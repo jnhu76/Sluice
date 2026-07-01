@@ -10,6 +10,7 @@
 #include <cppio/writer.hpp>
 
 #include <cstddef>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -24,12 +25,18 @@ public:
     // will close it on destruction. Pass -1 for an empty reader.
     explicit FileReader(int fd) : fd_(fd) {}
     ~FileReader() override;
-    FileReader(FileReader&& other) noexcept : fd_(other.fd_) { other.fd_ = -1; }
+    FileReader(FileReader&& other) noexcept
+        : fd_(other.fd_), open_error_(std::move(other.open_error_)) {
+        other.fd_ = -1;
+        other.open_error_.reset();
+    }
     FileReader& operator=(FileReader&& other) noexcept {
         if (this != &other) {
             close();
             fd_ = other.fd_;
+            open_error_ = std::move(other.open_error_);
             other.fd_ = -1;
+            other.open_error_.reset();
         }
         return *this;
     }
@@ -37,11 +44,16 @@ public:
     FileReader& operator=(const FileReader&) = delete;
 
     bool opened() const { return fd_ >= 0; }
+    // Returns an error if !opened(); the error preserves the real errno from a
+    // failed open() rather than a synthetic code.
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
 
 private:
     void close();
     int fd_ = -1;
+    // Set when the constructor's open() failed; surfaced on first I/O. Empty
+    // for a default-constructed or moved-from reader.
+    std::optional<IoError> open_error_;
 };
 
 class FileWriter final : public Writer {
@@ -53,12 +65,18 @@ public:
     // taken; the writer will close it on destruction. Pass -1 for an empty writer.
     explicit FileWriter(int fd) : fd_(fd) {}
     ~FileWriter() override;
-    FileWriter(FileWriter&& other) noexcept : fd_(other.fd_) { other.fd_ = -1; }
+    FileWriter(FileWriter&& other) noexcept
+        : fd_(other.fd_), open_error_(std::move(other.open_error_)) {
+        other.fd_ = -1;
+        other.open_error_.reset();
+    }
     FileWriter& operator=(FileWriter&& other) noexcept {
         if (this != &other) {
             close();
             fd_ = other.fd_;
+            open_error_ = std::move(other.open_error_);
             other.fd_ = -1;
+            other.open_error_.reset();
         }
         return *this;
     }
@@ -66,6 +84,8 @@ public:
     FileWriter& operator=(const FileWriter&) = delete;
 
     bool opened() const { return fd_ >= 0; }
+    // Returns an error if !opened(); preserves the real errno from a failed
+    // open() rather than a synthetic code.
     Result<std::size_t> write_some(std::span<const std::byte> src) override;
     // No-op flush of user-space state in this phase (no fsync). Durability is
     // intentionally deferred per the task boundaries.
@@ -74,6 +94,7 @@ public:
 private:
     void close();
     int fd_ = -1;
+    std::optional<IoError> open_error_;
 };
 
 }  // namespace cppio

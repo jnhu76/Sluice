@@ -3,6 +3,7 @@
 // flattened to a tagged code plus an OS errno slot for diagnostics.
 #pragma once
 
+#include <cerrno>
 #include <cstdint>
 #include <string_view>
 
@@ -41,19 +42,37 @@ inline constexpr std::string_view to_string(IoError::Code c) {
     return "unknown";
 }
 
-// Maps a POSIX errno value to an IoError. Deterministic. errno 0 -> backend_error
-// (it is never used to construct an error in normal flow; callers gate on err!=0).
+// Maps a POSIX errno value to an IoError. Uses portable <cerrno> macros (never
+// hardcoded ints) so behavior is stable across Linux/macOS/BSD. os_errno is
+// always preserved verbatim; errno 0 maps to backend_error since it is never a
+// real error (callers gate on err != 0).
 inline IoError from_errno_value(int err) {
     IoError e{};
     e.os_errno = err;
     switch (err) {
-        case 0:            e.code = IoError::Code::backend_error; break;
-        case 13: /*EACCES*/ e.code = IoError::Code::permission_denied; break;
-        case 28: /*ENOSPC*/ e.code = IoError::Code::no_space; break;
-        case 4:  /*EINTR*/  e.code = IoError::Code::interrupted; break;
-        case 11: /*EAGAIN*/ e.code = IoError::Code::would_block; break;
-        case 125: /*ECANCELED*/ e.code = IoError::Code::canceled; break;
-        default:            e.code = IoError::Code::backend_error; break;
+        case 0:
+            e.code = IoError::Code::backend_error; break;
+        case EACCES:
+        case EPERM:
+        case ENOENT:
+        case ENOTDIR:
+            e.code = IoError::Code::permission_denied; break;
+        case ENOSPC:
+        case EDQUOT:
+            e.code = IoError::Code::no_space; break;
+        case EINTR:
+            e.code = IoError::Code::interrupted; break;
+        case EAGAIN:
+#if EWOULDBLOCK != EAGAIN
+        case EWOULDBLOCK:
+#endif
+            e.code = IoError::Code::would_block; break;
+#ifdef ECANCELED
+        case ECANCELED:
+            e.code = IoError::Code::canceled; break;
+#endif
+        default:
+            e.code = IoError::Code::backend_error; break;
     }
     return e;
 }

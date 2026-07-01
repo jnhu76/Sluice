@@ -6,6 +6,20 @@
 
 namespace cppio::wal {
 
+namespace detail {
+
+// Fits len in a u32 without truncation. Anything > UINT32_MAX cannot be framed
+// by the WAL record layout (the length field is 4 bytes LE) and must be
+// rejected up-front rather than silently truncated.
+Result<std::uint32_t> checked_u32_len(std::size_t len) {
+    if (len > static_cast<std::size_t>(UINT32_MAX)) {
+        return make_unexpected<std::uint32_t>(IoError{IoError::Code::invalid_state});
+    }
+    return static_cast<std::uint32_t>(len);
+}
+
+}  // namespace detail
+
 namespace {
 
 void put_le_u32(std::byte* p, std::uint32_t v) {
@@ -31,9 +45,12 @@ std::uint32_t checksum_of(std::span<const std::byte> payload) {
 }  // namespace
 
 Result<void> write_record(Writer& writer, std::span<const std::byte> payload) {
+    auto len_res = detail::checked_u32_len(payload.size());
+    if (!len_res.has_value()) return make_unexpected<void>(len_res.error());
+
     std::array<std::byte, 8> header{};
     put_le_u32(header.data(), magic);
-    put_le_u32(header.data() + 4, static_cast<std::uint32_t>(payload.size()));
+    put_le_u32(header.data() + 4, len_res.value());
 
     auto h = writer.write_all(std::span<const std::byte>(header));
     if (!h.has_value()) return make_unexpected<void>(h.error());

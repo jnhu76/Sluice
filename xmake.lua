@@ -29,7 +29,8 @@ end
 -- Correctness tests, one binary per slice. Built/run via `xmake -g test`.
 local tests = {
     "result", "writer", "reader", "fault", "buffer",
-    "observed", "copy", "wal", "file",
+    "observed", "copy", "wal", "file", "posix_retry",
+    "wrapper_noncopyable",
 }
 for _, t in ipairs(tests) do
     cppio_one_file_target("binary", "test", t .. "_test", "tests", "cppio_core")

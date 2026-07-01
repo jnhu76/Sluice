@@ -27,4 +27,13 @@ Result<void> write_record(Writer& writer, std::span<const std::byte> payload);
 // Truncated stream -> error::eof. Bad checksum -> error::invalid_state.
 Result<std::vector<std::byte>> read_record(Reader& reader);
 
+namespace detail {
+
+// Checks a payload length fits in the u32 length field. Returns the length on
+// success or invalid_state if it would truncate. Extracted so the overflow
+// check is testable without allocating a 4 GiB payload.
+Result<std::uint32_t> checked_u32_len(std::size_t len);
+
+}  // namespace detail
+
 }  // namespace cppio::wal

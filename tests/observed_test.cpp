@@ -138,4 +138,30 @@ CPPIO_TEST_CASE(observed_writer_is_data_transparent) {
     CPPIO_CHECK(eq("data", inner.bytes()));
 }
 
+CPPIO_TEST_CASE(observed_writer_counts_write_errors) {
+    // Wrap a FaultWriter that fails after one call; ObservedWriter must both
+    // propagate the error and increment write_errors.
+    cppio::MemoryWriter sink;
+    cppio::FaultPlan plan;
+    plan.fail_after_write_calls = 0;  // very first write fails
+    plan.error = cppio::IoError{cppio::IoError::Code::no_space};
+    cppio::FaultWriter inner(sink, plan);
+    cppio::WriterStats stats{};
+    cppio::ObservedWriter w(inner, stats);
+
+    auto res = w.write_some(sb("data"));
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(res.error().code == cppio::IoError::Code::no_space);
+    CPPIO_CHECK(stats.write_errors == 1);
+    CPPIO_CHECK(stats.write_calls == 1);
+}
+
+CPPIO_TEST_CASE(observed_writer_does_not_count_write_errors_on_success) {
+    cppio::MemoryWriter inner;
+    cppio::WriterStats stats{};
+    cppio::ObservedWriter w(inner, stats);
+    CPPIO_CHECK(w.write_all(sb("ok")).has_value());
+    CPPIO_CHECK(stats.write_errors == 0);
+}
+
 CPPIO_MAIN()

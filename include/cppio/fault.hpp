@@ -85,6 +85,12 @@ public:
     FaultReader(Reader& inner, const FaultPlan& plan)
         : inner_(inner), plan_(plan) {}
 
+    // Not copyable or movable: holds a reference + mutable counters.
+    FaultReader(const FaultReader&) = delete;
+    FaultReader& operator=(const FaultReader&) = delete;
+    FaultReader(FaultReader&&) = delete;
+    FaultReader& operator=(FaultReader&&) = delete;
+
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
 
 private:
@@ -98,6 +104,12 @@ class FaultWriter final : public Writer {
 public:
     FaultWriter(Writer& inner, const FaultPlan& plan)
         : inner_(inner), plan_(plan) {}
+
+    // Not copyable or movable: holds a reference + mutable counters.
+    FaultWriter(const FaultWriter&) = delete;
+    FaultWriter& operator=(const FaultWriter&) = delete;
+    FaultWriter(FaultWriter&&) = delete;
+    FaultWriter& operator=(FaultWriter&&) = delete;
 
     Result<std::size_t> write_some(std::span<const std::byte> src) override;
     Result<void> flush() override;

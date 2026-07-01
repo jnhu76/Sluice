@@ -24,6 +24,10 @@ bool same(std::string_view s, const std::vector<std::byte>& b) {
            std::memcmp(s.data(), b.data(), s.size()) == 0;
 }
 
+std::span<const std::byte> span_of(const std::vector<std::byte>& v) {
+    return std::span<const std::byte>(v.data(), v.size());
+}
+
 }  // namespace
 
 // ---------- FaultReader ----------
@@ -161,6 +165,63 @@ CPPIO_TEST_CASE(fault_writer_is_deterministic_across_instances) {
     auto b = run();
     CPPIO_CHECK(a.size() == b.size());
     CPPIO_CHECK(std::memcmp(a.data(), b.data(), a.size()) == 0);
+}
+
+CPPIO_TEST_CASE(fault_writer_clamps_single_write_to_fail_after_bytes) {
+    // Regression: a single write_some larger than fail_after_bytes must not
+    // overshoot the byte budget. Previously returned the full src.size().
+    cppio::MemoryWriter sink;
+    cppio::FaultPlan plan;
+    plan.fail_after_bytes = 5;
+    cppio::FaultWriter w(sink, plan);
+    auto payload = bytes_of("0123456789");  // 10 bytes
+    auto res = w.write_some(span_of(payload));
+    CPPIO_CHECK(res.has_value());
+    CPPIO_CHECK(res.value() == 5);              // clamped to the budget
+    CPPIO_CHECK(same("01234", sink.bytes()));   // first 5 only
+}
+
+CPPIO_TEST_CASE(fault_writer_fails_exactly_at_byte_limit) {
+    // fail_after_bytes=5 with one-byte-per-call: the first 5 calls succeed, the
+    // 6th must fail (budget exhausted). Total delivered == 5, deterministically.
+    cppio::MemoryWriter sink;
+    cppio::FaultPlan plan;
+    plan.max_write_size = 1;
+    plan.fail_after_bytes = 5;
+    plan.error = cppio::IoError{cppio::IoError::Code::no_space};
+    cppio::FaultWriter w(sink, plan);
+    auto payload = bytes_of("0123456789");
+    auto res = w.write_all(span_of(payload));
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(res.error().code == cppio::IoError::Code::no_space);
+    CPPIO_CHECK(same("01234", sink.bytes()));
+    CPPIO_CHECK(sink.bytes().size() == 5);
+}
+
+CPPIO_TEST_CASE(fault_reader_clamps_single_read_to_fail_after_bytes) {
+    auto mem = cppio::MemoryReader::from_string("0123456789");
+    cppio::FaultPlan plan;
+    plan.fail_after_bytes = 4;
+    cppio::FaultReader r(mem, plan);
+    std::array<std::byte, 10> out{};
+    auto res = r.read_some(std::span<std::byte>(out));
+    CPPIO_CHECK(res.has_value());
+    CPPIO_CHECK(res.value() == 4);  // clamped, not 10
+}
+
+CPPIO_TEST_CASE(fault_reader_fails_after_bytes_combined_with_call_limit) {
+    // Both conditions active simultaneously: byte limit (3) binds first here.
+    auto mem = cppio::MemoryReader::from_string("abcdefgh");
+    cppio::FaultPlan plan;
+    plan.max_read_size = 1;
+    plan.fail_after_bytes = 3;
+    plan.fail_after_read_calls = 99;  // never reached
+    plan.error = cppio::IoError{cppio::IoError::Code::canceled};
+    cppio::FaultReader r(mem, plan);
+    std::vector<std::byte> out(8);
+    auto res = r.read_exact(std::span<std::byte>(out));
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(res.error().code == cppio::IoError::Code::canceled);
 }
 
 CPPIO_MAIN()

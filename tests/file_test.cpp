@@ -79,14 +79,40 @@ CPPIO_TEST_CASE(file_reader_returns_zero_at_eof) {
     CPPIO_CHECK(res.value() == 0);
 }
 
-CPPIO_TEST_CASE(file_reader_open_missing_returns_error) {
+CPPIO_TEST_CASE(file_reader_open_missing_preserves_enoent) {
     cppio::FileReader r("/no/such/file/should/exist/cppio");
     CPPIO_CHECK(!r.opened());
-    // read_some on a failed-open file surfaces an error, not success.
+    // read_some on a failed-open file surfaces the real errno (ENOENT), not a
+    // synthetic code.
     std::array<std::byte, 4> buf{};
     auto res = r.read_some(std::span<std::byte>(buf));
     CPPIO_CHECK(!res.has_value());
     CPPIO_CHECK(res.error().code == cppio::IoError::Code::permission_denied);
+    CPPIO_CHECK(res.error().os_errno == ENOENT);
+}
+
+CPPIO_TEST_CASE(file_reader_open_under_a_file_preserves_enotdir) {
+    // ENOTDIR: opening "<existing regular file>/child" must fail with ENOTDIR,
+    // and the real errno must survive to read_some's error.
+    TempPath tp;
+    { cppio::FileWriter w(tp.str()); (void)w.write_all(sb("x")); }
+    cppio::FileReader r(tp.str() + "/child");
+    CPPIO_CHECK(!r.opened());
+    std::array<std::byte, 4> buf{};
+    auto res = r.read_some(std::span<std::byte>(buf));
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(res.error().os_errno == ENOTDIR);
+}
+
+CPPIO_TEST_CASE(file_writer_open_failure_preserves_real_errno) {
+    // Try to write-create under a path whose parent is a regular file -> ENOTDIR.
+    TempPath tp;
+    { cppio::FileWriter w(tp.str()); (void)w.write_all(sb("x")); }
+    cppio::FileWriter w(tp.str() + "/child");
+    CPPIO_CHECK(!w.opened());
+    auto res = w.write_some(sb("data"));
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(res.error().os_errno == ENOTDIR);
 }
 
 CPPIO_TEST_CASE(file_copy_all_round_trips_through_real_files) {

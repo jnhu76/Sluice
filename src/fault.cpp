@@ -18,8 +18,14 @@ Result<std::size_t> FaultReader::read_some(std::span<std::byte> dst) {
     }
 
     std::span<std::byte> window = dst;
+    if (plan_.fail_after_bytes) {
+        std::uint64_t budget = *plan_.fail_after_bytes > bytes_seen_
+                                   ? *plan_.fail_after_bytes - bytes_seen_
+                                   : 0;
+        window = dst.first(static_cast<std::size_t>(std::min<std::uint64_t>(window.size(), budget)));
+    }
     if (plan_.max_read_size) {
-        window = dst.first(std::min(dst.size(), *plan_.max_read_size));
+        window = window.first(std::min(window.size(), *plan_.max_read_size));
     }
 
     auto r = inner_.read_some(window);
@@ -39,8 +45,14 @@ Result<std::size_t> FaultWriter::write_some(std::span<const std::byte> src) {
     }
 
     std::span<const std::byte> window = src;
+    if (plan_.fail_after_bytes) {
+        std::uint64_t budget = *plan_.fail_after_bytes > bytes_seen_
+                                   ? *plan_.fail_after_bytes - bytes_seen_
+                                   : 0;
+        window = src.first(static_cast<std::size_t>(std::min<std::uint64_t>(window.size(), budget)));
+    }
     if (plan_.max_write_size) {
-        window = src.first(std::min(src.size(), *plan_.max_write_size));
+        window = window.first(std::min(window.size(), *plan_.max_write_size));
     }
 
     auto r = inner_.write_some(window);

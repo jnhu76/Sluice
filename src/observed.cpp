@@ -20,6 +20,7 @@ Result<std::size_t> ObservedWriter::write_some(std::span<const std::byte> src) {
     ++stats_.write_calls;
     auto r = inner_.write_some(src);
     if (!r.has_value()) {
+        ++stats_.write_errors;
         return make_unexpected<std::size_t>(r.error());
     }
     std::size_t n = r.value();

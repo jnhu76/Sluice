@@ -156,4 +156,33 @@ CPPIO_TEST_CASE(wal_empty_payload_round_trips) {
     CPPIO_CHECK(res.value().empty());
 }
 
+CPPIO_TEST_CASE(wal_checked_u32_len_accepts_exact_max) {
+    auto r = cppio::wal::detail::checked_u32_len(static_cast<std::size_t>(UINT32_MAX));
+    CPPIO_CHECK(r.has_value());
+    CPPIO_CHECK(r.value() == UINT32_MAX);
+}
+
+CPPIO_TEST_CASE(wal_checked_u32_len_rejects_overflow) {
+    // One past UINT32_MAX must fail; this is the value the old cast truncated.
+    auto r = cppio::wal::detail::checked_u32_len(static_cast<std::size_t>(UINT32_MAX) + 1);
+    CPPIO_CHECK(!r.has_value());
+    CPPIO_CHECK(r.error().code == cppio::IoError::Code::invalid_state);
+}
+
+CPPIO_TEST_CASE(wal_write_record_rejects_payload_larger_than_u32) {
+    // Force checked_u32_len to fail without allocating 4 GiB: wrap the writer
+    // so we can also assert nothing was written before the rejection.
+    cppio::MemoryWriter out;
+    // Construct a span whose length overflows u32 but points at valid memory.
+    // We can't hold 4 GiB, so point at a 1-byte buffer and claim a huge size;
+    // write_record only inspects payload.size() before writing (which is the
+    // exact bug being guarded), so no actual read happens.
+    std::byte one{};
+    std::span<const std::byte> huge(&one, static_cast<std::size_t>(UINT32_MAX) + 1);
+    auto res = cppio::wal::write_record(out, huge);
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(res.error().code == cppio::IoError::Code::invalid_state);
+    CPPIO_CHECK(out.bytes().empty());  // rejected before any write
+}
+
 CPPIO_MAIN()

@@ -4,28 +4,58 @@
 #include <cppio/error.hpp>
 #include <cppio/result.hpp>
 
+#include <cerrno>
 #include <string>
 
 // ---- IoError behavior ----
 
-CPPIO_TEST_CASE(iorror_eof_code_round_trips_through_to_string) {
+CPPIO_TEST_CASE(to_string_round_trips_every_code) {
     CPPIO_CHECK(cppio::to_string(cppio::IoError::Code::eof) == std::string_view("eof"));
     CPPIO_CHECK(cppio::to_string(cppio::IoError::Code::no_space) == std::string_view("no_space"));
+    CPPIO_CHECK(cppio::to_string(cppio::IoError::Code::canceled) == std::string_view("canceled"));
+    CPPIO_CHECK(cppio::to_string(cppio::IoError::Code::interrupted) == std::string_view("interrupted"));
+    CPPIO_CHECK(cppio::to_string(cppio::IoError::Code::would_block) == std::string_view("would_block"));
+    CPPIO_CHECK(cppio::to_string(cppio::IoError::Code::permission_denied) ==
+                std::string_view("permission_denied"));
+    CPPIO_CHECK(cppio::to_string(cppio::IoError::Code::invalid_state) ==
+                std::string_view("invalid_state"));
     CPPIO_CHECK(cppio::to_string(cppio::IoError::Code::backend_error) ==
                 std::string_view("backend_error"));
 }
 
-CPPIO_TEST_CASE(from_errno_maps_positive_errno_to_interrupted_for_eintr_like_values) {
-    // from_errno must be deterministic and produce a sensible code for ENOSPC.
-    cppio::IoError e = cppio::from_errno_value(28 /* ENOSPC on Linux */);
-    CPPIO_CHECK(e.code == cppio::IoError::Code::no_space);
-    CPPIO_CHECK(e.os_errno == 28);
+// from_errno_value must use portable <cerrno> macros (not hardcoded ints) and
+// always preserve the original errno in os_errno regardless of the Code mapping.
+CPPIO_TEST_CASE(from_errno_maps_known_macros_and_preserves_os_errno) {
+    auto check = [](int errc, cppio::IoError::Code expected) {
+        cppio::IoError e = cppio::from_errno_value(errc);
+        CPPIO_CHECK(e.os_errno == errc);  // always preserved
+        CPPIO_CHECK(e.code == expected);
+    };
+    check(EACCES, cppio::IoError::Code::permission_denied);
+    check(EPERM, cppio::IoError::Code::permission_denied);
+    check(ENOSPC, cppio::IoError::Code::no_space);
+    check(EINTR, cppio::IoError::Code::interrupted);
+    check(EAGAIN, cppio::IoError::Code::would_block);
+    check(ENOENT, cppio::IoError::Code::permission_denied);
+    check(ENOTDIR, cppio::IoError::Code::permission_denied);
+#ifdef ECANCELED
+    check(ECANCELED, cppio::IoError::Code::canceled);
+#endif
+#if EWOULDBLOCK != EAGAIN
+    check(EWOULDBLOCK, cppio::IoError::Code::would_block);
+#endif
 }
 
-CPPIO_TEST_CASE(from_errno_zero_means_ok_is_not_an_error_helper) {
-    // errno 0 maps to a benign code; not used as an error by Result.
+CPPIO_TEST_CASE(from_errno_unknown_value_maps_to_backend_error_preserving_os_errno) {
+    cppio::IoError e = cppio::from_errno_value(9999);
+    CPPIO_CHECK(e.os_errno == 9999);
+    CPPIO_CHECK(e.code == cppio::IoError::Code::backend_error);
+}
+
+CPPIO_TEST_CASE(from_errno_zero_is_benign) {
     cppio::IoError e = cppio::from_errno_value(0);
     CPPIO_CHECK(e.os_errno == 0);
+    CPPIO_CHECK(e.code == cppio::IoError::Code::backend_error);
 }
 
 // ---- Result<T> behavior ----

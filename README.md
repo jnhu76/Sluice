@@ -105,6 +105,56 @@ Under `examples/`:
 - `fault_write` — a deterministic `FaultWriter` failure
 - `wal_records` — write and read back WAL records on disk
 
+## Intentional deviations from the Zig model
+
+These divergences from `std.Io` are deliberate and approved by the task scope
+(correctness / observability / composability phase; optimization, io_uring,
+and async are deferred). Documented here so they read as design, not oversight.
+
+- **Buffer ownership is *outside* the interface (wrapper model), not inside it.**
+  In Zig, the buffer lives *inside* each `Reader`/`Writer` (`r.buffer/seek/end`,
+  `w.buffer/end`); every reader is inherently buffered and VTable operations
+  (`drain`, `stream`, `rebase`) negotiate around it. This core deliberately keeps
+  `Reader`/`Writer` **unbuffered** and puts buffering in **wrapper types**
+  (`BufferedReader`/`BufferedWriter`), following the task's design table.
+  Consequence: some Zig operations have no direct analog here — `rebase`,
+  `preserve_len`, the `Discarding`/`Allocating` writers. Those are out of scope
+  for this phase.
+
+- **`copy_all` uses an intermediate scratch buffer, not a zero-copy fast path.**
+  Zig's `Reader.stream` (Reader.zig:168) routes the first bytes through the
+  reader's *own* buffer so the writer reads directly from buffered data — no
+  extra copy, and no scratch allocation when data is already buffered.
+  `cppio::copy_all(reader, writer, scratch)` always copies through the
+  caller-provided scratch, and wrapping it around a `BufferedReader` buys
+  nothing today. This is the largest fidelity gap and the prime candidate for
+  the zero-copy/io_uring phase.
+
+- **`flush()` is split, not uniform.**
+  In Zig one `flush` contract does the right thing regardless of whether the
+  writer is buffered (it drains until the buffer is empty, Writer.zig:312).
+  Here `FileWriter::flush()` is a documented no-op for user-space state (no
+  `fsync` this phase), and `BufferedWriter::flush()` does the real work.
+  Callers must therefore know which layer in a chain is buffered to flush
+  meaningfully; the unified Zig model avoids that. Deferred.
+
+- **Error model is flattened.**
+  Zig keeps it minimal: `Reader.Error = {ReadFailed, EndOfStream}`,
+  `Writer.Error = {WriteFailed}`; backend detail lives in the implementation.
+  `cppio::IoError::Code` carries eight categories (`eof`, `canceled`,
+  `interrupted`, `would_block`, `no_space`, `permission_denied`,
+  `invalid_state`, `backend_error`) plus a raw `os_errno`. The `backend_error`
+  code plays the role of Zig's `ReadFailed`/`WriteFailed`; the extra categories
+  let callers branch without digging into a backend. Considered an improvement
+  for C++ usage, not a regression.
+
+- **`std.testing.io` has no direct analog; the fault wrappers are original.**
+  Zig's current `std.testing.io` is built on an `Io.Threaded` context
+  (testing.zig:36), not a simple fault-injecting recorder. `FaultReader`/
+  `FaultWriter` + `FaultPlan` are this project's design to satisfy the task's
+  "deterministic fault injection" requirement. They are specified by the task,
+  so they are authoritative rather than a Zig-port fidelity issue.
+
 ## Status / scope
 
 This phase is correctness-only. See the final report for known limitations.

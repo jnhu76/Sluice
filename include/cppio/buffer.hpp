@@ -6,6 +6,7 @@
 #include <cppio/reader.hpp>
 #include <cppio/writer.hpp>
 
+#include <cassert>
 #include <cstddef>
 #include <span>
 
@@ -18,7 +19,16 @@ public:
     // The wrapper holds the span; the caller must keep the backing storage
     // alive for the wrapper's lifetime. Buffer must be non-empty.
     BufferedReader(Reader& inner, std::span<std::byte> buffer)
-        : inner_(inner), buf_(buffer) {}
+        : inner_(inner), buf_(buffer) {
+        assert(!buffer.empty() && "BufferedReader requires a non-empty backing buffer");
+    }
+
+    // Wrappers hold a reference to the inner reader and mutable cursor state;
+    // copying or moving them would alias that state and corrupt accounting.
+    BufferedReader(const BufferedReader&) = delete;
+    BufferedReader& operator=(const BufferedReader&) = delete;
+    BufferedReader(BufferedReader&&) = delete;
+    BufferedReader& operator=(BufferedReader&&) = delete;
 
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
 
@@ -36,7 +46,15 @@ private:
 class BufferedWriter final : public Writer {
 public:
     BufferedWriter(Writer& inner, std::span<std::byte> buffer)
-        : inner_(inner), buf_(buffer) {}
+        : inner_(inner), buf_(buffer) {
+        assert(!buffer.empty() && "BufferedWriter requires a non-empty backing buffer");
+    }
+
+    // Not copyable or movable: see BufferedReader for rationale.
+    BufferedWriter(const BufferedWriter&) = delete;
+    BufferedWriter& operator=(const BufferedWriter&) = delete;
+    BufferedWriter(BufferedWriter&&) = delete;
+    BufferedWriter& operator=(BufferedWriter&&) = delete;
 
     Result<std::size_t> write_some(std::span<const std::byte> src) override;
     Result<void> flush() override;
