@@ -142,11 +142,9 @@ class ObservingReader final : public cppio::Reader {
 public:
     cppio::MemoryReader mem;
     std::size_t max_requested = 0;
-    int read_calls = 0;
     explicit ObservingReader(std::string_view s) : mem(cppio::MemoryReader::from_string(s)) {}
     cppio::Result<std::size_t> read_some(std::span<std::byte> dst) override {
         max_requested = std::max(max_requested, dst.size());
-        ++read_calls;
         return mem.read_some(dst);
     }
 };
