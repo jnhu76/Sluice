@@ -1,0 +1,57 @@
+// cppio BufferedReader / BufferedWriter — interface-level buffering wrappers
+// inspired by Zig std.Io's interface-owned buffer model. The caller supplies
+// (and owns) the backing storage; the wrapper tracks fill/dirty positions.
+#pragma once
+
+#include <cppio/reader.hpp>
+#include <cppio/writer.hpp>
+
+#include <cstddef>
+#include <span>
+
+namespace cppio {
+
+// Reads from an inner Reader through a caller-owned buffer, collapsing many
+// small reads into fewer inner reads while preserving byte order and EOF.
+class BufferedReader final : public Reader {
+public:
+    // The wrapper holds the span; the caller must keep the backing storage
+    // alive for the wrapper's lifetime. Buffer must be non-empty.
+    BufferedReader(Reader& inner, std::span<std::byte> buffer)
+        : inner_(inner), buf_(buffer) {}
+
+    Result<std::size_t> read_some(std::span<std::byte> dst) override;
+
+private:
+    Reader& inner_;
+    std::span<std::byte> buf_;
+    std::size_t seek_ = 0;  // consumed position within buf_
+    std::size_t end_ = 0;   // one past last valid byte within buf_
+};
+
+// Writes to an inner Writer through a caller-owned buffer, coalescing small
+// writes. Dirty bytes are flushed on overflow and on explicit flush(). The
+// destructor does NOT flush — callers must flush() before destruction to
+// avoid silent data loss, matching the Zig model.
+class BufferedWriter final : public Writer {
+public:
+    BufferedWriter(Writer& inner, std::span<std::byte> buffer)
+        : inner_(inner), buf_(buffer) {}
+
+    Result<std::size_t> write_some(std::span<const std::byte> src) override;
+    Result<void> flush() override;
+
+    // No silent flush in destructor: a flush that fails cannot be reported
+    // from a destructor, so we require explicit flush() before destruction.
+    ~BufferedWriter() override = default;
+
+private:
+    // Push buf_[0..end_) to the inner writer, retrying short writes.
+    Result<void> flush_dirty();
+
+    Writer& inner_;
+    std::span<std::byte> buf_;
+    std::size_t end_ = 0;  // one past last dirty byte within buf_
+};
+
+}  // namespace cppio

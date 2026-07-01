@@ -1,0 +1,20 @@
+# Xmake cache
+.xmake/
+build/
+
+# MacOS Cache
+.DS_Store
+
+
+
+# Zig stdlib is a design reference only, never part of this codebase
+zig/
+
+# Build artifacts
+build/
+.xmake/
+
+# Generated / stray
+a.out
+*.o
+.vscode/

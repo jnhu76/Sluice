@@ -1,0 +1,140 @@
+// BufferedReader / BufferedWriter implementations.
+#include <cppio/buffer.hpp>
+
+#include <algorithm>
+#include <cstring>
+
+namespace cppio {
+
+// ---------------- BufferedReader ----------------
+
+Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
+    if (dst.empty()) return std::size_t{0};
+
+    std::size_t total = 0;
+    while (!dst.empty()) {
+        // Serve as much as possible from the buffer first.
+        std::size_t avail = end_ - seek_;
+        if (avail > 0) {
+            std::size_t n = std::min(dst.size(), avail);
+            std::memcpy(dst.data(), buf_.data() + seek_, n);
+            seek_ += n;
+            dst = dst.subspan(n);
+            total += n;
+            // If dst is satisfied, we're done without touching the inner reader.
+            if (dst.empty()) break;
+        }
+
+        // Buffer exhausted: refill once. If dst now fits entirely in the
+        // buffer we still refill the buffer (keeping the buffering property);
+        // a request larger than the buffer is filled directly from the inner
+        // reader after first draining what we have.
+        if (dst.size() > buf_.size()) {
+            // Large read: go straight to inner, bypassing the buffer for the
+            // remainder. The bytes already copied (total) stay valid.
+            auto r = inner_.read_some(dst);
+            if (!r.has_value()) {
+                if (total > 0) return total;  // already delivered some bytes
+                return make_unexpected<std::size_t>(r.error());
+            }
+            std::size_t n = r.value();
+            total += n;
+            // Stop after one inner read; caller can call again for the rest.
+            return total;
+        }
+
+        // Compact + refill the buffer.
+        if (seek_ > 0) {
+            std::memmove(buf_.data(), buf_.data() + seek_, end_ - seek_);
+            end_ -= seek_;
+            seek_ = 0;
+        }
+        auto r = inner_.read_some(std::span<std::byte>(buf_.data() + end_, buf_.size() - end_));
+        if (!r.has_value()) {
+            if (total > 0) return total;
+            return make_unexpected<std::size_t>(r.error());
+        }
+        std::size_t got = r.value();
+        if (got == 0) {
+            // EOF. Return whatever we accumulated this call.
+            return total;
+        }
+        end_ += got;
+    }
+    return total;
+}
+
+// ---------------- BufferedWriter ----------------
+
+Result<void> BufferedWriter::flush_dirty() {
+    while (end_ > 0) {
+        auto r = inner_.write_some(std::span<const std::byte>(buf_.data(), end_));
+        if (!r.has_value()) return make_unexpected<void>(r.error());
+        std::size_t n = r.value();
+        if (n == 0) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        if (n >= end_) {
+            end_ = 0;
+            break;
+        }
+        // Drop the written prefix, keep the rest ordered.
+        std::memmove(buf_.data(), buf_.data() + n, end_ - n);
+        end_ -= n;
+    }
+    return {};
+}
+
+Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
+    if (src.empty()) return std::size_t{0};
+
+    std::size_t total = 0;
+    while (!src.empty()) {
+        std::size_t room = buf_.size() - end_;
+        if (room == 0) {
+            auto f = flush_dirty();
+            if (!f.has_value()) {
+                return total > 0 ? Result<std::size_t>{total}
+                                 : make_unexpected<std::size_t>(f.error());
+            }
+            room = buf_.size();
+        }
+
+        if (src.size() > buf_.size() && end_ == 0) {
+            // Source larger than the whole buffer and buffer is clean:
+            // pass through directly to avoid a needless copy + flush cycle.
+            auto r = inner_.write_some(src);
+            if (!r.has_value()) {
+                return total > 0 ? Result<std::size_t>{total}
+                                 : make_unexpected<std::size_t>(r.error());
+            }
+            std::size_t n = r.value();
+            total += n;
+            if (n == 0) {
+                return total > 0 ? Result<std::size_t>{total}
+                                 : make_unexpected<std::size_t>(
+                                       IoError{IoError::Code::invalid_state});
+            }
+            src = src.subspan(n);
+            continue;
+        }
+
+        // Append into the buffer.
+        std::size_t n = std::min(src.size(), room);
+        std::memcpy(buf_.data() + end_, src.data(), n);
+        end_ += n;
+        src = src.subspan(n);
+        total += n;
+        // Stop after absorbing into the buffer: write_some is "may write fewer".
+        break;
+    }
+    return total;
+}
+
+Result<void> BufferedWriter::flush() {
+    auto f = flush_dirty();
+    if (!f.has_value()) return make_unexpected<void>(f.error());
+    return inner_.flush();
+}
+
+}  // namespace cppio
