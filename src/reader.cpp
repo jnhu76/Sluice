@@ -1,6 +1,7 @@
 // Implementation of Reader::read_exact and Reader::stream_to.
 #include <cppio/reader.hpp>
 #include <cppio/writer.hpp>
+#include <cppio/copy.hpp>
 
 #include <array>
 #include <cstddef>
@@ -38,6 +39,17 @@ Result<std::size_t> Reader::stream_to(Writer& writer) {
         if (!wr.has_value()) return make_unexpected<std::size_t>(wr.error());
         total += got;
     }
+}
+
+Result<std::uint64_t> Reader::stream_to(Writer& writer, std::span<std::byte> scratch,
+                                        CopyLimit limit) {
+    // Delegate to copy_all so the bounded-copy semantics live in exactly one
+    // place (no duplicated loop, no drift between stream_to and copy_all).
+    return copy_all(*this, writer, scratch, limit);
+}
+
+Result<std::uint64_t> Reader::stream_to(Writer& writer, CopyLimit limit) {
+    return copy_all(*this, writer, limit);
 }
 
 }  // namespace cppio

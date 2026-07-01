@@ -4,9 +4,11 @@
 // operations defined in terms of read_some and a Writer.
 #pragma once
 
+#include <cppio/limit.hpp>
 #include <cppio/result.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <span>
 
 namespace cppio {
@@ -26,8 +28,16 @@ public:
     Result<void> read_exact(std::span<std::byte> dst);
 
     // Derived: copy bytes from this reader to writer until EOF or error.
-    // Returns total bytes transferred.
+    // Returns total bytes transferred. Unbounded; delegates to copy_all with
+    // CopyLimit::unlimited().
     Result<std::size_t> stream_to(Writer& writer);
+
+    // Derived: bounded copy with an explicit limit and caller-provided scratch.
+    // Delegates to copy_all — no duplicated copy logic.
+    Result<std::uint64_t> stream_to(Writer& writer, std::span<std::byte> scratch, CopyLimit limit);
+
+    // Derived: bounded copy with an internally allocated scratch.
+    Result<std::uint64_t> stream_to(Writer& writer, CopyLimit limit);
 };
 
 }  // namespace cppio

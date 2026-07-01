@@ -64,6 +64,32 @@ auto result = copy_all(input, output);
 be reported from a destructor, so callers must call `flush()` explicitly before
 the wrapper goes out of scope.
 
+## Flush contract
+
+The `flush()` operation means different things at different layers:
+
+| Layer | `flush()` does | Errors? |
+|---|---|---|
+| `Writer::flush()` | Generic operation exposed by the abstraction. | yes (virtual) |
+| `BufferedWriter::flush()` | Drains **all dirty buffered bytes** into the inner writer, then calls `inner.flush()`. The destructor does **not** flush, because a flush that fails cannot be reported safely from a destructor. | yes |
+| `FileWriter::flush()` | **Documented no-op in this phase.** It does *not* imply `fsync` / `fdatasync`, does *not* imply durability. Durability semantics are deferred. | n/a |
+
+**Composition rule:** call `flush()` on the **outermost** writer you used. It
+propagates inward:
+
+```cpp
+FileWriter file(...);
+ObservedWriter observed(file, stats);
+BufferedWriter buffered(observed, buffer);
+buffered.write_all(...);
+buffered.flush();   // correct: drains buffered -> observed -> file, then file.flush()
+```
+
+**Flushing buffered bytes is not the same as a durable commit.** Even after
+`BufferedWriter::flush()` returns success, the bytes may live only in the OS page
+cache; a crash can still lose them until an explicit durability barrier (not
+provided this phase) runs.
+
 ## Building
 
 The project uses [xmake](https://xmake.io). Build the static library, run the

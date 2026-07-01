@@ -6,9 +6,11 @@
 #include <cppio/writer.hpp>
 #include <cppio/result.hpp>
 #include <cppio/error.hpp>
+#include <cppio/limit.hpp>
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <optional>
 #include <span>
@@ -140,6 +142,52 @@ CPPIO_TEST_CASE(stream_to_propagates_writer_error) {
     auto res = r.stream_to(w);
     CPPIO_CHECK(!res.has_value());
     CPPIO_CHECK(res.error().code == cppio::IoError::Code::no_space);
+}
+
+// ---------- limited Reader::stream_to (delegates to copy_all) ----------
+
+CPPIO_TEST_CASE(stream_to_limited_bytes_copies_only_n) {
+    ScriptedReader r;
+    r.payload = bytes_of("abcdef");
+    ScriptedWriter w;
+    std::vector<std::byte> scratch(16);
+    auto res = r.stream_to(w, std::span<std::byte>(scratch), cppio::CopyLimit::bytes(3));
+    CPPIO_CHECK(res.has_value());
+    CPPIO_CHECK(res.value() == 3);
+    CPPIO_CHECK(w.sink.size() == 3);
+    CPPIO_CHECK(std::memcmp(w.sink.data(), "abc", 3) == 0);
+}
+
+CPPIO_TEST_CASE(stream_to_nothing_copies_zero) {
+    ScriptedReader r;
+    r.payload = bytes_of("abcdef");
+    ScriptedWriter w;
+    std::vector<std::byte> scratch(16);
+    auto res = r.stream_to(w, std::span<std::byte>(scratch), cppio::CopyLimit::nothing());
+    CPPIO_CHECK(res.has_value());
+    CPPIO_CHECK(res.value() == 0);
+    CPPIO_CHECK(w.sink.empty());
+}
+
+CPPIO_TEST_CASE(stream_to_unlimited_matches_unbounded_behavior) {
+    ScriptedReader r;
+    r.payload = bytes_of("abcdef");
+    ScriptedWriter w;
+    std::vector<std::byte> scratch(16);
+    auto res = r.stream_to(w, std::span<std::byte>(scratch), cppio::CopyLimit::unlimited());
+    CPPIO_CHECK(res.has_value());
+    CPPIO_CHECK(res.value() == 6);
+    CPPIO_CHECK(w.sink.size() == 6);
+    CPPIO_CHECK(std::memcmp(w.sink.data(), "abcdef", 6) == 0);
+}
+
+CPPIO_TEST_CASE(stream_to_convenience_overload_without_scratch) {
+    ScriptedReader r;
+    r.payload = bytes_of("abcdef");
+    ScriptedWriter w;
+    auto res = r.stream_to(w, cppio::CopyLimit::bytes(3));
+    CPPIO_CHECK(res.has_value());
+    CPPIO_CHECK(res.value() == 3);
 }
 
 CPPIO_MAIN()
