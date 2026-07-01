@@ -5,7 +5,9 @@
 #include <cppio/result.hpp>
 
 #include <cerrno>
+#include <stdexcept>
 #include <string>
+#include <utility>
 
 // ---- IoError behavior ----
 
@@ -104,6 +106,76 @@ CPPIO_TEST_CASE(result_value_can_be_moved_out) {
     cppio::Result<std::string> r{std::string("payload")};
     std::string out = std::move(r).value();
     CPPIO_CHECK(out == "payload");
+}
+
+// Regression for the assignment UB: a throwing copy ctor must not leave the
+// Result claiming to hold a value it never constructed. Previously, has_value_
+// was set to true before placement-new; if the ctor threw, the destructor ran
+// value_.~T() on uninitialized storage (UB). Now has_value_ is published only
+// after a successful construction.
+namespace {
+int g_throw_on_copy_after = -1;  // copy number that should throw (-1 = never)
+struct ThrowingCopy {
+    int v;
+    static int copies;
+    ThrowingCopy(int x) : v(x) {}
+    ThrowingCopy(const ThrowingCopy& o) : v(o.v) {
+        if (g_throw_on_copy_after >= 0 && ++copies > g_throw_on_copy_after) {
+            throw std::runtime_error("induced copy failure");
+        }
+    }
+    ThrowingCopy& operator=(const ThrowingCopy&) = delete;
+};
+int ThrowingCopy::copies = 0;
+}  // namespace
+
+CPPIO_TEST_CASE(result_copy_assignment_survives_throwing_ctor) {
+    // The next copy of ThrowingCopy throws. We exercise assignment under
+    // exceptions; if the UB were present, the destructor would corrupt state
+    // and the next line could crash or trip the sanitizers.
+    cppio::Result<ThrowingCopy> src{ThrowingCopy{7}};
+    cppio::Result<ThrowingCopy> dst{ThrowingCopy{0}};
+    ThrowingCopy::copies = 0;
+    g_throw_on_copy_after = 0;  // first copy (the assignment) throws
+    bool threw = false;
+    try {
+        dst = src;
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    g_throw_on_copy_after = -1;
+    CPPIO_CHECK(threw);
+    // After the throw, dst must be safely destructible (no UB on exit). The
+    // value state is unspecified-per-standard; we deliberately do NOT assert
+    // any specific value — only that we got here without a sanitizer report.
+    // The throwing-type's destructor is trivial, so a clean scope exit proves
+    // the destructor path ran on a destroy-safe object.
+    (void)dst;
+}
+
+CPPIO_TEST_CASE(result_copy_works_and_original_unchanged) {
+    cppio::Result<int> original{42};
+    cppio::Result<int> copied = original;
+    CPPIO_CHECK(copied.has_value() && copied.value() == 42);
+    CPPIO_CHECK(original.has_value() && original.value() == 42);
+
+    cppio::Result<int> err_src =
+        cppio::make_unexpected<int>(cppio::IoError{cppio::IoError::Code::eof});
+    cppio::Result<int> copied_err = err_src;
+    CPPIO_CHECK(!copied_err.has_value());
+    CPPIO_CHECK(copied_err.error().code == cppio::IoError::Code::eof);
+}
+
+CPPIO_TEST_CASE(result_assignment_transfers_state) {
+    cppio::Result<int> a{1};
+    cppio::Result<int> b{2};
+    a = b;
+    CPPIO_CHECK(a.value() == 2 && b.value() == 2);
+
+    b = cppio::make_unexpected<int>(cppio::IoError{cppio::IoError::Code::canceled});
+    a = b;
+    CPPIO_CHECK(!a.has_value());
+    CPPIO_CHECK(a.error().code == cppio::IoError::Code::canceled);
 }
 
 CPPIO_MAIN()

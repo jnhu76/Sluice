@@ -9,6 +9,12 @@ namespace cppio {
 // ---------------- BufferedReader ----------------
 
 Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
+    // Release-safe precondition: an empty backing buffer can never make
+    // progress, so reject up-front rather than spinning or UB-ing. (The
+    // constructor also asserts this in debug builds.)
+    if (buf_.empty()) {
+        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+    }
     if (dst.empty()) return std::size_t{0};
 
     std::size_t total = 0;
@@ -86,6 +92,10 @@ Result<void> BufferedWriter::flush_dirty() {
 }
 
 Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
+    // Release-safe precondition: see BufferedReader::read_some.
+    if (buf_.empty()) {
+        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+    }
     if (src.empty()) return std::size_t{0};
 
     std::size_t total = 0;

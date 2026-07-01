@@ -208,4 +208,32 @@ CPPIO_TEST_CASE(buffered_writer_write_all_retries_across_short_inner_writes) {
     CPPIO_CHECK(eq("wxyz", sink.bytes()));
 }
 
+// Release-safe precondition: an empty backing buffer must produce a clean
+// invalid_state error from the operations, NOT undefined behavior. The
+// constructor's assert() is debug-only and aborts in dev builds; the runtime
+// guard inside read_some/write_some is the safety net that must hold in
+// release builds. These tests are only meaningful under NDEBUG, where the
+// assert is compiled out.
+#ifdef NDEBUG
+CPPIO_TEST_CASE(buffered_reader_rejects_empty_buffer_at_runtime) {
+    CountingReader inner("abc");
+    std::vector<std::byte> empty;
+    cppio::BufferedReader r(inner, std::span<std::byte>(empty));
+    std::array<std::byte, 4> out{};
+    auto res = r.read_some(std::span<std::byte>(out));
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(res.error().code == cppio::IoError::Code::invalid_state);
+}
+
+CPPIO_TEST_CASE(buffered_writer_rejects_empty_buffer_at_runtime) {
+    CountingWriter inner;
+    std::vector<std::byte> empty;
+    cppio::BufferedWriter w(inner, std::span<std::byte>(empty));
+    auto res = w.write_some(sb("data"));
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(res.error().code == cppio::IoError::Code::invalid_state);
+    CPPIO_CHECK(inner.write_calls == 0);  // never reached the inner writer
+}
+#endif
+
 CPPIO_MAIN()

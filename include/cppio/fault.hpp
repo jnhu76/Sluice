@@ -56,7 +56,12 @@ public:
 
     Result<std::size_t> read_some(std::span<std::byte> dst) override {
         std::size_t n = std::min(dst.size(), buf_.size() - pos_);
-        std::memcpy(dst.data(), buf_.data() + pos_, n);
+        // Guard the memcpy: with n==0 either buf_.data() (empty source) or
+        // dst.data() (empty request) may be null, and passing null to memcpy
+        // is UB even for a zero-length copy.
+        if (n != 0) {
+            std::memcpy(dst.data(), buf_.data() + pos_, n);
+        }
         pos_ += n;
         return n;
     }

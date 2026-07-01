@@ -48,18 +48,31 @@ struct result_storage {
     result_storage& operator=(const result_storage& o) {
         if (this != &o) {
             destroy();
-            has_value_ = o.has_value_;
-            if (has_value_) ::new (static_cast<void*>(std::addressof(value_))) T(o.value_);
-            else error_ = o.error_;
+            // Construct the new value BEFORE publishing has_value_ so that if
+            // T's copy ctor throws, the object is left in a destroy-safe state
+            // (has_value_ false, no live T) rather than claiming to hold a
+            // value it never constructed.
+            if (o.has_value_) {
+                ::new (static_cast<void*>(std::addressof(value_))) T(o.value_);
+                has_value_ = true;
+            } else {
+                error_ = o.error_;
+                has_value_ = false;
+            }
         }
         return *this;
     }
-    result_storage& operator=(result_storage&& o) noexcept(std::is_nothrow_move_assignable_v<T>) {
+    result_storage& operator=(result_storage&& o) noexcept(std::is_nothrow_move_constructible_v<T>) {
         if (this != &o) {
             destroy();
-            has_value_ = o.has_value_;
-            if (has_value_) ::new (static_cast<void*>(std::addressof(value_))) T(std::move(o.value_));
-            else error_ = o.error_;
+            // See copy-assign: construct before publishing has_value_.
+            if (o.has_value_) {
+                ::new (static_cast<void*>(std::addressof(value_))) T(std::move(o.value_));
+                has_value_ = true;
+            } else {
+                error_ = o.error_;
+                has_value_ = false;
+            }
         }
         return *this;
     }
