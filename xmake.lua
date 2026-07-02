@@ -32,6 +32,7 @@ local tests = {
     "observed", "copy", "wal", "file", "posix_retry",
     "wrapper_noncopyable", "limit", "measurement",
     "writer_vec", "reader_vec", "file_vec", "wal_vec", "vector_stats",
+    "buffered_readable",
 }
 for _, t in ipairs(tests) do
     cppio_one_file_target("binary", "test", t .. "_test", "tests", "cppio_core")

@@ -85,7 +85,16 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
     return total;
 }
 
-// ---------------- BufferedWriter ----------------
+// consume_buffered: advance seek_ by exactly n. No inner-reader call, no refill.
+// Rejects n larger than the currently buffered unread region.
+Result<void> BufferedReader::consume_buffered(std::size_t n) {
+    std::size_t avail = end_ - seek_;
+    if (n > avail) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    seek_ += n;
+    return {};
+}
 
 Result<void> BufferedWriter::flush_dirty() {
     if (end_ > 0 && stats_) ++stats_->write_flush_calls;

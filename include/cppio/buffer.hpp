@@ -3,6 +3,7 @@
 // (and owns) the backing storage; the wrapper tracks fill/dirty positions.
 #pragma once
 
+#include <cppio/buffered_readable.hpp>
 #include <cppio/reader.hpp>
 #include <cppio/writer.hpp>
 
@@ -16,7 +17,11 @@ namespace cppio {
 
 // Reads from an inner Reader through a caller-owned buffer, collapsing many
 // small reads into fewer inner reads while preserving byte order and EOF.
-class BufferedReader final : public Reader {
+//
+// Also implements BufferedReadable so copy_all's fast path can drain the
+// already-buffered unread region (buf_[seek_..end_]) directly, mirroring Zig's
+// Reader.stream fast path (Reader.zig:168).
+class BufferedReader final : public Reader, public BufferedReadable {
 public:
     // The wrapper holds the span; the caller must keep the backing storage
     // alive for the wrapper's lifetime. Buffer must be non-empty. If `stats`
@@ -34,6 +39,13 @@ public:
     BufferedReader& operator=(BufferedReader&&) = delete;
 
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
+
+    // --- BufferedReadable ---
+    // buf_[seek_..end_) is the buffered unread region. Read-only, no inner call.
+    std::span<const std::byte> peek_buffered() const override {
+        return std::span<const std::byte>(buf_.data() + seek_, end_ - seek_);
+    }
+    Result<void> consume_buffered(std::size_t n) override;
 
 private:
     Reader& inner_;
