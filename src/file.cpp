@@ -10,6 +10,8 @@
 #include <sys/types.h>
 #include <sys/uio.h>  // readv / writev / struct iovec
 #include <algorithm>
+#include <functional>
+#include <optional>
 #include <vector>
 
 #ifdef IOV_MAX
@@ -178,8 +180,9 @@ Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
 
 // ---------------- FileWriter ----------------
 
-FileWriter::FileWriter(const std::string& path, SyscallStats* stats, VectorStats* vec_stats)
-    : stats_(stats), vec_stats_(vec_stats) {
+FileWriter::FileWriter(const std::string& path, SyscallStats* stats, VectorStats* vec_stats,
+                       SyncStats* sync_stats)
+    : stats_(stats), vec_stats_(vec_stats), sync_stats_(sync_stats) {
     fd_ = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
     if (fd_ < 0) {
         open_error_ = from_errno_value(errno);
@@ -286,6 +289,43 @@ Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
 
     if (vec_stats_) vec_stats_->write_vec_bytes += total;
     return total;
+}
+
+namespace {
+
+// Shared sync core: runs the given fd-sync callable with EINTR retry and maps
+// errno. Used by both sync_data (fdatasync) and sync_all (fsync).
+Result<void> do_sync(int fd, const std::optional<IoError>& open_error,
+                     const std::function<int(int)>& fn, SyncStats* stats,
+                     std::uint64_t SyncStats::*calls, std::uint64_t SyncStats::*errors) {
+    if (fd < 0) {
+        // A failed-open file surfaces its preserved errno; a moved-from/empty
+        // writer with no open_error_ reports invalid_state.
+        if (stats) ++(stats->*errors);
+        if (open_error.has_value()) return make_unexpected<void>(*open_error);
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    int rc = detail::retry_on_eintr([&] { return fn(fd); });
+    if (rc < 0) {
+        if (stats) ++(stats->*errors);
+        return make_unexpected<void>(from_errno_value(errno));
+    }
+    if (stats) ++(stats->*calls);
+    return {};
+}
+
+}  // namespace
+
+Result<void> FileWriter::sync_data() {
+    return do_sync(fd_, open_error_,
+                   [](int fd) { return ::fdatasync(fd); },
+                   sync_stats_, &SyncStats::sync_data_calls, &SyncStats::sync_data_errors);
+}
+
+Result<void> FileWriter::sync_all() {
+    return do_sync(fd_, open_error_,
+                   [](int fd) { return ::fsync(fd); },
+                   sync_stats_, &SyncStats::sync_all_calls, &SyncStats::sync_all_errors);
 }
 
 }  // namespace cppio

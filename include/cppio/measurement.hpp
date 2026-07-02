@@ -79,6 +79,15 @@ struct CopyStats {
     std::uint64_t strategy_deferred_fallback_calls = 0;
 };
 
+// Counts explicit sync operations on a SyncableWriter (CPPIO-CORE-008D). Opt-in
+// and caller-owned like the other stats structs; null means no counting.
+struct SyncStats {
+    std::uint64_t sync_data_calls = 0;
+    std::uint64_t sync_data_errors = 0;
+    std::uint64_t sync_all_calls = 0;
+    std::uint64_t sync_all_errors = 0;
+};
+
 // Counts read_vec/write_vec activity. The *_fallback_calls fields distinguish
 // "used the default read_some/write_some loop" (e.g. an ObservedReader around a
 // MemoryReader, or any non-overriding reader) from "used a real vector syscall"
