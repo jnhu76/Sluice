@@ -58,8 +58,12 @@ public:
     FileReader& operator=(const FileReader&) = delete;
 
     bool opened() const { return fd_ >= 0; }
-    // Returns an error if !opened(); the error preserves the real errno from a
-    // failed open() rather than a synthetic code.
+    // The preserved errno from a failed open(), or empty if open succeeded / this
+    // reader is default/moved-from. Exposed so IoContext backends can surface the
+    // real open error at open time rather than deferring to first read.
+    const std::optional<IoError>& open_error() const { return open_error_; }
+    // Returns an error if !opened(); preserves the real errno from a failed
+    // open() rather than a synthetic code.
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
     // POSIX readv override: gathers into all non-empty slices in one (chunked)
     // syscall. See src/file.cpp and docs/readv-writev-design-note.md.
@@ -120,6 +124,10 @@ public:
     FileWriter& operator=(const FileWriter&) = delete;
 
     bool opened() const { return fd_ >= 0; }
+    // The preserved errno from a failed open(), or empty if open succeeded / this
+    // writer is default/moved-from. Exposed so IoContext backends can surface the
+    // real open error at open time rather than deferring to first write.
+    const std::optional<IoError>& open_error() const { return open_error_; }
     // Returns an error if !opened(); preserves the real errno from a failed
     // open() rather than a synthetic code.
     Result<std::size_t> write_some(std::span<const std::byte> src) override;

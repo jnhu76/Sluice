@@ -53,4 +53,16 @@ public:
     open_writer(std::string_view path, OpenWriterOptions options = {}) = 0;
 };
 
+// Concrete blocking-POSIX context (CPPIO-CORE-009C). Constructs FileReader/
+// FileWriter under the hood and surfaces open errors at open time (rather than
+// deferring to first I/O). No async, no thread pool, no io_uring.
+class BlockingIoContext final : public IoContext {
+public:
+    Result<std::unique_ptr<Reader>>
+    open_reader(std::string_view path, OpenReaderOptions options = {}) override;
+
+    Result<std::unique_ptr<Writer>>
+    open_writer(std::string_view path, OpenWriterOptions options = {}) override;
+};
+
 }  // namespace cppio
