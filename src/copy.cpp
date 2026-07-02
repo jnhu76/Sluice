@@ -1,6 +1,11 @@
 // copy_all implementation. The primary overload drives the bounded loop; the
-// back-compat / convenience overloads delegate to it.
+// back-compat / convenience overloads delegate to it. The loop tries the
+// buffered fast path first (CPPIO-CORE-006D): when the reader also implements
+// BufferedReadable, already-buffered unread bytes are drained via
+// peek_buffered/consume_buffered before any scratch read, mirroring Zig
+// std.Io's Reader.stream (Reader.zig:168).
 #include <cppio/copy.hpp>
+#include <cppio/buffered_readable.hpp>
 
 #include <algorithm>
 #include <array>
@@ -18,14 +23,61 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
     }
 
     // A non-zero / unlimited copy needs somewhere to stage bytes. An empty
-    // scratch can never make progress, so reject rather than spin or no-op.
+    // scratch can never make progress (the fast path may fully satisfy a limited
+    // copy, but a non-empty scratch is still required for the fallback), so
+    // reject rather than spin or no-op.
     if (scratch.empty()) {
         return make_unexpected<std::uint64_t>(IoError{IoError::Code::invalid_state});
     }
 
+    // Detect the buffered-readability capability once. A reader that does not
+    // implement BufferedReadable (FileReader, MemoryReader, FaultReader, ...)
+    // yields nullptr and the classic scratch loop runs unchanged.
+    auto* br = dynamic_cast<BufferedReadable*>(&reader);
+
     std::uint64_t total = 0;
     while (limit.is_unlimited() || total < limit.remaining()) {
         if (stats) ++stats->copy_loop_iterations;
+
+        // --- Buffered fast path: drain already-buffered bytes first. ---
+        if (br != nullptr) {
+            auto buffered = br->peek_buffered();
+            if (!buffered.empty()) {
+                // Respect the limit: copy at most (remaining - total) bytes.
+                std::size_t allowed = buffered.size();
+                if (limit.is_limited()) {
+                    std::uint64_t left = limit.remaining() - total;
+                    allowed = static_cast<std::size_t>(
+                        std::min<std::uint64_t>(buffered.size(), left));
+                }
+                if (allowed == 0) {
+                    // Limit reached on this iteration; fall through to limit stop.
+                    break;
+                }
+                // write_all is all-or-error: on failure it does not expose how
+                // many bytes (if any) it wrote. Per the writer-error rule we
+                // therefore consume NOTHING on failure and return the error.
+                auto wr = writer.write_all(buffered.first(allowed));
+                if (!wr.has_value()) {
+                    if (stats) ++stats->writer_error_stops;
+                    return make_unexpected<std::uint64_t>(wr.error());
+                }
+                auto cr = br->consume_buffered(allowed);
+                if (!cr.has_value()) {
+                    // Should be impossible: allowed <= buffered.size().
+                    if (stats) ++stats->reader_error_stops;
+                    return make_unexpected<std::uint64_t>(cr.error());
+                }
+                if (stats) {
+                    stats->bytes_read += allowed;
+                    stats->bytes_written += allowed;
+                }
+                total += allowed;
+                continue;  // loop: maybe more buffered bytes, maybe limit done
+            }
+        }
+
+        // --- Scratch fallback: read into scratch, then write_all. ---
         // Never ask the reader for more than the remaining limit allows, and
         // never more than the scratch can hold.
         std::size_t to_read = scratch.size();
