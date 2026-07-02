@@ -121,6 +121,17 @@ four `*Deferred` strategies (Vector/FileRange/Sendfile/Splice) are reserved
 slots that report unsupported rather than pretending to work. See
 `docs/copy-strategy.md`.
 
+### 4.8 Backend boundary: explicit IoContext vs Zig's context object — improved in CPPIO-CORE-009
+CPPIO-CORE-009 introduces `IoContext` (abstract) + `BlockingIoContext` (POSIX),
+an explicit backend capability boundary. Zig carries the backend in its `Io`
+context object (e.g. `Io.Threaded`), which owns submission/completion machinery
+and from which `Reader`/`Writer` are created. cppio cannot adopt that model
+wholesale (no async runtime yet), but `IoContext` mirrors the *seam*: handles
+are obtained from a context, and the choice of backend is centralized there.
+This improves the strategy boundary but does not make cppio equal to Zig
+`std.Io` — there is still no async/evented/uring backend, and the direct
+`FileReader`/`FileWriter` constructors remain valid. See `docs/io-context.md`.
+
 ## 5. Measurement gap (post-005)
 
 CPPIO-CORE-004 added the measurement structs (`SyscallStats`, `BufferStats`,

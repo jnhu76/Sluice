@@ -22,6 +22,7 @@ A composable, blocking I/O core:
 - Buffered fast path (CPPIO-CORE-006): `cppio::BufferedReadable`, an opt-in capability a `BufferedReader` implements so `copy_all` drains already-buffered bytes before falling back to the scratch path. See `docs/buffered-fast-path.md`.
 - Copy strategy layer (CPPIO-CORE-007): `cppio::CopyStrategy` / `CopyOptions` / `CopyDecision` make copy path selection explicit and observable. See `docs/copy-strategy.md`.
 - Flush/sync/durability separation (CPPIO-CORE-008): `cppio::SyncableWriter` (`sync_data`/`sync_all`), `SyncStats`, and `wal::WalWriter` (written/flushed/durable LSN invariant). `flush()` drains bytes and never implies durability. See `docs/flush-sync-durability.md`.
+- Backend capability boundary (CPPIO-CORE-009): `cppio::IoContext` / `BlockingIoContext` open `Reader`/`Writer` handles through an abstract factory so future backends can plug in. Direct `FileReader`/`FileWriter` constructors remain valid. See `docs/io-context.md`.
   ```cpp
   cppio::CopyOptions options;
   options.strategy = cppio::CopyStrategy::Scratch;
@@ -153,6 +154,7 @@ Under `examples/`:
 - `mvp_wal_vector` — WAL records via `write_record_vec`, read back with `read_record`
 - `mvp_copy_strategy` — demonstrates Scratch / BufferedFirst / Auto / deferred-rejected / deferred-fallback with decision output
 - `mvp_wal_durable` — WAL durability boundary: write/flush/sync with written/flushed/durable LSN output
+- `mvp_io_context_copy` — opens reader/writer through `BlockingIoContext`, copies, flushes, syncs
 
 ## Intentional deviations from the Zig model
 
