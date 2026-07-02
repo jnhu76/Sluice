@@ -124,4 +124,46 @@ Result<std::vector<std::byte>> read_record(Reader& reader) {
     return payload;
 }
 
+// ---------------- WalWriter ----------------
+
+WalWriter::WalWriter(Writer& writer) : writer_(writer), syncable_(nullptr) {}
+
+WalWriter::WalWriter(Writer& writer, SyncableWriter* syncable)
+    : writer_(writer), syncable_(syncable) {}
+
+Result<void> WalWriter::write_record(std::span<const std::byte> payload) {
+    auto r = cppio::wal::write_record(writer_, payload);
+    if (!r.has_value()) return make_unexpected<void>(r.error());
+    // Framed size = 8 (header) + payload + 4 (checksum). Only advance on success.
+    written_lsn_ += 8 + payload.size() + 4;
+    return {};
+}
+
+Result<void> WalWriter::write_record_vec(std::span<const std::byte> payload) {
+    auto r = cppio::wal::write_record_vec(writer_, payload);
+    if (!r.has_value()) return make_unexpected<void>(r.error());
+    written_lsn_ += 8 + payload.size() + 4;
+    return {};
+}
+
+Result<void> WalWriter::flush() {
+    auto r = writer_.flush();
+    if (!r.has_value()) return make_unexpected<void>(r.error());
+    flushed_lsn_ = written_lsn_;  // advance only on success
+    return {};
+}
+
+Result<void> WalWriter::sync() {
+    // Recommended semantics: flush first, then sync_data, then advance durable.
+    auto fr = flush();
+    if (!fr.has_value()) return make_unexpected<void>(fr.error());
+    if (syncable_ == nullptr) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    auto sr = syncable_->sync_data();
+    if (!sr.has_value()) return make_unexpected<void>(sr.error());
+    durable_lsn_ = flushed_lsn_;  // advance only on success
+    return {};
+}
+
 }  // namespace cppio::wal

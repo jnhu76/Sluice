@@ -34,7 +34,7 @@ local tests = {
     "writer_vec", "reader_vec", "file_vec", "wal_vec", "vector_stats",
     "buffered_readable", "copy_fast_path", "copy_stats_fast_path", "copy_strategy",
     "copy_scratch_strategy", "copy_buffered_first_strategy", "copy_deferred_strategy",
-    "copy_strategy_stats", "syncable_writer", "file_sync",
+    "copy_strategy_stats", "syncable_writer", "file_sync", "wal_writer",
 }
 for _, t in ipairs(tests) do
     cppio_one_file_target("binary", "test", t .. "_test", "tests", "cppio_core")
