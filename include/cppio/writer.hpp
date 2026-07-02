@@ -4,6 +4,7 @@
 // a derived operation that loops over short writes and rejects zero progress.
 #pragma once
 
+#include <cppio/iovec.hpp>
 #include <cppio/result.hpp>
 
 #include <cstddef>
@@ -28,6 +29,20 @@ public:
 
     // Derived: retry write_some until all of src is written or an error occurs.
     Result<void> write_all(std::span<const std::byte> src);
+
+    // Vector primitive (overridable): write from srcs in order, skipping empty
+    // slices. Returns total bytes written. Stops after the first short write or
+    // on the first error (which is propagated immediately, even after partial
+    // progress — mirrors write_all's "errors returned, not swallowed"). A
+    // concrete writer (FileWriter) may override this to issue a single writev.
+    // Default fallback loops over write_some so every Writer works out of the
+    // box. See docs/readv-writev-design-note.md.
+    virtual Result<std::size_t> write_vec(std::span<const ConstIoSlice> srcs);
+
+    // Vector derived: write every byte of every (non-empty) slice, retrying
+    // across short writes; reject zero progress on non-empty remaining input as
+    // invalid_state. Bytes are written in order with no skip or duplication.
+    Result<void> write_all_vec(std::span<const ConstIoSlice> srcs);
 };
 
 }  // namespace cppio

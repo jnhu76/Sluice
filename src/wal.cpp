@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstring>
+#include <vector>
 
 namespace cppio::wal {
 
@@ -66,6 +67,31 @@ Result<void> write_record(Writer& writer, std::span<const std::byte> payload) {
     if (!t.has_value()) return make_unexpected<void>(t.error());
 
     return {};
+}
+
+Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload) {
+    auto len_res = detail::checked_u32_len(payload.size());
+    if (!len_res.has_value()) return make_unexpected<void>(len_res.error());
+
+    // Frame the record on the stack and emit header|payload|checksum as a single
+    // write_all_vec — byte-identical to write_record. The header/trailer arrays
+    // outlive the write_all_vec call, so the slices stay valid.
+    std::array<std::byte, 8> header{};
+    put_le_u32(header.data(), magic);
+    put_le_u32(header.data() + 4, len_res.value());
+
+    std::array<std::byte, 4> trailer{};
+    put_le_u32(trailer.data(), checksum_of(payload));
+
+    std::vector<ConstIoSlice> slices;
+    slices.reserve(payload.empty() ? 2 : 3);
+    slices.push_back(ConstIoSlice{std::span<const std::byte>(header)});
+    if (!payload.empty()) {
+        slices.push_back(ConstIoSlice{payload});
+    }
+    slices.push_back(ConstIoSlice{std::span<const std::byte>(trailer)});
+
+    return writer.write_all_vec(std::span<const ConstIoSlice>(slices));
 }
 
 Result<std::vector<std::byte>> read_record(Reader& reader) {

@@ -4,6 +4,7 @@
 // operations defined in terms of read_some and a Writer.
 #pragma once
 
+#include <cppio/iovec.hpp>
 #include <cppio/limit.hpp>
 #include <cppio/measurement.hpp>
 #include <cppio/result.hpp>
@@ -41,6 +42,18 @@ public:
 
     // Derived: bounded copy with an internally allocated scratch.
     Result<std::uint64_t> stream_to(Writer& writer, CopyLimit limit);
+
+    // Vector primitive (overridable): read into dsts in order, skipping empty
+    // slices. Returns total bytes read. A conservative readv-style primitive:
+    // it STOPS as soon as a slice is not fully satisfied — i.e. on a clean EOF
+    // (n==0) OR on a positive short read (0 < n < slice size). An error is
+    // propagated immediately, even after partial progress (mirrors read_exact).
+    // This is NOT read_exact over slices; a future read_exact_vec would keep
+    // filling the same slice on a short read. A concrete reader (FileReader)
+    // overrides this with a single readv, exposing the same stop-on-short
+    // semantics. EOF before any progress returns 0. See
+    // docs/readv-writev-design-note.md.
+    virtual Result<std::size_t> read_vec(std::span<IoSlice> dsts);
 };
 
 }  // namespace cppio

@@ -4,6 +4,7 @@
 
 #include <cppio/reader.hpp>
 #include <cppio/writer.hpp>
+#include <cppio/measurement.hpp>
 
 #include <cstdint>
 
@@ -27,7 +28,11 @@ struct WriterStats {
 
 class ObservedReader final : public Reader {
 public:
-    ObservedReader(Reader& inner, ReaderStats& stats) : inner_(inner), stats_(stats) {}
+    // `vec_stats` is optional: when null, read_vec simply delegates without
+    // counting. When set, read_vec on a non-overriding inner reader counts as a
+    // fallback call (the default read_some loop runs).
+    ObservedReader(Reader& inner, ReaderStats& stats, VectorStats* vec_stats = nullptr)
+        : inner_(inner), stats_(stats), vec_stats_(vec_stats) {}
 
     // Not copyable or movable: holds references to the inner reader and the
     // caller-owned stats struct.
@@ -37,28 +42,36 @@ public:
     ObservedReader& operator=(ObservedReader&&) = delete;
 
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
+    Result<std::size_t> read_vec(std::span<IoSlice> dsts) override;
 
 private:
     Reader& inner_;
     ReaderStats& stats_;
+    VectorStats* vec_stats_;
 };
 
 class ObservedWriter final : public Writer {
 public:
-    ObservedWriter(Writer& inner, WriterStats& stats) : inner_(inner), stats_(stats) {}
+    // `vec_stats` is optional: when null, write_vec simply delegates without
+    // counting. When set, write_vec on a non-overriding inner writer counts as a
+    // fallback call (the default write_some loop runs).
+    ObservedWriter(Writer& inner, WriterStats& stats, VectorStats* vec_stats = nullptr)
+        : inner_(inner), stats_(stats), vec_stats_(vec_stats) {}
 
-    // Not copyable or movable: holds references to the inner writer and stats.
+    // Not copyable or movable: holds a reference to the inner writer and stats.
     ObservedWriter(const ObservedWriter&) = delete;
     ObservedWriter& operator=(const ObservedWriter&) = delete;
     ObservedWriter(ObservedWriter&&) = delete;
     ObservedWriter& operator=(ObservedWriter&&) = delete;
 
     Result<std::size_t> write_some(std::span<const std::byte> src) override;
+    Result<std::size_t> write_vec(std::span<const ConstIoSlice> srcs) override;
     Result<void> flush() override;
 
 private:
     Writer& inner_;
     WriterStats& stats_;
+    VectorStats* vec_stats_;
 };
 
 }  // namespace cppio

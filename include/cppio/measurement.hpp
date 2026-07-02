@@ -56,4 +56,22 @@ struct CopyStats {
     std::uint64_t writer_error_stops = 0;
 };
 
+// Counts read_vec/write_vec activity. The *_fallback_calls fields distinguish
+// "used the default read_some/write_some loop" (e.g. an ObservedReader around a
+// MemoryReader, or any non-overriding reader) from "used a real vector syscall"
+// (the FileReader/FileWriter readv/writev overrides). That split is the whole
+// point of these stats: it tells the decision matrix (CPPIO-CORE-011) how often
+// vector I/O actually reached the kernel as a single gather/scatter syscall vs.
+// degenerated to the per-slice fallback. See docs/readv-writev-design-note.md.
+struct VectorStats {
+    std::uint64_t read_vec_calls = 0;
+    std::uint64_t read_vec_bytes = 0;
+    std::uint64_t read_vec_iovecs = 0;
+    std::uint64_t read_vec_fallback_calls = 0;
+    std::uint64_t write_vec_calls = 0;
+    std::uint64_t write_vec_bytes = 0;
+    std::uint64_t write_vec_iovecs = 0;
+    std::uint64_t write_vec_fallback_calls = 0;
+};
+
 }  // namespace cppio

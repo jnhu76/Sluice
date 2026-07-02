@@ -52,4 +52,32 @@ Result<std::uint64_t> Reader::stream_to(Writer& writer, CopyLimit limit) {
     return copy_all(*this, writer, limit);
 }
 
+// Default vector fallback: drive each non-empty slice through read_some in
+// order. A conservative vector primitive (CPPIO-CORE-005B): like a single
+// readv-style operation, it STOPS as soon as a slice is not fully satisfied —
+// i.e. on a clean EOF (n==0) OR on a positive short read (0 < n < slice size).
+// An error is propagated immediately, even after partial progress (consistent
+// with read_exact and write_all). This deliberately does NOT behave like
+// read_exact over slices (which would keep filling the same slice on a short
+// read); that is the job of a future read_exact_vec. EOF before any progress
+// returns 0; EOF/error after progress returns the progress count / the error.
+Result<std::size_t> Reader::read_vec(std::span<IoSlice> dsts) {
+    std::size_t total = 0;
+    for (auto& d : dsts) {
+        if (d.bytes.empty()) continue;  // empty slices skipped, no read
+        auto r = read_some(d.bytes);
+        if (!r.has_value()) return make_unexpected<std::size_t>(r.error());
+        std::size_t n = r.value();
+        if (n > d.bytes.size()) {
+            // Defensive: a reader returning more than asked is broken.
+            return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+        }
+        // Both EOF (n==0) and a positive short read (0 < n < size) mean the
+        // slice was not fully satisfied: stop and report the partial total.
+        total += n;
+        if (n < d.bytes.size()) return total;  // EOF or short read: stop
+    }
+    return total;
+}
+
 }  // namespace cppio

@@ -23,6 +23,12 @@ inline constexpr std::uint32_t magic = 0x57414CU;  // "WAL"
 // Encode and write one record through writer (uses write_all).
 Result<void> write_record(Writer& writer, std::span<const std::byte> payload);
 
+// Encode and write one record through writer using the vector path: emits
+// header | payload | checksum as a single write_all_vec({header,payload,checksum}).
+// Produces byte-identical output to write_record; round-trips with read_record.
+// Same payload overflow guard as write_record. See docs/readv-writev-design-note.md.
+Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload);
+
 // Read and validate one record. Clean EOF at record start -> error::eof.
 // Truncated stream -> error::eof. Bad checksum -> error::invalid_state.
 Result<std::vector<std::byte>> read_record(Reader& reader);

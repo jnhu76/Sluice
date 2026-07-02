@@ -20,6 +20,7 @@ A composable, blocking I/O core:
 - `cppio::FaultReader` / `cppio::FaultWriter` — deterministic short-I/O and failure injection driven by a `FaultPlan`.
 - `cppio::copy_all(reader, writer, scratch)` — the copy primitive.
 - `cppio::wal::write_record` / `read_record` — a minimal WAL record format for exercising writer semantics.
+- Vector I/O (CPPIO-CORE-005): `cppio::IoSlice` / `cppio::ConstIoSlice`, `Reader::read_vec`, `Writer::write_vec` / `write_all_vec`, POSIX `readv`/`writev` overrides on the file backends, and `cppio::wal::write_record_vec`. See `docs/readv-writev-design-note.md`.
 
 ## Design reference
 
@@ -37,6 +38,7 @@ None of the implementation depends on Zig.
 | `std.testing.io`            | `FaultReader` / `FaultWriter`                                  |
 | failing I/O                 | `FaultReader` / `FaultWriter`                                  |
 | `streamTo` / copy primitive | `copy_all(Reader&, Writer&)`                                   |
+| `readVec`/`writeVec`        | `read_vec`/`write_vec`/`write_all_vec` (+ POSIX `readv`/`writev`) |
 
 ## Wrapper composition
 
@@ -120,6 +122,10 @@ external test framework. Each slice has its own binary:
 - `copy_test` — `copy_all` exact bytes, totals, both-side error propagation
 - `wal_test` — WAL round-trip, truncation, checksum mismatch, fault propagation
 - `file_test` — POSIX file round-trip, EOF, missing-file, move-only, on-disk WAL
+- `writer_vec_test` / `reader_vec_test` — default vector fallback: in-order, empty-skip, short I/O, error propagation
+- `file_vec_test` — POSIX `readv`/`writev` round-trip, `IOV_MAX` chunking, open-error, `VectorStats`
+- `wal_vec_test` — `write_record_vec` round-trips, byte-equivalence with `write_record`, overflow guard
+- `vector_stats_test` — `VectorStats` fallback counting through the observed wrappers
 
 ## Examples
 
@@ -180,6 +186,20 @@ and async are deferred). Documented here so they read as design, not oversight.
   `FaultWriter` + `FaultPlan` are this project's design to satisfy the task's
   "deterministic fault injection" requirement. They are specified by the task,
   so they are authoritative rather than a Zig-port fidelity issue.
+
+- **Vector I/O (`read_vec`/`write_vec`) is partial fidelity, landed in CPPIO-CORE-005.**
+  The *shape* matches Zig's `readVec`/`writeVec`. The default fallback and the
+  POSIX `readv`/`writev` overrides share conservative vector-primitive semantics:
+  stop on EOF, on error, or on the first positive short result (they are **not**
+  `read_exact`/`write_all` over slices — `write_all_vec` is the separate all-or-
+  error helper). Two intentional divergences from Zig remain: (1) the default
+  fallback loops over `read_some`/`write_some` rather than negotiating around an
+  interface-owned buffer (this core has no internal buffer — see above), and
+  (2) errors are propagated immediately even after partial progress, where
+  Zig's `readVec` swallows `EndOfStream` when bytes were already read. The POSIX
+  overrides on the file backends collapse slices into one syscall. This is a
+  prototype, **not** a performance claim — no benchmark integration yet. See
+  `docs/readv-writev-design-note.md`.
 
 ## Status / scope
 

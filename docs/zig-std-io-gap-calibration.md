@@ -1,7 +1,7 @@
 # Zig `std.Io` ↔ cppio gap calibration
 
 Compares the local Zig source (`./zig/lib/std/Io/`) against the current C++
-core. Status: after CPPIO-CORE-004. Zig is a **design reference only** — never a
+core. Status: after CPPIO-CORE-005. Zig is a **design reference only** — never a
 build/runtime dependency.
 
 ## 1. Scope
@@ -28,7 +28,7 @@ to close them. No performance claims — measurements land in CPPIO-CORE-010/011
 | `Io.Reader.Limited` wrapper | (none — `CopyLimit` covers the bound) | not needed |
 | `std.testing.io` fault model | `FaultReader`/`FaultWriter` + `FaultPlan` | original design, not a port — see §4.5 |
 | `Reader.peek` / buffered fast path | (none yet) | **largest gap** — see §5, CPPIO-CORE-006 |
-| `readv`/`writev` (vector I/O) | (none yet) | deferred — see §5, CPPIO-CORE-005 |
+| `readv`/`writev` (vector I/O) | `read_vec`/`write_vec`/`write_all_vec` + POSIX overrides | **Partial / Improved in CPPIO-CORE-005** — see §4.6 |
 
 ## 3. High-fidelity areas
 
@@ -79,21 +79,44 @@ Zig's current `std.testing.io` is built on an `Io.Threaded` context, not a
 simple fault-injecting recorder. `FaultReader`/`FaultWriter` are this project's
 design to satisfy the "deterministic fault injection" requirement.
 
-## 5. Measurement gap (post-004)
+### 4.6 Vector I/O: partial fidelity, improved in CPPIO-CORE-005
+CPPIO-CORE-005 added `read_vec`/`write_vec`/`write_all_vec` plus POSIX
+`readv`/`writev` overrides on the file backends and a `write_record_vec` WAL
+path; CPPIO-CORE-005B then aligned the default fallback to conservative
+readv/writev-style semantics (stop on EOF / error / first positive short result)
+— see `docs/readv-writev-design-note.md`. The *shape* now matches Zig's
+`readVec`/`readVecAll`/`writeVec`/`writeVecAll`. One deliberate semantic
+divergence remains (not a bug):
+
+- **Buffer model.** Zig's vector primitives negotiate around the
+  interface-owned buffer inside each Reader/Writer; cppio's default fallback
+  loops directly over `read_some`/`write_some` (no internal buffer — §4.1).
+
+cppio's error model on partial progress is also stricter by decision: errors are
+propagated immediately even after some slices made progress (matching
+`read_exact`/`write_all`), where Zig's `readVec` swallows `EndOfStream` when
+bytes were already read. This is documented as intentional and may be revisited.
+
+cppio now has vector primitives. It still does not have Zig's full
+interface-owned buffer model, and it still does not implement async / uring /
+cancellation. Zig `std.Io` remains a design reference only, not a dependency.
+
+## 5. Measurement gap (post-005)
 
 CPPIO-CORE-004 added the measurement structs (`SyscallStats`, `BufferStats`,
-`CopyStats`) and wired optional `Stats*` into the core types. This closes the
-*observability* gap — we can now count syscalls, buffer hits/misses, and copy
-stop reasons. What remains unmeasured until CPPIO-CORE-010: actual wall-clock
-throughput/latency, and the relative cost of the scratch copy vs a would-be
-zero-copy fast path.
+`CopyStats`) and CPPIO-CORE-005 added `VectorStats`; all are wired through
+optional, caller-owned `Stats*` pointers. This closes the *observability* gap —
+we can now count syscalls, buffer hits/misses, copy stop reasons, and vector
+calls/bytes/iovecs (split into fallback vs real readv/writev). What remains
+unmeasured until CPPIO-CORE-010: actual wall-clock throughput/latency, and the
+relative cost of the scratch copy vs a would-be zero-copy fast path.
 
 ## 6. Deferred fidelity items
 
 | Item | Job | Why deferred |
 |---|---|---|
 | Buffered fast path (zero-copy copy) | CPPIO-CORE-006 | needs measurement to justify |
-| `readv`/`writev` vector I/O | CPPIO-CORE-005 | next primitive before zero-copy |
+| ~~`readv`/`writev` vector I/O~~ | ~~CPPIO-CORE-005~~ | **done in 005 (partial — see §4.6)** |
 | Copy strategy layer | CPPIO-CORE-007 | needs 005/006 to choose between paths |
 | Flush/sync/durability split | CPPIO-CORE-008 | durability is out of correctness-phase scope |
 | `IoContext` capability object | CPPIO-CORE-009 | backend boundary before any async |
@@ -101,9 +124,10 @@ zero-copy fast path.
 
 ## 7. Next-step recommendation
 
-Follow the roadmap's strict order: **005 (readv/writev) → 006 (buffered fast
-path) → 010 (microbench) → 011 (decision matrix)**. Do not pick a copy strategy
-(007) or attempt io_uring (012) until measurement data from 010 exists — the
-discipline is "do not optimize before measuring." The buffered-fast-path gap
-(§4.2) is the single highest-value fidelity item, but it must be validated by
-microbench before it's treated as an optimization win rather than a guess.
+Follow the roadmap's strict order: **006 (buffered fast path) → 010 (microbench)
+→ 011 (decision matrix)**. With 005 landed, the next primitive is the buffered
+fast path. Do not pick a copy strategy (007) or attempt io_uring (012) until
+measurement data from 010 exists — the discipline is "do not optimize before
+measuring." The buffered-fast-path gap (§4.2) is the single highest-value
+fidelity item, but it must be validated by microbench before it's treated as an
+optimization win rather than a guess.
