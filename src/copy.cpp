@@ -1,9 +1,11 @@
-// copy_all implementation. The primary overload drives the bounded loop; the
-// back-compat / convenience overloads delegate to it. The loop tries the
-// buffered fast path first (CPPIO-CORE-006D): when the reader also implements
-// BufferedReadable, already-buffered unread bytes are drained via
-// peek_buffered/consume_buffered before any scratch read, mirroring Zig
-// std.Io's Reader.stream (Reader.zig:168).
+// copy_all implementation. The strategy-aware overload is the source of truth;
+// the CopyLimit / back-compat / convenience overloads delegate to it.
+//
+// The loop tries the buffered fast path first (CPPIO-CORE-006D) when the
+// strategy allows it: when the reader also implements BufferedReadable,
+// already-buffered unread bytes are drained via peek_buffered/consume_buffered
+// before any scratch read, mirroring Zig std.Io's Reader.stream (Reader.zig:168).
+// CPPIO-CORE-007C made that an explicit CopyStrategy choice.
 #include <cppio/copy.hpp>
 #include <cppio/buffered_readable.hpp>
 
@@ -12,9 +14,61 @@
 
 namespace cppio {
 
+namespace {
+
+// Whether a strategy is one of the deferred (not-yet-implemented) reserved
+// slots. They never execute their named path this stage.
+bool is_deferred(CopyStrategy s) {
+    return s == CopyStrategy::VectorDeferred ||
+           s == CopyStrategy::FileRangeDeferred ||
+           s == CopyStrategy::SendfileDeferred ||
+           s == CopyStrategy::SpliceDeferred;
+}
+
+}  // namespace
+
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
-                               CopyLimit limit, CopyStats* stats) {
+                               CopyOptions options, CopyStats* stats, CopyDecision* decision) {
     if (stats) ++stats->copy_calls;
+
+    CopyDecision local_dec;
+    CopyDecision& dec = decision ? *decision : local_dec;
+    dec.requested = options.strategy;
+    dec.selected = options.strategy;
+    dec.reason = to_string(options.strategy);
+    dec.used_buffered_fast_path = false;
+    dec.used_scratch_path = false;
+    dec.unsupported_requested = false;
+
+    // --- Deferred strategies: explicitly unsupported this stage (007E). ---
+    // Kept here (not in 007E only) so the intermediate is never silently broken.
+    if (is_deferred(options.strategy)) {
+        if (options.unsupported_policy == UnsupportedStrategyPolicy::FallbackToAuto) {
+            dec.unsupported_requested = true;
+            dec.selected = CopyStrategy::Auto;
+            dec.reason = "deferred_fallback_to_auto";
+            // Fall through to Auto behavior below by normalizing the strategy.
+            options.strategy = CopyStrategy::Auto;
+        } else {
+            // Default policy: return invalid_state, touch nothing.
+            dec.unsupported_requested = true;
+            dec.reason = "deferred_not_implemented";
+            if (stats) ++stats->reader_error_stops;
+            return make_unexpected<std::uint64_t>(IoError{IoError::Code::invalid_state});
+        }
+    }
+
+    // Resolve Auto: currently Auto == BufferedFirst (006 made buffered-first the
+    // default). Documented and tested; may change after measurement (010). Auto
+    // keeps its own requested value but reports what it ran as.
+    bool use_fast_path = (options.strategy == CopyStrategy::BufferedFirst ||
+                          options.strategy == CopyStrategy::Auto);
+    if (options.strategy == CopyStrategy::Auto) {
+        dec.selected = CopyStrategy::BufferedFirst;
+        dec.reason = "auto";
+    }
+
+    const CopyLimit& limit = options.limit;
 
     // nothing() (and bytes(0)): succeed immediately without touching endpoints.
     if (limit.is_limited() && limit.remaining() == 0) {
@@ -30,10 +84,9 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         return make_unexpected<std::uint64_t>(IoError{IoError::Code::invalid_state});
     }
 
-    // Detect the buffered-readability capability once. A reader that does not
-    // implement BufferedReadable (FileReader, MemoryReader, FaultReader, ...)
-    // yields nullptr and the classic scratch loop runs unchanged.
-    auto* br = dynamic_cast<BufferedReadable*>(&reader);
+    // Detect the buffered-readability capability once, but only honor it when
+    // the selected strategy wants the fast path (Scratch forces it off).
+    BufferedReadable* br = use_fast_path ? dynamic_cast<BufferedReadable*>(&reader) : nullptr;
 
     std::uint64_t total = 0;
     while (limit.is_unlimited() || total < limit.remaining()) {
@@ -74,6 +127,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                     ++stats->buffered_fast_path_calls;
                     stats->buffered_fast_path_bytes += allowed;
                 }
+                dec.used_buffered_fast_path = true;
                 total += allowed;
                 continue;  // loop: maybe more buffered bytes, maybe limit done
             }
@@ -114,11 +168,17 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
             return make_unexpected<std::uint64_t>(wr.error());
         }
         if (stats) stats->bytes_written += got;
+        dec.used_scratch_path = true;
         total += got;
     }
     // Loop exited because the limit was reached (not EOF/error).
     if (stats) ++stats->limit_stops;
     return total;
+}
+
+Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
+                               CopyLimit limit, CopyStats* stats) {
+    return copy_all(reader, writer, scratch, CopyOptions{limit, CopyStrategy::Auto}, stats);
 }
 
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch) {

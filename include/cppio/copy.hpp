@@ -2,6 +2,7 @@
 // Loops read -> write_all until EOF, error, or the CopyLimit is exhausted.
 #pragma once
 
+#include <cppio/copy_strategy.hpp>
 #include <cppio/limit.hpp>
 #include <cppio/measurement.hpp>
 #include <cppio/reader.hpp>
@@ -13,12 +14,20 @@
 
 namespace cppio {
 
-// Primary overload: bounded copy with caller-provided scratch and an explicit
-// limit. CopyLimit::unlimited() reproduces the original copy-to-EOF behavior;
-// CopyLimit::bytes(n) copies at most n; CopyLimit::nothing() copies nothing and
-// touches neither reader nor writer. Empty scratch with a non-zero/unlimited
-// limit is invalid_state; nothing() tolerates an empty scratch. If `stats` is
-// non-null, copy loop / byte / stop-reason counters are recorded there.
+// Strategy-aware primary overload (CPPIO-CORE-007C): selects the copy path from
+// options.strategy, respects options.limit, and fills *decision (if non-null)
+// with requested vs selected and which path moved bytes. Auto currently behaves
+// as BufferedFirst (006). Scratch forces the scratch read/write loop and never
+// uses the buffered fast path. Deferred strategies are handled in 007E. If
+// `stats` is non-null, copy loop / byte / stop-reason counters are recorded.
+Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
+                               CopyOptions options, CopyStats* stats = nullptr,
+                               CopyDecision* decision = nullptr);
+
+// Bounded copy with caller-provided scratch and an explicit limit. Delegates to
+// the strategy overload with CopyOptions{limit, CopyStrategy::Auto}. Preserves
+// the pre-007 behavior (Auto == BufferedFirst, so a BufferedReadable reader
+// still gets the fast path).
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
                                CopyLimit limit, CopyStats* stats = nullptr);
 
