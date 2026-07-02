@@ -38,7 +38,8 @@ for _, t in ipairs(tests) do
 end
 
 -- Buildable examples. Built/run via `xmake -g examples`.
-local examples = { "cat", "copy_file", "small_writes", "fault_write", "wal_records" }
+local examples = { "cat", "copy_file", "small_writes", "fault_write", "wal_records",
+                   "mvp_copy_pipeline", "mvp_limited_copy", "mvp_wal_vector" }
 for _, e in ipairs(examples) do
     cppio_one_file_target("binary", "examples", e, "examples", "cppio_core")
 end
