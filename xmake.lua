@@ -34,6 +34,7 @@ local tests = {
     "writer_vec", "reader_vec", "file_vec", "wal_vec", "vector_stats",
     "buffered_readable", "copy_fast_path", "copy_stats_fast_path", "copy_strategy",
     "copy_scratch_strategy", "copy_buffered_first_strategy", "copy_deferred_strategy",
+    "copy_strategy_stats",
 }
 for _, t in ipairs(tests) do
     cppio_one_file_target("binary", "test", t .. "_test", "tests", "cppio_core")
@@ -41,7 +42,8 @@ end
 
 -- Buildable examples. Built/run via `xmake -g examples`.
 local examples = { "cat", "copy_file", "small_writes", "fault_write", "wal_records",
-                   "mvp_copy_pipeline", "mvp_limited_copy", "mvp_wal_vector" }
+                   "mvp_copy_pipeline", "mvp_limited_copy", "mvp_wal_vector",
+                   "mvp_copy_strategy" }
 for _, e in ipairs(examples) do
     cppio_one_file_target("binary", "examples", e, "examples", "cppio_core")
 end
