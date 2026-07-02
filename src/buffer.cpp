@@ -17,6 +17,11 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
     }
     if (dst.empty()) return std::size_t{0};
 
+    if (stats_) {
+        ++stats_->read_requests;
+        stats_->read_request_bytes += dst.size();
+    }
+
     std::size_t total = 0;
     while (!dst.empty()) {
         // Serve as much as possible from the buffer first.
@@ -27,8 +32,14 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
             seek_ += n;
             dst = dst.subspan(n);
             total += n;
+            if (stats_) {
+                ++stats_->read_buffer_hits;
+                stats_->read_buffer_hit_bytes += n;
+            }
             // If dst is satisfied, we're done without touching the inner reader.
             if (dst.empty()) break;
+        } else if (stats_) {
+            ++stats_->read_buffer_misses;
         }
 
         // Buffer exhausted: refill once. If dst now fits entirely in the
@@ -65,6 +76,10 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
             // EOF. Return whatever we accumulated this call.
             return total;
         }
+        if (stats_) {
+            ++stats_->read_refill_calls;
+            stats_->read_refill_bytes += got;
+        }
         end_ += got;
     }
     return total;
@@ -73,6 +88,7 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
 // ---------------- BufferedWriter ----------------
 
 Result<void> BufferedWriter::flush_dirty() {
+    if (end_ > 0 && stats_) ++stats_->write_flush_calls;
     while (end_ > 0) {
         auto r = inner_.write_some(std::span<const std::byte>(buf_.data(), end_));
         if (!r.has_value()) {
@@ -84,6 +100,7 @@ Result<void> BufferedWriter::flush_dirty() {
             flush_ever_failed_ = true;
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
+        if (stats_) stats_->write_flush_bytes += n;
         if (n >= end_) {
             end_ = 0;
             break;
@@ -101,6 +118,11 @@ Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
         return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
     }
     if (src.empty()) return std::size_t{0};
+
+    if (stats_) {
+        ++stats_->write_requests;
+        stats_->write_request_bytes += src.size();
+    }
 
     std::size_t total = 0;
     while (!src.empty()) {
@@ -124,6 +146,10 @@ Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
             }
             std::size_t n = r.value();
             total += n;
+            if (stats_) {
+                ++stats_->write_direct_calls;
+                stats_->write_direct_bytes += n;
+            }
             if (n == 0) {
                 return total > 0 ? Result<std::size_t>{total}
                                  : make_unexpected<std::size_t>(
@@ -139,6 +165,10 @@ Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
         end_ += n;
         src = src.subspan(n);
         total += n;
+        if (stats_) {
+            ++stats_->write_buffered_calls;
+            stats_->write_buffered_bytes += n;
+        }
         // Stop after absorbing into the buffer: write_some is "may write fewer".
         break;
     }

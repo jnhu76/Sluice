@@ -5,6 +5,7 @@
 #include <cppio/copy.hpp>
 #include <cppio/fault.hpp>
 #include <cppio/limit.hpp>
+#include <cppio/measurement.hpp>
 #include <cppio/reader.hpp>
 #include <cppio/writer.hpp>
 
@@ -317,6 +318,113 @@ CPPIO_TEST_CASE(limited_copy_convenience_overload_without_scratch) {
     CPPIO_CHECK(res.has_value());
     CPPIO_CHECK(res.value() == 3);
     CPPIO_CHECK(eq("abc", writer.bytes()));
+}
+
+// ---------- CopyStats attachment + stop reasons (CPPIO-CORE-004) ----------
+
+CPPIO_TEST_CASE(copy_stats_eof_stop_and_byte_counts) {
+    auto reader = cppio::MemoryReader::from_string("abcdef");
+    cppio::MemoryWriter writer;
+    std::vector<std::byte> scratch(64);
+    cppio::CopyStats stats{};
+    auto res = cppio::copy_all(reader, writer, std::span<std::byte>(scratch),
+                               cppio::CopyLimit::unlimited(), &stats);
+    CPPIO_CHECK(res.has_value() && res.value() == 6);
+    CPPIO_CHECK(stats.copy_calls == 1);
+    CPPIO_CHECK(stats.bytes_read == 6);
+    CPPIO_CHECK(stats.bytes_written == 6);
+    CPPIO_CHECK(stats.eof_stops == 1);
+    CPPIO_CHECK(stats.limit_stops == 0);
+    CPPIO_CHECK(stats.reader_error_stops == 0);
+    CPPIO_CHECK(stats.writer_error_stops == 0);
+}
+
+CPPIO_TEST_CASE(copy_stats_limit_stop_includes_nothing) {
+    auto reader = cppio::MemoryReader::from_string("abcdef");
+    cppio::MemoryWriter writer;
+    std::vector<std::byte> scratch(64);
+    cppio::CopyStats stats{};
+
+    // nothing() must stop with a limit stop and zero reader/writer traffic.
+    auto res = cppio::copy_all(reader, writer, std::span<std::byte>(scratch),
+                               cppio::CopyLimit::nothing(), &stats);
+    CPPIO_CHECK(res.has_value() && res.value() == 0);
+    CPPIO_CHECK(stats.limit_stops == 1);
+    CPPIO_CHECK(stats.bytes_read == 0);
+    CPPIO_CHECK(stats.bytes_written == 0);
+    CPPIO_CHECK(stats.eof_stops == 0);
+
+    // A real byte limit that is hit (not EOF-first) also counts as a limit stop.
+    cppio::CopyStats stats2{};
+    auto reader2 = cppio::MemoryReader::from_string("abcdef");
+    cppio::MemoryWriter writer2;
+    auto res2 = cppio::copy_all(reader2, writer2, std::span<std::byte>(scratch),
+                                cppio::CopyLimit::bytes(3), &stats2);
+    CPPIO_CHECK(res2.has_value() && res2.value() == 3);
+    CPPIO_CHECK(stats2.limit_stops == 1);
+    CPPIO_CHECK(stats2.eof_stops == 0);
+    CPPIO_CHECK(stats2.bytes_read == 3);
+}
+
+CPPIO_TEST_CASE(copy_stats_reader_error_stop) {
+    cppio::MemoryReader mem = cppio::MemoryReader::from_string("abcdef");
+    cppio::FaultPlan plan;
+    plan.max_read_size = 1;
+    plan.fail_after_read_calls = 2;
+    plan.error = cppio::IoError{cppio::IoError::Code::canceled};
+    cppio::FaultReader reader(mem, plan);
+    cppio::MemoryWriter writer;
+    std::vector<std::byte> scratch(8);
+    cppio::CopyStats stats{};
+    auto res = cppio::copy_all(reader, writer, std::span<std::byte>(scratch),
+                               cppio::CopyLimit::unlimited(), &stats);
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(stats.reader_error_stops == 1);
+    CPPIO_CHECK(stats.writer_error_stops == 0);
+    CPPIO_CHECK(stats.eof_stops == 0);
+    CPPIO_CHECK(stats.limit_stops == 0);
+}
+
+CPPIO_TEST_CASE(copy_stats_writer_error_stop) {
+    auto reader = cppio::MemoryReader::from_string("abcdef");
+    cppio::MemoryWriter sink;
+    cppio::FaultPlan plan;
+    plan.max_write_size = 2;
+    plan.fail_after_write_calls = 1;
+    plan.error = cppio::IoError{cppio::IoError::Code::no_space};
+    cppio::FaultWriter writer(sink, plan);
+    std::vector<std::byte> scratch(8);
+    cppio::CopyStats stats{};
+    auto res = cppio::copy_all(reader, writer, std::span<std::byte>(scratch),
+                               cppio::CopyLimit::unlimited(), &stats);
+    CPPIO_CHECK(!res.has_value());
+    CPPIO_CHECK(stats.writer_error_stops == 1);
+    CPPIO_CHECK(stats.reader_error_stops == 0);
+    CPPIO_CHECK(stats.eof_stops == 0);
+}
+
+CPPIO_TEST_CASE(copy_stats_null_is_zero_overhead) {
+    auto reader = cppio::MemoryReader::from_string("abc");
+    cppio::MemoryWriter writer;
+    std::vector<std::byte> scratch(8);
+    auto res = cppio::copy_all(reader, writer, std::span<std::byte>(scratch),
+                               cppio::CopyLimit::unlimited(), nullptr);
+    CPPIO_CHECK(res.has_value() && res.value() == 3);
+}
+
+CPPIO_TEST_CASE(stream_to_delegates_copy_stats) {
+    // Reader::stream_to(writer, scratch, limit) must forward CopyStats to
+    // copy_all (no stats drift between the two paths).
+    cppio::MemoryReader reader = cppio::MemoryReader::from_string("abcdef");
+    cppio::MemoryWriter writer;
+    std::vector<std::byte> scratch(64);
+    cppio::CopyStats stats{};
+    auto res = reader.stream_to(writer, std::span<std::byte>(scratch),
+                                cppio::CopyLimit::bytes(3), &stats);
+    CPPIO_CHECK(res.has_value() && res.value() == 3);
+    CPPIO_CHECK(stats.copy_calls == 1);
+    CPPIO_CHECK(stats.limit_stops == 1);
+    CPPIO_CHECK(stats.bytes_read == 3);
 }
 
 CPPIO_MAIN()

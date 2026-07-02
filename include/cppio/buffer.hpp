@@ -6,6 +6,8 @@
 #include <cppio/reader.hpp>
 #include <cppio/writer.hpp>
 
+#include <cppio/measurement.hpp>
+
 #include <cassert>
 #include <cstddef>
 #include <span>
@@ -17,9 +19,10 @@ namespace cppio {
 class BufferedReader final : public Reader {
 public:
     // The wrapper holds the span; the caller must keep the backing storage
-    // alive for the wrapper's lifetime. Buffer must be non-empty.
-    BufferedReader(Reader& inner, std::span<std::byte> buffer)
-        : inner_(inner), buf_(buffer) {
+    // alive for the wrapper's lifetime. Buffer must be non-empty. If `stats`
+    // is non-null, buffer hit/miss/refill counters are recorded there.
+    BufferedReader(Reader& inner, std::span<std::byte> buffer, BufferStats* stats = nullptr)
+        : inner_(inner), buf_(buffer), stats_(stats) {
         assert(!buffer.empty() && "BufferedReader requires a non-empty backing buffer");
     }
 
@@ -37,6 +40,7 @@ private:
     std::span<std::byte> buf_;
     std::size_t seek_ = 0;  // consumed position within buf_
     std::size_t end_ = 0;   // one past last valid byte within buf_
+    BufferStats* stats_ = nullptr;
 };
 
 // Writes to an inner Writer through a caller-owned buffer, coalescing small
@@ -45,8 +49,8 @@ private:
 // avoid silent data loss, matching the Zig model.
 class BufferedWriter final : public Writer {
 public:
-    BufferedWriter(Writer& inner, std::span<std::byte> buffer)
-        : inner_(inner), buf_(buffer) {
+    BufferedWriter(Writer& inner, std::span<std::byte> buffer, BufferStats* stats = nullptr)
+        : inner_(inner), buf_(buffer), stats_(stats) {
         assert(!buffer.empty() && "BufferedWriter requires a non-empty backing buffer");
     }
 
@@ -79,6 +83,7 @@ private:
     std::span<std::byte> buf_;
     std::size_t end_ = 0;  // one past last dirty byte within buf_
     bool flush_ever_failed_ = false;  // suppresses the destructor assert
+    BufferStats* stats_ = nullptr;
 };
 
 }  // namespace cppio

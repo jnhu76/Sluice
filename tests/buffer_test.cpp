@@ -5,6 +5,7 @@
 
 #include <cppio/buffer.hpp>
 #include <cppio/fault.hpp>
+#include <cppio/measurement.hpp>
 #include <cppio/reader.hpp>
 #include <cppio/writer.hpp>
 
@@ -252,6 +253,64 @@ CPPIO_TEST_CASE(buffered_writer_destroys_cleanly_after_flush) {
         CPPIO_CHECK(w.flush().has_value());  // end_ back to 0 before scope exit
     }  // ~BufferedWriter asserts end_ == 0; reaching here proves the contract
     CPPIO_CHECK(eq("hello", inner.mem.bytes()));
+}
+
+// ---------- BufferStats attachment (CPPIO-CORE-004) ----------
+
+CPPIO_TEST_CASE(buffered_reader_records_hit_then_miss_then_refill) {
+    // Small buffer forces a refill once buffered bytes are exhausted.
+    CountingReader inner("abcdefgh");
+    cppio::BufferStats stats{};
+    std::vector<std::byte> backing(4);
+    cppio::BufferedReader r(inner, std::span<std::byte>(backing), &stats);
+
+    // First read: 1 byte served from a fresh refill (miss -> refill).
+    std::byte b{};
+    CPPIO_CHECK(r.read_some(std::span<std::byte>(&b, 1)).has_value());
+    CPPIO_CHECK(stats.read_requests >= 1);
+    CPPIO_CHECK(stats.read_refill_calls >= 1);
+    CPPIO_CHECK(stats.read_refill_bytes == 4);  // filled the 4-byte buffer
+
+    // Second byte: served from the buffer (hit), no new refill.
+    CPPIO_CHECK(r.read_some(std::span<std::byte>(&b, 1)).has_value());
+    CPPIO_CHECK(stats.read_buffer_hits >= 1);
+    CPPIO_CHECK(stats.read_refill_calls == 1);  // unchanged
+}
+
+CPPIO_TEST_CASE(buffered_writer_records_buffered_then_flush) {
+    CountingWriter inner;
+    cppio::BufferStats stats{};
+    std::vector<std::byte> backing(16);
+    cppio::BufferedWriter w(inner, std::span<std::byte>(backing), &stats);
+
+    CPPIO_CHECK(w.write_all(sb("hello")).has_value());  // fits in buffer
+    CPPIO_CHECK(stats.write_buffered_calls == 1);
+    CPPIO_CHECK(stats.write_buffered_bytes == 5);
+    CPPIO_CHECK(stats.write_flush_calls == 0);
+
+    CPPIO_CHECK(w.flush().has_value());
+    CPPIO_CHECK(stats.write_flush_calls == 1);
+    CPPIO_CHECK(stats.write_flush_bytes == 5);
+}
+
+CPPIO_TEST_CASE(buffered_writer_large_write_goes_direct) {
+    CountingWriter inner;
+    cppio::BufferStats stats{};
+    std::vector<std::byte> backing(4);
+    cppio::BufferedWriter w(inner, std::span<std::byte>(backing), &stats);
+
+    // A write larger than the buffer bypasses into a direct inner write.
+    CPPIO_CHECK(w.write_all(sb("CDEFGHIJ")).has_value());
+    CPPIO_CHECK(stats.write_direct_calls >= 1);
+    CPPIO_CHECK(stats.write_direct_bytes >= 1);
+}
+
+CPPIO_TEST_CASE(buffer_stats_null_is_zero_overhead) {
+    CountingReader inner("abc");
+    std::vector<std::byte> backing(4);
+    cppio::BufferedReader r(inner, std::span<std::byte>(backing), nullptr);
+    std::array<std::byte, 3> out{};
+    CPPIO_CHECK(r.read_exact(std::span<std::byte>(out)).has_value());  // no crash
 }
 
 CPPIO_MAIN()

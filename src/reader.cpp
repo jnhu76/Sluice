@@ -42,10 +42,10 @@ Result<std::size_t> Reader::stream_to(Writer& writer) {
 }
 
 Result<std::uint64_t> Reader::stream_to(Writer& writer, std::span<std::byte> scratch,
-                                        CopyLimit limit) {
+                                        CopyLimit limit, CopyStats* stats) {
     // Delegate to copy_all so the bounded-copy semantics live in exactly one
     // place (no duplicated loop, no drift between stream_to and copy_all).
-    return copy_all(*this, writer, scratch, limit);
+    return copy_all(*this, writer, scratch, limit, stats);
 }
 
 Result<std::uint64_t> Reader::stream_to(Writer& writer, CopyLimit limit) {

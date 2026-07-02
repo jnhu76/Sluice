@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cppio/limit.hpp>
+#include <cppio/measurement.hpp>
 #include <cppio/result.hpp>
 
 #include <cstddef>
@@ -33,8 +34,10 @@ public:
     Result<std::size_t> stream_to(Writer& writer);
 
     // Derived: bounded copy with an explicit limit and caller-provided scratch.
-    // Delegates to copy_all — no duplicated copy logic.
-    Result<std::uint64_t> stream_to(Writer& writer, std::span<std::byte> scratch, CopyLimit limit);
+    // Delegates to copy_all — no duplicated copy logic. If `stats` is non-null
+    // it is forwarded to copy_all for measurement.
+    Result<std::uint64_t> stream_to(Writer& writer, std::span<std::byte> scratch, CopyLimit limit,
+                                    CopyStats* stats = nullptr);
 
     // Derived: bounded copy with an internally allocated scratch.
     Result<std::uint64_t> stream_to(Writer& writer, CopyLimit limit);
