@@ -44,7 +44,10 @@ struct BufferStats {
     std::uint64_t write_direct_bytes = 0;
 };
 
-// Counts copy_all loop behavior and the reason each copy stopped.
+// Counts copy_all loop behavior and the reason each copy stopped. The
+// fast/scratch counters (CPPIO-CORE-006E) split the copy work between the
+// buffered fast path (draining already-buffered bytes via BufferedReadable) and
+// the scratch read path. They are observability hooks, not throughput numbers.
 struct CopyStats {
     std::uint64_t copy_calls = 0;
     std::uint64_t copy_loop_iterations = 0;
@@ -54,6 +57,15 @@ struct CopyStats {
     std::uint64_t limit_stops = 0;
     std::uint64_t reader_error_stops = 0;
     std::uint64_t writer_error_stops = 0;
+    // Buffered fast path: incremented each loop iteration that drains bytes from
+    // peek_buffered(); *_bytes is the byte count drained.
+    std::uint64_t buffered_fast_path_calls = 0;
+    std::uint64_t buffered_fast_path_bytes = 0;
+    // Scratch path: incremented each loop iteration that issues a read into the
+    // scratch buffer (including an EOF probe that reads 0); *_bytes is the byte
+    // count that was actually written through scratch.
+    std::uint64_t scratch_path_calls = 0;
+    std::uint64_t scratch_path_bytes = 0;
 };
 
 // Counts read_vec/write_vec activity. The *_fallback_calls fields distinguish

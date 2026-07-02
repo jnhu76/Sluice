@@ -71,6 +71,8 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                 if (stats) {
                     stats->bytes_read += allowed;
                     stats->bytes_written += allowed;
+                    ++stats->buffered_fast_path_calls;
+                    stats->buffered_fast_path_bytes += allowed;
                 }
                 total += allowed;
                 continue;  // loop: maybe more buffered bytes, maybe limit done
@@ -87,6 +89,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         }
 
         auto rr = reader.read_some(scratch.first(to_read));
+        if (stats) ++stats->scratch_path_calls;  // counts the attempt (incl. EOF probe)
         if (!rr.has_value()) {
             if (stats) ++stats->reader_error_stops;
             return make_unexpected<std::uint64_t>(rr.error());
@@ -101,7 +104,10 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
             if (stats) ++stats->reader_error_stops;
             return make_unexpected<std::uint64_t>(IoError{IoError::Code::invalid_state});
         }
-        if (stats) stats->bytes_read += got;
+        if (stats) {
+            stats->bytes_read += got;
+            stats->scratch_path_bytes += got;
+        }
         auto wr = writer.write_all(std::span<const std::byte>(scratch.data(), got));
         if (!wr.has_value()) {
             if (stats) ++stats->writer_error_stops;
