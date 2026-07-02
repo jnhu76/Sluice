@@ -57,7 +57,18 @@ needs, and a fake filesystem risks overbuilding. The seam exists for it.
 - No thread pool.
 - No io_uring.
 - No scheduler / cancellation token.
-- No `MemoryIoContext` this stage (deferred — see 009D).
+- No `MemoryIoContext` this stage — **deferred by CPPIO-CORE-009D**.
+
+### 009D decision: defer MemoryIoContext
+
+A `MemoryIoContext` (deterministic named in-memory files) is the natural test
+fake, but it risks overbuilding a filesystem. The existing in-memory
+`MemoryReader`/`MemoryWriter` plus the `FaultReader`/`FaultWriter` wrappers
+already cover the deterministic test needs this project has, and
+`BlockingIoContext` itself uses only temp files in tests. The abstract
+`IoContext` seam remains, so a future `MemoryIoContext` can be added without
+changing callers when a concrete need appears. Building it now would be
+speculative.
 
 ## 7. Future backend candidates
 
