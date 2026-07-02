@@ -66,6 +66,11 @@ int main() {
     std::vector<std::byte> write_buf(1024);
     std::vector<std::byte> scratch(8192);
 
+    // The total copied across the prime read + the copy_all (both feed the
+    // output). The prime read pulls more into the read buffer than it consumes,
+    // leaving unread buffered bytes for copy_all's fast path to drain.
+    std::size_t primed_bytes = 0;
+
     {
         cppio::FileReader file_in(in_tp.str(), &syscall_stats);
         if (!file_in.opened()) {
@@ -82,6 +87,24 @@ int main() {
         cppio::ObservedWriter observed_out(file_out, writer_stats);
         cppio::BufferedWriter buffered_out(observed_out, write_buf, &buffer_stats);
 
+        // Prime: read a few bytes out of the BufferedReader and write them
+        // directly, leaving the rest buffered for copy_all's fast path.
+        std::vector<std::byte> primed(64);
+        auto pr = buffered_in.read_some(std::span<std::byte>(primed));
+        if (!pr.has_value() || pr.value() != primed.size()) {
+            std::fprintf(stderr, "prime read failed\n");
+            return 1;
+        }
+        primed_bytes = primed.size();
+        auto pw = buffered_out.write_all(
+            std::span<const std::byte>(primed.data(), primed.size()));
+        if (!pw.has_value()) {
+            std::fprintf(stderr, "prime write failed\n");
+            return 1;
+        }
+
+        // copy_all drains the remaining buffered bytes via the fast path first,
+        // then falls back to scratch reads.
         auto res = cppio::copy_all(buffered_in, buffered_out,
                                    std::span<std::byte>(scratch),
                                    cppio::CopyLimit::unlimited(), &copy_stats);
@@ -96,9 +119,15 @@ int main() {
                          cppio::to_string(flush_res.error().code).data());
             return 1;
         }
-        if (res.value() != payload.size()) {
-            std::fprintf(stderr, "byte count mismatch: got %llu, want %zu\n",
-                         static_cast<unsigned long long>(res.value()), payload.size());
+        if (res.value() + primed_bytes != payload.size()) {
+            std::fprintf(stderr, "byte count mismatch: copied %llu + primed %zu, want %zu\n",
+                         static_cast<unsigned long long>(res.value()), primed_bytes, payload.size());
+            return 1;
+        }
+        // The buffered fast path must have served bytes: the prime left unread
+        // buffered data that copy_all drained before any scratch read.
+        if (copy_stats.buffered_fast_path_bytes == 0) {
+            std::fprintf(stderr, "buffered fast path did not engage\n");
             return 1;
         }
     }
@@ -110,18 +139,24 @@ int main() {
         return 1;
     }
 
-    // 4. Print composition stats.
-    std::printf("mvp_copy_pipeline: copied %zu bytes, stop=%s\n",
-                payload.size(), stop_reason(copy_stats));
+    // 4. Print composition stats, including the buffered fast path counters.
+    std::printf("mvp_copy_pipeline: copied %zu bytes (primed %zu + copy %llu), stop=%s\n",
+                payload.size(), primed_bytes,
+                static_cast<unsigned long long>(copy_stats.bytes_read),
+                stop_reason(copy_stats));
+    std::printf("  copied_bytes=%zu\n", payload.size());
+    std::printf("  buffered_fast_path_bytes=%llu\n",
+                static_cast<unsigned long long>(copy_stats.buffered_fast_path_bytes));
+    std::printf("  scratch_path_bytes=%llu\n",
+                static_cast<unsigned long long>(copy_stats.scratch_path_bytes));
+    std::printf("  buffer_hits=%llu\n",
+                static_cast<unsigned long long>(buffer_stats.read_buffer_hits));
+    std::printf("  buffer_misses=%llu\n",
+                static_cast<unsigned long long>(buffer_stats.read_buffer_misses));
     std::printf("  copy_loop_iterations=%llu bytes_read=%llu bytes_written=%llu\n",
                 static_cast<unsigned long long>(copy_stats.copy_loop_iterations),
                 static_cast<unsigned long long>(copy_stats.bytes_read),
                 static_cast<unsigned long long>(copy_stats.bytes_written));
-    std::printf("  buffer: read_hits=%llu read_misses=%llu write_buffered=%llu write_direct=%llu\n",
-                static_cast<unsigned long long>(buffer_stats.read_buffer_hits),
-                static_cast<unsigned long long>(buffer_stats.read_buffer_misses),
-                static_cast<unsigned long long>(buffer_stats.write_buffered_bytes),
-                static_cast<unsigned long long>(buffer_stats.write_direct_bytes));
     std::printf("  syscalls: read=%llu write=%llu (errors read=%llu write=%llu)\n",
                 static_cast<unsigned long long>(syscall_stats.read_syscalls),
                 static_cast<unsigned long long>(syscall_stats.write_syscalls),
