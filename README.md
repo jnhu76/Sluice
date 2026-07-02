@@ -19,6 +19,7 @@ A composable, blocking I/O core:
 - `cppio::ObservedReader` / `cppio::ObservedWriter` — transparent stats-collecting wrappers.
 - `cppio::FaultReader` / `cppio::FaultWriter` — deterministic short-I/O and failure injection driven by a `FaultPlan`.
 - `cppio::copy_all(reader, writer, scratch)` — the copy primitive.
+- Buffered fast path (CPPIO-CORE-006): `cppio::BufferedReadable`, an opt-in capability a `BufferedReader` implements so `copy_all` drains already-buffered bytes before falling back to the scratch path. See `docs/buffered-fast-path.md`.
 - `cppio::wal::write_record` / `read_record` — a minimal WAL record format for exercising writer semantics.
 - Vector I/O (CPPIO-CORE-005): `cppio::IoSlice` / `cppio::ConstIoSlice`, `Reader::read_vec`, `Writer::write_vec` / `write_all_vec`, POSIX `readv`/`writev` overrides on the file backends, and `cppio::wal::write_record_vec`. See `docs/readv-writev-design-note.md`.
 
@@ -120,6 +121,8 @@ external test framework. Each slice has its own binary:
 - `buffer_test` — `BufferedReader` / `BufferedWriter` order, EOF, dirty flush, flush-error
 - `observed_test` — stats accounting + data transparency
 - `copy_test` — `copy_all` exact bytes, totals, both-side error propagation
+- `buffered_readable_test` — `BufferedReadable` `peek_buffered`/`consume_buffered`
+- `copy_fast_path_test` / `copy_stats_fast_path_test` — `copy_all` buffered fast path + fast/scratch stats
 - `wal_test` — WAL round-trip, truncation, checksum mismatch, fault propagation
 - `file_test` — POSIX file round-trip, EOF, missing-file, move-only, on-disk WAL
 - `writer_vec_test` / `reader_vec_test` — default vector fallback: in-order, empty-skip, short I/O, error propagation
@@ -136,6 +139,9 @@ Under `examples/`:
 - `small_writes` — many tiny writes through `BufferedWriter` + `ObservedWriter`
 - `fault_write` — a deterministic `FaultWriter` failure
 - `wal_records` — write and read back WAL records on disk
+- `mvp_copy_pipeline` — the canonical MVP composition; demonstrates the buffered fast path
+- `mvp_limited_copy` — `CopyLimit::bytes(N)` copy with stop-reason stats
+- `mvp_wal_vector` — WAL records via `write_record_vec`, read back with `read_record`
 
 ## Intentional deviations from the Zig model
 
@@ -153,14 +159,17 @@ and async are deferred). Documented here so they read as design, not oversight.
   `preserve_len`, the `Discarding`/`Allocating` writers. Those are out of scope
   for this phase.
 
-- **`copy_all` uses an intermediate scratch buffer, not a zero-copy fast path.**
-  Zig's `Reader.stream` (Reader.zig:168) routes the first bytes through the
-  reader's *own* buffer so the writer reads directly from buffered data — no
-  extra copy, and no scratch allocation when data is already buffered.
-  `cppio::copy_all(reader, writer, scratch)` always copies through the
-  caller-provided scratch, and wrapping it around a `BufferedReader` buys
-  nothing today. This is the largest fidelity gap and the prime candidate for
-  the zero-copy/io_uring phase.
+- **`copy_all` has a buffered fast path, but is not full Zig zero-copy.**
+  Zig's `Reader.stream` (Reader.zig:168) writes `r.buffer[r.seek..r.end]`
+  directly to the writer because the buffer lives inside the reader. cppio keeps
+  the base `Reader` unbuffered, so CPPIO-CORE-006 added an opt-in
+  `BufferedReadable` capability: when `copy_all`'s reader also implements it
+  (i.e. a `BufferedReader`), already-buffered unread bytes are drained to the
+  writer via `peek_buffered()`/`consume_buffered()` before falling back to the
+  scratch read path. Unbuffered readers still go through `read_some(scratch) →
+  write_all(scratch)`. The wrapper-vs-interface-owned-buffer divergence remains
+  (see `docs/buffered-fast-path.md`); this is not a performance claim —
+  measurement lands in CPPIO-CORE-010.
 
 - **`flush()` is split, not uniform.**
   In Zig one `flush` contract does the right thing regardless of whether the

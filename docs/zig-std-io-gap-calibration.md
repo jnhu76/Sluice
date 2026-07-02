@@ -27,7 +27,7 @@ to close them. No performance claims — measurements land in CPPIO-CORE-010/011
 | `Io.Limit` (sentinel enum) | `CopyLimit` (Kind + remaining) | C++-friendly equivalent |
 | `Io.Reader.Limited` wrapper | (none — `CopyLimit` covers the bound) | not needed |
 | `std.testing.io` fault model | `FaultReader`/`FaultWriter` + `FaultPlan` | original design, not a port — see §4.5 |
-| `Reader.peek` / buffered fast path | (none yet) | **largest gap** — see §5, CPPIO-CORE-006 |
+| `Reader.peek` / buffered fast path | `BufferedReadable` + `copy_all` fast path | **Partial / Improved in CPPIO-CORE-006** — see §4.2 |
 | `readv`/`writev` (vector I/O) | `read_vec`/`write_vec`/`write_all_vec` + POSIX overrides | **Partial / Improved in CPPIO-CORE-005** — see §4.6 |
 
 ## 3. High-fidelity areas
@@ -55,12 +55,18 @@ around the buffer. cppio deliberately uses **external** `BufferedReader`/
 Zig's `rebase`, `preserve_len`, and the `Discarding`/`Allocating` writers have
 no direct analog here. Approved divergence.
 
-### 4.2 Copy uses scratch, not a zero-copy fast path
-Zig `Reader.stream` routes the first bytes through the reader's *own* buffer so
-the writer reads directly from already-buffered data. `cppio::copy_all` always
-stages through the caller's scratch buffer; wrapping a `BufferedReader` around
-the source buys nothing for `copy_all` today. Correct, but the largest fidelity
-gap — see `docs/buffered-fast-path.md` and CPPIO-CORE-006.
+### 4.2 Copy fast path: partial — improved in CPPIO-CORE-006
+Zig `Reader.stream` (`Reader.zig:168`) writes `r.buffer[r.seek..r.end]` (already
+buffered, unread bytes) directly to the writer before invoking the vtable stream
+— a zero-copy fast path because the buffer lives inside the reader. cppio's base
+`Reader` is unbuffered, so 006 closes this gap **without a rewrite**: an opt-in
+`BufferedReadable` capability interface lets `BufferedReader` expose its
+`buf_[seek_..end_)` region, and `copy_all` drains it via `peek_buffered()`/
+`consume_buffered()` before falling back to the scratch path. Detection is a
+`dynamic_cast` probe, so unbuffered readers pay nothing. The wrapper-vs-
+interface-owned-buffer divergence remains, and the scratch path still runs when
+no buffered bytes are exposed — see `docs/buffered-fast-path.md`. Not a
+performance claim; measurement lands in CPPIO-CORE-010.
 
 ### 4.3 Flush is split, not uniform
 Zig's single `flush` contract does the right thing regardless of buffering.
@@ -115,7 +121,7 @@ relative cost of the scratch copy vs a would-be zero-copy fast path.
 
 | Item | Job | Why deferred |
 |---|---|---|
-| Buffered fast path (zero-copy copy) | CPPIO-CORE-006 | needs measurement to justify |
+| ~~Buffered fast path (zero-copy copy)~~ | ~~CPPIO-CORE-006~~ | **done in 006 (partial — see §4.2)** |
 | ~~`readv`/`writev` vector I/O~~ | ~~CPPIO-CORE-005~~ | **done in 005 (partial — see §4.6)** |
 | Copy strategy layer | CPPIO-CORE-007 | needs 005/006 to choose between paths |
 | Flush/sync/durability split | CPPIO-CORE-008 | durability is out of correctness-phase scope |
@@ -124,10 +130,9 @@ relative cost of the scratch copy vs a would-be zero-copy fast path.
 
 ## 7. Next-step recommendation
 
-Follow the roadmap's strict order: **006 (buffered fast path) → 010 (microbench)
-→ 011 (decision matrix)**. With 005 landed, the next primitive is the buffered
-fast path. Do not pick a copy strategy (007) or attempt io_uring (012) until
-measurement data from 010 exists — the discipline is "do not optimize before
-measuring." The buffered-fast-path gap (§4.2) is the single highest-value
-fidelity item, but it must be validated by microbench before it's treated as an
-optimization win rather than a guess.
+Follow the roadmap's strict order: **007 (copy strategy layer) → 010 (microbench)
+→ 011 (decision matrix)**. With 006 landed, `copy_all` now has multiple paths
+(scratch, buffered fast path, vector write) and a strategy layer should choose
+between them explicitly rather than accumulate heuristics. Do not attempt
+io_uring (012) until measurement data from 010 exists — the discipline is "do
+not optimize before measuring."
