@@ -11,6 +11,15 @@ target("cppio_core")
     add_includedirs("include", {public = true})
     add_files("src/*.cpp")
 
+-- Bench helper library (CPPIO-CORE-010B). Linked into bench targets + the CSV test.
+target("cppio_bench_common")
+    set_kind("static")
+    set_default(false)
+    set_group("bench")
+    add_includedirs("include", "bench")
+    add_deps("cppio_core")
+    add_files("bench/bench_common.cpp")
+
 -- Declare a test/example target only when its source file exists, so xmake
 -- does not warn about missing files for slices not yet written.
 function cppio_one_file_target(kind, group, name, subdir, deps_list)
@@ -21,7 +30,7 @@ function cppio_one_file_target(kind, group, name, subdir, deps_list)
         set_default(false)
         set_group(group)
         if deps_list then add_deps(deps_list) end
-        add_includedirs("include")
+        add_includedirs("include", "bench")
         add_files(path)
         if group == "test" then add_tests(name) end
 end
@@ -47,4 +56,26 @@ local examples = { "cat", "copy_file", "small_writes", "fault_write", "wal_recor
                    "mvp_copy_strategy", "mvp_wal_durable", "mvp_io_context_copy" }
 for _, e in ipairs(examples) do
     cppio_one_file_target("binary", "examples", e, "examples", "cppio_core")
+end
+
+-- bench_csv_test needs the bench helper lib + bench include dir.
+do
+    local p = "tests/bench_csv_test.cpp"
+    if os.isfile(p) then
+        target("bench_csv_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("cppio_core", "cppio_bench_common")
+            add_includedirs("include", "bench")
+            add_files(p)
+            add_tests("bench_csv_test")
+    end
+end
+
+-- Core microbench targets (CPPIO-CORE-010C-F). Built/run via `xmake -g bench`.
+local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
+                  "sync_smoke_bench" }
+for _, b in ipairs(benches) do
+    cppio_one_file_target("binary", "bench", b, "bench", {"cppio_core", "cppio_bench_common"})
 end
