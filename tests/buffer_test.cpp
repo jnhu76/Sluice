@@ -236,4 +236,22 @@ CPPIO_TEST_CASE(buffered_writer_rejects_empty_buffer_at_runtime) {
 }
 #endif
 
+// BufferedWriter's destructor asserts (debug-only) that no dirty bytes remain,
+// catching the common "forgot to flush" misuse. This test proves the positive
+// contract: a flushed writer destroys cleanly. The negative contract (unflushed
+// dirty bytes abort in debug builds) is intentionally not asserted here —
+// triggering it would abort the test process, and it's debug-only so it can't
+// be observed under NDEBUG. Manual verification: construct a BufferedWriter,
+// write_all without flush, let it go out of scope in a debug build -> SIGABRT.
+CPPIO_TEST_CASE(buffered_writer_destroys_cleanly_after_flush) {
+    CountingWriter inner;
+    std::vector<std::byte> backing(8);
+    {
+        cppio::BufferedWriter w(inner, std::span<std::byte>(backing));
+        CPPIO_CHECK(w.write_all(sb("hello")).has_value());
+        CPPIO_CHECK(w.flush().has_value());  // end_ back to 0 before scope exit
+    }  // ~BufferedWriter asserts end_ == 0; reaching here proves the contract
+    CPPIO_CHECK(eq("hello", inner.mem.bytes()));
+}
+
 CPPIO_MAIN()

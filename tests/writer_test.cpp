@@ -80,6 +80,18 @@ CPPIO_TEST_CASE(write_all_rejects_zero_progress_on_non_empty_input) {
     CPPIO_CHECK(r.error().code == cppio::IoError::Code::invalid_state);
 }
 
+CPPIO_TEST_CASE(write_all_rejects_zero_progress_after_partial_write) {
+    // A partial write (2 bytes) followed by a zero-progress call must still be
+    // rejected as invalid_state, not loop forever. The 2 partial bytes remain
+    // delivered (write_all does not roll back on failure).
+    ScriptedWriter w;
+    w.steps = {{2, std::nullopt}, {0, std::nullopt}};
+    auto r = w.write_all(as_bytes("data"));
+    CPPIO_CHECK(!r.has_value());
+    CPPIO_CHECK(r.error().code == cppio::IoError::Code::invalid_state);
+    CPPIO_CHECK(w.sink.size() == 2);  // partial write happened before failure
+}
+
 CPPIO_TEST_CASE(write_all_empty_input_is_success_without_calls) {
     ScriptedWriter w;
     // No steps queued: if write_all wrongly called write_some it would error.

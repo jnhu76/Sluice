@@ -28,7 +28,12 @@ public:
     std::optional<cppio::IoError> err;  // returned instead of next data once set
 
     cppio::Result<std::size_t> read_some(std::span<std::byte> dst) override {
-        if (err && pos >= err_trigger_pos) return cppio::make_unexpected<std::size_t>(*err);
+        // If an error is armed, fire when the trigger position is reached. If
+        // the author armed err but forgot to set a position, fire immediately
+        // rather than silently never triggering (which would be a false pass).
+        if (err && (!err_trigger_pos.has_value() || pos >= *err_trigger_pos)) {
+            return cppio::make_unexpected<std::size_t>(*err);
+        }
         if (pos >= payload.size()) return std::size_t{0};  // EOF
         std::size_t avail = payload.size() - pos;
         std::size_t n = std::min(dst.size(), avail);
@@ -37,7 +42,7 @@ public:
         pos += n;
         return n;
     }
-    std::size_t err_trigger_pos = std::size_t(-1);
+    std::optional<std::size_t> err_trigger_pos;
 };
 
 class ScriptedWriter final : public cppio::Writer {

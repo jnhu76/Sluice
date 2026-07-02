@@ -45,6 +45,12 @@ public:
     constexpr std::uint64_t remaining() const noexcept { return remaining_; }
 
 private:
+    // Private default ctor: the factories construct a default instance then
+    // set its fields. A public default ctor would let callers write
+    // `CopyLimit c;` and silently get nothing()-equivalent semantics, which is
+    // a footgun — so only the class itself (and its static factories) may use it.
+    constexpr CopyLimit() = default;
+
     Kind kind_ = Kind::limited;
     std::uint64_t remaining_ = 0;
 };

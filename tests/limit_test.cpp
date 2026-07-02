@@ -4,6 +4,7 @@
 
 #include <cppio/limit.hpp>
 
+#include <concepts>
 #include <cstdint>
 
 CPPIO_TEST_CASE(copy_limit_unlimited_is_unlimited) {
@@ -38,5 +39,9 @@ CPPIO_TEST_CASE(copy_limit_is_value_like_and_constexpr_constructible) {
     static_assert(ten.is_limited() && ten.remaining() == 10);
     static_assert(zero.is_limited() && zero.remaining() == 0);
 }
+
+// A default-constructed CopyLimit would silently behave like nothing() (copy
+// zero bytes), which is a footgun. Instances must come from the factories only.
+static_assert(!std::default_initializable<cppio::CopyLimit>);
 
 CPPIO_MAIN()

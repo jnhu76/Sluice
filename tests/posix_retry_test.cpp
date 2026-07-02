@@ -64,4 +64,15 @@ CPPIO_TEST_CASE(retry_on_eintr_returns_zero_unchanged) {
     CPPIO_CHECK(sc.calls == 1);
 }
 
+CPPIO_TEST_CASE(retry_on_eintr_stops_after_eintr_then_permanent_error) {
+    // Multiple EINTR retries, then a permanent (non-EINTR) error: the helper
+    // must stop at the permanent error and preserve its errno, not keep retrying.
+    ScriptedSyscall sc;
+    sc.steps = {{-1, EINTR}, {-1, EINTR}, {-1, EBADF}};
+    auto n = cppio::detail::retry_on_eintr(std::ref(sc));
+    CPPIO_CHECK(n == -1);
+    CPPIO_CHECK(sc.calls == 3);
+    CPPIO_CHECK(errno == EBADF);
+}
+
 CPPIO_MAIN()

@@ -75,9 +75,13 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
 Result<void> BufferedWriter::flush_dirty() {
     while (end_ > 0) {
         auto r = inner_.write_some(std::span<const std::byte>(buf_.data(), end_));
-        if (!r.has_value()) return make_unexpected<void>(r.error());
+        if (!r.has_value()) {
+            flush_ever_failed_ = true;  // dirty bytes may remain; suppress dtor assert
+            return make_unexpected<void>(r.error());
+        }
         std::size_t n = r.value();
         if (n == 0) {
+            flush_ever_failed_ = true;
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         if (n >= end_) {

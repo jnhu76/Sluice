@@ -158,4 +158,23 @@ CPPIO_TEST_CASE(file_writer_is_move_only) {
     CPPIO_CHECK(moved.write_all(sb("moved")).has_value());
 }
 
+CPPIO_TEST_CASE(file_reader_is_move_only) {
+    // Parity with the FileWriter move test: verifies the moved-from reader
+    // releases its fd (no double-close) and the moved-to reader reads correctly.
+    TempPath tp;
+    {
+        cppio::FileWriter w(tp.str());
+        CPPIO_CHECK(w.write_all(sb("moved")).has_value());
+    }
+    cppio::FileReader r(tp.str());
+    CPPIO_CHECK(r.opened());
+    cppio::FileReader moved = std::move(r);
+    CPPIO_CHECK(moved.opened());
+    CPPIO_CHECK(!r.opened());  // moved-from is released
+    std::array<std::byte, 5> buf{};
+    auto res = moved.read_exact(std::span<std::byte>(buf));
+    CPPIO_CHECK(res.has_value());
+    CPPIO_CHECK(std::memcmp(buf.data(), "moved", 5) == 0);
+}
+
 CPPIO_MAIN()

@@ -61,7 +61,15 @@ public:
 
     // No silent flush in destructor: a flush that fails cannot be reported
     // from a destructor, so we require explicit flush() before destruction.
-    ~BufferedWriter() override = default;
+    // Debug-only assert catches the common "forgot to flush" misuse loudly;
+    // suppressed when flush() already reported an error (that path is known
+    // to leave dirty bytes — the caller has been notified). Compiled out under
+    // NDEBUG (the release-safe guard in write_some handles the empty-buffer
+    // precondition, not this).
+    ~BufferedWriter() override {
+        assert((end_ == 0 || flush_ever_failed_) &&
+               "BufferedWriter destroyed with unflushed dirty bytes (did you forget flush()?)");
+    }
 
 private:
     // Push buf_[0..end_) to the inner writer, retrying short writes.
@@ -70,6 +78,7 @@ private:
     Writer& inner_;
     std::span<std::byte> buf_;
     std::size_t end_ = 0;  // one past last dirty byte within buf_
+    bool flush_ever_failed_ = false;  // suppresses the destructor assert
 };
 
 }  // namespace cppio
