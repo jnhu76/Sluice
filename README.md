@@ -20,6 +20,13 @@ A composable, blocking I/O core:
 - `cppio::FaultReader` / `cppio::FaultWriter` — deterministic short-I/O and failure injection driven by a `FaultPlan`.
 - `cppio::copy_all(reader, writer, scratch)` — the copy primitive.
 - Buffered fast path (CPPIO-CORE-006): `cppio::BufferedReadable`, an opt-in capability a `BufferedReader` implements so `copy_all` drains already-buffered bytes before falling back to the scratch path. See `docs/buffered-fast-path.md`.
+- Copy strategy layer (CPPIO-CORE-007): `cppio::CopyStrategy` / `CopyOptions` / `CopyDecision` make copy path selection explicit and observable. See `docs/copy-strategy.md`.
+  ```cpp
+  cppio::CopyOptions options;
+  options.strategy = cppio::CopyStrategy::Scratch;
+  cppio::CopyDecision decision;
+  copy_all(reader, writer, scratch, options, &stats, &decision);
+  ```
 - `cppio::wal::write_record` / `read_record` — a minimal WAL record format for exercising writer semantics.
 - Vector I/O (CPPIO-CORE-005): `cppio::IoSlice` / `cppio::ConstIoSlice`, `Reader::read_vec`, `Writer::write_vec` / `write_all_vec`, POSIX `readv`/`writev` overrides on the file backends, and `cppio::wal::write_record_vec`. See `docs/readv-writev-design-note.md`.
 
@@ -123,6 +130,7 @@ external test framework. Each slice has its own binary:
 - `copy_test` — `copy_all` exact bytes, totals, both-side error propagation
 - `buffered_readable_test` — `BufferedReadable` `peek_buffered`/`consume_buffered`
 - `copy_fast_path_test` / `copy_stats_fast_path_test` — `copy_all` buffered fast path + fast/scratch stats
+- `copy_strategy_test` / `copy_scratch_strategy_test` / `copy_buffered_first_strategy_test` / `copy_deferred_strategy_test` / `copy_strategy_stats_test` — `CopyStrategy` API + Scratch/BufferedFirst/Auto routing + deferred handling + strategy counters
 - `wal_test` — WAL round-trip, truncation, checksum mismatch, fault propagation
 - `file_test` — POSIX file round-trip, EOF, missing-file, move-only, on-disk WAL
 - `writer_vec_test` / `reader_vec_test` — default vector fallback: in-order, empty-skip, short I/O, error propagation
@@ -142,6 +150,7 @@ Under `examples/`:
 - `mvp_copy_pipeline` — the canonical MVP composition; demonstrates the buffered fast path
 - `mvp_limited_copy` — `CopyLimit::bytes(N)` copy with stop-reason stats
 - `mvp_wal_vector` — WAL records via `write_record_vec`, read back with `read_record`
+- `mvp_copy_strategy` — demonstrates Scratch / BufferedFirst / Auto / deferred-rejected / deferred-fallback with decision output
 
 ## Intentional deviations from the Zig model
 

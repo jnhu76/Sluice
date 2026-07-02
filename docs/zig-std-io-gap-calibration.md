@@ -107,6 +107,20 @@ cppio now has vector primitives. It still does not have Zig's full
 interface-owned buffer model, and it still does not implement async / uring /
 cancellation. Zig `std.Io` remains a design reference only, not a dependency.
 
+### 4.7 Copy strategy: explicit layer vs Zig's vtable negotiation — improved in CPPIO-CORE-007
+CPPIO-CORE-007 improves the strategy boundary but does not make cppio equal to
+Zig `std.Io`. Zig does **not** have an explicit copy-strategy enum: path
+selection lives inside the Reader/Writer/vtable model (`Reader.stream` chooses
+behavior based on what the concrete reader/writer expose). cppio's base
+`Reader`/`Writer` are minimal and unbuffered, so 007 introduced an **explicit
+external strategy layer** (`CopyStrategy` / `CopyOptions` / `CopyDecision`) that
+the caller selects. This is an intentional C++ design divergence: cppio prefers
+an observable, caller-chosen, testable strategy over an implicit, vtable-
+negotiated one. Auto currently resolves to BufferedFirst (006's default); the
+four `*Deferred` strategies (Vector/FileRange/Sendfile/Splice) are reserved
+slots that report unsupported rather than pretending to work. See
+`docs/copy-strategy.md`.
+
 ## 5. Measurement gap (post-005)
 
 CPPIO-CORE-004 added the measurement structs (`SyscallStats`, `BufferStats`,
@@ -123,16 +137,16 @@ relative cost of the scratch copy vs a would-be zero-copy fast path.
 |---|---|---|
 | ~~Buffered fast path (zero-copy copy)~~ | ~~CPPIO-CORE-006~~ | **done in 006 (partial — see §4.2)** |
 | ~~`readv`/`writev` vector I/O~~ | ~~CPPIO-CORE-005~~ | **done in 005 (partial — see §4.6)** |
-| Copy strategy layer | CPPIO-CORE-007 | needs 005/006 to choose between paths |
+| ~~Copy strategy layer~~ | ~~CPPIO-CORE-007~~ | **done in 007 (explicit boundary — see §4.7)** |
 | Flush/sync/durability split | CPPIO-CORE-008 | durability is out of correctness-phase scope |
 | `IoContext` capability object | CPPIO-CORE-009 | backend boundary before any async |
 | io_uring | CPPIO-CORE-012 | requires 004–011 preconditions |
 
 ## 7. Next-step recommendation
 
-Follow the roadmap's strict order: **007 (copy strategy layer) → 010 (microbench)
-→ 011 (decision matrix)**. With 006 landed, `copy_all` now has multiple paths
-(scratch, buffered fast path, vector write) and a strategy layer should choose
-between them explicitly rather than accumulate heuristics. Do not attempt
-io_uring (012) until measurement data from 010 exists — the discipline is "do
-not optimize before measuring."
+Follow the roadmap's strict order: **008 (flush/sync/durability) → 010
+(microbench) → 011 (decision matrix)**. With 007 landed, copy paths are explicit
+and the strategy boundary is observable. Before benchmarking or io_uring, the
+project must separate flush-buffered-bytes from sync-file-data from durable-WAL-
+commit (008) so future WAL benchmarks cannot make false durability claims. Do
+not attempt io_uring (012) until measurement data from 010 exists.

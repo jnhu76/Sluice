@@ -32,6 +32,10 @@ performance claim.
 - **`CopyStats` counters** — `buffered_fast_path_calls`/`_bytes` and
   `scratch_path_calls`/`_bytes` split the copy work between the two paths.
 
+As of CPPIO-CORE-007 this fast path is also an **explicit `CopyStrategy`**
+(`BufferedFirst`, with `Auto` resolving to it). Forcing the pre-006 scratch path
+is now `CopyStrategy::Scratch`. See `docs/copy-strategy.md`.
+
 Detection uses `dynamic_cast` (not a virtual hook on the `Reader` base) so that
 unbuffered readers (`FileReader`, `MemoryReader`, `FaultReader`, ...) carry zero
 overhead and no dead virtuals. See §3 of this doc.

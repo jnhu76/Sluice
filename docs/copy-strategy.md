@@ -1,7 +1,9 @@
 # Copy strategy layer
 
-**Status: contract documented in CPPIO-CORE-007A.** Implementation lands in
-007B–007G. This is a design contract, not a performance claim.
+**Status: implemented in CPPIO-CORE-007A–007G.** The strategy boundary is now
+explicit and observable: Auto / Scratch / BufferedFirst are implemented, the
+four `*Deferred` strategies are reserved slots that report as unsupported, and
+`CopyDecision` / `CopyStats` record what ran. This is not a performance claim.
 
 ## 1. Scope
 
