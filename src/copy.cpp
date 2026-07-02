@@ -88,6 +88,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
             case CopyStrategy::FileRangeDeferred:
             case CopyStrategy::SendfileDeferred:
             case CopyStrategy::SpliceDeferred: break;
+            default: break;  // future enum values: do not double-count
         }
     }
 
