@@ -1,8 +1,13 @@
 # Zig `std.Io` ↔ cppio gap calibration
 
 Compares the local Zig source (`./zig/lib/std/Io/`) against the current C++
-core. Status: after CPPIO-CORE-005. Zig is a **design reference only** — never a
+core. Status: after CPPIO-CORE-012. Zig is a **design reference only** — never a
 build/runtime dependency.
+
+> **Authoritative parity table:** `docs/zig-std-io-parity-audit.md` (012C) is
+> now the single source of truth for concept-by-concept fidelity. This document
+> keeps the narrative gap analysis and per-section commentary that predates the
+> audit; where the two overlap, the audit table wins.
 
 ## 1. Scope
 
