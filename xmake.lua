@@ -27,7 +27,8 @@ target("sluice_bench_common")
     set_group("bench")
     add_includedirs("include", "bench")
     add_deps("sluice_core")
-    add_files("bench/bench_common.cpp", "bench/support/blocking_io_pool.cpp")
+    add_files("bench/bench_common.cpp", "bench/support/blocking_io_pool.cpp",
+              "bench/support/sync_matrix.cpp")
 
 -- Declare a test/example target only when its source file exists, so xmake
 -- does not warn about missing files for slices not yet written.
@@ -133,11 +134,35 @@ do
     end
 end
 
+-- sync_matrix_test (022S) locks the matrix CSV shape.
+do
+    local p = "tests/sync_matrix_test.cpp"
+    if os.isfile(p) then
+        target("sync_matrix_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_bench_common")
+            add_includedirs("include", "bench")
+            add_files(p)
+            add_tests("sync_matrix_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }
 for _, b in ipairs(benches) do
     sluice_one_file_target("binary", "bench", b, "bench", {"sluice_core", "sluice_bench_common"})
+end
+
+-- W1-W4 blocking bench matrix (sluice-CORE-022S). Linked against
+-- sluice_bench_common (which carries BlockingIoPool + the matrix CSV helpers).
+local sync_benches = { "w1_write_bench", "w2_read_bench", "w3_copy_bench",
+                       "w4_durability_bench" }
+for _, b in ipairs(sync_benches) do
+    sluice_one_file_target("binary", "bench", b, "bench",
+                          {"sluice_core", "sluice_bench_common"})
 end
 
 -- uring_write_bench needs the experimental uring lib too (stub or real).
