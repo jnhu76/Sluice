@@ -30,7 +30,7 @@ Fidelity labels: **High** / **Partial** / **Intentional divergence** / **Deferre
 | `Io.Limit` (copy/stream limit) | `cppio::CopyLimit` | High | Implemented (003) | unlimited/bytes/nothing; same shape. |
 | exact-read equivalent | `cppio::Reader::read_exact` | High | Implemented | EOF/error semantics match cppio's stricter error model. |
 | `writeAll` | `cppio::Writer::write_all` | High | Implemented | all-or-error, zero-progress → invalid_state. |
-| `flush` (`Writer.zig:312`) | `cppio::Writer::flush` (drain) | High | Implemented (008) | flush≠durability made explicit; sync is separate. |
+| `flush` (`Writer.zig:312`) | `cppio::Writer::flush` (drain) | Partial | Implemented (008) | Drain semantics are implemented for BufferedWriter; FileWriter::flush remains a non-durable no-op; durability is split into SyncableWriter. |
 | `readVec`/`readVecAll` (`Reader.zig:415/480`) | `cppio::Reader::read_vec` | Partial | Implemented (005) | Conservative stop-on-short; no `readVecAll` yet. |
 | `writeVec`/`writeVecAll` (`Writer.zig:174/454`) | `cppio::Writer::write_vec`/`write_all_vec` | High | Implemented (005) | shape + all-or-error helper both present. |
 | File reader/writer (`Io/File.zig`) | `cppio::FileReader`/`FileWriter` | Partial | Implemented (002) | Blocking POSIX; no backend vtable, no async open. |
