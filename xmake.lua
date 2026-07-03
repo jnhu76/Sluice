@@ -18,13 +18,16 @@ target("sluice_core")
     add_files("src/*.cpp")
 
 -- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
+-- Also contains BlockingIoPool (021S), the bounded execution model for the
+-- W1-W4 blocking bench matrix (job 022S). Pool source is here so both bench and
+-- test targets link it without per-target duplication.
 target("sluice_bench_common")
     set_kind("static")
     set_default(false)
     set_group("bench")
     add_includedirs("include", "bench")
     add_deps("sluice_core")
-    add_files("bench/bench_common.cpp")
+    add_files("bench/bench_common.cpp", "bench/support/blocking_io_pool.cpp")
 
 -- Declare a test/example target only when its source file exists, so xmake
 -- does not warn about missing files for slices not yet written.
@@ -111,6 +114,22 @@ do
             add_includedirs("include", "bench")
             add_files(p)
             add_tests("bench_csv_test")
+    end
+end
+
+-- blocking_io_pool_test (021S) needs the bench helper lib (it links
+-- BlockingIoPool from bench/support/) in addition to the core.
+do
+    local p = "tests/blocking_io_pool_test.cpp"
+    if os.isfile(p) then
+        target("blocking_io_pool_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_bench_common")
+            add_includedirs("include", "bench")
+            add_files(p)
+            add_tests("blocking_io_pool_test")
     end
 end
 
