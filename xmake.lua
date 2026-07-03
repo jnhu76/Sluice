@@ -50,6 +50,16 @@ for _, t in ipairs(tests) do
     cppio_one_file_target("binary", "test", t .. "_test", "tests", "cppio_core")
 end
 
+-- uring_write_batch_test links the experimental uring lib (stub or real).
+target("uring_write_batch_test")
+    set_kind("binary")
+    set_default(false)
+    set_group("test")
+    add_deps("cppio_core", "cppio_experimental_uring")
+    add_includedirs("include", "bench")
+    add_files("tests/uring_write_batch_test.cpp")
+    add_tests("uring_write_batch_test")
+
 -- Buildable examples. Built/run via `xmake -g examples`.
 local examples = { "cat", "copy_file", "small_writes", "fault_write", "wal_records",
                    "mvp_copy_pipeline", "mvp_limited_copy", "mvp_wal_vector",
