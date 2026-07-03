@@ -271,6 +271,21 @@ do
     end
 end
 
+-- ThreadPoolBackend tests (sluice-CORE-020A). Real blocking I/O on threads.
+do
+    local p = "tests/threadpool_backend_test.cpp"
+    if os.isfile(p) then
+        target("threadpool_backend_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("threadpool_backend_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }
