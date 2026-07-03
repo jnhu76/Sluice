@@ -1,14 +1,51 @@
 # Async I/O — next job cards
 
-**Status: sluice-CORE-016F.** Splits the async implementation (designed in 016A–
-016E, decided in the ADR `docs/adr/ADR-async-io-model.md`) into small,
-independently abortable jobs. **No code is written in this job.** Each card below
-is a future job's scope; it states a goal, non-goals, required tests, acceptance
-criteria, and abort conditions, so each can be picked up in isolation.
+**Status: sluice-CORE-016F (implementation BLOCKED behind the sync-first gate as
+of the 016G sync-first planning patch).** Splits the async implementation
+(designed in 016A–016E, decided in the ADR `docs/adr/ADR-async-io-model.md`) into
+small, independently abortable jobs. **No code is written in this job.** Each
+card below is a future job's scope; it states a goal, non-goals, required tests,
+acceptance criteria, and abort conditions, so each can be picked up in isolation.
+
+## ⛔ BLOCKED: sync-first gate must go GREEN first
+
+> **The async DESIGN (016A–016F, ADR 016D) remains ACCEPTED and is not changed
+> by this notice.** Only the start of async **implementation** (the jobs below)
+> is deferred.
+
+Async implementation is **blocked** behind `docs/sync-before-async-readiness-
+gate.md` (the sync-first gate, added in the 016G patch). Rationale (see
+`docs/sync-io-model-gap-audit.md`): the current blocking baseline is sequential
+single-stream only — it has no positional I/O, no durability policy, no
+concurrency/pool primitive, and no W1–W4 benchmark coverage. Comparing async W1–W4
+against sequential blocking would conflate "concurrency vs no concurrency" with
+"event-driven vs thread-per-op." The sync-first phase (jobs 017S–023S,
+`docs/sync-io-next-jobs.md`) engineers a fair, concurrent, positional,
+durability-defined, benchmarked blocking baseline; only then do the async jobs
+below unblock.
+
+```text
+[REQUIRED BEFORE ANY JOB BELOW STARTS]
+  017S Sync I/O model audit
+  018S Positional blocking I/O
+  019S Blocking derived helper closeout
+  020S Blocking durability model
+  021S Blocking bounded pool baseline
+  022S Blocking W1-W4 workload benchmark matrix
+  023S Blocking optimization pass
+  => docs/sync-before-async-readiness-gate.md = GREEN
+```
+
+Once the gate is green, the async jobs proceed in the order below, and async
+bench (job 022) MUST compare against the engineered concurrent W1–W4 blocking
+rows from 022S/023S — not the sequential rows (sync-first gate item 7).
 
 ## Ordering (revised after the 016 review patch)
 
 ```text
+016 (design, accepted/frozen) ──> [sync-first gate: 017S..023S GREEN]
+                                       │
+                                       v (unblocked)
 016 (this job, design) ─┬─> 017  Completion core (L0/L1 skeleton + AsyncStats)
                         │           │
                         │           v
@@ -30,7 +67,7 @@ criteria, and abort conditions, so each can be picked up in isolation.
                         │      020B UringAsyncBackend (gated, validated separately)
                         │           │
                         │           v
-                        └─────> 022 Async bench harness
+                        └─────> 022 Async bench harness (vs engineered blocking W1-W4)
 ```
 
 Why this order:
@@ -383,12 +420,16 @@ existing bench framework (`bench/`, `docs/bench-methodology.md`,
 
 ## Cross-links
 
+- ⛔ **Sync-first gate (BLOCKS all jobs below until GREEN):** `docs/sync-before-async-readiness-gate.md` (016G).
+- Sync-first job cards (must complete first): `docs/sync-io-next-jobs.md` (017S–023S).
+- Sync gap audit (why async is blocked): `docs/sync-io-model-gap-audit.md` (016G).
 - ADR: `docs/adr/ADR-async-io-model.md` (016D).
 - Inventory: `docs/async-source-inventory.md` (016A).
 - Problem statement: `docs/async-problem-statement.md` (016B) — defines W1–W5.
 - Alternatives: `docs/async-design-alternatives.md` (016C).
-- Readiness gate: `docs/async-readiness-gate.md` (016E).
+- Readiness gate (the async-side gate, after the sync-first gate): `docs/async-readiness-gate.md` (016E).
 - io_uring spike (reference point for 020B): `docs/io-uring-spike.md` (013).
 - liburing validation runbook (020B follows this): `docs/io-uring-liburing-validation.md` (014C).
-- Blocking bench methodology (022 extends this): `docs/bench-methodology.md`,
+- Blocking bench methodology (022 extends this; async bench compares against the
+  engineered W1–W4 rows from sync-first 022S/023S): `docs/bench-methodology.md`,
   `docs/bench-decision-matrix.md`.

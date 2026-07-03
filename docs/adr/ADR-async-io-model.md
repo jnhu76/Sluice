@@ -2,6 +2,7 @@
 
 **Status: sluice-CORE-016D.** Architecture Decision Record.
 **State: Accepted (design only — no code in this job).**
+**Implementation: DEFERRED behind the sync-first readiness gate** (`docs/sync-before-async-readiness-gate.md`, added in the 016G sync-first planning patch). The async **model decision** below is unchanged; only the start of async **coding** waits until the blocking baseline is engineered (jobs 017S–023S, `docs/sync-io-next-jobs.md`). See `docs/sync-io-model-gap-audit.md` for why.
 **Decides:** the async model sluice will adopt, its public API shape, its backend
 boundary, and what is explicitly deferred.
 
@@ -587,11 +588,14 @@ DEPS       : liburing optional (job 020B only); nothing else added.
 
 ## 17. Cross-links
 
+- ⛔ **Sync-first readiness gate (blocks implementation of this ADR):** `../sync-before-async-readiness-gate.md` (016G). The async *decision* here is accepted; async *coding* is deferred until that gate is GREEN.
+- Sync gap audit (why implementation is deferred): `../sync-io-model-gap-audit.md` (016G).
+- Sync-first job cards (must complete before async jobs): `../sync-io-next-jobs.md` (017S–023S).
 - Inventory: `../async-source-inventory.md` (016A).
 - Problem statement: `../async-problem-statement.md` (016B).
 - Alternatives: `../async-design-alternatives.md` (016C).
-- Readiness gate: `../async-readiness-gate.md` (016E).
-- Next jobs: `../async-next-jobs.md` (016F).
+- Readiness gate (the async-side gate, after the sync-first gate): `../async-readiness-gate.md` (016E).
+- Next jobs (blocked behind the sync-first gate): `../async-next-jobs.md` (016F).
 - io_uring spike: `../io-uring-spike.md` (013).
 - io_uring spike readiness gate (prior): `../io-uring-readiness-gate.md` (012D).
 - liburing validation runbook: `../io-uring-liburing-validation.md` (014C).
