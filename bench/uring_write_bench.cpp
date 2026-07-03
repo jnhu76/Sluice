@@ -1,12 +1,12 @@
 // uring_write_bench (CPPIO-CORE-013F). Compares a narrow write workload across
 // blocking file writer, blocking write_vec, and experimental uring write batch.
-// The uring mode is guarded: without CPPIO_HAS_LIBURING it emits a clear skip
+// The uring mode is guarded: without SLUICE_HAS_LIBURING it emits a clear skip
 // row. NO broad performance claim — see docs/io-uring-spike.md §11.
 #include "bench_common.hpp"
 
-#include <cppio/experimental/uring_write_batch.hpp>
-#include <cppio/file.hpp>
-#include <cppio/iovec.hpp>
+#include <sluice/experimental/uring_write_batch.hpp>
+#include <sluice/file.hpp>
+#include <sluice/iovec.hpp>
 
 #include <chrono>
 #include <cstdint>
@@ -14,10 +14,11 @@
 #include <filesystem>
 #include <iostream>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
-#if defined(CPPIO_HAS_LIBURING)
+#if defined(SLUICE_HAS_LIBURING)
 #include <fcntl.h>
 #include <unistd.h>
 #endif
@@ -27,9 +28,9 @@ namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath(const char* tag) {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_bench_uring_" + std::string(tag) + "_" +
-             std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_bench_uring_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -52,11 +53,11 @@ void print_spike_header() {
 }
 
 void run_blocking_file(const std::string& path, std::size_t payload_size) {
-    cppio::SyscallStats ss;
+    sluice::SyscallStats ss;
     std::vector<std::byte> buf(payload_size, std::byte{0x42});
     auto t0 = now_ns();
     for (int i = 0; i < kIters; ++i) {
-        cppio::FileWriter fw(path, &ss);
+        sluice::FileWriter fw(path, &ss);
         (void)fw.write_all(std::span<const std::byte>(buf));
         (void)fw.flush();
     }
@@ -67,13 +68,13 @@ void run_blocking_file(const std::string& path, std::size_t payload_size) {
 }
 
 void run_blocking_vec(const std::string& path, std::size_t payload_size) {
-    cppio::SyscallStats ss; cppio::VectorStats vs;
+    sluice::SyscallStats ss; sluice::VectorStats vs;
     std::vector<std::byte> buf(payload_size, std::byte{0x43});
     auto t0 = now_ns();
     for (int i = 0; i < kIters; ++i) {
-        cppio::FileWriter fw(path, &ss, &vs);
-        cppio::ConstIoSlice sl{std::span<const std::byte>(buf)};
-        (void)fw.write_vec(std::span<const cppio::ConstIoSlice>(&sl, 1));
+        sluice::FileWriter fw(path, &ss, &vs);
+        sluice::ConstIoSlice sl{std::span<const std::byte>(buf)};
+        (void)fw.write_vec(std::span<const sluice::ConstIoSlice>(&sl, 1));
         (void)fw.flush();
     }
     auto elapsed = now_ns() - t0;
@@ -82,17 +83,17 @@ void run_blocking_vec(const std::string& path, std::size_t payload_size) {
               << ss.write_syscalls << ',' << vs.write_vec_calls << ",0,0,0\n";
 }
 
-#if defined(CPPIO_HAS_LIBURING)
+#if defined(SLUICE_HAS_LIBURING)
 void run_uring(const std::string& path, std::size_t payload_size) {
-    cppio::UringStats us;
+    sluice::UringStats us;
     std::vector<std::byte> buf(payload_size, std::byte{0x44});
     auto t0 = now_ns();
     for (int i = 0; i < kIters; ++i) {
-        cppio::experimental::UringIoContext ctx(16);
+        sluice::experimental::UringIoContext ctx(16);
         ctx.set_stats(&us);
         int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
         if (fd < 0) continue;
-        cppio::experimental::UringWriteBatch batch(16);
+        sluice::experimental::UringWriteBatch batch(16);
         batch.set_stats(&us);
         (void)batch.write_all(fd, std::span<const std::byte>(buf), 0);
         ::close(fd);
@@ -120,7 +121,7 @@ int main() {
     for (std::size_t psz : {64u, 4096u, 65536u}) {
         run_blocking_file(tp.str(), psz);
         run_blocking_vec(tp.str(), psz);
-#if defined(CPPIO_HAS_LIBURING)
+#if defined(SLUICE_HAS_LIBURING)
         run_uring(tp.str(), psz);
 #else
         run_uring_skip(psz);

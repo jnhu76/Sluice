@@ -1,7 +1,7 @@
 // ObservedReader / ObservedWriter implementations: count and delegate.
-#include <cppio/observed.hpp>
+#include <sluice/observed.hpp>
 
-namespace cppio {
+namespace sluice {
 
 Result<std::size_t> ObservedReader::read_some(std::span<std::byte> dst) {
     ++stats_.read_calls;
@@ -75,4 +75,4 @@ Result<void> ObservedWriter::flush() {
     return {};
 }
 
-}  // namespace cppio
+}  // namespace sluice

@@ -1,13 +1,13 @@
 // BlockingIoContext implementation (CPPIO-CORE-009C). Wraps FileReader/
 // FileWriter construction and surfaces open errors at open time.
-#include <cppio/io_context.hpp>
-#include <cppio/file.hpp>
+#include <sluice/io_context.hpp>
+#include <sluice/file.hpp>
 
 #include <memory>
 #include <string>
 #include <utility>
 
-namespace cppio {
+namespace sluice {
 
 Result<std::unique_ptr<Reader>>
 BlockingIoContext::open_reader(std::string_view path, OpenReaderOptions options) {
@@ -34,4 +34,4 @@ BlockingIoContext::open_writer(std::string_view path, OpenWriterOptions options)
     return std::unique_ptr<Writer>(std::move(writer));
 }
 
-}  // namespace cppio
+}  // namespace sluice

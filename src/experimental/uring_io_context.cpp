@@ -1,15 +1,15 @@
 // UringIoContext implementation (CPPIO-CORE-013D). Owns POSIX open/close around
-// a UringWriteBatch::write_all. Standalone — not a cppio::IoContext subclass.
-#include <cppio/experimental/uring_io_context.hpp>
+// a UringWriteBatch::write_all. Standalone — not a sluice::IoContext subclass.
+#include <sluice/experimental/uring_io_context.hpp>
 
-#include <cppio/error.hpp>
+#include <sluice/error.hpp>
 
 #include <fcntl.h>
 #include <unistd.h>
 
 #include <string>
 
-namespace cppio::experimental {
+namespace sluice::experimental {
 
 UringIoContext::UringIoContext(unsigned queue_depth) : batch_(queue_depth) {}
 
@@ -25,4 +25,4 @@ Result<UringWriteResult> UringIoContext::write_file_all(std::string_view path,
     return result;
 }
 
-}  // namespace cppio::experimental
+}  // namespace sluice::experimental

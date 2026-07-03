@@ -1,0 +1,88 @@
+# core microbench summary (local observations, NOT performance claims)
+#
+# Sample run for CPPIO-CORE-011C/F. Host/filesystem:
+#   $(uname -srm) on WSL2, temp dir on the default filesystem (see df -T $TMPDIR).
+# This is ONE run on ONE machine. Numbers below are NOT portable; they exist to
+# exercise the harness/summarizer and seed the decision matrix (011D). Per the
+# runbook (docs/bench-optimization-runbook.md), no single cell becomes a rule.
+# Observed, workload-specific, environment-noted only.
+# cell = (case, bytes): mode -> elapsed_ns [min/median if repeats]  MB/s
+
+[copy_strategy, bytes=1024]
+  buffered_first/small_limit                                291 ns    3518.90 MB/s
+
+[copy_strategy, bytes=4096]
+  auto/unlimited                                            371 ns   22080.86 MB/s
+  buffered_first/exact_limit                                350 ns   11702.86 MB/s
+  buffered_first/unlimited                                  431 ns   19006.96 MB/s
+  scratch/unlimited                                         581 ns   14099.83 MB/s
+
+[copy_strategy, bytes=16384]
+  buffered_first/small_limit                               3356 ns    4882.00 MB/s
+
+[copy_strategy, bytes=65536]
+  auto/unlimited                                           8617 ns   15210.86 MB/s
+  buffered_first/exact_limit                               5160 ns   12700.78 MB/s
+  buffered_first/unlimited                                 4619 ns   28376.70 MB/s
+  scratch/unlimited                                        4629 ns   28315.40 MB/s
+
+[copy_strategy, bytes=262144]
+  buffered_first/small_limit                              50358 ns   20822.43 MB/s
+
+[copy_strategy, bytes=1048576]
+  auto/unlimited                                        2054326 ns    8677.20 MB/s
+  buffered_first/exact_limit                            2132580 ns    7867.10 MB/s
+  buffered_first/unlimited                              1634399 ns   10906.63 MB/s
+  scratch/unlimited                                     1629508 ns   10939.37 MB/s
+
+[copy_strategy, bytes=4194304]
+  buffered_first/small_limit                            1576926 ns  170227.05 MB/s
+
+[copy_strategy, bytes=16777216]
+  auto/unlimited                                       24197440 ns  178190.11 MB/s
+  buffered_first/exact_limit                           22741004 ns  188864.45 MB/s
+  buffered_first/unlimited                             25295577 ns  170454.48 MB/s
+  scratch/unlimited                                    34556961 ns  124772.10 MB/s
+
+[small_writes, bytes=1048576]
+  buffered_writer                                       1429397 ns (min 828626, n=5)  50274942.35 MB/s
+  observed_buffered_writer                              1329303 ns (min 838346, n=5)  57789209.00 MB/s
+  raw_file_writer                                      17904424 ns (min 1069436, n=5)  1021999.21 MB/s
+  vector_writer                                        17671891 ns (min 956857, n=5)  961850.33 MB/s
+
+[sync_smoke, bytes=204800]
+  flush_only                                             643115 ns   15922.50 MB/s
+  sync_all                                              1511137 ns    6776.35 MB/s
+  sync_data                                              762728 ns   13425.49 MB/s
+
+[wal_write, bytes=4096]
+  buffered_scalar/flush_each_batch                       380282 ns    2757.36 MB/s
+  buffered_scalar/no_sync                                 38355 ns   27338.70 MB/s
+  buffered_vector/flush_each_batch                       330034 ns    3177.18 MB/s
+  buffered_vector/no_sync                                 31812 ns   32961.65 MB/s
+  wal_scalar_write_record/no_sync                        988077 ns    1061.23 MB/s
+  wal_vector_write_record_vec/no_sync                    389790 ns    2690.10 MB/s
+
+[wal_write, bytes=32768]
+  buffered_scalar/flush_each_batch                       334412 ns   25084.65 MB/s
+  buffered_scalar/no_sync                                 69907 ns  119996.68 MB/s
+  buffered_vector/flush_each_batch                       339092 ns   24738.44 MB/s
+  buffered_vector/no_sync                                 58264 ns  143975.83 MB/s
+  wal_scalar_write_record/no_sync                        893162 ns    9392.03 MB/s
+  wal_vector_write_record_vec/no_sync                    459807 ns   18243.76 MB/s
+
+[wal_write, bytes=262144]
+  buffered_scalar/flush_each_batch                       556505 ns  120589.87 MB/s
+  buffered_scalar/no_sync                                329864 ns  203444.04 MB/s
+  buffered_vector/flush_each_batch                       572346 ns  117252.26 MB/s
+  buffered_vector/no_sync                                238676 ns  281171.40 MB/s
+  wal_scalar_write_record/no_sync                       1071009 ns   62659.48 MB/s
+  wal_vector_write_record_vec/no_sync                    746817 ns   89859.85 MB/s
+
+[wal_write, bytes=4194304]
+  buffered_scalar/flush_each_batch                      7898923 ns  135935.22 MB/s
+  buffered_scalar/no_sync                               4015532 ns  267397.15 MB/s
+  buffered_vector/flush_each_batch                      6870630 ns  156279.97 MB/s
+  buffered_vector/no_sync                               4047562 ns  265281.13 MB/s
+  wal_scalar_write_record/no_sync                       4059479 ns  264502.37 MB/s
+  wal_vector_write_record_vec/no_sync                   3701169 ns  290108.83 MB/s

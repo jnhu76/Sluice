@@ -32,7 +32,7 @@ universal performance claim**.
   wal_write/sync_smoke) + run script + summarizer + methodology doc.
 - **Optimization decision matrix** (011): runbook + summarizer +
   evidence-linked, scoped decisions (no universal claims).
-- **Experimental io_uring spike** (013): `cppio::experimental::UringWriteBatch`/
+- **Experimental io_uring spike** (013): `sluice::experimental::UringWriteBatch`/
   `UringIoContext`/`UringStats`, build-gated behind `--with-liburing`,
   skip-clean without liburing. **Not the default backend.**
 

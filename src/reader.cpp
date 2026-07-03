@@ -1,12 +1,12 @@
 // Implementation of Reader::read_exact and Reader::stream_to.
-#include <cppio/reader.hpp>
-#include <cppio/writer.hpp>
-#include <cppio/copy.hpp>
+#include <sluice/reader.hpp>
+#include <sluice/writer.hpp>
+#include <sluice/copy.hpp>
 
 #include <array>
 #include <cstddef>
 
-namespace cppio {
+namespace sluice {
 
 Result<void> Reader::read_exact(std::span<std::byte> dst) {
     while (!dst.empty()) {
@@ -109,4 +109,4 @@ Result<void> Reader::read_vec_all(std::span<IoSlice> dsts) {
     return {};
 }
 
-}  // namespace cppio
+}  // namespace sluice

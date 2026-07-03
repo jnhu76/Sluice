@@ -1,18 +1,19 @@
 // mvp_copy_pipeline: the canonical MVP composition.
 //   FileReader -> BufferedReader -> copy_all -> BufferedWriter -> ObservedWriter -> FileWriter
 // Verifies output bytes match input; prints composition stats. Not a benchmark.
-#include <cppio/buffer.hpp>
-#include <cppio/copy.hpp>
-#include <cppio/file.hpp>
-#include <cppio/limit.hpp>
-#include <cppio/measurement.hpp>
-#include <cppio/observed.hpp>
+#include <sluice/buffer.hpp>
+#include <sluice/copy.hpp>
+#include <sluice/file.hpp>
+#include <sluice/limit.hpp>
+#include <sluice/measurement.hpp>
+#include <sluice/observed.hpp>
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <span>
 #include <string>
 #include <vector>
@@ -22,9 +23,9 @@ namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath(const char* tag) {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_mvp_" + std::string(tag) + "_" +
-             std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_mvp_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -39,7 +40,7 @@ bool file_read_all(const std::string& path, std::string& out) {
     return true;
 }
 
-const char* stop_reason(const cppio::CopyStats& s) {
+const char* stop_reason(const sluice::CopyStats& s) {
     if (s.eof_stops) return "eof";
     if (s.limit_stops) return "limit";
     if (s.reader_error_stops) return "reader_error";
@@ -59,10 +60,10 @@ int main() {
     }
 
     // 2. Run the composite pipeline.
-    cppio::BufferStats buffer_stats{};
-    cppio::WriterStats writer_stats{};
-    cppio::SyscallStats syscall_stats{};
-    cppio::CopyStats copy_stats{};
+    sluice::BufferStats buffer_stats{};
+    sluice::WriterStats writer_stats{};
+    sluice::SyscallStats syscall_stats{};
+    sluice::CopyStats copy_stats{};
 
     std::vector<std::byte> read_buf(1024);
     std::vector<std::byte> write_buf(1024);
@@ -74,20 +75,20 @@ int main() {
     std::size_t primed_bytes = 0;
 
     {
-        cppio::FileReader file_in(in_tp.str(), &syscall_stats);
+        sluice::FileReader file_in(in_tp.str(), &syscall_stats);
         if (!file_in.opened()) {
             std::fprintf(stderr, "cannot open input\n");
             return 1;
         }
-        cppio::BufferedReader buffered_in(file_in, read_buf, &buffer_stats);
+        sluice::BufferedReader buffered_in(file_in, read_buf, &buffer_stats);
 
-        cppio::FileWriter file_out(out_tp.str(), &syscall_stats);
+        sluice::FileWriter file_out(out_tp.str(), &syscall_stats);
         if (!file_out.opened()) {
             std::fprintf(stderr, "cannot open output\n");
             return 1;
         }
-        cppio::ObservedWriter observed_out(file_out, writer_stats);
-        cppio::BufferedWriter buffered_out(observed_out, write_buf, &buffer_stats);
+        sluice::ObservedWriter observed_out(file_out, writer_stats);
+        sluice::BufferedWriter buffered_out(observed_out, write_buf, &buffer_stats);
 
         // Prime: read a few bytes out of the BufferedReader and write them
         // directly, leaving the rest buffered for copy_all's fast path.
@@ -107,18 +108,18 @@ int main() {
 
         // copy_all drains the remaining buffered bytes via the fast path first,
         // then falls back to scratch reads.
-        auto res = cppio::copy_all(buffered_in, buffered_out,
+        auto res = sluice::copy_all(buffered_in, buffered_out,
                                    std::span<std::byte>(scratch),
-                                   cppio::CopyLimit::unlimited(), &copy_stats);
+                                   sluice::CopyLimit::unlimited(), &copy_stats);
         if (!res.has_value()) {
             std::fprintf(stderr, "copy failed: %s\n",
-                         cppio::to_string(res.error().code).data());
+                         sluice::to_string(res.error().code).data());
             return 1;
         }
         auto flush_res = buffered_out.flush();  // outermost flush, propagates inward
         if (!flush_res.has_value()) {
             std::fprintf(stderr, "flush failed: %s\n",
-                         cppio::to_string(flush_res.error().code).data());
+                         sluice::to_string(flush_res.error().code).data());
             return 1;
         }
         if (res.value() + primed_bytes != payload.size()) {

@@ -1,12 +1,12 @@
-// mvp_memory_io_context: the fastest way to see cppio work end-to-end with NO
+// mvp_memory_io_context: the fastest way to see sluice work end-to-end with NO
 // filesystem. Seeds an in-memory reader, copies through an in-memory writer via
 // the IoContext boundary, prints the result. Useful as a 5-minute tour and for
 // tests that want determinism without temp files. Not a performance claim.
 //
 // Shows CPPIO-CORE-015 ergonomics: MemoryIoContext (015C) + from_bytes (015B).
-#include <cppio/copy.hpp>
-#include <cppio/limit.hpp>
-#include <cppio/memory_io_context.hpp>
+#include <sluice/copy.hpp>
+#include <sluice/limit.hpp>
+#include <sluice/memory_io_context.hpp>
 
 #include <cstdio>
 #include <cstddef>
@@ -24,7 +24,7 @@ std::vector<std::byte> to_bytes(std::string_view s) {
 }  // namespace
 
 int main() {
-    cppio::MemoryIoContext ctx;
+    sluice::MemoryIoContext ctx;
     // Seed a readable "file" entirely in memory.
     ctx.seed("input.txt", to_bytes("hello from the in-memory backend"));
 
@@ -42,9 +42,9 @@ int main() {
     // copy_all works through the abstract Reader*/Writer* handles exactly as it
     // would for the blocking file backend — that is the point of IoContext.
     std::vector<std::byte> scratch(64);
-    auto res = cppio::copy_all(*r.value(), *w.value(),
+    auto res = sluice::copy_all(*r.value(), *w.value(),
                                std::span<std::byte>(scratch),
-                               cppio::CopyLimit::unlimited());
+                               sluice::CopyLimit::unlimited());
     if (!res.has_value()) {
         std::fprintf(stderr, "copy failed\n");
         return 1;
@@ -52,7 +52,7 @@ int main() {
     (void)w.value()->flush();
 
     // The MemoryWriter sink holds the copied bytes; inspect it for the demo.
-    auto* mw = dynamic_cast<cppio::MemoryWriter*>(w.value().get());
+    auto* mw = dynamic_cast<sluice::MemoryWriter*>(w.value().get());
     if (mw == nullptr) {
         std::fprintf(stderr, "writer was not a MemoryWriter\n");
         return 1;

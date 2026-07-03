@@ -1,16 +1,17 @@
 // mvp_limited_copy: copy only the first N bytes using CopyLimit::bytes(N).
 // Verifies output size and contents; prints the stop reason from CopyStats.
-#include <cppio/buffer.hpp>
-#include <cppio/copy.hpp>
-#include <cppio/file.hpp>
-#include <cppio/limit.hpp>
-#include <cppio/measurement.hpp>
+#include <sluice/buffer.hpp>
+#include <sluice/copy.hpp>
+#include <sluice/file.hpp>
+#include <sluice/limit.hpp>
+#include <sluice/measurement.hpp>
 
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -19,9 +20,9 @@ namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath(const char* tag) {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_mvp_lim_" + std::string(tag) + "_" +
-             std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_mvp_lim_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -36,7 +37,7 @@ bool file_read_all(const std::string& path, std::string& out) {
     return true;
 }
 
-const char* stop_reason(const cppio::CopyStats& s) {
+const char* stop_reason(const sluice::CopyStats& s) {
     if (s.eof_stops) return "eof";
     if (s.limit_stops) return "limit";
     if (s.reader_error_stops) return "reader_error";
@@ -57,24 +58,24 @@ int main() {
         o.write(payload.data(), static_cast<std::streamsize>(payload.size()));
     }
 
-    cppio::BufferStats buffer_stats{};
-    cppio::CopyStats copy_stats{};
+    sluice::BufferStats buffer_stats{};
+    sluice::CopyStats copy_stats{};
     std::vector<std::byte> read_buf(64);
     std::vector<std::byte> write_buf(64);
     std::vector<std::byte> scratch(256);
 
     {
-        cppio::FileReader file_in(in_tp.str());
-        cppio::BufferedReader buffered_in(file_in, read_buf, &buffer_stats);
-        cppio::FileWriter file_out(out_tp.str());
-        cppio::BufferedWriter buffered_out(file_out, write_buf, &buffer_stats);
+        sluice::FileReader file_in(in_tp.str());
+        sluice::BufferedReader buffered_in(file_in, read_buf, &buffer_stats);
+        sluice::FileWriter file_out(out_tp.str());
+        sluice::BufferedWriter buffered_out(file_out, write_buf, &buffer_stats);
 
-        auto res = cppio::copy_all(buffered_in, buffered_out,
+        auto res = sluice::copy_all(buffered_in, buffered_out,
                                    std::span<std::byte>(scratch),
-                                   cppio::CopyLimit::bytes(kLimit), &copy_stats);
+                                   sluice::CopyLimit::bytes(kLimit), &copy_stats);
         if (!res.has_value()) {
             std::fprintf(stderr, "copy failed: %s\n",
-                         cppio::to_string(res.error().code).data());
+                         sluice::to_string(res.error().code).data());
             return 1;
         }
         if (res.value() != kLimit) {

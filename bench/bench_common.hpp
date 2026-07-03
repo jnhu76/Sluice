@@ -2,13 +2,13 @@
 // Emits CSV rows per the methodology in docs/core-microbench-methodology.md.
 #pragma once
 
-#include <cppio/measurement.hpp>
+#include <sluice/measurement.hpp>
 
 #include <cstdint>
 #include <iostream>
 #include <string>
 
-namespace cppio::bench {
+namespace sluice::bench {
 
 // One measured cell: a (case, mode) run with its stats. `case_name` is the
 // bench family (e.g. "small_writes"), `mode` the variant (e.g. "buffered").
@@ -33,4 +33,4 @@ void print_csv_header(std::ostream& out);
 // contain commas the caller must sanitize, but bench names are fixed literals.
 void print_csv_row(std::ostream& out, const BenchResult& r);
 
-}  // namespace cppio::bench
+}  // namespace sluice::bench

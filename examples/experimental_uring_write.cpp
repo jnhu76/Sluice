@@ -2,14 +2,15 @@
 // uring path if liburing is available; verifies bytes; prints stats. If
 // unavailable, prints a clear unsupported message and exits success (skip-style).
 // No performance claim.
-#include <cppio/experimental/uring_io_context.hpp>
-#include <cppio/measurement.hpp>
+#include <sluice/experimental/uring_io_context.hpp>
+#include <sluice/measurement.hpp>
 
 #include <cstdio>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -18,8 +19,9 @@ namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath() {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_experimental_uring_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_experimental_uring_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -41,19 +43,19 @@ int main() {
     std::vector<std::byte> buf(reinterpret_cast<const std::byte*>(payload.data()),
                                reinterpret_cast<const std::byte*>(payload.data() + payload.size()));
 
-    cppio::experimental::UringIoContext ctx(8);
-    cppio::UringStats st{};
+    sluice::experimental::UringIoContext ctx(8);
+    sluice::UringStats st{};
     ctx.set_stats(&st);
 
     auto r = ctx.write_file_all(tp.str(), std::span<const std::byte>(buf));
     if (!r.has_value()) {
-        if (r.error().code == cppio::IoError::Code::backend_error) {
+        if (r.error().code == sluice::IoError::Code::backend_error) {
             // Clean skip: liburing unavailable.
             std::printf("experimental_uring_write: SKIPPED (liburing unavailable)\n");
             return 0;
         }
         std::fprintf(stderr, "experimental_uring_write: failed: %s\n",
-                     cppio::to_string(r.error().code).data());
+                     sluice::to_string(r.error().code).data());
         return 1;
     }
 

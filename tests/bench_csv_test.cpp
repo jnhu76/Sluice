@@ -7,20 +7,20 @@
 #include <sstream>
 #include <string>
 
-CPPIO_TEST_CASE(bench_csv_header_has_expected_columns) {
+SLUICE_TEST_CASE(bench_csv_header_has_expected_columns) {
     std::ostringstream out;
-    cppio::bench::print_csv_header(out);
+    sluice::bench::print_csv_header(out);
     std::string h = out.str();
     for (auto col : {"case", "mode", "bytes", "iterations", "elapsed_ns",
                      "read_syscalls", "write_syscalls", "buffered_fast_path_bytes",
                      "scratch_path_bytes", "read_vec_calls", "write_vec_calls",
                      "sync_data_calls", "sync_all_calls"}) {
-        CPPIO_CHECK(h.find(col) != std::string::npos);
+        SLUICE_CHECK(h.find(col) != std::string::npos);
     }
 }
 
-CPPIO_TEST_CASE(bench_csv_row_carries_case_mode_and_fields) {
-    cppio::bench::BenchResult r;
+SLUICE_TEST_CASE(bench_csv_row_carries_case_mode_and_fields) {
+    sluice::bench::BenchResult r;
     r.case_name = "small_writes";
     r.mode = "buffered";
     r.bytes = 1024;
@@ -30,20 +30,20 @@ CPPIO_TEST_CASE(bench_csv_row_carries_case_mode_and_fields) {
     r.copy_stats.scratch_path_bytes = 999;
     r.sync_stats.sync_all_calls = 2;
     std::ostringstream out;
-    cppio::bench::print_csv_row(out, r);
+    sluice::bench::print_csv_row(out, r);
     std::string row = out.str();
-    CPPIO_CHECK(row.find("small_writes,buffered,1024,100,12345,") != std::string::npos);
-    CPPIO_CHECK(row.find(",7,") != std::string::npos);   // write_syscalls
-    CPPIO_CHECK(row.find(",999,") != std::string::npos); // scratch_path_bytes
-    CPPIO_CHECK(row.find(",2\n") != std::string::npos);  // sync_all_calls last
+    SLUICE_CHECK(row.find("small_writes,buffered,1024,100,12345,") != std::string::npos);
+    SLUICE_CHECK(row.find(",7,") != std::string::npos);   // write_syscalls
+    SLUICE_CHECK(row.find(",999,") != std::string::npos); // scratch_path_bytes
+    SLUICE_CHECK(row.find(",2\n") != std::string::npos);  // sync_all_calls last
 }
 
-CPPIO_TEST_CASE(bench_csv_row_has_elapsed_ns_field) {
-    cppio::bench::BenchResult r;
+SLUICE_TEST_CASE(bench_csv_row_has_elapsed_ns_field) {
+    sluice::bench::BenchResult r;
     r.elapsed_ns = 42;
     std::ostringstream out;
-    cppio::bench::print_csv_row(out, r);
-    CPPIO_CHECK(out.str().find(",42,") != std::string::npos);
+    sluice::bench::print_csv_row(out, r);
+    SLUICE_CHECK(out.str().find(",42,") != std::string::npos);
 }
 
-CPPIO_MAIN()
+SLUICE_MAIN()

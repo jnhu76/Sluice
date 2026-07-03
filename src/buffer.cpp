@@ -1,10 +1,10 @@
 // BufferedReader / BufferedWriter implementations.
-#include <cppio/buffer.hpp>
+#include <sluice/buffer.hpp>
 
 #include <algorithm>
 #include <cstring>
 
-namespace cppio {
+namespace sluice {
 
 // ---------------- BufferedReader ----------------
 
@@ -190,4 +190,4 @@ Result<void> BufferedWriter::flush() {
     return inner_.flush();
 }
 
-}  // namespace cppio
+}  // namespace sluice

@@ -1,11 +1,11 @@
 // WAL record write/read implementation. Little-endian framing.
-#include <cppio/wal.hpp>
+#include <sluice/wal.hpp>
 
 #include <array>
 #include <cstring>
 #include <vector>
 
-namespace cppio::wal {
+namespace sluice::wal {
 
 namespace detail {
 
@@ -132,7 +132,7 @@ WalWriter::WalWriter(Writer& writer, SyncableWriter* syncable)
     : writer_(writer), syncable_(syncable) {}
 
 Result<void> WalWriter::write_record(std::span<const std::byte> payload) {
-    auto r = cppio::wal::write_record(writer_, payload);
+    auto r = sluice::wal::write_record(writer_, payload);
     if (!r.has_value()) return make_unexpected<void>(r.error());
     // Framed size = 8 (header) + payload + 4 (checksum). Only advance on success.
     written_lsn_ += 8 + payload.size() + 4;
@@ -140,7 +140,7 @@ Result<void> WalWriter::write_record(std::span<const std::byte> payload) {
 }
 
 Result<void> WalWriter::write_record_vec(std::span<const std::byte> payload) {
-    auto r = cppio::wal::write_record_vec(writer_, payload);
+    auto r = sluice::wal::write_record_vec(writer_, payload);
     if (!r.has_value()) return make_unexpected<void>(r.error());
     written_lsn_ += 8 + payload.size() + 4;
     return {};
@@ -166,4 +166,4 @@ Result<void> WalWriter::sync() {
     return {};
 }
 
-}  // namespace cppio::wal
+}  // namespace sluice::wal

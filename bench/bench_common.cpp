@@ -1,7 +1,7 @@
 // Core microbench CSV helpers (CPPIO-CORE-010B).
 #include "bench_common.hpp"
 
-namespace cppio::bench {
+namespace sluice::bench {
 
 void print_csv_header(std::ostream& out) {
     out << "case,mode,bytes,iterations,elapsed_ns,"
@@ -24,4 +24,4 @@ void print_csv_row(std::ostream& out, const BenchResult& r) {
         << r.sync_stats.sync_data_calls << ',' << r.sync_stats.sync_all_calls << '\n';
 }
 
-}  // namespace cppio::bench
+}  // namespace sluice::bench

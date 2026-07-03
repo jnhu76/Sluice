@@ -1,17 +1,18 @@
 // mvp_io_context_copy: opens reader/writer through a BlockingIoContext, copies,
 // flushes, syncs (if SyncableWriter), prints stats, verifies bytes. No
 // performance claim.
-#include <cppio/buffer.hpp>
-#include <cppio/copy.hpp>
-#include <cppio/io_context.hpp>
-#include <cppio/limit.hpp>
-#include <cppio/measurement.hpp>
-#include <cppio/sync.hpp>
+#include <sluice/buffer.hpp>
+#include <sluice/copy.hpp>
+#include <sluice/io_context.hpp>
+#include <sluice/limit.hpp>
+#include <sluice/measurement.hpp>
+#include <sluice/sync.hpp>
 
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -20,9 +21,9 @@ namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath(const char* tag) {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_ioctx_copy_" + std::string(tag) + "_" +
-             std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_ioctx_copy_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -47,27 +48,27 @@ int main() {
         o.write(payload.data(), static_cast<std::streamsize>(payload.size()));
     }
 
-    cppio::BlockingIoContext ctx;
-    cppio::SyscallStats syscall_stats{};
-    cppio::SyncStats sync_stats{};
-    cppio::CopyStats copy_stats{};
+    sluice::BlockingIoContext ctx;
+    sluice::SyscallStats syscall_stats{};
+    sluice::SyncStats sync_stats{};
+    sluice::CopyStats copy_stats{};
 
     std::vector<std::byte> scratch(8192);
 
-    auto r = ctx.open_reader(in_tp.str(), cppio::OpenReaderOptions{&syscall_stats});
+    auto r = ctx.open_reader(in_tp.str(), sluice::OpenReaderOptions{&syscall_stats});
     if (!r.has_value()) {
         std::fprintf(stderr, "open_reader failed\n");
         return 1;
     }
     auto w = ctx.open_writer(out_tp.str(),
-                             cppio::OpenWriterOptions{&syscall_stats, nullptr, &sync_stats});
+                             sluice::OpenWriterOptions{&syscall_stats, nullptr, &sync_stats});
     if (!w.has_value()) {
         std::fprintf(stderr, "open_writer failed\n");
         return 1;
     }
 
-    auto res = cppio::copy_all(*r.value(), *w.value(), std::span<std::byte>(scratch),
-                               cppio::CopyLimit::unlimited(), &copy_stats);
+    auto res = sluice::copy_all(*r.value(), *w.value(), std::span<std::byte>(scratch),
+                               sluice::CopyLimit::unlimited(), &copy_stats);
     if (!res.has_value() || res.value() != payload.size()) {
         std::fprintf(stderr, "copy failed or short\n");
         return 1;
@@ -78,7 +79,7 @@ int main() {
         return 1;
     }
     // Sync if the writer exposes the capability.
-    auto* sw = dynamic_cast<cppio::SyncableWriter*>(w.value().get());
+    auto* sw = dynamic_cast<sluice::SyncableWriter*>(w.value().get());
     if (sw) {
         auto sync_res = sw->sync_data();
         if (!sync_res.has_value()) {

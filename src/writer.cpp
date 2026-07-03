@@ -1,11 +1,11 @@
 // Implementation of Writer::write_all — loops over short writes, propagates
 // errors, and treats zero progress on non-empty input as invalid_state.
-#include <cppio/writer.hpp>
+#include <sluice/writer.hpp>
 
 #include <cstddef>
 #include <vector>
 
-namespace cppio {
+namespace sluice {
 
 Result<void> Writer::write_all(std::span<const std::byte> src) {
     while (!src.empty()) {
@@ -110,4 +110,4 @@ Result<void> Writer::write_all_vec(std::span<const ConstIoSlice> srcs) {
     return {};
 }
 
-}  // namespace cppio
+}  // namespace sluice

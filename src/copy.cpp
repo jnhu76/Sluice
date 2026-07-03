@@ -6,13 +6,13 @@
 // already-buffered unread bytes are drained via peek_buffered/consume_buffered
 // before any scratch read, mirroring Zig std.Io's Reader.stream (Reader.zig:168).
 // CPPIO-CORE-007C made that an explicit CopyStrategy choice.
-#include <cppio/copy.hpp>
-#include <cppio/buffered_readable.hpp>
+#include <sluice/copy.hpp>
+#include <sluice/buffered_readable.hpp>
 
 #include <algorithm>
 #include <array>
 
-namespace cppio {
+namespace sluice {
 
 namespace {
 
@@ -218,4 +218,4 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer) {
     return copy_all(reader, writer, CopyLimit::unlimited());
 }
 
-}  // namespace cppio
+}  // namespace sluice

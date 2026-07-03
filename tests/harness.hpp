@@ -1,4 +1,4 @@
-// Tiny dependency-free test harness for cppio correctness tests.
+// Tiny dependency-free test harness for sluice correctness tests.
 // Mirrors the spirit of Zig's std.testing.io: deterministic, no external deps.
 #pragma once
 
@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-namespace cppio_test {
+namespace sluice_test {
 
 inline int& registry_state() {
     static int dummy = 0;
@@ -46,19 +46,19 @@ inline int report_and_exit() {
     return 1;
 }
 
-}  // namespace cppio_test
+}  // namespace sluice_test
 
-#define CPPIO_TEST_CASE(name) \
+#define SLUICE_TEST_CASE(name) \
     static void name(); \
     namespace { \
     struct name##_registrar { \
-        name##_registrar() { ::cppio_test::run_case(#name, name); } \
+        name##_registrar() { ::sluice_test::run_case(#name, name); } \
     }; \
     } \
     static name##_registrar name##_registered_; \
     static void name()
 
-namespace cppio_test {
+namespace sluice_test {
 using test_fn = void (*)();
 struct RegisteredCase {
     const char* name;
@@ -81,31 +81,31 @@ inline int run_all() {
     }
     return report_and_exit();
 }
-}  // namespace cppio_test
+}  // namespace sluice_test
 
-#define CPPIO_CHECK(cond)                                                              \
+#define SLUICE_CHECK(cond)                                                              \
     do {                                                                               \
         if (!(cond)) {                                                                 \
-            ::cppio_test::record_failure(__FILE__, __LINE__, #cond);                   \
+            ::sluice_test::record_failure(__FILE__, __LINE__, #cond);                   \
             return;                                                                    \
         }                                                                              \
     } while (0)
 
-#define CPPIO_CHECK_MSG(cond, msg)                                                     \
+#define SLUICE_CHECK_MSG(cond, msg)                                                     \
     do {                                                                               \
         if (!(cond)) {                                                                 \
-            ::cppio_test::record_failure(__FILE__, __LINE__, #cond, msg);              \
+            ::sluice_test::record_failure(__FILE__, __LINE__, #cond, msg);              \
             return;                                                                    \
         }                                                                              \
     } while (0)
 
-#define CPPIO_FAIL(msg)                                                                \
+#define SLUICE_FAIL(msg)                                                                \
     do {                                                                               \
-        ::cppio_test::record_failure(__FILE__, __LINE__, "(fail)", msg);               \
+        ::sluice_test::record_failure(__FILE__, __LINE__, "(fail)", msg);               \
         return;                                                                        \
     } while (0)
 
-#define CPPIO_MAIN()                                                                   \
+#define SLUICE_MAIN()                                                                   \
     int main() {                                                                       \
-        return ::cppio_test::run_all();                                                \
+        return ::sluice_test::run_all();                                                \
     }

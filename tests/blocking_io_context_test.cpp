@@ -4,13 +4,14 @@
 // SyncableWriter.
 #include "harness.hpp"
 
-#include <cppio/file.hpp>
-#include <cppio/io_context.hpp>
-#include <cppio/measurement.hpp>
-#include <cppio/sync.hpp>
+#include <sluice/file.hpp>
+#include <sluice/io_context.hpp>
+#include <sluice/measurement.hpp>
+#include <sluice/sync.hpp>
 
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 
 namespace {
@@ -18,9 +19,9 @@ namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath(const char* tag) {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_ioctx_" + std::string(tag) + "_" +
-             std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_ioctx_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -36,95 +37,95 @@ bool file_has(const std::string& path, std::string_view want) {
 
 }  // namespace
 
-CPPIO_TEST_CASE(blocking_context_opens_existing_file_for_reading) {
+SLUICE_TEST_CASE(blocking_context_opens_existing_file_for_reading) {
     TempPath tp("r");
     {
         std::ofstream o(tp.str(), std::ios::binary);
         o.write("hello", 5);
     }
-    cppio::BlockingIoContext ctx;
+    sluice::BlockingIoContext ctx;
     auto r = ctx.open_reader(tp.str());
-    CPPIO_CHECK(r.has_value());
-    CPPIO_CHECK(r.value() != nullptr);
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(r.value() != nullptr);
     std::byte buf[5];
     auto rr = r.value()->read_some(buf);
-    CPPIO_CHECK(rr.has_value() && rr.value() == 5);
+    SLUICE_CHECK(rr.has_value() && rr.value() == 5);
 }
 
-CPPIO_TEST_CASE(blocking_context_opens_new_file_for_writing) {
+SLUICE_TEST_CASE(blocking_context_opens_new_file_for_writing) {
     TempPath tp("w");
-    cppio::BlockingIoContext ctx;
+    sluice::BlockingIoContext ctx;
     auto w = ctx.open_writer(tp.str());
-    CPPIO_CHECK(w.has_value());
-    CPPIO_CHECK(w.value() != nullptr);
+    SLUICE_CHECK(w.has_value());
+    SLUICE_CHECK(w.value() != nullptr);
     auto wr = w.value()->write_some(std::as_bytes(std::span("data", 4)));
-    CPPIO_CHECK(wr.has_value() && wr.value() == 4);
-    CPPIO_CHECK(w.value()->flush().has_value());
-    CPPIO_CHECK(file_has(tp.str(), "data"));
+    SLUICE_CHECK(wr.has_value() && wr.value() == 4);
+    SLUICE_CHECK(w.value()->flush().has_value());
+    SLUICE_CHECK(file_has(tp.str(), "data"));
 }
 
-CPPIO_TEST_CASE(blocking_context_missing_reader_file_errors_at_open_time) {
-    cppio::BlockingIoContext ctx;
-    auto r = ctx.open_reader("/no/such/cppio/ioctx/missing");
-    CPPIO_CHECK(!r.has_value());  // error immediate, not deferred
+SLUICE_TEST_CASE(blocking_context_missing_reader_file_errors_at_open_time) {
+    sluice::BlockingIoContext ctx;
+    auto r = ctx.open_reader("/no/such/sluice/ioctx/missing");
+    SLUICE_CHECK(!r.has_value());  // error immediate, not deferred
 }
 
-CPPIO_TEST_CASE(blocking_context_invalid_writer_path_errors_at_open_time) {
-    cppio::BlockingIoContext ctx;
-    auto w = ctx.open_writer("/no/such/cppio/ioctx/dir/out");
-    CPPIO_CHECK(!w.has_value());
+SLUICE_TEST_CASE(blocking_context_invalid_writer_path_errors_at_open_time) {
+    sluice::BlockingIoContext ctx;
+    auto w = ctx.open_writer("/no/such/sluice/ioctx/dir/out");
+    SLUICE_CHECK(!w.has_value());
 }
 
-CPPIO_TEST_CASE(blocking_context_wires_stats_pointers) {
+SLUICE_TEST_CASE(blocking_context_wires_stats_pointers) {
     TempPath tp("s");
-    cppio::SyscallStats ss{};
-    cppio::VectorStats vs{};
-    cppio::SyncStats sync{};
-    cppio::BlockingIoContext ctx;
+    sluice::SyscallStats ss{};
+    sluice::VectorStats vs{};
+    sluice::SyncStats sync{};
+    sluice::BlockingIoContext ctx;
     {
         auto w = ctx.open_writer(tp.str(),
-                                 cppio::OpenWriterOptions{&ss, &vs, &sync});
-        CPPIO_CHECK(w.has_value());
-        CPPIO_CHECK(w.value()->write_some(std::as_bytes(std::span("ab", 2))).has_value());
+                                 sluice::OpenWriterOptions{&ss, &vs, &sync});
+        SLUICE_CHECK(w.has_value());
+        SLUICE_CHECK(w.value()->write_some(std::as_bytes(std::span("ab", 2))).has_value());
         // Reach sync_all through the SyncableWriter capability the FileWriter
         // exposes, rather than downcasting to the concrete (hidden) type.
-        auto* sw = dynamic_cast<cppio::SyncableWriter*>(w.value().get());
-        CPPIO_CHECK(sw != nullptr);
-        CPPIO_CHECK(sw->sync_all().has_value());
+        auto* sw = dynamic_cast<sluice::SyncableWriter*>(w.value().get());
+        SLUICE_CHECK(sw != nullptr);
+        SLUICE_CHECK(sw->sync_all().has_value());
     }
-    CPPIO_CHECK(ss.write_syscalls >= 1);
-    CPPIO_CHECK(sync.sync_all_calls == 1);
+    SLUICE_CHECK(ss.write_syscalls >= 1);
+    SLUICE_CHECK(sync.sync_all_calls == 1);
     // vector_stats only moves when write_vec is used; just confirm it's wired
     // (non-null path didn't crash and the writer accepted it).
 }
 
-CPPIO_TEST_CASE(blocking_context_returned_writer_is_syncable_writer) {
+SLUICE_TEST_CASE(blocking_context_returned_writer_is_syncable_writer) {
     TempPath tp("sy");
-    cppio::BlockingIoContext ctx;
+    sluice::BlockingIoContext ctx;
     auto w = ctx.open_writer(tp.str());
-    CPPIO_CHECK(w.has_value());
-    cppio::Writer& as_writer = *w.value();
-    auto* cap = dynamic_cast<cppio::SyncableWriter*>(&as_writer);
-    CPPIO_CHECK(cap != nullptr);  // FileWriter is SyncableWriter
+    SLUICE_CHECK(w.has_value());
+    sluice::Writer& as_writer = *w.value();
+    auto* cap = dynamic_cast<sluice::SyncableWriter*>(&as_writer);
+    SLUICE_CHECK(cap != nullptr);  // FileWriter is SyncableWriter
 }
 
-CPPIO_TEST_CASE(blocking_context_copy_through_context_handles) {
+SLUICE_TEST_CASE(blocking_context_copy_through_context_handles) {
     TempPath in_tp("ci"), out_tp("co");
     {
         std::ofstream o(in_tp.str(), std::ios::binary);
         o.write("round-trip", 10);
     }
-    cppio::BlockingIoContext ctx;
+    sluice::BlockingIoContext ctx;
     auto r = ctx.open_reader(in_tp.str());
     auto w = ctx.open_writer(out_tp.str());
-    CPPIO_CHECK(r.has_value() && w.has_value());
+    SLUICE_CHECK(r.has_value() && w.has_value());
     std::byte buf[10];
     auto rr = r.value()->read_some(buf);
-    CPPIO_CHECK(rr.has_value() && rr.value() == 10);
+    SLUICE_CHECK(rr.has_value() && rr.value() == 10);
     auto wr = w.value()->write_some(std::as_bytes(std::span(buf, 10)));
-    CPPIO_CHECK(wr.has_value() && wr.value() == 10);
-    CPPIO_CHECK(w.value()->flush().has_value());
-    CPPIO_CHECK(file_has(out_tp.str(), "round-trip"));
+    SLUICE_CHECK(wr.has_value() && wr.value() == 10);
+    SLUICE_CHECK(w.value()->flush().has_value());
+    SLUICE_CHECK(file_has(out_tp.str(), "round-trip"));
 }
 
-CPPIO_MAIN()
+SLUICE_MAIN()

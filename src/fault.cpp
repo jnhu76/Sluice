@@ -1,11 +1,11 @@
 // FaultReader / FaultWriter implementations: deterministic short-I/O + failure
 // injection layered on top of any Reader/Writer.
-#include <cppio/fault.hpp>
+#include <sluice/fault.hpp>
 
 #include <algorithm>
 #include <cstddef>
 
-namespace cppio {
+namespace sluice {
 
 Result<std::size_t> FaultReader::read_some(std::span<std::byte> dst) {
     ++read_calls_;
@@ -66,4 +66,4 @@ Result<void> FaultWriter::flush() {
     return inner_.flush();
 }
 
-}  // namespace cppio
+}  // namespace sluice

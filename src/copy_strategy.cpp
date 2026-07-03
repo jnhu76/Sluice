@@ -1,9 +1,9 @@
 // to_string implementations for CopyStrategy / UnsupportedStrategyPolicy.
 // Returns string-literal-backed views (static storage duration), so the
 // returned std::string_view is always valid.
-#include <cppio/copy_strategy.hpp>
+#include <sluice/copy_strategy.hpp>
 
-namespace cppio {
+namespace sluice {
 
 std::string_view to_string(CopyStrategy strategy) {
     switch (strategy) {
@@ -26,4 +26,4 @@ std::string_view to_string(UnsupportedStrategyPolicy policy) {
     return "unknown";
 }
 
-}  // namespace cppio
+}  // namespace sluice

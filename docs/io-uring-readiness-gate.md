@@ -1,6 +1,6 @@
 # io_uring readiness gate
 
-**Status: CPPIO-CORE-012D.** Decides whether cppio is ready for an experimental
+**Status: SLUICE-CORE-012D.** Decides whether sluice is ready for an experimental
 io_uring spike (013) and records the chosen first slice, risks, and abort
 conditions. This is a gate, not an implementation.
 
@@ -14,7 +14,7 @@ the default backend.
 
 ## 1. Preconditions
 
-The checklist cppio must satisfy before any io_uring code lands:
+The checklist sluice must satisfy before any io_uring code lands:
 
 ```text
 Blocking baseline exists                      ✓ (001-003)
@@ -30,8 +30,8 @@ Zig parity gaps are documented                ✓ (012B inventory, 012C audit)
 
 ## 2. Current satisfied prerequisites
 
-All nine preconditions are met as of CPPIO-CORE-011 (closeout in
-`docs/mvp-closeout.md`). The spike therefore does not need to invent missing
+All nine preconditions are met as of SLUICE-CORE-011 (closeout in
+`docs/archive/mvp-closeout.md`). The spike therefore does not need to invent missing
 infrastructure: it can sit behind the existing `IoContext` seam and reuse the
 existing bench harness and stats structs.
 
@@ -54,7 +54,7 @@ partial completion        — handle by looping until all bytes done
 short read/write          — handle by resubmitting the tail
 buffer lifetime           — caller-owned buffer must outlive the call; documented
 submission/completion ownership — the batch owns its ring; fd is not owned
-kernel support variance   — gate on CPPIO_HAS_LIBURING + runtime feature probe
+kernel support variance   — gate on SLUICE_HAS_LIBURING + runtime feature probe
 liburing availability     — optional build gate; skip cleanly if absent
 cancellation ambiguity    — NONE: the spike is synchronous, no cancel surface
 durability confusion      — flush≠sync: the spike does not imply durability

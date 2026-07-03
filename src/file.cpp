@@ -1,6 +1,6 @@
 // FileReader / FileWriter POSIX implementation.
-#include <cppio/file.hpp>
-#include <cppio/detail/posix_retry.hpp>
+#include <sluice/file.hpp>
+#include <sluice/detail/posix_retry.hpp>
 
 #include <cerrno>
 #include <climits>
@@ -20,7 +20,7 @@ inline constexpr long kIovMaxConst = IOV_MAX;
 inline constexpr long kIovMaxConst = 16;  // POSIX minimum; overridden by sysconf at runtime
 #endif
 
-namespace cppio {
+namespace sluice {
 
 namespace {
 
@@ -328,4 +328,4 @@ Result<void> FileWriter::sync_all() {
                    sync_stats_, &SyncStats::sync_all_calls, &SyncStats::sync_all_errors);
 }
 
-}  // namespace cppio
+}  // namespace sluice

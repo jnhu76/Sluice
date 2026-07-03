@@ -2,14 +2,15 @@
 // Writes several WAL records through a WalWriter backed by a FileWriter, flushes,
 // syncs, and prints written/flushed/durable LSN while verifying the invariant.
 // Does NOT claim durability beyond what OS sync provides.
-#include <cppio/file.hpp>
-#include <cppio/sync.hpp>
-#include <cppio/wal.hpp>
+#include <sluice/file.hpp>
+#include <sluice/sync.hpp>
+#include <sluice/wal.hpp>
 
 #include <cstdio>
 #include <cstdint>
 #include <filesystem>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -18,8 +19,9 @@ namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath() {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_wal_dur_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_wal_dur_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -38,15 +40,15 @@ int main() {
     TempPath tp;
     const std::vector<std::string> records = {"rec-one", "rec-two", "rec-three"};
 
-    cppio::SyncStats sync_stats{};
-    cppio::FileWriter fw(tp.str(), nullptr, nullptr, &sync_stats);
+    sluice::SyncStats sync_stats{};
+    sluice::FileWriter fw(tp.str(), nullptr, nullptr, &sync_stats);
     if (!fw.opened()) {
         std::fprintf(stderr, "cannot open %s\n", tp.str().c_str());
         return 1;
     }
     // FileWriter implements SyncableWriter, so sync() can reach fdatasync.
-    cppio::SyncableWriter* syncable = &fw;
-    cppio::wal::WalWriter wal(fw, syncable);
+    sluice::SyncableWriter* syncable = &fw;
+    sluice::wal::WalWriter wal(fw, syncable);
 
     // 1. Write several records. Only written_lsn should advance.
     for (const auto& r : records) {
@@ -54,7 +56,7 @@ int main() {
         auto res = wal.write_record(std::span<const std::byte>(payload));
         if (!res.has_value()) {
             std::fprintf(stderr, "write_record failed: %s\n",
-                         cppio::to_string(res.error().code).data());
+                         sluice::to_string(res.error().code).data());
             return 1;
         }
     }
@@ -78,7 +80,7 @@ int main() {
     auto sr = wal.sync();
     if (!sr.has_value()) {
         std::fprintf(stderr, "sync failed: %s\n",
-                     cppio::to_string(sr.error().code).data());
+                     sluice::to_string(sr.error().code).data());
         return 1;
     }
     std::printf("after sync:   written=%llu flushed=%llu durable=%llu\n",

@@ -1,21 +1,21 @@
 // UringWriteBatch implementation (CPPIO-CORE-013C).
 //
 // Two compile modes:
-//   * CPPIO_HAS_LIBURING defined: real io_uring path via liburing.
+//   * SLUICE_HAS_LIBURING defined: real io_uring path via liburing.
 //   * otherwise: unsupported stub (construction ok, write_all -> backend_error).
 // The stub keeps the project buildable with no liburing dependency (013B gate).
-#include <cppio/experimental/uring_write_batch.hpp>
+#include <sluice/experimental/uring_write_batch.hpp>
 
-#include <cppio/error.hpp>
+#include <sluice/error.hpp>
 
-#if defined(CPPIO_HAS_LIBURING)
+#if defined(SLUICE_HAS_LIBURING)
 #include <liburing.h>
 #endif
 
-namespace cppio::experimental {
+namespace sluice::experimental {
 
 UringWriteBatch::UringWriteBatch(unsigned queue_depth) : queue_depth_(queue_depth) {
-#if defined(CPPIO_HAS_LIBURING)
+#if defined(SLUICE_HAS_LIBURING)
     auto* ring = new io_uring{};
     if (::io_uring_queue_init(queue_depth, ring, 0) == 0) {
         ring_ = ring;
@@ -30,7 +30,7 @@ UringWriteBatch::UringWriteBatch(unsigned queue_depth) : queue_depth_(queue_dept
 }
 
 UringWriteBatch::~UringWriteBatch() {
-#if defined(CPPIO_HAS_LIBURING)
+#if defined(SLUICE_HAS_LIBURING)
     if (ring_) {
         ::io_uring_queue_exit(static_cast<io_uring*>(ring_));
         delete static_cast<io_uring*>(ring_);
@@ -41,7 +41,7 @@ UringWriteBatch::~UringWriteBatch() {
 
 Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std::byte> bytes,
                                                     std::uint64_t file_offset) {
-#if !defined(CPPIO_HAS_LIBURING)
+#if !defined(SLUICE_HAS_LIBURING)
     (void)fd; (void)bytes; (void)file_offset;
     // Unsupported stub: the project was built without liburing. Return
     // backend_error so callers/tests can skip cleanly.
@@ -117,4 +117,4 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
 #endif
 }
 
-}  // namespace cppio::experimental
+}  // namespace sluice::experimental

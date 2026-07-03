@@ -2,13 +2,14 @@
 // read them back with the existing wal::read_record. Verifies payloads. This is
 // NOT a vector-I/O performance claim — it only shows the vector path composes
 // end-to-end with the scalar reader.
-#include <cppio/file.hpp>
-#include <cppio/wal.hpp>
+#include <sluice/file.hpp>
+#include <sluice/wal.hpp>
 
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -17,8 +18,9 @@ namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath() {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_mvp_wal_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_mvp_wal_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -38,23 +40,23 @@ int main() {
     const std::vector<std::string> records = {"alpha-record", "beta-record", "gamma-record"};
 
     {
-        cppio::FileWriter w(tp.str());
+        sluice::FileWriter w(tp.str());
         if (!w.opened()) {
             std::fprintf(stderr, "cannot open %s for writing\n", tp.str().c_str());
             return 1;
         }
         for (const auto& rec : records) {
             auto payload = bytes_of(rec);
-            auto r = cppio::wal::write_record_vec(w, std::span<const std::byte>(payload));
+            auto r = sluice::wal::write_record_vec(w, std::span<const std::byte>(payload));
             if (!r.has_value()) {
                 std::fprintf(stderr, "write_record_vec failed: %s\n",
-                             cppio::to_string(r.error().code).data());
+                             sluice::to_string(r.error().code).data());
                 return 1;
             }
         }
     }
 
-    cppio::FileReader r(tp.str());
+    sluice::FileReader r(tp.str());
     if (!r.opened()) {
         std::fprintf(stderr, "cannot open %s for reading\n", tp.str().c_str());
         return 1;
@@ -64,11 +66,11 @@ int main() {
     std::size_t payload_bytes = 0;
     bool mismatch = false;
     while (true) {
-        auto res = cppio::wal::read_record(r);
+        auto res = sluice::wal::read_record(r);
         if (!res.has_value()) {
-            if (res.error().code != cppio::IoError::Code::eof) {
+            if (res.error().code != sluice::IoError::Code::eof) {
                 std::fprintf(stderr, "read_record error: %s\n",
-                             cppio::to_string(res.error().code).data());
+                             sluice::to_string(res.error().code).data());
                 return 1;
             }
             break;

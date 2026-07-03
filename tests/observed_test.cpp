@@ -2,10 +2,10 @@
 // pass-through of data semantics. Backed by MemoryReader/MemoryWriter + Fault.
 #include "harness.hpp"
 
-#include <cppio/observed.hpp>
-#include <cppio/fault.hpp>
-#include <cppio/reader.hpp>
-#include <cppio/writer.hpp>
+#include <sluice/observed.hpp>
+#include <sluice/fault.hpp>
+#include <sluice/reader.hpp>
+#include <sluice/writer.hpp>
 
 #include <cstring>
 #include <span>
@@ -24,144 +24,144 @@ bool eq(std::string_view s, const std::vector<std::byte>& b) {
 
 // ---------- ObservedReader ----------
 
-CPPIO_TEST_CASE(observed_reader_counts_read_calls_and_bytes) {
-    cppio::MemoryReader inner = cppio::MemoryReader::from_string("hello");
-    cppio::ReaderStats stats{};
-    cppio::ObservedReader r(inner, stats);
+SLUICE_TEST_CASE(observed_reader_counts_read_calls_and_bytes) {
+    sluice::MemoryReader inner = sluice::MemoryReader::from_string("hello");
+    sluice::ReaderStats stats{};
+    sluice::ObservedReader r(inner, stats);
 
     std::vector<std::byte> out(5);
-    CPPIO_CHECK(r.read_exact(std::span<std::byte>(out)).has_value());
+    SLUICE_CHECK(r.read_exact(std::span<std::byte>(out)).has_value());
 
-    CPPIO_CHECK(stats.read_calls == 1);
-    CPPIO_CHECK(stats.read_bytes == 5);
-    CPPIO_CHECK(stats.eof_count == 0);
-    CPPIO_CHECK(stats.read_errors == 0);
+    SLUICE_CHECK(stats.read_calls == 1);
+    SLUICE_CHECK(stats.read_bytes == 5);
+    SLUICE_CHECK(stats.eof_count == 0);
+    SLUICE_CHECK(stats.read_errors == 0);
 }
 
-CPPIO_TEST_CASE(observed_reader_counts_eof_when_zero_returned) {
-    cppio::MemoryReader inner = cppio::MemoryReader::from_string("ab");
-    cppio::ReaderStats stats{};
-    cppio::ObservedReader r(inner, stats);
+SLUICE_TEST_CASE(observed_reader_counts_eof_when_zero_returned) {
+    sluice::MemoryReader inner = sluice::MemoryReader::from_string("ab");
+    sluice::ReaderStats stats{};
+    sluice::ObservedReader r(inner, stats);
 
     std::array<std::byte, 2> a{};
     (void)r.read_some(std::span<std::byte>(a));       // consumes both bytes
     std::array<std::byte, 2> b{};
     auto e = r.read_some(std::span<std::byte>(b));    // EOF
-    CPPIO_CHECK(e.has_value());
-    CPPIO_CHECK(e.value() == 0);
-    CPPIO_CHECK(stats.eof_count == 1);
+    SLUICE_CHECK(e.has_value());
+    SLUICE_CHECK(e.value() == 0);
+    SLUICE_CHECK(stats.eof_count == 1);
 }
 
-CPPIO_TEST_CASE(observed_reader_counts_errors_and_does_not_count_as_eof) {
-    cppio::MemoryReader mem = cppio::MemoryReader::from_string("abcdef");
-    cppio::FaultPlan plan;
+SLUICE_TEST_CASE(observed_reader_counts_errors_and_does_not_count_as_eof) {
+    sluice::MemoryReader mem = sluice::MemoryReader::from_string("abcdef");
+    sluice::FaultPlan plan;
     plan.max_read_size = 1;
     plan.fail_after_read_calls = 2;
-    cppio::FaultReader faulted(mem, plan);
-    cppio::ReaderStats stats{};
-    cppio::ObservedReader r(faulted, stats);
+    sluice::FaultReader faulted(mem, plan);
+    sluice::ReaderStats stats{};
+    sluice::ObservedReader r(faulted, stats);
 
     std::vector<std::byte> out(6);
     (void)r.read_exact(std::span<std::byte>(out));
-    CPPIO_CHECK(stats.read_errors >= 1);
-    CPPIO_CHECK(stats.eof_count == 0);
+    SLUICE_CHECK(stats.read_errors >= 1);
+    SLUICE_CHECK(stats.eof_count == 0);
 }
 
-CPPIO_TEST_CASE(observed_reader_is_data_transparent) {
-    cppio::MemoryReader inner = cppio::MemoryReader::from_string("payload");
-    cppio::ReaderStats stats{};
-    cppio::ObservedReader r(inner, stats);
+SLUICE_TEST_CASE(observed_reader_is_data_transparent) {
+    sluice::MemoryReader inner = sluice::MemoryReader::from_string("payload");
+    sluice::ReaderStats stats{};
+    sluice::ObservedReader r(inner, stats);
 
     std::vector<std::byte> out(7);
-    CPPIO_CHECK(r.read_exact(std::span<std::byte>(out)).has_value());
-    CPPIO_CHECK(eq("payload", out));
+    SLUICE_CHECK(r.read_exact(std::span<std::byte>(out)).has_value());
+    SLUICE_CHECK(eq("payload", out));
 }
 
 // ---------- ObservedWriter ----------
 
-CPPIO_TEST_CASE(observed_writer_counts_write_calls_and_bytes) {
-    cppio::MemoryWriter inner;
-    cppio::WriterStats stats{};
-    cppio::ObservedWriter w(inner, stats);
+SLUICE_TEST_CASE(observed_writer_counts_write_calls_and_bytes) {
+    sluice::MemoryWriter inner;
+    sluice::WriterStats stats{};
+    sluice::ObservedWriter w(inner, stats);
 
-    CPPIO_CHECK(w.write_all(sb("hello")).has_value());
-    CPPIO_CHECK(stats.write_calls == 1);
-    CPPIO_CHECK(stats.write_bytes == 5);
-    CPPIO_CHECK(stats.short_writes == 0);
+    SLUICE_CHECK(w.write_all(sb("hello")).has_value());
+    SLUICE_CHECK(stats.write_calls == 1);
+    SLUICE_CHECK(stats.write_bytes == 5);
+    SLUICE_CHECK(stats.short_writes == 0);
 }
 
-CPPIO_TEST_CASE(observed_writer_counts_short_writes) {
-    cppio::MemoryWriter sink;
-    cppio::FaultPlan plan;
+SLUICE_TEST_CASE(observed_writer_counts_short_writes) {
+    sluice::MemoryWriter sink;
+    sluice::FaultPlan plan;
     plan.max_write_size = 2;
-    cppio::FaultWriter inner(sink, plan);
-    cppio::WriterStats stats{};
-    cppio::ObservedWriter w(inner, stats);
+    sluice::FaultWriter inner(sink, plan);
+    sluice::WriterStats stats{};
+    sluice::ObservedWriter w(inner, stats);
 
     // A single write_all triggers multiple short writes internally.
-    CPPIO_CHECK(w.write_all(sb("abcdef")).has_value());
-    CPPIO_CHECK(stats.short_writes >= 1);  // at least one call wrote fewer than asked
-    CPPIO_CHECK(stats.write_bytes == 6);
-    CPPIO_CHECK(eq("abcdef", sink.bytes()));
+    SLUICE_CHECK(w.write_all(sb("abcdef")).has_value());
+    SLUICE_CHECK(stats.short_writes >= 1);  // at least one call wrote fewer than asked
+    SLUICE_CHECK(stats.write_bytes == 6);
+    SLUICE_CHECK(eq("abcdef", sink.bytes()));
 }
 
-CPPIO_TEST_CASE(observed_writer_counts_flush_calls_and_errors) {
-    cppio::MemoryWriter sink;
-    cppio::FaultPlan plan;
+SLUICE_TEST_CASE(observed_writer_counts_flush_calls_and_errors) {
+    sluice::MemoryWriter sink;
+    sluice::FaultPlan plan;
     plan.fail_flush = true;
-    cppio::FaultWriter inner(sink, plan);
-    cppio::WriterStats stats{};
-    cppio::ObservedWriter w(inner, stats);
+    sluice::FaultWriter inner(sink, plan);
+    sluice::WriterStats stats{};
+    sluice::ObservedWriter w(inner, stats);
 
     auto res = w.flush();
-    CPPIO_CHECK(!res.has_value());
-    CPPIO_CHECK(stats.flush_calls == 1);
-    CPPIO_CHECK(stats.flush_errors == 1);
+    SLUICE_CHECK(!res.has_value());
+    SLUICE_CHECK(stats.flush_calls == 1);
+    SLUICE_CHECK(stats.flush_errors == 1);
 }
 
-CPPIO_TEST_CASE(observed_writer_flush_success_increments_only_flush_calls) {
-    cppio::MemoryWriter inner;
-    cppio::WriterStats stats{};
-    cppio::ObservedWriter w(inner, stats);
+SLUICE_TEST_CASE(observed_writer_flush_success_increments_only_flush_calls) {
+    sluice::MemoryWriter inner;
+    sluice::WriterStats stats{};
+    sluice::ObservedWriter w(inner, stats);
 
-    CPPIO_CHECK(w.flush().has_value());
-    CPPIO_CHECK(stats.flush_calls == 1);
-    CPPIO_CHECK(stats.flush_errors == 0);
-    CPPIO_CHECK(stats.write_calls == 0);
+    SLUICE_CHECK(w.flush().has_value());
+    SLUICE_CHECK(stats.flush_calls == 1);
+    SLUICE_CHECK(stats.flush_errors == 0);
+    SLUICE_CHECK(stats.write_calls == 0);
 }
 
-CPPIO_TEST_CASE(observed_writer_is_data_transparent) {
-    cppio::MemoryWriter inner;
-    cppio::WriterStats stats{};
-    cppio::ObservedWriter w(inner, stats);
-    CPPIO_CHECK(w.write_all(sb("data")).has_value());
-    CPPIO_CHECK(eq("data", inner.bytes()));
+SLUICE_TEST_CASE(observed_writer_is_data_transparent) {
+    sluice::MemoryWriter inner;
+    sluice::WriterStats stats{};
+    sluice::ObservedWriter w(inner, stats);
+    SLUICE_CHECK(w.write_all(sb("data")).has_value());
+    SLUICE_CHECK(eq("data", inner.bytes()));
 }
 
-CPPIO_TEST_CASE(observed_writer_counts_write_errors) {
+SLUICE_TEST_CASE(observed_writer_counts_write_errors) {
     // Wrap a FaultWriter that fails after one call; ObservedWriter must both
     // propagate the error and increment write_errors.
-    cppio::MemoryWriter sink;
-    cppio::FaultPlan plan;
+    sluice::MemoryWriter sink;
+    sluice::FaultPlan plan;
     plan.fail_after_write_calls = 0;  // very first write fails
-    plan.error = cppio::IoError{cppio::IoError::Code::no_space};
-    cppio::FaultWriter inner(sink, plan);
-    cppio::WriterStats stats{};
-    cppio::ObservedWriter w(inner, stats);
+    plan.error = sluice::IoError{sluice::IoError::Code::no_space};
+    sluice::FaultWriter inner(sink, plan);
+    sluice::WriterStats stats{};
+    sluice::ObservedWriter w(inner, stats);
 
     auto res = w.write_some(sb("data"));
-    CPPIO_CHECK(!res.has_value());
-    CPPIO_CHECK(res.error().code == cppio::IoError::Code::no_space);
-    CPPIO_CHECK(stats.write_errors == 1);
-    CPPIO_CHECK(stats.write_calls == 1);
+    SLUICE_CHECK(!res.has_value());
+    SLUICE_CHECK(res.error().code == sluice::IoError::Code::no_space);
+    SLUICE_CHECK(stats.write_errors == 1);
+    SLUICE_CHECK(stats.write_calls == 1);
 }
 
-CPPIO_TEST_CASE(observed_writer_does_not_count_write_errors_on_success) {
-    cppio::MemoryWriter inner;
-    cppio::WriterStats stats{};
-    cppio::ObservedWriter w(inner, stats);
-    CPPIO_CHECK(w.write_all(sb("ok")).has_value());
-    CPPIO_CHECK(stats.write_errors == 0);
+SLUICE_TEST_CASE(observed_writer_does_not_count_write_errors_on_success) {
+    sluice::MemoryWriter inner;
+    sluice::WriterStats stats{};
+    sluice::ObservedWriter w(inner, stats);
+    SLUICE_CHECK(w.write_all(sb("ok")).has_value());
+    SLUICE_CHECK(stats.write_errors == 0);
 }
 
-CPPIO_MAIN()
+SLUICE_MAIN()

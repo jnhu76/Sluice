@@ -2,12 +2,13 @@
 // stay zero (no ops run); with liburing a successful write bumps the counters.
 #include "harness.hpp"
 
-#include <cppio/experimental/uring_io_context.hpp>
-#include <cppio/measurement.hpp>
+#include <sluice/experimental/uring_io_context.hpp>
+#include <sluice/measurement.hpp>
 
-#if defined(CPPIO_HAS_LIBURING)
+#if defined(SLUICE_HAS_LIBURING)
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #endif
 
 #include <cstddef>
@@ -15,25 +16,26 @@
 #include <string>
 #include <vector>
 
-#if !defined(CPPIO_HAS_LIBURING)
-CPPIO_TEST_CASE(uring_stats_nullptr_changes_nothing_stub) {
-    cppio::experimental::UringWriteBatch batch(8);
+#if !defined(SLUICE_HAS_LIBURING)
+SLUICE_TEST_CASE(uring_stats_nullptr_changes_nothing_stub) {
+    sluice::experimental::UringWriteBatch batch(8);
     batch.set_stats(nullptr);  // no crash, no counting
-    cppio::UringStats st{};
+    sluice::UringStats st{};
     batch.set_stats(&st);
     std::vector<std::byte> buf(4, std::byte{0});
     (void)batch.write_all(/*fd=*/1, std::span<const std::byte>(buf), 0);
     // Stub returns before any op, so no counters move.
-    CPPIO_CHECK(st.submit_calls == 0);
-    CPPIO_CHECK(st.completed_ops == 0);
+    SLUICE_CHECK(st.submit_calls == 0);
+    SLUICE_CHECK(st.completed_ops == 0);
 }
 #else
 namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath() {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_uring_stats_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_uring_stats_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -42,21 +44,21 @@ struct TempPath {
 };
 }  // namespace
 
-CPPIO_TEST_CASE(uring_stats_increment_on_successful_write) {
+SLUICE_TEST_CASE(uring_stats_increment_on_successful_write) {
     TempPath tp;
-    cppio::experimental::UringIoContext ctx(8);
-    cppio::UringStats st{};
+    sluice::experimental::UringIoContext ctx(8);
+    sluice::UringStats st{};
     ctx.set_stats(&st);
     std::string payload = "uring stats";
     std::vector<std::byte> buf(payload.begin(), payload.end());
     auto r = ctx.write_file_all(tp.str(), std::span<const std::byte>(buf));
-    CPPIO_CHECK(r.has_value());
-    CPPIO_CHECK(st.queue_init_calls >= 1);
-    CPPIO_CHECK(st.submitted_ops >= 1);
-    CPPIO_CHECK(st.completed_ops >= 1);
-    CPPIO_CHECK(st.bytes_completed == payload.size());
-    CPPIO_CHECK(st.completion_errors == 0);
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(st.queue_init_calls >= 1);
+    SLUICE_CHECK(st.submitted_ops >= 1);
+    SLUICE_CHECK(st.completed_ops >= 1);
+    SLUICE_CHECK(st.bytes_completed == payload.size());
+    SLUICE_CHECK(st.completion_errors == 0);
 }
 #endif
 
-CPPIO_MAIN()
+SLUICE_MAIN()

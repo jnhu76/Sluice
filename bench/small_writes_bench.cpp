@@ -4,9 +4,9 @@
 // docs/core-microbench-methodology.md.
 #include "bench_common.hpp"
 
-#include <cppio/buffer.hpp>
-#include <cppio/file.hpp>
-#include <cppio/observed.hpp>
+#include <sluice/buffer.hpp>
+#include <sluice/file.hpp>
+#include <sluice/observed.hpp>
 
 #include <chrono>
 #include <cstdio>
@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <iostream>
 #include <span>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -23,8 +24,9 @@ namespace {
 struct TempPath {
     std::filesystem::path p;
     TempPath() {
-        p = std::filesystem::temp_directory_path() /
-            ("cppio_bench_sw_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
+        std::ostringstream oss;
+        oss << "sluice_bench_sw_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
         try { std::filesystem::remove(p); } catch (...) {}
@@ -40,19 +42,19 @@ std::uint64_t now_ns() {
 constexpr std::uint64_t kTotalBytes = 1u << 20;  // 1 MiB per cell
 constexpr int kWarmupIters = 2;
 
-void bench_raw(const std::string& path, std::size_t chunk, cppio::bench::BenchResult& r) {
+void bench_raw(const std::string& path, std::size_t chunk, sluice::bench::BenchResult& r) {
     r.mode = "raw_file_writer";
-    cppio::SyscallStats& ss = r.syscall_stats;
+    sluice::SyscallStats& ss = r.syscall_stats;
     std::vector<std::byte> buf(chunk, std::byte{0xAB});
     // warmup
     for (int i = 0; i < kWarmupIters; ++i) {
-        cppio::FileWriter w(path, &ss);
+        sluice::FileWriter w(path, &ss);
         std::uint64_t left = kTotalBytes;
         while (left) { auto n = std::min(left, buf.size()); (void)w.write_all(std::span(buf.data(), n)); left -= n; }
     }
     ss = {};
     auto t0 = now_ns();
-    cppio::FileWriter w(path, &ss);
+    sluice::FileWriter w(path, &ss);
     std::uint64_t left = kTotalBytes, iters = 0;
     while (left) { auto n = std::min(left, buf.size()); (void)w.write_all(std::span(buf.data(), n)); left -= n; ++iters; }
     (void)w.flush();
@@ -61,20 +63,20 @@ void bench_raw(const std::string& path, std::size_t chunk, cppio::bench::BenchRe
     r.iterations = iters;
 }
 
-void bench_buffered(const std::string& path, std::size_t chunk, cppio::bench::BenchResult& r) {
+void bench_buffered(const std::string& path, std::size_t chunk, sluice::bench::BenchResult& r) {
     r.mode = "buffered_writer";
-    cppio::SyscallStats ss; cppio::BufferStats bs;
+    sluice::SyscallStats ss; sluice::BufferStats bs;
     std::vector<std::byte> buf(chunk, std::byte{0xAB});
     std::vector<std::byte> wbuf(4096);
     for (int i = 0; i < kWarmupIters; ++i) {
-        cppio::FileWriter fw(path); cppio::BufferedWriter bw(fw, wbuf, &bs);
+        sluice::FileWriter fw(path); sluice::BufferedWriter bw(fw, wbuf, &bs);
         std::uint64_t left = kTotalBytes;
         while (left) { auto n = std::min(left, buf.size()); (void)bw.write_all(std::span(buf.data(), n)); left -= n; }
         (void)bw.flush();
     }
     bs = {}; ss = {};
     auto t0 = now_ns();
-    cppio::FileWriter fw(path, &ss); cppio::BufferedWriter bw(fw, wbuf, &bs);
+    sluice::FileWriter fw(path, &ss); sluice::BufferedWriter bw(fw, wbuf, &bs);
     std::uint64_t left = kTotalBytes, iters = 0;
     while (left) { auto n = std::min(left, buf.size()); (void)bw.write_all(std::span(buf.data(), n)); left -= n; ++iters; }
     (void)bw.flush();
@@ -83,15 +85,15 @@ void bench_buffered(const std::string& path, std::size_t chunk, cppio::bench::Be
     r.syscall_stats = ss; r.buffer_stats = bs;
 }
 
-void bench_observed_buffered(const std::string& path, std::size_t chunk, cppio::bench::BenchResult& r) {
+void bench_observed_buffered(const std::string& path, std::size_t chunk, sluice::bench::BenchResult& r) {
     r.mode = "observed_buffered_writer";
-    cppio::SyscallStats ss; cppio::BufferStats bs; cppio::WriterStats ws;
+    sluice::SyscallStats ss; sluice::BufferStats bs; sluice::WriterStats ws;
     std::vector<std::byte> buf(chunk, std::byte{0xAB});
     std::vector<std::byte> wbuf(4096);
     auto t0 = now_ns();
-    cppio::FileWriter fw(path, &ss);
-    cppio::ObservedWriter ow(fw, ws);
-    cppio::BufferedWriter bw(ow, wbuf, &bs);
+    sluice::FileWriter fw(path, &ss);
+    sluice::ObservedWriter ow(fw, ws);
+    sluice::BufferedWriter bw(ow, wbuf, &bs);
     std::uint64_t left = kTotalBytes, iters = 0;
     while (left) { auto n = std::min(left, buf.size()); (void)bw.write_all(std::span(buf.data(), n)); left -= n; ++iters; }
     (void)bw.flush();
@@ -100,16 +102,16 @@ void bench_observed_buffered(const std::string& path, std::size_t chunk, cppio::
     r.syscall_stats = ss; r.buffer_stats = bs;
 }
 
-void bench_vector(const std::string& path, std::size_t chunk, cppio::bench::BenchResult& r) {
+void bench_vector(const std::string& path, std::size_t chunk, sluice::bench::BenchResult& r) {
     r.mode = "vector_writer";
-    cppio::SyscallStats ss; cppio::VectorStats vs;
+    sluice::SyscallStats ss; sluice::VectorStats vs;
     std::vector<std::byte> buf(chunk, std::byte{0xAB});
     auto t0 = now_ns();
-    cppio::FileWriter fw(path, &ss, &vs);
+    sluice::FileWriter fw(path, &ss, &vs);
     std::uint64_t left = kTotalBytes, iters = 0;
     while (left) {
-        cppio::ConstIoSlice sl{std::span<const std::byte>(buf)};
-        auto res = fw.write_vec(std::span<const cppio::ConstIoSlice>(&sl, 1));
+        sluice::ConstIoSlice sl{std::span<const std::byte>(buf)};
+        auto res = fw.write_vec(std::span<const sluice::ConstIoSlice>(&sl, 1));
         if (!res.has_value() || res.value() == 0) break;
         left -= res.value(); ++iters;
     }
@@ -123,14 +125,14 @@ void bench_vector(const std::string& path, std::size_t chunk, cppio::bench::Benc
 
 int main() {
     TempPath tp;
-    cppio::bench::print_csv_header(std::cout);
+    sluice::bench::print_csv_header(std::cout);
     for (std::size_t chunk : {1u, 8u, 64u, 512u, 4096u}) {
-        cppio::bench::BenchResult r;
+        sluice::bench::BenchResult r;
         r.case_name = "small_writes";
-        bench_raw(tp.str(), chunk, r);              cppio::bench::print_csv_row(std::cout, r);
-        bench_buffered(tp.str(), chunk, r);         cppio::bench::print_csv_row(std::cout, r);
-        bench_observed_buffered(tp.str(), chunk, r);cppio::bench::print_csv_row(std::cout, r);
-        bench_vector(tp.str(), chunk, r);           cppio::bench::print_csv_row(std::cout, r);
+        bench_raw(tp.str(), chunk, r);              sluice::bench::print_csv_row(std::cout, r);
+        bench_buffered(tp.str(), chunk, r);         sluice::bench::print_csv_row(std::cout, r);
+        bench_observed_buffered(tp.str(), chunk, r);sluice::bench::print_csv_row(std::cout, r);
+        bench_vector(tp.str(), chunk, r);           sluice::bench::print_csv_row(std::cout, r);
     }
     return 0;
 }

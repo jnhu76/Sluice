@@ -1,238 +1,289 @@
-# io-core
+Sluice is an experimental C++ I/O control-flow library for explicit capabilities, pluggable backends, and backend-neutral Reader/Writer semantics.
 
-A small C++ I/O core inspired by Zig `std.Io`.
+## Why Sluice
 
-This C++ core is inspired by Zig std.Io.
-Zig source is used as a design reference only.
-The core does not depend on Zig.
-The first phase focuses on correctness, observability, and deterministic fault injection.
-Optimization, benchmarking, io_uring, async backends, and policy selection are intentionally deferred.
+Most C++ I/O ties you to a specific backend — POSIX files, sockets, memory — before you've written a line of business logic. Sluice flips that: you code against abstract `Reader`/`Writer` interfaces, and the backend is a **pluggable capability** you choose at the edges of your program.
 
-## What's here
+This means:
 
-A composable, blocking I/O core:
+- **Test with deterministic fault injection** (`FaultReader`/`FaultWriter`) — no filesystem, no mocking framework.
+- **Benchmark with stats-collecting wrappers** (`ObservedReader`/`ObservedWriter`) — zero-copy pass-through that counts bytes and calls.
+- **Swap backends without changing call sites** — POSIX files today, io_uring tomorrow, in-memory for tests, all through the same `copy_all` primitive.
 
-- `cppio::Reader` / `cppio::Writer` — the two abstractions everything else is built on.
-- `cppio::Result<T>` / `cppio::IoError` — a small expected-like error channel (C++20, no `std::expected` dependency).
-- `cppio::BufferedReader` / `cppio::BufferedWriter` — interface-level buffering wrappers.
-- `cppio::FileReader` / `cppio::FileWriter` — blocking POSIX file I/O, RAII, move-only.
-- `cppio::ObservedReader` / `cppio::ObservedWriter` — transparent stats-collecting wrappers.
-- `cppio::FaultReader` / `cppio::FaultWriter` — deterministic short-I/O and failure injection driven by a `FaultPlan`.
-- `cppio::copy_all(reader, writer, scratch)` — the copy primitive.
-- Buffered fast path (CPPIO-CORE-006): `cppio::BufferedReadable`, an opt-in capability a `BufferedReader` implements so `copy_all` drains already-buffered bytes before falling back to the scratch path. See `docs/buffered-fast-path.md`.
-- Copy strategy layer (CPPIO-CORE-007): `cppio::CopyStrategy` / `CopyOptions` / `CopyDecision` make copy path selection explicit and observable. See `docs/copy-strategy.md`.
-- Flush/sync/durability separation (CPPIO-CORE-008): `cppio::SyncableWriter` (`sync_data`/`sync_all`), `SyncStats`, and `wal::WalWriter` (written/flushed/durable LSN invariant). `flush()` drains bytes and never implies durability. See `docs/flush-sync-durability.md`.
-- Backend capability boundary (CPPIO-CORE-009): `cppio::IoContext` / `BlockingIoContext` open `Reader`/`Writer` handles through an abstract factory so future backends can plug in. Direct `FileReader`/`FileWriter` constructors remain valid. See `docs/io-context.md`.
-- Core microbench harness + optimization matrix (CPPIO-CORE-010/011): `bench/*_bench` emit CSV; `scripts/run_core_microbenches.sh` + `scripts/summarize_core_microbench.py` run and summarize. Scoped, evidence-linked decisions live in `docs/optimization-decision-matrix.md`. No universal performance claims.
+The library is inspired by Zig's `std.Io` but adapted for C++20 idioms. It is **not** a port — it's a C++ take on the same explicit-capability philosophy.
 
-**MVP status:** complete (CPPIO-CORE-001–011, closeout in `docs/mvp-closeout.md`). Zig `std.Io` parity audited in `docs/zig-std-io-parity-audit.md`. Post-MVP: an experimental io_uring write spike (CPPIO-CORE-012 audit + readiness gate, CPPIO-CORE-013 spike) lives under `cppio::experimental` behind an optional `--with-liburing` build gate; it is **not** the default backend. See `docs/io-uring-spike.md`.
-  ```cpp
-  cppio::CopyOptions options;
-  options.strategy = cppio::CopyStrategy::Scratch;
-  cppio::CopyDecision decision;
-  copy_all(reader, writer, scratch, options, &stats, &decision);
-  ```
-- `cppio::wal::write_record` / `read_record` — a minimal WAL record format for exercising writer semantics.
-- Vector I/O (CPPIO-CORE-005): `cppio::IoSlice` / `cppio::ConstIoSlice`, `Reader::read_vec`, `Writer::write_vec` / `write_all_vec`, POSIX `readv`/`writev` overrides on the file backends, and `cppio::wal::write_record_vec`. See `docs/readv-writev-design-note.md`.
-
-## Design reference
-
-Zig `std.Io` is the reference model. The Zig source tree under `./zig` is **not**
-compiled or linked; it is read only for design inspiration (interface-owned
-buffers, explicit capability objects, `std.testing.io`-style fault injection).
-None of the implementation depends on Zig.
-
-| Zig idea                    | C++ implementation                                             |
-| --------------------------- | -------------------------------------------------------------- |
-| `std.Io.Reader`             | `cppio::Reader`                                                |
-| `std.Io.Writer`             | `cppio::Writer`                                                |
-| explicit I/O capability     | minimal blocking file support now; `IoContext` deferred        |
-| interface-owned buffer      | `BufferedReader` / `BufferedWriter` wrappers                   |
-| `std.testing.io`            | `FaultReader` / `FaultWriter`                                  |
-| failing I/O                 | `FaultReader` / `FaultWriter`                                  |
-| `streamTo` / copy primitive | `copy_all(Reader&, Writer&)`                                   |
-| `readVec`/`writeVec`        | `read_vec`/`write_vec`/`write_all_vec` (+ POSIX `readv`/`writev`) |
-
-## Wrapper composition
-
-Wrappers compose by reference. The outermost wrapper is what the caller drives;
-each delegates to the next layer in the chain:
+## 5-minute tour
 
 ```cpp
-FileWriter file("/tmp/out.bin");
-ObservedWriter observed(file, stats);
-BufferedWriter buffered(observed, buffer);
+// In-memory round-trip: no filesystem, no setup.
+#include <sluice/memory_io_context.hpp>
+#include <sluice/copy.hpp>
+#include <cstdio>
 
-buffered.write_all(bytes);   // flows: buffered -> observed -> file
-buffered.flush();            // stats reflect inner calls
+int main() {
+    sluice::MemoryIoContext ctx;
+
+    auto r = ctx.open_reader("hello world");
+    auto w = ctx.open_writer();
+
+    sluice::copy_all(*r, *w);
+
+    auto bytes = w->take_bytes();
+    std::printf("%s\n", bytes.data());  // prints: hello world
+}
 ```
 
-and:
+For a real-backend version, see `examples/mvp_copy_pipeline.cpp`.
 
-```cpp
-FileReader input("/tmp/in.bin");
-FileWriter output("/tmp/out.bin");
-auto result = copy_all(input, output);
-```
+## Core concepts
 
-`BufferedWriter` does **not** flush in its destructor — a flush that fails cannot
-be reported from a destructor, so callers must call `flush()` explicitly before
-the wrapper goes out of scope.
+### Reader / Writer
 
-## Flush contract
+The two fundamental abstractions. Everything else — buffering, observability, fault injection, backends — is a wrapper around one of these.
 
-The `flush()` operation means different things at different layers:
-
-| Layer | `flush()` does | Errors? |
+| Concept | Interface | Key methods |
 |---|---|---|
-| `Writer::flush()` | Generic operation exposed by the abstraction. | yes (virtual) |
-| `BufferedWriter::flush()` | Drains **all dirty buffered bytes** into the inner writer, then calls `inner.flush()`. The destructor does **not** flush, because a flush that fails cannot be reported safely from a destructor. | yes |
-| `FileWriter::flush()` | **Documented no-op in this phase.** It does *not* imply `fsync` / `fdatasync`, does *not* imply durability. Durability semantics are deferred. | n/a |
+| Reader | `sluice::Reader` | `read_some()`, `read_exact()`, `skip_exact()` |
+| Writer | `sluice::Writer` | `write_some()`, `write_all()`, `flush()` |
+| Vector I/O | (on Reader/Writer) | `read_vec()`, `write_vec()`, `write_all_vec()` |
 
-**Composition rule:** call `flush()` on the **outermost** writer you used. It
-propagates inward:
+### Wrapper composition
+
+Wrappers hold a reference to an inner reader/writer and delegate to it. The outermost wrapper is what the caller drives; each layer adds a capability:
 
 ```cpp
-FileWriter file(...);
-ObservedWriter observed(file, stats);
-BufferedWriter buffered(observed, buffer);
-buffered.write_all(...);
-buffered.flush();   // correct: drains buffered -> observed -> file, then file.flush()
+sluice::FileWriter      file("/tmp/out.bin");   // raw POSIX writes
+sluice::ObservedWriter  observed(file, stats);  // count bytes & calls
+sluice::BufferedWriter  buffered(observed, buf); // add buffering
+
+buffered.write_all(bytes);  // flows: buffered → observed → file
+buffered.flush();           // stats reflect inner calls
 ```
 
-**Flushing buffered bytes is not the same as a durable commit.** Even after
-`BufferedWriter::flush()` returns success, the bytes may live only in the OS page
-cache; a crash can still lose them until an explicit durability barrier (not
-provided this phase) runs.
+Available wrappers:
+
+| Wrapper | What it adds |
+|---|---|
+| `BufferedReader` / `BufferedWriter` | Interface-level buffering |
+| `ObservedReader` / `ObservedWriter` | Transparent byte/call counting |
+| `FaultReader` / `FaultWriter` | Deterministic short-I/O and error injection |
+
+### Copy primitive
+
+```cpp
+sluice::copy_all(reader, writer);                      // simple
+sluice::copy_all(reader, writer, scratch);             // with scratch buffer
+sluice::copy_all(reader, writer, scratch, options,     // with strategy & stats
+                 &stats, &decision);
+```
+
+`copy_all` has a **buffered fast path**: when the reader is a `BufferedReader` (which implements the `BufferedReadable` capability), it drains already-buffered bytes before falling back to scratch reads. This is opt-in, observable, and not a performance claim.
+
+### Copy strategies
+
+The strategy layer (SLUICE-CORE-007) makes copy-path selection explicit:
+
+| Strategy | Behaviour |
+|---|---|
+| `CopyStrategy::Scratch` | Always read into scratch, then write (safe fallback) |
+| `CopyStrategy::BufferedFirst` | Try the buffered fast path first; fall back to scratch |
+| `CopyStrategy::Auto` | Let `copy_all` decide based on runtime capability probes |
+
+### Backend capability boundary
+
+`sluice::IoContext` is an abstract factory that opens `Reader`/`Writer` handles:
+
+```cpp
+sluice::BlockingIoContext ctx;           // POSIX files
+sluice::MemoryIoContext  ctx;            // in-memory (tests, examples)
+
+auto reader = ctx.open_reader(path);
+auto writer = ctx.open_writer(path);
+sluice::copy_all(*reader, *writer);
+```
+
+Direct `FileReader`/`FileWriter` constructors remain valid for simple cases. The context abstraction exists so future backends (io_uring, network sockets) can plug in without changing call sites.
+
+### Flush / sync / durability
+
+Three distinct operations with three distinct contracts:
+
+| Operation | What it guarantees |
+|---|---|
+| `flush()` | Drains buffered bytes to the inner writer. **No durability.** |
+| `sync_data()` | `fdatasync` — data integrity (via `SyncableWriter` capability) |
+| `sync_all()` | `fsync` — data + metadata integrity (via `SyncableWriter` capability) |
+
+`BufferedWriter::flush()` drains dirty bytes. `FileWriter::flush()` is a documented no-op (no `fsync` this phase). The destructor does **not** flush — a flush that fails cannot be reported from a destructor.
+
+Composition rule: call `flush()` on the **outermost** writer you used:
+
+```cpp
+buffered.write_all(bytes);
+buffered.flush();   // drains buffered → observed → file, then file.flush()
+```
+
+### WAL record format
+
+`sluice::wal` provides a minimal write-ahead log record format for exercising writer semantics:
+
+```cpp
+sluice::wal::write_record(writer, data);         // write a record
+auto got = sluice::wal::read_record(reader);     // read it back
+sluice::wal::write_record_vec(writer, iovecs);   // vector variant
+```
 
 ## Building
 
-The project uses [xmake](https://xmake.io). Build the static library, run the
-tests, and build the examples:
+The project uses [xmake](https://xmake.io).
 
 ```sh
-xmake f -m debug            # configure
-xmake build cppio_core      # build the static library
-xmake build -g test         # build all correctness tests
-xmake test                  # run them
-xmake build -g examples     # build the examples
+xmake f -m debug                  # configure (debug mode)
+xmake build sluice_core           # build the static library
+xmake build -g test               # build all tests
+xmake test                        # run all tests
+xmake build -g examples           # build examples
 ```
 
-There is no pre-existing `cppio-bench` integration; benchmark logic is untouched.
+To enable the experimental io_uring spike (requires liburing):
+
+```sh
+xmake f --with-liburing=true
+xmake build -g experimental
+```
+
+### Sanitizers and memory checking
+
+The project ships with five analysis modes. Each configures the compiler/runtime appropriately and produces binaries under a dedicated output directory.
+
+| Mode | Flag | What it catches |
+|---|---|---|
+| `asan` | `-fsanitize=address` | Out-of-bounds, use-after-free, double-free |
+| `tsan` | `-fsanitize=thread` | Data races, deadlocks |
+| `ubsan` | `-fsanitize=undefined` | Signed overflow, null dereference, alignment issues |
+| `asanubsan` | ASan + UBSan combined | Both of the above simultaneously |
+| `valgrind` | debug symbols + `-O3` | Memory leaks, invalid reads/writes (runtime check) |
+
+**Sanitizer tests** (compile-time instrumentation):
+
+```sh
+xmake f -m asan && xmake build -g test && xmake run -g test
+xmake f -m tsan && xmake build -g test && xmake run -g test
+xmake f -m ubsan && xmake build -g test && xmake run -g test
+xmake f -m asanubsan && xmake build -g test && xmake run -g test
+```
+
+**Valgrind** (runtime wrapper — build with debug symbols, then run under valgrind):
+
+```sh
+xmake f -m valgrind && xmake build -g test
+valgrind --leak-check=full --error-exitcode=1 build/linux/x86_64/valgrind/<test_name>_test
+```
+
+**Switching to Clang** (if sanitizers misbehave with g++):
+
+```sh
+xmake f --toolchain=clang -c && xmake build
+xmake f --toolchain=clang -m asan -c && xmake build   # Clang + ASan
+```
+
+## Project layout
+
+```
+include/sluice/          Public headers
+src/                     Implementation
+tests/                   Correctness tests (one binary per slice)
+examples/                Runnable examples
+bench/                   Microbenchmarks (CSV output)
+docs/                    Design notes, audits, decision records
+scripts/                 Build/analysis helpers
+```
 
 ## Tests
 
-Tests live under `tests/` and use a tiny dependency-free harness
-(`tests/harness.hpp`) modeled after Zig's `std.testing.io` — deterministic, no
-external test framework. Each slice has its own binary:
+Tests live under `tests/` and use a tiny dependency-free harness (`tests/harness.hpp`) modeled after Zig's `std.testing.io` — deterministic, no external framework. Each slice has its own binary:
 
-- `result_test` — `Result<T>` / `IoError` semantics
-- `writer_test` — `write_all`: short writes, zero-progress rejection, error propagation
-- `reader_test` — `read_exact` / `stream_to`: EOF, partial reads, error propagation
-- `fault_test` — `FaultReader` / `FaultWriter` determinism and partial-write preservation
-- `buffer_test` — `BufferedReader` / `BufferedWriter` order, EOF, dirty flush, flush-error
-- `observed_test` — stats accounting + data transparency
-- `copy_test` — `copy_all` exact bytes, totals, both-side error propagation
-- `buffered_readable_test` — `BufferedReadable` `peek_buffered`/`consume_buffered`
-- `copy_fast_path_test` / `copy_stats_fast_path_test` — `copy_all` buffered fast path + fast/scratch stats
-- `copy_strategy_test` / `copy_scratch_strategy_test` / `copy_buffered_first_strategy_test` / `copy_deferred_strategy_test` / `copy_strategy_stats_test` — `CopyStrategy` API + Scratch/BufferedFirst/Auto routing + deferred handling + strategy counters
-- `wal_test` — WAL round-trip, truncation, checksum mismatch, fault propagation
-- `file_test` — POSIX file round-trip, EOF, missing-file, move-only, on-disk WAL
-- `writer_vec_test` / `reader_vec_test` — default vector fallback: in-order, empty-skip, short I/O, error propagation
-- `file_vec_test` — POSIX `readv`/`writev` round-trip, `IOV_MAX` chunking, open-error, `VectorStats`
-- `wal_vec_test` — `write_record_vec` round-trips, byte-equivalence with `write_record`, overflow guard
-- `vector_stats_test` — `VectorStats` fallback counting through the observed wrappers
+| Test | What it covers |
+|---|---|
+| `result_test` | `Result<T>` / `IoError` semantics |
+| `writer_test` | `write_all`: short writes, zero-progress rejection, error propagation |
+| `reader_test` | `read_exact`, `skip_exact`: EOF, partial reads, error propagation |
+| `fault_test` | `FaultReader`/`FaultWriter` determinism and partial-write preservation |
+| `buffer_test` | `BufferedReader`/`BufferedWriter` order, EOF, dirty flush, flush-error |
+| `observed_test` | Stats accounting + data transparency |
+| `copy_test` | `copy_all` exact bytes, totals, both-side error propagation |
+| `buffered_readable_test` | `peek_buffered`/`consume_buffered` fast-path capability |
+| `copy_fast_path_test` / `copy_stats_fast_path_test` | Buffered fast path + fast/scratch stats |
+| `copy_strategy_test` (+ variants) | `CopyStrategy` API and routing |
+| `wal_test` | WAL round-trip, truncation, checksum mismatch, fault propagation |
+| `file_test` | POSIX file round-trip, EOF, missing-file, move-only |
+| `writer_vec_test` / `reader_vec_test` | Default vector fallback |
+| `file_vec_test` | POSIX `readv`/`writev` round-trip, `IOV_MAX` chunking |
+| `wal_vec_test` | `write_record_vec` round-trip |
+| `vector_stats_test` | `VectorStats` fallback counting |
+| `io_context_api_test` | `IoContext` interface contract |
+| `blocking_io_context_test` | `BlockingIoContext` open/error paths |
+| `memory_io_context_test` | `MemoryIoContext` round-trip |
+| `memory_reader_convenience_test` | `MemoryReader::from_bytes` convenience |
+| `file_sync_test` | `SyncableWriter` durability contract |
+| `syncable_writer_test` | `SyncableWriter` interface + capability detection |
+| `wal_writer_test` | WAL writer + sync integration |
+| `read_vec_all_test` | `read_vec_all` helper |
+| `uring_*_test` | Experimental io_uring spike (stub without liburing) |
 
 ## Examples
 
-**5-minute tour:** `mvp_memory_io_context` is the fastest way to see cppio work
-end-to-end with no filesystem — it seeds an in-memory reader, copies through an
-in-memory writer via the `IoContext` boundary, and prints the bytes. For a
-real-backend tour, start with `mvp_copy_pipeline`.
+| Example | What it shows |
+|---|---|
+| `mvp_memory_io_context` | **5-minute tour** — in-memory round-trip, no filesystem |
+| `mvp_copy_pipeline` | Canonical MVP composition with buffered fast path |
+| `cat` | Stream a file to stdout, observed for stats |
+| `copy_file` | `copy_all` between two files, explicit flush |
+| `small_writes` | Many tiny writes through `BufferedWriter` + `ObservedWriter` |
+| `fault_write` | Deterministic `FaultWriter` failure |
+| `wal_records` | Write and read back WAL records on disk |
+| `mvp_limited_copy` | `CopyLimit::bytes(N)` copy with stop-reason stats |
+| `mvp_wal_vector` | WAL records via `write_record_vec` |
+| `mvp_copy_strategy` | Scratch / BufferedFirst / Auto / deferred-rejected strategies |
+| `mvp_wal_durable` | WAL durability: write/flush/sync with LSN tracking |
+| `mvp_io_context_copy` | Open reader/writer through `BlockingIoContext`, copy, flush, sync |
+| `experimental_uring_write` | Experimental io_uring write path (skips cleanly without liburing) |
 
-Under `examples/`:
+## Design reference
 
-- `cat` — stream a file to stdout, observed for stats
-- `copy_file` — `copy_all` between two files, explicit flush
-- `small_writes` — many tiny writes through `BufferedWriter` + `ObservedWriter`
-- `fault_write` — a deterministic `FaultWriter` failure
-- `wal_records` — write and read back WAL records on disk
-- `mvp_copy_pipeline` — the canonical MVP composition; demonstrates the buffered fast path
-- `mvp_limited_copy` — `CopyLimit::bytes(N)` copy with stop-reason stats
-- `mvp_wal_vector` — WAL records via `write_record_vec`, read back with `read_record`
-- `mvp_copy_strategy` — demonstrates Scratch / BufferedFirst / Auto / deferred-rejected / deferred-fallback with decision output
-- `mvp_wal_durable` — WAL durability boundary: write/flush/sync with written/flushed/durable LSN output
-- `mvp_io_context_copy` — opens reader/writer through `BlockingIoContext`, copies, flushes, syncs
-- `mvp_memory_io_context` — the 5-minute tour: in-memory backend, no filesystem
-- `experimental_uring_write` — experimental io_uring write path; skips cleanly without liburing
+Zig `std.Io` is the reference model. The Zig source tree under `./zig` is **not** compiled or linked — it is read for design inspiration only. None of the implementation depends on Zig.
 
-## Intentional deviations from the Zig model
+| Zig idea | Sluice equivalent |
+|---|---|
+| `std.Io.Reader` | `sluice::Reader` |
+| `std.Io.Writer` | `sluice::Writer` |
+| interface-owned buffer | `BufferedReader`/`BufferedWriter` wrappers |
+| `std.testing.io` | `FaultReader`/`FaultWriter` |
+| `streamTo` | `copy_all(Reader&, Writer&)` |
+| `readVec`/`writeVec` | `read_vec`/`write_vec`/`write_all_vec` |
+| flush / sync split | `flush()` + `SyncableWriter` |
+| `Io` capability context | `sluice::IoContext` |
 
-These divergences from `std.Io` are deliberate and approved by the task scope
-(correctness / observability / composability phase; optimization, io_uring,
-and async are deferred). Documented here so they read as design, not oversight.
+### Intentional divergences
 
-- **Buffer ownership is *outside* the interface (wrapper model), not inside it.**
-  In Zig, the buffer lives *inside* each `Reader`/`Writer` (`r.buffer/seek/end`,
-  `w.buffer/end`); every reader is inherently buffered and VTable operations
-  (`drain`, `stream`, `rebase`) negotiate around it. This core deliberately keeps
-  `Reader`/`Writer` **unbuffered** and puts buffering in **wrapper types**
-  (`BufferedReader`/`BufferedWriter`), following the task's design table.
-  Consequence: some Zig operations have no direct analog here — `rebase`,
-  `preserve_len`, the `Discarding`/`Allocating` writers. Those are out of scope
-  for this phase.
+These are deliberate design choices, not gaps:
 
-- **`copy_all` has a buffered fast path, but is not full Zig zero-copy.**
-  Zig's `Reader.stream` (Reader.zig:168) writes `r.buffer[r.seek..r.end]`
-  directly to the writer because the buffer lives inside the reader. cppio keeps
-  the base `Reader` unbuffered, so CPPIO-CORE-006 added an opt-in
-  `BufferedReadable` capability: when `copy_all`'s reader also implements it
-  (i.e. a `BufferedReader`), already-buffered unread bytes are drained to the
-  writer via `peek_buffered()`/`consume_buffered()` before falling back to the
-  scratch read path. Unbuffered readers still go through `read_some(scratch) →
-  write_all(scratch)`. The wrapper-vs-interface-owned-buffer divergence remains
-  (see `docs/buffered-fast-path.md`); this is not a performance claim —
-  measurement lands in CPPIO-CORE-010.
+1. **Buffer ownership is outside the interface** — Sluice keeps base `Reader`/`Writer` unbuffered and provides buffering through wrapper types. This means operations like Zig's `rebase`/`preserve_len` have no direct analog.
 
-- **`flush()` is split, not uniform.**
-  In Zig one `flush` contract does the right thing regardless of whether the
-  writer is buffered (it drains until the buffer is empty, Writer.zig:312).
-  Here `FileWriter::flush()` is a documented no-op for user-space state (no
-  `fsync` this phase), and `BufferedWriter::flush()` does the real work.
-  Callers must therefore know which layer in a chain is buffered to flush
-  meaningfully; the unified Zig model avoids that. Deferred.
+2. **`copy_all` has a buffered fast path** via the opt-in `BufferedReadable` capability, but is not full Zig zero-copy. Unbuffered readers go through `read_some(scratch) → write_all(scratch)`.
 
-- **Error model is flattened.**
-  Zig keeps it minimal: `Reader.Error = {ReadFailed, EndOfStream}`,
-  `Writer.Error = {WriteFailed}`; backend detail lives in the implementation.
-  `cppio::IoError::Code` carries eight categories (`eof`, `canceled`,
-  `interrupted`, `would_block`, `no_space`, `permission_denied`,
-  `invalid_state`, `backend_error`) plus a raw `os_errno`. The `backend_error`
-  code plays the role of Zig's `ReadFailed`/`WriteFailed`; the extra categories
-  let callers branch without digging into a backend. Considered an improvement
-  for C++ usage, not a regression.
+3. **`flush()` is split, not uniform** — `FileWriter::flush()` is a documented no-op; `BufferedWriter::flush()` does the real drain work. Callers must know which layer is buffered.
 
-- **`std.testing.io` has no direct analog; the fault wrappers are original.**
-  Zig's current `std.testing.io` is built on an `Io.Threaded` context
-  (testing.zig:36), not a simple fault-injecting recorder. `FaultReader`/
-  `FaultWriter` + `FaultPlan` are this project's design to satisfy the task's
-  "deterministic fault injection" requirement. They are specified by the task,
-  so they are authoritative rather than a Zig-port fidelity issue.
+4. **Error model is richer** — `sluice::IoError::Code` carries eight categories (`eof`, `canceled`, `interrupted`, `would_block`, `no_space`, `permission_denied`, `invalid_state`, `backend_error`) plus a raw `os_errno`, giving callers more to branch on than Zig's `ReadFailed`/`WriteFailed`.
 
-- **Vector I/O (`read_vec`/`write_vec`) is partial fidelity, landed in CPPIO-CORE-005.**
-  The *shape* matches Zig's `readVec`/`writeVec`. The default fallback and the
-  POSIX `readv`/`writev` overrides share conservative vector-primitive semantics:
-  stop on EOF, on error, or on the first positive short result (they are **not**
-  `read_exact`/`write_all` over slices — `write_all_vec` is the separate all-or-
-  error helper). Two intentional divergences from Zig remain: (1) the default
-  fallback loops over `read_some`/`write_some` rather than negotiating around an
-  interface-owned buffer (this core has no internal buffer — see above), and
-  (2) errors are propagated immediately even after partial progress, where
-  Zig's `readVec` swallows `EndOfStream` when bytes were already read. The POSIX
-  overrides on the file backends collapse slices into one syscall. This is a
-  prototype, **not** a performance claim — no benchmark integration yet. See
-  `docs/readv-writev-design-note.md`.
+5. **Fault injection is original design** — `FaultReader`/`FaultWriter` + `FaultPlan` are purpose-built for deterministic testing, not a port of Zig's `std.testing.io`.
 
-## Status / scope
+6. **Vector I/O semantics are conservative** — stop on EOF, on error, or on the first positive short result. Errors propagate immediately even after partial progress. This is a prototype, not a performance claim.
 
-This phase is correctness-only. See the final report for known limitations.
+## Status
+
+This phase focuses on correctness, observability, and composability. Optimization, benchmarking, io_uring, async backends, and policy selection are intentionally deferred.
+
+An experimental io_uring write spike (SLUICE-CORE-013) lives under `sluice::experimental` behind an optional `--with-liburing` build gate. It is **not** the default backend. See `docs/io-uring-spike.md`.
+
+For the full changelog, see `docs/changelog.md`.

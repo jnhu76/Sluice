@@ -1,8 +1,8 @@
 // cat: read a file and stream its bytes to stdout. Demonstrates FileReader +
 // FileWriter composition + observed stats.
-#include <cppio/file.hpp>
-#include <cppio/observed.hpp>
-#include <cppio/copy.hpp>
+#include <sluice/file.hpp>
+#include <sluice/observed.hpp>
+#include <sluice/copy.hpp>
 
 #include <cstdio>
 #include <filesystem>
@@ -22,18 +22,18 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    cppio::FileReader reader(path);
-    cppio::FileWriter writer(STDOUT_FILENO);  // adopt fd 1; /dev/stdout can't be opened on some systems
+    sluice::FileReader reader(path);
+    sluice::FileWriter writer(STDOUT_FILENO);  // adopt fd 1; /dev/stdout can't be opened on some systems
 
-    cppio::ReaderStats stats{};
-    cppio::ObservedReader observed(reader, stats);
+    sluice::ReaderStats stats{};
+    sluice::ObservedReader observed(reader, stats);
 
     std::vector<std::byte> scratch(8192);
-    auto res = cppio::copy_all(observed, writer, std::span<std::byte>(scratch));
+    auto res = sluice::copy_all(observed, writer, std::span<std::byte>(scratch));
     (void)writer.flush();
     if (!res.has_value()) {
         std::fprintf(stderr, "copy failed: %s\n",
-                     cppio::to_string(res.error().code).data());
+                     sluice::to_string(res.error().code).data());
         return 1;
     }
 

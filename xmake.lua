@@ -1,28 +1,34 @@
--- xmake build for the cppio C++ core (Zig std.Io inspired).
+-- xmake build for the sluice C++ core (Zig std.Io inspired).
 -- Zig source under ./zig is design reference only; never built here.
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.release", "mode.asan", "mode.tsan", "mode.ubsan", "mode.valgrind")
+
+-- Combined ASan + UBSan: no built-in mode, set policies directly.
+if is_mode("asanubsan") then
+    set_policy("build.sanitizer.address", true)
+    set_policy("build.sanitizer.undefined", true)
+end
 
 set_languages("c++20")
 set_warnings("all", "error")
 
 -- Core static library: Reader/Writer abstractions + wrappers.
-target("cppio_core")
+target("sluice_core")
     set_kind("static")
     add_includedirs("include", {public = true})
     add_files("src/*.cpp")
 
--- Bench helper library (CPPIO-CORE-010B). Linked into bench targets + the CSV test.
-target("cppio_bench_common")
+-- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
+target("sluice_bench_common")
     set_kind("static")
     set_default(false)
     set_group("bench")
     add_includedirs("include", "bench")
-    add_deps("cppio_core")
+    add_deps("sluice_core")
     add_files("bench/bench_common.cpp")
 
 -- Declare a test/example target only when its source file exists, so xmake
 -- does not warn about missing files for slices not yet written.
-function cppio_one_file_target(kind, group, name, subdir, deps_list)
+function sluice_one_file_target(kind, group, name, subdir, deps_list)
     local path = subdir .. "/" .. name .. ".cpp"
     if not os.isfile(path) then return end
     target(name)
@@ -48,7 +54,7 @@ local tests = {
     "memory_reader_convenience", "memory_io_context",
 }
 for _, t in ipairs(tests) do
-    cppio_one_file_target("binary", "test", t .. "_test", "tests", "cppio_core")
+    sluice_one_file_target("binary", "test", t .. "_test", "tests", "sluice_core")
 end
 
 -- uring_write_batch_test links the experimental uring lib (stub or real).
@@ -56,7 +62,7 @@ target("uring_write_batch_test")
     set_kind("binary")
     set_default(false)
     set_group("test")
-    add_deps("cppio_core", "cppio_experimental_uring")
+    add_deps("sluice_core", "sluice_experimental_uring")
     add_includedirs("include", "bench")
     add_files("tests/uring_write_batch_test.cpp")
     add_tests("uring_write_batch_test")
@@ -65,7 +71,7 @@ target("uring_io_context_test")
     set_kind("binary")
     set_default(false)
     set_group("test")
-    add_deps("cppio_core", "cppio_experimental_uring")
+    add_deps("sluice_core", "sluice_experimental_uring")
     add_includedirs("include", "bench")
     add_files("tests/uring_io_context_test.cpp")
     add_tests("uring_io_context_test")
@@ -74,7 +80,7 @@ target("uring_stats_test")
     set_kind("binary")
     set_default(false)
     set_group("test")
-    add_deps("cppio_core", "cppio_experimental_uring")
+    add_deps("sluice_core", "sluice_experimental_uring")
     add_includedirs("include", "bench")
     add_files("tests/uring_stats_test.cpp")
     add_tests("uring_stats_test")
@@ -85,12 +91,12 @@ local examples = { "cat", "copy_file", "small_writes", "fault_write", "wal_recor
                    "mvp_copy_strategy", "mvp_wal_durable", "mvp_io_context_copy",
                    "mvp_memory_io_context" }
 for _, e in ipairs(examples) do
-    cppio_one_file_target("binary", "examples", e, "examples", "cppio_core")
+    sluice_one_file_target("binary", "examples", e, "examples", "sluice_core")
 end
 
 -- experimental_uring_write links the experimental uring lib (stub or real).
-cppio_one_file_target("binary", "examples", "experimental_uring_write", "examples",
-                      {"cppio_core", "cppio_experimental_uring"})
+sluice_one_file_target("binary", "examples", "experimental_uring_write", "examples",
+                      {"sluice_core", "sluice_experimental_uring"})
 
 -- bench_csv_test needs the bench helper lib + bench include dir.
 do
@@ -100,26 +106,26 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("cppio_core", "cppio_bench_common")
+            add_deps("sluice_core", "sluice_bench_common")
             add_includedirs("include", "bench")
             add_files(p)
             add_tests("bench_csv_test")
     end
 end
 
--- Core microbench targets (CPPIO-CORE-010C-F). Built/run via `xmake -g bench`.
+-- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }
 for _, b in ipairs(benches) do
-    cppio_one_file_target("binary", "bench", b, "bench", {"cppio_core", "cppio_bench_common"})
+    sluice_one_file_target("binary", "bench", b, "bench", {"sluice_core", "sluice_bench_common"})
 end
 
 -- uring_write_bench needs the experimental uring lib too (stub or real).
-cppio_one_file_target("binary", "bench", "uring_write_bench", "bench",
-                      {"cppio_core", "cppio_bench_common", "cppio_experimental_uring"})
+sluice_one_file_target("binary", "bench", "uring_write_bench", "bench",
+                      {"sluice_core", "sluice_bench_common", "sluice_experimental_uring"})
 
 -- ---------------------------------------------------------------------------
--- CPPIO-CORE-013B: optional liburing build gate for the experimental spike.
+-- SLUICE-CORE-013B: optional liburing build gate for the experimental spike.
 --
 -- Normal builds have NO liburing dependency. Pass `--with-liburing=true` (and
 -- have liburing available via xrepo/system) to enable the experimental uring
@@ -143,15 +149,39 @@ end
 -- Experimental uring library. Always defined so the headers/sources exist; the
 -- implementation compiles either the real uring path or the unsupported stub
 -- based on CPPIO_HAS_LIBURING.
-target("cppio_experimental_uring")
+target("sluice_experimental_uring")
     set_kind("static")
     set_default(false)
     set_group("experimental")
     add_includedirs("include", {public = true})
-    add_deps("cppio_core")
+    add_deps("sluice_core")
     add_files("src/experimental/*.cpp")
     if has_liburing then
-        add_defines("CPPIO_HAS_LIBURING", {public = true})
+        add_defines("SLUICE_HAS_LIBURING", {public = true})
         add_packages("liburing", {public = true})
     end
+
+-- ---------------------------------------------------------------------------
+-- Quick reference — sanitizer / test commands:
+--
+--   Default build:       xmake build
+--   Debug build:         xmake f -m debug && xmake build
+--   Release build:       xmake f -m release && xmake build
+--
+--   Run all tests:       xmake run -g test
+--   Run one test:        xmake run <test_name>_test
+--
+--   ASan:                xmake f -m asan && xmake build -g test && xmake run -g test
+--   TSan:                xmake f -m tsan && xmake build -g test && xmake run -g test
+--   UBSan:               xmake f -m ubsan && xmake build -g test && xmake run -g test
+--   ASan+UBSan:          xmake f -m asanubsan && xmake build -g test && xmake run -g test
+--   Valgrind:            xmake f -m valgrind && xmake build -g test
+--                         valgrind --leak-check=full <binary>
+--
+--   Switch to Clang:     xmake f --toolchain=clang -c && xmake build
+--   Clang + ASan:        xmake f --toolchain=clang -m asan -c && xmake build
+--
+--   Run all examples:    xmake run -g examples
+--   Run all benches:     xmake run -g bench
+-- ---------------------------------------------------------------------------
 
