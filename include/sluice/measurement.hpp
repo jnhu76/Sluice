@@ -118,4 +118,22 @@ struct VectorStats {
     std::uint64_t write_vec_fallback_calls = 0;
 };
 
+// Async runtime observability (sluice-CORE-017). Caller-owned, nullable, never
+// global — same rule as the structs above. Attached to AsyncIoContext via a raw
+// pointer (set_stats); null means no counting. Defined here (not in async/) so
+// it sits with the other Stats types and is visible to both the async core and
+// the bench CSV helpers. See docs/adr/ADR-async-io-model.md §10b.
+struct AsyncStats {
+    std::uint64_t submit_calls = 0;        // count of submit_* invocations
+    std::uint64_t submitted_ops = 0;       // ops actually recorded outstanding
+    std::uint64_t poll_calls = 0;          // poll() invocations
+    std::uint64_t wait_calls = 0;          // wait_one() invocations
+    std::uint64_t completed_ops = 0;       // Completions marked ready
+    std::uint64_t canceled_ops = 0;        // Completions completed with canceled
+    std::uint64_t completion_errors = 0;   // Completions completed with an error != canceled
+    std::uint64_t short_completions = 0;   // read/write with fewer bytes than requested
+    std::uint64_t max_outstanding = 0;     // high-water mark of in-flight ops
+    std::uint64_t queue_full_retries = 0;  // submit rejected (L8) then retried
+};
+
 } // namespace sluice

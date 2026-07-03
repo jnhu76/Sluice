@@ -18,6 +18,18 @@ target("sluice_core")
     add_includedirs("include", {public = true})
     add_files("src/*.cpp")
 
+-- Async runtime library (sluice-CORE-017+). OPT-IN, namespace sluice::async.
+-- Built alongside the core but kept a separate static lib so the blocking
+-- default (sluice_core) carries no async surface. ADR §A6: async is opt-in and
+-- BlockingIoContext/Reader/Writer are untouched.
+target("sluice_async")
+    set_kind("static")
+    set_default(false)
+    set_group("async")
+    add_includedirs("include", {public = true})
+    add_deps("sluice_core")
+    add_files("src/async/*.cpp")
+
 -- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
 -- Also contains BlockingIoPool (021S), the bounded execution model for the
 -- W1-W4 blocking bench matrix (job 022S). Pool source is here so both bench and
@@ -195,6 +207,22 @@ do
             add_includedirs("include", "bench")
             add_files(p)
             add_tests("sync_matrix_test")
+    end
+end
+
+-- Async runtime tests (sluice-CORE-017+). Link both sluice_core (Result/IoError/
+-- measurement) and sluice_async (Completion/AsyncIoContext/backends).
+do
+    local p = "tests/async_completion_test.cpp"
+    if os.isfile(p) then
+        target("async_completion_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("async_completion_test")
     end
 end
 
