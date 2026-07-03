@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
             for mode in modes:
                 rows = cells[(case, mode, nbytes)]
                 elapsed_vals = [r[0] for r in rows]
-                total_bytes = sum(r[2] for r in rows)
+                total_bytes = sum(r[2] * r[1] for r in rows)
                 # throughput from total bytes / total elapsed
                 mb_s = (total_bytes / 1e6) / (sum(elapsed_vals) / 1e9) if sum(elapsed_vals) else 0.0
                 if len(elapsed_vals) > 1:

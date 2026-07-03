@@ -43,13 +43,15 @@ public:
     virtual ~IoContext() = default;
 
     // Open `path` for reading. On success returns a Reader handle the caller
-    // owns; on failure returns the open error immediately.
-    virtual Result<std::unique_ptr<Reader>>
+    // owns; on failure returns the open error immediately. [[nodiscard]]: an
+    // open error must never be silently dropped.
+    [[nodiscard]] virtual Result<std::unique_ptr<Reader>>
     open_reader(std::string_view path, OpenReaderOptions options = {}) = 0;
 
     // Create/truncate `path` for writing. On success returns a Writer handle the
-    // caller owns; on failure returns the open error immediately.
-    virtual Result<std::unique_ptr<Writer>>
+    // caller owns; on failure returns the open error immediately. [[nodiscard]]:
+    // an open error must never be silently dropped.
+    [[nodiscard]] virtual Result<std::unique_ptr<Writer>>
     open_writer(std::string_view path, OpenWriterOptions options = {}) = 0;
 };
 
