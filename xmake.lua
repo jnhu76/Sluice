@@ -241,6 +241,21 @@ do
     end
 end
 
+-- Async "all" helpers tests (sluice-CORE-018). read_all/write_all over the fake.
+do
+    local p = "tests/async_op_helpers_test.cpp"
+    if os.isfile(p) then
+        target("async_op_helpers_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("async_op_helpers_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }
