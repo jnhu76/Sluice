@@ -79,3 +79,41 @@ local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench"
 for _, b in ipairs(benches) do
     cppio_one_file_target("binary", "bench", b, "bench", {"cppio_core", "cppio_bench_common"})
 end
+
+-- ---------------------------------------------------------------------------
+-- CPPIO-CORE-013B: optional liburing build gate for the experimental spike.
+--
+-- Normal builds have NO liburing dependency. Pass `--with-liburing=true` (and
+-- have liburing available via xrepo/system) to enable the experimental uring
+-- targets and define CPPIO_HAS_LIBURING. Without it, the experimental sources
+-- compile as unsupported-stubs so the rest of the project is unaffected.
+-- ---------------------------------------------------------------------------
+option("with-liburing")
+    set_default(false)
+    set_description("Enable the experimental io_uring spike (requires liburing).")
+option_end()
+
+local has_liburing = false
+if has_config("with-liburing") then
+    -- add_requires with optional=true lets xmake try to fetch liburing; if the
+    -- user passed --with-liburing=true but it's unavailable, fail loudly here
+    -- rather than silently building stubs.
+    add_requires("liburing", {alias = "liburing"})
+    has_liburing = true
+end
+
+-- Experimental uring library. Always defined so the headers/sources exist; the
+-- implementation compiles either the real uring path or the unsupported stub
+-- based on CPPIO_HAS_LIBURING.
+target("cppio_experimental_uring")
+    set_kind("static")
+    set_default(false)
+    set_group("experimental")
+    add_includedirs("include", {public = true})
+    add_deps("cppio_core")
+    add_files("src/experimental/*.cpp")
+    if has_liburing then
+        add_defines("CPPIO_HAS_LIBURING", {public = true})
+        add_packages("liburing", {public = true})
+    end
+
