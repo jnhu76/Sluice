@@ -3,7 +3,6 @@
 
 #include <array>
 #include <cstring>
-#include <vector>
 
 namespace sluice::wal {
 
@@ -83,15 +82,17 @@ Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload
     std::array<std::byte, 4> trailer{};
     put_le_u32(trailer.data(), checksum_of(payload));
 
-    std::vector<ConstIoSlice> slices;
-    slices.reserve(payload.empty() ? 2 : 3);
-    slices.push_back(ConstIoSlice{std::span<const std::byte>(header)});
+    // Max 3 slices (header, payload, checksum) — stack-allocated to avoid
+    // heap allocation (R.5, Per.19).
+    std::array<ConstIoSlice, 3> slices{};
+    std::size_t count = 0;
+    slices[count++] = ConstIoSlice{std::span<const std::byte>(header)};
     if (!payload.empty()) {
-        slices.push_back(ConstIoSlice{payload});
+        slices[count++] = ConstIoSlice{payload};
     }
-    slices.push_back(ConstIoSlice{std::span<const std::byte>(trailer)});
+    slices[count++] = ConstIoSlice{std::span<const std::byte>(trailer)};
 
-    return writer.write_all_vec(std::span<const ConstIoSlice>(slices));
+    return writer.write_all_vec(std::span<const ConstIoSlice>(slices.data(), count));
 }
 
 Result<std::vector<std::byte>> read_record(Reader& reader) {

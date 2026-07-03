@@ -89,6 +89,14 @@ struct result_storage<void> {
     bool has_value_;
     explicit result_storage(success_tag) : error_{}, has_value_(true) {}
     explicit result_storage(error_tag, IoError e) : error_(e), has_value_(false) {}
+
+    result_storage(const result_storage&) = default;
+    result_storage(result_storage&&) noexcept = default;
+    result_storage& operator=(const result_storage&) = default;
+    result_storage& operator=(result_storage&&) noexcept = default;
+    ~result_storage() = default;
+
+    friend bool operator==(const result_storage&, const result_storage&) = default;
 };
 
 }  // namespace detail

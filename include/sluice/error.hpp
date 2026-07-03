@@ -24,7 +24,7 @@ struct IoError {
     Code code;
     int os_errno = 0;
 
-    friend bool operator==(const IoError&, const IoError&) = default;
+    friend bool operator==(const IoError&, const IoError&) noexcept = default;
 };
 
 // Stable string name for a code. Used for diagnostics only, not control flow.

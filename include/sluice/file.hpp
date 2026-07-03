@@ -33,24 +33,17 @@ public:
     explicit FileReader(int fd) : fd_(fd) {}
     ~FileReader() override;
     FileReader(FileReader&& other) noexcept
-        : fd_(other.fd_), open_error_(std::move(other.open_error_)),
-          stats_(other.stats_), vec_stats_(other.vec_stats_) {
-        other.fd_ = -1;
-        other.open_error_.reset();
-        other.stats_ = nullptr;
-        other.vec_stats_ = nullptr;
-    }
+        : fd_(std::exchange(other.fd_, -1)),
+          open_error_(std::exchange(other.open_error_, {})),
+          stats_(std::exchange(other.stats_, nullptr)),
+          vec_stats_(std::exchange(other.vec_stats_, nullptr)) {}
     FileReader& operator=(FileReader&& other) noexcept {
         if (this != &other) {
             close();
-            fd_ = other.fd_;
-            open_error_ = std::move(other.open_error_);
-            stats_ = other.stats_;
-            vec_stats_ = other.vec_stats_;
-            other.fd_ = -1;
-            other.open_error_.reset();
-            other.stats_ = nullptr;
-            other.vec_stats_ = nullptr;
+            fd_ = std::exchange(other.fd_, -1);
+            open_error_ = std::exchange(other.open_error_, {});
+            stats_ = std::exchange(other.stats_, nullptr);
+            vec_stats_ = std::exchange(other.vec_stats_, nullptr);
         }
         return *this;
     }
@@ -96,27 +89,19 @@ public:
     explicit FileWriter(int fd) : fd_(fd) {}
     ~FileWriter() override;
     FileWriter(FileWriter&& other) noexcept
-        : fd_(other.fd_), open_error_(std::move(other.open_error_)),
-          stats_(other.stats_), vec_stats_(other.vec_stats_), sync_stats_(other.sync_stats_) {
-        other.fd_ = -1;
-        other.open_error_.reset();
-        other.stats_ = nullptr;
-        other.vec_stats_ = nullptr;
-        other.sync_stats_ = nullptr;
-    }
+        : fd_(std::exchange(other.fd_, -1)),
+          open_error_(std::exchange(other.open_error_, {})),
+          stats_(std::exchange(other.stats_, nullptr)),
+          vec_stats_(std::exchange(other.vec_stats_, nullptr)),
+          sync_stats_(std::exchange(other.sync_stats_, nullptr)) {}
     FileWriter& operator=(FileWriter&& other) noexcept {
         if (this != &other) {
             close();
-            fd_ = other.fd_;
-            open_error_ = std::move(other.open_error_);
-            stats_ = other.stats_;
-            vec_stats_ = other.vec_stats_;
-            sync_stats_ = other.sync_stats_;
-            other.fd_ = -1;
-            other.open_error_.reset();
-            other.stats_ = nullptr;
-            other.vec_stats_ = nullptr;
-            other.sync_stats_ = nullptr;
+            fd_ = std::exchange(other.fd_, -1);
+            open_error_ = std::exchange(other.open_error_, {});
+            stats_ = std::exchange(other.stats_, nullptr);
+            vec_stats_ = std::exchange(other.vec_stats_, nullptr);
+            sync_stats_ = std::exchange(other.sync_stats_, nullptr);
         }
         return *this;
     }

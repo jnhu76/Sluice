@@ -10,7 +10,6 @@
 #include <sys/types.h>
 #include <sys/uio.h>  // readv / writev / struct iovec
 #include <algorithm>
-#include <functional>
 #include <optional>
 #include <vector>
 
@@ -295,8 +294,10 @@ namespace {
 
 // Shared sync core: runs the given fd-sync callable with EINTR retry and maps
 // errno. Used by both sync_data (fdatasync) and sync_all (fsync).
+// Templated to avoid std::function heap allocation (F.22, Per.3).
+template <class Fn>
 Result<void> do_sync(int fd, const std::optional<IoError>& open_error,
-                     const std::function<int(int)>& fn, SyncStats* stats,
+                     const Fn& fn, SyncStats* stats,
                      std::uint64_t SyncStats::*calls, std::uint64_t SyncStats::*errors) {
     if (fd < 0) {
         // A failed-open file surfaces its preserved errno; a moved-from/empty
