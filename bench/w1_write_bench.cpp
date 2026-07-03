@@ -170,15 +170,22 @@ void run_cell(const Params& pm) {
     std::vector<std::byte> fill_buf(pm.block_size, std::byte{0x5A});
     const std::byte* fill = fill_buf.data();
 
+    // Hold the TempPath objects alive across the whole cell so their dtors clean
+    // up the files when the cell ends. (A bare TempPath{}.str() would let the
+    // dtor run immediately and leak the file the writer later creates.)
+    std::vector<TempPath> held;
     std::vector<std::string> paths;
-    for (std::size_t s = 0; s < pm.streams; ++s) paths.emplace_back(TempPath{}.str());
+    for (std::size_t s = 0; s < pm.streams; ++s) {
+        held.emplace_back();
+        paths.push_back(held.back().str());
+    }
 
-    // For one_file_many_offsets, open a single shared file with O_CREAT|O_RDWR;
-    // FileWriter opens O_WRONLY|O_TRUNC which suffices for pwrite, but we want
-    // disjoint offsets — O_TRUNC is fine because we write everything ourselves.
+    // For one_file_many_offsets, one shared fd; positional write_at per stream
+    // writes disjoint regions. O_TRUNC is fine — we write everything ourselves.
+    TempPath shared_path;
     std::unique_ptr<sluice::FileWriter> shared;
     if (pm.file_layout == "one_file_many_offsets") {
-        shared = std::make_unique<sluice::FileWriter>(TempPath{}.str());
+        shared = std::make_unique<sluice::FileWriter>(shared_path.str());
     }
 
     emit(pm, "blocking_sequential",

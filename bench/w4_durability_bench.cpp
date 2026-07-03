@@ -147,8 +147,13 @@ void emit(const Params& pm, const std::string& mode, std::uint64_t elapsed_ns,
 void run_cell(const Params& pm) {
     std::vector<std::byte> fill_buf(pm.block_size, std::byte{0x44});
     const std::byte* fill = fill_buf.data();
+    // Hold TempPath objects alive so their dtors clean up at cell end.
+    std::vector<TempPath> held;
     std::vector<std::string> paths;
-    for (std::size_t s = 0; s < pm.streams; ++s) paths.emplace_back(TempPath{}.str());
+    for (std::size_t s = 0; s < pm.streams; ++s) {
+        held.emplace_back();
+        paths.push_back(held.back().str());
+    }
 
     if (pm.policy == SyncPolicy::none) {
         emit(pm, "blocking_sequential",
