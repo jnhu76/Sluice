@@ -87,3 +87,33 @@ observations — never a universal "io_uring is faster" claim. See
 - **Decision:** Do NOT promote io_uring. The spike proves the seam is
   expressible; whether it is locally beneficial is unmeasured and must be
   re-run on a liburing-equipped kernel before any rule.
+
+## Post-MVP backend decision (v0.1-mvp, CPPIO-CORE-014E)
+
+```text
+Decision: io_uring stays experimental; the blocking POSIX backend remains the
+          default for v0.1-mvp.
+```
+
+Rationale, in priority order:
+
+1. **No measured comparison exists.** The uring bench row was skipped on the
+   no-liburing dev host (`docs/results/liburing-validation-2026-07-03.md`).
+   Promoting without measurement violates the runbook.
+2. **The spike is synchronous-over-uring**, not a real async backend. Promoting
+   it to default would not deliver io_uring's actual value (batched async
+   submission) and would couple the default path to an unfinished surface.
+3. **No async/cancellation runtime.** A production io_uring backend needs both;
+   neither exists. Promoting now would freeze an incomplete API.
+4. **The blocking backend is tested, measured, and the seam works.** There is no
+   measured reason to switch the default.
+
+Promotion criteria (all required, none currently met):
+- A real, repeated liburing-equipped validation run (014D pending).
+- A stable, scoped, workload-relevant win in the bench.
+- An async/cancellation story (or an explicit decision that synchronous-over-
+  uring is acceptable as default, with evidence).
+- A default-backend-selection change that does not break the blocking path.
+
+Until then, io_uring remains `cppio::experimental`, build-gated, skip-clean
+without liburing, and **not** the default.
