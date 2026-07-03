@@ -44,4 +44,20 @@ Result<std::size_t> read_all(AsyncIoContext& ctx, int fd,
 Result<std::size_t> write_all(AsyncIoContext& ctx, int fd,
                               std::span<const std::byte> src, std::uint64_t offset);
 
+// --- Durability ops (sluice-CORE-018B, W4 overlapped durability) ---
+//
+// ADR §6 P3: a sync op carries no buffer/offset. Its ordering vs in-flight
+// writes is governed by caller composition — to durably persist writes, AWAIT
+// the writes' Completions, THEN submit the sync. These coordinators drive a
+// Completion<void> to ready via a poll-loop. They complete the SYNCHRONOUS shape
+// of async durability; the W4 value (overlap with the NEXT batch of writes) is
+// realized by submitting a sync op and NOT awaiting it before submitting more
+// writes (see the W4 overlap test). No group commit (016B O5).
+
+// Request fdatasync of `fd`, blocking until the sync completes. Returns void on
+// success or an error. Mirrors blocking SyncableWriter::sync_data semantics.
+Result<void> sync_data_all(AsyncIoContext& ctx, int fd);
+// Request fsync of `fd`, blocking until the sync completes.
+Result<void> sync_all_all(AsyncIoContext& ctx, int fd);
+
 }  // namespace sluice::async

@@ -72,4 +72,33 @@ Result<std::size_t> write_all(AsyncIoContext& ctx, int fd,
     return written;
 }
 
+namespace {
+// Drive a sync Completion<void> to ready via a poll-loop (synchronous shape of
+// async durability). The W4 overlap value is realized by submitting the sync
+// op and NOT awaiting it (raw submit_sync_*); this helper is the sync-shaped
+// convenience, mirroring blocking sync_data/sync_all.
+Result<void> sync_step(AsyncIoContext& ctx, Completion<void>& c, int fd,
+                       bool data_only) {
+    c.reset();
+    Result<void> sr = data_only
+        ? ctx.submit_sync_data(SyncDataOp{fd}, c)
+        : ctx.submit_sync_all(SyncAllOp{fd}, c);
+    if (!sr.has_value()) return sr;
+    while (!c.ready()) {
+        (void)ctx.poll();
+    }
+    return c.result();
+}
+}  // namespace
+
+Result<void> sync_data_all(AsyncIoContext& ctx, int fd) {
+    Completion<void> c;
+    return sync_step(ctx, c, fd, /*data_only=*/true);
+}
+
+Result<void> sync_all_all(AsyncIoContext& ctx, int fd) {
+    Completion<void> c;
+    return sync_step(ctx, c, fd, /*data_only=*/false);
+}
+
 }  // namespace sluice::async
