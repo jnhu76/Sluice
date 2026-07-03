@@ -54,6 +54,15 @@ public:
     // semantics. EOF before any progress returns 0. See
     // docs/readv-writev-design-note.md.
     virtual Result<std::size_t> read_vec(std::span<IoSlice> dsts);
+
+    // Exact-read over multiple slices (CPPIO-CORE-015A): fill every byte of every
+    // non-empty slice, retrying the SAME slice on a short read (unlike read_vec,
+    // which stops on a short read). Symmetric to Writer::write_all_vec. Empty
+    // slices are skipped. Returns void on success. On EOF before completion
+    // returns IoError::eof; other read errors propagate immediately, even after
+    // partial progress (matching read_exact). Naming note: the writer side is
+    // write_all_vec; this is read_vec_all per the task spec.
+    Result<void> read_vec_all(std::span<IoSlice> dsts);
 };
 
 }  // namespace cppio

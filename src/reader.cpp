@@ -80,4 +80,33 @@ Result<std::size_t> Reader::read_vec(std::span<IoSlice> dsts) {
     return total;
 }
 
+// read_vec_all: exact-read over slices. Unlike read_vec (which stops as soon as
+// a slice is not fully satisfied), this keeps retrying the SAME slice's unfilled
+// tail until it is complete, then moves to the next. Symmetric to
+// Writer::write_all_vec. EOF before all non-empty slices are full -> eof; other
+// errors propagate immediately (matching read_exact). Empty slices are skipped
+// (and never cause a read). Partial progress is observable in the caller's
+// buffers even on failure.
+Result<void> Reader::read_vec_all(std::span<IoSlice> dsts) {
+    for (auto& d : dsts) {
+        if (d.bytes.empty()) continue;  // empty slices skipped, no read
+        std::size_t filled = 0;
+        while (filled < d.bytes.size()) {
+            auto r = read_some(d.bytes.subspan(filled));
+            if (!r.has_value()) return make_unexpected<void>(r.error());
+            std::size_t n = r.value();
+            if (n > d.bytes.size() - filled) {
+                // Defensive: a reader returning more than asked is broken.
+                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            }
+            if (n == 0) {
+                // Clean EOF before this slice was filled.
+                return make_unexpected<void>(IoError{IoError::Code::eof});
+            }
+            filled += n;
+        }
+    }
+    return {};
+}
+
 }  // namespace cppio
