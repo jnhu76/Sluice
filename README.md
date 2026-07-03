@@ -23,6 +23,7 @@ A composable, blocking I/O core:
 - Copy strategy layer (CPPIO-CORE-007): `cppio::CopyStrategy` / `CopyOptions` / `CopyDecision` make copy path selection explicit and observable. See `docs/copy-strategy.md`.
 - Flush/sync/durability separation (CPPIO-CORE-008): `cppio::SyncableWriter` (`sync_data`/`sync_all`), `SyncStats`, and `wal::WalWriter` (written/flushed/durable LSN invariant). `flush()` drains bytes and never implies durability. See `docs/flush-sync-durability.md`.
 - Backend capability boundary (CPPIO-CORE-009): `cppio::IoContext` / `BlockingIoContext` open `Reader`/`Writer` handles through an abstract factory so future backends can plug in. Direct `FileReader`/`FileWriter` constructors remain valid. See `docs/io-context.md`.
+- Core microbench harness + optimization matrix (CPPIO-CORE-010/011): `bench/*_bench` emit CSV; `scripts/run_core_microbenches.sh` + `scripts/summarize_core_microbench.py` run and summarize. Scoped, evidence-linked decisions live in `docs/optimization-decision-matrix.md`. No universal performance claims.
   ```cpp
   cppio::CopyOptions options;
   options.strategy = cppio::CopyStrategy::Scratch;

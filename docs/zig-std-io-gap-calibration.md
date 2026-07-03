@@ -149,15 +149,15 @@ relative cost of the scratch copy vs a would-be zero-copy fast path.
 | ~~Buffered fast path (zero-copy copy)~~ | ~~CPPIO-CORE-006~~ | **done in 006 (partial — see §4.2)** |
 | ~~`readv`/`writev` vector I/O~~ | ~~CPPIO-CORE-005~~ | **done in 005 (partial — see §4.6)** |
 | ~~Copy strategy layer~~ | ~~CPPIO-CORE-007~~ | **done in 007 (explicit boundary — see §4.7)** |
-| Flush/sync/durability split | CPPIO-CORE-008 | durability is out of correctness-phase scope |
-| `IoContext` capability object | CPPIO-CORE-009 | backend boundary before any async |
-| io_uring | CPPIO-CORE-012 | requires 004–011 preconditions |
+| ~~Flush/sync/durability split~~ | ~~CPPIO-CORE-008~~ | **done in 008 — see docs/flush-sync-durability.md** |
+| ~~`IoContext` capability object~~ | ~~CPPIO-CORE-009~~ | **done in 009 (BlockingIoContext) — see §4.8** |
+| io_uring | CPPIO-CORE-012 | requires 004–011 preconditions (now met) |
 
 ## 7. Next-step recommendation
 
-Follow the roadmap's strict order: **008 (flush/sync/durability) → 010
-(microbench) → 011 (decision matrix)**. With 007 landed, copy paths are explicit
-and the strategy boundary is observable. Before benchmarking or io_uring, the
-project must separate flush-buffered-bytes from sync-file-data from durable-WAL-
-commit (008) so future WAL benchmarks cannot make false durability claims. Do
-not attempt io_uring (012) until measurement data from 010 exists.
+With 004–011 landed, the correctness + measurement foundation is complete. The
+optimization decision matrix (`docs/optimization-decision-matrix.md`) records
+scoped, evidence-linked rules; `docs/next-steps-after-011.md` lists candidates
+that the matrix points at. The remaining roadmap item is io_uring (012), which
+requires an async/evented backend that does not yet exist. Do not start any
+optimization without re-measuring first per `docs/optimization-runbook.md`.
