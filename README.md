@@ -25,7 +25,7 @@ A composable, blocking I/O core:
 - Backend capability boundary (CPPIO-CORE-009): `cppio::IoContext` / `BlockingIoContext` open `Reader`/`Writer` handles through an abstract factory so future backends can plug in. Direct `FileReader`/`FileWriter` constructors remain valid. See `docs/io-context.md`.
 - Core microbench harness + optimization matrix (CPPIO-CORE-010/011): `bench/*_bench` emit CSV; `scripts/run_core_microbenches.sh` + `scripts/summarize_core_microbench.py` run and summarize. Scoped, evidence-linked decisions live in `docs/optimization-decision-matrix.md`. No universal performance claims.
 
-**MVP status:** complete (CPPIO-CORE-001–011, closeout in `docs/mvp-closeout.md`). Zig `std.Io` parity audited in `docs/zig-std-io-parity-audit.md`. Next step is an experimental io_uring spike, not a production backend — see `docs/io-uring-readiness-gate.md`.
+**MVP status:** complete (CPPIO-CORE-001–011, closeout in `docs/mvp-closeout.md`). Zig `std.Io` parity audited in `docs/zig-std-io-parity-audit.md`. Post-MVP: an experimental io_uring write spike (CPPIO-CORE-012 audit + readiness gate, CPPIO-CORE-013 spike) lives under `cppio::experimental` behind an optional `--with-liburing` build gate; it is **not** the default backend. See `docs/io-uring-spike.md`.
   ```cpp
   cppio::CopyOptions options;
   options.strategy = cppio::CopyStrategy::Scratch;
@@ -158,6 +158,7 @@ Under `examples/`:
 - `mvp_copy_strategy` — demonstrates Scratch / BufferedFirst / Auto / deferred-rejected / deferred-fallback with decision output
 - `mvp_wal_durable` — WAL durability boundary: write/flush/sync with written/flushed/durable LSN output
 - `mvp_io_context_copy` — opens reader/writer through `BlockingIoContext`, copies, flushes, syncs
+- `experimental_uring_write` — experimental io_uring write path; skips cleanly without liburing
 
 ## Intentional deviations from the Zig model
 

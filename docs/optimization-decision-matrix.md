@@ -72,6 +72,18 @@ recording it.
 ## Next step (post-MVP)
 
 Next step is an experimental io_uring spike, not a production backend
-(CPPIO-CORE-012D gate → 013 spike). The spike may add a guarded bench row here
-**only** if it produces stable, scoped, evidence-linked observations — never a
-universal "io_uring is faster" claim. See `docs/io-uring-readiness-gate.md`.
+(CPPIO-CORE-012D gate → 013 spike, now landed). The spike may add a guarded
+bench row here **only** if it produces stable, scoped, evidence-linked
+observations — never a universal "io_uring is faster" claim. See
+`docs/io-uring-readiness-gate.md`.
+
+### 5. Experimental uring write path — no universal claim
+- **Category:** Candidate (deferred) — needs a liburing-equipped repeated run.
+- **Scope:** temp file, 64B/4KB/64KB payloads, 200 iterations, one host.
+- **Evidence:** `bench/uring_write_bench` emits a `uring_write_batch` row when
+  liburing is present, else a `..._SKIPPED_NO_LIBURING` row. On the dev host
+  (no liburing) the uring row was skipped, so **no measured comparison exists
+  yet** — the row is a Candidate placeholder, not a result.
+- **Decision:** Do NOT promote io_uring. The spike proves the seam is
+  expressible; whether it is locally beneficial is unmeasured and must be
+  re-run on a liburing-equipped kernel before any rule.

@@ -1,7 +1,29 @@
 # Experimental io_uring spike
 
-**Status: CPPIO-CORE-013A (design); implementation 013B–013G; closeout 013H–013I.**
+**Status: implemented in CPPIO-CORE-013A–013G; documented/closeout 013H–013I.**
 This is an **experiment**, not a production backend.
+
+## What was implemented (013B–013G)
+
+- **Optional liburing build gate** (`CPPIO_HAS_LIBURING`, `--with-liburing`).
+  Normal builds have **zero** liburing dependency.
+- **`cppio::experimental::UringWriteBatch`** — synchronous-over-uring batched
+  file writes (`write_all(fd, bytes, offset)`). Stub when liburing is absent.
+- **`cppio::experimental::UringIoContext`** — standalone open/write/close
+  wrapper (`write_file_all`). Not a subclass of `cppio::IoContext`; not plugged
+  into `BlockingIoContext`.
+- **`cppio::UringStats`** — optional counters wired via `set_stats`.
+- **`bench/uring_write_bench`** — guarded bench (skip row without liburing).
+- **`examples/experimental_uring_write`** — skip-cleanly-without-liburing demo.
+
+## What was NOT implemented
+
+- No production backend, no generic Reader/Writer uring backend.
+- No async runtime / scheduler / cancellation.
+- No networking / timers / mmap.
+- No default backend switch (`BlockingIoContext` stays the default).
+- No durability claim (uring write completion ≠ fsync).
+- No broad performance claim (only a local, workload-specific bench row).
 
 ## 1. Scope
 
