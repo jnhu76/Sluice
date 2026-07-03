@@ -68,3 +68,10 @@ Follow the runbook (011A): run in release, summarize, interpret with repeats,
 then add/revise an entry with category + scope + evidence link + decision.
 Never delete a Rejected entry without new evidence — that's the point of
 recording it.
+
+## Next step (post-MVP)
+
+Next step is an experimental io_uring spike, not a production backend
+(CPPIO-CORE-012D gate → 013 spike). The spike may add a guarded bench row here
+**only** if it produces stable, scoped, evidence-linked observations — never a
+universal "io_uring is faster" claim. See `docs/io-uring-readiness-gate.md`.

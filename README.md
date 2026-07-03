@@ -24,6 +24,8 @@ A composable, blocking I/O core:
 - Flush/sync/durability separation (CPPIO-CORE-008): `cppio::SyncableWriter` (`sync_data`/`sync_all`), `SyncStats`, and `wal::WalWriter` (written/flushed/durable LSN invariant). `flush()` drains bytes and never implies durability. See `docs/flush-sync-durability.md`.
 - Backend capability boundary (CPPIO-CORE-009): `cppio::IoContext` / `BlockingIoContext` open `Reader`/`Writer` handles through an abstract factory so future backends can plug in. Direct `FileReader`/`FileWriter` constructors remain valid. See `docs/io-context.md`.
 - Core microbench harness + optimization matrix (CPPIO-CORE-010/011): `bench/*_bench` emit CSV; `scripts/run_core_microbenches.sh` + `scripts/summarize_core_microbench.py` run and summarize. Scoped, evidence-linked decisions live in `docs/optimization-decision-matrix.md`. No universal performance claims.
+
+**MVP status:** complete (CPPIO-CORE-001–011, closeout in `docs/mvp-closeout.md`). Zig `std.Io` parity audited in `docs/zig-std-io-parity-audit.md`. Next step is an experimental io_uring spike, not a production backend — see `docs/io-uring-readiness-gate.md`.
   ```cpp
   cppio::CopyOptions options;
   options.strategy = cppio::CopyStrategy::Scratch;
