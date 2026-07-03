@@ -86,6 +86,10 @@ for _, e in ipairs(examples) do
     cppio_one_file_target("binary", "examples", e, "examples", "cppio_core")
 end
 
+-- experimental_uring_write links the experimental uring lib (stub or real).
+cppio_one_file_target("binary", "examples", "experimental_uring_write", "examples",
+                      {"cppio_core", "cppio_experimental_uring"})
+
 -- bench_csv_test needs the bench helper lib + bench include dir.
 do
     local p = "tests/bench_csv_test.cpp"
