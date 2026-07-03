@@ -7,6 +7,7 @@
 // io_uring ring (synchronous-over-uring: submit, then block on completion).
 #pragma once
 
+#include <cppio/measurement.hpp>
 #include <cppio/result.hpp>
 
 #include <cstddef>
@@ -39,6 +40,9 @@ public:
     Result<UringWriteResult> write_all(int fd, std::span<const std::byte> bytes,
                                        std::uint64_t file_offset);
 
+    // Optional measurement (CPPIO-CORE-013E). Caller-owned; null = no counting.
+    void set_stats(UringStats* stats) { stats_ = stats; }
+
 private:
     [[maybe_unused]] unsigned queue_depth_;
 #if defined(CPPIO_HAS_LIBURING)
@@ -46,6 +50,7 @@ private:
 #else
     [[maybe_unused]] void* ring_ = nullptr;  // unused stub
 #endif
+    UringStats* stats_ = nullptr;
 };
 
 }  // namespace cppio::experimental

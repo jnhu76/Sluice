@@ -88,6 +88,18 @@ struct SyncStats {
     std::uint64_t sync_all_errors = 0;
 };
 
+// Counts experimental io_uring activity (CPPIO-CORE-013E). Opt-in and
+// caller-owned; null means no counting. Lives in namespace cppio (not
+// experimental) so bench/CSV helpers can treat it like the other stats structs.
+struct UringStats {
+    std::uint64_t queue_init_calls = 0;
+    std::uint64_t submit_calls = 0;
+    std::uint64_t submitted_ops = 0;
+    std::uint64_t completed_ops = 0;
+    std::uint64_t completion_errors = 0;
+    std::uint64_t bytes_completed = 0;
+};
+
 // Counts read_vec/write_vec activity. The *_fallback_calls fields distinguish
 // "used the default read_some/write_some loop" (e.g. an ObservedReader around a
 // MemoryReader, or any non-overriding reader) from "used a real vector syscall"

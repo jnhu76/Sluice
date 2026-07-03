@@ -69,6 +69,15 @@ target("uring_io_context_test")
     add_files("tests/uring_io_context_test.cpp")
     add_tests("uring_io_context_test")
 
+target("uring_stats_test")
+    set_kind("binary")
+    set_default(false)
+    set_group("test")
+    add_deps("cppio_core", "cppio_experimental_uring")
+    add_includedirs("include", "bench")
+    add_files("tests/uring_stats_test.cpp")
+    add_tests("uring_stats_test")
+
 -- Buildable examples. Built/run via `xmake -g examples`.
 local examples = { "cat", "copy_file", "small_writes", "fault_write", "wal_records",
                    "mvp_copy_pipeline", "mvp_limited_copy", "mvp_wal_vector",

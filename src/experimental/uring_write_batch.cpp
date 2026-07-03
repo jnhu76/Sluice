@@ -19,6 +19,7 @@ UringWriteBatch::UringWriteBatch(unsigned queue_depth) : queue_depth_(queue_dept
     auto* ring = new io_uring{};
     if (::io_uring_queue_init(queue_depth, ring, 0) == 0) {
         ring_ = ring;
+        if (stats_) ++stats_->queue_init_calls;
     } else {
         delete ring;
         ring_ = nullptr;
@@ -70,25 +71,32 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
         }
         ::io_uring_prep_write(sqe, fd, p, remaining, static_cast<__off_t>(off));
         ++result.submitted;
+        if (stats_) ++stats_->submitted_ops;
         if (::io_uring_submit(ring) < 0) {
             ++result.errors;
+            if (stats_) ++stats_->completion_errors;
             return make_unexpected<UringWriteResult>(IoError{IoError::Code::backend_error});
         }
+        if (stats_) ++stats_->submit_calls;
         io_uring_cqe* cqe = nullptr;
         int wait = ::io_uring_wait_cqe(ring, &cqe);
         if (wait < 0 || cqe == nullptr) {
             ++result.errors;
+            if (stats_) ++stats_->completion_errors;
             return make_unexpected<UringWriteResult>(IoError{IoError::Code::backend_error});
         }
         int res = cqe->res;
         ::io_uring_cqe_seen(ring, cqe);
         ++result.completed;
+        if (stats_) ++stats_->completed_ops;
         if (res < 0) {
             ++result.errors;
+            if (stats_) ++stats_->completion_errors;
             return make_unexpected<UringWriteResult>(from_errno_value(-res));
         }
         std::size_t wrote = static_cast<std::size_t>(res);
         result.bytes_written += wrote;
+        if (stats_) stats_->bytes_completed += wrote;
         if (wrote == 0) {
             // Zero progress: stop rather than spin.
             ++result.errors;

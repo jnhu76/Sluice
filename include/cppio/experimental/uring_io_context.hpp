@@ -21,6 +21,9 @@ public:
     Result<UringWriteResult> write_file_all(std::string_view path,
                                             std::span<const std::byte> bytes);
 
+    // Optional measurement (CPPIO-CORE-013E); forwarded to the batch.
+    void set_stats(UringStats* stats) { batch_.set_stats(stats); }
+
 private:
     UringWriteBatch batch_;
 };
