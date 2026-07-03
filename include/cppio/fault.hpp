@@ -54,6 +54,13 @@ public:
         return MemoryReader({p, p + s.size()});
     }
 
+    // Convenience factory from a byte span (CPPIO-CORE-015B). Mirrors
+    // from_string; COPIES the span into owned storage so the caller's buffer
+    // need not outlive the reader (no dangling reference). Empty span is fine.
+    static MemoryReader from_bytes(std::span<const std::byte> bytes) {
+        return MemoryReader({bytes.begin(), bytes.end()});
+    }
+
     Result<std::size_t> read_some(std::span<std::byte> dst) override {
         std::size_t n = std::min(dst.size(), buf_.size() - pos_);
         // Guard the memcpy: with n==0 either buf_.data() (empty source) or
