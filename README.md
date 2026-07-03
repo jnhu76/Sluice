@@ -280,10 +280,20 @@ These are deliberate design choices, not gaps:
 
 6. **Vector I/O semantics are conservative** — stop on EOF, on error, or on the first positive short result. Errors propagate immediately even after partial progress. This is a prototype, not a performance claim.
 
+## API reference
+
+For the full API reference, see [`docs/api-reference.md`](docs/api-reference.md).
+
 ## Status
 
 This phase focuses on correctness, observability, and composability. Optimization, benchmarking, io_uring, async backends, and policy selection are intentionally deferred.
 
 An experimental io_uring write spike (SLUICE-CORE-013) lives under `sluice::experimental` behind an optional `--with-liburing` build gate. It is **not** the default backend. See `docs/io-uring-spike.md`.
+
+### Async I/O: design accepted, implementation gated
+
+The async I/O **design** (sluice-CORE-016) has landed as design-only docs: an accepted ADR (`docs/adr/ADR-async-io-model.md`) specifying a completion-based, file-I/O-only, opt-in async foundation. **No async code exists yet** — blocking remains the default and the only implemented backend.
+
+Async **implementation** is intentionally blocked behind a **sync-first readiness gate** (`docs/sync-before-async-readiness-gate.md`): the blocking baseline must first gain positional I/O, a durability model, a bounded pool baseline, and a W1–W4 benchmark matrix (jobs 017S–023S, `docs/sync-io-next-jobs.md`) so that async is later compared against an engineered, concurrent blocking baseline rather than sequential-only blocking. See `docs/sync-io-model-gap-audit.md` for the rationale.
 
 For the full changelog, see `docs/changelog.md`.
