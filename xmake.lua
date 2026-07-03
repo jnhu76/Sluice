@@ -108,6 +108,10 @@ for _, b in ipairs(benches) do
     cppio_one_file_target("binary", "bench", b, "bench", {"cppio_core", "cppio_bench_common"})
 end
 
+-- uring_write_bench needs the experimental uring lib too (stub or real).
+cppio_one_file_target("binary", "bench", "uring_write_bench", "bench",
+                      {"cppio_core", "cppio_bench_common", "cppio_experimental_uring"})
+
 -- ---------------------------------------------------------------------------
 -- CPPIO-CORE-013B: optional liburing build gate for the experimental spike.
 --
