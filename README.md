@@ -145,6 +145,11 @@ external test framework. Each slice has its own binary:
 
 ## Examples
 
+**5-minute tour:** `mvp_memory_io_context` is the fastest way to see cppio work
+end-to-end with no filesystem — it seeds an in-memory reader, copies through an
+in-memory writer via the `IoContext` boundary, and prints the bytes. For a
+real-backend tour, start with `mvp_copy_pipeline`.
+
 Under `examples/`:
 
 - `cat` — stream a file to stdout, observed for stats
@@ -158,6 +163,7 @@ Under `examples/`:
 - `mvp_copy_strategy` — demonstrates Scratch / BufferedFirst / Auto / deferred-rejected / deferred-fallback with decision output
 - `mvp_wal_durable` — WAL durability boundary: write/flush/sync with written/flushed/durable LSN output
 - `mvp_io_context_copy` — opens reader/writer through `BlockingIoContext`, copies, flushes, syncs
+- `mvp_memory_io_context` — the 5-minute tour: in-memory backend, no filesystem
 - `experimental_uring_write` — experimental io_uring write path; skips cleanly without liburing
 
 ## Intentional deviations from the Zig model
