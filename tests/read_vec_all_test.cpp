@@ -118,4 +118,20 @@ CPPIO_TEST_CASE(read_vec_all_propagates_error_after_partial_progress) {
     CPPIO_CHECK(std::memcmp(a.data(), "ABC", 3) == 0);
 }
 
+CPPIO_TEST_CASE(read_vec_all_defensive_check_reader_returning_more_than_asked) {
+    // A broken reader that returns more bytes than the buffer has room for
+    // must trigger the defensive invalid_state check rather than corrupting.
+    struct OverReader final : cppio::Reader {
+        cppio::Result<std::size_t> read_some(std::span<std::byte> dst) override {
+            return dst.size() + 1;  // Return more than asked (broken)
+        }
+    };
+    OverReader rd;
+    std::vector<std::byte> a(4);
+    std::array<cppio::IoSlice, 1> dsts = {mslice(a)};
+    auto r = rd.read_vec_all(std::span<cppio::IoSlice>(dsts));
+    CPPIO_CHECK(!r.has_value());
+    CPPIO_CHECK(r.error().code == cppio::IoError::Code::invalid_state);
+}
+
 CPPIO_MAIN()

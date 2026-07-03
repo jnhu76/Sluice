@@ -24,7 +24,9 @@ struct TempPath {
             ("cppio_bench_wal_" + std::string(tag) + "_" +
              std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
     }
-    ~TempPath() { std::filesystem::remove(p); }
+    ~TempPath() {
+        try { std::filesystem::remove(p); } catch (...) {}
+    }
     std::string str() const { return p.string(); }
 };
 

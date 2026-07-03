@@ -138,4 +138,58 @@ CPPIO_TEST_CASE(buffered_readable_is_detectable_via_dynamic_cast) {
     CPPIO_CHECK(mr_cap == nullptr);  // capability not present on plain reader
 }
 
+CPPIO_TEST_CASE(buffered_readable_consume_zero_on_non_empty_buffer_succeeds) {
+    CountingReader inner("hello");
+    std::vector<std::byte> buf(16);
+    cppio::BufferedReader br(inner, buf);
+    std::vector<std::byte> out(2);
+    (void)br.read_some(std::span<std::byte>(out));
+    std::size_t before = br.peek_buffered().size();
+    // consume_buffered(0) is a no-op: nothing consumed, no error.
+    auto c = br.consume_buffered(0);
+    CPPIO_CHECK(c.has_value());
+    CPPIO_CHECK(br.peek_buffered().size() == before);
+}
+
+CPPIO_TEST_CASE(buffered_readable_consume_exactly_available_empties_peek) {
+    CountingReader inner("hello");
+    std::vector<std::byte> buf(16);
+    cppio::BufferedReader br(inner, buf);
+    std::vector<std::byte> out(1);
+    (void)br.read_some(std::span<std::byte>(out));
+    std::size_t n = br.peek_buffered().size();
+    CPPIO_CHECK(n > 0);
+    auto c = br.consume_buffered(n);
+    CPPIO_CHECK(c.has_value());
+    CPPIO_CHECK(br.peek_buffered().empty());
+}
+
+CPPIO_TEST_CASE(buffered_readable_peek_on_already_empty_buffer_returns_empty) {
+    CountingReader inner("a");
+    std::vector<std::byte> buf(16);
+    cppio::BufferedReader br(inner, buf);
+    std::vector<std::byte> out(16);  // read all
+    (void)br.read_some(std::span<std::byte>(out));
+    // Buffer is now empty: no unread bytes.
+    auto p = br.peek_buffered();
+    CPPIO_CHECK(p.empty());
+}
+
+CPPIO_TEST_CASE(buffered_readable_read_after_partial_consume_serves_remaining_bytes) {
+    // After consuming part of the buffer, a read_some serves from the unread
+    // portion (not from the start of the physical buffer, not a new refill).
+    CountingReader inner("hello world");
+    std::vector<std::byte> buf(16);
+    cppio::BufferedReader br(inner, buf);
+    std::vector<std::byte> out(1);
+    (void)br.read_some(std::span<std::byte>(out));  // refill pulls all 11
+    // peek shows 10, consume 3 ("ell"), then read_some serves "o worl" (6).
+    CPPIO_CHECK(br.peek_buffered().size() == 10);
+    (void)br.consume_buffered(3);
+    std::vector<std::byte> out2(6);
+    auto r2 = br.read_some(std::span<std::byte>(out2));
+    CPPIO_CHECK(r2.has_value() && r2.value() == 6);
+    CPPIO_CHECK(std::memcmp(out2.data(), "o worl", 6) == 0);
+}
+
 CPPIO_MAIN()

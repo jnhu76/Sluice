@@ -24,7 +24,9 @@ struct TempPath {
         p = dir / ("cppio_test_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)) +
                    ".tmp");
     }
-    ~TempPath() { std::filesystem::remove(p); }
+    ~TempPath() {
+        try { std::filesystem::remove(p); } catch (...) {}
+    }
     std::string str() const { return p.string(); }
 };
 

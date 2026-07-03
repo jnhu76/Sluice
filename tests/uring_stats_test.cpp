@@ -35,7 +35,9 @@ struct TempPath {
         p = std::filesystem::temp_directory_path() /
             ("cppio_uring_stats_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp");
     }
-    ~TempPath() { std::filesystem::remove(p); }
+    ~TempPath() {
+        try { std::filesystem::remove(p); } catch (...) {}
+    }
     std::string str() const { return p.string(); }
 };
 }  // namespace

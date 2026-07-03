@@ -61,8 +61,15 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
     while (remaining > 0) {
         io_uring_sqe* sqe = ::io_uring_get_sqe(ring);
         if (sqe == nullptr) {
-            // Submission queue full: flush pending, then retry.
-            ::io_uring_submit(ring);
+            // Submission queue full: flush pending, then retry. Check the flush
+            // submit's return (a failure must not be silently ignored) and count
+            // it as a submit call for stats symmetry with the happy path.
+            if (::io_uring_submit(ring) < 0) {
+                ++result.errors;
+                if (stats_) ++stats_->completion_errors;
+                return make_unexpected<UringWriteResult>(IoError{IoError::Code::backend_error});
+            }
+            if (stats_) ++stats_->submit_calls;
             sqe = ::io_uring_get_sqe(ring);
             if (sqe == nullptr) {
                 ++result.errors;
