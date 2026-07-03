@@ -177,6 +177,112 @@ Result<std::size_t> FileReader::read_vec(std::span<IoSlice> dsts) {
     return total;
 }
 
+Result<std::size_t> FileReader::read_at(std::uint64_t offset, std::span<std::byte> dst) {
+    if (fd_ < 0) {
+        if (stats_) ++stats_->read_syscall_errors;
+        return make_unexpected<std::size_t>(
+            open_error_.value_or(IoError{IoError::Code::permission_denied}));
+    }
+    if (dst.empty()) return std::size_t{0};
+    // pread does not move the file cursor. off_t is signed; offset is uint64.
+    // A pathological huge offset would overflow off_t — clamp via static_cast.
+    ssize_t n = detail::retry_on_eintr([&] {
+        return ::pread(fd_, dst.data(), dst.size(), static_cast<off_t>(offset));
+    });
+    auto result = syscall_result(n);
+    if (stats_) {
+        if (result.has_value()) {
+            ++stats_->read_syscalls;
+            stats_->read_syscall_bytes += result.value();
+        } else {
+            ++stats_->read_syscall_errors;
+        }
+    }
+    return result;
+}
+
+Result<std::size_t> FileReader::read_vec_at(std::uint64_t offset, std::span<IoSlice> dsts) {
+    // Build the iovec list once, skipping empty slices (same as read_vec).
+    std::vector<iovec> iovs;
+    iovs.reserve(dsts.size());
+    for (auto& d : dsts) {
+        if (d.bytes.empty()) continue;
+        iovs.push_back(iovec{d.bytes.data(), d.bytes.size()});
+    }
+
+    if (vec_stats_) {
+        ++vec_stats_->read_vec_calls;
+        vec_stats_->read_vec_iovecs += iovs.size();
+    }
+
+    if (iovs.empty()) return std::size_t{0};
+
+    if (fd_ < 0) {
+        if (stats_) ++stats_->read_syscall_errors;
+        return make_unexpected<std::size_t>(
+            open_error_.value_or(IoError{IoError::Code::permission_denied}));
+    }
+
+    // preadv advances through the iovecs itself, but each call starts at the
+    // given offset. Across IOV_MAX chunks, advance the offset by bytes already
+    // read so the next chunk continues the logical read.
+    std::size_t total = 0;
+    std::size_t idx = 0;  // current iovec index
+    std::uint64_t off = offset;
+    while (idx < iovs.size()) {
+        std::size_t chunk = std::min<std::size_t>(iovs.size() - idx,
+                                                  static_cast<std::size_t>(iov_max()));
+        ssize_t n = detail::retry_on_eintr([&] {
+            return ::preadv(fd_, &iovs[idx], iovcnt_clamped(chunk), static_cast<off_t>(off));
+        });
+        auto r = syscall_result(n);
+        if (stats_) {
+            if (r.has_value()) {
+                ++stats_->read_syscalls;
+                stats_->read_syscall_bytes += r.value();
+            } else {
+                ++stats_->read_syscall_errors;
+            }
+        }
+        if (!r.has_value()) {
+            return make_unexpected<std::size_t>(r.error());
+        }
+        std::size_t got = r.value();
+        total += got;
+        off += got;
+        if (got == 0) break;  // clean EOF mid-chunk: stop
+        // Count fully-consumed iovecs (preadv scatters in place).
+        std::size_t remaining = got;
+        while (idx < iovs.size() && remaining >= iovs[idx].iov_len) {
+            remaining -= iovs[idx].iov_len;
+            ++idx;
+        }
+        if (remaining > 0) break;  // partial fill: stop-on-short
+    }
+
+    if (vec_stats_) vec_stats_->read_vec_bytes += total;
+    return total;
+}
+
+Result<void> FileReader::read_at_exact(std::uint64_t offset, std::span<std::byte> dst) {
+    if (dst.empty()) return {};  // immediate success
+    std::uint64_t off = offset;
+    std::size_t filled = 0;
+    while (filled < dst.size()) {
+        auto r = read_at(off, dst.subspan(filled));
+        if (!r.has_value()) return make_unexpected(r.error());
+        std::size_t got = r.value();
+        if (got == 0) {
+            // EOF before dst is full. Matches read_exact: eof whether or not
+            // partial progress was made.
+            return make_unexpected(IoError{IoError::Code::eof});
+        }
+        filled += got;
+        off += got;
+    }
+    return {};
+}
+
 // ---------------- FileWriter ----------------
 
 FileWriter::FileWriter(const std::string& path, SyscallStats* stats, VectorStats* vec_stats,
@@ -288,6 +394,109 @@ Result<std::size_t> FileWriter::write_vec(std::span<const ConstIoSlice> srcs) {
 
     if (vec_stats_) vec_stats_->write_vec_bytes += total;
     return total;
+}
+
+Result<std::size_t> FileWriter::write_at(std::uint64_t offset, std::span<const std::byte> src) {
+    if (fd_ < 0) {
+        if (stats_) ++stats_->write_syscall_errors;
+        return make_unexpected<std::size_t>(
+            open_error_.value_or(IoError{IoError::Code::permission_denied}));
+    }
+    if (src.empty()) return std::size_t{0};
+    // pwrite does not move the file cursor. off_t is signed; clamp the cast.
+    ssize_t n = detail::retry_on_eintr([&] {
+        return ::pwrite(fd_, src.data(), src.size(), static_cast<off_t>(offset));
+    });
+    auto result = syscall_result(n);
+    if (stats_) {
+        if (result.has_value()) {
+            ++stats_->write_syscalls;
+            stats_->write_syscall_bytes += result.value();
+        } else {
+            ++stats_->write_syscall_errors;
+        }
+    }
+    return result;
+}
+
+Result<std::size_t> FileWriter::write_vec_at(std::uint64_t offset, std::span<const ConstIoSlice> srcs) {
+    // Build the iovec list once, skipping empty slices (same as write_vec).
+    std::vector<iovec> iovs;
+    iovs.reserve(srcs.size());
+    for (const auto& s : srcs) {
+        if (s.bytes.empty()) continue;
+        iovs.push_back(iovec{const_cast<void*>(static_cast<const void*>(s.bytes.data())),
+                             s.bytes.size()});
+    }
+
+    if (vec_stats_) {
+        ++vec_stats_->write_vec_calls;
+        vec_stats_->write_vec_iovecs += iovs.size();
+    }
+
+    if (iovs.empty()) return std::size_t{0};
+
+    if (fd_ < 0) {
+        if (stats_) ++stats_->write_syscall_errors;
+        return make_unexpected<std::size_t>(
+            open_error_.value_or(IoError{IoError::Code::permission_denied}));
+    }
+
+    // pwritev advances through iovecs itself; each call starts at `off`. Across
+    // IOV_MAX chunks, advance off by bytes already written.
+    std::size_t total = 0;
+    std::size_t idx = 0;
+    std::uint64_t off = offset;
+    while (idx < iovs.size()) {
+        std::size_t chunk = std::min<std::size_t>(iovs.size() - idx,
+                                                  static_cast<std::size_t>(iov_max()));
+        ssize_t n = detail::retry_on_eintr([&] {
+            return ::pwritev(fd_, &iovs[idx], iovcnt_clamped(chunk), static_cast<off_t>(off));
+        });
+        auto r = syscall_result(n);
+        if (stats_) {
+            if (r.has_value()) {
+                ++stats_->write_syscalls;
+                stats_->write_syscall_bytes += r.value();
+            } else {
+                ++stats_->write_syscall_errors;
+            }
+        }
+        if (!r.has_value()) {
+            return make_unexpected<std::size_t>(r.error());
+        }
+        std::size_t wrote = r.value();
+        total += wrote;
+        off += wrote;
+        if (wrote == 0) break;  // zero-progress: stop
+        std::size_t remaining = wrote;
+        while (idx < iovs.size() && remaining >= iovs[idx].iov_len) {
+            remaining -= iovs[idx].iov_len;
+            ++idx;
+        }
+        if (remaining > 0) break;  // short write mid-iovec: stop
+    }
+
+    if (vec_stats_) vec_stats_->write_vec_bytes += total;
+    return total;
+}
+
+Result<void> FileWriter::write_at_all(std::uint64_t offset, std::span<const std::byte> src) {
+    if (src.empty()) return {};
+    std::uint64_t off = offset;
+    std::size_t written = 0;
+    while (written < src.size()) {
+        auto r = write_at(off, src.subspan(written));
+        if (!r.has_value()) return make_unexpected(r.error());
+        std::size_t put = r.value();
+        if (put == 0) {
+            // Zero progress on non-empty remaining input: backend failure.
+            return make_unexpected(IoError{IoError::Code::invalid_state});
+        }
+        written += put;
+        off += put;
+    }
+    return {};
 }
 
 namespace {

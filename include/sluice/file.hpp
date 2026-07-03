@@ -62,6 +62,19 @@ public:
     // syscall. See src/file.cpp and docs/readv-writev-design-note.md.
     Result<std::size_t> read_vec(std::span<IoSlice> dsts) override;
 
+    // Positional read (sluice-CORE-018S): pread at an explicit byte offset.
+    // Does NOT move the shared file cursor. Returns bytes read (0 == EOF at
+    // that offset). See docs/sync-io-model.md (Positional I/O semantics).
+    Result<std::size_t> read_at(std::uint64_t offset, std::span<std::byte> dst);
+    // Positional vector read (sluice-CORE-018S): preadv at an explicit byte
+    // offset. Same stop-on-short + skip-empty semantics as read_vec. Does NOT
+    // move the shared file cursor.
+    Result<std::size_t> read_vec_at(std::uint64_t offset, std::span<IoSlice> dsts);
+    // Derived (sluice-CORE-019S): read exactly dst.size() bytes from `offset`
+    // (looping read_at across short reads), or fail on EOF/error. dst.size()==0
+    // is immediate success. EOF before/within -> IoError::eof.
+    Result<void> read_at_exact(std::uint64_t offset, std::span<std::byte> dst);
+
 private:
     void close();
     int fd_ = -1;
@@ -119,6 +132,19 @@ public:
     // POSIX writev override: scatters from all non-empty slices in (chunked)
     // syscalls. See src/file.cpp and docs/readv-writev-design-note.md.
     Result<std::size_t> write_vec(std::span<const ConstIoSlice> srcs) override;
+    // Positional write (sluice-CORE-018S): pwrite at an explicit byte offset.
+    // Does NOT move the shared file cursor. Returns bytes written (0 on
+    // non-empty input is invalid_state/backend failure — surfaced by callers).
+    // See docs/sync-io-model.md (Positional I/O semantics).
+    Result<std::size_t> write_at(std::uint64_t offset, std::span<const std::byte> src);
+    // Positional vector write (sluice-CORE-018S): pwritev at an explicit byte
+    // offset. Same stop-on-short + skip-empty semantics as write_vec. Does NOT
+    // move the shared file cursor.
+    Result<std::size_t> write_vec_at(std::uint64_t offset, std::span<const ConstIoSlice> srcs);
+    // Derived (sluice-CORE-019S): write all of src at `offset`, looping
+    // write_at across short writes and advancing offset by bytes written. Zero
+    // progress on non-empty remaining input -> IoError::invalid_state.
+    Result<void> write_at_all(std::uint64_t offset, std::span<const std::byte> src);
     // No-op flush of user-space state in this phase (no fsync). Durability is
     // INTENTIONALLY separate — see sync_data/sync_all below and
     // docs/flush-sync-durability.md. flush() must never call fsync/fdatasync.
