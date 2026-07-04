@@ -15,8 +15,10 @@
 #include <sluice/file.hpp>
 #include <sluice/limit.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <exception>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -81,12 +83,10 @@ std::uint64_t run_sequential(const Params& pm,
                              const std::vector<std::string>& srcs,
                              const std::vector<std::string>& dsts,
                              std::byte* scratch) {
-    std::uint64_t total = 0;
     auto t0 = now_ns();
     for (std::size_t s = 0; s < pm.streams; ++s) {
-        total += run_one_copy(srcs[s], dsts[s], pm.bytes_per_stream, pm.buffer_size, scratch);
+        (void)run_one_copy(srcs[s], dsts[s], pm.bytes_per_stream, pm.buffer_size, scratch);
     }
-    (void)total;
     return now_ns() - t0;
 }
 
@@ -114,17 +114,25 @@ std::uint64_t run_thread_per_stream(const Params& pm,
                                     const std::vector<std::string>& dsts) {
     std::vector<std::vector<std::byte>> scratches(pm.streams,
                                                   std::vector<std::byte>(pm.buffer_size));
+    // Capture any thread exception so it does not std::terminate the bench; it
+    // is rethrown on the caller thread after join (same pattern as the pool).
+    std::atomic<std::exception_ptr> captured{nullptr};
     std::vector<std::thread> threads;
     threads.reserve(pm.streams);
     auto t0 = now_ns();
     for (std::size_t s = 0; s < pm.streams; ++s) {
         std::byte* sc = scratches[s].data();
         std::string src = srcs[s], dst = dsts[s];
-        threads.emplace_back([src, dst, &pm, sc] {
-            (void)run_one_copy(src, dst, pm.bytes_per_stream, pm.buffer_size, sc);
+        threads.emplace_back([src, dst, &pm, sc, &captured] {
+            try {
+                (void)run_one_copy(src, dst, pm.bytes_per_stream, pm.buffer_size, sc);
+            } catch (...) {
+                captured.store(std::current_exception());
+            }
         });
     }
     for (auto& t : threads) t.join();
+    if (auto ex = captured.load()) std::rethrow_exception(ex);
     return now_ns() - t0;
 }
 

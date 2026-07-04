@@ -8,6 +8,15 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
+
+// Positional I/O (pread/pwrite/preadv/pwritev) narrows std::uint64_t offsets to
+// off_t via static_cast. This is lossless ONLY when off_t is 64-bit (the LFS /
+// _FILE_OFFSET_BITS=64 configuration sluice targets). Fail the build on a 32-bit
+// off_t platform rather than silently truncating offsets to invalid values.
+static_assert(sizeof(off_t) == 8,
+              "sluice positional I/O requires 64-bit off_t "
+              "(_FILE_OFFSET_BITS=64 / LFS). A 32-bit off_t would silently "
+              "truncate uint64 offsets in pread/pwrite.");
 #include <sys/uio.h>  // readv / writev / struct iovec
 #include <algorithm>
 #include <optional>

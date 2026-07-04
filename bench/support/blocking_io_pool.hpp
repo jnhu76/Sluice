@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <memory>
 
 namespace sluice::bench {
 
@@ -54,7 +55,7 @@ public:
 
 private:
     struct Impl;
-    Impl* impl_;
+    std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace sluice::bench

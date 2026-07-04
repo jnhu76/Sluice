@@ -101,7 +101,7 @@ std::uint64_t run_sequential(const Params& pm, std::byte* scratch,
     return now_ns() - t0;
 }
 
-std::uint64_t run_bounded_pool(const Params& pm, std::byte* scratch,
+std::uint64_t run_bounded_pool(const Params& pm,
                                const std::vector<std::string>& paths,
                                sluice::FileReader* shared) {
     // Each worker needs its own scratch (concurrent). We allocate one per stream.
@@ -196,7 +196,7 @@ void run_cell(const Params& pm) {
     emit(pm, "blocking_sequential",
          run_sequential(pm, sc, paths, shared.get()), 1);
     emit(pm, "blocking_bounded_pool",
-         run_bounded_pool(pm, sc, paths, shared.get()), pm.pool_threads);
+         run_bounded_pool(pm, paths, shared.get()), pm.pool_threads);
     emit(pm, "blocking_thread_per_stream",
          run_thread_per_stream(pm, paths, shared.get()), pm.streams);
 }

@@ -76,8 +76,8 @@ struct BlockingIoPool::Impl {
 };
 
 BlockingIoPool::BlockingIoPool(std::size_t threads, std::size_t max_queued)
-    : impl_(new Impl(threads == 0 ? 1 : threads,
-                     max_queued == 0 ? 1 : max_queued)) {
+    : impl_(std::make_unique<Impl>(threads == 0 ? 1 : threads,
+                                   max_queued == 0 ? 1 : max_queued)) {
     impl_->workers.reserve(impl_->thread_count);
     for (std::size_t i = 0; i < impl_->thread_count; ++i) {
         impl_->workers.emplace_back([this] { impl_->worker_loop(); });
@@ -85,13 +85,11 @@ BlockingIoPool::BlockingIoPool(std::size_t threads, std::size_t max_queued)
 }
 
 BlockingIoPool::~BlockingIoPool() {
+    // shutdown() drains the queue and joins all workers. The unique_ptr then
+    // destroys Impl (no manual delete; leak-safe even if a worker constructor
+    // had thrown during construction). Idempotent: a user-called shutdown()
+    // makes this a no-op.
     shutdown();
-    // After shutdown all workers are joined. Detach is not used; we join.
-    for (auto& w : impl_->workers) {
-        if (w.joinable()) w.join();
-    }
-    delete impl_;
-    impl_ = nullptr;
 }
 
 void BlockingIoPool::submit(std::function<void()> job) {

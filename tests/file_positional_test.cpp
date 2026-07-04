@@ -25,11 +25,22 @@ public:
                     ("sluice_posional_test_" + std::to_string(counter_++) + ".tmp");
         path_ = base.string();
     }
-    ~TempPath() { std::filesystem::remove(path_); }
+    ~TempPath() {
+        // Guard the moved-from state: the move ctor clears path_, and remove("")
+        // on an empty path is a needless (if non-throwing) no-op. Defensive.
+        if (!path_.empty()) std::filesystem::remove(path_);
+    }
     TempPath(const TempPath&) = delete;
     TempPath& operator=(const TempPath&) = delete;
     TempPath(TempPath&& o) noexcept : path_(std::move(o.path_)) { o.path_.clear(); }
-    TempPath& operator=(TempPath&&) noexcept = default;
+    TempPath& operator=(TempPath&& o) noexcept {
+        if (this != &o) {
+            if (!path_.empty()) std::filesystem::remove(path_);
+            path_ = std::move(o.path_);
+            o.path_.clear();
+        }
+        return *this;
+    }
     const std::string& path() const { return path_; }
 private:
     std::string path_;
