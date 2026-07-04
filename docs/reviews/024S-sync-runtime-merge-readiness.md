@@ -5,14 +5,18 @@ author, pre-merge) walks through before merging `sync-runtime` → `master`.
 
 ## Must be true before merge
 
+- [x] Sync backend taxonomy exists: `docs/io/sync-backend-taxonomy.md`
+- [x] Production `BlockingIoPool` exists OUTSIDE benchmark support: `include/sluice/blocking_io_pool.hpp` + `src/blocking_io_pool.cpp` (namespace `sluice`)
+- [x] Benchmarks use the production pool instead of a duplicate: `bench/support/blocking_io_pool.*` is now a thin adapter over `sluice::BlockingIoPool`
 - [x] Sync contract ADR exists: `docs/adr/ADR-024S-sync-runtime-contract.md`
 - [x] Partial-I/O / error semantics documented: `docs/io/sync-error-semantics.md`
-- [x] `BlockingIoPool` lifecycle documented: ADR §4 (G9) + `docs/io/sync-error-semantics.md` (submit-after-shutdown row)
-- [x] Negative tests cover lifecycle and partial/error behavior: `tests/sync_contract_negative_test.cpp` (5 slices) + existing `blocking_io_pool_test.cpp` / `fault_test.cpp` / `reader_test.cpp` / `writer_test.cpp` / `file_positional_test.cpp`
+- [x] `BlockingIoPool` lifecycle documented: ADR §4 (G9) + `docs/io/sync-error-semantics.md`
+- [x] Negative tests cover lifecycle and partial/error behavior: `tests/blocking_io_pool_prod_test.cpp` (10 slices) + `tests/sync_contract_negative_test.cpp` (5 slices) + existing `blocking_io_pool_test.cpp` / `fault_test.cpp` / `reader_test.cpp` / `writer_test.cpp` / `file_positional_test.cpp`
 - [x] W1–W4 benchmark notes exist: `docs/bench/sync-runtime-bench-notes.md`
 - [x] Sanitizer/valgrind commands documented (see "Verification commands" below)
-- [x] No async/io_uring/P2300/actor code added in this closeout (the `src/experimental/uring_*` is pre-existing, gated, off by default, and NOT part of this contract)
-- [x] Default path remains blocking sync (no `Reader`/`Writer`/positional semantic change in 024S)
+- [x] No async/io_uring/epoll/P2300/actor/green-thread code added (the `src/experimental/uring_*` is pre-existing, gated, off by default, and NOT part of this contract)
+- [x] Default path remains blocking sync (no `Reader`/`Writer`/positional semantic change)
+- [x] Production multithreaded path is bounded (fixed worker count + bounded queue + backpressure/rejection)
 
 ## Reviewer checklist
 

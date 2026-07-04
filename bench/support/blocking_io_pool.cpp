@@ -1,95 +1,43 @@
-// Implementation of BlockingIoPool (sluice-CORE-021S). See header for the
-// concurrency model. State is fully instance-owned (no globals).
+// Bench adapter implementation (sluice-CORE-024S §6). Wraps the production
+// sluice::BlockingIoPool; does NOT re-implement the pool. Pure C++17/20.
 #include "blocking_io_pool.hpp"
 
+#include <atomic>
 #include <condition_variable>
-#include <cstddef>
-#include <deque>
 #include <exception>
-#include <functional>
 #include <mutex>
-#include <thread>
 #include <utility>
-#include <vector>
 
 namespace sluice::bench {
 
-struct BlockingIoPool::Impl {
-    const std::size_t thread_count;
-    const std::size_t max_queued;
-
+struct BlockingIoPool::Adapter {
+    std::unique_ptr<sluice::BlockingIoPool> pool;
     std::mutex mtx;
-    std::condition_variable cv_queue_not_full;  // signaled when a job dequeues
-    std::condition_variable cv_queue_not_empty; // signaled when a job enqueues
-    std::condition_variable cv_idle;            // signaled when in_flight hits 0
+    std::condition_variable cv;
+    std::atomic<std::size_t> in_flight{0};
+    std::exception_ptr pending_ex;
+    bool accepting = true;
 
-    std::deque<std::function<void()>> queue;
-    std::size_t queued = 0;        // jobs in queue (not yet dequeued)
-    std::size_t in_flight = 0;     // dequeued + not yet completed
-    bool accepting = true;         // false once shutdown() begins
-    bool stopped = false;          // workers exit when true && queue empty
-    std::exception_ptr pending_ex; // first thrown exception, if any
-    std::vector<std::thread> workers;
-
-    explicit Impl(std::size_t threads, std::size_t max_q)
-        : thread_count(threads), max_queued(max_q) {}
-
-    void worker_loop() {
-        for (;;) {
-            std::function<void()> job;
-            {
-                std::unique_lock<std::mutex> lk(mtx);
-                cv_queue_not_empty.wait(lk, [&] { return stopped || !queue.empty(); });
-                if (queue.empty()) {
-                    // stopped && drained -> exit.
-                    return;
-                }
-                job = std::move(queue.front());
-                queue.pop_front();
-                --queued;
-                ++in_flight;
-                // A slot freed up: unblock a throttled submit() if any.
-                cv_queue_not_full.notify_one();
-            }
-            run_job(job);
-            {
-                std::unique_lock<std::mutex> lk(mtx);
-                --in_flight;
-                if (in_flight == 0) {
-                    cv_idle.notify_all();
-                }
-            }
+    explicit Adapter(std::size_t threads, std::size_t max_queued) {
+        auto r = sluice::make_blocking_io_pool(sluice::BlockingIoPoolOptions{threads, max_queued});
+        // The bench adapter coerces 0 to 1 (pre-024S behavior) for robustness;
+        // make_blocking_io_pool rejects 0, so coerce before calling.
+        if (!r.has_value()) {
+            r = sluice::make_blocking_io_pool(sluice::BlockingIoPoolOptions{
+                threads == 0 ? 1 : threads, max_queued == 0 ? 1 : max_queued});
         }
-    }
-
-    void run_job(const std::function<void()>& job) {
-        if (!job) {
-            return;
+        if (!r.has_value()) {
+            throw std::runtime_error("bench::BlockingIoPool: production pool construction failed");
         }
-        try {
-            job();
-        } catch (...) {
-            std::scoped_lock lk(mtx);
-            if (!pending_ex) {
-                pending_ex = std::current_exception();
-            }
-        }
+        pool = std::move(r.value());
     }
 };
 
 BlockingIoPool::BlockingIoPool(std::size_t threads, std::size_t max_queued)
-    : impl_(std::make_unique<Impl>(threads == 0 ? 1 : threads, max_queued == 0 ? 1 : max_queued)) {
-    impl_->workers.reserve(impl_->thread_count);
-    for (std::size_t i = 0; i < impl_->thread_count; ++i) {
-        impl_->workers.emplace_back([this] { impl_->worker_loop(); });
-    }
-}
+    : adapter_(std::make_unique<Adapter>(threads == 0 ? 1 : threads,
+                                         max_queued == 0 ? 1 : max_queued)) {}
 
 BlockingIoPool::~BlockingIoPool() {
-    // shutdown() drains the queue and joins all workers. The unique_ptr then
-    // destroys Impl (no manual delete; leak-safe even if a worker constructor
-    // had thrown during construction). Idempotent: a user-called shutdown()
-    // makes this a no-op.
     shutdown();
 }
 
@@ -97,31 +45,43 @@ void BlockingIoPool::submit(std::function<void()> job) {
     if (!job) {
         return;
     }
-    {
-        std::unique_lock<std::mutex> lk(impl_->mtx);
-        if (!impl_->accepting) {
-            // shutdown() in progress or completed: drop silently.
-            return;
+    if (!adapter_->accepting) {
+        return; // bench adapter: silent drop after shutdown (preserves contract)
+    }
+    adapter_->in_flight.fetch_add(1, std::memory_order_acq_rel);
+    // Wrap the job: decrement in_flight on completion, capture exception.
+    std::function<void()> wrapped = [this, j = std::move(job)]() {
+        try {
+            j();
+        } catch (...) {
+            std::scoped_lock lk(adapter_->mtx);
+            if (!adapter_->pending_ex) {
+                adapter_->pending_ex = std::current_exception();
+            }
         }
-        impl_->cv_queue_not_full.wait(
-            lk, [&] { return impl_->queued < impl_->max_queued || !impl_->accepting; });
-        if (!impl_->accepting) {
-            return;
+        if (adapter_->in_flight.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            std::scoped_lock lk(adapter_->mtx);
+            adapter_->cv.notify_all();
         }
-        impl_->queue.push_back(std::move(job));
-        ++impl_->queued;
-        impl_->cv_queue_not_empty.notify_one();
+    };
+    auto r = adapter_->pool->submit(std::move(wrapped));
+    if (!r.has_value()) {
+        // Rejected (e.g. shutdown raced): undo the in-flight bump, drop silently.
+        if (adapter_->in_flight.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            std::scoped_lock lk(adapter_->mtx);
+            adapter_->cv.notify_all();
+        }
     }
 }
 
 void BlockingIoPool::wait_all() {
     std::exception_ptr to_throw;
     {
-        std::unique_lock<std::mutex> lk(impl_->mtx);
-        impl_->cv_idle.wait(lk, [&] { return impl_->queued == 0 && impl_->in_flight == 0; });
-        if (impl_->pending_ex) {
-            to_throw = impl_->pending_ex;
-            impl_->pending_ex = nullptr;
+        std::unique_lock<std::mutex> lk(adapter_->mtx);
+        adapter_->cv.wait(lk, [&] { return adapter_->in_flight.load() == 0; });
+        if (adapter_->pending_ex) {
+            to_throw = adapter_->pending_ex;
+            adapter_->pending_ex = nullptr;
         }
     }
     if (to_throw) {
@@ -130,26 +90,16 @@ void BlockingIoPool::wait_all() {
 }
 
 void BlockingIoPool::shutdown() {
-    {
-        std::scoped_lock lk(impl_->mtx);
-        if (!impl_->accepting) {
-            return; // idempotent
-        }
-        impl_->accepting = false;
-        impl_->stopped = true;
-        // Wake everyone who might be waiting.
-        impl_->cv_queue_not_empty.notify_all();
-        impl_->cv_queue_not_full.notify_all();
+    if (!adapter_->accepting) {
+        adapter_->pool->shutdown(); // idempotent on production pool too
+        return;
     }
-    for (auto& w : impl_->workers) {
-        if (w.joinable()) {
-            w.join();
-        }
-    }
+    adapter_->accepting = false;
+    adapter_->pool->shutdown();
 }
 
 std::size_t BlockingIoPool::thread_count() const {
-    return impl_->thread_count;
+    return adapter_->pool->worker_count();
 }
 
 } // namespace sluice::bench

@@ -139,6 +139,36 @@ do
     end
 end
 
+-- Production BlockingIoPool tests (sluice-CORE-024S). Core-only: the production
+-- pool lives in include/sluice/blocking_io_pool.hpp + src/blocking_io_pool.cpp.
+do
+    local p = "tests/blocking_io_pool_prod_test.cpp"
+    if os.isfile(p) then
+        target("blocking_io_pool_prod_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("blocking_io_pool_prod_test")
+    end
+end
+
+-- TEMP btest.
+do
+    local p = "tests/_btest.cpp"
+    if os.isfile(p) then
+        target("_btest")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs("include", "tests")
+            add_files(p)
+    end
+end
+
 -- sync_matrix_test (022S) locks the matrix CSV shape.
 do
     local p = "tests/sync_matrix_test.cpp"

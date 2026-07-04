@@ -38,6 +38,15 @@ xmake run w1_write_bench   # (and w2_read_bench / w3_copy_bench / w4_durability_
 > performance win**. Direct blocking remains the simplest and often fastest path
 > for single-stream synchronous I/O.
 
+> The sync pool is the **production multithreaded blocking path**
+> (`sluice::BlockingIoPool`, `include/sluice/blocking_io_pool.hpp`). It should be
+> evaluated against direct blocking, NOT confused with async io_uring or
+> per-operation thread spawning. It is a bounded OS-thread pool (fixed worker
+> count, bounded queue, backpressure/rejection) — see
+> `docs/io/sync-backend-taxonomy.md`. The bench adapter
+> (`sluice::bench::BlockingIoPool`) wraps this production pool; benches do not
+> duplicate the implementation.
+
 ## What the benches do NOT prove
 
 - **No universal throughput/latency claim.** Every number is workload × mode ×

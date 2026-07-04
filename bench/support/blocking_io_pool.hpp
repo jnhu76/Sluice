@@ -1,22 +1,21 @@
-// sluice-CORE-021S: a bounded blocking worker pool for concurrent bench
-// workloads (the W1-W4 matrix, job 022S).
+// sluice::bench::BlockingIoPool — bench adapter over the production pool
+// (sluice-CORE-024S §6).
 //
-// IMPORTANT: BlockingIoPool is an EXECUTION MODEL for benchmarks, NOT an I/O
-// backend. It does not implement IoContext, is not selectable as a backend, and
-// lives in bench/support/ (see docs/sync-io-architecture.md §3). It runs
-// ordinary blocking operations on fixed std::thread workers. It is NOT async.
+// This is NOT a duplicate implementation. It wraps the production
+// sluice::BlockingIoPool (include/sluice/blocking_io_pool.hpp) and exposes the
+// fire-and-forget shape the W1-W4 benches already use (void submit, wait_all,
+// shutdown, thread_count). Per docs/io/sync-backend-taxonomy.md §2.6, benches
+// do not re-implement the pool.
 //
-// Concurrency model:
-//   - N worker threads, fixed at construction.
-//   - A bounded FIFO queue (max_queued). submit() blocks when the queue is full,
-//     so submitted-but-unrun jobs never grow without limit.
-//   - wait_all() blocks until every submitted job has completed.
-//   - shutdown() stops accepting, drains the queue, joins workers. Idempotent.
-//   - submit() after shutdown() is a safe no-op.
-//
-// State is instance-owned only (no globals) so the pool is ASan/TSan-clean and
-// multiple independent pools do not interfere.
+// The void submit() drops the returned Task (fire-and-forget); wait_all() joins
+// via an in-flight atomic counter + a condition variable; exceptions are
+// captured (first-wins) and rethrown at wait_all(), matching the pre-024S
+// adapter's contract. The production pool's submit-after-shutdown rejection is
+// mapped to a silent drop here (preserving the bench adapter's existing
+// void-submit contract so bench call sites don't change).
 #pragma once
+
+#include <sluice/blocking_io_pool.hpp>
 
 #include <cstddef>
 #include <functional>
@@ -26,9 +25,6 @@ namespace sluice::bench {
 
 class BlockingIoPool {
   public:
-    // Construct a pool with `threads` worker threads and a bounded queue of
-    // `max_queued` pending jobs. `threads` must be >= 1. `max_queued` default is
-    // modest; callers (e.g. benches) may raise it to avoid submit throttling.
     explicit BlockingIoPool(std::size_t threads, std::size_t max_queued = 64);
     ~BlockingIoPool();
 
@@ -37,25 +33,22 @@ class BlockingIoPool {
     BlockingIoPool(BlockingIoPool&&) = delete;
     BlockingIoPool& operator=(BlockingIoPool&&) = delete;
 
-    // Submit a job. Blocks if the queue is at capacity. After shutdown() this is
-    // a no-op (returns without enqueuing). A null job is ignored.
+    // Fire-and-forget. Blocks (backpressure) if the queue is full. After
+    // shutdown() this is a silent drop (bench adapter contract).
     void submit(std::function<void()> job);
 
-    // Block until every submitted job has completed. If any job threw, the first
-    // captured exception is rethrown here (and then cleared). Workers stay alive
-    // and the pool keeps accepting jobs. Safe to call when nothing is pending.
+    // Block until every submitted job has completed. Rethrows the first captured
+    // job exception (then clears it). Safe when nothing is pending.
     void wait_all();
 
-    // Stop accepting submissions, finish all pending jobs, then join workers.
-    // Idempotent; also invoked by the destructor if not called first.
+    // Idempotent; destructor calls it.
     void shutdown();
 
-    // Number of worker threads (fixed at construction).
     std::size_t thread_count() const;
 
   private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
+    struct Adapter;
+    std::unique_ptr<Adapter> adapter_;
 };
 
 } // namespace sluice::bench
