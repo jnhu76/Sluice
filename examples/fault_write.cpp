@@ -10,7 +10,7 @@ int main() {
     sluice::MemoryWriter sink;
     sluice::FaultPlan plan;
     plan.max_write_size = 4;
-    plan.fail_after_write_calls = 2;  // 3rd call fails
+    plan.fail_after_write_calls = 2; // 3rd call fails
     plan.error = sluice::IoError{sluice::IoError::Code::no_space};
     sluice::FaultWriter faulted(sink, plan);
 
@@ -18,8 +18,7 @@ int main() {
     sluice::ObservedWriter observed(faulted, stats);
 
     std::string msg = "this payload is longer than the budget allows here";
-    auto res = observed.write_all(
-        std::as_bytes(std::span(msg.data(), msg.size())));
+    auto res = observed.write_all(std::as_bytes(std::span(msg.data(), msg.size())));
 
     if (!res.has_value()) {
         std::printf("fault_write: deterministic failure as expected -> code=%s\n",
@@ -31,5 +30,5 @@ int main() {
                 static_cast<unsigned long long>(stats.write_calls),
                 static_cast<unsigned long long>(stats.write_bytes),
                 static_cast<unsigned long long>(stats.short_writes));
-    return res.has_value() ? 0 : 0;  // demo always exits 0
+    return 0; // demo always exits 0, regardless of the fault outcome
 }

@@ -18,7 +18,7 @@ namespace {
 // Inner reader that counts read_some calls, so we can prove peek/consume never
 // touch the inner reader.
 class CountingReader final : public sluice::Reader {
-public:
+  public:
     sluice::MemoryReader mem;
     int calls = 0;
     explicit CountingReader(std::string_view s) : mem(sluice::MemoryReader::from_string(s)) {}
@@ -28,7 +28,7 @@ public:
     }
 };
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(buffered_readable_newly_constructed_has_empty_peek) {
     CountingReader inner("hello");
@@ -51,7 +51,7 @@ SLUICE_TEST_CASE(buffered_readable_exposes_leftover_after_partial_read) {
     SLUICE_CHECK(std::memcmp(out.data(), "he", 2) == 0);
 
     auto peeked = br.peek_buffered();
-    SLUICE_CHECK(peeked.size() == 9);  // "llo world"
+    SLUICE_CHECK(peeked.size() == 9); // "llo world"
     SLUICE_CHECK(std::memcmp(peeked.data(), "llo world", 9) == 0);
 }
 
@@ -61,13 +61,13 @@ SLUICE_TEST_CASE(buffered_readable_consume_advances_cursor) {
     sluice::BufferedReader br(inner, buf);
 
     std::vector<std::byte> out(2);
-    (void)br.read_some(std::span<std::byte>(out));  // refill pulls all 11
+    (void)br.read_some(std::span<std::byte>(out)); // refill pulls all 11
 
     SLUICE_CHECK(br.peek_buffered().size() == 9);
-    auto c = br.consume_buffered(3);  // consume "llo"
+    auto c = br.consume_buffered(3); // consume "llo"
     SLUICE_CHECK(c.has_value());
     auto peeked = br.peek_buffered();
-    SLUICE_CHECK(peeked.size() == 6);  // " world"
+    SLUICE_CHECK(peeked.size() == 6); // " world"
     SLUICE_CHECK(std::memcmp(peeked.data(), " world", 6) == 0);
 
     // The next read_some serves from the (now advanced) buffer, in order.
@@ -83,7 +83,7 @@ SLUICE_TEST_CASE(buffered_readable_consume_too_many_returns_invalid_state) {
     std::vector<std::byte> buf(16);
     sluice::BufferedReader br(inner, buf);
     std::vector<std::byte> out(1);
-    (void)br.read_some(std::span<std::byte>(out));  // refill pulls all 5
+    (void)br.read_some(std::span<std::byte>(out)); // refill pulls all 5
     std::size_t buffered = br.peek_buffered().size();
     SLUICE_CHECK(buffered > 0);
 
@@ -105,7 +105,7 @@ SLUICE_TEST_CASE(buffered_readable_peek_does_not_call_inner_reader) {
     (void)br.peek_buffered();
     (void)br.peek_buffered();
     (void)br.peek_buffered();
-    SLUICE_CHECK(inner.calls == calls_before);  // peek never touches inner
+    SLUICE_CHECK(inner.calls == calls_before); // peek never touches inner
 }
 
 SLUICE_TEST_CASE(buffered_readable_consume_does_not_call_inner_reader) {
@@ -118,7 +118,7 @@ SLUICE_TEST_CASE(buffered_readable_consume_does_not_call_inner_reader) {
 
     SLUICE_CHECK(br.consume_buffered(3).has_value());
     SLUICE_CHECK(br.consume_buffered(2).has_value());
-    SLUICE_CHECK(inner.calls == calls_before);  // consume never touches inner
+    SLUICE_CHECK(inner.calls == calls_before); // consume never touches inner
 }
 
 SLUICE_TEST_CASE(buffered_readable_is_detectable_via_dynamic_cast) {
@@ -135,7 +135,7 @@ SLUICE_TEST_CASE(buffered_readable_is_detectable_via_dynamic_cast) {
     auto* br_cap = dynamic_cast<sluice::BufferedReadable*>(&br_as_reader);
     auto* mr_cap = dynamic_cast<sluice::BufferedReadable*>(&mr_as_reader);
     SLUICE_CHECK(br_cap != nullptr);
-    SLUICE_CHECK(mr_cap == nullptr);  // capability not present on plain reader
+    SLUICE_CHECK(mr_cap == nullptr); // capability not present on plain reader
 }
 
 SLUICE_TEST_CASE(buffered_readable_consume_zero_on_non_empty_buffer_succeeds) {
@@ -168,7 +168,7 @@ SLUICE_TEST_CASE(buffered_readable_peek_on_already_empty_buffer_returns_empty) {
     CountingReader inner("a");
     std::vector<std::byte> buf(16);
     sluice::BufferedReader br(inner, buf);
-    std::vector<std::byte> out(16);  // read all
+    std::vector<std::byte> out(16); // read all
     (void)br.read_some(std::span<std::byte>(out));
     // Buffer is now empty: no unread bytes.
     auto p = br.peek_buffered();
@@ -182,7 +182,7 @@ SLUICE_TEST_CASE(buffered_readable_read_after_partial_consume_serves_remaining_b
     std::vector<std::byte> buf(16);
     sluice::BufferedReader br(inner, buf);
     std::vector<std::byte> out(1);
-    (void)br.read_some(std::span<std::byte>(out));  // refill pulls all 11
+    (void)br.read_some(std::span<std::byte>(out)); // refill pulls all 11
     // peek shows 10, consume 3 ("ell"), then read_some serves "o worl" (6).
     SLUICE_CHECK(br.peek_buffered().size() == 10);
     (void)br.consume_buffered(3);

@@ -11,8 +11,7 @@ namespace sluice::detail {
 //
 // `fn` must return a signed integer-like value where < 0 means error, and must
 // set errno on failure (matching ::read/::write semantics).
-template <class Fn>
-auto retry_on_eintr(Fn&& fn) -> decltype(fn()) {
+template <class Fn> auto retry_on_eintr(Fn&& fn) -> decltype(fn()) {
     for (;;) {
         auto result = fn();
         if (result < 0 && errno == EINTR) {
@@ -22,4 +21,4 @@ auto retry_on_eintr(Fn&& fn) -> decltype(fn()) {
     }
 }
 
-}  // namespace sluice::detail
+} // namespace sluice::detail

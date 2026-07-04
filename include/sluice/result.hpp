@@ -14,8 +14,7 @@
 
 namespace sluice {
 
-template <class T>
-class Result;
+template <class T> class Result;
 
 namespace detail {
 
@@ -24,8 +23,7 @@ struct success_tag {};
 struct error_tag {};
 struct unexpect_tag {};
 
-template <class T>
-struct result_storage {
+template <class T> struct result_storage {
     union {
         T value_;
     };
@@ -37,13 +35,19 @@ struct result_storage {
     explicit result_storage(error_tag, IoError e) : error_(e), has_value_(false) {}
 
     result_storage(const result_storage& o) : has_value_(o.has_value_) {
-        if (has_value_) ::new (static_cast<void*>(std::addressof(value_))) T(o.value_);
-        else error_ = o.error_;
+        if (has_value_) {
+            ::new (static_cast<void*>(std::addressof(value_))) T(o.value_);
+        } else {
+            error_ = o.error_;
+        }
     }
     result_storage(result_storage&& o) noexcept(std::is_nothrow_move_constructible_v<T>)
         : has_value_(o.has_value_) {
-        if (has_value_) ::new (static_cast<void*>(std::addressof(value_))) T(std::move(o.value_));
-        else error_ = o.error_;
+        if (has_value_) {
+            ::new (static_cast<void*>(std::addressof(value_))) T(std::move(o.value_));
+        } else {
+            error_ = o.error_;
+        }
     }
     result_storage& operator=(const result_storage& o) {
         if (this != &o) {
@@ -62,7 +66,8 @@ struct result_storage {
         }
         return *this;
     }
-    result_storage& operator=(result_storage&& o) noexcept(std::is_nothrow_move_constructible_v<T>) {
+    result_storage&
+    operator=(result_storage&& o) noexcept(std::is_nothrow_move_constructible_v<T>) {
         if (this != &o) {
             destroy();
             // See copy-assign: construct before publishing has_value_.
@@ -79,12 +84,13 @@ struct result_storage {
     ~result_storage() { destroy(); }
 
     void destroy() {
-        if (has_value_) value_.~T();
+        if (has_value_) {
+            value_.~T();
+        }
     }
 };
 
-template <>
-struct result_storage<void> {
+template <> struct result_storage<void> {
     IoError error_;
     bool has_value_;
     explicit result_storage(success_tag) : error_{}, has_value_(true) {}
@@ -99,20 +105,18 @@ struct result_storage<void> {
     friend bool operator==(const result_storage&, const result_storage&) = default;
 };
 
-}  // namespace detail
+} // namespace detail
 
 // Helper to construct the error variant explicitly: make_unexpected<T>(err).
-template <class T>
-Result<T> make_unexpected(IoError e) {
+template <class T> Result<T> make_unexpected(IoError e) {
     return Result<T>(typename detail::error_tag{}, e);
 }
-Result<void> make_unexpected_void(IoError e);  // defined below, after Result<void>
+Result<void> make_unexpected_void(IoError e); // defined below, after Result<void>
 
-template <class T>
-class [[nodiscard]] Result {
-public:
-    Result(T&& v) : storage_(typename detail::success_tag{}, std::move(v)) {}          // NOLINT
-    Result(const T& v) : storage_(typename detail::success_tag{}, v) {}                // NOLINT
+template <class T> class [[nodiscard]] Result {
+  public:
+    Result(T&& v) : storage_(typename detail::success_tag{}, std::move(v)) {} // NOLINT
+    Result(const T& v) : storage_(typename detail::success_tag{}, v) {}       // NOLINT
     Result(typename detail::error_tag, IoError e) : storage_(typename detail::error_tag{}, e) {}
 
     Result(const Result&) = default;
@@ -129,22 +133,19 @@ public:
 
     const IoError& error() const& { return storage_.error_; }
 
-    T value_or(T fallback) const& {
-        return has_value() ? storage_.value_ : fallback;
-    }
+    T value_or(T fallback) const& { return has_value() ? storage_.value_ : fallback; }
     T value_or(T fallback) && {
         return has_value() ? std::move(storage_.value_) : std::move(fallback);
     }
 
-private:
+  private:
     friend Result<T> make_unexpected<T>(IoError);
     detail::result_storage<T> storage_;
 };
 
-template <>
-class [[nodiscard]] Result<void> {
-public:
-    Result() : storage_(typename detail::success_tag{}) {}                              // NOLINT
+template <> class [[nodiscard]] Result<void> {
+  public:
+    Result() : storage_(typename detail::success_tag{}) {} // NOLINT
     Result(typename detail::error_tag, IoError e) : storage_(typename detail::error_tag{}, e) {}
 
     bool has_value() const noexcept { return storage_.has_value_; }
@@ -152,7 +153,7 @@ public:
 
     const IoError& error() const& { return storage_.error_; }
 
-private:
+  private:
     friend Result<void> make_unexpected_void(IoError);
     detail::result_storage<void> storage_;
 };
@@ -166,4 +167,4 @@ inline Result<void> make_unexpected(IoError e) {
     return make_unexpected_void(e);
 }
 
-}  // namespace sluice
+} // namespace sluice

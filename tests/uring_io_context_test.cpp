@@ -29,11 +29,14 @@ struct TempPath {
     std::filesystem::path p;
     TempPath() {
         std::ostringstream oss;
-        oss << "sluice_uring_ioctx_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        oss << "sluice_uring_ioctx_" << std::hex << reinterpret_cast<std::uintptr_t>(this)
+            << ".tmp";
         p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
@@ -42,7 +45,7 @@ bool file_has(const std::string& path, std::string_view want) {
     std::string content((std::istreambuf_iterator<char>(in), {}));
     return content == std::string(want);
 }
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(uring_io_context_write_file_all_writes_bytes) {
     TempPath tp;
@@ -61,7 +64,7 @@ SLUICE_TEST_CASE(uring_io_context_invalid_path_errors) {
     sluice::experimental::UringIoContext ctx(8);
     std::vector<std::byte> buf(4, std::byte{0});
     auto r = ctx.write_file_all("/no/such/sluice/uring/dir/f", std::span<const std::byte>(buf));
-    SLUICE_CHECK(!r.has_value());  // open fails -> propagated
+    SLUICE_CHECK(!r.has_value()); // open fails -> propagated
 }
 #endif
 

@@ -16,7 +16,7 @@ SLUICE_TEST_CASE(memory_reader_default_constructs_empty) {
     std::byte buf[4];
     auto r = rd.read_some(buf);
     SLUICE_CHECK(r.has_value());
-    SLUICE_CHECK(r.value() == 0);  // EOF immediately
+    SLUICE_CHECK(r.value() == 0); // EOF immediately
     SLUICE_CHECK(rd.remaining() == 0);
 }
 
@@ -28,7 +28,7 @@ SLUICE_TEST_CASE(memory_reader_from_string_copies_bytes) {
     src[0] = 'X';
     std::byte buf[5];
     (void)rd.read_some(buf);
-    SLUICE_CHECK(std::to_integer<char>(buf[0]) == 'h');  // independent copy
+    SLUICE_CHECK(std::to_integer<char>(buf[0]) == 'h'); // independent copy
 }
 
 SLUICE_TEST_CASE(memory_reader_from_bytes_copies_span) {
@@ -39,7 +39,7 @@ SLUICE_TEST_CASE(memory_reader_from_bytes_copies_span) {
     src[0] = std::byte{0x00};
     std::byte buf[4];
     (void)rd.read_some(buf);
-    SLUICE_CHECK(buf[0] == std::byte{0x7A});  // independent copy
+    SLUICE_CHECK(buf[0] == std::byte{0x7A}); // independent copy
 }
 
 SLUICE_TEST_CASE(memory_reader_from_bytes_empty_span) {

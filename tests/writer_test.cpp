@@ -19,7 +19,7 @@ namespace {
 
 // Records each write_some payload; returns scripted response per call.
 class ScriptedWriter final : public sluice::Writer {
-public:
+  public:
     // Sequence of (bytes_to_accept, optional error). Consumed in order.
     struct Step {
         std::size_t accept;
@@ -32,18 +32,21 @@ public:
 
     sluice::Result<std::size_t> write_some(std::span<const std::byte> src) override {
         if (steps.empty()) {
-            return sluice::make_unexpected<std::size_t>(sluice::IoError{sluice::IoError::Code::invalid_state});
+            return sluice::make_unexpected<std::size_t>(
+                sluice::IoError{sluice::IoError::Code::invalid_state});
         }
         Step s = steps.front();
         steps.erase(steps.begin());
-        if (s.err) return sluice::make_unexpected<std::size_t>(*s.err);
+        if (s.err)
+            return sluice::make_unexpected<std::size_t>(*s.err);
         std::size_t n = std::min(s.accept, src.size());
         sink.insert(sink.end(), src.begin(), src.begin() + n);
         return n;
     }
     sluice::Result<void> flush() override {
         ++flush_calls;
-        if (flush_err) return sluice::make_unexpected(*flush_err);
+        if (flush_err)
+            return sluice::make_unexpected(*flush_err);
         return {};
     }
 };
@@ -52,7 +55,7 @@ std::span<const std::byte> as_bytes(std::string_view s) {
     return std::as_bytes(std::span(s.data(), s.size()));
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(write_all_writes_everything_in_one_call) {
     ScriptedWriter w;
@@ -74,7 +77,7 @@ SLUICE_TEST_CASE(write_all_retries_across_short_writes) {
 
 SLUICE_TEST_CASE(write_all_rejects_zero_progress_on_non_empty_input) {
     ScriptedWriter w;
-    w.steps = {{0, std::nullopt}};  // accepts nothing but no error
+    w.steps = {{0, std::nullopt}}; // accepts nothing but no error
     auto r = w.write_all(as_bytes("data"));
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == sluice::IoError::Code::invalid_state);
@@ -89,7 +92,7 @@ SLUICE_TEST_CASE(write_all_rejects_zero_progress_after_partial_write) {
     auto r = w.write_all(as_bytes("data"));
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == sluice::IoError::Code::invalid_state);
-    SLUICE_CHECK(w.sink.size() == 2);  // partial write happened before failure
+    SLUICE_CHECK(w.sink.size() == 2); // partial write happened before failure
 }
 
 SLUICE_TEST_CASE(write_all_empty_input_is_success_without_calls) {
@@ -106,7 +109,7 @@ SLUICE_TEST_CASE(write_all_propagates_write_some_error) {
     auto r = w.write_all(as_bytes("abcdef"));
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == sluice::IoError::Code::no_space);
-    SLUICE_CHECK(w.sink.size() == 2);  // partial write happened before failure
+    SLUICE_CHECK(w.sink.size() == 2); // partial write happened before failure
 }
 
 SLUICE_TEST_CASE(flush_propagates_error) {

@@ -13,12 +13,12 @@ namespace detail {
 // rejected up-front rather than silently truncated.
 Result<std::uint32_t> checked_u32_len(std::size_t len) {
     if (len > static_cast<std::size_t>(UINT32_MAX)) {
-        return make_unexpected<std::uint32_t>(IoError{IoError::Code::invalid_state});
+        return make_unexpected<std::uint32_t>(IoError{.code = IoError::Code::invalid_state});
     }
     return static_cast<std::uint32_t>(len);
 }
 
-}  // namespace detail
+} // namespace detail
 
 namespace {
 
@@ -38,39 +38,51 @@ std::uint32_t get_le_u32(const std::byte* p) {
 
 std::uint32_t checksum_of(std::span<const std::byte> payload) {
     std::uint64_t sum = 0;
-    for (auto b : payload) sum += std::to_integer<unsigned>(b);
-    return static_cast<std::uint32_t>(sum & 0xFFFFFFFFu);
+    for (auto b : payload) {
+        sum += std::to_integer<unsigned>(b);
+    }
+    return static_cast<std::uint32_t>(sum & 0xFFFFFFFFU);
 }
 
-}  // namespace
+} // namespace
 
 Result<void> write_record(Writer& writer, std::span<const std::byte> payload) {
     auto len_res = detail::checked_u32_len(payload.size());
-    if (!len_res.has_value()) return make_unexpected<void>(len_res.error());
+    if (!len_res.has_value()) {
+        return make_unexpected<void>(len_res.error());
+    }
 
     std::array<std::byte, 8> header{};
     put_le_u32(header.data(), magic);
     put_le_u32(header.data() + 4, len_res.value());
 
     auto h = writer.write_all(std::span<const std::byte>(header));
-    if (!h.has_value()) return make_unexpected<void>(h.error());
+    if (!h.has_value()) {
+        return make_unexpected<void>(h.error());
+    }
 
     if (!payload.empty()) {
         auto p = writer.write_all(payload);
-        if (!p.has_value()) return make_unexpected<void>(p.error());
+        if (!p.has_value()) {
+            return make_unexpected<void>(p.error());
+        }
     }
 
     std::array<std::byte, 4> trailer{};
     put_le_u32(trailer.data(), checksum_of(payload));
     auto t = writer.write_all(std::span<const std::byte>(trailer));
-    if (!t.has_value()) return make_unexpected<void>(t.error());
+    if (!t.has_value()) {
+        return make_unexpected<void>(t.error());
+    }
 
     return {};
 }
 
 Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload) {
     auto len_res = detail::checked_u32_len(payload.size());
-    if (!len_res.has_value()) return make_unexpected<void>(len_res.error());
+    if (!len_res.has_value()) {
+        return make_unexpected<void>(len_res.error());
+    }
 
     // Frame the record on the stack and emit header|payload|checksum as a single
     // write_all_vec — byte-identical to write_record. The header/trailer arrays
@@ -98,29 +110,35 @@ Result<void> write_record_vec(Writer& writer, std::span<const std::byte> payload
 Result<std::vector<std::byte>> read_record(Reader& reader) {
     std::array<std::byte, 8> header{};
     auto h = reader.read_exact(std::span<std::byte>(header));
-    if (!h.has_value()) return make_unexpected<std::vector<std::byte>>(h.error());
+    if (!h.has_value()) {
+        return make_unexpected<std::vector<std::byte>>(h.error());
+    }
 
     std::uint32_t rec_magic = get_le_u32(header.data());
     std::uint32_t length = get_le_u32(header.data() + 4);
     if (rec_magic != magic) {
         return make_unexpected<std::vector<std::byte>>(
-            IoError{IoError::Code::invalid_state});
+            IoError{.code = IoError::Code::invalid_state});
     }
 
     std::vector<std::byte> payload(length);
     if (length > 0) {
         auto p = reader.read_exact(std::span<std::byte>(payload));
-        if (!p.has_value()) return make_unexpected<std::vector<std::byte>>(p.error());
+        if (!p.has_value()) {
+            return make_unexpected<std::vector<std::byte>>(p.error());
+        }
     }
 
     std::array<std::byte, 4> trailer{};
     auto t = reader.read_exact(std::span<std::byte>(trailer));
-    if (!t.has_value()) return make_unexpected<std::vector<std::byte>>(t.error());
+    if (!t.has_value()) {
+        return make_unexpected<std::vector<std::byte>>(t.error());
+    }
 
     std::uint32_t stored = get_le_u32(trailer.data());
     if (stored != checksum_of(payload)) {
         return make_unexpected<std::vector<std::byte>>(
-            IoError{IoError::Code::invalid_state});
+            IoError{.code = IoError::Code::invalid_state});
     }
     return payload;
 }
@@ -134,7 +152,9 @@ WalWriter::WalWriter(Writer& writer, SyncableWriter* syncable)
 
 Result<void> WalWriter::write_record(std::span<const std::byte> payload) {
     auto r = sluice::wal::write_record(writer_, payload);
-    if (!r.has_value()) return make_unexpected<void>(r.error());
+    if (!r.has_value()) {
+        return make_unexpected<void>(r.error());
+    }
     // Framed size = 8 (header) + payload + 4 (checksum). Only advance on success.
     written_lsn_ += 8 + payload.size() + 4;
     return {};
@@ -142,29 +162,37 @@ Result<void> WalWriter::write_record(std::span<const std::byte> payload) {
 
 Result<void> WalWriter::write_record_vec(std::span<const std::byte> payload) {
     auto r = sluice::wal::write_record_vec(writer_, payload);
-    if (!r.has_value()) return make_unexpected<void>(r.error());
+    if (!r.has_value()) {
+        return make_unexpected<void>(r.error());
+    }
     written_lsn_ += 8 + payload.size() + 4;
     return {};
 }
 
 Result<void> WalWriter::flush() {
     auto r = writer_.flush();
-    if (!r.has_value()) return make_unexpected<void>(r.error());
-    flushed_lsn_ = written_lsn_;  // advance only on success
+    if (!r.has_value()) {
+        return make_unexpected<void>(r.error());
+    }
+    flushed_lsn_ = written_lsn_; // advance only on success
     return {};
 }
 
 Result<void> WalWriter::sync() {
     // Recommended semantics: flush first, then sync_data, then advance durable.
     auto fr = flush();
-    if (!fr.has_value()) return make_unexpected<void>(fr.error());
+    if (!fr.has_value()) {
+        return make_unexpected<void>(fr.error());
+    }
     if (syncable_ == nullptr) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_state});
     }
     auto sr = syncable_->sync_data();
-    if (!sr.has_value()) return make_unexpected<void>(sr.error());
-    durable_lsn_ = flushed_lsn_;  // advance only on success
+    if (!sr.has_value()) {
+        return make_unexpected<void>(sr.error());
+    }
+    durable_lsn_ = flushed_lsn_; // advance only on success
     return {};
 }
 
-}  // namespace sluice::wal
+} // namespace sluice::wal

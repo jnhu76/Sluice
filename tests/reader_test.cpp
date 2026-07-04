@@ -21,11 +21,11 @@ namespace {
 // Hand-rolled scripted reader: serves a fixed payload, optionally with a cap
 // per read and an injected error after some bytes are consumed.
 class ScriptedReader final : public sluice::Reader {
-public:
+  public:
     std::vector<std::byte> payload;
     std::size_t pos = 0;
     std::optional<std::size_t> max_per_read;
-    std::optional<sluice::IoError> err;  // returned instead of next data once set
+    std::optional<sluice::IoError> err; // returned instead of next data once set
 
     sluice::Result<std::size_t> read_some(std::span<std::byte> dst) override {
         // If an error is armed, fire when the trigger position is reached. If
@@ -34,10 +34,12 @@ public:
         if (err && (!err_trigger_pos.has_value() || pos >= *err_trigger_pos)) {
             return sluice::make_unexpected<std::size_t>(*err);
         }
-        if (pos >= payload.size()) return std::size_t{0};  // EOF
+        if (pos >= payload.size())
+            return std::size_t{0}; // EOF
         std::size_t avail = payload.size() - pos;
         std::size_t n = std::min(dst.size(), avail);
-        if (max_per_read) n = std::min(n, *max_per_read);
+        if (max_per_read)
+            n = std::min(n, *max_per_read);
         std::memcpy(dst.data(), payload.data() + pos, n);
         pos += n;
         return n;
@@ -46,7 +48,7 @@ public:
 };
 
 class ScriptedWriter final : public sluice::Writer {
-public:
+  public:
     std::vector<std::byte> sink;
     sluice::Result<std::size_t> write_some(std::span<const std::byte> src) override {
         sink.insert(sink.end(), src.begin(), src.end());
@@ -60,7 +62,7 @@ std::vector<std::byte> bytes_of(std::string_view s) {
     return {p, p + s.size()};
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(read_exact_fills_buffer_when_enough_data) {
     ScriptedReader r;
@@ -73,7 +75,7 @@ SLUICE_TEST_CASE(read_exact_fills_buffer_when_enough_data) {
 
 SLUICE_TEST_CASE(read_exact_returns_eof_when_source_too_short) {
     ScriptedReader r;
-    r.payload = bytes_of("hi");  // only 2 bytes
+    r.payload = bytes_of("hi"); // only 2 bytes
     std::vector<std::byte> out(5);
     auto res = r.read_exact(std::span<std::byte>(out));
     SLUICE_CHECK(!res.has_value());
@@ -100,7 +102,7 @@ SLUICE_TEST_CASE(read_exact_assembles_short_reads) {
 SLUICE_TEST_CASE(read_exact_propagates_read_error) {
     ScriptedReader r;
     r.payload = bytes_of("abcdef");
-    r.max_per_read = 1;  // force partial reads so pos walks through the trigger
+    r.max_per_read = 1; // force partial reads so pos walks through the trigger
     r.err = sluice::IoError{sluice::IoError::Code::backend_error};
     r.err_trigger_pos = 2;
     std::vector<std::byte> out(6);
@@ -123,7 +125,7 @@ SLUICE_TEST_CASE(stream_to_copies_all_bytes_until_eof) {
 SLUICE_TEST_CASE(stream_to_propagates_reader_error) {
     ScriptedReader r;
     r.payload = bytes_of("abcdef");
-    r.max_per_read = 1;  // force pos to reach the trigger across reads
+    r.max_per_read = 1; // force pos to reach the trigger across reads
     r.err = sluice::IoError{sluice::IoError::Code::canceled};
     r.err_trigger_pos = 2;
     ScriptedWriter w;
@@ -139,8 +141,10 @@ SLUICE_TEST_CASE(stream_to_propagates_writer_error) {
     struct FailW final : sluice::Writer {
         int calls = 0;
         sluice::Result<std::size_t> write_some(std::span<const std::byte>) override {
-            if (calls++ == 0) return std::size_t{3};
-            return sluice::make_unexpected<std::size_t>(sluice::IoError{sluice::IoError::Code::no_space});
+            if (calls++ == 0)
+                return std::size_t{3};
+            return sluice::make_unexpected<std::size_t>(
+                sluice::IoError{sluice::IoError::Code::no_space});
         }
         sluice::Result<void> flush() override { return {}; }
     } w;

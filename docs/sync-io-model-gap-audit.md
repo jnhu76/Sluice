@@ -15,6 +15,17 @@ The async **design** (016A–016F) remains accepted. This patch only **defers as
 implementation** behind a sync-first completion phase. It changes no async
 decision and removes no async doc.
 
+> **Relationship to the SYNC-IO-COMPLETE spec (reconciliation).** This doc is the
+> *planning layer* (gaps G1–G7). The *architecture/contract layer* that realizes
+> the fixes lives in `docs/sync-io-architecture.md` (taxonomy: backends vs
+> execution models), `docs/sync-io-model.md` (primitive contract incl. the
+> positional-I/O decision for G1/G2), `docs/sync-durability-model.md` (G4),
+> `docs/sync-bench-methodology.md` + `docs/sync-bench-matrix.md` (G6/G7), and
+> `docs/sync-optimization-notes.md`. Job cards 017S–023S in
+> `docs/sync-io-next-jobs.md` map to the SYNC-IO-COMPLETE phases. **Terminology
+> note:** G5's "bounded pool" is `BlockingIoPool`, an **execution model for
+> benchmarks, not an I/O backend** (see `docs/sync-io-architecture.md` §3).
+
 ## 1. What the blocking model has today (inventory)
 
 All of the following live in the `sluice` namespace and are blocking, single-threaded.

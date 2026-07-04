@@ -19,7 +19,7 @@
 namespace sluice {
 
 class BufferedReadable {
-public:
+  public:
     virtual ~BufferedReadable() = default;
 
     // Returns the currently buffered, unread bytes. Does NOT call the inner
@@ -33,4 +33,4 @@ public:
     virtual Result<void> consume_buffered(std::size_t n) = 0;
 };
 
-}  // namespace sluice
+} // namespace sluice

@@ -25,4 +25,4 @@ struct ConstIoSlice {
     std::span<const std::byte> bytes;
 };
 
-}  // namespace sluice
+} // namespace sluice

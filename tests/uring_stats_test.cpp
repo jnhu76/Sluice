@@ -19,7 +19,7 @@
 #if !defined(SLUICE_HAS_LIBURING)
 SLUICE_TEST_CASE(uring_stats_nullptr_changes_nothing_stub) {
     sluice::experimental::UringWriteBatch batch(8);
-    batch.set_stats(nullptr);  // no crash, no counting
+    batch.set_stats(nullptr); // no crash, no counting
     sluice::UringStats st{};
     batch.set_stats(&st);
     std::vector<std::byte> buf(4, std::byte{0});
@@ -34,15 +34,18 @@ struct TempPath {
     std::filesystem::path p;
     TempPath() {
         std::ostringstream oss;
-        oss << "sluice_uring_stats_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        oss << "sluice_uring_stats_" << std::hex << reinterpret_cast<std::uintptr_t>(this)
+            << ".tmp";
         p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(uring_stats_increment_on_successful_write) {
     TempPath tp;

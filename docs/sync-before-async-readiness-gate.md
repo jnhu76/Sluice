@@ -28,18 +28,19 @@ durability-defined, benchmarked blocking baseline — isolating async's real del
 
 ## 1. Minimum required gate items
 
-Each item maps to a gap in `docs/sync-io-model-gap-audit.md` and a job in
-`docs/sync-io-next-jobs.md`.
+Each item maps to a gap in `docs/sync-io-model-gap-audit.md`, a job in
+`docs/sync-io-next-jobs.md`, and a contract doc in the SYNC-IO-COMPLETE
+architecture/contract layer.
 
-| # | Gate item | Closes gap | Closed by | Status |
-|---|---|---|---|---|
-| 1 | Blocking primitive semantics audited | G3 | 017S + 019S | **[IMPL]** |
-| 2 | Positional I/O decision made (and, if "add", implemented) | G1, G2 | 017S decision + 018S | **[IMPL]** |
-| 3 | Durability model documented + baseline measured | G4 | 020S | **[IMPL]** |
-| 4 | Blocking bounded pool baseline exists | G5 | 021S | **[IMPL]** |
-| 5 | W1–W4 blocking benchmark matrix exists | G6, G7 | 022S | **[IMPL]** |
-| 6 | Blocking baseline engineered (tuned) for W1–W4 | G7 | 023S | **[IMPL]** |
-| 7 | Async will be compared against engineered blocking baselines, not only sequential | fairness | 022S + 023S produce the rows; async bench (016F job 022) consumes them | **[POLICY]** |
+| # | Gate item | Closes gap | Closed by | Contract doc | Status |
+|---|---|---|---|---|---|
+| 1 | Blocking primitive semantics audited | G3 | 017S + 019S | `sync-io-model.md` | **[IMPL]** |
+| 2 | Positional I/O decision made (and, if "add", implemented) | G1, G2 | 017S decision + 018S | `sync-io-model.md` (Positional I/O) | **[IMPL]** |
+| 3 | Durability model documented + baseline measured | G4 | 020S | `sync-durability-model.md` | **[IMPL]** |
+| 4 | Blocking bounded pool baseline exists | G5 | 021S | `sync-io-architecture.md` §3 (`BlockingIoPool`) | **[IMPL]** |
+| 5 | W1–W4 blocking benchmark matrix exists | G6, G7 | 022S | `sync-bench-matrix.md`, `sync-bench-methodology.md` | **[IMPL]** |
+| 6 | Blocking baseline engineered (tuned) for W1–W4 | G7 | 023S | `sync-optimization-notes.md` | **[IMPL]** |
+| 7 | Async will be compared against engineered blocking baselines, not only sequential | fairness | 022S + 023S produce the rows; async bench (016F job 022) consumes them | `sync-bench-methodology.md` §1 | **[POLICY]** |
 
 All items are **[IMPL]** (proven by the sync-first jobs) except #7, which is a
 **[POLICY]** commitment recorded here and enforced when async bench (016F job

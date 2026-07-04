@@ -18,7 +18,7 @@
 namespace sluice {
 
 class MemoryIoContext final : public IoContext {
-public:
+  public:
     MemoryIoContext() = default;
 
     // Seed a readable path with the given bytes. Overwrites any prior seed.
@@ -48,8 +48,8 @@ public:
         return std::unique_ptr<Writer>(std::make_unique<MemoryWriter>());
     }
 
-private:
+  private:
     std::unordered_map<std::string, std::vector<std::byte>> store_;
 };
 
-}  // namespace sluice
+} // namespace sluice

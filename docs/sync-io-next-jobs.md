@@ -11,6 +11,38 @@ The async **design** (016A–016F) stays accepted. This phase only engineers the
 blocking baseline so async is later compared against a fair, multi-stream
 blocking baseline — not against sequential-only blocking.
 
+> **Reconciliation note (SYNC-IO-COMPLETE).** This doc is the *planning layer*
+> (actionable job cards). The *architecture/contract/policy layer* lives in:
+> `docs/sync-io-architecture.md` (architecture + taxonomy), `docs/sync-io-model.md`
+> (primitive contract), `docs/sync-durability-model.md`, `docs/sync-bench-
+> methodology.md`, `docs/sync-bench-matrix.md`, `docs/sync-optimization-notes.md`.
+> The job numbers below (017S–023S) **stay** as the actionable units; the
+> SYNC-IO-COMPLETE phases are a doc-structure overlay. Terminology used below is
+> aligned to the architecture doc: backends (`BlockingIoContext`/`MemoryIoContext`/
+> Fault|Observed layers) vs execution models (`blocking_sequential`/
+> `blocking_bounded_pool`/`blocking_thread_per_stream`); the pool is
+> `BlockingIoPool`, an **execution model not a backend**.
+
+## Phase ↔ job mapping
+
+| SYNC-IO-COMPLETE phase | Job(s) | Primary doc output |
+|---|---|---|
+| Phase 1 — repository audit | 017S | (informs) `sync-io-architecture.md`, `sync-io-model.md` |
+| Phase 2 — sync architecture doc | 017S | `docs/sync-io-architecture.md` ✓ (written) |
+| Phase 3 — primitive contract | 017S | `docs/sync-io-model.md` ✓ (written) |
+| Phase 4 — positional blocking I/O | **018S** | (contract in `sync-io-model.md`) |
+| Phase 5 — derived helper closeout | **019S** | (contract in `sync-io-model.md`) |
+| Phase 6 — durability model | **020S** | `docs/sync-durability-model.md` ✓ (written) |
+| Phase 7 — bounded pool | **021S** | `BlockingIoPool` (code; bench/support) |
+| Phase 8 — W1–W4 bench matrix | **022S** | bench targets + CSV |
+| Phase 9 — bench methodology docs | 022S | `docs/sync-bench-methodology.md`, `docs/sync-bench-matrix.md` ✓ (written) |
+| Phase 10 — optimization notes | **023S** | `docs/sync-optimization-notes.md` ✓ (template written) |
+| Phase 11 — async deferral note | — | `docs/async-deferred-until-sync-baseline.md` ✓ (written) |
+| Phase 12 — tests & validation | each | per-job tests |
+
+Docs marked ✓ already exist (written in the reconciliation patch). Code phases
+(018S/019S/021S/022S/023S) remain to be implemented in follow-up TDD sessions.
+
 ## Why a sync-first phase
 
 ```text
@@ -196,13 +228,18 @@ what blocking durability *is* and measures it.
 
 ---
 
-## 021S — Blocking bounded pool baseline
+## 021S — Blocking bounded pool baseline (`BlockingIoPool`)
 
-**Goal.** Close gap G5: add a **bounded blocking worker pool** (`std::thread`
-based, no external dependency) so W1–W4 are expressible on the blocking side as
-*concurrent* workloads, not only sequential ones. This is the largest gap: today
-the blocking path has zero concurrency primitives. The pool is opt-in and does
-NOT become the default backend.
+**Goal.** Close gap G5: add **`BlockingIoPool`** — a bounded blocking worker pool
+(`std::thread` based, no external dependency) so W1–W4 are expressible on the
+blocking side as *concurrent* workloads (`blocking_bounded_pool` mode), not only
+sequential ones. This is the largest gap: today the blocking path has zero
+concurrency primitives. **`BlockingIoPool` is an execution model, NOT an I/O
+backend** — it does not implement `IoContext` and is not selectable as a
+backend. The production API lives in `include/sluice/blocking_io_pool.hpp` and
+`src/blocking_io_pool.cpp`; `bench/support/` is only a thin benchmark adapter
+(see `docs/sync-io-architecture.md` §3). It is opt-in and does NOT become the
+default backend.
 
 **Non-goals.**
 - Not a replacement for `BlockingIoContext` (the default stays cursor-based,
@@ -224,8 +261,11 @@ NOT become the default backend.
 - Regression: existing single-threaded tests unchanged.
 
 **Acceptance criteria.**
-- W1–W4 are expressible as concurrent blocking workloads on the pool.
-- No new external dependency (std::thread/mutex only).
+- W1–W4 are expressible as concurrent blocking workloads on `BlockingIoPool`.
+- Production `BlockingIoPool` lives in `include/sluice/blocking_io_pool.hpp` +
+  `src/blocking_io_pool.cpp`; `bench/support/` only adapts it for benchmarks,
+  and it is NOT an `IoContext` backend.
+- No new external dependency (std::thread/mutex/condition_variable only).
 - ASan/TSan runs clean on pool tests.
 - `BlockingIoContext` default path unchanged.
 - Build/tests green.
@@ -242,9 +282,13 @@ NOT become the default backend.
 
 **Goal.** Close gaps G6+G7: extend stats/bench for multi-stream cells and build
 the **blocking W1–W4 benchmark matrix** — concurrent independent writes (W1),
-reads (W2), copy (W3), and overlapped durability (W4) — against the pool baseline
-from 021S. This is the blocking analogue of async job 022; it must exist *first*
-so async is later compared against an engineered blocking matrix.
+reads (W2), copy (W3), and overlapped durability (W4) — against `BlockingIoPool`
+(`blocking_bounded_pool` mode) from 021S, with `blocking_sequential` and
+`blocking_thread_per_stream` baselines for reference. Workloads, parameters,
+metrics, and decision questions are fixed in `docs/sync-bench-matrix.md`; the
+methodology in `docs/sync-bench-methodology.md`. This is the blocking analogue of
+async job 022; it must exist *first* so async is later compared against an
+engineered blocking matrix.
 
 **Non-goals.**
 - No universal performance claim.
@@ -252,13 +296,16 @@ so async is later compared against an engineered blocking matrix.
 - No networking/timer benches.
 
 **Required artifacts + tests.**
-- Stats extension (G6): active-streams count, per-cell concurrency field in
-  `BenchResult` (or a parallel multi-stream result struct). Caller-owned, never
-  global.
-- Bench targets (new, under `bench/`): `w1_concurrent_writes_bench`,
-  `w2_concurrent_reads_bench`, `w3_concurrent_copy_bench`,
-  `w4_overlapped_durability_bench` — each parameterized by (streams, pool size,
-  payload).
+- Stats extension (G6): active-streams count, per-cell concurrency fields in the
+  bench CSV (the required columns `streams`/`pool_threads`/`threads_used` per
+  `docs/sync-bench-methodology.md` §4). Caller-owned, never global.
+- Bench targets (new, under `bench/`, names adjusted to repo convention):
+  W1 many-write, W2 many-read, W3 many-copy, W4 overlapped-durability — each
+  parameterized by (streams, pool_threads, block/buffer size, file_layout,
+  sync_policy) per `docs/sync-bench-matrix.md`. Modes:
+  blocking_sequential / blocking_bounded_pool / blocking_thread_per_stream
+  (+ sync_uring_spike as a build-gated comparison row only).
+- CSV output per `docs/sync-bench-methodology.md` §4.
 - A results note under `docs/results/` recording at least one run per workload,
   scoped per-workload/per-machine, never universal.
 
@@ -317,10 +364,23 @@ against sequential blocking.
 
 ## Cross-links
 
+**Architecture / contract / policy layer (SYNC-IO-COMPLETE):**
+- Sync architecture: `docs/sync-io-architecture.md`.
+- Primitive contract: `docs/sync-io-model.md`.
+- Durability model: `docs/sync-durability-model.md`.
+- Bench methodology: `docs/sync-bench-methodology.md`, `docs/sync-bench-matrix.md`.
+- Optimization notes: `docs/sync-optimization-notes.md`.
+- Async deferral note: `docs/async-deferred-until-sync-baseline.md`.
+
+**Planning layer (016G):**
 - Gap audit: `docs/sync-io-model-gap-audit.md` (016G).
 - Sync-first readiness gate: `docs/sync-before-async-readiness-gate.md`.
+
+**Async (frozen / blocked):**
 - Async next jobs (blocked until the gate is green): `docs/async-next-jobs.md` (016F).
 - Async ADR (accepted, unchanged): `docs/adr/ADR-async-io-model.md` (016D).
 - Async problem statement (W1–W5): `docs/async-problem-statement.md` (016B).
-- Existing durability design: `docs/design-flush-sync-durability.md`, `docs/design-wal-durability.md`.
-- Existing bench methodology: `docs/bench-methodology.md`, `docs/bench-decision-matrix.md`.
+
+**Existing (extended, not replaced):**
+- Durability design: `docs/design-flush-sync-durability.md`, `docs/design-wal-durability.md`.
+- Bench methodology: `docs/bench-methodology.md`, `docs/bench-decision-matrix.md`.

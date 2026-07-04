@@ -26,7 +26,7 @@ std::span<const std::byte> span_of(const std::vector<std::byte>& v) {
     return std::span<const std::byte>(v.data(), v.size());
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(wal_round_trips_one_record) {
     sluice::MemoryWriter out;
@@ -78,7 +78,7 @@ SLUICE_TEST_CASE(wal_truncated_record_returns_error) {
 
     // Truncate the encoded stream so the payload is incomplete.
     auto full = out.bytes();
-    SLUICE_CHECK(full.size() > 8);  // header is 8 bytes
+    SLUICE_CHECK(full.size() > 8); // header is 8 bytes
     std::vector<std::byte> trunc(full.begin(), full.begin() + (full.size() - 3));
     sluice::MemoryReader in(trunc);
     auto res = sluice::wal::read_record(in);

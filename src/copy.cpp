@@ -19,17 +19,17 @@ namespace {
 // Whether a strategy is one of the deferred (not-yet-implemented) reserved
 // slots. They never execute their named path this stage.
 bool is_deferred(CopyStrategy s) {
-    return s == CopyStrategy::VectorDeferred ||
-           s == CopyStrategy::FileRangeDeferred ||
-           s == CopyStrategy::SendfileDeferred ||
-           s == CopyStrategy::SpliceDeferred;
+    return s == CopyStrategy::VectorDeferred || s == CopyStrategy::FileRangeDeferred ||
+           s == CopyStrategy::SendfileDeferred || s == CopyStrategy::SpliceDeferred;
 }
 
-}  // namespace
+} // namespace
 
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
                                CopyOptions options, CopyStats* stats, CopyDecision* decision) {
-    if (stats) ++stats->copy_calls;
+    if (stats) {
+        ++stats->copy_calls;
+    }
 
     CopyDecision local_dec;
     CopyDecision& dec = decision ? *decision : local_dec;
@@ -47,7 +47,9 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
             dec.unsupported_requested = true;
             dec.selected = CopyStrategy::Auto;
             dec.reason = "deferred_fallback_to_auto";
-            if (stats) ++stats->strategy_deferred_fallback_calls;
+            if (stats) {
+                ++stats->strategy_deferred_fallback_calls;
+            }
             // Fall through to Auto behavior below by normalizing the strategy.
             options.strategy = CopyStrategy::Auto;
         } else {
@@ -58,15 +60,15 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                 ++stats->strategy_deferred_rejected_calls;
                 ++stats->reader_error_stops;
             }
-            return make_unexpected<std::uint64_t>(IoError{IoError::Code::invalid_state});
+            return make_unexpected<std::uint64_t>(IoError{.code = IoError::Code::invalid_state});
         }
     }
 
     // Resolve Auto: currently Auto == BufferedFirst (006 made buffered-first the
     // default). Documented and tested; may change after measurement (010). Auto
     // keeps its own requested value but reports what it ran as.
-    bool use_fast_path = (options.strategy == CopyStrategy::BufferedFirst ||
-                          options.strategy == CopyStrategy::Auto);
+    bool use_fast_path =
+        (options.strategy == CopyStrategy::BufferedFirst || options.strategy == CopyStrategy::Auto);
     if (options.strategy == CopyStrategy::Auto) {
         dec.selected = CopyStrategy::BufferedFirst;
         dec.reason = "auto";
@@ -79,16 +81,24 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
     // as BufferedFirst. (007F semantics.)
     if (stats) {
         switch (options.strategy) {
-            case CopyStrategy::Auto: ++stats->strategy_auto_calls; break;
-            case CopyStrategy::Scratch: ++stats->strategy_scratch_calls; break;
-            case CopyStrategy::BufferedFirst: ++stats->strategy_buffered_first_calls; break;
-            // Deferred strategies never reach here: rejected returned early, and
-            // fallback normalized options.strategy to Auto above (counted as Auto).
-            case CopyStrategy::VectorDeferred:
-            case CopyStrategy::FileRangeDeferred:
-            case CopyStrategy::SendfileDeferred:
-            case CopyStrategy::SpliceDeferred: break;
-            default: break;  // future enum values: do not double-count
+        case CopyStrategy::Auto:
+            ++stats->strategy_auto_calls;
+            break;
+        case CopyStrategy::Scratch:
+            ++stats->strategy_scratch_calls;
+            break;
+        case CopyStrategy::BufferedFirst:
+            ++stats->strategy_buffered_first_calls;
+            break;
+        // Deferred strategies never reach here: rejected returned early, and
+        // fallback normalized options.strategy to Auto above (counted as Auto).
+        case CopyStrategy::VectorDeferred:
+        case CopyStrategy::FileRangeDeferred:
+        case CopyStrategy::SendfileDeferred:
+        case CopyStrategy::SpliceDeferred:
+            break;
+        default:
+            break; // future enum values: do not double-count
         }
     }
 
@@ -96,7 +106,9 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
 
     // nothing() (and bytes(0)): succeed immediately without touching endpoints.
     if (limit.is_limited() && limit.remaining() == 0) {
-        if (stats) ++stats->limit_stops;
+        if (stats) {
+            ++stats->limit_stops;
+        }
         return std::uint64_t{0};
     }
 
@@ -105,7 +117,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
     // copy, but a non-empty scratch is still required for the fallback), so
     // reject rather than spin or no-op.
     if (scratch.empty()) {
-        return make_unexpected<std::uint64_t>(IoError{IoError::Code::invalid_state});
+        return make_unexpected<std::uint64_t>(IoError{.code = IoError::Code::invalid_state});
     }
 
     // Detect the buffered-readability capability once, but only honor it when
@@ -114,7 +126,9 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
 
     std::uint64_t total = 0;
     while (limit.is_unlimited() || total < limit.remaining()) {
-        if (stats) ++stats->copy_loop_iterations;
+        if (stats) {
+            ++stats->copy_loop_iterations;
+        }
 
         // --- Buffered fast path: drain already-buffered bytes first. ---
         if (br != nullptr) {
@@ -124,8 +138,8 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                 std::size_t allowed = buffered.size();
                 if (limit.is_limited()) {
                     std::uint64_t left = limit.remaining() - total;
-                    allowed = static_cast<std::size_t>(
-                        std::min<std::uint64_t>(buffered.size(), left));
+                    allowed =
+                        static_cast<std::size_t>(std::min<std::uint64_t>(buffered.size(), left));
                 }
                 if (allowed == 0) {
                     // Limit reached on this iteration; fall through to limit stop.
@@ -136,13 +150,17 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                 // therefore consume NOTHING on failure and return the error.
                 auto wr = writer.write_all(buffered.first(allowed));
                 if (!wr.has_value()) {
-                    if (stats) ++stats->writer_error_stops;
+                    if (stats) {
+                        ++stats->writer_error_stops;
+                    }
                     return make_unexpected<std::uint64_t>(wr.error());
                 }
                 auto cr = br->consume_buffered(allowed);
                 if (!cr.has_value()) {
                     // Should be impossible: allowed <= buffered.size().
-                    if (stats) ++stats->reader_error_stops;
+                    if (stats) {
+                        ++stats->reader_error_stops;
+                    }
                     return make_unexpected<std::uint64_t>(cr.error());
                 }
                 if (stats) {
@@ -153,7 +171,7 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
                 }
                 dec.used_buffered_fast_path = true;
                 total += allowed;
-                continue;  // loop: maybe more buffered bytes, maybe limit done
+                continue; // loop: maybe more buffered bytes, maybe limit done
             }
         }
 
@@ -167,20 +185,28 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         }
 
         auto rr = reader.read_some(scratch.first(to_read));
-        if (stats) ++stats->scratch_path_calls;  // counts the attempt (incl. EOF probe)
+        if (stats) {
+            ++stats->scratch_path_calls; // counts the attempt (incl. EOF probe)
+        }
         if (!rr.has_value()) {
-            if (stats) ++stats->reader_error_stops;
+            if (stats) {
+                ++stats->reader_error_stops;
+            }
             return make_unexpected<std::uint64_t>(rr.error());
         }
         std::size_t got = rr.value();
         if (got == 0) {
-            if (stats) ++stats->eof_stops;
-            return total;  // clean EOF
+            if (stats) {
+                ++stats->eof_stops;
+            }
+            return total; // clean EOF
         }
         if (got > to_read) {
             // Defensive: a reader returning more than asked is broken.
-            if (stats) ++stats->reader_error_stops;
-            return make_unexpected<std::uint64_t>(IoError{IoError::Code::invalid_state});
+            if (stats) {
+                ++stats->reader_error_stops;
+            }
+            return make_unexpected<std::uint64_t>(IoError{.code = IoError::Code::invalid_state});
         }
         if (stats) {
             stats->bytes_read += got;
@@ -188,21 +214,28 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::by
         }
         auto wr = writer.write_all(std::span<const std::byte>(scratch.data(), got));
         if (!wr.has_value()) {
-            if (stats) ++stats->writer_error_stops;
+            if (stats) {
+                ++stats->writer_error_stops;
+            }
             return make_unexpected<std::uint64_t>(wr.error());
         }
-        if (stats) stats->bytes_written += got;
+        if (stats) {
+            stats->bytes_written += got;
+        }
         dec.used_scratch_path = true;
         total += got;
     }
     // Loop exited because the limit was reached (not EOF/error).
-    if (stats) ++stats->limit_stops;
+    if (stats) {
+        ++stats->limit_stops;
+    }
     return total;
 }
 
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch,
                                CopyLimit limit, CopyStats* stats) {
-    return copy_all(reader, writer, scratch, CopyOptions{limit, CopyStrategy::Auto}, stats);
+    return copy_all(reader, writer, scratch,
+                    CopyOptions{.limit = limit, .strategy = CopyStrategy::Auto}, stats);
 }
 
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, std::span<std::byte> scratch) {
@@ -218,4 +251,4 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer) {
     return copy_all(reader, writer, CopyLimit::unlimited());
 }
 
-}  // namespace sluice
+} // namespace sluice

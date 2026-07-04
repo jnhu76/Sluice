@@ -19,7 +19,7 @@
 namespace {
 
 class CountingReader final : public sluice::Reader {
-public:
+  public:
     sluice::MemoryReader mem;
     int calls = 0;
     explicit CountingReader(std::string_view s) : mem(sluice::MemoryReader::from_string(s)) {}
@@ -33,17 +33,17 @@ bool eq(std::string_view s, const std::vector<std::byte>& b) {
     return b.size() == s.size() && std::memcmp(s.data(), b.data(), s.size()) == 0;
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(scratch_strategy_copies_exact_bytes) {
     auto reader = sluice::MemoryReader::from_string("hello world");
     sluice::MemoryWriter writer;
     std::vector<std::byte> scratch(4);
     sluice::CopyDecision dec;
-    auto res = sluice::copy_all(reader, writer, std::span<std::byte>(scratch),
-                               sluice::CopyOptions{sluice::CopyLimit::unlimited(),
-                                                  sluice::CopyStrategy::Scratch},
-                               nullptr, &dec);
+    auto res = sluice::copy_all(
+        reader, writer, std::span<std::byte>(scratch),
+        sluice::CopyOptions{sluice::CopyLimit::unlimited(), sluice::CopyStrategy::Scratch}, nullptr,
+        &dec);
     SLUICE_CHECK(res.has_value());
     SLUICE_CHECK(res.value() == 11);
     SLUICE_CHECK(eq("hello world", writer.bytes()));
@@ -86,7 +86,7 @@ SLUICE_TEST_CASE(scratch_strategy_nothing_limit_touches_nothing) {
     SLUICE_CHECK(res.has_value());
     SLUICE_CHECK(res.value() == 0);
     SLUICE_CHECK(writer.bytes().empty());
-    SLUICE_CHECK(inner.calls == calls_before);  // nothing touched no reader
+    SLUICE_CHECK(inner.calls == calls_before); // nothing touched no reader
     // selected may be Scratch, but no path was actually used.
     SLUICE_CHECK(dec.selected == sluice::CopyStrategy::Scratch);
     SLUICE_CHECK(!dec.used_scratch_path);
@@ -113,7 +113,8 @@ SLUICE_TEST_CASE(scratch_strategy_propagates_writer_error) {
     struct FailWriter final : sluice::Writer {
         int calls = 0;
         sluice::Result<std::size_t> write_some(std::span<const std::byte>) override {
-            if (calls++ == 0) return std::size_t{3};
+            if (calls++ == 0)
+                return std::size_t{3};
             return sluice::make_unexpected<std::size_t>(
                 sluice::IoError{sluice::IoError::Code::no_space});
         }
@@ -135,7 +136,7 @@ SLUICE_TEST_CASE(scratch_strategy_avoids_buffered_fast_path_even_when_buffered_r
     std::vector<std::byte> rbuf(64);
     sluice::BufferedReader br(inner, rbuf);
     std::vector<std::byte> primed(4);
-    (void)br.read_some(std::span<std::byte>(primed));  // 12 buffered remain
+    (void)br.read_some(std::span<std::byte>(primed)); // 12 buffered remain
     // With Scratch, copy_all must not drain via peek/consume: the buffer's
     // unread region stays intact (only read_some advances it).
     sluice::MemoryWriter writer;
@@ -149,7 +150,7 @@ SLUICE_TEST_CASE(scratch_strategy_avoids_buffered_fast_path_even_when_buffered_r
     SLUICE_CHECK(eq("456789ABCDEF", writer.bytes()));
     SLUICE_CHECK(!dec.used_buffered_fast_path);
     SLUICE_CHECK(dec.used_scratch_path);
-    SLUICE_CHECK(br.peek_buffered().empty());  // drained through read_some
+    SLUICE_CHECK(br.peek_buffered().empty()); // drained through read_some
 }
 
 SLUICE_TEST_CASE(existing_copy_all_overload_preserves_behavior) {
@@ -165,7 +166,7 @@ SLUICE_TEST_CASE(existing_copy_all_overload_preserves_behavior) {
     std::vector<std::byte> scratch(8);
     sluice::CopyStats st;
     auto res = sluice::copy_all(br, writer, std::span<std::byte>(scratch),
-                               sluice::CopyLimit::unlimited(), &st);
+                                sluice::CopyLimit::unlimited(), &st);
     SLUICE_CHECK(res.has_value());
     SLUICE_CHECK(res.value() == 12);
     SLUICE_CHECK(eq("456789ABCDEF", writer.bytes()));

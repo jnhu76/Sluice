@@ -33,4 +33,4 @@ void print_csv_header(std::ostream& out);
 // contain commas the caller must sanitize, but bench names are fixed literals.
 void print_csv_row(std::ostream& out, const BenchResult& r);
 
-}  // namespace sluice::bench
+} // namespace sluice::bench

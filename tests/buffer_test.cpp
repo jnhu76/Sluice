@@ -25,7 +25,7 @@ std::span<const std::byte> sb(std::string_view s) {
 
 // Reader that counts read_some calls — verifies buffering reduces them.
 class CountingReader final : public sluice::Reader {
-public:
+  public:
     sluice::MemoryReader mem;
     int calls = 0;
     explicit CountingReader(std::string_view s) : mem(sluice::MemoryReader::from_string(s)) {}
@@ -36,7 +36,7 @@ public:
 };
 
 class CountingWriter final : public sluice::Writer {
-public:
+  public:
     sluice::MemoryWriter mem;
     int write_calls = 0;
     int flush_calls = 0;
@@ -44,10 +44,13 @@ public:
         ++write_calls;
         return mem.write_some(src);
     }
-    sluice::Result<void> flush() override { ++flush_calls; return {}; }
+    sluice::Result<void> flush() override {
+        ++flush_calls;
+        return {};
+    }
 };
 
-}  // namespace
+} // namespace
 
 // ---------- BufferedReader ----------
 
@@ -109,12 +112,12 @@ SLUICE_TEST_CASE(buffered_reader_does_not_overwrite_unread_buffered_bytes) {
     std::byte b1{};
     (void)r.read_some(std::span<std::byte>(&b1, 1));
     SLUICE_CHECK(std::to_integer<char>(b1) == 'b');
-    SLUICE_CHECK(inner.calls == 1);  // second byte came from the buffer
+    SLUICE_CHECK(inner.calls == 1); // second byte came from the buffer
 }
 
 SLUICE_TEST_CASE(buffered_reader_can_read_more_than_buffer_size) {
     CountingReader inner("0123456789");
-    std::vector<std::byte> backing(3);  // smaller than request
+    std::vector<std::byte> backing(3); // smaller than request
     sluice::BufferedReader r(inner, std::span<std::byte>(backing));
 
     std::vector<std::byte> out(10);
@@ -174,8 +177,8 @@ SLUICE_TEST_CASE(buffered_writer_large_write_bypasses_buffer_in_order) {
     std::vector<std::byte> backing(4);
     sluice::BufferedWriter w(inner, std::span<std::byte>(backing));
 
-    SLUICE_CHECK(w.write_all(sb("AB")).has_value());  // buffered
-    SLUICE_CHECK(w.write_all(sb("CDEFGHIJ")).has_value());  // larger than buffer
+    SLUICE_CHECK(w.write_all(sb("AB")).has_value());       // buffered
+    SLUICE_CHECK(w.write_all(sb("CDEFGHIJ")).has_value()); // larger than buffer
     SLUICE_CHECK(w.flush().has_value());
     SLUICE_CHECK(eq("ABCDEFGHIJ", inner.mem.bytes()));
 }
@@ -183,14 +186,14 @@ SLUICE_TEST_CASE(buffered_writer_large_write_bypasses_buffer_in_order) {
 SLUICE_TEST_CASE(buffered_writer_flush_error_propagates) {
     sluice::MemoryWriter sink;
     sluice::FaultPlan plan;
-    plan.max_write_size = 3;          // inner can't drain 5 bytes in one call
-    plan.fail_after_write_calls = 1;  // 2nd inner write call fails
+    plan.max_write_size = 3;         // inner can't drain 5 bytes in one call
+    plan.fail_after_write_calls = 1; // 2nd inner write call fails
     plan.error = sluice::IoError{sluice::IoError::Code::no_space};
     sluice::FaultWriter inner(sink, plan);
     std::vector<std::byte> backing(8);
     sluice::BufferedWriter w(inner, std::span<std::byte>(backing));
 
-    SLUICE_CHECK(w.write_all(sb("hello")).has_value());  // still buffered
+    SLUICE_CHECK(w.write_all(sb("hello")).has_value()); // still buffered
     auto res = w.flush();
     SLUICE_CHECK(!res.has_value());
     SLUICE_CHECK(res.error().code == sluice::IoError::Code::no_space);
@@ -199,7 +202,7 @@ SLUICE_TEST_CASE(buffered_writer_flush_error_propagates) {
 SLUICE_TEST_CASE(buffered_writer_write_all_retries_across_short_inner_writes) {
     sluice::MemoryWriter sink;
     sluice::FaultPlan plan;
-    plan.max_write_size = 2;  // every inner write limited to 2
+    plan.max_write_size = 2; // every inner write limited to 2
     sluice::FaultWriter inner(sink, plan);
     std::vector<std::byte> backing(3);
     sluice::BufferedWriter w(inner, std::span<std::byte>(backing));
@@ -233,7 +236,7 @@ SLUICE_TEST_CASE(buffered_writer_rejects_empty_buffer_at_runtime) {
     auto res = w.write_some(sb("data"));
     SLUICE_CHECK(!res.has_value());
     SLUICE_CHECK(res.error().code == sluice::IoError::Code::invalid_state);
-    SLUICE_CHECK(inner.write_calls == 0);  // never reached the inner writer
+    SLUICE_CHECK(inner.write_calls == 0); // never reached the inner writer
 }
 #endif
 
@@ -250,8 +253,8 @@ SLUICE_TEST_CASE(buffered_writer_destroys_cleanly_after_flush) {
     {
         sluice::BufferedWriter w(inner, std::span<std::byte>(backing));
         SLUICE_CHECK(w.write_all(sb("hello")).has_value());
-        SLUICE_CHECK(w.flush().has_value());  // end_ back to 0 before scope exit
-    }  // ~BufferedWriter asserts end_ == 0; reaching here proves the contract
+        SLUICE_CHECK(w.flush().has_value()); // end_ back to 0 before scope exit
+    } // ~BufferedWriter asserts end_ == 0; reaching here proves the contract
     SLUICE_CHECK(eq("hello", inner.mem.bytes()));
 }
 
@@ -269,12 +272,12 @@ SLUICE_TEST_CASE(buffered_reader_records_hit_then_miss_then_refill) {
     SLUICE_CHECK(r.read_some(std::span<std::byte>(&b, 1)).has_value());
     SLUICE_CHECK(stats.read_requests >= 1);
     SLUICE_CHECK(stats.read_refill_calls >= 1);
-    SLUICE_CHECK(stats.read_refill_bytes == 4);  // filled the 4-byte buffer
+    SLUICE_CHECK(stats.read_refill_bytes == 4); // filled the 4-byte buffer
 
     // Second byte: served from the buffer (hit), no new refill.
     SLUICE_CHECK(r.read_some(std::span<std::byte>(&b, 1)).has_value());
     SLUICE_CHECK(stats.read_buffer_hits >= 1);
-    SLUICE_CHECK(stats.read_refill_calls == 1);  // unchanged
+    SLUICE_CHECK(stats.read_refill_calls == 1); // unchanged
 }
 
 SLUICE_TEST_CASE(buffered_writer_records_buffered_then_flush) {
@@ -283,7 +286,7 @@ SLUICE_TEST_CASE(buffered_writer_records_buffered_then_flush) {
     std::vector<std::byte> backing(16);
     sluice::BufferedWriter w(inner, std::span<std::byte>(backing), &stats);
 
-    SLUICE_CHECK(w.write_all(sb("hello")).has_value());  // fits in buffer
+    SLUICE_CHECK(w.write_all(sb("hello")).has_value()); // fits in buffer
     SLUICE_CHECK(stats.write_buffered_calls == 1);
     SLUICE_CHECK(stats.write_buffered_bytes == 5);
     SLUICE_CHECK(stats.write_flush_calls == 0);
@@ -310,7 +313,7 @@ SLUICE_TEST_CASE(buffer_stats_null_is_zero_overhead) {
     std::vector<std::byte> backing(4);
     sluice::BufferedReader r(inner, std::span<std::byte>(backing), nullptr);
     std::array<std::byte, 3> out{};
-    SLUICE_CHECK(r.read_exact(std::span<std::byte>(out)).has_value());  // no crash
+    SLUICE_CHECK(r.read_exact(std::span<std::byte>(out)).has_value()); // no crash
 }
 
 SLUICE_MAIN()

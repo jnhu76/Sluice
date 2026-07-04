@@ -11,29 +11,28 @@ SLUICE_TEST_CASE(to_string_copy_strategy_values) {
     SLUICE_CHECK(sluice::to_string(sluice::CopyStrategy::Auto) == std::string_view("auto"));
     SLUICE_CHECK(sluice::to_string(sluice::CopyStrategy::Scratch) == std::string_view("scratch"));
     SLUICE_CHECK(sluice::to_string(sluice::CopyStrategy::BufferedFirst) ==
-                std::string_view("buffered_first"));
+                 std::string_view("buffered_first"));
     SLUICE_CHECK(sluice::to_string(sluice::CopyStrategy::VectorDeferred) ==
-                std::string_view("vector_deferred"));
+                 std::string_view("vector_deferred"));
     SLUICE_CHECK(sluice::to_string(sluice::CopyStrategy::FileRangeDeferred) ==
-                std::string_view("file_range_deferred"));
+                 std::string_view("file_range_deferred"));
     SLUICE_CHECK(sluice::to_string(sluice::CopyStrategy::SendfileDeferred) ==
-                std::string_view("sendfile_deferred"));
+                 std::string_view("sendfile_deferred"));
     SLUICE_CHECK(sluice::to_string(sluice::CopyStrategy::SpliceDeferred) ==
-                std::string_view("splice_deferred"));
+                 std::string_view("splice_deferred"));
 }
 
 SLUICE_TEST_CASE(to_string_unsupported_strategy_policy_values) {
     SLUICE_CHECK(sluice::to_string(sluice::UnsupportedStrategyPolicy::ReturnInvalidState) ==
-                std::string_view("return_invalid_state"));
+                 std::string_view("return_invalid_state"));
     SLUICE_CHECK(sluice::to_string(sluice::UnsupportedStrategyPolicy::FallbackToAuto) ==
-                std::string_view("fallback_to_auto"));
+                 std::string_view("fallback_to_auto"));
 }
 
 SLUICE_TEST_CASE(copy_options_default_values) {
     sluice::CopyOptions opts;
     SLUICE_CHECK(opts.strategy == sluice::CopyStrategy::Auto);
-    SLUICE_CHECK(opts.unsupported_policy ==
-                sluice::UnsupportedStrategyPolicy::ReturnInvalidState);
+    SLUICE_CHECK(opts.unsupported_policy == sluice::UnsupportedStrategyPolicy::ReturnInvalidState);
     // Default limit is unlimited.
     SLUICE_CHECK(opts.limit.is_unlimited());
 }

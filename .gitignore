@@ -15,6 +15,8 @@ build/
 .xmake/
 
 # Generated / stray
+compile_commands.json
 a.out
 *.o
 .vscode/
+.cache/

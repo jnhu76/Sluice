@@ -27,7 +27,9 @@ struct TempPath {
         p = dir / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
@@ -35,7 +37,9 @@ struct TempPath {
 sluice::ConstIoSlice cslice_of(std::string_view s) {
     return sluice::ConstIoSlice{std::as_bytes(std::span(s.data(), s.size()))};
 }
-sluice::IoSlice mslice_of(std::span<std::byte> b) { return sluice::IoSlice{b}; }
+sluice::IoSlice mslice_of(std::span<std::byte> b) {
+    return sluice::IoSlice{b};
+}
 
 bool file_equals(const std::string& path, std::string_view expected) {
     std::ifstream in(path, std::ios::binary);
@@ -43,7 +47,7 @@ bool file_equals(const std::string& path, std::string_view expected) {
     return content == std::string(expected);
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(file_write_vec_writes_correct_bytes_to_disk) {
     TempPath tp;
@@ -66,7 +70,8 @@ SLUICE_TEST_CASE(file_read_vec_reads_correct_bytes_from_disk) {
     }
     sluice::FileReader r(tp.str());
     SLUICE_CHECK(r.opened());
-    std::vector<std::byte> a(5), b(7);
+    std::vector<std::byte> a(5);
+    std::vector<std::byte> b(7);
     std::array<sluice::IoSlice, 2> dsts = {mslice_of(a), mslice_of(b)};
     auto res = r.read_vec(std::span<sluice::IoSlice>(dsts));
     SLUICE_CHECK(res.has_value());
@@ -79,8 +84,8 @@ SLUICE_TEST_CASE(file_write_vec_then_read_vec_round_trips_many_slices) {
     TempPath tp;
     {
         sluice::FileWriter w(tp.str());
-        std::array<sluice::ConstIoSlice, 4> srcs = {
-            cslice_of("aaaa"), cslice_of("bbbb"), cslice_of("cccc"), cslice_of("dddd")};
+        std::array<sluice::ConstIoSlice, 4> srcs = {cslice_of("aaaa"), cslice_of("bbbb"),
+                                                    cslice_of("cccc"), cslice_of("dddd")};
         auto r = w.write_vec(std::span<const sluice::ConstIoSlice>(srcs));
         SLUICE_CHECK(r.has_value());
         SLUICE_CHECK(r.value() == 16);
@@ -103,18 +108,20 @@ SLUICE_TEST_CASE(file_vec_handles_more_slices_than_iov_max) {
     // A slice count exceeding IOV_MAX must still round-trip: the override chunks
     // the readv/writev calls. Many tiny slices force multiple chunks.
     TempPath tp;
-    constexpr std::size_t kN = 4096;  // well above IOV_MAX (1024 on Linux)
+    constexpr std::size_t kN = 4096; // well above IOV_MAX (1024 on Linux)
     std::vector<std::string> pieces;
     std::string expected;
     expected.reserve(kN * 3);
     for (std::size_t i = 0; i < kN; ++i) {
-        std::string s = "x" + std::to_string(i % 10) + "y";  // 3 bytes each
+        std::string s = "x" + std::to_string(i % 10) + "y"; // 3 bytes each
         pieces.push_back(s);
         expected += s;
     }
     std::vector<sluice::ConstIoSlice> srcs;
     srcs.reserve(kN);
-    for (auto& s : pieces) srcs.push_back(cslice_of(s));
+    for (auto& s : pieces) {
+        srcs.push_back(cslice_of(s));
+    }
     {
         sluice::FileWriter w(tp.str());
         auto r = w.write_vec(std::span<const sluice::ConstIoSlice>(srcs));
@@ -176,20 +183,21 @@ SLUICE_TEST_CASE(file_vec_stats_count_non_fallback_path) {
     sluice::VectorStats vs{};
     {
         sluice::FileWriter w(tp.str(), nullptr, &vs);
-        std::array<sluice::ConstIoSlice, 3> srcs = {
-            cslice_of("ab"), cslice_of(""), cslice_of("cde")};
+        std::array<sluice::ConstIoSlice, 3> srcs = {cslice_of("ab"), cslice_of(""),
+                                                    cslice_of("cde")};
         auto r = w.write_vec(std::span<const sluice::ConstIoSlice>(srcs));
         SLUICE_CHECK(r.has_value());
         SLUICE_CHECK(r.value() == 5);
     }
     SLUICE_CHECK(vs.write_vec_calls == 1);
     SLUICE_CHECK(vs.write_vec_bytes == 5);
-    SLUICE_CHECK(vs.write_vec_iovecs == 2);       // empty slice not counted
-    SLUICE_CHECK(vs.write_vec_fallback_calls == 0);  // real writev, not fallback
+    SLUICE_CHECK(vs.write_vec_iovecs == 2);         // empty slice not counted
+    SLUICE_CHECK(vs.write_vec_fallback_calls == 0); // real writev, not fallback
 
     sluice::VectorStats vrs{};
     sluice::FileReader r(tp.str(), nullptr, &vrs);
-    std::vector<std::byte> a(3), b(2);
+    std::vector<std::byte> a(3);
+    std::vector<std::byte> b(2);
     std::array<sluice::IoSlice, 2> dsts = {mslice_of(a), mslice_of(b)};
     auto res = r.read_vec(std::span<sluice::IoSlice>(dsts));
     SLUICE_CHECK(res.has_value());
@@ -197,7 +205,7 @@ SLUICE_TEST_CASE(file_vec_stats_count_non_fallback_path) {
     SLUICE_CHECK(vrs.read_vec_calls == 1);
     SLUICE_CHECK(vrs.read_vec_bytes == 5);
     SLUICE_CHECK(vrs.read_vec_iovecs == 2);
-    SLUICE_CHECK(vrs.read_vec_fallback_calls == 0);  // real readv, not fallback
+    SLUICE_CHECK(vrs.read_vec_fallback_calls == 0); // real readv, not fallback
 }
 
 SLUICE_TEST_CASE(file_vec_short_read_returns_partial_byte_count) {
@@ -210,15 +218,18 @@ SLUICE_TEST_CASE(file_vec_short_read_returns_partial_byte_count) {
         SLUICE_CHECK(w.write_all(std::as_bytes(std::span("abc", 3))).has_value());
     }
     sluice::FileReader r(tp.str());
-    std::vector<std::byte> a(4, std::byte{0xFF}), b(4, std::byte{0xFF});
+    std::vector<std::byte> a(4, std::byte{0xFF});
+    std::vector<std::byte> b(4, std::byte{0xFF});
     std::array<sluice::IoSlice, 2> dsts = {mslice_of(a), mslice_of(b)};
     auto res = r.read_vec(std::span<sluice::IoSlice>(dsts));
     SLUICE_CHECK(res.has_value());
-    SLUICE_CHECK(res.value() == 3);  // partial: only what the file held
+    SLUICE_CHECK(res.value() == 3); // partial: only what the file held
     SLUICE_CHECK(std::memcmp(a.data(), "abc", 3) == 0);
     // slice a bytes [3] and all of slice b must be untouched (0xFF).
     SLUICE_CHECK(std::to_integer<int>(a[3]) == 0xFF);
-    for (auto x : b) SLUICE_CHECK(std::to_integer<int>(x) == 0xFF);
+    for (auto x : b) {
+        SLUICE_CHECK(std::to_integer<int>(x) == 0xFF);
+    }
 }
 
 SLUICE_MAIN()

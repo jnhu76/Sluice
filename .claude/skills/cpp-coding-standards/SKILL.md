@@ -22,7 +22,81 @@ Comprehensive coding standards for modern C++ (C++17/20/23) derived from the [C+
 - Legacy C codebases that cannot adopt modern C++ features
 - Embedded/bare-metal contexts where specific guidelines conflict with hardware constraints (adapt selectively)
 
-## Cross-Cutting Principles
+---
+
+# Prefer C++ to C
+
+**Core Guideline — CPL.1**
+
+> The presence of classes, templates, namespaces, `std::vector`, or smart
+> pointers does not by itself make a design idiomatic C++.
+
+The primary goal of this skill is:
+
+> Write and review C++ as C++, not as C with classes.
+
+## Definition: C with classes
+
+"C with classes" is procedural C-style state and lifetime management that
+has merely been wrapped in C++ syntax.
+
+### Suspicious design patterns
+
+These are design smells, not unconditional syntax bans:
+
+* `init()` / `deinit()` or `init()` / `shutdown()` protocols that permit
+  partially initialized objects
+* public or weakly encapsulated state bags manipulated by procedural functions
+* `bool`, integer, or status-code returns combined with output parameters
+* pointer-plus-length interfaces where a range abstraction is appropriate
+* owning handles represented as plain integers or raw pointers with cleanup
+  performed elsewhere
+* manual cleanup paths
+* `goto cleanup`
+* repeated `if (resource) release(resource)` logic
+* explicit lifecycle flags such as `initialized_`, `opened_`, or `started_`
+  used primarily to compensate for invalid object states
+* `void*` context pointers and C callback conventions inside normal C++ code
+* macro-based constants or dispatch where typed language facilities apply
+* raw arrays used as ordinary containers
+* manual memory ownership
+* pervasive pointer semantics where value semantics are natural
+* large switch statements over type tags that recreate an object model
+* classes that are only namespaces for procedural functions
+* classes whose methods merely mutate a shared context structure
+* manager objects that centralize unrelated lifetime and mutable state
+* manual lock/unlock
+* manual thread lifetime management without an owning abstraction
+* C string handling in code that naturally owns or observes text
+* `memset` used as object initialization
+* `memcpy` used to copy non-trivial object state
+* C-style variadic interfaces
+* C-style casts
+* weakly typed integer flags and mode parameters
+* sentinel values where the type system can express absence or state
+* APIs that require callers to remember a cleanup or finalization operation
+
+### Legitimate C-like code
+
+Low-level boundaries, operating-system APIs, foreign-function interfaces,
+wire formats, memory-mapped structures, SIMD code, allocator internals, and
+other deliberately low-level components may legitimately use C-like
+representations.
+
+When C-like code is required:
+
+1. identify the low-level boundary
+2. keep it narrow
+3. document the invariant
+4. prevent ownership and lifetime rules from leaking outward
+5. expose a safer C++ interface to ordinary callers when practical
+
+Do not mechanically rewrite a valid low-level boundary merely to make it look
+more object-oriented.
+
+---
+
+# Cross-Cutting Principles
 
 These themes recur across the entire guidelines and form the foundation:
 
@@ -32,6 +106,498 @@ These themes recur across the entire guidelines and form the foundation:
 4. **Express intent** (P.3, F.1, NL.1-2, T.10): Names, types, and concepts should communicate purpose
 5. **Minimize complexity** (F.2-3, ES.5, Per.4-5): Simple code is correct code
 6. **Value semantics over pointer semantics** (C.10, R.3-5, F.20, CP.31): Prefer returning by value and scoped objects
+
+---
+
+# C++ Design Synthesis Gate
+
+Before implementing a new component, determine:
+
+### 1. What is the resource?
+
+Identify resources such as:
+
+* memory
+* file descriptors
+* sockets
+* file handles
+* mappings
+* locks
+* threads
+* worker pools
+* registrations
+* subscriptions
+* backend contexts
+
+Ask:
+
+> Can the resource lifetime be represented by an object lifetime?
+
+Prefer RAII.
+
+### 2. What is the valid state?
+
+Identify the component invariant.
+
+Ask:
+
+> Can construction produce a valid object immediately?
+
+Prefer constructors or factories that return complete valid objects.
+
+Avoid two-phase initialization unless required by a documented constraint.
+
+Do not create an object that requires callers to remember `init()` before any
+other operation when the type can prevent that state.
+
+### 3. What is the ownership model?
+
+Explicitly distinguish:
+
+* owning value
+* unique ownership
+* shared ownership
+* borrowed reference
+* nullable observer
+* contiguous range
+* string ownership
+* string observation
+
+Use types to communicate these distinctions.
+
+Do not use one pointer representation for multiple unrelated semantics.
+
+### 4. What is the natural value model?
+
+Ask:
+
+> Should this concept behave as a value?
+
+Prefer value semantics when identity and shared mutation are not essential.
+
+Do not introduce heap allocation merely to make an object polymorphic or
+shareable.
+
+Do not use `shared_ptr` as a substitute for an ownership decision.
+
+### 5. What should the interface return?
+
+Prefer complete return values.
+
+Prefer a named result type when an operation returns multiple related values.
+
+Avoid output parameters as the default interface design.
+
+Distinguish a real mutation operation from a C-style function that writes
+results through pointers or references.
+
+### 6. Is this a range?
+
+For contiguous sequences and buffers, distinguish:
+
+* ownership
+* mutable observation
+* immutable observation
+
+Prefer appropriate C++ range abstractions such as `std::span` when supported
+by the project's C++ standard and when the interface represents a contiguous
+range.
+
+Do not default to `(T*, size)` merely because the implementation ultimately
+calls a C or operating-system API.
+
+Keep pointer-plus-length representation at the low-level boundary when
+possible.
+
+### 7. Is invalid state representable?
+
+Ask:
+
+> Can a caller construct or observe a meaningless state?
+
+Use types, constructors, scoped enums, variants, optional state, or separate
+types when they materially prevent misuse.
+
+Do not solve a type-model problem with comments and boolean flags by default.
+
+### 8. Is polymorphism actually needed?
+
+Do not automatically introduce inheritance.
+
+Consider:
+
+* value semantics
+* composition
+* templates
+* concepts
+* variants
+* callable objects
+* type erasure
+* ordinary functions
+
+Use inheritance when runtime subtype polymorphism is actually the intended
+model.
+
+The goal is C++ abstraction, not maximal object orientation.
+
+### 9. What is the failure model?
+
+Follow the project's documented error model.
+
+Do not mechanically impose exceptions on a project using another deliberate
+error model.
+
+Regardless of representation, ensure:
+
+* cleanup is automatic
+* partial state is controlled
+* errors are not silently swallowed
+* the interface communicates failure semantics
+
+### 10. What performs cleanup?
+
+The preferred answer should normally be:
+
+> the owning object's destructor
+
+Treat answers such as:
+
+* "the caller"
+* "shutdown()"
+* "cleanup()"
+* "the error label"
+* "whoever allocated it"
+
+as signals to inspect the design more closely.
+
+---
+
+# Anti-C-With-Classes Review
+
+Before marking C++ implementation work complete, run an explicit review.
+
+Ask:
+
+1. Did I model a resource as an object with deterministic lifetime?
+2. Did I introduce an `init`/`shutdown` protocol that RAII could replace?
+3. Can the object exist in a meaningless partially initialized state?
+4. Did I use a state flag to compensate for a weak invariant?
+5. Did I expose pointer-plus-length instead of a range abstraction?
+6. Did I use output parameters where a return value would communicate intent?
+7. Did I use raw ownership or external cleanup?
+8. Did I represent domain states as integers, flags, macros, or magic values?
+9. Did I write a manager/context object that is effectively a C state struct?
+10. Are methods merely procedural functions operating on that state struct?
+11. Did I recreate manual dispatch with type tags and large switches?
+12. Did I use shared ownership because ownership was unclear?
+13. Did I use inheritance simply to obtain dynamic dispatch?
+14. Did I make callers remember an ordering protocol the type system could
+    express?
+15. Did I keep a C or OS abstraction leaking through public C++ interfaces?
+16. Would this design still look essentially identical if all classes were
+    converted to C structs and methods to free functions?
+
+The final question is particularly important.
+
+If the answer is yes, determine whether the component is intentionally a
+low-level C boundary.
+
+If not, redesign it using C++ facilities and Core Guidelines principles.
+
+Do not treat this review as a demand to introduce inheritance or elaborate
+design patterns.
+
+Prefer the simplest type-safe, lifetime-safe C++ design.
+
+---
+
+# Contrast Examples
+
+## Resource lifetime
+
+### Bad: C with classes — protocol-dependent state
+
+```cpp
+class File {
+public:
+    bool open(const char* path);
+    void close();
+
+    // Caller must remember: do not call read() before open().
+    // Do not call close() twice.
+    // Do not use the object after close().
+    // The destructor does nothing.
+    int read(char* buf, std::size_t n);
+
+private:
+    int fd_{-1};
+    bool opened_{false};
+};
+```
+
+This design permits a partially initialized, meaningless state. The
+object's invariant is not enforced. Callers must remember a protocol.
+
+### Good: RAII — construction produces a valid object
+
+```cpp
+class File {
+public:
+    explicit File(const char* path, FileOpen mode = FileOpen::ReadOnly)
+        : fd_(::open(path, static_cast<int>(mode))) {
+        if (fd_ < 0) {
+            throw std::system_error(errno, std::system_category(), path);
+        }
+    }
+
+    ~File() {
+        if (fd_ >= 0) ::close(fd_);
+    }
+
+    File(const File&) = delete;
+    File& operator=(const File&) = delete;
+    File(File&& other) noexcept : fd_(std::exchange(other.fd_, -1)) {}
+    File& operator=(File&& other) noexcept {
+        if (this != &other) {
+            if (fd_ >= 0) ::close(fd_);
+            fd_ = std::exchange(other.fd_, -1);
+        }
+        return *this;
+    }
+
+    int fd() const { return fd_; }
+
+private:
+    int fd_;
+};
+```
+
+Construction always produces a valid open file or throws. Destruction
+always closes. No `init()`, no `close()`, no lifecycle flags.
+
+## Buffer interface
+
+### Bad: pointer-plus-length with output parameter
+
+```cpp
+int write_data(const unsigned char* data,
+               std::size_t size,
+               std::size_t* written);
+```
+
+This is a C-style interface. Callers must pass correct pointer and length.
+The result is written through an output parameter. Ownership of the written
+count is unclear.
+
+### Good: range and result type
+
+```cpp
+struct WriteResult {
+    std::size_t bytes_written;
+    bool success;
+};
+
+WriteResult write_data(std::span<const std::byte> data) {
+    // data.size() is always valid, no null-pointer risk.
+    // The result is returned, not written through a pointer.
+    // ...
+}
+```
+
+## Procedural context object
+
+### Bad: C state struct wrapped in a class
+
+```cpp
+struct PoolContext {
+    Thread* threads;
+    std::size_t thread_count;
+    Job* jobs;
+    std::size_t job_count;
+    bool stopping;
+};
+
+bool pool_init(PoolContext*);
+bool pool_submit(PoolContext*, Job*);
+void pool_shutdown(PoolContext*);
+void pool_destroy(PoolContext*);
+```
+
+This is C with classes. The class is a state bag. Methods are procedural
+functions operating on shared state. Callers must call `pool_init` before
+`pool_submit` and `pool_shutdown` before `pool_destroy`. The type system
+does not prevent misuse.
+
+### Good: C++ design with explicit ownership
+
+```cpp
+class ThreadPool {
+public:
+    explicit ThreadPool(std::size_t thread_count)
+        : stopping_(false) {
+        for (std::size_t i = 0; i < thread_count; ++i) {
+            workers_.emplace_back([this] { worker_loop(); });
+        }
+    }
+
+    ~ThreadPool() {
+        {
+            std::scoped_lock lock(mutex_);
+            stopping_ = true;
+        }
+        cv_.notify_all();
+        for (auto& w : workers_) {
+            if (w.joinable()) w.join();
+        }
+    }
+
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
+
+    void submit(Job job) {
+        {
+            std::scoped_lock lock(mutex_);
+            jobs_.push(std::move(job));
+        }
+        cv_.notify_one();
+    }
+
+private:
+    void worker_loop() { /* ... */ }
+
+    std::vector<std::thread> workers_;
+    std::queue<Job> jobs_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    bool stopping_;
+};
+```
+
+Ownership is explicit. Worker lifetime is owned by the object. Shutdown
+belongs to the destructor. The object invariant is meaningful: either the
+pool is running or it is stopped.
+
+## Type-tag dispatch
+
+### Bad: tag plus union plus switch
+
+```cpp
+enum class ObjectType { Null, Int, Float, String, Array, Map };
+
+struct Value {
+    ObjectType type;
+    union {
+        int int_val;
+        double float_val;
+        char* string_val;
+        // ...
+    };
+};
+
+void process(const Value& v) {
+    switch (v.type) {
+        case ObjectType::Int:    /* ... */ break;
+        case ObjectType::Float:  /* ... */ break;
+        case ObjectType::String: /* ... */ break;
+        // ...
+        default: break;
+    }
+}
+```
+
+This recreates an object model with type tags. The compiler cannot check
+exhaustiveness of all operations. Callers must remember to handle every tag.
+
+### Good: C++ alternative
+
+Choose the appropriate alternative depending on the problem:
+
+**Closed set, runtime dispatch — use `std::variant`:**
+
+```cpp
+using Value = std::variant<
+    std::monostate,
+    int,
+    double,
+    std::string,
+    std::vector<Value>,
+    std::map<std::string, Value>
+>;
+
+void process(const Value& v) {
+    std::visit([](const auto& val) {
+        using T = std::decay_t<decltype(val)>;
+        if constexpr (std::is_same_v<T, std::monostate>) { /* null */ }
+        else if constexpr (std::is_same_v<T, int>) { /* int */ }
+        // compiler checks exhaustiveness
+    }, v);
+}
+```
+
+**Open set, runtime dispatch — use inheritance:**
+
+```cpp
+class ASTNode {
+public:
+    virtual ~ASTNode() = default;
+    virtual void accept(ASTVisitor&) = 0;
+};
+```
+
+**Compile-time dispatch — use templates/concepts:**
+
+```cpp
+template<typename T>
+concept Numeric = std::integral<T> || std::floating_point<T>;
+
+template<Numeric T>
+T add(T a, T b) { return a + b; }
+```
+
+## Error plus output parameter
+
+### Bad: status code and out-parameter
+
+```cpp
+ErrorCode parse_config(const char* path, Config* out) {
+    if (!path) return ErrorCode::InvalidArg;
+    if (!out) return ErrorCode::InvalidArg;
+    // ... parse ...
+    out->timeout = 30;
+    out->retries = 3;
+    return ErrorCode::Ok;
+}
+
+Config config;
+ErrorCode err = parse_config("/etc/app.conf", &config);
+if (err != ErrorCode::Ok) { /* handle error */ }
+```
+
+### Good: complete return type
+
+```cpp
+std::expected<Config, ConfigError> parse_config(std::string_view path) {
+    // ... parse ...
+    Config config;
+    config.timeout = std::chrono::seconds{30};
+    config.retries = 3;
+    return config;
+}
+
+auto result = parse_config("/etc/app.conf");
+if (!result) {
+    // handle result.error()
+}
+// use *result or result.value()
+```
+
+If the project does not use exceptions and does not have `std::expected`,
+use a project-specific result type. The principle remains: return the
+result, do not write it through a pointer.
+
+---
+
+# Guidelines Coverage
 
 ## Philosophy & Interfaces (P.*, I.*)
 
@@ -104,10 +670,6 @@ struct ParseResult {
 };
 
 ParseResult parse(std::string_view input);   // GOOD: return struct
-
-// BAD: output parameters
-void parse(std::string_view input,
-           std::string& token, int& pos);    // avoid this
 ```
 
 ### Pure Functions and constexpr
@@ -662,6 +1224,36 @@ private:
 - Hungarian notation like `strName`, `iCount` (NL.5)
 - ALL_CAPS for anything other than macros (NL.9)
 
+## C-Style Programming (CPL.*)
+
+### Key Rules
+
+| Rule | Summary |
+|------|---------|
+| **CPL.1** | Prefer C++ to C |
+| **CPL.2** | If you must use C, use the common subset of C and C++, and compile the C code as C++ |
+| **CPL.3** | If you must use C for interfaces, use C++ in the calling code using such interfaces |
+
+### Guidelines
+
+* Avoid `void*` where a typed alternative exists
+* Prefer `std::string` or `std::string_view` over C strings in owning or observing text
+* Prefer `std::span` or range abstractions over pointer-plus-length where the project standard supports it
+* Prefer typed enums, `constexpr`, and named constants over `#define` for constants and dispatch
+* Prefer C++ casts over C-style casts
+* Prefer RAII over manual cleanup
+* Do not use C-style variadics in new C++ interfaces
+* Do not use `memset`/`memcpy` to initialize or copy non-trivial types
+
+### Anti-Patterns
+
+- `void*` context pointers where a typed alternative is practical
+- C-style casts (`(int)x`) instead of named C++ casts
+- `#define` constants where `constexpr` or `enum class` applies
+- C-style variadic functions in new interfaces
+- `memset` used as object initialization
+- `memcpy` used to copy non-trivial object state
+
 ## Performance (Per.*)
 
 ### Key Rules
@@ -699,7 +1291,201 @@ std::vector<std::unique_ptr<Point>> indirect_points; // BAD: pointer chasing
 - Choosing "clever" low-level code over clear abstractions (Per.4, Per.5)
 - Ignoring data layout and cache behavior (Per.19)
 
-## Quick Reference Checklist
+## Core Guidelines Profiles
+
+The C++ Core Guidelines define machine-enforceable profiles for common
+categories of errors. When available in the project's toolchain, these
+profiles provide mechanical enforcement of safety properties.
+
+### Type Safety Profile
+
+Ensures objects are used only according to their type.
+
+* Avoid casts that bypass the type system
+* Do not use `union` to alias unrelated types
+* Do not access a `union` member that was not the last one written
+* Do not use `reinterpret_cast` unless necessary for low-level interop
+
+### Bounds Safety Profile
+
+Ensures array and buffer accesses are within bounds.
+
+* Prefer `std::array` or `std::vector` over raw arrays
+* Prefer `std::span` over pointer-plus-length in interfaces
+* Use checked access where available
+* Compiler and sanitizer bounds checks where available
+
+### Lifetime Safety Profile
+
+Ensures pointers and references do not outlive the objects they refer to.
+
+* Prefer RAII for resource management
+* Prefer scoped objects over heap-allocated objects
+* Do not return references or pointers to local objects
+* Use `std::unique_ptr` or `std::shared_ptr` for ownership transfer
+* Static lifetime analysis where available
+
+---
+
+# Separate Guidelines From Project Policy
+
+Clearly distinguish three categories of findings:
+
+### Core Guideline
+
+A recommendation grounded in a verified C++ Core Guidelines rule.
+
+Example:
+
+> **Core Guideline — R.1**
+>
+> The file descriptor is externally closed through `shutdown()`. Model the
+> descriptor as an owning RAII resource or explain why object lifetime cannot
+> represent the resource lifetime.
+
+### C++ Design Heuristic
+
+A synthesis rule used to detect C-with-classes or weak C++ abstraction.
+
+Example:
+
+> **C++ Design Heuristic — C-with-classes**
+>
+> `WorkerManager` is primarily a mutable state bag plus procedural lifecycle
+> methods. The issue is not its naming or syntax; the abstraction does not
+> express worker ownership or shutdown in its type/lifetime model.
+
+### Project Contract
+
+A repository-specific architectural or semantic requirement.
+
+Example:
+
+> **Project Contract**
+>
+> All backend contexts must support graceful shutdown via a `stop()` method.
+> This is a project-level requirement, not a Core Guideline.
+
+The skill must not fabricate a Core Guidelines rule ID for a project-specific
+preference.
+
+When reviewing code, findings should use these labels where useful.
+
+---
+
+# Respect The Project's C++ Standard
+
+Before recommending a language or library facility, determine the project's
+supported C++ standard.
+
+Do not recommend C++23-only facilities in a C++20 project as though they are
+available.
+
+Common version-gated features:
+
+| Feature | Minimum Standard |
+|---------|-----------------|
+| `std::optional`, `std::variant`, `std::any` | C++17 |
+| `std::string_view` | C++17 |
+| `if constexpr` | C++17 |
+| Structured bindings | C++17 |
+| Concepts, ranges, `std::span` | C++20 |
+| `std::format` | C++20 |
+| `std::expected` | C++23 |
+| `std::flat_map`, `std::flat_set` | C++23 |
+
+When a newer facility would materially improve the design:
+
+* state the version requirement
+* use an existing project abstraction if available
+* otherwise use a compatible design
+
+Do not perform a language-version migration unless explicitly requested.
+
+---
+
+# Tool Enforcement
+
+Machine-checkable concerns should be enforced by tooling, not natural
+language alone.
+
+### Compiler warnings
+
+* `-Wall -Wextra -Wpedantic` (minimum)
+* `-Wconversion` for narrowing detection
+* `-Wold-style-cast` for C-style cast detection
+* `-Wnon-virtual-dtor` for missing virtual destructors
+
+### clang-tidy checks
+
+* `modernize-use-override` (C.128)
+* `modernize-use-auto` (where appropriate)
+* `modernize-use-nullptr` (ES.47)
+* `modernize-use-emplace` (container efficiency)
+* `cppcoreguidelines-owning-memory` (R.1, R.20)
+* `cppcoreguidelines-pro-type-member-init` (ES.20)
+* `cppcoreguidelines-init-variables` (ES.20)
+* `cppcoreguidelines-avoid-c-arrays` (SL.con.1)
+* `cppcoreguidelines-avoid-magic-numbers` (ES.45)
+* `cppcoreguidelines-pro-type-union-access` (type safety)
+* `cppcoreguidelines-pro-type-vararg` (F.55)
+
+### Sanitizers
+
+* AddressSanitizer (ASan) for memory errors
+* ThreadSanitizer (TSan) for data races
+* UndefinedBehaviorSanitizer (UBSan) for undefined behavior
+
+### Static analysis
+
+* Lifetime safety analysis where supported
+* Bounds checking where supported
+
+### Important caveat
+
+Tools do not replace design review for:
+
+* ownership model
+* value semantics
+* invariants
+* abstraction boundaries
+* shutdown semantics
+* C-with-classes detection
+
+---
+
+# Completion Behavior
+
+When this skill is active during implementation:
+
+1. perform the C++ Design Synthesis Gate before introducing significant new
+   types or interfaces
+2. implement according to relevant Core Guidelines
+3. respect project contracts and the supported C++ standard
+4. run the Anti-C-With-Classes Review
+5. review relevant type, bounds, and lifetime safety concerns
+6. use available mechanical enforcement
+7. report substantive unresolved deviations
+
+When reviewing code, do not produce hundreds of low-value style findings.
+
+Prioritize findings in this order:
+
+1. lifetime and ownership
+2. invalid states and invariants
+3. resource safety
+4. concurrency lifetime and synchronization
+5. interface and type safety
+6. bounds safety
+7. error model
+8. C-with-classes design
+9. class and generic design
+10. expressions and local coding issues
+11. naming and layout
+
+---
+
+# Quick Reference Checklist
 
 Before marking C++ work complete:
 
@@ -721,4 +1507,7 @@ Before marking C++ work complete:
 - [ ] Exceptions are custom types, thrown by value, caught by reference (E.14, E.15)
 - [ ] `'\n'` instead of `std::endl` (SL.io.50)
 - [ ] No magic numbers (ES.45)
-
+- [ ] No `init()`/`shutdown()` protocols where RAII suffices (CPL.1)
+- [ ] No output parameters where return values communicate intent (F.20)
+- [ ] No C-style context pointers or manual lifecycle management (CPL.1)
+- [ ] Interface does not leak C or OS abstractions to ordinary callers (CPL.3)

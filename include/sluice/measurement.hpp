@@ -118,4 +118,4 @@ struct VectorStats {
     std::uint64_t write_vec_fallback_calls = 0;
 };
 
-}  // namespace sluice
+} // namespace sluice

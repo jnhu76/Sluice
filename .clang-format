@@ -1,0 +1,42 @@
+# clang-format configuration for sluice.
+# Captures the codebase style: 4-space indent, braces attached to control
+# statements, 100-col limit. Used to normalize formatting after clang-tidy
+# --fix (which places closing braces on their own line). Run: clang-format -i.
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: c++20
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+
+# Attach braces to control statements (if/for/while on same line) — this is
+# what cleans up clang-tidy --fix's stray '}' placements.
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: All
+
+# Pointers/references: type-attached (sluice uses `T* p`).
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+SpaceBeforeParens: ControlStatements
+AlignAfterOpenBracket: Align
+AlignOperands: Align
+AlignTrailingComments: true
+
+# Don't churn includes aggressively.
+IncludeBlocks: Preserve
+SortIncludes: false
+
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: true
+FixNamespaceComments: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: None
+ReflowComments: false

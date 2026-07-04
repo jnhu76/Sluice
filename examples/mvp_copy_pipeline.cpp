@@ -2,58 +2,30 @@
 //   FileReader -> BufferedReader -> copy_all -> BufferedWriter -> ObservedWriter -> FileWriter
 // Verifies output bytes match input; prints composition stats. Not a benchmark.
 #include <sluice/buffer.hpp>
+#include "support/example_helpers.hpp"
+#include "support/temp_path.hpp"
 #include <sluice/copy.hpp>
 #include <sluice/file.hpp>
 #include <sluice/limit.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/observed.hpp>
 
+using sluice::bench::TempPath;
+using sluice::bench::file_read_all;
+using sluice::bench::stop_reason;
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
-#include <sstream>
 #include <span>
 #include <string>
 #include <vector>
 
-namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath(const char* tag) {
-        std::ostringstream oss;
-        oss << "sluice_mvp_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-};
-
-bool file_read_all(const std::string& path, std::string& out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    out.assign(std::istreambuf_iterator<char>(in), {});
-    return true;
-}
-
-const char* stop_reason(const sluice::CopyStats& s) {
-    if (s.eof_stops) return "eof";
-    if (s.limit_stops) return "limit";
-    if (s.reader_error_stops) return "reader_error";
-    if (s.writer_error_stops) return "writer_error";
-    return "none";
-}
-
-}  // namespace
-
 int main() {
     // 1. Create a small input file.
     TempPath in_tp("in"), out_tp("out");
-    const std::string payload(2048, 'Z');  // larger than the 1KiB read buffer
+    const std::string payload(2048, 'Z'); // larger than the 1KiB read buffer
     {
         std::ofstream o(in_tp.str(), std::ios::binary);
         o.write(payload.data(), static_cast<std::streamsize>(payload.size()));
@@ -99,8 +71,7 @@ int main() {
             return 1;
         }
         primed_bytes = primed.size();
-        auto pw = buffered_out.write_all(
-            std::span<const std::byte>(primed.data(), primed.size()));
+        auto pw = buffered_out.write_all(std::span<const std::byte>(primed.data(), primed.size()));
         if (!pw.has_value()) {
             std::fprintf(stderr, "prime write failed\n");
             return 1;
@@ -108,15 +79,13 @@ int main() {
 
         // copy_all drains the remaining buffered bytes via the fast path first,
         // then falls back to scratch reads.
-        auto res = sluice::copy_all(buffered_in, buffered_out,
-                                   std::span<std::byte>(scratch),
-                                   sluice::CopyLimit::unlimited(), &copy_stats);
+        auto res = sluice::copy_all(buffered_in, buffered_out, std::span<std::byte>(scratch),
+                                    sluice::CopyLimit::unlimited(), &copy_stats);
         if (!res.has_value()) {
-            std::fprintf(stderr, "copy failed: %s\n",
-                         sluice::to_string(res.error().code).data());
+            std::fprintf(stderr, "copy failed: %s\n", sluice::to_string(res.error().code).data());
             return 1;
         }
-        auto flush_res = buffered_out.flush();  // outermost flush, propagates inward
+        auto flush_res = buffered_out.flush(); // outermost flush, propagates inward
         if (!flush_res.has_value()) {
             std::fprintf(stderr, "flush failed: %s\n",
                          sluice::to_string(flush_res.error().code).data());
@@ -124,7 +93,8 @@ int main() {
         }
         if (res.value() + primed_bytes != payload.size()) {
             std::fprintf(stderr, "byte count mismatch: copied %llu + primed %zu, want %zu\n",
-                         static_cast<unsigned long long>(res.value()), primed_bytes, payload.size());
+                         static_cast<unsigned long long>(res.value()), primed_bytes,
+                         payload.size());
             return 1;
         }
         // The buffered fast path must have served bytes: the prime left unread
@@ -145,8 +115,7 @@ int main() {
     // 4. Print composition stats, including the buffered fast path counters.
     std::printf("mvp_copy_pipeline: copied %zu bytes (primed %zu + copy %llu), stop=%s\n",
                 payload.size(), primed_bytes,
-                static_cast<unsigned long long>(copy_stats.bytes_read),
-                stop_reason(copy_stats));
+                static_cast<unsigned long long>(copy_stats.bytes_read), stop_reason(copy_stats));
     std::printf("  copied_bytes=%zu\n", payload.size());
     std::printf("  buffered_fast_path_bytes=%llu\n",
                 static_cast<unsigned long long>(copy_stats.buffered_fast_path_bytes));

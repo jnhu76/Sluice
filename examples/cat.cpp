@@ -23,7 +23,8 @@ int main(int argc, char** argv) {
     }
 
     sluice::FileReader reader(path);
-    sluice::FileWriter writer(STDOUT_FILENO);  // adopt fd 1; /dev/stdout can't be opened on some systems
+    sluice::FileWriter writer(
+        STDOUT_FILENO); // adopt fd 1; /dev/stdout can't be opened on some systems
 
     sluice::ReaderStats stats{};
     sluice::ObservedReader observed(reader, stats);
@@ -32,8 +33,7 @@ int main(int argc, char** argv) {
     auto res = sluice::copy_all(observed, writer, std::span<std::byte>(scratch));
     (void)writer.flush();
     if (!res.has_value()) {
-        std::fprintf(stderr, "copy failed: %s\n",
-                     sluice::to_string(res.error().code).data());
+        std::fprintf(stderr, "copy failed: %s\n", sluice::to_string(res.error().code).data());
         return 1;
     }
 

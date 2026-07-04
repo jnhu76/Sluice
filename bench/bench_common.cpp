@@ -14,14 +14,13 @@ void print_csv_header(std::ostream& out) {
 }
 
 void print_csv_row(std::ostream& out, const BenchResult& r) {
-    out << r.case_name << ',' << r.mode << ','
-        << r.bytes << ',' << r.iterations << ',' << r.elapsed_ns << ','
-        << r.syscall_stats.read_syscalls << ',' << r.syscall_stats.write_syscalls << ','
-        << r.syscall_stats.read_syscall_bytes << ',' << r.syscall_stats.write_syscall_bytes << ','
-        << r.copy_stats.buffered_fast_path_bytes << ',' << r.copy_stats.scratch_path_bytes << ','
-        << r.copy_stats.copy_loop_iterations << ','
+    out << r.case_name << ',' << r.mode << ',' << r.bytes << ',' << r.iterations << ','
+        << r.elapsed_ns << ',' << r.syscall_stats.read_syscalls << ','
+        << r.syscall_stats.write_syscalls << ',' << r.syscall_stats.read_syscall_bytes << ','
+        << r.syscall_stats.write_syscall_bytes << ',' << r.copy_stats.buffered_fast_path_bytes
+        << ',' << r.copy_stats.scratch_path_bytes << ',' << r.copy_stats.copy_loop_iterations << ','
         << r.vector_stats.read_vec_calls << ',' << r.vector_stats.write_vec_calls << ','
         << r.sync_stats.sync_data_calls << ',' << r.sync_stats.sync_all_calls << '\n';
 }
 
-}  // namespace sluice::bench
+} // namespace sluice::bench

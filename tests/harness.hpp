@@ -27,7 +27,8 @@ inline std::vector<Failure>& failures() {
     return f;
 }
 
-inline void record_failure(const char* file, int line, std::string_view expr, std::string_view msg = {}) {
+inline void record_failure(const char* file, int line, std::string_view expr,
+                           std::string_view msg = {}) {
     failures().push_back({std::string(file), line, std::string(expr), std::string(msg)});
 }
 
@@ -46,16 +47,16 @@ inline int report_and_exit() {
     return 1;
 }
 
-}  // namespace sluice_test
+} // namespace sluice_test
 
-#define SLUICE_TEST_CASE(name) \
-    static void name(); \
-    namespace { \
-    struct name##_registrar { \
-        name##_registrar() { ::sluice_test::run_case(#name, name); } \
-    }; \
-    } \
-    static name##_registrar name##_registered_; \
+#define SLUICE_TEST_CASE(name)                                                                     \
+    static void name();                                                                            \
+    namespace {                                                                                    \
+    struct name##_registrar {                                                                      \
+        name##_registrar() { ::sluice_test::run_case(#name, name); }                               \
+    };                                                                                             \
+    }                                                                                              \
+    static name##_registrar name##_registered_;                                                    \
     static void name()
 
 namespace sluice_test {
@@ -81,31 +82,31 @@ inline int run_all() {
     }
     return report_and_exit();
 }
-}  // namespace sluice_test
+} // namespace sluice_test
 
-#define SLUICE_CHECK(cond)                                                              \
-    do {                                                                               \
-        if (!(cond)) {                                                                 \
-            ::sluice_test::record_failure(__FILE__, __LINE__, #cond);                   \
-            return;                                                                    \
-        }                                                                              \
+#define SLUICE_CHECK(cond)                                                                         \
+    do {                                                                                           \
+        if (!(cond)) {                                                                             \
+            ::sluice_test::record_failure(__FILE__, __LINE__, #cond);                              \
+            return;                                                                                \
+        }                                                                                          \
     } while (0)
 
-#define SLUICE_CHECK_MSG(cond, msg)                                                     \
-    do {                                                                               \
-        if (!(cond)) {                                                                 \
-            ::sluice_test::record_failure(__FILE__, __LINE__, #cond, msg);              \
-            return;                                                                    \
-        }                                                                              \
+#define SLUICE_CHECK_MSG(cond, msg)                                                                \
+    do {                                                                                           \
+        if (!(cond)) {                                                                             \
+            ::sluice_test::record_failure(__FILE__, __LINE__, #cond, msg);                         \
+            return;                                                                                \
+        }                                                                                          \
     } while (0)
 
-#define SLUICE_FAIL(msg)                                                                \
-    do {                                                                               \
-        ::sluice_test::record_failure(__FILE__, __LINE__, "(fail)", msg);               \
-        return;                                                                        \
+#define SLUICE_FAIL(msg)                                                                           \
+    do {                                                                                           \
+        ::sluice_test::record_failure(__FILE__, __LINE__, "(fail)", msg);                          \
+        return;                                                                                    \
     } while (0)
 
-#define SLUICE_MAIN()                                                                   \
-    int main() {                                                                       \
-        return ::sluice_test::run_all();                                                \
+#define SLUICE_MAIN()                                                                              \
+    int main() {                                                                                   \
+        return ::sluice_test::run_all();                                                           \
     }

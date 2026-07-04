@@ -3,6 +3,7 @@
 // vector_writer. CSV to stdout. NOT a performance claim — see
 // docs/core-microbench-methodology.md.
 #include "bench_common.hpp"
+#include "support/temp_path.hpp"
 
 #include <sluice/buffer.hpp>
 #include <sluice/file.hpp>
@@ -20,26 +21,13 @@
 #include <vector>
 
 namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath() {
-        std::ostringstream oss;
-        oss << "sluice_bench_sw_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-};
+using sluice::bench::TempPath;
 
 std::uint64_t now_ns() {
-    return static_cast<std::uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
+    return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
 }
 
-constexpr std::uint64_t kTotalBytes = 1u << 20;  // 1 MiB per cell
+constexpr std::uint64_t kTotalBytes = 1U << 20; // 1 MiB per cell
 constexpr int kWarmupIters = 2;
 
 void bench_raw(const std::string& path, std::size_t chunk, sluice::bench::BenchResult& r) {
@@ -50,13 +38,23 @@ void bench_raw(const std::string& path, std::size_t chunk, sluice::bench::BenchR
     for (int i = 0; i < kWarmupIters; ++i) {
         sluice::FileWriter w(path, &ss);
         std::uint64_t left = kTotalBytes;
-        while (left) { auto n = std::min(left, buf.size()); (void)w.write_all(std::span(buf.data(), n)); left -= n; }
+        while (left) {
+            auto n = std::min(left, buf.size());
+            (void)w.write_all(std::span(buf.data(), n));
+            left -= n;
+        }
     }
     ss = {};
     auto t0 = now_ns();
     sluice::FileWriter w(path, &ss);
-    std::uint64_t left = kTotalBytes, iters = 0;
-    while (left) { auto n = std::min(left, buf.size()); (void)w.write_all(std::span(buf.data(), n)); left -= n; ++iters; }
+    std::uint64_t left = kTotalBytes;
+    std::uint64_t iters = 0;
+    while (left) {
+        auto n = std::min(left, buf.size());
+        (void)w.write_all(std::span(buf.data(), n));
+        left -= n;
+        ++iters;
+    }
     (void)w.flush();
     r.elapsed_ns = now_ns() - t0;
     r.bytes = kTotalBytes;
@@ -65,74 +63,112 @@ void bench_raw(const std::string& path, std::size_t chunk, sluice::bench::BenchR
 
 void bench_buffered(const std::string& path, std::size_t chunk, sluice::bench::BenchResult& r) {
     r.mode = "buffered_writer";
-    sluice::SyscallStats ss; sluice::BufferStats bs;
+    sluice::SyscallStats ss;
+    sluice::BufferStats bs;
     std::vector<std::byte> buf(chunk, std::byte{0xAB});
     std::vector<std::byte> wbuf(4096);
     for (int i = 0; i < kWarmupIters; ++i) {
-        sluice::FileWriter fw(path); sluice::BufferedWriter bw(fw, wbuf, &bs);
+        sluice::FileWriter fw(path);
+        sluice::BufferedWriter bw(fw, wbuf, &bs);
         std::uint64_t left = kTotalBytes;
-        while (left) { auto n = std::min(left, buf.size()); (void)bw.write_all(std::span(buf.data(), n)); left -= n; }
+        while (left) {
+            auto n = std::min(left, buf.size());
+            (void)bw.write_all(std::span(buf.data(), n));
+            left -= n;
+        }
         (void)bw.flush();
     }
-    bs = {}; ss = {};
+    bs = {};
+    ss = {};
     auto t0 = now_ns();
-    sluice::FileWriter fw(path, &ss); sluice::BufferedWriter bw(fw, wbuf, &bs);
-    std::uint64_t left = kTotalBytes, iters = 0;
-    while (left) { auto n = std::min(left, buf.size()); (void)bw.write_all(std::span(buf.data(), n)); left -= n; ++iters; }
+    sluice::FileWriter fw(path, &ss);
+    sluice::BufferedWriter bw(fw, wbuf, &bs);
+    std::uint64_t left = kTotalBytes;
+    std::uint64_t iters = 0;
+    while (left) {
+        auto n = std::min(left, buf.size());
+        (void)bw.write_all(std::span(buf.data(), n));
+        left -= n;
+        ++iters;
+    }
     (void)bw.flush();
     r.elapsed_ns = now_ns() - t0;
-    r.bytes = kTotalBytes; r.iterations = iters;
-    r.syscall_stats = ss; r.buffer_stats = bs;
+    r.bytes = kTotalBytes;
+    r.iterations = iters;
+    r.syscall_stats = ss;
+    r.buffer_stats = bs;
 }
 
-void bench_observed_buffered(const std::string& path, std::size_t chunk, sluice::bench::BenchResult& r) {
+void bench_observed_buffered(const std::string& path, std::size_t chunk,
+                             sluice::bench::BenchResult& r) {
     r.mode = "observed_buffered_writer";
-    sluice::SyscallStats ss; sluice::BufferStats bs; sluice::WriterStats ws;
+    sluice::SyscallStats ss;
+    sluice::BufferStats bs;
+    sluice::WriterStats ws;
     std::vector<std::byte> buf(chunk, std::byte{0xAB});
     std::vector<std::byte> wbuf(4096);
     auto t0 = now_ns();
     sluice::FileWriter fw(path, &ss);
     sluice::ObservedWriter ow(fw, ws);
     sluice::BufferedWriter bw(ow, wbuf, &bs);
-    std::uint64_t left = kTotalBytes, iters = 0;
-    while (left) { auto n = std::min(left, buf.size()); (void)bw.write_all(std::span(buf.data(), n)); left -= n; ++iters; }
+    std::uint64_t left = kTotalBytes;
+    std::uint64_t iters = 0;
+    while (left) {
+        auto n = std::min(left, buf.size());
+        (void)bw.write_all(std::span(buf.data(), n));
+        left -= n;
+        ++iters;
+    }
     (void)bw.flush();
     r.elapsed_ns = now_ns() - t0;
-    r.bytes = kTotalBytes; r.iterations = iters;
-    r.syscall_stats = ss; r.buffer_stats = bs;
+    r.bytes = kTotalBytes;
+    r.iterations = iters;
+    r.syscall_stats = ss;
+    r.buffer_stats = bs;
 }
 
 void bench_vector(const std::string& path, std::size_t chunk, sluice::bench::BenchResult& r) {
     r.mode = "vector_writer";
-    sluice::SyscallStats ss; sluice::VectorStats vs;
+    sluice::SyscallStats ss;
+    sluice::VectorStats vs;
     std::vector<std::byte> buf(chunk, std::byte{0xAB});
     auto t0 = now_ns();
     sluice::FileWriter fw(path, &ss, &vs);
-    std::uint64_t left = kTotalBytes, iters = 0;
+    std::uint64_t left = kTotalBytes;
+    std::uint64_t iters = 0;
     while (left) {
         sluice::ConstIoSlice sl{std::span<const std::byte>(buf)};
         auto res = fw.write_vec(std::span<const sluice::ConstIoSlice>(&sl, 1));
-        if (!res.has_value() || res.value() == 0) break;
-        left -= res.value(); ++iters;
+        if (!res.has_value() || res.value() == 0) {
+            break;
+        }
+        left -= res.value();
+        ++iters;
     }
     (void)fw.flush();
     r.elapsed_ns = now_ns() - t0;
-    r.bytes = kTotalBytes - left; r.iterations = iters;
-    r.syscall_stats = ss; r.vector_stats = vs;
+    r.bytes = kTotalBytes - left;
+    r.iterations = iters;
+    r.syscall_stats = ss;
+    r.vector_stats = vs;
 }
 
-}  // namespace
+} // namespace
 
 int main() {
-    TempPath tp;
+    TempPath tp("sluice_bench_sw");
     sluice::bench::print_csv_header(std::cout);
-    for (std::size_t chunk : {1u, 8u, 64u, 512u, 4096u}) {
+    for (std::size_t chunk : {1U, 8U, 64U, 512U, 4096U}) {
         sluice::bench::BenchResult r;
         r.case_name = "small_writes";
-        bench_raw(tp.str(), chunk, r);              sluice::bench::print_csv_row(std::cout, r);
-        bench_buffered(tp.str(), chunk, r);         sluice::bench::print_csv_row(std::cout, r);
-        bench_observed_buffered(tp.str(), chunk, r);sluice::bench::print_csv_row(std::cout, r);
-        bench_vector(tp.str(), chunk, r);           sluice::bench::print_csv_row(std::cout, r);
+        bench_raw(tp.str(), chunk, r);
+        sluice::bench::print_csv_row(std::cout, r);
+        bench_buffered(tp.str(), chunk, r);
+        sluice::bench::print_csv_row(std::cout, r);
+        bench_observed_buffered(tp.str(), chunk, r);
+        sluice::bench::print_csv_row(std::cout, r);
+        bench_vector(tp.str(), chunk, r);
+        sluice::bench::print_csv_row(std::cout, r);
     }
     return 0;
 }

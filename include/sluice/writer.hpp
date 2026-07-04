@@ -13,7 +13,7 @@
 namespace sluice {
 
 class Writer {
-public:
+  public:
     virtual ~Writer() = default;
 
     // Primitive: write up to src.size() bytes. May return fewer (short write).
@@ -45,4 +45,4 @@ public:
     Result<void> write_all_vec(std::span<const ConstIoSlice> srcs);
 };
 
-}  // namespace sluice
+} // namespace sluice
