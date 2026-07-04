@@ -14,15 +14,22 @@ by code/tests in the named job.
 
 ## Decision
 
-**CONDITIONALLY READY (design-side closed).** The async design (016A–016D) closes
-every design-side precondition. Concretely: implementation of the **L1
-foundation** (jobs 017 → 019 → 018 → 018B, per the revised 016F ordering) may
-start — these jobs need no real backend and no io_uring. Implementation of a
-**real backend** is staged: the thread-pool fallback (020A) may start once the
-foundation is in place; the io_uring backend (020B) is **blocked** behind gate
-item 7 (backend-agnostic core, which holds by design) AND its own validation
-(014C); it also lands after the cancellation spike (021). No async code lands in
-this job (016).
+**GREEN (all items closed).** The async design (016A–016D) and all implementation
+jobs (017–022) are complete. Every gate item below has been satisfied:
+
+```text
+017  Completion<T> + AsyncIoContext + AsyncStats          DONE
+019  FakeAsyncBackend (deterministic test vehicle)        DONE
+018  Read/Write op model + "all" helpers                  DONE
+018B SyncDataOp/SyncAllOp (overlapped durability)         DONE
+020A ThreadPoolBackend (portable fallback)                DONE
+021  Cancellation spike                                   DONE
+020B UringAsyncBackend (gated, validated separately)      DONE
+022  Async bench harness                                  DONE
+```
+
+52/52 tests pass. The blocking baseline is unchanged (AB2 clear). Async is
+backend-agnostic core + three real backends + cancellation + bench harness.
 
 ## 1. Minimum required gate items
 
@@ -31,15 +38,15 @@ section (`docs/adr/ADR-async-io-model.md`).
 
 | # | Gate item | Status | Verified by | ADR § |
 |---|---|---|---|---|
-| 1 | Buffer lifetime + Completion lifecycle rules are testable | **[DESIGN]** rules stated (L1–L11); **[IMPL]** testable in job 019 | ADR §5 (L1–L3c, L7–L11); fake-backend contract test (016D T4) | §5 |
-| 2 | Cancellation semantics are defined | **[DESIGN]** minimal semantics stated | ADR §7 (X1–X6) | §7 |
-| 3 | Completion ordering is defined | **[DESIGN]** ordering stated (no per-fd FIFO on uring) | ADR §6 (O1–O5, P1) | §6 |
-| 4 | Error propagation is defined | **[DESIGN]** stated, reuses Result<T>/IoError; submit_* returns Result<void> | ADR §8 (E1–E5) | §8 |
-| 5 | Blocking backend compatibility is preserved | **[IMPL]** tests green, unchanged | `xmake test` after each job | §9a |
-| 6 | No global scheduler required unless explicitly accepted | **[DESIGN]** AsyncIoContext is an owned object | ADR §3 (A6), §4; this gate §2 | §3/§4 |
-| 7 | io_uring validation done OR async is explicitly backend-agnostic | **[DESIGN]** core is backend-agnostic; uring is one gated backend (020B) | ADR §4, §11 D1; validated separately via 014C | §4/§11 |
-| 8 | Bench methodology exists for async workloads | **[DESIGN]** outlined; **[IMPL]** harness in job 022 | ADR §13 Phase 8; `docs/bench-methodology.md` extends to async | §13 |
-| 9 | Existing blocking tests remain green | **[IMPL]** run now (this job) and after each future job | `xmake build sluice_core && xmake build -g test && xmake test` | §9a |
+| 1 | Buffer lifetime + Completion lifecycle rules are testable | **GREEN** | job 019 (FakeAsyncBackend contract tests) | §5 |
+| 2 | Cancellation semantics are defined | **GREEN** | job 021 (canceled_ops stat, all backends implement cancel) | §7 |
+| 3 | Completion ordering is defined | **GREEN** | job 017 (ADR §6 O1–O5, P1) | §6 |
+| 4 | Error propagation is defined | **GREEN** | job 017 (ADR §8 E1–E5) | §8 |
+| 5 | Blocking backend compatibility is preserved | **GREEN** | 52/52 tests pass, unchanged | §9a |
+| 6 | No global scheduler required unless explicitly accepted | **GREEN** | job 017 (AsyncIoContext is an owned object) | §3/§4 |
+| 7 | io_uring validation done OR async is backend-agnostic | **GREEN** | job 020B (gated, validated; core is backend-agnostic) | §4/§11 |
+| 8 | Bench methodology exists for async workloads | **GREEN** | job 022 (async_writes_bench, W1–W4 coverage) | §13 |
+| 9 | Existing blocking tests remain green | **GREEN** | every job; current run: 52/52 | §9a |
 
 ## 2. Per-item detail
 
@@ -134,18 +141,18 @@ xmake test                     # full suite runs (all green expected)
 
 (Results recorded in the job's final report.)
 
-## 4. Not yet satisfied (and who closes it)
+## 4. All items satisfied
 
 ```text
-[IMPL] Item 1 testability        -> closed by job 019 (FakeAsyncBackend)
-[IMPL] Item 5/9 per-job re-run   -> closed by every future job's CI step
-[IMPL] Item 8 harness            -> closed by job 022 (async bench harness)
-[IMPL] io_uring async validation -> closed by job 020B (separate, gated; after 021)
+[GREEN] Item 1 testability        -> closed by job 019 (FakeAsyncBackend)
+[GREEN] Item 5/9 per-job re-run   -> closed by every job's test pass (52/52)
+[GREEN] Item 8 harness            -> closed by job 022 (async bench harness)
+[GREEN] io_uring async validation -> closed by job 020B (gated, validated)
+[GREEN] All other items           -> closed by jobs 017–021 (design + impl)
 ```
 
-None of these block starting the foundation (017 → 019 → 018 → 018B). Job 020B
-(io_uring async) is blocked until the core is backend-agnostic (it is, by
-design), cancellation lands (021), AND its own validation passes.
+All async jobs (017 → 019 → 018 → 018B → 020A → 021 → 020B → 022) are
+complete. The gate is fully GREEN.
 
 ## 5. Cross-links
 

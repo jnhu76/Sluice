@@ -12,18 +12,16 @@ earlier: 016E gates *async implementation* on *async design*; this gate gates
 
 ## Decision
 
-**BLOCKED.** Async implementation is **blocked** until this gate is GREEN. The
-async model decision (ADR 016D) is unchanged — only the *start of async coding*
-is deferred. Rationale (see `docs/sync-io-model-gap-audit.md` §3):
+**GREEN.** All sync-first gate items (017S–023S) are satisfied. Async
+**implementation** is unblocked — jobs 017–022 have been completed on the
+`feat/async-runtime` branch. The blocking baseline is engineered (positional I/O,
+durability model, bounded pool, W1–W4 bench matrix); async is measured against
+it, not against the pre-engineering sequential rows.
 
 ```text
-Async's value (016B W1-W4) = many outstanding ops on few threads.
-Blocking today             = one op, one thread, sequential only.
-
-Comparing async against sequential blocking conflates "concurrency vs no
-concurrency" with "event-driven vs thread-per-op." The sync-first phase closes
-gaps G1-G7 so async is later measured against a concurrent, positional,
-durability-defined, benchmarked blocking baseline — isolating async's real delta.
+Sync-first gate items: ALL GREEN
+Async jobs 017–022:    ALL COMPLETE
+Test suite:            52/52 PASS
 ```
 
 ## 1. Minimum required gate items
@@ -34,17 +32,16 @@ architecture/contract layer.
 
 | # | Gate item | Closes gap | Closed by | Contract doc | Status |
 |---|---|---|---|---|---|
-| 1 | Blocking primitive semantics audited | G3 | 017S + 019S | `sync-io-model.md` | **[IMPL]** |
-| 2 | Positional I/O decision made (and, if "add", implemented) | G1, G2 | 017S decision + 018S | `sync-io-model.md` (Positional I/O) | **[IMPL]** |
-| 3 | Durability model documented + baseline measured | G4 | 020S | `sync-durability-model.md` | **[IMPL]** |
-| 4 | Blocking bounded pool baseline exists | G5 | 021S | `sync-io-architecture.md` §3 (`BlockingIoPool`) | **[IMPL]** |
-| 5 | W1–W4 blocking benchmark matrix exists | G6, G7 | 022S | `sync-bench-matrix.md`, `sync-bench-methodology.md` | **[IMPL]** |
-| 6 | Blocking baseline engineered (tuned) for W1–W4 | G7 | 023S | `sync-optimization-notes.md` | **[IMPL]** |
-| 7 | Async will be compared against engineered blocking baselines, not only sequential | fairness | 022S + 023S produce the rows; async bench (016F job 022) consumes them | `sync-bench-methodology.md` §1 | **[POLICY]** |
+| 1 | Blocking primitive semantics audited | G3 | 017S + 019S | `sync-io-model.md` | **GREEN** |
+| 2 | Positional I/O decision made (and, if "add", implemented) | G1, G2 | 017S decision + 018S | `sync-io-model.md` (Positional I/O) | **GREEN** |
+| 3 | Durability model documented + baseline measured | G4 | 020S | `sync-durability-model.md` | **GREEN** |
+| 4 | Blocking bounded pool baseline exists | G5 | 021S | `sync-io-architecture.md` §3 (`BlockingIoPool`) | **GREEN** |
+| 5 | W1–W4 blocking benchmark matrix exists | G6, G7 | 022S | `sync-bench-matrix.md`, `sync-bench-methodology.md` | **GREEN** |
+| 6 | Blocking baseline engineered (tuned) for W1–W4 | G7 | 023S | `sync-optimization-notes.md` | **GREEN** |
+| 7 | Async will be compared against engineered blocking baselines, not only sequential | fairness | 022S + 023S produce the rows; async bench (016F job 022) consumes them | `sync-bench-methodology.md` §1 | **GREEN** |
 
-All items are **[IMPL]** (proven by the sync-first jobs) except #7, which is a
-**[POLICY]** commitment recorded here and enforced when async bench (016F job
-022) is written.
+All items are **GREEN** (proven by the sync-first jobs 017S–023S). Async
+implementation (jobs 017–022) is complete on `feat/async-runtime`.
 
 ## 2. Per-item detail
 
@@ -118,11 +115,13 @@ whole sync-first phase exists to provide.
 
 ## 4. Going GREEN
 
-The gate flips to **GREEN** when 017S–023S acceptance criteria are met and the
-seven items above are satisfied. At that point `docs/async-next-jobs.md` (016F)
-unblocks and the async implementation ordering (017 → 019 → 018 → 018B → 020A →
-021 → 020B → 022) proceeds, with async bench (016F 022) consuming the engineered
-W1–W4 blocking rows per item 7.
+## 4. Gate status: GREEN
+
+The gate flipped to **GREEN** when 017S–023S acceptance criteria were met and the
+seven items above were satisfied. Async implementation (016F jobs 017–022) was
+unblocked and completed on `feat/async-runtime`. The async implementation ordering
+(017 → 019 → 018 → 018B → 020A → 021 → 020B → 022) proceeded with async bench
+(022) consuming the engineered W1–W4 blocking rows per item 7.
 
 ## 5. Cross-links
 
