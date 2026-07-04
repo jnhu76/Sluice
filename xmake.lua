@@ -341,6 +341,10 @@ sluice_one_file_target("binary", "bench", "uring_write_bench", "bench",
 sluice_one_file_target("binary", "bench", "pool_throughput_bench", "bench",
                       {"sluice_core", "sluice_bench_common"})
 
+-- async_writes_bench (sluice-CORE-022) needs the async runtime lib too.
+sluice_one_file_target("binary", "bench", "async_writes_bench", "bench",
+                      {"sluice_core", "sluice_bench_common", "sluice_async"})
+
 -- ---------------------------------------------------------------------------
 -- SLUICE-CORE-013B: optional liburing build gate for the experimental spike.
 --
