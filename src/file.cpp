@@ -50,9 +50,12 @@ Result<std::size_t> syscall_result(ssize_t n) {
 long iov_max() {
     static const long cached = []() -> long {
 #ifdef IOV_MAX
-        long v = static_cast<long>(kIovMaxConst);
-        return v > 0 ? v : 16L;
+        // kIovMaxConst derives from the system IOV_MAX macro (POSIX minimum 16,
+        // Linux 1024); it is compile-time positive, so no runtime check needed.
+        return static_cast<long>(kIovMaxConst);
 #else
+        // No compile-time IOV_MAX: query sysconf, fall back to the POSIX minimum
+        // (16) if the query fails or returns a non-positive value.
         long v = ::sysconf(_SC_IOV_MAX);
         return v > 0 ? v : 16L;
 #endif

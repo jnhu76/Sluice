@@ -69,7 +69,7 @@ struct BlockingIoPool::Impl {
         try {
             job();
         } catch (...) {
-            std::lock_guard<std::mutex> lk(mtx);
+            std::scoped_lock lk(mtx);
             if (!pending_ex) pending_ex = std::current_exception();
         }
     }
@@ -127,7 +127,7 @@ void BlockingIoPool::wait_all() {
 
 void BlockingIoPool::shutdown() {
     {
-        std::lock_guard<std::mutex> lk(impl_->mtx);
+        std::scoped_lock lk(impl_->mtx);
         if (!impl_->accepting) return;   // idempotent
         impl_->accepting = false;
         impl_->stopped = true;
