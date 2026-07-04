@@ -13,6 +13,7 @@
 // CSV to stdout. Results are environment-sensitive — NO universal performance
 // claim; sync timings depend heavily on the underlying filesystem/disk.
 #include "bench_common.hpp"
+#include "support/temp_path.hpp"
 #include "support/blocking_io_pool.hpp"
 #include "support/sync_matrix.hpp"
 
@@ -30,23 +31,7 @@
 #include <vector>
 
 namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath() {
-        std::ostringstream oss;
-        oss << "sluice_w4_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << "_"
-            << (counter_++) << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try {
-            std::filesystem::remove(p);
-        } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-    static inline long counter_ = 0;
-};
+using sluice::bench::TempPath;
 
 std::uint64_t now_ns() {
     return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -164,7 +149,7 @@ void run_cell(const Params& pm) {
     std::vector<TempPath> held;
     std::vector<std::string> paths;
     for (std::size_t s = 0; s < pm.streams; ++s) {
-        held.emplace_back();
+        held.emplace_back("sluice_w4");
         paths.push_back(held.back().str());
     }
 

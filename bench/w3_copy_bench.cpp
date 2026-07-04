@@ -8,6 +8,7 @@
 // Three execution modes (sync-bench-methodology.md §2). CSV to stdout. Results
 // are environment-sensitive — NO universal performance claim.
 #include "bench_common.hpp"
+#include "support/temp_path.hpp"
 #include "support/blocking_io_pool.hpp"
 #include "support/sync_matrix.hpp"
 
@@ -30,23 +31,7 @@
 #include <vector>
 
 namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath() {
-        std::ostringstream oss;
-        oss << "sluice_w3_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << "_"
-            << (counter_++) << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try {
-            std::filesystem::remove(p);
-        } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-    static inline long counter_ = 0;
-};
+using sluice::bench::TempPath;
 
 std::uint64_t now_ns() {
     return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -115,8 +100,11 @@ std::uint64_t run_thread_per_stream(const Params& pm, const std::vector<std::str
     std::vector<std::vector<std::byte>> scratches(pm.streams,
                                                   std::vector<std::byte>(pm.buffer_size));
     // Capture any thread exception so it does not std::terminate the bench; it
-    // is rethrown on the caller thread after join (same pattern as the pool).
-    std::atomic<std::exception_ptr> captured{nullptr};
+    // is rethrown on the caller thread after join. exception_ptr is NOT
+    // trivially copyable, so guard with a mutex (portable; std::atomic<
+    // exception_ptr> is not guaranteed pre-C++23).
+    std::mutex ex_mtx;
+    std::exception_ptr captured;
     std::vector<std::thread> threads;
     threads.reserve(pm.streams);
     auto t0 = now_ns();
@@ -124,19 +112,22 @@ std::uint64_t run_thread_per_stream(const Params& pm, const std::vector<std::str
         std::byte* sc = scratches[s].data();
         std::string src = srcs[s];
         std::string dst = dsts[s];
-        threads.emplace_back([src, dst, &pm, sc, &captured] {
+        threads.emplace_back([src, dst, &pm, sc, &captured, &ex_mtx] {
             try {
                 (void)run_one_copy(src, dst, pm.bytes_per_stream, pm.buffer_size, sc);
             } catch (...) {
-                captured.store(std::current_exception());
+                std::scoped_lock lk(ex_mtx);
+                if (!captured) {
+                    captured = std::current_exception();
+                }
             }
         });
     }
     for (auto& t : threads) {
         t.join();
     }
-    if (auto ex = captured.load()) {
-        std::rethrow_exception(ex);
+    if (captured) {
+        std::rethrow_exception(captured);
     }
     return now_ns() - t0;
 }
@@ -164,10 +155,10 @@ void run_cell(const Params& pm) {
     std::vector<std::string> srcs;
     std::vector<std::string> dsts;
     for (std::size_t s = 0; s < pm.streams; ++s) {
-        held.emplace_back();
+        held.emplace_back("sluice_w3");
         srcs.push_back(held.back().str());
         seed_file(srcs.back(), pm.bytes_per_stream);
-        held.emplace_back();
+        held.emplace_back("sluice_w3");
         dsts.push_back(held.back().str());
     }
     std::vector<std::byte> scratch(pm.buffer_size);

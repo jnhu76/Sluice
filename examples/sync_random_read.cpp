@@ -6,6 +6,7 @@
 // positional contract without async/coroutine machinery.
 #include <sluice/file.hpp>
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -24,26 +25,27 @@ int main(int argc, char** argv) {
     }
 
     // Positional reads at two disjoint offsets. These do NOT move the cursor.
-    std::byte a[4]{};
-    std::byte b[4]{};
-    if (auto res = r.read_at_exact(0, std::span<std::byte>(a)); !res.has_value()) {
+    std::array<std::byte, 4> a{};
+    std::array<std::byte, 4> b{};
+    if (auto res = r.read_at_exact(0, std::span<std::byte>(a.data(), a.size())); !res.has_value()) {
         std::fprintf(stderr, "read_at_exact(0) failed\n");
         return 1;
     }
-    if (auto res = r.read_at_exact(100, std::span<std::byte>(b)); !res.has_value()) {
+    if (auto res = r.read_at_exact(100, std::span<std::byte>(b.data(), b.size()));
+        !res.has_value()) {
         std::fprintf(stderr, "read_at_exact(100) failed (file may be < 104 bytes)\n");
         // not fatal — the contract demo still holds for the first read
     }
 
     // Cursor-based read: starts at offset 0 (positional reads left it untouched).
-    std::byte cur[4]{};
-    auto n = r.read_some(std::span<std::byte>(cur));
+    std::array<std::byte, 4> cur{};
+    auto n = r.read_some(std::span<std::byte>(cur.data(), cur.size()));
     if (!n.has_value()) {
         std::fprintf(stderr, "read_some failed\n");
         return 1;
     }
     // cur should equal a (both read offset 0) — positional reads didn't advance.
-    bool cursor_intact = (n.value() == 4 && std::memcmp(cur, a, 4) == 0);
+    bool cursor_intact = (n.value() == 4 && std::memcmp(cur.data(), a.data(), 4) == 0);
     std::printf("positional reads left cursor at 0: %s\n", cursor_intact ? "yes (G6 holds)" : "no");
     return cursor_intact ? 0 : 1;
 }

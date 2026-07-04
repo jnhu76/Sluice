@@ -3,7 +3,10 @@
 // NOT a vector-I/O performance claim — it only shows the vector path composes
 // end-to-end with the scalar reader.
 #include <sluice/file.hpp>
+#include "support/temp_path.hpp"
 #include <sluice/wal.hpp>
+
+using sluice::bench::TempPath;
 
 #include <cstdio>
 #include <cstring>
@@ -14,21 +17,6 @@
 #include <vector>
 
 namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath() {
-        std::ostringstream oss;
-        oss << "sluice_mvp_wal_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try {
-            std::filesystem::remove(p);
-        } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-};
 
 std::vector<std::byte> bytes_of(std::string_view s) {
     auto* p = reinterpret_cast<const std::byte*>(s.data());

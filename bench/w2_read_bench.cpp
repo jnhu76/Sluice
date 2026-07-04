@@ -7,6 +7,7 @@
 // Three execution modes (sync-bench-methodology.md §2). CSV to stdout. Results
 // are environment-sensitive — NO universal performance claim.
 #include "bench_common.hpp"
+#include "support/temp_path.hpp"
 #include "support/blocking_io_pool.hpp"
 #include "support/sync_matrix.hpp"
 
@@ -27,23 +28,7 @@
 #include <vector>
 
 namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath() {
-        std::ostringstream oss;
-        oss << "sluice_w2_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << "_"
-            << (counter_++) << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try {
-            std::filesystem::remove(p);
-        } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-    static inline long counter_ = 0;
-};
+using sluice::bench::TempPath;
 
 std::uint64_t now_ns() {
     return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -180,12 +165,12 @@ void run_cell(const Params& pm) {
     std::vector<std::string> paths;
     std::vector<TempPath> held; // keep temp files alive across the cell
     for (std::size_t s = 0; s < pm.streams; ++s) {
-        held.emplace_back();
+        held.emplace_back("sluice_w2");
         paths.push_back(held.back().str());
         seed_file(paths.back(), pm.blocks_per_stream * pm.block_size);
     }
 
-    TempPath shared_path;
+    TempPath shared_path("sluice_w2");
     std::unique_ptr<sluice::FileReader> shared;
     if (pm.file_layout == "one_file_many_offsets") {
         seed_file(shared_path.str(), pm.streams * pm.blocks_per_stream * pm.block_size);

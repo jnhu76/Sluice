@@ -3,6 +3,7 @@
 // The uring mode is guarded: without SLUICE_HAS_LIBURING it emits a clear skip
 // row. NO broad performance claim — see docs/io-uring-spike.md §11.
 #include "bench_common.hpp"
+#include "support/temp_path.hpp"
 
 #include <sluice/experimental/uring_write_batch.hpp>
 #include <sluice/file.hpp>
@@ -24,22 +25,7 @@
 #endif
 
 namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath(const char* tag) {
-        std::ostringstream oss;
-        oss << "sluice_bench_uring_" << tag << "_" << std::hex
-            << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try {
-            std::filesystem::remove(p);
-        } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-};
+using sluice::bench::TempPath;
 
 std::uint64_t now_ns() {
     return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());

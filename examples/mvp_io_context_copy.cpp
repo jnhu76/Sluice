@@ -2,11 +2,14 @@
 // flushes, syncs (if SyncableWriter), prints stats, verifies bytes. No
 // performance claim.
 #include <sluice/buffer.hpp>
+#include "support/temp_path.hpp"
 #include <sluice/copy.hpp>
 #include <sluice/io_context.hpp>
 #include <sluice/limit.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/sync.hpp>
+
+using sluice::bench::TempPath;
 
 #include <cstdio>
 #include <filesystem>
@@ -17,22 +20,6 @@
 #include <vector>
 
 namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath(const char* tag) {
-        std::ostringstream oss;
-        oss << "sluice_ioctx_copy_" << tag << "_" << std::hex
-            << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try {
-            std::filesystem::remove(p);
-        } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-};
 
 bool file_read_all(const std::string& path, std::string& out) {
     std::ifstream in(path, std::ios::binary);

@@ -13,6 +13,7 @@
 // CSV to stdout via matrix::print_row. Results are environment-sensitive and
 // workload/machine-scoped — NO universal performance claim.
 #include "bench_common.hpp"
+#include "support/temp_path.hpp"
 #include "support/blocking_io_pool.hpp"
 #include "support/sync_matrix.hpp"
 
@@ -32,23 +33,7 @@
 #include <vector>
 
 namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath() {
-        std::ostringstream oss;
-        oss << "sluice_w1_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << "_"
-            << (counter_++) << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try {
-            std::filesystem::remove(p);
-        } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-    static inline long counter_ = 0;
-};
+using sluice::bench::TempPath;
 
 std::uint64_t now_ns() {
     return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -177,13 +162,13 @@ void run_cell(const Params& pm) {
     std::vector<TempPath> held;
     std::vector<std::string> paths;
     for (std::size_t s = 0; s < pm.streams; ++s) {
-        held.emplace_back();
+        held.emplace_back("sluice_w1");
         paths.push_back(held.back().str());
     }
 
     // For one_file_many_offsets, one shared fd; positional write_at per stream
     // writes disjoint regions. O_TRUNC is fine — we write everything ourselves.
-    TempPath shared_path;
+    TempPath shared_path("sluice_w1");
     std::unique_ptr<sluice::FileWriter> shared;
     if (pm.file_layout == "one_file_many_offsets") {
         shared = std::make_unique<sluice::FileWriter>(shared_path.str());

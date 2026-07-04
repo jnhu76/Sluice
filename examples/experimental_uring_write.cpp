@@ -3,7 +3,10 @@
 // unavailable, prints a clear unsupported message and exits success (skip-style).
 // No performance claim.
 #include <sluice/experimental/uring_io_context.hpp>
+#include "support/temp_path.hpp"
 #include <sluice/measurement.hpp>
+
+using sluice::bench::TempPath;
 
 #include <cstdio>
 #include <cstddef>
@@ -15,22 +18,6 @@
 #include <vector>
 
 namespace {
-
-struct TempPath {
-    std::filesystem::path p;
-    TempPath() {
-        std::ostringstream oss;
-        oss << "sluice_experimental_uring_" << std::hex << reinterpret_cast<std::uintptr_t>(this)
-            << ".tmp";
-        p = std::filesystem::temp_directory_path() / oss.str();
-    }
-    ~TempPath() {
-        try {
-            std::filesystem::remove(p);
-        } catch (...) {}
-    }
-    std::string str() const { return p.string(); }
-};
 
 bool file_has(const std::string& path, std::string_view want) {
     std::ifstream in(path, std::ios::binary);
