@@ -241,3 +241,33 @@ The blockers for proceeding into PHASE E (Evented/fibers):
 - Job-card sequence this governs: `docs/zig-stdio-migration-jobs.md` (023C).
 - Async ADR (the accepted L1 model): `docs/adr/ADR-async-io-model.md` (016D).
 - Async next jobs (017-022, GREEN baseline): `docs/async-next-jobs.md` (016F).
+
+## 9. PHASE B close-out (GREEN)
+
+PHASE B (backend substrate completeness) is **GREEN** as of jobs 024/025/026:
+
+```text
+024  Shared AsyncBackend conformance suite (B1)             DONE
+     8 shared cases × {Fake, ThreadPool, Uring-stub}; release+debug+
+     asanubsan+tsan green; GCC+Clang green. 53/53 tests.
+025  ThreadPoolBackend shutdown gate + cancel doc repair (B2) DONE
+     destroying_ now enforced via accepting_new_work(); header/impl agree;
+     cancel best-effort semantics documented and tested.
+026  UringAsyncBackend O(1) cancel + feature gates (B3)     DONE*
+     Completion* -> op-id reverse index (was linear scan); submit batching
+     seam verified present; registered-buffers/files gates added (off by
+     default). *Real-mode runtime verification DEFERRED: liburing absent
+     on host; structural syntax/type check passed (g++ -fsyntax-only
+     -DSLUICE_HAS_LIBURING exit 0). Exactly-once cancel-race logic
+     unchanged from 020B.
+```
+
+**The backend substrate is sufficient to support PHASE T (task model).** The
+verdict (B — sufficient with narrow extensions) holds: the narrow extensions
+are closed; the Zig task runtime lands on a separate layer above
+`AsyncBackend` (no contract change), per §5 of this audit.
+
+**Open item (not a blocker):** when a liburing-equipped environment is
+available, run the existing gated cancel cases in `tests/uring_backend_test.cpp`
+to runtime-verify the O(1) cancel path. The conformance suite (024) already
+exercises Uring in stub mode.
