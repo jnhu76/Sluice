@@ -104,6 +104,41 @@ sluice::copy_all(*reader, *writer);
 
 Direct `FileReader`/`FileWriter` constructors remain valid for simple cases. The context abstraction exists so future backends (io_uring, network sockets) can plug in without changing call sites.
 
+### Positional I/O
+
+`FileReader`/`FileWriter` support positional operations (`pread`/`pwrite`/`preadv`/`pwritev`) that do **not** mutate the shared file offset — two positional ops on the same fd at different offsets are independent:
+
+```cpp
+sluice::FileWriter writer(path);
+sluice::FileReader reader(path);
+
+writer.write_at(buf1, offset1);       // pwrite — cursor untouched
+writer.write_at(buf2, offset2);       // independent, no lseek needed
+reader.read_at(dst, offset);          // pread
+reader.read_at_exact(dst, offset);    // loops until dst is filled
+writer.write_all_at(src, offset);     // loops across shorts
+```
+
+Vectored positional forms (`read_vec_at`/`write_vec_at`/`write_all_vec_at`) are also available.
+
+### BlockingIoPool
+
+A **bounded OS-thread execution helper** for offloading blocking work. It is *not* an async runtime — it runs callables on a fixed number of `std::thread` workers:
+
+```cpp
+#include <sluice/blocking_io_pool.hpp>
+
+auto pool = sluice::BlockingIoPool::create(
+    sluice::BlockingIoPoolOptions{.worker_count = 4, .max_queue_depth = 64});
+
+auto task = pool->submit([] { return do_heavy_io(); });
+auto result = task.get();  // blocks until complete, surfaces value or rethrows
+
+pool->shutdown();  // stops accepting, drains submitted work, joins workers
+```
+
+Key properties: bounded queue (backpressure via `try_submit`), submission rejected after `shutdown()`, task exceptions surface via `task.get()`, instance-owned (no globals), sanitizer-clean. Formal TLA+ verification covers admission, lifecycle, and completion (`spec/tla/BlockingIoPool.tla`).
+
 ### Flush / sync / durability
 
 Three distinct operations with three distinct contracts:
@@ -229,6 +264,13 @@ Tests live under `tests/` and use a tiny dependency-free harness (`tests/harness
 | `syncable_writer_test` | `SyncableWriter` interface + capability detection |
 | `wal_writer_test` | WAL writer + sync integration |
 | `read_vec_all_test` | `read_vec_all` helper |
+| `file_positional_test` | Positional read/write (`pread`/`pwrite`/`preadv`/`pwritev`) — cursor isolation, vector chunking |
+| `blocking_io_pool_test` | `BlockingIoPool` unit/property tests — lifecycle, rejection, exception propagation |
+| `blocking_io_pool_invariants_test` | `BlockingIoPool` B-class invariant enforcement |
+| `blocking_io_pool_prod_test` | `BlockingIoPool` production pool concurrency |
+| `blocking_io_pool_stress_test` | `BlockingIoPool` stress under contention |
+| `sync_contract_negative_test` | Sync contract negative tests — G4–G6, G9, N4, N10 enforcement |
+| `sync_matrix_test` | Sync matrix correctness |
 | `uring_*_test` | Experimental io_uring spike (stub without liburing) |
 
 ## Examples
@@ -247,6 +289,8 @@ Tests live under `tests/` and use a tiny dependency-free harness (`tests/harness
 | `mvp_copy_strategy` | Scratch / BufferedFirst / Auto / deferred-rejected strategies |
 | `mvp_wal_durable` | WAL durability: write/flush/sync with LSN tracking |
 | `mvp_io_context_copy` | Open reader/writer through `BlockingIoContext`, copy, flush, sync |
+| `blocking_io_pool` | Bounded pool: submit tasks, collect results, observe stats |
+| `sync_random_read` | Positional random read across a file |
 | `experimental_uring_write` | Experimental io_uring write path (skips cleanly without liburing) |
 
 ## Design reference
@@ -286,14 +330,12 @@ For the full API reference, see [`docs/api-reference.md`](docs/api-reference.md)
 
 ## Status
 
-This phase focuses on correctness, observability, and composability. Optimization, benchmarking, io_uring, async backends, and policy selection are intentionally deferred.
+The sync-first phase is **complete** (jobs 017S–023S). The blocking baseline is now positional, durability-defined, concurrent (`BlockingIoPool`), and benchmarked across W1–W4. The sync-first readiness gate is **GREEN** — async implementation is unblocked.
+
+The sync runtime contract (`docs/adr/ADR-024S-sync-runtime-contract.md`) is fixed: all calls are synchronous, positional I/O does not mutate the file offset, EINTR is retried, and `BlockingIoPool` is a bounded OS-thread execution helper (not an async runtime). The contract's explicit non-goals (no `async`/`await`, no coroutine abstraction, no P2300, no cancellation of in-flight syscalls) protect the boundary between sync and future async work.
+
+The async **design** (`docs/adr/ADR-async-io-model.md`) remains accepted. Async **implementation** proceeds against the engineered blocking baselines — not sequential-only blocking.
 
 An experimental io_uring write spike (SLUICE-CORE-013) lives under `sluice::experimental` behind an optional `--with-liburing` build gate. It is **not** the default backend. See `docs/io-uring-spike.md`.
-
-### Async I/O: design accepted, implementation gated
-
-The async I/O **design** (sluice-CORE-016) has landed as design-only docs: an accepted ADR (`docs/adr/ADR-async-io-model.md`) specifying a completion-based, file-I/O-only, opt-in async foundation. **No async code exists yet** — blocking remains the default and the only implemented backend.
-
-Async **implementation** is intentionally blocked behind a **sync-first readiness gate** (`docs/sync-before-async-readiness-gate.md`): the blocking baseline must first gain positional I/O, a durability model, a bounded pool baseline, and a W1–W4 benchmark matrix (jobs 017S–023S, `docs/sync-io-next-jobs.md`) so that async is later compared against an engineered, concurrent blocking baseline rather than sequential-only blocking. See `docs/sync-io-model-gap-audit.md` for the rationale.
 
 For the full changelog, see `docs/changelog.md`.
