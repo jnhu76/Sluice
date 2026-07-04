@@ -18,3 +18,4 @@ build/
 a.out
 *.o
 .vscode/
+.cache/
