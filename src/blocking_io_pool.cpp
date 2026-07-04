@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -90,8 +91,21 @@ struct BlockingIoPool::Impl {
         return current_blocking_io_pool == this;
     }
 
-    void shutdown(bool detach_current_worker) {
-        std::call_once(shutdown_once, [this, detach_current_worker] {
+    bool is_current_worker_thread_id() const noexcept {
+        const std::thread::id self = std::this_thread::get_id();
+        for (const auto& w : workers) {
+            if (w.joinable() && w.get_id() == self) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void shutdown() {
+        std::call_once(shutdown_once, [this] {
+            if (is_current_worker_thread_id()) {
+                std::terminate();
+            }
             {
                 std::scoped_lock lk(mtx);
                 accepting = false;
@@ -99,15 +113,8 @@ struct BlockingIoPool::Impl {
                 not_full.notify_all();  // wake any blocked submitters
             }
 
-            const std::thread::id self = std::this_thread::get_id();
             for (auto& w : workers) {
                 if (!w.joinable()) {
-                    continue;
-                }
-                if (w.get_id() == self) {
-                    if (detach_current_worker) {
-                        w.detach();
-                    }
                     continue;
                 }
                 w.join();
@@ -128,13 +135,13 @@ BlockingIoPool::BlockingIoPool(BlockingIoPoolOptions opts, PoolStats* stats)
         }
     } catch (...) {
         // Roll back: signal shutdown so workers exit, then rethrow.
-        impl_->shutdown(/*detach_current_worker=*/false);
+        impl_->shutdown();
         throw;
     }
 }
 
 BlockingIoPool::~BlockingIoPool() {
-    impl_->shutdown(/*detach_current_worker=*/impl_->is_current_worker());
+    impl_->shutdown();
 }
 
 namespace detail {
@@ -198,7 +205,7 @@ void BlockingIoPool::shutdown() {
     if (impl_->is_current_worker()) {
         throw std::logic_error("BlockingIoPool::shutdown() cannot be called from a worker task");
     }
-    impl_->shutdown(/*detach_current_worker=*/false);
+    impl_->shutdown();
 }
 
 std::size_t BlockingIoPool::worker_count() const noexcept {
