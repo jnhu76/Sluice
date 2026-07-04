@@ -16,16 +16,14 @@ struct BlockingIoPool::Adapter {
     std::condition_variable cv;
     std::atomic<std::size_t> in_flight{0};
     std::exception_ptr pending_ex;
-    bool accepting = true;
+    // atomic: read in submit() (any thread) while shutdown() writes it (CP.2 —
+    // a plain bool here was a data race).
+    std::atomic<bool> accepting{true};
 
     explicit Adapter(std::size_t threads, std::size_t max_queued) {
-        auto r = sluice::make_blocking_io_pool(sluice::BlockingIoPoolOptions{threads, max_queued});
-        // The bench adapter coerces 0 to 1 (pre-024S behavior) for robustness;
-        // make_blocking_io_pool rejects 0, so coerce before calling.
-        if (!r.has_value()) {
-            r = sluice::make_blocking_io_pool(sluice::BlockingIoPoolOptions{
-                threads == 0 ? 1 : threads, max_queued == 0 ? 1 : max_queued});
-        }
+        // Coerce 0 to 1 (pre-024S robustness) before the factory, which rejects 0.
+        auto r = sluice::make_blocking_io_pool(sluice::BlockingIoPoolOptions{
+            threads == 0 ? 1 : threads, max_queued == 0 ? 1 : max_queued});
         if (!r.has_value()) {
             throw std::runtime_error("bench::BlockingIoPool: production pool construction failed");
         }
@@ -45,7 +43,7 @@ void BlockingIoPool::submit(std::function<void()> job) {
     if (!job) {
         return;
     }
-    if (!adapter_->accepting) {
+    if (!adapter_->accepting.load()) {
         return; // bench adapter: silent drop after shutdown (preserves contract)
     }
     adapter_->in_flight.fetch_add(1, std::memory_order_acq_rel);
@@ -90,11 +88,11 @@ void BlockingIoPool::wait_all() {
 }
 
 void BlockingIoPool::shutdown() {
-    if (!adapter_->accepting) {
+    if (!adapter_->accepting.load()) {
         adapter_->pool->shutdown(); // idempotent on production pool too
         return;
     }
-    adapter_->accepting = false;
+    adapter_->accepting.store(false);
     adapter_->pool->shutdown();
 }
 
