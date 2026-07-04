@@ -317,6 +317,25 @@ do
     end
 end
 
+-- Shared AsyncBackend conformance suite (sluice-CORE-024, B1). One parameterized
+-- harness asserting every genuinely-shared backend semantic against every
+-- backend. The suite impl is compiled into the driver target alongside the
+-- driver; backend-specific MECHANISM tests stay in their own files.
+do
+    local driver = "tests/backend_conformance_driver_test.cpp"
+    local impl = "tests/backend_conformance_test.cpp"
+    if os.isfile(driver) and os.isfile(impl) then
+        target("backend_conformance_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(driver, impl)
+            add_tests("backend_conformance_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }

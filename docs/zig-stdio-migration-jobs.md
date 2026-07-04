@@ -50,7 +50,17 @@ internal correctness, conformance, and seam additions.
 
 ---
 
-## 024 — Shared backend conformance suite (B1)
+## 024 — Shared backend conformance suite (B1) — DONE
+
+**Implemented.** `tests/backend_conformance.hpp` (factory + run_conformance),
+`tests/backend_conformance_test.cpp` (8 shared cases), and
+`tests/backend_conformance_driver_test.cpp` (instantiates Fake / ThreadPool /
+Uring-stub). Wired into `xmake.lua` as `backend_conformance_test` (test group).
+Verified: release, debug, asanubsan, tsan all green; 53/53 tests pass.
+real_mode cases (positional/EOF/short/exactly-once) exercised on ThreadPool;
+skipped cleanly on Fake + Uring-stub. Backend-specific mechanism tests remain
+in their existing per-backend files (no duplication removed yet — migration of
+redundant assertions is deferred to avoid churn).
 
 **Job ID.** 024
 **Title.** Shared `AsyncBackend` conformance suite
