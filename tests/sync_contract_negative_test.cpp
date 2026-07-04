@@ -108,19 +108,18 @@ SLUICE_TEST_CASE(contract_read_exact_retries_short_reads_to_completion) {
 // coroutine / async / io_uring machinery (N1, N2, N3). Structural guard: if a
 // future change makes reader.hpp/writer.hpp/file.hpp transitively depend on
 // <coroutine> or an async header, this test breaks the build.
-SLUICE_TEST_CASE(contract_sync_headers_have_no_coroutine_dependency) {
-    // If <coroutine> were a transitive include of the sync headers, the
-    // following macro-defined sentinel would be visible. It is NOT included
-    // anywhere in the sync layer by design (N1/N2).
-    #ifdef __cpp_impl_coroutine
-    // __cpp_impl_coroutine may be defined by the compiler itself regardless of
-    // our includes; this guard is therefore advisory, not a hard contract. The
-    // real guard is the absence of #include <coroutine> / async/ headers in the
-    // sync public surface — verified by grep in the merge-readiness checklist.
-    #endif
-    // The contract: compiling and linking this test against ONLY sluice_core
-    // (no sluice_async, no coroutine header included here) succeeds. That IS
-    // the guard: the sync layer stands alone.
+SLUICE_TEST_CASE(contract_sync_layer_stands_alone_from_async) {
+    // N1/N2 guard: the sync layer must not depend on coroutine/async machinery.
+    // This test deliberately does NOT include <coroutine> or any async/ header.
+    // The structural guards are:
+    //   (a) this TU links against sluice_core ONLY (xmake: deps = sluice_core);
+    //       if reader.hpp/writer.hpp/file.hpp ever transitively required
+    //       sluice_async, linking this test would fail.
+    //   (b) the merge-readiness grep (docs/reviews/024S-...md) checks the public
+    //       headers contain no #include <coroutine>/async/.
+    // The runtime assertion below confirms a basic sync operation succeeds on
+    // the standalone core, exercising the dependency boundary end-to-end.
+    static_assert(sizeof(MemoryReader) > 0, "MemoryReader is available from core alone");
     std::byte b{};
     MemoryReader r(MemoryReader::from_bytes(std::span<const std::byte>(&b, 1)));
     std::byte out[1]{};

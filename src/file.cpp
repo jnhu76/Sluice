@@ -185,7 +185,11 @@ Result<std::size_t> FileReader::read_at(std::uint64_t offset, std::span<std::byt
     }
     if (dst.empty()) return std::size_t{0};
     // pread does not move the file cursor. off_t is signed; offset is uint64.
-    // A pathological huge offset would overflow off_t — clamp via static_cast.
+    // This NARROWS via static_cast (not a clamp): on the supported configuration
+    // (off_t is 64-bit, _FILE_OFFSET_BITS=64 / LFS) the cast is lossless for all
+    // representable file offsets. Offsets beyond off_t's positive range yield
+    // implementation-defined behavior; the kernel rejects such syscalls with
+    // EINVAL/EOVERFLOW. Same rationale applies to write_at/*_vec_at below.
     ssize_t n = detail::retry_on_eintr([&] {
         return ::pread(fd_, dst.data(), dst.size(), static_cast<off_t>(offset));
     });
