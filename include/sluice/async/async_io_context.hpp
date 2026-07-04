@@ -57,6 +57,12 @@ public:
     AsyncBackend(const AsyncBackend&) = delete;
     AsyncBackend& operator=(const AsyncBackend&) = delete;
 
+    // Optional stats sink. The context attaches its caller-owned AsyncStats so
+    // the backend can tally per-completion outcomes it knows directly — e.g.
+    // canceled_ops (job 021) and completion_errors — without the context having
+    // to re-scan results after poll(). Null = no counting (default).
+    void attach_stats(AsyncStats* s) { stats_ = s; }
+
     // Hand an op to the backend against the caller-owned Completion. The backend
     // records the op outstanding (marking the Completion via mark_outstanding()
     // is the context's job, not the backend's, so the state machine stays in one
@@ -85,6 +91,7 @@ public:
 
 protected:
     AsyncBackend() = default;
+    AsyncStats* stats_ = nullptr;
 };
 
 // The public L1 foundation (parallels the blocking IoContext). Owns a backend;
