@@ -94,7 +94,7 @@ target("uring_stats_test")
 local examples = { "cat", "copy_file", "small_writes", "fault_write", "wal_records",
                    "mvp_copy_pipeline", "mvp_limited_copy", "mvp_wal_vector",
                    "mvp_copy_strategy", "mvp_wal_durable", "mvp_io_context_copy",
-                   "mvp_memory_io_context", "sync_random_read" }
+                   "mvp_memory_io_context", "sync_random_read", "blocking_io_pool" }
 for _, e in ipairs(examples) do
     sluice_one_file_target("binary", "examples", e, "examples", "sluice_core")
 end
@@ -102,11 +102,6 @@ end
 -- experimental_uring_write links the experimental uring lib (stub or real).
 sluice_one_file_target("binary", "examples", "experimental_uring_write", "examples",
                       {"sluice_core", "sluice_experimental_uring"})
-
--- blocking_io_pool example links the bench common lib (BlockingIoPool lives in
--- bench/support/). Demonstrates G9 — pool is an execution helper, not async.
-sluice_one_file_target("binary", "examples", "blocking_io_pool", "examples",
-                      {"sluice_core", "sluice_bench_common"})
 
 -- bench_csv_test needs the bench helper lib + bench include dir.
 do
