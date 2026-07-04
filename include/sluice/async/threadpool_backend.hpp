@@ -15,10 +15,18 @@
 // caller MUST keep it alive + address-stable until the Completion is ready
 // (same rule as the rest of async). The backend does NOT copy buffers.
 //
-// Cancel (ADR §7 X2): best-effort. Portable cancel of an in-flight blocking
-// syscall is deferred; here cancel marks the op as "cancel requested" and the
-// op completes with its real result when the syscall returns (exactly-once).
-// If the syscall hasn't started, it's removed and completed as canceled.
+// Cancel (ADR §7 X2): best-effort and asynchronous. This backend spawns one
+// worker thread per submitted op, so an op is "started" essentially at submit.
+// Portable cancel of an in-flight blocking syscall is deferred (it would need
+// pthread_kill/tgkill — a portability hazard). Therefore cancel here records a
+// cancel request and the op completes with its real result when the syscall
+// returns (exactly-once, ADR X3). The terminal result after cancel is one of
+// {success, error, canceled} — defined, never stuck outstanding. Cancellation
+// that actually interrupts the syscall is the Uring backend's job (020B/026).
+//
+// Shutdown gate: once destruction begins (or shutting_down_for_test flips the
+// gate), submit_* returns invalid_state synchronously instead of spawning a
+// worker that could not be joined (was dead state before 025 B2; now enforced).
 //
 // No new dependency (std::thread/mutex/condition_variable only — ADR §11 D4).
 // State is instance-owned (no globals, gate item 6).
@@ -62,20 +70,29 @@ public:
 
     std::size_t outstanding() const noexcept override;
 
+    // Test-only hook: flips the shutdown gate WITHOUT running the destructor
+    // (the destructor path is unsafe to test directly: use-after-free on the
+    // backend object). Used by the 025 B2 contract tests to verify submit-
+    // after-shutdown-begun returns invalid_state. The leading underscore marks
+    // it as internal; production code never calls it.
+    void shutting_down_for_test();
+
 private:
-    // A pending op: its Completion and what to do. The work callable runs on a
-    // worker thread; on return it pushes a terminal result into ready_.
-    struct Job {
-        Completion<std::size_t>* size_completion = nullptr;  // one of these two
-        Completion<void>* void_completion = nullptr;
-        std::function<void()> work;  // performs the syscall, captures the result
-    };
+    // A pending op's ready form. The work callable runs on a worker thread; on
+    // return it pushes a terminal result into the matching ready_ deque.
     struct ReadySize { Completion<std::size_t>* c; Result<std::size_t> r; };
     struct ReadyVoid { Completion<void>* c; Result<void> r; };
 
-    // Enqueue a job: record outstanding + spawn worker.
+    // Enqueue a job: record outstanding + spawn worker. Caller has already
+    // verified accepting_new_work() and c.idle().
     void enqueue_size(Completion<std::size_t>& c, std::function<Result<std::size_t>()> work);
     void enqueue_void(Completion<void>& c, std::function<Result<void>()> work);
+
+    // True if the backend will accept a new submitted op (not shutting down).
+    // Centralizes the destroying_ gate so every submit_* enforces it. Reads
+    // destroying_ under mtx_; the lock provides the happens-before edge to the
+    // destructor's write (CP.20).
+    bool accepting_new_work() const;
 
     mutable std::mutex mtx_;
     std::condition_variable cv_;

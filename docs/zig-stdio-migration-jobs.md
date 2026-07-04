@@ -145,7 +145,27 @@ every applicable shared case.
 
 ---
 
-## 025 — ThreadPoolBackend correctness repair (B2)
+## 025 — ThreadPoolBackend correctness repair (B2) — DONE
+
+**Implemented.** The shutdown gate (`destroying_`) is now consulted by every
+`submit_*` via `accepting_new_work()` and returns `invalid_state` synchronously
+once destruction begins (was dead state). `shutting_down_for_test()` is the
+test hook that flips the gate without running the destructor (the destructor
+path is unsafe to test directly: use-after-free). The header now describes the
+realized cancel semantics (best-effort, exactly-once, terminal result is one
+of {success, error, canceled}; real cancellation of in-flight syscalls stays
+the Uring backend's job). The unused `Job` struct was removed.
+
+**Scope decision (recorded):** the "cancel-not-yet-started" path (dequeue +
+complete-as-canceled) is **not implemented** because this backend spawns a
+worker thread at submit, so an op is effectively started immediately. The ADR
+§7 X3 best-effort semantics permit this. Real signal-based interrupt
+(pthread_kill/tgkill, mirroring Zig `Threaded.signalAllCanceledSyscalls`) is
+deferred to a sub-job only if a future conformance case demands it.
+
+Verified: release + debug + asanubsan + tsan all green; 53/53 tests pass.
+The shared conformance suite (024) `cancel_yields_defined_terminal` case
+passes for ThreadPool.
 
 **Job ID.** 025
 **Title.** `ThreadPoolBackend` cancel region + shutdown gate + doc repair

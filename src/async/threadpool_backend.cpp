@@ -55,6 +55,14 @@ Result<void> do_sync(int fd, bool data_only) {
 }
 }  // namespace
 
+// Returns true if the op was enqueued; false if the backend is shutting down
+// (submit_* then reports invalid_state to the caller). Centralizes the gate so
+// every submit path enforces it identically.
+bool ThreadPoolBackend::accepting_new_work() const {
+    std::lock_guard<std::mutex> lk(mtx_);
+    return !destroying_;
+}
+
 void ThreadPoolBackend::enqueue_size(Completion<std::size_t>& c,
                                      std::function<Result<std::size_t>()> work) {
     c.mark_outstanding();
@@ -91,23 +99,32 @@ void ThreadPoolBackend::enqueue_void(Completion<void>& c,
     });
 }
 
+void ThreadPoolBackend::shutting_down_for_test() {
+    std::lock_guard<std::mutex> lk(mtx_);
+    destroying_ = true;
+}
+
 Result<void> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
-    if (!c.idle()) return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
+    if (!c.idle() || !accepting_new_work())
+        return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     enqueue_size(c, [op] { return do_read(op.fd, op.dst, op.len, op.offset); });
     return {};
 }
 Result<void> ThreadPoolBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
-    if (!c.idle()) return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
+    if (!c.idle() || !accepting_new_work())
+        return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     enqueue_size(c, [op] { return do_write(op.fd, op.src, op.len, op.offset); });
     return {};
 }
 Result<void> ThreadPoolBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
-    if (!c.idle()) return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
+    if (!c.idle() || !accepting_new_work())
+        return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     enqueue_void(c, [op] { return do_sync(op.fd, /*data_only=*/true); });
     return {};
 }
 Result<void> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>& c) {
-    if (!c.idle()) return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
+    if (!c.idle() || !accepting_new_work())
+        return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     enqueue_void(c, [op] { return do_sync(op.fd, /*data_only=*/false); });
     return {};
 }

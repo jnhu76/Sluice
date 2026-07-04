@@ -10,6 +10,7 @@
 #include <sluice/async/op_helpers.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/error.hpp>
+#include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
 #include <cstdio>
@@ -23,6 +24,7 @@
 #include <vector>
 
 using namespace sluice::async;
+using sluice::AsyncStats;
 using sluice::Result;
 using sluice::IoError;
 
@@ -149,6 +151,74 @@ SLUICE_TEST_CASE(tp_many_concurrent_writes_complete) {
         if (!cs[i].ready() || cs[i].result().value() != 16) { all_ok = false; break; }
     }
     SLUICE_CHECK(all_ok);
+    ::close(fd);
+}
+
+// ---- Slice 8 (025 B2): submit after shutdown begins -> invalid_state ------
+// destroying_ is now actually consulted by submit (was dead state). Once the
+// gate is flipped, submit must reject synchronously with invalid_state rather
+// than spawn a worker that could not be joined. shutting_down_for_test() flips
+// the gate without running the destructor (the destructor path is unsafe to
+// test directly: use-after-free on the backend).
+SLUICE_TEST_CASE(tp_submit_after_shutdown_rejected) {
+    ThreadPoolBackend backend;
+    backend.shutting_down_for_test();  // flip the gate without destructing
+    Completion<std::size_t> c;
+    std::byte b[4]{};
+    auto r = backend.submit_read(ReadOp{0, b, 4, 0}, c);
+    SLUICE_CHECK(!r.has_value());
+    SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
+    SLUICE_CHECK(!c.outstanding());  // rejected before mark_outstanding
+    SLUICE_CHECK(backend.outstanding() == 0);
+}
+
+// ---- Slice 9 (025 B2): cancel records intent; op completes (best-effort) ---
+// Cancel on the thread-pool backend is best-effort: an in-flight blocking
+// syscall is not interrupted (portability hazard), so the op completes with its
+// real result and cancel only records intent (ADR §7 X3 — terminal result is
+// one of {success, error, canceled}). This case verifies the DEFINED-contract
+// half: after cancel + reap, the Completion is ready with a real result, and
+// exactly-once holds. canceled_ops stat stays 0 here because no op was
+// actually canceled (it completed for real).
+SLUICE_TEST_CASE(tp_cancel_best_effort_op_completes_with_real_result) {
+    TempPath tp;
+    int fd = open_temp(tp.path());
+    AsyncStats stats;
+    AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>(), &stats);
+
+    // Write 4 bytes so a read returns real data.
+    const std::byte seed[4]{std::byte{0xCA}, std::byte{0xFE},
+                            std::byte{0xBA}, std::byte{0xBE}};
+    SLUICE_CHECK(write_all(ctx, fd, {seed, 4}, 0).has_value());
+
+    Completion<std::size_t> r;
+    std::byte got[4]{};
+    SLUICE_CHECK(ctx.submit_read(ReadOp{fd, got, 4, 0}, r).has_value());
+    SLUICE_CHECK(r.outstanding());
+
+    // Request cancel; the op is almost certainly already in-flight on a worker.
+    // We do NOT assert WHICH terminal result — only that it is DEFINED and the
+    // Completion reaches ready exactly once.
+    ctx.cancel(r);
+    std::size_t guard = 0;
+    while (!r.ready() && guard < 10000) {
+        auto n = ctx.wait_one();
+        SLUICE_CHECK(n.has_value());
+        if (n.value() == 0) ++guard;
+        if (n.value() > 0) break;
+        ++guard;
+    }
+    SLUICE_CHECK(r.ready());
+    const auto res = r.result();
+    const bool defined = res.has_value() ||
+                         res.error().code == IoError::Code::canceled ||
+                         res.error().code == IoError::Code::eof ||
+                         res.error().code == IoError::Code::backend_error;
+    SLUICE_CHECK(defined);
+    // No op was actually canceled (real result), so the stat stays 0.
+    // (If a future sub-job adds signal-based interrupt, this assertion is
+    // updated to reflect real cancellation.)
+    SLUICE_CHECK(stats.canceled_ops == 0);
     ::close(fd);
 }
 
