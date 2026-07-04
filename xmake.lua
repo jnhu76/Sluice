@@ -377,6 +377,23 @@ option("with-liburing")
     set_description("Enable the experimental io_uring spike (requires liburing).")
 option_end()
 
+-- SLUICE-CORE-026 (B3): feature gates for io_uring registered buffers/files.
+-- Both OFF by default — matching Zig upstream (Io/Uring.zig uses neither
+-- registered buffers nor registered files). A future job may implement them
+-- under a documented lifetime contract; until then the gates exist so the
+-- build can advertise the capability without the implementation. The defines
+-- SLUICE_URING_REGISTERED_BUFFERS / SLUICE_URING_REGISTERED_FILES are threaded
+-- onto sluice_async only when liburing is also enabled (they are meaningless
+-- without a real ring).
+option("with-uring-registered-buffers")
+    set_default(false)
+    set_description("Enable io_uring registered buffers (lifetime contract WIP; off by default).")
+option_end()
+option("with-uring-registered-files")
+    set_default(false)
+    set_description("Enable io_uring registered files descriptors (lifetime contract WIP; off by default).")
+option_end()
+
 local has_liburing = false
 if has_config("with-liburing") then
     -- add_requires with optional=true lets xmake try to fetch liburing; if the
@@ -394,6 +411,12 @@ if has_liburing then
     target("sluice_async")
         add_defines("SLUICE_HAS_LIBURING", {public = true})
         add_packages("liburing", {public = true})
+        if has_config("with-uring-registered-buffers") then
+            add_defines("SLUICE_URING_REGISTERED_BUFFERS")
+        end
+        if has_config("with-uring-registered-files") then
+            add_defines("SLUICE_URING_REGISTERED_FILES")
+        end
 end
 
 -- Experimental uring library. Always defined so the headers/sources exist; the

@@ -19,7 +19,19 @@
 // race is resolved structurally: the original op's CQE is the ONLY thing that
 // completes the Completion (exactly-once, X3); a cancel SQE only toggles intent
 // for stat accounting and is dropped if the target already resolved. No-op in
-// stub mode.
+// stub mode. As of 026 (B3) cancel is O(1) average via a Completion* -> op-id
+// reverse index (was a linear scan of outstanding ops).
+//
+// Submit batching (026 B3): submit_* only acquires + preps an SQE (flushing on
+// SQE pressure); the kernel is poked in poll()/wait_one(). The public L1 API is
+// unchanged (one submit_* per op); the seam is internal so a future Batch (T4)
+// can submit many SQEs per flush. This matches Zig Io/Uring.zig's enqueue/submit
+// split.
+//
+// Feature gates (026 B3): SLUICE_URING_REGISTERED_BUFFERS and
+// SLUICE_URING_REGISTERED_FILES are build options, both OFF by default (matching
+// Zig upstream — Io/Uring.zig uses neither). A future job may implement them
+// under a documented lifetime contract.
 //
 // State is instance-owned (no globals, gate item 6).
 #pragma once

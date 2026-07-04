@@ -249,7 +249,48 @@ job implements against).
 
 ---
 
-## 026 — UringAsyncBackend substrate hardening (B3)
+## 026 — UringAsyncBackend substrate hardening (B3) — DONE (real-mode runtime verification DEFERRED)
+
+**Implemented.** Three substrate hardenings:
+
+1. **O(1) cancel identity.** Added `Impl::comp_to_op`, a `Completion* -> op-id`
+   reverse index, inserted at `register_op` and erased at `reap_op_cqe`. Both
+   `cancel(Completion<size_t>&)` and `cancel(Completion<void>&)` now do a single
+   hash lookup via `op_id_for()` instead of a linear scan of `ops`. The
+   exactly-once invariant (ADR §7 X3) is unchanged: the cancel CQE never
+   completes a Completion; only the original op's CQE does.
+
+2. **Submit batching seam (internal).** Verified already present from 020B:
+   `submit_*` only acquires + preps an SQE (pressure-flush); the kernel is poked
+   in `poll()`/`wait_one()`. The public L1 API is unchanged (one submit_* per
+   op); the seam is internal so the future `Batch` (T4) can submit many SQEs
+   per flush. Matches Zig `Io/Uring.zig`'s `enqueue`/`submit` split. No code
+   change needed here — documented in the header.
+
+3. **Feature gates.** Added xmake options `with-uring-registered-buffers` /
+   `with-uring-registered-files` (both OFF by default, matching Zig upstream —
+   `Io/Uring.zig` uses neither). The defines
+   `SLUICE_URING_REGISTERED_BUFFERS` / `SLUICE_URING_REGISTERED_FILES` are
+   threaded onto `sluice_async` only when liburing is also enabled. No
+   implementation behind them yet — a future job adds them under a documented
+   lifetime contract.
+
+**Verification (honest):** liburing is **absent on this host** and cannot be
+installed (no sudo). Real-mode runtime verification is therefore **DEFERRED**
+to a liburing-equipped environment. Structural verification done:
+- Stub-mode build + full suite green (53/53).
+- Real-mode **syntax/type check** via a stub `liburing.h` (g++ -fsyntax-only
+  -DSLUICE_HAS_LIBURING): exit 0 — the O(1) cancel refactor and reverse-index
+  maintenance are syntactically and type-correct.
+- The exactly-once cancel-race logic is unchanged from 020B (which was
+  validated under liburing when that job landed); B3 only changes the LOOKUP
+  path, not the race resolution.
+
+**Hard blocker (per task §14/§15):** real-mode runtime verification of the
+O(1) cancel path requires liburing. This is recorded, not silently claimed.
+When a liburing environment is available, the existing
+`tests/uring_backend_test.cpp` cancel cases (gated behind
+`SLUICE_HAS_LIBURING`) exercise the path and must pass unchanged.
 
 **Job ID.** 026
 **Title.** O(1) cancel identity + batch-submit seam + feature gates

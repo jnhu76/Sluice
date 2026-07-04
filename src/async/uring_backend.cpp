@@ -140,6 +140,10 @@ struct UringAsyncBackend::Impl {
     std::unordered_map<__u64, OpRec> ops;
     // Cancel-op id -> targeted op id. Lets the cancel CQE find its OpRec.
     std::unordered_map<__u64, __u64> cancel_to_op;
+    // Completion* -> op id (O(1) cancel lookup, B3). Type-erased to void* so one
+    // map serves both Completion<size_t> and Completion<void>. Maintained
+    // alongside ops: inserted at register_op, erased at reap_op_cqe.
+    std::unordered_map<void*, __u64> comp_to_op;
 
     Impl() = default;
     ~Impl() {
@@ -176,6 +180,12 @@ struct UringAsyncBackend::Impl {
         if (it == ops.end()) return;  // unknown id (shouldn't happen); drop
         OpRec& rec = it->second;
 
+        // Determine the Completion* for the reverse-index erase BEFORE we move
+        // out of the record. is_void discriminates which pointer is live.
+        void* comp_key = rec.is_void
+                             ? static_cast<void*>(rec.void_c)
+                             : static_cast<void*>(rec.size_c);
+
         if (rec.is_void) {
             if (res < 0) {
                 IoError e = sluice::from_errno_value(-res);
@@ -200,6 +210,15 @@ struct UringAsyncBackend::Impl {
             }
         }
         ops.erase(it);
+        comp_to_op.erase(comp_key);  // B3: keep reverse index in sync
+    }
+
+    // O(1) cancel lookup: find the op id for a Completion*, or 0 if not
+    // outstanding. Used by both cancel() overloads so cancel is O(1) average
+    // instead of O(outstanding). (B3)
+    __u64 op_id_for(void* comp_key) const {
+        auto it = comp_to_op.find(comp_key);
+        return it == comp_to_op.end() ? 0 : it->second;
     }
 
     // Reap every currently-ready CQE. Cancel CQEs clear intent only; op CQEs
@@ -284,12 +303,17 @@ UringAsyncBackend::~UringAsyncBackend() { delete impl_; }
 namespace {
 
 // Register a freshly-prepped op (SQE already filled, user_data already set) in
-// the outstanding table and mark the Completion outstanding. Returns the op id.
-// Templated on the Impl type so this free helper does not have to name the
-// private nested Impl; it only needs ops/next_id members, which Impl provides.
+// the outstanding table + the O(1) cancel reverse-index, and mark the
+// Completion outstanding. Returns the op id. Templated on the Impl type so this
+// free helper does not have to name the private nested Impl; it only needs
+// ops/next_id/comp_to_op members, which Impl provides.
 template <class ImplLike, class C>
 __u64 register_op(ImplLike& impl, __u64 id, C& c, OpRec rec) {
     c.mark_outstanding();
+    void* comp_key = rec.is_void
+                         ? static_cast<void*>(rec.void_c)
+                         : static_cast<void*>(rec.size_c);
+    impl.comp_to_op.emplace(comp_key, id);  // B3: O(1) cancel lookup
     impl.ops.emplace(id, std::move(rec));
     impl.next_id = id + 1;
     return id;
@@ -399,26 +423,25 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
 
 void UringAsyncBackend::cancel(Completion<std::size_t>& c) {
     if (!impl_ || !impl_->have_ring) return;
-    // Find the outstanding op for this Completion (linear scan; cancel is not a
-    // hot path, and the contract is best-effort). Pointer identity is the key.
-    for (auto& [id, rec] : impl_->ops) {
-        if (rec.is_void || rec.size_c != &c) continue;
-        if (rec.cancel_requested) return;  // already requested; exactly-once intent
-        rec.cancel_requested = true;
-        impl_->submit_cancel(id, stats_);
-        return;
-    }
+    // O(1) cancel lookup via the reverse index (B3). Was a linear scan of ops.
+    const __u64 id = impl_->op_id_for(static_cast<void*>(&c));
+    if (id == 0) return;  // not outstanding (already reaped or never submitted)
+    auto it = impl_->ops.find(id);
+    if (it == impl_->ops.end()) return;
+    if (it->second.cancel_requested) return;  // already requested; exactly-once intent
+    it->second.cancel_requested = true;
+    impl_->submit_cancel(id, stats_);
 }
 
 void UringAsyncBackend::cancel(Completion<void>& c) {
     if (!impl_ || !impl_->have_ring) return;
-    for (auto& [id, rec] : impl_->ops) {
-        if (!rec.is_void || rec.void_c != &c) continue;
-        if (rec.cancel_requested) return;
-        rec.cancel_requested = true;
-        impl_->submit_cancel(id, stats_);
-        return;
-    }
+    const __u64 id = impl_->op_id_for(static_cast<void*>(&c));
+    if (id == 0) return;
+    auto it = impl_->ops.find(id);
+    if (it == impl_->ops.end()) return;
+    if (it->second.cancel_requested) return;
+    it->second.cancel_requested = true;
+    impl_->submit_cancel(id, stats_);
 }
 
 std::size_t UringAsyncBackend::outstanding() const noexcept {
