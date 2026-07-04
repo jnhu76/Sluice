@@ -367,6 +367,16 @@ if has_config("with-liburing") then
     has_liburing = true
 end
 
+-- When liburing is enabled, the async runtime's UringAsyncBackend compiles its
+-- REAL io_uring path (otherwise it is an unsupported stub, sluice-CORE-020B).
+-- Thread the same define + package onto sluice_async that sluice_experimental_uring
+-- gets, so src/async/uring_backend.cpp sees SLUICE_HAS_LIBURING and links liburing.
+if has_liburing then
+    target("sluice_async")
+        add_defines("SLUICE_HAS_LIBURING", {public = true})
+        add_packages("liburing", {public = true})
+end
+
 -- Experimental uring library. Always defined so the headers/sources exist; the
 -- implementation compiles either the real uring path or the unsupported stub
 -- based on CPPIO_HAS_LIBURING.

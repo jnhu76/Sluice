@@ -5,12 +5,21 @@
 // ops, no per-op thread). GATED behind liburing (ADR §11 D4 — optional dep):
 //
 //   * SLUICE_HAS_LIBURING defined (liburing linked): real io_uring path.
+//     Submit batches SQEs without submitting (lazy); poll() flushes via
+//     io_uring_submit and reaps io_uring_peek_batch_cqe; wait_one() uses
+//     io_uring_submit_and_wait. CQE res<0 maps to IoError via from_errno_value
+//     (ADR E3). SQE pressure (queue full) is flushed + retried and tallied as
+//     queue_full_retries.
 //   * otherwise: UNSUPPORTED STUB. submit_* returns IoError::backend_error
 //     synchronously; poll()/wait_one() reap nothing. The project builds with no
 //     liburing dependency (020B gate / 013B pattern); tests run in stub mode.
 //
-// Cancel (ADR §7 X2): best-effort via io_uring IORING_OP_ASYNC_CANCEL (when
-// liburing is present); no-op in stub mode.
+// Cancel (ADR §7 X2): best-effort via io_uring IORING_OP_ASYNC_CANCEL
+// (io_uring_prep_cancel64) when liburing is present. The cancel-vs-in-flight-CQE
+// race is resolved structurally: the original op's CQE is the ONLY thing that
+// completes the Completion (exactly-once, X3); a cancel SQE only toggles intent
+// for stat accounting and is dropped if the target already resolved. No-op in
+// stub mode.
 //
 // State is instance-owned (no globals, gate item 6).
 #pragma once
@@ -56,7 +65,6 @@ private:
     struct Impl;
     Impl* impl_ = nullptr;
 #endif
-    unsigned queue_depth_ = 0;
     bool available_ = false;
 };
 
