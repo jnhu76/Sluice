@@ -166,6 +166,22 @@ do
     end
 end
 
+-- Production BlockingIoPool INVARIANT tests (sluice-CORE-024S, category B):
+-- exactly-once / no-lost-task / no-double-get / FIFO order.
+do
+    local p = "tests/blocking_io_pool_invariants_test.cpp"
+    if os.isfile(p) then
+        target("blocking_io_pool_invariants_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("blocking_io_pool_invariants_test")
+    end
+end
+
 -- TEMP btest.
 do
     local p = "tests/_btest.cpp"
