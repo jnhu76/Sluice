@@ -22,12 +22,12 @@ namespace sluice {
 // ---------- In-memory sinks ----------
 
 class MemoryWriter final : public Writer {
-public:
+  public:
     MemoryWriter() = default;
     explicit MemoryWriter(std::vector<std::byte> initial) : buf_(std::move(initial)) {}
 
     static MemoryWriter from_string(std::string_view s) {
-        auto* p = reinterpret_cast<const std::byte*>(s.data());
+        const auto* p = reinterpret_cast<const std::byte*>(s.data());
         return MemoryWriter({p, p + s.size()});
     }
 
@@ -40,17 +40,17 @@ public:
     const std::vector<std::byte>& bytes() const { return buf_; }
     std::vector<std::byte> take() { return std::move(buf_); }
 
-private:
+  private:
     std::vector<std::byte> buf_;
 };
 
 class MemoryReader final : public Reader {
-public:
+  public:
     MemoryReader() = default;
     explicit MemoryReader(std::vector<std::byte> data) : buf_(std::move(data)) {}
 
     static MemoryReader from_string(std::string_view s) {
-        auto* p = reinterpret_cast<const std::byte*>(s.data());
+        const auto* p = reinterpret_cast<const std::byte*>(s.data());
         return MemoryReader({p, p + s.size()});
     }
 
@@ -75,7 +75,7 @@ public:
 
     std::size_t remaining() const { return buf_.size() - pos_; }
 
-private:
+  private:
     std::vector<std::byte> buf_;
     std::size_t pos_ = 0;
 };
@@ -89,13 +89,12 @@ struct FaultPlan {
     std::optional<std::size_t> max_read_size;
     std::optional<std::size_t> max_write_size;
     bool fail_flush = false;
-    IoError error = IoError{IoError::Code::backend_error, 0};
+    IoError error = IoError{.code = IoError::Code::backend_error, .os_errno = 0};
 };
 
 class FaultReader final : public Reader {
-public:
-    FaultReader(Reader& inner, const FaultPlan& plan)
-        : inner_(inner), plan_(plan) {}
+  public:
+    FaultReader(Reader& inner, const FaultPlan& plan) : inner_(inner), plan_(plan) {}
 
     // Not copyable or movable: holds a reference + mutable counters.
     FaultReader(const FaultReader&) = delete;
@@ -105,7 +104,7 @@ public:
 
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
 
-private:
+  private:
     Reader& inner_;
     FaultPlan plan_;
     std::uint64_t read_calls_ = 0;
@@ -113,9 +112,8 @@ private:
 };
 
 class FaultWriter final : public Writer {
-public:
-    FaultWriter(Writer& inner, const FaultPlan& plan)
-        : inner_(inner), plan_(plan) {}
+  public:
+    FaultWriter(Writer& inner, const FaultPlan& plan) : inner_(inner), plan_(plan) {}
 
     // Not copyable or movable: holds a reference + mutable counters.
     FaultWriter(const FaultWriter&) = delete;
@@ -126,11 +124,11 @@ public:
     Result<std::size_t> write_some(std::span<const std::byte> src) override;
     Result<void> flush() override;
 
-private:
+  private:
     Writer& inner_;
     FaultPlan plan_;
     std::uint64_t write_calls_ = 0;
     std::uint64_t bytes_seen_ = 0;
 };
 
-}  // namespace sluice
+} // namespace sluice

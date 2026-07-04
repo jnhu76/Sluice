@@ -20,21 +20,20 @@ namespace {
 }
 
 bool same(std::string_view s, const std::vector<std::byte>& b) {
-    return b.size() == s.size() &&
-           std::memcmp(s.data(), b.data(), s.size()) == 0;
+    return b.size() == s.size() && std::memcmp(s.data(), b.data(), s.size()) == 0;
 }
 
 std::span<const std::byte> span_of(const std::vector<std::byte>& v) {
     return std::span<const std::byte>(v.data(), v.size());
 }
 
-}  // namespace
+} // namespace
 
 // ---------- FaultReader ----------
 
 SLUICE_TEST_CASE(fault_reader_passes_through_when_no_plan) {
     auto mem = sluice::MemoryReader::from_string("abcdef");
-    sluice::FaultPlan plan;  // empty: no failures, no caps
+    sluice::FaultPlan plan; // empty: no failures, no caps
     sluice::FaultReader r(mem, plan);
     std::vector<std::byte> out(6);
     auto res = r.read_exact(std::span<std::byte>(out));
@@ -46,7 +45,7 @@ SLUICE_TEST_CASE(fault_reader_fails_after_n_read_calls) {
     auto mem = sluice::MemoryReader::from_string("abcdef");
     sluice::FaultPlan plan;
     plan.fail_after_read_calls = 2;
-    plan.max_read_size = 1;  // force one-byte reads so call count advances
+    plan.max_read_size = 1; // force one-byte reads so call count advances
     plan.error = sluice::IoError{sluice::IoError::Code::canceled};
     sluice::FaultReader r(mem, plan);
     std::vector<std::byte> out(6);
@@ -63,7 +62,7 @@ SLUICE_TEST_CASE(fault_reader_forces_short_reads_via_max_read_size) {
     std::array<std::byte, 6> out{};
     auto n1 = r.read_some(std::span<std::byte>(out));
     SLUICE_CHECK(n1.has_value());
-    SLUICE_CHECK(n1.value() <= 2);  // never more than max_read_size
+    SLUICE_CHECK(n1.value() <= 2); // never more than max_read_size
 }
 
 SLUICE_TEST_CASE(fault_reader_never_mutates_data) {
@@ -104,7 +103,7 @@ SLUICE_TEST_CASE(fault_writer_passes_through_when_no_plan) {
 SLUICE_TEST_CASE(fault_writer_fails_after_n_write_calls) {
     sluice::MemoryWriter sink;
     sluice::FaultPlan plan;
-    plan.max_write_size = 2;  // force multiple calls for 6 bytes
+    plan.max_write_size = 2; // force multiple calls for 6 bytes
     plan.fail_after_write_calls = 2;
     plan.error = sluice::IoError{sluice::IoError::Code::no_space};
     sluice::FaultWriter w(sink, plan);
@@ -128,7 +127,7 @@ SLUICE_TEST_CASE(fault_writer_preserves_partial_write_data_on_failure) {
     sluice::MemoryWriter sink;
     sluice::FaultPlan plan;
     plan.max_write_size = 2;
-    plan.fail_after_write_calls = 1;  // fail on the 2nd call
+    plan.fail_after_write_calls = 1; // fail on the 2nd call
     plan.error = sluice::IoError{sluice::IoError::Code::no_space};
     sluice::FaultWriter w(sink, plan);
     auto res = w.write_all(std::as_bytes(std::span(std::string_view("abcdef"))));
@@ -174,11 +173,11 @@ SLUICE_TEST_CASE(fault_writer_clamps_single_write_to_fail_after_bytes) {
     sluice::FaultPlan plan;
     plan.fail_after_bytes = 5;
     sluice::FaultWriter w(sink, plan);
-    auto payload = bytes_of("0123456789");  // 10 bytes
+    auto payload = bytes_of("0123456789"); // 10 bytes
     auto res = w.write_some(span_of(payload));
     SLUICE_CHECK(res.has_value());
-    SLUICE_CHECK(res.value() == 5);              // clamped to the budget
-    SLUICE_CHECK(same("01234", sink.bytes()));   // first 5 only
+    SLUICE_CHECK(res.value() == 5);            // clamped to the budget
+    SLUICE_CHECK(same("01234", sink.bytes())); // first 5 only
 }
 
 SLUICE_TEST_CASE(fault_writer_fails_exactly_at_byte_limit) {
@@ -206,7 +205,7 @@ SLUICE_TEST_CASE(fault_reader_clamps_single_read_to_fail_after_bytes) {
     std::array<std::byte, 10> out{};
     auto res = r.read_some(std::span<std::byte>(out));
     SLUICE_CHECK(res.has_value());
-    SLUICE_CHECK(res.value() == 4);  // clamped, not 10
+    SLUICE_CHECK(res.value() == 4); // clamped, not 10
 }
 
 SLUICE_TEST_CASE(fault_reader_fails_after_bytes_combined_with_call_limit) {
@@ -215,7 +214,7 @@ SLUICE_TEST_CASE(fault_reader_fails_after_bytes_combined_with_call_limit) {
     sluice::FaultPlan plan;
     plan.max_read_size = 1;
     plan.fail_after_bytes = 3;
-    plan.fail_after_read_calls = 99;  // never reached
+    plan.fail_after_read_calls = 99; // never reached
     plan.error = sluice::IoError{sluice::IoError::Code::canceled};
     sluice::FaultReader r(mem, plan);
     std::vector<std::byte> out(8);

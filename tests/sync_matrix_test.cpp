@@ -39,8 +39,8 @@ SLUICE_TEST_CASE(matrix_row_carries_all_fields) {
     r.pool_threads = 4;
     r.block_size = 4096;
     r.buffer_size = 0;
-    r.total_bytes = 4 * 100 * 4096;
-    r.total_ops = 4 * 100;
+    r.total_bytes = std::uint64_t{4} * 100 * 4096;
+    r.total_ops = std::uint64_t{4} * 100;
     r.total_ms = 12.5;
     r.mbps = 124.0;
     r.ops_per_sec = 32000.0;
@@ -59,7 +59,7 @@ SLUICE_TEST_CASE(matrix_row_carries_all_fields) {
 
 SLUICE_TEST_CASE(fill_derived_computes_mbps_and_ops) {
     MatrixRow r;
-    r.total_bytes = 10 * 1024 * 1024;   // 10 MiB
+    r.total_bytes = std::uint64_t{10} * 1024 * 1024; // 10 MiB
     r.total_ops = 1000;
     // 10 ms = 10'000'000 ns.
     fill_derived(r, 10'000'000ULL);

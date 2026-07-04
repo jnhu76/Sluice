@@ -18,7 +18,7 @@ namespace sluice {
 class Writer;
 
 class Reader {
-public:
+  public:
     virtual ~Reader() = default;
 
     // Primitive: read up to dst.size() bytes into dst. Returns the number read.
@@ -65,4 +65,4 @@ public:
     Result<void> read_vec_all(std::span<IoSlice> dsts);
 };
 
-}  // namespace sluice
+} // namespace sluice

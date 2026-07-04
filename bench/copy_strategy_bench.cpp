@@ -19,13 +19,12 @@
 namespace {
 
 std::uint64_t now_ns() {
-    return static_cast<std::uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
+    return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
 }
 
 // A reader over an in-memory payload, also BufferedReadable via BufferedReader.
 class MemReader final : public sluice::Reader {
-public:
+  public:
     sluice::MemoryReader mem;
     explicit MemReader(std::string_view s) : mem(sluice::MemoryReader::from_string(s)) {}
     sluice::Result<std::size_t> read_some(std::span<std::byte> dst) override {
@@ -44,19 +43,27 @@ void run_cell(std::size_t total, sluice::CopyStrategy strategy, const char* stra
     sluice::BufferStats bs;
     // warmup
     for (int i = 0; i < 1; ++i) {
-        MemReader rd(payload); sluice::BufferedReader br(rd, rbuf, &bs);
+        MemReader rd(payload);
+        sluice::BufferedReader br(rd, rbuf, &bs);
         sluice::MemoryWriter wo;
-        sluice::CopyOptions o; o.strategy = strategy; o.limit = limit;
+        sluice::CopyOptions o;
+        o.strategy = strategy;
+        o.limit = limit;
         (void)sluice::copy_all(br, wo, std::span<std::byte>(scratch), o);
     }
-    st = {}; bs = {};
-    MemReader rd(payload); sluice::BufferedReader br(rd, rbuf, &bs);
+    st = {};
+    bs = {};
+    MemReader rd(payload);
+    sluice::BufferedReader br(rd, rbuf, &bs);
     sluice::MemoryWriter wo;
-    sluice::CopyOptions o; o.strategy = strategy; o.limit = limit;
+    sluice::CopyOptions o;
+    o.strategy = strategy;
+    o.limit = limit;
     auto t0 = now_ns();
     auto res = sluice::copy_all(br, wo, std::span<std::byte>(scratch), o, &st);
     auto elapsed = now_ns() - t0;
-    if (!res.has_value()) return;
+    if (!res.has_value())
+        return;
 
     sluice::bench::BenchResult r;
     r.case_name = "copy_strategy";
@@ -69,17 +76,22 @@ void run_cell(std::size_t total, sluice::CopyStrategy strategy, const char* stra
     sluice::bench::print_csv_row(std::cout, r);
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     sluice::bench::print_csv_header(std::cout);
     for (std::size_t total : {4u * 1024u, 64u * 1024u, 1024u * 1024u, 16u * 1024u * 1024u}) {
-        run_cell(total, sluice::CopyStrategy::Scratch,       "scratch",       sluice::CopyLimit::unlimited(), "unlimited");
-        run_cell(total, sluice::CopyStrategy::BufferedFirst, "buffered_first",sluice::CopyLimit::unlimited(), "unlimited");
-        run_cell(total, sluice::CopyStrategy::Auto,          "auto",          sluice::CopyLimit::unlimited(), "unlimited");
+        run_cell(total, sluice::CopyStrategy::Scratch, "scratch", sluice::CopyLimit::unlimited(),
+                 "unlimited");
+        run_cell(total, sluice::CopyStrategy::BufferedFirst, "buffered_first",
+                 sluice::CopyLimit::unlimited(), "unlimited");
+        run_cell(total, sluice::CopyStrategy::Auto, "auto", sluice::CopyLimit::unlimited(),
+                 "unlimited");
         // small + exact limit cases
-        run_cell(total, sluice::CopyStrategy::BufferedFirst, "buffered_first",sluice::CopyLimit::bytes(total / 4), "small_limit");
-        run_cell(total, sluice::CopyStrategy::BufferedFirst, "buffered_first",sluice::CopyLimit::bytes(total),     "exact_limit");
+        run_cell(total, sluice::CopyStrategy::BufferedFirst, "buffered_first",
+                 sluice::CopyLimit::bytes(total / 4), "small_limit");
+        run_cell(total, sluice::CopyStrategy::BufferedFirst, "buffered_first",
+                 sluice::CopyLimit::bytes(total), "exact_limit");
     }
     return 0;
 }

@@ -39,7 +39,9 @@ struct TempPath {
         p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
@@ -48,14 +50,15 @@ bool file_has(const std::string& path, std::string_view want) {
     std::string content((std::istreambuf_iterator<char>(in), {}));
     return content == std::string(want);
 }
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(uring_write_batch_writes_small_file) {
     TempPath tp;
     // The batch takes a raw fd; open directly via POSIX for the spike.
     int fd = ::open(tp.str().c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
     SLUICE_CHECK(fd >= 0);
-    if (fd < 0) return;
+    if (fd < 0)
+        return;
     std::string payload = "hello uring";
     std::vector<std::byte> buf(payload.begin(), payload.end());
     sluice::experimental::UringWriteBatch batch(8);

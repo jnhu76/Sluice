@@ -21,20 +21,20 @@ namespace sluice {
 
 // Which copy path to use. See docs/copy-strategy.md §4-6.
 enum class CopyStrategy {
-    Auto,            // default; currently behaves as BufferedFirst
-    Scratch,         // force the scratch read/write loop; never use fast path
-    BufferedFirst,   // drain buffered bytes first, then scratch (006 behavior)
+    Auto,          // default; currently behaves as BufferedFirst
+    Scratch,       // force the scratch read/write loop; never use fast path
+    BufferedFirst, // drain buffered bytes first, then scratch (006 behavior)
 
-    VectorDeferred,        // reserved slot; NOT implemented
-    FileRangeDeferred,     // reserved slot; NOT implemented
-    SendfileDeferred,      // reserved slot; NOT implemented
-    SpliceDeferred,        // reserved slot; NOT implemented
+    VectorDeferred,    // reserved slot; NOT implemented
+    FileRangeDeferred, // reserved slot; NOT implemented
+    SendfileDeferred,  // reserved slot; NOT implemented
+    SpliceDeferred,    // reserved slot; NOT implemented
 };
 
 // What to do when a requested strategy is a deferred (unsupported) slot.
 enum class UnsupportedStrategyPolicy {
-    ReturnInvalidState,  // default: return invalid_state, touch nothing
-    FallbackToAuto,      // mark unsupported, then run Auto
+    ReturnInvalidState, // default: return invalid_state, touch nothing
+    FallbackToAuto,     // mark unsupported, then run Auto
 };
 
 // Caller-facing options. Existing copy_all overloads delegate with
@@ -42,8 +42,7 @@ enum class UnsupportedStrategyPolicy {
 struct CopyOptions {
     CopyLimit limit = CopyLimit::unlimited();
     CopyStrategy strategy = CopyStrategy::Auto;
-    UnsupportedStrategyPolicy unsupported_policy =
-        UnsupportedStrategyPolicy::ReturnInvalidState;
+    UnsupportedStrategyPolicy unsupported_policy = UnsupportedStrategyPolicy::ReturnInvalidState;
 };
 
 // Explains what strategy was requested vs what actually ran. Filled by copy_all
@@ -62,4 +61,4 @@ struct CopyDecision {
 std::string_view to_string(CopyStrategy strategy);
 std::string_view to_string(UnsupportedStrategyPolicy policy);
 
-}  // namespace sluice
+} // namespace sluice

@@ -27,7 +27,9 @@ struct TempPath {
         p = dir / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
@@ -41,7 +43,7 @@ bool file_contains(const std::string& path, std::string_view expected) {
     return content == std::string(expected);
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(file_writer_creates_and_appends_bytes) {
     TempPath tp;
@@ -50,8 +52,8 @@ SLUICE_TEST_CASE(file_writer_creates_and_appends_bytes) {
         SLUICE_CHECK(w.opened());
         SLUICE_CHECK(w.write_all(sb("hello ")).has_value());
         SLUICE_CHECK(w.write_all(sb("world")).has_value());
-        SLUICE_CHECK(w.flush().has_value());  // user-space no-op for now
-    }  // RAII closes
+        SLUICE_CHECK(w.flush().has_value()); // user-space no-op for now
+    } // RAII closes
     SLUICE_CHECK(file_contains(tp.str(), "hello world"));
 }
 
@@ -100,7 +102,10 @@ SLUICE_TEST_CASE(file_reader_open_under_a_file_preserves_enotdir) {
     // ENOTDIR: opening "<existing regular file>/child" must fail with ENOTDIR,
     // and the real errno must survive to read_some's error.
     TempPath tp;
-    { sluice::FileWriter w(tp.str()); (void)w.write_all(sb("x")); }
+    {
+        sluice::FileWriter w(tp.str());
+        (void)w.write_all(sb("x"));
+    }
     sluice::FileReader r(tp.str() + "/child");
     SLUICE_CHECK(!r.opened());
     std::array<std::byte, 4> buf{};
@@ -112,7 +117,10 @@ SLUICE_TEST_CASE(file_reader_open_under_a_file_preserves_enotdir) {
 SLUICE_TEST_CASE(file_writer_open_failure_preserves_real_errno) {
     // Try to write-create under a path whose parent is a regular file -> ENOTDIR.
     TempPath tp;
-    { sluice::FileWriter w(tp.str()); (void)w.write_all(sb("x")); }
+    {
+        sluice::FileWriter w(tp.str());
+        (void)w.write_all(sb("x"));
+    }
     sluice::FileWriter w(tp.str() + "/child");
     SLUICE_CHECK(!w.opened());
     auto res = w.write_some(sb("data"));
@@ -121,7 +129,8 @@ SLUICE_TEST_CASE(file_writer_open_failure_preserves_real_errno) {
 }
 
 SLUICE_TEST_CASE(file_copy_all_round_trips_through_real_files) {
-    TempPath src_tp, dst_tp;
+    TempPath src_tp;
+    TempPath dst_tp;
     {
         sluice::FileWriter w(src_tp.str());
         std::string big(2048, 'z');
@@ -159,7 +168,7 @@ SLUICE_TEST_CASE(file_writer_is_move_only) {
     SLUICE_CHECK(w.opened());
     sluice::FileWriter moved = std::move(w);
     SLUICE_CHECK(moved.opened());
-    SLUICE_CHECK(!w.opened());  // moved-from is released
+    SLUICE_CHECK(!w.opened()); // moved-from is released
     SLUICE_CHECK(moved.write_all(sb("moved")).has_value());
 }
 
@@ -175,7 +184,7 @@ SLUICE_TEST_CASE(file_reader_is_move_only) {
     SLUICE_CHECK(r.opened());
     sluice::FileReader moved = std::move(r);
     SLUICE_CHECK(moved.opened());
-    SLUICE_CHECK(!r.opened());  // moved-from is released
+    SLUICE_CHECK(!r.opened()); // moved-from is released
     std::array<std::byte, 5> buf{};
     auto res = moved.read_exact(std::span<std::byte>(buf));
     SLUICE_CHECK(res.has_value());
@@ -219,7 +228,7 @@ SLUICE_TEST_CASE(file_stats_null_is_zero_overhead_and_semantics_unchanged) {
         sluice::FileWriter w(tp.str(), nullptr);
         SLUICE_CHECK(w.write_all(sb("x")).has_value());
     }
-    sluice::FileReader r(tp.str());  // default: no stats
+    sluice::FileReader r(tp.str()); // default: no stats
     std::array<std::byte, 1> buf{};
     SLUICE_CHECK(r.read_exact(std::span<std::byte>(buf)).has_value());
     SLUICE_CHECK(std::to_integer<char>(buf[0]) == 'x');
@@ -233,7 +242,7 @@ SLUICE_TEST_CASE(file_reader_records_syscall_errors_on_failed_open) {
     auto res = r.read_some(std::span<std::byte>(buf));
     SLUICE_CHECK(!res.has_value());
     SLUICE_CHECK(stats.read_syscall_errors >= 1);
-    SLUICE_CHECK(stats.read_syscalls == 0);  // no actual ::read happened
+    SLUICE_CHECK(stats.read_syscalls == 0); // no actual ::read happened
 }
 
 SLUICE_MAIN()

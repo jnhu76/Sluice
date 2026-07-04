@@ -14,7 +14,7 @@
 namespace sluice::experimental {
 
 class UringIoContext {
-public:
+  public:
     explicit UringIoContext(unsigned queue_depth = 64);
     // Open(path, O_WRONLY|O_CREAT|O_TRUNC) -> UringWriteBatch::write_all -> close.
     // Returns backend_error when liburing is unavailable (clean skip).
@@ -24,8 +24,8 @@ public:
     // Optional measurement (CPPIO-CORE-013E); forwarded to the batch.
     void set_stats(UringStats* stats) { batch_.set_stats(stats); }
 
-private:
+  private:
     UringWriteBatch batch_;
 };
 
-}  // namespace sluice::experimental
+} // namespace sluice::experimental

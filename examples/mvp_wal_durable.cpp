@@ -24,7 +24,9 @@ struct TempPath {
         p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
@@ -34,7 +36,7 @@ std::vector<std::byte> bytes_of(std::string_view s) {
     return {p, p + s.size()};
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     TempPath tp;
@@ -79,8 +81,7 @@ int main() {
     // 3. Sync (flush + fdatasync). durable_lsn should catch up.
     auto sr = wal.sync();
     if (!sr.has_value()) {
-        std::fprintf(stderr, "sync failed: %s\n",
-                     sluice::to_string(sr.error().code).data());
+        std::fprintf(stderr, "sync failed: %s\n", sluice::to_string(sr.error().code).data());
         return 1;
     }
     std::printf("after sync:   written=%llu flushed=%llu durable=%llu\n",
@@ -91,15 +92,13 @@ int main() {
                 static_cast<unsigned long long>(sync_stats.sync_data_calls));
 
     // 4. Verify invariant: durable <= flushed <= written.
-    if (!(wal.durable_lsn() <= wal.flushed_lsn() &&
-          wal.flushed_lsn() <= wal.written_lsn())) {
+    if (!(wal.durable_lsn() <= wal.flushed_lsn() && wal.flushed_lsn() <= wal.written_lsn())) {
         std::fprintf(stderr, "LSN invariant violated\n");
         return 1;
     }
 
     // 5. Avoid claiming durability beyond OS sync semantics.
-    std::printf("mvp_wal_durable: %zu records written, LSN invariant holds\n",
-                records.size());
+    std::printf("mvp_wal_durable: %zu records written, LSN invariant holds\n", records.size());
     std::printf("  (durable_lsn reflects an fdatasync request; actual persistence\n");
     std::printf("   depends on OS/filesystem/disk behavior)\n");
     return 0;

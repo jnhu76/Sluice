@@ -25,7 +25,7 @@
 namespace sluice::bench {
 
 class BlockingIoPool {
-public:
+  public:
     // Construct a pool with `threads` worker threads and a bounded queue of
     // `max_queued` pending jobs. `threads` must be >= 1. `max_queued` default is
     // modest; callers (e.g. benches) may raise it to avoid submit throttling.
@@ -53,9 +53,9 @@ public:
     // Number of worker threads (fixed at construction).
     std::size_t thread_count() const;
 
-private:
+  private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace sluice::bench
+} // namespace sluice::bench

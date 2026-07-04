@@ -30,8 +30,7 @@ int main(int argc, char** argv) {
         std::byte b{static_cast<unsigned char>(c)};
         auto res = buffered.write_all(std::span<const std::byte>(&b, 1));
         if (!res.has_value()) {
-            std::fprintf(stderr, "write failed: %s\n",
-                         sluice::to_string(res.error().code).data());
+            std::fprintf(stderr, "write failed: %s\n", sluice::to_string(res.error().code).data());
             return 1;
         }
     }
@@ -44,8 +43,7 @@ int main(int argc, char** argv) {
 
     std::printf("small_writes: %d app writes -> inner write_calls=%llu "
                 "write_bytes=%llu short_writes=%llu flush_calls=%llu\n",
-                n,
-                static_cast<unsigned long long>(stats.write_calls),
+                n, static_cast<unsigned long long>(stats.write_calls),
                 static_cast<unsigned long long>(stats.write_bytes),
                 static_cast<unsigned long long>(stats.short_writes),
                 static_cast<unsigned long long>(stats.flush_calls));

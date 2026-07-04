@@ -22,23 +22,27 @@ struct TempPath {
     std::filesystem::path p;
     TempPath(const char* tag) {
         std::ostringstream oss;
-        oss << "sluice_ioctx_copy_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        oss << "sluice_ioctx_copy_" << tag << "_" << std::hex
+            << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
         p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
 
 bool file_read_all(const std::string& path, std::string& out) {
     std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
+    if (!in)
+        return false;
     out.assign(std::istreambuf_iterator<char>(in), {});
     return true;
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     TempPath in_tp("in"), out_tp("out");
@@ -68,7 +72,7 @@ int main() {
     }
 
     auto res = sluice::copy_all(*r.value(), *w.value(), std::span<std::byte>(scratch),
-                               sluice::CopyLimit::unlimited(), &copy_stats);
+                                sluice::CopyLimit::unlimited(), &copy_stats);
     if (!res.has_value() || res.value() != payload.size()) {
         std::fprintf(stderr, "copy failed or short\n");
         return 1;
@@ -95,8 +99,7 @@ int main() {
         return 1;
     }
 
-    std::printf("mvp_io_context_copy: copied %zu bytes via BlockingIoContext\n",
-                payload.size());
+    std::printf("mvp_io_context_copy: copied %zu bytes via BlockingIoContext\n", payload.size());
     std::printf("  copy_bytes_read=%llu copy_loop_iterations=%llu\n",
                 static_cast<unsigned long long>(copy_stats.bytes_read),
                 static_cast<unsigned long long>(copy_stats.copy_loop_iterations));

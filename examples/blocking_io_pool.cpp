@@ -25,8 +25,8 @@ int main() {
             done.fetch_add(1, std::memory_order_relaxed);
         });
     }
-    pool.wait_all();   // blocks until every submitted job completes
+    pool.wait_all(); // blocks until every submitted job completes
     std::printf("jobs completed: %d / %d\n", done.load(), N);
-    pool.shutdown();   // idempotent; also runs in the destructor if skipped
+    pool.shutdown(); // idempotent; also runs in the destructor if skipped
     return done.load() == N ? 0 : 1;
 }

@@ -11,7 +11,7 @@ namespace {
 
 // A writer that opts into SyncableWriter.
 class SyncableMemoryWriter final : public sluice::Writer, public sluice::SyncableWriter {
-public:
+  public:
     int sync_data_calls = 0;
     int sync_all_calls = 0;
     sluice::Result<std::size_t> write_some(std::span<const std::byte> src) override {
@@ -28,7 +28,7 @@ public:
     }
 };
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(syncable_writer_interface_compiles_and_is_abstract) {
     // SyncableWriter is abstract (pure virtuals); the concrete subclass works.
@@ -51,7 +51,7 @@ SLUICE_TEST_CASE(existing_writers_not_forced_to_implement_sync) {
     sluice::MemoryWriter mw;
     sluice::Writer& as_writer = mw;
     auto* cap = dynamic_cast<sluice::SyncableWriter*>(&as_writer);
-    SLUICE_CHECK(cap == nullptr);  // capability absent, not forced
+    SLUICE_CHECK(cap == nullptr); // capability absent, not forced
 }
 
 SLUICE_MAIN()

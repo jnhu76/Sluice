@@ -14,11 +14,13 @@
 
 namespace {
 
-sluice::IoSlice mslice(std::span<std::byte> b) { return sluice::IoSlice{b}; }
+sluice::IoSlice mslice(std::span<std::byte> b) {
+    return sluice::IoSlice{b};
+}
 
 // A reader that caps each read_some to k per call, forcing multiple short reads.
 class ShortReader final : public sluice::Reader {
-public:
+  public:
     sluice::MemoryReader mem;
     std::size_t cap;
     int calls = 0;
@@ -35,7 +37,7 @@ public:
 
 // A reader that errors after a configured number of bytes have been read.
 class ErrorAfterReader final : public sluice::Reader {
-public:
+  public:
     sluice::MemoryReader mem;
     std::size_t consumed = 0;
     std::size_t trigger;
@@ -43,17 +45,19 @@ public:
     ErrorAfterReader(std::string_view s, std::size_t t, sluice::IoError e)
         : mem(sluice::MemoryReader::from_string(s)), trigger(t), err(e) {}
     sluice::Result<std::size_t> read_some(std::span<std::byte> dst) override {
-        if (consumed >= trigger) return sluice::make_unexpected<std::size_t>(err);
+        if (consumed >= trigger)
+            return sluice::make_unexpected<std::size_t>(err);
         auto r = mem.read_some(dst);
-        if (r.has_value()) consumed += r.value();
+        if (r.has_value())
+            consumed += r.value();
         return r;
     }
 };
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(read_vec_all_fills_all_buffers_in_one_call) {
-    auto rd = sluice::MemoryReader::from_string("hello world!!");  // 13 bytes
+    auto rd = sluice::MemoryReader::from_string("hello world!!"); // 13 bytes
     std::vector<std::byte> a(5), b(5), c(3);
     std::array<sluice::IoSlice, 3> dsts = {mslice(a), mslice(b), mslice(c)};
     auto r = rd.read_vec_all(std::span<sluice::IoSlice>(dsts));
@@ -66,14 +70,14 @@ SLUICE_TEST_CASE(read_vec_all_fills_all_buffers_in_one_call) {
 SLUICE_TEST_CASE(read_vec_all_fills_across_multiple_short_reads) {
     // cap=2 forces many short reads; read_vec_all must keep filling the SAME
     // slice until complete, unlike read_vec which stops on a short read.
-    ShortReader rd("ABCDEFGHIJ", 2);  // 10 bytes, 2 per read
+    ShortReader rd("ABCDEFGHIJ", 2); // 10 bytes, 2 per read
     std::vector<std::byte> a(4), b(6);
     std::array<sluice::IoSlice, 2> dsts = {mslice(a), mslice(b)};
     auto r = rd.read_vec_all(std::span<sluice::IoSlice>(dsts));
     SLUICE_CHECK(r.has_value());
     SLUICE_CHECK(std::memcmp(a.data(), "ABCD", 4) == 0);
     SLUICE_CHECK(std::memcmp(b.data(), "EFGHIJ", 6) == 0);
-    SLUICE_CHECK(rd.calls >= 5);  // at least 5 reads of 2
+    SLUICE_CHECK(rd.calls >= 5); // at least 5 reads of 2
 }
 
 SLUICE_TEST_CASE(read_vec_all_eof_before_completion_returns_eof) {
@@ -123,7 +127,7 @@ SLUICE_TEST_CASE(read_vec_all_defensive_check_reader_returning_more_than_asked) 
     // must trigger the defensive invalid_state check rather than corrupting.
     struct OverReader final : sluice::Reader {
         sluice::Result<std::size_t> read_some(std::span<std::byte> dst) override {
-            return dst.size() + 1;  // Return more than asked (broken)
+            return dst.size() + 1; // Return more than asked (broken)
         }
     };
     OverReader rd;

@@ -23,7 +23,9 @@ struct TempPath {
         p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
@@ -33,7 +35,7 @@ std::vector<std::byte> bytes_of(std::string_view s) {
     return {p, p + s.size()};
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     TempPath tp;
@@ -91,7 +93,6 @@ int main() {
         return 1;
     }
 
-    std::printf("mvp_wal_vector: wrote+read %d records, %zu payload bytes\n",
-                count, payload_bytes);
+    std::printf("mvp_wal_vector: wrote+read %d records, %zu payload bytes\n", count, payload_bytes);
     return 0;
 }

@@ -12,8 +12,11 @@ namespace {
 // {return_value, errno_to_set}. errno is set BEFORE returning so the helper
 // observes it.
 class ScriptedSyscall {
-public:
-    struct Step { long ret; int err; };
+  public:
+    struct Step {
+        long ret;
+        int err;
+    };
     std::vector<Step> steps;
     mutable std::size_t calls = 0;
 
@@ -28,14 +31,14 @@ public:
     }
 };
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(retry_on_eintr_retries_then_succeeds) {
     ScriptedSyscall sc;
     sc.steps = {{-1, EINTR}, {-1, EINTR}, {7, 0}};
     auto n = sluice::detail::retry_on_eintr(std::ref(sc));
     SLUICE_CHECK(n == 7);
-    SLUICE_CHECK(sc.calls == 3);  // retried exactly twice
+    SLUICE_CHECK(sc.calls == 3); // retried exactly twice
 }
 
 SLUICE_TEST_CASE(retry_on_eintr_returns_first_success) {

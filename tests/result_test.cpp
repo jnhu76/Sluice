@@ -13,16 +13,20 @@
 
 SLUICE_TEST_CASE(to_string_round_trips_every_code) {
     SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::eof) == std::string_view("eof"));
-    SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::no_space) == std::string_view("no_space"));
-    SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::canceled) == std::string_view("canceled"));
-    SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::interrupted) == std::string_view("interrupted"));
-    SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::would_block) == std::string_view("would_block"));
+    SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::no_space) ==
+                 std::string_view("no_space"));
+    SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::canceled) ==
+                 std::string_view("canceled"));
+    SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::interrupted) ==
+                 std::string_view("interrupted"));
+    SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::would_block) ==
+                 std::string_view("would_block"));
     SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::permission_denied) ==
-                std::string_view("permission_denied"));
+                 std::string_view("permission_denied"));
     SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::invalid_state) ==
-                std::string_view("invalid_state"));
+                 std::string_view("invalid_state"));
     SLUICE_CHECK(sluice::to_string(sluice::IoError::Code::backend_error) ==
-                std::string_view("backend_error"));
+                 std::string_view("backend_error"));
 }
 
 // from_errno_value must use portable <cerrno> macros (not hardcoded ints) and
@@ -30,7 +34,7 @@ SLUICE_TEST_CASE(to_string_round_trips_every_code) {
 SLUICE_TEST_CASE(from_errno_maps_known_macros_and_preserves_os_errno) {
     auto check = [](int errc, sluice::IoError::Code expected) {
         sluice::IoError e = sluice::from_errno_value(errc);
-        SLUICE_CHECK(e.os_errno == errc);  // always preserved
+        SLUICE_CHECK(e.os_errno == errc); // always preserved
         SLUICE_CHECK(e.code == expected);
     };
     check(EACCES, sluice::IoError::Code::permission_denied);
@@ -69,7 +73,8 @@ SLUICE_TEST_CASE(result_value_holds_constructed_value) {
 }
 
 SLUICE_TEST_CASE(result_error_holds_error) {
-    sluice::Result<int> r = sluice::make_unexpected<int>(sluice::IoError{sluice::IoError::Code::eof});
+    sluice::Result<int> r =
+        sluice::make_unexpected<int>(sluice::IoError{sluice::IoError::Code::eof});
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == sluice::IoError::Code::eof);
 }
@@ -80,7 +85,8 @@ SLUICE_TEST_CASE(result_void_can_be_success) {
 }
 
 SLUICE_TEST_CASE(result_void_can_be_error) {
-    sluice::Result<void> r = sluice::make_unexpected<void>(sluice::IoError{sluice::IoError::Code::canceled});
+    sluice::Result<void> r =
+        sluice::make_unexpected<void>(sluice::IoError{sluice::IoError::Code::canceled});
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == sluice::IoError::Code::canceled);
 }
@@ -91,7 +97,8 @@ SLUICE_TEST_CASE(result_value_or_returns_value_on_success) {
 }
 
 SLUICE_TEST_CASE(result_value_or_returns_fallback_on_error) {
-    sluice::Result<int> r = sluice::make_unexpected<int>(sluice::IoError{sluice::IoError::Code::eof});
+    sluice::Result<int> r =
+        sluice::make_unexpected<int>(sluice::IoError{sluice::IoError::Code::eof});
     SLUICE_CHECK(r.value_or(99) == 99);
 }
 
@@ -114,7 +121,7 @@ SLUICE_TEST_CASE(result_value_can_be_moved_out) {
 // value_.~T() on uninitialized storage (UB). Now has_value_ is published only
 // after a successful construction.
 namespace {
-int g_throw_on_copy_after = -1;  // copy number that should throw (-1 = never)
+int g_throw_on_copy_after = -1; // copy number that should throw (-1 = never)
 struct ThrowingCopy {
     int v;
     static int copies;
@@ -127,7 +134,7 @@ struct ThrowingCopy {
     ThrowingCopy& operator=(const ThrowingCopy&) = delete;
 };
 int ThrowingCopy::copies = 0;
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(result_copy_assignment_survives_throwing_ctor) {
     // The next copy of ThrowingCopy throws. We exercise assignment under
@@ -136,7 +143,7 @@ SLUICE_TEST_CASE(result_copy_assignment_survives_throwing_ctor) {
     sluice::Result<ThrowingCopy> src{ThrowingCopy{7}};
     sluice::Result<ThrowingCopy> dst{ThrowingCopy{0}};
     ThrowingCopy::copies = 0;
-    g_throw_on_copy_after = 0;  // first copy (the assignment) throws
+    g_throw_on_copy_after = 0; // first copy (the assignment) throws
     bool threw = false;
     try {
         dst = src;

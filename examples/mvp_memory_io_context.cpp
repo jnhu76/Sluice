@@ -21,7 +21,7 @@ std::vector<std::byte> to_bytes(std::string_view s) {
     auto* p = reinterpret_cast<const std::byte*>(s.data());
     return {p, p + s.size()};
 }
-}  // namespace
+} // namespace
 
 int main() {
     sluice::MemoryIoContext ctx;
@@ -42,9 +42,8 @@ int main() {
     // copy_all works through the abstract Reader*/Writer* handles exactly as it
     // would for the blocking file backend — that is the point of IoContext.
     std::vector<std::byte> scratch(64);
-    auto res = sluice::copy_all(*r.value(), *w.value(),
-                               std::span<std::byte>(scratch),
-                               sluice::CopyLimit::unlimited());
+    auto res = sluice::copy_all(*r.value(), *w.value(), std::span<std::byte>(scratch),
+                                sluice::CopyLimit::unlimited());
     if (!res.has_value()) {
         std::fprintf(stderr, "copy failed\n");
         return 1;
@@ -57,8 +56,7 @@ int main() {
         std::fprintf(stderr, "writer was not a MemoryWriter\n");
         return 1;
     }
-    std::string copied(reinterpret_cast<const char*>(mw->bytes().data()),
-                       mw->bytes().size());
+    std::string copied(reinterpret_cast<const char*>(mw->bytes().data()), mw->bytes().size());
 
     std::printf("mvp_memory_io_context: copied %llu bytes via IoContext\n",
                 static_cast<unsigned long long>(res.value()));

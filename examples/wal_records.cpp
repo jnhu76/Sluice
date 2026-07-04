@@ -15,7 +15,7 @@ std::vector<std::byte> bytes_of(std::string_view s) {
     return {p, p + s.size()};
 }
 
-}  // namespace
+} // namespace
 
 int main(int argc, char** argv) {
     std::string path = argc >= 2 ? argv[1] : "/tmp/sluice_wal_demo.tmp";
@@ -57,7 +57,6 @@ int main(int argc, char** argv) {
         ++count;
         total_bytes += res.value().size();
     }
-    std::printf("wal_records: read back %d records, %zu payload bytes\n",
-                count, total_bytes);
+    std::printf("wal_records: read back %d records, %zu payload bytes\n", count, total_bytes);
     return 0;
 }

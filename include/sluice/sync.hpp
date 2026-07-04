@@ -17,7 +17,7 @@
 namespace sluice {
 
 class SyncableWriter {
-public:
+  public:
     virtual ~SyncableWriter() = default;
 
     // Request persistence of file *data* (maps to fdatasync on POSIX where
@@ -29,4 +29,4 @@ public:
     virtual Result<void> sync_all() = 0;
 };
 
-}  // namespace sluice
+} // namespace sluice

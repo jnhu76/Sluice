@@ -24,7 +24,7 @@ namespace {
 // same seam style as writer_test.cpp's ScriptedWriter, exposing the default
 // fallback path: write_vec on this writer must drive it through write_some.
 class ScriptedWriter final : public sluice::Writer {
-public:
+  public:
     struct Step {
         std::size_t accept;
         std::optional<sluice::IoError> err;
@@ -47,7 +47,8 @@ public:
         }
         Step s = steps.front();
         steps.erase(steps.begin());
-        if (s.err) return sluice::make_unexpected<std::size_t>(*s.err);
+        if (s.err)
+            return sluice::make_unexpected<std::size_t>(*s.err);
         std::size_t n = std::min(s.accept, src.size());
         sink.insert(sink.end(), src.begin(), src.begin() + n);
         return n;
@@ -59,7 +60,7 @@ sluice::ConstIoSlice slice_of(std::string_view s) {
     return sluice::ConstIoSlice{std::as_bytes(std::span(s.data(), s.size()))};
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(write_vec_writes_slices_in_order) {
     ScriptedWriter w;
@@ -113,13 +114,12 @@ SLUICE_TEST_CASE(write_vec_propagates_error_after_partial_progress) {
     // Slice 0 fully written, slice 1 errors -> error propagated even though
     // bytes were delivered (errors returned, not swallowed; matches write_all).
     ScriptedWriter w;
-    w.steps = {{100, std::nullopt},
-               {0, sluice::IoError{sluice::IoError::Code::no_space}}};
+    w.steps = {{100, std::nullopt}, {0, sluice::IoError{sluice::IoError::Code::no_space}}};
     std::array<sluice::ConstIoSlice, 2> srcs = {slice_of("ok"), slice_of("bad")};
     auto r = w.write_vec(std::span<const sluice::ConstIoSlice>(srcs));
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == sluice::IoError::Code::no_space);
-    SLUICE_CHECK(w.sink.size() == 2);  // partial write happened before failure
+    SLUICE_CHECK(w.sink.size() == 2); // partial write happened before failure
 }
 
 SLUICE_TEST_CASE(write_vec_all_empty_slices_returns_zero) {
@@ -173,13 +173,12 @@ SLUICE_TEST_CASE(write_all_vec_rejects_zero_progress_on_non_empty_input) {
 SLUICE_TEST_CASE(write_all_vec_propagates_error) {
     ScriptedWriter w;
     // First slice fully written, second slice's first call errors.
-    w.steps = {{100, std::nullopt},
-               {0, sluice::IoError{sluice::IoError::Code::no_space}}};
+    w.steps = {{100, std::nullopt}, {0, sluice::IoError{sluice::IoError::Code::no_space}}};
     std::array<sluice::ConstIoSlice, 2> srcs = {slice_of("ok"), slice_of("bad")};
     auto r = w.write_all_vec(std::span<const sluice::ConstIoSlice>(srcs));
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == sluice::IoError::Code::no_space);
-    SLUICE_CHECK(w.sink.size() == 2);  // partial write happened before failure
+    SLUICE_CHECK(w.sink.size() == 2); // partial write happened before failure
 }
 
 SLUICE_TEST_CASE(write_all_vec_empty_slices_is_success) {
@@ -198,16 +197,14 @@ SLUICE_TEST_CASE(write_all_vec_never_skips_or_duplicates_bytes) {
     // no skipped byte, no duplicated byte.
     ScriptedWriter w;
     w.accept_all_when_empty = true;
-    w.steps = {{1, std::nullopt}, {1, std::nullopt}, {2, std::nullopt},
-               {3, std::nullopt}};
-    std::array<sluice::ConstIoSlice, 5> srcs = {
-        slice_of("AAAAA"), slice_of("BBBBB"), slice_of("CCCCC"),
-        slice_of("DDDDD"), slice_of("EEEEE")};
+    w.steps = {{1, std::nullopt}, {1, std::nullopt}, {2, std::nullopt}, {3, std::nullopt}};
+    std::array<sluice::ConstIoSlice, 5> srcs = {slice_of("AAAAA"), slice_of("BBBBB"),
+                                                slice_of("CCCCC"), slice_of("DDDDD"),
+                                                slice_of("EEEEE")};
     auto r = w.write_all_vec(std::span<const sluice::ConstIoSlice>(srcs));
     SLUICE_CHECK(r.has_value());
     SLUICE_CHECK(w.sink.size() == 25);
-    SLUICE_CHECK(std::memcmp(w.sink.data(),
-                            "AAAAABBBBBCCCCCDDDDDEEEEE", 25) == 0);
+    SLUICE_CHECK(std::memcmp(w.sink.data(), "AAAAABBBBBCCCCCDDDDDEEEEE", 25) == 0);
 }
 
 SLUICE_MAIN()

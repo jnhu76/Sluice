@@ -27,7 +27,7 @@ struct WriterStats {
 };
 
 class ObservedReader final : public Reader {
-public:
+  public:
     // `vec_stats` is optional: when null, read_vec simply delegates without
     // counting. When set, read_vec on a non-overriding inner reader counts as a
     // fallback call (the default read_some loop runs).
@@ -44,14 +44,14 @@ public:
     Result<std::size_t> read_some(std::span<std::byte> dst) override;
     Result<std::size_t> read_vec(std::span<IoSlice> dsts) override;
 
-private:
+  private:
     Reader& inner_;
     ReaderStats& stats_;
     VectorStats* vec_stats_;
 };
 
 class ObservedWriter final : public Writer {
-public:
+  public:
     // `vec_stats` is optional: when null, write_vec simply delegates without
     // counting. When set, write_vec on a non-overriding inner writer counts as a
     // fallback call (the default write_some loop runs).
@@ -68,10 +68,10 @@ public:
     Result<std::size_t> write_vec(std::span<const ConstIoSlice> srcs) override;
     Result<void> flush() override;
 
-private:
+  private:
     Writer& inner_;
     WriterStats& stats_;
     VectorStats* vec_stats_;
 };
 
-}  // namespace sluice
+} // namespace sluice

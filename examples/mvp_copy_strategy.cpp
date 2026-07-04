@@ -18,7 +18,7 @@
 namespace {
 
 class StrReader final : public sluice::Reader {
-public:
+  public:
     sluice::MemoryReader mem;
     explicit StrReader(std::string_view s) : mem(sluice::MemoryReader::from_string(s)) {}
     sluice::Result<std::size_t> read_some(std::span<std::byte> dst) override {
@@ -30,8 +30,8 @@ void run(const char* label, StrReader& reader, sluice::BufferedReader* buffered,
          sluice::Writer& writer, std::span<std::byte> scratch, sluice::CopyOptions opts) {
     sluice::CopyStats st;
     sluice::CopyDecision dec;
-    sluice::Reader& src = buffered ? static_cast<sluice::Reader&>(*buffered)
-                                  : static_cast<sluice::Reader&>(reader);
+    sluice::Reader& src =
+        buffered ? static_cast<sluice::Reader&>(*buffered) : static_cast<sluice::Reader&>(reader);
     auto res = sluice::copy_all(src, writer, scratch, opts, &st, &dec);
     std::printf("=== %s ===\n", label);
     if (!res.has_value()) {
@@ -49,7 +49,7 @@ void run(const char* label, StrReader& reader, sluice::BufferedReader* buffered,
                 static_cast<unsigned long long>(st.scratch_path_bytes));
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     const std::string_view data = "0123456789ABCDEF";
@@ -59,7 +59,8 @@ int main() {
     {
         StrReader r(data);
         sluice::MemoryWriter w;
-        sluice::CopyOptions o; o.strategy = sluice::CopyStrategy::Scratch;
+        sluice::CopyOptions o;
+        o.strategy = sluice::CopyStrategy::Scratch;
         run("Scratch", r, nullptr, w, scratch, o);
     }
     // 2. BufferedFirst strategy (prime a BufferedReader so fast path engages)
@@ -68,9 +69,10 @@ int main() {
         std::vector<std::byte> rbuf(64);
         sluice::BufferedReader br(r, rbuf);
         std::vector<std::byte> primed(4);
-        (void)br.read_some(primed);  // leave 12 buffered
+        (void)br.read_some(primed); // leave 12 buffered
         sluice::MemoryWriter w;
-        sluice::CopyOptions o; o.strategy = sluice::CopyStrategy::BufferedFirst;
+        sluice::CopyOptions o;
+        o.strategy = sluice::CopyStrategy::BufferedFirst;
         run("BufferedFirst", r, &br, w, scratch, o);
     }
     // 3. Auto strategy (same setup; Auto resolves to BufferedFirst)
@@ -81,14 +83,16 @@ int main() {
         std::vector<std::byte> primed(4);
         (void)br.read_some(primed);
         sluice::MemoryWriter w;
-        sluice::CopyOptions o; o.strategy = sluice::CopyStrategy::Auto;
+        sluice::CopyOptions o;
+        o.strategy = sluice::CopyStrategy::Auto;
         run("Auto", r, &br, w, scratch, o);
     }
     // 4. Deferred strategy rejected (default policy)
     {
         StrReader r(data);
         sluice::MemoryWriter w;
-        sluice::CopyOptions o; o.strategy = sluice::CopyStrategy::VectorDeferred;
+        sluice::CopyOptions o;
+        o.strategy = sluice::CopyStrategy::VectorDeferred;
         run("VectorDeferred (rejected)", r, nullptr, w, scratch, o);
     }
     // 5. Deferred strategy fallback to Auto

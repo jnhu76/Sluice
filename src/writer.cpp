@@ -10,14 +10,16 @@ namespace sluice {
 Result<void> Writer::write_all(std::span<const std::byte> src) {
     while (!src.empty()) {
         auto r = write_some(src);
-        if (!r.has_value()) return make_unexpected(r.error());
+        if (!r.has_value()) {
+            return make_unexpected(r.error());
+        }
         std::size_t n = r.value();
         if (n == 0) {
-            return make_unexpected(IoError{IoError::Code::invalid_state});
+            return make_unexpected(IoError{.code = IoError::Code::invalid_state});
         }
         if (n > src.size()) {
             // Defensive: a writer returning more than asked is broken.
-            return make_unexpected(IoError{IoError::Code::invalid_state});
+            return make_unexpected(IoError{.code = IoError::Code::invalid_state});
         }
         src = src.subspan(n);
     }
@@ -35,16 +37,22 @@ Result<void> Writer::write_all(std::span<const std::byte> src) {
 Result<std::size_t> Writer::write_vec(std::span<const ConstIoSlice> srcs) {
     std::size_t total = 0;
     for (const auto& s : srcs) {
-        if (s.bytes.empty()) continue;  // empty slices are skipped, no syscall
+        if (s.bytes.empty()) {
+            continue; // empty slices are skipped, no syscall
+        }
         auto r = write_some(s.bytes);
-        if (!r.has_value()) return make_unexpected<std::size_t>(r.error());
+        if (!r.has_value()) {
+            return make_unexpected<std::size_t>(r.error());
+        }
         std::size_t n = r.value();
         if (n > s.bytes.size()) {
             // Defensive: a writer returning more than asked is broken.
-            return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+            return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_state});
         }
         total += n;
-        if (n < s.bytes.size()) break;  // short write: stop and report partial
+        if (n < s.bytes.size()) {
+            break; // short write: stop and report partial
+        }
     }
     return total;
 }
@@ -56,42 +64,44 @@ Result<std::size_t> Writer::write_vec(std::span<const ConstIoSlice> srcs) {
 // invalid_state (same rule as write_all). Bytes always written in order.
 Result<void> Writer::write_all_vec(std::span<const ConstIoSlice> srcs) {
     std::size_t idx = 0;
-    std::size_t head_offset = 0;  // bytes already written of srcs[idx]
+    std::size_t head_offset = 0; // bytes already written of srcs[idx]
     while (idx < srcs.size()) {
         // Drive the remaining tail through write_vec. The fast path (no
         // partial first slice) is a plain subspan with no allocation; only a
         // resume inside a partially-written slice needs a temporary vector so
         // the first entry is the tail of srcs[idx].
         std::size_t n_remaining = srcs.size() - idx;
-        auto drive = [&](std::span<const ConstIoSlice> rem) {
-            return write_vec(rem);
-        };
+        auto drive = [&](std::span<const ConstIoSlice> rem) { return write_vec(rem); };
         Result<std::size_t> r = [&]() -> Result<std::size_t> {
             if (head_offset == 0) {
                 return drive(srcs.subspan(idx));
             }
             std::vector<ConstIoSlice> remaining;
             remaining.reserve(n_remaining);
-            remaining.push_back(
-                ConstIoSlice{srcs[idx].bytes.subspan(head_offset)});
+            remaining.push_back(ConstIoSlice{srcs[idx].bytes.subspan(head_offset)});
             for (std::size_t i = idx + 1; i < srcs.size(); ++i) {
                 remaining.push_back(srcs[i]);
             }
             return drive(std::span<const ConstIoSlice>(remaining));
         }();
-        if (!r.has_value()) return make_unexpected(r.error());
+        if (!r.has_value()) {
+            return make_unexpected(r.error());
+        }
         std::size_t written = r.value();
         if (written == 0) {
             // No progress. Only an error if there is still non-empty data left.
             bool any_left = false;
             for (std::size_t i = idx; i < srcs.size(); ++i) {
                 std::size_t off = (i == idx) ? head_offset : 0;
-                if (srcs[i].bytes.size() > off) { any_left = true; break; }
+                if (srcs[i].bytes.size() > off) {
+                    any_left = true;
+                    break;
+                }
             }
             if (any_left) {
-                return make_unexpected(IoError{IoError::Code::invalid_state});
+                return make_unexpected(IoError{.code = IoError::Code::invalid_state});
             }
-            break;  // nothing non-empty remains: done
+            break; // nothing non-empty remains: done
         }
         // Walk written bytes forward through the slice list to find the new
         // (idx, head_offset). This keeps order and never skips/duplicates.
@@ -110,4 +120,4 @@ Result<void> Writer::write_all_vec(std::span<const ConstIoSlice> srcs) {
     return {};
 }
 
-}  // namespace sluice
+} // namespace sluice

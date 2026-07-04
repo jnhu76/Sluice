@@ -11,10 +11,10 @@ SLUICE_TEST_CASE(bench_csv_header_has_expected_columns) {
     std::ostringstream out;
     sluice::bench::print_csv_header(out);
     std::string h = out.str();
-    for (auto col : {"case", "mode", "bytes", "iterations", "elapsed_ns",
-                     "read_syscalls", "write_syscalls", "buffered_fast_path_bytes",
-                     "scratch_path_bytes", "read_vec_calls", "write_vec_calls",
-                     "sync_data_calls", "sync_all_calls"}) {
+    for (const auto* col :
+         {"case", "mode", "bytes", "iterations", "elapsed_ns", "read_syscalls", "write_syscalls",
+          "buffered_fast_path_bytes", "scratch_path_bytes", "read_vec_calls", "write_vec_calls",
+          "sync_data_calls", "sync_all_calls"}) {
         SLUICE_CHECK(h.find(col) != std::string::npos);
     }
 }

@@ -40,4 +40,4 @@ Result<std::uint64_t> copy_all(Reader& reader, Writer& writer, CopyLimit limit);
 // Convenience overload: unbounded copy with an internally allocated scratch.
 Result<std::uint64_t> copy_all(Reader& reader, Writer& writer);
 
-}  // namespace sluice
+} // namespace sluice

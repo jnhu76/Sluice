@@ -27,7 +27,7 @@ std::span<const std::byte> span_of(const std::vector<std::byte>& v) {
     return std::span<const std::byte>(v.data(), v.size());
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(wal_vec_round_trips_one_record) {
     sluice::MemoryWriter out;
@@ -67,7 +67,7 @@ SLUICE_TEST_CASE(wal_vec_produces_same_bytes_as_scalar_path) {
     SLUICE_CHECK(sluice::wal::write_record(scalar_out, span_of(payload)).has_value());
     SLUICE_CHECK(vec_out.bytes().size() == scalar_out.bytes().size());
     SLUICE_CHECK(std::memcmp(vec_out.bytes().data(), scalar_out.bytes().data(),
-                            vec_out.bytes().size()) == 0);
+                             vec_out.bytes().size()) == 0);
 }
 
 SLUICE_TEST_CASE(wal_vec_writer_fault_propagates) {

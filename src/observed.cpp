@@ -12,7 +12,9 @@ Result<std::size_t> ObservedReader::read_some(std::span<std::byte> dst) {
     }
     std::size_t n = r.value();
     stats_.read_bytes += n;
-    if (n == 0) ++stats_.eof_count;
+    if (n == 0) {
+        ++stats_.eof_count;
+    }
     return n;
 }
 
@@ -29,9 +31,15 @@ Result<std::size_t> ObservedReader::read_vec(std::span<IoSlice> dsts) {
         ++vec_stats_->read_vec_calls;
         ++vec_stats_->read_vec_fallback_calls;
         std::uint64_t iovecs = 0;
-        for (const auto& d : dsts) if (!d.bytes.empty()) ++iovecs;
+        for (const auto& d : dsts) {
+            if (!d.bytes.empty()) {
+                ++iovecs;
+            }
+        }
         vec_stats_->read_vec_iovecs += iovecs;
-        if (r.has_value()) vec_stats_->read_vec_bytes += r.value();
+        if (r.has_value()) {
+            vec_stats_->read_vec_bytes += r.value();
+        }
     }
     return r;
 }
@@ -45,7 +53,9 @@ Result<std::size_t> ObservedWriter::write_some(std::span<const std::byte> src) {
     }
     std::size_t n = r.value();
     stats_.write_bytes += n;
-    if (n < src.size()) ++stats_.short_writes;
+    if (n < src.size()) {
+        ++stats_.short_writes;
+    }
     return n;
 }
 
@@ -58,9 +68,15 @@ Result<std::size_t> ObservedWriter::write_vec(std::span<const ConstIoSlice> srcs
         ++vec_stats_->write_vec_calls;
         ++vec_stats_->write_vec_fallback_calls;
         std::uint64_t iovecs = 0;
-        for (const auto& s : srcs) if (!s.bytes.empty()) ++iovecs;
+        for (const auto& s : srcs) {
+            if (!s.bytes.empty()) {
+                ++iovecs;
+            }
+        }
         vec_stats_->write_vec_iovecs += iovecs;
-        if (r.has_value()) vec_stats_->write_vec_bytes += r.value();
+        if (r.has_value()) {
+            vec_stats_->write_vec_bytes += r.value();
+        }
     }
     return r;
 }
@@ -75,4 +91,4 @@ Result<void> ObservedWriter::flush() {
     return {};
 }
 
-}  // namespace sluice
+} // namespace sluice

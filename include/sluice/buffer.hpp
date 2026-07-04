@@ -22,7 +22,7 @@ namespace sluice {
 // already-buffered unread region (buf_[seek_..end_]) directly, mirroring Zig's
 // Reader.stream fast path (Reader.zig:168).
 class BufferedReader final : public Reader, public BufferedReadable {
-public:
+  public:
     // The wrapper holds the span; the caller must keep the backing storage
     // alive for the wrapper's lifetime. Buffer must be non-empty. If `stats`
     // is non-null, buffer hit/miss/refill counters are recorded there.
@@ -43,15 +43,15 @@ public:
     // --- BufferedReadable ---
     // buf_[seek_..end_) is the buffered unread region. Read-only, no inner call.
     std::span<const std::byte> peek_buffered() const override {
-        return std::span<const std::byte>(buf_.data() + seek_, end_ - seek_);
+        return {buf_.data() + seek_, end_ - seek_};
     }
     Result<void> consume_buffered(std::size_t n) override;
 
-private:
+  private:
     Reader& inner_;
     std::span<std::byte> buf_;
-    std::size_t seek_ = 0;  // consumed position within buf_
-    std::size_t end_ = 0;   // one past last valid byte within buf_
+    std::size_t seek_ = 0; // consumed position within buf_
+    std::size_t end_ = 0;  // one past last valid byte within buf_
     BufferStats* stats_ = nullptr;
 };
 
@@ -60,7 +60,7 @@ private:
 // destructor does NOT flush — callers must flush() before destruction to
 // avoid silent data loss, matching the Zig model.
 class BufferedWriter final : public Writer {
-public:
+  public:
     BufferedWriter(Writer& inner, std::span<std::byte> buffer, BufferStats* stats = nullptr)
         : inner_(inner), buf_(buffer), stats_(stats) {
         assert(!buffer.empty() && "BufferedWriter requires a non-empty backing buffer");
@@ -87,15 +87,15 @@ public:
                "BufferedWriter destroyed with unflushed dirty bytes (did you forget flush()?)");
     }
 
-private:
+  private:
     // Push buf_[0..end_) to the inner writer, retrying short writes.
     Result<void> flush_dirty();
 
     Writer& inner_;
     std::span<std::byte> buf_;
-    std::size_t end_ = 0;  // one past last dirty byte within buf_
-    bool flush_ever_failed_ = false;  // suppresses the destructor assert
+    std::size_t end_ = 0;            // one past last dirty byte within buf_
+    bool flush_ever_failed_ = false; // suppresses the destructor assert
     BufferStats* stats_ = nullptr;
 };
 
-}  // namespace sluice
+} // namespace sluice

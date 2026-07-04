@@ -20,11 +20,14 @@ struct TempPath {
     std::filesystem::path p;
     TempPath(const char* tag) {
         std::ostringstream oss;
-        oss << "sluice_ioctx_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        oss << "sluice_ioctx_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this)
+            << ".tmp";
         p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
@@ -35,7 +38,7 @@ bool file_has(const std::string& path, std::string_view want) {
     return content == std::string(want);
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(blocking_context_opens_existing_file_for_reading) {
     TempPath tp("r");
@@ -67,7 +70,7 @@ SLUICE_TEST_CASE(blocking_context_opens_new_file_for_writing) {
 SLUICE_TEST_CASE(blocking_context_missing_reader_file_errors_at_open_time) {
     sluice::BlockingIoContext ctx;
     auto r = ctx.open_reader("/no/such/sluice/ioctx/missing");
-    SLUICE_CHECK(!r.has_value());  // error immediate, not deferred
+    SLUICE_CHECK(!r.has_value()); // error immediate, not deferred
 }
 
 SLUICE_TEST_CASE(blocking_context_invalid_writer_path_errors_at_open_time) {
@@ -83,8 +86,9 @@ SLUICE_TEST_CASE(blocking_context_wires_stats_pointers) {
     sluice::SyncStats sync{};
     sluice::BlockingIoContext ctx;
     {
-        auto w = ctx.open_writer(tp.str(),
-                                 sluice::OpenWriterOptions{&ss, &vs, &sync});
+        auto w = ctx.open_writer(tp.str(), sluice::OpenWriterOptions{.syscall_stats = &ss,
+                                                                     .vector_stats = &vs,
+                                                                     .sync_stats = &sync});
         SLUICE_CHECK(w.has_value());
         SLUICE_CHECK(w.value()->write_some(std::as_bytes(std::span("ab", 2))).has_value());
         // Reach sync_all through the SyncableWriter capability the FileWriter
@@ -106,11 +110,12 @@ SLUICE_TEST_CASE(blocking_context_returned_writer_is_syncable_writer) {
     SLUICE_CHECK(w.has_value());
     sluice::Writer& as_writer = *w.value();
     auto* cap = dynamic_cast<sluice::SyncableWriter*>(&as_writer);
-    SLUICE_CHECK(cap != nullptr);  // FileWriter is SyncableWriter
+    SLUICE_CHECK(cap != nullptr); // FileWriter is SyncableWriter
 }
 
 SLUICE_TEST_CASE(blocking_context_copy_through_context_handles) {
-    TempPath in_tp("ci"), out_tp("co");
+    TempPath in_tp("ci");
+    TempPath out_tp("co");
     {
         std::ofstream o(in_tp.str(), std::ios::binary);
         o.write("round-trip", 10);

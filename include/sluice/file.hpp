@@ -20,7 +20,7 @@
 namespace sluice {
 
 class FileReader final : public Reader {
-public:
+  public:
     FileReader() = default;
     // Open `path` for reading. If `stats` is non-null, syscall counters are
     // recorded there for the lifetime of this reader. If `vec_stats` is
@@ -33,8 +33,7 @@ public:
     explicit FileReader(int fd) : fd_(fd) {}
     ~FileReader() override;
     FileReader(FileReader&& other) noexcept
-        : fd_(std::exchange(other.fd_, -1)),
-          open_error_(std::exchange(other.open_error_, {})),
+        : fd_(std::exchange(other.fd_, -1)), open_error_(std::exchange(other.open_error_, {})),
           stats_(std::exchange(other.stats_, nullptr)),
           vec_stats_(std::exchange(other.vec_stats_, nullptr)) {}
     FileReader& operator=(FileReader&& other) noexcept {
@@ -75,7 +74,7 @@ public:
     // is immediate success. EOF before/within -> IoError::eof.
     Result<void> read_at_exact(std::uint64_t offset, std::span<std::byte> dst);
 
-private:
+  private:
     void close();
     int fd_ = -1;
     // Set when the constructor's open() failed; surfaced on first I/O. Empty
@@ -88,7 +87,7 @@ private:
 };
 
 class FileWriter final : public Writer, public SyncableWriter {
-public:
+  public:
     FileWriter() = default;
     // Creates/truncates the file (O_WRONLY|O_CREAT|O_TRUNC). If `stats` is
     // non-null, syscall counters are recorded there for the writer's lifetime.
@@ -102,8 +101,7 @@ public:
     explicit FileWriter(int fd) : fd_(fd) {}
     ~FileWriter() override;
     FileWriter(FileWriter&& other) noexcept
-        : fd_(std::exchange(other.fd_, -1)),
-          open_error_(std::exchange(other.open_error_, {})),
+        : fd_(std::exchange(other.fd_, -1)), open_error_(std::exchange(other.open_error_, {})),
           stats_(std::exchange(other.stats_, nullptr)),
           vec_stats_(std::exchange(other.vec_stats_, nullptr)),
           sync_stats_(std::exchange(other.sync_stats_, nullptr)) {}
@@ -154,7 +152,7 @@ public:
     // Request persistence of file data + metadata (fsync).
     Result<void> sync_all() override;
 
-private:
+  private:
     void close();
     int fd_ = -1;
     std::optional<IoError> open_error_;
@@ -163,4 +161,4 @@ private:
     SyncStats* sync_stats_ = nullptr;
 };
 
-}  // namespace sluice
+} // namespace sluice

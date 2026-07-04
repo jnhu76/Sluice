@@ -13,9 +13,11 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
     // progress, so reject up-front rather than spinning or UB-ing. (The
     // constructor also asserts this in debug builds.)
     if (buf_.empty()) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+        return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_state});
     }
-    if (dst.empty()) return std::size_t{0};
+    if (dst.empty()) {
+        return std::size_t{0};
+    }
 
     if (stats_) {
         ++stats_->read_requests;
@@ -37,7 +39,9 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
                 stats_->read_buffer_hit_bytes += n;
             }
             // If dst is satisfied, we're done without touching the inner reader.
-            if (dst.empty()) break;
+            if (dst.empty()) {
+                break;
+            }
         } else if (stats_) {
             ++stats_->read_buffer_misses;
         }
@@ -51,7 +55,9 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
             // remainder. The bytes already copied (total) stay valid.
             auto r = inner_.read_some(dst);
             if (!r.has_value()) {
-                if (total > 0) return total;  // already delivered some bytes
+                if (total > 0) {
+                    return total; // already delivered some bytes
+                }
                 return make_unexpected<std::size_t>(r.error());
             }
             std::size_t n = r.value();
@@ -68,7 +74,9 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
         }
         auto r = inner_.read_some(std::span<std::byte>(buf_.data() + end_, buf_.size() - end_));
         if (!r.has_value()) {
-            if (total > 0) return total;
+            if (total > 0) {
+                return total;
+            }
             return make_unexpected<std::size_t>(r.error());
         }
         std::size_t got = r.value();
@@ -90,26 +98,30 @@ Result<std::size_t> BufferedReader::read_some(std::span<std::byte> dst) {
 Result<void> BufferedReader::consume_buffered(std::size_t n) {
     std::size_t avail = end_ - seek_;
     if (n > avail) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        return make_unexpected<void>(IoError{.code = IoError::Code::invalid_state});
     }
     seek_ += n;
     return {};
 }
 
 Result<void> BufferedWriter::flush_dirty() {
-    if (end_ > 0 && stats_) ++stats_->write_flush_calls;
+    if (end_ > 0 && stats_) {
+        ++stats_->write_flush_calls;
+    }
     while (end_ > 0) {
         auto r = inner_.write_some(std::span<const std::byte>(buf_.data(), end_));
         if (!r.has_value()) {
-            flush_ever_failed_ = true;  // dirty bytes may remain; suppress dtor assert
+            flush_ever_failed_ = true; // dirty bytes may remain; suppress dtor assert
             return make_unexpected<void>(r.error());
         }
         std::size_t n = r.value();
         if (n == 0) {
             flush_ever_failed_ = true;
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            return make_unexpected<void>(IoError{.code = IoError::Code::invalid_state});
         }
-        if (stats_) stats_->write_flush_bytes += n;
+        if (stats_) {
+            stats_->write_flush_bytes += n;
+        }
         if (n >= end_) {
             end_ = 0;
             break;
@@ -124,9 +136,11 @@ Result<void> BufferedWriter::flush_dirty() {
 Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
     // Release-safe precondition: see BufferedReader::read_some.
     if (buf_.empty()) {
-        return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+        return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_state});
     }
-    if (src.empty()) return std::size_t{0};
+    if (src.empty()) {
+        return std::size_t{0};
+    }
 
     if (stats_) {
         ++stats_->write_requests;
@@ -162,7 +176,7 @@ Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
             if (n == 0) {
                 return total > 0 ? Result<std::size_t>{total}
                                  : make_unexpected<std::size_t>(
-                                       IoError{IoError::Code::invalid_state});
+                                       IoError{.code = IoError::Code::invalid_state});
             }
             src = src.subspan(n);
             continue;
@@ -186,8 +200,10 @@ Result<std::size_t> BufferedWriter::write_some(std::span<const std::byte> src) {
 
 Result<void> BufferedWriter::flush() {
     auto f = flush_dirty();
-    if (!f.has_value()) return make_unexpected<void>(f.error());
+    if (!f.has_value()) {
+        return make_unexpected<void>(f.error());
+    }
     return inner_.flush();
 }
 
-}  // namespace sluice
+} // namespace sluice

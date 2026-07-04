@@ -20,7 +20,7 @@ bool eq(std::string_view s, const std::vector<std::byte>& b) {
     return b.size() == s.size() && std::memcmp(s.data(), b.data(), s.size()) == 0;
 }
 
-}  // namespace
+} // namespace
 
 // ---------- ObservedReader ----------
 
@@ -44,9 +44,9 @@ SLUICE_TEST_CASE(observed_reader_counts_eof_when_zero_returned) {
     sluice::ObservedReader r(inner, stats);
 
     std::array<std::byte, 2> a{};
-    (void)r.read_some(std::span<std::byte>(a));       // consumes both bytes
+    (void)r.read_some(std::span<std::byte>(a)); // consumes both bytes
     std::array<std::byte, 2> b{};
-    auto e = r.read_some(std::span<std::byte>(b));    // EOF
+    auto e = r.read_some(std::span<std::byte>(b)); // EOF
     SLUICE_CHECK(e.has_value());
     SLUICE_CHECK(e.value() == 0);
     SLUICE_CHECK(stats.eof_count == 1);
@@ -100,7 +100,7 @@ SLUICE_TEST_CASE(observed_writer_counts_short_writes) {
 
     // A single write_all triggers multiple short writes internally.
     SLUICE_CHECK(w.write_all(sb("abcdef")).has_value());
-    SLUICE_CHECK(stats.short_writes >= 1);  // at least one call wrote fewer than asked
+    SLUICE_CHECK(stats.short_writes >= 1); // at least one call wrote fewer than asked
     SLUICE_CHECK(stats.write_bytes == 6);
     SLUICE_CHECK(eq("abcdef", sink.bytes()));
 }
@@ -143,7 +143,7 @@ SLUICE_TEST_CASE(observed_writer_counts_write_errors) {
     // propagate the error and increment write_errors.
     sluice::MemoryWriter sink;
     sluice::FaultPlan plan;
-    plan.fail_after_write_calls = 0;  // very first write fails
+    plan.fail_after_write_calls = 0; // very first write fails
     plan.error = sluice::IoError{sluice::IoError::Code::no_space};
     sluice::FaultWriter inner(sink, plan);
     sluice::WriterStats stats{};

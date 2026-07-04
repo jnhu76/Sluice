@@ -29,18 +29,20 @@ struct TempPath {
     std::filesystem::path p;
     TempPath(const char* tag) {
         std::ostringstream oss;
-        oss << "sluice_bench_uring_" << tag << "_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
+        oss << "sluice_bench_uring_" << tag << "_" << std::hex
+            << reinterpret_cast<std::uintptr_t>(this) << ".tmp";
         p = std::filesystem::temp_directory_path() / oss.str();
     }
     ~TempPath() {
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
 
 std::uint64_t now_ns() {
-    return static_cast<std::uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
+    return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
 }
 
 constexpr int kIters = 200;
@@ -62,13 +64,13 @@ void run_blocking_file(const std::string& path, std::size_t payload_size) {
         (void)fw.flush();
     }
     auto elapsed = now_ns() - t0;
-    std::cout << "uring_write,blocking_file_writer," << (payload_size * kIters) << ','
-              << kIters << ',' << elapsed << ','
-              << ss.write_syscalls << ",0,0,0,0\n";
+    std::cout << "uring_write,blocking_file_writer," << (payload_size * kIters) << ',' << kIters
+              << ',' << elapsed << ',' << ss.write_syscalls << ",0,0,0,0\n";
 }
 
 void run_blocking_vec(const std::string& path, std::size_t payload_size) {
-    sluice::SyscallStats ss; sluice::VectorStats vs;
+    sluice::SyscallStats ss;
+    sluice::VectorStats vs;
     std::vector<std::byte> buf(payload_size, std::byte{0x43});
     auto t0 = now_ns();
     for (int i = 0; i < kIters; ++i) {
@@ -78,9 +80,9 @@ void run_blocking_vec(const std::string& path, std::size_t payload_size) {
         (void)fw.flush();
     }
     auto elapsed = now_ns() - t0;
-    std::cout << "uring_write,blocking_write_vec," << (payload_size * kIters) << ','
-              << kIters << ',' << elapsed << ','
-              << ss.write_syscalls << ',' << vs.write_vec_calls << ",0,0,0\n";
+    std::cout << "uring_write,blocking_write_vec," << (payload_size * kIters) << ',' << kIters
+              << ',' << elapsed << ',' << ss.write_syscalls << ',' << vs.write_vec_calls
+              << ",0,0,0\n";
 }
 
 #if defined(SLUICE_HAS_LIBURING)
@@ -92,16 +94,16 @@ void run_uring(const std::string& path, std::size_t payload_size) {
         sluice::experimental::UringIoContext ctx(16);
         ctx.set_stats(&us);
         int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-        if (fd < 0) continue;
+        if (fd < 0)
+            continue;
         sluice::experimental::UringWriteBatch batch(16);
         batch.set_stats(&us);
         (void)batch.write_all(fd, std::span<const std::byte>(buf), 0);
         ::close(fd);
     }
     auto elapsed = now_ns() - t0;
-    std::cout << "uring_write,uring_write_batch," << (payload_size * kIters) << ','
-              << kIters << ',' << elapsed << ",0,0,"
-              << us.submitted_ops << ',' << us.completed_ops << ','
+    std::cout << "uring_write,uring_write_batch," << (payload_size * kIters) << ',' << kIters << ','
+              << elapsed << ",0,0," << us.submitted_ops << ',' << us.completed_ops << ','
               << us.completion_errors << '\n';
 }
 #else
@@ -113,12 +115,12 @@ void run_uring_skip(std::size_t payload_size) {
 }
 #endif
 
-}  // namespace
+} // namespace
 
 int main() {
     print_spike_header();
     TempPath tp("wb");
-    for (std::size_t psz : {64u, 4096u, 65536u}) {
+    for (std::size_t psz : {64U, 4096U, 65536U}) {
         run_blocking_file(tp.str(), psz);
         run_blocking_vec(tp.str(), psz);
 #if defined(SLUICE_HAS_LIBURING)

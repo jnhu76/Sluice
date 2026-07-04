@@ -25,7 +25,9 @@ struct TempPath {
     ~TempPath() {
         // Swallow cleanup errors: a failing remove (already gone, permission)
         // must not throw during stack unwinding and terminate the test process.
-        try { std::filesystem::remove(p); } catch (...) {}
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
     }
     std::string str() const { return p.string(); }
 };
@@ -36,7 +38,7 @@ bool file_has(const std::string& path, std::string_view want) {
     return content == std::string(want);
 }
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(file_writer_is_syncable_writer) {
     TempPath tp;
@@ -54,7 +56,7 @@ SLUICE_TEST_CASE(file_writer_sync_all_succeeds_after_write) {
     auto wr = w.write_some(std::as_bytes(std::span("data", 4)));
     SLUICE_CHECK(wr.has_value() && wr.value() == 4);
     auto s = w.sync_all();
-    SLUICE_CHECK(s.has_value());  // fsync on a freshly written temp file succeeds
+    SLUICE_CHECK(s.has_value()); // fsync on a freshly written temp file succeeds
     SLUICE_CHECK(file_has(tp.str(), "data"));
 }
 
@@ -64,7 +66,7 @@ SLUICE_TEST_CASE(file_writer_sync_data_succeeds_after_write) {
     SLUICE_CHECK(w.opened());
     auto wr = w.write_some(std::as_bytes(std::span("payload", 7)));
     SLUICE_CHECK(wr.has_value() && wr.value() == 7);
-    auto s = w.sync_data();  // fdatasync; succeeds where supported
+    auto s = w.sync_data(); // fdatasync; succeeds where supported
     SLUICE_CHECK(s.has_value());
 }
 
@@ -81,7 +83,7 @@ SLUICE_TEST_CASE(file_writer_sync_preserves_open_error_errno) {
 }
 
 SLUICE_TEST_CASE(file_writer_sync_on_invalid_writer_returns_invalid_state) {
-    sluice::FileWriter w;  // default-constructed: no fd, no open_error_
+    sluice::FileWriter w; // default-constructed: no fd, no open_error_
     SLUICE_CHECK(!w.opened());
     auto s = w.sync_all();
     SLUICE_CHECK(!s.has_value());
@@ -97,7 +99,7 @@ SLUICE_TEST_CASE(file_writer_flush_does_not_invoke_sync) {
     SLUICE_CHECK(w.write_some(std::as_bytes(std::span("x", 1))).has_value());
     auto f = w.flush();
     SLUICE_CHECK(f.has_value());
-    SLUICE_CHECK(st.sync_data_calls == 0);  // flush is NOT a sync
+    SLUICE_CHECK(st.sync_data_calls == 0); // flush is NOT a sync
     SLUICE_CHECK(st.sync_all_calls == 0);
 }
 
@@ -126,10 +128,10 @@ SLUICE_TEST_CASE(sync_stats_count_calls_and_errors) {
 
 SLUICE_TEST_CASE(sync_stats_nullptr_changes_nothing) {
     TempPath tp;
-    sluice::FileWriter w(tp.str());  // no sync stats
+    sluice::FileWriter w(tp.str()); // no sync stats
     SLUICE_CHECK(w.write_some(std::as_bytes(std::span("c", 1))).has_value());
     auto s = w.sync_all();
-    SLUICE_CHECK(s.has_value());  // behavior unchanged with null stats
+    SLUICE_CHECK(s.has_value()); // behavior unchanged with null stats
 }
 
 SLUICE_MAIN()

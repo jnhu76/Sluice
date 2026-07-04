@@ -35,18 +35,21 @@ struct TempPath {
     std::filesystem::path p;
     TempPath() {
         std::ostringstream oss;
-        oss << "sluice_w3_" << std::hex << reinterpret_cast<std::uintptr_t>(this)
-            << "_" << (counter_++) << ".tmp";
+        oss << "sluice_w3_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << "_"
+            << (counter_++) << ".tmp";
         p = std::filesystem::temp_directory_path() / oss.str();
     }
-    ~TempPath() { try { std::filesystem::remove(p); } catch (...) {} }
+    ~TempPath() {
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
+    }
     std::string str() const { return p.string(); }
     static inline long counter_ = 0;
 };
 
 std::uint64_t now_ns() {
-    return static_cast<std::uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
+    return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
 }
 
 void seed_file(const std::string& path, std::size_t total) {
@@ -79,10 +82,8 @@ struct Params {
     std::size_t bytes_per_stream;
 };
 
-std::uint64_t run_sequential(const Params& pm,
-                             const std::vector<std::string>& srcs,
-                             const std::vector<std::string>& dsts,
-                             std::byte* scratch) {
+std::uint64_t run_sequential(const Params& pm, const std::vector<std::string>& srcs,
+                             const std::vector<std::string>& dsts, std::byte* scratch) {
     auto t0 = now_ns();
     for (std::size_t s = 0; s < pm.streams; ++s) {
         (void)run_one_copy(srcs[s], dsts[s], pm.bytes_per_stream, pm.buffer_size, scratch);
@@ -90,8 +91,7 @@ std::uint64_t run_sequential(const Params& pm,
     return now_ns() - t0;
 }
 
-std::uint64_t run_bounded_pool(const Params& pm,
-                               const std::vector<std::string>& srcs,
+std::uint64_t run_bounded_pool(const Params& pm, const std::vector<std::string>& srcs,
                                const std::vector<std::string>& dsts) {
     std::vector<std::vector<std::byte>> scratches(pm.streams,
                                                   std::vector<std::byte>(pm.buffer_size));
@@ -100,7 +100,8 @@ std::uint64_t run_bounded_pool(const Params& pm,
     auto t0 = now_ns();
     for (std::size_t s = 0; s < pm.streams; ++s) {
         std::byte* sc = scratches[s].data();
-        std::string src = srcs[s], dst = dsts[s];
+        std::string src = srcs[s];
+        std::string dst = dsts[s];
         pool.submit([src, dst, &pm, sc] {
             (void)run_one_copy(src, dst, pm.bytes_per_stream, pm.buffer_size, sc);
         });
@@ -109,8 +110,7 @@ std::uint64_t run_bounded_pool(const Params& pm,
     return now_ns() - t0;
 }
 
-std::uint64_t run_thread_per_stream(const Params& pm,
-                                    const std::vector<std::string>& srcs,
+std::uint64_t run_thread_per_stream(const Params& pm, const std::vector<std::string>& srcs,
                                     const std::vector<std::string>& dsts) {
     std::vector<std::vector<std::byte>> scratches(pm.streams,
                                                   std::vector<std::byte>(pm.buffer_size));
@@ -122,7 +122,8 @@ std::uint64_t run_thread_per_stream(const Params& pm,
     auto t0 = now_ns();
     for (std::size_t s = 0; s < pm.streams; ++s) {
         std::byte* sc = scratches[s].data();
-        std::string src = srcs[s], dst = dsts[s];
+        std::string src = srcs[s];
+        std::string dst = dsts[s];
         threads.emplace_back([src, dst, &pm, sc, &captured] {
             try {
                 (void)run_one_copy(src, dst, pm.bytes_per_stream, pm.buffer_size, sc);
@@ -131,8 +132,12 @@ std::uint64_t run_thread_per_stream(const Params& pm,
             }
         });
     }
-    for (auto& t : threads) t.join();
-    if (auto ex = captured.load()) std::rethrow_exception(ex);
+    for (auto& t : threads) {
+        t.join();
+    }
+    if (auto ex = captured.load()) {
+        std::rethrow_exception(ex);
+    }
     return now_ns() - t0;
 }
 
@@ -156,31 +161,31 @@ void emit(const Params& pm, const std::string& mode, std::uint64_t elapsed_ns,
 
 void run_cell(const Params& pm) {
     std::vector<TempPath> held;
-    std::vector<std::string> srcs, dsts;
+    std::vector<std::string> srcs;
+    std::vector<std::string> dsts;
     for (std::size_t s = 0; s < pm.streams; ++s) {
-        held.emplace_back(); srcs.push_back(held.back().str());
+        held.emplace_back();
+        srcs.push_back(held.back().str());
         seed_file(srcs.back(), pm.bytes_per_stream);
-        held.emplace_back(); dsts.push_back(held.back().str());
+        held.emplace_back();
+        dsts.push_back(held.back().str());
     }
     std::vector<std::byte> scratch(pm.buffer_size);
 
-    emit(pm, "blocking_sequential",
-         run_sequential(pm, srcs, dsts, scratch.data()), 1);
-    emit(pm, "blocking_bounded_pool",
-         run_bounded_pool(pm, srcs, dsts), pm.pool_threads);
-    emit(pm, "blocking_thread_per_stream",
-         run_thread_per_stream(pm, srcs, dsts), pm.streams);
+    emit(pm, "blocking_sequential", run_sequential(pm, srcs, dsts, scratch.data()), 1);
+    emit(pm, "blocking_bounded_pool", run_bounded_pool(pm, srcs, dsts), pm.pool_threads);
+    emit(pm, "blocking_thread_per_stream", run_thread_per_stream(pm, srcs, dsts), pm.streams);
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     sluice::bench::matrix::print_header(std::cout);
-    constexpr std::size_t bytes_per_stream = 256 * 1024;   // 256 KiB per stream
-    const std::size_t hw = std::max<std::size_t>(2u, std::thread::hardware_concurrency());
+    constexpr std::size_t bytes_per_stream = std::size_t{256} * 1024; // 256 KiB per stream
+    const std::size_t hw = std::max<std::size_t>(2U, std::thread::hardware_concurrency());
 
     for (std::size_t buf : {std::size_t(4) * 1024, std::size_t(64) * 1024}) {
-        for (std::size_t streams : {1u, 2u, 4u}) {
+        for (std::size_t streams : {1U, 2U, 4U}) {
             Params pm{streams, std::min(streams, hw), buf, bytes_per_stream};
             run_cell(pm);
         }

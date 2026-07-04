@@ -62,7 +62,10 @@ SLUICE_TEST_CASE(pool_collects_results_into_caller_buffer) {
 
     bool all_ok = true;
     for (std::size_t i = 0; i < kJobs; ++i) {
-        if (results[i] != static_cast<int>(i * i)) { all_ok = false; break; }
+        if (results[i] != static_cast<int>(i * i)) {
+            all_ok = false;
+            break;
+        }
     }
     SLUICE_CHECK(all_ok);
 }
@@ -84,9 +87,7 @@ SLUICE_TEST_CASE(single_worker_pool_runs_jobs_sequentially) {
             // Record the high-water mark of concurrent execution.
             int prev = max_concurrent.load(std::memory_order_relaxed);
             while (cur > prev &&
-                   !max_concurrent.compare_exchange_weak(
-                       prev, cur, std::memory_order_relaxed)) {
-            }
+                   !max_concurrent.compare_exchange_weak(prev, cur, std::memory_order_relaxed)) {}
             // brief work so a race (if any existed) would be observable.
             std::this_thread::yield();
             running.fetch_sub(1, std::memory_order_acq_rel);
@@ -101,8 +102,8 @@ SLUICE_TEST_CASE(single_worker_pool_runs_jobs_sequentially) {
 
 SLUICE_TEST_CASE(wait_all_with_no_pending_jobs_returns_immediately) {
     BlockingIoPool pool(2);
-    pool.wait_all();      // no jobs submitted; must not deadlock
-    pool.wait_all();      // idempotent
+    pool.wait_all(); // no jobs submitted; must not deadlock
+    pool.wait_all(); // idempotent
     SLUICE_CHECK(pool.thread_count() == 2);
 }
 
@@ -161,11 +162,11 @@ SLUICE_TEST_CASE(shutdown_joins_workers_and_is_idempotent) {
     for (int i = 0; i < 100; ++i) {
         pool.submit([&ran] { ran.fetch_add(1, std::memory_order_relaxed); });
     }
-    pool.shutdown();   // drains pending + joins
+    pool.shutdown(); // drains pending + joins
     SLUICE_CHECK(ran.load() == 100);
 
-    pool.shutdown();   // idempotent
-    pool.shutdown();   // still idempotent
+    pool.shutdown(); // idempotent
+    pool.shutdown(); // still idempotent
 }
 
 // ---- Slice 7: submit after shutdown is a safe no-op ------------------------
@@ -208,7 +209,7 @@ SLUICE_TEST_CASE(exception_in_job_surfaces_at_wait_all) {
 
     // After the exception is drained, the pool is usable again and clear.
     pool.submit([&ran] { ran.fetch_add(1, std::memory_order_relaxed); });
-    pool.wait_all();   // must not throw
+    pool.wait_all(); // must not throw
     SLUICE_CHECK(ran.load() == 21);
 }
 

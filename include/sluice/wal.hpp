@@ -19,7 +19,7 @@
 
 namespace sluice::wal {
 
-inline constexpr std::uint32_t magic = 0x57414CU;  // "WAL"
+inline constexpr std::uint32_t magic = 0x57414CU; // "WAL"
 
 // Encode and write one record through writer (uses write_all).
 Result<void> write_record(Writer& writer, std::span<const std::byte> payload);
@@ -40,7 +40,7 @@ Result<std::vector<std::byte>> read_record(Reader& reader);
 // WalWriter just frames write_record/write_record_vec through its inner writer
 // and advances LSNs on successful flush/sync. See docs/flush-sync-durability.md.
 class WalWriter {
-public:
+  public:
     // Without a SyncableWriter, sync() returns invalid_state (nothing to sync).
     explicit WalWriter(Writer& writer);
     // `syncable` is the optional sync capability of the underlying sink (e.g. a
@@ -64,7 +64,7 @@ public:
     std::uint64_t flushed_lsn() const noexcept { return flushed_lsn_; }
     std::uint64_t durable_lsn() const noexcept { return durable_lsn_; }
 
-private:
+  private:
     Writer& writer_;
     SyncableWriter* syncable_;
     std::uint64_t written_lsn_ = 0;
@@ -79,6 +79,6 @@ namespace detail {
 // check is testable without allocating a 4 GiB payload.
 Result<std::uint32_t> checked_u32_len(std::size_t len);
 
-}  // namespace detail
+} // namespace detail
 
-}  // namespace sluice::wal
+} // namespace sluice::wal

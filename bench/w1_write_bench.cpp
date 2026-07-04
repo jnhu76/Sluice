@@ -37,18 +37,21 @@ struct TempPath {
     std::filesystem::path p;
     TempPath() {
         std::ostringstream oss;
-        oss << "sluice_w1_" << std::hex << reinterpret_cast<std::uintptr_t>(this)
-            << "_" << (counter_++) << ".tmp";
+        oss << "sluice_w1_" << std::hex << reinterpret_cast<std::uintptr_t>(this) << "_"
+            << (counter_++) << ".tmp";
         p = std::filesystem::temp_directory_path() / oss.str();
     }
-    ~TempPath() { try { std::filesystem::remove(p); } catch (...) {} }
+    ~TempPath() {
+        try {
+            std::filesystem::remove(p);
+        } catch (...) {}
+    }
     std::string str() const { return p.string(); }
     static inline long counter_ = 0;
 };
 
 std::uint64_t now_ns() {
-    return static_cast<std::uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
+    return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
 }
 
 // One stream: open its file (many_files) or use the shared fd (one_file_many_offsets),
@@ -79,12 +82,11 @@ struct Params {
     std::size_t pool_threads;
     std::size_t block_size;
     std::size_t blocks_per_stream;
-    std::string file_layout;   // many_files | one_file_many_offsets
+    std::string file_layout; // many_files | one_file_many_offsets
 };
 
 std::uint64_t run_sequential(const Params& pm, const std::byte* fill,
-                             const std::vector<std::string>& paths,
-                             sluice::FileWriter* shared) {
+                             const std::vector<std::string>& paths, sluice::FileWriter* shared) {
     auto t0 = now_ns();
     for (std::size_t s = 0; s < pm.streams; ++s) {
         if (pm.file_layout == "many_files") {
@@ -98,14 +100,13 @@ std::uint64_t run_sequential(const Params& pm, const std::byte* fill,
 }
 
 std::uint64_t run_bounded_pool(const Params& pm, const std::byte* fill,
-                               const std::vector<std::string>& paths,
-                               sluice::FileWriter* shared) {
+                               const std::vector<std::string>& paths, sluice::FileWriter* shared) {
     sluice::bench::BlockingIoPool pool(pm.pool_threads,
                                        std::max<std::size_t>(pm.pool_threads * 4, 16));
     auto t0 = now_ns();
     for (std::size_t s = 0; s < pm.streams; ++s) {
         if (pm.file_layout == "many_files") {
-            std::string path = paths[s];
+            const std::string& path = paths[s];
             pool.submit([path, &pm, fill] {
                 run_stream_many_files(path, pm.blocks_per_stream, pm.block_size, fill);
             });
@@ -115,8 +116,7 @@ std::uint64_t run_bounded_pool(const Params& pm, const std::byte* fill,
             // the point of the one_file_many_offsets cell (decision Q3).
             std::uint64_t base = s * pm.blocks_per_stream * pm.block_size;
             pool.submit([shared, base, &pm, fill] {
-                run_stream_offsets(*shared, base, pm.blocks_per_stream,
-                                   pm.block_size, fill);
+                run_stream_offsets(*shared, base, pm.blocks_per_stream, pm.block_size, fill);
             });
         }
     }
@@ -132,19 +132,20 @@ std::uint64_t run_thread_per_stream(const Params& pm, const std::byte* fill,
     auto t0 = now_ns();
     for (std::size_t s = 0; s < pm.streams; ++s) {
         if (pm.file_layout == "many_files") {
-            std::string path = paths[s];
+            const std::string& path = paths[s];
             threads.emplace_back([path, &pm, fill] {
                 run_stream_many_files(path, pm.blocks_per_stream, pm.block_size, fill);
             });
         } else {
             std::uint64_t base = s * pm.blocks_per_stream * pm.block_size;
             threads.emplace_back([shared, base, &pm, fill] {
-                run_stream_offsets(*shared, base, pm.blocks_per_stream,
-                                   pm.block_size, fill);
+                run_stream_offsets(*shared, base, pm.blocks_per_stream, pm.block_size, fill);
             });
         }
     }
-    for (auto& t : threads) t.join();
+    for (auto& t : threads) {
+        t.join();
+    }
     return now_ns() - t0;
 }
 
@@ -157,8 +158,8 @@ void emit(const Params& pm, const std::string& mode, std::uint64_t elapsed_ns,
     r.pool_threads = (mode == "blocking_bounded_pool") ? pm.pool_threads : 0;
     r.block_size = pm.block_size;
     r.buffer_size = 0;
-    r.total_bytes = pm.streams * pm.blocks_per_stream * pm.block_size;
-    r.total_ops = pm.streams * pm.blocks_per_stream;
+    r.total_bytes = std::uint64_t{pm.streams} * pm.blocks_per_stream * pm.block_size;
+    r.total_ops = std::uint64_t{pm.streams} * pm.blocks_per_stream;
     r.threads_used = threads_used;
     r.sync_policy = "none";
     r.file_layout = pm.file_layout;
@@ -188,15 +189,14 @@ void run_cell(const Params& pm) {
         shared = std::make_unique<sluice::FileWriter>(shared_path.str());
     }
 
-    emit(pm, "blocking_sequential",
-         run_sequential(pm, fill, paths, shared.get()), 1);
-    emit(pm, "blocking_bounded_pool",
-         run_bounded_pool(pm, fill, paths, shared.get()), pm.pool_threads);
-    emit(pm, "blocking_thread_per_stream",
-         run_thread_per_stream(pm, fill, paths, shared.get()), pm.streams);
+    emit(pm, "blocking_sequential", run_sequential(pm, fill, paths, shared.get()), 1);
+    emit(pm, "blocking_bounded_pool", run_bounded_pool(pm, fill, paths, shared.get()),
+         pm.pool_threads);
+    emit(pm, "blocking_thread_per_stream", run_thread_per_stream(pm, fill, paths, shared.get()),
+         pm.streams);
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     sluice::bench::matrix::print_header(std::cout);
@@ -204,18 +204,26 @@ int main() {
     // Minimal coverage per sync-bench-matrix.md §6: a small + a large block
     // sweep, both file_layouts. Keep iterations modest so the bench is quick.
     constexpr std::size_t small = 512;
-    constexpr std::size_t large = 64 * 1024;
+    constexpr std::size_t large = std::size_t{64} * 1024;
     constexpr std::size_t blocks = 64;
-    const std::size_t hw = std::max<std::size_t>(2u, std::thread::hardware_concurrency());
+    const std::size_t hw = std::max<std::size_t>(2U, std::thread::hardware_concurrency());
 
-    for (std::size_t streams : {1u, 2u, 4u}) {
-        Params pm{streams, std::min(streams, hw), small, blocks, "many_files"};
+    for (std::size_t streams : {1U, 2U, 4U}) {
+        Params pm{.streams = streams,
+                  .pool_threads = std::min(streams, hw),
+                  .block_size = small,
+                  .blocks_per_stream = blocks,
+                  .file_layout = "many_files"};
         run_cell(pm);
         pm.file_layout = "one_file_many_offsets";
         run_cell(pm);
     }
     {
-        Params pm{4, std::min<std::size_t>(4, hw), large, blocks, "many_files"};
+        Params pm{.streams = 4,
+                  .pool_threads = std::min<std::size_t>(4, hw),
+                  .block_size = large,
+                  .blocks_per_stream = blocks,
+                  .file_layout = "many_files"};
         run_cell(pm);
         pm.file_layout = "one_file_many_offsets";
         run_cell(pm);

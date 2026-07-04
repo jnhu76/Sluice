@@ -24,7 +24,7 @@ struct UringWriteResult {
 };
 
 class UringWriteBatch {
-public:
+  public:
     explicit UringWriteBatch(unsigned queue_depth = 64);
     ~UringWriteBatch();
 
@@ -43,14 +43,14 @@ public:
     // Optional measurement (CPPIO-CORE-013E). Caller-owned; null = no counting.
     void set_stats(UringStats* stats) { stats_ = stats; }
 
-private:
+  private:
     [[maybe_unused]] unsigned queue_depth_;
 #if defined(SLUICE_HAS_LIBURING)
-    void* ring_ = nullptr;  // points to a struct io_uring owned by the .cpp
+    void* ring_ = nullptr; // points to a struct io_uring owned by the .cpp
 #else
-    [[maybe_unused]] void* ring_ = nullptr;  // unused stub
+    [[maybe_unused]] void* ring_ = nullptr; // unused stub
 #endif
     UringStats* stats_ = nullptr;
 };
 
-}  // namespace sluice::experimental
+} // namespace sluice::experimental

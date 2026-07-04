@@ -24,7 +24,8 @@ int main(int argc, char** argv) {
     }
 
     // Positional reads at two disjoint offsets. These do NOT move the cursor.
-    std::byte a[4]{}, b[4]{};
+    std::byte a[4]{};
+    std::byte b[4]{};
     if (auto res = r.read_at_exact(0, std::span<std::byte>(a)); !res.has_value()) {
         std::fprintf(stderr, "read_at_exact(0) failed\n");
         return 1;
@@ -43,7 +44,6 @@ int main(int argc, char** argv) {
     }
     // cur should equal a (both read offset 0) — positional reads didn't advance.
     bool cursor_intact = (n.value() == 4 && std::memcmp(cur, a, 4) == 0);
-    std::printf("positional reads left cursor at 0: %s\n",
-                cursor_intact ? "yes (G6 holds)" : "no");
+    std::printf("positional reads left cursor at 0: %s\n", cursor_intact ? "yes (G6 holds)" : "no");
     return cursor_intact ? 0 : 1;
 }

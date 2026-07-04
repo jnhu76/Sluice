@@ -19,8 +19,8 @@ namespace sluice::bench::matrix {
 // One measured matrix cell: a (workload, mode, parameter-set) run.
 struct MatrixRow {
     // Required columns (sync-bench-methodology.md §4):
-    std::string mode;          // blocking_sequential | blocking_bounded_pool | blocking_thread_per_stream
-    std::string workload;      // W1 | W2 | W3 | W4
+    std::string mode; // blocking_sequential | blocking_bounded_pool | blocking_thread_per_stream
+    std::string workload; // W1 | W2 | W3 | W4
     std::uint64_t streams = 0;
     std::uint64_t pool_threads = 0;
     std::uint64_t block_size = 0;
@@ -31,8 +31,8 @@ struct MatrixRow {
     double mbps = 0.0;
     double ops_per_sec = 0.0;
     std::uint64_t threads_used = 0;
-    std::string sync_policy;   // none | sync_data_every_file | ... per durability model
-    std::string file_layout;   // many_files | one_file_many_offsets
+    std::string sync_policy; // none | sync_data_every_file | ... per durability model
+    std::string file_layout; // many_files | one_file_many_offsets
 };
 
 // Print the matrix CSV header (one line) to `out`.
@@ -45,4 +45,4 @@ void print_row(std::ostream& out, const MatrixRow& r);
 // nanoseconds. Helper so bench targets can compute once and reuse.
 void fill_derived(MatrixRow& r, std::uint64_t elapsed_ns);
 
-}  // namespace sluice::bench::matrix
+} // namespace sluice::bench::matrix

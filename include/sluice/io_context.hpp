@@ -39,7 +39,7 @@ struct OpenWriterOptions {
 // are returned at open time where feasible (unlike the direct FileReader/
 // FileWriter constructors, which defer open errors to first I/O).
 class IoContext {
-public:
+  public:
     virtual ~IoContext() = default;
 
     // Open `path` for reading. On success returns a Reader handle the caller
@@ -59,12 +59,12 @@ public:
 // FileWriter under the hood and surfaces open errors at open time (rather than
 // deferring to first I/O). No async, no thread pool, no io_uring.
 class BlockingIoContext final : public IoContext {
-public:
-    Result<std::unique_ptr<Reader>>
-    open_reader(std::string_view path, OpenReaderOptions options = {}) override;
+  public:
+    Result<std::unique_ptr<Reader>> open_reader(std::string_view path,
+                                                OpenReaderOptions options = {}) override;
 
-    Result<std::unique_ptr<Writer>>
-    open_writer(std::string_view path, OpenWriterOptions options = {}) override;
+    Result<std::unique_ptr<Writer>> open_writer(std::string_view path,
+                                                OpenWriterOptions options = {}) override;
 };
 
-}  // namespace sluice
+} // namespace sluice

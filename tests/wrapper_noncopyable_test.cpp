@@ -14,10 +14,10 @@
 // or counter state. Allowing copy/move would alias that shared state.
 // C++20 has std::copy_constructible/move_constructible concepts; assignability
 // uses the type_traits _v traits (no concept until C++20 didn't add assign ones).
-#define SLUICE_ASSERT_NONCOPYABLE(Type)                           \
-    static_assert(!std::copy_constructible<Type>);               \
-    static_assert(!std::is_copy_assignable_v<Type>);             \
-    static_assert(!std::move_constructible<Type>);               \
+#define SLUICE_ASSERT_NONCOPYABLE(Type)                                                            \
+    static_assert(!std::copy_constructible<Type>);                                                 \
+    static_assert(!std::is_copy_assignable_v<Type>);                                               \
+    static_assert(!std::move_constructible<Type>);                                                 \
     static_assert(!std::is_move_assignable_v<Type>)
 
 SLUICE_ASSERT_NONCOPYABLE(sluice::BufferedReader);

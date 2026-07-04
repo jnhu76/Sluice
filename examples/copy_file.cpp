@@ -41,8 +41,7 @@ int main(int argc, char** argv) {
     auto res = sluice::copy_all(reader, writer, std::span<std::byte>(scratch), limit);
     auto flush_res = writer.flush();
     if (!res.has_value()) {
-        std::fprintf(stderr, "copy failed: %s\n",
-                     sluice::to_string(res.error().code).data());
+        std::fprintf(stderr, "copy failed: %s\n", sluice::to_string(res.error().code).data());
         return 1;
     }
     if (!flush_res.has_value()) {

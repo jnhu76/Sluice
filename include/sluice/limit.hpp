@@ -16,7 +16,7 @@
 namespace sluice {
 
 class CopyLimit {
-public:
+  public:
     enum class Kind {
         unlimited,
         limited,
@@ -25,7 +25,7 @@ public:
     static constexpr CopyLimit unlimited() {
         CopyLimit l;
         l.kind_ = Kind::unlimited;
-        l.remaining_ = 0;  // not meaningful in unlimited mode
+        l.remaining_ = 0; // not meaningful in unlimited mode
         return l;
     }
 
@@ -44,7 +44,7 @@ public:
     // Only meaningful when is_limited(); returns 0 for nothing().
     constexpr std::uint64_t remaining() const noexcept { return remaining_; }
 
-private:
+  private:
     // Private default ctor: the factories construct a default instance then
     // set its fields. A public default ctor would let callers write
     // `CopyLimit c;` and silently get nothing()-equivalent semantics, which is
@@ -55,4 +55,4 @@ private:
     std::uint64_t remaining_ = 0;
 };
 
-}  // namespace sluice
+} // namespace sluice

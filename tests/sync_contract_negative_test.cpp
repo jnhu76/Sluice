@@ -12,6 +12,7 @@
 #include <sluice/reader.hpp>
 #include <sluice/writer.hpp>
 
+#include <array>
 #include <cstddef>
 #include <string_view>
 #include <vector>
@@ -22,9 +23,9 @@ using namespace sluice;
 // MemoryReader runs out of data cleanly (no fault injected) — the contract says
 // this surfaces as eof, not as a generic error or a zero-byte success.
 SLUICE_TEST_CASE(contract_read_exact_eof_maps_to_eof_code) {
-    auto r = MemoryReader::from_string("abc");   // 3 bytes available
-    std::byte out[5]{};                          // request 5
-    auto res = r.read_exact(std::span<std::byte>(out));
+    auto r = MemoryReader::from_string("abc"); // 3 bytes available
+    std::array<std::byte, 5> out{};            // request 5
+    auto res = r.read_exact(std::span<std::byte>(out.data(), out.size()));
     SLUICE_CHECK(!res.has_value());
     SLUICE_CHECK(res.error().code == IoError::Code::eof);
 }
@@ -34,18 +35,18 @@ SLUICE_TEST_CASE(contract_read_exact_eof_maps_to_eof_code) {
 // backend; write_all must not infinite-loop. Contract: invalid_state.
 namespace {
 class ZeroProgressWriter final : public Writer {
-public:
+  public:
     Result<std::size_t> write_some(std::span<const std::byte>) override {
-        return std::size_t{0};  // accepts work, makes no progress
+        return std::size_t{0}; // accepts work, makes no progress
     }
     Result<void> flush() override { return {}; }
 };
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(contract_write_all_zero_progress_is_invalid_state) {
     ZeroProgressWriter w;
-    std::byte buf[4]{};
-    auto res = w.write_all(std::span<std::byte>(buf));
+    std::array<std::byte, 4> buf{};
+    auto res = w.write_all(std::span<std::byte>(buf.data(), buf.size()));
     SLUICE_CHECK(!res.has_value());
     SLUICE_CHECK(res.error().code == IoError::Code::invalid_state);
 }
@@ -54,7 +55,7 @@ SLUICE_TEST_CASE(contract_write_all_zero_progress_is_invalid_state) {
 // Empty buffer → the loop predicate is false immediately → success, no syscall.
 namespace {
 class CountingWriter final : public Writer {
-public:
+  public:
     int calls = 0;
     Result<std::size_t> write_some(std::span<const std::byte> src) override {
         ++calls;
@@ -65,20 +66,20 @@ public:
     std::vector<std::byte> sink;
 };
 class CountingReader final : public Reader {
-public:
+  public:
     int calls = 0;
     Result<std::size_t> read_some(std::span<std::byte> dst) override {
         ++calls;
-        return dst.size();  // pretend to fill
+        return dst.size(); // pretend to fill
     }
 };
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(contract_zero_length_read_exact_is_noop) {
     CountingReader r;
     auto res = r.read_exact(std::span<std::byte>{});
     SLUICE_CHECK(res.has_value());
-    SLUICE_CHECK(r.calls == 0);  // no syscall issued
+    SLUICE_CHECK(r.calls == 0); // no syscall issued
 }
 
 SLUICE_TEST_CASE(contract_zero_length_write_all_is_noop) {
@@ -94,13 +95,13 @@ SLUICE_TEST_CASE(contract_zero_length_write_all_is_noop) {
 SLUICE_TEST_CASE(contract_read_exact_retries_short_reads_to_completion) {
     auto mem = MemoryReader::from_string("0123456789");
     FaultPlan plan;
-    plan.max_read_size = 2;  // force 2-byte reads
+    plan.max_read_size = 2; // force 2-byte reads
     FaultReader fr(mem, plan);
-    std::byte out[10]{};
-    auto res = fr.read_exact(std::span<std::byte>(out));
+    std::array<std::byte, 10> out{};
+    auto res = fr.read_exact(std::span<std::byte>(out.data(), out.size()));
     SLUICE_CHECK(res.has_value());
     // Verify the bytes round-tripped correctly through the short-read loop.
-    auto* p = reinterpret_cast<const char*>(out);
+    const auto* p = reinterpret_cast<const char*>(out.data());
     SLUICE_CHECK(std::string_view(p, 10) == "0123456789");
 }
 
@@ -119,11 +120,12 @@ SLUICE_TEST_CASE(contract_sync_layer_stands_alone_from_async) {
     //       headers contain no #include <coroutine>/async/.
     // The runtime assertion below confirms a basic sync operation succeeds on
     // the standalone core, exercising the dependency boundary end-to-end.
-    static_assert(sizeof(MemoryReader) > 0, "MemoryReader is available from core alone");
+    static_assert(std::is_default_constructible_v<MemoryReader>,
+                  "MemoryReader is available from core alone");
     std::byte b{};
     MemoryReader r(MemoryReader::from_bytes(std::span<const std::byte>(&b, 1)));
-    std::byte out[1]{};
-    SLUICE_CHECK(r.read_exact(std::span<std::byte>(out)).has_value());
+    std::array<std::byte, 1> out{};
+    SLUICE_CHECK(r.read_exact(std::span<std::byte>(out.data(), out.size())).has_value());
 }
 
 SLUICE_MAIN()

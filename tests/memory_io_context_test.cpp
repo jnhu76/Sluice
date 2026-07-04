@@ -19,7 +19,7 @@ std::vector<std::byte> to_bytes(std::string_view s) {
     auto* p = reinterpret_cast<const std::byte*>(s.data());
     return {p, p + s.size()};
 }
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(memory_io_context_open_reader_succeeds_for_seeded_path) {
     sluice::MemoryIoContext ctx;

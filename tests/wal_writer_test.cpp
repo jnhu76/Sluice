@@ -28,7 +28,7 @@ std::span<const std::byte> span_of(const std::vector<std::byte>& v) {
 // A Writer that can be made to fail write/flush on demand, plus an optional
 // sync capability that can be made to fail.
 class ControlledWriter final : public sluice::Writer, public sluice::SyncableWriter {
-public:
+  public:
     std::vector<std::byte> sink;
     bool fail_write = false;
     bool fail_flush = false;
@@ -63,7 +63,7 @@ public:
     sluice::Result<void> sync_all() override { return sync_data(); }
 };
 
-}  // namespace
+} // namespace
 
 SLUICE_TEST_CASE(wal_writer_initial_lsns_all_zero) {
     sluice::MemoryWriter sink;
@@ -93,15 +93,15 @@ SLUICE_TEST_CASE(wal_writer_flush_advances_flushed_not_durable) {
     SLUICE_CHECK(w.write_record(span_of(payload)).has_value());
     SLUICE_CHECK(w.flush().has_value());
     SLUICE_CHECK(w.flushed_lsn() == 17);
-    SLUICE_CHECK(w.durable_lsn() == 0);  // not synced yet
+    SLUICE_CHECK(w.durable_lsn() == 0); // not synced yet
     SLUICE_CHECK(invariant(w));
 }
 
 SLUICE_TEST_CASE(wal_writer_sync_advances_durable_after_flush_and_sync) {
     ControlledWriter cw;
-    sluice::wal::WalWriter w(cw, &cw);  // writer IS the SyncableWriter
+    sluice::wal::WalWriter w(cw, &cw); // writer IS the SyncableWriter
     auto payload = bytes_of("data");
-    SLUICE_CHECK(w.write_record(span_of(payload)).has_value());  // 8+4+4=16
+    SLUICE_CHECK(w.write_record(span_of(payload)).has_value()); // 8+4+4=16
     SLUICE_CHECK(w.sync().has_value());
     SLUICE_CHECK(w.flushed_lsn() == 16);
     SLUICE_CHECK(w.durable_lsn() == 16);
@@ -111,7 +111,7 @@ SLUICE_TEST_CASE(wal_writer_sync_advances_durable_after_flush_and_sync) {
 
 SLUICE_TEST_CASE(wal_writer_sync_without_syncable_returns_invalid_state) {
     sluice::MemoryWriter sink;
-    sluice::wal::WalWriter w(sink);  // no SyncableWriter
+    sluice::wal::WalWriter w(sink); // no SyncableWriter
     auto payload = bytes_of("data");
     SLUICE_CHECK(w.write_record(span_of(payload)).has_value());
     auto s = w.sync();
@@ -130,7 +130,7 @@ SLUICE_TEST_CASE(wal_writer_write_failure_does_not_advance_written_lsn) {
     auto payload = bytes_of("nope");
     auto r = w.write_record(span_of(payload));
     SLUICE_CHECK(!r.has_value());
-    SLUICE_CHECK(w.written_lsn() == 0);  // unchanged on failure
+    SLUICE_CHECK(w.written_lsn() == 0); // unchanged on failure
     SLUICE_CHECK(invariant(w));
 }
 
@@ -139,10 +139,10 @@ SLUICE_TEST_CASE(wal_writer_flush_failure_does_not_advance_flushed_lsn) {
     cw.fail_flush = true;
     sluice::wal::WalWriter w(cw, &cw);
     auto payload = bytes_of("x");
-    SLUICE_CHECK(w.write_record(span_of(payload)).has_value());  // written=13
+    SLUICE_CHECK(w.write_record(span_of(payload)).has_value()); // written=13
     auto f = w.flush();
     SLUICE_CHECK(!f.has_value());
-    SLUICE_CHECK(w.flushed_lsn() == 0);  // unchanged on failure
+    SLUICE_CHECK(w.flushed_lsn() == 0); // unchanged on failure
     SLUICE_CHECK(w.written_lsn() == 13);
     SLUICE_CHECK(invariant(w));
 }
@@ -185,7 +185,7 @@ SLUICE_TEST_CASE(wal_writer_invariant_holds_after_mixed_operations) {
     sluice::wal::WalWriter w(cw, &cw);
     auto a = bytes_of("aaa");
     auto b = bytes_of("bbbb");
-    SLUICE_CHECK(w.write_record(span_of(a)).has_value());   // 8+3+4=15
+    SLUICE_CHECK(w.write_record(span_of(a)).has_value()); // 8+3+4=15
     SLUICE_CHECK(invariant(w));
     SLUICE_CHECK(w.write_record_vec(span_of(b)).has_value()); // +8+4+4=+16 -> 31
     SLUICE_CHECK(invariant(w));
