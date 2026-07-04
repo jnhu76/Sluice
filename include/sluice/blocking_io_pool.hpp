@@ -13,6 +13,11 @@
 //   - shutdown() drains already-submitted work (running syscalls NOT cancelled),
 //     joins workers. Idempotent; destructor calls it (drain-and-join contract).
 //   - submit/try_submit AFTER shutdown() is REJECTED (IoError::invalid_state).
+//   - Progress guarantee boundary: tasks are ordinary user callables. A task
+//     must not synchronously require queued work from the same saturated pool to
+//     make forward progress. Same-pool recursive blocking submit() and
+//     capacity-exhausting same-pool Task::get() dependency graphs are outside
+//     the pool's progress guarantee.
 //
 // Pure C++17/20: std::thread/mutex/condition_variable/future. No C runtime
 // mixing, no platform-specific threading primitives. State is instance-owned

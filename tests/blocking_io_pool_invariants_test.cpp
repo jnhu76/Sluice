@@ -11,7 +11,8 @@
 //   B4 FIFO order        : on a single-worker pool, tasks complete in submit order
 //
 // These are the deterministic counterparts to the C-class TLA+ properties
-// (deadlock/starvation/bound) which need exhaustive state-space search.
+// (internal protocol stuck state / modeled-task progress / bound) which need
+// exhaustive state-space search.
 #include "harness.hpp"
 
 #include <sluice/blocking_io_pool.hpp>

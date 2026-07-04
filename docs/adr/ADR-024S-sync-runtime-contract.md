@@ -79,7 +79,31 @@ The **production** pool (`sluice::BlockingIoPool`, `include/sluice/blocking_io_p
 - `shutdown()`: stops accepting, **drains already-submitted work** (running blocking syscalls are NOT cancelled — no async cancellation claim), joins workers. **Idempotent.** Destructor calls it if not already called (drain-and-join).
 - `stats() -> PoolStats`: observability — `submitted`, `started`, `completed`, `failed`, `rejected`, `queue_depth`, `worker_count`. Caller-owned (nullable), never global.
 - State is **instance-owned only** (no globals); two pools do not interfere (sanitizer-verified).
+- **Progress boundary:** tasks are arbitrary user callables, and the pool does
+  not guarantee progress for same-pool dependency graphs. A task must not
+  synchronously require queued work from the same saturated pool to make forward
+  progress. Same-pool recursive blocking `submit()` and capacity-exhausting
+  same-pool `Task::get()` waits are outside the progress guarantee. This is not
+  a restriction on normal external producers, and ordinary callable capture /
+  reference lifetime remains the caller's C++ responsibility.
 - NOT an `IoContext`, NOT async, NOT a fiber/green-thread scheduler, NOT a P2300 executor.
+
+### 5. Formal verification scope
+
+The TLA+ model in `spec/tla/BlockingIoPool.tla` verifies the **internal
+admission / bounded-queue / dequeue / completion / shutdown-drain protocol**.
+It checks:
+
+- `NoInternalProtocolStuck`: every reachable modeled state is either legitimate
+  quiescence after admission is closed and accepted work has drained, or has a
+  real modeled protocol transition enabled.
+- queue bound, lifecycle consistency, and get-after-done linearizability.
+- modeled-task progress under the model's weak-fairness assumptions.
+
+The model does **not** prove deadlock freedom for arbitrary user callables or
+arbitrary task dependency graphs. It assumes modeled accepted task execution is
+finite and excludes same-pool recursive blocking submission and same-pool cyclic
+or capacity-exhausting `Task::get()` dependencies.
 
 The **bench adapter** (`sluice::bench::BlockingIoPool`, `bench/support/`) wraps the production pool so benchmarks do not duplicate the implementation.
 

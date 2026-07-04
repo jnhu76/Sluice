@@ -2,19 +2,22 @@
 (*
   TLA+ specification of the production sluice::BlockingIoPool (sluice-CORE-024S).
 
-  Purpose: EXHAUSTIVELY prove the C-class safety/liveness properties that
-  single-threaded tests and stress tests CANNOT prove (they are probabilistic):
-    C1  deadlock-freedom   (no reachable state where the system is stuck)
+  Purpose: EXHAUSTIVELY check the C-class protocol safety/liveness properties
+  that single-threaded tests and stress tests CANNOT prove (they are
+  probabilistic):
+    C1  no internal protocol stuck state (every reachable modeled state is
+        either legitimate quiescence after admission closes and accepted work
+        drains, or has a real modeled protocol transition enabled)
     C3  queue bound        (queue length never exceeds max_depth)
     C5  shutdown contract  (after shutdown: no new accepts; prior accepts drain)
-    C2  starvation-freedom (every enqueued task eventually completes)  [liveness]
+    C2  modeled-task progress (under the stated weak fairness assumptions,
+        every accepted modeled task eventually reaches done)  [liveness]
     C4  happens-before     (Task::get sees the value set by the worker)  [via linearizability]
 
   The model is parameterized but TLC checks SMALL constants (NumWorkers=2,
-  MaxDepth=2, NumTasks=3) — exhaustive over all interleavings of those sizes is
-  sufficient because the algorithm is uniform (the invariants, if they hold for
-  the small model, hold for any size; TLC's state-space search covers every
-  reachable interleaving).
+  MaxDepth=2, NumTasks=3). TLC is exhaustive for all reachable interleavings of
+  the configured constants; it is not a mathematical induction proof over all
+  possible sizes.
 
   Mapping to the C++ implementation:
     - Submit(blocking)     : waits when queue full; rejects after shutdown
@@ -23,8 +26,12 @@
     - Worker complete      : set value on Task state; notify getter
     - Shutdown             : stop accepting; workers drain remaining; join
 
-  This spec is the AUTHORITATIVE concurrency contract. If TLC finds a violation,
-  the C++ has a bug (or the spec diverges from intent — either is actionable).
+  This spec is the authoritative contract for the internal admission /
+  bounded-queue / dequeue / completion / shutdown-drain protocol. It does NOT
+  model arbitrary user-callable behavior, recursive same-pool submission, or
+  same-pool Task dependency graphs. If TLC finds a violation of a modeled
+  property, the C++ protocol has a bug (or the spec diverges from intent —
+  either is actionable).
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -142,11 +149,6 @@ Shutdown ==
 (* Next-state relation                                                          *)
 (* --------------------------------------------------------------------------- *)
 
-(* Stutter: a no-op step so the system can always make progress (avoids spurious
-   deadlocks on legal terminal states — e.g. all tasks rejected after shutdown). *)
-Stutter ==
-    UNCHANGED <<queue, accepting, inFlight, done, submitted, rejected, getters>>
-
 Next ==
     \/ \E t \in AllTasks : Submit(t)
     \/ \E t \in AllTasks : TrySubmit(t)
@@ -154,13 +156,14 @@ Next ==
     \/ Complete
     \/ \E t \in AllTasks : Get(t)
     \/ Shutdown
-    \/ Stutter
 
 (* --------------------------------------------------------------------------- *)
 (* Spec                                                                         *)
 (* --------------------------------------------------------------------------- *)
 
-Spec == Init /\ [][Next]_<<queue, accepting, inFlight, done, submitted, rejected, getters>>
+Vars == <<queue, accepting, inFlight, done, submitted, rejected, getters>>
+
+Spec == Init /\ [][Next]_Vars
 
 (* --------------------------------------------------------------------------- *)
 (* INVARIANTS (safety — checked by TLC at every reachable state)                *)
@@ -196,23 +199,37 @@ TaskLifecycle ==
     /\ rejected \subseteq AllTasks
     /\ submitted \cap rejected = {}              (* a task is either accepted or rejected, not both *)
 
+(* C1: no internal protocol stuck state. Stuttering is part of the behavioral
+   spec via [][Next]_Vars; it is NOT a protocol action. A reachable state is
+   acceptable only when it is legitimate quiescence, or when a real modeled
+   protocol transition is enabled. *)
+LegitimateQuiescence ==
+    /\ accepting = FALSE
+    /\ queue = <<>>
+    /\ inFlight = {}
+    /\ submitted \subseteq done
+    /\ getters = done
+    /\ submitted \cup rejected = AllTasks
+
+ProtocolTransitionEnabled ==
+    \/ \E t \in AllTasks : ENABLED Submit(t)
+    \/ \E t \in AllTasks : ENABLED TrySubmit(t)
+    \/ ENABLED Dequeue
+    \/ ENABLED Complete
+    \/ \E t \in AllTasks : ENABLED Get(t)
+    \/ ENABLED Shutdown
+
+NoInternalProtocolStuck ==
+    \/ LegitimateQuiescence
+    \/ ProtocolTransitionEnabled
+
 (* --------------------------------------------------------------------------- *)
 (* LIVENESS / TEMPORAL (checked by TLC with fairness)                           *)
 (* --------------------------------------------------------------------------- *)
 
-(* C1 deadlock-freedom: the system can always make progress UNLESS it has
-   reached a terminal state (all tasks done/gotten, pool shut down). TLC checks
-   this implicitly: if a deadlock is reachable, TLC reports it. We allow
-   "terminal" states (no action enabled) ONLY when all submitted tasks are done.
-   We make this an explicit invariant: *)
-NoPrematureDeadlock ==
-    (* If no action is enabled, then every submitted task is done (and inFlight
-       is empty, queue is empty). TLC's deadlock check enforces reachability of
-       a non-deadlock state; this invariant characterizes the LEGAL deadlocks. *)
-    TRUE  (* TLC's built-in deadlock check is the real verifier here *)
-
-(* C2 starvation-freedom: every submitted task eventually completes (done). *)
-(* Requires weak fairness on Dequeue + Complete. *)
+(* C2 modeled-task progress: under the modeled environment and weak fairness on
+   Dequeue + Complete, every accepted modeled task eventually completes (done).
+   This is not a claim that arbitrary C++ callables eventually return. *)
 StarvationFree ==
     \A t \in AllTasks : (t \in submitted) ~> (t \in done)
 
@@ -225,16 +242,15 @@ Linearizable ==
 (* Fairness (required for liveness checking)                                    *)
 (* --------------------------------------------------------------------------- *)
 
-Vars == <<queue, accepting, inFlight, done, submitted, rejected, getters>>
-
 (* Weak fairness on Dequeue and Complete: workers keep draining as long as there
-   is work. Required for the starvation-freedom liveness check. *)
+   is modeled work and modeled task execution completes. Required for the
+   modeled-task progress liveness check. *)
 FairSpec ==
     /\ Spec
     /\ WF_Vars(Dequeue)
     /\ WF_Vars(Complete)
 
-(* Temporal property to check: starvation-freedom. *)
+(* Temporal property to check: modeled-task progress. *)
 TemporalProperty == StarvationFree
 
 =============================================================================
