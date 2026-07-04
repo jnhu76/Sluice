@@ -407,7 +407,10 @@ Result<std::size_t> FileWriter::write_at(std::uint64_t offset, std::span<const s
             open_error_.value_or(IoError{IoError::Code::permission_denied}));
     }
     if (src.empty()) return std::size_t{0};
-    // pwrite does not move the file cursor. off_t is signed; clamp the cast.
+    // pwrite does not move the file cursor. off_t is signed; offset is uint64.
+    // NARROWS via static_cast (not a clamp) — see read_at for the full rationale
+    // (lossless on the supported 64-bit off_t / LFS config; kernel rejects
+    // out-of-range offsets with EINVAL/EOVERFLOW).
     ssize_t n = detail::retry_on_eintr([&] {
         return ::pwrite(fd_, src.data(), src.size(), static_cast<off_t>(offset));
     });
