@@ -271,6 +271,21 @@ do
     end
 end
 
+-- Async cancellation tests (sluice-CORE-021 spike).
+do
+    local p = "tests/async_cancel_test.cpp"
+    if os.isfile(p) then
+        target("async_cancel_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("async_cancel_test")
+    end
+end
+
 -- ThreadPoolBackend tests (sluice-CORE-020A). Real blocking I/O on threads.
 do
     local p = "tests/threadpool_backend_test.cpp"

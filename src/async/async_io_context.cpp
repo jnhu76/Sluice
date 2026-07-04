@@ -10,7 +10,13 @@
 namespace sluice::async {
 
 AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats)
-    : backend_(std::move(backend)), stats_(stats) {}
+    : backend_(std::move(backend)), stats_(stats) {
+    // Hand the caller-owned stats sink to the backend so it can tally per-
+    // completion outcomes it knows directly (canceled_ops, completion_errors)
+    // at completion time, rather than the context re-scanning results after
+    // poll(). Job 021 (cancellation spike).
+    if (backend_) backend_->attach_stats(stats_);
+}
 
 AsyncIoContext::~AsyncIoContext() {
     // ADR L11: destroying with outstanding Completions is a contract violation.

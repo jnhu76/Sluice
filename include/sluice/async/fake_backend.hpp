@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <deque>
+#include <iterator>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -135,8 +136,43 @@ public:
             }
             return n;
         }
-        // Explicit-staging mode (default): consume one stage per completion that
-        // has a staged result.
+        // Explicit-staging mode (default). First apply any TARGETED cancel
+        // requests (pointer-keyed) to their specific completions — these take
+        // precedence over FIFO staging. ready_size_/pending_size_ are parallel,
+        // so erase the pending entry at the matched index.
+        while (!targeted_size_.empty()) {
+            auto [c, err] = targeted_size_.front();
+            targeted_size_.pop_front();
+            auto rit = std::find(ready_size_.begin(), ready_size_.end(), c);
+            if (rit != ready_size_.end()) {
+                auto idx = std::distance(ready_size_.begin(), rit);
+                ready_size_.erase(rit);
+                pending_size_.erase(pending_size_.begin() + idx);
+                c->complete_with(make_unexpected<std::size_t>(err));
+                if (stats_) {
+                    if (err.code == IoError::Code::canceled) ++stats_->canceled_ops;
+                    else ++stats_->completion_errors;
+                }
+                ++n;
+            }
+        }
+        while (!targeted_void_.empty()) {
+            auto [c, err] = targeted_void_.front();
+            targeted_void_.pop_front();
+            auto rit = std::find(ready_void_.begin(), ready_void_.end(), c);
+            if (rit != ready_void_.end()) {
+                auto idx = std::distance(ready_void_.begin(), rit);
+                ready_void_.erase(rit);
+                pending_void_.erase(pending_void_.begin() + idx);
+                c->complete_with(make_unexpected<void>(err));
+                if (stats_) {
+                    if (err.code == IoError::Code::canceled) ++stats_->canceled_ops;
+                    else ++stats_->completion_errors;
+                }
+                ++n;
+            }
+        }
+        // Then FIFO-staged results for the remaining completions.
         while (!ready_size_.empty() && has_size_stage()) {
             auto* c = ready_size_.front();
             ready_size_.pop_front();
@@ -158,20 +194,20 @@ public:
         return poll();
     }
 
-    // Minimal cancel (ADR §7 X2): the op is removed and staged as canceled;
-    // applied at next poll.
+    // Minimal cancel (ADR §7 X2): REQUESTS cancel. The op stays outstanding and
+    // is completed (exactly-once, X3) at the next poll()/wait_one() with
+    // IoError::canceled. We do NOT complete here — A3/O1: completions are
+    // produced only inside poll/wait_one. Cancel is POINTER-KEYED (targeted) so
+    // it works on any outstanding op, not just the FIFO oldest: a targeted
+    // cancel takes precedence over FIFO staging for its specific completion.
     void cancel(Completion<std::size_t>& c) override {
-        auto it = std::find(ready_size_.begin(), ready_size_.end(), &c);
-        if (it != ready_size_.end()) {
-            staged_size_err_.push_back(IoError{IoError::Code::canceled});
-            ready_size_.erase(it);
+        if (std::find(ready_size_.begin(), ready_size_.end(), &c) != ready_size_.end()) {
+            targeted_size_.push_back({&c, IoError{IoError::Code::canceled}});
         }
     }
     void cancel(Completion<void>& c) override {
-        auto it = std::find(ready_void_.begin(), ready_void_.end(), &c);
-        if (it != ready_void_.end()) {
-            staged_void_err_.push_back(IoError{IoError::Code::canceled});
-            ready_void_.erase(it);
+        if (std::find(ready_void_.begin(), ready_void_.end(), &c) != ready_void_.end()) {
+            targeted_void_.push_back({&c, IoError{IoError::Code::canceled}});
         }
     }
 
@@ -248,6 +284,11 @@ private:
     std::deque<IoError> staged_size_err_;
     std::deque<bool> staged_void_ok_;
     std::deque<IoError> staged_void_err_;
+    // Pointer-keyed cancel requests (ADR §7 X2). Applied to the NAMED completion
+    // at poll(), taking precedence over FIFO staging. ready_size_/pending_size_
+    // are parallel deques, so the pending entry at the matched index is erased.
+    std::deque<std::pair<Completion<std::size_t>*, IoError>> targeted_size_;
+    std::deque<std::pair<Completion<void>*, IoError>> targeted_void_;
 
     // Auto-complete mode state.
     enum class Auto : std::uint8_t { off, bytes, err, short_then_full };
