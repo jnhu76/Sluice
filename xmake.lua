@@ -150,6 +150,22 @@ do
     end
 end
 
+-- Production BlockingIoPool CONCURRENCY stress tests (sluice-CORE-024S).
+-- Catches data races / deadlocks the functional tests miss. Run under TSan.
+do
+    local p = "tests/blocking_io_pool_stress_test.cpp"
+    if os.isfile(p) then
+        target("blocking_io_pool_stress_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("blocking_io_pool_stress_test")
+    end
+end
+
 -- TEMP btest.
 do
     local p = "tests/_btest.cpp"
@@ -198,6 +214,10 @@ end
 -- uring_write_bench needs the experimental uring lib too (stub or real).
 sluice_one_file_target("binary", "bench", "uring_write_bench", "bench",
                       {"sluice_core", "sluice_bench_common", "sluice_experimental_uring"})
+
+-- pool_throughput_bench (sluice-CORE-024S): production pool scalability sweep.
+sluice_one_file_target("binary", "bench", "pool_throughput_bench", "bench",
+                      {"sluice_core", "sluice_bench_common"})
 
 -- ---------------------------------------------------------------------------
 -- SLUICE-CORE-013B: optional liburing build gate for the experimental spike.
