@@ -83,9 +83,10 @@ For the sync phase, the allowed execution models are:
 | `blocking_thread_per_stream` | one worker thread per stream | strong-but-expensive baseline; benchmark only |
 
 **Hard rule:** The pool is **not async**. `BlockingIoPool` runs ordinary blocking
-operations on worker threads. It is an **execution model for benchmarks, not an
-I/O backend** — it does not implement `IoContext` and is not selectable as a
-backend. It lives in `bench/support/`, not in the public core API.
+operations on worker threads. It is an **execution model, not an I/O backend** —
+it does not implement `IoContext` and is not selectable as a backend. The
+production API lives in `include/sluice/blocking_io_pool.hpp` and
+`src/blocking_io_pool.cpp`; `bench/support/` is only a thin benchmark adapter.
 
 The pool uses only standard C++ primitives (`std::thread`, `std::mutex`,
 `std::condition_variable`, `std::queue`, `std::function`). No lock-free queue, no

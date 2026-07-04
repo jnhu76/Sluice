@@ -8,6 +8,7 @@
 #include <sluice/result.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -29,6 +30,24 @@ SLUICE_TEST_CASE(make_pool_rejects_zero_queue_depth) {
     SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
 }
 
+SLUICE_TEST_CASE(public_constructor_rejects_invalid_options) {
+    bool caught_worker_count = false;
+    try {
+        BlockingIoPool pool(BlockingIoPoolOptions{0, 4});
+    } catch (const std::invalid_argument&) {
+        caught_worker_count = true;
+    }
+    SLUICE_CHECK(caught_worker_count);
+
+    bool caught_queue_depth = false;
+    try {
+        BlockingIoPool pool(BlockingIoPoolOptions{2, 0});
+    } catch (const std::invalid_argument&) {
+        caught_queue_depth = true;
+    }
+    SLUICE_CHECK(caught_queue_depth);
+}
+
 SLUICE_TEST_CASE(make_pool_constructs_valid_pool) {
     auto r = make_blocking_io_pool(BlockingIoPoolOptions{2, 8});
     SLUICE_CHECK(r.has_value());
@@ -42,6 +61,21 @@ SLUICE_TEST_CASE(submit_surfaces_return_value) {
     auto t = pool.submit([] { return 42; });
     SLUICE_CHECK(t.has_value());
     SLUICE_CHECK(t.value().get() == 42);
+}
+
+SLUICE_TEST_CASE(submit_accepts_mutable_callables) {
+    auto pr = make_blocking_io_pool(BlockingIoPoolOptions{1, 4});
+    SLUICE_CHECK(pr.has_value());
+    auto& pool = *pr.value();
+    int observed = 0;
+    auto mutable_job = [state = 0, &observed]() mutable {
+        ++state;
+        observed = state;
+    };
+    auto t = pool.submit(std::move(mutable_job));
+    SLUICE_CHECK(t.has_value());
+    t.value().get();
+    SLUICE_CHECK(observed == 1);
 }
 
 SLUICE_TEST_CASE(submit_surfaces_exception) {
@@ -125,6 +159,68 @@ SLUICE_TEST_CASE(shutdown_is_idempotent) {
     pool.shutdown();
     pool.shutdown();
     pool.shutdown();
+}
+
+SLUICE_TEST_CASE(concurrent_shutdown_callers_wait_for_drain) {
+    auto pr = make_blocking_io_pool(BlockingIoPoolOptions{2, 4});
+    SLUICE_CHECK(pr.has_value());
+    auto& pool = *pr.value();
+
+    std::atomic<bool> started{false};
+    std::atomic<bool> release{false};
+    std::atomic<bool> first_done{false};
+    std::atomic<bool> second_done{false};
+
+    auto gate = pool.submit([&] {
+        started.store(true, std::memory_order_release);
+        while (!release.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+    });
+    SLUICE_CHECK(gate.has_value());
+    while (!started.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+
+    std::thread first([&] {
+        pool.shutdown();
+        first_done.store(true, std::memory_order_release);
+    });
+    std::thread second([&] {
+        pool.shutdown();
+        second_done.store(true, std::memory_order_release);
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    SLUICE_CHECK(!first_done.load(std::memory_order_acquire));
+    SLUICE_CHECK(!second_done.load(std::memory_order_acquire));
+
+    release.store(true, std::memory_order_release);
+    first.join();
+    second.join();
+    SLUICE_CHECK(first_done.load(std::memory_order_acquire));
+    SLUICE_CHECK(second_done.load(std::memory_order_acquire));
+    gate.value().get();
+}
+
+SLUICE_TEST_CASE(worker_initiated_shutdown_is_rejected) {
+    auto pr = make_blocking_io_pool(BlockingIoPoolOptions{1, 4});
+    SLUICE_CHECK(pr.has_value());
+    auto& pool = *pr.value();
+
+    auto bad = pool.submit([&pool] { pool.shutdown(); });
+    SLUICE_CHECK(bad.has_value());
+    bool caught = false;
+    try {
+        bad.value().get();
+    } catch (const std::logic_error&) {
+        caught = true;
+    }
+    SLUICE_CHECK(caught);
+
+    auto still_usable = pool.submit([] { return 7; });
+    SLUICE_CHECK(still_usable.has_value());
+    SLUICE_CHECK(still_usable.value().get() == 7);
 }
 
 SLUICE_TEST_CASE(stats_are_consistent) {

@@ -114,10 +114,11 @@ TrySubmit(t) ==
             /\ rejected' = rejected \cup {t}
             /\ UNCHANGED <<queue, accepting, inFlight, done, submitted, getters>>
 
-(* Worker dequeues the head of the queue (FIFO). Any worker; we don't model
-   worker identity since the queue is shared. *)
+(* Worker dequeues the head of the queue (FIFO). We abstract worker identity,
+   but still bound concurrent in-flight work by NumWorkers. *)
 Dequeue ==
     /\ Len(queue) > 0
+    /\ Cardinality(inFlight) < NumWorkers
     /\ LET t == Head(queue)
        IN  /\ queue' = Tail(queue)
            /\ inFlight' = inFlight \cup {t}
@@ -172,6 +173,10 @@ Spec == Init /\ [][Next]_Vars
 (* C3: queue length never exceeds the bound. *)
 QueueBoundInvariant == Len(queue) <= MaxDepth
 
+(* Worker-boundedness: the abstracted workers cannot run more tasks than the
+   configured worker count. *)
+WorkerBoundInvariant == Cardinality(inFlight) <= NumWorkers
+
 (* Structural: inFlight and done are disjoint; done and getters nest correctly. *)
 StateConsistency ==
     /\ inFlight \cap done = {}                    (* a task isn't both running and done *)
@@ -179,19 +184,6 @@ StateConsistency ==
     /\ done \subseteq submitted                   (* done implies it was submitted *)
     /\ inFlight \subseteq submitted               (* inFlight implies submitted *)
     /\ \A i \in 1..Len(queue) : queue[i] \in submitted  (* queued implies submitted *)
-
-(* C5 (safety half): once not accepting, no NEW task enters the queue. Formally:
-   after accepting becomes FALSE, submitted does not grow via Submit-enqueue.
-   We model this as: every task in the queue/inFlight/done was submitted WHILE
-   accepting (or is a reject). The cleanest invariant: if ~accepting, then for
-   any t added to submitted after shutdown... we approximate by: a task can only
-   be in submitted if it was enqueued, and enqueue requires accepting. This is
-   enforced by Submit's guard. TLC checks the transition guards, so the safety
-   is proven by inspecting Submit. We add a derived invariant: *)
-NoEnqueueAfterShutdown ==
-    /\ accepting => TRUE   (* trivial; the real check is in the Submit guard *)
-    (* The non-trivial statement: there is no transition that adds to 'submitted'
-       while accepting=FALSE. Submit's IF branch guarantees this. *)
 
 (* A useful aggregate: all tasks are in exactly one lifecycle bucket. *)
 TaskLifecycle ==

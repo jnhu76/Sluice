@@ -18,12 +18,16 @@ void print_row(std::ostream& out, const MatrixRow& r) {
     if (!s) {
         return;
     }
+    std::ios::fmtflags saved_flags = out.flags();
+    std::streamsize saved_precision = out.precision();
     out.setf(std::ios::fixed, std::ios::floatfield);
     out.precision(3);
     out << r.mode << ',' << r.workload << ',' << r.streams << ',' << r.pool_threads << ','
         << r.block_size << ',' << r.buffer_size << ',' << r.total_bytes << ',' << r.total_ops << ','
         << r.total_ms << ',' << r.mbps << ',' << r.ops_per_sec << ',' << r.threads_used << ','
         << r.sync_policy << ',' << r.file_layout << '\n';
+    out.flags(saved_flags);
+    out.precision(saved_precision);
 }
 
 void fill_derived(MatrixRow& r, std::uint64_t elapsed_ns) {

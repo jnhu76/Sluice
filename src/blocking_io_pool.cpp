@@ -9,11 +9,32 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
 
 namespace sluice {
+
+namespace {
+thread_local const void* current_blocking_io_pool = nullptr;
+
+struct WorkerScope {
+    const void* previous;
+    explicit WorkerScope(const void* pool) : previous(current_blocking_io_pool) {
+        current_blocking_io_pool = pool;
+    }
+    ~WorkerScope() { current_blocking_io_pool = previous; }
+};
+
+BlockingIoPoolOptions validate_options_or_throw(BlockingIoPoolOptions opts) {
+    if (opts.worker_count == 0 || opts.max_queue_depth == 0) {
+        throw std::invalid_argument(
+            "BlockingIoPool requires non-zero worker_count and max_queue_depth");
+    }
+    return opts;
+}
+} // namespace
 
 struct BlockingIoPool::Impl {
     BlockingIoPoolOptions opts;
@@ -22,8 +43,11 @@ struct BlockingIoPool::Impl {
     std::mutex mtx;
     std::condition_variable not_full;  // signaled when a slot frees
     std::condition_variable not_empty; // signaled when a job is enqueued
+    std::condition_variable idle;      // signaled when queue + active work drain
     std::deque<std::function<void()>> queue;
     std::vector<std::thread> workers;
+    std::once_flag shutdown_once;
+    std::size_t active = 0;
     bool accepting = true; // false once shutdown() begins
 
     Impl(BlockingIoPoolOptions o, PoolStats* s) : opts(o), stats(s) {
@@ -33,6 +57,7 @@ struct BlockingIoPool::Impl {
     }
 
     void worker_loop() {
+        WorkerScope scope(this);
         for (;;) {
             std::function<void()> job;
             {
@@ -43,6 +68,7 @@ struct BlockingIoPool::Impl {
                 }
                 job = std::move(queue.front());
                 queue.pop_front();
+                ++active;
                 if (stats) {
                     ++stats->started;
                     --stats->queue_depth;
@@ -50,12 +76,48 @@ struct BlockingIoPool::Impl {
                 not_full.notify_one();
             }
             job();
+            {
+                std::scoped_lock lk(mtx);
+                --active;
+                if (queue.empty() && active == 0) {
+                    idle.notify_all();
+                }
+            }
         }
+    }
+
+    bool is_current_worker() const noexcept {
+        return current_blocking_io_pool == this;
+    }
+
+    void shutdown(bool detach_current_worker) {
+        std::call_once(shutdown_once, [this, detach_current_worker] {
+            {
+                std::scoped_lock lk(mtx);
+                accepting = false;
+                not_empty.notify_all(); // wake all workers to see accepting==false
+                not_full.notify_all();  // wake any blocked submitters
+            }
+
+            const std::thread::id self = std::this_thread::get_id();
+            for (auto& w : workers) {
+                if (!w.joinable()) {
+                    continue;
+                }
+                if (w.get_id() == self) {
+                    if (detach_current_worker) {
+                        w.detach();
+                    }
+                    continue;
+                }
+                w.join();
+            }
+        });
     }
 };
 
 BlockingIoPool::BlockingIoPool(BlockingIoPoolOptions opts, PoolStats* stats)
-    : impl_(std::make_unique<Impl>(opts, stats)) {
+    : impl_(std::make_unique<Impl>(validate_options_or_throw(opts), stats)) {
     impl_->workers.reserve(impl_->opts.worker_count);
     // If a thread constructor throws, the already-created threads in
     // impl_->workers are joined by the Impl destructor (which runs as part of
@@ -66,13 +128,13 @@ BlockingIoPool::BlockingIoPool(BlockingIoPoolOptions opts, PoolStats* stats)
         }
     } catch (...) {
         // Roll back: signal shutdown so workers exit, then rethrow.
-        shutdown();
+        impl_->shutdown(/*detach_current_worker=*/false);
         throw;
     }
 }
 
 BlockingIoPool::~BlockingIoPool() {
-    shutdown(); // drain-and-join; idempotent.
+    impl_->shutdown(/*detach_current_worker=*/impl_->is_current_worker());
 }
 
 namespace detail {
@@ -124,21 +186,19 @@ PoolStats* BlockingIoPool::pool_stats() noexcept {
     return impl_->stats;
 }
 
+void BlockingIoPool::wait_idle() {
+    if (impl_->is_current_worker()) {
+        throw std::logic_error("BlockingIoPool::wait_idle() cannot be called from a worker task");
+    }
+    std::unique_lock<std::mutex> lk(impl_->mtx);
+    impl_->idle.wait(lk, [&] { return impl_->queue.empty() && impl_->active == 0; });
+}
+
 void BlockingIoPool::shutdown() {
-    {
-        std::scoped_lock lk(impl_->mtx);
-        if (!impl_->accepting) {
-            return; // idempotent
-        }
-        impl_->accepting = false;
-        impl_->not_empty.notify_all(); // wake all workers to see accepting==false
-        impl_->not_full.notify_all();  // wake any blocked submitters
+    if (impl_->is_current_worker()) {
+        throw std::logic_error("BlockingIoPool::shutdown() cannot be called from a worker task");
     }
-    for (auto& w : impl_->workers) {
-        if (w.joinable()) {
-            w.join();
-        }
-    }
+    impl_->shutdown(/*detach_current_worker=*/false);
 }
 
 std::size_t BlockingIoPool::worker_count() const noexcept {

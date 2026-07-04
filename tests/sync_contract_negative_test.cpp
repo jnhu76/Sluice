@@ -1,7 +1,7 @@
 // Contract-negative tests for the sync runtime (sluice-CORE-024S §4).
 //
 // These are CROSS-LAYER regression guards: each slices one row of the contract
-// (docs/adr/ADR-024S-sync-runtime-contract.md G4-G6, G9, N4, N10;
+// (docs/adr/ADR-024S-sync-runtime-contract.md G4-G6, G9, G11, N4;
 //  docs/io/sync-error-semantics.md table). The same behaviors are also exercised
 // individually in fault_test/reader_test/writer_test/file_positional_test — this
 // file exists so the CONTRACT as a whole has a single place a refactor must keep

@@ -234,10 +234,12 @@ what blocking durability *is* and measures it.
 (`std::thread` based, no external dependency) so W1–W4 are expressible on the
 blocking side as *concurrent* workloads (`blocking_bounded_pool` mode), not only
 sequential ones. This is the largest gap: today the blocking path has zero
-concurrency primitives. **`BlockingIoPool` is an execution model for benchmarks,
-NOT an I/O backend** — it does not implement `IoContext`, is not selectable as a
-backend, and lives in `bench/support/` (see `docs/sync-io-architecture.md` §3).
-It is opt-in and does NOT become the default backend.
+concurrency primitives. **`BlockingIoPool` is an execution model, NOT an I/O
+backend** — it does not implement `IoContext` and is not selectable as a
+backend. The production API lives in `include/sluice/blocking_io_pool.hpp` and
+`src/blocking_io_pool.cpp`; `bench/support/` is only a thin benchmark adapter
+(see `docs/sync-io-architecture.md` §3). It is opt-in and does NOT become the
+default backend.
 
 **Non-goals.**
 - Not a replacement for `BlockingIoContext` (the default stays cursor-based,
@@ -260,7 +262,9 @@ It is opt-in and does NOT become the default backend.
 
 **Acceptance criteria.**
 - W1–W4 are expressible as concurrent blocking workloads on `BlockingIoPool`.
-- `BlockingIoPool` lives in `bench/support/` and is NOT an `IoContext` backend.
+- Production `BlockingIoPool` lives in `include/sluice/blocking_io_pool.hpp` +
+  `src/blocking_io_pool.cpp`; `bench/support/` only adapts it for benchmarks,
+  and it is NOT an `IoContext` backend.
 - No new external dependency (std::thread/mutex/condition_variable only).
 - ASan/TSan runs clean on pool tests.
 - `BlockingIoContext` default path unchanged.

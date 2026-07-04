@@ -180,6 +180,8 @@ xmake test                        # run all tests
 xmake build -g examples           # build examples
 ```
 
+`xmake build` also refreshes the ignored `compile_commands.json` used by clang-tidy and VS Code.
+
 To enable the experimental io_uring spike (requires liburing):
 
 ```sh
@@ -269,7 +271,7 @@ Tests live under `tests/` and use a tiny dependency-free harness (`tests/harness
 | `blocking_io_pool_invariants_test` | `BlockingIoPool` B-class invariant enforcement |
 | `blocking_io_pool_prod_test` | `BlockingIoPool` production pool concurrency |
 | `blocking_io_pool_stress_test` | `BlockingIoPool` stress under contention |
-| `sync_contract_negative_test` | Sync contract negative tests — G4–G6, G9, N4, N10 enforcement |
+| `sync_contract_negative_test` | Sync contract negative tests — G4–G6, G9, G11, N4 enforcement |
 | `sync_matrix_test` | Sync matrix correctness |
 | `uring_*_test` | Experimental io_uring spike (stub without liburing) |
 

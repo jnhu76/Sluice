@@ -1,6 +1,7 @@
 -- xmake build for the sluice C++ core (Zig std.Io inspired).
 -- Zig source under ./zig is design reference only; never built here.
 add_rules("mode.debug", "mode.release", "mode.asan", "mode.tsan", "mode.ubsan", "mode.valgrind")
+add_rules("plugin.compile_commands.autoupdate")
 
 -- Combined ASan + UBSan: no built-in mode, set policies directly.
 if is_mode("asanubsan") then
@@ -182,20 +183,6 @@ do
     end
 end
 
--- TEMP btest.
-do
-    local p = "tests/_btest.cpp"
-    if os.isfile(p) then
-        target("_btest")
-            set_kind("binary")
-            set_default(false)
-            set_group("test")
-            add_deps("sluice_core")
-            add_includedirs("include", "tests")
-            add_files(p)
-    end
-end
-
 -- sync_matrix_test (022S) locks the matrix CSV shape.
 do
     local p = "tests/sync_matrix_test.cpp"
@@ -295,4 +282,3 @@ target("sluice_experimental_uring")
 --   Run all examples:    xmake run -g examples
 --   Run all benches:     xmake run -g bench
 -- ---------------------------------------------------------------------------
-

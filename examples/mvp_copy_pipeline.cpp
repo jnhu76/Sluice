@@ -2,6 +2,7 @@
 //   FileReader -> BufferedReader -> copy_all -> BufferedWriter -> ObservedWriter -> FileWriter
 // Verifies output bytes match input; prints composition stats. Not a benchmark.
 #include <sluice/buffer.hpp>
+#include "support/example_helpers.hpp"
 #include "support/temp_path.hpp"
 #include <sluice/copy.hpp>
 #include <sluice/file.hpp>
@@ -10,40 +11,16 @@
 #include <sluice/observed.hpp>
 
 using sluice::bench::TempPath;
+using sluice::bench::file_read_all;
+using sluice::bench::stop_reason;
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
-#include <sstream>
 #include <span>
 #include <string>
 #include <vector>
-
-namespace {
-
-bool file_read_all(const std::string& path, std::string& out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in)
-        return false;
-    out.assign(std::istreambuf_iterator<char>(in), {});
-    return true;
-}
-
-const char* stop_reason(const sluice::CopyStats& s) {
-    if (s.eof_stops)
-        return "eof";
-    if (s.limit_stops)
-        return "limit";
-    if (s.reader_error_stops)
-        return "reader_error";
-    if (s.writer_error_stops)
-        return "writer_error";
-    return "none";
-}
-
-} // namespace
 
 int main() {
     // 1. Create a small input file.

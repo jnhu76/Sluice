@@ -35,6 +35,7 @@ The sync runtime's contract is fixed as follows.
 | G8 | Durability ops (`SyncableWriter::sync_data`/`sync_all` → `fdatasync`/`fsync`) surface OS/filesystem success or failure via `Result<void>`. They do **not** overclaim physical-media persistence beyond the OS/filesystem contract (see `docs/sync-durability-model.md`). |
 | G9 | `BlockingIoPool` (production: `sluice::BlockingIoPool`, `include/sluice/blocking_io_pool.hpp`) is a **bounded OS-thread execution helper for blocking work, NOT an async runtime.** It runs callables on a fixed number of `std::thread` workers (NOT one thread per operation). It exposes task return values via a returned future-like handle, surfaces task exceptions, rejects submissions after `shutdown()`, and is bounded (backpressure / `try_submit` rejection). It is not selectable as an `IoContext`, implements no completion model, and has no dependency relationship with the I/O types. See `docs/io/sync-backend-taxonomy.md` for the full backend boundary. |
 | G10 | Errors are `Result<T>` / `IoError` (codes: `eof`, `canceled`, `interrupted`, `would_block`, `no_space`, `permission_denied`, `invalid_state`, `backend_error`). `errno` is mapped verbatim where the syscall returns `-1`; `errno == 0` maps to `backend_error` (never a real success). |
+| G11 | `BlockingIoPool::submit` / `try_submit` after `shutdown()` is **rejected** (`IoError::invalid_state`), NOT a silent no-op. Production pool callers must handle the rejection; silent drops hid bugs (the pre-024S bench pool was a no-op, recorded as a known behavior change). |
 
 ### 2. Explicit non-goals (NOT guaranteed; do not depend on these)
 
@@ -49,7 +50,6 @@ The sync runtime's contract is fixed as follows.
 | N7 | No scheduler abstraction / task graph. |
 | N8 | No attempt to solve function-coloring at this layer. |
 | N9 | No implicit buffer lifetime extension: the caller owns buffers; positional/buffered wrappers borrow them. |
-| N10 | `BlockingIoPool::submit` / `try_submit` after `shutdown()` is **rejected** (`IoError::invalid_state`), NOT a silent no-op. Production pool callers must handle the rejection; silent drops hid bugs (the pre-024S bench pool was a no-op, recorded as a known behavior change). |
 
 ### 3. Layering
 
@@ -74,8 +74,8 @@ as primitives; it does not modify them.
 The **production** pool (`sluice::BlockingIoPool`, `include/sluice/blocking_io_pool.hpp`):
 
 - Construct via `BlockingIoPoolOptions{worker_count, max_queue_depth}`. `worker_count == 0` and `max_queue_depth == 0` are **rejected** (factory returns `IoError::invalid_state`). Worker threads are fixed in number; thread-creation failure does not leave a half-valid pool (RAII via `unique_ptr<Impl>`).
-- `try_submit(callable) -> Result<Task<T>>`: **non-blocking**. Returns a rejection (`IoError::would_block` when full, `invalid_state` after `shutdown()` — N10). The returned `Task<T>` carries the callable's return value and any thrown exception; `task.get()` blocks until complete and surfaces the value or rethrows.
-- `submit(callable) -> Result<Task<T>>`: **blocking with backpressure** — waits for queue space, then enqueues. Rejects only after `shutdown()` (N10).
+- `try_submit(callable) -> Result<Task<T>>`: **non-blocking**. Returns a rejection (`IoError::would_block` when full, `invalid_state` after `shutdown()` — G11). The returned `Task<T>` carries the callable's return value and any thrown exception; `task.get()` blocks until complete and surfaces the value or rethrows.
+- `submit(callable) -> Result<Task<T>>`: **blocking with backpressure** — waits for queue space, then enqueues. Rejects only after `shutdown()` (G11).
 - `shutdown()`: stops accepting, **drains already-submitted work** (running blocking syscalls are NOT cancelled — no async cancellation claim), joins workers. **Idempotent.** Destructor calls it if not already called (drain-and-join).
 - `stats() -> PoolStats`: observability — `submitted`, `started`, `completed`, `failed`, `rejected`, `queue_depth`, `worker_count`. Caller-owned (nullable), never global.
 - State is **instance-owned only** (no globals); two pools do not interfere (sanitizer-verified).
@@ -110,6 +110,6 @@ The **bench adapter** (`sluice::bench::BlockingIoPool`, `bench/support/`) wraps 
 ## Consequences
 
 - The sync layer is **boring, stable, and correct by design**. Reviewers merge it knowing what it is and is not.
-- Negative tests (`tests/sync_contract_negative_test.cpp` + `tests/blocking_io_pool_test.cpp`) lock G4-G6, G9, N4, N10 against future drift.
+- Negative tests (`tests/sync_contract_negative_test.cpp` + `tests/blocking_io_pool_test.cpp`) lock G4-G6, G9, G11, and N4 against future drift.
 - Any future async backend is built **on top of** these primitives; the contract forbids rewriting `Reader`/`Writer`/positional semantics to serve async.
-- The production pool's `submit`-after-`shutdown` is now a **rejection** (N10 changed from the pre-024S no-op). This is a deliberate behavior change: silent drops hid bugs. The bench adapter preserves the old fire-and-forget `void submit` shape for existing bench call sites, mapping the rejection internally.
+- The production pool's `submit`-after-`shutdown` is now a **rejection** (G11 changed from the pre-024S no-op). This is a deliberate behavior change: silent drops hid bugs. The bench adapter preserves the old fire-and-forget `void submit` shape for existing bench call sites, mapping the rejection internally.

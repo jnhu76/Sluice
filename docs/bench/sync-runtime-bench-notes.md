@@ -37,7 +37,7 @@ xmake run w1_write_bench   # (and w2_read_bench / w3_copy_bench / w4_durability_
 > and for **overlap under mixed workloads**, but it is **not a universal
 > performance win**. Direct blocking remains the simplest and often fastest path
 > for single-stream synchronous I/O.
-
+>
 > The sync pool is the **production multithreaded blocking path**
 > (`sluice::BlockingIoPool`, `include/sluice/blocking_io_pool.hpp`). It should be
 > evaluated against direct blocking, NOT confused with async io_uring or

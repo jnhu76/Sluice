@@ -11,7 +11,7 @@ author, pre-merge) walks through before merging `sync-runtime` → `master`.
 - [x] Sync contract ADR exists: `docs/adr/ADR-024S-sync-runtime-contract.md`
 - [x] Partial-I/O / error semantics documented: `docs/io/sync-error-semantics.md`
 - [x] `BlockingIoPool` lifecycle documented: ADR §4 (G9) + `docs/io/sync-error-semantics.md`
-- [x] Negative tests cover lifecycle and partial/error behavior: `tests/blocking_io_pool_prod_test.cpp` (10 slices) + `tests/sync_contract_negative_test.cpp` (5 slices) + existing `blocking_io_pool_test.cpp` / `fault_test.cpp` / `reader_test.cpp` / `writer_test.cpp` / `file_positional_test.cpp`
+- [x] Negative tests cover lifecycle and partial/error behavior: `tests/blocking_io_pool_prod_test.cpp`, `tests/blocking_io_pool_stress_test.cpp`, `tests/blocking_io_pool_invariants_test.cpp`, `tests/sync_contract_negative_test.cpp`, plus existing `blocking_io_pool_test.cpp` / `fault_test.cpp` / `reader_test.cpp` / `writer_test.cpp` / `file_positional_test.cpp`
 - [x] W1–W4 benchmark notes exist: `docs/bench/sync-runtime-bench-notes.md`
 - [x] Sanitizer/valgrind commands documented (see "Verification commands" below)
 - [x] No async/io_uring/epoll/P2300/actor/green-thread code added (the `src/experimental/uring_*` is pre-existing, gated, off by default, and NOT part of this contract)
@@ -25,10 +25,10 @@ author, pre-merge) walks through before merging `sync-runtime` → `master`.
   grep -rn "async/\|<coroutine>\|co_await\|co_return\|io_uring" include/sluice/*.hpp
   ```
   Expected: **no matches** in the sync public surface (`io_uring` may appear only in archived/spike docs and `src/experimental/`).
-- [ ] Confirm `BlockingIoPool` is **not** described as an async runtime. It is in `bench/support/`, is not an `IoContext`, and the ADR (G9) + this doc say so explicitly.
+- [ ] Confirm `BlockingIoPool` is **not** described as an async runtime. The production pool is defined in `include/sluice/blocking_io_pool.hpp` + `src/blocking_io_pool.cpp`, `bench/support/` is only a thin adapter, and it is not an `IoContext`.
 - [ ] Confirm durability docs do not overclaim physical persistence. ADR G8 + `docs/sync-durability-model.md` + `docs/results/sync-durability-baseline.md` all carry the "OS/filesystem contract, not physical-media proof" caveat.
 - [ ] Confirm partial-I/O behavior is tested: EOF→`eof`, short-read retry, zero-progress→`invalid_state`, zero-length no-op (`tests/sync_contract_negative_test.cpp` slices 1–4).
-- [ ] Confirm shutdown/lifecycle behavior is tested: `blocking_io_pool_test.cpp` (`submit_after_shutdown_is_noop`, `shutdown_joins_workers_and_is_idempotent`, `destructor_drains_and_joins`, `exception_in_job_surfaces_at_wait_all`).
+- [ ] Confirm shutdown/lifecycle behavior is tested: `blocking_io_pool_test.cpp`, `blocking_io_pool_prod_test.cpp`, `blocking_io_pool_stress_test.cpp`, and `blocking_io_pool_invariants_test.cpp` cover rejection after shutdown, idempotent/concurrent shutdown, destructor drain, worker-initiated shutdown rejection, and exception propagation.
 - [ ] Confirm benchmark interpretation is conservative: no universal claim, tmpfs-understates-W4 caveat present, debug-build caveat present.
 
 ## Verification commands
@@ -43,8 +43,8 @@ xmake f -m asanubsan  && xmake build -g test && xmake test   # ASan + UBSan
 xmake f -m ubsan      && xmake build -g test && xmake test   # standalone UBSan
 
 # Valgrind memcheck on the concurrency-sensitive + contract binaries
-xmake f -m debug && xmake build blocking_io_pool_test file_positional_test sync_contract_negative_test
-for t in blocking_io_pool_test file_positional_test sync_contract_negative_test; do
+xmake f -m debug && xmake build blocking_io_pool_test blocking_io_pool_prod_test blocking_io_pool_stress_test blocking_io_pool_invariants_test file_positional_test sync_contract_negative_test
+for t in blocking_io_pool_test blocking_io_pool_prod_test blocking_io_pool_stress_test blocking_io_pool_invariants_test file_positional_test sync_contract_negative_test; do
   valgrind --error-exitcode=99 --leak-check=full --errors-for-leak-kinds=definite --quiet \
     build/linux/x86_64/debug/$t && echo "$t: valgrind clean"
 done
@@ -58,4 +58,3 @@ xmake build -g bench
 - Async runtime, io_uring default backend, P2300 — all explicitly deferred to the `async-runtime` branch (see `docs/async-deferred-until-sync-baseline.md`).
 - p50/p95/p99 latency columns in the bench CSV (methodology "add where feasible").
 - Real-disk W4 re-measurement (tmpfs-understates caveat is documented).
-- Changing `BlockingIoPool::submit`-after-`shutdown` from no-op to error (N10 — current no-op is the contract; changing it is a separate behavior-change task).

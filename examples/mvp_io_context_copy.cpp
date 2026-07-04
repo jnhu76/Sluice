@@ -2,6 +2,7 @@
 // flushes, syncs (if SyncableWriter), prints stats, verifies bytes. No
 // performance claim.
 #include <sluice/buffer.hpp>
+#include "support/example_helpers.hpp"
 #include "support/temp_path.hpp"
 #include <sluice/copy.hpp>
 #include <sluice/io_context.hpp>
@@ -10,26 +11,13 @@
 #include <sluice/sync.hpp>
 
 using sluice::bench::TempPath;
+using sluice::bench::file_read_all;
 
 #include <cstdio>
-#include <filesystem>
 #include <fstream>
 #include <span>
-#include <sstream>
 #include <string>
 #include <vector>
-
-namespace {
-
-bool file_read_all(const std::string& path, std::string& out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in)
-        return false;
-    out.assign(std::istreambuf_iterator<char>(in), {});
-    return true;
-}
-
-} // namespace
 
 int main() {
     TempPath in_tp("in"), out_tp("out");

@@ -15,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 
@@ -65,27 +66,41 @@ template <class T> struct Task<T>::State {
 template <class T, class Fn>
 std::function<void()> make_bound_job(Fn fn, std::shared_ptr<typename Task<T>::State> st,
                                      PoolStats* stats) {
-    return [fn = std::move(fn), st = std::move(st), stats]() {
+    return [fn = std::move(fn), st = std::move(st), stats]() mutable {
         try {
             if constexpr (std::is_void_v<T>) {
                 fn();
-                if (stats) {
-                    ++stats->completed;
+                {
+                    std::scoped_lock lk(st->mtx);
+                    st->ready = true;
+                    if (stats) {
+                        ++stats->completed;
+                    }
                 }
-                st->set_value();
+                st->cv.notify_all();
             } else {
                 T v = fn();
-                if (stats) {
-                    ++stats->completed;
+                {
+                    std::scoped_lock lk(st->mtx);
+                    st->value.emplace(std::move(v));
+                    st->ready = true;
+                    if (stats) {
+                        ++stats->completed;
+                    }
                 }
-                st->set_value(std::move(v));
+                st->cv.notify_all();
             }
         } catch (...) {
-            st->set_exception(std::current_exception());
-            if (stats) {
-                ++stats->completed;
-                ++stats->failed;
+            {
+                std::scoped_lock lk(st->mtx);
+                st->ex = std::current_exception();
+                st->ready = true;
+                if (stats) {
+                    ++stats->completed;
+                    ++stats->failed;
+                }
             }
+            st->cv.notify_all();
         }
     };
 }

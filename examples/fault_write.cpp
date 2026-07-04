@@ -30,5 +30,5 @@ int main() {
                 static_cast<unsigned long long>(stats.write_calls),
                 static_cast<unsigned long long>(stats.write_bytes),
                 static_cast<unsigned long long>(stats.short_writes));
-    return res.has_value() ? 0 : 0; // demo always exits 0
+    return 0; // demo always exits 0, regardless of the fault outcome
 }

@@ -97,10 +97,10 @@ SLUICE_TEST_CASE(b2_no_lost_task_under_backpressure) {
     SLUICE_CHECK(done.load() == accepted.load()); // every accepted task ran
 }
 
-// ---- B3: no-double-get — Task::get() called twice is contract-violation-detected
-// The contract documents double-get as UB. This test documents the CURRENT
-// behavior (logic_error thrown from the empty-state path) and pins it so a
-// change to a stronger guarantee (assert/terminate) is intentional, not silent.
+// ---- B3: no-double-get — second Task::get() has a concrete outcome ---------
+// Double-get is outside the contract. This pins the defensive floor: a second
+// call either reports a violation or returns the same value, but never silently
+// corrupts the result.
 SLUICE_TEST_CASE(b3_double_get_is_detected) {
     auto pr = make_blocking_io_pool(BlockingIoPoolOptions{.worker_count = 1, .max_queue_depth = 4});
     SLUICE_CHECK(pr.has_value());
@@ -109,18 +109,14 @@ SLUICE_TEST_CASE(b3_double_get_is_detected) {
     SLUICE_CHECK(t.has_value());
     int first = t.value().get();
     SLUICE_CHECK(first == 7);
-    // Second get(): the shared state has been consumed (moved-from optional).
-    // Current behavior: logic_error ("get() on an empty Task") OR, if the
-    // optional still holds the value, a second return. We accept EITHER but
-    // document that double-get is contract UB. This test pins the no-crash floor.
-    bool ok = true;
+    bool consistent = true;
     try {
-        (void)t.value().get(); // second get — contract UB; we just require no crash
+        int second = t.value().get();
+        consistent = (second == first);
     } catch (const std::exception&) {
         // Detected as a violation: acceptable.
-        ok = true;
     }
-    SLUICE_CHECK(ok); // no UB/crash on double-get (defensive)
+    SLUICE_CHECK(consistent);
 }
 
 // ---- B4: FIFO order — single-worker pool completes tasks in submit order ----

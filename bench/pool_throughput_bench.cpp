@@ -27,7 +27,9 @@
 namespace {
 
 std::uint64_t now_ns() {
-    return static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                          std::chrono::steady_clock::now().time_since_epoch())
+                                          .count());
 }
 
 // Run N tasks through a pool with W workers; return elapsed ns. Each task does
@@ -35,20 +37,19 @@ std::uint64_t now_ns() {
 // destruction guarantees completion.
 std::uint64_t run_with_pool(std::size_t workers, std::size_t tasks,
                             const std::function<void()>& work) {
-    auto pr = sluice::make_blocking_io_pool(
-        sluice::BlockingIoPoolOptions{.worker_count = workers, .max_queue_depth = tasks + 16});
+    auto pr = sluice::make_blocking_io_pool(sluice::BlockingIoPoolOptions{
+        .worker_count = workers, .max_queue_depth = std::max<std::size_t>(workers * 4, 16)});
     if (!pr.has_value()) {
         return 0;
     }
-    auto& pool = *pr.value();
+    auto pool = std::move(pr.value());
     auto t0 = now_ns();
     for (std::size_t i = 0; i < tasks; ++i) {
-        auto t = pool.submit(work);
+        auto t = pool->submit(work);
         (void)t;
     }
-    // Destroy pool (drain+join) to measure full completion.
-    auto owned = std::move(pr.value());
-    (void)owned;
+    // Drain+join before stopping the clock so elapsed time includes completion.
+    pool.reset();
     return now_ns() - t0;
 }
 

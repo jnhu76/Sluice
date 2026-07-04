@@ -182,6 +182,8 @@ xmake test                        # 运行所有测试
 xmake build -g examples           # 构建示例
 ```
 
+`xmake build` 也会刷新被忽略的 `compile_commands.json`，供 clang-tidy 和 VS Code 使用。
+
 启用实验性 io_uring（需要 liburing）：
 
 ```sh
@@ -262,7 +264,7 @@ scripts/                 构建/分析辅助脚本
 | `blocking_io_pool_invariants_test` | `BlockingIoPool` B 类不变量强制 |
 | `blocking_io_pool_prod_test` | `BlockingIoPool` 生产池并发 |
 | `blocking_io_pool_stress_test` | `BlockingIoPool` 压力测试 |
-| `sync_contract_negative_test` | 同步契约否定测试——G4–G6、G9、N4、N10 强制 |
+| `sync_contract_negative_test` | 同步契约否定测试——G4–G6、G9、G11、N4 强制 |
 | `sync_matrix_test` | 同步矩阵正确性 |
 
 ## 示例

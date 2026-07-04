@@ -7,57 +7,27 @@
 // are the real POSIX pread/pwrite/preadv/pwritev paths).
 #include "harness.hpp"
 
+#include "support/temp_path.hpp"
+
 #include <sluice/file.hpp>
 
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <string>
+#include <string_view>
 
 namespace {
 
-// RAII temp file path; cleaned up on destruction. Unique per instance.
-class TempPath {
-  public:
-    TempPath() {
-        auto base = std::filesystem::temp_directory_path() /
-                    ("sluice_posional_test_" + std::to_string(counter_++) + ".tmp");
-        path_ = base.string();
-    }
-    ~TempPath() {
-        // Guard the moved-from state: the move ctor clears path_, and remove("")
-        // on an empty path is a needless (if non-throwing) no-op. Defensive.
-        if (!path_.empty()) {
-            std::filesystem::remove(path_);
-        }
-    }
-    TempPath(const TempPath&) = delete;
-    TempPath& operator=(const TempPath&) = delete;
-    TempPath(TempPath&& o) noexcept : path_(std::move(o.path_)) { o.path_.clear(); }
-    TempPath& operator=(TempPath&& o) noexcept {
-        if (this != &o) {
-            if (!path_.empty()) {
-                std::filesystem::remove(path_);
-            }
-            path_ = std::move(o.path_);
-            o.path_.clear();
-        }
-        return *this;
-    }
-    const std::string& path() const { return path_; }
-
-  private:
-    std::string path_;
-    static inline long counter_ = 0;
-};
+using sluice::bench::TempPath;
 
 // Seed a file with `contents` and return its path. Uses raw assert/exit rather
 // than SLUICE_CHECK because SLUICE_CHECK's `return;` is invalid in a function
 // returning TempPath by value.
 TempPath seed_file(std::string_view contents) {
-    TempPath tp;
-    FILE* f = std::fopen(tp.path().c_str(), "wb");
+    TempPath tp("positional_test");
+    FILE* f = std::fopen(tp.str().c_str(), "wb");
     if (f == nullptr) {
         std::fprintf(stderr, "fopen failed\n");
         std::exit(1);
@@ -76,7 +46,7 @@ TempPath seed_file(std::string_view contents) {
 
 SLUICE_TEST_CASE(read_at_reads_from_explicit_offset) {
     auto tp = seed_file("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     SLUICE_CHECK(r.opened());
     std::array<std::byte, 5> buf{};
     auto res = r.read_at(10, buf);
@@ -89,7 +59,7 @@ SLUICE_TEST_CASE(read_at_reads_from_explicit_offset) {
 
 SLUICE_TEST_CASE(read_at_does_not_move_shared_cursor) {
     auto tp = seed_file("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 5> buf{};
     // read_at(20,...) must NOT advance the implicit cursor (which starts at 0).
     auto at = r.read_at(20, buf);
@@ -106,7 +76,7 @@ SLUICE_TEST_CASE(read_at_does_not_move_shared_cursor) {
 
 SLUICE_TEST_CASE(read_at_returns_zero_at_eof) {
     auto tp = seed_file("ABC");
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 4> buf{};
     // Reading past the end returns 0 (EOF), not an error.
     auto res = r.read_at(3, buf);
@@ -118,7 +88,7 @@ SLUICE_TEST_CASE(read_at_returns_zero_at_eof) {
 
 SLUICE_TEST_CASE(read_at_zero_length_is_noop) {
     auto tp = seed_file("ABC");
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     auto res = r.read_at(0, std::span<std::byte>{});
     SLUICE_CHECK(res.has_value());
     SLUICE_CHECK(res.value() == 0);
@@ -130,7 +100,7 @@ SLUICE_TEST_CASE(write_at_writes_at_explicit_offset) {
     // FileWriter ctor truncates, so test write_at by writing at an offset into a
     // fresh file and verifying a gap of zeros appears before the written bytes.
     TempPath tp;
-    sluice::FileWriter w(tp.path());
+    sluice::FileWriter w(tp.str());
     SLUICE_CHECK(w.opened());
     const std::string payload = "XY";
     std::span<const std::byte> src{reinterpret_cast<const std::byte*>(payload.data()),
@@ -140,7 +110,7 @@ SLUICE_TEST_CASE(write_at_writes_at_explicit_offset) {
     SLUICE_CHECK(res.value() == 2);
     SLUICE_CHECK(w.flush().has_value());
     // Read back: bytes 0-2 are zero (sparse gap), 3-4 are "XY".
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 5> buf{};
     auto got = r.read_at(0, buf);
     SLUICE_CHECK(got.has_value());
@@ -156,7 +126,7 @@ SLUICE_TEST_CASE(write_at_writes_at_explicit_offset) {
 
 SLUICE_TEST_CASE(write_at_does_not_move_shared_cursor) {
     TempPath tp;
-    sluice::FileWriter w(tp.path());
+    sluice::FileWriter w(tp.str());
     SLUICE_CHECK(w.opened());
     // Write "AB" at the cursor (offset 0).
     std::string ab = "AB";
@@ -178,7 +148,7 @@ SLUICE_TEST_CASE(write_at_does_not_move_shared_cursor) {
     SLUICE_CHECK(b.value() == 2);
     SLUICE_CHECK(w.flush().has_value());
     // Verify: offset 0-1 "AB", 2-3 "CD", 10 "Z".
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 11> buf{};
     auto got = r.read_at(0, buf);
     SLUICE_CHECK(got.has_value());
@@ -194,7 +164,7 @@ SLUICE_TEST_CASE(write_at_does_not_move_shared_cursor) {
 
 SLUICE_TEST_CASE(read_vec_at_scatters_from_offset) {
     auto tp = seed_file("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 3> a{};
     std::array<std::byte, 3> b{};
     std::array<sluice::IoSlice, 2> dsts = {sluice::IoSlice{a}, sluice::IoSlice{b}};
@@ -208,7 +178,7 @@ SLUICE_TEST_CASE(read_vec_at_scatters_from_offset) {
 
 SLUICE_TEST_CASE(read_vec_at_does_not_move_cursor) {
     auto tp = seed_file("ABCDEFGHIJ");
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 2> a{};
     std::array<sluice::IoSlice, 1> dsts = {sluice::IoSlice{a}};
     auto at = r.read_vec_at(5, dsts); // "FG"
@@ -226,7 +196,7 @@ SLUICE_TEST_CASE(read_vec_at_does_not_move_cursor) {
 
 SLUICE_TEST_CASE(write_vec_at_gathers_at_offset) {
     TempPath tp;
-    sluice::FileWriter w(tp.path());
+    sluice::FileWriter w(tp.str());
     SLUICE_CHECK(w.opened());
     std::string p1 = "AB";
     std::string p2 = "CDE";
@@ -240,7 +210,7 @@ SLUICE_TEST_CASE(write_vec_at_gathers_at_offset) {
     SLUICE_CHECK(res.has_value());
     SLUICE_CHECK(res.value() == 5);
     SLUICE_CHECK(w.flush().has_value());
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 7> buf{};
     auto got = r.read_at(0, buf);
     SLUICE_CHECK(got.has_value());
@@ -255,7 +225,7 @@ SLUICE_TEST_CASE(write_vec_at_gathers_at_offset) {
 
 SLUICE_TEST_CASE(read_at_exact_fills_buffer_from_offset) {
     auto tp = seed_file("0123456789");
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 4> buf{};
     auto res = r.read_at_exact(3, buf);
     SLUICE_CHECK(res.has_value());
@@ -264,7 +234,7 @@ SLUICE_TEST_CASE(read_at_exact_fills_buffer_from_offset) {
 
 SLUICE_TEST_CASE(read_at_exact_eof_before_any_bytes) {
     auto tp = seed_file("ABC"); // 3 bytes
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 4> buf{};
     // offset 3 is at EOF before any byte: eof.
     auto res = r.read_at_exact(3, buf);
@@ -274,7 +244,7 @@ SLUICE_TEST_CASE(read_at_exact_eof_before_any_bytes) {
 
 SLUICE_TEST_CASE(read_at_exact_eof_after_partial_bytes) {
     auto tp = seed_file("ABC"); // 3 bytes
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 5> buf{};
     // offset 1: can read "BC" (2 bytes) then EOF before filling 5 -> eof.
     auto res = r.read_at_exact(1, buf);
@@ -284,7 +254,7 @@ SLUICE_TEST_CASE(read_at_exact_eof_after_partial_bytes) {
 
 SLUICE_TEST_CASE(read_at_exact_zero_length_is_success) {
     auto tp = seed_file("ABC");
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     auto res = r.read_at_exact(0, std::span<std::byte>{});
     SLUICE_CHECK(res.has_value());
 }
@@ -293,7 +263,7 @@ SLUICE_TEST_CASE(read_at_exact_zero_length_is_success) {
 
 SLUICE_TEST_CASE(write_at_all_writes_full_buffer_at_offset) {
     TempPath tp;
-    sluice::FileWriter w(tp.path());
+    sluice::FileWriter w(tp.str());
     SLUICE_CHECK(w.opened());
     std::string payload = "HELLO";
     auto res =
@@ -301,7 +271,7 @@ SLUICE_TEST_CASE(write_at_all_writes_full_buffer_at_offset) {
                               reinterpret_cast<const std::byte*>(payload.data()), payload.size()});
     SLUICE_CHECK(res.has_value());
     SLUICE_CHECK(w.flush().has_value());
-    sluice::FileReader r(tp.path());
+    sluice::FileReader r(tp.str());
     std::array<std::byte, 7> buf{};
     auto got = r.read_at(0, buf);
     SLUICE_CHECK(got.has_value());
@@ -313,7 +283,7 @@ SLUICE_TEST_CASE(write_at_all_writes_full_buffer_at_offset) {
 
 SLUICE_TEST_CASE(write_at_all_zero_length_is_success) {
     TempPath tp;
-    sluice::FileWriter w(tp.path());
+    sluice::FileWriter w(tp.str());
     auto res = w.write_at_all(0, std::span<const std::byte>{});
     SLUICE_CHECK(res.has_value());
 }

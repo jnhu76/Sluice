@@ -115,6 +115,11 @@ class BlockingIoPool {
     // Returns invalid_state after shutdown() (no silent drop).
     template <class F> Result<Task<std::invoke_result_t<F&&>>> submit(F&& f);
 
+    // Wait until the current queue and in-flight tasks are idle without
+    // stopping the pool. New concurrent submissions after the idle observation
+    // are outside this wait.
+    void wait_idle();
+
     // Stop accepting, drain already-submitted work, join workers. Idempotent.
     void shutdown();
 

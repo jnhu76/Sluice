@@ -2,7 +2,7 @@
 
 **Status:** Reference (sluice-CORE-024S §3). Every row documents behavior the
 code actually implements; no row is aspirational. Cross-references
-`docs/adr/ADR-024S-sync-runtime-contract.md` (G1–G10, N1–N10).
+`docs/adr/ADR-024S-sync-runtime-contract.md` (G1–G11, N1–N9).
 
 This document is the reviewer-facing answer to: *how are partial I/O and error
 cases handled?* It exists so the merge cannot quietly change a behavior without
@@ -39,7 +39,7 @@ The rows marked with a behavior the fault layer can reproduce are guarded by
 `tests/fault_test.cpp` (short reads/writes, error injection, flush failure) and
 the new `tests/sync_contract_negative_test.cpp` (sluice-CORE-024S §4), which
 locks: EOF mapping, zero-progress `invalid_state`, zero-length no-op, positional
-cursor-independence, and `BlockingIoPool` submit-after-shutdown no-op.
+cursor-independence, and `BlockingIoPool` submit-after-shutdown rejection.
 
 ## Not covered (and why)
 
@@ -48,6 +48,3 @@ cursor-independence, and `BlockingIoPool` submit-after-shutdown no-op.
   `docs/sync-durability-model.md`. Not a sync-runtime bug — an OS-level limit.
 - **Cancellation of in-flight syscalls:** out of scope (N4). A blocking call runs
   to kernel completion.
-- **`submit`-after-`shutdown` returning an error:** the current no-op is recorded
-  here as the contract (N10). Changing it to an error is a behavior change
-  outside this closeout's scope.

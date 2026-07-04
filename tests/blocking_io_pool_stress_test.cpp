@@ -49,19 +49,7 @@ SLUICE_TEST_CASE(concurrent_producers_all_tasks_complete) {
     for (auto& th : producers) {
         th.join();
     }
-    // Destructor drains+joins. After it, all tasks must have run.
-    // (Scope-end destroys pool here.)
-    // To assert after drain, destroy pool explicitly then check.
-    // But pool is a reference into the unique_ptr; destroy via a nested scope.
-    // Simpler: wait via re-submitting a sentinel? No — just destroy and check.
-    // Move pool out so we control destruction timing.
-    // Actually the unique_ptr pr.value() owns it; let it go out of scope below.
-    // We need the count AFTER drain. Use a nested scope:
-    {
-        // Force drain: destroy the pool now.
-        auto owned = std::move(pr.value());
-        // owned destroys here -> drain+join.
-    }
+    pool.wait_idle();
     SLUICE_CHECK(done.load() == kProducers * kTasksPerProducer);
 }
 
@@ -183,9 +171,7 @@ SLUICE_TEST_CASE(single_worker_pool_concurrent_producers) {
     for (auto& th : producers) {
         th.join();
     }
-    {
-        auto owned = std::move(pr.value());
-    }
+    pool.wait_idle();
     SLUICE_CHECK(done.load() == kProducers * kTasksPerProducer);
 }
 
