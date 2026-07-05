@@ -465,8 +465,38 @@ calling thread (Threaded-equivalent).
 
 Verified: release + debug + asanubsan + tsan green; full suite 56/56. TSan run
 3x (Group uses many threads → race-relevant); clean. Deterministic tests.
-**030 (T4) — `Batch`.** Grouped completions over op storage (`Io.zig:474`).
-Depends on 028, 026.
+**030 (T4) — `Batch` — DONE.**
+
+**Implemented.** `include/sluice/async/batch.hpp` + `src/async/batch.cpp`. A
+grouped-completion driver over `AsyncIoContext`, derived from Zig Io.Batch
+(Io.zig:474-624).
+
+- `BatchOp` — descriptor for one op (read/write/sync_data/sync_all), the
+  cppio analogue of Zig Operation narrowed to file I/O (ADR §A5).
+- `add(op) -> index` — append an op; returns its index.
+- `await_one(ctx) -> ready_count` — submit every not-yet-submitted op, drive
+  `ctx.wait_one()` until ≥1 UNPOPPED slot is ready (or nothing outstanding).
+  Mirrors Zig awaitAsync (Io.zig:578: "wait for at least one").
+- `next() -> optional<BatchResult>` — pop the next completion in arbitrary
+  order (concurrent completion order, ADR §6 O2); each slot popped exactly
+  once (per-slot `popped` flag). Mirrors Zig Batch.next (Io.zig:551).
+
+**Scope decision (recorded):** the NARROWEST source-backed adaptation. Zig
+couples Batch to its Operation tagged union + the backend's batchAwait vtable,
+neither of which cppio has. Instead, Batch is a DRIVER over the existing
+AsyncIoContext: it submits via the existing per-op `submit_*`, drives
+`poll`/`wait_one`, and surfaces completions in reap order. This reuses
+Completion<T> (no new op-storage type) and does NOT touch AsyncBackend (no
+new vtable). A future job may introduce a native Operation.Storage if a
+backend needs to bypass per-op submit overhead. Slots are stored as
+`unique_ptr<Slot>` so the vector may relocate pointers without moving the
+address-stable Completion<T> (ADR §5 L7).
+
+Verified: release + debug + asanubsan + tsan green; full suite 57/57. TSan run
+3x (Batch drives ThreadPool real threads → race-relevant); clean. Deterministic
+loop (no busy-wait; guards on `outstanding()` prevent blocking on an empty
+backend). Flakiness during development traced to a real race (any_ready
+counting popped-but-not-cleared slots) — fixed before commit.
 **031 (T5) — `Select`.** Higher-level selector on `Queue` (`Io.zig:1367`).
 Depends on 029, 030, 034 (S3).
 
