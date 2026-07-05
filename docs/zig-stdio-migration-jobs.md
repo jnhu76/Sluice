@@ -439,8 +439,32 @@ own Future type (the scheduler lives in the backend).
 Verified: release + debug + asanubsan + tsan green; full suite 55/55. TSan run
 twice (Future uses real threads → race-relevant); clean. Deterministic tests
 (no timing races; slice 4 polls a token, not a clock).
-**029 (T3) — `Group`.** Unordered task set, cancel-propagation boundary
-(`Io.zig:1218`). Depends on 028.
+**029 (T3) — `Group` — DONE.**
+
+**Implemented.** `include/sluice/async/group.hpp` + `src/async/group.cpp`. An
+unordered set of fire-and-forget tasks awaitable/cancelable as a whole, derived
+from Zig Io.Group (Io.zig:1218-1303):
+
+- `async(fn)` spawns a worker thread that runs `fn(CancelToken&)` (the shared
+  group token), completes a group-owned `Future<void>` on return, and swallows
+  any exception — the group is a cancel-propagation boundary (Zig
+  Io.zig:1240).
+- `await()` blocks until ALL tasks complete (idempotent, Zig Io.zig:1282);
+  reaps the group's task/future lists.
+- `cancel()` requests the shared token then awaits (idempotent, Zig
+  Io.zig:1298).
+- `group_token()` exposes the shared cancel handle.
+- Destructor drains if await was never called (resource guarantee, Zig
+  Io.zig:1211; no detached threads, CP.26).
+
+**Scope decision:** Group is fire-and-forget (no result aggregation — Zig
+Group.Task carries no result, Io.zig:484). Composes Future<T> (T2) and
+CancelToken (T1). No `concurrent()` variant yet (needs a notion of a
+concurrency unit cppio does not have without PHASE E). await() blocks the
+calling thread (Threaded-equivalent).
+
+Verified: release + debug + asanubsan + tsan green; full suite 56/56. TSan run
+3x (Group uses many threads → race-relevant); clean. Deterministic tests.
 **030 (T4) — `Batch`.** Grouped completions over op storage (`Io.zig:474`).
 Depends on 028, 026.
 **031 (T5) — `Select`.** Higher-level selector on `Queue` (`Io.zig:1367`).

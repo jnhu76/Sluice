@@ -369,6 +369,22 @@ do
     end
 end
 
+-- Group tests (sluice-CORE-029, T3). Unordered task set; await/cancel whole-
+-- group; cancel-propagation boundary. Links sluice_async (group.cpp + cancel).
+do
+    local p = "tests/group_test.cpp"
+    if os.isfile(p) then
+        target("group_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("group_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }
