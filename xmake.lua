@@ -505,6 +505,24 @@ do
     end
 end
 
+-- E6 scheduler progress tests (sluice-CORE-E6). Proves the hybrid poll/wait
+-- idle policy: a Fiber awaiting a real-backend Completion that completes after
+-- the runnable queue drains is resumed via wait_one. ThreadPoolBackend is the
+-- real completion source (cv-wait). Gated to x86_64.
+do
+    local p = "tests/e6_scheduler_progress_test.cpp"
+    if os.isfile(p) then
+        target("e6_scheduler_progress_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e6_scheduler_progress_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }

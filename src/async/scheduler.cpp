@@ -69,17 +69,52 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
 void Scheduler::run_until_idle() {
     running_ = true;
     g_sched_ctx = &sched_ctx_;
-    // Drive until no runnable fibers remain. Wake both Completion-waiters
-    // (poll backend) and ready-flag-waiters (poll registered &ready) at the
-    // top of each iteration — the E4 poll-at-loop-top shape, extended to
-    // level-triggered Future readiness.
+    // Hybrid poll/wait progress (E6, P3 from the E6 audit):
+    //   S1 (runnable non-empty): non-blocking wake passes (poll); run a Fiber.
+    //       Backend progress observation is non-blocking here — calling
+    //       wait_one() would strand a runnable Fiber (E4 liveness violation).
+    //   S2 (runnable empty, ≥1 Completion-backed wait pending): the Scheduler
+    //       worker is idle (no Fiber to run) and a backend op is in flight that
+    //       it can drive. Block on ctx_.wait_one(); a backend completion
+    //       (ThreadPool worker / Uring CQE / Fake staged) wakes it, the next
+    //       loop top's wake_ready_completions enqueues the now-ready Fiber.
+    //       This is the legitimate scheduler-idle wait — distinct from blocking
+    //       while a Fiber is runnable. E4 liveness permits it (no runnable task
+    //       to starve).
+    //   S3 (runnable empty, only ready-flag/Future waits remain): no progress
+    //       source the Scheduler can drive — return (caller re-enters; an
+    //       external-thread producer would need a wake primitive = E7+).
+    //
+    // The wait_one() call is GATED on Completion-backed waits pending
+    // (waiting_size_/waiting_void_ non-empty) to avoid the zero-outstanding
+    // hazard (wait_one with nothing outstanding blocks forever).
     while (true) {
         wake_ready_completions();
         wake_ready_flags();
-        if (runnable_.empty()) {
-            break;
+        if (!runnable_.empty()) {
+            run_next();
+            continue;
         }
-        run_next();
+        // runnable empty: S2 or S3?
+        const bool completion_wait_pending =
+            !waiting_size_.empty() || !waiting_void_.empty();
+        if (completion_wait_pending) {
+            // S2: ask the backend for progress. For real backends (ThreadPool,
+            // Uring), wait_one() BLOCKS until a completion is ready — the
+            // legitimate scheduler-idle wait. For Fake, wait_one() == poll()
+            // and returns 0 when nothing is staged (non-blocking) — in that
+            // case there is no progress the Scheduler can drive, so we break
+            // and let the caller stage work and re-enter (preserving E4/E5's
+            // test-driven model). Gating on the reaped count avoids a busy
+            // spin on a non-blocking wait_one (the [BUSY-SPIN-RISK] from the
+            // E6 audit).
+            auto wr = ctx_.wait_one();
+            if (!wr.has_value() || wr.value() == 0) {
+                break;  // no progress; external producer must stage + re-enter
+            }
+            continue;  // wait_one reaped ≥1; next loop top maps it to runnable
+        }
+        break;  // S3 or truly idle
     }
     running_ = false;
     g_sched_ctx = nullptr;
@@ -108,8 +143,13 @@ std::size_t Scheduler::wake_ready_completions() {
     // Take a snapshot of waiting fibers BEFORE polling: a completion that
     // fires inside poll will mark a Completion ready; we then match it.
     // Snapshot is by key (Completion*); pointers are stable.
-    std::size_t reaped = ctx_.poll();
-    if (reaped == 0) return 0;
+    // NOTE: do NOT early-return when poll reaps 0. A Completion may have been
+    // made ready by a prior wait_one()'s internal poll (E6 T2 path: wait_one
+    // drains the backend's ready queue and completes the Completion, then
+    // returns; the next loop-top poll reaps 0 because the queue is already
+    // drained, but the Completion is now ready and its waiting Fiber must still
+    // be woken). Always scan the waiting maps.
+    (void)ctx_.poll();
 
     // Walk the waiting maps; any whose Completion is now ready gets woken.
     for (auto it = waiting_size_.begin(); it != waiting_size_.end();) {
