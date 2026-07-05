@@ -336,6 +336,22 @@ do
     end
 end
 
+-- Cooperative cancellation primitives tests (sluice-CORE-027, T1). Pure-logic;
+-- links sluice_core (Result/IoError) + sluice_async (cancel.cpp).
+do
+    local p = "tests/cancel_token_test.cpp"
+    if os.isfile(p) then
+        target("cancel_token_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("cancel_token_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }

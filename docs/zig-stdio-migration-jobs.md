@@ -380,9 +380,36 @@ Each card is a sketch; full cards are written when PHASE B closes (autonomous
 execution proceeds, but the cards are seeded here so the dependency graph is
 visible).
 
-**027 (T1) — Cancel token + protection region + recancel.** Adds
-`CancelToken`, `CancelProtection` (delivery-blocking, matching
-`Io.zig:1322`), `recancel` (`Io.zig:1310`). Depends on 024.
+**027 (T1) — Cancel token + protection region + recancel — DONE.**
+
+**Implemented.** `include/sluice/async/cancel.hpp` + `src/async/cancel.cpp`
+introduce the cooperative cancellation layer derived from Zig's model
+(Io.zig:1183-1188, 1310-1358):
+
+- `CancelToken` — the shareable cancel-request state (atomic, thread-safe).
+  `request()`/`is_requested()`/`rearm()`/`clear()`. Release/acquire ordering
+  so a consumer on another thread observes the request with a happens-before
+  edge.
+- `CancelState` — per-consumer state: the `CancelProtection` bit
+  (delivery-blocking) and the acknowledgement bit (single-shot). Default
+  `unblocked`, matching Zig (tasks created unblocked, Io.zig:1325).
+- `CancelGuard` — RAII wrapper for protected regions (mirrors Zig
+  `swapCancelProtection` usage, Io.zig:1334). `[[nodiscard]]`.
+- `check_cancel(token, state)` — the pure cancelation point (Zig
+  `checkCancel`, Io.zig:1356). Delivers `IoError::canceled` iff requested AND
+  unblocked AND not-yet-acknowledged; on delivery marks acknowledged
+  (single-shot).
+
+**Scope decision (recorded):** the token/state split mirrors Zig's per-task
+cancel bit + per-task protection, decoupled from the task object so cppio can
+compose it (a Future wraps a token; a Group shares one). The backend op-cancel
+(ADR §7 X2) stays on `AsyncIoContext::cancel`; this layer is what a task uses
+to COOPERATIVELY observe a cancel request between/at Io operations. No
+scheduler dependency.
+
+Verified: release + debug + asanubsan green; full suite 54/54. Single-threaded
+logic tests (cross-thread happens-before documented; future task-runtime tests
+will exercise it under TSan).
 **028 (T2) — `Future<Result>`.** Single-task awaitable (`Io.zig:1176`).
 Depends on 027.
 **029 (T3) — `Group`.** Unordered task set, cancel-propagation boundary
