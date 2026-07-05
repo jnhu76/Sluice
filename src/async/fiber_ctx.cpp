@@ -65,6 +65,12 @@ extern "C" void fiber_entry_trampoline();
 //   Entry's two args per SysV AMD64: first arg in rdi, second in rsi) and
 //   tail-calls entry. (No return address is on the stack — Entry must not
 //   return.)
+// The trampoline pops (entry, resumed_by, user_data), places the latter two
+// in the SysV AMD64 arg registers (rdi, rsi), and `callq`s the entry. We use
+// `callq` (NOT `jmpq`) so a normal C++ entry function — whose compiler-emitted
+// prologue expects a return address at (rsp) — is entered correctly. The entry
+// must switch away via context_switch before returning (it never returns to
+// the trampoline); the `ud2` after the call traps loudly if it ever does.
 asm(
     ".text\n"
     ".globl fiber_entry_trampoline\n"
@@ -73,7 +79,8 @@ asm(
     "  popq %rax\n"          // rax = entry (Entry fn ptr), stashed by init_context
     "  popq %rdi\n"          // rdi = resumed_by (first arg, SysV AMD64)
     "  popq %rsi\n"          // rsi = user_data (second arg, SysV AMD64)
-    "  jmpq *%rax\n"         // tail-call entry(rdi, rsi); no return
+    "  callq *%rax\n"        // call entry(rdi, rsi); pushes a return address
+    "  ud2\n"                // entry must NOT return; trap if it does
     ".size fiber_entry_trampoline, .-fiber_entry_trampoline\n"
 );
 
@@ -113,47 +120,44 @@ Switch* context_switch(Switch* s) noexcept {
 
 // ---- init_context (x86_64) -----------------------------------------------
 // Set up a fresh Context so its first context_switch enters the trampoline,
-// which tail-calls entry(resumed_by, user_data). The trampoline expects the
-// init-time stack to hold [entry, resumed_by, user_data] (low -> high), with
-// the initial rsp pointing at `entry` so the first `popq %rax` in the trampoline
-// loads it. We also leave a zero return-slot below entry (i.e. at rsp-8 from
-// the trampoline's perspective) so the SysV-AMD64 stack alignment invariant
-// (rsp % 16 == 0 at a call) holds when the trampoline's jmp is reached: we
-// arrange for rsp to be 16-aligned minus 8 at entry to the trampoline (mirroring
-// a `call` having pushed a return address), then three pops (24 bytes) bring
-// rsp to 16-alignment before the jmp.
+// which `callq`s entry(resumed_by, user_data). The init frame holds
+// [entry, resumed_by, user_data] high->low; initial rsp points at `entry` so
+// the trampoline's first `popq %rax` loads it. See the alignment-math comment
+// inside the function body for the SysV-AMD64 invariant.
 bool init_context(Context& ctx, Entry entry, void* user_data,
                   std::byte* stack_base, std::size_t stack_size) noexcept {
     if (entry == nullptr || stack_base == nullptr || stack_size < 64) {
         return false;
     }
-    // Top of the stack (highest address). Align down to 16 bytes (SysV AMD64).
-    auto top = reinterpret_cast<std::uintptr_t>(stack_base) + stack_size;
-    top &= ~static_cast<std::uintptr_t>(0xF);
-
-    // Lay out the init frame high -> low:
-    //   top-0x08:  user_data
-    //   top-0x10:  resumed_by  (the Switch*; set by the FIRST context_switch
-    //                            into this fiber — we leave a placeholder that
-    //                            the trampoline will load; the real value is
-    //                            whatever the resumer's rsi holds at the switch)
-    //   top-0x18:  entry
-    //   top-0x20:  dummy return slot (keeps 16-byte alignment at the jmp)
+    // Alignment math (System V AMD64, rsp must be ≡ 8 (mod 16) at a callee's
+    // first instruction — i.e. immediately after a `call`'s implicit push):
     //
-    // Initial rsp points at top-0x18 (so the first popq in the trampoline
-    // loads entry). resumed_by is conceptually "the Switch* that resumed me";
-    // because context_switch passes s in rsi and the resumed fiber reads rsi at
-    // label 0, but the trampoline runs BEFORE label 0 (it is the entry point),
-    // we instead stash the resumed_by we want the entry to see at top-0x10.
-    // For an isolated ping-pong test the value is arbitrary/unused; the real
-    // scheduler (E4) will set it meaningfully.
+    //   The trampoline is entered via `jmpq *16(%rcx)` (no push), so its entry
+    //   rsp = whatever init set = R0.
+    //   The trampoline does 3 `popq`s (+24) then a `callq` (push, -8) into the
+    //   entry function. So the entry function's entry rsp = R0 + 24 - 8 = R0+16.
+    //   We need (R0 + 16) ≡ 8 (mod 16)  →  R0 ≡ 8 (mod 16).
+    //
+    //   With top 16-aligned (top ≡ 0 (mod 16)), setting R0 = top - 24 gives
+    //   R0 ≡ -24 ≡ 8 (mod 16). ✓
+    //
+    // Init frame layout (high -> low), 3 slots, no dummy:
+    //   top-0x08:  user_data      (p[-1])
+    //   top-0x10:  resumed_by     (p[-2], placeholder; the real value is the
+    //                              Switch* the resumer passed in rsi at the
+    //                              initial context_switch. The trampoline loads
+    //                              it into rdi for the entry.)
+    //   top-0x18:  entry          (p[-3])  <- initial rsp points here
+    auto top = reinterpret_cast<std::uintptr_t>(stack_base) + stack_size;
+    top &= ~static_cast<std::uintptr_t>(0xF);  // 16-byte align down (SysV AMD64)
     auto* p = reinterpret_cast<std::uint64_t*>(top);
     p[-1] = reinterpret_cast<std::uint64_t>(user_data);     // top-0x08
     p[-2] = 0;                                               // top-0x10: resumed_by placeholder
     p[-3] = reinterpret_cast<std::uint64_t>(entry);         // top-0x18
-    p[-4] = 0;                                               // top-0x20: dummy return slot
 
-    ctx.rsp = reinterpret_cast<std::uint64_t>(&p[-3]);      // initial rsp -> entry
+    // R0 = &p[-3] = top-24. As shown above, R0 ≡ 8 (mod 16); after the
+    // trampoline's 3 pops + callq, the entry function sees rsp ≡ 8 (mod 16).
+    ctx.rsp = reinterpret_cast<std::uint64_t>(&p[-3]);
     ctx.rbp = 0;
     ctx.rip = reinterpret_cast<std::uint64_t>(&fiber_entry_trampoline);
     return true;

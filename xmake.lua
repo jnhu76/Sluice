@@ -435,6 +435,24 @@ do
     end
 end
 
+-- E4 single-worker Evented scheduler tests (sluice-CORE-E4). Proves scheduler
+-- liveness (B progresses while A awaits a pending op), completion wake path,
+-- resume fidelity, exactly-once. Uses FakeAsyncBackend held-pending mode.
+-- Gated to x86_64 (depends on fiber_ctx::context_switch).
+do
+    local p = "tests/e4_scheduler_test.cpp"
+    if os.isfile(p) then
+        target("e4_scheduler_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e4_scheduler_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }

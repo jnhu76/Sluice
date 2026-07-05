@@ -22,6 +22,7 @@
 #pragma once
 
 #include <sluice/async/cancel.hpp>
+#include <sluice/async/fiber_ctx.hpp>
 
 #include <atomic>
 #include <cstddef>
@@ -108,10 +109,14 @@ private:
     Entry entry_{};
     CancelToken token_{};
     CancelState cstate_{};
-    // E2 fills this: a platform Context (sp/fp/pc save area) for the context
-    // switch. Opaque for now; the E2 job gives it a concrete type per arch.
-    // Kept as raw bytes + alignment so E1 does not depend on the asm header.
-    alignas(16) std::byte context_storage_[32]{};
+public:
+    // The fiber's saved CPU context (sp/fp/pc). Filled by fiber_ctx::init_context
+    // before the first run; updated by context_switch each time the fiber
+    // suspends. Public so the Scheduler (E4) can read/write it without friending.
+    // Address-stable for the fiber's lifetime (Fiber is non-movable).
+    fiber_ctx::Context ctx{};
+private:
+    // (context_storage_ removed in E4: superseded by the typed ctx above.)
 };
 
 }  // namespace sluice::async
