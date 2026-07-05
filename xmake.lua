@@ -401,6 +401,22 @@ do
     end
 end
 
+-- Fiber state-model tests (sluice-CORE-E1). Pure C++ state machine; no asm yet
+-- (E2). Links sluice_async (fiber.cpp + cancel.cpp).
+do
+    local p = "tests/fiber_test.cpp"
+    if os.isfile(p) then
+        target("fiber_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("fiber_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }
