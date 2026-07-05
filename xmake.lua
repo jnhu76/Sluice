@@ -352,6 +352,23 @@ do
     end
 end
 
+-- Future<T> tests (sluice-CORE-028, T2). Header-only Future; exercises a
+-- thread-driven producer (await blocks until the worker completes) + the
+-- cooperative-cancel path. Links sluice_async (for cancel.cpp) + std::thread.
+do
+    local p = "tests/future_test.cpp"
+    if os.isfile(p) then
+        target("future_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("future_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }

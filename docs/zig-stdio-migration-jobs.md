@@ -410,8 +410,35 @@ scheduler dependency.
 Verified: release + debug + asanubsan green; full suite 54/54. Single-threaded
 logic tests (cross-thread happens-before documented; future task-runtime tests
 will exercise it under TSan).
-**028 (T2) — `Future<Result>`.** Single-task awaitable (`Io.zig:1176`).
-Depends on 027.
+**028 (T2) — `Future<Result>` — DONE.**
+
+**Implemented.** `include/sluice/async/future.hpp` (header-only template). A
+single-task awaitable derived from Zig Future (Io.zig:1176-1206):
+
+- Caller-provided result storage (like Completion, ADR §5 L4). Uses
+  `std::optional<Result<T>>` so the pre-ready state is meaningfully empty
+  (avoid the meaningless "default Result" state).
+- Producer side: `complete_with(Result<T>)` — exactly-once terminal publish
+  under `mtx_`, then `cv_.notify_all()`. Thread-safe (producer may run on a
+  worker thread).
+- Consumer side: `await()` (idempotent, blocks the calling thread on `cv_`
+  until ready, Zig Io.zig:1199) and `cancel()` (idempotent, requests via the
+  token then awaits, Zig Io.zig:1191). Not thread-safe for concurrent
+  awaiters (Zig: "not threadsafe", Io.zig:1198) — one awaiter per Future.
+- Cooperative cancel via `cancel_token()` (composes 027's CancelToken). The
+  producer observes the token at its cancel points; best-effort (ADR §7 X3).
+
+**Scope decision (recorded):** with no fiber runtime (PHASE E not started),
+`await()` BLOCKS THE CALLING THREAD on a condition variable. This is the
+Threaded-equivalent shape (Zig Io.Threaded), NOT the Evented shape (Zig
+Io.Uring, where await suspends a fiber). The API is identical; only the
+mechanism differs — so a future fiber-based await can replace it without
+churning callers. No scheduler dependency; Future is scheduler-free like Zig's
+own Future type (the scheduler lives in the backend).
+
+Verified: release + debug + asanubsan + tsan green; full suite 55/55. TSan run
+twice (Future uses real threads → race-relevant); clean. Deterministic tests
+(no timing races; slice 4 polls a token, not a clock).
 **029 (T3) — `Group`.** Unordered task set, cancel-propagation boundary
 (`Io.zig:1218`). Depends on 028.
 **030 (T4) — `Batch`.** Grouped completions over op storage (`Io.zig:474`).
