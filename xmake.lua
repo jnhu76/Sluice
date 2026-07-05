@@ -488,6 +488,23 @@ do
     end
 end
 
+-- E5-B Evented Group tests (sluice-CORE-E5-B). Proves G1-G6: Evented Group
+-- tasks run on Fibers (not std::thread), can suspend inside Future::await,
+-- resume, and complete; Threaded regression. Gated to x86_64.
+do
+    local p = "tests/e5_b_evented_group_test.cpp"
+    if os.isfile(p) then
+        target("e5_b_evented_group_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e5_b_evented_group_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }
