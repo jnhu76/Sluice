@@ -26,6 +26,7 @@
 #pragma once
 
 #include <sluice/async/cancel.hpp>
+#include <sluice/async/wait_policy.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
@@ -45,7 +46,12 @@ namespace sluice::async {
 template <class T>
 class Future {
 public:
-    Future() = default;
+    // Construct with the default (Threaded) wait policy. A caller may inject a
+    // different policy (e.g. an Evented fiber-yield policy in E5) via the
+    // WaitPolicy& overload. The policy is BORROWED (not owned); it must outlive
+    // the Future.
+    Future() : policy_(&default_wait_policy()) {}
+    explicit Future(WaitPolicy& policy) : policy_(&policy) {}
 
     Future(const Future&) = delete;
     Future& operator=(const Future&) = delete;
@@ -74,13 +80,18 @@ public:
 
     // ---- Consumer side ----
 
-    // Idempotent (Zig Io.zig:1199). Blocks the calling thread until the result
-    // is ready, then returns it. A second call returns the cached result
-    // without blocking. Not thread-safe for concurrent awaiters (Zig: "not
-    // threadsafe", Io.zig:1198) — one awaiter per Future.
+    // Idempotent (Zig Io.zig:1199). LOGICAL wait until the result is ready,
+    // then return it. A second call returns the cached result without waiting.
+    // Not thread-safe for concurrent awaiters (Zig: "not threadsafe",
+    // Io.zig:1198) — one awaiter per Future.
+    //
+    // The PHYSICAL mechanism is delegated to the injected WaitPolicy (E0 ADR
+    // §3): the Threaded default blocks the calling thread; an Evented policy
+    // (E5) suspends the current fiber. The Future does not embed either.
     Result<T> await() {
-        std::unique_lock<std::mutex> lk(mtx_);
-        cv_.wait(lk, [this] { return ready_.load(std::memory_order::acquire); });
+        if (!ready_.load(std::memory_order::acquire)) {
+            policy_->wait_until_ready(ready_, mtx_, cv_);
+        }
         return *result_;
     }
 
@@ -100,6 +111,7 @@ public:
     }
 
 private:
+    WaitPolicy* policy_;            // borrowed; the physical-wait seam (E0A)
     mutable std::mutex mtx_;
     std::condition_variable cv_;
     // No result until ready (cppcoding-standards: avoid the meaningless state

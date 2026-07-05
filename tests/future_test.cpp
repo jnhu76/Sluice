@@ -6,9 +6,11 @@
 
 #include <sluice/async/cancel.hpp>
 #include <sluice/async/future.hpp>
+#include <sluice/async/wait_policy.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <thread>
 
@@ -95,6 +97,51 @@ SLUICE_TEST_CASE(future_cancel_honored_by_cooperative_producer) {
     worker.join();
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == IoError::Code::canceled);
+}
+
+// ---- Slice 5 (E0A): await delegates to the injected WaitPolicy seam -------
+// The E0 ADR §3 boundary: Future must NOT embed the physical wait mechanism.
+// This slice proves the seam — a custom WaitPolicy records that it was invoked,
+// and still satisfies the wait (using the Threaded mechanism internally) so the
+// result is returned correctly. When E5 lands, an Evented policy replaces the
+// mechanism with a fiber yield; this test's shape is the contract proof.
+namespace {
+class RecordingWaitPolicy : public sluice::async::WaitPolicy {
+public:
+    void wait_until_ready(const std::atomic<bool>& ready,
+                          std::mutex& mtx,
+                          std::condition_variable& cv) override {
+        ++invocations;
+        // Use the Threaded mechanism (the contract is "wait until ready"); the
+        // point of this test is the SEAM, not a different mechanism.
+        std::unique_lock<std::mutex> lk(mtx);
+        cv.wait(lk, [&] { return ready.load(std::memory_order::acquire); });
+    }
+    std::atomic<int> invocations{0};
+};
+}  // namespace
+
+SLUICE_TEST_CASE(future_await_delegates_to_wait_policy_seam) {
+    RecordingWaitPolicy policy;
+    Future<int> f{policy};  // inject the custom policy
+    SLUICE_CHECK(policy.invocations.load() == 0);
+
+    // await on an un-ready Future: the policy MUST be invoked.
+    std::thread worker([&f] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        f.complete_with(Result<int>{42});
+    });
+    auto r = f.await();
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(r.value() == 42);
+    SLUICE_CHECK(policy.invocations.load() == 1);  // seam was used, not bypassed
+    worker.join();
+
+    // Second await: ready already; the policy must NOT be re-invoked (the
+    // fast-path skips the wait when ready, preserving idempotency).
+    auto r2 = f.await();
+    SLUICE_CHECK(r2.value() == 42);
+    SLUICE_CHECK(policy.invocations.load() == 1);
 }
 
 SLUICE_MAIN()
