@@ -470,6 +470,24 @@ do
     end
 end
 
+-- E5-A2 Evented Future await tests (sluice-CORE-E5-A2). Proves F1-F6: an
+-- EventedWaitPolicy Future suspends the current Fiber; another Fiber progresses
+-- (liveness); completion resumes the awaiter; resume fidelity; idempotent
+-- repeat; Threaded regression. Gated to x86_64.
+do
+    local p = "tests/e5_a2_evented_future_test.cpp"
+    if os.isfile(p) then
+        target("e5_a2_evented_future_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e5_a2_evented_future_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }
