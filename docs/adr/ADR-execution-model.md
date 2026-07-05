@@ -250,6 +250,69 @@ E12 Threaded vs Evented semantic parity audit
 state transition (the E4 cycle above). This is the experiment's load-bearing
 proof.
 
+## 9.1 E4 success criterion — scheduler-liveness invariant (added by E4-GATE)
+
+The load-bearing semantic invariant for Evented execution is about the
+**scheduler worker**, not about whether a blocking syscall exists anywhere:
+
+> **While an asynchronous operation is pending, an Evented scheduler worker
+> must remain available to execute another runnable task.**
+
+This refines §2's "must suspend the current user task/fiber, return the worker
+to the scheduler." It makes the success criterion **externally observable and
+testable** without inspecting syscall names or implementation mechanism.
+
+The three execution paths are semantically distinct:
+
+```text
+P1 — FORBIDDEN (scheduler-worker blocking):
+  scheduler worker -> fiber body -> blocking syscall -> scheduler worker pinned.
+  A fiber directly executing a blocking operation on the scheduler worker
+  violates Evented semantics when another task is runnable.
+
+P2 — PERMITTED (blocking-pool offload):
+  scheduler worker -> submit async op -> blocking backend worker -> blocking
+  syscall -> completion -> scheduler wakes task.
+  Blocking-pool offload is valid because the scheduler worker remains free.
+  (The §4 boundary already lists ThreadPool workers as a backend completion
+  source alongside Uring CQEs and Fake poll.)
+
+P3 — PERMITTED (kernel async / completion backend):
+  scheduler worker -> submit kernel async op -> kernel/completion backend ->
+  completion -> scheduler wakes task.
+  io_uring / completion-based execution is valid.
+```
+
+This ADR does **NOT** require every Evented backend to use kernel-native async
+I/O. P2 (blocking-pool offload) is a legitimate Evented execution path because
+it satisfies the scheduler-liveness invariant. Classifying P2 as a category
+error would contradict §4, which already names ThreadPool workers as a
+completion source.
+
+**E4 success criterion (externally observable):**
+
+```text
+single scheduler worker
+
+Fiber A: submit an async op; op remains pending; await/suspend on it.
+Fiber B: is runnable; records progress.
+
+Required observation: Fiber B runs while Fiber A's op is still pending.
+Then: backend completes A's op; A becomes runnable; A resumes at the exact
+suspension point; A observes the terminal result.
+```
+
+The critical proof is: **B progresses before A's pending operation completes.**
+With exactly one scheduler worker, this proves A returned the worker to the
+scheduler. The proof must NOT rely on syscall-name inspection, `strace`
+assertions, "Uring must not call pread," `EAGAIN` as the primary liveness
+proof, or sleep-based timing races. Test semantics, not implementation
+mechanism.
+
+E4-T1 (single-worker scheduler liveness) is the **primary E4 gate**. E4-T2
+(completion resumes waiting fiber), E4-T3 (exactly-once runnable transition),
+E4-T4 (runnable task not starved) are required supporting proofs.
+
 ## 10. No performance claim
 
 Implementing fibers does NOT constitute a performance claim. Any performance
