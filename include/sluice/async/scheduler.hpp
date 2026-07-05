@@ -43,6 +43,7 @@
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <deque>
 #include <unordered_map>
@@ -97,9 +98,43 @@ public:
     void await_completion_size(Completion<std::size_t>& c);
     void await_completion_void(Completion<void>& c);
 
+    // Level-triggered ready-flag wait (E5-A1). Suspends the current Fiber until
+    // `ready` observes true (acquire). Used by EventedWaitPolicy to await a
+    // Future's persistent readiness state without coupling to the Future's
+    // mutex/condition_variable (those remain the Threaded mechanism).
+    //
+    // Protocol (the ordering is load-bearing; do not reorder without a proof):
+    //
+    //   1. if ready.load(acquire): return            (R1: already ready)
+    //   2. identify current Fiber (current_)
+    //   3. register: &ready -> current Fiber         (in waiting_ready_)
+    //   4. re-check ready.load(acquire)
+    //   5. if ready: erase registration; return      (R2: raced ready)
+    //   6. transition current Fiber: running -> waiting
+    //   7. context switch: current Fiber -> scheduler
+    //   8. (Scheduler later polls ready; on true: erase registration,
+    //       waiting -> runnable, enqueue exactly once)   (R3/R4)
+    //   9. resumed Fiber returns from await_ready_flag
+    //
+    // The protocol does NOT lock the Future's mutex. Correctness rests on
+    // `ready` being PERSISTENT level-triggered state (complete_with stores it
+    // with release and never clears it): the worst case is that the ready flag
+    // flips true between step 5 and step 7 — but the flag stays true and the
+    // Fiber is already `waiting` (set in step 6, before the switch in step 7),
+    // so the Scheduler's next poll of `&ready` observes true and wakes it (R3).
+    // No ephemeral wake is dropped because there is no ephemeral wake.
+    //
+    // Single-waiter: one Fiber per &ready in waiting_ready_ (matches Future's
+    // documented single-waiter contract). Producer threads never mutate
+    // Scheduler state — they only store ready=true. The Scheduler is the sole
+    // mutator of its runnable queue.
+    void await_ready_flag(const std::atomic<bool>& ready);
+
     // Diagnostics for tests.
     std::size_t runnable_count() const noexcept { return runnable_.size(); }
-    std::size_t waiting_count() const noexcept { return waiting_size_.size() + waiting_void_.size(); }
+    std::size_t waiting_count() const noexcept {
+        return waiting_size_.size() + waiting_void_.size() + waiting_ready_.size();
+    }
 
 private:
     // Poll the backend; for each newly-ready Completion, find the associated
@@ -107,8 +142,16 @@ private:
     // the association (exactly-once wake). Returns the count woken.
     std::size_t wake_ready_completions();
 
+    // Poll registered level-triggered readiness flags (E5-A1). For each
+    // (&ready, Fiber*) in waiting_ready_ whose ready now loads true (acquire),
+    // erase the registration, transition the Fiber waiting->runnable, enqueue
+    // it. Exactly-once: the registration is erased on wake, so a later poll
+    // cannot re-enqueue. Returns the count woken.
+    std::size_t wake_ready_flags();
+
     // Switch into the next runnable fiber. Returns when the fiber yields back
-    // to the scheduler (via await_completion_*) or reaches done.
+    // to the scheduler (via await_completion_* / await_ready_flag) or reaches
+    // done.
     void run_next();
 
     AsyncIoContext& ctx_;
@@ -118,8 +161,14 @@ private:
     // Completion<void> are distinct types; we erase both to void* keys.
     std::unordered_map<void*, Fiber*> waiting_size_{};
     std::unordered_map<void*, Fiber*> waiting_void_{};
+    // Level-triggered readiness (E5-A1): &ready -> waiting Fiber*. The key is
+    // the address of a persistent std::atomic<bool> (e.g. Future::ready_); it
+    // is unique per waitable and stable for the waitable's lifetime (Futures
+    // are non-movable). One Fiber per &ready (Future is single-waiter).
+    std::unordered_map<const std::atomic<bool>*, Fiber*> waiting_ready_{};
     // The fiber currently being driven (set in run_next, cleared on return).
-    // Used by await_completion_* to know which fiber to mark waiting.
+    // Used by await_completion_* / await_ready_flag to know which fiber to
+    // mark waiting.
     Fiber* current_ = nullptr;
     bool running_ = false;
 };

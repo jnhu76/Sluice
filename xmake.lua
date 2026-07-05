@@ -453,6 +453,23 @@ do
     end
 end
 
+-- E5-A1 level-triggered scheduler ready-flag wait tests (sluice-CORE-E5-A1).
+-- Tests Scheduler::await_ready_flag in isolation (no Future). Proves R1-R5.
+-- Gated to x86_64.
+do
+    local p = "tests/e5_a1_ready_flag_test.cpp"
+    if os.isfile(p) then
+        target("e5_a1_ready_flag_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e5_a1_ready_flag_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }

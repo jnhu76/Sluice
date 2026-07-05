@@ -69,17 +69,14 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
 void Scheduler::run_until_idle() {
     running_ = true;
     g_sched_ctx = &sched_ctx_;
-    // Drive until neither runnable fibers nor waiting fibers remain. A waiting
-    // fiber may be woken by a backend completion observed via poll(), so even
-    // when the runnable queue is empty we must poll while fibers are waiting.
-    // (If no fiber is runnable AND none is waiting, there is nothing to drive.)
+    // Drive until no runnable fibers remain. Wake both Completion-waiters
+    // (poll backend) and ready-flag-waiters (poll registered &ready) at the
+    // top of each iteration — the E4 poll-at-loop-top shape, extended to
+    // level-triggered Future readiness.
     while (true) {
-        wake_ready_completions();  // polls ctx_; wakes any fiber whose op fired
+        wake_ready_completions();
+        wake_ready_flags();
         if (runnable_.empty()) {
-            // Nothing runnable right now. If fibers are still waiting, their
-            // completions haven't fired yet — the test must release them. Stop
-            // (do not busy-loop) and let the caller stage more completions and
-            // call run_until_idle again.
             break;
         }
         run_next();
@@ -164,6 +161,50 @@ void Scheduler::await_completion_void(Completion<void>& c) {
     s.old = &me->ctx;
     s.new_ = g_sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+}
+
+std::size_t Scheduler::wake_ready_flags() {
+    // Poll registered level-triggered readiness flags. A flag that loads true
+    // (acquire) wakes its single waiting Fiber (waiting -> runnable) and the
+    // registration is erased (exactly-once: a later poll cannot re-enqueue).
+    std::size_t woken = 0;
+    for (auto it = waiting_ready_.begin(); it != waiting_ready_.end();) {
+        if (it->first->load(std::memory_order::acquire)) {
+            Fiber* f = it->second;
+            it = waiting_ready_.erase(it);
+            f->make_runnable();
+            runnable_.push_back(f);
+            ++woken;
+        } else {
+            ++it;
+        }
+    }
+    return woken;
+}
+
+void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
+    Fiber* me = current_;
+    // 1. Fast path: already ready.
+    if (ready.load(std::memory_order::acquire)) return;
+    // 2-3. Register &ready -> current Fiber.
+    waiting_ready_[&ready] = me;
+    // 4-5. Re-check after registering. If ready flipped true in the window,
+    // erase and return without suspending (R2).
+    if (ready.load(std::memory_order::acquire)) {
+        waiting_ready_.erase(&ready);
+        return;
+    }
+    // 6. Transition running -> waiting. Set BEFORE the switch so the scheduler
+    //    poll (which only accepts waiting->runnable) sees the right state if
+    //    ready flips true between here and the switch (R3).
+    me->make_waiting();
+    // 7. Switch back to the scheduler.
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = g_sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+    // 9. Resumed: the scheduler observed ready==true, erased the registration,
+    //    and switched back into me->ctx. Return.
 }
 
 }  // namespace sluice::async
