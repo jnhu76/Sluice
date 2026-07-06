@@ -92,6 +92,19 @@ void Scheduler::run(unsigned worker_count) {
         workers_[i]->id = i;
     }
 
+    // Reset each worker's saved scheduler context (sched_ctx) to a pristine
+    // state before the run. A prior run() may have left sched_ctx holding a
+    // resume-pointer and rsp/rbp that were valid only on that run's thread —
+    // e.g. run(1) runs inline on the caller's thread, so workers_[0]->sched_ctx
+    // would point into the caller's (now-unwound) stack. Each worker re-saves
+    // sched_ctx on its first run_next_on() before any Fiber can switch back to
+    // it, so a stale value is never read in the well-formed path; zeroing here
+    // is a defense-in-depth that also makes a misuse fail loudly (jump to 0)
+    // instead of silently into recycled stack memory.
+    for (auto& w : workers_) {
+        w->sched_ctx = fiber_ctx::Context{};
+    }
+
     // Distribute any pending_spawn_ across workers round-robin.
     {
         std::lock_guard<std::mutex> lk(global_mtx_);
@@ -112,6 +125,10 @@ void Scheduler::run(unsigned worker_count) {
     running_fiber_count_.store(0, std::memory_order_release);
     idle_workers_.store(0, std::memory_order_release);
     global_terminate_.store(false, std::memory_order_release);
+    admission_ = AdmissionState::none;
+    admission_owner_ = static_cast<unsigned>(-1);
+    // NOTE: admission_seam_* is NOT reset here — it is test-controlled state
+    // that must persist across the run() boundary (T11 arms it before run()).
 
     if (worker_count == 1) {
         // Single-worker fast path: run inline (no thread spawn). This preserves
@@ -144,17 +161,21 @@ void Scheduler::run(unsigned worker_count) {
 }
 
 void Scheduler::worker_loop(WorkerState* ws) {
-    // Multi-worker coordinated loop. Each iteration:
+    // E7-C fixup: coordinated loop with explicit MW state classification
+    // (ADR §9.2.6) and two-phase MW-S2 admission.
+    //
+    // Each iteration:
     //   1. Try to get a runnable Fiber (local queue → pending_spawn_).
-    //   2. If got one: run it, continue.
-    //   3. No runnable: do readiness drain (wake ready Completions/flags, route
-    //      to owner workers). If any woken, continue.
-    //   4. Still nothing: check for Completion-backed progress.
-    //      Worker 0 drives backend (serialized; E7-C generalizes).
-    //   5. No progress anywhere: check global quiescence. ALL workers must agree
-    //      there is no runnable/running work AND no Completion outstanding before
-    //      any worker may exit. Non-progressing workers park on inbox_cv with a
-    //      timeout; the run terminates when global_quiescent becomes true.
+    //   2. If got one: run it, continue (MW-S1).
+    //   3. No runnable: under global_mtx_, do readiness drain (route ready
+    //      Completions/flags). If any woken, continue (MW-S1).
+    //   4. Under global_mtx_, classify: MW-S1 / MW-S2 / MW-S3 / QUIESCENT.
+    //      MW-S2: this worker may be elected candidate; two-phase admission
+    //      before entering wait_one (Phase A elect, Phase B re-drain+reclassify
+    //      before commit, Phase C release global_mtx_ + wait_one, Phase D
+    //      reacquire + clear + reclassify).
+    //      MW-S3 / QUIESCENT: contribute to coordinated termination.
+    //   5. No work and not elected: park briefly on inbox_cv.
     while (true) {
         // 1. Get a runnable Fiber.
         Fiber* f = nullptr;
@@ -174,94 +195,185 @@ void Scheduler::worker_loop(WorkerState* ws) {
         }
 
         if (f) {
-            // Found work: reset idle count (other workers' idle observations
-            // are stale).
             idle_workers_.store(0, std::memory_order_release);
             run_next_on(ws, f);
             continue;
         }
 
-        // 2. Readiness drain: wake any ready Completions/flags.
+        // 2. Readiness drain + classify under global_mtx_.
+        MwState state;
         {
             std::lock_guard<std::mutex> lk(global_mtx_);
-            if (wake_ready_completions_locked() || wake_ready_flags_locked()) {
-                idle_workers_.store(0, std::memory_order_release);
-                continue;  // woken Fibers routed to their owner workers
-            }
+            (void)wake_ready_completions_locked();
+            (void)wake_ready_flags_locked();
+            state = classify_locked();
         }
 
-        // 3. Check Completion-backed progress (single driver for E7-A/E7-B).
-        bool completion_pending;
-        {
-            std::lock_guard<std::mutex> lk(global_mtx_);
-            completion_pending = !waiting_size_.empty() || !waiting_void_.empty();
+        // If drain produced routed work, the owning worker will pick it up
+        // next iteration; for this worker, fall through to state handling.
+
+        if (state == MwState::mw_s1) {
+            // Runnable/running work exists somewhere (possibly routed by the
+            // drain to another worker, or another worker is running a Fiber).
+            // This worker has no local runnable work (f was null at top), so it
+            // must NOT busy-spin — that starves other workers on a contended
+            // core. Fall through to park on inbox_cv; the owning worker will
+            // notify when it routes work here, or the 1ms timeout re-checks.
+            idle_workers_.store(0, std::memory_order_release);
+            if (global_terminate_.load(std::memory_order_acquire)) break;
+            // Fall through to park (no continue).
         }
 
-        if (completion_pending && ws->id == 0) {
-            // Worker 0 drives backend progress.
-            auto wr = ctx_.wait_one();
-            if (wr.has_value() && wr.value() > 0) {
-                // Reap; next iteration's readiness drain will route woken Fibers.
-                continue;
+        if (state == MwState::mw_s2) {
+            // MW-S2: backend progress pending, no Fiber can execute. At most
+            // one participant may enter wait_one. Two-phase admission.
+            //
+            // Phase A: under global_mtx_, elect this worker as candidate if
+            //          no admission is in progress and this is the lowest-id
+            //          idle worker (deterministic election: worker 0).
+            bool elected = false;
+            {
+                std::lock_guard<std::mutex> lk(global_mtx_);
+                // Re-classify under the lock — state may have changed since
+                // the unlocked classify above.
+                if (classify_locked() == MwState::mw_s2 &&
+                    admission_ == AdmissionState::none &&
+                    ws->id == 0) {
+                    admission_ = AdmissionState::candidate;
+                    admission_owner_ = ws->id;
+                    elected = true;
+                }
             }
-            // wait_one returned 0 (Fake: nothing staged). Fall through to
-            // quiescence check.
-        }
 
-        // 4. No progress. Attempt to go idle and check global quiescence.
-        //    The quiescence decision is made atomically under global_mtx_ by
-        //    the LAST worker to go idle: it re-checks ALL state (runnable,
-        //    running, completion) under the lock before setting terminate.
-        //    Any route_runnable_locked call that runs while global_mtx_ is held
-        //    clears terminate + resets idle — so the quiescence check and the
-        //    route are mutually exclusive.
-        {
-            std::lock_guard<std::mutex> lk(global_mtx_);
-            bool any_runnable = !pending_spawn_.empty();
-            for (auto& w : workers_) {
-                std::lock_guard<std::mutex> wlk(w->inbox_mtx);
-                if (!w->local_runnable.empty()) { any_runnable = true; break; }
+            if (elected) {
+                // Phase B: re-drain + reclassify before committing. The
+                // election is a candidate, not a commit — route_runnable_locked
+                // may have demoted it in the meantime.
+                // Test seam (E7-T11): pause here to let another worker route.
+                if (admission_seam_armed_) {
+                    std::unique_lock<std::mutex> slk(admission_seam_mtx_);
+                    admission_seam_paused_ = true;
+                    admission_seam_cv_.notify_all();  // signal the test we paused
+                    admission_seam_cv_.wait(slk, [this] {
+                        return !admission_seam_armed_;
+                    });
+                    admission_seam_paused_ = false;
+                }
+
+                std::lock_guard<std::mutex> lk(global_mtx_);
+                // Demoted by a concurrent route? Then abandon admission.
+                if (admission_ != AdmissionState::candidate ||
+                    admission_owner_ != ws->id) {
+                    // Another path cancelled us. Loop.
+                    continue;
+                }
+                // Re-drain readiness + reclassify.
+                (void)wake_ready_completions_locked();
+                (void)wake_ready_flags_locked();
+                MwState s2 = classify_locked();
+                if (s2 != MwState::mw_s2) {
+                    // State changed (MW-S1 via routed work, or MW-S3 via
+                    // outstanding drop). Cancel candidate; do NOT enter wait_one.
+                    admission_ = AdmissionState::none;
+                    admission_owner_ = static_cast<unsigned>(-1);
+                    continue;
+                }
+                // Commit: this is the single MW-S2 progress participant.
+                admission_ = AdmissionState::committed;
             }
-            bool any_completion = !waiting_size_.empty() || !waiting_void_.empty();
-            bool any_running = running_fiber_count_.load(std::memory_order_acquire) > 0;
 
-            if (any_runnable || any_running || any_completion) {
-                // Work exists. Reset idle and loop (will find it on next iteration).
-                idle_workers_.store(0, std::memory_order_release);
-            } else {
-                // No work visible. Increment idle.
-                unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
-                if (prev + 1 >= workers_.size()) {
-                    // ALL workers idle. FINAL re-check under the same lock —
-                    // no route_runnable_locked can have run since our state
-                    // check (it needs global_mtx_ which we hold).
-                    bool still_no_work = !pending_spawn_.empty() == false;
+            // Phase C: release global_mtx_ (held only inside the blocks above)
+            // and enter wait_one. Only the committed participant reaches here.
+            if (admission_ == AdmissionState::committed && admission_owner_ == ws->id) {
+                auto wr = ctx_.wait_one();
+                // E6/E7 reap semantics: wait_one()==0 means the backend made
+                // no progress this call. For FakeAsyncBackend this happens
+                // when nothing is staged; for real backends it means "no op
+                // became ready". Per ADR §9.2.6 / E6, this is the legitimate
+                // "no Scheduler-driven progress" boundary: the coordinated
+                // run terminates (like MW-S3), preserving E4/E5 caller-driven
+                // semantics. A reap>0 yields ready Completions which the next
+                // loop-top drain will route.
+                bool made_progress = wr.has_value() && wr.value() > 0;
+
+                // Phase D: reacquire global_mtx_, clear admission, drain.
+                {
+                    std::lock_guard<std::mutex> lk(global_mtx_);
+                    admission_ = AdmissionState::none;
+                    admission_owner_ = static_cast<unsigned>(-1);
+                    (void)wake_ready_completions_locked();
+                    (void)wake_ready_flags_locked();
+                }
+
+                if (!made_progress) {
+                    // No backend progress: terminate this coordinated run. The
+                    // run may be re-entered by the caller after staging work
+                    // (E4/E5 model). MW-S2 with outstanding-but-uncompletable
+                    // ops is treated as a no-progress boundary, NOT busy-spin.
+                    global_terminate_.store(true, std::memory_order_release);
                     for (auto& w : workers_) {
                         std::lock_guard<std::mutex> wlk(w->inbox_mtx);
-                        if (!w->local_runnable.empty()) { still_no_work = false; break; }
+                        w->inbox_cv.notify_all();
                     }
-                    if (still_no_work &&
-                        running_fiber_count_.load(std::memory_order_acquire) == 0 &&
-                        waiting_size_.empty() && waiting_void_.empty()) {
-                        // Confirmed: global quiescence or MW-S3. Terminate.
+                    {
+                        std::lock_guard<std::mutex> slk(admission_seam_mtx_);
+                        admission_seam_armed_ = false;
+                        admission_seam_cv_.notify_all();
+                    }
+                    break;
+                }
+                idle_workers_.store(0, std::memory_order_release);
+                continue;
+            }
+
+            // Not elected and not committed: another worker is the candidate/
+            // committed participant. Fall through to idle parking.
+        }
+
+        // state is MW-S3 or QUIESCENT (or MW-S2 non-participant): contribute
+        // to coordinated termination. The last worker to go idle does a FINAL
+        // re-check under global_mtx_ before setting global_terminate_.
+        {
+            std::lock_guard<std::mutex> lk(global_mtx_);
+            // Cancel any stale admission if we're terminating — wait_one is
+            // undefined past run end. (admission_ should already be none here
+            // for non-elected workers.)
+            MwState final_state = classify_locked();
+            // If real work appeared (MW-S1) or backend still outstanding (S2),
+            // do not terminate.
+            if (final_state == MwState::mw_s1 || final_state == MwState::mw_s2) {
+                idle_workers_.store(0, std::memory_order_release);
+            } else {
+                unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
+                if (prev + 1 >= workers_.size()) {
+                    // All workers idle. Final re-check (global_mtx_ held).
+                    MwState still = classify_locked();
+                    if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
+                        // Physical run termination. MW-S3 retains wait
+                        // registrations logically; only quiescent is true
+                        // completion. Both may terminate the run.
                         global_terminate_.store(true, std::memory_order_release);
                         for (auto& w : workers_) {
                             std::lock_guard<std::mutex> wlk(w->inbox_mtx);
                             w->inbox_cv.notify_all();
                         }
+                        // Release any admission-seam wait so parked test
+                        // workers can observe termination.
+                        {
+                            std::lock_guard<std::mutex> slk(admission_seam_mtx_);
+                            admission_seam_armed_ = false;
+                            admission_seam_cv_.notify_all();
+                        }
                         break;
                     }
-                    // State changed since first check. Reset and retry.
                     idle_workers_.store(0, std::memory_order_release);
                 }
             }
         }
 
-        // Check terminate signal. If set, exit (the quiescence check above
-        // confirmed no work under global_mtx_).
         if (global_terminate_.load(std::memory_order_acquire)) break;
 
-        // 5. Park briefly waiting for routed work or a state change.
+        // Park briefly waiting for routed work or termination.
         {
             std::unique_lock<std::mutex> ws_lk(ws->inbox_mtx);
             ws->inbox_cv.wait_for(ws_lk, std::chrono::milliseconds(1),
@@ -351,6 +463,16 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     // A worker that was about to exit must re-check its inbox (late-drain).
     global_terminate_.store(false, std::memory_order_release);
     idle_workers_.store(0, std::memory_order_release);
+    // E7-C fixup: new runnable work cancels any MW-S2 admission candidate/
+    // committed. A committed participant in wait_one cannot be interrupted
+    // (it has released global_mtx_), but a CANDIDATE that has not yet
+    // committed will observe admission_ != candidate on Phase-B re-check and
+    // abandon. route_runnable_locked demotes candidate→none so the candidate
+    // does not commit.
+    if (admission_ == AdmissionState::candidate) {
+        admission_ = AdmissionState::none;
+        admission_owner_ = static_cast<unsigned>(-1);
+    }
     if (owner) {
         std::lock_guard<std::mutex> lk(owner->inbox_mtx);
         owner->local_runnable.push_back(f);
@@ -358,6 +480,34 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     } else {
         pending_spawn_.push_back(f);
     }
+}
+
+Scheduler::MwState Scheduler::classify_locked() const {
+    // Must be called with global_mtx_ held.
+    bool any_runnable = !pending_spawn_.empty();
+    std::size_t per_worker_runnable = 0;
+    if (!any_runnable) {
+        for (auto& w : workers_) {
+            std::lock_guard<std::mutex> wlk(w->inbox_mtx);
+            per_worker_runnable += w->local_runnable.size();
+            if (!w->local_runnable.empty()) { any_runnable = true; break; }
+        }
+    }
+    const bool any_running =
+        running_fiber_count_.load(std::memory_order_acquire) > 0;
+    if (any_runnable || any_running) return MwState::mw_s1;
+
+    // No executable Fiber. Backend outstanding count is the source of truth
+    // for MW-S2 vs MW-S3. ctx_.outstanding() acquires access_mtx_ internally;
+    // global_mtx_→access_mtx_ is the accepted lock order.
+    const bool any_outstanding = ctx_.outstanding() > 0;
+    if (any_outstanding) return MwState::mw_s2;
+
+    const bool any_wait =
+        !waiting_size_.empty() || !waiting_void_.empty() || !waiting_ready_.empty();
+    if (any_wait) return MwState::mw_s3_unresolved;
+
+    return MwState::quiescent;
 }
 
 void Scheduler::await_completion_size(Completion<std::size_t>& c) {

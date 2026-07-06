@@ -74,6 +74,8 @@ inline void run_case(const char* name, test_fn fn) {
 }
 inline int run_all() {
     for (const auto& c : registered_cases()) {
+        std::printf("[run] %s\n", c.name);
+        std::fflush(stdout);
         c.fn();
         if (!failures().empty()) {
             std::printf("FAILED in case: %s\n", c.name);

@@ -26,6 +26,10 @@
 
 namespace sluice::async {
 
+// Forward declaration — narrow test hook for E7-T11 deterministic admission
+// race. Defined only in test TUs; exposes no public Scheduler contract.
+struct SchedulerTestHooks;
+
 // Per-worker execution state (E7-C1). Each Worker thread owns one of these.
 // The scheduler Context + current Fiber are NEVER shared across concurrent
 // Workers. Accessed by the owning Worker thread without locks for the
@@ -93,11 +97,35 @@ public:
     }
 
 private:
+    friend struct SchedulerTestHooks;  // E7-T11 deterministic admission seam
+
     // Wait registration with owner Worker (E7-B will use owner; E7-A stores
     // the Fiber only).
     struct WaitReg {
         Fiber* fiber;
         WorkerState* owner;
+    };
+
+    // E7-C fixup: explicit global MW-state classification (ADR §9.2.6).
+    // Physical run termination may occur for both MW_S3_UNRESOLVED and
+    // QUIESCENT, but they are LOGICALLY distinct: MW_S3 retains unresolved
+    // wait registrations and must never be reported as quiescence.
+    enum class MwState {
+        mw_s1,              // runnable/running work exists
+        mw_s2,              // no runnable/running; ≥1 backend op outstanding
+        mw_s3_unresolved,   // no runnable/running; no backend op outstanding; wait registration(s) remain
+        quiescent,          // nothing remains
+    };
+
+    // E7-C fixup: two-phase MW-S2 admission state machine. An atomic bool is
+    // insufficient (check-to-block race). NONE → CANDIDATE (under global_mtx_,
+    // after Phase-A drain+classify) → COMMITTED (after Phase-B re-drain+
+    // reclassify still shows MW-S2). route_runnable_locked demotes COMMITTED
+    // or CANDIDATE back to NONE (new runnable work cancels admission).
+    enum class AdmissionState : unsigned {
+        none,
+        candidate,
+        committed,
     };
 
     bool wake_ready_completions_locked();
@@ -106,6 +134,24 @@ private:
     void route_runnable_locked(Fiber* f, WorkerState* owner);
     void worker_loop(WorkerState* ws);
     void run_next_on(WorkerState* ws, Fiber* fiber);
+
+    // Classify global MW state. Must be called with global_mtx_ held.
+    // Uses the AUTHORITATIVE backend outstanding count (ctx_.outstanding()),
+    // NOT scheduler wait-map size — a backend op may be outstanding without
+    // a current Scheduler wait registration, and a wait registration may
+    // exist with no outstanding backend op (MW-S3). ctx_.outstanding()
+    // acquires access_mtx_ internally; global_mtx_→access_mtx_ is the
+    // accepted lock order.
+    MwState classify_locked() const;
+
+    // Test seam for E7-T11 (deterministic MW-S2 admission race). When set,
+    // the worker that reaches Phase-B commit pauses BEFORE the final
+    // reclassify+commit decision until the seam is released by the test.
+    // Exposes no public contract; private, used by a friend test.
+    bool admission_seam_armed_ = false;
+    std::mutex admission_seam_mtx_;
+    std::condition_variable admission_seam_cv_;
+    bool admission_seam_paused_ = false;
 
     // Get the current Worker's WorkerState (worker-local via TLS).
     static WorkerState* current_worker();
@@ -134,6 +180,14 @@ private:
     std::atomic<bool> global_terminate_{false};
     std::condition_variable global_idle_cv_;
     bool in_coordinated_run_ = false;
+
+    // E7-C fixup: MW-S2 admission coordination state (protected by
+    // global_mtx_). admission_ transitions NONE→CANDIDATE→COMMITTED under
+    // global_mtx_; route_runnable_locked demotes to NONE. Only the COMMITTED
+    // participant may enter ctx_.wait_one(), and only AFTER releasing
+    // global_mtx_.
+    AdmissionState admission_{AdmissionState::none};
+    unsigned admission_owner_ = static_cast<unsigned>(-1);  // worker id of candidate/committed
 };
 
 }  // namespace sluice::async
