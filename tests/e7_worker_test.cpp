@@ -146,4 +146,121 @@ SLUICE_TEST_CASE(e7_t2_worker_local_scheduler_context) {
     SLUICE_CHECK(fset.state() == FiberState::done);
 }
 
+// ---- E7-T3: pinned resume — Fiber resumes on its owning Worker -----------
+// Fiber A starts on Worker 0 (round-robin: first spawned → worker 0). A
+// suspends on a ready flag. A different Worker (Worker 1) observes the flag
+// becomes ready (via the readiness drain) and routes A back to Worker 0.
+// Assert: A resumes on the same OS thread as Worker 0 (its owner).
+SLUICE_TEST_CASE(e7_t3_pinned_resume_on_owning_worker) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
+    Scheduler sched(ctx);
+
+    std::atomic<bool> flag_a{false};
+    std::thread::id a_tid_pre{}, a_tid_post{};
+    std::atomic<bool> a_suspended{false};
+
+    // Fiber A: starts on Worker 0 (first spawned, round-robin → worker 0).
+    Fiber fa;
+    fa.set_entry([&](Fiber&) {
+        a_tid_pre = std::this_thread::get_id();
+        a_suspended.store(true);
+        sched.await_ready_flag(flag_a);
+        a_tid_post = std::this_thread::get_id();
+    });
+    // Setter Fiber: makes flag_a ready (starts on Worker 1 — second spawned).
+    Fiber fset;
+    fset.set_entry([&](Fiber&) {
+        while (!a_suspended.load()) {}
+        flag_a.store(true, std::memory_order_release);
+    });
+    FiberStack sa, sset;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(fset, sset.base(), sset.size()));
+    sched.spawn(fa);   // → Worker 0
+    sched.spawn(fset); // → Worker 1
+    sched.run(2);
+
+    SLUICE_CHECK(a_tid_pre == a_tid_post);  // resumed on same OS thread (Worker 0)
+    SLUICE_CHECK(fa.state() == FiberState::done);
+    SLUICE_CHECK(fset.state() == FiberState::done);
+}
+
+// ---- E7-T7: internal Worker notification — cross-worker routed work -------
+// Worker 1 (setter) makes a flag ready for Fiber A owned by Worker 0. Worker 0
+// must observe the routed runnable work and resume A. Assert: A resumes on
+// Worker 0 (its owner); the setter ran on a different worker.
+SLUICE_TEST_CASE(e7_t7_internal_worker_notification) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
+    Scheduler sched(ctx);
+
+    std::atomic<bool> flag_a{false};
+    std::thread::id a_tid{}, setter_tid{};
+    std::atomic<bool> a_suspended{false};
+
+    Fiber fa;
+    fa.set_entry([&](Fiber&) {
+        a_tid = std::this_thread::get_id();
+        a_suspended.store(true);
+        sched.await_ready_flag(flag_a);
+    });
+    Fiber fset;
+    fset.set_entry([&](Fiber&) {
+        setter_tid = std::this_thread::get_id();
+        while (!a_suspended.load()) {}
+        flag_a.store(true, std::memory_order_release);
+    });
+    FiberStack sa, sset;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(fset, sset.base(), sset.size()));
+    sched.spawn(fa);   // → Worker 0
+    sched.spawn(fset); // → Worker 1
+    sched.run(2);
+
+    SLUICE_CHECK(a_tid != setter_tid);  // ran on different Workers
+    SLUICE_CHECK(fa.state() == FiberState::done);
+    SLUICE_CHECK(fset.state() == FiberState::done);
+}
+
+// ---- E7-T10A: persistent ready flag observed before idle admission --------
+// Fiber A on Worker 0 waits on flag X; Fiber B on Worker 1 makes X ready.
+// Before MW-S3/quiescence admission, X readiness is observed; A is routed to
+// Worker 0; A resumes. Assert: A resumes; no stalled state.
+SLUICE_TEST_CASE(e7_t10a_persistent_flag_before_idle_admission) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
+    Scheduler sched(ctx);
+
+    std::atomic<bool> flag_x{false};
+    std::atomic<bool> a_suspended{false};
+    int a_resumed = 0;
+
+    Fiber fa;
+    fa.set_entry([&](Fiber&) {
+        a_suspended.store(true);
+        sched.await_ready_flag(flag_x);
+        a_resumed = 1;
+    });
+    Fiber fb;
+    fb.set_entry([&](Fiber&) {
+        while (!a_suspended.load()) {}
+        flag_x.store(true, std::memory_order_release);
+    });
+    FiberStack sa, sb;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(fb, sb.base(), sb.size()));
+    sched.spawn(fa);   // → Worker 0
+    sched.spawn(fb);   // → Worker 1
+    sched.run(2);
+
+    SLUICE_CHECK(a_resumed == 1);
+    SLUICE_CHECK(fa.state() == FiberState::done);
+    SLUICE_CHECK(fb.state() == FiberState::done);
+    SLUICE_CHECK(sched.waiting_ready_count() == 0);  // registration erased on wake
+}
+
 SLUICE_MAIN()

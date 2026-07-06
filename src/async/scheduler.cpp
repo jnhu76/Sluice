@@ -110,6 +110,8 @@ void Scheduler::run(unsigned worker_count) {
     in_coordinated_run_ = true;
     active_worker_count_.store(worker_count, std::memory_order_release);
     running_fiber_count_.store(0, std::memory_order_release);
+    idle_workers_.store(0, std::memory_order_release);
+    global_terminate_.store(false, std::memory_order_release);
 
     if (worker_count == 1) {
         // Single-worker fast path: run inline (no thread spawn). This preserves
@@ -142,17 +144,19 @@ void Scheduler::run(unsigned worker_count) {
 }
 
 void Scheduler::worker_loop(WorkerState* ws) {
-    // E7-A simplified loop: each worker tries to get a runnable Fiber, run it,
-    // and repeat. When no runnable Fiber exists anywhere, the worker checks
-    // for Completion-backed progress. The first worker (id==0) drives backend
-    // progress (single backend driver for E7-A; E7-C generalizes to serialized
-    // access). The coordinated run ends when no runnable Fiber + no
-    // outstanding Completion + (for multi-worker) a quiescence check.
-    //
-    // This is a simplified E7-A loop; E7-C refines it into the full
-    // MW-S1/MW-S2/MW-S3/QUIESCENT protocol.
+    // Multi-worker coordinated loop. Each iteration:
+    //   1. Try to get a runnable Fiber (local queue → pending_spawn_).
+    //   2. If got one: run it, continue.
+    //   3. No runnable: do readiness drain (wake ready Completions/flags, route
+    //      to owner workers). If any woken, continue.
+    //   4. Still nothing: check for Completion-backed progress.
+    //      Worker 0 drives backend (serialized; E7-C generalizes).
+    //   5. No progress anywhere: check global quiescence. ALL workers must agree
+    //      there is no runnable/running work AND no Completion outstanding before
+    //      any worker may exit. Non-progressing workers park on inbox_cv with a
+    //      timeout; the run terminates when global_quiescent becomes true.
     while (true) {
-        // Try to get a runnable Fiber: local queue first, then pending_spawn_.
+        // 1. Get a runnable Fiber.
         Fiber* f = nullptr;
         {
             std::lock_guard<std::mutex> lk(ws->inbox_mtx);
@@ -170,24 +174,23 @@ void Scheduler::worker_loop(WorkerState* ws) {
         }
 
         if (f) {
+            // Found work: reset idle count (other workers' idle observations
+            // are stale).
+            idle_workers_.store(0, std::memory_order_release);
             run_next_on(ws, f);
             continue;
         }
 
-        // No runnable Fiber. Check backend progress (single driver for E7-A).
-        bool made_progress = false;
+        // 2. Readiness drain: wake any ready Completions/flags.
         {
             std::lock_guard<std::mutex> lk(global_mtx_);
-            // Pre-admission readiness drain (E7-C6): observe ready waits before
-            // deciding to block or return.
-            made_progress = wake_ready_completions_locked() || wake_ready_flags_locked();
-        }
-        if (made_progress) {
-            // Route woken Fibers to workers and continue.
-            continue;
+            if (wake_ready_completions_locked() || wake_ready_flags_locked()) {
+                idle_workers_.store(0, std::memory_order_release);
+                continue;  // woken Fibers routed to their owner workers
+            }
         }
 
-        // Check if there are Completion-backed waits pending (S2).
+        // 3. Check Completion-backed progress (single driver for E7-A/E7-B).
         bool completion_pending;
         {
             std::lock_guard<std::mutex> lk(global_mtx_);
@@ -195,24 +198,24 @@ void Scheduler::worker_loop(WorkerState* ws) {
         }
 
         if (completion_pending && ws->id == 0) {
-            // S2: only worker 0 drives backend progress (E7-A simplification).
+            // Worker 0 drives backend progress.
             auto wr = ctx_.wait_one();
-            if (!wr.has_value() || wr.value() == 0) {
-                // No progress; check global state.
-                std::lock_guard<std::mutex> lk(global_mtx_);
-                bool any_runnable = !pending_spawn_.empty();
-                for (auto& w : workers_) {
-                    std::lock_guard<std::mutex> wlk(w->inbox_mtx);
-                    if (!w->local_runnable.empty()) { any_runnable = true; break; }
-                }
-                if (!any_runnable) break;  // MW-S3 or quiescent: return
+            if (wr.has_value() && wr.value() > 0) {
+                // Reap; next iteration's readiness drain will route woken Fibers.
+                continue;
             }
-            continue;
+            // wait_one returned 0 (Fake: nothing staged). Fall through to
+            // quiescence check.
         }
 
-        // Multi-worker coordination (E7-A simplified): if we're not worker 0
-        // and have nothing to do, check if the run is done.
-        if (ws->id != 0) {
+        // 4. No progress. Attempt to go idle and check global quiescence.
+        //    The quiescence decision is made atomically under global_mtx_ by
+        //    the LAST worker to go idle: it re-checks ALL state (runnable,
+        //    running, completion) under the lock before setting terminate.
+        //    Any route_runnable_locked call that runs while global_mtx_ is held
+        //    clears terminate + resets idle — so the quiescence check and the
+        //    route are mutually exclusive.
+        {
             std::lock_guard<std::mutex> lk(global_mtx_);
             bool any_runnable = !pending_spawn_.empty();
             for (auto& w : workers_) {
@@ -220,20 +223,50 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 if (!w->local_runnable.empty()) { any_runnable = true; break; }
             }
             bool any_completion = !waiting_size_.empty() || !waiting_void_.empty();
-            if (!any_runnable && !any_completion) break;  // done
-            // Wait briefly for routed work or state change.
+            bool any_running = running_fiber_count_.load(std::memory_order_acquire) > 0;
+
+            if (any_runnable || any_running || any_completion) {
+                // Work exists. Reset idle and loop (will find it on next iteration).
+                idle_workers_.store(0, std::memory_order_release);
+            } else {
+                // No work visible. Increment idle.
+                unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
+                if (prev + 1 >= workers_.size()) {
+                    // ALL workers idle. FINAL re-check under the same lock —
+                    // no route_runnable_locked can have run since our state
+                    // check (it needs global_mtx_ which we hold).
+                    bool still_no_work = !pending_spawn_.empty() == false;
+                    for (auto& w : workers_) {
+                        std::lock_guard<std::mutex> wlk(w->inbox_mtx);
+                        if (!w->local_runnable.empty()) { still_no_work = false; break; }
+                    }
+                    if (still_no_work &&
+                        running_fiber_count_.load(std::memory_order_acquire) == 0 &&
+                        waiting_size_.empty() && waiting_void_.empty()) {
+                        // Confirmed: global quiescence or MW-S3. Terminate.
+                        global_terminate_.store(true, std::memory_order_release);
+                        for (auto& w : workers_) {
+                            std::lock_guard<std::mutex> wlk(w->inbox_mtx);
+                            w->inbox_cv.notify_all();
+                        }
+                        break;
+                    }
+                    // State changed since first check. Reset and retry.
+                    idle_workers_.store(0, std::memory_order_release);
+                }
+            }
+        }
+
+        // Check terminate signal. If set, exit (the quiescence check above
+        // confirmed no work under global_mtx_).
+        if (global_terminate_.load(std::memory_order_acquire)) break;
+
+        // 5. Park briefly waiting for routed work or a state change.
+        {
             std::unique_lock<std::mutex> ws_lk(ws->inbox_mtx);
             ws->inbox_cv.wait_for(ws_lk, std::chrono::milliseconds(1),
-                                   [&] { return !ws->local_runnable.empty() || !ws->inbox.empty(); });
-        } else {
-            // Worker 0 with no progress and no completion: check done.
-            std::lock_guard<std::mutex> lk(global_mtx_);
-            bool any_runnable = !pending_spawn_.empty();
-            for (auto& w : workers_) {
-                std::lock_guard<std::mutex> wlk(w->inbox_mtx);
-                if (!w->local_runnable.empty()) { any_runnable = true; break; }
-            }
-            if (!any_runnable) break;  // MW-S3 or quiescent: return
+                                   [&] { return !ws->local_runnable.empty() ||
+                                                global_terminate_.load(std::memory_order_acquire); });
         }
     }
 }
@@ -314,11 +347,11 @@ bool Scheduler::wake_ready_flags_locked() {
 
 void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     // Must be called with global_mtx_ held.
+    // Clear the terminate signal: new work was routed, so the run is NOT over.
+    // A worker that was about to exit must re-check its inbox (late-drain).
+    global_terminate_.store(false, std::memory_order_release);
+    idle_workers_.store(0, std::memory_order_release);
     if (owner) {
-        // Route to owner's local queue. Need owner->inbox_mtx (different from
-        // global_mtx_). Safe: global_mtx_ protects waiting maps; inbox_mtx
-        // protects the queue. No deadlock because we never acquire them in
-        // reverse order.
         std::lock_guard<std::mutex> lk(owner->inbox_mtx);
         owner->local_runnable.push_back(f);
         owner->inbox_cv.notify_one();

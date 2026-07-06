@@ -130,6 +130,8 @@ private:
     // Run coordination state.
     std::atomic<unsigned> active_worker_count_{0};
     std::atomic<unsigned> running_fiber_count_{0};
+    std::atomic<unsigned> idle_workers_{0};
+    std::atomic<bool> global_terminate_{false};
     std::condition_variable global_idle_cv_;
     bool in_coordinated_run_ = false;
 };
