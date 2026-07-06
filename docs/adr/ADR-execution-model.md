@@ -313,6 +313,321 @@ E4-T1 (single-worker scheduler liveness) is the **primary E4 gate**. E4-T2
 (completion resumes waiting fiber), E4-T3 (exactly-once runnable transition),
 E4-T4 (runnable task not starved) are required supporting proofs.
 
+## 9.2 E7 multi-worker scheduler contract (added by E7-ADR)
+
+This section defines the E7 multi-worker scheduler ownership contract. E7
+extends E4–E6 (single-worker Evented scheduler) to multiple Scheduler workers
+while preserving every already-proven semantic: Completion outstanding
+semantics, the `submit_*` postcondition, Future/WaitPolicy public contracts,
+Group public API, and E4/E5/E6 liveness/progress semantics. The E7
+architecture-closure audit concluded `E7 ADR READY` based on (a) the
+serialized-access (not exact-thread-affinity) nature of the current backends,
+and (b) generalizing E6's blocking-wait gate from single-worker idle to global
+Scheduler idle.
+
+### 9.2.1 Preserved submission / Completion semantics
+
+E7 preserves the current submission postcondition **unchanged**:
+
+```text
+submit-success
+    -> operation is accepted/recorded by the backend
+    -> Completion is outstanding
+```
+
+`Completion::outstanding` continues to mean **BACKEND-ACCEPTED** — the op is
+in the backend and the Completion is outstanding, both happening atomically
+inside the backend's `submit_*`. The `submit_*` postcondition is **not
+weakened**. E7 does **not** introduce `queued`, `logically-submitted`, or
+`driver-accepted` Completion states. E7 does **not** introduce command-ingress
+handoff. E7 does **not** move `mark_outstanding` from backend-private submit
+paths to AsyncIoContext. The E4–E6 pattern
+
+```text
+ctx.submit_*(op, completion)
+scheduler.await_completion_*(completion)
+```
+
+where immediate await after submit remains valid, is preserved.
+
+### 9.2.2 Worker-local execution state
+
+Each Scheduler worker has its own:
+
+```text
+scheduler context (sched_ctx — the saved native stack continuation)
+current Fiber slot (current_ — the Fiber currently executing on this worker)
+```
+
+Reason: `sched_ctx` stores a native-thread stack continuation — `rsp`/`rbp`
+point into the OS worker thread's stack; `current` means the Fiber currently
+executing on this OS worker. These are worker-local because they reference the
+OS thread's own stack and currently-running task.
+
+Required ADR statement:
+
+```text
+Each Scheduler worker has its own scheduler context and current-Fiber slot.
+There is no Scheduler-global current Fiber in E7.
+```
+
+### 9.2.3 Conservative pinned-Fiber contract
+
+E7 uses a conservative non-migrating contract:
+
+```text
+Once a Fiber first begins execution on Worker W,
+every later E7 resume of that Fiber occurs on Worker W.
+```
+
+Work stealing and Fiber migration are deferred to E8.
+
+```text
+E7 does not prove cross-worker Fiber migration.
+E7 does not prove work stealing.
+E8 owns the migration/stealing decision.
+```
+
+E7 does **not** choose a global runnable queue that allows an already-started
+Fiber to resume on any worker.
+
+### 9.2.4 Owner-preserving wake routing
+
+```text
+Every started Fiber has one owning Worker during E7.
+
+When a Fiber is running:
+    owner = the current Worker.
+
+When a Fiber is waiting:
+    the wait registration preserves the owner,
+    either by map partitioning or by an owner tag.
+
+When a Fiber is runnable:
+    it resides in the owning Worker's runnable path
+    such as local queue or inbox.
+
+Every wake routes the Fiber back to its owning Worker.
+```
+
+E7 does **not** require a public `Fiber::owner_worker` field. E7 does **not**
+require a global `Fiber* -> Worker*` table unless implementation later proves
+it necessary. The ADR defines the invariant, not the storage class.
+
+### 9.2.5 Serialized backend access domain
+
+```text
+At most one Scheduler worker may call into AsyncIoContext / AsyncBackend at a
+time. Calls may come from different OS worker threads over time, but they must
+be externally serialized and never concurrent.
+```
+
+This is a **serialized access domain**, not an exact owner-thread contract.
+
+Rationale:
+
+```text
+UringAsyncBackend is not proven exact-thread-affine:
+    cppio initializes io_uring with flags=0,
+    no IORING_SETUP_SINGLE_ISSUER,
+    no thread-id assertion,
+    no backend thread_local state.
+
+But it is not concurrent-safe:
+    ring state and backend maps are unsynchronized.
+
+Therefore E7 requires serialized access, not a dedicated owner thread.
+
+FakeAsyncBackend and AsyncIoContext stats are also not concurrent-safe but are
+serializable. ThreadPoolBackend is internally locked, but the accepted contract
+must fit all backends.
+```
+
+E7 does **not** introduce a dedicated backend driver thread. E7 does **not**
+introduce command ingress.
+
+### 9.2.6 Global MW-S1 / MW-S2 progress rule
+
+E6's S1/S2 rule generalizes to multiple workers.
+
+**MW-S1 — global executable work exists:**
+
+```text
+At least one Worker:
+    is running a Fiber
+or
+    has runnable Fiber work
+or
+    has routed runnable inbox work
+```
+
+Rule: backend progress observation must be non-blocking — `poll` only. No
+worker may call blocking `wait_one()` under MW-S1.
+
+**MW-S2 — globally no Fiber can execute, backend progress pending:**
+
+```text
+no Worker is running a Fiber
+all Worker runnable queues/inboxes are empty
+no Scheduler-internal routed runnable work is pending
+at least one Completion-backed backend operation is outstanding
+```
+
+Rule: one elected participant may enter `wait_one()`.
+
+When `wait_one` returns and a Completion becomes ready:
+
+```text
+wake path routes the Fiber back to its owning Worker
+MW-S2 ends
+execution resumes under MW-S1
+```
+
+This is the multi-worker generalization of E6. Do **not** call `wait_one()`
+while any Scheduler Fiber can run. Do **not** busy-spin as the default idle
+strategy.
+
+### 9.2.7 Internal worker notification
+
+E7 requires internal worker-to-worker notification for routed runnable work.
+
+```text
+Worker 0 observes Completion C ready.
+C belongs to Fiber A.
+Fiber A is owned by Worker 2.
+
+Worker 0 routes A to Worker 2's runnable path.
+Worker 2 must be notified that runnable work exists.
+```
+
+The mechanism is implementation-local: `condition_variable`, `eventfd`,
+`futex`, `pipe`, lock-free inbox, or other. E7 does **not** specify the
+primitive in this contract. But the contract must say:
+
+```text
+E7 includes Scheduler-internal cross-worker notification.
+```
+
+This is **distinct** from arbitrary external producer wake (§9.2.8).
+
+### 9.2.8 External producer / arbitrary external callers are out of E7
+
+E7 coordinates Scheduler-managed workers. E7 does **not** require support for
+arbitrary user OS threads concurrently calling `AsyncIoContext::submit_*`,
+`AsyncIoContext::cancel`, or `Future::complete_with` while the Scheduler is
+idle.
+
+```text
+External producer wake is not proven by E7.
+```
+
+This is classified as an orthogonal, currently unassigned external-wake /
+external-concurrency frontier. E7 does **not** silently assign it to E9.
+
+### 9.2.9 Logical global quiescence
+
+```text
+no Worker is running a Fiber
+no Worker has runnable Fiber work in local queues or inboxes
+no Scheduler-internal routed runnable work is pending
+no Completion-backed backend operation remains outstanding
+```
+
+If only external-domain waits remain, they are outside E7's quiescence proof
+unless a later external-wake contract is added. Quiescence is **not** defined
+as "no thread is blocked in `wait_one`" — thread parking is implementation
+state, not logical work.
+
+### 9.2.10 Explicitly rejected alternatives
+
+E7 does **not** choose:
+
+```text
+global runnable queue with migratable Fibers
+dedicated backend driver thread
+command ingress / queued backend commands
+new Completion queued state
+driver wait over backend completion OR command ingress
+exact owner-thread backend affinity
+per-worker AsyncIoContext/backend
+```
+
+Reason: they are either unnecessary for E7 after the global-idle rule, or they
+belong to E8/later frontiers, or they would change already-proven E4–E6
+contracts.
+
+### 9.2.11 Scope boundaries
+
+E7 proves:
+
+```text
+multiple Scheduler workers
+worker-local execution state
+pinned Fiber ownership
+owner-preserving wake routing
+serialized backend access
+global MW-S1/MW-S2 progress rule
+internal worker notification
+logical global quiescence
+```
+
+E7 does **not** prove:
+
+```text
+work stealing
+Fiber migration
+external producer wake
+arbitrary external AsyncIoContext multi-caller API
+new resource identity
+Reader/Writer async bridge
+network/process
+Batch integration changes
+timer subsystem
+io-aware futex/wait queues
+sync primitives
+```
+
+### 9.2.12 Verification expectations for later implementation
+
+E7 implementation (later) must demonstrate:
+
+```text
+E7-T1 — worker-local current:
+    Two workers run two Fibers concurrently; each Fiber awaits a different
+    ready flag or Completion. Assert: Worker 0 registers Fiber A; Worker 1
+    registers Fiber B; no cross-registration occurs.
+
+E7-T2 — worker-local scheduler context:
+    Two workers suspend/resume separate Fibers. Assert: each Fiber returns to
+    its own worker scheduler context; no shared sched_ctx overwrite.
+
+E7-T3 — pinned resume:
+    Fiber A starts on Worker W; A suspends; A is woken by another worker's
+    poll. Assert: A resumes on W.
+
+E7-T4 — no wait_one under MW-S1:
+    One worker has runnable Fiber B while Fiber A awaits backend Completion.
+    Assert: no worker enters blocking wait_one; B makes progress.
+
+E7-T5 — wait_one under MW-S2:
+    All workers idle except one backend Completion pending. Assert: one elected
+    participant calls wait_one; backend completion wakes pinned Fiber.
+
+E7-T6 — serialized backend access:
+    Stress multiple workers submitting/canceling/polling. Assert: AsyncBackend
+    calls are never concurrent.
+
+E7-T7 — internal worker notification:
+    Worker 0 wakes Fiber A owned by Worker 2. Assert: A appears in Worker 2's
+    runnable path; Worker 2 observes it; A resumes on Worker 2.
+
+E7-T8 — global quiescence:
+    When all logical work is done: all workers exit/return according to
+    implementation design; no outstanding Completion remains.
+```
+
+This ADR patch does not require implementation.
+
 ## 10. No performance claim
 
 Implementing fibers does NOT constitute a performance claim. Any performance
