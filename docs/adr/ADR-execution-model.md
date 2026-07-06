@@ -487,6 +487,63 @@ This is the multi-worker generalization of E6. Do **not** call `wait_one()`
 while any Scheduler Fiber can run. Do **not** busy-spin as the default idle
 strategy.
 
+**MW-S3 — unresolved wait / no Scheduler-driven progress:**
+
+```text
+no Worker is running a Fiber
+all Worker runnable queues/inboxes are empty
+no Completion-backed backend operation is outstanding
+one or more Scheduler wait registrations remain
+```
+
+Required contract:
+
+```text
+MW-S3 is NOT global quiescence.
+MW-S3 is NOT MW-S2.
+Scheduler must not call backend wait_one merely because MW-S3 exists.
+E7 does not prove progress from MW-S3.
+```
+
+MW-S3 may represent an internal logical dependency cycle, unresolved logical
+waiting, a wait dependent on an external producer, or another dormant/stalled
+condition. E7 does **not** need to distinguish these causes. Do **not** add
+producer provenance to Future or WaitPolicy. Do **not** add a deadlock
+detector. Do **not** add external producer wake. The purpose is only to avoid
+classifying unresolved waiting as completed quiescence.
+
+**Persistent-readiness observation before idle-state admission (E7 invariant):**
+
+E5 uses level-triggered readiness: `Future::complete_with` stores
+`ready.store(true)` and does NOT actively notify or mutate Scheduler state;
+the Scheduler polls registered readiness, erases the registration, and routes
+the waiting → runnable Fiber. Therefore, before the coordinated Scheduler
+admits MW-S2, MW-S3, or global quiescence, registered persistent readiness
+states MUST be observed/rechecked and every currently-ready waiter MUST be
+routed to its owning Worker's runnable path:
+
+```text
+observe persistent readiness registrations
+    -> route every ready Fiber
+    -> then evaluate MW-S1 / MW-S2 / MW-S3 / quiescence
+```
+
+The implementation may use global maps, per-Worker maps, partitioned maps, or
+coordinated scans — the ADR defines only the semantic observation requirement.
+This preserves E5's level-triggered protocol. A Scheduler must not enter
+MW-S3/quiescence while a registered ready flag is already true.
+
+**Coordinated MW-S2 admission:**
+
+MW-S2 is a coordinated global Scheduler state transition, not a per-Worker
+inference. Admission to blocking `wait_one()` must be coordinated with Worker
+running-state and runnable/inbox publication: a runnable publication visible
+before MW-S2 admission prevents blocking admission. A Worker must not infer
+MW-S2 from stale/local observations such as "my local queue is empty and I
+currently see running_count == 0." E7 does **not** specify the coordination
+mechanism (mutex type, atomic counter layout, epoch protocol, barrier, leader
+election) — those remain implementation details.
+
 ### 9.2.7 Internal worker notification
 
 E7 requires internal worker-to-worker notification for routed runnable work.
@@ -526,17 +583,42 @@ external-concurrency frontier. E7 does **not** silently assign it to E9.
 
 ### 9.2.9 Logical global quiescence
 
+Global quiescence requires:
+
 ```text
 no Worker is running a Fiber
 no Worker has runnable Fiber work in local queues or inboxes
 no Scheduler-internal routed runnable work is pending
 no Completion-backed backend operation remains outstanding
+no Scheduler-managed Fiber remains registered as waiting
 ```
 
-If only external-domain waits remain, they are outside E7's quiescence proof
-unless a later external-wake contract is added. Quiescence is **not** defined
-as "no thread is blocked in `wait_one`" — thread parking is implementation
-state, not logical work.
+The final condition includes waits on Completion-backed wait registrations and
+persistent readiness / ready-flag registrations.
+
+Semantic rule:
+
+> A Scheduler with unresolved waiting Fibers is not globally quiescent merely
+> because no Fiber is currently executable.
+
+Distinguish:
+
+```text
+quiescent:        no logical Scheduler work remains.
+stalled/dormant:  logical waiting remains (MW-S3), but E7 has no
+                  Scheduler-driven progress source.
+```
+
+Quiescence is **not** defined as "no thread is blocked in `wait_one`" — thread
+parking is implementation state, not logical work. The current E5 wait
+registration identifies the waitable readiness identity, the waiting Fiber, and
+the owning Worker; it does **not** identify the producer that will eventually
+make readiness true, so the Scheduler cannot generally distinguish "Future
+completed by another Scheduler Fiber" from "Future completed by an arbitrary
+external OS thread" from registration alone. Therefore if any wait registration
+remains, no backend progress source remains, and no Fiber is executable, the
+state is MW-S3 — not quiescence. External producer wake remains outside E7;
+internal dependency-cycle detection also remains outside E7.
 
 ### 9.2.10 Explicitly rejected alternatives
 
@@ -567,6 +649,7 @@ pinned Fiber ownership
 owner-preserving wake routing
 serialized backend access
 global MW-S1/MW-S2 progress rule
+MW-S3 unresolved-wait classification (distinct from quiescence)
 internal worker notification
 logical global quiescence
 ```
@@ -621,9 +704,34 @@ E7-T7 — internal worker notification:
     Worker 0 wakes Fiber A owned by Worker 2. Assert: A appears in Worker 2's
     runnable path; Worker 2 observes it; A resumes on Worker 2.
 
-E7-T8 — global quiescence:
-    When all logical work is done: all workers exit/return according to
-    implementation design; no outstanding Completion remains.
+E7-T8 — true global quiescence:
+    Construct a completed workload. Assert: no running Fiber; no runnable/inbox
+    Fiber; no backend Completion outstanding; no wait registration remains.
+    Then the coordinated Scheduler run terminates.
+
+E7-T9 — unresolved wait is not quiescence:
+    Construct: Fiber A awaits an unready persistent readiness flag/Future; A is
+    waiting; no Fiber runnable/running; no backend Completion outstanding.
+    Assert: Scheduler does not classify the state as global quiescence; the
+    wait registration remains; the state is MW-S3 / unresolved wait. E7 is not
+    required to make progress from this state; do not use an external producer
+    to wake it.
+
+E7-T10 — ready-flag observation precedes idle admission:
+    Construct two Scheduler-managed Fibers on different Workers: Fiber A waits
+    on Future X / persistent ready flag; Fiber B makes X ready. Before global
+    idle/quiescence admission: X readiness is observed; A's registration is
+    erased; A is routed to its owning Worker; A resumes. Assert the Scheduler
+    does not enter MW-S3/quiescence while a registered ready flag is already
+    true.
+
+E7-T11 — MW-S2 admission race:
+    Create a deterministic test seam around MW-S2 admission. Interleave: a
+    candidate progress participant begins global-idle admission; another Worker
+    publishes routed runnable work before blocking admission commits. Assert:
+    blocking wait_one is not entered; the runnable Fiber progresses. Do not use
+    sleeps; the test should prove the coordinated admission invariant, not a
+    timing accident.
 ```
 
 This ADR patch does not require implementation.
