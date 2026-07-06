@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 namespace sluice::async {
 
@@ -129,6 +130,9 @@ public:
 private:
     std::unique_ptr<AsyncBackend> backend_;
     AsyncStats* stats_;
+    // E7-C serialized backend access domain: at most one caller drives
+    // AsyncBackend at a time. All submit_*/cancel/poll/wait_one acquire this.
+    mutable std::mutex access_mtx_;
 };
 
 }  // namespace sluice::async
