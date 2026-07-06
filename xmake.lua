@@ -506,9 +506,9 @@ do
 end
 
 -- E6 scheduler progress tests (sluice-CORE-E6). Proves the hybrid poll/wait
--- idle policy: a Fiber awaiting a real-backend Completion that completes after
--- the runnable queue drains is resumed via wait_one. ThreadPoolBackend is the
--- real completion source (cv-wait). Gated to x86_64.
+-- progress policy: a Fiber awaiting a real-backend Completion that completes
+-- after the runnable queue drains is resumed via wait_one. ThreadPoolBackend is
+-- the real completion source (cv-wait). Gated to x86_64.
 do
     local p = "tests/e6_scheduler_progress_test.cpp"
     if os.isfile(p) then
@@ -520,6 +520,23 @@ do
             add_includedirs("include")
             add_files(p)
             add_tests("e6_scheduler_progress_test")
+    end
+end
+
+-- E7 multi-worker scheduler tests (sluice-CORE-E7). Proves worker-local
+-- execution state, pinned routing, serialized backend access, MW coordination.
+-- Gated to x86_64.
+do
+    local p = "tests/e7_worker_test.cpp"
+    if os.isfile(p) then
+        target("e7_worker_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e7_worker_test")
     end
 end
 

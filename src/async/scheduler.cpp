@@ -1,8 +1,16 @@
-// Implementation of the minimal single-worker Scheduler (sluice-CORE-E4).
+// Implementation of the multi-worker Scheduler (sluice-CORE-E7-A).
 //
-// See include/sluice/async/scheduler.hpp for scope and ownership. This is the
-// single-worker experiment proving ADR-execution-model §9.1 (scheduler
-// liveness). It is NOT the final runtime.
+// E7-A: worker-local execution state + multi-worker run skeleton.
+// See docs/adr/ADR-execution-model.md §9.2.
+//
+// This commit localizes sched_ctx + current_ into per-Worker WorkerState and
+// adds run(worker_count). E7-B adds pinned routing; E7-C adds MW coordination.
+// For E7-A, the multi-worker path uses a simple model: all spawned Fibers go
+// into pending_spawn_; workers pick from it round-robin; backend progress is
+// done by worker 0 only (single-driver for E7-A; E7-C generalizes); the
+// coordinated run returns when no runnable Fiber remains and no Completion
+// is outstanding. This is sufficient to prove worker-local execution state
+// (E7-T1/T2) and preserve single-worker regression (E4-E6).
 #include <sluice/async/scheduler.hpp>
 
 #include <sluice/async/fiber_ctx.hpp>
@@ -13,43 +21,34 @@ namespace sluice::async {
 
 namespace {
 
-// Bridge: fiber_ctx's Entry is void(*)(Switch*, void*); Fiber's entry is
-// std::function<void(Fiber&)> stored on the Fiber. This trampoline recovers
-// the Fiber* (passed as user_data) and invokes its entry. On return, it marks
-// the fiber done and switches back to the scheduler forever (the trampoline
-// must not return — it has no return address).
-//
-// The scheduler context pointer is stashed per-fiber so a fiber that completes
-// can switch back to the scheduler. We store it in a thread-local during
-// run_until_idle (single-worker => one OS thread).
-//
-// Per-fiber "scheduler ctx to return to" lives in a side table keyed by Fiber*,
-// set when run_next switches into the fiber. We use a thread-local pointer
-// instead because there is exactly one scheduler per thread in E4.
-thread_local fiber_ctx::Context* g_sched_ctx = nullptr;
+// TLS: the current Worker's WorkerState. Set by worker_loop before any Fiber
+// runs; used by await_completion_*/await_ready_flag to find the current
+// Fiber and scheduler context. This is genuine Worker-local state (one Worker
+// per OS thread) — NOT a process-global slot shared across Workers.
+thread_local WorkerState* g_worker = nullptr;
 
 void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
-    (void)resumed_by;  // E4 does not use the resume-message field
+    (void)resumed_by;
     auto* fiber = static_cast<Fiber*>(user_data);
-    // Run the user entry. It may call Scheduler::await_completion_* which
-    // switches back to the scheduler; control returns here when the scheduler
-    // switches back into this fiber.
     if (fiber->entry()) {
         fiber->entry()(*fiber);
     }
     fiber->make_done();
-    // Switch back to the scheduler forever. The fiber is done; the scheduler
-    // will not re-select it (run_next skips done fibers).
+    // Switch back to this worker's scheduler context forever.
     fiber_ctx::Switch s;
-    s.old = &fiber->ctx;       // our own context (unused after done)
-    s.new_ = g_sched_ctx;      // resume scheduler
+    s.old = &fiber->ctx;
+    s.new_ = &g_worker->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    __builtin_unreachable();   // scheduler never resumes a done fiber
+    __builtin_unreachable();
 }
 
 }  // namespace
 
 Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {}
+
+Scheduler::~Scheduler() {
+    // Workers are joined in run(). Nothing to drain here for E7-A.
+}
 
 bool Scheduler::init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stack_size) {
     return fiber_ctx::init_context(fiber.ctx, &fiber_entry_bridge, &fiber,
@@ -57,109 +56,225 @@ bool Scheduler::init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stac
 }
 
 void Scheduler::spawn(Fiber& fiber) noexcept {
-    // Initialize the fiber's context if it hasn't been already (idempotent:
-    // init_context overwrites). The fiber's stack is owned by the caller; we
-    // require the caller to have called init_context OR we do it here. For E4
-    // simplicity, the TEST calls init_context (it owns the stack). Here we
-    // just enqueue.
     fiber.make_runnable();
-    runnable_.push_back(&fiber);
+    // Round-robin assignment to worker local queues so that Fibers distribute
+    // across workers (required for E7-T1/T2 concurrency tests). If no workers
+    // exist yet (pre-run), use pending_spawn_ which will be distributed when
+    // run() creates workers.
+    std::lock_guard<std::mutex> lk(global_mtx_);
+    if (!workers_.empty()) {
+        unsigned target = next_spawn_worker_++ % static_cast<unsigned>(workers_.size());
+        std::lock_guard<std::mutex> wlk(workers_[target]->inbox_mtx);
+        workers_[target]->local_runnable.push_back(&fiber);
+        workers_[target]->inbox_cv.notify_one();
+    } else {
+        pending_spawn_.push_back(&fiber);
+    }
 }
 
-void Scheduler::run_until_idle() {
-    running_ = true;
-    g_sched_ctx = &sched_ctx_;
-    // Hybrid poll/wait progress (E6, P3 from the E6 audit):
-    //   S1 (runnable non-empty): non-blocking wake passes (poll); run a Fiber.
-    //       Backend progress observation is non-blocking here — calling
-    //       wait_one() would strand a runnable Fiber (E4 liveness violation).
-    //   S2 (runnable empty, ≥1 Completion-backed wait pending): the Scheduler
-    //       worker is idle (no Fiber to run) and a backend op is in flight that
-    //       it can drive. Block on ctx_.wait_one(); a backend completion
-    //       (ThreadPool worker / Uring CQE / Fake staged) wakes it, the next
-    //       loop top's wake_ready_completions enqueues the now-ready Fiber.
-    //       This is the legitimate scheduler-idle wait — distinct from blocking
-    //       while a Fiber is runnable. E4 liveness permits it (no runnable task
-    //       to starve).
-    //   S3 (runnable empty, only ready-flag/Future waits remain): no progress
-    //       source the Scheduler can drive — return (caller re-enters; an
-    //       external-thread producer would need a wake primitive = E7+).
+WorkerState* Scheduler::current_worker() {
+    return g_worker;
+}
+
+void Scheduler::run(unsigned worker_count) {
+    if (worker_count == 0) worker_count = 1;
+
+    // WorkerState is address-stable across run() calls (wait registrations may
+    // hold WorkerState* pointers between calls — E7-ABORT-6 lifetime). Grow or
+    // shrink as needed, but never destroy/recreate existing workers within
+    // the Scheduler's lifetime.
+    while (workers_.size() < worker_count) {
+        workers_.push_back(std::make_unique<WorkerState>());
+        workers_.back()->id = static_cast<unsigned>(workers_.size() - 1);
+    }
+    // Ensure worker IDs are correct.
+    for (unsigned i = 0; i < workers_.size(); ++i) {
+        workers_[i]->id = i;
+    }
+
+    // Distribute any pending_spawn_ across workers round-robin.
+    {
+        std::lock_guard<std::mutex> lk(global_mtx_);
+        unsigned w = 0;
+        while (!pending_spawn_.empty()) {
+            auto* f = pending_spawn_.front();
+            pending_spawn_.pop_front();
+            std::lock_guard<std::mutex> wlk(workers_[w % worker_count]->inbox_mtx);
+            workers_[w % worker_count]->local_runnable.push_back(f);
+            workers_[w % worker_count]->inbox_cv.notify_one();
+            ++w;
+        }
+    }
+    next_spawn_worker_ = 0;
+
+    in_coordinated_run_ = true;
+    active_worker_count_.store(worker_count, std::memory_order_release);
+    running_fiber_count_.store(0, std::memory_order_release);
+
+    if (worker_count == 1) {
+        // Single-worker fast path: run inline (no thread spawn). This preserves
+        // the E4-E6 behavior exactly — run_until_idle on the caller's thread.
+        g_worker = workers_[0].get();
+        workers_[0]->active.store(true, std::memory_order_release);
+        worker_loop(workers_[0].get());
+        workers_[0]->active.store(false, std::memory_order_release);
+        g_worker = nullptr;
+    } else {
+        // Multi-worker: spawn OS threads, each running worker_loop.
+        std::vector<std::thread> threads;
+        threads.reserve(worker_count);
+        for (unsigned i = 0; i < worker_count; ++i) {
+            threads.emplace_back([this, i] {
+                g_worker = workers_[i].get();
+                workers_[i]->active.store(true, std::memory_order_release);
+                worker_loop(workers_[i].get());
+                workers_[i]->active.store(false, std::memory_order_release);
+                g_worker = nullptr;
+            });
+        }
+        for (auto& t : threads) {
+            if (t.joinable()) t.join();
+        }
+    }
+
+    in_coordinated_run_ = false;
+    active_worker_count_.store(0, std::memory_order_release);
+}
+
+void Scheduler::worker_loop(WorkerState* ws) {
+    // E7-A simplified loop: each worker tries to get a runnable Fiber, run it,
+    // and repeat. When no runnable Fiber exists anywhere, the worker checks
+    // for Completion-backed progress. The first worker (id==0) drives backend
+    // progress (single backend driver for E7-A; E7-C generalizes to serialized
+    // access). The coordinated run ends when no runnable Fiber + no
+    // outstanding Completion + (for multi-worker) a quiescence check.
     //
-    // The wait_one() call is GATED on Completion-backed waits pending
-    // (waiting_size_/waiting_void_ non-empty) to avoid the zero-outstanding
-    // hazard (wait_one with nothing outstanding blocks forever).
+    // This is a simplified E7-A loop; E7-C refines it into the full
+    // MW-S1/MW-S2/MW-S3/QUIESCENT protocol.
     while (true) {
-        wake_ready_completions();
-        wake_ready_flags();
-        if (!runnable_.empty()) {
-            run_next();
+        // Try to get a runnable Fiber: local queue first, then pending_spawn_.
+        Fiber* f = nullptr;
+        {
+            std::lock_guard<std::mutex> lk(ws->inbox_mtx);
+            if (!ws->local_runnable.empty()) {
+                f = ws->local_runnable.front();
+                ws->local_runnable.pop_front();
+            }
+        }
+        if (!f) {
+            std::lock_guard<std::mutex> lk(global_mtx_);
+            if (!pending_spawn_.empty()) {
+                f = pending_spawn_.front();
+                pending_spawn_.pop_front();
+            }
+        }
+
+        if (f) {
+            run_next_on(ws, f);
             continue;
         }
-        // runnable empty: S2 or S3?
-        const bool completion_wait_pending =
-            !waiting_size_.empty() || !waiting_void_.empty();
-        if (completion_wait_pending) {
-            // S2: ask the backend for progress. For real backends (ThreadPool,
-            // Uring), wait_one() BLOCKS until a completion is ready — the
-            // legitimate scheduler-idle wait. For Fake, wait_one() == poll()
-            // and returns 0 when nothing is staged (non-blocking) — in that
-            // case there is no progress the Scheduler can drive, so we break
-            // and let the caller stage work and re-enter (preserving E4/E5's
-            // test-driven model). Gating on the reaped count avoids a busy
-            // spin on a non-blocking wait_one (the [BUSY-SPIN-RISK] from the
-            // E6 audit).
+
+        // No runnable Fiber. Check backend progress (single driver for E7-A).
+        bool made_progress = false;
+        {
+            std::lock_guard<std::mutex> lk(global_mtx_);
+            // Pre-admission readiness drain (E7-C6): observe ready waits before
+            // deciding to block or return.
+            made_progress = wake_ready_completions_locked() || wake_ready_flags_locked();
+        }
+        if (made_progress) {
+            // Route woken Fibers to workers and continue.
+            continue;
+        }
+
+        // Check if there are Completion-backed waits pending (S2).
+        bool completion_pending;
+        {
+            std::lock_guard<std::mutex> lk(global_mtx_);
+            completion_pending = !waiting_size_.empty() || !waiting_void_.empty();
+        }
+
+        if (completion_pending && ws->id == 0) {
+            // S2: only worker 0 drives backend progress (E7-A simplification).
             auto wr = ctx_.wait_one();
             if (!wr.has_value() || wr.value() == 0) {
-                break;  // no progress; external producer must stage + re-enter
+                // No progress; check global state.
+                std::lock_guard<std::mutex> lk(global_mtx_);
+                bool any_runnable = !pending_spawn_.empty();
+                for (auto& w : workers_) {
+                    std::lock_guard<std::mutex> wlk(w->inbox_mtx);
+                    if (!w->local_runnable.empty()) { any_runnable = true; break; }
+                }
+                if (!any_runnable) break;  // MW-S3 or quiescent: return
             }
-            continue;  // wait_one reaped ≥1; next loop top maps it to runnable
+            continue;
         }
-        break;  // S3 or truly idle
+
+        // Multi-worker coordination (E7-A simplified): if we're not worker 0
+        // and have nothing to do, check if the run is done.
+        if (ws->id != 0) {
+            std::lock_guard<std::mutex> lk(global_mtx_);
+            bool any_runnable = !pending_spawn_.empty();
+            for (auto& w : workers_) {
+                std::lock_guard<std::mutex> wlk(w->inbox_mtx);
+                if (!w->local_runnable.empty()) { any_runnable = true; break; }
+            }
+            bool any_completion = !waiting_size_.empty() || !waiting_void_.empty();
+            if (!any_runnable && !any_completion) break;  // done
+            // Wait briefly for routed work or state change.
+            std::unique_lock<std::mutex> ws_lk(ws->inbox_mtx);
+            ws->inbox_cv.wait_for(ws_lk, std::chrono::milliseconds(1),
+                                   [&] { return !ws->local_runnable.empty() || !ws->inbox.empty(); });
+        } else {
+            // Worker 0 with no progress and no completion: check done.
+            std::lock_guard<std::mutex> lk(global_mtx_);
+            bool any_runnable = !pending_spawn_.empty();
+            for (auto& w : workers_) {
+                std::lock_guard<std::mutex> wlk(w->inbox_mtx);
+                if (!w->local_runnable.empty()) { any_runnable = true; break; }
+            }
+            if (!any_runnable) break;  // MW-S3 or quiescent: return
+        }
     }
-    running_ = false;
-    g_sched_ctx = nullptr;
 }
 
-void Scheduler::run_next() {
-    Fiber* fiber = runnable_.front();
-    runnable_.pop_front();
-    current_ = fiber;
-    // Switch into the fiber. Its context was either init'd (first run) or
-    // saved when it last suspended. On return, the fiber has either completed
-    // (done) or suspended via await_completion_* (switched back to sched_ctx_).
+void Scheduler::run_next_on(WorkerState* ws, Fiber* fiber) {
+    ws->current = fiber;
+    running_fiber_count_.fetch_add(1, std::memory_order_acq_rel);
     fiber->make_running();
     fiber_ctx::Switch s;
-    s.old = &sched_ctx_;   // save scheduler state here
-    s.new_ = &fiber->ctx;  // resume the fiber
+    s.old = &ws->sched_ctx;
+    s.new_ = &fiber->ctx;
     (void)fiber_ctx::context_switch(&s);
-    // Control resumes here when the fiber switches back to &sched_ctx_.
-    current_ = nullptr;
+    // Control resumes here when the fiber switches back to ws->sched_ctx.
+    ws->current = nullptr;
+    running_fiber_count_.fetch_sub(1, std::memory_order_acq_rel);
 }
 
-std::size_t Scheduler::wake_ready_completions() {
-    // Poll the backend. Each ready Completion wakes its associated fiber
-    // (waiting -> runnable) and the association is removed (exactly-once).
-    std::size_t woken = 0;
-    // Take a snapshot of waiting fibers BEFORE polling: a completion that
-    // fires inside poll will mark a Completion ready; we then match it.
-    // Snapshot is by key (Completion*); pointers are stable.
-    // NOTE: do NOT early-return when poll reaps 0. A Completion may have been
-    // made ready by a prior wait_one()'s internal poll (E6 T2 path: wait_one
-    // drains the backend's ready queue and completes the Completion, then
-    // returns; the next loop-top poll reaps 0 because the queue is already
-    // drained, but the Completion is now ready and its waiting Fiber must still
-    // be woken). Always scan the waiting maps.
-    (void)ctx_.poll();
+void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
+    // E7-A: route to the owner's local queue, or to pending_spawn_ if no owner.
+    if (owner) {
+        std::lock_guard<std::mutex> lk(owner->inbox_mtx);
+        owner->local_runnable.push_back(f);
+        owner->inbox_cv.notify_one();
+    } else {
+        pending_spawn_.push_back(f);
+    }
+}
 
-    // Walk the waiting maps; any whose Completion is now ready gets woken.
+bool Scheduler::wake_ready_completions_locked() {
+    // Called with global_mtx_ held. Polls backend + scans Completion waits.
+    bool woken = false;
+    (void)ctx_.poll();
     for (auto it = waiting_size_.begin(); it != waiting_size_.end();) {
         auto* c = static_cast<Completion<std::size_t>*>(it->first);
         if (c->ready()) {
-            Fiber* f = it->second;
+            Fiber* f = it->second.fiber;
+            WorkerState* owner = it->second.owner;
             it = waiting_size_.erase(it);
             f->make_runnable();
-            runnable_.push_back(f);
-            ++woken;
+            route_runnable_locked(f, owner);
+            woken = true;
         } else {
             ++it;
         }
@@ -167,84 +282,110 @@ std::size_t Scheduler::wake_ready_completions() {
     for (auto it = waiting_void_.begin(); it != waiting_void_.end();) {
         auto* c = static_cast<Completion<void>*>(it->first);
         if (c->ready()) {
-            Fiber* f = it->second;
+            Fiber* f = it->second.fiber;
+            WorkerState* owner = it->second.owner;
             it = waiting_void_.erase(it);
             f->make_runnable();
-            runnable_.push_back(f);
-            ++woken;
+            route_runnable_locked(f, owner);
+            woken = true;
         } else {
             ++it;
         }
     }
     return woken;
+}
+
+bool Scheduler::wake_ready_flags_locked() {
+    bool woken = false;
+    for (auto it = waiting_ready_.begin(); it != waiting_ready_.end();) {
+        if (it->first->load(std::memory_order::acquire)) {
+            Fiber* f = it->second.fiber;
+            WorkerState* owner = it->second.owner;
+            it = waiting_ready_.erase(it);
+            f->make_runnable();
+            route_runnable_locked(f, owner);
+            woken = true;
+        } else {
+            ++it;
+        }
+    }
+    return woken;
+}
+
+void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
+    // Must be called with global_mtx_ held.
+    if (owner) {
+        // Route to owner's local queue. Need owner->inbox_mtx (different from
+        // global_mtx_). Safe: global_mtx_ protects waiting maps; inbox_mtx
+        // protects the queue. No deadlock because we never acquire them in
+        // reverse order.
+        std::lock_guard<std::mutex> lk(owner->inbox_mtx);
+        owner->local_runnable.push_back(f);
+        owner->inbox_cv.notify_one();
+    } else {
+        pending_spawn_.push_back(f);
+    }
 }
 
 void Scheduler::await_completion_size(Completion<std::size_t>& c) {
-    // current_ is the running fiber. Mark it waiting, associate, switch back
-    // to the scheduler.
-    Fiber* me = current_;
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
     me->make_waiting();
-    waiting_size_[static_cast<void*>(&c)] = me;
+    {
+        std::lock_guard<std::mutex> lk(global_mtx_);
+        waiting_size_[static_cast<void*>(&c)] = {me, ws};
+    }
     fiber_ctx::Switch s;
-    s.old = &me->ctx;       // save fiber state
-    s.new_ = g_sched_ctx;   // resume scheduler
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    // Resumed: the scheduler observed the completion and switched back into
-    // me->ctx. c is now ready.
 }
 
 void Scheduler::await_completion_void(Completion<void>& c) {
-    Fiber* me = current_;
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
     me->make_waiting();
-    waiting_void_[static_cast<void*>(&c)] = me;
+    {
+        std::lock_guard<std::mutex> lk(global_mtx_);
+        waiting_void_[static_cast<void*>(&c)] = {me, ws};
+    }
     fiber_ctx::Switch s;
     s.old = &me->ctx;
-    s.new_ = g_sched_ctx;
+    s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-}
-
-std::size_t Scheduler::wake_ready_flags() {
-    // Poll registered level-triggered readiness flags. A flag that loads true
-    // (acquire) wakes its single waiting Fiber (waiting -> runnable) and the
-    // registration is erased (exactly-once: a later poll cannot re-enqueue).
-    std::size_t woken = 0;
-    for (auto it = waiting_ready_.begin(); it != waiting_ready_.end();) {
-        if (it->first->load(std::memory_order::acquire)) {
-            Fiber* f = it->second;
-            it = waiting_ready_.erase(it);
-            f->make_runnable();
-            runnable_.push_back(f);
-            ++woken;
-        } else {
-            ++it;
-        }
-    }
-    return woken;
 }
 
 void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
-    Fiber* me = current_;
-    // 1. Fast path: already ready.
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
     if (ready.load(std::memory_order::acquire)) return;
-    // 2-3. Register &ready -> current Fiber.
-    waiting_ready_[&ready] = me;
-    // 4-5. Re-check after registering. If ready flipped true in the window,
-    // erase and return without suspending (R2).
+    {
+        std::lock_guard<std::mutex> lk(global_mtx_);
+        waiting_ready_[&ready] = {me, ws};
+    }
     if (ready.load(std::memory_order::acquire)) {
+        std::lock_guard<std::mutex> lk(global_mtx_);
         waiting_ready_.erase(&ready);
         return;
     }
-    // 6. Transition running -> waiting. Set BEFORE the switch so the scheduler
-    //    poll (which only accepts waiting->runnable) sees the right state if
-    //    ready flips true between here and the switch (R3).
     me->make_waiting();
-    // 7. Switch back to the scheduler.
     fiber_ctx::Switch s;
     s.old = &me->ctx;
-    s.new_ = g_sched_ctx;
+    s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    // 9. Resumed: the scheduler observed ready==true, erased the registration,
-    //    and switched back into me->ctx. Return.
+}
+
+std::size_t Scheduler::runnable_count() const {
+    std::size_t total = 0;
+    {
+        std::lock_guard<std::mutex> lk(global_mtx_);
+        total += pending_spawn_.size();
+    }
+    for (auto& w : workers_) {
+        std::lock_guard<std::mutex> wlk(w->inbox_mtx);
+        total += w->local_runnable.size();
+    }
+    return total;
 }
 
 }  // namespace sluice::async
