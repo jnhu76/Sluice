@@ -512,26 +512,76 @@ producer provenance to Future or WaitPolicy. Do **not** add a deadlock
 detector. Do **not** add external producer wake. The purpose is only to avoid
 classifying unresolved waiting as completed quiescence.
 
-**Persistent-readiness observation before idle-state admission (E7 invariant):**
+**Observable-readiness observation before idle-state admission (E7 invariant):**
 
 E5 uses level-triggered readiness: `Future::complete_with` stores
 `ready.store(true)` and does NOT actively notify or mutate Scheduler state;
 the Scheduler polls registered readiness, erases the registration, and routes
-the waiting → runnable Fiber. Therefore, before the coordinated Scheduler
-admits MW-S2, MW-S3, or global quiescence, registered persistent readiness
-states MUST be observed/rechecked and every currently-ready waiter MUST be
-routed to its owning Worker's runnable path:
+the waiting → runnable Fiber. The same classification discipline applies to
+Completion-backed waits: a Completion may become terminal-ready via a backend
+`poll()`/`wait_one()` whose reap-count signal is not the authoritative source
+of "is this Completion ready" (E6 bug fix — see below). Therefore, before the
+coordinated Scheduler admits MW-S2, MW-S3, or global quiescence, it MUST
+observe registered wait readiness and route every currently-ready waiter to its
+owning Worker's runnable path. This covers both registration kinds:
 
 ```text
-observe persistent readiness registrations
-    -> route every ready Fiber
-    -> then evaluate MW-S1 / MW-S2 / MW-S3 / quiescence
+Completion-backed registrations: Completion is already terminal-ready.
+persistent readiness registrations: ready flag currently loads true.
+```
+
+Conceptually:
+
+```text
+observe registered waits
+    |
+    +-- ready Completion
+    |       -> erase registration; waiting -> runnable; route to owner Worker
+    |
+    +-- ready persistent flag
+            -> erase registration; waiting -> runnable; route to owner Worker
+
+then evaluate MW-S1 / MW-S2 / MW-S3 / QUIESCENT
 ```
 
 The implementation may use global maps, per-Worker maps, partitioned maps, or
 coordinated scans — the ADR defines only the semantic observation requirement.
 This preserves E5's level-triggered protocol. A Scheduler must not enter
 MW-S3/quiescence while a registered ready flag is already true.
+
+**Backend progress and waiting-Fiber wake routing are distinct.** A backend
+`poll()` or `wait_one()` may make a Completion terminal-ready even when a later
+backend poll reports zero newly reaped operations. Therefore Completion wait
+registrations must be scanned/routed based on Completion readiness, NOT gated
+solely by the current backend progress call's reap count. The contract is:
+
+```text
+backend progress count == 0
+    does NOT imply
+no registered Completion waiter is ready
+```
+
+This preserves the E6 bug fix (in which a Completion made ready by `wait_one`'s
+internal poll had to be scanned unconditionally — the prior `if (reaped == 0)
+return 0` early-return stranded the Fiber).
+
+**Latent executable work.** A registered waiter whose wait source is already
+observably ready is latent executable work. It must be materialized into the
+owning Worker's runnable path before MW-S2 admission. Example:
+
+```text
+Completion C1: already ready; Fiber A still registered waiting.
+Completion C2: outstanding.
+no Worker currently running/runnable.
+```
+
+The Scheduler must first route A; it must NOT classify the state as MW-S2 and
+block in `wait_one()` for C2. This preserves the E4/E6 liveness invariant: if a
+Fiber can already be made runnable, blocking backend wait is forbidden.
+
+**MW-S3 refinement.** MW-S3 contains unresolved waits whose readiness is NOT
+currently observable as ready after the coordinated pre-admission observation
+pass. A ready-but-not-yet-routed registration is NOT MW-S3.
 
 **Coordinated MW-S2 admission:**
 
@@ -717,13 +767,26 @@ E7-T9 — unresolved wait is not quiescence:
     required to make progress from this state; do not use an external producer
     to wake it.
 
-E7-T10 — ready-flag observation precedes idle admission:
-    Construct two Scheduler-managed Fibers on different Workers: Fiber A waits
-    on Future X / persistent ready flag; Fiber B makes X ready. Before global
-    idle/quiescence admission: X readiness is observed; A's registration is
-    erased; A is routed to its owning Worker; A resumes. Assert the Scheduler
-    does not enter MW-S3/quiescence while a registered ready flag is already
-    true.
+E7-T10 — observable readiness precedes global-state admission (covers both
+    registration kinds):
+
+    E7-T10A — persistent ready flag:
+        Two Scheduler-managed Fibers on different Workers: Fiber A waits on
+        Future X / persistent ready flag; Fiber B makes X ready. Before global
+        idle/quiescence admission: X readiness is observed; A's registration is
+        erased; A is routed to its owning Worker; A resumes. Assert the
+        Scheduler does not enter MW-S3/quiescence while a registered ready flag
+        is already true.
+
+    E7-T10B — Completion ready after backend wait/progress:
+        Fiber A waits on Completion C1; backend progress / wait_one makes C1
+        terminal-ready; the subsequent backend progress observation reports
+        zero newly reaped work (or otherwise provides no new-progress signal).
+        Before MW-S2/MW-S3/quiescence admission: C1 readiness is observed from
+        Completion state; A's registration is erased; A is routed to its
+        owning Worker; A resumes. Assert global-state admission is not gated
+        solely by the current poll/reap count. This preserves the E6 semantic
+        bug fix under E7's multi-worker classification. No sleeps.
 
 E7-T11 — MW-S2 admission race:
     Create a deterministic test seam around MW-S2 admission. Interleave: a
