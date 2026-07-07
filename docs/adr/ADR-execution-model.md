@@ -1080,6 +1080,433 @@ Select / Mutex / Condition / ... (E10/E12)
 A stackful Fiber may resume on another OS Worker only after being stolen
 while Runnable and after its ownership transfer is committed.
 
+## 9.4 E9 Scheduler park admission and unified wake-source protocol (added by E9-ADR)
+
+This section defines the E9 park-admission and wake-source decision. E9
+closes the two gaps identified by the E9-0 wake-source topology audit
+(`docs/e9-0-wake-source-topology-audit.md`):
+
+```text
+GAP-1 (external wake, source W8):
+    An external OS thread completes a Future (Future::complete_with sets
+    ready_=true) while one or more Scheduler Workers are parked. There is
+    no path from that publication to any Scheduler Worker. Recovery today
+    is the 1ms inbox_cv timed park (a de-facto periodic poll) or
+    caller-driven run() re-entry — both rejected as primary strategies.
+
+GAP-2 (MIXED-WAKE, sources W5 + W8 together):
+    backendOutstanding = TRUE and an external-wake-capable wait is
+    registered. classify_locked returns MW-S2; the elected participant
+    blocks in ctx_.wait_one() on backend progress ONLY. An external-ready
+    publication cannot interrupt that wait. For a single-Worker run this
+    is a hard stall until the backend completes.
+```
+
+E9 defines an explicit park/wake protocol that closes both gaps without
+adding a hidden driver thread, without a global singleton, without
+polling as the primary strategy, and without weakening E7/E8.
+
+### 9.4.1 Architecture decision — Model P3 (decoupled wake domains)
+
+Six candidate models were evaluated against the E9 load-bearing path
+(Fiber A awaits an external Future; all Workers park; an external thread
+completes the Future; A resumes without caller re-entry) and the
+MIXED-WAKE path (§9.4.7).
+
+```text
+P1 — Independent Scheduler CV + unchanged backend wait_one:
+    external publication -> Scheduler CV; backend-only MW-S2 -> wait_one.
+    REJECTED. A MIXED-WAKE participant that enters wait_one is not on the
+    Scheduler CV wake set, so an external-ready publication cannot wake it
+    (GAP-2 un-closed). The audit (§9.4.7) shows the MW-S2 participant can
+    remain in backend wait while external work is ready.
+
+P2 — Wake epoch + Scheduler park, backend progress ALSO signals the epoch:
+    All wake-relevant producers (including the backend) increment the
+    Scheduler wake epoch and signal.
+    REJECTED as primary. It requires the backend to call a Scheduler wake
+    callback on every completion. io_uring kernel completions cannot call
+    a C++ callback (a CQE is reaped by a Userspace poll, not pushed); so
+    P2 either needs a backend driver thread (forbidden, §9.4.10) or
+    reduces to P5. ThreadPoolBackend *could* signal, but io_uring cannot,
+    so P2 is not uniform across backends.
+
+P3 — Decoupled wake domains (SELECTED):
+    Backend progress and external-ready wake are handled by SEPARATE
+    parked domains, unified by a single Scheduler wake epoch.
+      - At most one Worker (the MW-S2 participant) may block in
+        ctx_.wait_one() for backend progress (E7 rule preserved).
+      - ANY OTHER idle Worker parks on the Scheduler wake source
+        (wake_cv + wake epoch), whose wake set includes external-ready
+        publication AND runnable publication AND shutdown.
+    Single-Worker correctness (N=1): when an external-wake-capable wait is
+    registered, the lone Worker MUST NOT commit to a backend-only
+    wait_one; it parks on the Scheduler wake source instead, and backend
+    progress is observed by periodic re-poll under the SAME park (a
+    bounded timed wait on wake_cv, NOT a busy poll). This keeps N=1
+    correct without a second thread.
+
+P4 — Timed park / periodic poll:
+    park_for(T); wake; poll everything; repeat.
+    REJECTED as primary. It is the current behavior (the 1ms inbox_cv
+    wait) and is exactly the workaround E9 §6 forbids choosing. It may
+    remain as DEFENSE-IN-DEPTH under the Scheduler wake source (a bounded
+    timed wait that re-drains on timeout), never as the authority.
+
+P5 — Unified interruptible backend wait seam:
+    wait for: backend progress OR Scheduler wake.
+    REJECTED as primary (would be sound, but costs a backend-facing seam
+    change). It requires AsyncBackend::wait_one to be interruptible by an
+    external signal on all three backends. io_uring would need an
+    eventfd registered in the ring; ThreadPoolBackend would need its cv_
+    tied to the Scheduler wake source; FakeBackend does not block. This
+    is a real BACKEND-WAKE-SEAM-GAP, but it is LARGER than the minimum
+    protocol-enabling change. P3 closes the same gaps with a
+    Scheduler-internal seam only; P5 is reserved if P3 proves insufficient
+    under the formal gate or the load-bearing tests.
+
+P6 — OS multiplexed wake source (eventfd/pipe in io_uring, etc.):
+    REJECTED for E9. Protocol-first: P3 expresses the protocol without
+    selecting an OS mechanism. eventfd-in-ring is an implementation of P5
+    for the io_uring backend specifically, deferred until P3 is proven
+    insufficient.
+```
+
+**Selected protocol: Model P3 (decoupled wake domains).** It is the
+smallest protocol that closes both gaps, preserves the E7 at-most-one
+backend-wait-participant rule, does not require a backend-facing seam
+change, and is correct for N=1 (the single-worker Evented case that is
+the project's load-bearing proof, ADR §9.1).
+
+### 9.4.2 Park admission
+
+A Worker must not park from a local-empty observation. Park admission is
+globally coordinated. The phases (names map to the TLA+ actions,
+`docs/spec/e9_park_wake/`):
+
+```text
+ACTIVE
+    -> (no local work; re-drain under global_mtx_; classify)
+PARK_CANDIDATE        [BeginParkCandidate]
+    -> (final persistent-readiness drain under global_mtx_)
+    -> (final global classifier recheck under global_mtx_)
+    -> (observe wake epoch E; record observedEpoch[w] = E)
+    -> validate: if current epoch != E, abandon (do not park)
+PARK_COMMITTED        [FinalParkRecheckAndCommit]
+    -> choose park domain (see §9.4.3)
+    -> release global_mtx_
+    -> physical park on the chosen domain [EnterPhysicalPark]
+    -> (wake returns) [LeavePark]
+    -> re-drain; reclassify; loop
+```
+
+Park admission REUSES the E7 two-phase admission shape (NONE → CANDIDATE
+→ COMMITTED) but the COMMITTED decision is now gated by the wake-epoch
+validation, not merely by the MW-S2 reclassify. A publish between
+CANDIDATE and COMMITTED that routes runnable work demotes admission (E7
+rule, preserved); a publish that only advances the wake epoch (e.g. an
+external-ready flag set with no runnable ticket yet) is caught by the
+epoch validation at COMMIT.
+
+### 9.4.3 Park domain selection (the P3 rule)
+
+```text
+Let W be the Worker about to enter physical park (PARK_COMMITTED).
+
+IF W is the elected MW-S2 participant (E7 two-phase admission COMMITTED
+   on backend progress) AND no external-wake-capable wait is registered:
+    park domain = BACKEND   (ctx_.wait_one(), E7 rule unchanged)
+
+ELSE IF W is the elected MW-S2 participant AND an external-wake-capable
+   wait IS registered:
+    park domain = SCHEDULER  (do NOT enter backend-only wait_one)
+    -- this is the MIXED-WAKE fix: the lone backend-wait participant
+       yields its backend-wait privilege when external wake is possible,
+       so external-ready can wake it. Backend progress is still observed
+       by the bounded timed wait on the Scheduler wake source.
+
+ELSE (W is an idle non-participant, or single-worker with external wake):
+    park domain = SCHEDULER  (wake_cv + wake epoch)
+```
+
+In all cases the Scheduler-domain park is a `condition_variable` wait on
+`wake_cv_` with a **bounded timeout** (defense-in-depth, not the
+authority). The wake epoch is the authority; the timeout only re-drains
+on the (correctness-irrelevant) case of a lost wake.
+
+At most one Worker may be in the BACKEND park domain (E7 Inv6 preserved,
+E9-Inv6). Any number of Workers may be in the SCHEDULER park domain.
+
+### 9.4.4 Wake obligation
+
+A publication creates a wake obligation when it makes previously
+non-executable persistent state capable of producing executable Scheduler
+work while one or more Workers may be parked.
+
+```text
+For every accepted wake source: publish persistent state FIRST,
+then signal the Scheduler wake source SECOND. The wake signal is
+advisory; persistent state is authoritative.
+```
+
+Classification:
+
+```text
+runnable publication (W1/W2/W3):
+    obligation: YES. route_runnable_locked already clears global_terminate_
+    and notifies inbox_cv; E9 ALSO advances the wake epoch and notifies
+    wake_cv_ so a SCHEDULER-parked Worker resumes. (Production today
+    notifies inbox_cv only; E9 adds the wake-epoch path.)
+
+external persistent-ready transition (W8):
+    obligation: YES. The external producer calls the Scheduler wake handle
+    (notify_external_wake), which advances the wake epoch and notifies
+    wake_cv_. The producer MUST NOT call make_runnable / route_runnable /
+    mutate any Scheduler queue (§9.4.9).
+
+backend progress (W4/W5/W6):
+    obligation: the MW-S2 BACKEND-domain participant observes it directly
+    via wait_one return. If the participant is in the SCHEDULER domain
+    (MIXED-WAKE case), backend progress is observed by the bounded timed
+    wait's timeout re-drain, OR by the wake handle if the backend is later
+    wired to signal it (P5, deferred). The backend does NOT call the
+    Scheduler wake handle in the E9 baseline.
+
+shutdown/termination (W9):
+    obligation: YES. global_terminate_ advances the wake epoch and notifies
+    wake_cv_ + inbox_cv, waking every parked Worker regardless of domain.
+```
+
+### 9.4.5 Wake epoch / generation semantics
+
+```text
+wakeEpoch : monotonically non-decreasing counter (std::atomic<uint64_t>),
+            protected by wake_mtx_ (the wake_cv_ mutex).
+
+A Worker about to enter the SCHEDULER park domain, under wake_mtx_:
+    observedEpoch[w] = wakeEpoch.load()
+    if (drain predicate false) {  // spurious / already-serviced
+        do not park; loop
+    }
+    wake_cv_.wait_for(lk, bounded_T, [&] {
+        return wakeEpoch.load() != observedEpoch[w]
+            || global_terminate_
+            || !local_runnable.empty();
+    });
+
+A producer (internal or external):
+    publish persistent state
+    { lock wake_mtx_; ++wakeEpoch; }
+    wake_cv_.notify_all()   (or notify_one; see §9.4.8)
+```
+
+The epoch is the authority for "did a wake-relevant publication happen
+after I decided to park?" The cv/notify is the physical delivery. A
+consumed/coalesced/spurious wake does NOT erase persistent state
+(E9-Inv3); the Worker re-drains on every wake.
+
+### 9.4.6 Lost-wake closure
+
+The protocol closes every interleaving of publish-vs-park:
+
+```text
+(a) publish before CANDIDATE:
+    the publication routes runnable / sets the flag; the candidate's
+    final drain observes it; admission is abandoned (E7 rule).
+
+(b) publish after CANDIDATE, before COMMITTED (epoch observed):
+    the publication advances wakeEpoch. The candidate's epoch validation
+    at COMMIT observes current != observed (observed not yet recorded, so
+    validation uses a fresh read) and abandons. [modeled as the
+    FinalParkRecheckAndCommit epoch check]
+
+(c) publish after COMMITTED, before physical sleep:
+    the Worker has recorded observedEpoch[w] = E under wake_mtx_ and is
+    about to wait_cv.wait. The producer's ++wakeEpoch happens-before its
+    notify; the Worker's wait predicate sees wakeEpoch != E and does NOT
+    block. (classic condition-variable pre-wait race, closed by the
+    epoch predicate under the wake mutex.)
+
+(d) publish while sleeping:
+    the producer's notify wakes the Worker; epoch != observed; re-drain.
+
+(e) spurious wake:
+    the Worker re-drains; if nothing changed it may re-park. No duplicate
+    runnable publication (make_runnable is exactly-once, E7-T2).
+
+(f) coalesced multiple wakes:
+    multiple producers advance wakeEpoch and notify; the Worker wakes
+    once, drains ALL persistent ready state (wake_ready_*_locked scans
+    every registered waiter), and routes every ready Fiber. One wake per
+    publication is NOT required.
+```
+
+### 9.4.7 MIXED-WAKE semantics
+
+When `backendOutstanding = TRUE` AND an external-wake-capable wait is
+registered, the protocol is explicit (no implicit behavior):
+
+```text
+The MW-S2 participant does NOT enter a backend-only wait_one. It parks
+on the SCHEDULER wake domain (§9.4.3). Its wake set therefore includes
+external-ready publication. Backend progress is observed by the bounded
+timed wait's re-drain; external-ready is observed immediately on wake.
+```
+
+This is the load-bearing difference from E7 MW-S2: E7 admits backend
+wait_one whenever backendOutstanding; E9 overrides that ONLY when an
+external-wake-capable wait is registered. When no such wait is registered,
+E7 MW-S2 behavior is unchanged (E9-T10 preserves the E7-T5 proof).
+
+"External-wake-capable" is determined structurally: a wait registered in
+`waiting_ready_` whose flag address was handed a live
+`SchedulerWakeHandle` is external-wake-capable. (In the E9 baseline every
+`waiting_ready_` registration is treated as external-wake-capable; a
+finer distinction is deferred.)
+
+### 9.4.8 Worker notification cardinality
+
+```text
+wake_cv_.notify_all() on every wake obligation (initial E9 baseline).
+```
+
+Correctness-first: notify_all guarantees every SCHEDULER-parked Worker
+observes the epoch change. wake_one would be a performance refinement
+requiring a "which Worker should resume this publication" decision the
+Scheduler does not currently make (runnable publication routes to an
+OWNER, but external-ready is drained by whichever Worker wakes first).
+The conservative notify_all baseline is documented; a later commit may
+refine to wake-one-per-routed-owner. Wake coalescing (E9-Inv5) means
+notify_all is not one-wake-per-ticket.
+
+### 9.4.9 External producer boundary (mandatory review invariant)
+
+```text
+external producer MAY:
+    publish persistent readiness (Future::complete_with -> ready_=true)
+    signal the Scheduler wake source (SchedulerWakeHandle::notify)
+
+external producer MUST NOT:
+    mutate local_runnable
+    call make_runnable on a waiting Fiber
+    erase Scheduler wait registration
+    route a Fiber to a Worker
+    call any AsyncIoContext / AsyncBackend method
+```
+
+Scheduler Workers remain the only domain that drains registration,
+performs waiting→runnable, publishes runnable tickets, and routes by
+WaitReg.owner. This preserves E5's active-wake race closure and E7's
+duplicate-publication bug class closure.
+
+### 9.4.10 Wake-handle / notification lifetime
+
+The external producer holds a `SchedulerWakeHandle` (or token) that is
+**generation-invalidated**, not a raw `Scheduler*`. The handle is
+issued by the Scheduler and stored as `shared_ptr`/`weak_ptr` semantics:
+
+```text
+SchedulerWakeHandle:
+    - holds a control block: { weak_ptr<SchedulerWakeState>, uint64_t gen }
+    - notify(): locks the weak control; if the Scheduler is alive AND gen
+      is current, advances wakeEpoch + notify_all; otherwise no-op.
+    - invalidated by Scheduler destruction (control block's parent weak
+      expires) and by any future gen-bump (reserved for E10+).
+```
+
+Answers (E9 spec §19):
+
+```text
+Can producer retain notifier after Scheduler destruction?
+    YES, safely — notify() is a no-op (weak_ptr expired).
+Can a Future outlive Scheduler?
+    Contract: no (caller-owned, ADR §5 L1-L3c). If it does, the handle's
+    notify is a no-op; no use-after-free.
+Can Scheduler be destroyed with an Evented wait registered?
+    YES — the wait maps are destroyed with the Scheduler; any later
+    producer notify() is a no-op via the weak control block.
+Who invalidates the notifier?
+    Scheduler destruction (weak expiry). No explicit invalidation call.
+Is signal after invalidation a no-op, error, or contract violation?
+    NO-OP. (A raw Scheduler* callback would be use-after-free; the weak
+    handle makes it safe.)
+```
+
+Do NOT use a raw `Scheduler*` callback from arbitrary producer threads.
+The weak/generation handle is the minimum proven lifetime contract.
+
+### 9.4.11 Park state is not logical quiescence
+
+```text
+all Workers parked  does NOT imply  QUIESCENT.
+```
+
+The logical work classifier (`classify_locked`) remains authoritative. A
+parked Worker is not logical work; a wake signal/epoch is not logical
+work. An unresolved registered wait is still MW-S3 (E7 §9.2.6). E9 does
+NOT collapse all-parked into quiescent (E9-Inv8).
+
+### 9.4.12 BACKEND-WAKE-SEAM-GAP classification
+
+E9 inspected whether `AsyncBackend::poll` / `wait_one` can express "wait
+for backend progress OR Scheduler wake":
+
+```text
+FakeBackend:      wait_one does not block; N/A.
+ThreadPoolBackend: wait_one blocks on its own cv_; could be tied to the
+                   Scheduler wake source (a P5 seam repair) but is NOT
+                   required under P3 (the MW-S2 participant parks on the
+                   Scheduler domain instead when external wake is
+                   possible).
+io_uring:         wait_one blocks in io_uring_submit_and_wait (kernel);
+                   a CQE cannot call a C++ callback. P5 would require
+                   registering an eventfd in the ring. NOT required under
+                   P3.
+```
+
+**Classification: BACKEND-WAKE-SEAM-GAP is real but NOT protocol-blocking
+under P3.** The gap is sidestepped by parking the MW-S2 participant on
+the Scheduler wake domain (not the backend) whenever external wake is
+possible. A backend seam repair (P5) is reserved as E9-B1 only if the
+formal gate or the load-bearing tests prove P3 insufficient. It is NOT
+added speculatively.
+
+### 9.4.13 Scope boundaries
+
+E9 proves:
+
+```text
+explicit park admission with wake-epoch validation
+Scheduler wake source (wake_cv + wake epoch) for external + runnable wake
+external-thread Future completion wakes a parked Scheduler (no re-entry)
+MIXED-WAKE closure (external wake not blind behind backend wait)
+wake coalescing, spurious-wake safety
+shutdown wakes parked Workers
+park state is not quiescence
+N=1 correctness (single-worker external wake, no second thread)
+E7/E8 invariants preserved (steal = MOVE + OWNER TRANSFER; MW rules)
+```
+
+E9 does NOT prove:
+
+```text
+E10 WaitNode / cancellation-safe wait queue
+a backend-facing interruptible wait seam (P5; reserved as E9-B1)
+eventfd-in-ring (P6; deferred)
+wake_one routing refinement (notify_all baseline)
+timers (E11)
+per-wait producer provenance / deadlock detection
+arbitrary external-thread submit_/cancel (E7 §9.2.8 still out of scope;
+    only Future::complete_with + wake-handle signal from external threads)
+```
+
+### 9.4.14 Abort conditions (E9-ABORT-1 .. E9-ABORT-10)
+
+Stop and report `E9: BLOCKED` if any of the selected protocol's
+invariants cannot be met. These map 1:1 to the E9 spec §25 set and are
+checked by the formal gate (§9.4 of the ADR) and the load-bearing tests
+(E9-T1 .. E9-T14).
+
 ## 10. No performance claim
 
 Implementing fibers does NOT constitute a performance claim. Any performance
