@@ -56,7 +56,10 @@ bool Scheduler::init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stac
 }
 
 void Scheduler::spawn(Fiber& fiber) noexcept {
-    fiber.make_runnable();
+    // E7-T2 exactly-once: publish a runnable ticket ONLY if the created->runnable
+    // transition succeeded. (spawn's source state is always 'created', so this
+    // only fails if spawn is called twice — defensive.)
+    if (!fiber.make_runnable()) return;
     // Round-robin assignment to worker local queues so that Fibers distribute
     // across workers (required for E7-T1/T2 concurrency tests). If no workers
     // exist yet (pre-run), use pending_spawn_ which will be distributed when
@@ -417,9 +420,13 @@ bool Scheduler::wake_ready_completions_locked() {
             Fiber* f = it->second.fiber;
             WorkerState* owner = it->second.owner;
             it = waiting_size_.erase(it);
-            f->make_runnable();
-            route_runnable_locked(f, owner);
-            woken = true;
+            // E7-T2 exactly-once: only publish a ticket if the fiber actually
+            // transitioned waiting->runnable. If the fiber was already runnable
+            // (e.g. a concurrent wake raced), do NOT enqueue a second ticket.
+            if (f->make_runnable()) {
+                route_runnable_locked(f, owner);
+                woken = true;
+            }
         } else {
             ++it;
         }
@@ -430,9 +437,10 @@ bool Scheduler::wake_ready_completions_locked() {
             Fiber* f = it->second.fiber;
             WorkerState* owner = it->second.owner;
             it = waiting_void_.erase(it);
-            f->make_runnable();
-            route_runnable_locked(f, owner);
-            woken = true;
+            if (f->make_runnable()) {  // E7-T2 exactly-once
+                route_runnable_locked(f, owner);
+                woken = true;
+            }
         } else {
             ++it;
         }
@@ -447,9 +455,10 @@ bool Scheduler::wake_ready_flags_locked() {
             Fiber* f = it->second.fiber;
             WorkerState* owner = it->second.owner;
             it = waiting_ready_.erase(it);
-            f->make_runnable();
-            route_runnable_locked(f, owner);
-            woken = true;
+            if (f->make_runnable()) {  // E7-T2 exactly-once
+                route_runnable_locked(f, owner);
+                woken = true;
+            }
         } else {
             ++it;
         }

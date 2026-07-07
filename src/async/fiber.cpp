@@ -3,21 +3,22 @@
 
 namespace sluice::async {
 
-void Fiber::make_runnable() noexcept {
+bool Fiber::make_runnable() noexcept {
     FiberState expected = FiberState::created;
-    // created -> runnable (CAS); or waiting -> runnable (CAS).
+    // created -> runnable (CAS); or waiting -> runnable (CAS). Returns true
+    // only when the transition actually occurred. This is the load-bearing
+    // exactly-once-publication invariant (E7-T2): a successful transition into
+    // runnable grants the caller the right to publish EXACTLY ONE runnable
+    // ticket. A no-op transition (fiber already runnable, or running, or done)
+    // returns false — the caller MUST NOT enqueue a second ticket.
     if (state_.compare_exchange_strong(expected, FiberState::runnable,
                                        std::memory_order::acq_rel)) {
-        return;
+        return true;
     }
     expected = FiberState::waiting;
-    // waiting -> runnable. If the current state is neither created nor waiting
-    // (e.g. already runnable, running, or done), this is a no-op — making an
-    // already-runnable fiber runnable again, or waking a finished fiber, are
-    // both benign/forbidden respectively (done is absorbing: a failed CAS from
-    // done leaves state at done).
-    (void)state_.compare_exchange_strong(expected, FiberState::runnable,
-                                         std::memory_order::acq_rel);
+    // waiting -> runnable.
+    return state_.compare_exchange_strong(expected, FiberState::runnable,
+                                          std::memory_order::acq_rel);
 }
 
 void Fiber::make_running() noexcept {

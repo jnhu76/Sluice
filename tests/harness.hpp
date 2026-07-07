@@ -73,7 +73,23 @@ inline void run_case(const char* name, test_fn fn) {
     registered_cases().push_back({name, fn});
 }
 inline int run_all() {
+    // TEST-ONLY diagnostic: optional comma/space-separated case-name allowlist
+    // via $SLUICE_TEST_FILTER (Phase-1 root-cause investigation). When unset,
+    // runs all registered cases in registration order (original behavior).
+    const char* filt = std::getenv("SLUICE_TEST_FILTER");
+    std::vector<std::string> allow;
+    if (filt && *filt) {
+        std::string s(filt), tok;
+        for (char ch : s) { if (ch==','||ch==' ') { if(!tok.empty()){allow.push_back(tok);} tok.clear(); } else tok.push_back(ch); }
+        if (!tok.empty()) allow.push_back(tok);
+    }
+    auto selected = [&](const char* name){
+        if (allow.empty()) return true;
+        for (auto& a : allow) if (std::string(name).find(a)!=std::string::npos) return true;
+        return false;
+    };
     for (const auto& c : registered_cases()) {
+        if (!selected(c.name)) continue;
         std::printf("[run] %s\n", c.name);
         std::fflush(stdout);
         c.fn();

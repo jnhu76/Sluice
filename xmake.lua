@@ -540,6 +540,8 @@ do
     end
 end
 
+
+
 -- E7-C coordination tests (sluice-CORE-E7-C). Serialized backend access probe,
 -- quiescence, MW-S3. Gated to x86_64.
 do
@@ -677,3 +679,20 @@ target("sluice_experimental_uring")
 --   Run all examples:    xmake run -g examples
 --   Run all benches:     xmake run -g bench
 -- ---------------------------------------------------------------------------
+
+-- e7_dup_publication_test — focused regression for the E7-T2 root cause
+-- (exactly-once runnable publication). Unit-level make_runnable contract +
+-- integration wake-while-runnable scenario. Fails on pre-fix code.
+do
+    local p = "tests/e7_dup_publication_test.cpp"
+    if os.isfile(p) then
+        target("e7_dup_publication_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e7_dup_publication_test")
+    end
+end

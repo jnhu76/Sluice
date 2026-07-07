@@ -79,7 +79,14 @@ public:
     // runnable/running. Forbidden from done (terminal is absorbing). Called by
     // the scheduler when queueing, or by a completion handler (E4) waking a
     // waiting fiber.
-    void make_runnable() noexcept;
+    //
+    // Returns true ONLY when the transition actually occurred (created->runnable
+    // or waiting->runnable). Returns false if the fiber was already runnable,
+    // running, or done. This is the exactly-once-publication invariant (E7-T2):
+    // the caller may publish AT MOST ONE runnable ticket, and only when this
+    // returns true. A false return MUST NOT be followed by an enqueue — that
+    // would create a duplicate live ticket.
+    bool make_runnable() noexcept;
 
     // Transition to running. Lawful from: runnable only. Called by the worker
     // (E4) when it picks the fiber off the ready queue.
