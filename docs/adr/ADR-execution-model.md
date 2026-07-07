@@ -827,17 +827,25 @@ Model D — generation-tagged ownership:
 Evaluation against the E8 load-bearing path
 (steal → run on thief → suspend → wake → resume on thief):
 
-- **Model A is unsound.** A stolen fiber that suspends on the thief
-  captures `WaitReg.owner = thief` (because `await_*` uses `g_worker`).
-  But if the owner record is *not* transferred, the wake path that reads
-  a global owner would route to W0, while a wake path reading `WaitReg`
-  would route to W1 — the system has *two* notions of owner. This is the
-  stale-owner defect. Model A is the negative model E8 must disprove
-  (§9.3.6). **Rejected.**
+- **Model A is unsound.** If the steal moves the ticket to W1's
+  `local_runnable` but does *not* transfer the runnable owner record
+  (`fiber_owner_`), the post-steal state has the ticket on W1's queue while
+  `fiber_owner_[F]` still names W0. The thief can never pop the stolen
+  ticket (`try_steal`/pop require the runnable owner record to agree with
+  the queue the ticket sits on), so the ticket is stranded on the wrong
+  owner's queue — the **runnable ticket / runnable owner-record split**.
+  This is the defect the negative TLA+ model must produce (§9.3.6).
+  *(Note on a corrected framing: production wake routing reads
+  `WaitReg.owner`, not `fiber_owner_`; the unsoundness of Model A is the
+  broken steal/pop consistency, not a stale wake route. See §9.3.5.1.)*
+  **Rejected.**
 - **Model B is the smallest sound model.** One abstract transition moves
-  the ticket AND transfers the owner. The wake path always reads the
-  current owner. No transient inconsistent state. Linearizes under
-  `global_mtx_` (the existing owner-read domain — E8-0 O8). **Selected.**
+  the ticket AND transfers the runnable owner record. The ticket and the
+  owner record always agree, so steal and pop are mutually consistent.
+  Because the thief becomes the executor on Pop, the subsequent suspend
+  captures `WaitReg.owner = g_worker = thief`, and wake routes to the
+  thief. No transient inconsistent state. Linearizes under `global_mtx_`
+  (the existing coordination domain — E8-0 O8). **Selected.**
 - **Model C defers the inconsistency, does not eliminate it.** Between
   steal and `run_next_on`, the owner record says W0 while the ticket is
   in W1's queue. If the thief pops and runs the fiber before any other
@@ -857,8 +865,10 @@ Evaluation against the E8 load-bearing path
   for E8; reserved for E10+ if a real epoch hazard appears.**
 
 **Selected protocol: Model B.** Steal is one abstract transition that
-moves the runnable ticket and transfers ownership. It is the smallest
-model that closes the stale-owner state space.
+moves the runnable ticket and transfers the runnable owner record. It is
+the smallest model that keeps the ticket and the runnable owner record in
+agreement across steal, so the thief can pop and run the stolen Fiber and
+the subsequent wait-epoch resume owner is captured correctly.
 
 ### 9.3.2 Stealable Fiber state
 
@@ -938,26 +948,75 @@ intermediate "removed from W0, not yet on W1" window exists only while
 `global_mtx_` is held, which is the same domain that reads owner/ticket
 state — so it is not observable.
 
-E8 introduces an explicit owner record (a `WorkerState*` stored either on
-`Fiber` or in a scheduler-side structure) precisely so that the steal can
-mutate it and the wake path can read the *current* owner. E7's
-`WaitReg.owner` (write-once at suspend) is preserved for the
-non-stolen case; the new owner record is the authoritative current-owner
-source.
+### 9.3.5.1 State-indexed authority (E8-FORMAL-CORRECTIVE correction)
+
+The as-built production authority is **state-indexed**, not global. Three
+distinct representations carry ownership/execution/resume authority, one
+per Fiber phase:
+
+```text
+Runnable ownership:
+    Scheduler::fiber_owner_[F]  -- the runnable owner record. Records which
+    Worker's local_runnable queue currently holds F's runnable ticket.
+    Mutated by StealRunnable (victim -> thief). Read by the steal
+    eligibility check (try_steal verifies the victim still owns the
+    stealable ticket). NOT read by any wake path.
+
+Running execution authority:
+    g_worker (TLS) / WorkerState::current -- the Worker currently executing
+    F. Set when the worker pops and runs F (run_next_on). Cleared at
+    Suspend.
+
+Waiting wait-epoch resume authority:
+    WaitReg.owner -- captured as g_worker at suspend time. await_* stores
+    WaitReg{me, ws} with ws = g_worker. Read by wake_ready_*_locked to
+    route the woken Fiber. This is the routing authority.
+```
+
+These three agree at lifecycle transition boundaries (the formal
+invariants E8-AUTH-Inv4/Inv5 bind `ownerRecord = execWorker` at Running
+and `ownerRecord = waitOwner` at Waiting), but they are **different
+production fields**. In particular:
+
+```text
+Wake routing reads WaitReg.owner, NOT fiber_owner_.
+```
+
+The earlier wording of this section described the owner record as "the
+authoritative current-owner source" that "the wake path can read the
+current owner." That does not match as-built production: `wake_ready_*
+_locked` read `it->second.owner` (the registration's captured
+`WaitReg.owner`) and call `route_runnable_locked(f, owner)`; no wake
+path references `fiber_owner_`. The `fiber_owner_` record is the
+runnable ownership / steal-consistency record, not the routing authority.
+The TLA+ model has been corrected to separate `ownerRecord[f]`,
+`execWorker[f]`, and `waitOwner[f]`, with `WakeReady` routing by
+`waitOwner[f]`. See `docs/spec/e8_ownership_transfer/` and the audit at
+`docs/e8-formal-corrective/audit.md`.
 
 ### 9.3.6 Wake routing after transfer
 
-After `Steal(F, W0, W1)`, `owner[F] = W1`. Any future Completion wake or
-ready-flag wake must route F to W1.
+After `Steal(F, W0, W1)`, the runnable owner record `fiber_owner_[F]`
+becomes W1, so the ticket sits on W1's `local_runnable`. W1 then pops and
+runs F; at that point `g_worker = W1` and `WorkerState::current = F`.
+When F suspends, `await_*` captures `WaitReg.owner = g_worker = W1`. The
+subsequent wake reads `WaitReg.owner = W1` and routes F to W1. The
+lifecycle transition protocol preserves consistency between the runnable
+owner record, the execution Worker, and the captured wait resume owner;
+it does **not** route from `fiber_owner_`.
 
 A stolen Runnable Fiber has **no active wait registration** (E7
 `InvRunnableUnregistered`: `fiberState = Runnable => waitReg = None`).
-Therefore steal and wake do not race on the same valid Fiber epoch. The
-stale-owner hazard exists *only* in the negative model where ownership
-is not transferred: a post-steal suspend captures `WaitReg.owner = W1`
-(via `g_worker`), but if a global owner record still says W0, a wake
-reading the global record routes to W0 — the counterexample the negative
-TLA+ model must produce.
+Therefore steal and wake do not race on the same valid Fiber epoch:
+**steal is Runnable-only, so a valid steal never races with a live
+`WaitReg` for the same Fiber epoch.** The stale-owner hazard exists *only*
+in the negative TLA+ model where the steal moves the ticket but does NOT
+transfer the runnable owner record: the post-steal state has the ticket on
+W1's queue while `ownerRecord` still names W0, violating the local-ticket
+/ owner-record agreement (`InvLocalMatchesOwner`) — the runnable
+ticket / runnable owner-record split. Production does not read
+`fiber_owner_` on wake, so this negative model demonstrates the
+runnable-ownership defect class, not a stale `WaitReg` wake route.
 
 If the production code ever permits a wait registration to remain active
 on a Runnable Fiber, that is E8-ABORT-4 (a violated E7 publication/wait
@@ -999,10 +1058,12 @@ regression suites (`e7_dup_publication_test`, `e7_worker_test`,
 E8 proves:
 ```text
 runnable-only work stealing
-explicit Fiber execution ownership transfer
-owner-consistent future wake routing
-steal-vs-pop exclusivity
+explicit runnable ownership transfer (ticket + fiber_owner_ record)
+ticket/owner-record agreement across steal (the steal-consistency record)
+steal-vs-pop exclusivity (the consumer of the owner-local ticket becomes executor)
+wait-epoch resume routing: wake reads WaitReg.owner (captured g_worker at suspend)
 MW-S1 integration (stealable work is MW-S1)
+steal is Runnable-only => a valid steal never races a live WaitReg epoch
 ```
 
 E8 does **not** prove:

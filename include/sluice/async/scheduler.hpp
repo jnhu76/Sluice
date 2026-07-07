@@ -203,15 +203,20 @@ private:
     std::unordered_map<void*, WaitReg> waiting_void_{};
     std::unordered_map<const std::atomic<bool>*, WaitReg> waiting_ready_{};
 
-    // E8: authoritative current execution owner of each Fiber that has been
-    // spawned (protected by global_mtx_). Set at spawn, updated by suspend
-    // (to g_worker — the worker the fiber is about to leave parked waiting),
-    // and MUTATED by try_steal (victim -> thief). The wake path reads this
-    // to route a woken Fiber to its CURRENT owner, not a stale one. This is
-    // the production realization of the TLA+ `owner[f]` variable made
-    // mutable by StealRunnable (ADR §9.3.5). For E7-pinned Fibers this is
-    // write-once (spawn/suspend set the same worker) and behavior is
-    // identical to E7; E8 only diverges on steal.
+    // E8: the RUNNABLE ownership / steal-consistency record for each Fiber
+    // that has been spawned (protected by global_mtx_). It records which
+    // Worker's local_runnable queue currently holds the Fiber's runnable
+    // ticket. Writers: spawn / spawn_on / run() distribute (initial owner),
+    // and try_steal (victim -> thief). Readers: the steal eligibility check
+    // in try_steal (verify the victim still owns the stealable ticket) and
+    // the owner_of/owner_id_of test diagnostics.
+    //
+    // It is NOT read by any wake/route path: wake_ready_*_locked route by
+    // WaitReg.owner (captured as g_worker at suspend time). It is NOT
+    // updated by await_* (the wait-epoch resume owner is captured in
+    // WaitReg.owner, not here). See ADR §9.3.5.1 + docs/e8-formal-corrective.
+    // For E7-pinned Fibers this is write-once (spawn sets it; no steal
+    // occurs) and is behaviorally identical to E7; E8 only diverges on steal.
     std::unordered_map<Fiber*, WorkerState*> fiber_owner_{};
 
     // Global runnable queue for pre-start assignment (E7-A; E7-B will make this

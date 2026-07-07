@@ -69,7 +69,8 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
         unsigned target = next_spawn_worker_++ % static_cast<unsigned>(workers_.size());
         std::lock_guard<std::mutex> wlk(workers_[target]->inbox_mtx);
         workers_[target]->local_runnable.push_back(&fiber);
-        // E8: record the initial execution owner (ADR §9.3.5 owner variable).
+        // E8: record the initial runnable owner (ADR §9.3.5.1 ownerRecord;
+        // production realization of the TLA+ ownerRecord[f]).
         fiber_owner_[&fiber] = workers_[target].get();
         workers_[target]->inbox_cv.notify_one();
     } else {
@@ -143,7 +144,7 @@ void Scheduler::run(unsigned worker_count) {
             auto* tgt = workers_[w % worker_count].get();
             std::lock_guard<std::mutex> wlk(tgt->inbox_mtx);
             tgt->local_runnable.push_back(f);
-            // E8: record the initial execution owner for pre-run spawns.
+            // E8: record the initial runnable owner for pre-run spawns.
             fiber_owner_[f] = tgt;
             tgt->inbox_cv.notify_one();
             ++w;

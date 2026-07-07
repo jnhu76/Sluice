@@ -2,116 +2,157 @@
 (*
   Deliberately BROKEN variant of the E8 ownership-transfer protocol.
 
-  Defect (Model A — ticket-only steal): StealRunnable moves the ticket
-  W0Local -> W1Local but does NOT transfer owner. owner[F] stays W0.
+  SINGLE DEFECT (E8-FORMAL-CORRECTIVE): the buggy StealRunnable MOVES the
+  runnable ticket W0Local -> W1Local but does NOT transfer the runnable owner
+  record. ownerRecord[F] stays W0 while the ticket is on W1's local queue.
 
-  Causal chain the defect admits (the E8 spec §7 required counterexample):
-    F owned by W0
-    F runnable on W0 (ticket W0Local)
-    W1 steals F : ticket -> W1Local, owner stays W0
-    W1 pops F    : PopRunnable requires owner[f]=w; under the buggy model
-                   we relax PopRunnable to NOT check owner (the bug
-                   compounds: production would also need to pop without
-                   owner check, or the steal is a no-op). See PopRunnableBuggy.
-    F runs on W1, suspends : waitReg set; owner still W0.
-    F becomes ready, WakeReady fires : publishes ticket to LocalOf(owner[f])
-                   = LocalOf(W0) = W0Local.  <-- STALE OWNER ROUTE.
-    F is now runnable on W0's local queue, but W1 is the worker that
-    suspended it and is waiting to resume it. The ticket is on the wrong
-    worker.
+  This model is identical to E8OwnershipTransfer in every action EXCEPT
+  StealRunnableBuggy's ownerRecord update. In particular:
+    - PopRunnable is the SAME as the correct model (requires ownerRecord[f]=w
+      AND ticketLocation[f]=LocalOf(w)). There is NO PopRunnableBuggy. The
+      earlier compound-defect variant (which also relaxed PopRunnable) has been
+      removed -- it was a second, unnecessary bug.
 
-  TLC MUST find a counterexample to InvLocalMatchesOwner (and/or to a
-  "wake routes to current execution owner" property) whose causal trace
-  is semantically equivalent to:
-    F owned W0 -> stolen to W1 without owner transfer -> runs W1 ->
-    waits -> wakes -> stale owner says W0 -> routed back to W0.
+  Why a single defect suffices:
+    The defect class is "runnable ticket / runnable owner-record split", NOT
+    "stale WaitReg wake route". Production wake routing reads WaitReg.owner
+    (waitOwner), NOT fiber_owner_ (ownerRecord); so a stale-route counterexample
+    cannot be produced by this model at all (and would not match production).
+    The load-bearing property the buggy model must violate is
+    InvLocalMatchesOwner: after a steal, the ticket is on W1Local while
+    ownerRecord is still W0. PopRunnable cannot fire for W1 (ownerRecord=W0 !=
+    W1), so the stolen fiber is stranded -- exactly the E8-T4 "exactly one of
+    steal/pop wins" defect. TLC finds this shallow counterexample at depth 4.
 
-  This is the load-bearing E8 proof: the correct model (E8OwnershipTransfer)
-  PASSES InvLocalMatchesOwner; this buggy model FAILS it.
+  Required counterexample (E8 spec §6):
+    ownerRecord[f] = W0
+    ticketLocation[f] = W0Local
+    BrokenSteal W0 -> W1
+    ticketLocation[f] = W1Local
+    ownerRecord[f] = W0          \* remains victim
+    InvLocalMatchesOwner violated
+
+  TLC MUST find a counterexample to InvLocalMatchesOwner whose causal trace is
+  exactly: steal moves the ticket without transferring ownerRecord. This is the
+  load-bearing E8 proof: the correct model PASSES InvLocalMatchesOwner; this
+  buggy model FAILS it via the single intended defect.
 *)
 
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
-CONSTANTS Fibers, Workers, W0, W1, F0, F1
+CONSTANTS Fibers, Workers, W0, W1, F0, F1, NA
 
-VARIABLES fiberState, ticketLocation, waitReg, owner
+VARIABLES fiberState, ticketLocation, waitReg, ownerRecord, execWorker, waitOwner
 
 FiberState == {"Created", "Waiting", "Runnable", "Running", "Done"}
 TicketLoc  == {"None", "PendingSpawn", "W0Local", "W1Local", "W0Inbox", "W1Inbox"}
+WaitKeyVal == {"K"} \cup {"None"}
+
+ASSUME
+    /\ Fibers # {}
+    /\ Workers # {}
+    /\ W0 \in Workers
+    /\ W1 \in Workers
+    /\ NA \notin Workers
+    /\ W0 # W1
+    /\ F0 # F1
+    /\ F0 \in Fibers
+    /\ F1 \in Fibers
 
 LocalOf(w) == CASE w = W0 -> "W0Local"
                     [] w = W1 -> "W1Local"
+                    [] OTHER -> "None"
 
 InboxOf(w) == CASE w = W0 -> "W0Inbox"
                     [] w = W1 -> "W1Inbox"
+                    [] OTHER -> "None"
 
 Other(w) == IF w = W0 THEN W1 ELSE W0
+
+TicketLive(f) == ticketLocation[f] # "None"
+TicketFree(f) == ticketLocation[f] = "None"
+RegFree(f)    == waitReg[f] = "None"
+
+(* ---- All actions below are IDENTICAL to E8OwnershipTransfer except
+   StealRunnableBuggy (the single defect) and the module name. ---- *)
 
 SpawnPublish(f) ==
     /\ fiberState[f] = "Created"
     /\ fiberState' = [fiberState EXCEPT ![f] = "Runnable"]
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = "PendingSpawn"]
-    /\ owner' = [owner EXCEPT ![f] = W0]
-    /\ UNCHANGED waitReg
+    /\ ownerRecord' = [ownerRecord EXCEPT ![f] = W0]
+    /\ execWorker' = [execWorker EXCEPT ![f] = NA]
+    /\ waitOwner' = [waitOwner EXCEPT ![f] = NA]
+    /\ UNCHANGED <<waitReg>>
 
 MovePendingToOwnerLocal(f) ==
     /\ ticketLocation[f] = "PendingSpawn"
-    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]
-    /\ UNCHANGED <<fiberState, waitReg, owner>>
+    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(ownerRecord[f])]
+    /\ UNCHANGED <<fiberState, waitReg, ownerRecord, execWorker, waitOwner>>
 
 SuspendFiber(f) ==
     /\ fiberState[f] = "Running"
     /\ waitReg[f] = "None"
+    /\ waitOwner[f] = NA
     /\ fiberState' = [fiberState EXCEPT ![f] = "Waiting"]
     /\ waitReg' = [waitReg EXCEPT ![f] = "K"]
-    /\ UNCHANGED <<ticketLocation, owner>>
+    /\ waitOwner' = [waitOwner EXCEPT ![f] = execWorker[f]]
+    /\ execWorker' = [execWorker EXCEPT ![f] = NA]
+    /\ UNCHANGED <<ticketLocation, ownerRecord>>
 
 WakeReady(f) ==
     /\ fiberState[f] = "Waiting"
     /\ waitReg[f] # "None"
     /\ fiberState' = [fiberState EXCEPT ![f] = "Runnable"]
     /\ waitReg' = [waitReg EXCEPT ![f] = "None"]
-    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]
-    /\ UNCHANGED owner
+    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(waitOwner[f])]
+    /\ waitOwner' = [waitOwner EXCEPT ![f] = NA]
+    /\ UNCHANGED <<ownerRecord, execWorker>>
 
 MoveInboxToLocal(f) ==
-    /\ ticketLocation[f] = InboxOf(owner[f])
-    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]
-    /\ UNCHANGED <<fiberState, waitReg, owner>>
+    /\ ownerRecord[f] \in Workers
+    /\ ticketLocation[f] = InboxOf(ownerRecord[f])
+    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(ownerRecord[f])]
+    /\ UNCHANGED <<fiberState, waitReg, ownerRecord, execWorker, waitOwner>>
 
-(* BUGGY Pop: does NOT require owner[f] = w. A thief must be able to pop
-   the stolen ticket whose owner record still points at the victim; this
-   is the necessary compounding defect for Model A to even run the stolen
-   fiber. In the correct model PopRunnable requires owner[f]=w, which
-   would make a non-transferring steal a dead no-op (the thief could
-   never pop). The bug is precisely that production would relax this. *)
-PopRunnableBuggy(w, f) ==
+(* SAME as the correct model. The buggy model does NOT relax PopRunnable: the
+   load-bearing defect is solely in StealRunnableBuggy. Keeping PopRunnable
+   intact is what makes the ticket/owner-record split observable -- a stolen
+   fiber whose ownerRecord did not transfer CANNOT be popped by the thief
+   (ownerRecord[f]=victim # thief), so the defect surfaces as a stuck runnable
+   ticket on the wrong owner's queue (InvLocalMatchesOwner). *)
+PopRunnable(w, f) ==
     /\ fiberState[f] = "Runnable"
     /\ ticketLocation[f] = LocalOf(w)
-    \* NO owner check -- this is the bug.
+    /\ ownerRecord[f] = w
     /\ fiberState' = [fiberState EXCEPT ![f] = "Running"]
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = "None"]
-    /\ UNCHANGED <<waitReg, owner>>
+    /\ execWorker' = [execWorker EXCEPT ![f] = w]
+    /\ UNCHANGED <<waitReg, ownerRecord, waitOwner>>
 
-(* THE BROKEN ACTION: ticket moves, owner does NOT transfer. Model A. *)
+(* THE SINGLE DEFECT: ticket moves W0Local -> W1Local but ownerRecord does NOT
+   transfer (Model A). Every other line is identical to StealRunnable in the
+   correct model; only the ownerRecord update is broken. *)
 StealRunnableBuggy(victim, thief, f) ==
     /\ victim # thief
     /\ fiberState[f] = "Runnable"
-    /\ owner[f] = victim
+    /\ ownerRecord[f] = victim
     /\ ticketLocation[f] = LocalOf(victim)
+    /\ waitOwner[f] = NA
+    /\ execWorker[f] = NA
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(thief)]
-    /\ owner' = owner   \* <-- BUG: owner unchanged (Model A)
-    /\ UNCHANGED <<fiberState, waitReg>>
+    /\ ownerRecord' = ownerRecord   \* <-- BUG: ownerRecord unchanged (Model A). Correct model has [ownerRecord EXCEPT ![f] = thief].
+    /\ UNCHANGED <<fiberState, waitReg, execWorker, waitOwner>>
 
 FinishFiber(f) ==
     /\ fiberState[f] = "Running"
     /\ ticketLocation[f] = "None"
     /\ waitReg[f] = "None"
     /\ fiberState' = [fiberState EXCEPT ![f] = "Done"]
-    /\ UNCHANGED <<ticketLocation, waitReg, owner>>
+    /\ UNCHANGED <<ticketLocation, waitReg, ownerRecord, execWorker, waitOwner>>
 
 Stutter ==
-    /\ UNCHANGED <<fiberState, ticketLocation, waitReg, owner>>
+    /\ UNCHANGED <<fiberState, ticketLocation, waitReg, ownerRecord, execWorker, waitOwner>>
 
 Next ==
     \/ Stutter
@@ -120,7 +161,7 @@ Next ==
     \/ \E f \in Fibers : SuspendFiber(f)
     \/ \E f \in Fibers : WakeReady(f)
     \/ \E f \in Fibers : MoveInboxToLocal(f)
-    \/ \E w \in Workers, f \in Fibers : PopRunnableBuggy(w, f)
+    \/ \E w \in Workers, f \in Fibers : PopRunnable(w, f)
     \/ \E victim \in Workers, thief \in Workers, f \in Fibers :
         StealRunnableBuggy(victim, thief, f)
     \/ \E f \in Fibers : FinishFiber(f)
@@ -129,47 +170,34 @@ Init ==
     /\ fiberState = [f \in Fibers |-> "Created"]
     /\ ticketLocation = [f \in Fibers |-> "None"]
     /\ waitReg = [f \in Fibers |-> "None"]
-    /\ owner = [f \in Fibers |-> W0]
+    /\ ownerRecord = [f \in Fibers |-> NA]
+    /\ execWorker = [f \in Fibers |-> NA]
+    /\ waitOwner = [f \in Fibers |-> NA]
 
-Spec == Init /\ [][Next]_<<fiberState, ticketLocation, waitReg, owner>>
+Spec == Init /\ [][Next]_<<fiberState, ticketLocation, waitReg, ownerRecord, execWorker, waitOwner>>
 
 (* The load-bearing invariant the buggy model must violate:
-   after a steal->run->suspend->wake cycle, the new runnable ticket must
-   be on the CURRENT execution owner's queue. Under Model A the wake
-   routes to the stale owner (victim), so the ticket lands on the
-   victim's local queue while the thief is the execution owner.
-
-   We check BOTH:
-     - InvLocalMatchesOwner (ticket on local queue => owner matches)
-     - InvWakeRoutesToExecutionOwner (a Reachable-state property: there
-       exists a state where a fiber is Runnable with its ticket on W1Local
-       but owner=W0, OR a fiber was stolen to W1, ran on W1, suspended,
-       and woke to W0Local).
-
-   InvLocalMatchesOwner is the direct state invariant; the buggy model
-   admits a state where ticketLocation[f]=W1Local and owner[f]=W0 (right
-   after the buggy steal), which already violates it. The richer causal
-   chain (steal->run->suspend->wake->stale-route) is the semantic proof
-   that the violation is the stale-owner defect, not an unrelated one. *)
-
+   after a steal, the ticket is on W1Local but ownerRecord is still W0.
+   This is the runnable ticket / runnable owner-record split -- exactly the
+   defect class production prevents by transferring ownerRecord in try_steal. *)
 InvLocalMatchesOwner ==
     \A f \in Fibers :
-        /\ (ticketLocation[f] = "W0Local" => owner[f] = W0)
-        /\ (ticketLocation[f] = "W1Local" => owner[f] = W1)
+        /\ (ticketLocation[f] = "W0Local" => ownerRecord[f] = W0)
+        /\ (ticketLocation[f] = "W1Local" => ownerRecord[f] = W1)
 
 InvInboxMatchesOwner ==
     \A f \in Fibers :
-        /\ (ticketLocation[f] = "W0Inbox" => owner[f] = W0)
-        /\ (ticketLocation[f] = "W1Inbox" => owner[f] = W1)
+        /\ (ticketLocation[f] = "W0Inbox" => ownerRecord[f] = W0)
+        /\ (ticketLocation[f] = "W1Inbox" => ownerRecord[f] = W1)
 
-(* The full causal chain is reachable in the state graph (the buggy model
-   has no dead-end before wake): from the InvLocalMatchesOwner violation at
-   depth 4 (post-steal: ticket=W1Local, owner=W0), PopRunnableBuggy(W1) ->
-   SuspendFiber -> WakeReady reaches a state with ticketLocation=W0Local,
-   owner=W0, fiberState=Runnable, waitReg=None -- the stale-route. TLC finds
-   the shallower violation first; both are the same defect class. *)
+(* The full correct-model invariant conjunction (for completeness / to confirm
+   that ONLY InvLocalMatchesOwner is the one that falls). *)
+InvTicketImpliesRunnable ==
+    \A f \in Fibers :
+        ticketLocation[f] # "None" => fiberState[f] = "Runnable"
 
 Inv ==
+    /\ InvTicketImpliesRunnable
     /\ InvLocalMatchesOwner
     /\ InvInboxMatchesOwner
 =====

@@ -3,21 +3,55 @@
   E8 runnable ownership-transfer / work-stealing protocol (sluice-CORE-E8).
 
   Narrow TLA+ model of the abstract scheduling protocol whose correctness is
-  load-bearing for E8: stealing a Runnable Fiber TRANSFERS its execution
-  ownership to the thief, so a subsequent wake routes to the thief, not the
-  original owner.
+  load-bearing for E8: stealing a Runnable Fiber TRANSFERS its runnable
+  ownership to the thief, preserving the invariant that a stolen Fiber's
+  runnable ticket and runnable owner-record always agree (the steal-
+  consistency record), so that the thief — which becomes the current executor
+  on Pop — captures the correct Worker as the wait-epoch resume owner when it
+  later suspends.
+
+  STATE-INDEXED AUTHORITY MODEL (E8-FORMAL-CORRECTIVE).
+
+  The as-built production authority is state-indexed, NOT global. Three
+  distinct representations carry ownership/authority, one per Fiber phase:
+
+    ownerRecord[f]  -- RUNNABLE ownership + steal-consistency record.
+                       Production: Scheduler::fiber_owner_[F].
+                       Mutated by StealRunnable (victim -> thief). Read by the
+                       steal eligibility check. NOT read by any wake path.
+
+    execWorker[f]   -- RUNNING execution authority.
+                       Production: g_worker (TLS) / WorkerState::current.
+                       Set by PopRunnable (the consumer of the owner-local
+                       ticket becomes the executor). Cleared at Suspend.
+
+    waitOwner[f]    -- WAITING wait-epoch resume owner.
+                       Production: WaitReg.owner captured as g_worker at
+                       suspend time (Scheduler::await_* stores WaitReg{me, ws}
+                       with ws = g_worker). Read by WakeReady to route the
+                       woken Fiber. NOT ownerRecord.
+
+  These three agree at lifecycle transition boundaries (the invariants below),
+  but they are DIFFERENT production fields. In particular:
+
+    WakeReady routes by waitOwner[f], NOT by ownerRecord[f].
+
+  This matches production wake routing (wake_ready_*_locked read
+  it->second.owner = WaitReg.owner, then route_runnable_locked(f, owner)).
+  The earlier single-variable model read owner[f] in WakeReady, which silently
+  claimed wake routing reads fiber_owner_ — a refinement ambiguity that is
+  corrected here.
 
   Extends the E7 runnable-publication vocabulary (docs/spec/e7_publication/
-  E7Publication.tla). The E7 model is the CLOSED baseline: one successful
-  created|waiting -> runnable transition grants one runnable publication
-  capability; transport/consumption move/consume the ticket without
-  publishing. E8 adds ONE new action, StealRunnable, which is MOVE + OWNER
-  TRANSFER (never PUBLISH).
+  E7Publication.tla): one successful created|waiting -> runnable transition
+  grants one runnable publication capability; transport/consumption move/
+  consume the ticket without publishing. E8 adds ONE new action, StealRunnable,
+  which is MOVE + OWNER-RECORD TRANSFER (never PUBLISH).
 
   Domain (finite, exhaustive TLC): Workers = {W0, W1}, Fibers = {F0, F1}.
 
   Models ONLY the state relevant to ownership transfer / wake routing:
-    fiberState, ticketLocation, waitReg, owner.
+    fiberState, ticketLocation, waitReg, ownerRecord, execWorker, waitOwner.
   Does NOT model AsyncBackend, context-switch asm, stacks, ThreadPool, io_uring,
   performance, MW-S2 admission (closed by E7MultiWorkerProgress.tla), or
   Chase-Lev deques (E16).
@@ -25,13 +59,15 @@
 
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
-CONSTANTS Fibers, Workers, W0, W1, F0, F1
+CONSTANTS Fibers, Workers, W0, W1, F0, F1, NA
 
 VARIABLES
     fiberState,        \* [Fibers -> FiberState]
     ticketLocation,    \* [Fibers -> TicketLoc]  -- the ONE abstract runnable token
     waitReg,           \* [Fibers -> WaitKey | None]  -- active wait registration
-    owner              \* [Fibers -> Workers]    -- CURRENT execution owner (mutable by steal)
+    ownerRecord,       \* [Fibers -> Workers \cup {NA}]  -- RUNNABLE owner (runnable ticket owner); mutable by steal
+    execWorker,        \* [Fibers -> Workers \cup {NA}]  -- RUNNING executor (current Worker); set by Pop, cleared by Suspend
+    waitOwner          \* [Fibers -> Workers \cup {NA}]  -- WAITING wait-epoch resume owner; set by Suspend, read by Wake
 
 FiberState == {"Created", "Waiting", "Runnable", "Running", "Done"}
 TicketLoc  == {"None", "PendingSpawn", "W0Local", "W1Local", "W0Inbox", "W1Inbox"}
@@ -40,16 +76,28 @@ WaitKeyVal == {"K"} \cup {"None"}
 ASSUME
     /\ Fibers # {}
     /\ Workers # {}
+    /\ W0 \in Workers
+    /\ W1 \in Workers
+    /\ NA \notin Workers
+    /\ W0 # W1
+    /\ F0 # F1
+    /\ F0 \in Fibers
+    /\ F1 \in Fibers
 
 (* =========================================================================
    Helpers
    ========================================================================= *)
 
+(* Total over Workers \cup {NA}: return "None" for NA so the helpers never
+   throw a no-true-CASE branch. Callers that read the result also guard on
+   ownerRecord/waitOwner \in Workers where the value must be a real local. *)
 LocalOf(w) == CASE w = W0 -> "W0Local"
                     [] w = W1 -> "W1Local"
+                    [] OTHER -> "None"
 
 InboxOf(w) == CASE w = W0 -> "W0Inbox"
                     [] w = W1 -> "W1Inbox"
+                    [] OTHER -> "None"
 
 Other(w) == IF w = W0 THEN W1 ELSE W0
 
@@ -61,80 +109,114 @@ RegFree(f)    == waitReg[f] = "None"
    Actions
    ========================================================================= *)
 
-(* PUBLISH: spawn. created -> runnable, one ticket to pending_spawn_. *)
+(* PUBLISH: spawn. created -> runnable, one ticket to pending_spawn_.
+   Establishes the runnable owner record (initial owner). *)
 SpawnPublish(f) ==
     /\ fiberState[f] = "Created"
     /\ fiberState' = [fiberState EXCEPT ![f] = "Runnable"]
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = "PendingSpawn"]
-    /\ owner' = [owner EXCEPT ![f] = W0]   \* initial owner established at spawn
-    /\ UNCHANGED waitReg
+    /\ ownerRecord' = [ownerRecord EXCEPT ![f] = W0]   \* initial runnable owner established at spawn
+    /\ execWorker' = [execWorker EXCEPT ![f] = NA]     \* no executor while merely Runnable
+    /\ waitOwner' = [waitOwner EXCEPT ![f] = NA]       \* no wait-epoch resume owner while Runnable
+    /\ UNCHANGED <<waitReg>>
 
 (* MOVE: pending_spawn -> owner local (run() distribute). *)
 MovePendingToOwnerLocal(f) ==
     /\ ticketLocation[f] = "PendingSpawn"
-    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]
-    /\ UNCHANGED <<fiberState, waitReg, owner>>
+    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(ownerRecord[f])]
+    /\ UNCHANGED <<fiberState, waitReg, ownerRecord, execWorker, waitOwner>>
 
 (* STATE_ONLY (atomic): a Running fiber registers a wait AND suspends.
    Abstracts the production await_* sequence (register-under-lock, double-
-   check, make_waiting, switch away) as one linearized transition. *)
+   check, make_waiting, switch away) as one linearized transition.
+
+   THE WAIT-RESUME-AUTHORITY CAPTURE (E8-AUTH-Inv10): waitOwner' := execWorker.
+   Production equivalent: WaitReg.owner = g_worker at suspend time
+   (Scheduler::await_* stores WaitReg{me, ws} with ws = g_worker, the Worker
+   currently executing the Fiber). execWorker is cleared (the Fiber is no
+   longer running); waitReg is set. ownerRecord is left UNCHANGED -- production
+   never writes fiber_owner_ from await_*; it retains its last runnable-owner
+   value, which equals the suspend-time executor by the Running invariant. *)
 SuspendFiber(f) ==
     /\ fiberState[f] = "Running"
     /\ waitReg[f] = "None"
+    /\ waitOwner[f] = NA   \* precondition hygiene: waitOwner must be NA before capture
     /\ fiberState' = [fiberState EXCEPT ![f] = "Waiting"]
     /\ waitReg' = [waitReg EXCEPT ![f] = "K"]
-    /\ UNCHANGED <<ticketLocation, owner>>
+    /\ waitOwner' = [waitOwner EXCEPT ![f] = execWorker[f]]   \* capture current executor (WaitReg.owner = g_worker)
+    /\ execWorker' = [execWorker EXCEPT ![f] = NA]            \* no executor while Waiting
+    /\ UNCHANGED <<ticketLocation, ownerRecord>>
 
 (* PUBLISH: wake a waiting fiber. Waiting -> Runnable; exactly ONE ticket
-   published to the CURRENT owner's local queue. The owner read here is
-   the load-bearing one: it MUST reflect any StealRunnable that happened
-   since the original spawn. *)
+   published to the queue named by waitOwner[f] -- the captured wait-epoch
+   resume owner.
+
+   ROUTING AUTHORITY = waitOwner[f] (production WaitReg.owner). NOT ownerRecord.
+   This is the load-bearing correction: production wake_ready_*_locked reads
+   it->second.owner (the registration's captured owner) and calls
+   route_runnable_locked(f, owner). ownerRecord[f] is invariant-equal to
+   waitOwner[f] in valid Waiting states (Inv5), but it is NOT the routing
+   source. Modeling wake as reading waitOwner preserves the distinction
+   between the routing authority and the consistency relation. *)
 WakeReady(f) ==
     /\ fiberState[f] = "Waiting"
     /\ waitReg[f] # "None"
     /\ fiberState' = [fiberState EXCEPT ![f] = "Runnable"]
     /\ waitReg' = [waitReg EXCEPT ![f] = "None"]
-    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]
-    /\ UNCHANGED owner
+    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(waitOwner[f])]
+    /\ waitOwner' = [waitOwner EXCEPT ![f] = NA]   \* resume owner consumed
+    /\ UNCHANGED <<ownerRecord, execWorker>>
 
 (* MOVE: owner inbox -> owner local. Cardinality unchanged. Kept for
    vocabulary completeness with E7; production inbox is dead storage
-   (E8-0 audit O5/O6) but the model permits the transition. *)
+   (E8-0 audit O5/O6) but the model permits the transition. Guarded on
+   ownerRecord \in Workers so the LocalOf/InboxOf CASE helpers (which are
+   total only over {W0,W1}) are never evaluated at NA. *)
 MoveInboxToLocal(f) ==
-    /\ ticketLocation[f] = InboxOf(owner[f])
-    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(owner[f])]
-    /\ UNCHANGED <<fiberState, waitReg, owner>>
+    /\ ownerRecord[f] \in Workers
+    /\ ticketLocation[f] = InboxOf(ownerRecord[f])
+    /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(ownerRecord[f])]
+    /\ UNCHANGED <<fiberState, waitReg, ownerRecord, execWorker, waitOwner>>
 
 (* CONSUME: pop a runnable ticket; Runnable -> Running; ticket consumed.
    Requires the ticket be on THIS worker's local queue == the current
-   owner's queue (E8-Inv10). *)
+   ownerRecord's queue (E8-AUTH-Inv3 / former Inv10). The consumer becomes
+   the executor: execWorker' := w (production: run_next_on sets
+   WorkerState::current = fiber on ws; g_worker = ws on the worker thread). *)
 PopRunnable(w, f) ==
     /\ fiberState[f] = "Runnable"
     /\ ticketLocation[f] = LocalOf(w)
-    /\ owner[f] = w
+    /\ ownerRecord[f] = w
     /\ fiberState' = [fiberState EXCEPT ![f] = "Running"]
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = "None"]
-    /\ UNCHANGED <<waitReg, owner>>
+    /\ execWorker' = [execWorker EXCEPT ![f] = w]
+    /\ UNCHANGED <<waitReg, ownerRecord, waitOwner>>
 
 (* =========================================================================
    THE E8 ACTION: StealRunnable.
 
-   MOVE existing ticket + TRANSFER owner. Does NOT call make_runnable
-   (no created|waiting -> runnable transition). Does NOT create a second
-   ticket. The ticket simply changes local queue and the owner record
-   changes to the thief. One abstract transition.
+   MOVE existing ticket + TRANSFER runnable ownerRecord. Does NOT call
+   make_runnable (no created|waiting -> runnable transition). Does NOT create
+   a second ticket. The ticket changes local queue and the runnable owner
+   record changes to the thief. One abstract transition.
 
-   Preconditions:  Runnable, owner = victim, ticket on victim's local.
-   Postconditions: Runnable, owner = thief,  ticket on thief's local.
+   Preconditions:  Runnable, ownerRecord = victim, ticket on victim's local,
+                   waitOwner = None (a valid Runnable Fiber has no active wait
+                   registration -- E7 InvRunnableUnregistered; steal cannot
+                   race with a live wait epoch).
+   Postconditions: Runnable, ownerRecord = thief, ticket on thief's local.
+   Unchanged:      execWorker, waitOwner (both None for a valid Runnable Fiber).
    ========================================================================= *)
 StealRunnable(victim, thief, f) ==
     /\ victim # thief
     /\ fiberState[f] = "Runnable"
-    /\ owner[f] = victim
+    /\ ownerRecord[f] = victim
     /\ ticketLocation[f] = LocalOf(victim)
+    /\ waitOwner[f] = NA   \* steal cannot race a live wait epoch (Inv9)
+    /\ execWorker[f] = NA  \* a valid Runnable Fiber has no executor
     /\ ticketLocation' = [ticketLocation EXCEPT ![f] = LocalOf(thief)]
-    /\ owner' = [owner EXCEPT ![f] = thief]
-    /\ UNCHANGED <<fiberState, waitReg>>
+    /\ ownerRecord' = [ownerRecord EXCEPT ![f] = thief]
+    /\ UNCHANGED <<fiberState, waitReg, execWorker, waitOwner>>
 
 (* STATE_ONLY: finish. Running -> Done. Precondition: no ticket, no reg. *)
 FinishFiber(f) ==
@@ -142,12 +224,12 @@ FinishFiber(f) ==
     /\ ticketLocation[f] = "None"
     /\ waitReg[f] = "None"
     /\ fiberState' = [fiberState EXCEPT ![f] = "Done"]
-    /\ UNCHANGED <<ticketLocation, waitReg, owner>>
+    /\ UNCHANGED <<ticketLocation, waitReg, ownerRecord, execWorker, waitOwner>>
 
 (* Stutter: no spurious deadlock; safety invariants checked across all
    reachable states including terminal ones. *)
 Stutter ==
-    /\ UNCHANGED <<fiberState, ticketLocation, waitReg, owner>>
+    /\ UNCHANGED <<fiberState, ticketLocation, waitReg, ownerRecord, execWorker, waitOwner>>
 
 (* =========================================================================
    Next, Init, Spec
@@ -169,69 +251,106 @@ Init ==
     /\ fiberState = [f \in Fibers |-> "Created"]
     /\ ticketLocation = [f \in Fibers |-> "None"]
     /\ waitReg = [f \in Fibers |-> "None"]
-    /\ owner = [f \in Fibers |-> W0]   \* placeholder until SpawnPublish sets it
+    /\ ownerRecord = [f \in Fibers |-> NA]   \* no runnable owner until SpawnPublish sets it
+    /\ execWorker = [f \in Fibers |-> NA]    \* no fiber is Running at Init
+    /\ waitOwner = [f \in Fibers |-> NA]     \* no fiber is Waiting at Init
 
-Spec == Init /\ [][Next]_<<fiberState, ticketLocation, waitReg, owner>>
+Spec == Init /\ [][Next]_<<fiberState, ticketLocation, waitReg, ownerRecord, execWorker, waitOwner>>
 
 (* =========================================================================
-   E8 safety invariants (E8-Inv1 .. E8-Inv10)
+   E8-AUTH safety invariants (state-indexed authority)
+
+   "NA" (not-a-worker) is the explicit empty marker for the authority fields:
+   a Fiber that is not Running has execWorker = NA; a Fiber that is not
+   Waiting has waitOwner = NA. This keeps the routing-authority field
+   (waitOwner) and the consistency field (ownerRecord) distinct from the
+   real-Worker domain, so phase guards bind them unambiguously.
    ========================================================================= *)
 
-(* E8-Inv1: Ticket implies Runnable. *)
+(* E8-AUTH-Inv1: Ticket implies Runnable. *)
 InvTicketImpliesRunnable ==
     \A f \in Fibers :
         ticketLocation[f] # "None" => fiberState[f] = "Runnable"
 
-(* E8-Inv2: Runnable owns one ticket (E7 linear-ticket rule). *)
-InvRunnableHasTicket ==
+(* E8-AUTH-Inv2: Runnable has one ticket and owner record; no exec/wait auth. *)
+InvRunnableAuthority ==
     \A f \in Fibers :
-        fiberState[f] = "Runnable" => ticketLocation[f] # "None"
+        fiberState[f] = "Runnable"
+            => /\ ticketLocation[f] # "None"
+               /\ ownerRecord[f] \in Workers
+               /\ execWorker[f] = NA            \* no executor while merely Runnable
+               /\ waitOwner[f] = NA             \* no wait-epoch resume owner while Runnable
 
-(* E8-Inv3: Local ticket matches CURRENT owner (load-bearing after steal). *)
+(* E8-AUTH-Inv3: Local ticket matches runnable owner record (load-bearing
+   after steal; this is what the negative model violates). *)
 InvLocalMatchesOwner ==
     \A f \in Fibers :
-        /\ (ticketLocation[f] = "W0Local" => owner[f] = W0)
-        /\ (ticketLocation[f] = "W1Local" => owner[f] = W1)
+        /\ (ticketLocation[f] = "W0Local" => ownerRecord[f] = W0)
+        /\ (ticketLocation[f] = "W1Local" => ownerRecord[f] = W1)
 
-(* E8-Inv4: Inbox destination matches CURRENT owner. *)
+(* E8-AUTH-Inv3b: Inbox destination matches runnable owner record. *)
 InvInboxMatchesOwner ==
     \A f \in Fibers :
-        /\ (ticketLocation[f] = "W0Inbox" => owner[f] = W0)
-        /\ (ticketLocation[f] = "W1Inbox" => owner[f] = W1)
+        /\ (ticketLocation[f] = "W0Inbox" => ownerRecord[f] = W0)
+        /\ (ticketLocation[f] = "W1Inbox" => ownerRecord[f] = W1)
 
-(* E8-Inv5: Waiting Fibers are not stealable (no ticket; steal disabled). *)
-InvWaitingTicketFree ==
+(* E8-AUTH-Inv4: Running authority consistency.
+   fiberState = Running => execWorker is a real Worker, no ticket, no wait
+   auth, and ownerRecord agrees with execWorker (the consumer of the owner-
+   local ticket becomes the executor). *)
+InvRunningAuthority ==
     \A f \in Fibers :
-        fiberState[f] = "Waiting" => ticketLocation[f] = "None"
+        fiberState[f] = "Running"
+            => /\ execWorker[f] \in Workers
+               /\ ticketLocation[f] = "None"
+               /\ waitOwner[f] = NA            \* no live wait resume owner while Running
+               /\ waitReg[f] = "None"
+               /\ ownerRecord[f] = execWorker[f]
 
-(* E8-Inv6: Running Fibers are not stealable (no ticket). *)
-InvRunningTicketFree ==
+(* E8-AUTH-Inv5: Waiting authority consistency.
+   fiberState = Waiting => waitOwner is a real Worker (the resume authority),
+   no ticket, no executor, and ownerRecord is invariant-equal to waitOwner
+   (the runnable owner record retains the suspend-time executor because the
+   Running invariant bound ownerRecord=execWorker, and Suspend sets
+   waitOwner=execWorker while leaving ownerRecord unchanged). *)
+InvWaitingAuthority ==
     \A f \in Fibers :
-        fiberState[f] = "Running" => ticketLocation[f] = "None"
+        fiberState[f] = "Waiting"
+            => /\ waitReg[f] # "None"
+               /\ ticketLocation[f] = "None"
+               /\ execWorker[f] = NA          \* no executor while Waiting
+               /\ waitOwner[f] \in Workers
+               /\ ownerRecord[f] = waitOwner[f]
 
-(* E8-Inv7: Done Fibers are detached. *)
+(* E8-AUTH-Inv6: Wake routes by wait owner.
+   Encoded structurally in WakeReady: ticketLocation' = LocalOf(waitOwner[f]).
+   There is NO abstract rule by which WakeReady routes via ownerRecord, even
+   though ownerRecord = waitOwner in all valid Waiting states (Inv5). The
+   model preserves the routing-authority vs consistency-relation distinction.
+   (Structural; no separate state formula.) *)
+
+(* E8-AUTH-Inv7: Done detached. *)
 InvDoneDetached ==
     \A f \in Fibers :
         fiberState[f] = "Done"
             => /\ ticketLocation[f] = "None"
                /\ waitReg[f] = "None"
 
-(* E8-Inv8: Steal preserves ticket cardinality. Encoded structurally:
-   StealRunnable has NO make_runnable and moves one ticket; it cannot
-   produce ticketLocation = None -> NonNone. The companion state invariant
-   is that the total number of live tickets is unchanged by StealRunnable
-   (it moves a NonNone loc to another NonNone loc). Captured by Inv1+Inv2
-   together with StealRunnable's pre/post. No additional formula needed;
-   this is documentation. *)
+(* E8-AUTH-Inv8: Steal preserves one ticket. Encoded structurally:
+   StealRunnable has no make_runnable and moves one ticket; it cannot
+   produce ticketLocation None -> NonNone. Captured by Inv1 + Inv2 together
+   with StealRunnable's pre/post. (Structural; no separate formula.) *)
 
-(* E8-Inv9: Wake routes to CURRENT owner. Encoded structurally in WakeReady:
-   ticketLocation' = LocalOf(owner[f]). The state-level companion is
-   InvLocalMatchesOwner: after WakeReady the new ticket is on the current
-   owner's local queue. No separate formula. *)
+(* E8-AUTH-Inv9: Steal cannot race with a valid Waiting authority.
+   StealRunnable is enabled only for fiberState = Runnable and waitOwner = NA
+   (precondition). A valid Fiber cannot simultaneously be stealable and
+   registered for wait resume (E7 InvRunnableUnregistered). (Structural +
+   InvRunnableUnregistered.) *)
 
-(* E8-Inv10: Pop executes only current-owner work. Encoded structurally in
-   PopRunnable: requires owner[f] = w AND ticketLocation[f] = LocalOf(w).
-   State-level companion: InvLocalMatchesOwner. *)
+(* E8-AUTH-Inv10: Suspend captures current executor.
+   Encoded structurally in SuspendFiber: waitOwner' = execWorker. (Structural;
+   the state-level consequence is InvWaitingAuthority: waitOwner is set and
+   equals ownerRecord which equaled execWorker under InvRunningAuthority.) *)
 
 (* Waiting iff registered (E7 baseline, preserved). *)
 InvWaitingRegistered ==
@@ -247,21 +366,13 @@ InvRunnableUnregistered ==
     \A f \in Fibers :
         fiberState[f] = "Runnable" => waitReg[f] = "None"
 
-(* E8-Inv-extra: a stolen fiber that suspends on the thief and wakes must
-   route to the thief. This is the E8-T3 causal chain. It is a property of
-   the *sequence* StealRunnable -> PopRunnable(thief) -> SuspendFiber ->
-   WakeReady. The state invariant that closes it is InvLocalMatchesOwner
-   evaluated after WakeReady: the new ticket is on LocalOf(owner[f]),
-   and owner[f] = thief (set by StealRunnable, unchanged by Pop/Suspend/
-   Wake). So InvLocalMatchesOwner is the load-bearing check. *)
-
 Inv ==
     /\ InvTicketImpliesRunnable
-    /\ InvRunnableHasTicket
+    /\ InvRunnableAuthority
     /\ InvLocalMatchesOwner
     /\ InvInboxMatchesOwner
-    /\ InvWaitingTicketFree
-    /\ InvRunningTicketFree
+    /\ InvRunningAuthority
+    /\ InvWaitingAuthority
     /\ InvDoneDetached
     /\ InvWaitingRegistered
     /\ InvRegisteredWaiting
