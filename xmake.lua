@@ -696,3 +696,20 @@ do
             add_tests("e7_dup_publication_test")
     end
 end
+
+-- e8_steal_test — runnable ownership transfer / work stealing (sluice-CORE-E8).
+-- Proves steal = MOVE + OWNER TRANSFER (never PUBLISH); stolen Fiber
+-- wake-routes to the thief. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e8_steal_test.cpp"
+    if os.isfile(p) then
+        target("e8_steal_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e8_steal_test")
+    end
+end

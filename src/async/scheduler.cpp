@@ -69,10 +69,35 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
         unsigned target = next_spawn_worker_++ % static_cast<unsigned>(workers_.size());
         std::lock_guard<std::mutex> wlk(workers_[target]->inbox_mtx);
         workers_[target]->local_runnable.push_back(&fiber);
+        // E8: record the initial execution owner (ADR §9.3.5 owner variable).
+        fiber_owner_[&fiber] = workers_[target].get();
         workers_[target]->inbox_cv.notify_one();
     } else {
         pending_spawn_.push_back(&fiber);
+        // Owner is assigned at run() distribute time; record a placeholder
+        // (null) here. run() will set fiber_owner_ when it distributes.
     }
+}
+
+void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
+    // E8 test seam: place `fiber` directly on worker `worker_id`'s
+    // local_runnable. No-op if the make_runnable PUBLISH fails (created->
+    // runnable didn't happen). Records the owner as worker_id. Narrow
+    // deterministic-test hook (see header).
+    if (!fiber.make_runnable()) return;
+    std::lock_guard<std::mutex> lk(global_mtx_);
+    if (worker_id >= workers_.size()) {
+        // Workers not created yet — fall back to pending_spawn_; the run()
+        // distribute will assign round-robin (test must call spawn_on after
+        // workers exist, i.e. from inside a Fiber body during a run).
+        pending_spawn_.push_back(&fiber);
+        return;
+    }
+    WorkerState* tgt = workers_[worker_id].get();
+    std::lock_guard<std::mutex> wlk(tgt->inbox_mtx);
+    tgt->local_runnable.push_back(&fiber);
+    fiber_owner_[&fiber] = tgt;
+    tgt->inbox_cv.notify_one();
 }
 
 WorkerState* Scheduler::current_worker() {
@@ -115,9 +140,12 @@ void Scheduler::run(unsigned worker_count) {
         while (!pending_spawn_.empty()) {
             auto* f = pending_spawn_.front();
             pending_spawn_.pop_front();
-            std::lock_guard<std::mutex> wlk(workers_[w % worker_count]->inbox_mtx);
-            workers_[w % worker_count]->local_runnable.push_back(f);
-            workers_[w % worker_count]->inbox_cv.notify_one();
+            auto* tgt = workers_[w % worker_count].get();
+            std::lock_guard<std::mutex> wlk(tgt->inbox_mtx);
+            tgt->local_runnable.push_back(f);
+            // E8: record the initial execution owner for pre-run spawns.
+            fiber_owner_[f] = tgt;
+            tgt->inbox_cv.notify_one();
             ++w;
         }
     }
@@ -194,6 +222,18 @@ void Scheduler::worker_loop(WorkerState* ws) {
             if (!pending_spawn_.empty()) {
                 f = pending_spawn_.front();
                 pending_spawn_.pop_front();
+            }
+        }
+
+        // E8: if this worker has no local work, try to steal a runnable
+        // Fiber from another worker before falling through to the idle/
+        // admission path. Steal is MOVE + OWNER TRANSFER; on success a
+        // runnable ticket now sits on ws->local_runnable owned by ws, so
+        // loop back and pop it. try_steal is a no-op if there is only one
+        // worker or no other worker has runnable work.
+        if (!f && workers_.size() > 1) {
+            if (try_steal(ws)) {
+                continue;  // stolen ticket is on ws->local_runnable; pop next iteration
             }
         }
 
@@ -578,6 +618,64 @@ std::size_t Scheduler::runnable_count() const {
         total += w->local_runnable.size();
     }
     return total;
+}
+
+bool Scheduler::try_steal(WorkerState* thief) {
+    // E8 StealRunnable (ADR §9.3.4): MOVE one runnable ticket from a victim's
+    // local_runnable to thief->local_runnable AND TRANSFER owner victim->thief,
+    // as one atomic transition under global_mtx_. NEVER calls make_runnable
+    // (the fiber is already Runnable; steal is transport, not publication).
+    //
+    // Victim selection (non-normative, ADR §9.3.8): round-robin over the
+    // other workers, steal from the first that has runnable work. Deterministic
+    // enough to test; no NUMA/priority/affinity.
+    //
+    // Linearization (ADR §9.3.5): the entire remove-from-victim / set-owner /
+    // push-to-thief sequence happens under global_mtx_, which is the same
+    // domain that reads owner/ticket state (E8-0 audit O8). No IN_TRANSIT
+    // state is observable.
+    if (workers_.size() <= 1) return false;  // nothing to steal from
+
+    std::lock_guard<std::mutex> lk(global_mtx_);
+    // Round-robin victim starting point keyed on thief id to spread load.
+    unsigned n = static_cast<unsigned>(workers_.size());
+    for (unsigned k = 1; k < n; ++k) {
+        unsigned vidx = (thief->id + k) % n;
+        WorkerState* victim = workers_[vidx].get();
+        Fiber* stolen = nullptr;
+        {
+            std::lock_guard<std::mutex> vlk(victim->inbox_mtx);
+            // Find a stealable ticket: a Fiber on victim->local_runnable that
+            // is Runnable and currently owned by victim. local_runnable holds
+            // only runnable tickets in the well-formed path, but a defensive
+            // state check guards against any drift.
+            for (auto it = victim->local_runnable.begin();
+                 it != victim->local_runnable.end(); ++it) {
+                Fiber* f = *it;
+                if (f->state() != FiberState::runnable) continue;
+                auto oit = fiber_owner_.find(f);
+                if (oit == fiber_owner_.end() || oit->second != victim) continue;
+                stolen = f;
+                victim->local_runnable.erase(it);
+                break;
+            }
+        }
+        if (stolen) {
+            // Transfer owner (the E8 mutation) and push to thief.
+            fiber_owner_[stolen] = thief;
+            {
+                std::lock_guard<std::mutex> tlk(thief->inbox_mtx);
+                thief->local_runnable.push_back(stolen);
+            }
+            thief->inbox_cv.notify_one();
+            // Stealable work was MW-S1; a successful steal keeps it MW-S1
+            // (ticket count unchanged — see E8-0 audit O7). No admission
+            // demotion needed: route_runnable_locked's admission-cancel is
+            // for NEW publications; steal moves an existing ticket.
+            return true;
+        }
+    }
+    return false;
 }
 
 }  // namespace sluice::async

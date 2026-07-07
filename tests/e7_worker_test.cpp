@@ -138,9 +138,16 @@ SLUICE_TEST_CASE(e7_t2_worker_local_scheduler_context) {
     sched.spawn(fset);
     sched.run(2);
 
-    SLUICE_CHECK(a_tid_pre == a_tid_post);  // resumed on same OS thread
+    SLUICE_CHECK(a_tid_pre == a_tid_post);  // resumed on same OS thread (worker-local sched_ctx)
     SLUICE_CHECK(b_tid_pre == b_tid_post);
-    SLUICE_CHECK(a_tid_pre != b_tid_pre);   // ran on different OS threads
+    // E8 NOTE: the original E7-T2 also asserted `a_tid_pre != b_tid_pre`
+    // ("ran on different OS threads") to prove two distinct workers. E8
+    // introduces work stealing (ADR §9.3), so one waiter may be STOLEN by
+    // the other's worker, making both pre-suspend tids equal. That is
+    // correct under E8 (ownership transfers). The load-bearing E7-T2 claim
+    // is worker-local sched_ctx: each Fiber resumes on the SAME OS thread
+    // it suspended on (asserted above). The "different threads" proxy is
+    // dropped as E8-invalid.
     SLUICE_CHECK(fa.state() == FiberState::done);
     SLUICE_CHECK(fb.state() == FiberState::done);
     SLUICE_CHECK(fset.state() == FiberState::done);
@@ -190,7 +197,17 @@ SLUICE_TEST_CASE(e7_t3_pinned_resume_on_owning_worker) {
 // ---- E7-T7: internal Worker notification — cross-worker routed work -------
 // Worker 1 (setter) makes a flag ready for Fiber A owned by Worker 0. Worker 0
 // must observe the routed runnable work and resume A. Assert: A resumes on
-// Worker 0 (its owner); the setter ran on a different worker.
+// its owner (Worker 0); the setter runs to completion.
+//
+// E8 NOTE: E7-T7 originally asserted `a_tid != setter_tid` ("ran on different
+// Workers") as a proxy for "both fibers ran." E8 introduces work stealing
+// (ADR §9.3), so the setter — initially assigned to Worker 1 — may be STOLEN
+// by Worker 0 (which is idle while A waits). Under E8 this is correct:
+// ownership transfers to the thief. The load-bearing E7-T7 claim (cross-
+// worker routed wake: W0's A is woken by a flag and resumes on W0) is
+// unchanged and still asserted. The "different worker" proxy is dropped as
+// E8-invalid. The E7-pinned variant is preserved in e7_dup_publication_test
+// semantics; E8 stealing is proven in e8_steal_test.
 SLUICE_TEST_CASE(e7_t7_internal_worker_notification) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -198,20 +215,22 @@ SLUICE_TEST_CASE(e7_t7_internal_worker_notification) {
     Scheduler sched(ctx);
 
     std::atomic<bool> flag_a{false};
-    std::thread::id a_tid{}, setter_tid{};
+    std::thread::id a_tid{}, a_tid_post{};
     std::atomic<bool> a_suspended{false};
+    std::atomic<bool> setter_ran{false};
 
     Fiber fa;
     fa.set_entry([&](Fiber&) {
         a_tid = std::this_thread::get_id();
         a_suspended.store(true);
         sched.await_ready_flag(flag_a);
+        a_tid_post = std::this_thread::get_id();
     });
     Fiber fset;
     fset.set_entry([&](Fiber&) {
-        setter_tid = std::this_thread::get_id();
         while (!a_suspended.load()) {}
         flag_a.store(true, std::memory_order_release);
+        setter_ran.store(true);
     });
     FiberStack sa, sset;
     SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
@@ -220,7 +239,12 @@ SLUICE_TEST_CASE(e7_t7_internal_worker_notification) {
     sched.spawn(fset); // → Worker 1
     sched.run(2);
 
-    SLUICE_CHECK(a_tid != setter_tid);  // ran on different Workers
+    // Load-bearing E7-T7 claim: A resumed on its owning Worker 0 (pinned
+    // wake routing preserved even under E8 stealing — a stolen Fiber's
+    // wake routes to its CURRENT owner, and A was never stolen: it
+    // suspended on W0 and woke on W0).
+    SLUICE_CHECK(a_tid == a_tid_post);
+    SLUICE_CHECK(setter_ran.load());
     SLUICE_CHECK(fa.state() == FiberState::done);
     SLUICE_CHECK(fset.state() == FiberState::done);
 }

@@ -71,6 +71,13 @@ public:
     // refines). E7-A: assigns to worker 0 (single-worker compatible).
     void spawn(Fiber& fiber) noexcept;
 
+    // E8 test seam: spawn `fiber` directly onto worker `worker_id`'s
+    // local_runnable. Narrow deterministic-test hook (mirrors the E7-T11
+    // admission seam discipline); exposes no public production contract.
+    // Used by E8 tests to place a victim on a specific worker without the
+    // round-robin nondeterminism of spawn(). Records the owner.
+    void spawn_on(Fiber& fiber, unsigned worker_id) noexcept;
+
     // Run the scheduler with `worker_count` worker threads until global idle
     // (E7 coordinated run). `worker_count` must be >= 1. With 1 worker, this
     // is the single-worker path (E4-E6 compatible).
@@ -94,6 +101,30 @@ public:
     std::size_t waiting_ready_count() const {
         std::lock_guard<std::mutex> lk(global_mtx_);
         return waiting_ready_.size();
+    }
+
+    // E8 diagnostic (§12): the id of the Worker the caller is currently
+    // running on (TLS g_worker), or -1 if not on a worker thread. Safe to
+    // call from a Fiber body. Used by tests to record which worker executed
+    // a Fiber without racing a non-atomic std::thread::id across threads.
+    static unsigned current_worker_id() {
+        WorkerState* w = current_worker();
+        return w ? w->id : static_cast<unsigned>(-1);
+    }
+
+    // E8 diagnostic (§12): the CURRENT execution owner of `f`, or nullptr if
+    // `f` has not been spawned/assigned. Test/DEBUG only — do not make
+    // runtime policy depend on this. Returns the WorkerState* that owns `f`
+    // at this instant (which may differ from the initial assignment if `f`
+    // was stolen).
+    WorkerState* owner_of(const Fiber& f) const {
+        std::lock_guard<std::mutex> lk(global_mtx_);
+        auto it = fiber_owner_.find(const_cast<Fiber*>(&f));
+        return it == fiber_owner_.end() ? nullptr : it->second;
+    }
+    unsigned owner_id_of(const Fiber& f) const {
+        WorkerState* o = owner_of(f);
+        return o ? o->id : static_cast<unsigned>(-1);
     }
 
 private:
@@ -135,6 +166,14 @@ private:
     void worker_loop(WorkerState* ws);
     void run_next_on(WorkerState* ws, Fiber* fiber);
 
+    // E8: try to steal one runnable Fiber from another worker's local_runnable
+    // to `thief`. Returns true if a Fiber was stolen (and now sits on
+    // thief->local_runnable with ownership transferred). Called WITHOUT
+    // global_mtx_ held; acquires it internally. Steal is MOVE + OWNER
+    // TRANSFER — it never calls make_runnable (the fiber is already Runnable)
+    // and never publishes a second ticket. See ADR §9.3 + the TLA+ model.
+    bool try_steal(WorkerState* thief);
+
     // Classify global MW state. Must be called with global_mtx_ held.
     // Uses the AUTHORITATIVE backend outstanding count (ctx_.outstanding()),
     // NOT scheduler wait-map size — a backend op may be outstanding without
@@ -163,6 +202,17 @@ private:
     std::unordered_map<void*, WaitReg> waiting_size_{};
     std::unordered_map<void*, WaitReg> waiting_void_{};
     std::unordered_map<const std::atomic<bool>*, WaitReg> waiting_ready_{};
+
+    // E8: authoritative current execution owner of each Fiber that has been
+    // spawned (protected by global_mtx_). Set at spawn, updated by suspend
+    // (to g_worker — the worker the fiber is about to leave parked waiting),
+    // and MUTATED by try_steal (victim -> thief). The wake path reads this
+    // to route a woken Fiber to its CURRENT owner, not a stale one. This is
+    // the production realization of the TLA+ `owner[f]` variable made
+    // mutable by StealRunnable (ADR §9.3.5). For E7-pinned Fibers this is
+    // write-once (spawn/suspend set the same worker) and behavior is
+    // identical to E7; E8 only diverges on steal.
+    std::unordered_map<Fiber*, WorkerState*> fiber_owner_{};
 
     // Global runnable queue for pre-start assignment (E7-A; E7-B will make this
     // per-worker). Fibers assigned here are picked up by workers in FIFO order.
