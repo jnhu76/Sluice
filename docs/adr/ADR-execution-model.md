@@ -799,6 +799,226 @@ E7-T11 — MW-S2 admission race:
 
 This ADR patch does not require implementation.
 
+## 9.3 E8 runnable ownership-transfer contract (added by E8-ADR)
+
+This section defines the E8 runnable-ownership-transfer decision. E8
+extends E7's pinned-ownership contract to allow an idle Worker to execute
+a Runnable Fiber currently owned by another Worker, by *transferring
+ownership* of the Fiber to the thief as part of the steal. The E8-0
+ownership topology audit (`docs/e8-0-ownership-topology-audit.md`)
+established that no E7 invariant contradicts this; this section records
+the chosen protocol.
+
+### 9.3.1 Protocol decision — Model B (ownership-transfer steal)
+
+Four candidate models were evaluated:
+
+```text
+Model A — ticket-only steal:
+    ticket W0Local -> W1Local; owner stays W0.
+Model B — ownership-transfer steal:
+    ticket W0Local -> W1Local; owner W0 -> W1, in one transition.
+Model C — ownership transfer at first execution on thief:
+    steal ticket (owner stays W0); owner := W1 at run_next_on.
+Model D — generation-tagged ownership:
+    owner[F] = (W, gen); steal bumps gen.
+```
+
+Evaluation against the E8 load-bearing path
+(steal → run on thief → suspend → wake → resume on thief):
+
+- **Model A is unsound.** A stolen fiber that suspends on the thief
+  captures `WaitReg.owner = thief` (because `await_*` uses `g_worker`).
+  But if the owner record is *not* transferred, the wake path that reads
+  a global owner would route to W0, while a wake path reading `WaitReg`
+  would route to W1 — the system has *two* notions of owner. This is the
+  stale-owner defect. Model A is the negative model E8 must disprove
+  (§9.3.6). **Rejected.**
+- **Model B is the smallest sound model.** One abstract transition moves
+  the ticket AND transfers the owner. The wake path always reads the
+  current owner. No transient inconsistent state. Linearizes under
+  `global_mtx_` (the existing owner-read domain — E8-0 O8). **Selected.**
+- **Model C defers the inconsistency, does not eliminate it.** Between
+  steal and `run_next_on`, the owner record says W0 while the ticket is
+  in W1's queue. If the thief pops and runs the fiber before any other
+  action, this is observationally equivalent to B — but the audit
+  (`docs/e8-0-ownership-topology-audit.md` O10) shows the wake path and
+  `classify_locked` read owner/ticket-location independently; the
+  in-between window is a real observable state that would require an
+  IN_TRANSIT state to model. §4.4 forbids inventing such a state unless
+  genuinely exposed. Model C *creates* the exposure Model B avoids.
+  **Rejected.**
+- **Model D adds machinery (generation tags) for a hazard E8 does not
+  have.** A stolen runnable fiber has no active wait registration (E7
+  `InvRunnableUnregistered`), so there is no stale-registration race on
+  the stolen epoch. Generations solve "is this wake for the current
+  epoch?" — a problem that arises only with cancellation/multi-wait
+  (E10/E13), not with runnable stealing. **Rejected as over-engineering
+  for E8; reserved for E10+ if a real epoch hazard appears.**
+
+**Selected protocol: Model B.** Steal is one abstract transition that
+moves the runnable ticket and transfers ownership. It is the smallest
+model that closes the stale-owner state space.
+
+### 9.3.2 Stealable Fiber state
+
+Only `FiberState::runnable` may be stolen. `created`, `waiting`,
+`running`, `done` are not stealable.
+
+`pending_spawn_` is **not stealable** in E8. It is the pre-`run` initial-
+assignment buffer; stealing from it would conflate "steal" with "initial
+owner assignment" (the E8 spec §4.1 forbids silently merging these). The
+smallest E8 steals from a worker's `local_runnable` only.
+
+### 9.3.3 Stealable ticket location
+
+The stealable location is **`WorkerState::local_runnable`** of the victim.
+
+The E8-0 audit established that `WorkerState::inbox` (the `std::deque`) is
+**dead storage** — no production path pushes to it; all routed tickets go
+directly to `local_runnable` under `inbox_mtx`. Therefore the spec's
+§4.2 question "is inbox stealable?" is moot for the current
+implementation: there is no inbox ticket to steal. E8 steals from
+`local_runnable`. If a future revision revives `inbox` as a real
+transport queue, this decision must be revisited.
+
+E8 does **not** steal from: wait maps, `current`/running, `done`, or
+`pending_spawn_`.
+
+### 9.3.4 Ownership-transfer linearization point
+
+One abstract transition:
+
+```text
+Steal(F, W0, W1)
+```
+
+Required preconditions:
+```text
+fiberState[F] = Runnable
+owner[F] = W0
+ticketLocation[F] = W0Local
+W0 != W1
+```
+
+Required postconditions:
+```text
+fiberState[F] = Runnable
+owner[F] = W1
+ticketLocation[F] = W1Local
+```
+
+The transition:
+```text
+does not create a new runnable ticket
+does not call make_runnable()
+does not perform Runnable -> Runnable publication
+```
+
+It MOVES an existing ticket and TRANSFERS ownership.
+
+### 9.3.5 No abstract in-transit state in E8 baseline
+
+The steal linearizes under `global_mtx_` (the existing coordination
+domain that already serializes routing and owner reads — E8-0 O8). The
+production sequence is:
+
+```text
+lock global_mtx_
+  verify F.state == runnable && F.owner == W0
+  remove F from W0.local_runnable
+  set F.owner = W1            (the new owner record)
+  push F to W1.local_runnable
+unlock global_mtx_
+notify W1.inbox_cv
+```
+
+No `IN_TRANSIT`, `STEALING`, or `MIGRATING` state is introduced. The
+intermediate "removed from W0, not yet on W1" window exists only while
+`global_mtx_` is held, which is the same domain that reads owner/ticket
+state — so it is not observable.
+
+E8 introduces an explicit owner record (a `WorkerState*` stored either on
+`Fiber` or in a scheduler-side structure) precisely so that the steal can
+mutate it and the wake path can read the *current* owner. E7's
+`WaitReg.owner` (write-once at suspend) is preserved for the
+non-stolen case; the new owner record is the authoritative current-owner
+source.
+
+### 9.3.6 Wake routing after transfer
+
+After `Steal(F, W0, W1)`, `owner[F] = W1`. Any future Completion wake or
+ready-flag wake must route F to W1.
+
+A stolen Runnable Fiber has **no active wait registration** (E7
+`InvRunnableUnregistered`: `fiberState = Runnable => waitReg = None`).
+Therefore steal and wake do not race on the same valid Fiber epoch. The
+stale-owner hazard exists *only* in the negative model where ownership
+is not transferred: a post-steal suspend captures `WaitReg.owner = W1`
+(via `g_worker`), but if a global owner record still says W0, a wake
+reading the global record routes to W0 — the counterexample the negative
+TLA+ model must produce.
+
+If the production code ever permits a wait registration to remain active
+on a Runnable Fiber, that is E8-ABORT-4 (a violated E7 publication/wait
+invariant) — stop and report, do not patch around it.
+
+### 9.3.7 Steal and blocking admission
+
+Stealable runnable work is MW-S1 work. The E8-0 audit (O7) established
+that `classify_locked` already counts every worker's `local_runnable`,
+so stealable work is automatically MW-S1-visible with no classifier
+change.
+
+An idle Worker must not commit MW-S2 blocking admission while globally
+visible stealable work exists at the final admission recheck. This is
+already enforced by the E7 two-phase admission protocol
+(`FinalAdmissionRecheckAndCommit` requires `MW_S2`, which requires
+`~MW_S1`, which requires no `local_runnable` anywhere). E8 reuses the
+accepted E7 progress protocol unchanged. E8 does **not** create a second
+idle classifier for work stealing.
+
+### 9.3.8 Victim selection
+
+E8 victim selection is non-normative scheduling strategy. The baseline
+policy is **round-robin over other workers, first non-empty victim** —
+deterministic enough to test. No NUMA, no priority, no affinity. The
+work-stealing protocol must not depend on a sophisticated victim
+selector.
+
+### 9.3.9 Stability gates
+
+See the E8 spec §13. The load-bearing gates are E8-T3 (steal→wait→wake→
+new owner) and E8-T4 (deterministic steal-vs-pop), each 1000/1000, and
+E8-T11 (exactly-once stress) 2000/2000 debug / 1000/1000 release. E7
+regression suites (`e7_dup_publication_test`, `e7_worker_test`,
+`e7_coord_test`) must remain GREEN at their specified repetition counts.
+
+### 9.3.10 Scope boundaries
+
+E8 proves:
+```text
+runnable-only work stealing
+explicit Fiber execution ownership transfer
+owner-consistent future wake routing
+steal-vs-pop exclusivity
+MW-S1 integration (stealable work is MW-S1)
+```
+
+E8 does **not** prove:
+```text
+stealing a Running / Waiting / Done Fiber
+preemptive migration, stack copying, live stack migration
+Chase-Lev or any lock-free deque (deferred to E16)
+NUMA / priority / affinity
+external producer wake (E9)
+timer subsystem (E11)
+Select / Mutex / Condition / ... (E10/E12)
+```
+
+A stackful Fiber may resume on another OS Worker only after being stolen
+while Runnable and after its ownership transfer is committed.
+
 ## 10. No performance claim
 
 Implementing fibers does NOT constitute a performance claim. Any performance
