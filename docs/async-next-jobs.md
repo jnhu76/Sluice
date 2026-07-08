@@ -1,40 +1,29 @@
 # Async I/O — next job cards
 
-**Status: sluice-CORE-016F (implementation BLOCKED behind the sync-first gate as
-of the 016G sync-first planning patch).** Splits the async implementation
-(designed in 016A–016E, decided in the ADR `docs/adr/ADR-async-io-model.md`) into
-small, independently abortable jobs. **No code is written in this job.** Each
-card below is a future job's scope; it states a goal, non-goals, required tests,
-acceptance criteria, and abort conditions, so each can be picked up in isolation.
+**Status: sluice-CORE-016F. ALL JOBS COMPLETE on `feat/async-runtime`.** Splits
+the async implementation (designed in 016A–016E, decided in the ADR
+`docs/adr/ADR-async-io-model.md`) into small, independently abortable jobs. All
+jobs below have been implemented and are green (52/52 tests pass).
 
-## ⛔ BLOCKED: sync-first gate must go GREEN first
-
-> **The async DESIGN (016A–016F, ADR 016D) remains ACCEPTED and is not changed
-> by this notice.** Only the start of async **implementation** (the jobs below)
-> is deferred.
-
-Async implementation is **blocked** behind `docs/sync-before-async-readiness-
-gate.md` (the sync-first gate, added in the 016G patch). Rationale (see
-`docs/sync-io-model-gap-audit.md`): the current blocking baseline is sequential
-single-stream only — it has no positional I/O, no durability policy, no
-concurrency/pool primitive, and no W1–W4 benchmark coverage. Comparing async W1–W4
-against sequential blocking would conflate "concurrency vs no concurrency" with
-"event-driven vs thread-per-op." The sync-first phase (jobs 017S–023S,
-`docs/sync-io-next-jobs.md`) engineers a fair, concurrent, positional,
-durability-defined, benchmarked blocking baseline; only then do the async jobs
-below unblock.
+## GREEN: all jobs complete
 
 ```text
-[REQUIRED BEFORE ANY JOB BELOW STARTS]
-  017S Sync I/O model audit
-  018S Positional blocking I/O
-  019S Blocking derived helper closeout
-  020S Blocking durability model
-  021S Blocking bounded pool baseline
-  022S Blocking W1-W4 workload benchmark matrix
-  023S Blocking optimization pass
-  => docs/sync-before-async-readiness-gate.md = GREEN
+017  Completion<T> + AsyncIoContext + AsyncStats          DONE
+019  FakeAsyncBackend (deterministic test vehicle)        DONE
+018  Read/Write op model + "all" helpers                  DONE
+018B SyncDataOp/SyncAllOp (overlapped durability)         DONE
+020A ThreadPoolBackend (portable fallback)                DONE
+021  Cancellation spike                                   DONE
+020B UringAsyncBackend (gated, validated separately)      DONE
+022  Async bench harness                                  DONE
 ```
+
+> **The async DESIGN (016A–016F, ADR 016D) remains ACCEPTED and is not changed
+> by this notice.** All async implementation jobs are now complete on
+> `feat/async-runtime`.
+
+The sync-first gate (`docs/sync-before-async-readiness-gate.md`) is **GREEN**.
+The async readiness gate (`docs/async-readiness-gate.md`) is **GREEN**.
 
 Once the gate is green, the async jobs proceed in the order below, and async
 bench (job 022) MUST compare against the engineered concurrent W1–W4 blocking

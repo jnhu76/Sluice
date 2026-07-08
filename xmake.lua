@@ -18,6 +18,18 @@ target("sluice_core")
     add_includedirs("include", {public = true})
     add_files("src/*.cpp")
 
+-- Async runtime library (sluice-CORE-017+). OPT-IN, namespace sluice::async.
+-- Built alongside the core but kept a separate static lib so the blocking
+-- default (sluice_core) carries no async surface. ADR §A6: async is opt-in and
+-- BlockingIoContext/Reader/Writer are untouched.
+target("sluice_async")
+    set_kind("static")
+    set_default(false)
+    set_group("async")
+    add_includedirs("include", {public = true})
+    add_deps("sluice_core")
+    add_files("src/async/*.cpp")
+
 -- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
 -- Also contains BlockingIoPool (021S), the bounded execution model for the
 -- W1-W4 blocking bench matrix (job 022S). Pool source is here so both bench and
@@ -198,6 +210,354 @@ do
     end
 end
 
+-- Async runtime tests (sluice-CORE-017+). Link both sluice_core (Result/IoError/
+-- measurement) and sluice_async (Completion/AsyncIoContext/backends).
+do
+    local p = "tests/async_completion_test.cpp"
+    if os.isfile(p) then
+        target("async_completion_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("async_completion_test")
+    end
+end
+
+-- FakeAsyncBackend tests (sluice-CORE-019). The deterministic test vehicle.
+do
+    local p = "tests/fake_backend_test.cpp"
+    if os.isfile(p) then
+        target("fake_backend_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("fake_backend_test")
+    end
+end
+
+-- Async "all" helpers tests (sluice-CORE-018). read_all/write_all over the fake.
+do
+    local p = "tests/async_op_helpers_test.cpp"
+    if os.isfile(p) then
+        target("async_op_helpers_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("async_op_helpers_test")
+    end
+end
+
+-- Async durability ops tests (sluice-CORE-018B, W4).
+do
+    local p = "tests/async_durability_test.cpp"
+    if os.isfile(p) then
+        target("async_durability_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("async_durability_test")
+    end
+end
+
+-- Async cancellation tests (sluice-CORE-021 spike).
+do
+    local p = "tests/async_cancel_test.cpp"
+    if os.isfile(p) then
+        target("async_cancel_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("async_cancel_test")
+    end
+end
+
+-- UringAsyncBackend tests (sluice-CORE-020B). Stub-mode contract by default;
+-- real io_uring path gated behind SLUICE_HAS_LIBURING.
+do
+    local p = "tests/uring_backend_test.cpp"
+    if os.isfile(p) then
+        target("uring_backend_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("uring_backend_test")
+    end
+end
+
+-- ThreadPoolBackend tests (sluice-CORE-020A). Real blocking I/O on threads.
+do
+    local p = "tests/threadpool_backend_test.cpp"
+    if os.isfile(p) then
+        target("threadpool_backend_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("threadpool_backend_test")
+    end
+end
+
+-- Shared AsyncBackend conformance suite (sluice-CORE-024, B1). One parameterized
+-- harness asserting every genuinely-shared backend semantic against every
+-- backend. The suite impl is compiled into the driver target alongside the
+-- driver; backend-specific MECHANISM tests stay in their own files.
+do
+    local driver = "tests/backend_conformance_driver_test.cpp"
+    local impl = "tests/backend_conformance_test.cpp"
+    if os.isfile(driver) and os.isfile(impl) then
+        target("backend_conformance_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(driver, impl)
+            add_tests("backend_conformance_test")
+    end
+end
+
+-- Cooperative cancellation primitives tests (sluice-CORE-027, T1). Pure-logic;
+-- links sluice_core (Result/IoError) + sluice_async (cancel.cpp).
+do
+    local p = "tests/cancel_token_test.cpp"
+    if os.isfile(p) then
+        target("cancel_token_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("cancel_token_test")
+    end
+end
+
+-- Future<T> tests (sluice-CORE-028, T2). Header-only Future; exercises a
+-- thread-driven producer (await blocks until the worker completes) + the
+-- cooperative-cancel path. Links sluice_async (for cancel.cpp) + std::thread.
+do
+    local p = "tests/future_test.cpp"
+    if os.isfile(p) then
+        target("future_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("future_test")
+    end
+end
+
+-- Group tests (sluice-CORE-029, T3). Unordered task set; await/cancel whole-
+-- group; cancel-propagation boundary. Links sluice_async (group.cpp + cancel).
+do
+    local p = "tests/group_test.cpp"
+    if os.isfile(p) then
+        target("group_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("group_test")
+    end
+end
+
+-- Batch tests (sluice-CORE-030, T4). Grouped completions over AsyncIoContext;
+-- uses real I/O (ThreadPoolBackend + temp fds). Links sluice_async (batch.cpp).
+do
+    local p = "tests/batch_test.cpp"
+    if os.isfile(p) then
+        target("batch_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("batch_test")
+    end
+end
+
+-- Fiber state-model tests (sluice-CORE-E1). Pure C++ state machine; no asm yet
+-- (E2). Links sluice_async (fiber.cpp + cancel.cpp).
+do
+    local p = "tests/fiber_test.cpp"
+    if os.isfile(p) then
+        target("fiber_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("fiber_test")
+    end
+end
+
+-- Isolated x86_64 fiber context-switch tests (sluice-CORE-E2/E3). NO I/O, no
+-- Future/WaitPolicy/AsyncBackend/Group integration. Proves only the asm +
+-- trampoline. Links sluice_async (fiber_ctx.cpp). Gated to x86_64 via the
+-- `supported` constant in the header; non-x86_64 skips cleanly.
+do
+    local p = "tests/fiber_ctx_test.cpp"
+    if os.isfile(p) then
+        target("fiber_ctx_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("fiber_ctx_test")
+    end
+end
+
+-- E4 single-worker Evented scheduler tests (sluice-CORE-E4). Proves scheduler
+-- liveness (B progresses while A awaits a pending op), completion wake path,
+-- resume fidelity, exactly-once. Uses FakeAsyncBackend held-pending mode.
+-- Gated to x86_64 (depends on fiber_ctx::context_switch).
+do
+    local p = "tests/e4_scheduler_test.cpp"
+    if os.isfile(p) then
+        target("e4_scheduler_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e4_scheduler_test")
+    end
+end
+
+-- E5-A1 level-triggered scheduler ready-flag wait tests (sluice-CORE-E5-A1).
+-- Tests Scheduler::await_ready_flag in isolation (no Future). Proves R1-R5.
+-- Gated to x86_64.
+do
+    local p = "tests/e5_a1_ready_flag_test.cpp"
+    if os.isfile(p) then
+        target("e5_a1_ready_flag_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e5_a1_ready_flag_test")
+    end
+end
+
+-- E5-A2 Evented Future await tests (sluice-CORE-E5-A2). Proves F1-F6: an
+-- EventedWaitPolicy Future suspends the current Fiber; another Fiber progresses
+-- (liveness); completion resumes the awaiter; resume fidelity; idempotent
+-- repeat; Threaded regression. Gated to x86_64.
+do
+    local p = "tests/e5_a2_evented_future_test.cpp"
+    if os.isfile(p) then
+        target("e5_a2_evented_future_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e5_a2_evented_future_test")
+    end
+end
+
+-- E5-B Evented Group tests (sluice-CORE-E5-B). Proves G1-G6: Evented Group
+-- tasks run on Fibers (not std::thread), can suspend inside Future::await,
+-- resume, and complete; Threaded regression. Gated to x86_64.
+do
+    local p = "tests/e5_b_evented_group_test.cpp"
+    if os.isfile(p) then
+        target("e5_b_evented_group_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e5_b_evented_group_test")
+    end
+end
+
+-- E6 scheduler progress tests (sluice-CORE-E6). Proves the hybrid poll/wait
+-- progress policy: a Fiber awaiting a real-backend Completion that completes
+-- after the runnable queue drains is resumed via wait_one. ThreadPoolBackend is
+-- the real completion source (cv-wait). Gated to x86_64.
+do
+    local p = "tests/e6_scheduler_progress_test.cpp"
+    if os.isfile(p) then
+        target("e6_scheduler_progress_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e6_scheduler_progress_test")
+    end
+end
+
+-- E7 multi-worker scheduler tests (sluice-CORE-E7). Proves worker-local
+-- execution state, pinned routing, serialized backend access, MW coordination.
+-- Gated to x86_64.
+do
+    local p = "tests/e7_worker_test.cpp"
+    if os.isfile(p) then
+        target("e7_worker_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e7_worker_test")
+    end
+end
+
+
+
+-- E7-C coordination tests (sluice-CORE-E7-C). Serialized backend access probe,
+-- quiescence, MW-S3. Gated to x86_64.
+do
+    local p = "tests/e7_coord_test.cpp"
+    if os.isfile(p) then
+        target("e7_coord_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e7_coord_test")
+    end
+end
+
 -- Core microbench targets (SLUICE-CORE-010C-F). Built/run via `xmake -g bench`.
 local benches = { "small_writes_bench", "copy_strategy_bench", "wal_write_bench",
                   "sync_smoke_bench" }
@@ -222,6 +582,10 @@ sluice_one_file_target("binary", "bench", "uring_write_bench", "bench",
 sluice_one_file_target("binary", "bench", "pool_throughput_bench", "bench",
                       {"sluice_core", "sluice_bench_common"})
 
+-- async_writes_bench (sluice-CORE-022) needs the async runtime lib too.
+sluice_one_file_target("binary", "bench", "async_writes_bench", "bench",
+                      {"sluice_core", "sluice_bench_common", "sluice_async"})
+
 -- ---------------------------------------------------------------------------
 -- SLUICE-CORE-013B: optional liburing build gate for the experimental spike.
 --
@@ -235,6 +599,23 @@ option("with-liburing")
     set_description("Enable the experimental io_uring spike (requires liburing).")
 option_end()
 
+-- SLUICE-CORE-026 (B3): feature gates for io_uring registered buffers/files.
+-- Both OFF by default — matching Zig upstream (Io/Uring.zig uses neither
+-- registered buffers nor registered files). A future job may implement them
+-- under a documented lifetime contract; until then the gates exist so the
+-- build can advertise the capability without the implementation. The defines
+-- SLUICE_URING_REGISTERED_BUFFERS / SLUICE_URING_REGISTERED_FILES are threaded
+-- onto sluice_async only when liburing is also enabled (they are meaningless
+-- without a real ring).
+option("with-uring-registered-buffers")
+    set_default(false)
+    set_description("Enable io_uring registered buffers (lifetime contract WIP; off by default).")
+option_end()
+option("with-uring-registered-files")
+    set_default(false)
+    set_description("Enable io_uring registered files descriptors (lifetime contract WIP; off by default).")
+option_end()
+
 local has_liburing = false
 if has_config("with-liburing") then
     -- add_requires with optional=true lets xmake try to fetch liburing; if the
@@ -242,6 +623,22 @@ if has_config("with-liburing") then
     -- rather than silently building stubs.
     add_requires("liburing", {alias = "liburing"})
     has_liburing = true
+end
+
+-- When liburing is enabled, the async runtime's UringAsyncBackend compiles its
+-- REAL io_uring path (otherwise it is an unsupported stub, sluice-CORE-020B).
+-- Thread the same define + package onto sluice_async that sluice_experimental_uring
+-- gets, so src/async/uring_backend.cpp sees SLUICE_HAS_LIBURING and links liburing.
+if has_liburing then
+    target("sluice_async")
+        add_defines("SLUICE_HAS_LIBURING", {public = true})
+        add_packages("liburing", {public = true})
+        if has_config("with-uring-registered-buffers") then
+            add_defines("SLUICE_URING_REGISTERED_BUFFERS")
+        end
+        if has_config("with-uring-registered-files") then
+            add_defines("SLUICE_URING_REGISTERED_FILES")
+        end
 end
 
 -- Experimental uring library. Always defined so the headers/sources exist; the
@@ -282,3 +679,76 @@ target("sluice_experimental_uring")
 --   Run all examples:    xmake run -g examples
 --   Run all benches:     xmake run -g bench
 -- ---------------------------------------------------------------------------
+
+-- e7_dup_publication_test — focused regression for the E7-T2 root cause
+-- (exactly-once runnable publication). Unit-level make_runnable contract +
+-- integration wake-while-runnable scenario. Fails on pre-fix code.
+do
+    local p = "tests/e7_dup_publication_test.cpp"
+    if os.isfile(p) then
+        target("e7_dup_publication_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e7_dup_publication_test")
+    end
+end
+
+-- e8_steal_test — runnable ownership transfer / work stealing (sluice-CORE-E8).
+-- Proves steal = MOVE + OWNER TRANSFER (never PUBLISH); stolen Fiber
+-- wake-routes to the thief. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e8_steal_test.cpp"
+    if os.isfile(p) then
+        target("e8_steal_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e8_steal_test")
+    end
+end
+
+-- e9_external_wake_test — Scheduler park admission + unified wake-source
+-- protocol (sluice-CORE-E9). Proves external-thread flag completion wakes a
+-- parked Scheduler (no caller re-entry), MIXED-WAKE closure, wake coalescing,
+-- the pre-park race, wake-handle lifetime, and E7/E8 runnable/shutdown wake.
+-- Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e9_external_wake_test.cpp"
+    if os.isfile(p) then
+        target("e9_external_wake_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e9_external_wake_test")
+    end
+end
+
+-- e9_wake_handle_lifetime_test — SchedulerWakeHandle callback-lifetime lease
+-- (sluice-CORE-E9 LIFETIME-CORRECTIVE). Proves notify() holds Control::mtx
+-- (the callback lease) through the Scheduler wake callback, so destruction
+-- cannot interleave with an in-flight callback. Deterministic T1 (notifier
+-- wins) / T2 (destructor wins) / T3 (stale handle) + concurrent T4 stress.
+-- Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e9_wake_handle_lifetime_test.cpp"
+    if os.isfile(p) then
+        target("e9_wake_handle_lifetime_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e9_wake_handle_lifetime_test")
+    end
+end

@@ -20,3 +20,6 @@ a.out
 *.o
 .vscode/
 .cache/
+
+# TLC (TLA+) transient disk state (checker fingerprint-set output)
+states/
