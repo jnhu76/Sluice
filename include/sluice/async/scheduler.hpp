@@ -34,21 +34,26 @@ struct SchedulerTestHooks;
 // Defined only in the E9 test TU; accesses private park-seam members.
 struct E9ParkSeamHooks;
 
-// E9 external wake handle (ADR §9.4.10). A generation-validated, weak handle
-// that an EXTERNAL producer thread holds so it can wake a parked Scheduler
-// Worker without holding a raw Scheduler* (which would be use-after-free
-// across Scheduler destruction).
+// E9 external wake handle (ADR §9.4.10). A control-block-backed handle that
+// an EXTERNAL producer thread holds so it can wake a parked Scheduler Worker
+// without holding a raw Scheduler* (which would be use-after-free across
+// Scheduler destruction).
 //
 // Contract:
 //   - Issued by Scheduler::make_wake_handle(); the producer owns the instance.
 //   - notify() is safe to call from any thread, including AFTER the issuing
-//     Scheduler has been destroyed (it becomes a no-op via the weak control
-//     block). It advances the Scheduler wake epoch and notifies wake_cv_.
+//     Scheduler has been destroyed (it becomes a no-op). The shared Control
+//     block outlives the Scheduler (the Scheduler and every handle hold a
+//     shared_ptr); the destructor flips alive=false under Control::mtx.
+//   - notify() holds Control::mtx (the CALLBACK LEASE) from the validity
+//     check through the Scheduler wake callback, so destruction cannot
+//     interleave with an in-flight callback (E9-LIFETIME-CORRECTIVE).
 //   - The producer MUST NOT call any other Scheduler method via this handle.
 //   - The producer MUST NOT touch Scheduler queues, registrations, or Fibers.
 //
 // Refinement map: TLA+ ExternalReadyPublish (the signal half) ->
-// SchedulerWakeHandle::notify -> Scheduler::signal_wake_locked.
+// SchedulerWakeHandle::notify -> Scheduler::signal_wake_locked. Callback
+// lifetime: docs/spec/e9_wake_handle_lifetime/.
 class SchedulerWakeHandle {
 public:
     SchedulerWakeHandle() = default;
@@ -64,6 +69,17 @@ public:
 
     // Is this handle currently bound to a live Scheduler?
     bool bound() const noexcept;
+
+    // ---- E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13) ----
+    // TEST-ONLY. Defined in scheduler.cpp (where Control is complete).
+    // Arm/pause/release the notify callback at the exact boundary: validated
+    // + lease held, immediately before notify_external_wake. The seam does
+    // NOT modify Scheduler state; it only blocks the notifier thread so the
+    // test can prove the destructor cannot progress while the lease is held.
+    void lifetime_seam_arm() noexcept;
+    void lifetime_seam_wait_paused() noexcept;
+    bool lifetime_seam_is_paused() const noexcept;
+    void lifetime_seam_release() noexcept;
 
 private:
     friend class Scheduler;

@@ -732,3 +732,23 @@ do
             add_tests("e9_external_wake_test")
     end
 end
+
+-- e9_wake_handle_lifetime_test — SchedulerWakeHandle callback-lifetime lease
+-- (sluice-CORE-E9 LIFETIME-CORRECTIVE). Proves notify() holds Control::mtx
+-- (the callback lease) through the Scheduler wake callback, so destruction
+-- cannot interleave with an in-flight callback. Deterministic T1 (notifier
+-- wins) / T2 (destructor wins) / T3 (stale handle) + concurrent T4 stress.
+-- Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e9_wake_handle_lifetime_test.cpp"
+    if os.isfile(p) then
+        target("e9_wake_handle_lifetime_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e9_wake_handle_lifetime_test")
+    end
+end

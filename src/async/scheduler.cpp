@@ -47,16 +47,38 @@ void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
 // ---- E9 SchedulerWakeHandle::Control (full definition; forward-declared in
 // the header so the shared_ptr member is pimpl-friendly) ----
 struct SchedulerWakeHandle::Control {
-    // mutex protects alive; wake delivery itself uses the Scheduler's
-    // wake_mtx_. A raw Scheduler* is safe here ONLY because the Scheduler
-    // clears `scheduler` and flips `alive=false` in its destructor before
-    // the control block can be freed (the Scheduler holds a shared_ptr;
-    // handles hold a shared_ptr, so the block outlives both). A notify()
-    // that races the destructor either sees alive=true (Scheduler still
-    // fully constructed) or alive=false (no-op) — never a torn Scheduler.
+    // E9-LIFETIME-CORRECTIVE: Control::mtx is the CALLBACK LEASE.
+    //
+    // notify() holds this mutex from the validity check through the ENTIRE
+    // Scheduler wake callback (notify_external_wake -> signal_wake_locked).
+    // ~Scheduler acquires the SAME mutex before invalidating the control
+    // block. Therefore destruction cannot invalidate or destroy Scheduler
+    // wake members while a notify callback holding the lease is in flight:
+    //   - Notify wins:  N holds the lease through the callback; D's mutex
+    //                   acquisition BLOCKS until the callback returns.
+    //   - D wins:       D invalidates + releases; N then observes dead/null
+    //                   and returns false without any Scheduler dereference.
+    //
+    // This is a mutex-serialized callback lease, NOT shared ownership and
+    // NOT reference counting. Control::mtx does not extend Scheduler object
+    // ownership. A stale handle may survive Scheduler destruction; its later
+    // notify() observes alive=false and returns false (a safe no-op). See
+    // docs/spec/e9_wake_handle_lifetime/ for the TLA+ proof.
     std::mutex mtx;
     Scheduler* scheduler{nullptr};
     bool alive{false};
+
+    // E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13). TEST-ONLY.
+    // When armed, notify() pauses at the exact causal boundary — AFTER it
+    // has validated alive under Control::mtx and BEFORE notify_external_wake
+    // — while STILL HOLDING the lease. This forces the notifier-wins
+    // interleaving deterministically: the destructor cannot complete
+    // invalidation while the notifier is paused. It does NOT alter
+    // production Scheduler state; it only blocks the notifier thread.
+    bool lifetime_seam_armed{false};
+    bool lifetime_seam_paused{false};
+    std::mutex lifetime_seam_mtx;
+    std::condition_variable lifetime_seam_cv;
 };
 
 Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
@@ -69,17 +91,25 @@ Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
 }
 
 Scheduler::~Scheduler() {
-    // E9-CORRECTIVE (Section 11 wake-handle lifetime audit): invalidate every
-    // outstanding wake handle so a post-destruction notify() becomes a no-op.
-    // Both `alive=false` AND `scheduler=nullptr` are set UNDER THE SAME LOCK
-    // so notify()'s consistent snapshot (taken under control_->mtx) never
-    // observes alive=true with a dangling scheduler pointer. This closes the
-    // during-destruction race: a concurrent notify() either sees
-    // {alive=true, scheduler=valid} (Scheduler fully constructed — the
-    // callback touches only wake_mtx_/wake_epoch_/wake_cv_) or
-    // {alive=false} (no-op). The destructor does not proceed to destroy
-    // wake_mtx_ until after this block (member destruction order), by which
-    // point no live notify() can hold a valid scheduler snapshot.
+    // E9-LIFETIME-CORRECTIVE: invalidate the control block under Control::mtx.
+    //
+    // Control::mtx is held from the validity check through the Scheduler
+    // wake callback in notify() (the callback lease). Scheduler destruction
+    // acquires the same mutex here before invalidating the control block.
+    // Therefore destruction cannot invalidate or destroy Scheduler wake
+    // members while a notify callback holding the lease is in flight:
+    //   - Notify wins:  the callback runs to completion and releases the
+    //                   lease; only then does this acquire proceed.
+    //   - Destructor wins: this invalidates (alive=false, scheduler=nullptr)
+    //                   and releases; any later notify observes dead/null
+    //                   and returns false without a Scheduler dereference.
+    //
+    // This serializes the callback-duration lease against invalidation. It
+    // is NOT shared ownership: a stale SchedulerWakeHandle may outlive the
+    // Scheduler, but its later notify() is a safe no-op. After this block,
+    // wake_control_.reset() drops the Scheduler's reference; the Control
+    // block lives as long as any outstanding handle holds a shared_ptr to
+    // it, but `alive` is now permanently false.
     if (wake_control_) {
         {
             std::lock_guard<std::mutex> lk(wake_control_->mtx);
@@ -95,15 +125,37 @@ Scheduler::~Scheduler() {
 
 bool SchedulerWakeHandle::notify() noexcept {
     if (!control_) return false;
-    Scheduler* sched = nullptr;
-    bool alive = false;
-    {
-        std::lock_guard<std::mutex> lk(control_->mtx);
-        sched = control_->scheduler;
-        alive = control_->alive;
+    // E9-LIFETIME-CORRECTIVE: hold Control::mtx (the callback lease) from
+    // the validity check THROUGH the Scheduler wake callback. The
+    // destructor acquires this same mutex before invalidating, so it
+    // BLOCKS while a callback is in flight; invalidation + Scheduler
+    // member destruction happen strictly after any validated callback
+    // returns. This closes the snapshot-before-callback UAF window where
+    // a previously-released lease let the destructor destroy members
+    // between snapshot and callback. See docs/spec/e9_wake_handle_lifetime/.
+    std::lock_guard<std::mutex> lk(control_->mtx);
+    if (!control_->alive || control_->scheduler == nullptr) {
+        return false;  // post-destruction / unbound: no-op
     }
-    if (!alive || sched == nullptr) return false;  // post-destruction: no-op
-    sched->notify_external_wake();
+    // E9-LIFETIME-CORRECTIVE deterministic seam (spec 13): pause at the
+    // exact boundary — validated + lease held, just before the callback.
+    // Lets T1 prove the destructor cannot progress while the notifier
+    // owns the lease. The seam blocks on its OWN mtx/cv; Control::mtx
+    // remains held for the duration, which is precisely the guarantee
+    // under test.
+    if (control_->lifetime_seam_armed) {
+        std::unique_lock<std::mutex> slk(control_->lifetime_seam_mtx);
+        control_->lifetime_seam_paused = true;
+        control_->lifetime_seam_cv.notify_all();
+        control_->lifetime_seam_cv.wait(slk,
+                                        [this] { return !control_->lifetime_seam_armed; });
+        control_->lifetime_seam_paused = false;
+        // Re-validate: the test's release may have let the destructor run.
+        if (!control_->alive || control_->scheduler == nullptr) {
+            return false;
+        }
+    }
+    control_->scheduler->notify_external_wake();
     return true;
 }
 
@@ -111,6 +163,34 @@ bool SchedulerWakeHandle::bound() const noexcept {
     if (!control_) return false;
     std::lock_guard<std::mutex> lk(control_->mtx);
     return control_->alive && control_->scheduler != nullptr;
+}
+
+// E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13). TEST-ONLY.
+// Defined here because Control is complete only in this TU. These wrap the
+// Control seam state; they do NOT touch any Scheduler state.
+void SchedulerWakeHandle::lifetime_seam_arm() noexcept {
+    if (!control_) return;
+    std::lock_guard<std::mutex> lk(control_->lifetime_seam_mtx);
+    control_->lifetime_seam_armed = true;
+}
+
+void SchedulerWakeHandle::lifetime_seam_wait_paused() noexcept {
+    if (!control_) return;
+    std::unique_lock<std::mutex> lk(control_->lifetime_seam_mtx);
+    control_->lifetime_seam_cv.wait(lk, [this] { return control_->lifetime_seam_paused; });
+}
+
+bool SchedulerWakeHandle::lifetime_seam_is_paused() const noexcept {
+    if (!control_) return false;
+    std::lock_guard<std::mutex> lk(control_->lifetime_seam_mtx);
+    return control_->lifetime_seam_paused;
+}
+
+void SchedulerWakeHandle::lifetime_seam_release() noexcept {
+    if (!control_) return;
+    std::lock_guard<std::mutex> lk(control_->lifetime_seam_mtx);
+    control_->lifetime_seam_armed = false;
+    control_->lifetime_seam_cv.notify_all();
 }
 
 SchedulerWakeHandle Scheduler::make_wake_handle() {
