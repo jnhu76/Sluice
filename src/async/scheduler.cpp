@@ -69,18 +69,23 @@ Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
 }
 
 Scheduler::~Scheduler() {
-    // E9: invalidate every outstanding wake handle so a post-destruction
-    // notify() becomes a no-op. Clearing the Scheduler's shared_ptr to the
-    // control block drops the strong ref; handles still hold a copy, but
-    // their weak_ptr-to-Scheduler expires (the Scheduler is gone). We also
-    // flip alive=false under the lock so notify() sees the invalidation
-    // deterministically even if a shared_ptr alias temporarily lingers.
+    // E9-CORRECTIVE (Section 11 wake-handle lifetime audit): invalidate every
+    // outstanding wake handle so a post-destruction notify() becomes a no-op.
+    // Both `alive=false` AND `scheduler=nullptr` are set UNDER THE SAME LOCK
+    // so notify()'s consistent snapshot (taken under control_->mtx) never
+    // observes alive=true with a dangling scheduler pointer. This closes the
+    // during-destruction race: a concurrent notify() either sees
+    // {alive=true, scheduler=valid} (Scheduler fully constructed — the
+    // callback touches only wake_mtx_/wake_epoch_/wake_cv_) or
+    // {alive=false} (no-op). The destructor does not proceed to destroy
+    // wake_mtx_ until after this block (member destruction order), by which
+    // point no live notify() can hold a valid scheduler snapshot.
     if (wake_control_) {
         {
             std::lock_guard<std::mutex> lk(wake_control_->mtx);
             wake_control_->alive = false;
+            wake_control_->scheduler = nullptr;
         }
-        wake_control_->scheduler = nullptr;
         wake_control_.reset();
     }
     // Workers are joined in run().
@@ -135,21 +140,60 @@ void Scheduler::signal_wake_locked() {
 }
 
 void Scheduler::park_on_wake_source(WorkerState* ws) {
-    // Park the calling Worker on the SCHEDULER wake domain. Record the
-    // observed epoch under wake_mtx_, then cv.wait_for with a bounded
-    // timeout (defense-in-depth, NOT the primary strategy — persistent
-    // state is authoritative). Wake when: epoch advanced, or terminate,
-    // or local runnable arrived (route_runnable_locked pushes to
-    // local_runnable AND calls signal_wake_locked).
+    // Park the calling Worker on the SCHEDULER wake domain (ADR §9.4.5).
+    // Record the observed epoch under wake_mtx_, then cv.wait_for with a
+    // BOUNDED timeout. The timeout is LOAD-BEARING in MIXED-WAKE: it is the
+    // observation-return path for backend readiness, which does NOT directly
+    // signal the Scheduler wake source in the E9 baseline (E9-LIFE-8,
+    // ADR §9.4.7.1). It is NOT "defense in depth only."
+    //
+    // E9-CORRECTIVE (Section 10 data-race fix): the predicate no longer
+    // inspects ws->local_runnable (a std::deque protected by inbox_mtx_,
+    // NOT wake_mtx_). Reading it under wake_mtx_ was a data race. Runnable
+    // publication (route_runnable_locked) already calls signal_wake_locked()
+    // — advancing wake_epoch_ — so the epoch advance IS the wake signal for
+    // runnable publication. The Worker re-drains local_runnable under
+    // inbox_mtx_ at loop top after the wake; it does not need to peek at
+    // the deque in the wake predicate.
+    //
+    // Deterministic park seams (ADR §9.4.15): seam B pauses the Worker at
+    // the commit-to-physical-wait boundary. The pause is done with wake_mtx_
+    // RELEASED so the test's notify() (which acquires wake_mtx_ via
+    // signal_wake_locked) can proceed; the observed_epoch is recorded AFTER
+    // the pause so a pre-wait publication is caught by the epoch predicate.
     //
     // Lock order: called with global_mtx_ RELEASED.
-    std::unique_lock<std::mutex> lk(wake_mtx_);
     ws->park_domain = WorkerState::ParkDomain::Scheduler;
-    ws->observed_epoch = wake_epoch_;
+
+    // E9-CORRECTIVE seam B: pause at the commit boundary with NO wake lock
+    // held, so the test can publish + notify (signal_wake_locked) during
+    // the pause without deadlocking.
+    if (park_commit_seam_armed_) {
+        std::unique_lock<std::mutex> slk(park_seam_mtx_);
+        park_seam_commit_paused_ = true;
+        park_seam_cv_.notify_all();  // signal the test we are at the boundary
+        park_seam_cv_.wait(slk, [this] { return !park_commit_seam_armed_; });
+        park_seam_commit_paused_ = false;
+    }
+
+    std::unique_lock<std::mutex> lk(wake_mtx_);
+    ws->observed_epoch = wake_epoch_;  // recorded AFTER any seam publication
     wake_cv_.wait_for(lk, std::chrono::milliseconds(2), [&] {
-        return wake_epoch_ != ws->observed_epoch ||
-               global_terminate_.load(std::memory_order_acquire) ||
-               !ws->local_runnable.empty();
+        if (wake_epoch_ != ws->observed_epoch ||
+            global_terminate_.load(std::memory_order_acquire)) {
+            return true;
+        }
+        // E9-CORRECTIVE (Section 10): check local_runnable SAFELY. The deque
+        // is protected by inbox_mtx (route_runnable_locked pushes under it);
+        // reading it under wake_mtx_ alone was a data race. Acquire inbox_mtx
+        // for the read. This closes the lost-wake window where a runnable
+        // publication advanced the epoch BEFORE observed_epoch was recorded
+        // (the parked Worker would otherwise wait for the 2ms timeout, opening
+        // a steal window). route_runnable_locked also signals the epoch, so
+        // the epoch clause usually fires first; this is the authoritative
+        // backstop for the routed-but-epoch-already-observed case.
+        std::lock_guard<std::mutex> ilk(ws->inbox_mtx);
+        return !ws->local_runnable.empty();
     });
     ws->park_domain = WorkerState::ParkDomain::None;
 }
@@ -210,7 +254,21 @@ WorkerState* Scheduler::current_worker() {
 }
 
 void Scheduler::run(unsigned worker_count) {
+    // E9-CORRECTIVE: existing run() remains DRAIN-compatible (ADR §9.4.0).
+    // Existing E7/E8 callers and tests use Drain: MW-S3 returns STALLED.
+    run_impl(worker_count, RunMode::drain);
+}
+
+void Scheduler::run_live(unsigned worker_count) {
+    // E9-CORRECTIVE: explicit LIVE entry. The run may remain resident while
+    // an unresolved wait has an effective Scheduler wake source. Used by the
+    // E9-T1..T14 no-re-entry external-wake proofs.
+    run_impl(worker_count, RunMode::live);
+}
+
+void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
     if (worker_count == 0) worker_count = 1;
+    run_mode_ = mode;  // stable for the duration of this run invocation
 
     // WorkerState is address-stable across run() calls (wait registrations may
     // hold WorkerState* pointers between calls — E7-ABORT-6 lifetime). Grow or
@@ -533,17 +591,24 @@ void Scheduler::worker_loop(WorkerState* ws) {
             if (final_state == MwState::mw_s1 || final_state == MwState::mw_s2) {
                 idle_workers_.store(0, std::memory_order_release);
             } else {
-                // E9: if an external-wake-capable wait is registered, the run
-                // must NOT terminate on MW-S3 — a producer thread may still
-                // publish a ready flag and wake us. Instead of contributing to
-                // the idle/terminate count, this worker parks on the SCHEDULER
-                // wake source and waits for the external notify (ADR §9.4.3,
-                // the N=1 correctness rule). The park is reached by falling
-                // through without incrementing idle_workers_ toward termination.
-                // (The bounded wake_cv timeout re-drains; persistent state is
-                // the authority.)
+                // E9-CORRECTIVE: SelectIdleAction at the MW-S3 boundary (ADR
+                // §9.4.0). Park admission for MW-S3 + external-wake-capable is
+                // governed by the EXPLICIT RunMode, NOT by wake capability
+                // alone. This is the shipped defect repaired: the original E9
+                // used external_wake_possible_locked() as the run-lifetime
+                // decision (the semantic conflation), which made a Drain run
+                // park forever on MW-S3 (the deterministic hang, e7_t9).
+                //
+                //   Live  + MW-S3 + external-wake-capable -> PARK (resident)
+                //   Drain + MW-S3                         -> RETURN STALLED
+                //   Live  + MW-S3 without external wake   -> RETURN STALLED
                 if (final_state == MwState::mw_s3_unresolved &&
+                    run_mode_ == RunMode::live &&
                     external_wake_possible_locked()) {
+                    // Live: keep the run resident. Do NOT contribute to the
+                    // idle/terminate count; fall through to park_on_wake_source.
+                    // The bounded wake_cv timeout re-drains; persistent state
+                    // is the authority (E9-LIFE-8).
                     idle_workers_.store(0, std::memory_order_release);
                     // Fall through to park_on_wake_source below.
                 } else {
@@ -554,7 +619,10 @@ void Scheduler::worker_loop(WorkerState* ws) {
                         if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
                             // Physical run termination. MW-S3 retains wait
                             // registrations logically; only quiescent is true
-                            // completion. Both may terminate the run.
+                            // completion. Both may terminate the run. In Drain
+                            // this is RETURN STALLED (the E7/E8 contract); in
+                            // Live it is reached only for MW-S3 without an
+                            // effective wake source, or true quiescence.
                             global_terminate_.store(true, std::memory_order_release);
                             for (auto& w : workers_) {
                                 std::lock_guard<std::mutex> wlk(w->inbox_mtx);
@@ -579,13 +647,26 @@ void Scheduler::worker_loop(WorkerState* ws) {
 
         if (global_terminate_.load(std::memory_order_acquire)) break;
 
+        // E9-CORRECTIVE seam A (ParkCandidate boundary, ADR §9.4.15): pause
+        // the Worker right after it has decided to park (Live MW-S3 external
+        // path) and before the physical wait setup. A test uses this to prove
+        // a publication before ParkCandidate is drained (E9-T3). The seam
+        // does NOT modify Scheduler state; it only pauses at the boundary.
+        if (park_candidate_seam_armed_) {
+            std::unique_lock<std::mutex> slk(park_seam_mtx_);
+            park_seam_candidate_paused_ = true;
+            park_seam_cv_.notify_all();
+            park_seam_cv_.wait(slk, [this] { return !park_candidate_seam_armed_; });
+            park_seam_candidate_paused_ = false;
+        }
+
         // E9: park on the unified wake source (wake_cv + wake epoch). This
         // replaces the E7 1ms inbox_cv timed park, which was a de-facto
         // periodic poll masking the external-wake gap (ADR §9.4). The wake
         // source's wake set now includes runnable publication (route_runnable
         // signals) and external-ready publication (SchedulerWakeHandle).
-        // The 2ms bounded timeout is DEFENSE-IN-DEPTH against a lost wake —
-        // it is NOT the authority (persistent state is, ADR §9.4.5).
+        // The 2ms bounded timeout is LOAD-BEARING for MIXED-WAKE backend
+        // observation (E9-LIFE-8); it is the observation-return path.
         park_on_wake_source(ws);
     }
 }

@@ -30,6 +30,10 @@ namespace sluice::async {
 // race. Defined only in test TUs; exposes no public Scheduler contract.
 struct SchedulerTestHooks;
 
+// Forward declaration — E9-CORRECTIVE deterministic park seams (ADR §9.4.15).
+// Defined only in the E9 test TU; accesses private park-seam members.
+struct E9ParkSeamHooks;
+
 // E9 external wake handle (ADR §9.4.10). A generation-validated, weak handle
 // that an EXTERNAL producer thread holds so it can wake a parked Scheduler
 // Worker without holding a raw Scheduler* (which would be use-after-free
@@ -67,6 +71,26 @@ private:
     explicit SchedulerWakeHandle(std::shared_ptr<Control> ctrl) noexcept
         : control_(std::move(ctrl)) {}
     std::shared_ptr<Control> control_;
+};
+
+// E9-CORRECTIVE: Run invocation lifetime contract (ADR §9.4.0). RunMode is
+// an EXPLICIT invocation policy, separate from wake capability. It is the
+// ONLY axis along which the idle action differs; the classifier,
+// publication protocol, ownership protocol, and backend admission are
+// shared (one worker loop, one classifier).
+//
+//   drain — E7/E8 compatibility. MW-S3 returns STALLED; the run invocation
+//           MUST NOT park merely because an external-wake-capable wait
+//           exists. Existing callers and E7/E8 tests use Drain.
+//   live  — explicit E9 entry. The run remains resident while an
+//           unresolved wait has an effective Scheduler wake source
+//           (MW-S3 + external-wake-capable may park). No effective wake
+//           source still returns STALLED.
+//
+// A wake handle NEVER implicitly switches Drain <-> Live (E9-LIFE-6).
+enum class RunMode : unsigned char {
+    drain,
+    live,
 };
 
 // Per-worker execution state (E7-C1). Each Worker thread owns one of these.
@@ -129,12 +153,22 @@ public:
     void spawn_on(Fiber& fiber, unsigned worker_id) noexcept;
 
     // Run the scheduler with `worker_count` worker threads until global idle
-    // (E7 coordinated run). `worker_count` must be >= 1. With 1 worker, this
-    // is the single-worker path (E4-E6 compatible).
+    // (E7 coordinated run, DRAIN mode). `worker_count` must be >= 1. With 1
+    // worker, this is the single-worker path (E4-E6 compatible). Drain
+    // semantics (ADR §9.4.0): MW-S3 returns STALLED; the run does NOT park
+    // merely because an external-wake-capable wait exists.
     void run(unsigned worker_count);
 
+    // E9-CORRECTIVE: explicit LIVE entry. Same worker loop and classifier as
+    // run(); differs ONLY at the idle-action selection boundary. In Live, an
+    // unresolved MW-S3 wait with an effective Scheduler wake source may keep
+    // the run resident (park). MW-S3 without an effective wake source still
+    // returns STALLED. Used by E9-T1..T14 (the no-re-entry external-wake
+    // proof). See ADR §9.4.0 / §9.4.3.
+    void run_live(unsigned worker_count);
+
     // Legacy single-worker entry point (E4-E6 compatibility). Delegates to
-    // run(1).
+    // run(1) (Drain).
     void run_until_idle() { run(1); }
 
     // ---- E5/E6 suspension primitives (called from Fiber bodies) ----
@@ -197,6 +231,7 @@ public:
 private:
     friend struct SchedulerTestHooks;  // E7-T11 deterministic admission seam
     friend class SchedulerWakeHandle;  // E9: notify() -> notify_external_wake
+    friend struct E9ParkSeamHooks;     // E9-CORRECTIVE park seams (T3/T4)
 
     // Wait registration with owner Worker (E7-B will use owner; E7-A stores
     // the Fiber only).
@@ -232,6 +267,11 @@ private:
     void route_runnable(Fiber* f, WorkerState* owner);
     void route_runnable_locked(Fiber* f, WorkerState* owner);
     void worker_loop(WorkerState* ws);
+    // E9-CORRECTIVE: one internal run implementation parameterized by
+    // RunMode. The worker loop reads run_mode_ to select the idle action
+    // (ADR §9.4.0). Drain and Live share the SAME loop, classifier, and
+    // publication/ownership protocols.
+    void run_impl(unsigned worker_count, RunMode mode);
     void run_next_on(WorkerState* ws, Fiber* fiber);
 
     // E8: try to steal one runnable Fiber from another worker's local_runnable
@@ -259,6 +299,23 @@ private:
     std::mutex admission_seam_mtx_;
     std::condition_variable admission_seam_cv_;
     bool admission_seam_paused_ = false;
+
+    // E9-CORRECTIVE deterministic park seams (ADR §9.4.15). Two narrow
+    // TEST-only hooks at the load-bearing causal boundaries of park
+    // admission, replacing sleep-based race proofs (M7):
+    //   park_candidate_seam_  — pauses a Worker right after it reaches
+    //                           ParkCandidate (Phase-B recheck boundary).
+    //   park_commit_seam_     — pauses a Worker immediately before the
+    //                           physical wait (commit boundary).
+    // They only pause the Worker at the exact boundary; they do NOT
+    // modify Scheduler state. The test releases the seam only after the
+    // producer has published readiness + signaled the wake epoch.
+    bool park_candidate_seam_armed_ = false;
+    bool park_commit_seam_armed_ = false;
+    std::mutex park_seam_mtx_;
+    std::condition_variable park_seam_cv_;
+    bool park_seam_candidate_paused_ = false;
+    bool park_seam_commit_paused_ = false;
 
     // Get the current Worker's WorkerState (worker-local via TLS).
     static WorkerState* current_worker();
@@ -303,6 +360,13 @@ private:
     std::atomic<bool> global_terminate_{false};
     std::condition_variable global_idle_cv_;
     bool in_coordinated_run_ = false;
+
+    // E9-CORRECTIVE: the current run invocation's lifetime policy. Set by
+    // run_impl before worker_loop starts; read by worker_loop at the idle-
+    // action selection boundary. Stable for the duration of a run (a run
+    // invocation has ONE mode). Plain bool-storage is safe: it is written
+    // once before any worker thread starts and only read thereafter.
+    RunMode run_mode_{RunMode::drain};
 
     // E7-C fixup: MW-S2 admission coordination state (protected by
     // global_mtx_). admission_ transitions NONE→CANDIDATE→COMMITTED under
