@@ -2,7 +2,9 @@
 
 ## Current Baseline
 
-Sluice has completed the execution substrate through E7 and is entering E8.
+Sluice has completed the execution substrate through E9 (Scheduler park/wake
+and external-wake protocol). E8 (runnable ownership transfer / work stealing)
+superseded E7's conservative pinned-Fiber contract.
 
 Current accepted capabilities:
 
@@ -30,10 +32,14 @@ backend progress policy
 poll / wait_one distinction
 
 multi-worker Scheduler
-Worker-local execution state
+Worker-local execution state (sched_ctx is reached only via the local
+    worker's WorkerState at every context-switch site — ADR §9.2.2)
 
-pinned Fiber ownership
-owner-preserving wake routing
+runnable ownership transfer / work stealing (E8 — supersedes E7 pinning;
+    a stolen Fiber may resume on the thief; wake routes by WaitReg.owner)
+
+owner-preserving wake routing (route by the wait-epoch resume owner
+    captured at suspend; the executing Worker's own sched_ctx is used)
 
 serialized backend access
 
@@ -43,9 +49,12 @@ two-phase blocking admission
 
 exactly-once runnable publication
 
+Scheduler park/wake + external-wake protocol (E9)
+
 TLA+:
     runnable-publication protocol
     multi-worker progress/admission protocol
+    runnable ownership-transfer protocol (E8)
 ```
 
 The runtime currently has a mature execution substrate.
