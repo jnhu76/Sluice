@@ -898,10 +898,24 @@ Scheduler::MwState Scheduler::classify_locked() const {
 void Scheduler::await_completion_size(Completion<std::size_t>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
-    me->make_waiting();
+    // E7/E8 SuspendFiber refinement obligation: register + readiness recheck +
+    // make_waiting MUST be one atomic transition with respect to the wake path
+    // (wake_ready_completions_locked runs under global_mtx_). Doing make_waiting
+    // before registering (the old shape) left a window in which the wake path
+    // could not see this fiber; doing the recheck outside the lock could miss a
+    // wake that landed between register-release and recheck. Both admitted a
+    // lost wake / permanent park. Mirror the attach_ready_wake idiom: register,
+    // recheck, and make_waiting all under global_mtx_; only context_switch is
+    // outside. If the Completion is already ready under the lock, undo the
+    // speculative registration and continue running (no make_waiting).
     {
         std::lock_guard<std::mutex> lk(global_mtx_);
         waiting_size_[static_cast<void*>(&c)] = {me, ws};
+        if (c.ready()) {
+            waiting_size_.erase(static_cast<void*>(&c));
+            return;
+        }
+        me->make_waiting();
     }
     fiber_ctx::Switch s;
     s.old = &me->ctx;
@@ -912,10 +926,16 @@ void Scheduler::await_completion_size(Completion<std::size_t>& c) {
 void Scheduler::await_completion_void(Completion<void>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
-    me->make_waiting();
+    // See await_completion_size: register + recheck + make_waiting under the
+    // wake-path lock; only context_switch is outside.
     {
         std::lock_guard<std::mutex> lk(global_mtx_);
         waiting_void_[static_cast<void*>(&c)] = {me, ws};
+        if (c.ready()) {
+            waiting_void_.erase(static_cast<void*>(&c));
+            return;
+        }
+        me->make_waiting();
     }
     fiber_ctx::Switch s;
     s.old = &me->ctx;
@@ -927,16 +947,19 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
     if (ready.load(std::memory_order::acquire)) return;
+    // See await_completion_size: register + recheck + make_waiting under
+    // global_mtx_ (the wake_flags lock), only context_switch outside. The old
+    // shape did the recheck and make_waiting outside the lock, racing a wake
+    // that landed between register-release and recheck (lost wake / park).
     {
         std::lock_guard<std::mutex> lk(global_mtx_);
         waiting_ready_[&ready] = {me, ws};
+        if (ready.load(std::memory_order::acquire)) {
+            waiting_ready_.erase(&ready);
+            return;
+        }
+        me->make_waiting();
     }
-    if (ready.load(std::memory_order::acquire)) {
-        std::lock_guard<std::mutex> lk(global_mtx_);
-        waiting_ready_.erase(&ready);
-        return;
-    }
-    me->make_waiting();
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
