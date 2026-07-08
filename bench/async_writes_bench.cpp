@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <unistd.h>
@@ -73,14 +74,29 @@ std::uint64_t run_blocking(const Params& pm, int fd, const std::byte* fill) {
 // Async path: submit N positional writes, reap via wait_one.
 std::uint64_t run_async_threadpool(const Params& pm, int fd, const std::byte* fill) {
     sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::ThreadPoolBackend>());
-    std::vector<sluice::async::Completion<std::size_t>> cs(pm.ops);
-    auto t0 = now_ns();
+    // Completion is non-copyable AND non-movable (completion.hpp L7: an
+    // outstanding Completion's address is the backend's handle to it). Hold the
+    // N Completions as unique_ptr so the vector stores stable addresses and
+    // never needs to move them (a plain vector<Completion> compiles only because
+    // the count-constructor never grows, but that is a fragile implicit contract
+    // — any later push_back/reserve would fail to compile). submit_write uses the
+    // returned count of accepted writes (pm.ops minus rejections) so a failed
+    // submission does not make the reap loop block forever waiting for an op
+    // that was never enqueued.
+    std::vector<std::unique_ptr<sluice::async::Completion<std::size_t>>> cs;
+    cs.reserve(pm.ops);
     for (std::size_t i = 0; i < pm.ops; ++i) {
-        (void)ctx.submit_write(sluice::async::WriteOp{
-            fd, fill, pm.block_size, static_cast<std::uint64_t>(i) * pm.block_size}, cs[i]);
+        cs.push_back(std::make_unique<sluice::async::Completion<std::size_t>>());
+    }
+    auto t0 = now_ns();
+    std::size_t accepted = 0;
+    for (std::size_t i = 0; i < pm.ops; ++i) {
+        auto r = ctx.submit_write(sluice::async::WriteOp{
+            fd, fill, pm.block_size, static_cast<std::uint64_t>(i) * pm.block_size}, *cs[i]);
+        if (r.has_value()) ++accepted;
     }
     std::size_t reaped = 0;
-    while (reaped < pm.ops) {
+    while (reaped < accepted) {
         auto r = ctx.wait_one();
         if (!r.has_value()) break;
         reaped += r.value();

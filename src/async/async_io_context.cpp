@@ -34,6 +34,15 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
 }
 
 namespace {
+// Tally one submit_* result into AsyncStats. This is the SINGLE counting
+// authority for queue_full_retries on the L8 reject path (submit into a
+// non-idle Completion -> invalid_state): every AsyncBackend returns
+// invalid_state for that case, and tally_submit counts it here once,
+// uniformly across backends (Uring/ThreadPool/Sync/Fake). Backends MUST NOT
+// also bump queue_full_retries for invalid_state — that double-counts. A
+// backend MAY still bump queue_full_retries for a backend_error ring-full
+// path (Uring does; tally_submit cannot see it since it returns
+// backend_error, not invalid_state).
 void tally_submit(AsyncStats* s, const Result<void>& r) {
     if (!s) return;
     ++s->submit_calls;

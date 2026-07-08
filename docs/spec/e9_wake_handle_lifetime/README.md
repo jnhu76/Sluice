@@ -5,7 +5,7 @@ protocol, closing the E9-LIFETIME-CORRECTIVE defect.
 
 ## The load-bearing question
 
-```
+```text
 May a SchedulerWakeHandle::notify() callback dereference the Scheduler
 AFTER the Scheduler destructor has destroyed its wake members?
 ```
@@ -17,7 +17,7 @@ validity check through the entire Scheduler wake callback; `~Scheduler`
 acquires the same mutex before invalidating. Exactly two linearizations
 are legal:
 
-```
+```text
 Notify wins:    N holds the lease through the callback; D's mutex
                 acquisition BLOCKS until the callback returns; invalidation
                 and member destruction happen strictly after.
@@ -52,7 +52,7 @@ No third result is permitted.
 
 ## State axes (spec 6)
 
-```
+```text
 schedulerState  in {Alive, Invalidated, Destroyed}
 notifyPhase     in {Idle, Validating, Callback, ReturnedTrue, ReturnedFalse}
 controlOwner    in {None, Notifier, Destructor}   -- Control::mtx holder
@@ -113,7 +113,7 @@ the `.tla`):
 
 ## Running
 
-```
+```bash
 java -cp /tmp/tla2tools.jar tlc2.TLC \
   -config docs/spec/e9_wake_handle_lifetime/E9WakeHandleLifetime.cfg \
   docs/spec/e9_wake_handle_lifetime/E9WakeHandleLifetime
@@ -141,7 +141,7 @@ The trace reproduces the exact snapshot→release→invalidate→callback UAF
 (spec 9). `LifeInv1 (Callback => Alive)` isolates the callback-after-
 invalidation state:
 
-```
+```text
 S1: Init                              scheduler=Alive, phase=Idle, owner=None
 S2: NotifyAcquire                     phase=Validating, owner=Notifier (lease HELD)
 S3: NotifyValidateRelease   DEFECT    phase=SnapshotReleased, owner=None,
@@ -159,7 +159,7 @@ single destruction, and mutex semantics are all faithful to production.
 
 ### Correct-vs-buggy semantic diff
 
-```
+```text
 Correct: notify retains the Control lease (controlOwner=Notifier) through
          the entire callback; NotifyRelease is the only path back to None.
          DestructorAcquire is impossible while controlOwner=Notifier, so
@@ -192,7 +192,7 @@ No other defect differences are required for the counterexample.
 
 ### Lifetime authority statement
 
-```
+```text
 Control::mtx does not extend Scheduler object ownership.
 
 It serializes the callback-duration lease against Scheduler invalidation.

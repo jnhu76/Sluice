@@ -158,9 +158,10 @@ struct UringAsyncBackend::Impl {
 
     // Acquire an SQE, flushing the ring on pressure (mirror the 013 spike's
     // flush+retry). Returns nullptr only if the ring cannot make room even after
-    // a flush; the caller then reports backend_error/invalid_state. Bumps
-    // queue_full_retries here so both the flush path and the still-full path are
-    // counted uniformly.
+    // a flush; the caller then reports backend_error (and bumps
+    // queue_full_retries itself — that is the only path here that represents a
+    // genuinely full ring, distinct from the L8 !idle reject which is counted
+    // uniformly at the AsyncIoContext layer).
     io_uring_sqe* get_sqe_with_pressure(sluice::AsyncStats* stats) {
         io_uring_sqe* sqe = ::io_uring_get_sqe(&ring);
         if (sqe != nullptr) return sqe;
@@ -324,7 +325,9 @@ __u64 register_op(ImplLike& impl, __u64 id, C& c, OpRec rec) {
 Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
     if (!impl_ || !impl_->have_ring) return no_ring();
     if (!c.idle()) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // L8 reject (submit into a non-idle Completion). Counted ONCE by
+        // AsyncIoContext::tally_submit (the cross-backend L8 authority) when it
+        // sees invalid_state. Do NOT double-count here.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
@@ -344,7 +347,7 @@ Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& 
 Result<void> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
     if (!impl_ || !impl_->have_ring) return no_ring();
     if (!c.idle()) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // L8 reject; counted ONCE by AsyncIoContext::tally_submit. See submit_read.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
@@ -364,7 +367,7 @@ Result<void> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>
 Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
     if (!impl_ || !impl_->have_ring) return no_ring();
     if (!c.idle()) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // L8 reject; counted ONCE by AsyncIoContext::tally_submit. See submit_read.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
@@ -383,7 +386,7 @@ Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>
 Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& c) {
     if (!impl_ || !impl_->have_ring) return no_ring();
     if (!c.idle()) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // L8 reject; counted ONCE by AsyncIoContext::tally_submit. See submit_read.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);

@@ -46,7 +46,6 @@ VARIABLES fiberState, ticketLocation, waitReg, ownerRecord, execWorker, waitOwne
 
 FiberState == {"Created", "Waiting", "Runnable", "Running", "Done"}
 TicketLoc  == {"None", "PendingSpawn", "W0Local", "W1Local", "W0Inbox", "W1Inbox"}
-WaitKeyVal == {"K"} \cup {"None"}
 
 ASSUME
     /\ Fibers # {}
@@ -66,8 +65,6 @@ LocalOf(w) == CASE w = W0 -> "W0Local"
 InboxOf(w) == CASE w = W0 -> "W0Inbox"
                     [] w = W1 -> "W1Inbox"
                     [] OTHER -> "None"
-
-Other(w) == IF w = W0 THEN W1 ELSE W0
 
 TicketLive(f) == ticketLocation[f] # "None"
 TicketFree(f) == ticketLocation[f] = "None"

@@ -59,7 +59,7 @@ consistency relation separate in the model.
 
 ## Running
 
-```
+```bash
 java -cp /tmp/tla2tools.jar tlc2.TLC \
   -config docs/spec/e8_ownership_transfer/E8OwnershipTransfer.cfg \
   docs/spec/e8_ownership_transfer/E8OwnershipTransfer
@@ -70,7 +70,7 @@ java -cp /tmp/tla2tools.jar tlc2.TLC \
 
 ## Model domain (finite, exhaustive TLC)
 
-```
+```text
 Workers = {W0, W1}
 Fibers  = {F0, F1}
 ```
@@ -133,7 +133,7 @@ fiber has no active wait registration whose owner could be stale).
 
 ### Buggy model counterexample (Model A — single defect)
 
-```
+```text
 State 1: <Initial predicate>
   ownerRecord=(F0:NA,F1:NA); ticketLocation=(F0:None,F1:None); fiberState=(F0:Created,F1:Created)
 State 2: <SpawnPublish F0>
@@ -163,7 +163,7 @@ The comment-stripped, name-normalized diff between
 `E8OwnershipTransfer.tla` and `E8OwnershipTransferBuggyOwner.tla` shows
 **exactly one** behavioral difference:
 
-```
+```diff
 StealRunnable:
 -    /\ ownerRecord' = [ownerRecord EXCEPT ![f] = thief]     \* correct (Model B)
 +    /\ ownerRecord' = ownerRecord                           \* buggy  (Model A: no transfer)

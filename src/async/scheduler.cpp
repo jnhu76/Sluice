@@ -84,9 +84,10 @@ struct SchedulerWakeHandle::Control {
 Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
     // E9: create the wake control block. Every issued SchedulerWakeHandle
     // holds a shared_ptr to it; the Scheduler holds a shared_ptr too so the
-    // block outlives the Scheduler's stack locals. The handle additionally
-    // keeps a weak_ptr to the Scheduler itself so notify() can detect
-    // post-destruction calls and no-op.
+    // block outlives the Scheduler's stack locals. A handle's notify() detects
+    // post-destruction via the Control::alive flag (protected by Control::mtx,
+    // the callback lease) and returns false without any Scheduler dereference.
+    // See Control below and docs/spec/e9_wake_handle_lifetime/.
     wake_control_ = std::make_shared<SchedulerWakeHandle::Control>();
 }
 
@@ -195,8 +196,15 @@ void SchedulerWakeHandle::lifetime_seam_release() noexcept {
 
 SchedulerWakeHandle Scheduler::make_wake_handle() {
     // The control block is shared with this Scheduler; it points back here.
-    wake_control_->scheduler = this;
-    wake_control_->alive = true;
+    // Mutate scheduler/alive under Control::mtx, matching ~Scheduler and every
+    // reader (notify/bound). A concurrent notify() on a previously-issued
+    // handle reads these under Control::mtx; an unlocked write here would race
+    // it (and TSan flags it).
+    {
+        std::lock_guard<std::mutex> lk(wake_control_->mtx);
+        wake_control_->scheduler = this;
+        wake_control_->alive = true;
+    }
     return SchedulerWakeHandle{wake_control_};
 }
 

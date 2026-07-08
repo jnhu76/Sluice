@@ -36,23 +36,14 @@ void Group::await() {
             }
             if (pending == 0) break;
             sched_->run_until_idle();
-            // Re-check after driving. If no Future became ready AND the
-            // scheduler has nothing runnable, an external producer must stage
+            // Re-check after driving. If run_until_idle made no task Future
+            // ready (after_pending == pending), an external producer must stage
             // more work; break to avoid an infinite loop. (E5 scope: producers
             // are in-scheduler Fibers or staged by the test between awaits.)
-            std::size_t still_pending = 0;
-            {
-                std::lock_guard<std::mutex> lk(mtx_);
-                for (auto& f : futures_) {
-                    if (!f->ready()) ++still_pending;
-                }
-            }
-            (void)still_pending;  // the loop re-checks at the top
             // Single pass per call; the caller may re-invoke await() if it
             // staged external work. For purely in-scheduler producers this
             // loop terminates because the producer Fiber completes inside
             // run_until_idle.
-            // Guard: if run_until_idle made no task Future ready, stop.
             std::size_t after_pending = 0;
             {
                 std::lock_guard<std::mutex> lk(mtx_);

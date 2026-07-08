@@ -19,14 +19,14 @@ admits a counterexample matching the observed causal chain.
 
 ## Running
 
-```
+```bash
 java -cp /tmp/tla2tools.jar tlc2.TLC -config E7Correct.cfg E7Publication
 java -cp /tmp/tla2tools.jar tlc2.TLC -config E7Buggy.cfg    E7Buggy
 ```
 
 ## Model domain (finite, exhaustive TLC)
 
-```
+```text
 Fibers   = {F0, F1, F2}
 Workers  = {W0, W1}
 WaitKeys = {K0, K1}
@@ -65,7 +65,7 @@ action must NOT create another publication.
 
 ### Buggy model counterexample (matches the flight recorder)
 
-```
+```text
 State 1: Created, ticketCount=0
 State 2: SpawnPublish            -> Runnable, ticketCount=1   (ticket A)
 State 3: DefectDuplicatePublish  -> ticketCount=2             (ticket B - defect)
@@ -92,7 +92,7 @@ queue, two POPs, the second on a Done fiber).
 
 ### The proven buggy producer
 
-```
+```text
 old C++ behavior:
     make_runnable() returned void (silent no-op on already-Runnable);
     wake_ready_*_locked called route_runnable_locked UNCONDITIONALLY.
@@ -111,7 +111,7 @@ fixed C++ behavior (commit 2265f1f):
 
 ## Conclusion (per the protocol doc)
 
-```
+```text
 The abstract E7 runnable-publication protocol preserves Inv1-Inv8 for the
 checked finite model.
 

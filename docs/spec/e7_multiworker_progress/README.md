@@ -24,7 +24,7 @@ of it.
 
 ## Running
 
-```
+```bash
 java -cp /tmp/tla2tools.jar tlc2.TLC -config E7MultiWorkerProgress.cfg               E7MultiWorkerProgress
 java -cp /tmp/tla2tools.jar tlc2.TLC -config E7MultiWorkerProgressBuggyOutstanding.cfg E7MultiWorkerProgressBuggyOutstanding
 java -cp /tmp/tla2tools.jar tlc2.TLC -config E7MultiWorkerProgressBuggyAdmission.cfg   E7MultiWorkerProgressBuggyAdmission
@@ -32,7 +32,7 @@ java -cp /tmp/tla2tools.jar tlc2.TLC -config E7MultiWorkerProgressBuggyAdmission
 
 ## Model domain (finite, exhaustive TLC)
 
-```
+```text
 Fibers  = {F0, F1}
 Workers = {W0, W1}
 ```
@@ -54,7 +54,7 @@ Workers = {W0, W1}
 
 Mirrors `Scheduler::classify_locked()` (ADR §9.2.6):
 
-```
+```text
 MW_S1       = AnyRunnable ∨ AnyRunning
 MW_S2       = ¬MW_S1 ∧ backendOutstanding      ← authoritative, NOT wait regs
 MW_S3       = ¬MW_S1 ∧ ¬backendOutstanding ∧ AnyWaitRegistration
@@ -89,7 +89,7 @@ counter — NOT `AnyWaitRegistration`. This is the §9 invariant.
 
 ### Buggy-outstanding counterexample (§9)
 
-```
+```text
 F0 completionWait=TRUE, F1 completionWait=TRUE
 backendOutstanding = FALSE          ← no backend op submitted (ready-flag/no-op case)
 MW_S2 = TRUE (buggy: derived from wait regs)
@@ -102,7 +102,7 @@ backendOutstanding`) prevents this: the state is MW-S3, not MW-S2.
 
 ### Buggy-admission counterexample (§10)
 
-```
+```text
 ElectCandidate(W0) under MW_S2
 [concurrent] MakeCompletionReady(F0)  ← ready reg appears
 FinalAdmissionRecheckAndCommit(W0)    ← BUGGY: skips ~ReadyRegUndrained check
@@ -153,7 +153,7 @@ drain first, flipping the state to MW_S1 and cancelling the candidate.
 
 ## Conclusion
 
-```
+```text
 The abstract E7 multi-worker progress / blocking-admission protocol preserves
 MW-Inv1-8 for the checked finite model.
 
