@@ -4,8 +4,8 @@ Status: **NORMATIVE** for E9-CORRECTIVE and all later async-runtime phases (E10+
 
 This is NOT a generic software-engineering essay. It is the project-specific
 construction method distilled from the E9 corrective review, made binding so
-future async-runtime work (E10 WaitNode/cancellation, E11 timers, E16
-runtime hardening) cannot repeat the E9 lifetime-conflation defect.
+future async-runtime work (E10 WaitNode/cancellation, E11 timers, E14
+runtime closure) cannot repeat the E9 lifetime-conflation defect.
 
 The decisive E9 defect this method exists to prevent:
 
@@ -219,8 +219,10 @@ This method is binding for:
 ```text
 E9-CORRECTIVE  run lifetime contract separation (this task)
 E10            WaitNode + cancellation-safe wait queue core
-E11            timers
-E16            runtime hardening (OS-multiplexed wake, lock-free deques)
+E11            Deadline / timer wait integration
+E12            Async synchronization primitives (E12-A..G)
+E13            Select / multi-wait winner protocol
+E14            Threaded vs Evented semantic parity and runtime closure
 ```
 
 An async-runtime phase that violates M1–M9 (e.g. omits a load-bearing

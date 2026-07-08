@@ -237,14 +237,53 @@ E7 multi-worker scheduler
   ↓
 E8 work stealing
   ↓
-E9 Io-aware wait queues / futex layer
+E9 Scheduler park/wake and external-wake protocol [CLOSED]
   ↓
-E10 Mutex / Condition / Event / Queue / RwLock / Semaphore (PHASE S)
+E10 WaitNode and cancellation-safe wait queue core
   ↓
-E11 Select (T5 — was blocked; unblocked once Queue exists)
+E11 Deadline / timer wait integration
   ↓
-E12 Threaded vs Evented semantic parity audit
+E12 Async synchronization primitives (E12-A Mutex, E12-B Event, E12-C Condition,
+    E12-D Queue, E12-E Semaphore, E12-F RwLock, E12-G cross-primitive audit)
+  ↓
+E13 Select / multi-wait winner protocol
+  ↓
+E14 Threaded vs Evented semantic parity and runtime closure
 ```
+
+### Historical frontier refinement
+
+The original ADR defined the future construction frontier coarsely:
+
+```text
+Original E9:  Io-aware wait queues / futex layer
+Original E10: Mutex / Condition / Event / Queue / RwLock / Semaphore
+Original E11: Select
+Original E12: Threaded vs Evented semantic parity audit
+```
+
+Construction and formal review refined the original E9 scope. As-built
+mapping:
+
+```text
+Original E9
+  -> E9  Scheduler Park/Wake and External-Wake Protocol [CLOSED]
+  -> E10 WaitNode and Cancellation-Safe Wait Queue Core
+  -> E11 Deadline / Timer Wait Integration
+
+Original E10
+  -> E12 Async Synchronization Primitives
+
+Original E11
+  -> E13 Select / Multi-Wait Winner Protocol
+
+Original E12
+  -> E14 Threaded vs Evented Semantic Parity and Runtime Closure
+```
+
+Completed E7/E8/E9 identifiers remain frozen historical IDs. This mapping
+refines the future construction frontier and does not retroactively
+renumber completed work.
 
 **Do not begin with work stealing.** First prove the complete single-worker
 state transition (the E4 cycle above). This is the experiment's load-bearing
@@ -1808,8 +1847,9 @@ EVENTED    : must suspend the current user task/fiber, return the worker to
 BOUNDARY   : backend completion → task state → runnable → scheduler. Four
              separate responsibilities; UringAsyncBackend is NOT the scheduler.
 FRONTIER   : ADR → E0-A audit → Task/Fiber → context → switch → single-worker
-             proof (E4) → logical-wait refactor → multi-worker → stealing →
-             futex → sync primitives → Select → parity audit.
+              proof (E4) → logical-wait refactor → multi-worker → stealing →
+              E9 park/wake [CLOSED] → E10 WaitNode → E11 timers → E12 sync
+              primitives → E13 Select → E14 parity + runtime closure.
 NO PERF    : fibers add no universal performance claim (§10).
 DEPS       : fiber.zig port (x86_64, gated) + existing optional liburing.
 ```

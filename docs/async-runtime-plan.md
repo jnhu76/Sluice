@@ -412,15 +412,16 @@ A Fiber can wait on a Scheduler source with a deadline without double publicatio
 
 Only after E9-E11 should Sluice add user-facing asynchronous synchronization primitives.
 
-Recommended order:
+Planned decomposition:
 
 ```text
-E12-A Event
-E12-B Semaphore
-E12-C Mutex
-E12-D Condition
-E12-E Queue
+E12-A Mutex
+E12-B Event
+E12-C Condition
+E12-D Queue
+E12-E Semaphore
 E12-F RwLock
+E12-G Cross-Primitive Cancellation Audit
 ```
 
 The exact order may be adjusted after API audit.
@@ -514,7 +515,7 @@ A primitive is not allowed to create a private scheduler side channel.
 
 ---
 
-# E13 — Multi-Wait / Select
+# E13 — Select / Multi-Wait Winner Protocol
 
 ## Goal
 
@@ -592,7 +593,7 @@ One logical Fiber wait can safely span heterogeneous readiness sources.
 
 ---
 
-# E14 — High-Level Async I/O Bridge
+# E14 — High-Level Async I/O Bridge (deferred — not in current frontier)
 
 At this point Sluice has:
 
@@ -658,9 +659,9 @@ Normal application code can perform asynchronous I/O without manually wiring `Co
 
 ---
 
-# E15 — Threaded / Evented Semantic Parity Audit
+# E14 — Threaded vs Evented Semantic Parity and Runtime Closure
 
-The old roadmap called this E12.
+The original roadmap called this E12.
 
 It should remain, but much later.
 
@@ -714,7 +715,7 @@ No accidental divergence.
 
 ---
 
-# E16 — Runtime Hardening and Performance Architecture
+# E15 — Runtime Hardening and Performance Architecture (deferred — not in current frontier)
 
 Only after semantic closure should Sluice optimize the runtime architecture.
 
@@ -777,28 +778,29 @@ E8
 Runnable ownership transfer / work stealing
 
 E9
-Scheduler park/wake substrate
+Scheduler park/wake and external-wake protocol [CLOSED]
 
 E10
-WaitNode and cancellation-safe wait queues
+WaitNode and cancellation-safe wait queue core
 
 E11
-Timers and deadlines
+Deadline / timer wait integration
 
 E12
 Async synchronization primitives
+  E12-A Mutex
+  E12-B Event
+  E12-C Condition
+  E12-D Queue
+  E12-E Semaphore
+  E12-F RwLock
+  E12-G Cross-Primitive Cancellation Audit
 
 E13
-Multi-wait / Select
+Select / multi-wait winner protocol
 
 E14
-High-level async I/O bridge
-
-E15
-Threaded/Evented semantic parity audit
-
-E16
-Runtime hardening and performance architecture
+Threaded vs Evented semantic parity and runtime closure
 ```
 
 The dependency trunk is:
@@ -848,21 +850,8 @@ COMPOSITION
 
         ↓
 
-APPLICATION I/O
-    Reader / Writer
-    network
-
-        ↓
-
 SEMANTIC CLOSURE
     Threaded vs Evented parity
-
-        ↓
-
-OPTIMIZATION
-    lock-free deque
-    NUMA
-    backend sharding
 ```
 
 The runtime should continue to be built by protocol dependency, not by API popularity.
