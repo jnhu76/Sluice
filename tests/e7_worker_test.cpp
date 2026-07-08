@@ -2,11 +2,31 @@
 //
 // E7-T1: two workers run two Fibers concurrently; each registers a different
 // wait. Assert no cross-registration. Proves worker-local current.
-// E7-T2: two workers suspend/resume separate Fibers. Assert each Fiber returns
-// through its own worker's scheduler continuation (distinct OS thread identity).
+// E7-T2: coordinated two-worker suspend/resume regression. Asserts the
+// two-waiter + setter topology drains, wakes, and completes cleanly.
 //
-// PROVES: worker-local sched_ctx + current.
-// DOES NOT PROVE: pinned routing (E7-B), MW coordination (E7-C).
+// CONTRACT ROLE (reassessed under E8, ADR §9.3):
+//   E7-T2 no longer claims to prove the current C-A contract directly. C-A is
+//   "whenever Fiber F executes/suspends/resumes on Worker W, the context
+//   switch uses W's own WorkerState::sched_ctx." That pairing is a structural
+//   invariant of production (sched_ctx is reached only via the local ws /
+//   g_worker at every switch site — see run_next_on / fiber_entry_bridge /
+//   await_* in src/async/scheduler.cpp) and is exercised across a legal E8
+//   W1-suspend -> W0-resume migration by e8_t3_steal_run_suspend_wake_resume_
+//   on_thief, which asserts wid_pre == wid_post on the thief. E7-T2 is a
+//   distinct coordinated suspend/resume regression, NOT a C-A proof.
+//
+//   The original E7-era same-thread oracle (`tid_pre == tid_post`) encoded the
+//   superseded C-B wait-epoch worker-affinity contract ("suspend-worker ==
+//   resume-worker"). E8 superseded C-B by permitting Runnable ownership
+//   transfer + cross-worker resume between runnable epochs, so C-B may be
+//   violated by a legal steal. The C-B oracle is dropped here (it would reject
+//   legal E8 executions on this topology); the topology's liveness/state
+//   assertions remain.
+//
+// PROVES: worker-local current (T1); coordinated suspend/resume liveness (T2).
+// DOES NOT PROVE: worker-local sched_ctx pairing (C-A — proven structurally +
+//   e8_t3); pinned routing (E7-B, superseded by E8); MW coordination (E7-C).
 //
 // Single coordinated run(2) per test — no double-run (sched_ctx is OS-thread-
 // stack-dependent; destroying/recreating threads between run() calls dangles
@@ -87,16 +107,33 @@ SLUICE_TEST_CASE(e7_t1_worker_local_current_no_cross_registration) {
     SLUICE_CHECK(fb.state() == FiberState::waiting);
 }
 
-// ---- E7-T2: worker-local scheduler context — distinct continuations -------
-// Two workers each run a Fiber that records its OS thread identity before
-// suspend. A third Fiber (setter) sets both flags. The waiting Fibers resume.
-// Assert: each Fiber's pre-suspend thread identity == post-resume identity
-// (it resumed on the same OS worker thread). Also assert: the two waiting
-// Fibers ran on different OS threads (proving two distinct workers).
+// ---- E7-T2: coordinated two-worker suspend/resume regression --------------
+// Historical identity: this case was named "worker_local_scheduler_context" and
+// asserted `tid_pre == tid_post` per waiter to encode the E7-era C-B contract
+// ("suspend-worker == resume-worker" within a wait epoch). E8 (ADR §9.3)
+// superseded C-B by permitting legal Runnable ownership transfer + cross-worker
+// resume between runnable epochs, so a legal steal on this topology would
+// legitimately make a waiter resume on the OTHER worker — the C-B oracle would
+// reject that legal E8 execution (a flake source). The same-thread oracle is
+// therefore dropped; it is NOT a valid C-A proxy (C-A is "the context switch
+// uses the executing Worker's own sched_ctx," not "same worker pre/post").
 //
-// This requires all three Fibers to be in the same run(2): the setter, after
-// both waiters have suspended, sets both flags, and the coordinated run's
-// readiness drain routes the woken waiters back to their owning workers.
+// Current role: a coordinated suspend/resume regression. Three Fibers share one
+// run(2): two waiters each suspend on an unready flag; a setter, after both
+// waiters have suspended, makes both flags ready. The load-bearing assertions
+// are liveness + state: both waiters reach their post-resume point and all
+// three Fibers complete done, and the ready-flag registrations are erased on
+// wake. This exercises the readiness drain + wake-route + worker-local suspend
+// machinery on the two-worker topology.
+//
+// C-A (worker-local sched_ctx pairing) is NOT proven by this case. It is a
+// structural invariant of production (sched_ctx is reached only via the local
+// ws / g_worker at every switch site — src/async/scheduler.cpp run_next_on,
+// fiber_entry_bridge, await_completion_*, await_ready_flag) and is exercised
+// across a legal E8 W1-suspend -> W0-resume migration by
+// e8_t3_steal_run_suspend_wake_resume_on_thief (asserts wid_pre == wid_post on
+// the thief). The test name is preserved for historical identity; do not read
+// it as a C-A proof claim.
 SLUICE_TEST_CASE(e7_t2_worker_local_scheduler_context) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -104,23 +141,21 @@ SLUICE_TEST_CASE(e7_t2_worker_local_scheduler_context) {
     Scheduler sched(ctx);
 
     std::atomic<bool> flag_a{false}, flag_b{false};
-    std::thread::id a_tid_pre{}, a_tid_post{};
-    std::thread::id b_tid_pre{}, b_tid_post{};
     std::atomic<int> waiters_suspended{0};
+    std::atomic<bool> a_resumed{false};
+    std::atomic<bool> b_resumed{false};
 
     Fiber fa;
     fa.set_entry([&](Fiber&) {
-        a_tid_pre = std::this_thread::get_id();
         waiters_suspended.fetch_add(1, std::memory_order_acq_rel);
         sched.await_ready_flag(flag_a);
-        a_tid_post = std::this_thread::get_id();
+        a_resumed.store(true, std::memory_order_release);
     });
     Fiber fb;
     fb.set_entry([&](Fiber&) {
-        b_tid_pre = std::this_thread::get_id();
         waiters_suspended.fetch_add(1, std::memory_order_acq_rel);
         sched.await_ready_flag(flag_b);
-        b_tid_post = std::this_thread::get_id();
+        b_resumed.store(true, std::memory_order_release);
     });
     Fiber fset;
     fset.set_entry([&](Fiber&) {
@@ -138,19 +173,14 @@ SLUICE_TEST_CASE(e7_t2_worker_local_scheduler_context) {
     sched.spawn(fset);
     sched.run(2);
 
-    SLUICE_CHECK(a_tid_pre == a_tid_post);  // resumed on same OS thread (worker-local sched_ctx)
-    SLUICE_CHECK(b_tid_pre == b_tid_post);
-    // E8 NOTE: the original E7-T2 also asserted `a_tid_pre != b_tid_pre`
-    // ("ran on different OS threads") to prove two distinct workers. E8
-    // introduces work stealing (ADR §9.3), so one waiter may be STOLEN by
-    // the other's worker, making both pre-suspend tids equal. That is
-    // correct under E8 (ownership transfers). The load-bearing E7-T2 claim
-    // is worker-local sched_ctx: each Fiber resumes on the SAME OS thread
-    // it suspended on (asserted above). The "different threads" proxy is
-    // dropped as E8-invalid.
+    // Load-bearing: both waiters reached their post-resume point (the readiness
+    // drain woke them and they resumed), and all three Fibers completed.
+    SLUICE_CHECK(a_resumed.load());
+    SLUICE_CHECK(b_resumed.load());
     SLUICE_CHECK(fa.state() == FiberState::done);
     SLUICE_CHECK(fb.state() == FiberState::done);
     SLUICE_CHECK(fset.state() == FiberState::done);
+    SLUICE_CHECK(sched.waiting_ready_count() == 0);  // both registrations erased on wake
 }
 
 // ---- E7-T3: pinned resume — Fiber resumes on its owning Worker -----------
