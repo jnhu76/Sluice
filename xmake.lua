@@ -713,3 +713,22 @@ do
             add_tests("e8_steal_test")
     end
 end
+
+-- e9_external_wake_test — Scheduler park admission + unified wake-source
+-- protocol (sluice-CORE-E9). Proves external-thread flag completion wakes a
+-- parked Scheduler (no caller re-entry), MIXED-WAKE closure, wake coalescing,
+-- the pre-park race, wake-handle lifetime, and E7/E8 runnable/shutdown wake.
+-- Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e9_external_wake_test.cpp"
+    if os.isfile(p) then
+        target("e9_external_wake_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e9_external_wake_test")
+    end
+end

@@ -44,10 +44,114 @@ void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
 
 }  // namespace
 
-Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {}
+// ---- E9 SchedulerWakeHandle::Control (full definition; forward-declared in
+// the header so the shared_ptr member is pimpl-friendly) ----
+struct SchedulerWakeHandle::Control {
+    // mutex protects alive; wake delivery itself uses the Scheduler's
+    // wake_mtx_. A raw Scheduler* is safe here ONLY because the Scheduler
+    // clears `scheduler` and flips `alive=false` in its destructor before
+    // the control block can be freed (the Scheduler holds a shared_ptr;
+    // handles hold a shared_ptr, so the block outlives both). A notify()
+    // that races the destructor either sees alive=true (Scheduler still
+    // fully constructed) or alive=false (no-op) — never a torn Scheduler.
+    std::mutex mtx;
+    Scheduler* scheduler{nullptr};
+    bool alive{false};
+};
+
+Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
+    // E9: create the wake control block. Every issued SchedulerWakeHandle
+    // holds a shared_ptr to it; the Scheduler holds a shared_ptr too so the
+    // block outlives the Scheduler's stack locals. The handle additionally
+    // keeps a weak_ptr to the Scheduler itself so notify() can detect
+    // post-destruction calls and no-op.
+    wake_control_ = std::make_shared<SchedulerWakeHandle::Control>();
+}
 
 Scheduler::~Scheduler() {
-    // Workers are joined in run(). Nothing to drain here for E7-A.
+    // E9: invalidate every outstanding wake handle so a post-destruction
+    // notify() becomes a no-op. Clearing the Scheduler's shared_ptr to the
+    // control block drops the strong ref; handles still hold a copy, but
+    // their weak_ptr-to-Scheduler expires (the Scheduler is gone). We also
+    // flip alive=false under the lock so notify() sees the invalidation
+    // deterministically even if a shared_ptr alias temporarily lingers.
+    if (wake_control_) {
+        {
+            std::lock_guard<std::mutex> lk(wake_control_->mtx);
+            wake_control_->alive = false;
+        }
+        wake_control_->scheduler = nullptr;
+        wake_control_.reset();
+    }
+    // Workers are joined in run().
+}
+
+// ---- E9 SchedulerWakeHandle::notify + bound ----
+
+bool SchedulerWakeHandle::notify() noexcept {
+    if (!control_) return false;
+    Scheduler* sched = nullptr;
+    bool alive = false;
+    {
+        std::lock_guard<std::mutex> lk(control_->mtx);
+        sched = control_->scheduler;
+        alive = control_->alive;
+    }
+    if (!alive || sched == nullptr) return false;  // post-destruction: no-op
+    sched->notify_external_wake();
+    return true;
+}
+
+bool SchedulerWakeHandle::bound() const noexcept {
+    if (!control_) return false;
+    std::lock_guard<std::mutex> lk(control_->mtx);
+    return control_->alive && control_->scheduler != nullptr;
+}
+
+SchedulerWakeHandle Scheduler::make_wake_handle() {
+    // The control block is shared with this Scheduler; it points back here.
+    wake_control_->scheduler = this;
+    wake_control_->alive = true;
+    return SchedulerWakeHandle{wake_control_};
+}
+
+void Scheduler::notify_external_wake() noexcept {
+    // External producer entry point. Publishes a wake obligation: advance
+    // the wake epoch and notify wake_cv_. Safe to call from any thread.
+    // Refinement map: TLA+ ExternalReadyPublish (signal half).
+    signal_wake_locked();
+}
+
+void Scheduler::signal_wake_locked() {
+    // Advance the wake epoch under wake_mtx_ and notify. Idempotent +
+    // coalescing-safe. The epoch is the authority for the commit-to-sleep
+    // window; persistent state is the lost-wake authority (ADR §9.4.5).
+    // Safe to call with global_mtx_ held (we only acquire wake_mtx_).
+    {
+        std::lock_guard<std::mutex> lk(wake_mtx_);
+        ++wake_epoch_;
+    }
+    wake_cv_.notify_all();
+}
+
+void Scheduler::park_on_wake_source(WorkerState* ws) {
+    // Park the calling Worker on the SCHEDULER wake domain. Record the
+    // observed epoch under wake_mtx_, then cv.wait_for with a bounded
+    // timeout (defense-in-depth, NOT the primary strategy — persistent
+    // state is authoritative). Wake when: epoch advanced, or terminate,
+    // or local runnable arrived (route_runnable_locked pushes to
+    // local_runnable AND calls signal_wake_locked).
+    //
+    // Lock order: called with global_mtx_ RELEASED.
+    std::unique_lock<std::mutex> lk(wake_mtx_);
+    ws->park_domain = WorkerState::ParkDomain::Scheduler;
+    ws->observed_epoch = wake_epoch_;
+    wake_cv_.wait_for(lk, std::chrono::milliseconds(2), [&] {
+        return wake_epoch_ != ws->observed_epoch ||
+               global_terminate_.load(std::memory_order_acquire) ||
+               !ws->local_runnable.empty();
+    });
+    ws->park_domain = WorkerState::ParkDomain::None;
 }
 
 bool Scheduler::init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stack_size) {
@@ -324,12 +428,51 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 }
                 // Commit: this is the single MW-S2 progress participant.
                 admission_ = AdmissionState::committed;
+                // E9 MIXED-WAKE: capture the park-domain decision NOW (under
+                // global_mtx_). If an external-wake-capable wait is registered,
+                // the participant must NOT enter a backend-only ctx_.wait_one()
+                // (external-ready cannot interrupt it). It parks on the
+                // SCHEDULER wake domain instead, so external-ready can wake it.
+                // Refinement map: TLA+ EnterPhysicalPark domain selection.
+                ws->park_domain = external_wake_possible_locked()
+                                      ? WorkerState::ParkDomain::Scheduler
+                                      : WorkerState::ParkDomain::Backend;
             }
 
             // Phase C: release global_mtx_ (held only inside the blocks above)
             // and enter wait_one. Only the committed participant reaches here.
             if (admission_ == AdmissionState::committed && admission_owner_ == ws->id) {
+                // E9 MIXED-WAKE domain split.
+                if (ws->park_domain == WorkerState::ParkDomain::Scheduler) {
+                    // External-wake-capable wait registered: park on the wake
+                    // source (NOT backend wait_one). The wake set includes
+                    // external-ready publication. A wake here means a producer
+                    // signaled (external ready or routed work) — treat it as
+                    // progress and re-drain.
+                    ws->park_domain = WorkerState::ParkDomain::None;  // reset before park
+                    park_on_wake_source(ws);
+                    // Phase D: reacquire global_mtx_, clear admission, drain.
+                    {
+                        std::lock_guard<std::mutex> lk(global_mtx_);
+                        admission_ = AdmissionState::none;
+                        admission_owner_ = static_cast<unsigned>(-1);
+                        (void)wake_ready_completions_locked();
+                        (void)wake_ready_flags_locked();
+                    }
+                    // A wake on the Scheduler domain means a wake-relevant
+                    // publication happened; treat as progress (re-loop). We do
+                    // NOT terminate on a wake-source return (unlike the backend
+                    // no-progress path), because the whole point is that
+                    // external wake must be observable independent of backend
+                    // timing.
+                    idle_workers_.store(0, std::memory_order_release);
+                    continue;
+                }
+
+                // BACKEND domain: the E7 path. Backend progress only.
+                ws->park_domain = WorkerState::ParkDomain::Backend;
                 auto wr = ctx_.wait_one();
+                ws->park_domain = WorkerState::ParkDomain::None;
                 // E6/E7 reap semantics: wait_one()==0 means the backend made
                 // no progress this call. For FakeAsyncBackend this happens
                 // when nothing is staged; for real backends it means "no op
@@ -359,6 +502,8 @@ void Scheduler::worker_loop(WorkerState* ws) {
                         std::lock_guard<std::mutex> wlk(w->inbox_mtx);
                         w->inbox_cv.notify_all();
                     }
+                    // E9: wake any Worker parked on the wake source.
+                    signal_wake_locked();
                     {
                         std::lock_guard<std::mutex> slk(admission_seam_mtx_);
                         admission_seam_armed_ = false;
@@ -388,42 +533,60 @@ void Scheduler::worker_loop(WorkerState* ws) {
             if (final_state == MwState::mw_s1 || final_state == MwState::mw_s2) {
                 idle_workers_.store(0, std::memory_order_release);
             } else {
-                unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
-                if (prev + 1 >= workers_.size()) {
-                    // All workers idle. Final re-check (global_mtx_ held).
-                    MwState still = classify_locked();
-                    if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
-                        // Physical run termination. MW-S3 retains wait
-                        // registrations logically; only quiescent is true
-                        // completion. Both may terminate the run.
-                        global_terminate_.store(true, std::memory_order_release);
-                        for (auto& w : workers_) {
-                            std::lock_guard<std::mutex> wlk(w->inbox_mtx);
-                            w->inbox_cv.notify_all();
-                        }
-                        // Release any admission-seam wait so parked test
-                        // workers can observe termination.
-                        {
-                            std::lock_guard<std::mutex> slk(admission_seam_mtx_);
-                            admission_seam_armed_ = false;
-                            admission_seam_cv_.notify_all();
-                        }
-                        break;
-                    }
+                // E9: if an external-wake-capable wait is registered, the run
+                // must NOT terminate on MW-S3 — a producer thread may still
+                // publish a ready flag and wake us. Instead of contributing to
+                // the idle/terminate count, this worker parks on the SCHEDULER
+                // wake source and waits for the external notify (ADR §9.4.3,
+                // the N=1 correctness rule). The park is reached by falling
+                // through without incrementing idle_workers_ toward termination.
+                // (The bounded wake_cv timeout re-drains; persistent state is
+                // the authority.)
+                if (final_state == MwState::mw_s3_unresolved &&
+                    external_wake_possible_locked()) {
                     idle_workers_.store(0, std::memory_order_release);
+                    // Fall through to park_on_wake_source below.
+                } else {
+                    unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
+                    if (prev + 1 >= workers_.size()) {
+                        // All workers idle. Final re-check (global_mtx_ held).
+                        MwState still = classify_locked();
+                        if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
+                            // Physical run termination. MW-S3 retains wait
+                            // registrations logically; only quiescent is true
+                            // completion. Both may terminate the run.
+                            global_terminate_.store(true, std::memory_order_release);
+                            for (auto& w : workers_) {
+                                std::lock_guard<std::mutex> wlk(w->inbox_mtx);
+                                w->inbox_cv.notify_all();
+                            }
+                            // E9: wake any Worker parked on the wake source.
+                            signal_wake_locked();
+                            // Release any admission-seam wait so parked test
+                            // workers can observe termination.
+                            {
+                                std::lock_guard<std::mutex> slk(admission_seam_mtx_);
+                                admission_seam_armed_ = false;
+                                admission_seam_cv_.notify_all();
+                            }
+                            break;
+                        }
+                        idle_workers_.store(0, std::memory_order_release);
+                    }
                 }
             }
         }
 
         if (global_terminate_.load(std::memory_order_acquire)) break;
 
-        // Park briefly waiting for routed work or termination.
-        {
-            std::unique_lock<std::mutex> ws_lk(ws->inbox_mtx);
-            ws->inbox_cv.wait_for(ws_lk, std::chrono::milliseconds(1),
-                                   [&] { return !ws->local_runnable.empty() ||
-                                                global_terminate_.load(std::memory_order_acquire); });
-        }
+        // E9: park on the unified wake source (wake_cv + wake epoch). This
+        // replaces the E7 1ms inbox_cv timed park, which was a de-facto
+        // periodic poll masking the external-wake gap (ADR §9.4). The wake
+        // source's wake set now includes runnable publication (route_runnable
+        // signals) and external-ready publication (SchedulerWakeHandle).
+        // The 2ms bounded timeout is DEFENSE-IN-DEPTH against a lost wake —
+        // it is NOT the authority (persistent state is, ADR §9.4.5).
+        park_on_wake_source(ws);
     }
 }
 
@@ -530,6 +693,9 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     } else {
         pending_spawn_.push_back(f);
     }
+    // E9: signal the wake source so a Worker parked on the SCHEDULER domain
+    // (park_on_wake_source) resumes. Refinement map: TLA+ PublishRunnable.
+    signal_wake_locked();
 }
 
 Scheduler::MwState Scheduler::classify_locked() const {
@@ -606,6 +772,37 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+}
+
+void Scheduler::attach_ready_wake(const std::atomic<bool>& ready,
+                                  SchedulerWakeHandle& wh) {
+    // Validate that `ready` is currently registered as an external-wake wait.
+    // The handle is bound to THIS Scheduler (make_wake_handle), so an external
+    // producer's notify() already routes to signal_wake_locked. This method
+    // exists to make the per-wait attachment explicit and to future-proof a
+    // per-wait wake-map (E10). It is a contract assertion + a pre-emptive
+    // signal: if the flag became ready between the registration and this
+    // attach, signal now so a Worker about to park is woken immediately.
+    bool need_signal = false;
+    {
+        std::lock_guard<std::mutex> lk(global_mtx_);
+        auto it = waiting_ready_.find(&ready);
+        if (it == waiting_ready_.end()) {
+            // Not registered (already drained, or wrong caller). No-op.
+            return;
+        }
+        // Re-check the flag under the lock: if ready, the Worker that is
+        // about to park must be woken — signal the wake source.
+        if (ready.load(std::memory_order::acquire)) {
+            need_signal = true;
+        }
+    }
+    // wh must be bound to this Scheduler. (Contract; not enforced here to
+    // avoid coupling — a foreign handle's notify no-ops harmlessly if the
+    // Scheduler differs, but that is a caller bug.)
+    if (need_signal) {
+        signal_wake_locked();
+    }
 }
 
 std::size_t Scheduler::runnable_count() const {
