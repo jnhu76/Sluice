@@ -134,7 +134,7 @@ with exactly one runnable ticket throughout.
 
 ---
 
-# E9 — Scheduler Park/Wake and Wait-Queue Substrate
+# E9 — Scheduler Park/Wake and External-Wake Protocol
 
 ## Why E9 changes from the old roadmap
 
@@ -336,7 +336,7 @@ The Scheduler has a reusable cancellation-safe single-wait queue substrate that 
 
 ---
 
-# E11 — Timers and Deadlines
+# E11 — Deadline / Timer Wait Integration
 
 ## Why timers come before the synchronization API explosion
 
@@ -593,7 +593,9 @@ One logical Fiber wait can safely span heterogeneous readiness sources.
 
 ---
 
-# E14 — High-Level Async I/O Bridge (deferred — not in current frontier)
+# Deferred — High-Level Async I/O Bridge
+
+**Not in current frontier (E9–E14).** Preserved as a future obligation.
 
 At this point Sluice has:
 
