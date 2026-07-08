@@ -867,3 +867,13 @@ OPTIMIZATION
 
 The runtime should continue to be built by protocol dependency, not by API popularity.
 
+## Construction method lock (E9-CORRECTIVE)
+
+All async-runtime phases from E9-CORRECTIVE onward MUST follow the normative
+construction method in [`docs/async-runtime-construction-method.md`](async-runtime-construction-method.md)
+(M1–M9). It was written in response to the E9 defect where the formal model
+omitted the run-lifetime dimension and green-lit a deterministic hang. An
+async-runtime phase that violates M1–M9 (e.g. omits a load-bearing state
+dimension, ships a hidden semantic switch, or relies on `sleep_for`-based
+causal proof) is NOT accepted as CLOSED.
+

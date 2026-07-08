@@ -1106,6 +1106,127 @@ E9 defines an explicit park/wake protocol that closes both gaps without
 adding a hidden driver thread, without a global singleton, without
 polling as the primary strategy, and without weakening E7/E8.
 
+### 9.4.0 Run invocation lifetime contract (added by E9-CORRECTIVE)
+
+**Normative.** Run invocation lifetime is an EXPLICIT protocol dimension,
+separate from wake capability. The shipped E9 defect was a semantic
+conflation: `external_wake_possible_locked()` was used both for MW-S2
+park-domain selection (legitimate wake capability) AND for the MW-S3
+run-lifetime decision (park instead of return STALLED). That conflation
+broke the E7/E8 Drain contract — a normal `run(1)` with an unresolved
+external-wake-capable wait parked forever instead of returning.
+
+E9-CORRECTIVE makes the policy explicit:
+
+```text
+enum class RunMode { drain, live };
+```
+
+```text
+run(worker_count)              -> RunMode::drain  (E7/E8 compatibility)
+run_live(worker_count)         -> RunMode::live   (explicit E9 entry)
+```
+
+One internal implementation: `run_impl(worker_count, RunMode)`. There is
+ONE worker loop, ONE classifier, ONE publication protocol, ONE ownership
+protocol, and ONE backend admission protocol. RunMode differs ONLY at the
+idle-action selection boundary (after the authoritative global state has
+been classified).
+
+#### Mode/state decision matrix
+
+| Global state                          | Drain                               | Live                                |
+| ------------------------------------- | ----------------------------------- | ----------------------------------- |
+| MW-S1                                 | execute                             | execute                             |
+| MW-S2 backend-only                    | E7 backend wait (`ctx_.wait_one`)   | E7 backend wait                     |
+| MW-S2 mixed                           | bounded Scheduler-domain observation park | bounded Scheduler-domain observation park |
+| MW-S3 + effective external wake       | **RETURN STALLED**                  | PARK (Scheduler domain)             |
+| MW-S3 without effective external wake | RETURN STALLED                      | RETURN STALLED                      |
+| QUIESCENT                             | RETURN QUIESCENT                    | RETURN QUIESCENT                    |
+| shutdown                              | return                              | wake parked Workers + return        |
+
+The distinction is normative: Drain MUST NOT park merely because an
+external-wake-capable wait exists; Live MAY remain resident while an
+unresolved wait has an effective Scheduler wake source.
+
+```text
+state = classify_locked()
+action = select_idle_action(run_mode, state, effective_wake_capability)
+```
+
+#### Run mode does not modify
+
+```text
+MW classification                 (classify_locked unchanged)
+runnable publication              (spawn / route_runnable_locked unchanged)
+owner transfer / steal            (E8 MOVE + OWNER TRANSFER unchanged)
+WaitReg routing                   (wake_ready_*_locked route by WaitReg.owner)
+backend outstanding semantics     (ctx_.outstanding() unchanged)
+```
+
+Run mode ONLY selects the allowed idle action after the authoritative
+global state has been classified.
+
+#### Drain compatibility (mandatory)
+
+The existing `run(...)` API remains Drain-compatible. Existing E7/E8
+callers and tests use Drain unless they explicitly opt into Live. Drain
+semantics:
+
+```text
+MW-S1                -> execute runnable work
+MW-S2 backend-only   -> accepted E7 backend-progress admission / wait_one
+MW-S2 MIXED-WAKE     -> bounded Scheduler-domain observation park
+                        (still governed by the same state classifier)
+MW-S3                -> RETURN STALLED
+QUIESCENT            -> RETURN QUIESCENT
+```
+
+Normative rule:
+
+```text
+Drain mode MUST NOT park merely because an external-wake-capable wait exists.
+```
+
+The E7/E8 obligations remain valid (`e7_t9_unresolved_wait_not_quiescence`,
+the worker-local tests, and the E8 waiting-Fiber tests MUST still return).
+Do not rewrite these tests to accept permanent park.
+
+#### Live semantics
+
+```text
+MW-S1                              -> execute
+MW-S2 backend-only                 -> E7 backend wait_one path
+MW-S2 MIXED-WAKE                   -> Scheduler-domain bounded observation park
+MW-S3 + effective external wake    -> Scheduler-domain park
+MW-S3 without effective external   -> RETURN STALLED
+QUIESCENT                          -> RETURN QUIESCENT
+shutdown/termination               -> wake parked Workers, RETURN
+```
+
+Live does NOT mean "never return until shutdown under every idle state."
+It means: remain resident while unresolved logical work has an effective
+wake source that can make the Scheduler observable again. No effective
+wake source ⇒ RETURN STALLED. No logical work ⇒ RETURN QUIESCENT.
+
+#### Wake handle does not control run mode (mandatory)
+
+```text
+SchedulerWakeHandle  = wake capability
+RunMode              = invocation lifetime contract
+```
+
+The existence, copy count, retention, or destruction of a wake handle
+MUST NOT implicitly switch Drain → Live or Live → Drain. Forbidden:
+
+```text
+if wake handle attached: keep run alive
+else: return
+```
+
+Run lifetime is an explicit invocation policy (M4). E9-T1 remains a
+Live-mode proof with NO caller-driven re-entry.
+
 ### 9.4.1 Architecture decision — Model P3 (decoupled wake domains)
 
 Six candidate models were evaluated against the E9 load-bearing path
@@ -1364,6 +1485,58 @@ E7 MW-S2 behavior is unchanged (E9-T10 preserves the E7-T5 proof).
 `waiting_ready_` registration is treated as external-wake-capable; a
 finer distinction is deferred.)
 
+#### 9.4.7.1 Bounded Scheduler-domain observation is normative (E9-CORRECTIVE)
+
+The backend wake domains are PHYSICALLY DISJOINT from the Scheduler wake
+condition variable in the E9 baseline:
+
+```text
+Scheduler wake source:    runnable publication, external Future wake signal, shutdown
+backend wake source:      ThreadPoolBackend cv, io_uring CQE/wait_one, Fake poll/staging
+```
+
+For the E9 baseline, the Scheduler does NOT add callbacks to every backend
+(no eventfd, no epoll, no io_uring wake integration, no dedicated backend
+driver thread, no new universal backend wake API). The locked baseline is:
+
+```text
+backend-only MW-S2              -> ctx_.wait_one()
+Scheduler-domain external MW-S3 -> wake-epoch park (Live mode only)
+MIXED-WAKE                      -> bounded Scheduler-domain observation park
+```
+
+The bounded observation park waits for:
+
+```text
+wake epoch change   OR   shutdown   OR   appropriate Scheduler signal
+OR   observation interval expiry
+```
+
+After any return it: drains backend persistent readiness, drains external
+persistent readiness, and reclassifies globally.
+
+**The bounded observation interval is LOAD-BEARING for backend progress
+latency in MIXED-WAKE.** In MIXED-WAKE Scheduler-domain park, backend
+readiness does NOT directly signal the Scheduler wake source in the E9
+baseline; backend readiness is observed through the bounded observation
+return. Therefore the observation interval is protocol authority for
+backend observation in this mode, NOT "defense in depth only."
+
+The current observation interval is **2 ms**
+(`park_on_wake_source` `wake_cv_.wait_for(... 2ms ...)`). It is an
+implementation policy; tests must NOT depend on an exact 2 ms scheduling
+race (deterministic seams are used for causal proof, §9.4.15).
+
+The unification across disjoint wake domains is:
+
+```text
+post-observation drain + authoritative global reclassification
+```
+
+NOT one physical wake primitive. Do not claim unified physical wake
+semantics. Future optimization to OS-multiplexed wake (eventfd-in-ring)
+belongs to E16/runtime hardening unless separately reprioritized.
+
 ### 9.4.8 Worker notification cardinality
 
 ```text
@@ -1487,6 +1660,18 @@ N=1 correctness (single-worker external wake, no second thread)
 E7/E8 invariants preserved (steal = MOVE + OWNER TRANSFER; MW rules)
 ```
 
+E9-CORRECTIVE additionally proves:
+
+```text
+explicit RunMode (Drain | Live) invocation lifetime contract (§9.4.0)
+Drain MW-S3 returns STALLED (E7/E8 drain compatibility restored)
+Live MW-S3 + effective external wake may remain resident
+Live MW-S3 without effective external wake returns STALLED
+WakeHandle does not control run mode (no hidden semantic switch)
+bounded Scheduler-domain observation is normative in MIXED-WAKE (§9.4.7.1)
+deterministic park seams replace sleep-based race proofs (§9.4.15)
+```
+
 E9 does NOT prove:
 
 ```text
@@ -1506,6 +1691,38 @@ Stop and report `E9: BLOCKED` if any of the selected protocol's
 invariants cannot be met. These map 1:1 to the E9 spec §25 set and are
 checked by the formal gate (§9.4 of the ADR) and the load-bearing tests
 (E9-T1 .. E9-T14).
+
+E9-CORRECTIVE adds (C-ABORT-1 .. C-ABORT-12): stop and report
+`E9-CORRECTIVE: BLOCKED` if Drain can park indefinitely on MW-S3, if Live
+requires rewriting E7/E8 publication/ownership, if a wake handle
+implicitly controls RunMode, if Drain and Live require separate
+classifiers or worker loops, if MIXED-WAKE external-ready progress
+depends on backend completion, if the bounded observation timeout is
+load-bearing but omitted/denied in ADR/refinement, if T3/T4 causal proof
+still relies on timing sleeps, if the shipped Drain-park defect cannot be
+reproduced by the negative formal model, if `local_runnable` is read
+concurrently under an unrelated synchronization domain, if the normal
+debug/release E7/E8 hang remains, or if required E9-T8..T14 obligations
+remain absent.
+
+### 9.4.15 Deterministic park seams (added by E9-CORRECTIVE)
+
+Race proofs MUST use deterministic causal seams, not `sleep_for`
+(M7). Two narrow TEST-only seams are added at the load-bearing causal
+boundaries of park admission:
+
+```text
+seam A — after ParkCandidate (Phase-B recheck boundary)
+seam B — after park commit / immediately before the physical wait
+```
+
+Each seam is a mutex + condition_variable (or latch) that pauses the
+Worker at the exact causal boundary without modifying Scheduler state.
+The test releases the seam only after the producer has published
+persistent readiness and signaled the wake epoch. This proves the
+commit-to-physical-wait window is closed by the epoch predicate, not by
+timing luck. Stress repetition is gathered AFTER these deterministic
+proofs.
 
 ## 10. No performance claim
 
