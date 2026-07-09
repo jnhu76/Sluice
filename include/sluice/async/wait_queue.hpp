@@ -98,10 +98,11 @@
 // "who makes the fiber runnable" decision in scheduler code (§8).
 #pragma once
 
+#include <sluice/async/mutex.hpp>
+#include <sluice/async/thread_annotations.hpp>
 #include <sluice/async/wait_node.hpp>
 
 #include <cassert>
-#include <mutex>
 
 namespace sluice::async {
 
@@ -140,11 +141,11 @@ private:
     // one critical section; resolve + route under one). Scheduler is the ONLY
     // consumer of this seam. Private + friended: an external TU cannot acquire
     // the queue lock and therefore cannot reach the _locked resolvers.
-    std::mutex& mtx() noexcept { return mtx_; }
+    Mutex& mtx() noexcept SLUICE_RETURN_CAPABILITY(mtx_) { return mtx_; }
 
     // Structural query (caller holds mtx_). Used by the Scheduler; private so
     // external code cannot inspect queue membership.
-    bool empty_locked() const noexcept { return head_ == nullptr; }
+    bool empty_locked() const noexcept SLUICE_REQUIRES(mtx_) { return head_ == nullptr; }
 
     // ---- Registration (single-wait) ----
 
@@ -162,7 +163,7 @@ private:
     // Fiber* into a queue the Scheduler later trusts at resolution time, outside
     // Scheduler accounting. Scheduler is the only friend; there is no public
     // wrapper and no test hook.
-    bool register_wait_locked(WaitNode& node, Fiber* fiber = nullptr) {
+    bool register_wait_locked(WaitNode& node, Fiber* fiber = nullptr) SLUICE_REQUIRES(mtx_) {
         if (!node.register_(this, fiber)) return false;  // already registered/terminal (C8)
         // FIFO tail-link.
         node.next_ = nullptr;
@@ -187,7 +188,7 @@ private:
     // Resolve the FIFO head with Woken, unlink the winner, and return it.
     // Returns nullptr if the queue is empty (no wait to wake) or if the head's
     // resolve CAS failed (the head was concurrently cancelled — a loser here).
-    WaitNode* wake_one_locked() {
+    WaitNode* wake_one_locked() SLUICE_REQUIRES(mtx_) {
         if (head_ == nullptr) return nullptr;
         WaitNode* n = head_;
         if (n->resolve_(WaitOutcome::woken)) {  // winner CAS (§2/§7)
@@ -210,7 +211,7 @@ private:
     // this call is the winner (node was Registered and is now Cancelled). A
     // losing call (node already terminal — C3/C4/C5) returns false and does
     // nothing. `node` MUST belong to this queue (caller contract).
-    bool cancel_locked(WaitNode& node) {
+    bool cancel_locked(WaitNode& node) SLUICE_REQUIRES(mtx_) {
         // `node` may not belong to this queue (caller contract violation). The
         // resolve CAS still cannot wrongly succeed: a Registered node has a
         // single home_ (set under its own state CAS at register time). We do
@@ -229,7 +230,7 @@ private:
     // (wake_one_locked / cancel_locked), under mtx_, in the SAME critical
     // section as its winning resolve CAS. This is the ONE unlink path (§7: no
     // competing wake-unlink / cancel-unlink / destructor-unlink). Clears home_.
-    void unlink_locked(WaitNode& node) {
+    void unlink_locked(WaitNode& node) SLUICE_REQUIRES(mtx_) {
         // Splice node out of the doubly-linked list.
         if (node.prev_ != nullptr) {
             node.prev_->next_ = node.next_;
@@ -246,9 +247,9 @@ private:
         node.home_ = nullptr;
     }
 
-    std::mutex mtx_;
-    WaitNode* head_{nullptr};  // FIFO head; null iff empty
-    WaitNode* tail_{nullptr};  // FIFO tail; maintained in lockstep with head_
+    Mutex mtx_;
+    WaitNode* head_ SLUICE_GUARDED_BY(mtx_){nullptr};  // FIFO head; null iff empty
+    WaitNode* tail_ SLUICE_GUARDED_BY(mtx_){nullptr};  // FIFO tail; maintained in lockstep with head_
 };
 
 }  // namespace sluice::async

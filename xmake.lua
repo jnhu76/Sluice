@@ -12,6 +12,13 @@ end
 set_languages("c++20")
 set_warnings("all", "error")
 
+-- CPP-STATIC-1: Clang Thread Safety Analysis gate.
+-- The TSA flags are added only for the sluice_async target (pilot scope),
+-- via unconditional add_cxxflags on that target below.
+-- GCC does not recognize -Wthread-safety and would error on it, so xmake
+-- filters the flag out of the GCC compile command (the gate is Clang-only).
+-- For non-Clang compilers the annotation macros additionally erase to no-ops.
+
 -- Core static library: Reader/Writer abstractions + wrappers.
 target("sluice_core")
     set_kind("static")
@@ -29,6 +36,12 @@ target("sluice_async")
     add_includedirs("include", {public = true})
     add_deps("sluice_core")
     add_files("src/async/*.cpp")
+    -- CPP-STATIC-1: Clang TSA gate.  Add TSA flags for this target.
+    -- The flags are Clang-specific; GCC does not recognize -Wthread-safety
+    -- and xmake filters it out of the GCC compile command, so the gate is
+    -- Clang-only and the GCC build is unaffected.
+    add_cxxflags("-Wthread-safety")
+    add_cxxflags("-Werror=thread-safety")
 
 -- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
 -- Also contains BlockingIoPool (021S), the bounded execution model for the
