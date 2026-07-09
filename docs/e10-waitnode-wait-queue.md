@@ -150,19 +150,34 @@ concurrently. The condition→wait race is the **caller's** responsibility
 Operations: `register_wait[_locked]`, `wake_one[_locked]`, `cancel[_locked]`,
 `unlink_locked`, `empty_locked`.
 
-> **Resolution seams are private (E10-CORRECTIVE C2).** `wake_one[_locked]` /
-> `cancel[_locked]` / `unlink_locked` are PRIVATE. A Scheduler-integrated wait
-> (registered via `Scheduler::await_wait`, which owns `waiting_waitq_count_` and
-> the runnable-route obligation) may be terminally resolved ONLY through
-> `Scheduler::wake_wait_one` / `Scheduler::cancel_wait`, which take the queue
-> lock under `global_mtx_` and route the winner's fiber through the canonical
-> wake seam (`route_runnable_locked`). Direct WaitQueue resolution would resolve
-> + unlink the node WITHOUT decrementing `waiting_waitq_count_` and WITHOUT
-> routing the fiber — stranding it and leaving MW classification stale.
-> `register_wait` remains public (registration is not a resolution). The
-> Scheduler is `friend`; a pure-protocol test hook (`WaitQueueTestHooks`) reaches
-> the resolvers for C1-C9. `cancel_all` is removed (C3: no authoritative shutdown
-> semantic, zero production callsites).
+> **Structural operations are all private (E10-CORRECTIVE-2).** Every
+> WaitQueue structural operation — `register_wait_locked`, `wake_one_locked`,
+> `cancel_locked`, `unlink_locked`, `mtx()`, `empty_locked` — is PRIVATE, with
+> `Scheduler` the ONLY friend. This closes two connected authority defects:
+>
+> - **R1 (friend escape):** the public header used to forward-declare and friend
+>   `struct WaitQueueTestHooks`, letting an arbitrary downstream TU define the
+>   granted friend type and reach the private resolvers / `mtx_`. That
+>   unconditional friend grant is removed; there is NO test friend and NO
+>   publicly nameable access type.
+> - **R2 (raw registration):** the public `register_wait(node, fiber)` is
+>   removed; registration is now ONLY `register_wait_locked`, reachable solely
+>   through `Scheduler::await_wait`. An external TU cannot express
+>   `q.register_wait(node, arbitrary_fiber)` against the public header, so an
+>   arbitrary `Fiber*` cannot be injected into a queue that Scheduler resolution
+>   later trusts.
+>
+> A Scheduler-integrated wait may be REGISTERED only through
+> `Scheduler::await_wait` and terminally RESOLVED only through
+> `Scheduler::wake_wait_one` / `Scheduler::cancel_wait`. Direct WaitQueue
+> resolution would resolve + unlink the node WITHOUT decrementing
+> `waiting_waitq_count_` and WITHOUT routing the fiber — stranding it and
+> leaving MW classification stale. `cancel_all` is removed (C3: no authoritative
+> shutdown semantic, zero production callsites).
+>
+> **Architecture (E10-CORRECTIVE-2):** E10 `WaitQueue` is Scheduler-integrated
+> runtime wait infrastructure, NOT a generic independently-usable public waiting
+> primitive. There is no standalone public registration/resolution surface.
 
 **Intrusive-link invariants (proven, §5):**
 - linked-at-most-once: `register_` only succeeds from `Detached`.
@@ -268,7 +283,14 @@ redefine fiber runnable ownership, worker ownership, steal, RunMode, or Drain.
 - Winner routes through `route_runnable_locked` (the canonical seam), guarded
   by E7-T2 `make_runnable()` (exactly-once publication).
 - `waiting_waitq_count_` is counted by `classify_locked` exactly like the
-  other wait maps, so MW-S3 (unresolved waits) is correct.
+  other wait maps, so MW-S3 (unresolved waits) is correct. It is incremented
+  exactly once per successful `await_wait` registration and decremented exactly
+  once per winning resolution (`wake_wait_one` / `cancel_wait` winner). The
+  decrement is guarded by `if (waiting_waitq_count_ > 0)`; after
+  E10-CORRECTIVE-2 sealed registration to `await_wait` only, a decrement that
+  would underflow (a resolution without a matching registration) is impossible
+  — the guard is retained as defense-in-depth, not because it masks a reachable
+  state.
 - **External wake-domain classification (E10-CORRECTIVE C1):** a WaitQueue wait
   is **externally resolvable** — `wake_wait_one` / `cancel_wait` run from any
   thread, take `global_mtx_` + `q.mtx()`, and reach `signal_wake_locked` (the
@@ -279,14 +301,20 @@ redefine fiber runnable ownership, worker ownership, steal, RunMode, or Drain.
   could park/STALLED on a source that cannot observe an E10 resolution
   (stranding the waiter). (Pre-corrective, only `!waiting_ready_.empty()` was
   returned — the C1 park-domain gap.)
-- **Resolution authority topology (E10-CORRECTIVE C2):** a Scheduler-integrated
-  wait is terminally resolved ONLY through `Scheduler::wake_wait_one` /
-  `Scheduler::cancel_wait`. `WaitQueue`'s resolution seams
-  (`wake_one[_locked]` / `cancel[_locked]`) are PRIVATE (friend `Scheduler`).
-  This preserves one terminal-winner authority (the `resolve_` CAS), one
-  structural-unlink authority (`unlink_locked` in the same critical section),
-  and one Scheduler-integration authority (the count + runnable route live only
-  in the Scheduler seams).
+- **Resolution authority topology (E10-CORRECTIVE C2; sealed
+  E10-CORRECTIVE-2 R1+R2):** a Scheduler-integrated wait is REGISTERED only
+  through `Scheduler::await_wait` and terminally RESOLVED only through
+  `Scheduler::wake_wait_one` / `Scheduler::cancel_wait`. ALL WaitQueue
+  structural operations (`register_wait_locked` / `wake_one_locked` /
+  `cancel_locked` / `unlink_locked` / `mtx()` / `empty_locked`) are PRIVATE,
+  friended ONLY to `Scheduler`. There is no test friend and no publicly
+  nameable access type. This preserves one terminal-winner authority (the
+  `resolve_` CAS), one structural-unlink authority (`unlink_locked` in the same
+  critical section), one registration-integration authority (`await_wait`), one
+  resolution-integration authority (`wake_wait_one` / `cancel_wait`), one
+  wait-accounting authority (`waiting_waitq_count_` in the Scheduler), and one
+  runnable-publication authority (`route_runnable_locked` guarded by
+  `make_runnable`).
 - No direct `local_runnable` push from `WaitQueue`; all routing goes through
   the scheduler seam.
 - Lock order: `global_mtx_` → `q.mtx()` → `wake_mtx_` (via

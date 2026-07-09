@@ -77,7 +77,7 @@ this when the formal framework is unavailable).
 | Formal concept/action | Production path / seam | authority / domain |
 | --------------------- | ---------------------- | ------------------ |
 | `nodeState` | `WaitNode::state_` (atomic `State`) | winner authority |
-| `Register(n)` | `WaitQueue::register_wait_locked` → `WaitNode::register_` (CAS Detached→Registered) under `q.mtx()` | structural domain |
+| `Register(n)` | `Scheduler::await_wait` → `WaitQueue::register_wait_locked` → `WaitNode::register_` (CAS Detached→Registered) under `global_mtx_` + `q.mtx()` | structural domain |
 | `ResolveWake(n)` | `Scheduler::wake_wait_one` → `WaitQueue::wake_one_locked` → `WaitNode::resolve_(Woken)` (CAS) + `unlink_locked` + `route_runnable_locked` | winner + scheduler wake |
 | `ResolveCancel(n)` | `Scheduler::cancel_wait` → `WaitQueue::cancel_locked` → `WaitNode::resolve_(Cancelled)` (CAS) + `unlink_locked` + `route_runnable_locked` | winner + scheduler wake |
 | `linked[n]` | node is in the queue's intrusive list (`home_ != null`) | structural |
@@ -85,6 +85,19 @@ this when the formal framework is unavailable).
 | `wakeDispatched` | each winner calls `route_runnable_locked` once (E7-T2 exactly-once via `make_runnable`) | scheduler wake |
 | Absent `Reset` action | E10 nodes are NOT resettable (terminal is absorbing) | absorbing terminal |
 | `FairResolve` | enabled resolvers run under the scheduler worker loop | liveness |
+
+**Environment boundary (E10-CORRECTIVE-2).** The formal `Register(n)` action
+abstracts structural registration (`register_wait_locked`). Production now
+exposes registration ONLY through `Scheduler::await_wait` (the registration
+integration authority) and resolution ONLY through `Scheduler::wake_wait_one` /
+`Scheduler::cancel_wait`. The formal model does NOT model a public raw-
+registration environment action (it never did — `Register(n)` maps to the
+private structural half), so no TLA state-transition change is required. The
+sealing narrows the REFINEMENT boundary: every production `Register(n)` step is
+now mediated by the Scheduler integration authority, which the model treats as
+the environment driver. This strengthens, not weakens, the refinement — the set
+of environment-reachable `Register` steps in production is a subset of the
+modeled ones.
 
 ## Explicit state-transition table (authoritative, executable fallback)
 

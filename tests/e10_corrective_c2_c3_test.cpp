@@ -1,5 +1,8 @@
 // e10_corrective_c2_c3_test — E10-CORRECTIVE C2 resolution-authority + C3
-// cancel_all surface (sluice-CORE-E10).
+// cancel_all surface (sluice-CORE-E10). E10-CORRECTIVE-2 retains this test
+// unchanged in substance: the resolution-authority + cancel_all closures from
+// the first corrective remain in force. The static_asserts (T2/T6) still guard
+// against a public resolver being re-introduced.
 //
 // C2 (accepted defect): a Scheduler-integrated wait (registered via
 // Scheduler::await_wait, which owns waiting_waitq_count_ + the runnable-route
@@ -16,11 +19,10 @@
 // Scheduler does NOT auto-resolve waits on run termination. Decision: REMOVED.
 //
 // T2 (structural): the direct-resolution bypass is no longer EXPRESSIBLE.
-// wake_one / cancel / cancel_all are gone from the public surface (wake_one/
-// cancel are now private, friended only to Scheduler + the test hook;
-// cancel_all is deleted). This is a compile-time structural proof: the bypass
-// literally does not compile. It uses static_assert + member-detection so a
-// future regression (re-adding a public resolver) fails the build.
+// wake_one / cancel are PRIVATE (E10-CORRECTIVE C2; E10-CORRECTIVE-2 further
+// sealed registration + removed the test hook); cancel_all is deleted (C3). The
+// static_asserts use member-detection so a future regression (re-adding a
+// public resolver) fails the build.
 //
 // T4 (non-bypass): a Scheduler-integrated resolution via the Scheduler seams
 // DOES route through the canonical wake seam AND keeps waiting_waitq_count_
@@ -157,10 +159,11 @@ SLUICE_TEST_CASE(e10_corrective_c4_wake_keeps_wait_count_zero) {
         entries.fetch_add(1, std::memory_order_acq_rel);
     });
     fwake.set_entry([&](Fiber&) {
-        // The waiter sets `suspended` BEFORE it registers inside await_wait, so
-        // the queue may be (briefly) empty when we first arrive. Retry until we
-        // are the winner — this mirrors how an external waker must tolerate the
-        // register-vs-wake race. Exactly one retry wins (the single-winner CAS).
+        // Test synchronization only: the synthetic `suspended` flag is published
+        // BEFORE await_wait completes registration, so this test retries until
+        // registration becomes visible. Production resolvers are not required to
+        // retry (a wake on an empty WaitQueue is a false / no-op, NOT remembered).
+        // Exactly one retry wins (the single-winner CAS).
         bool woke = false;
         while (!suspended.load(std::memory_order_acquire)) {}
         for (int i = 0; i < 1000 && !woke; ++i) {
@@ -204,8 +207,11 @@ SLUICE_TEST_CASE(e10_corrective_c4_cancel_keeps_wait_count_zero) {
         entries.fetch_add(1, std::memory_order_acq_rel);
     });
     fcancel.set_entry([&](Fiber&) {
-        // Retry until winner: see T4a note — the waiter may not have registered
-        // when we first arrive. Exactly one retry wins (the single-winner CAS).
+        // Test synchronization only: the synthetic `suspended` flag is published
+        // BEFORE await_wait completes registration, so this test retries until
+        // registration becomes visible. Production resolvers are not required to
+        // retry (a cancel of an unregistered node is a no-op). Exactly one retry
+        // wins (the single-winner CAS).
         bool cancelled = false;
         while (!suspended.load(std::memory_order_acquire)) {}
         for (int i = 0; i < 1000 && !cancelled; ++i) {

@@ -53,18 +53,38 @@
 // and perform the canonical route_runnable_locked. Those Scheduler seams call
 // the private _locked resolver variants here.
 //
-// RESOLUTION AUTHORITY (E10-CORRECTIVE C2). The terminal resolution seams of a
-// WaitQueue — wake_one_locked / cancel_locked — are PRIVATE. A Scheduler-
-// integrated wait (registered via Scheduler::await_wait, which owns
+// SEALED AUTHORITY (E10-CORRECTIVE-2 R1+R2). ALL structural operations of a
+// WaitQueue are PRIVATE, with Scheduler the ONLY friend:
+//
+//   - register_wait_locked : the registration integration authority's
+//                            structural half (Scheduler::await_wait wraps it
+//                            with waiting_waitq_count_ accounting + the
+//                            waiting/runnable transition).
+//   - wake_one_locked      : terminal-winner resolution (Woken).
+//   - cancel_locked        : terminal-winner resolution (Cancelled).
+//   - unlink_locked        : the one structural-removal seam.
+//   - mtx()                : the structural lock the Scheduler takes UNDER
+//                            global_mtx_ to make register/resolve atomic with
+//                            its own coordination state.
+//
+// A Scheduler-integrated wait (registered via Scheduler::await_wait, which owns
 // waiting_waitq_count_ + the runnable-route obligation) may be terminally
-// resolved ONLY through Scheduler::wake_wait_one / Scheduler::cancel_wait.
-// Calling WaitQueue resolution directly would resolve the node + unlink it
-// WITHOUT decrementing waiting_waitq_count_ and WITHOUT routing the resumed
-// fiber through the canonical Scheduler wake seam — stranding the fiber and
-// leaving MW classification stale. The public surface therefore exposes
-// register_wait (registration is not a resolution) but NOT wake_one/cancel.
-// The Scheduler is a friend; a pure-protocol test hook (WaitQueueTestHooks,
-// defined only in the protocol test TU) reaches the resolvers for C1-C9.
+// resolved ONLY through Scheduler::wake_wait_one / Scheduler::cancel_wait, and
+// registered ONLY through Scheduler::await_wait. Calling WaitQueue registration
+// or resolution directly would bypass Scheduler accounting: an arbitrary
+// Fiber* could be injected into a queue that Scheduler resolution later trusts
+// (R2 P1/P2/P5), or a node could be resolved + unlinked WITHOUT decrementing
+// waiting_waitq_count_ and WITHOUT routing the resumed fiber (stranding the
+// fiber and leaving MW classification stale).
+//
+// There is NO test friend and NO publicly nameable access type. A downstream TU
+// cannot reach mtx_, register_wait_locked, wake_one_locked, cancel_locked, or
+// unlink_locked. This closes the unconditional WaitQueueTestHooks friend grant
+// that previously let an arbitrary TU define the granted friend type and call
+// the private seams (R1). Tests observe the protocol through the public
+// Scheduler integration seams (Scheduler::await_wait / wake_wait_one /
+// cancel_wait) and the lock-free WaitNode state queries; production authority
+// is never weakened to make tests convenient.
 //
 // cancel_all REMOVED (E10-CORRECTIVE C3): it had ZERO production callsites, no
 // authoritative E10 shutdown semantic required it, and its header text
@@ -85,12 +105,7 @@
 
 namespace sluice::async {
 
-class Scheduler;  // forward: friend — the sole resolution authority (C2)
-
-// Pure-protocol test hook (C1-C9). Forward-declared so WaitQueue can friend it;
-// defined ONLY in the e10_wait_queue_test TU, exactly like SchedulerTestHooks /
-// E9ParkSeamHooks. It exposes no production contract.
-struct WaitQueueTestHooks;
+class Scheduler;  // forward: friend — the sole registration+resolution authority
 
 class WaitQueue {
 public:
@@ -117,8 +132,18 @@ public:
     WaitQueue(WaitQueue&&) = delete;
     WaitQueue& operator=(WaitQueue&&) = delete;
 
-    // ---- Structural queries (caller holds mtx_) ----
+private:
+    friend class Scheduler;  // the sole registration + resolution authority
 
+    // Expose the structural lock so the Scheduler can run register/resolve
+    // atomically with its own coordination state (register + make_waiting under
+    // one critical section; resolve + route under one). Scheduler is the ONLY
+    // consumer of this seam. Private + friended: an external TU cannot acquire
+    // the queue lock and therefore cannot reach the _locked resolvers.
+    std::mutex& mtx() noexcept { return mtx_; }
+
+    // Structural query (caller holds mtx_). Used by the Scheduler; private so
+    // external code cannot inspect queue membership.
     bool empty_locked() const noexcept { return head_ == nullptr; }
 
     // ---- Registration (single-wait) ----
@@ -126,32 +151,17 @@ public:
     // Register `node` (Detached -> Registered) and link it at the FIFO tail.
     // `fiber` is recorded on the node as the scheduler-facing handle (opaque to
     // WaitNode; the Scheduler uses it to route the resumed fiber). Returns false
-    // if `node` is already registered or terminal (C8: a completed node cannot
-    // be reused until reset/detached — and E10 nodes are NOT resettable; a new
-    // wait needs a new node). Takes mtx_ internally.
+    // if `node` is already registered or terminal (C8). _locked variant: caller
+    // holds mtx_.
     //
-    // Registration is PUBLIC because it is NOT a terminal resolution: it does
-    // not make any fiber runnable and does not bypass Scheduler authority. A
-    // Scheduler-integrated registration goes through Scheduler::await_wait (so
-    // waiting_waitq_count_ is accounted), but register_wait remains available
-    // for direct use because a non-Scheduler caller may legitimately enqueue a
-    // node it intends to resolve through the Scheduler seams.
-    bool register_wait(WaitNode& node, Fiber* fiber = nullptr) {
-        std::lock_guard<std::mutex> lk(mtx_);
-        return register_wait_locked(node, fiber);
-    }
-
-    // Expose the lock so the Scheduler can run register/resolve atomically
-    // with its own coordination state (e.g. register + make_waiting under one
-    // lock, or resolve + route under one lock). The Scheduler is the consumer
-    // of this seam; test code reaches the resolvers via WaitQueueTestHooks.
-    std::mutex& mtx() noexcept { return mtx_; }
-
-private:
-    friend class Scheduler;             // the sole resolution authority (C2)
-    friend struct WaitQueueTestHooks;   // pure-protocol test hook (C1-C9)
-
-    // _locked variant: caller holds mtx_.
+    // PRIVATE (E10-CORRECTIVE-2 R2): a Scheduler-integrated registration goes
+    // through Scheduler::await_wait, which calls this under global_mtx_ + mtx_,
+    // records waiting_waitq_count_, captures ws->current as the Fiber handle,
+    // and performs the waiting transition. An external TU cannot express
+    // register_wait(node, arbitrary_fiber): that would inject an arbitrary
+    // Fiber* into a queue the Scheduler later trusts at resolution time, outside
+    // Scheduler accounting. Scheduler is the only friend; there is no public
+    // wrapper and no test hook.
     bool register_wait_locked(WaitNode& node, Fiber* fiber = nullptr) {
         if (!node.register_(this, fiber)) return false;  // already registered/terminal (C8)
         // FIFO tail-link.
