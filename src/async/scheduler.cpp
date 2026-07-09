@@ -399,16 +399,25 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
             tgt->inbox_cv.notify_one();
             ++w;
         }
+        // Reset the global coordination fields INSIDE the global_mtx_ critical
+        // section they are protected by. next_spawn_worker_ / admission_ /
+        // admission_owner_ are mutated by spawn() / route_runnable_locked() and
+        // read under global_mtx_ (they are GUARDED_BY(global_mtx_)). Resetting
+        // them unlocked here admitted a real concurrency-safety violation:
+        // while this run_impl() thread released global_mtx_ between the
+        // distribute block and the reset, a concurrent T2 in spawn() could
+        // mutate next_spawn_worker_ (T1's unlocked reset then clobbered it),
+        // or race route_runnable_locked's admission demotion. Moving the
+        // resets into the existing critical section closes that window.
+        next_spawn_worker_ = 0;
+        admission_ = AdmissionState::none;
+        admission_owner_ = static_cast<unsigned>(-1);
     }
-    next_spawn_worker_ = 0;
-
     in_coordinated_run_ = true;
     active_worker_count_.store(worker_count, std::memory_order_release);
     running_fiber_count_.store(0, std::memory_order_release);
     idle_workers_.store(0, std::memory_order_release);
     global_terminate_.store(false, std::memory_order_release);
-    admission_ = AdmissionState::none;
-    admission_owner_ = static_cast<unsigned>(-1);
     // NOTE: admission_seam_* is NOT reset here — it is test-controlled state
     // that must persist across the run() boundary (T11 arms it before run()).
 
@@ -554,40 +563,55 @@ void Scheduler::worker_loop(WorkerState* ws) {
                     admission_seam_paused_ = false;
                 }
 
-                std::lock_guard<std::mutex> lk(global_mtx_);
-                // Demoted by a concurrent route? Then abandon admission.
-                if (admission_ != AdmissionState::candidate ||
-                    admission_owner_ != ws->id) {
-                    // Another path cancelled us. Loop.
-                    continue;
+                // Capture the commit decision under global_mtx_ into a local.
+                // The previous shape committed admission_ = committed under the
+                // lock and then re-read admission_ in the Phase-C guard OUTSIDE
+                // the lock — a read of a GUARDED_BY(global_mtx_) field without
+                // the lock. No reachable race is proven (only the committed
+                // worker can change admission_ from committed, per the MW-S2
+                // state-machine invariant), but the unlocked read was a real
+                // lock-authority violation. Capture the committed/admission fact
+                // under global_mtx_ and use the local after the lock.
+                bool phase_b_committed = false;
+                {
+                    std::lock_guard<std::mutex> lk(global_mtx_);
+                    // Demoted by a concurrent route? Then abandon admission.
+                    if (admission_ != AdmissionState::candidate ||
+                        admission_owner_ != ws->id) {
+                        // Another path cancelled us. Loop.
+                        continue;
+                    }
+                    // Re-drain readiness + reclassify.
+                    (void)wake_ready_completions_locked();
+                    (void)wake_ready_flags_locked();
+                    MwState s2 = classify_locked();
+                    if (s2 != MwState::mw_s2) {
+                        // State changed (MW-S1 via routed work, or MW-S3 via
+                        // outstanding drop). Cancel candidate; do NOT enter wait_one.
+                        admission_ = AdmissionState::none;
+                        admission_owner_ = static_cast<unsigned>(-1);
+                        continue;
+                    }
+                    // Commit: this is the single MW-S2 progress participant.
+                    admission_ = AdmissionState::committed;
+                    phase_b_committed = true;
+                    // E9 MIXED-WAKE: capture the park-domain decision NOW (under
+                    // global_mtx_). If an external-wake-capable wait is registered,
+                    // the participant must NOT enter a backend-only ctx_.wait_one()
+                    // (external-ready cannot interrupt it). It parks on the
+                    // SCHEDULER wake domain instead, so external-ready can wake it.
+                    // Refinement map: TLA+ EnterPhysicalPark domain selection.
+                    ws->park_domain = external_wake_possible_locked()
+                                          ? WorkerState::ParkDomain::Scheduler
+                                          : WorkerState::ParkDomain::Backend;
                 }
-                // Re-drain readiness + reclassify.
-                (void)wake_ready_completions_locked();
-                (void)wake_ready_flags_locked();
-                MwState s2 = classify_locked();
-                if (s2 != MwState::mw_s2) {
-                    // State changed (MW-S1 via routed work, or MW-S3 via
-                    // outstanding drop). Cancel candidate; do NOT enter wait_one.
-                    admission_ = AdmissionState::none;
-                    admission_owner_ = static_cast<unsigned>(-1);
-                    continue;
-                }
-                // Commit: this is the single MW-S2 progress participant.
-                admission_ = AdmissionState::committed;
-                // E9 MIXED-WAKE: capture the park-domain decision NOW (under
-                // global_mtx_). If an external-wake-capable wait is registered,
-                // the participant must NOT enter a backend-only ctx_.wait_one()
-                // (external-ready cannot interrupt it). It parks on the
-                // SCHEDULER wake domain instead, so external-ready can wake it.
-                // Refinement map: TLA+ EnterPhysicalPark domain selection.
-                ws->park_domain = external_wake_possible_locked()
-                                      ? WorkerState::ParkDomain::Scheduler
-                                      : WorkerState::ParkDomain::Backend;
-            }
 
-            // Phase C: release global_mtx_ (held only inside the blocks above)
-            // and enter wait_one. Only the committed participant reaches here.
-            if (admission_ == AdmissionState::committed && admission_owner_ == ws->id) {
+                // Phase C: release global_mtx_ (held only inside the blocks above)
+                // and enter wait_one. Only the committed participant reaches here.
+                // phase_b_committed was captured under the lock; reading it
+                // outside the lock is safe because only the committed worker can
+                // change admission_ from committed (the state machine invariant).
+                if (phase_b_committed) {
                 // E9 MIXED-WAKE domain split.
                 if (ws->park_domain == WorkerState::ParkDomain::Scheduler) {
                     // External-wake-capable wait registered: park on the wake
@@ -660,6 +684,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 idle_workers_.store(0, std::memory_order_release);
                 continue;
             }
+        }  // if (elected)
 
             // Not elected and not committed: another worker is the candidate/
             // committed participant. Fall through to idle parking.
