@@ -48,10 +48,29 @@
 //   - STRUCTURAL (next_/prev_/home_, list head/tail): WaitQueue::mtx_.
 //   - WINNER (terminal outcome): WaitNode::state_ atomic CAS (see wait_node.hpp).
 // Every mutating method (_locked variants) requires the caller to hold mtx_.
-// The public wake_one()/cancel()/register_wait() take the lock internally and
-// delegate to the _locked variants. The Scheduler calls the _locked variants
-// under global_mtx_ (its existing coordination domain) — see the scheduler
-// integration; the queue's own mtx_ is the structural authority.
+// The Scheduler resolves a Scheduler-integrated wait through its OWN seams
+// (Scheduler::wake_wait_one / cancel_wait), which take mtx_ under global_mtx_
+// and perform the canonical route_runnable_locked. Those Scheduler seams call
+// the private _locked resolver variants here.
+//
+// RESOLUTION AUTHORITY (E10-CORRECTIVE C2). The terminal resolution seams of a
+// WaitQueue — wake_one_locked / cancel_locked — are PRIVATE. A Scheduler-
+// integrated wait (registered via Scheduler::await_wait, which owns
+// waiting_waitq_count_ + the runnable-route obligation) may be terminally
+// resolved ONLY through Scheduler::wake_wait_one / Scheduler::cancel_wait.
+// Calling WaitQueue resolution directly would resolve the node + unlink it
+// WITHOUT decrementing waiting_waitq_count_ and WITHOUT routing the resumed
+// fiber through the canonical Scheduler wake seam — stranding the fiber and
+// leaving MW classification stale. The public surface therefore exposes
+// register_wait (registration is not a resolution) but NOT wake_one/cancel.
+// The Scheduler is a friend; a pure-protocol test hook (WaitQueueTestHooks,
+// defined only in the protocol test TU) reaches the resolvers for C1-C9.
+//
+// cancel_all REMOVED (E10-CORRECTIVE C3): it had ZERO production callsites, no
+// authoritative E10 shutdown semantic required it, and its header text
+// ("the Scheduler cancels-all on run termination") was an authority/document
+// drift — the Scheduler does NOT auto-resolve waits on run termination (a
+// stranded MW-S3 wait is left for the caller, like E9's waiting_ready_).
 //
 // Layering: BELOW the Scheduler. WaitQueue knows nothing about fibers,
 // scheduling, or runnable enqueue. It returns the winning node to the caller,
@@ -66,22 +85,31 @@
 
 namespace sluice::async {
 
+class Scheduler;  // forward: friend — the sole resolution authority (C2)
+
+// Pure-protocol test hook (C1-C9). Forward-declared so WaitQueue can friend it;
+// defined ONLY in the e10_wait_queue_test TU, exactly like SchedulerTestHooks /
+// E9ParkSeamHooks. It exposes no production contract.
+struct WaitQueueTestHooks;
+
 class WaitQueue {
 public:
     WaitQueue() noexcept = default;
 
     // §10 destruction invariant: a queue MUST be empty when destroyed, OR its
-    // owner must have explicitly cancelled all registered waiters. Destroying a
-    // queue with linked nodes would orphan them (their home_ points to freed
-    // memory; §3 Q8). Debug asserts empty; release is a no-op (the nodes are
-    // caller-owned and remain valid, but their home_ becomes dangling — the
-    // caller contract is to drain first). The Scheduler cancels-all on run
-    // termination; see the scheduler integration.
+    // owner must have explicitly resolved (cancelled) all registered waiters.
+    // Destroying a queue with linked nodes would orphan them (their home_
+    // points to freed memory; §3 Q8). Debug asserts empty; release is a no-op
+    // (the nodes are caller-owned and remain valid, but their home_ becomes
+    // dangling — the caller contract is to drain first). The Scheduler does NOT
+    // auto-resolve waits on run termination (E10-CORRECTIVE C3); an unresolved
+    // registered wait is left for the caller, exactly as E9 treats a stranded
+    // waiting_ready_ flag (MW-S3 returns STALLED in Drain).
     ~WaitQueue() {
         // head_ == null iff empty (tail_ maintained in lockstep). A non-empty
         // queue at destruction is a caller contract violation (§10).
         assert(head_ == nullptr &&
-               "WaitQueue destroyed with registered waiters (cancel-all first)");
+               "WaitQueue destroyed with registered waiters (resolve them first)");
     }
 
     WaitQueue(const WaitQueue&) = delete;
@@ -101,10 +129,27 @@ public:
     // if `node` is already registered or terminal (C8: a completed node cannot
     // be reused until reset/detached — and E10 nodes are NOT resettable; a new
     // wait needs a new node). Takes mtx_ internally.
+    //
+    // Registration is PUBLIC because it is NOT a terminal resolution: it does
+    // not make any fiber runnable and does not bypass Scheduler authority. A
+    // Scheduler-integrated registration goes through Scheduler::await_wait (so
+    // waiting_waitq_count_ is accounted), but register_wait remains available
+    // for direct use because a non-Scheduler caller may legitimately enqueue a
+    // node it intends to resolve through the Scheduler seams.
     bool register_wait(WaitNode& node, Fiber* fiber = nullptr) {
         std::lock_guard<std::mutex> lk(mtx_);
         return register_wait_locked(node, fiber);
     }
+
+    // Expose the lock so the Scheduler can run register/resolve atomically
+    // with its own coordination state (e.g. register + make_waiting under one
+    // lock, or resolve + route under one lock). The Scheduler is the consumer
+    // of this seam; test code reaches the resolvers via WaitQueueTestHooks.
+    std::mutex& mtx() noexcept { return mtx_; }
+
+private:
+    friend class Scheduler;             // the sole resolution authority (C2)
+    friend struct WaitQueueTestHooks;   // pure-protocol test hook (C1-C9)
 
     // _locked variant: caller holds mtx_.
     bool register_wait_locked(WaitNode& node, Fiber* fiber = nullptr) {
@@ -122,18 +167,16 @@ public:
     }
 
     // ---- Wake one (canonical terminal resolver, Woken outcome) ----
+    //
+    // PRIVATE (C2): the Scheduler resolves a Scheduler-integrated wait via
+    // Scheduler::wake_wait_one, which calls this under global_mtx_ + mtx_ and
+    // routes the winner's fiber through the canonical wake seam. Resolving a
+    // Scheduler-integrated wait directly here would bypass the count/runnable
+    // integration and strand the fiber.
 
     // Resolve the FIFO head with Woken, unlink the winner, and return it.
     // Returns nullptr if the queue is empty (no wait to wake) or if the head's
     // resolve CAS failed (the head was concurrently cancelled — a loser here).
-    // The caller (the Scheduler) makes the returned node's fiber runnable via
-    // the canonical wake seam. Takes mtx_ internally.
-    WaitNode* wake_one() {
-        std::lock_guard<std::mutex> lk(mtx_);
-        return wake_one_locked();
-    }
-
-    // _locked variant: caller holds mtx_.
     WaitNode* wake_one_locked() {
         if (head_ == nullptr) return nullptr;
         WaitNode* n = head_;
@@ -149,18 +192,14 @@ public:
     }
 
     // ---- Cancel a specific node (canonical terminal resolver, Cancelled) ----
+    //
+    // PRIVATE (C2): the Scheduler resolves via Scheduler::cancel_wait, which
+    // calls this and routes the winner. See wake_one_locked.
 
     // Resolve `node` with Cancelled and unlink the winner. Returns true iff
     // this call is the winner (node was Registered and is now Cancelled). A
     // losing call (node already terminal — C3/C4/C5) returns false and does
-    // nothing. `node` MUST belong to this queue (caller contract). Takes mtx_
-    // internally.
-    bool cancel(WaitNode& node) {
-        std::lock_guard<std::mutex> lk(mtx_);
-        return cancel_locked(node);
-    }
-
-    // _locked variant: caller holds mtx_.
+    // nothing. `node` MUST belong to this queue (caller contract).
     bool cancel_locked(WaitNode& node) {
         // `node` may not belong to this queue (caller contract violation). The
         // resolve CAS still cannot wrongly succeed: a Registered node has a
@@ -174,39 +213,12 @@ public:
         return false;  // already terminal (loser): C2/C3/C4/C5 no-op
     }
 
-    // ---- Cancel all registered waiters (owner shutdown, §10) ----
-
-    // Resolve every currently-registered node with Cancelled and unlink it.
-    // Used by the Scheduler on run termination so no waiter is stranded. Takes
-    // mtx_ internally. Returns the number of waiters cancelled-and-unlinked.
-    std::size_t cancel_all() {
-        std::lock_guard<std::mutex> lk(mtx_);
-        std::size_t n = 0;
-        while (head_ != nullptr) {
-            WaitNode* node = head_;
-            // Each head is still Registered (only this loop mutates the list
-            // under mtx_). If a concurrent external cancel raced (none should,
-            // since cancel_all runs under mtx_ too), resolve_ just loses and
-            // we skip the unlink for that one — but cancel_all holds mtx_, so
-            // no other resolver can run concurrently. The CAS is defensive.
-            if (node->resolve_(WaitOutcome::cancelled)) {
-                unlink_locked(*node);
-                ++n;
-            } else {
-                // Terminal-but-still-linked (should not happen under exclusive
-                // mtx_): unlink defensively to drain the list.
-                unlink_locked(*node);
-            }
-        }
-        return n;
-    }
-
     // ---- Unlink (the single structural-removal seam, §7) ----
 
-    // Unlink a node from the list. Called ONLY by a winning resolver (wake_one
-    // / cancel / cancel_all), under mtx_, in the SAME critical section as its
-    // winning resolve CAS. This is the ONE unlink path (§7: no competing
-    // wake-unlink / cancel-unlink / destructor-unlink). Clears home_.
+    // Unlink a node from the list. Called ONLY by a winning resolver
+    // (wake_one_locked / cancel_locked), under mtx_, in the SAME critical
+    // section as its winning resolve CAS. This is the ONE unlink path (§7: no
+    // competing wake-unlink / cancel-unlink / destructor-unlink). Clears home_.
     void unlink_locked(WaitNode& node) {
         // Splice node out of the doubly-linked list.
         if (node.prev_ != nullptr) {
@@ -224,11 +236,6 @@ public:
         node.home_ = nullptr;
     }
 
-    // Expose the lock so the Scheduler can run register/wake/cancel atomically
-    // with its own coordination state (e.g. classify + wake under one lock).
-    std::mutex& mtx() noexcept { return mtx_; }
-
-private:
     std::mutex mtx_;
     WaitNode* head_{nullptr};  // FIFO head; null iff empty
     WaitNode* tail_{nullptr};  // FIFO tail; maintained in lockstep with head_

@@ -84,7 +84,7 @@ returns true **only** for the unique winner. Every loser returns false.
 | WaitNode lifetime | the calling fiber/task (caller-owned) | caller | n/a | terminal (winner unlinked it), or never registered |
 | `WaitNode::state_` | the node | `resolve_` CAS (winner); `register_` (queue op) | `std::atomic` acq_rel | terminal before destroy |
 | link fields (`next_/prev_/home_`) | the node | `WaitQueue` under `mtx_` | `WaitQueue::mtx_` | unlinked (winner did it) |
-| queue membership | `WaitQueue` | `WaitQueue` ops under `mtx_` | `mtx_` | empty or cancel-all on destroy |
+| queue membership | `WaitQueue` | `WaitQueue` ops under `mtx_` | `mtx_` | empty (resolve all waits) on destroy |
 | Fiber handle (`fiber_`) | the node; set at register | immutable after register | none | n/a |
 
 **§3 questions, answered:**
@@ -105,7 +105,8 @@ returns true **only** for the unique winner. Every loser returns false.
    Registered node (`~WaitNode` asserts `!is_registered()`); the winner
    resolves+unlinks it first.
 8. Can queue destruction race registered waiters? **The queue destructor
-   asserts empty in debug** (§10); the caller must drain (cancel-all) first.
+   asserts empty in debug** (§10); the caller must drain (resolve every
+   registered wait) first.
 
 ---
 
@@ -147,7 +148,21 @@ concurrently. The condition→wait race is the **caller's** responsibility
   configurable policy).
 
 Operations: `register_wait[_locked]`, `wake_one[_locked]`, `cancel[_locked]`,
-`cancel_all`, `unlink_locked`, `empty_locked`.
+`unlink_locked`, `empty_locked`.
+
+> **Resolution seams are private (E10-CORRECTIVE C2).** `wake_one[_locked]` /
+> `cancel[_locked]` / `unlink_locked` are PRIVATE. A Scheduler-integrated wait
+> (registered via `Scheduler::await_wait`, which owns `waiting_waitq_count_` and
+> the runnable-route obligation) may be terminally resolved ONLY through
+> `Scheduler::wake_wait_one` / `Scheduler::cancel_wait`, which take the queue
+> lock under `global_mtx_` and route the winner's fiber through the canonical
+> wake seam (`route_runnable_locked`). Direct WaitQueue resolution would resolve
+> + unlink the node WITHOUT decrementing `waiting_waitq_count_` and WITHOUT
+> routing the fiber — stranding it and leaving MW classification stale.
+> `register_wait` remains public (registration is not a resolution). The
+> Scheduler is `friend`; a pure-protocol test hook (`WaitQueueTestHooks`) reaches
+> the resolvers for C1-C9. `cancel_all` is removed (C3: no authoritative shutdown
+> semantic, zero production callsites).
 
 **Intrusive-link invariants (proven, §5):**
 - linked-at-most-once: `register_` only succeeds from `Detached`.
@@ -165,6 +180,33 @@ Operations: `register_wait[_locked]`, `wake_one[_locked]`, `cancel[_locked]`,
 The winner is determined by the CAS; the linearization point (§7) is the
 instant the CAS stores the terminal value. At that instant the node is
 (a) terminally resolved, (b) the unique winner, (c) the unique unlink owner.
+
+**Formal vs production abstraction boundary (E10-CORRECTIVE C4).** The formal
+`ResolveWake` / `ResolveCancel` action abstracts the ENTIRE `q.mtx_`-protected
+production critical section
+
+```
+q.mtx_ acquired
+    -> resolve_(outcome) CAS         // winner linearization point
+    -> unlink_locked                 // structural removal
+q.mtx_ released
+```
+
+as ONE formal atomic step. The production `resolve_` CAS is the **winner
+linearization point**, but CAS success ALONE does **not** imply that the
+physical queue unlink has completed at the next C++ instruction — the unlink
+runs later in the SAME lock-held critical section. Therefore any production-
+observable structural invariant of the shape
+
+> `node is linked iff node state is Registered`
+
+must be asserted at the **lock / critical-section abstraction boundary**
+(under `q.mtx_`), NOT at instruction granularity. Between the CAS and the
+`unlink_locked` call (same critical section, lock still held) a Registered-to-
+terminal node is momentarily still physically linked — this is invisible to
+any correct observer, because every observer also holds `q.mtx_`. The formal
+single-winner property is NOT weakened: there is exactly one winner per node,
+and exactly one unlink per winner, both under the same lock.
 
 **Wake vs cancellation truth table (§6):**
 
@@ -189,7 +231,7 @@ permanently suspended.
 
 **Unlink Law (§7):** queue removal is NOT an independent protocol. There is
 ONE unlink path — `WaitQueue::unlink_locked`, called only by a winning
-resolver (wake_one / cancel / cancel_all), in the same `q.mtx()` critical
+resolver (`wake_one_locked` / `cancel_locked`), in the same `q.mtx()` critical
 section as its winning CAS. There is no separate wake-unlink, cancel-unlink, or
 destructor-unlink.
 
@@ -199,10 +241,22 @@ caller unlinks exactly once. A loser returns before `unlink_locked`.
 **Destruction preconditions (§10):**
 - `~WaitNode`: asserts `!is_registered()` (debug). A terminal or never-
   registered node destroys cleanly; a Registered node asserts.
-- `~WaitQueue`: asserts empty (debug). The caller must drain (cancel-all)
-  first. The Scheduler does NOT auto-cancel-all on run termination (matching
-  E9's treatment of `waiting_ready_`: a stranded MW-S3 wait is left for the
-  caller to resolve or re-enter `run()`).
+- `~WaitQueue`: asserts empty (debug). The caller must drain (resolve every
+  registered wait) first. The Scheduler does NOT auto-resolve waits on run
+  termination: a stranded MW-S3 wait is left for the caller to resolve or
+  re-enter `run()` (exactly as E9 treats a stranded `waiting_ready_` flag).
+  (E10-CORRECTIVE C3 removed the dead `cancel_all` API and the false header
+  claim "the Scheduler cancels-all on run termination".)
+
+### Unresolved registered waits during Drain/shutdown (§10)
+
+In **Drain** mode, an unresolved E10 wait makes the run reach MW-S3 and the run
+returns **STALLED** (the run terminates); the wait node is left **Registered**
+and its fiber is left **Waiting**. The caller is then responsible for resolving
+it (`Scheduler::cancel_wait`) before destroying the node (`~WaitNode` asserts
+`!is_registered()`). The Scheduler performs **no automatic cancel/resolution** on
+run termination — there is no `cancel_all`, by decision (C3): it had zero
+production callsites and no authoritative E10 shutdown semantic required it.
 
 ---
 
@@ -215,6 +269,24 @@ redefine fiber runnable ownership, worker ownership, steal, RunMode, or Drain.
   by E7-T2 `make_runnable()` (exactly-once publication).
 - `waiting_waitq_count_` is counted by `classify_locked` exactly like the
   other wait maps, so MW-S3 (unresolved waits) is correct.
+- **External wake-domain classification (E10-CORRECTIVE C1):** a WaitQueue wait
+  is **externally resolvable** — `wake_wait_one` / `cancel_wait` run from any
+  thread, take `global_mtx_` + `q.mtx()`, and reach `signal_wake_locked` (the
+  unified Scheduler wake source) via `route_runnable_locked`. This is the same
+  wake capability as a `waiting_ready_` flag wait. Therefore
+  `external_wake_possible_locked()` is true iff `!waiting_ready_.empty() ||
+  waiting_waitq_count_ > 0`. Without the `waiting_waitq_count_` term, a Live run
+  could park/STALLED on a source that cannot observe an E10 resolution
+  (stranding the waiter). (Pre-corrective, only `!waiting_ready_.empty()` was
+  returned — the C1 park-domain gap.)
+- **Resolution authority topology (E10-CORRECTIVE C2):** a Scheduler-integrated
+  wait is terminally resolved ONLY through `Scheduler::wake_wait_one` /
+  `Scheduler::cancel_wait`. `WaitQueue`'s resolution seams
+  (`wake_one[_locked]` / `cancel[_locked]`) are PRIVATE (friend `Scheduler`).
+  This preserves one terminal-winner authority (the `resolve_` CAS), one
+  structural-unlink authority (`unlink_locked` in the same critical section),
+  and one Scheduler-integration authority (the count + runnable route live only
+  in the Scheduler seams).
 - No direct `local_runnable` push from `WaitQueue`; all routing goes through
   the scheduler seam.
 - Lock order: `global_mtx_` → `q.mtx()` → `wake_mtx_` (via

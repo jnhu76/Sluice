@@ -204,6 +204,20 @@ public:
     // the loser performs no second wake. Cancellation here is wait-cancellation
     // ONLY (not task / I/O cancellation).
     //
+    // FIBER LIFETIME (E10-CORRECTIVE Sec.6). `await_wait` is called by the
+    // running fiber itself (me = ws->current); the node is registered with that
+    // fiber as its handle, and the fiber then suspends INSIDE this call
+    // (make_waiting + context_switch). The fiber cannot return from await_wait
+    // — and therefore cannot reach done, and its caller cannot destroy it —
+    // until a resolver wins, which resolves+unlinks the node in the SAME
+    // critical section before routing the fiber runnable. Hence a Fiber
+    // registered via await_wait can never be destroyed while its WaitNode is
+    // Registered: the Scheduler owns no Fiber objects (they are caller-owned
+    // raw pointers), never destroys a Fiber on run termination, and a fiber may
+    // be destroyed by its caller only after it reaches done (by which point the
+    // node is already terminal+unlinked). [FIBER_WAIT_LIFETIME:
+    //  PROTECTED_BY_EXISTING_OWNERSHIP]
+    //
     // Registration protocol (§4 lost-wake window): mirrors await_ready_flag —
     // register + recheck + make_waiting are ONE atomic transition w.r.t. the
     // wake path (wake_wait_one_locked runs under global_mtx_); only
@@ -470,12 +484,22 @@ private:
     // ws is the calling worker. Called with global_mtx_ RELEASED.
     void park_on_wake_source(WorkerState* ws);
 
-    // Predicate: is there currently an external-wake-capable wait registered
-    // (a ready-flag wait)? When true, the MW-S2 participant must NOT enter a
-    // backend-only ctx_.wait_one() — it parks on the SCHEDULER domain instead
-    // (the MIXED-WAKE fix, ADR §9.4.7). Call with global_mtx_ held.
+    // Predicate: is there currently an externally-resolvable wait registered —
+    // one whose resolution arrives from OUTSIDE the worker loop (a ready-flag
+    // wait, OR a WaitQueue wait resolved via wake_wait_one/cancel_wait)? Such
+    // resolutions reach signal_wake_locked (the unified Scheduler wake source),
+    // NOT a backend reap, so the worker MUST park on the SCHEDULER domain to
+    // observe them. When true, the MW-S2 participant must NOT enter a backend-
+    // only ctx_.wait_one() — it parks on the SCHEDULER domain instead (the
+    // MIXED-WAKE fix, ADR §9.4.7). Call with global_mtx_ held.
+    //
+    // E10-CORRECTIVE C1: a WaitQueue wait is externally resolvable exactly like
+    // a ready-flag wait (wake_wait_one/cancel_wait run under global_mtx_ +
+    // q.mtx() and reach signal_wake_locked via route_runnable_locked). It MUST
+    // participate in this classification, or a Live run could park/terminate on
+    // a source that cannot observe the wait's resolution (C1 park-domain gap).
     bool external_wake_possible_locked() const {
-        return !waiting_ready_.empty();
+        return !waiting_ready_.empty() || waiting_waitq_count_ > 0;
     }
 };
 

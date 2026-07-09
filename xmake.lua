@@ -791,3 +791,56 @@ do
             add_tests("e10_scheduler_wait_test")
     end
 end
+
+-- e10_corrective_c1_test — E10-CORRECTIVE C1 external wake-domain classification
+-- regression (sluice-CORE-E10). Proves a Live run with an externally-resolvable
+-- WaitQueue wait parks (not STALLED) so an external wake_wait_one/cancel_wait
+-- resumes the waiter. Fails on uncorrected 0debd21.
+do
+    local p = "tests/e10_corrective_c1_test.cpp"
+    if os.isfile(p) then
+        target("e10_corrective_c1_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_corrective_c1_test")
+    end
+end
+
+-- e10_corrective_c2_c3_test — E10-CORRECTIVE C2 resolution-authority bypass
+-- (structural: public wake_one/cancel/cancel_all are not expressible) + C3
+-- cancel_all surface (REMOVED) + T4 non-bypass count consistency. Compile-time
+-- static_assert + runtime mirror + fiber integration.
+do
+    local p = "tests/e10_corrective_c2_c3_test.cpp"
+    if os.isfile(p) then
+        target("e10_corrective_c2_c3_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_corrective_c2_c3_test")
+    end
+end
+
+-- e10_corrective_c5_test — E10-CORRECTIVE C5 middle-node concurrent unlink
+-- topology stress (A<->B<->C; concurrent wake-head-A || cancel-middle-B). Locks
+-- in the doubly-linked list topology invariants at a meaningful stress count.
+do
+    local p = "tests/e10_corrective_c5_test.cpp"
+    if os.isfile(p) then
+        target("e10_corrective_c5_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_corrective_c5_test")
+    end
+end

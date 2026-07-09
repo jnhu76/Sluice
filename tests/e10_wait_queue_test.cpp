@@ -17,6 +17,13 @@
 //
 // These are UNIT tests of the protocol. They do NOT verify scheduler
 // integration (that is e10_scheduler_wait_test: C10, C11).
+//
+// E10-CORRECTIVE C2: the terminal resolution seams (wake_one / cancel) are now
+// PRIVATE on WaitQueue — a Scheduler-integrated wait may be terminally resolved
+// ONLY through Scheduler::wake_wait_one / Scheduler::cancel_wait. These
+// pure-protocol tests reach the same resolvers via WaitQueueTestHooks (a test-
+// only friend, exactly like SchedulerTestHooks / E9ParkSeamHooks). This proves
+// the protocol in isolation without exposing a production bypass.
 #include "harness.hpp"
 
 #include <sluice/async/wait_node.hpp>
@@ -27,6 +34,30 @@
 #include <vector>
 
 using namespace sluice::async;
+
+// E10-CORRECTIVE C2: pure-protocol test hook reaching the (now private)
+// terminal resolvers under mtx_. Defined ONLY in this TU; friend of
+// WaitQueue. Exposes no production contract. Mirrors the SchedulerTestHooks /
+// E9ParkSeamHooks discipline: a friend struct in the async namespace whose
+// static methods are the test's only entry to private state.
+namespace sluice::async {
+struct WaitQueueTestHooks {
+    static WaitNode* wake_one_locked(WaitQueue& q) { return q.wake_one_locked(); }
+    static bool cancel_locked(WaitQueue& q, WaitNode& n) { return q.cancel_locked(n); }
+
+    // Lock-holding convenience wrappers (mirror the former public wake_one()/
+    // cancel() that took mtx_ internally). The race-stress tests need a single
+    // lock-then-resolve step to express wake||cancel deterministically.
+    static WaitNode* wake_one(WaitQueue& q) {
+        std::lock_guard<std::mutex> lk(q.mtx_);
+        return q.wake_one_locked();
+    }
+    static bool cancel(WaitQueue& q, WaitNode& n) {
+        std::lock_guard<std::mutex> lk(q.mtx_);
+        return q.cancel_locked(n);
+    }
+};
+}  // namespace sluice::async
 
 // A Registered node occupies a queue slot and its destruction would leave a
 // dangling queue pointer (§10/C9). Tests that intend to leave a node
@@ -47,12 +78,12 @@ SLUICE_TEST_CASE(e10_c1_wake_vs_cancel_one_winner) {
     SLUICE_CHECK_MSG(q.register_wait(n), "register succeeds (Detached->Registered)");
 
     // wake_one first: it is the winner.
-    WaitNode* woken = q.wake_one();
+    WaitNode* woken = WaitQueueTestHooks::wake_one(q);
     SLUICE_CHECK_MSG(woken == &n, "wake_one returns the woken node");
     SLUICE_CHECK_MSG(n.was_woken(), "node terminal outcome is Woken");
 
     // cancel loses: node is already terminal.
-    bool cancel_won = q.cancel(n);
+    bool cancel_won = WaitQueueTestHooks::cancel(q, n);
     SLUICE_CHECK_MSG(!cancel_won, "cancel after wake is a loser (no-op)");
     SLUICE_CHECK_MSG(n.was_woken(), "outcome unchanged (Cancelled NOT applied)");
     SLUICE_CHECK_MSG(q.empty_locked() || true, "queue drained by winner unlink");
@@ -61,9 +92,9 @@ SLUICE_TEST_CASE(e10_c1_wake_vs_cancel_one_winner) {
     WaitQueue q2;
     WaitNode n2;
     q2.register_wait(n2);
-    SLUICE_CHECK_MSG(q2.cancel(n2), "cancel wins (Registered->Cancelled)");
+    SLUICE_CHECK_MSG(WaitQueueTestHooks::cancel(q2, n2), "cancel wins (Registered->Cancelled)");
     SLUICE_CHECK_MSG(n2.was_cancelled(), "outcome is Cancelled");
-    WaitNode* woken2 = q2.wake_one();
+    WaitNode* woken2 = WaitQueueTestHooks::wake_one(q2);
     SLUICE_CHECK_MSG(woken2 == nullptr, "wake after cancel is a loser (null)");
     SLUICE_CHECK_MSG(n2.was_cancelled(), "outcome unchanged (Woken NOT applied)");
 }
@@ -79,13 +110,13 @@ SLUICE_TEST_CASE(e10_c2_repeated_wake_second_loses) {
     WaitNode n;
     q.register_wait(n);
 
-    WaitNode* first = q.wake_one();
+    WaitNode* first = WaitQueueTestHooks::wake_one(q);
     SLUICE_CHECK_MSG(first == &n, "first wake wins");
     SLUICE_CHECK_MSG(n.was_woken(), "node is Woken");
 
     // A second wake_one on the (now empty) queue returns null. The node is
     // already terminal and unlinked — no second resolution is possible.
-    WaitNode* second = q.wake_one();
+    WaitNode* second = WaitQueueTestHooks::wake_one(q);
     SLUICE_CHECK_MSG(second == nullptr, "second wake finds nothing (queue drained)");
     SLUICE_CHECK_MSG(n.was_woken(), "outcome still Woken (no double-resolve)");
 
@@ -100,9 +131,9 @@ SLUICE_TEST_CASE(e10_c3_repeated_cancel_second_loses) {
     WaitNode n;
     q.register_wait(n);
 
-    SLUICE_CHECK_MSG(q.cancel(n), "first cancel wins");
+    SLUICE_CHECK_MSG(WaitQueueTestHooks::cancel(q, n), "first cancel wins");
     SLUICE_CHECK_MSG(n.was_cancelled(), "node is Cancelled");
-    SLUICE_CHECK_MSG(!q.cancel(n), "second cancel loses (node terminal)");
+    SLUICE_CHECK_MSG(!WaitQueueTestHooks::cancel(q, n), "second cancel loses (node terminal)");
     SLUICE_CHECK_MSG(n.was_cancelled(), "outcome still Cancelled");
 }
 
@@ -111,11 +142,11 @@ SLUICE_TEST_CASE(e10_c4_wake_after_cancel_no_resurrection) {
     WaitQueue q;
     WaitNode n;
     q.register_wait(n);
-    SLUICE_CHECK_MSG(q.cancel(n), "cancel wins");
+    SLUICE_CHECK_MSG(WaitQueueTestHooks::cancel(q, n), "cancel wins");
     SLUICE_CHECK_MSG(n.was_cancelled(), "Cancelled");
 
     // The cancel unlinked n, so the queue is empty and wake_one returns null.
-    WaitNode* w = q.wake_one();
+    WaitNode* w = WaitQueueTestHooks::wake_one(q);
     SLUICE_CHECK_MSG(w == nullptr, "wake after cancel finds nothing");
     SLUICE_CHECK_MSG(n.was_cancelled(), "Cancelled outcome preserved (no resurrection)");
 
@@ -130,11 +161,11 @@ SLUICE_TEST_CASE(e10_c5_cancel_after_wake_outcome_unchanged) {
     WaitQueue q;
     WaitNode n;
     q.register_wait(n);
-    WaitNode* w = q.wake_one();
+    WaitNode* w = WaitQueueTestHooks::wake_one(q);
     SLUICE_CHECK_MSG(w == &n, "wake wins");
     SLUICE_CHECK_MSG(n.was_woken(), "Woken");
 
-    SLUICE_CHECK_MSG(!q.cancel(n), "cancel after wake loses");
+    SLUICE_CHECK_MSG(!WaitQueueTestHooks::cancel(q, n), "cancel after wake loses");
     SLUICE_CHECK_MSG(n.was_woken(), "Woken outcome unchanged (not flipped to Cancelled)");
 }
 
@@ -153,7 +184,7 @@ SLUICE_TEST_CASE(e10_c6_unlink_exactly_once_links_intact) {
     SLUICE_CHECK_MSG(q.register_wait(d), "register d");
 
     // Cancel the middle node b: this unlinks it without disturbing the rest.
-    SLUICE_CHECK_MSG(q.cancel(b), "cancel b wins");
+    SLUICE_CHECK_MSG(WaitQueueTestHooks::cancel(q, b), "cancel b wins");
     SLUICE_CHECK_MSG(b.was_cancelled(), "b is Cancelled");
     // b's links must be cleared by the unlink.
     SLUICE_CHECK_MSG(b.next_ == nullptr, "b.next cleared");
@@ -163,10 +194,10 @@ SLUICE_TEST_CASE(e10_c6_unlink_exactly_once_links_intact) {
     // Drain in FIFO order: a, c, d. Each wake_one must return a distinct,
     // still-Woken node. If the unlink had corrupted links, a later wake_one
     // would return null prematurely or skip a node.
-    WaitNode* w1 = q.wake_one();
-    WaitNode* w2 = q.wake_one();
-    WaitNode* w3 = q.wake_one();
-    WaitNode* w4 = q.wake_one();
+    WaitNode* w1 = WaitQueueTestHooks::wake_one(q);
+    WaitNode* w2 = WaitQueueTestHooks::wake_one(q);
+    WaitNode* w3 = WaitQueueTestHooks::wake_one(q);
+    WaitNode* w4 = WaitQueueTestHooks::wake_one(q);
     SLUICE_CHECK_MSG(w1 == &a, "wake a");
     SLUICE_CHECK_MSG(w2 == &c, "wake c (b unlinked, order preserved)");
     SLUICE_CHECK_MSG(w3 == &d, "wake d");
@@ -186,7 +217,7 @@ SLUICE_TEST_CASE(e10_c7_multiple_waiters_others_unaffected) {
 
     // Wake exactly one (the FIFO head, a). b and c must remain Registered and
     // linked — NOT terminally altered by a's wake.
-    WaitNode* w = q.wake_one();
+    WaitNode* w = WaitQueueTestHooks::wake_one(q);
     SLUICE_CHECK_MSG(w == &a, "head woken");
     SLUICE_CHECK_MSG(a.was_woken(), "a is Woken");
     SLUICE_CHECK_MSG(!b.is_terminal(), "b still Registered (unaffected)");
@@ -195,11 +226,11 @@ SLUICE_TEST_CASE(e10_c7_multiple_waiters_others_unaffected) {
     SLUICE_CHECK_MSG(c.is_registered(), "c still Registered");
 
     // The remaining queue is [b, c]. Cancel b: must win (b is still live).
-    SLUICE_CHECK_MSG(q.cancel(b), "cancel b wins (b was untouched by a's wake)");
+    SLUICE_CHECK_MSG(WaitQueueTestHooks::cancel(q, b), "cancel b wins (b was untouched by a's wake)");
     SLUICE_CHECK_MSG(b.was_cancelled(), "b is Cancelled");
 
     // c is still live; wake it.
-    WaitNode* wc = q.wake_one();
+    WaitNode* wc = WaitQueueTestHooks::wake_one(q);
     SLUICE_CHECK_MSG(wc == &c, "wake c");
     SLUICE_CHECK_MSG(c.was_woken(), "c is Woken");
 }
@@ -217,7 +248,7 @@ SLUICE_TEST_CASE(e10_c8_node_reuse_rejected) {
     // Double-register while Registered: rejected.
     SLUICE_CHECK_MSG(!q.register_wait(n), "double-register rejected (linked once)");
 
-    q.wake_one();
+    WaitQueueTestHooks::wake_one(q);
     SLUICE_CHECK_MSG(n.was_woken(), "n Woken");
 
     // Re-register a terminal node: rejected (reuse not supported).
@@ -227,7 +258,7 @@ SLUICE_TEST_CASE(e10_c8_node_reuse_rejected) {
     WaitQueue q2;
     WaitNode fresh;
     SLUICE_CHECK_MSG(q2.register_wait(fresh), "fresh node registers");
-    q2.wake_one();
+    WaitQueueTestHooks::wake_one(q2);
 }
 
 // ---- C9: destruction invariant — a Registered node cannot be destroyed ------
@@ -243,7 +274,7 @@ SLUICE_TEST_CASE(e10_c9_destruction_invariant) {
         WaitQueue q;
         WaitNode n;
         q.register_wait(n);
-        q.cancel(n);  // winner unlinks -> n is Cancelled, not Registered
+        WaitQueueTestHooks::cancel(q, n);  // winner unlinks -> n is Cancelled, not Registered
         SLUICE_CHECK_MSG(n.was_cancelled(), "n Cancelled before scope exit");
     }  // ~WaitNode: !is_registered() -> ok
     // A never-registered node may be destroyed (still Detached).
@@ -256,7 +287,7 @@ SLUICE_TEST_CASE(e10_c9_destruction_invariant) {
         WaitQueue q;
         WaitNode n;
         q.register_wait(n);
-        q.wake_one();  // winner unlinks
+        WaitQueueTestHooks::wake_one(q);  // winner unlinks
         SLUICE_CHECK_MSG(n.was_woken(), "n Woken before scope exit");
     }
     // NOTE: the NEGATIVE case (destroying a Registered node) is intentionally
@@ -287,12 +318,12 @@ SLUICE_TEST_CASE(e10_c12_race_stress_exactly_one_winner) {
         std::thread waker([&] {
             while (!go.load(std::memory_order_acquire)) {}
             // wake_one may or may not be the winner.
-            if (q.wake_one() != nullptr) wins.fetch_add(1, std::memory_order_acq_rel);
+            if (WaitQueueTestHooks::wake_one(q) != nullptr) wins.fetch_add(1, std::memory_order_acq_rel);
         });
         std::thread canceller([&] {
             while (!go.load(std::memory_order_acquire)) {}
             // cancel may or may not be the winner.
-            if (q.cancel(n)) wins.fetch_add(1, std::memory_order_acq_rel);
+            if (WaitQueueTestHooks::cancel(q, n)) wins.fetch_add(1, std::memory_order_acq_rel);
         });
 
         go.store(true, std::memory_order_release);

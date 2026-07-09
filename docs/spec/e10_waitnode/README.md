@@ -140,6 +140,20 @@ performs the terminal resolution, the unlink, and the scheduler-wake enqueue.
    queue membership) is consistent with this instant because they read the
    same atomic `state_` with acquire.
 
+   **Refinement boundary (E10-CORRECTIVE C4).** The formal `ResolveWake(n)` /
+   `ResolveCancel(n)` action abstracts the ENTIRE `q.mtx()`-protected production
+   critical section — `resolve_(outcome)` CAS **plus** `unlink_locked` **plus**
+   `route_runnable_locked` — as ONE atomic step (see the variable map, lines
+   above: each formal action maps to the full lock-held CS). The production CAS
+   is the **winner linearization point**, but CAS success ALONE does not imply
+   the physical queue unlink has completed at the next C++ instruction: the
+   unlink runs later in the SAME critical section (lock still held). Thus the
+   production-observable structural invariant "node is linked iff node state is
+   Registered" holds at the **lock/critical-section abstraction boundary** (any
+   observer holds `q.mtx()`), NOT at instruction granularity. This does NOT
+   weaken the formal single-winner property (still exactly one winner, one
+   unlink, both under the same lock).
+
 5. **NoTerminalResurrection.** No production action moves a terminal node to a
    non-terminal state: `resolve_` requires `Registered`; `register_` requires
    `Detached`; terminal nodes are neither. The state machine is closed.
