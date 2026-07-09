@@ -65,13 +65,18 @@ SLUICE_TEST_CASE(e10_c10_wake_resumes_once_via_canonical_seam) {
         entries.fetch_add(1, std::memory_order_acq_rel);  // after resume
     });
     fwake.set_entry([&](Fiber&) {
-        // Wait until the waiter has registered + suspended, then wake it.
-        while (!waiter_suspended.load(std::memory_order_acquire)) {
-            // yield is fine; the run is cooperative on a single worker so this
-            // fiber does not run until fwait yields via context_switch. With 2
-            // workers fwait suspends and frees a worker to run fwake.
-        }
-        bool woke = sched.wake_wait_one(q);
+        // TEST SYNC ONLY: `waiter_suspended` is published BEFORE await_wait's
+        // register_ CAS, so this resolver may observe the signal while the node
+        // is not yet registered (the queue is still empty). Retry until the wake
+        // wins. Production resolvers are NOT required to retry (a wake on an
+        // empty WaitQueue is a false / no-op, NOT remembered — see
+        // e10-waitnode-wait-queue.md §4). Without this retry, a missed wake
+        // would fail the CHECK below, early-return the test, and destroy `node`
+        // while fwait concurrently registers+suspends it (~WaitNode asserts
+        // Registered).
+        while (!waiter_suspended.load(std::memory_order_acquire)) {}
+        bool woke = false;
+        for (int i = 0; i < 1000 && !woke; ++i) woke = sched.wake_wait_one(q);
         SLUICE_CHECK_MSG(woke, "wake_wait_one delivered exactly one wake");
     });
 
@@ -113,8 +118,12 @@ SLUICE_TEST_CASE(e10_c10_cancel_resumes_once_via_canonical_seam) {
         entries.fetch_add(1, std::memory_order_acq_rel);
     });
     fcancel.set_entry([&](Fiber&) {
+        // TEST SYNC ONLY: see C10 fwake note — waiter_suspended predates
+        // registration, so retry until the cancel wins. Production resolvers
+        // are NOT required to retry.
         while (!waiter_suspended.load(std::memory_order_acquire)) {}
-        bool cancelled = sched.cancel_wait(q, node);
+        bool cancelled = false;
+        for (int i = 0; i < 1000 && !cancelled; ++i) cancelled = sched.cancel_wait(q, node);
         SLUICE_CHECK_MSG(cancelled, "cancel_wait won");
     });
 
@@ -164,12 +173,21 @@ SLUICE_TEST_CASE(e10_c10_wake_cancel_race_one_resume) {
         fwake.set_entry([&](Fiber&) {
             while (!suspended.load(std::memory_order_acquire)) {}
             while (!go.load(std::memory_order_acquire)) {}
-            (void)sched.wake_wait_one(q);
+            // TEST SYNC ONLY: suspended predates registration (see C10 fwake
+            // note). Both resolvers retry until one wins the single-winner CAS;
+            // production resolvers are NOT required to retry (wake on empty
+            // queue is a no-op, not remembered). The retry still leaves a
+            // genuine wake||cancel contention on the registered node.
+            for (int i = 0; i < 1000; ++i) {
+                if (sched.wake_wait_one(q)) break;
+            }
         });
         fcancel.set_entry([&](Fiber&) {
             while (!suspended.load(std::memory_order_acquire)) {}
             while (!go.load(std::memory_order_acquire)) {}
-            (void)sched.cancel_wait(q, node);
+            for (int i = 0; i < 1000; ++i) {
+                if (sched.cancel_wait(q, node)) break;
+            }
         });
 
         FiberStack sw, sk, sc;
