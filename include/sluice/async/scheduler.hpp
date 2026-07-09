@@ -12,6 +12,11 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
+#include <sluice/async/lock_guard.hpp>
+#include <sluice/async/mutex.hpp>
+#include <sluice/async/thread_annotations.hpp>
+#include <sluice/async/wait_node.hpp>
+#include <sluice/async/wait_queue.hpp>
 
 #include <atomic>
 #include <condition_variable>
@@ -192,6 +197,51 @@ public:
     void await_completion_void(Completion<void>& c);
     void await_ready_flag(const std::atomic<bool>& ready);
 
+    // ---- E10 WaitQueue suspension (sluice-CORE-E10) ----
+    // Suspend the calling Fiber on `q`, registering `node`. `node` must be
+    // Detached (fresh) and outlive this call's suspend until it is resumed
+    // (woken or cancelled). The fiber resumes when EXACTLY ONE resolver wins:
+    //   - wake_wait_one(q) resolves the head with Woken, OR
+    //   - cancel_wait(q, node) resolves this node with Cancelled.
+    // The winner transition is the WaitNode resolve CAS (one authority, §2/§7);
+    // the loser performs no second wake. Cancellation here is wait-cancellation
+    // ONLY (not task / I/O cancellation).
+    //
+    // FIBER LIFETIME (E10-CORRECTIVE Sec.6). `await_wait` is called by the
+    // running fiber itself (me = ws->current); the node is registered with that
+    // fiber as its handle, and the fiber then suspends INSIDE this call
+    // (make_waiting + context_switch). The fiber cannot return from await_wait
+    // — and therefore cannot reach done, and its caller cannot destroy it —
+    // until a resolver wins, which resolves+unlinks the node in the SAME
+    // critical section before routing the fiber runnable. Hence a Fiber
+    // registered via await_wait can never be destroyed while its WaitNode is
+    // Registered: the Scheduler owns no Fiber objects (they are caller-owned
+    // raw pointers), never destroys a Fiber on run termination, and a fiber may
+    // be destroyed by its caller only after it reaches done (by which point the
+    // node is already terminal+unlinked). [FIBER_WAIT_LIFETIME:
+    //  PROTECTED_BY_EXISTING_OWNERSHIP]
+    //
+    // Registration protocol (§4 lost-wake window): mirrors await_ready_flag —
+    // register + recheck + make_waiting are ONE atomic transition w.r.t. the
+    // wake path (wake_wait_one_locked runs under global_mtx_); only
+    // context_switch is outside. If the wait is already resolvable at register
+    // time (e.g. a wake was already delivered), the registration is undone and
+    // the fiber does NOT suspend.
+    void await_wait(WaitQueue& q, WaitNode& node);
+
+    // Resolve the head of `q` with Woken and route the winner's fiber through
+    // the canonical wake seam (route_runnable_locked). Returns true iff a wait
+    // was actually woken by THIS call (exactly one runnable enqueue). Called by
+    // a waker (typically a Fiber or external producer). Safe to call any time.
+    bool wake_wait_one(WaitQueue& q);
+
+    // Resolve `node` (registered in `q`) with Cancelled and route the winner's
+    // fiber. Returns true iff this call won (the node was Registered and is now
+    // Cancelled). A losing call (node already woken) is a no-op. E10 cancel is
+    // wait-cancellation only: it does NOT cancel the task/fiber/I/O op.
+    bool cancel_wait(WaitQueue& q, WaitNode& node);
+
+
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()
     // from an external thread to wake a parked Worker whose wake set includes
@@ -212,11 +262,12 @@ public:
     // ---- Diagnostics ----
     std::size_t runnable_count() const;
     std::size_t waiting_count() const {
-        std::lock_guard<std::mutex> lk(global_mtx_);
-        return waiting_size_.size() + waiting_void_.size() + waiting_ready_.size();
+        LockGuard lk(global_mtx_);
+        return waiting_size_.size() + waiting_void_.size() + waiting_ready_.size() +
+               waiting_waitq_count_;
     }
     std::size_t waiting_ready_count() const {
-        std::lock_guard<std::mutex> lk(global_mtx_);
+        LockGuard lk(global_mtx_);
         return waiting_ready_.size();
     }
 
@@ -235,7 +286,7 @@ public:
     // at this instant (which may differ from the initial assignment if `f`
     // was stolen).
     WorkerState* owner_of(const Fiber& f) const {
-        std::lock_guard<std::mutex> lk(global_mtx_);
+        LockGuard lk(global_mtx_);
         auto it = fiber_owner_.find(const_cast<Fiber*>(&f));
         return it == fiber_owner_.end() ? nullptr : it->second;
     }
@@ -278,10 +329,10 @@ private:
         committed,
     };
 
-    bool wake_ready_completions_locked();
-    bool wake_ready_flags_locked();
-    void route_runnable(Fiber* f, WorkerState* owner);
-    void route_runnable_locked(Fiber* f, WorkerState* owner);
+    bool wake_ready_completions_locked() SLUICE_REQUIRES(global_mtx_);
+    bool wake_ready_flags_locked() SLUICE_REQUIRES(global_mtx_);
+    void route_runnable(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
+    void route_runnable_locked(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
     void worker_loop(WorkerState* ws);
     // E9-CORRECTIVE: one internal run implementation parameterized by
     // RunMode. The worker loop reads run_mode_ to select the idle action
@@ -305,7 +356,7 @@ private:
     // exist with no outstanding backend op (MW-S3). ctx_.outstanding()
     // acquires access_mtx_ internally; global_mtx_→access_mtx_ is the
     // accepted lock order.
-    MwState classify_locked() const;
+    MwState classify_locked() const SLUICE_REQUIRES(global_mtx_);
 
     // Test seam for E7-T11 (deterministic MW-S2 admission race). When set,
     // the worker that reaches Phase-B commit pauses BEFORE the final
@@ -339,10 +390,21 @@ private:
     AsyncIoContext& ctx_;
 
     // Global coordination state (protected by global_mtx_).
-    mutable std::mutex global_mtx_;
-    std::unordered_map<void*, WaitReg> waiting_size_{};
-    std::unordered_map<void*, WaitReg> waiting_void_{};
-    std::unordered_map<const std::atomic<bool>*, WaitReg> waiting_ready_{};
+    mutable Mutex global_mtx_;
+    std::unordered_map<void*, WaitReg> waiting_size_ SLUICE_GUARDED_BY(global_mtx_){};
+    std::unordered_map<void*, WaitReg> waiting_void_ SLUICE_GUARDED_BY(global_mtx_){};
+    std::unordered_map<const std::atomic<bool>*, WaitReg> waiting_ready_ SLUICE_GUARDED_BY(global_mtx_){};
+
+    // E10: count of fibers suspended on a WaitQueue via await_wait (protected
+    // by global_mtx_). Incremented on registration, decremented on resolution
+    // (wake_wait_one winner OR cancel_wait winner). Counted by classify_locked
+    // exactly like the other wait maps so MW-S3 (unresolved waits) is correct.
+    // We track a COUNT (not a per-node map) because a WaitQueue owns its own
+    // intrusive node list; the scheduler only needs to know SOME E10 wait is
+    // unresolved for MW classification, and the per-node fiber is recovered
+    // from the winning node at resolution time.
+    std::size_t waiting_waitq_count_ SLUICE_GUARDED_BY(global_mtx_){0};
+
 
     // E8: the RUNNABLE ownership / steal-consistency record for each Fiber
     // that has been spawned (protected by global_mtx_). It records which
@@ -358,12 +420,12 @@ private:
     // WaitReg.owner, not here). See ADR §9.3.5.1 + docs/e8-formal-corrective.
     // For E7-pinned Fibers this is write-once (spawn sets it; no steal
     // occurs) and is behaviorally identical to E7; E8 only diverges on steal.
-    std::unordered_map<Fiber*, WorkerState*> fiber_owner_{};
+    std::unordered_map<Fiber*, WorkerState*> fiber_owner_ SLUICE_GUARDED_BY(global_mtx_){};
 
     // Global runnable queue for pre-start assignment (E7-A; E7-B will make this
     // per-worker). Fibers assigned here are picked up by workers in FIFO order.
-    std::deque<Fiber*> pending_spawn_{};
-    unsigned next_spawn_worker_ = 0;
+    std::deque<Fiber*> pending_spawn_ SLUICE_GUARDED_BY(global_mtx_){};
+    unsigned next_spawn_worker_ SLUICE_GUARDED_BY(global_mtx_) = 0;
 
     // Worker state storage. Owned by the Scheduler (address-stable for the
     // Scheduler's lifetime — wait registrations and inboxes reference these).
@@ -389,8 +451,8 @@ private:
     // global_mtx_; route_runnable_locked demotes to NONE. Only the COMMITTED
     // participant may enter ctx_.wait_one(), and only AFTER releasing
     // global_mtx_.
-    AdmissionState admission_{AdmissionState::none};
-    unsigned admission_owner_ = static_cast<unsigned>(-1);  // worker id of candidate/committed
+    AdmissionState admission_ SLUICE_GUARDED_BY(global_mtx_){AdmissionState::none};
+    unsigned admission_owner_ SLUICE_GUARDED_BY(global_mtx_) = static_cast<unsigned>(-1);  // worker id of candidate/committed
 
     // ---- E9 wake source (ADR §9.4.5) ----
     // The unified Scheduler wake source. wake_epoch_ is a monotonically
@@ -402,9 +464,9 @@ private:
     // the SCHEDULER-domain park. Lock order: global_mtx_ may be held while
     // acquiring wake_mtx_ (signal_wake_locked does so); the reverse is never
     // done.
-    std::mutex wake_mtx_;
-    std::condition_variable wake_cv_;
-    std::uint64_t wake_epoch_{0};
+    Mutex wake_mtx_;
+    std::condition_variable_any wake_cv_;
+    std::uint64_t wake_epoch_ SLUICE_GUARDED_BY(wake_mtx_){0};
 
     // The wake control block, weak-referenced by every issued
     // SchedulerWakeHandle so a post-destruction notify() is a safe no-op.
@@ -423,14 +485,28 @@ private:
     // bounded timeout, defense-in-depth). Records observed_epoch_ under
     // wake_mtx_ before sleeping. Returns when wake-worthy state is observed.
     // ws is the calling worker. Called with global_mtx_ RELEASED.
-    void park_on_wake_source(WorkerState* ws);
+    // TSA-SUPPRESS-001: uses std::unique_lock + cv.wait (release-wait-reacquire
+    // pattern).  Clang TSA cannot track unique_lock capability semantics through
+    // condition_variable::wait.  The production lock fact (wake_epoch_ is
+    // protected by wake_mtx_) is already independently accepted and proven in E9.
+    void park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANALYSIS;
 
-    // Predicate: is there currently an external-wake-capable wait registered
-    // (a ready-flag wait)? When true, the MW-S2 participant must NOT enter a
-    // backend-only ctx_.wait_one() — it parks on the SCHEDULER domain instead
-    // (the MIXED-WAKE fix, ADR §9.4.7). Call with global_mtx_ held.
-    bool external_wake_possible_locked() const {
-        return !waiting_ready_.empty();
+    // Predicate: is there currently an externally-resolvable wait registered —
+    // one whose resolution arrives from OUTSIDE the worker loop (a ready-flag
+    // wait, OR a WaitQueue wait resolved via wake_wait_one/cancel_wait)? Such
+    // resolutions reach signal_wake_locked (the unified Scheduler wake source),
+    // NOT a backend reap, so the worker MUST park on the SCHEDULER domain to
+    // observe them. When true, the MW-S2 participant must NOT enter a backend-
+    // only ctx_.wait_one() — it parks on the SCHEDULER domain instead (the
+    // MIXED-WAKE fix, ADR §9.4.7). Call with global_mtx_ held.
+    //
+    // E10-CORRECTIVE C1: a WaitQueue wait is externally resolvable exactly like
+    // a ready-flag wait (wake_wait_one/cancel_wait run under global_mtx_ +
+    // q.mtx() and reach signal_wake_locked via route_runnable_locked). It MUST
+    // participate in this classification, or a Live run could park/terminate on
+    // a source that cannot observe the wait's resolution (C1 park-domain gap).
+    bool external_wake_possible_locked() const SLUICE_REQUIRES(global_mtx_) {
+        return !waiting_ready_.empty() || waiting_waitq_count_ > 0;
     }
 };
 

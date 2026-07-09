@@ -12,6 +12,13 @@ end
 set_languages("c++20")
 set_warnings("all", "error")
 
+-- CPP-STATIC-1: Clang Thread Safety Analysis gate.
+-- The TSA flags are added only for the sluice_async target (pilot scope),
+-- via unconditional add_cxxflags on that target below.
+-- GCC does not recognize -Wthread-safety and would error on it, so xmake
+-- filters the flag out of the GCC compile command (the gate is Clang-only).
+-- For non-Clang compilers the annotation macros additionally erase to no-ops.
+
 -- Core static library: Reader/Writer abstractions + wrappers.
 target("sluice_core")
     set_kind("static")
@@ -29,6 +36,12 @@ target("sluice_async")
     add_includedirs("include", {public = true})
     add_deps("sluice_core")
     add_files("src/async/*.cpp")
+    -- CPP-STATIC-1: Clang TSA gate.  Add TSA flags for this target.
+    -- The flags are Clang-specific; GCC does not recognize -Wthread-safety
+    -- and xmake filters it out of the GCC compile command, so the gate is
+    -- Clang-only and the GCC build is unaffected.
+    add_cxxflags("-Wthread-safety")
+    add_cxxflags("-Werror=thread-safety")
 
 -- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
 -- Also contains BlockingIoPool (021S), the bounded execution model for the
@@ -750,5 +763,97 @@ do
             add_includedirs("include")
             add_files(p)
             add_tests("e9_wake_handle_lifetime_test")
+    end
+end
+
+-- e10_wait_queue_test — WaitNode/WaitQueue cancellation-safe protocol
+-- (sluice-CORE-E10). Pure-protocol tests (no scheduler): wake-vs-cancel single
+-- winner, repeated wake/cancel, wake-after-cancel/cancel-after-wake, unlink
+-- exactly-once, multiple waiters, node-reuse rejection, destruction invariant,
+-- and a high-iteration wake||cancel stress. Header-only WaitNode/WaitQueue, so
+-- this links sluice_async only to stay consistent with the async test family.
+do
+    local p = "tests/e10_wait_queue_test.cpp"
+    if os.isfile(p) then
+        target("e10_wait_queue_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_wait_queue_test")
+    end
+end
+
+-- e10_scheduler_wait_test — Scheduler integration of WaitNode/WaitQueue
+-- (sluice-CORE-E10). Integration tests with real fibers: C10 exactly-one winner
+-- makes the fiber runnable via the canonical wake seam (wake + cancel + race),
+-- C11 Drain interaction (MW-S3 wait returns STALLED, no revival of E9 hang).
+-- Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e10_scheduler_wait_test.cpp"
+    if os.isfile(p) then
+        target("e10_scheduler_wait_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_scheduler_wait_test")
+    end
+end
+
+-- e10_corrective_c1_test — E10-CORRECTIVE C1 external wake-domain classification
+-- regression (sluice-CORE-E10). Proves a Live run with an externally-resolvable
+-- WaitQueue wait parks (not STALLED) so an external wake_wait_one/cancel_wait
+-- resumes the waiter. Fails on uncorrected 0debd21.
+do
+    local p = "tests/e10_corrective_c1_test.cpp"
+    if os.isfile(p) then
+        target("e10_corrective_c1_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_corrective_c1_test")
+    end
+end
+
+-- e10_corrective_c2_c3_test — E10-CORRECTIVE C2 resolution-authority bypass
+-- (structural: public wake_one/cancel/cancel_all are not expressible) + C3
+-- cancel_all surface (REMOVED) + T4 non-bypass count consistency. Compile-time
+-- static_assert + runtime mirror + fiber integration.
+do
+    local p = "tests/e10_corrective_c2_c3_test.cpp"
+    if os.isfile(p) then
+        target("e10_corrective_c2_c3_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_corrective_c2_c3_test")
+    end
+end
+
+-- e10_corrective_c5_test — E10-CORRECTIVE C5 middle-node concurrent unlink
+-- topology stress (A<->B<->C; concurrent wake-head-A || cancel-middle-B). Locks
+-- in the doubly-linked list topology invariants at a meaningful stress count.
+do
+    local p = "tests/e10_corrective_c5_test.cpp"
+    if os.isfile(p) then
+        target("e10_corrective_c5_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_corrective_c5_test")
     end
 end

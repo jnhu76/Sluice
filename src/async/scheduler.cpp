@@ -64,9 +64,9 @@ struct SchedulerWakeHandle::Control {
     // ownership. A stale handle may survive Scheduler destruction; its later
     // notify() observes alive=false and returns false (a safe no-op). See
     // docs/spec/e9_wake_handle_lifetime/ for the TLA+ proof.
-    std::mutex mtx;
-    Scheduler* scheduler{nullptr};
-    bool alive{false};
+    Mutex mtx;
+    Scheduler* scheduler SLUICE_GUARDED_BY(mtx){nullptr};
+    bool alive SLUICE_GUARDED_BY(mtx){false};
 
     // E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13). TEST-ONLY.
     // When armed, notify() pauses at the exact causal boundary — AFTER it
@@ -113,7 +113,7 @@ Scheduler::~Scheduler() {
     // it, but `alive` is now permanently false.
     if (wake_control_) {
         {
-            std::lock_guard<std::mutex> lk(wake_control_->mtx);
+            LockGuard lk(wake_control_->mtx);
             wake_control_->alive = false;
             wake_control_->scheduler = nullptr;
         }
@@ -134,7 +134,7 @@ bool SchedulerWakeHandle::notify() noexcept {
     // returns. This closes the snapshot-before-callback UAF window where
     // a previously-released lease let the destructor destroy members
     // between snapshot and callback. See docs/spec/e9_wake_handle_lifetime/.
-    std::lock_guard<std::mutex> lk(control_->mtx);
+    LockGuard lk(control_->mtx);
     if (!control_->alive || control_->scheduler == nullptr) {
         return false;  // post-destruction / unbound: no-op
     }
@@ -162,7 +162,7 @@ bool SchedulerWakeHandle::notify() noexcept {
 
 bool SchedulerWakeHandle::bound() const noexcept {
     if (!control_) return false;
-    std::lock_guard<std::mutex> lk(control_->mtx);
+    LockGuard lk(control_->mtx);
     return control_->alive && control_->scheduler != nullptr;
 }
 
@@ -201,7 +201,7 @@ SchedulerWakeHandle Scheduler::make_wake_handle() {
     // handle reads these under Control::mtx; an unlocked write here would race
     // it (and TSan flags it).
     {
-        std::lock_guard<std::mutex> lk(wake_control_->mtx);
+        LockGuard lk(wake_control_->mtx);
         wake_control_->scheduler = this;
         wake_control_->alive = true;
     }
@@ -221,13 +221,19 @@ void Scheduler::signal_wake_locked() {
     // window; persistent state is the lost-wake authority (ADR §9.4.5).
     // Safe to call with global_mtx_ held (we only acquire wake_mtx_).
     {
-        std::lock_guard<std::mutex> lk(wake_mtx_);
+        LockGuard lk(wake_mtx_);
         ++wake_epoch_;
     }
     wake_cv_.notify_all();
 }
 
-void Scheduler::park_on_wake_source(WorkerState* ws) {
+// TSA-SUPPRESS-001: park_on_wake_source uses std::unique_lock + cv.wait
+// (release-wait-reacquire pattern).  Clang TSA cannot track unique_lock
+// capability semantics through condition_variable::wait.  The production
+// lock fact (wake_epoch_ is protected by wake_mtx_) is already independently
+// accepted and proven in E9.  Suppression is attached to the smallest exact
+// function.
+void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANALYSIS {
     // Park the calling Worker on the SCHEDULER wake domain (ADR §9.4.5).
     // Record the observed epoch under wake_mtx_, then cv.wait_for with a
     // BOUNDED timeout. The timeout is LOAD-BEARING in MIXED-WAKE: it is the
@@ -264,9 +270,9 @@ void Scheduler::park_on_wake_source(WorkerState* ws) {
         park_seam_commit_paused_ = false;
     }
 
-    std::unique_lock<std::mutex> lk(wake_mtx_);
+    std::unique_lock<Mutex> lk(wake_mtx_);
     ws->observed_epoch = wake_epoch_;  // recorded AFTER any seam publication
-    wake_cv_.wait_for(lk, std::chrono::milliseconds(2), [&] {
+    wake_cv_.wait_for(lk, std::chrono::milliseconds(2), [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
         if (wake_epoch_ != ws->observed_epoch ||
             global_terminate_.load(std::memory_order_acquire)) {
             return true;
@@ -300,7 +306,7 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
     // across workers (required for E7-T1/T2 concurrency tests). If no workers
     // exist yet (pre-run), use pending_spawn_ which will be distributed when
     // run() creates workers.
-    std::lock_guard<std::mutex> lk(global_mtx_);
+    LockGuard lk(global_mtx_);
     if (!workers_.empty()) {
         unsigned target = next_spawn_worker_++ % static_cast<unsigned>(workers_.size());
         std::lock_guard<std::mutex> wlk(workers_[target]->inbox_mtx);
@@ -322,7 +328,7 @@ void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
     // runnable didn't happen). Records the owner as worker_id. Narrow
     // deterministic-test hook (see header).
     if (!fiber.make_runnable()) return;
-    std::lock_guard<std::mutex> lk(global_mtx_);
+    LockGuard lk(global_mtx_);
     if (worker_id >= workers_.size()) {
         // Workers not created yet — fall back to pending_spawn_; the run()
         // distribute will assign round-robin (test must call spawn_on after
@@ -386,7 +392,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
 
     // Distribute any pending_spawn_ across workers round-robin.
     {
-        std::lock_guard<std::mutex> lk(global_mtx_);
+        LockGuard lk(global_mtx_);
         unsigned w = 0;
         while (!pending_spawn_.empty()) {
             auto* f = pending_spawn_.front();
@@ -399,16 +405,15 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
             tgt->inbox_cv.notify_one();
             ++w;
         }
+        next_spawn_worker_ = 0;
+        admission_ = AdmissionState::none;
+        admission_owner_ = static_cast<unsigned>(-1);
     }
-    next_spawn_worker_ = 0;
-
     in_coordinated_run_ = true;
     active_worker_count_.store(worker_count, std::memory_order_release);
     running_fiber_count_.store(0, std::memory_order_release);
     idle_workers_.store(0, std::memory_order_release);
     global_terminate_.store(false, std::memory_order_release);
-    admission_ = AdmissionState::none;
-    admission_owner_ = static_cast<unsigned>(-1);
     // NOTE: admission_seam_* is NOT reset here — it is test-controlled state
     // that must persist across the run() boundary (T11 arms it before run()).
 
@@ -469,7 +474,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
             }
         }
         if (!f) {
-            std::lock_guard<std::mutex> lk(global_mtx_);
+            LockGuard lk(global_mtx_);
             if (!pending_spawn_.empty()) {
                 f = pending_spawn_.front();
                 pending_spawn_.pop_front();
@@ -497,7 +502,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
         // 2. Readiness drain + classify under global_mtx_.
         MwState state;
         {
-            std::lock_guard<std::mutex> lk(global_mtx_);
+            LockGuard lk(global_mtx_);
             (void)wake_ready_completions_locked();
             (void)wake_ready_flags_locked();
             state = classify_locked();
@@ -527,7 +532,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
             //          idle worker (deterministic election: worker 0).
             bool elected = false;
             {
-                std::lock_guard<std::mutex> lk(global_mtx_);
+                LockGuard lk(global_mtx_);
                 // Re-classify under the lock — state may have changed since
                 // the unlocked classify above.
                 if (classify_locked() == MwState::mw_s2 &&
@@ -554,40 +559,46 @@ void Scheduler::worker_loop(WorkerState* ws) {
                     admission_seam_paused_ = false;
                 }
 
-                std::lock_guard<std::mutex> lk(global_mtx_);
-                // Demoted by a concurrent route? Then abandon admission.
-                if (admission_ != AdmissionState::candidate ||
-                    admission_owner_ != ws->id) {
-                    // Another path cancelled us. Loop.
-                    continue;
+                bool phase_b_committed = false;
+                {
+                    LockGuard lk(global_mtx_);
+                    // Demoted by a concurrent route? Then abandon admission.
+                    if (admission_ != AdmissionState::candidate ||
+                        admission_owner_ != ws->id) {
+                        // Another path cancelled us. Loop.
+                        continue;
+                    }
+                    // Re-drain readiness + reclassify.
+                    (void)wake_ready_completions_locked();
+                    (void)wake_ready_flags_locked();
+                    MwState s2 = classify_locked();
+                    if (s2 != MwState::mw_s2) {
+                        // State changed (MW-S1 via routed work, or MW-S3 via
+                        // outstanding drop). Cancel candidate; do NOT enter wait_one.
+                        admission_ = AdmissionState::none;
+                        admission_owner_ = static_cast<unsigned>(-1);
+                        continue;
+                    }
+                    // Commit: this is the single MW-S2 progress participant.
+                    admission_ = AdmissionState::committed;
+                    phase_b_committed = true;
+                    // E9 MIXED-WAKE: capture the park-domain decision NOW (under
+                    // global_mtx_). If an external-wake-capable wait is registered,
+                    // the participant must NOT enter a backend-only ctx_.wait_one()
+                    // (external-ready cannot interrupt it). It parks on the
+                    // SCHEDULER wake domain instead, so external-ready can wake it.
+                    // Refinement map: TLA+ EnterPhysicalPark domain selection.
+                    ws->park_domain = external_wake_possible_locked()
+                                          ? WorkerState::ParkDomain::Scheduler
+                                          : WorkerState::ParkDomain::Backend;
                 }
-                // Re-drain readiness + reclassify.
-                (void)wake_ready_completions_locked();
-                (void)wake_ready_flags_locked();
-                MwState s2 = classify_locked();
-                if (s2 != MwState::mw_s2) {
-                    // State changed (MW-S1 via routed work, or MW-S3 via
-                    // outstanding drop). Cancel candidate; do NOT enter wait_one.
-                    admission_ = AdmissionState::none;
-                    admission_owner_ = static_cast<unsigned>(-1);
-                    continue;
-                }
-                // Commit: this is the single MW-S2 progress participant.
-                admission_ = AdmissionState::committed;
-                // E9 MIXED-WAKE: capture the park-domain decision NOW (under
-                // global_mtx_). If an external-wake-capable wait is registered,
-                // the participant must NOT enter a backend-only ctx_.wait_one()
-                // (external-ready cannot interrupt it). It parks on the
-                // SCHEDULER wake domain instead, so external-ready can wake it.
-                // Refinement map: TLA+ EnterPhysicalPark domain selection.
-                ws->park_domain = external_wake_possible_locked()
-                                      ? WorkerState::ParkDomain::Scheduler
-                                      : WorkerState::ParkDomain::Backend;
-            }
 
-            // Phase C: release global_mtx_ (held only inside the blocks above)
-            // and enter wait_one. Only the committed participant reaches here.
-            if (admission_ == AdmissionState::committed && admission_owner_ == ws->id) {
+                // Phase C: release global_mtx_ (held only inside the blocks above)
+                // and enter wait_one. Only the committed participant reaches here.
+                // phase_b_committed was captured under the lock; reading it
+                // outside the lock is safe because only the committed worker can
+                // change admission_ from committed (the state machine invariant).
+                if (phase_b_committed) {
                 // E9 MIXED-WAKE domain split.
                 if (ws->park_domain == WorkerState::ParkDomain::Scheduler) {
                     // External-wake-capable wait registered: park on the wake
@@ -599,7 +610,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
                     park_on_wake_source(ws);
                     // Phase D: reacquire global_mtx_, clear admission, drain.
                     {
-                        std::lock_guard<std::mutex> lk(global_mtx_);
+                        LockGuard lk(global_mtx_);
                         admission_ = AdmissionState::none;
                         admission_owner_ = static_cast<unsigned>(-1);
                         (void)wake_ready_completions_locked();
@@ -631,7 +642,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
 
                 // Phase D: reacquire global_mtx_, clear admission, drain.
                 {
-                    std::lock_guard<std::mutex> lk(global_mtx_);
+                    LockGuard lk(global_mtx_);
                     admission_ = AdmissionState::none;
                     admission_owner_ = static_cast<unsigned>(-1);
                     (void)wake_ready_completions_locked();
@@ -660,6 +671,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 idle_workers_.store(0, std::memory_order_release);
                 continue;
             }
+        }  // if (elected)
 
             // Not elected and not committed: another worker is the candidate/
             // committed participant. Fall through to idle parking.
@@ -669,7 +681,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
         // to coordinated termination. The last worker to go idle does a FINAL
         // re-check under global_mtx_ before setting global_terminate_.
         {
-            std::lock_guard<std::mutex> lk(global_mtx_);
+            LockGuard lk(global_mtx_);
             // Cancel any stale admission if we're terminating — wait_one is
             // undefined past run end. (admission_ should already be none here
             // for non-elected workers.)
@@ -878,6 +890,7 @@ Scheduler::MwState Scheduler::classify_locked() const {
             if (!w->local_runnable.empty()) { any_runnable = true; break; }
         }
     }
+    (void)per_worker_runnable;  // accumulated for diagnostics; silence unused warning
     const bool any_running =
         running_fiber_count_.load(std::memory_order_acquire) > 0;
     if (any_runnable || any_running) return MwState::mw_s1;
@@ -889,7 +902,8 @@ Scheduler::MwState Scheduler::classify_locked() const {
     if (any_outstanding) return MwState::mw_s2;
 
     const bool any_wait =
-        !waiting_size_.empty() || !waiting_void_.empty() || !waiting_ready_.empty();
+        !waiting_size_.empty() || !waiting_void_.empty() || !waiting_ready_.empty() ||
+        waiting_waitq_count_ > 0;
     if (any_wait) return MwState::mw_s3_unresolved;
 
     return MwState::quiescent;
@@ -909,7 +923,7 @@ void Scheduler::await_completion_size(Completion<std::size_t>& c) {
     // outside. If the Completion is already ready under the lock, undo the
     // speculative registration and continue running (no make_waiting).
     {
-        std::lock_guard<std::mutex> lk(global_mtx_);
+        LockGuard lk(global_mtx_);
         waiting_size_[static_cast<void*>(&c)] = {me, ws};
         if (c.ready()) {
             waiting_size_.erase(static_cast<void*>(&c));
@@ -929,7 +943,7 @@ void Scheduler::await_completion_void(Completion<void>& c) {
     // See await_completion_size: register + recheck + make_waiting under the
     // wake-path lock; only context_switch is outside.
     {
-        std::lock_guard<std::mutex> lk(global_mtx_);
+        LockGuard lk(global_mtx_);
         waiting_void_[static_cast<void*>(&c)] = {me, ws};
         if (c.ready()) {
             waiting_void_.erase(static_cast<void*>(&c));
@@ -952,7 +966,7 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     // shape did the recheck and make_waiting outside the lock, racing a wake
     // that landed between register-release and recheck (lost wake / park).
     {
-        std::lock_guard<std::mutex> lk(global_mtx_);
+        LockGuard lk(global_mtx_);
         waiting_ready_[&ready] = {me, ws};
         if (ready.load(std::memory_order::acquire)) {
             waiting_ready_.erase(&ready);
@@ -966,6 +980,89 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     (void)fiber_ctx::context_switch(&s);
 }
 
+void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
+    // E10 WaitQueue suspension seam. Mirrors await_ready_flag's lost-wake-closed
+    // idiom (commit 422036c): register + recheck + make_waiting are ONE atomic
+    // transition w.r.t. the wake path (wake_wait_one / cancel_wait run under
+    // global_mtx_); only context_switch is outside. The queue protocol itself
+    // creates no wake-before-suspend loss — the register_ CAS (under q.mtx_,
+    // taken inside global_mtx_) publishes membership before make_waiting.
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
+    // The fiber handle is recorded on the node so the winner resolver can route
+    // the resumed fiber without a per-node scheduler map.
+    {
+        // Register into the queue AND record the unresolved-wait count under one
+        // critical section. q.mtx() is the structural authority (§9); global_mtx_
+        // is the scheduler coordination domain. Lock order: global_mtx_ then
+        // q.mtx() (consistent with global_mtx_->inbox_mtx in route_runnable).
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(q.mtx());
+        if (!q.register_wait_locked(node, me)) {
+            // Node was already registered or terminal (C8): a contract violation.
+            // Do not suspend; return to the caller with the node untouched.
+            return;
+        }
+        ++waiting_waitq_count_;
+        // Recheck: if the node was already resolved concurrently (it cannot be,
+        // since register_wait_locked just moved it to Registered under both
+        // locks and every resolver takes global_mtx_), undo and do not suspend.
+        // This is defense-in-depth mirroring await_ready_flag's recheck.
+        if (node.is_terminal()) {
+            q.unlink_locked(node);
+            --waiting_waitq_count_;
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+}
+
+bool Scheduler::wake_wait_one(WaitQueue& q) {
+    // Resolve the FIFO head of `q` with Woken and route the winner's fiber
+    // through the canonical wake seam (route_runnable_locked). The winner is
+    // the unique resolver (§2/§7): the resolve CAS under q.mtx_ is the
+    // authority, and unlink happens in the same critical section. The loser
+    // (e.g. a concurrent cancel of the head) returns null and this is a no-op.
+    //
+    // make_runnable + route_runnable_locked run under global_mtx_ (the wake
+    // path's coordination domain), exactly like wake_ready_flags_locked. This
+    // is the single canonical runnable-enqueue seam (§8).
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(q.mtx());
+    WaitNode* won = q.wake_one_locked();
+    if (won == nullptr) return false;  // empty, or head lost to a cancel
+    Fiber* f = won->fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
+    // succeeded. The node is terminal; make_runnable is the publication guard.
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+        return true;
+    }
+    return false;
+}
+
+bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
+    // Resolve `node` with Cancelled and route the winner's fiber. E10 cancel is
+    // wait-cancellation ONLY (not task/fiber/I/O cancellation). The winner is
+    // determined by the same resolve CAS authority as wake (§2/§7): a losing
+    // cancel (node already Woken) returns false and does nothing.
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(q.mtx());
+    if (!q.cancel_locked(node)) return false;  // already terminal (loser)
+    Fiber* f = node.fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+        return true;
+    }
+    return false;
+}
+
 void Scheduler::attach_ready_wake(const std::atomic<bool>& ready,
                                   SchedulerWakeHandle& wh) {
     // Validate that `ready` is currently registered as an external-wake wait.
@@ -977,7 +1074,7 @@ void Scheduler::attach_ready_wake(const std::atomic<bool>& ready,
     // attach, signal now so a Worker about to park is woken immediately.
     bool need_signal = false;
     {
-        std::lock_guard<std::mutex> lk(global_mtx_);
+        LockGuard lk(global_mtx_);
         auto it = waiting_ready_.find(&ready);
         if (it == waiting_ready_.end()) {
             // Not registered (already drained, or wrong caller). No-op.
@@ -1000,7 +1097,7 @@ void Scheduler::attach_ready_wake(const std::atomic<bool>& ready,
 std::size_t Scheduler::runnable_count() const {
     std::size_t total = 0;
     {
-        std::lock_guard<std::mutex> lk(global_mtx_);
+        LockGuard lk(global_mtx_);
         total += pending_spawn_.size();
     }
     for (auto& w : workers_) {
@@ -1026,7 +1123,7 @@ bool Scheduler::try_steal(WorkerState* thief) {
     // state is observable.
     if (workers_.size() <= 1) return false;  // nothing to steal from
 
-    std::lock_guard<std::mutex> lk(global_mtx_);
+    LockGuard lk(global_mtx_);
     // Round-robin victim starting point keyed on thief id to spread load.
     unsigned n = static_cast<unsigned>(workers_.size());
     for (unsigned k = 1; k < n; ++k) {
