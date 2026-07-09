@@ -889,7 +889,8 @@ Scheduler::MwState Scheduler::classify_locked() const {
     if (any_outstanding) return MwState::mw_s2;
 
     const bool any_wait =
-        !waiting_size_.empty() || !waiting_void_.empty() || !waiting_ready_.empty();
+        !waiting_size_.empty() || !waiting_void_.empty() || !waiting_ready_.empty() ||
+        waiting_waitq_count_ > 0;
     if (any_wait) return MwState::mw_s3_unresolved;
 
     return MwState::quiescent;
@@ -964,6 +965,89 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+}
+
+void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
+    // E10 WaitQueue suspension seam. Mirrors await_ready_flag's lost-wake-closed
+    // idiom (commit 422036c): register + recheck + make_waiting are ONE atomic
+    // transition w.r.t. the wake path (wake_wait_one / cancel_wait run under
+    // global_mtx_); only context_switch is outside. The queue protocol itself
+    // creates no wake-before-suspend loss — the register_ CAS (under q.mtx_,
+    // taken inside global_mtx_) publishes membership before make_waiting.
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
+    // The fiber handle is recorded on the node so the winner resolver can route
+    // the resumed fiber without a per-node scheduler map.
+    {
+        // Register into the queue AND record the unresolved-wait count under one
+        // critical section. q.mtx() is the structural authority (§9); global_mtx_
+        // is the scheduler coordination domain. Lock order: global_mtx_ then
+        // q.mtx() (consistent with global_mtx_->inbox_mtx in route_runnable).
+        std::lock_guard<std::mutex> lk(global_mtx_);
+        std::lock_guard<std::mutex> qlk(q.mtx());
+        if (!q.register_wait_locked(node, me)) {
+            // Node was already registered or terminal (C8): a contract violation.
+            // Do not suspend; return to the caller with the node untouched.
+            return;
+        }
+        ++waiting_waitq_count_;
+        // Recheck: if the node was already resolved concurrently (it cannot be,
+        // since register_wait_locked just moved it to Registered under both
+        // locks and every resolver takes global_mtx_), undo and do not suspend.
+        // This is defense-in-depth mirroring await_ready_flag's recheck.
+        if (node.is_terminal()) {
+            q.unlink_locked(node);
+            --waiting_waitq_count_;
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+}
+
+bool Scheduler::wake_wait_one(WaitQueue& q) {
+    // Resolve the FIFO head of `q` with Woken and route the winner's fiber
+    // through the canonical wake seam (route_runnable_locked). The winner is
+    // the unique resolver (§2/§7): the resolve CAS under q.mtx_ is the
+    // authority, and unlink happens in the same critical section. The loser
+    // (e.g. a concurrent cancel of the head) returns null and this is a no-op.
+    //
+    // make_runnable + route_runnable_locked run under global_mtx_ (the wake
+    // path's coordination domain), exactly like wake_ready_flags_locked. This
+    // is the single canonical runnable-enqueue seam (§8).
+    std::lock_guard<std::mutex> lk(global_mtx_);
+    std::lock_guard<std::mutex> qlk(q.mtx());
+    WaitNode* won = q.wake_one_locked();
+    if (won == nullptr) return false;  // empty, or head lost to a cancel
+    Fiber* f = won->fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
+    // succeeded. The node is terminal; make_runnable is the publication guard.
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+        return true;
+    }
+    return false;
+}
+
+bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
+    // Resolve `node` with Cancelled and route the winner's fiber. E10 cancel is
+    // wait-cancellation ONLY (not task/fiber/I/O cancellation). The winner is
+    // determined by the same resolve CAS authority as wake (§2/§7): a losing
+    // cancel (node already Woken) returns false and does nothing.
+    std::lock_guard<std::mutex> lk(global_mtx_);
+    std::lock_guard<std::mutex> qlk(q.mtx());
+    if (!q.cancel_locked(node)) return false;  // already terminal (loser)
+    Fiber* f = node.fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+        return true;
+    }
+    return false;
 }
 
 void Scheduler::attach_ready_wake(const std::atomic<bool>& ready,

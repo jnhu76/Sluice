@@ -752,3 +752,42 @@ do
             add_tests("e9_wake_handle_lifetime_test")
     end
 end
+
+-- e10_wait_queue_test — WaitNode/WaitQueue cancellation-safe protocol
+-- (sluice-CORE-E10). Pure-protocol tests (no scheduler): wake-vs-cancel single
+-- winner, repeated wake/cancel, wake-after-cancel/cancel-after-wake, unlink
+-- exactly-once, multiple waiters, node-reuse rejection, destruction invariant,
+-- and a high-iteration wake||cancel stress. Header-only WaitNode/WaitQueue, so
+-- this links sluice_async only to stay consistent with the async test family.
+do
+    local p = "tests/e10_wait_queue_test.cpp"
+    if os.isfile(p) then
+        target("e10_wait_queue_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_wait_queue_test")
+    end
+end
+
+-- e10_scheduler_wait_test — Scheduler integration of WaitNode/WaitQueue
+-- (sluice-CORE-E10). Integration tests with real fibers: C10 exactly-one winner
+-- makes the fiber runnable via the canonical wake seam (wake + cancel + race),
+-- C11 Drain interaction (MW-S3 wait returns STALLED, no revival of E9 hang).
+-- Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e10_scheduler_wait_test.cpp"
+    if os.isfile(p) then
+        target("e10_scheduler_wait_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e10_scheduler_wait_test")
+    end
+end

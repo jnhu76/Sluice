@@ -12,6 +12,8 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
+#include <sluice/async/wait_node.hpp>
+#include <sluice/async/wait_queue.hpp>
 
 #include <atomic>
 #include <condition_variable>
@@ -192,6 +194,37 @@ public:
     void await_completion_void(Completion<void>& c);
     void await_ready_flag(const std::atomic<bool>& ready);
 
+    // ---- E10 WaitQueue suspension (sluice-CORE-E10) ----
+    // Suspend the calling Fiber on `q`, registering `node`. `node` must be
+    // Detached (fresh) and outlive this call's suspend until it is resumed
+    // (woken or cancelled). The fiber resumes when EXACTLY ONE resolver wins:
+    //   - wake_wait_one(q) resolves the head with Woken, OR
+    //   - cancel_wait(q, node) resolves this node with Cancelled.
+    // The winner transition is the WaitNode resolve CAS (one authority, §2/§7);
+    // the loser performs no second wake. Cancellation here is wait-cancellation
+    // ONLY (not task / I/O cancellation).
+    //
+    // Registration protocol (§4 lost-wake window): mirrors await_ready_flag —
+    // register + recheck + make_waiting are ONE atomic transition w.r.t. the
+    // wake path (wake_wait_one_locked runs under global_mtx_); only
+    // context_switch is outside. If the wait is already resolvable at register
+    // time (e.g. a wake was already delivered), the registration is undone and
+    // the fiber does NOT suspend.
+    void await_wait(WaitQueue& q, WaitNode& node);
+
+    // Resolve the head of `q` with Woken and route the winner's fiber through
+    // the canonical wake seam (route_runnable_locked). Returns true iff a wait
+    // was actually woken by THIS call (exactly one runnable enqueue). Called by
+    // a waker (typically a Fiber or external producer). Safe to call any time.
+    bool wake_wait_one(WaitQueue& q);
+
+    // Resolve `node` (registered in `q`) with Cancelled and route the winner's
+    // fiber. Returns true iff this call won (the node was Registered and is now
+    // Cancelled). A losing call (node already woken) is a no-op. E10 cancel is
+    // wait-cancellation only: it does NOT cancel the task/fiber/I/O op.
+    bool cancel_wait(WaitQueue& q, WaitNode& node);
+
+
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()
     // from an external thread to wake a parked Worker whose wake set includes
@@ -213,7 +246,8 @@ public:
     std::size_t runnable_count() const;
     std::size_t waiting_count() const {
         std::lock_guard<std::mutex> lk(global_mtx_);
-        return waiting_size_.size() + waiting_void_.size() + waiting_ready_.size();
+        return waiting_size_.size() + waiting_void_.size() + waiting_ready_.size() +
+               waiting_waitq_count_;
     }
     std::size_t waiting_ready_count() const {
         std::lock_guard<std::mutex> lk(global_mtx_);
@@ -343,6 +377,17 @@ private:
     std::unordered_map<void*, WaitReg> waiting_size_{};
     std::unordered_map<void*, WaitReg> waiting_void_{};
     std::unordered_map<const std::atomic<bool>*, WaitReg> waiting_ready_{};
+
+    // E10: count of fibers suspended on a WaitQueue via await_wait (protected
+    // by global_mtx_). Incremented on registration, decremented on resolution
+    // (wake_wait_one winner OR cancel_wait winner). Counted by classify_locked
+    // exactly like the other wait maps so MW-S3 (unresolved waits) is correct.
+    // We track a COUNT (not a per-node map) because a WaitQueue owns its own
+    // intrusive node list; the scheduler only needs to know SOME E10 wait is
+    // unresolved for MW classification, and the per-node fiber is recovered
+    // from the winning node at resolution time.
+    std::size_t waiting_waitq_count_{0};
+
 
     // E8: the RUNNABLE ownership / steal-consistency record for each Fiber
     // that has been spawned (protected by global_mtx_). It records which
