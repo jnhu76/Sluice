@@ -96,10 +96,10 @@ ResolveWake(n) ==
     /\ wakeDispatched' = wakeDispatched + 1          \* exactly one scheduler-wake intent
 
 (* THE CANONICAL ONE-WINNER TERMINAL RESOLVER — Cancel. Same authority as Wake;
-   outcome Cancelled. resolvedCount++ but wakeDispatched UNCHANGED is a modeling
-   choice: a cancel also resumes the fiber through the canonical seam in
-   production (cancel_wait -> route_runnable_locked), so it increments
-   wakeDispatched too. *)
+   outcome Cancelled. resolvedCount++ and wakeDispatched++ because a cancel
+   also resumes the fiber through the canonical seam in production
+   (cancel_wait -> route_runnable_locked), so it dispatches exactly one
+   scheduler-wake intent, exactly like ResolveWake. *)
 ResolveCancel(n) ==
     /\ nodeState[n] = "Registered"
     /\ nodeState' = [nodeState EXCEPT ![n] = "Cancelled"]
@@ -166,15 +166,13 @@ InvTerminalNotLinked ==
    total number of winning resolutions (each winner dispatches exactly once;
    losers dispatch zero times). wakeDispatched = Sum resolvedCount. *)
 InvNoDuplicateSchedulerWake ==
-    wakeDispatched = SumOver(resolvedCount)
+    wakeDispatched = SumResolvedCount
 
-(* Helper: sum of resolvedCount over all nodes. *)
-RECURSIVE SumOver(_)
-SumOver(rc) ==
-    LET ns == [n \in Nodes |-> rc[n]]
-    IN IF Nodes = {} THEN 0
-       ELSE LET pick == CHOOSE n \in Nodes : TRUE
-            IN rc[pick] + SumOver([n \in Nodes \ {pick} |-> rc[n]])
+(* Helper: sum of resolvedCount over all nodes. Domain is fixed Nodes = {N0,N1};
+   a direct sum avoids the broken RECURSIVE SumOver that indexed the constant
+   Nodes instead of the function domain (TLC evaluation error on sub-domains). *)
+SumResolvedCount ==
+    resolvedCount[N0] + resolvedCount[N1]
 
 Inv ==
     /\ InvNoDoubleCompletion

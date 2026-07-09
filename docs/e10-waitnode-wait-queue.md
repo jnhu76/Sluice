@@ -147,8 +147,9 @@ concurrently. The condition→wait race is the **caller's** responsibility
 - **FIFO** (matches existing `local_runnable` / `pending_spawn_` discipline; no
   configurable policy).
 
-Operations: `register_wait[_locked]`, `wake_one[_locked]`, `cancel[_locked]`,
-`unlink_locked`, `empty_locked`.
+Operations: `register_wait_locked`, `wake_one_locked`, `cancel_locked`,
+`unlink_locked`, `empty_locked` (all private — see E10-CORRECTIVE-2 below; the
+public `register_wait` was removed).
 
 > **Structural operations are all private (E10-CORRECTIVE-2).** Every
 > WaitQueue structural operation — `register_wait_locked`, `wake_one_locked`,
