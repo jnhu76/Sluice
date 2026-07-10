@@ -8,9 +8,14 @@
 //   IN scope:  one WaitNode lifecycle, one cancellation-safe WaitQueue
 //              protocol, single-wait registration, wake-vs-cancel winner
 //              protocol, safe unlink/removal, one canonical terminal seam.
-//   OUT scope: timers, deadlines, mutex/sem/condvar/event/channel/select/
-//              multi-wait/wait-any/wait-all, I/O/io_uring cancellation, task
-//              cancellation propagation, structured concurrency.
+//              E11 extends the terminal outcomes with `expired` (deadline
+//              expiry), reached ONLY through the Scheduler expiry seam and
+//              the private WaitQueue::expire_locked resolver — still one
+//              resolve_ authority, no second winner protocol.
+//   OUT scope: mutex/sem/condvar/event/channel/select/multi-wait/wait-any/
+//              wait-all, I/O/io_uring cancellation, task cancellation
+//              propagation, structured concurrency, high-level sleep/timerfd
+//              public APIs, timer-wheel optimization.
 //
 // E10 wait cancellation is NOT task cancellation and is NOT I/O operation
 // cancellation. Cancel here means only: resolve THIS registered wait with the
@@ -69,7 +74,10 @@ class Fiber;      // forward (the scheduler-facing handle)
 class WaitQueue;  // forward (friend: link fields + register/detach)
 
 // The terminal outcome of a wait resolution (§2/§6). Repository-native names
-// for the two allowed E10 terminal outcomes.
+// for the allowed terminal outcomes. E10 introduced woken/cancelled; E11 adds
+// `expired` (a monotonic deadline elapsed) as a THIRD terminal outcome that is
+// observably distinct from cancellation and competes for the SAME resolve_
+// authority (no second winner protocol).
 enum class WaitOutcome : std::uint8_t {
     // Not yet terminal (the node is detached or registered but unresolved).
     // Returned by outcome() for a non-terminal node so callers can distinguish.
@@ -81,6 +89,13 @@ enum class WaitOutcome : std::uint8_t {
     // The wait was resolved by cancellation (WaitQueue::cancel). E10 cancel is
     // wait-cancellation only — see the header banner.
     cancelled = 2,
+    // The wait was resolved by a monotonic deadline elapsing (E11
+    // TIMER_EXPIRE). Distinct from cancellation: the deadline elapsed, the
+    // resource did not become ready and the wait was not cancelled. Reached
+    // only through the Scheduler expiry seam (expire_wait) which calls the
+    // private WaitQueue::expire_locked -> resolve_(expired), exactly mirroring
+    // wake/cancel authority. Timeout is NOT cancellation.
+    expired = 3,
 };
 
 // One registered wait. A WaitNode lives inside a single await frame and is
@@ -88,17 +103,18 @@ enum class WaitOutcome : std::uint8_t {
 // non-movable: identity is the object address (the intrusive link fields and
 // the scheduler's wait map key on it), exactly like Completion<T>.
 //
-// State machine (§2):
+// State machine (§2, extended for E11):
 //
 //   Detached ──register──> Registered ─┬─resolve(Woken)─────> Woken      [T]
-//        ▲                              └─resolve(Cancelled)─> Cancelled [T]
+//        ▲                              ├─resolve(Cancelled)─> Cancelled [T]
+//        │                              └─resolve(Expired)───> Expired   [T]
 //
 //   Detached    : initial; never linked. register_() moves to Registered.
 //                 (A node that was never registered may be destroyed.)
 //   Registered  : linked in exactly one WaitQueue; resolvable.
-//   Woken / Cancelled : absorbing terminal states. The winner unlinks the
-//                 node (under the queue mtx_) but the terminal state is kept
-//                 forever so outcome() stays queryable.
+//   Woken / Cancelled / Expired : absorbing terminal states. The winner
+//                 unlinks the node (under the queue mtx_) but the terminal
+//                 state is kept forever so outcome() stays queryable.
 //
 // Who mutates what (§3 ownership):
 //   - state_ : register_()/resolve_() via atomic CAS.
@@ -134,7 +150,7 @@ public:
     }
     bool is_terminal() const noexcept {
         const auto s = state_.load(std::memory_order::acquire);
-        return s == State::woken || s == State::cancelled;
+        return s == State::woken || s == State::cancelled || s == State::expired;
     }
     // The terminal outcome, or WaitOutcome::unresolved if not yet terminal.
     // Acquire so a losing resolver observes the winner's published outcome (§9).
@@ -142,6 +158,7 @@ public:
         const auto s = state_.load(std::memory_order::acquire);
         if (s == State::woken) return WaitOutcome::woken;
         if (s == State::cancelled) return WaitOutcome::cancelled;
+        if (s == State::expired) return WaitOutcome::expired;
         return WaitOutcome::unresolved;
     }
     bool was_woken() const noexcept {
@@ -149,6 +166,11 @@ public:
     }
     bool was_cancelled() const noexcept {
         return state_.load(std::memory_order::acquire) == State::cancelled;
+    }
+    // E11: the wait resolved by a monotonic deadline elapsing (distinct from
+    // cancellation). Lock-free acquire, like was_woken/was_cancelled.
+    bool was_expired() const noexcept {
+        return state_.load(std::memory_order::acquire) == State::expired;
     }
 
     // The opaque scheduler-facing fiber handle (immutable).
@@ -170,13 +192,14 @@ private:
         registered = 1,  // linked in exactly one queue; resolvable
         woken = 2,       // terminal: resolved by wake (absorbing)
         cancelled = 3,   // terminal: resolved by cancel (absorbing)
+        expired = 4,     // terminal: resolved by deadline expiry (E11, absorbing)
     };
 
     // Register this node into `q` (Detached -> Registered) and record the
     // scheduler-facing `fiber` handle. Called by WaitQueue under its mtx_
     // during enqueue. Returns false (no transition) if the node is already
-    // registered or terminal — register is single-shot per wait, which is the
-    // C8 reuse-rejection contract.
+    // registered or terminal (incl. E11's expired) — register is single-shot
+    // per wait, which is the C8 reuse-rejection contract.
     bool register_(WaitQueue* q, Fiber* fiber) noexcept {
         State expected = State::detached;
         if (!state_.compare_exchange_strong(expected, State::registered,
@@ -190,13 +213,20 @@ private:
     }
 
     // The canonical ONE-WINNER terminal resolver (§2 Design Law, §7 Unlink
-    // Law). CAS state_ Registered -> {woken,cancelled}. Returns true ONLY when
-    // this call is the unique winner (CAS succeeded). Every losing caller
-    // returns false and MUST perform no second wake/unlink.
+    // Law). CAS state_ Registered -> {woken,cancelled,expired}. Returns true
+    // ONLY when this call is the unique winner (CAS succeeded). Every losing
+    // caller returns false and MUST perform no second wake/unlink.
+    //
+    // E11: `expired` is a third terminal outcome reached only via the Scheduler
+    // expiry seam. It is outcome-agnostic to the CAS: the same Registered
+    // guard + acq_rel CAS is the single authority. A losing timer expiry (a
+    // node already woken/cancelled/expired) sees the CAS fail and does nothing
+    // — exactly the E10 loser semantic (§6 truth table).
     bool resolve_(WaitOutcome outcome) noexcept {
         State target;
         if (outcome == WaitOutcome::woken) target = State::woken;
         else if (outcome == WaitOutcome::cancelled) target = State::cancelled;
+        else if (outcome == WaitOutcome::expired) target = State::expired;
         else { assert(false && "resolve_ requires a terminal outcome"); return false; }
         State expected = State::registered;
         return state_.compare_exchange_strong(expected, target,

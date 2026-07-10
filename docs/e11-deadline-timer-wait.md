@@ -1,7 +1,8 @@
 # E11 — Deadline / Timer Wait Integration
 
 Normative specification for the E11 deadline / timer wait integration
-(sluice-CORE-E11). **Status: CURRENT FRONTIER** — not yet implemented.
+(sluice-CORE-E11). **Status: [CLOSED]** — implemented (see as-built notes at the
+end of this document and `docs/spec/e11_timer_wait/`).
 
 This document is the authoritative E11 spec. It is written to extend — not
 repeat — the as-built E10 wait protocol documented in
@@ -840,6 +841,54 @@ The required TLA+ negative models produce counterexamples for broken protocols.
 The corrected formal model preserves I1–I7.
 
 Deterministic production tests and applicable sanitizer gates are green.
+
+---
+
+## As-built topology (CLOSED record)
+
+The chosen implementation, satisfying the exit condition above:
+
+```text
+Deadline representation      deadline_t = deadline_tick_t (uint64 monotonic ticks)
+monotonic clock              Scheduler::clock_ (atomic; steady_clock in prod,
+                             controllable logical clock in tests via advance_clock)
+timer container              binary min-heap of TimerRegistration* over a
+                             pointer-stable std::list pool (lazy removal)
+timer registration identity  TimerRegistration control block (heap-allocated,
+                             pool-owned); its address is its identity
+timer registration ownership Scheduler owns timer_pool_ (std::list); each block
+                             lives exactly one wait epoch
+retirement state             TimerRegistration::state_ atomic
+                             (ACTIVE / RETIRED / CONSUMED) — the independently-
+                             stable callback-lifetime authority (I4)
+WaitNode binding             reg.node_ = &WaitNode (captures WaitNode&, never
+                             only Fiber*); immutable after registration
+address/storage reuse protect  expiry gates on reg.state_ (try_claim_expiry)
+                               BEFORE reading node_; non-timer winner retires
+                               reg in the same CS as resolve_ (before the fiber
+                               can resume and destroy its node)
+Scheduler expiry seam        Scheduler::expire_wait (mirrors wake_wait_one /
+                             cancel_wait); driven by pump_deadlines_locked in the
+                             worker loop + advance_clock (test driver)
+timer expiry winner path     pump -> try_claim_expiry(ACTIVE->CONSUMED) ->
+                             global_mtx_ + q.mtx() -> resolve_(expired) ->
+                             unlink_locked -> --waiting_waitq_count_ ->
+                             make_runnable + route_runnable_locked
+non-timer retirement path    wake_wait_one/cancel_wait winner ->
+                             retire_timer_for_node_locked (ACTIVE->RETIRED) in
+                             the SAME CS as resolve_, BEFORE runnable publication
+deadline park topology       park_on_wake_source bounded by an atomic cache of
+                             the earliest ACTIVE deadline (no global_mtx_ taken
+                             under wake_mtx_); worker-loop pump re-establishes
+                             the authoritative deadline set each iteration (I6)
+RunMode integration          external_wake_possible_locked includes
+                             any_active_deadline_locked; Drain leaves a deadline
+                             wait stranded (STALLED) exactly like E9/E10 (no
+                             Drain-hang regression — E11-T14)
+```
+
+Formal model: `docs/spec/e11_timer_wait/` (correct model + NEG-1..NEG-5).
+Deterministic tests: `tests/e11_timer_wait_test.cpp` (E11-T0..T16).
 
 ---
 

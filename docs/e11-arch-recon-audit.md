@@ -351,6 +351,24 @@ loser-path. **No immediate physical timer-wheel removal is required for
 correctness** (it may be done lazily); E10 gives logical invalidation for free
 via the CAS rejection.
 
+> **E11 IMPLEMENTATION CORRECTION (as-built).** The above statement is accurate
+> ONLY while the `WaitNode` object is still alive (its absorbing terminal state
+> rejects a straggling `resolve_` CAS). E11's additional obligation is the
+> **post-destruction** window: once the fiber resumes and its caller-owned
+> `WaitNode` goes out of scope, the node storage is gone, and a physically-
+> retained/lazy timer entry holding a raw `WaitNode*` would dereference freed
+> memory. The absorbing terminal state is **NOT** sufficient protection after
+> the `WaitNode` object has been destroyed. The as-built E11 therefore carries
+> an independently-stable `TimerRegistration` control block whose atomic
+> `state` (ACTIVE/RETIRED/CONSUMED) is the callback-lifetime authority: a
+> non-timer winner retires the registration in the SAME `global_mtx_` CS that
+> resolves the node (before runnable publication), so a straggling expiry
+> observes RETIRED via the registration's OWN state and MUST NOT dereference the
+> destroyed node. This is the load-bearing difference between E10 loser cleanup
+> (immediate, node still alive) and E11 timer-lifetime closure (post-
+> destruction). See `include/sluice/async/timer_registration.hpp` and
+> `docs/spec/e11_timer_wait/` (NEG-4) for the formal proof.
+
 ### Protocol meaning of "deadline cancellation" in this codebase
 
 ```
@@ -363,6 +381,20 @@ outcome via the normal resolution path, which lazily invalidates all
 competing timer registrations for free. It needs no separate
 timer-deletion API.
 ```
+
+> **E11 IMPLEMENTATION CORRECTION (as-built).** The "lazily invalidates ...
+> for free" claim holds ONLY while the `WaitNode` is alive. After the fiber
+> resumes and the node storage is destroyed, the CAS-rejection argument no
+> longer applies (the `state_` is freed). The as-built E11 closes this gap with
+> an independently-stable `TimerRegistration` retirement state
+> (ACTIVE/RETIRED/CONSUMED): a non-timer winner retires the bound registration
+> before runnable publication, and a straggling expiry observes RETIRED on the
+> registration's OWN state (not the node) and MUST NOT dereference it. So
+> "deadline cancellation" = (1) retire the timer registration's callback
+> authority under `global_mtx_` + (2) lazily drop the physical timer entry,
+> where (1) is the load-bearing post-destruction safety and (2) is optional.
+> Distinct from E10: this is E11 callback-lifetime closure, not merely E10
+> logical-loser safety.
 
 ---
 

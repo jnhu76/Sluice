@@ -357,10 +357,15 @@ The Scheduler has a reusable cancellation-safe single-wait queue substrate that 
 
 # E11 — Deadline / Timer Wait Integration
 
-**Status: CURRENT FRONTIER.** Authoritative spec:
+**Status: [CLOSED].** Authoritative spec:
 [`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md).
 Insertion audit: [`docs/e11-arch-recon-audit.md`](e11-arch-recon-audit.md)
 (verdict `E11-READY-WITH-CONSTRAINTS`, implementation GO).
+Formal model: [`docs/spec/e11_timer_wait/`](spec/e11_timer_wait/).
+As-built: `Scheduler::await_wait_deadline` / `expire_wait` /
+`advance_clock`; `TimerRegistration` (independently-stable ACTIVE/RETIRED/CONSUMED
+callback-lifetime control block); `WaitNode::expired` third terminal outcome
+through the same `resolve_` CAS.
 
 ## Why timers come before the synchronization API explosion
 
@@ -791,7 +796,7 @@ E10
 WaitNode and cancellation-safe wait queue core [CLOSED]
 
 E11
-Deadline / timer wait integration   [CURRENT FRONTIER — spec: docs/e11-deadline-timer-wait.md]
+Deadline / timer wait integration   [CLOSED — spec: docs/e11-deadline-timer-wait.md; formal: docs/spec/e11_timer_wait/]
 
 E12
 Async synchronization primitives
