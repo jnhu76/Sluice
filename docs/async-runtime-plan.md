@@ -3,8 +3,9 @@
 ## Current Baseline
 
 Sluice has completed the execution substrate through E9 (Scheduler park/wake
-and external-wake protocol). E8 (runnable ownership transfer / work stealing)
-superseded E7's conservative pinned-Fiber contract.
+and external-wake protocol), and the wait-queue protocol through E10
+(WaitNode + cancellation-safe WaitQueue core). E8 (runnable ownership transfer
+/ work stealing) superseded E7's conservative pinned-Fiber contract.
 
 Current accepted capabilities:
 
@@ -51,10 +52,19 @@ exactly-once runnable publication
 
 Scheduler park/wake + external-wake protocol (E9)
 
+fresh single-use WaitNode per wait epoch (E10)
+one canonical resolve_ CAS resolution authority (E10)
+cancellation-safe WaitQueue (wake vs cancel, one winner) (E10)
+sealed Scheduler-integrated registration/resolution authority (E10-CORRECTIVE-2)
+WaitNode wait-epoch isolation (structural: node identity + absorbing terminal)
+external wake-domain classification closure (E10-CORRECTIVE C1)
+
 TLA+:
     runnable-publication protocol
     multi-worker progress/admission protocol
     runnable ownership-transfer protocol (E8)
+    park/wake liveness + external-wake protocol (E9)
+    WaitNode single-winner + no-double-completion (E10)
 ```
 
 The runtime currently has a mature execution substrate.
@@ -341,15 +351,20 @@ at most one runnable publication
 
 ## Exit condition
 
-The Scheduler has a reusable cancellation-safe single-wait queue substrate that does not depend on a particular synchronization primitive.
+The Scheduler has a reusable cancellation-safe single-wait queue substrate that does not depend on a particular synchronization primitive. **[CLOSED — `0debd21` / `dbabd21` / `3cd17c6`; as-built: `docs/e10-waitnode-wait-queue.md`]**
 
 ---
 
 # E11 — Deadline / Timer Wait Integration
 
+**Status: CURRENT FRONTIER.** Authoritative spec:
+[`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md).
+Insertion audit: [`docs/e11-arch-recon-audit.md`](e11-arch-recon-audit.md)
+(verdict `E11-READY-WITH-CONSTRAINTS`, implementation GO).
+
 ## Why timers come before the synchronization API explosion
 
-Without timers, every future API is forced to choose between:
+Without deadlines, every future API is forced to choose between:
 
 ```text
 await forever
@@ -357,63 +372,44 @@ await forever
 
 and an ad hoc timeout implementation.
 
-Timeout is not merely an API parameter.
-
-It creates a race:
-
-```text
-resource wake
-    vs
-timer expiry
-    vs
-cancellation
-```
-
-The winner must own the right to resume the Fiber.
-
-Therefore timers belong at the wait protocol layer.
-
-## Goal
-
-Implement:
-
-```text
-monotonic deadline
-timer registration
-timer expiry
-Scheduler wake integration
-deadline cancellation
-```
-
-## Required race protocol
-
-For one wait epoch:
+Timeout introduces a competing wait-resolution cause:
 
 ```text
 RESOURCE_WAKE
+    vs
 TIMER_EXPIRE
+    vs
 CANCEL
 ```
 
-compete for one wake capability.
+For one wait epoch these must compete for the existing E10 `WaitNode::resolve_`
+authority. Timers therefore belong at the wait protocol layer before Mutex,
+Event, Condition, Semaphore, Queue, or Select are introduced.
 
-Exactly one wins.
-
-Losers perform cleanup but do not publish another runnable ticket.
-
-## Formal gate
-
-TLA+ negative models should demonstrate:
+## Scope (summary)
 
 ```text
-resource wake + timeout double resume
+monotonic absolute deadline
+Scheduler-owned timer registration
+timer expiry as a THIRD resolve_ cause (distinct expired outcome)
+deadline-aware Scheduler parking (E9 park-liveness integration)
+timer registration retirement / lifetime closure
 ```
 
-for the broken protocol.
+Deferred: high-level sleep API, timerfd/io_uring-timeout public APIs,
+timer-wheel performance optimization, Select/multi-wait, all sync primitives.
 
-## Exit condition
+## Exit condition (summary)
 
-A Fiber can wait on a Scheduler source with a deadline without double publication or lost wake.
+`RESOURCE_WAKE`, `TIMER_EXPIRE`, and `CANCEL` compete through the existing E10
+`resolve_` authority; exactly one cause wins; exactly one runnable ticket may be
+published; timeout is observably distinct from cancellation; a timer bound to
+one wait epoch cannot resolve a later epoch; a retired timer cannot dereference
+a destroyed `WaitNode`; an already-due deadline cannot be lost during wait
+admission; a Scheduler with an active deadline cannot park indefinitely past it;
+the NEG-1…NEG-5 TLA+ models produce counterexamples for broken protocols; I1–I7
+hold; deterministic + sanitizer gates green. Full normative text:
+[`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md).
 
 ---
 
@@ -792,10 +788,10 @@ E9
 Scheduler park/wake and external-wake protocol [CLOSED]
 
 E10
-WaitNode and cancellation-safe wait queue core
+WaitNode and cancellation-safe wait queue core [CLOSED]
 
 E11
-Deadline / timer wait integration
+Deadline / timer wait integration   [CURRENT FRONTIER — spec: docs/e11-deadline-timer-wait.md]
 
 E12
 Async synchronization primitives
