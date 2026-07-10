@@ -2,24 +2,40 @@
 (*
   E11 NEG-1 — Resource Wake + Timer Double Publication (BROKEN model).
 
-  Defect: the timer expiry resolver publishes INDEPENDENTLY — it does NOT guard
-  on the resolve_ CAS winner. ResolveTimer fires whenever the registration is
-  Active+due and the node is non-Detached (terminal OR Registered), unconditionally
-  incrementing resolvedCount + wakeDispatched. This mirrors the E10
-  E10WaitNodeBuggyNoWinner skeleton (no winner CAS) applied to the timer cause.
+  Defect: the timer expiry resolver publishes INDEPENDENTLY — it increments
+  resolvedCount + wakeDispatched and consumes the registration WITHOUT
+  performing the resolve_ CAS winner transition on the node. Specifically the
+  buggy ResolveTimer does NOT move nodeState out of "Registered", so a CONCURRENT
+  ResolveWake (which guards on nodeState = "Registered") can subsequently fire
+  on the SAME node and publish a SECOND time. This is the "timer-local
+  completion authority" defect: the timer believes it won and dispatched a
+  runnable ticket, but the node is still Registered and another cause can still
+  resolve it.
 
   Broken protocol:
-      RESOURCE_WAKE publishes independently
-      TIMER_EXPIRE publishes independently
+      RESOURCE_WAKE publishes (CAS Registered -> Woken)
+      TIMER_EXPIRE published earlier without the CAS (node still Registered)
+      -> two runnable publications for one wait epoch
 
   Required counterexample:
-      same wait epoch -> two runnable publications (resolvedCount[n] = 2),
+      same wait epoch N -> resolvedCount[N] = 2 and wakeDispatched = 2,
       violating InvSingleResolutionWinner / InvSingleRunnablePublication.
 
-  This model is identical to E11TimerWait EXCEPT ResolveTimer omits the
-  nodeState[n] = "Registered" guard (it fires on any non-Detached node), so a
-  wake-resolved node can be "resolved" again by the timer. Everything else is
-  the correct protocol, isolating the defect (M5: one-rule difference).
+  MODEL DESIGN (M5 one-rule difference). Identical to E11TimerWait EXCEPT
+  ResolveTimer publishes + consumes the registration but leaves nodeState at
+  "Registered" (omits the resolve_ CAS that would move it to "Expired"). Every
+  other rule is the correct protocol. This is the smallest semantic defect that
+  represents "timer expiry without the shared winner CAS" and makes the double
+  publication reachable: after the buggy timer fires, ResolveWake is STILL
+  enabled on the Registered node.
+
+  REACHABILITY. The defect is reachable because ResolveTimerBuggy and
+  ResolveWake are BOTH enabled in the state (regState=Active, due,
+  nodeState=Registered): TLC schedules ResolveTimerBuggy (publishes once, node
+  stays Registered, reg -> Consumed), then ResolveWake (node Registered ->
+  Woken, publishes again). resolvedCount reaches 2. This is the same shape as
+  the E10 E10WaitNodeBuggyNoWinner counterexample (two resolvers firing on one
+  Registered node).
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -41,7 +57,7 @@ isTerminal(n) == nodeState[n] \in {"Woken", "Cancelled", "Expired"}
 
 Register(n) ==
     /\ nodeState[n] = "Detached"
-    /\ nodeAlive[n] = TRUE
+    /\ nodeAlive[n] = FALSE
     /\ \E r \in Regs :
         /\ regState[r] = "Inert"
         /\ nodeState' = [nodeState EXCEPT ![n] = "Registered"]
@@ -49,7 +65,26 @@ Register(n) ==
         /\ regState' = [regState EXCEPT ![r] = "Active"]
         /\ regEpoch' = [regEpoch EXCEPT ![r] = n]
         /\ \E d \in DeadlineVal : regDeadline' = [regDeadline EXCEPT ![r] = d]
-        /\ UNCHANGED <<nodeAlive, now, parked, resolvedCount, wakeDispatched>>
+        /\ nodeAlive' = [nodeAlive EXCEPT ![n] = TRUE]
+        /\ UNCHANGED <<now, parked, resolvedCount, wakeDispatched>>
+
+AdmissionExpire(n) ==
+    /\ nodeState[n] = "Registered"
+    /\ \E r \in Regs :
+        /\ regEpoch[r] = n
+        /\ regState[r] = "Active"
+        /\ now >= regDeadline[r]
+    /\ nodeState' = [nodeState EXCEPT ![n] = "Expired"]
+    /\ linked' = [linked EXCEPT ![n] = FALSE]
+    /\ regState' = [r \in Regs |->
+                          IF /\ regEpoch[r] = n
+                             /\ regState[r] = "Active"
+                             /\ now >= regDeadline[r]
+                          THEN "Consumed"
+                          ELSE regState[r]]
+    /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
+    /\ wakeDispatched' = wakeDispatched + 1
+    /\ UNCHANGED <<regEpoch, regDeadline, nodeAlive, now, parked>>
 
 ResolveWake(n) ==
     /\ nodeState[n] = "Registered"
@@ -58,8 +93,10 @@ ResolveWake(n) ==
     /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
     /\ wakeDispatched' = wakeDispatched + 1
     /\ regState' = [r \in Regs |->
-                        IF /\ regEpoch[r] = n /\ regState[r] = "Active"
-                        THEN "Retired" ELSE regState[r]]
+                        IF /\ regEpoch[r] = n
+                           /\ regState[r] = "Active"
+                        THEN "Retired"
+                        ELSE regState[r]]
     /\ UNCHANGED <<regEpoch, regDeadline, nodeAlive, now, parked>>
 
 ResolveCancel(n) ==
@@ -69,24 +106,27 @@ ResolveCancel(n) ==
     /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
     /\ wakeDispatched' = wakeDispatched + 1
     /\ regState' = [r \in Regs |->
-                        IF /\ regEpoch[r] = n /\ regState[r] = "Active"
-                        THEN "Retired" ELSE regState[r]]
+                        IF /\ regEpoch[r] = n
+                           /\ regState[r] = "Active"
+                        THEN "Retired"
+                        ELSE regState[r]]
     /\ UNCHANGED <<regEpoch, regDeadline, nodeAlive, now, parked>>
 
-(* DEFECT: ResolveTimer has NO winner-CAS guard on the node. It fires on any
-   non-Detached node (incl. Woken/Cancelled/Expired), unconditionally publishing.
-   This lets a wake-resolved node be "resolved" again by the timer -> double
-   publication. (Correct model guards nodeState[regEpoch[r]] = "Registered".) *)
-ResolveTimer(r) ==
+(* DEFECT: ResolveTimer publishes (resolvedCount + wakeDispatched) and consumes
+   the registration, but it does NOT perform the resolve_ CAS — nodeState stays
+   "Registered". A subsequent ResolveWake is still enabled on the same node and
+   publishes AGAIN -> resolvedCount = 2. (Correct model transitions
+   nodeState[regEpoch[r]] to "Expired", closing the Registered window.) *)
+ResolveTimerBuggy(r) ==
     /\ regState[r] = "Active"
     /\ now >= regDeadline[r]
-    /\ nodeState[regEpoch[r]] # "Detached"   \* DEFECT: should be = "Registered"
+    /\ nodeState[regEpoch[r]] = "Registered"
     /\ regState' = [regState EXCEPT ![r] = "Consumed"]
-    /\ nodeState' = [nodeState EXCEPT ![regEpoch[r]] = "Expired"]
+    \* DEFECT: nodeState is NOT moved to "Expired" (no resolve_ CAS).
     /\ resolvedCount' = [resolvedCount EXCEPT ![regEpoch[r]] =
                                     resolvedCount[regEpoch[r]] + 1]
     /\ wakeDispatched' = wakeDispatched + 1
-    /\ UNCHANGED <<linked, regEpoch, regDeadline, nodeAlive, now, parked>>
+    /\ UNCHANGED <<nodeState, linked, regEpoch, regDeadline, nodeAlive, now, parked>>
 
 DestroyNode(n) ==
     /\ isTerminal(n)
@@ -108,9 +148,10 @@ Stutter == UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched,
 Next ==
     \/ Stutter
     \/ \E n \in Nodes : Register(n)
+    \/ \E n \in Nodes : AdmissionExpire(n)
     \/ \E n \in Nodes : ResolveWake(n)
     \/ \E n \in Nodes : ResolveCancel(n)
-    \/ \E r \in Regs : ResolveTimer(r)
+    \/ \E r \in Regs : ResolveTimerBuggy(r)
     \/ \E n \in Nodes : DestroyNode(n)
     \/ Tick
 
@@ -130,7 +171,7 @@ Vars == <<nodeState, linked, resolvedCount, wakeDispatched,
           regState, regEpoch, regDeadline, nodeAlive, now, parked>>
 Spec == Init /\ [][Next]_Vars
 
-(* The invariant the buggy model must VIOLATE. *)
+(* The invariants the buggy model must VIOLATE. *)
 InvSingleResolutionWinner == \A n \in Nodes : resolvedCount[n] <= 1
 SumResolvedCount == resolvedCount[N0] + resolvedCount[N1]
 InvSingleRunnablePublication == wakeDispatched = SumResolvedCount

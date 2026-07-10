@@ -101,10 +101,14 @@ deadlineDue(r) == regState[r] = "Active" /\ now >= regDeadline[r]
 
 (* Register: Detached -> Registered; bind an Active registration R to n with an
    absolute deadline. Mirrors Scheduler::await_wait_deadline admission. A fresh
-   node starts alive (its storage is reachable). *)
+   node starts alive (its storage is reachable): Register SETS nodeAlive[n]=TRUE.
+   (Init sets nodeAlive=FALSE for all nodes, so registration is the action that
+   brings a node's storage into existence; DestroyNode returns it to FALSE. This
+   makes the registration epoch REACHABLE for TLC — previously the contradictory
+   guard nodeAlive[n]=TRUE made Register dead and the safety check vacuous.) *)
 Register(n) ==
     /\ nodeState[n] = "Detached"
-    /\ nodeAlive[n] = TRUE
+    /\ nodeAlive[n] = FALSE
     /\ \E r \in Regs :
         /\ regState[r] = "Inert"
         /\ nodeState' = [nodeState EXCEPT ![n] = "Registered"]
@@ -113,7 +117,7 @@ Register(n) ==
         /\ regEpoch' = [regEpoch EXCEPT ![r] = n]
         \* deadline chosen nondeterministically (TLC explores all values)
         /\ \E d \in DeadlineVal : regDeadline' = [regDeadline EXCEPT ![r] = d]
-        /\ nodeAlive' = nodeAlive
+        /\ nodeAlive' = [nodeAlive EXCEPT ![n] = TRUE]
         /\ now' = now
         /\ parked' = parked
         /\ resolvedCount' = resolvedCount
@@ -132,7 +136,11 @@ AdmissionExpire(n) ==
         /\ now >= regDeadline[r]
     /\ nodeState' = [nodeState EXCEPT ![n] = "Expired"]
     /\ linked' = [linked EXCEPT ![n] = FALSE]
-    /\ regState' = [regState EXCEPT ![r \in Regs |->
+    \* Consume every Active registration bound to n whose deadline is due (an
+    \* EXCEPT may not take a function constructor as its subscript; use a plain
+    \* function constructor over all Regs, matching the form used by
+    \* ResolveWake/ResolveCancel below).
+    /\ regState' = [r \in Regs |->
                           IF /\ regEpoch[r] = n
                              /\ regState[r] = "Active"
                              /\ now >= regDeadline[r]
@@ -278,11 +286,11 @@ InvSingleResolutionWinner ==
 (* I2 — Single Runnable Publication: scheduler-wake intents == total winning
    resolutions. Each winner dispatches exactly once; losers (a timer whose CAS
    lost to a concurrent wake/cancel, or vice versa) dispatch zero. *)
-InvSingleRunnablePublication ==
-    wakeDispatched = SumResolvedCount
-
 SumResolvedCount ==
     resolvedCount[N0] + resolvedCount[N1]
+
+InvSingleRunnablePublication ==
+    wakeDispatched = SumResolvedCount
 
 (* I3 — Wait-Epoch Isolation: a timer registration R bound to epoch N_E may only
    attempt resolution of N_E. It CANNOT resolve a later epoch N_E+1. Modeled
@@ -343,18 +351,36 @@ Inv ==
    E11 liveness (I6 — Deadline Park Liveness)
    ========================================================================= *)
 LivenessSpec == Spec
-FairTimer ==
-    /\ WF_Vars(\E r \in Regs : ResolveTimer(r))
-    /\ WF_Vars(Tick)
-LivenessSpecFair == LivenessSpec /\ []FairTimer
+(* Fairness: weak fairness on the timer resolver and the clock Tick (the two
+   actions that drive a due Active deadline to resolution). Conjoined as bare
+   WF conjuncts (NOT wrapped in [] — WF is already an always-formula; wrapping
+   it yields a formula TLC rejects as "actions must be <>[]A or []<>A"). This
+   mirrors the E9 LivenessSpec structure (FairX == WF_vars(action); LivenessSpec
+   == Spec /\ FairX /\ ...). *)
+FairResolveTimer == WF_Vars(\E r \in Regs : ResolveTimer(r))
+FairTick == WF_Vars(Tick)
+LivenessSpecFair ==
+    LivenessSpec
+    /\ FairResolveTimer
+    /\ FairTick
 
-(* I6 — Deadline Park Liveness: an Active due deadline is eventually resolved.
-   A Worker may not remain parked solely because no non-timer wake source fires. *)
+(* I6 — Deadline Park Liveness: a Registered wait with a due Active deadline
+   does not strand forever. The Scheduler's timer pump (ResolveTimer, under
+   fairness) eventually attempts resolution, OR a competing cause (wake/cancel)
+   resolves it first. Either way the node reaches a terminal outcome — it does
+   NOT remain Registered indefinitely while a deadline is due. (The property is
+   NOT "the timer always wins" — a legitimate wake/cancel that retires the
+   registration first is a valid resolution. It IS "the wait is not lost while
+   parked," the E11 contribution over E10's wake-only liveness.)
+
+   Written as [](P => <>Q): whenever a due Active deadline is bound to a
+   Registered node, that node is eventually terminal. Matches the E9
+   Life2/Life7 liveness property form. *)
 DeadlineParkLiveness ==
     \A r \in Regs :
-        (/\ regState[r] = "Active"
-         /\ now >= regDeadline[r]
-         /\ nodeState[regEpoch[r]] = "Registered")
-        ~> nodeState[regEpoch[r]] = "Expired"
+        [] ( (/\ regState[r] = "Active"
+              /\ now >= regDeadline[r]
+              /\ nodeState[regEpoch[r]] = "Registered")
+             => <> (isTerminal(regEpoch[r])) )
 
 =============================================================================

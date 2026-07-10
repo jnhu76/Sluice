@@ -1,9 +1,9 @@
------------------------ MODULE E11TimerWaitNeg3StaleCrossEpoch -----------------------
+------------------------------- MODULE E11TimerWaitNeg3StaleCrossEpoch -------------------------------
 (*
   E11 NEG-3 — Stale Timer Cross-Epoch Resolution (BROKEN model).
 
   This is the address-reuse boundary between I3 and I4. The defect: a timer
-  registration captures only a REUSABLE STORAGE SLOT (the address/Fiber
+  registration captures only a REUSABLE STORAGE SLOT (the address / Fiber
   identity), not the logical wait epoch. When epoch E+1 reuses the same slot A,
   a stale timer registered for E resolves E+1.
 
@@ -27,7 +27,20 @@
 
   The CORRECT model keys the expiry on regEpoch[r] (the logical epoch), which is
   immutable and distinct per Register — so a stale timer for E can never reach
-  E+1. Production realizes this by capturing WaitNode& (never only Fiber*).
+  E+1. Production realizes this by capturing a WaitNode reference (never only a
+  Fiber pointer).
+
+  REACHABILITY. Register(N0) claims slot A0 + Active R0 (regSlot[R0]=A0,
+  regEpoch[R0]=N0). ResolveWake(N0) retires R0. DestroyNode(N0) frees slot A0.
+  Register(N1) REUSES slot A0 (slotOf[N1]=A0). Now a stale ResolveTimer(R0)
+  fires (if R0 were still Active) and, keying on regSlot[R0]=A0 = slotOf[N1],
+  resolves N1. To make R0 still Active at expiry time, the buggy model does NOT
+  retire R0 on ResolveWake (the defect is the slot-keyed expiry; the stale timer
+  must remain armed). The counterexample witnesses resolvedCount[N1] >= 1 caused
+  by R0 (bound to N0), violating InvSingleResolutionWinner.
+
+  M5 one-rule difference: the defect is ResolveTimer keying on regSlot[r] (the
+  reusable address) instead of regEpoch[r] (the immutable epoch identity).
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -49,8 +62,8 @@ ASSUME
 isTerminal(n) == nodeState[n] \in {"Woken", "Cancelled", "Expired"}
 
 (* Register: claim a free slot for this epoch, bind an Active registration that
-   captures BOTH the epoch (regEpoch) AND the slot (regSlot). A fresh node starts
-   alive (slot occupied). *)
+   captures BOTH the epoch (regEpoch) AND the slot (regSlot). A fresh node
+   occupies its slot (slotFree := FALSE). *)
 Register(n) ==
     /\ nodeState[n] = "Detached"
     /\ \E s \in Slots :
@@ -66,19 +79,24 @@ Register(n) ==
             /\ \E d \in DeadlineVal : regDeadline' = [regDeadline EXCEPT ![r] = d]
             /\ UNCHANGED <<now, resolvedCount>>
 
+(* ResolveWake resolves the node. To isolate the cross-epoch defect (M5:
+   one-rule difference = the slot-keyed expiry), the registration bound to n is
+   NOT retired here — the buggy design's stale timer must stay armed so it can
+   later fire on the reused slot. (The correct production design retires the
+   reg in the same step; NEG-4 isolates that lifetime defect separately. Here
+   the load-bearing bug is the slot-vs-epoch keying, so the reg stays Active to
+   make the stale expiry reachable.) *)
 ResolveWake(n) ==
     /\ nodeState[n] = "Registered"
     /\ nodeState' = [nodeState EXCEPT ![n] = "Woken"]
     /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
-    /\ regState' = [r \in Regs |->
-                        IF /\ regEpoch[r] = n /\ regState[r] = "Active"
-                        THEN "Retired" ELSE regState[r]]
-    /\ UNCHANGED <<slotOf, slotFree, regEpoch, regSlot, regDeadline, now>>
+    /\ UNCHANGED <<slotOf, slotFree, regState, regEpoch, regSlot, regDeadline, now>>
 
 (* DEFECT: ResolveTimer targets the SLOT the registration captured (regSlot[r]),
    resolving whichever epoch CURRENTLY occupies that slot — NOT the epoch the
    registration was bound to (regEpoch[r]). When E+1 reuses E's slot, a stale
-   Active timer for E resolves E+1. *)
+   Active timer for E resolves E+1. (Correct model keys on regEpoch[r]: resolves
+   exactly m = regEpoch[r], which is immutable and distinct per epoch.) *)
 ResolveTimer(r) ==
     /\ regState[r] = "Active"
     /\ now >= regDeadline[r]
@@ -91,11 +109,12 @@ ResolveTimer(r) ==
         /\ UNCHANGED <<slotOf, slotFree, regEpoch, regSlot, regDeadline, now>>
 
 (* DestroyNode: free the slot so a later epoch may reuse it. Models the
-   post-resolution lifetime window + storage reuse. The registration must be
-   retired/consumed first (DestroyNode requires it). *)
+   post-resolution lifetime window + storage reuse. The buggy design does not
+   require the registration to be retired first (the stale timer stays armed),
+   so the slot is freed while R0 is still Active — allowing N1 to reuse it and
+   the stale slot-keyed R0 expiry to resolve N1. *)
 DestroyNode(n) ==
     /\ isTerminal(n)
-    /\ \A r \in Regs : regEpoch[r] = n => regState[r] \in {"Retired", "Consumed", "Inert"}
     /\ slotFree' = [slotFree EXCEPT ![slotOf[n]] = TRUE]
     /\ UNCHANGED <<nodeState, slotOf, resolvedCount,
                   regState, regEpoch, regSlot, regDeadline, now>>
@@ -132,20 +151,20 @@ Vars == <<nodeState, slotOf, slotFree, resolvedCount,
           regState, regEpoch, regSlot, regDeadline, now>>
 Spec == Init /\ [][Next]_Vars
 
-(* I3 violation: a timer registered for epoch E resolves a DIFFERENT epoch E+1.
-   Counterexample: resolvedCount[m] > 0 for an epoch m that a registration bound
-   to a DIFFERENT epoch caused. Concretely, the buggy ResolveTimer resolves an
-   epoch m with regEpoch[r] # m — captured by resolvedCount growing past the
-   node's own single resolution. The cleaner witness: some slot is resolved
-   twice across two epochs (resolvedCount[N0]+resolvedCount[N1] > 1 reachable
-   where one resolution was caused by a stale cross-epoch timer). *)
+(* I3 — Wait-Epoch Isolation: a timer registration that fired (Consumed) must
+   have resolved its OWN bound epoch (the node at regEpoch[r] is Expired), NOT a
+   different epoch that merely reused the registration's captured slot. The
+   buggy slot-keyed ResolveTimer consumes R (bound to N0) while expiring N1,
+   leaving nodeState[regEpoch[R]=N0] = "Woken" (resolved by the wake, not by the
+   timer) — so a Consumed registration whose bound epoch is NOT Expired is the
+   cross-epoch-resolution witness. (The correct model keys ResolveTimer on
+   regEpoch[r], so a Consumed R always coincides with its bound node Expired.) *)
 InvWaitEpochIsolation ==
     \A r \in Regs :
-        regState[r] = "Consumed" => TRUE   \* structural (correct model keys on
-                                           \* regEpoch, so r can only resolve its
-                                           \* own epoch). The buggy model keys on
-                                           \* regSlot, allowing cross-epoch.
-\* The invariant the buggy model must VIOLATE: single resolution winner.
+        regState[r] = "Consumed" => nodeState[regEpoch[r]] = "Expired"
+
+(* Also keep the single-resolution guard: a slot reused across two epochs must
+   not accumulate two timer resolutions. *)
 InvSingleResolutionWinner == \A n \in Nodes : resolvedCount[n] <= 1
 
 =============================================================================

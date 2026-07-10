@@ -2,11 +2,13 @@
 (*
   E11 NEG-2 — Timer Expiry + Cancellation Double Publication (BROKEN model).
 
-  Defect: the cancellation resolver has an INDEPENDENT completion authority — it
-  does NOT guard on the resolve_ CAS winner. ResolveCancel fires on any non-
-  Detached node (terminal OR Registered), unconditionally incrementing
-  resolvedCount + wakeDispatched. This mirrors the timer-local winner authority
-  defect but on the cancel cause.
+  Defect: the cancellation resolver has an INDEPENDENT completion authority —
+  it publishes (resolvedCount + wakeDispatched) WITHOUT performing the resolve_
+  CAS winner transition on the node. The buggy ResolveCancel does NOT move
+  nodeState out of "Registered", so a CONCURRENT ResolveTimer (which guards on
+  nodeState = "Registered") can subsequently fire on the SAME node and publish a
+  SECOND time. This mirrors NEG-1 but with the cancel cause as the buggy
+  independent publisher.
 
   Broken protocol:
       timer-local completion authority
@@ -14,11 +16,16 @@
       -> both believe they won -> two publications
 
   Required counterexample:
-      a timer-expired node is then "cancelled" -> resolvedCount[n] = 2,
+      same wait epoch N -> resolvedCount[N] = 2 and wakeDispatched = 2,
       violating InvSingleResolutionWinner / InvSingleRunnablePublication.
 
-  Identical to E11TimerWait EXCEPT ResolveCancel omits the Registered guard
-  (fires on any non-Detached node). Isolates the defect (M5: one-rule diff).
+  MODEL DESIGN (M5 one-rule difference). Identical to E11TimerWait EXCEPT
+  ResolveCancel publishes but leaves nodeState at "Registered" (omits the
+  resolve_ CAS that would move it to "Cancelled"). Every other rule is the
+  correct protocol. REACHABILITY: ResolveCancelBuggy and ResolveTimer are BOTH
+  enabled on (regState=Active, due, nodeState=Registered); TLC schedules the
+  buggy cancel (publishes once, node stays Registered) then the timer (publishes
+  again), reaching resolvedCount = 2. Same shape as the E10 NoWinner CE.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -40,7 +47,7 @@ isTerminal(n) == nodeState[n] \in {"Woken", "Cancelled", "Expired"}
 
 Register(n) ==
     /\ nodeState[n] = "Detached"
-    /\ nodeAlive[n] = TRUE
+    /\ nodeAlive[n] = FALSE
     /\ \E r \in Regs :
         /\ regState[r] = "Inert"
         /\ nodeState' = [nodeState EXCEPT ![n] = "Registered"]
@@ -48,7 +55,26 @@ Register(n) ==
         /\ regState' = [regState EXCEPT ![r] = "Active"]
         /\ regEpoch' = [regEpoch EXCEPT ![r] = n]
         /\ \E d \in DeadlineVal : regDeadline' = [regDeadline EXCEPT ![r] = d]
-        /\ UNCHANGED <<nodeAlive, now, parked, resolvedCount, wakeDispatched>>
+        /\ nodeAlive' = [nodeAlive EXCEPT ![n] = TRUE]
+        /\ UNCHANGED <<now, parked, resolvedCount, wakeDispatched>>
+
+AdmissionExpire(n) ==
+    /\ nodeState[n] = "Registered"
+    /\ \E r \in Regs :
+        /\ regEpoch[r] = n
+        /\ regState[r] = "Active"
+        /\ now >= regDeadline[r]
+    /\ nodeState' = [nodeState EXCEPT ![n] = "Expired"]
+    /\ linked' = [linked EXCEPT ![n] = FALSE]
+    /\ regState' = [r \in Regs |->
+                          IF /\ regEpoch[r] = n
+                             /\ regState[r] = "Active"
+                             /\ now >= regDeadline[r]
+                          THEN "Consumed"
+                          ELSE regState[r]]
+    /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
+    /\ wakeDispatched' = wakeDispatched + 1
+    /\ UNCHANGED <<regEpoch, regDeadline, nodeAlive, now, parked>>
 
 ResolveWake(n) ==
     /\ nodeState[n] = "Registered"
@@ -57,19 +83,23 @@ ResolveWake(n) ==
     /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
     /\ wakeDispatched' = wakeDispatched + 1
     /\ regState' = [r \in Regs |->
-                        IF /\ regEpoch[r] = n /\ regState[r] = "Active"
-                        THEN "Retired" ELSE regState[r]]
+                        IF /\ regEpoch[r] = n
+                           /\ regState[r] = "Active"
+                        THEN "Retired"
+                        ELSE regState[r]]
     /\ UNCHANGED <<regEpoch, regDeadline, nodeAlive, now, parked>>
 
-(* DEFECT: ResolveCancel has NO winner-CAS guard. Fires on any non-Detached node
-   (incl. Expired), unconditionally publishing. A timer-expired node can be
-   "cancelled" -> double publication. (Correct: nodeState[n] = "Registered".) *)
-ResolveCancel(n) ==
-    /\ nodeState[n] # "Detached"   \* DEFECT: should be = "Registered"
-    /\ nodeState' = [nodeState EXCEPT ![n] = "Cancelled"]
+(* DEFECT: ResolveCancel publishes (resolvedCount + wakeDispatched) but does NOT
+   perform the resolve_ CAS — nodeState stays "Registered". A subsequent
+   ResolveTimer is still enabled on the same node and publishes AGAIN ->
+   resolvedCount = 2. (Correct model transitions nodeState to "Cancelled".) *)
+ResolveCancelBuggy(n) ==
+    /\ nodeState[n] = "Registered"
     /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
     /\ wakeDispatched' = wakeDispatched + 1
-    /\ UNCHANGED <<linked, regState, regEpoch, regDeadline, nodeAlive, now, parked>>
+    \* DEFECT: nodeState is NOT moved to "Cancelled" (no resolve_ CAS); the
+    \* registration is also NOT retired (cancel-local authority ignores it).
+    /\ UNCHANGED <<nodeState, linked, regState, regEpoch, regDeadline, nodeAlive, now, parked>>
 
 ResolveTimer(r) ==
     /\ regState[r] = "Active"
@@ -103,8 +133,9 @@ Stutter == UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched,
 Next ==
     \/ Stutter
     \/ \E n \in Nodes : Register(n)
+    \/ \E n \in Nodes : AdmissionExpire(n)
     \/ \E n \in Nodes : ResolveWake(n)
-    \/ \E n \in Nodes : ResolveCancel(n)
+    \/ \E n \in Nodes : ResolveCancelBuggy(n)
     \/ \E r \in Regs : ResolveTimer(r)
     \/ \E n \in Nodes : DestroyNode(n)
     \/ Tick
@@ -125,6 +156,7 @@ Vars == <<nodeState, linked, resolvedCount, wakeDispatched,
           regState, regEpoch, regDeadline, nodeAlive, now, parked>>
 Spec == Init /\ [][Next]_Vars
 
+(* The invariants the buggy model must VIOLATE. *)
 InvSingleResolutionWinner == \A n \in Nodes : resolvedCount[n] <= 1
 SumResolvedCount == resolvedCount[N0] + resolvedCount[N1]
 InvSingleRunnablePublication == wakeDispatched = SumResolvedCount

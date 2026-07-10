@@ -1416,6 +1416,32 @@ void Scheduler::erase_popped_registration_locked(TimerRegistration* r) {
     }
 }
 
+TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
+                                                            WaitQueue* q,
+                                                            deadline_t deadline) {
+    // E11-T17 (F2) narrow test hook. Creates an ACTIVE TimerRegistration for
+    // {node, q, deadline}, pushes it into the deadline heap, refreshes the
+    // earliest-deadline park cache, AND registers `node` into `q` (Detached ->
+    // Registered) so the pump's expire path can resolve it. This mirrors the
+    // full await_wait_deadline admission MINUS the fiber suspend + accounting
+    // (it does not touch waiting_waitq_count_ and does not suspend a fiber),
+    // so the coordinator can install a NEW deadline from a NON-worker thread
+    // while the worker is held at the park-commit seam (global_mtx_ is released
+    // at that seam). Called by the test coordinator. See
+    // tests/e11_timer_wait_test.cpp T17. TEST-ONLY; no production caller.
+    if (clock_now_unlocked() >= deadline) return nullptr;  // already due: skip
+    if (q != nullptr) {
+        LockGuard qlk(q->mtx());
+        if (!q->register_wait_locked(*node, nullptr)) return nullptr;  // not Detached
+    }
+    ++waiting_waitq_count_;  // mirror admission accounting (pump decrements on win)
+    timer_pool_.emplace_back(node, q, deadline);
+    TimerRegistration* reg = &timer_pool_.back();
+    heap_push_locked(reg);
+    recompute_earliest_deadline_locked();  // publish to the park-timeout cache
+    return reg;
+}
+
 // ---- deadline heap helpers (min-heap on deadline) ----
 
 bool Scheduler::heap_less(const TimerRegistration* a, const TimerRegistration* b) noexcept {

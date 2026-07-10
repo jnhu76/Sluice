@@ -27,6 +27,7 @@
 #include <sluice/async/wait_node.hpp>
 #include <sluice/async/wait_queue.hpp>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstddef>
@@ -98,9 +99,65 @@ struct E11TimerTestHooks {
         }
         return n;
     }
+    // E11-T18 (F3): physical timer-container sizes for the storage-reclamation
+    // contract. The pool (std::list<TimerRegistration>) and the deadline heap
+    // (vector<TimerRegistration*>) are the physical retention structures.
+    // Reading their sizes under global_mtx_ lets the test prove the ACTUAL
+    // reclamation policy: logical retirement is immediate, lifetime safety is
+    // immediate, but physical reclamation is LAZY-AT-DEADLINE (a far-future
+    // RETIRED entry remains physically present until pump_deadlines_locked pops
+    // it at its original deadline). Narrow E11 test visibility only.
+    static std::size_t timer_pool_size(const Scheduler& s) {
+        return s.timer_pool_.size();
+    }
+    static std::size_t deadline_heap_size(const Scheduler& s) {
+        return s.deadline_heap_.size();
+    }
+    // Count entries in a given lifetime state (under global_mtx_).
+    static std::size_t timer_pool_count_in_state(const Scheduler& s,
+                                                 TimerRegistration::State st) {
+        std::size_t n = 0;
+        for (const auto& r : s.timer_pool_) {
+            if (r.state() == st) ++n;
+        }
+        return n;
+    }
     static bool earliest_active_deadline(const Scheduler& s,
                                          Scheduler::deadline_t& out) {
         return s.earliest_active_deadline_locked(out);
+    }
+    // ---- E11-T17 park-commit seam + external registration (F2) ----
+    // The production park_commit_seam_ (E9-CORRECTIVE, ADR 9.4.15) pauses a
+    // Worker immediately before the physical cv.wait, AFTER it has computed the
+    // park obligation from earliest_active_deadline_ but BEFORE it sleeps. T17
+    // uses it to deterministically hold the Worker at the park-commit boundary
+    // (capturing deadline A's obligation). While held, the coordinator installs
+    // a NEW earlier deadline B via register_test_deadline (a non-worker-thread
+    // hook — the worker is held with global_mtx_ released), then releases the
+    // seam and proves B (not A) drives the wake. Deterministic causal proof for
+    // "new earlier deadline during an existing park obligation" — NO sleep_for,
+    // NO stress, single worker (M7).
+    static void arm_park_commit(Scheduler& s) {
+        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
+        s.park_commit_seam_armed_ = true;
+    }
+    static void wait_park_commit_paused(Scheduler& s) {
+        std::unique_lock<std::mutex> lk(s.park_seam_mtx_);
+        s.park_seam_cv_.wait(lk, [&s] { return s.park_seam_commit_paused_; });
+    }
+    static void release_park_commit(Scheduler& s) {
+        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
+        s.park_commit_seam_armed_ = false;
+        s.park_seam_cv_.notify_all();
+    }
+    // Install a deadline obligation from a non-worker thread (under global_mtx_).
+    // Mirrors the pool+heap half of await_wait_deadline admission. Returns the
+    // registration pointer (nullptr if the deadline was already due).
+    static TimerRegistration* register_test_deadline(Scheduler& s, WaitNode* node,
+                                                     WaitQueue* q,
+                                                     Scheduler::deadline_t deadline) {
+        LockGuard lk(s.global_mtx_);
+        return s.register_test_deadline_locked(node, q, deadline);
     }
 };
 }  // namespace sluice::async
@@ -299,15 +356,26 @@ SLUICE_TEST_CASE(e11_t4_cancel_wins_timer_loses) {
 //
 // Wait epoch E: a node at some address registers a far-future deadline, then
 // is woken (resource wins). The fiber resumes; the node goes out of scope
-// (destroyed). Wait epoch E+1: a NEW node is constructed (it may reuse the
-// same stack address). A stale timer entry for E (still in the heap, retired)
-// is pumped — it MUST NOT resolve E+1. We force the pump and assert E+1 is
-// untouched. This is the load-bearing address-reuse trace (I3/I4).
+// (destroyed). A stale timer entry for E (still in the heap, retired) is then
+// pumped — it MUST be inert. T8 forces the pump and asserts nothing resolves
+// (no UAF under ASan). T9/T10 strengthen this with an explicit forced pump
+// strictly after node destruction.
 //
-// We approximate the same-address reuse by constructing the second node in the
-// SAME lexical scope position after the first is destroyed. The decisive proof
-// is the retirement state, not the address: even if addresses differed, a
-// retired registration must be inert.
+// EVIDENCE BOUNDARY (F5-corrected, honest): T8/T9/T10 do NOT construct epoch
+// E+1 and do NOT force address(node_E) == address(node_E+1). They prove the
+// retirement-state gate (a RETIRED/CONSUMED registration is inert and never
+// dereferences a destroyed node), NOT same-NUMERIC-address reuse. The
+// same-storage-slot reuse boundary (a stale timer resolving a DIFFERENT epoch
+// that reused E's address) is proven by the FORMAL NEG-3 model
+// (E11TimerWaitNeg3StaleCrossEpoch: the slot-keyed buggy expiry resolves E+1)
+// plus the production refinement (TimerRegistration::node_ captures the live
+// WaitNode object, never a reusable address or Fiber*). A unit-level
+// construct_at/destroy_at same-slot test was considered and rejected: it would
+// not meaningfully refine the production Fiber ownership topology (WaitNodes
+// are fiber-frame locals, not placement-new slots), so option B (narrow the
+// claim + rely on NEG-3 + the retirement proof) is the honest evidence path.
+// The decisive production guarantee is the retirement state observed BEFORE any
+// node dereference, independent of address.
 // =============================================================================
 SLUICE_TEST_CASE(e11_t8_storage_reuse_epoch_isolation) {
     if constexpr (!fiber_ctx::supported) return;
@@ -842,6 +910,242 @@ SLUICE_TEST_CASE(e11_t13_retiring_earliest_preserves_next_deadline) {
     SLUICE_CHECK_MSG(nb.was_expired(), "B resolved Expired");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0,
                      "B resolved (earliest retirement preserved next)");
+}
+
+// =============================================================================
+// E11-T17 (F2): new-earlier-deadline during an existing park obligation.
+//
+// The closure review (F2) found that T12 only proves "earliest deadline cache
+// becomes B" — it does NOT force the causal interleaving:
+//
+//     Worker W has committed to park using timer state A (deadline far future)
+//     THEN deadline B < A is registered
+//     W must not remain parked until A; B drives the wake
+//
+// This test forces exactly that interleaving on a SINGLE worker. The worker
+// runs LIVE, registers A (far-future 10000), and reaches the park-commit seam —
+// HELD there (it has committed to park with A=10000 as the earliest obligation).
+// While held, the coordinator thread installs B (200 < 10000) via the narrow
+// register_test_deadline hook (a non-worker-thread registration; the worker is
+// held at the seam with global_mtx_ released, so no deadlock). The coordinator
+// then advances the logical clock to make B due and releases the seam. The
+// worker re-loops; pump_deadlines_locked observes B due under global_mtx_ and
+// resolves B Expired. Proof: B's expiry is observed and B resolves BEFORE A (A
+// never becomes due; clock=250 < A=10000).
+//
+// PRODUCTION MECHANISM (documented accurately, per F2): E11 does NOT signal a
+// parked Worker on timer registration (no registration-triggered wake). Park
+// liveness is BOUNDED POLLING — park_on_wake_source caps the cv.wait by the
+// earliest ACTIVE deadline, and the worker loop's pump_deadlines_locked
+// re-establishes the authoritative deadline set under global_mtx_ on every
+// iteration. So "new earlier deadline during park" resolves via the bounded-
+// park + per-iteration pump, not a registration signal. The causal seam here is
+// the controllable clock + park_commit seam + an external (non-worker)
+// registration — NOT sleep_for, NOT stress (M7). Single worker => deterministic
+// (no cross-worker scheduling races).
+// =============================================================================
+SLUICE_TEST_CASE(e11_t17_new_earlier_deadline_during_park) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11TimerTestHooks::enable_test_clock(sched);
+
+    WaitQueue qA, qB;
+    WaitNode na, nb;  // na: the parked A wait. nb: the externally-registered B.
+    std::atomic<bool> a_registered{false};
+
+    // Waiter A: far-future deadline (10000). Signals registration so the
+    // coordinator knows the worker will park with A's obligation as earliest.
+    Fiber fwa;
+    fwa.set_entry([&](Fiber&) {
+        a_registered.store(true, std::memory_order::release);
+        sched.await_wait_deadline(qA, na, Scheduler::deadline_t{10000});
+    });
+
+    FiberStack sa;
+    SLUICE_CHECK(sched.init_fiber(fwa, sa.base(), sa.size()));
+    sched.spawn(fwa);
+
+    // Arm the park-commit seam BEFORE run_live so the worker is held at the
+    // commit boundary when it parks (after computing its park obligation from
+    // earliest_active_deadline_, before the physical cv.wait).
+    E11TimerTestHooks::arm_park_commit(sched);
+
+    std::thread runner([&] { sched.run_live(1); });
+
+    // 1. Wait for A to register and the worker to reach+pause at the park-commit
+    //    boundary. At this point the only active deadline is A (10000).
+    while (!a_registered.load(std::memory_order::acquire)) std::this_thread::yield();
+    E11TimerTestHooks::wait_park_commit_paused(sched);
+
+    // 2. Causal observation: at the park-commit boundary, the earliest active
+    //    deadline is A (10000) — the worker committed to park using A's state.
+    //    Only A is active (B not yet registered).
+    {
+        Scheduler::deadline_t e = 0;
+        const bool has = E11TimerTestHooks::earliest_active_deadline(sched, e);
+        SLUICE_CHECK_MSG(has && e == 10000,
+                         "worker parked with A(10000) as the earliest obligation");
+        std::size_t cnt = E11TimerTestHooks::active_deadline_count(sched);
+        SLUICE_CHECK_MSG(cnt == 1, "only A is active at the park-commit seam");
+    }
+
+    // 3. While the worker is HELD at the seam, the coordinator thread installs
+    //    the NEW earlier deadline B (200 < 10000) via the external-registration
+    //    test hook (global_mtx_ is free: the worker is paused at the seam with
+    //    no lock held). This is the F2 interleaving: committed-to-park-with-A,
+    //    THEN B registers.
+    TimerRegistration* reg_b = E11TimerTestHooks::register_test_deadline(
+        sched, &nb, &qB, Scheduler::deadline_t{200});
+    SLUICE_CHECK_MSG(reg_b != nullptr,
+                     "B(200) registered while worker held at the park-commit seam");
+    // The new earlier deadline changed the earliest obligation to B (200).
+    {
+        Scheduler::deadline_t e = 0;
+        const bool has = E11TimerTestHooks::earliest_active_deadline(sched, e);
+        SLUICE_CHECK_MSG(has && e == 200,
+                         "new earlier deadline B(200) became the earliest obligation");
+        std::size_t cnt = E11TimerTestHooks::active_deadline_count(sched);
+        SLUICE_CHECK_MSG(cnt == 2, "both A and B are now active");
+    }
+
+    // 4. Make B due (200) — strictly before A (10000). Release the seam. The
+    //    worker re-loops; pump_deadlines_locked observes B due under global_mtx_
+    //    and resolves B's node Expired. A is NOT due (10000 > 250).
+    E11TimerTestHooks::set_clock(sched, 250);
+    E11TimerTestHooks::release_park_commit(sched);
+
+    // Wait for the pump to resolve B (deterministic: the worker re-loops after
+    // the seam release and pumps under global_mtx_). Bounded poll, not sleep.
+    for (int i = 0; i < 200000 && !nb.is_terminal(); ++i) std::this_thread::yield();
+
+    // 5. Proof: the pump resolved B (the new earlier deadline) Expired. B's
+    //    registration was consumed by the timer winner path. A remained
+    //    unresolved (its deadline 10000 was never reached; clock=250). The
+    //    worker did NOT remain parked until A — B's earlier deadline drove the
+    //    wake (via the bounded park + per-iteration pump).
+    SLUICE_CHECK_MSG(nb.was_expired(),
+                     "B(200) resolved Expired (drove the wake, not A)");
+    SLUICE_CHECK_MSG(reg_b->is_consumed(),
+                     "B's registration consumed by the timer winner path");
+    SLUICE_CHECK_MSG(!na.is_terminal(),
+                     "A(10000) still Registered (worker did not remain parked until A)");
+    SLUICE_CHECK_MSG(!na.was_expired(),
+                     "A(10000) did NOT expire (B resolved first; A not due)");
+
+    // A is still unresolved (parked on its far-future deadline). Cancel it from
+    // the coordinator so run_live can reach quiescence and the runner thread can
+    // join (the cancel signals the Scheduler wake source). Then the node is safe
+    // to destroy (C9).
+    SLUICE_CHECK_MSG(sched.cancel_wait(qA, na), "cancel the stranded A wait");
+    runner.join();
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// =============================================================================
+// E11-T18 (F3): timer storage reclamation contract (lazy-at-deadline).
+//
+// The closure review (F3) found that the "timer-pool unbounded growth fixed"
+// claim was overbroad: a far-future RETIRED registration remains PHYSICALLY
+// retained in the pool+heap until pump_deadlines_locked pops it at its ORIGINAL
+// deadline. This test proves the ACTUAL contract:
+//
+//     logical retirement    immediate (ACTIVE -> RETIRED in the winner CS)
+//     lifetime safety       immediate (atomic state gate; no destroyed-node deref)
+//     physical reclamation  lazy-at-deadline (pump pops+erases at the deadline)
+//
+// It creates N far-future deadline waits, resolves each via RESOURCE_WAKE (which
+// RETIRES each registration immediately), and asserts:
+//   (a) immediately after the wakes: 0 ACTIVE entries (logical retirement was
+//       immediate), but the pool+heap still hold N inert RETIRED entries
+//       (physical reclamation has NOT happened — their far-future deadlines have
+//       not been reached);
+//   (b) after advancing the clock past those deadlines and pumping: the pool+heap
+//       are empty (physical reclamation completed at the deadline).
+//
+// This is the honest reclamation contract — NOT "unbounded growth fixed" in an
+// absolute sense (the pool is bounded by live waits PLUS retired entries whose
+// deadlines have not yet been reached), but bounded by the deadline horizon and
+// proven to drain at-deadline. Uses the controllable clock (no sleep_for, M7).
+// =============================================================================
+SLUICE_TEST_CASE(e11_t18_timer_reclamation_lazy_at_deadline) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    constexpr unsigned N = 4;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11TimerTestHooks::enable_test_clock(sched);
+
+    WaitQueue q;
+    std::array<WaitNode, N> nodes;
+    std::array<Fiber, N> waiters;
+    std::array<FiberStack, N> stacks;
+    std::atomic<unsigned> registered{0};
+
+    // N waiters, each with a FAR-FUTURE deadline (so the pump will NOT pop them
+    // until the clock is advanced past it). Each registers then suspends.
+    for (unsigned i = 0; i < N; ++i) {
+        waiters[i].set_entry([&, i](Fiber&) {
+            registered.fetch_add(1, std::memory_order::release);
+            sched.await_wait_deadline(q, nodes[i], Scheduler::deadline_t{100000});
+        });
+        SLUICE_CHECK(sched.init_fiber(waiters[i], stacks[i].base(), stacks[i].size()));
+        sched.spawn(waiters[i]);
+    }
+    sched.run(1);  // Drain: each waiter registers then suspends (no resolver).
+
+    // (pre) All N deadlines are ACTIVE and physically present.
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == N,
+                     "N active deadlines registered");
+    SLUICE_CHECK_MSG(E11TimerTestHooks::timer_pool_size(sched) == N,
+                     "pool holds N entries (all active)");
+
+    // Resolve each via RESOURCE_WAKE. The wake winner RETIRES the bound
+    // registration in the SAME CS (logical retirement is immediate). A retry
+    // waker fiber is needed because the waiters are suspended on the queue.
+    Fiber fwaker;
+    fwaker.set_entry([&](Fiber&) {
+        for (unsigned i = 0; i < N; ++i) {
+            for (int k = 0; k < 10000 && !nodes[i].is_terminal(); ++k) {
+                sched.wake_wait_one(q);
+                std::this_thread::yield();
+            }
+        }
+    });
+    FiberStack sw;
+    SLUICE_CHECK(sched.init_fiber(fwaker, sw.base(), sw.size()));
+    sched.spawn(fwaker);
+    sched.run(1);  // wake each waiter (retires each registration immediately)
+
+    // (a) Immediately after the wakes: logical retirement was IMMEDIATE (0
+    // ACTIVE), lifetime safety is immediate (the entries are inert), BUT
+    // physical reclamation has NOT happened — the far-future RETIRED entries
+    // remain physically in the pool+heap because their deadlines (100000) have
+    // not been reached by the pump. This is the overclaim F3 corrects: the pool
+    // is NOT empty here.
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+                     "logical retirement immediate: 0 active after wakes");
+    SLUICE_CHECK_MSG(
+        E11TimerTestHooks::timer_pool_count_in_state(
+            sched, TimerRegistration::State::retired) == N,
+        "N entries RETIRED (logical retirement immediate)");
+    SLUICE_CHECK_MSG(E11TimerTestHooks::timer_pool_size(sched) == N,
+                     "physical retention: pool still holds N RETIRED entries");
+    SLUICE_CHECK_MSG(E11TimerTestHooks::deadline_heap_size(sched) == N,
+                     "physical retention: heap still holds N RETIRED entries");
+
+    // (b) Advance the clock PAST the far-future deadlines and pump. Now the
+    // pump pops each RETIRED entry (at its deadline) and erases its pool block.
+    // Physical reclamation completes at the deadline.
+    E11TimerTestHooks::set_clock(sched, 200000);
+    sched.advance_clock(200000);
+
+    SLUICE_CHECK_MSG(E11TimerTestHooks::timer_pool_size(sched) == 0,
+                     "physical reclamation at-deadline: pool drained");
+    SLUICE_CHECK_MSG(E11TimerTestHooks::deadline_heap_size(sched) == 0,
+                     "physical reclamation at-deadline: heap drained");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
 }
 
 // =============================================================================

@@ -80,39 +80,54 @@ parked         : whether the Scheduler is parked (idle)
 
 ## Results
 
-**NOTE — TLA+ tooling limitation.** This environment has no `tla2tools.jar`
-(the E10 README records the same limitation) and no network to fetch it. **TLC
-was NOT executed here.** The `.cfg` files are reproducible from a fixed jar
-exactly as the E7/E8/E9/E10 models are; running them is:
+**TLC WAS EXECUTED.** The gate runs against TLC2 v1.8.0 (rev 227f61b,
+2026-07-09) from `tla2tools.jar` (fetched from the TLA+ GitHub release). The
+reproducible runner is `scripts/verify-e11-formal.sh` (M8); it asserts every
+model's expected verdict. To run it yourself:
 
 ```bash
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e11_timer_wait/E11TimerWait.cfg docs/spec/e11_timer_wait/E11TimerWait
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e11_timer_wait/E11TimerWaitLiveness.cfg docs/spec/e11_timer_wait/E11TimerWait
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e11_timer_wait/E11TimerWaitNeg1DoublePublication.cfg \
-  docs/spec/e11_timer_wait/E11TimerWaitNeg1DoublePublication
-# ... likewise for Neg2..Neg5
+# one-time: fetch the jar the E7-E10 READMEs also expect at /tmp/tla2tools.jar
+curl -sSL -o /tmp/tla2tools.jar \
+  https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
+# then:
+scripts/verify-e11-formal.sh
 ```
 
-Expected (by construction, pending actual TLC execution):
+Actual executed results (TLC2 v1.8.0, all models exhaustive over the finite
+domain Nodes={N0,N1}, Regs={R0,R1}, Time=0..3, DeadlineVal=0..3):
 
-| model | config | result | counterexample |
-|-------|--------|--------|----------------|
-| `E11TimerWait` | `E11TimerWait.cfg` | all invariants PASS | — |
-| `E11TimerWait` | `E11TimerWaitLiveness.cfg` | `DeadlineParkLiveness` PASS | — |
-| `E11TimerWaitNeg1DoublePublication` | `.cfg` | `InvSingleResolutionWinner` FAIL | a node reaches `resolvedCount = 2` (wake + timer) |
-| `E11TimerWaitNeg2TimerCancelDoublePublication` | `.cfg` | `InvSingleResolutionWinner` FAIL | a node reaches `resolvedCount = 2` (timer + cancel) |
-| `E11TimerWaitNeg3StaleCrossEpoch` | `.cfg` | `InvSingleResolutionWinner` FAIL | a slot resolved twice across E and E+1 |
-| `E11TimerWaitNeg4CallbackAfterRetirement` | `.cfg` | `InvTimerLifetimeClosure` FAIL | `nodeAlive[n]=FALSE /\ regState[r]=Active` |
-| `E11TimerWaitNeg5DeadlineLostParked` | `.cfg` | `DeadlineParkLiveness` FAIL | deadline due forever, parked forever |
+| model | config | result | states (distinct) | counterexample |
+|-------|--------|--------|-------------------|----------------|
+| `E11TimerWait` | `E11TimerWait.cfg` | all invariants PASS | 10888 | — |
+| `E11TimerWait` | `E11TimerWaitLiveness.cfg` | `DeadlineParkLiveness` PASS | 10888 | — |
+| `E11TimerWaitNeg1DoublePublication` | `.cfg` | `InvSingleResolutionWinner` FAIL | 144 | timer publishes without the resolve_ CAS, then wake publishes again: `resolvedCount[N0]=2` |
+| `E11TimerWaitNeg2TimerCancelDoublePublication` | `.cfg` | `InvSingleResolutionWinner` FAIL | 133 | cancel publishes without the resolve_ CAS, then timer/admission publishes again: `resolvedCount[N0]=2` |
+| `E11TimerWaitNeg3StaleCrossEpoch` | `.cfg` | `InvWaitEpochIsolation` FAIL | 1395 | stale slot-keyed timer for N0 resolves N1 (N1 reused N0's slot): `regState[R0]=Consumed /\ nodeState[N0]#Expired` |
+| `E11TimerWaitNeg4CallbackAfterRetirement` | `.cfg` | `InvTimerLifetimeClosure` FAIL | 129 | non-timer winner does not retire the reg; node destroyed while reg ACTIVE: `nodeAlive[N0]=FALSE /\ regState[R0]=Active` |
+| `E11TimerWaitNeg5DeadlineLostParked` | `.cfg` | `DeadlineParkLiveness` FAIL | 10888 | parked forever with a due deadline (Tick + pump disabled while parked, no Unpark) |
 
-Because TLC could not be run, the authoritative proof of E11's safety is the
-**refinement map + explicit causal proof below** (the E10 README §12 permits
-this executable fallback when the formal framework is unavailable). The
-deterministic production tests in `tests/e11_timer_wait_test.cpp` (T0–T16) ARE
-executed and pass under ASan/UBSan — they are the load-bearing runtime evidence.
+**Corrective history.** The first-committed E11 models did NOT parse or were
+vacuous/non-counterexample-producing under real TLC: the correct model had an
+invalid `EXCEPT ![r \in Regs |-> ...]` subscript and a `SumResolvedCount`
+forward reference; every model's `Register` required `nodeAlive[n]=TRUE` while
+`Init` set all `nodeAlive=FALSE` (registration unreachable -> safety PASS
+vacuous, NEG counterexamples unreachable); the liveness property used the `~>`
+form TLC rejects as a standalone PROPERTY wrapped under `[]`-fairness; and the
+negative models' defects were unreachable because retirement was atomic with
+the resolve. These were all corrected so the gate is now actually executed.
+The E10 README's claim that "§12 permits an executable fallback when TLC is
+unavailable" is withdrawn — no such §12 exists in the E10 spec (it ends at
+§11), and M8 requires the gate be runnable from committed artifacts (which it
+now is, via `scripts/verify-e11-formal.sh`).
+
+TLC IS run (see Results above + `scripts/verify-e11-formal.sh`). The formal
+gate and the **refinement map + explicit causal proof below** are complementary:
+the gate proves the finite model preserves I1–I7 and that each broken variant
+has a reachable defect; the refinement map ties each formal concept to its
+production authority; the deterministic production tests in
+`tests/e11_timer_wait_test.cpp` (T0–T17) exercise the production seams under
+ASan/UBSan. The causal proof below carries the I3/I4 argument that does not
+reduce to a finite-state sweep (object-identity vs numeric-address reuse).
 
 ## Refinement map (TLA+ → production)
 
@@ -184,8 +199,8 @@ state (which is gone once the node is destroyed). $\blacksquare$
 | --------- | ------------- | ---------------- | ------------------ |
 | I1 Single Resolution Winner | `resolvedCount[n] <= 1` | `resolve_` CAS (three causes, one authority) | T5, T16 |
 | I2 Single Runnable Publication | `wakeDispatched == Sum resolvedCount` | `make_runnable` exactly-once | T5, T16 |
-| I3 Wait-Epoch Isolation | `regEpoch[r]` immutable; `ResolveTimer` targets it | `TimerRegistration::node_` captures `WaitNode&` | T7, T8 |
-| I4 Timer Lifetime Closure | `ResolveTimer` gates on `regState = Active`; `DestroyNode` requires retirement | `try_claim_expiry` before deref; `retire_timer_for_node_locked` in winner CS | T8, T9/T10 |
+| I3 Wait-Epoch Isolation | `regEpoch[r]` immutable; `ResolveTimer` targets it | `TimerRegistration::node_` captures `WaitNode&` (object identity, never a reusable address) | T7; NEG-3 (same-slot reuse CE) |
+| I4 Timer Lifetime Closure | `ResolveTimer` gates on `regState = Active`; `DestroyNode` requires retirement | `try_claim_expiry` before deref; `retire_timer_for_node_locked` in winner CS | T8/T9/T10 (retirement-state gate); NEG-4 (lifetime CE) |
 | I5 Deadline Admission Closure | `AdmissionExpire` at registration | `await_wait_deadline` I5 recheck | T0 |
 | I6 Deadline Park Liveness | `DeadlineParkLiveness` under fairness | bounded `park_on_wake_source` + worker-loop pump | T11, T12, T13, T15 |
 | I7 Cleanup Closure | winner retires R; terminal => no Active reg | `retire_timer_for_node_locked` | T4, T5 |

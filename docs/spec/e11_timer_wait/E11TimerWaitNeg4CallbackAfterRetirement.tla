@@ -2,28 +2,40 @@
 (*
   E11 NEG-4 — Timer Callback After WaitNode Retirement (BROKEN model).
 
-  Defect: a node may be DESTROYED (nodeAlive := FALSE) while a bound registration
-  is still ACTIVE — the callback/dereference authority is NOT closed before the
-  node's lifetime ends. A later ResolveTimer dereferences the destroyed node.
+  Defect: a non-timer resolution (RESOURCE_WAKE / CANCEL) resolves the wait and
+  publishes WITHOUT retiring the bound timer registration. The registration
+  stays ACTIVE while the node becomes terminal; the fiber resumes and the node's
+  storage is destroyed (nodeAlive := FALSE); a later ResolveTimer (the stale
+  expiry) then dereferences the destroyed node because it still sees an ACTIVE
+  registration. This is the I4 (Timer Lifetime Closure) violation — the
+  load-bearing E11 difference from E10 loser-safety.
 
   Broken protocol:
-      timer registration still owns dereference authority
-      after WaitNode lifetime ends
+      non-timer resolution publishes/resumes
+      WITHOUT retiring timer callback authority
+      -> node destroyed while registration ACTIVE
+      -> stale expiry dereferences freed storage (UAF)
 
-  Required counterexample state:
+  Required counterexample state (reachable):
       nodeAlive[n] = FALSE
       regState[r] = "Active"   (for regEpoch[r] = n)
-      timer expiry attempts dereference (ResolveTimer enabled -> node touched)
+      => InvTimerLifetimeClosure VIOLATED.
 
-  Violation: InvTimerLifetimeClosure (I4). The correct model requires
-  DestroyNode to retire/consume ALL registrations bound to n FIRST (the
-  DestroyNode guard \A r : regEpoch[r] = n => regState[r] # "Active"). The buggy
-  model DROPS that guard, so a stale Active registration survives node
-  destruction and a later expiry dereferences freed storage (UAF in production).
+  MODEL DESIGN (M5). The defect is modeled at the source the closure protocol
+  prescribes — the NON-TIMER RESOLVE PATH. ResolveWakeBuggy / ResolveCancelBuggy
+  transition the node to terminal and publish, but do NOT retire the bound Active
+  registration (they leave regState unchanged). DestroyNodeBuggy correspondingly
+  does NOT require the bound registration to be retired/consumed (its guard only
+  checks isTerminal). Together these allow the bad state: a terminal, destroyed
+  node whose registration is still ACTIVE. The correct model retires the reg in
+  the SAME step as the resolve (so isTerminal => reg Retired/Consumed) and
+  DestroyNode requires that; the buggy model omits both, isolating the
+  "callback authority not closed before node lifetime" defect as the one-rule
+  difference at the resolve path.
 
-  This is the load-bearing lifetime-closure defect: the difference between E10
-  loser-safety (holds while the node is alive) and E11 callback-lifetime safety
-  (must hold AFTER the node storage is destroyed).
+  REACHABILITY: Register -> ResolveWakeBuggy (node Woken, reg stays Active) ->
+  DestroyNodeBuggy (nodeAlive := FALSE, reg still Active) reaches
+  nodeAlive[N]=FALSE /\ regState[R]=Active. InvTimerLifetimeClosure fires.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -45,7 +57,7 @@ isTerminal(n) == nodeState[n] \in {"Woken", "Cancelled", "Expired"}
 
 Register(n) ==
     /\ nodeState[n] = "Detached"
-    /\ nodeAlive[n] = TRUE
+    /\ nodeAlive[n] = FALSE
     /\ \E r \in Regs :
         /\ regState[r] = "Inert"
         /\ nodeState' = [nodeState EXCEPT ![n] = "Registered"]
@@ -53,29 +65,32 @@ Register(n) ==
         /\ regState' = [regState EXCEPT ![r] = "Active"]
         /\ regEpoch' = [regEpoch EXCEPT ![r] = n]
         /\ \E d \in DeadlineVal : regDeadline' = [regDeadline EXCEPT ![r] = d]
-        /\ UNCHANGED <<nodeAlive, now, parked, resolvedCount, wakeDispatched>>
+        /\ nodeAlive' = [nodeAlive EXCEPT ![n] = TRUE]
+        /\ UNCHANGED <<now, parked, resolvedCount, wakeDispatched>>
 
-ResolveWake(n) ==
+(* DEFECT (the one-rule difference at the resolve path): a non-timer winner
+   resolves the node and publishes but does NOT retire the bound Active
+   registration. The registration stays ACTIVE across the node's transition to
+   terminal and across the subsequent node destruction. (Correct model retires
+   the reg here: regState' = IF regEpoch[r]=n /\ Active THEN Retired ELSE ...).
+   This is "non-timer resolution publishes WITHOUT retiring timer callback
+   authority" — the defect the closure protocol prescribes for NEG-4. *)
+ResolveWakeBuggy(n) ==
     /\ nodeState[n] = "Registered"
     /\ nodeState' = [nodeState EXCEPT ![n] = "Woken"]
     /\ linked' = [linked EXCEPT ![n] = FALSE]
     /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
     /\ wakeDispatched' = wakeDispatched + 1
-    /\ regState' = [r \in Regs |->
-                        IF /\ regEpoch[r] = n /\ regState[r] = "Active"
-                        THEN "Retired" ELSE regState[r]]
-    /\ UNCHANGED <<regEpoch, regDeadline, nodeAlive, now, parked>>
+    \* DEFECT: regState is NOT retired (UNCHANGED) — callback authority stays open.
+    /\ UNCHANGED <<regState, regEpoch, regDeadline, nodeAlive, now, parked>>
 
-ResolveCancel(n) ==
+ResolveCancelBuggy(n) ==
     /\ nodeState[n] = "Registered"
     /\ nodeState' = [nodeState EXCEPT ![n] = "Cancelled"]
     /\ linked' = [linked EXCEPT ![n] = FALSE]
     /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
     /\ wakeDispatched' = wakeDispatched + 1
-    /\ regState' = [r \in Regs |->
-                        IF /\ regEpoch[r] = n /\ regState[r] = "Active"
-                        THEN "Retired" ELSE regState[r]]
-    /\ UNCHANGED <<regEpoch, regDeadline, nodeAlive, now, parked>>
+    /\ UNCHANGED <<regState, regEpoch, regDeadline, nodeAlive, now, parked>>
 
 ResolveTimer(r) ==
     /\ regState[r] = "Active"
@@ -89,15 +104,17 @@ ResolveTimer(r) ==
     /\ wakeDispatched' = wakeDispatched + 1
     /\ UNCHANGED <<regEpoch, regDeadline, nodeAlive, now, parked>>
 
-(* DEFECT: DestroyNode does NOT require the bound registration to be
-   retired/consumed first. A node may be destroyed while a registration bound to
-   it is still ACTIVE, leaving callback/dereference authority open past the
-   node's lifetime. (Correct model guards: \A r : regEpoch[r]=n =>
-   regState[r]\in {Retired,Consumed,Inert}.) *)
+(* DestroyNode requires only that the node is terminal (its lifetime ended). It
+   does NOT require the bound registration to be retired/consumed — which is
+   consistent with the buggy resolve path that never retired it. The correct
+   model's DestroyNode additionally guards \A r : regEpoch[r]=n =>
+   regState[r] \in {Retired,Consumed,Inert}; that guard is redundant in the
+   correct model (isTerminal already implies it) but load-bearing here, where
+   the buggy resolve leaves the reg Active. *)
 DestroyNode(n) ==
     /\ isTerminal(n)
     /\ nodeAlive[n] = TRUE
-    \* DEFECT: the retirement guard is DROPPED here.
+    \* DEFECT: no retirement guard — the buggy resolve left the reg Active.
     /\ nodeAlive' = [nodeAlive EXCEPT ![n] = FALSE]
     /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched,
                   regState, regEpoch, regDeadline, now, parked>>
@@ -114,8 +131,8 @@ Stutter == UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched,
 Next ==
     \/ Stutter
     \/ \E n \in Nodes : Register(n)
-    \/ \E n \in Nodes : ResolveWake(n)
-    \/ \E n \in Nodes : ResolveCancel(n)
+    \/ \E n \in Nodes : ResolveWakeBuggy(n)
+    \/ \E n \in Nodes : ResolveCancelBuggy(n)
     \/ \E r \in Regs : ResolveTimer(r)
     \/ \E n \in Nodes : DestroyNode(n)
     \/ Tick
@@ -136,10 +153,10 @@ Vars == <<nodeState, linked, resolvedCount, wakeDispatched,
           regState, regEpoch, regDeadline, nodeAlive, now, parked>>
 Spec == Init /\ [][Next]_Vars
 
-(* I4: no expiry may dereference a node whose storage is destroyed. The buggy
-   model reaches: nodeAlive[n] = FALSE /\ regState[r] = "Active" (bound to n),
-   so an Active registration outlives the node's storage -> InvTimerLifetimeClosure
-   is VIOLATED. *)
+(* I4: an ACTIVE registration implies its bound node storage is still alive
+   (retirement/consumption happens before DestroyNode). The buggy model reaches
+   nodeAlive[n] = FALSE /\ regState[r] = "Active" (bound to n), so an Active
+   registration outlives the node's storage -> VIOLATED (stale-expiry UAF). *)
 InvTimerLifetimeClosure ==
     \A r \in Regs :
         regState[r] = "Active" => nodeAlive[regEpoch[r]]

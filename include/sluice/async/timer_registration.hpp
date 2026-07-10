@@ -32,10 +32,14 @@
 //
 // Lifetime/ownership: the Scheduler owns the set of TimerRegistration objects
 // (stored by value in a pointer-stable container: std::list). Each block lives
-// exactly for one wait epoch and is erased when its timer is consumed/retired
-// and no longer physically present in the deadline heap. It MUST outlive any
-// WaitNode it is bound to (it is heap-allocated by the Scheduler, while the
-// node is a fiber-frame local), satisfying the post-destruction window.
+// exactly for one wait epoch. Logical retirement (ACTIVE->RETIRED) is immediate
+// (the non-timer winner performs it in the same CS as the resolve CAS); but
+// PHYSICAL erasure from the heap+pool is LAZY-AT-DEADLINE — the pump erases a
+// block only when now >= its deadline, regardless of its state. So a far-future
+// RETIRED block remains physically in the pool until its original deadline is
+// reached (proven by e11_t18). It MUST outlive any WaitNode it is bound to (it
+// is heap-allocated by the Scheduler, while the node is a fiber-frame local),
+// satisfying the post-destruction window.
 //
 // Synchronization: `state` is std::atomic (lock-free acquire/release) so an
 // expiry path can observe retirement without taking global_mtx_. The bound

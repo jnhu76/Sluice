@@ -106,9 +106,18 @@ route_runnable_locked
 It is NOT a Fiber wait epoch.
 
 A wait epoch is structurally identified by its fresh, non-reusable
-`WaitNode` identity (its address). This is the E10 wait-epoch isolation
-mechanism — there is no epoch counter, and none is required (audit §E
-finding 8, §F).
+`WaitNode` OBJECT identity — the live `WaitNode` instance for one object
+lifetime. This is the E10 wait-epoch isolation mechanism — there is no epoch
+counter, and none is required (audit §E finding 8, §F).
+
+Note (F4-corrected): the live `WaitNode` object identity is NOT the same as its
+numeric storage ADDRESS. A later wait epoch E+1 is a distinct object whose
+storage MAY reuse E's numeric address after E's node is destroyed. The epoch
+isolation mechanism is the fresh live-object instance + its absorbing terminal
+state, NOT a permanently-unique address token. E11's `TimerRegistration` binds
+to the live `WaitNode&` (object identity) and gates expiry on its own
+independently-stable retirement state, so a stale expiry cannot reach E+1 even
+when E+1 reuses E's address (I3/I4; formal NEG-3).
 
 E11 MUST extend this protocol.
 
@@ -853,9 +862,19 @@ Deadline representation      deadline_t = deadline_tick_t (uint64 monotonic tick
 monotonic clock              Scheduler::clock_ (atomic; steady_clock in prod,
                              controllable logical clock in tests via advance_clock)
 timer container              binary min-heap of TimerRegistration* over a
-                             pointer-stable std::list pool (lazy removal)
-timer registration identity  TimerRegistration control block (heap-allocated,
-                             pool-owned); its address is its identity
+                             pointer-stable std::list pool. Reclamation
+                             contract (proven by e11_t18): logical retirement
+                             (ACTIVE->RETIRED) is IMMEDIATE; lifetime safety is
+                             IMMEDIATE (atomic state gate); PHYSICAL reclamation
+                             is LAZY-AT-DEADLINE (pump pops+erases an entry only
+                             when now >= its deadline, regardless of state). A
+                             far-future RETIRED entry remains physically in the
+                             heap+pool until its original deadline is reached.
+                             Pool size is bounded by concurrent ACTIVE waits +
+                             retired/consumed entries whose deadlines have not
+                             yet been reached — NOT solely by concurrent waits;
+                             "unbounded growth fixed" is not claimed absolutely.
+                             Wheel-compaction / eager removal is deferred to E15.
 timer registration ownership Scheduler owns timer_pool_ (std::list); each block
                              lives exactly one wait epoch
 retirement state             TimerRegistration::state_ atomic
@@ -888,7 +907,7 @@ RunMode integration          external_wake_possible_locked includes
 ```
 
 Formal model: `docs/spec/e11_timer_wait/` (correct model + NEG-1..NEG-5).
-Deterministic tests: `tests/e11_timer_wait_test.cpp` (E11-T0..T16).
+Deterministic tests: `tests/e11_timer_wait_test.cpp` (E11-T0..T18).
 
 ---
 

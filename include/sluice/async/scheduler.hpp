@@ -560,13 +560,22 @@ private:
     // The deadline container is a binary min-heap over TimerRegistration*,
     // keyed by deadline. Pointer-stable storage (std::list) so a registration's
     // identity survives heap sift operations and outlives any bound WaitNode.
-    // Erasure is lazy-but-bounded: an inert (retired/consumed) registration
-    // MAY remain physically in the heap until its deadline arrives and
-    // pump_deadlines_locked pops it (then it is erased from the pool too), but
-    // its atomic `state` makes it inert (try_claim_expiry / retire observe
-    // RETIRED/CONSUMED without dereferencing the destroyed node — I4). No
-    // inert block lingers past its own deadline, so the pool never holds more
-    // live-or-pending entries than there are concurrent deadline waits.
+    //
+    // Reclamation contract (proven by e11_t18, F3-corrected): logical
+    // retirement (ACTIVE->RETIRED) is IMMEDIATE (the non-timer winner performs
+    // it in the same CS as the resolve CAS); lifetime safety is IMMEDIATE (the
+    // atomic `state` gate makes try_claim_expiry/retire observe RETIRED/CONSUMED
+    // WITHOUT dereferencing a possibly-destroyed node — I4); but PHYSICAL
+    // reclamation (erase from heap + pool) is LAZY-AT-DEADLINE — the pump pops
+    // an entry only when `now >= its deadline`, regardless of state, and erases
+    // the pool block then. Consequently a far-future RETIRED entry remains
+    // physically in the heap+pool until its original deadline is reached. The
+    // pool size is therefore bounded by (concurrent ACTIVE deadline waits) +
+    // (retired/consumed entries whose deadlines have not yet been reached); it
+    // is NOT bounded solely by concurrent waits, and "unbounded growth fixed"
+    // must not be claimed absolutely. No inert block lingers past its OWN
+    // deadline. Wheel-compaction / eager removal is deferred to E15 and is NOT
+    // added unless a reviewer proves a mandatory resource-bound violation.
     //
     // All heap state is protected by global_mtx_ (the Scheduler coordination
     // domain): the heap is mutated only by await_wait_deadline (register),
@@ -645,6 +654,20 @@ private:
     // live+pending deadline waits with no UAF. Called under global_mtx_.
     // NEVER reads node()/queue() (I4-safe by construction).
     void erase_popped_registration_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
+
+    // E11-T17 (F2) narrow test hook: register a TimerRegistration for {node,q,
+    // deadline} from a NON-worker thread (the test coordinator). Mirrors the
+    // full await_wait_deadline admission MINUS the fiber-suspend path: it
+    // registers `node` into `q` (Detached->Registered), increments the wait
+    // count, creates the ACTIVE registration, pushes it into the deadline heap,
+    // and refreshes the earliest-deadline park cache — but does NOT suspend a
+    // fiber. This lets the coordinator install a NEW deadline while the worker
+    // is held at the park-commit seam (global_mtx_ is released at that seam).
+    // TEST-ONLY. Returns the created registration pointer (nullptr if the
+    // deadline was already due or the node was not Detached).
+    TimerRegistration* register_test_deadline_locked(WaitNode* node, WaitQueue* q,
+                                                     deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_);
 
     // Predicate: is there currently an active timer registration? An active
     // deadline is an externally-resolvable wait (its expiry reaches the
