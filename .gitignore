@@ -1,3 +1,6 @@
+# skill
+.agents
+
 # Xmake cache
 .xmake/
 build/
