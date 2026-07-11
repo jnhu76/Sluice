@@ -32,6 +32,18 @@
 // impossible — set()'s drain completes atomically before reset() or a new
 // admission can run. No generation counter or snapshot is needed.
 //
+// SEALED PUBLIC AUTHORITY (E12-A-EVENT-CORRECTIVE-1 F-EVENT-AUTH). The Event's
+// private WaitQueue is NOT publicly reachable: there is no wait_queue() accessor
+// on the production-public surface. The ONLY Event-specific RESOURCE_WAKE
+// authorities are set() and admission observing SET. Cancellation is the narrow
+// per-wait-epoch Event::cancel surface (CANCEL cause), which routes through the
+// inherited Scheduler::cancel_wait on this Event's private WaitQueue WITHOUT
+// exposing it. Ordinary downstream code CANNOT call wake_wait_one on an Event
+// (the required bypass `scheduler.wake_wait_one(event.wait_queue())` does not
+// compile). Deterministic test hooks (phase seams + the underlying queue) are
+// reachable ONLY through the friend struct E12EventTestHooks, defined in the
+// e12 test TU — an ordinary production TU cannot name or define that type.
+//
 // Scheduler binding: Event borrows Scheduler& for its lifetime. set() may be
 // called from an external OS thread; wait resolution reaches that Scheduler's
 // waiting_waitq_count_, runnable routing, wake source, and deadline service.
@@ -116,17 +128,43 @@ public:
     //   - deadline elapsing       -> Expired  (TIMER_EXPIRE)
     // If SET at admission, resolves Woken inline (no suspend). If the deadline
     // is already due at admission (and not SET), resolves Expired inline (E11 I5).
+    //
+    // Deadline precedence (F-EVENT-DEADLINE, normative): during Event deadline
+    // admission, Event SET readiness is checked BEFORE the already-due deadline
+    // predicate. Therefore Event SET + already-due deadline -> Woken (the
+    // resource is ready; the deadline is moot). The matrix:
+    //   SET    + future      -> Woken
+    //   SET    + already due -> Woken   (SET precedence)
+    //   UNSET  + already due -> Expired
+    //   UNSET  + future      -> RESOURCE/TIMER/CANCEL race
     void wait_until(WaitNode& node, Scheduler::deadline_t deadline) {
         scheduler_.await_event_wait_deadline(waiters_, set_, node, deadline);
     }
 
-    // Test/integration seam: the underlying WaitQueue. Used by tests to call
-    // Scheduler::cancel_wait (the inherited E10 cancellation surface). This is
-    // NOT a public cancellation API; it exposes the wait-epoch substrate for
-    // deterministic race proofs.
-    WaitQueue& wait_queue() noexcept { return waiters_; }
+    // Narrow per-wait-epoch CANCELLATION authority (E12-A-EVENT-CORRECTIVE-1 A2).
+    // Resolves `node` with Cancelled through the Scheduler's cancellation path on
+    // THIS Event's private WaitQueue, WITHOUT exposing that queue. Returns true
+    // iff this call won (the node was Registered here and is now Cancelled).
+    //
+    // Properties:
+    //   - does NOT expose WaitQueue&
+    //   - does NOT call RESOURCE_WAKE (cannot synthesize a SET-satisfied wake)
+    //   - does NOT change Event SET/UNSET
+    //   - does NOT cancel a WaitNode belonging to another Event (a foreign node
+    //     is not registered in this Event's queue; cancel_wait loses the CAS)
+    //   - does NOT cancel a detached, terminal, or destroyed epoch (returns false)
+    //   - returns whether CANCEL won
+    //
+    // This is a narrow per-wait-epoch cancellation seam. It is NOT a task
+    // cancellation token, NOT cancel-all, NOT an Event close, and NOT destructor
+    // cancellation.
+    [[nodiscard]] bool cancel(WaitNode& node) {
+        return scheduler_.event_cancel_wait(waiters_, node);
+    }
 
 private:
+    friend struct E12EventTestHooks;  // test-only phase seams (defined in test TU)
+
     Scheduler& scheduler_;
     std::atomic<bool> set_;
     WaitQueue waiters_;

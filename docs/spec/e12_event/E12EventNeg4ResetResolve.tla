@@ -1,31 +1,19 @@
----------------------- MODULE E12EventNeg2WakeOne ----------------------
+--------------------- MODULE E12EventNeg4ResetResolve ---------------------
 (*
-  NEG-EVENT-2 -- Wake-One Manual-Reset Strands Waiter (E12-A-EVENT-CORRECTIVE-1).
+  NEG-EVENT-4 -- Reset Resolves Waiter (E12-A-EVENT-CORRECTIVE-1, Corrective J).
 
-  One-rule difference from the E12 set semantics: SetEventBuggy resolves ONLY
-  ONE registered Suspended waiter (the FIFO head / a victim), instead of
-  draining all registered Suspended waiters. The broken protocol:
+  Single broken rule: ResetBuggy changes one Registered waiter to terminal
+  (Woken) and records the "Reset" resolution cause. The correct ResetEvent is a
+  pure state flip that NEVER touches a node.
 
-    W1 registered, W2 registered
-    SetEventBuggy -> SET, resolves only W1
-    set-on-SET idempotent (cannot re-enter a drain on SET), reset absent,
-    deadline absent, cancel absent
-    W2 remains Registered+Suspended forever while Event remains SET
+  Counterexample: a node that was Registered becomes terminal with
+  resolutionCause = "Reset". Violated expected property: InvResetNonResolution
+  (E5).
 
-  Required counterexample: W2 remains Registered+Suspended forever while
-  Event remains SET. Violated expected property: EventSetDrainLivenessNonVacuous
-  (E4 liveness).
-
-  Defect: SetEventBuggy resolves only ONE Suspended node, leaving the others
-  stranded. The correct set protocol (StartSet -> DrainOne* -> FinishSet) drains
-  every Suspended node under fairness; this buggy atomic set picks one victim.
-
-  NOTE: this negative model uses the ORIGINAL atomic SetEventBuggy (not the
-  multi-step StartSet/DrainOne/FinishSet) because the defect it targets is the
-  set-releases-ALL cardinality, which is most directly expressed by an atomic
-  set that resolves exactly one. The multi-step model is the refinement that
-  proves set/reset epoch isolation (E6); NEG-2 targets the orthogonal E4
-  liveness/cardinality property. State variables are shared for consistency.
+  The resolutionCause variable is written by EVERY modeled terminal-resolution
+  action (AdmissionWake -> AdmissionSet, DrainOne -> SetBroadcast, ResolveCancel
+  -> Cancel) AND by the buggy ResetBuggy -> Reset. It is not a constant forced
+  to pass: the bug writes the "Reset" value, which the property forbids.
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
@@ -39,6 +27,9 @@ VARIABLES nodeState, linked, resolvedCount, wakeDispatched, eventSet,
 NodeState == {"Detached", "Registered", "Woken", "Cancelled", "Expired"}
 AdmissionPhase == {"NoAdmission", "AdmissionOpen", "Suspended"}
 ProtoPhase == {"Idle", "SetDrain"}
+\* ResolutionCause is extended with "Reset" so the buggy ResetBuggy can write it
+\* (the correct model never produces "Reset").
+ResolutionCause == {"None", "AdmissionSet", "SetBroadcast", "Cancel", "Reset"}
 NoGen == 1000000
 
 ASSUME /\ Nodes # {}
@@ -112,50 +103,60 @@ CommitSuspend(n) ==
                   protoPhase, resetGeneration, registrationGeneration,
                   activeSetGen, wakeEpochGen, resolutionCause>>
 
-\* DEFECT: SetEventBuggy transitions to SET and resolves ONLY ONE Suspended node
-\* (picks a victim via \E), instead of draining all. A non-victim Suspended node
-\* remains Registered forever while eventSet stays SET. Since eventSet is now
-\* SET, SetEventBuggy cannot re-fire (it requires UNSET), and reset is absent, so
-\* the stranded node is never resolved.
-SetEventBuggy ==
+StartSet ==
+    /\ protoPhase = "Idle"
     /\ eventSet = "UNSET"
-    /\ Cardinality(Drainable) >= 1
-    /\ \E victim \in Drainable :
-          /\ eventSet' = "SET"
-          /\ activeSetGen' = resetGeneration
-          /\ nodeState' =
-                 [n \in Nodes |->
-                    IF n = victim THEN "Woken" ELSE nodeState[n]]
-          /\ linked' =
-                 [n \in Nodes |->
-                    IF n = victim THEN FALSE ELSE linked[n]]
-          /\ resolvedCount' =
-                 [n \in Nodes |->
-                    IF n = victim THEN resolvedCount[n] + 1 ELSE resolvedCount[n]]
-          /\ wokenBySetDrain' =
-                 [n \in Nodes |->
-                    IF n = victim THEN wokenBySetDrain[n] + 1 ELSE wokenBySetDrain[n]]
-          /\ wakeEpochGen' =
-                 [n \in Nodes |->
-                    IF n = victim THEN activeSetGen' ELSE wakeEpochGen[n]]
-          /\ wakeDispatched' = wakeDispatched + 1
-          /\ resolutionCause' =
-                 [n \in Nodes |->
-                    IF n = victim THEN "SetBroadcast" ELSE resolutionCause[n]]
+    /\ protoPhase' = "SetDrain"
+    /\ eventSet' = "SET"
+    /\ activeSetGen' = resetGeneration
+    /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched,
+                  admissionPhase, admissionSawSet, wokenBySetDrain,
+                  resetGeneration, registrationGeneration, wakeEpochGen,
+                  resolutionCause>>
 
-    /\ UNCHANGED <<admissionPhase, admissionSawSet,
-                  protoPhase, resetGeneration, registrationGeneration>>
+DrainOne(n) ==
+    /\ protoPhase = "SetDrain"
+    /\ activeSetGen # NoGen
+    /\ nodeState[n] = "Registered"
+    /\ admissionPhase[n] = "Suspended"
+    /\ nodeState' = [nodeState EXCEPT ![n] = "Woken"]
+    /\ linked' = [linked EXCEPT ![n] = FALSE]
+    /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
+    /\ wakeDispatched' = wakeDispatched + 1
+    /\ wokenBySetDrain' = [wokenBySetDrain EXCEPT ![n] = wokenBySetDrain[n] + 1]
+    /\ wakeEpochGen' = [wakeEpochGen EXCEPT ![n] = activeSetGen]
+    /\ resolutionCause' = [resolutionCause EXCEPT ![n] = "SetBroadcast"]
+    /\ UNCHANGED <<eventSet, admissionPhase, admissionSawSet,
+                  protoPhase, resetGeneration, registrationGeneration,
+                  activeSetGen>>
 
-ResetEvent ==
+FinishSet ==
+    /\ protoPhase = "SetDrain"
+    /\ protoPhase' = "Idle"
+    /\ activeSetGen' = NoGen
+    /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched, eventSet,
+                  admissionPhase, admissionSawSet, wokenBySetDrain,
+                  resetGeneration, registrationGeneration,
+                  wakeEpochGen, resolutionCause>>
+
+\* DEFECT: ResetBuggy changes ONE Registered waiter to terminal (Woken) and
+\* records the "Reset" resolution cause. The correct ResetEvent never touches a
+\* node. Here ResetBuggy both flips eventSet AND resolves a victim (if any
+\* Registered node exists).
+ResetBuggy(n) ==
     /\ protoPhase = "Idle"
     /\ eventSet = "SET"
     /\ resetGeneration < MaxGen
+    /\ nodeState[n] = "Registered"
     /\ eventSet' = "UNSET"
     /\ resetGeneration' = resetGeneration + 1
-    /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched,
-                  admissionPhase, admissionSawSet, wokenBySetDrain,
-                  protoPhase, registrationGeneration, activeSetGen,
-                  wakeEpochGen, resolutionCause>>
+    /\ nodeState' = [nodeState EXCEPT ![n] = "Woken"]
+    /\ linked' = [linked EXCEPT ![n] = FALSE]
+    /\ resolvedCount' = [resolvedCount EXCEPT ![n] = resolvedCount[n] + 1]
+    /\ wakeDispatched' = wakeDispatched + 1
+    /\ resolutionCause' = [resolutionCause EXCEPT ![n] = "Reset"]
+    /\ UNCHANGED <<admissionPhase, admissionSawSet, wokenBySetDrain,
+                  protoPhase, registrationGeneration, activeSetGen, wakeEpochGen>>
 
 ResolveCancel(n) ==
     /\ nodeState[n] = "Registered"
@@ -176,22 +177,18 @@ Next ==
     \/ \E n \in Nodes : Register(n)
     \/ \E n \in Nodes : AdmissionWake(n)
     \/ \E n \in Nodes : CommitSuspend(n)
-    \/ SetEventBuggy
-    \/ ResetEvent
+    \/ StartSet
+    \/ \E n \in Nodes : DrainOne(n)
+    \/ FinishSet
+    \/ \E n \in Nodes : ResetBuggy(n)
     \/ \E n \in Nodes : ResolveCancel(n)
 
 Spec == Init /\ [][Next]_Vars
 
-\* Fairness on the buggy set (so it must eventually run when drainable + UNSET).
-FairSetEventBuggy == WF_Vars(SetEventBuggy)
-LivenessSpecFair == Spec /\ FairSetEventBuggy
-
-\* The expected violated property: EventSetDrainLivenessNonVacuous (E4).
-\* A Suspended node that is NOT the victim remains Registered forever.
-EventSetDrainLivenessNonVacuous ==
+\* The expected violated property: InvResetNonResolution (E5). A terminal node
+\* must NEVER have the "Reset" resolution cause. The buggy ResetBuggy writes it.
+InvResetNonResolution ==
     \A n \in Nodes :
-        [] ( (/\ nodeState[n] = "Registered"
-              /\ admissionPhase[n] = "Suspended")
-             => <> (isTerminal(n)) )
+        isTerminal(n) => resolutionCause[n] # "Reset"
 
 =============================================================================

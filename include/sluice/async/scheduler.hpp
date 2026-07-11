@@ -48,6 +48,13 @@ struct E9ParkSeamHooks;
 // proofs never use sleep_for as causal proof.
 struct E11TimerTestHooks;
 
+// Forward declaration — E12-A-EVENT-CORRECTIVE-1 deterministic Event phase
+// seams (Corrective B). Defined only in the e12 test TU; accesses private
+// Scheduler Event-phase members + Event's private WaitQueue. An ordinary
+// production TU cannot name this type (it is defined ONLY in the e12 test TU
+// inside namespace sluice::async), so the phase seams are mechanically gated.
+struct E12EventTestHooks;
+
 // E9 external wake handle (ADR §9.4.10). A control-block-backed handle that
 // an EXTERNAL producer thread holds so it can wake a parked Scheduler Worker
 // without holding a raw Scheduler* (which would be use-after-free across
@@ -348,8 +355,24 @@ public:
     // Woken inline (no suspend). If the deadline is already due at admission,
     // the E11 I5 path resolves Expired inline (no suspend). The deadline
     // registration is retired by a non-timer winner in the same CS (E11 I4).
+    //
+    // Deadline precedence (F-EVENT-DEADLINE): at admission, Event SET readiness
+    // is checked BEFORE the already-due deadline predicate. Therefore Event SET
+    // + already-due deadline -> Woken inline (the resource is ready; the
+    // deadline is moot). This is the accepted production behavior.
     void await_event_wait_deadline(WaitQueue& q, const std::atomic<bool>& set_flag,
                                    WaitNode& node, deadline_t deadline);
+
+    // E12-A-EVENT-CORRECTIVE-1 A2: the narrow Event cancellation authority.
+    // Resolves `node` (registered in this Event's `waiters` queue) with
+    // Cancelled through the inherited cancel_wait path on `q`. Routes the
+    // winner's fiber through the canonical wake seam. Returns true iff this
+    // call won (the node was Registered in `q` and is now Cancelled). Does NOT
+    // expose `q` to the caller (Event::cancel passes its private waiters_).
+    // A foreign node (registered in a different queue, or detached/terminal)
+    // loses the resolve_ CAS and returns false. This is the per-wait-epoch
+    // CANCEL cause; it cannot synthesize a RESOURCE_WAKE.
+    bool event_cancel_wait(WaitQueue& q, WaitNode& node);
 
 
     // ---- E9 external wake source (ADR §9.4) ----
@@ -410,6 +433,7 @@ private:
     friend class SchedulerWakeHandle;  // E9: notify() -> notify_external_wake
     friend struct E9ParkSeamHooks;     // E9-CORRECTIVE park seams (T3/T4)
     friend struct E11TimerTestHooks;   // E11 deterministic clock/timer seams
+    friend struct E12EventTestHooks;   // E12-A-CORRECTIVE Event phase seams
 
     // Wait registration with owner Worker (E7-B will use owner; E7-A stores
     // the Fiber only).
@@ -500,6 +524,27 @@ private:
     std::condition_variable park_seam_cv_;
     bool park_seam_candidate_paused_ = false;
     bool park_seam_commit_paused_ = false;
+
+    // E12-A-EVENT-CORRECTIVE-1 (Corrective B): deterministic Event phase seams.
+    // Narrow TEST-only hooks at the load-bearing causal boundaries of the Event
+    // set/admission protocol, so causal proofs do NOT rely on timing:
+    //   event_set_store_before_drain_seam_  — pauses a set() thread AFTER it
+    //     has stored SET and while it STILL HOLDS global_mtx_ (mid-drain). This
+    //     proves reset/admission cannot cross an active old-set drain.
+    //   event_admission_before_final_check_seam_ — pauses a wait() thread AFTER
+    //     registration and while it STILL HOLDS global_mtx_+q.mtx(), BEFORE the
+    //     final SET check. This proves set()'s drain cannot complete until the
+    //     admission releases serialization (admission-first ordering).
+    // The seam only PAUSES the thread at the boundary; it does NOT modify
+    // Scheduler state. The seam blocks on its OWN mtx/cv while the production
+    // lock remains held, which is precisely the guarantee under test. Reachable
+    // ONLY through friend E12EventTestHooks (defined in the e12 test TU).
+    bool event_set_store_before_drain_seam_armed_ = false;
+    bool event_admission_before_final_check_seam_armed_ = false;
+    std::mutex event_seam_mtx_;
+    std::condition_variable event_seam_cv_;
+    bool event_set_seam_paused_ = false;
+    bool event_admission_seam_paused_ = false;
 
     // Get the current Worker's WorkerState (worker-local via TLS).
     static WorkerState* current_worker();

@@ -524,7 +524,7 @@ non-destruction Event semantics (set/reset/wait/late-waiter/cardinality); it
 blocks only the destruction path, which can be specified before the destructor
 is exercised. This is recorded so it is not discovered late.
 
-**Event verdict (E12-A CLOSED):**
+**Event verdict (E12-A CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED):**
 
 ```text
 PUBLIC SEMANTICS RESOLVED + IMPLEMENTED:
@@ -535,11 +535,15 @@ IMPLEMENTATION BOUNDARY RESOLVED:
     loop wake_wait_one_locked until drained (event_set_broadcast), atomic
     under global_mtx_. No native wake-many WaitQueue API added.
 
+PUBLIC AUTHORITY SEALED (E12-A-EVENT-CORRECTIVE-1 F-EVENT-AUTH):
+    raw wait_queue() accessor REMOVED; narrow Event::cancel(node) added.
+    Ordinary production code CANNOT obtain the Event's WaitQueue (compile probe).
+
 DESTRUCTION CONTRACT RESOLVED:
     caller contract violation; ~Event asserts empty in debug, no cancel/wake.
 
-E12-A CLOSED — see docs/e12-event.md (as-built topology) +
-    docs/spec/e12_event/ (formal model) +
+E12-A CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED — see docs/e12-event.md
+    (as-built topology) + docs/spec/e12_event/ (formal model) +
     scripts/verify-e12-event-formal.sh (formal gate).
 ```
 

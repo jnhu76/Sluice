@@ -426,7 +426,7 @@ Canonical decomposition (protocol-dependency order, resolved by the E12
 preparation audit — see [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)):
 
 ```text
-E12-A Event              [CLOSED — docs/e12-event.md; formal: docs/spec/e12_event/]
+E12-A Event              [CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED (E12-A-EVENT-CORRECTIVE-1) — docs/e12-event.md; formal: docs/spec/e12_event/]
 E12-B Semaphore
 E12-C Mutex
 E12-D Condition

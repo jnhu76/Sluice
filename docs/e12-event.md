@@ -1,6 +1,7 @@
 # E12-A — Async Event (Persistent Manual-Reset)
 
-> Status: CLOSED
+> Status: **CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED**
+> (E12-A-EVENT-CORRECTIVE-1)
 >
 > Authority baseline: E10 CLOSED
 > ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED at
@@ -8,8 +9,9 @@
 > Preparation: [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)
 > (E12-PREP READY).
 >
-> This document is the authoritative E12-A Event specification, now refined by
-> the verified implementation. Formal model:
+> This document is the authoritative E12-A Event specification, refined by the
+> E12-A-EVENT-CORRECTIVE-1 corrective (sealed public authority, narrow
+> cancellation, multi-step formal set protocol, NEG-EVENT-3/4). Formal model:
 > [`docs/spec/e12_event/`](spec/e12_event/). Formal gate:
 > [`scripts/verify-e12-event-formal.sh`](../scripts/verify-e12-event-formal.sh).
 
@@ -141,13 +143,26 @@ public:
     void wait(WaitNode& node);
     void wait_until(WaitNode& node, Scheduler::deadline_t deadline);
 
-    // Test/integration seam: the underlying WaitQueue. Used by tests to call
-    // Scheduler::cancel_wait (the inherited E10 cancellation surface).
-    WaitQueue& wait_queue() noexcept;
+    // Narrow per-wait-epoch CANCELLATION authority (E12-A-EVENT-CORRECTIVE-1 A2).
+    // Resolves `node` with Cancelled through the Scheduler cancellation path on
+    // THIS Event's private WaitQueue, WITHOUT exposing that queue. Returns true
+    // iff this call won.
+    [[nodiscard]] bool cancel(WaitNode& node);
 };
 
 }  // namespace sluice::async
 ```
+
+The raw `WaitQueue& wait_queue()` accessor was REMOVED in
+E12-A-EVENT-CORRECTIVE-1 (F-EVENT-AUTH): it leaked the Event's underlying
+WaitQueue to ordinary production code, which could combine it with
+`Scheduler::wake_wait_one` to resolve an Event waiter as `Woken` while the Event
+remained UNSET and `set()` was never called. A compile-negative probe
+(`tests/e12_event_authority_probe.cpp`, gated by the formal verify script)
+mechanically verifies the bypass no longer compiles. The Event's private
+WaitQueue is reachable only through the test-only friend struct
+`E12EventTestHooks` (defined solely in the e12 test TU); an ordinary production
+TU cannot name it.
 
 ### 3.1 Constructor / initial state
 
@@ -219,7 +234,7 @@ Result is queried via `node.outcome()`:
 Same admission as `wait`, plus an E11 `TimerRegistration` created for this wait
 epoch. The wait resolves when EXACTLY ONE cause wins the `resolve_` CAS:
 - `set()` broadcast -> `Woken` (RESOURCE_WAKE)
-- `cancel_wait` -> `Cancelled` (CANCEL)
+- `cancel` / `cancel_wait` -> `Cancelled` (CANCEL)
 - deadline elapsing -> `Expired` (TIMER_EXPIRE)
 
 If the deadline is already due at admission, the E11 I5 path resolves `Expired`
@@ -227,12 +242,43 @@ inline (no suspend). If `set_` is observed at admission, the wait resolves
 `Woken` inline (no suspend). The deadline registration is retired by a non-timer
 winner in the same critical section (E11 I4 lifetime closure).
 
-### 3.8 Cancellation exposure
+**Deadline precedence (F-EVENT-DEADLINE, normative):** during Event deadline
+admission, Event SET readiness is checked BEFORE the already-due deadline
+predicate. Therefore Event SET + already-due deadline -> `Woken` (the resource
+is ready; the deadline is moot). The complete matrix:
+
+| Event at admission | Deadline at admission | Result                     |
+| ------------------ | --------------------- | -------------------------- |
+| SET                | future                | Woken                      |
+| SET                | already due           | Woken (SET precedence)     |
+| UNSET              | already due           | Expired                    |
+| UNSET              | future                | RESOURCE/TIMER/CANCEL race |
+
+The combined SET + already-due case is asserted directly by T33.
+
+### 3.8 Cancellation authority (E12-A-EVENT-CORRECTIVE-1 A2)
 
 `CANCEL` is an inherited WaitNode resolution cause. E12-A does NOT invent a new
 public task-level cancellation token. `Event::wait` internally uses one ordinary
-E10/E11 WaitNode epoch; `Scheduler::cancel_wait(event.wait_queue(), node)` remains
-capable of cancelling that epoch at the substrate level.
+E10/E11 WaitNode epoch. The narrow per-wait-epoch cancellation surface is:
+
+```cpp
+[[nodiscard]] bool Event::cancel(WaitNode& node);
+```
+
+It routes through `Scheduler::event_cancel_wait` (the inherited
+`cancel_wait` path on this Event's private WaitQueue) WITHOUT exposing that
+queue. Properties: it does not call RESOURCE_WAKE, does not change Event
+SET/UNSET, cannot cancel a WaitNode belonging to another Event (a foreign node
+loses the resolve_ CAS), cannot cancel a detached/terminal node (returns false),
+and returns whether CANCEL won. This is NOT a task cancellation token, NOT
+cancel-all, NOT an Event close, NOT destructor cancellation.
+
+A WaitNode registered in a DIFFERENT queue passed to `Event::cancel` is a CALLER
+CONTRACT VIOLATION (`cancel_wait`'s node must belong to the passed queue); the
+resolve_ CAS is node-state-based, not queue-identity-based, so such misuse is
+documented as the caller's responsibility. The compile probe gates external
+queue access.
 
 ### 3.9 Destruction contract
 
@@ -403,7 +449,31 @@ admission also take `global_mtx_`. Therefore:
 No generation counter or snapshot is needed — `global_mtx_` serialization makes
 the topology mechanically impossible.
 
-### 7.3 T18 causal trace
+### 7.3 Causal traces (E12-A-EVENT-CORRECTIVE-1 Correctives C/D)
+
+The set/reset epoch isolation is proven by mechanically-gated causal tests
+(NOT timing). The `EVENT_SET_AFTER_SET_STORE_BEFORE_DRAIN` and
+`EVENT_ADMISSION_AFTER_REGISTER_BEFORE_FINAL_SET_CHECK` test phase seams pause
+a thread at the load-bearing boundary while the production lock
+(`global_mtx_`, and for admission `q.mtx()`) is STILL HELD.
+
+- **T27 (set-drain blocks reset):** S1 stores SET then pauses mid-drain holding
+  `global_mtx_`; a reset contender records `reset_attempted` but
+  `reset_completed` stays false until S1 releases. Lock held: `global_mtx_`.
+- **T28 (set-drain blocks admission):** a new-admission contender (modeled via
+  `cancel`, which also needs `global_mtx_`) records `admission_attempted` but
+  `admission_completed` stays false while S1's drain is active.
+- **T29 (post-reset Wnew waits for S2):** Wold registered → S1 drains Wold →
+  reset → Wnew admitted under UNSET → S2 wakes Wnew. Wold woken by S1; Wnew woken
+  by S2 (NOT by S1's drain).
+- **T30 (admission-first ordering):** W's admission pauses holding
+  `global_mtx_`+`q.mtx()` before the final SET check; a setter cannot complete
+  until W releases. W commits waiting under UNSET, releases; the setter then
+  drains W.
+- **T31 (set-first ordering):** the setter stores SET and pauses mid-drain; an
+  admission cannot complete until the setter releases; admission then observes
+  SET and returns Woken inline (no suspend), proving Wnew was NOT registered
+  during the drain.
 
 ```text
 Event = UNSET
@@ -424,8 +494,9 @@ Wnew observes UNSET -> registers + suspends
 S2 -> Wnew Woken
 ```
 
-S1 cannot RESOURCE_WAKE Wnew (Wnew is not registered during S1's drain). This is
-the runtime causal proof.
+S1 cannot RESOURCE_WAKE Wnew (Wnew is not registered during S1's drain). T27/T28
+prove the active-drain serialization mechanically; T29 proves the full topology;
+together they prove `OLD_SET_WAKES_POST_RESET_WAITER -> impossible`.
 
 ---
 
@@ -486,20 +557,28 @@ the waiter eventually becomes terminal
 The formal expression of set-releases-all. A safety implication pretending to
 prove liveness is NOT acceptable.
 
-### E5 — Reset Non-Resolution
+### E5 — Reset Non-Resolution (E12-A-EVENT-CORRECTIVE-1 Corrective J)
 ```text
 Reset alone does not change a WaitNode from Registered to terminal
 ```
-`reset()` only flips `set_`; it does not touch any WaitNode.
+`reset()` only flips `set_`; it does not touch any WaitNode. The formal property
+`InvResetNonResolution` checks that a terminal node's `resolutionCause` (written
+by every terminal-resolution action) is never "Reset" — real checking power, not
+a constant. NEG-EVENT-4 confirms a buggy reset that resolves a waiter is caught.
 
-### E6 — Set-Epoch Isolation (if load-bearing mechanism exists)
+### E6 — Set-Epoch Isolation (E12-A-EVENT-CORRECTIVE-1 Corrective H3)
 ```text
-a completed old SET epoch cannot resource-wake a waiter admitted after a later
-RESET epoch
+a set-epoch DRAIN may RESOURCE_WAKE only a wait epoch that was already
+registered when that set epoch's drain linearized
 ```
-Production uses `global_mtx_` serialization (no generation counter); the correct
-model represents this directly — the drain and reset/admission are mutually
-exclusive critical sections.
+Production uses `global_mtx_` serialization (no generation counter). The formal
+model represents the set epoch as a MULTI-STEP serialized critical section
+(`StartSet` → `DrainOne`* → `FinishSet`); `ResetEvent` and `Register` require
+the protocol to be `Idle`. The property
+`InvSetEpochIsolation` checks `registrationGeneration[n] <= wakeEpochGen[n]`:
+a waiter admitted after a later reset cannot be woken by an older set epoch's
+drain. This replaces the vacuous `wokenBySetEpoch[n] <= 1`. NEG-EVENT-3 confirms
+the stale-set/post-reset defect is caught.
 
 ---
 
@@ -523,16 +602,30 @@ Defect: SET resolves only one registered waiter instead of making all
 registered SET-ready epochs progress.
 ```
 
-### NEG-EVENT-3 — Old Set Wakes Post-Reset Waiter (if applicable)
+### NEG-EVENT-3 — Old Set Wakes Post-Reset Waiter (E12-A-EVENT-CORRECTIVE-1)
 ```text
-Broken: S1 set begins broadcast; reset -> UNSET; Wnew registers after reset;
-stale S1 broadcast resolves Wnew.
+Broken: the global serialization between old set drain, reset, and admission is
+LOST (RegisterBuggy/ResetBuggy drop the protoPhase=Idle guard).
+S1 StartSet (epoch gen G0); ResetBuggy (gen G1, while drain active); Wnew
+RegisterBuggy (registrationGeneration=G1); stale DrainOne(Wnew) wakes Wnew by
+epoch G0 (G0 < G1).
+Counterexample: Wnew registrationGeneration=G1, wakeEpochGen=G0.
 Violated: SetEpochIsolation (E6).
 ```
-If production serialization mechanically makes this topology impossible and the
-correct model represents it directly, this negative model is added to confirm
-the serialization is load-bearing. Runtime causal proof (T18) is mandatory
-regardless.
+The single broken rule is the lost `protoPhase` guard on Reset + Register. The
+negative model does NOT initialize a stale wake directly, does NOT disable all
+progress, does NOT reuse a terminal node, does NOT change WaitNode single-
+resolution semantics, and does NOT remove cancel generally.
+
+### NEG-EVENT-4 — Reset Resolves Waiter (E12-A-EVENT-CORRECTIVE-1 Corrective J)
+```text
+Broken: ResetBuggy changes one Registered waiter to terminal (Woken) and records
+the "Reset" resolution cause.
+Counterexample: a terminal node with resolutionCause="Reset".
+Violated: ResetNonResolution (E5).
+```
+The `resolutionCause` variable is written by every modeled terminal-resolution
+action; the bug writes the forbidden "Reset" value, which the property catches.
 
 ---
 
@@ -544,7 +637,7 @@ regardless.
 | T1    | initially SET, wait returns immediately              | Woken, no suspend |
 | T2    | set() on SET                                         | idempotent no-op  |
 | T3    | reset() clears readiness                             | UNSET             |
-| T4    | late waiter after SET                                | Woken, no suspend |
+| T4    | late waiter after SET                                 | Woken, no suspend |
 | T5    | set before admission                                 | Woken, no suspend |
 | T6    | set during admission                                 | Woken (one path)  |
 | T7    | set after suspension                                 | Woken             |
@@ -556,14 +649,32 @@ regardless.
 | T13   | RESOURCE_WAKE wins CANCEL                            | Woken             |
 | T14   | CANCEL wins RESOURCE_WAKE                            | Cancelled         |
 | T15   | TIMER_EXPIRE wins CANCEL                             | Expired           |
-| T16   | three-way race                                       | one terminal      |
+| T16   | three-way race (STRESS, not causal winner proof)     | one terminal      |
 | T17   | reset does not cancel registered waiter              | waiter remains    |
-| T18   | OLD_SET_WAKES_POST_RESET_WAITER                      | S1 cannot wake Wnew |
-| T19   | external OS thread set wakes parked Live Scheduler   | Woken             |
-| T20   | woken waiter resumes after E8 steal                  | Woken             |
+| T18   | OLD_SET_WAKES_POST_RESET_WAITER (sequential)         | S1 cannot wake Wnew |
+| T19   | external OS thread set wakes Live Scheduler (park-independent) | Woken  |
+| T20   | woken waiter resumes after E8 ownership transfer     | Woken (outcome Worker-independent; steal correctness inherited from E8) |
 | T21   | Drain unresolved Event wait                          | STALLED, no hang  |
 | T22   | destruction after terminal waits                     | safe              |
-| T23   | repeated multi-waiter mixed-outcome stress           | all consistent    |
+| T23   | repeated multi-waiter mixed-outcome STRESS           | all consistent    |
+| T24   | compile-negative: raw WaitQueue bypass sealed        | fails to compile  |
+| T25   | Event::cancel correct Event/node wins Cancelled once | Cancelled         |
+| T26   | Event::cancel detached/terminal/empty loses safely   | false             |
+| T27   | causal set-drain BLOCKS reset (seam, global_mtx_)    | reset blocked     |
+| T28   | causal set-drain BLOCKS admission (seam)             | admission blocked |
+| T29   | post-reset Wnew waits for S2, not stale S1           | Wnew woken by S2  |
+| T30   | causal admission-FIRST ordering (seam)               | setter blocked    |
+| T31   | causal set-FIRST ordering (seam)                     | admission blocked |
+| T32   | truly parked Live Worker awakened by external set    | Woken (park seam) |
+| T33   | SET + already-due deadline -> Woken (precedence)     | Woken             |
+
+T16 and T23 are STRESS tests (supplementary), NOT causal winner proofs — the
+causal two/three-way winner proofs are T11–T15. T20 proves the Event outcome and
+wait identity are Worker-independent; actual steal correctness is inherited from
+the closed E8 proof (T20 does NOT independently force a steal — it runs with two
+Workers and a steal MAY occur). T19 is park-independent (its bounded sleeps are
+registration-sync only, NOT the park-entry proof); T32 is the mechanical
+park-entry proof via the E9 park-commit seam.
 
 ---
 
@@ -609,7 +720,9 @@ deadline path:
     TimerRegistration. SET precedence at admission; else E11 I5 already-due path.
 
 cancellation path:
-    Scheduler::cancel_wait(event.wait_queue(), node) — inherited E10 seam.
+    Event::cancel(node) -> Scheduler::event_cancel_wait (inherited E10 cancel
+    on this Event's private WaitQueue, NOT exposed). The raw wait_queue()
+    accessor is REMOVED (F-EVENT-AUTH).
 
 destruction contract:
     ~Event asserts waiters_ empty in debug (~WaitQueue). No cancel/wake.
@@ -620,20 +733,28 @@ RunMode behavior:
     Drain: MW-S3 returns STALLED (no hang); unresolved waiter left for caller.
 ```
 
-## 14. Exit condition — VERIFIED
+## 14. Exit condition — CORRECTED (E12-A-EVENT-CORRECTIVE-1)
 
-E12-A is CLOSED. All exit conditions verified:
+E12-A is **CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED**. The corrective
+closed the public-authority leak, added a narrow cancellation authority,
+replaced the timing-based/vacuous proofs with mechanically-gated causal tests
+and a multi-step formal set protocol, and added NEG-EVENT-3/4. Verification:
 
-- All deterministic tests T0–T23 pass (debug + release).
-- TLA+ formal model passes: safety (E1,E2,E3,E5,E6) + liveness (E4) + both
-  negative models (NEG-EVENT-1, NEG-EVENT-2) produce counterexamples violating
-  their expected named properties. TLC v1.8.0 (build 2026.07.09).
-- ASan+UBSan clean on Event tests (3 consecutive runs).
-- TSan clean on Event tests (no data races, no lock-order-inversion, no UAF).
-  The known raw fiber-asm DEADLYSIGNAL at high concurrent-worker counts is
-  classified separately (T23 uses 3 workers to stay within TSan's fiber budget).
+- All deterministic tests T0–T33 pass (debug + release).
+- TLA+ formal model passes: safety (E1,E2,E3,E5,E6) + liveness (E4) + all four
+  negative models (NEG-EVENT-1..4) produce counterexamples violating their
+  EXPECTED NAMED properties; WRONG-PROPERTY gate OK; COMPILE-PROBE gate OK.
+- TLC runtime version: `2026.07.09.134028 (rev: 227f61b)`; TLA+ tools release
+  tag (recorded separately): v1.8.0.
 - Clang TSA clean (sluice_async target compiles with -Werror=thread-safety).
 - E7–E11 regression suite passes (e7_worker, e8_steal, e9_external_wake,
   e10_wait_queue, e10_scheduler_wait, e10_corrective_c1/c2_c3, e11_timer_wait).
-- Production bypass audit: RESOURCE_WAKE/TIMER_EXPIRE/CANCEL all converge on
-  WaitNode::resolve_ — no parallel authority (see §8 call graphs).
+- **`e10_corrective_c5_test` is a PROVEN BASELINE DEFECT**: it fails to compile
+  (`error: unused variable 'order_bad' [-Werror,-Wunused-variable]`) on the
+  17bca5a parent/baseline `ac3495a` as well — the defect is OUTSIDE this
+  corrective diff and is NOT silently "fixed" here. The suite is NOT "all green"
+  while this baseline compile defect remains.
+- Production bypass audit: RESOURCE_WAKE (Event::set / admission observing SET),
+  TIMER_EXPIRE (E11 deadline service), CANCEL (Event::cancel / mechanically
+  gated integration seam) all converge on WaitNode::resolve_ — no parallel
+  authority. The raw WaitQueue bypass is sealed (compile probe).

@@ -1308,6 +1308,20 @@ std::size_t Scheduler::event_set_broadcast(WaitQueue& waiters,
     std::size_t woken = 0;
     LockGuard lk(global_mtx_);
     set_flag.store(true, std::memory_order::release);
+    // E12-A-EVENT-CORRECTIVE-1 (Corrective B): deterministic set-store-before-
+    // drain phase seam. When armed, pause the set() thread AFTER it has stored
+    // SET and while it STILL HOLDS global_mtx_, BEFORE the drain loop. This lets
+    // a causal test mechanically prove reset() and a new admission CANNOT
+    // complete while an old-set drain is active (the production lock is held).
+    // The seam blocks on its OWN mtx/cv (global_mtx_ remains held for the
+    // pause), which is precisely the guarantee under test. TEST-ONLY.
+    if (event_set_store_before_drain_seam_armed_) {
+        std::unique_lock<std::mutex> slk(event_seam_mtx_);
+        event_set_seam_paused_ = true;
+        event_seam_cv_.notify_all();
+        event_seam_cv_.wait(slk, [this] { return !event_set_store_before_drain_seam_armed_; });
+        event_set_seam_paused_ = false;
+    }
     while (wake_wait_one_locked(waiters) != nullptr) {
         ++woken;
     }
@@ -1322,6 +1336,19 @@ void Scheduler::event_reset(std::atomic<bool>& set_flag) {
     // (the set/reset epoch isolation domain).
     LockGuard lk(global_mtx_);
     set_flag.store(false, std::memory_order::release);
+}
+
+bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
+    // E12-A-EVENT-CORRECTIVE-1 A2: the narrow Event cancellation authority. This
+    // is the inherited cancel_wait path (the CANCEL cause), exposed WITHOUT
+    // revealing the Event's private WaitQueue to the caller (Event::cancel
+    // passes its private waiters_ here). It resolves `node` with Cancelled and
+    // routes the winner through the canonical wake seam.
+    //
+    // A foreign node (registered in a different queue, or detached/terminal)
+    // loses the resolve_ CAS and returns false (E10 loser semantic). This call
+    // CANNOT synthesize a RESOURCE_WAKE and CANNOT change Event SET/UNSET.
+    return cancel_wait(q, node);
 }
 
 void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
@@ -1349,6 +1376,24 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
             return;
         }
         ++waiting_waitq_count_;
+        // E12-A-EVENT-CORRECTIVE-1 (Corrective D): deterministic admission-before-
+        // final-set-check phase seam. When armed, pause the admission thread
+        // AFTER registration and while it STILL HOLDS global_mtx_+q.mtx(), BEFORE
+        // the final SET check. This lets a causal test mechanically prove:
+        //   - admission-first: set()'s drain cannot complete until admission
+        //     releases serialization (a competing setter blocks on global_mtx_).
+        //   - set-first: if the setter stores SET first, admission (paused here
+        //     or about to run) cannot complete its drain until the setter
+        //     releases; admission then observes SET and resolves Woken inline.
+        // The seam blocks on its OWN mtx/cv (the production locks remain held),
+        // which is precisely the guarantee under test. TEST-ONLY.
+        if (event_admission_before_final_check_seam_armed_) {
+            std::unique_lock<std::mutex> slk(event_seam_mtx_);
+            event_admission_seam_paused_ = true;
+            event_seam_cv_.notify_all();
+            event_seam_cv_.wait(slk, [this] { return !event_admission_before_final_check_seam_armed_; });
+            event_admission_seam_paused_ = false;
+        }
         // Admission closure: if SET is observed after registration, resolve this
         // wait as Woken inline through the canonical resolve_ authority. The node
         // is unlinked in the same critical section (wake_node_locked). No suspend.
