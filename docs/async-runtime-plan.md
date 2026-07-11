@@ -452,13 +452,17 @@ Useful to validate WaitNode integration.
 
 Introduces permit accounting and waiter queue ordering.
 
-Key invariant:
+Key invariant (supply accounting — corrected in E12-PREP-CORRECTIVE-2; see
+[`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §5.1):
 
 ```text
-permits + granted permits + queued demand
+initial_supply + successful_release_count
+    ==
+free_permits + granted_not_yet_committed + successful_acquire_count
 ```
 
-must reconcile.
+Queued demand is a *separate* dimension (count of live wait epochs still
+demanding a permit) and MUST NOT be counted on the supply side.
 
 ## Mutex
 
