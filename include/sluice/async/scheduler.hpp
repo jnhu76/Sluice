@@ -585,6 +585,11 @@ private:
     std::list<TimerRegistration> timer_pool_ SLUICE_GUARDED_BY(global_mtx_){};
     std::vector<TimerRegistration*> deadline_heap_ SLUICE_GUARDED_BY(global_mtx_){};
 
+    // O(1) count of ACTIVE timer registrations. Incremented/decremented
+    // alongside every Active ↔ {Retired, Consumed} state transition under
+    // global_mtx_. Replaces an O(pool) scan in any_active_deadline_locked().
+    std::size_t active_deadline_count_ SLUICE_GUARDED_BY(global_mtx_){0};
+
     // The monotonic clock. Production: ticks since process start on
     // steady_clock. Tests: a logical clock advanced deterministically by
     // advance_clock() (the timer driver). test_clock_mode_ selects the source.

@@ -290,11 +290,19 @@ void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANA
         if (earliest <= now_ticks) {
             wake_deadline = std::chrono::steady_clock::now();
         } else {
-            // Convert logical ticks to a real-time cap. In test mode the clock
-            // is logical; cap at a short poll so advance_clock()'s pump drives
-            // expiry deterministically. Use 1ms so the parked worker re-loops
-            // and the test's advance_clock() pump resolves the due deadline.
-            wake_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(1);
+            deadline_t remaining = earliest - now_ticks;
+            if (test_clock_mode_.load(std::memory_order::acquire)) {
+                // Test mode: the clock is logical; cap at a short poll so
+                // advance_clock()'s pump drives expiry deterministically.
+                wake_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(1);
+            } else {
+                // Production: compute the actual remaining time to the earliest
+                // deadline, capped at the E9 2ms backstop. Avoids a fixed 1ms
+                // poll that would cause ~1000 wakeups/s per active deadline.
+                auto delay = std::min(std::chrono::milliseconds(remaining),
+                                      std::chrono::milliseconds(2));
+                wake_deadline = std::chrono::steady_clock::now() + delay;
+            }
         }
     }
     wake_cv_.wait_until(lk, wake_deadline, [&]() SLUICE_NO_THREAD_SAFETY_ANALYSIS {
@@ -1192,6 +1200,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         // survives heap operations and it outlives the caller-owned WaitNode.
         timer_pool_.emplace_back(&node, &q, deadline);
         reg = &timer_pool_.back();
+        ++active_deadline_count_;
         heap_push_locked(reg);
         recompute_earliest_deadline_locked();  // publish to the park-timeout cache
 
@@ -1204,6 +1213,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         if (clock_now_unlocked() >= deadline) {
             if (q.expire_locked(node)) {
                 reg->try_claim_expiry();  // ACTIVE->CONSUMED (winner)
+                --active_deadline_count_;
                 recompute_earliest_deadline_locked();  // reg no longer Active
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 if (me != nullptr && me->make_runnable()) {
@@ -1225,7 +1235,9 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         if (node.is_terminal()) {
             q.unlink_locked(node);
             --waiting_waitq_count_;
-            reg->retire();  // mark the registration inert (lazy pump erases it)
+            if (reg->retire()) {  // ACTIVE->RETIRED (closes callback authority)
+                --active_deadline_count_;
+            }
             recompute_earliest_deadline_locked();
             return;
         }
@@ -1284,6 +1296,8 @@ std::size_t Scheduler::pump_deadlines_locked() {
         // I4 gate: claim the timer authority BEFORE dereferencing the node. If
         // the registration is RETIRED (non-timer winner closed it) or already
         // CONSUMED (an earlier expiry won), skip — do NOT touch node/queue.
+        // The active count was already decremented when the registration was
+        // retired/consumed by the non-timer winner path.
         if (!top->try_claim_expiry()) {
             // Inert stale entry, now dropped from the heap. Erase its pool block
             // too so the pool never accumulates dead registrations (the block's
@@ -1292,6 +1306,7 @@ std::size_t Scheduler::pump_deadlines_locked() {
             erase_popped_registration_locked(top);
             continue;
         }
+        --active_deadline_count_;  // ACTIVE->CONSUMED
         // ACTIVE->CONSUMED won: this expiry owns the timer authority. Resolve
         // the bound node through the canonical seam. The {node, queue} pointers
         // are valid: retirement happens only in the non-timer winner's
@@ -1346,7 +1361,9 @@ void Scheduler::retire_timer_for_node_locked(WaitNode& node) {
     for (auto& r : timer_pool_) {
         if (!r.is_active()) continue;  // inert: node may be destroyed; skip (I4)
         if (r.node() == &node) {
-            r.retire();  // ACTIVE->RETIRED (no-op if a timer concurrently won)
+            if (r.retire()) {  // ACTIVE->RETIRED
+                --active_deadline_count_;
+            }
             recompute_earliest_deadline_locked();  // refresh park-timeout cache
             return;
         }
@@ -1354,14 +1371,12 @@ void Scheduler::retire_timer_for_node_locked(WaitNode& node) {
 }
 
 bool Scheduler::any_active_deadline_locked() const {
-    // True if any registration in the pool is still ACTIVE (an unresolved
-    // deadline wait). Retired/consumed entries are inert. Used by
-    // external_wake_possible_locked so a Live run with an active deadline parks
-    // (I6) and MW classification treats the deadline as an external-wake source.
-    for (const auto& r : timer_pool_) {
-        if (r.is_active()) return true;
-    }
-    return false;
+    // True if any registration is still ACTIVE (an unresolved deadline wait).
+    // Uses the O(1) active_deadline_count_ maintained across all state
+    // transitions. Called by external_wake_possible_locked so a Live run with
+    // an active deadline parks (I6) and MW classification treats the deadline
+    // as an external-wake source.
+    return active_deadline_count_ > 0;
 }
 
 bool Scheduler::earliest_active_deadline_locked(deadline_t& out) const {
@@ -1438,6 +1453,7 @@ TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
     ++waiting_waitq_count_;  // mirror admission accounting (pump decrements on win)
     timer_pool_.emplace_back(node, q, deadline);
     TimerRegistration* reg = &timer_pool_.back();
+    ++active_deadline_count_;
     heap_push_locked(reg);
     recompute_earliest_deadline_locked();  // publish to the park-timeout cache
     return reg;

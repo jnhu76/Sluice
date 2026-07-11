@@ -394,10 +394,17 @@ InvWaitEpochIsolation ==
    expiry may dereference its bound node. ResolveTimer is enabled ONLY when
    regState[r] = "Active". A Retired/Consumed R cannot fire. Additionally, a
    node whose storage is destroyed (nodeAlive = FALSE) has no Active-bound
-   registration (DestroyNode requires all bound regs Retired/Consumed/Inert). *)
+   registration (DestroyNode requires all bound regs Retired/Consumed/Inert).
+
+   NON-TAUTOLOGICAL: A Retired registration implies its bound node has reached a
+   terminal state (ResolveWake/ResolveCancel set the node to Woken/Cancelled in
+   the same action that retires R). A Consumed registration's bound node is
+   Expired (I3). If a Retired R's node were still Registered, the model would
+   violate the closure: a stale ResolveTimer could fire on R before it observes
+   RETIRED, after the node's storage is destroyed. *)
 InvTimerLifetimeClosure ==
     \A r \in Regs :
-        /\ regState[r] \in {"Retired", "Consumed"} => ~deadlineDue(r)
+        /\ regState[r] = "Retired" => isTerminal(regEpoch[r])
         /\ (regState[r] = "Active" => nodeAlive[regEpoch[r]])
     \* An Active registration implies its bound node storage is still alive
     \* (retirement/consumption happens before DestroyNode).

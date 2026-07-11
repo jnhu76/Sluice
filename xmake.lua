@@ -40,8 +40,8 @@ target("sluice_async")
     -- The flags are Clang-specific; GCC does not recognize -Wthread-safety
     -- and xmake filters it out of the GCC compile command, so the gate is
     -- Clang-only and the GCC build is unaffected.
-    add_cxxflags("-Wthread-safety")
-    add_cxxflags("-Werror=thread-safety")
+    add_cxxflags("-Wthread-safety", {force = true})
+    add_cxxflags("-Werror=thread-safety", {force = true})
 
 -- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
 -- Also contains BlockingIoPool (021S), the bounded execution model for the

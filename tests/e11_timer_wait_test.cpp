@@ -92,7 +92,8 @@ struct E11TimerTestHooks {
     // park-topology tests (T12/T13) to observe the deadline-heap state without
     // driving expiry: they assert that the obligation set evolves correctly
     // (new earlier deadline becomes earliest; retiring earliest leaves the next).
-    static std::size_t active_deadline_count(const Scheduler& s) {
+    static std::size_t active_deadline_count(Scheduler& s) {
+        LockGuard lk(s.global_mtx_);
         std::size_t n = 0;
         for (const auto& r : s.timer_pool_) {
             if (r.is_active()) ++n;
@@ -122,8 +123,9 @@ struct E11TimerTestHooks {
         }
         return n;
     }
-    static bool earliest_active_deadline(const Scheduler& s,
+    static bool earliest_active_deadline(Scheduler& s,
                                          Scheduler::deadline_t& out) {
+        LockGuard lk(s.global_mtx_);
         return s.earliest_active_deadline_locked(out);
     }
     // ---- E11-T17 park-commit seam + external registration (F2) ----

@@ -727,6 +727,30 @@ Scheduler remains parked
 
 The corrected protocol must demonstrate deadline park liveness.
 
+### NEG-6 — Due Deadline Lost at Admission
+
+Broken protocol:
+
+```text
+final admission decision commits Fiber suspension
+EVEN WHEN the deadline is already due at that decision
+```
+
+Counterexample:
+
+```text
+admission phase = Suspended
+AND
+suspendedDue = TRUE (deadline was due when suspension committed)
+AND
+node state = Registered (not resolved at admission)
+```
+
+> The buggy variant omits the `~admissionDeadlineDue(n)` guard from the
+> suspend path, allowing a wait whose deadline has already arrived to be
+> parked instead of resolved inline. The correct model forces
+> `AdmissionExpire` when the deadline is due at the admission decision.
+
 ---
 
 ## Required deterministic tests

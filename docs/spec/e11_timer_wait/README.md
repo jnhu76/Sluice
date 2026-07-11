@@ -47,9 +47,14 @@ straggling expiry observes BEFORE dereferencing its bound node.
 - `E11TimerWait.cfg`                            — TLC config (safety invariants).
 - `E11TimerWaitLiveness.cfg`                    — TLC config (I6 park liveness).
 - `E11TimerWaitNeg1DoublePublication.tla/.cfg`  — NEG-1: timer expiry with no
-  winner CAS -> double publication.
+  winner CAS -> double publication. Baseline is the E11 model BEFORE the I5
+  admission-phase dimension (no admissionPhase/suspendedDue); omits the
+  admission-closure state but is structurally equivalent for the double-
+  publication defect (NEG-1 does not touch the admission boundary).
 - `E11TimerWaitNeg2TimerCancelDoublePublication.tla/.cfg` — NEG-2: cancel with
-  independent completion authority -> double publication.
+  independent completion authority -> double publication. Same pre-I5 baseline
+  as NEG-1; omits admission-phase state, which is orthogonal to the
+  cancel-vs-timer race NEG-2 targets.
 - `E11TimerWaitNeg3StaleCrossEpoch.tla/.cfg`    — NEG-3: stale timer keys on a
   reusable storage slot -> resolves epoch E+1 (the address-reuse boundary).
 - `E11TimerWaitNeg4CallbackAfterRetirement.tla/.cfg` — NEG-4: node destroyed
