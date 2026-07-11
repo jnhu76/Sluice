@@ -15,14 +15,18 @@
 #include <sluice/async/lock_guard.hpp>
 #include <sluice/async/mutex.hpp>
 #include <sluice/async/thread_annotations.hpp>
+#include <sluice/async/timer_registration.hpp>
 #include <sluice/async/wait_node.hpp>
 #include <sluice/async/wait_queue.hpp>
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -38,6 +42,11 @@ struct SchedulerTestHooks;
 // Forward declaration — E9-CORRECTIVE deterministic park seams (ADR §9.4.15).
 // Defined only in the E9 test TU; accesses private park-seam members.
 struct E9ParkSeamHooks;
+
+// Forward declaration — E11 deterministic clock/timer test seams (M7). Defined
+// only in the E11 test TU; enables the controllable monotonic clock so race
+// proofs never use sleep_for as causal proof.
+struct E11TimerTestHooks;
 
 // E9 external wake handle (ADR §9.4.10). A control-block-backed handle that
 // an EXTERNAL producer thread holds so it can wake a parked Scheduler Worker
@@ -242,6 +251,59 @@ public:
     bool cancel_wait(WaitQueue& q, WaitNode& node);
 
 
+    // ---- E10/E11 boundary: deadline / timer wait (sluice-CORE-E11) ----
+    // The E11 Deadline type: a monotonic absolute time point. The protocol
+    // authority is the absolute deadline (`expired iff now >= deadline`); a
+    // relative duration is converted to a deadline by the caller via
+    // `monotonic_now() + duration`. Wall-clock time never participates.
+    using deadline_t = deadline_tick_t;
+
+    // Read the Scheduler's monotonic clock. Production: steady_clock ticks
+    // since process start. Tests: a controllable logical clock advanced by
+    // advance_clock() (M7 deterministic causal seam).
+    deadline_t monotonic_now() const noexcept;
+
+    // TEST-ONLY causal seam (M7): advance the controllable logical clock to
+    // `t` and pump any due timers. No-op in production mode (the clock runs
+    // on steady_clock). In test mode this is the deterministic timer driver:
+    // it advances time and resolves due deadlines through expire_wait, WITHOUT
+    // sleep_for.
+    void advance_clock(deadline_t t);
+
+    // Suspend the calling Fiber on `q`, registering `node` with a monotonic
+    // absolute `deadline`. The wait resolves when EXACTLY ONE cause wins the
+    // resolve_ CAS:
+    //   - wake_wait_one(q)         -> Woken   (RESOURCE_WAKE)
+    //   - cancel_wait(q, node)     -> Cancelled (CANCEL)
+    //   - the deadline elapsing     -> Expired  (TIMER_EXPIRE)
+    // The winner is the WaitNode resolve CAS (one authority); a losing cause
+    // performs no second wake. `node` must be Detached (fresh) and outlive
+    // this call's suspend until it is resumed.
+    //
+    // A deadline already due at admission MUST NOT strand the fiber: under the
+    // admission critical section, after registration the deadline is rechecked
+    // and, if due, resolved as Expired through the same resolve_ authority
+    // before suspension (I5 admission closure). The fiber never suspends
+    // merely because timer registration happened after the deadline was due.
+    //
+    // A TimerRegistration control block (independently-stable retirement
+    // state) is created for this wait epoch and owned by the Scheduler. A
+    // non-timer winner retires it in the SAME critical section that resolves
+    // the node, before runnable publication — so a stale expiry cannot
+    // dereference the destroyed WaitNode (I4 lifetime closure).
+    void await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t deadline);
+
+    // Resolve `node` (registered in `q`) with Expired and route the winner's
+    // fiber. The E11 third resolution cause, reached when the bound deadline
+    // elapses. Returns true iff this call won (the node was Registered and is
+    // now Expired). A losing call (node already woken/cancelled, or retired)
+    // is a no-op. Mirrors wake_wait_one / cancel_wait exactly:
+    // global_mtx_ + q.mtx() -> resolve_(Expired) -> unlink_locked ->
+    // --waiting_waitq_count_ -> make_runnable + route_runnable_locked. NEVER
+    // a parallel timer-wake publication path.
+    bool expire_wait(WaitQueue& q, WaitNode& node);
+
+
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()
     // from an external thread to wake a parked Worker whose wake set includes
@@ -299,6 +361,7 @@ private:
     friend struct SchedulerTestHooks;  // E7-T11 deterministic admission seam
     friend class SchedulerWakeHandle;  // E9: notify() -> notify_external_wake
     friend struct E9ParkSeamHooks;     // E9-CORRECTIVE park seams (T3/T4)
+    friend struct E11TimerTestHooks;   // E11 deterministic clock/timer seams
 
     // Wait registration with owner Worker (E7-B will use owner; E7-A stores
     // the Fiber only).
@@ -485,15 +548,161 @@ private:
     // bounded timeout, defense-in-depth). Records observed_epoch_ under
     // wake_mtx_ before sleeping. Returns when wake-worthy state is observed.
     // ws is the calling worker. Called with global_mtx_ RELEASED.
+    // E11: the bounded timeout is min(default wake poll, earliest-deadline-now)
+    // so an active deadline cannot park a Worker indefinitely past it (I6).
     // TSA-SUPPRESS-001: uses std::unique_lock + cv.wait (release-wait-reacquire
     // pattern).  Clang TSA cannot track unique_lock capability semantics through
     // condition_variable::wait.  The production lock fact (wake_epoch_ is
     // protected by wake_mtx_) is already independently accepted and proven in E9.
     void park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANALYSIS;
 
+    // ---- E11 timer / deadline subsystem (sluice-CORE-E11) ----
+    // The deadline container is a binary min-heap over TimerRegistration*,
+    // keyed by deadline. Pointer-stable storage (std::list) so a registration's
+    // identity survives heap sift operations and outlives any bound WaitNode.
+    //
+    // Reclamation contract (proven by e11_t18, F3-corrected): logical
+    // retirement (ACTIVE->RETIRED) is IMMEDIATE (the non-timer winner performs
+    // it in the same CS as the resolve CAS); lifetime safety is IMMEDIATE (the
+    // atomic `state` gate makes try_claim_expiry/retire observe RETIRED/CONSUMED
+    // WITHOUT dereferencing a possibly-destroyed node — I4); but PHYSICAL
+    // reclamation (erase from heap + pool) is LAZY-AT-DEADLINE — the pump pops
+    // an entry only when `now >= its deadline`, regardless of state, and erases
+    // the pool block then. Consequently a far-future RETIRED entry remains
+    // physically in the heap+pool until its original deadline is reached. The
+    // pool size is therefore bounded by (concurrent ACTIVE deadline waits) +
+    // (retired/consumed entries whose deadlines have not yet been reached); it
+    // is NOT bounded solely by concurrent waits, and "unbounded growth fixed"
+    // must not be claimed absolutely. No inert block lingers past its OWN
+    // deadline. Wheel-compaction / eager removal is deferred to E15 and is NOT
+    // added unless a reviewer proves a mandatory resource-bound violation.
+    //
+    // All heap state is protected by global_mtx_ (the Scheduler coordination
+    // domain): the heap is mutated only by await_wait_deadline (register),
+    // pump_deadlines_locked (expiry), and the retire path (state flip under
+    // the same CS as the resolve CAS). The clock is atomic so a worker can read
+    // it outside the lock for the park-timeout computation.
+    std::list<TimerRegistration> timer_pool_ SLUICE_GUARDED_BY(global_mtx_){};
+    std::vector<TimerRegistration*> deadline_heap_ SLUICE_GUARDED_BY(global_mtx_){};
+
+    // O(1) count of ACTIVE timer registrations. Incremented/decremented
+    // alongside every Active ↔ {Retired, Consumed} state transition under
+    // global_mtx_. Replaces an O(pool) scan in any_active_deadline_locked().
+    std::size_t active_deadline_count_ SLUICE_GUARDED_BY(global_mtx_){0};
+
+    // The monotonic clock. Production: ticks since process start on
+    // steady_clock. Tests: a logical clock advanced deterministically by
+    // advance_clock() (the timer driver). test_clock_mode_ selects the source.
+    //
+    // Both are std::atomic and carry NO GUARDED_BY: the clock is read LOCK-FREE
+    // by clock_now_unlocked() / pump_deadlines_locked() (the park-timeout calc
+    // and the timer driver), which intentionally do not always hold global_mtx_.
+    // This matches the established pattern for the other atomic run-coordination
+    // fields (global_terminate_, active_worker_count_): atomic storage is the
+    // synchronization authority, not a mutex capability. Writes still serialize
+    // under global_mtx_ in practice (advance_clock / the worker loop), but the
+    // reads are lock-free and acquire/release-ordered on the atomic itself.
+    std::atomic<deadline_t> clock_{0};
+    std::atomic<bool> test_clock_mode_{false};
+
+    // Atomic cache of the earliest ACTIVE deadline, or kNoDeadline if none.
+    // Maintained under global_mtx_ by recompute_earliest_deadline_locked()
+    // (called after every heap/pool mutation), but read LOCK-FREE by
+    // park_on_wake_source to bound the wake wait WITHOUT taking global_mtx_
+    // (avoids a wake_mtx_->global_mtx_ lock-order inversion — I6 without
+    // re-opening a park-side global_mtx_ acquisition). A stale read is safe: it
+    // only makes the park timeout slightly too long/short; the worker loop's
+    // pump_deadlines_locked re-establishes the authoritative deadline set under
+    // global_mtx_ on every iteration, so liveness (I6) is preserved even if the
+    // cache briefly lags.
+    static constexpr deadline_t kNoDeadline =
+        static_cast<deadline_t>(-1);
+    std::atomic<deadline_t> earliest_active_deadline_{kNoDeadline};
+
+    // Helper: read the clock WITHOUT global_mtx_ (for the park-timeout calc).
+    // In production returns steady_clock ticks; in test mode returns clock_.
+    deadline_t clock_now_unlocked() const noexcept;
+
+    // Recompute earliest_active_deadline_ from the pool (under global_mtx_) and
+    // publish it to the atomic cache. Called after every heap/pool mutation
+    // (register, pump-pop/erase, retire). O(pool); the pool is small.
+    void recompute_earliest_deadline_locked() SLUICE_REQUIRES(global_mtx_);
+
+    // Helper: the earliest ACTIVE deadline, or false if none. Called under
+    // global_mtx_. Used to classify the deadline dimension. (park_on_wake_source
+    // reads the atomic cache instead, to avoid the lock-order inversion.)
+    bool earliest_active_deadline_locked(deadline_t& out) const SLUICE_REQUIRES(global_mtx_);
+
+    // Pump due timers: for every heap-min whose deadline <= now and whose
+    // registration is still ACTIVE, claim it (try_claim_expiry) and resolve
+    // its bound node through expire_wait. Lazy-skips retired/consumed entries
+    // (removes them from the heap without dereferencing the node). Returns the
+    // number of expiries that attempted resolution. Called under global_mtx_
+    // by the worker loop and by advance_clock(). Acquires q.mtx() internally
+    // via expire_wait (lock order: global_mtx_ -> q.mtx()).
+    std::size_t pump_deadlines_locked() SLUICE_REQUIRES(global_mtx_);
+
+    // Heap helpers (min-heap on deadline). Called under global_mtx_.
+    static bool heap_less(const TimerRegistration* a, const TimerRegistration* b) noexcept;
+    void heap_push_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
+    void heap_pop_min_locked() SLUICE_REQUIRES(global_mtx_);
+    void heap_sift_up_locked(std::size_t i) SLUICE_REQUIRES(global_mtx_);
+    void heap_sift_down_locked(std::size_t i) SLUICE_REQUIRES(global_mtx_);
+
+    // O(1) erase of a registration's pool block by its pool_self_ self-link.
+    // SAFE ONLY when the block has ALREADY been popped from the deadline heap
+    // (so no live heap slot still holds its pointer). The pump is the sole
+    // legitimate caller: it pops the min (removing it from the heap), then
+    // erases the pool block. Other paths (admission-expired, non-timer retire)
+    // do NOT erase — they leave the block in the heap to be popped+erased by
+    // the pump at its deadline (lazy removal). This keeps the pool bounded by
+    // live+pending deadline waits with no UAF. Called under global_mtx_.
+    // NEVER reads node()/queue() (I4-safe by construction).
+    void erase_popped_registration_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
+
+    // E11-T17 (F2) narrow test hook: register a TimerRegistration for {node,q,
+    // deadline} from a NON-worker thread (the test coordinator). Mirrors the
+    // full await_wait_deadline admission MINUS the fiber-suspend path: it
+    // registers `node` into `q` (Detached->Registered), increments the wait
+    // count, creates the ACTIVE registration, pushes it into the deadline heap,
+    // and refreshes the earliest-deadline park cache — but does NOT suspend a
+    // fiber. This lets the coordinator install a NEW deadline while the worker
+    // is held at the park-commit seam (global_mtx_ is released at that seam).
+    // TEST-ONLY. Returns the created registration pointer (nullptr if the
+    // deadline was already due or the node was not Detached).
+    TimerRegistration* register_test_deadline_locked(WaitNode* node, WaitQueue* q,
+                                                     deadline_t deadline)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Predicate: is there currently an active timer registration? An active
+    // deadline is an externally-resolvable wait (its expiry reaches the
+    // Scheduler worker loop), so it participates in MW classification + park
+    // liveness exactly like a WaitQueue wait. Called under global_mtx_.
+    bool any_active_deadline_locked() const SLUICE_REQUIRES(global_mtx_);
+
+    // Retire the timer registration (if any) bound to `node`. Called by the
+    // non-timer winner path (wake_wait_one / cancel_wait) in the SAME
+    // global_mtx_ critical section as the resolve CAS, BEFORE runnable
+    // publication (E11 Phase 5). Performs ACTIVE->RETIRED on the
+    // registration's independently-stable state, closing callback authority so
+    // a stale/lazy expiry cannot dereference the node after the fiber resumes
+    // and destroys its caller-owned WaitNode (I4).
+    //
+    // I4-safe scan discipline: the scan considers ONLY ACTIVE registrations.
+    // An ACTIVE registration is provably bound to a live, still-Registered
+    // node (the node is destroyed only after its wait epoch resolves, which
+    // resolves in the SAME global_mtx_ CS that retires/consumes the registration
+    // — so while a registration is ACTIVE its node has not been destroyed).
+    // Inert (retired/consumed) entries are skipped WITHOUT reading their node()
+    // pointer, so a block bound to an already-destroyed node is never
+    // dereferenced here. The ACTIVE block matching `&node` (the live winner
+    // node) is retired. Called under global_mtx_.
+    void retire_timer_for_node_locked(WaitNode& node) SLUICE_REQUIRES(global_mtx_);
+
     // Predicate: is there currently an externally-resolvable wait registered —
     // one whose resolution arrives from OUTSIDE the worker loop (a ready-flag
-    // wait, OR a WaitQueue wait resolved via wake_wait_one/cancel_wait)? Such
+    // wait, OR a WaitQueue wait resolved via wake_wait_one/cancel_wait, OR an
+    // E11 deadline wait whose expiry is driven by the timer pump)? Such
     // resolutions reach signal_wake_locked (the unified Scheduler wake source),
     // NOT a backend reap, so the worker MUST park on the SCHEDULER domain to
     // observe them. When true, the MW-S2 participant must NOT enter a backend-
@@ -505,8 +714,14 @@ private:
     // q.mtx() and reach signal_wake_locked via route_runnable_locked). It MUST
     // participate in this classification, or a Live run could park/terminate on
     // a source that cannot observe the wait's resolution (C1 park-domain gap).
+    //
+    // E11: an ACTIVE deadline registration is likewise externally resolvable —
+    // its expiry is driven by the worker loop's timer pump + the bounded park
+    // timeout, not by a backend reap. It participates in this classification
+    // for the same reason as the WaitQueue wait.
     bool external_wake_possible_locked() const SLUICE_REQUIRES(global_mtx_) {
-        return !waiting_ready_.empty() || waiting_waitq_count_ > 0;
+        return !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
+               any_active_deadline_locked();
     }
 };
 

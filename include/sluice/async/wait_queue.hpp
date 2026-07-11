@@ -35,6 +35,12 @@
 //           return true
 //       return false
 //
+//   expire_locked(node):                    // E11 (third resolver)
+//       if node.resolve_(Expired):          // winner CAS
+//           unlink(node)                    // SAME critical section
+//           return true
+//       return false
+//
 // Intrusive-link invariants (§5, proven):
 //   - linked-at-most-once: register_() only succeeds from the Detached state,
 //     and sets home_ once. A node already registered is rejected (C8).
@@ -62,6 +68,8 @@
 //                            waiting/runnable transition).
 //   - wake_one_locked      : terminal-winner resolution (Woken).
 //   - cancel_locked        : terminal-winner resolution (Cancelled).
+//   - expire_locked        : E11 terminal-winner resolution (Expired) — third
+//                            cause, SAME resolve_ CAS authority.
 //   - unlink_locked        : the one structural-removal seam.
 //   - mtx()                : the structural lock the Scheduler takes UNDER
 //                            global_mtx_ to make register/resolve atomic with
@@ -69,13 +77,13 @@
 //
 // A Scheduler-integrated wait (registered via Scheduler::await_wait, which owns
 // waiting_waitq_count_ + the runnable-route obligation) may be terminally
-// resolved ONLY through Scheduler::wake_wait_one / Scheduler::cancel_wait, and
-// registered ONLY through Scheduler::await_wait. Calling WaitQueue registration
-// or resolution directly would bypass Scheduler accounting: an arbitrary
-// Fiber* could be injected into a queue that Scheduler resolution later trusts
-// (R2 P1/P2/P5), or a node could be resolved + unlinked WITHOUT decrementing
-// waiting_waitq_count_ and WITHOUT routing the resumed fiber (stranding the
-// fiber and leaving MW classification stale).
+// resolved ONLY through Scheduler::wake_wait_one / cancel_wait / expire_wait,
+// and registered ONLY through Scheduler::await_wait. Calling WaitQueue
+// registration or resolution directly would bypass Scheduler accounting: an
+// arbitrary Fiber* could be injected into a queue that Scheduler resolution
+// later trusts (R2 P1/P2/P5), or a node could be resolved + unlinked WITHOUT
+// decrementing waiting_waitq_count_ and WITHOUT routing the resumed fiber
+// (stranding the fiber and leaving MW classification stale).
 //
 // There is NO test friend and NO publicly nameable access type. A downstream TU
 // cannot reach mtx_, register_wait_locked, wake_one_locked, cancel_locked, or
@@ -222,6 +230,27 @@ private:
             return true;
         }
         return false;  // already terminal (loser): C2/C3/C4/C5 no-op
+    }
+
+    // ---- Expire a specific node (E11 third terminal resolver, Expired) ----
+    //
+    // PRIVATE (E11-CORRECTIVE seal): the Scheduler resolves a deadline-elapsed
+    // wait ONLY via Scheduler::expire_wait, which calls this under global_mtx_
+    // + mtx_ and routes the winner through the canonical wake seam. Mirrors
+    // wake_one_locked / cancel_locked exactly: the resolve_(Expired) CAS is the
+    // winner authority (§2 Design Law), unlink happens in the SAME critical
+    // section (§7 Unlink Law), and the loser (node already woken/cancelled, or
+    // a concurrent expiry) returns false and performs no unlink/no publication.
+    //
+    // `node` MUST belong to this queue (caller contract — the Scheduler's
+    // expiry seam dereferences the TimerRegistration's bound queue/node, and
+    // the registration was created for a node registered in THIS queue).
+    bool expire_locked(WaitNode& node) SLUICE_REQUIRES(mtx_) {
+        if (node.resolve_(WaitOutcome::expired)) {  // winner CAS (§2/§7)
+            unlink_locked(node);                   // SAME critical section (§7)
+            return true;
+        }
+        return false;  // already terminal (loser): timer lost to wake/cancel/expiry
     }
 
     // ---- Unlink (the single structural-removal seam, §7) ----

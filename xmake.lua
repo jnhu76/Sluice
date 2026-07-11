@@ -40,8 +40,8 @@ target("sluice_async")
     -- The flags are Clang-specific; GCC does not recognize -Wthread-safety
     -- and xmake filters it out of the GCC compile command, so the gate is
     -- Clang-only and the GCC build is unaffected.
-    add_cxxflags("-Wthread-safety")
-    add_cxxflags("-Werror=thread-safety")
+    add_cxxflags("-Wthread-safety", {force = true})
+    add_cxxflags("-Werror=thread-safety", {force = true})
 
 -- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
 -- Also contains BlockingIoPool (021S), the bounded execution model for the
@@ -855,5 +855,26 @@ do
             add_includedirs("include")
             add_files(p)
             add_tests("e10_corrective_c5_test")
+    end
+end
+
+-- e11_timer_wait_test — Deadline / Timer Wait Integration (sluice-CORE-E11).
+-- Deterministic production tests: already-due deadline, resource-wins/timer-
+-- wins/cancel-wins races at the resolve_ seam, losing-timer cannot publish,
+-- stale timer cannot resolve a later wait epoch, storage-reuse epoch isolation,
+-- timer retirement closes WaitNode dereference, deadline park liveness,
+-- RunMode classification. Uses a controllable monotonic clock + explicit timer
+-- driver (NO sleep_for causal proof). Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e11_timer_wait_test.cpp"
+    if os.isfile(p) then
+        target("e11_timer_wait_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e11_timer_wait_test")
     end
 end
