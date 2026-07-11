@@ -1423,12 +1423,13 @@ TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
     // {node, q, deadline}, pushes it into the deadline heap, refreshes the
     // earliest-deadline park cache, AND registers `node` into `q` (Detached ->
     // Registered) so the pump's expire path can resolve it. This mirrors the
-    // full await_wait_deadline admission MINUS the fiber suspend + accounting
-    // (it does not touch waiting_waitq_count_ and does not suspend a fiber),
-    // so the coordinator can install a NEW deadline from a NON-worker thread
-    // while the worker is held at the park-commit seam (global_mtx_ is released
-    // at that seam). Called by the test coordinator. See
-    // tests/e11_timer_wait_test.cpp T17. TEST-ONLY; no production caller.
+    // full await_wait_deadline admission MINUS the fiber-suspend path: it
+    // increments waiting_waitq_count_ (so the pump's decrement on win balances)
+    // and registers the node, but does NOT suspend a fiber, so the coordinator
+    // can install a NEW deadline from a NON-worker thread while the worker is
+    // held at the park-commit seam (global_mtx_ is released at that seam).
+    // Called by the test coordinator. See tests/e11_timer_wait_test.cpp T17.
+    // TEST-ONLY; no production caller.
     if (clock_now_unlocked() >= deadline) return nullptr;  // already due: skip
     if (q != nullptr) {
         LockGuard qlk(q->mtx());

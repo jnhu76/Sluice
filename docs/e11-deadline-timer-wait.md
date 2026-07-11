@@ -777,6 +777,25 @@ TSan
 Known Fiber/TSan tooling limitations must be classified separately from protocol
 failures and may not hide a timer-lifetime defect.
 
+> **As-built TSan classification.** TSan cannot track the user-space stack
+> exchange performed by the fiber context-switch asm (`jump_fcontext`); a
+> rescheduled fiber writes through a stack TSan attributes to a different
+> thread, which TSan reports either as a data race or (under deeper stack
+> reuse) as a SEGV/DEADLYSIGNAL. This is a tooling limitation, NOT a protocol
+> defect. Classification actually observed at the E11 closure gate:
+> - ASan/UBSan: CLEAN on all E11 tests (no use-after-free, no UB). The
+>   timer-lifetime tests (T8, T9/T10, T17, T18) are the load-bearing
+>   lifetime-closure evidence and pass under ASan/UBSan.
+> - TSan: CLEAN on all E11 tests that do not reschedule a fiber across workers
+>   while TSan is watching (T0, T2–T5, T7, T8, T9/T10, T11, T12, T14, T15, T17,
+>   T18). T13 (which `run_live(4)`-drives four workers + steal-rescheduling)
+>   triggers the fiber-asm SEGV/DEADLYSIGNAL — classified as a Fiber/TSan
+>   tooling limitation and verified CLEAN under ASan/UBSan + release.
+> - The T17 park/repark test (which uses a non-worker-thread registration hook)
+>   is TSan-CLEAN: the coordinator reads only the caller-owned `WaitNode`'s
+>   atomic state (never the pool-owned `TimerRegistration` after the pump may
+>   erase it).
+
 > **Construction-method hook (M7).** Every race proof above uses a phase seam /
 > barrier / latch / explicit test hook — NOT `sleep_for` and NOT
 > "run 1000 times and hope". Stress evidence is gathered AFTER the causal

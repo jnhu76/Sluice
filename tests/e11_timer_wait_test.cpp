@@ -918,20 +918,28 @@ SLUICE_TEST_CASE(e11_t13_retiring_earliest_preserves_next_deadline) {
 // The closure review (F2) found that T12 only proves "earliest deadline cache
 // becomes B" — it does NOT force the causal interleaving:
 //
-//     Worker W has committed to park using timer state A (deadline far future)
+//     Worker W is in the park path with only timer state A (far-future) active
 //     THEN deadline B < A is registered
 //     W must not remain parked until A; B drives the wake
 //
-// This test forces exactly that interleaving on a SINGLE worker. The worker
-// runs LIVE, registers A (far-future 10000), and reaches the park-commit seam —
-// HELD there (it has committed to park with A=10000 as the earliest obligation).
-// While held, the coordinator thread installs B (200 < 10000) via the narrow
-// register_test_deadline hook (a non-worker-thread registration; the worker is
-// held at the seam with global_mtx_ released, so no deadlock). The coordinator
-// then advances the logical clock to make B due and releases the seam. The
-// worker re-loops; pump_deadlines_locked observes B due under global_mtx_ and
-// resolves B Expired. Proof: B's expiry is observed and B resolves BEFORE A (A
-// never becomes due; clock=250 < A=10000).
+// This test forces that interleaving on a SINGLE worker. The worker runs LIVE,
+// registers A (far-future 10000), and enters the park path — the park_commit
+// seam holds it at the physical-wait boundary (the seam sits at park_on_wake_
+// source, before the cv.wait; at that instant A=10000 is the only active
+// deadline). While held, the coordinator thread installs B (200 < 10000) via
+// the narrow register_test_deadline hook (a non-worker-thread registration; the
+// worker is held at the seam with global_mtx_ released, so no deadlock). The
+// coordinator then advances the logical clock to make B due and releases the
+// seam. The worker re-loops; pump_deadlines_locked observes B due under
+// global_mtx_ and resolves B Expired. Proof: B's expiry is observed and B
+// resolves BEFORE A (A never becomes due; clock=250 < A=10000).
+//
+// (Note on seam position: the park_commit seam pauses the worker BEFORE it
+// reads earliest_active_deadline_ for the cv.wait timeout. So the precise claim
+// is "a deadline installed while the worker is in the park path is not lost" —
+// the pump on the next loop iteration resolves it. The test separately asserts,
+// at the seam, that A is the earliest active obligation, so the "only A active
+// when the worker entered the park path" precondition is captured.)
 //
 // PRODUCTION MECHANISM (documented accurately, per F2): E11 does NOT signal a
 // parked Worker on timer registration (no registration-triggered wake). Park
@@ -1020,15 +1028,22 @@ SLUICE_TEST_CASE(e11_t17_new_earlier_deadline_during_park) {
     // the seam release and pumps under global_mtx_). Bounded poll, not sleep.
     for (int i = 0; i < 200000 && !nb.is_terminal(); ++i) std::this_thread::yield();
 
-    // 5. Proof: the pump resolved B (the new earlier deadline) Expired. B's
-    //    registration was consumed by the timer winner path. A remained
-    //    unresolved (its deadline 10000 was never reached; clock=250). The
-    //    worker did NOT remain parked until A — B's earlier deadline drove the
-    //    wake (via the bounded park + per-iteration pump).
+    // 5. Proof: the pump resolved B (the new earlier deadline) Expired. A
+    //    remained unresolved (its deadline 10000 was never reached; clock=250).
+    //    The worker did NOT remain parked until A — B's earlier deadline drove
+    //    the wake (via the bounded park + per-iteration pump).
+    //
+    //    NB: we observe the outcome ONLY through the caller-owned WaitNode `nb`
+    //    (its state_ is atomic and the node is NOT pool-owned, so it is safe to
+    //    read lock-free from the coordinator). We deliberately do NOT re-read
+    //    `reg_b` here: the pump erases B's TimerRegistration pool block under
+    //    global_mtx_ in the same iteration it resolves B (lazy-at-deadline
+    //    reclamation), so a lock-free read of reg_b from this thread would race
+    //    with that erase (TSan). `nb` Expired is sufficient proof the timer
+    //    won: the pump resolves a node ONLY via try_claim_expiry (ACTIVE->CONSUMED
+    //    CAS) — so a terminal-Expired nb implies B's registration was consumed.
     SLUICE_CHECK_MSG(nb.was_expired(),
                      "B(200) resolved Expired (drove the wake, not A)");
-    SLUICE_CHECK_MSG(reg_b->is_consumed(),
-                     "B's registration consumed by the timer winner path");
     SLUICE_CHECK_MSG(!na.is_terminal(),
                      "A(10000) still Registered (worker did not remain parked until A)");
     SLUICE_CHECK_MSG(!na.was_expired(),
