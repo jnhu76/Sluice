@@ -3,13 +3,18 @@
 Narrow TLA+ model of the E11 deadline/timer wait integration (sluice-CORE-E11),
 extending the E10 WaitNode protocol
 ([`docs/spec/e10_waitnode/`](../e10_waitnode/)) with a THIRD resolution cause
-`TIMER_EXPIRE` and the two new state dimensions E11 introduces over E10:
+`TIMER_EXPIRE` and the three new state dimensions E11 introduces over E10:
 
 ```text
 timer-registration lifetime   (TimerRegistration control-block state:
                                ACTIVE / RETIRED / CONSUMED)
 deadline park liveness        (monotonic time + deadline-due predicate +
                                Scheduler parked/executable state)
+wait admission phase          (NoAdmission / AdmissionOpen / Suspended) — the
+                               final-admission-decision boundary that closes I5
+                               (Deadline Admission Closure). Without it I5 can
+                               only be stated as P => TRUE (a tautology); this
+                               dimension makes I5 non-vacuous.
 ```
 
 Mirrors the style of the E7/E8/E9/E10 TLA+ models.
@@ -38,7 +43,7 @@ straggling expiry observes BEFORE dereferencing its bound node.
 
 - `E11TimerWait.tla`                            — the correct protocol (three
   resolvers through one `resolve_` CAS + timer-registration lifetime + park
-  liveness). Preserves I1–I7.
+  liveness + wait-admission-phase boundary). Preserves I1–I7.
 - `E11TimerWait.cfg`                            — TLC config (safety invariants).
 - `E11TimerWaitLiveness.cfg`                    — TLC config (I6 park liveness).
 - `E11TimerWaitNeg1DoublePublication.tla/.cfg`  — NEG-1: timer expiry with no
@@ -51,6 +56,9 @@ straggling expiry observes BEFORE dereferencing its bound node.
   while a bound registration is still ACTIVE -> callback outlives the node (I4).
 - `E11TimerWaitNeg5DeadlineLostParked.tla/.cfg` — NEG-5: Scheduler parks past a
   due deadline -> deadline lost, wait unresolved forever (I6 liveness).
+- `E11TimerWaitNeg6DeadlineLostAtAdmission.tla/.cfg` — NEG-6: the final
+  admission decision commits suspension even when the deadline is already due ->
+  the wait is parked on an already-due deadline (I5 violation).
 - `README.md`                                   — this file + refinement map.
 
 ## Model domain (finite, exhaustive TLC)
@@ -76,14 +84,18 @@ regDeadline[r] : absolute monotonic deadline
 nodeAlive[n]   : storage reachable (FALSE after DestroyNode)
 now            : monotonic logical time
 parked         : whether the Scheduler is parked (idle)
+admissionPhase[n] : NoAdmission/AdmissionOpen/Suspended (I5 admission boundary)
+suspendedDue[n]   : deadline-due fact recorded at the final admission decision
 ```
 
 ## Results
 
-**TLC WAS EXECUTED.** The gate runs against TLC2 v1.8.0 (rev 227f61b,
-2026-07-09) from `tla2tools.jar` (fetched from the TLA+ GitHub release). The
-reproducible runner is `scripts/verify-e11-formal.sh` (M8); it asserts every
-model's expected verdict. To run it yourself:
+**TLC WAS EXECUTED.** The gate runs against the TLC version actually reported by
+the jar — currently `Version 2026.07.09.134028 (rev: 227f61b)` from
+`tla2tools.jar` (fetched from the TLA+ GitHub release). The reproducible runner
+is `scripts/verify-e11-formal.sh` (M8); it asserts every model's expected
+verdict AND that each negative model violates its EXPECTED NAMED property (not
+just any generic "Invariant violated"). To run it yourself:
 
 ```bash
 # one-time: fetch the jar the E7-E10 READMEs also expect at /tmp/tla2tools.jar
@@ -93,18 +105,56 @@ curl -sSL -o /tmp/tla2tools.jar \
 scripts/verify-e11-formal.sh
 ```
 
-Actual executed results (TLC2 v1.8.0, all models exhaustive over the finite
-domain Nodes={N0,N1}, Regs={R0,R1}, Time=0..3, DeadlineVal=0..3):
+Actual executed results (all models exhaustive over the finite domain
+Nodes={N0,N1}, Regs={R0,R1}, Time=0..3, DeadlineVal=0..3):
 
-| model | config | result | states (distinct) | counterexample |
-|-------|--------|--------|-------------------|----------------|
-| `E11TimerWait` | `E11TimerWait.cfg` | all invariants PASS | 10888 | — |
-| `E11TimerWait` | `E11TimerWaitLiveness.cfg` | `DeadlineParkLiveness` PASS | 10888 | — |
-| `E11TimerWaitNeg1DoublePublication` | `.cfg` | `InvSingleResolutionWinner` FAIL | 144 | timer publishes without the resolve_ CAS, then wake publishes again: `resolvedCount[N0]=2` |
-| `E11TimerWaitNeg2TimerCancelDoublePublication` | `.cfg` | `InvSingleResolutionWinner` FAIL | 133 | cancel publishes without the resolve_ CAS, then timer/admission publishes again: `resolvedCount[N0]=2` |
-| `E11TimerWaitNeg3StaleCrossEpoch` | `.cfg` | `InvWaitEpochIsolation` FAIL | 1395 | stale slot-keyed timer for N0 resolves N1 (N1 reused N0's slot): `regState[R0]=Consumed /\ nodeState[N0]#Expired` |
-| `E11TimerWaitNeg4CallbackAfterRetirement` | `.cfg` | `InvTimerLifetimeClosure` FAIL | 129 | non-timer winner does not retire the reg; node destroyed while reg ACTIVE: `nodeAlive[N0]=FALSE /\ regState[R0]=Active` |
-| `E11TimerWaitNeg5DeadlineLostParked` | `.cfg` | `DeadlineParkLiveness` FAIL | 10888 | parked forever with a due deadline (Tick + pump disabled while parked, no Unpark) |
+| model | config | result | states (distinct) | depth | counterexample |
+|-------|--------|--------|-------------------|-------|----------------|
+| `E11TimerWait` | `E11TimerWait.cfg` | all invariants PASS | 13528 | 11 | — |
+| `E11TimerWait` | `E11TimerWaitLiveness.cfg` | `DeadlineParkLiveness` PASS | 13528 | 11 | — |
+| `E11TimerWaitNeg1DoublePublication` | `.cfg` | `InvSingleResolutionWinner` FAIL | 144 | 4 | timer publishes without the resolve_ CAS, then wake publishes again: `resolvedCount[N0]=2` |
+| `E11TimerWaitNeg2TimerCancelDoublePublication` | `.cfg` | `InvSingleResolutionWinner` FAIL | 133 | 4 | cancel publishes without the resolve_ CAS, then timer/admission publishes again: `resolvedCount[N0]=2` |
+| `E11TimerWaitNeg3StaleCrossEpoch` | `.cfg` | `InvWaitEpochIsolation` FAIL | 1395 | 6 | stale slot-keyed timer for N0 resolves N1 (N1 reused N0's slot): `regState[R0]=Consumed /\ nodeState[N0]#Expired` |
+| `E11TimerWaitNeg4CallbackAfterRetirement` | `.cfg` | `InvTimerLifetimeClosure` FAIL | 129 | 4 | non-timer winner does not retire the reg; node destroyed while reg ACTIVE: `nodeAlive[N0]=FALSE /\ regState[R0]=Active` |
+| `E11TimerWaitNeg5DeadlineLostParked` | `.cfg` | `DeadlineParkLiveness` FAIL | 10888 | 11 | parked forever with a due deadline (Tick + pump disabled while parked, no Unpark) |
+| `E11TimerWaitNeg6DeadlineLostAtAdmission` | `.cfg` | `InvDeadlineAdmissionClosure` FAIL | 25 | 3 | admission commits suspension while the deadline is already due: `admissionPhase[N0]=Suspended /\ suspendedDue[N0]=TRUE /\ nodeState[N0]=Registered` |
+
+### I5 admission-closure corrective (the load-bearing formal fix)
+
+The original I5 invariant was a **tautology** — `(...) => TRUE` — so the formal
+gate contributed zero checking power for Deadline Admission Closure while the
+documentation claimed the corrected model preserved I1–I7. The corrective adds
+the wait-admission-phase state dimension (`admissionPhase`:
+NoAdmission/AdmissionOpen/Suspended) and a history fact `suspendedDue[n]`
+recording the deadline-due predicate value at the final admission decision, then
+states I5 non-tautologically:
+
+```tla
+InvDeadlineAdmissionClosure ==
+    \A n \in Nodes :
+        admissionPhase[n] = "Suspended" => ~suspendedDue[n]
+```
+
+I5 is **non-vacuous**: TLC reaches both admission branches and the
+post-suspension timer path (witnessed by inverse-invariant counterexamples —
+see the corrective commit report). It does NOT reject the legitimate
+post-suspension state (suspended while not due, then time advances and the
+deadline becomes due): `suspendedDue` is frozen at the `CommitSuspend` step and
+does not track later time progress, so a node suspended while not-due stays
+`suspendedDue=FALSE` even after its deadline becomes due (that later-due state
+belongs to I6 timer-progress semantics). NEG-6 demonstrates the I5 defect the
+old tautology could never surface.
+
+### I3 strengthening (carried alongside the I5 authority reopening)
+
+I3 was classified as weak (`regState[r]="Consumed" => regEpoch[r] \in Nodes`,
+primarily proving a model value belongs to its declared domain). It is
+strengthened to the semantic law "a timer registration may resolve only its
+immortally bound logical wait epoch": `regState[r]="Consumed" =>
+nodeState[regEpoch[r]]="Expired"` — a Consumed registration's bound epoch is the
+node that became Expired. NEG-3 (slot-keyed cross-epoch expiry) violates this
+directly: R0 (bound to N0) is Consumed while `nodeState[N0]="Woken"` (resolved
+by wake, not the timer), so the strengthened I3 fires without weakening I1.
 
 **Corrective history.** The first-committed E11 models did NOT parse or were
 vacuous/non-counterexample-producing under real TLC: the correct model had an
@@ -115,10 +165,14 @@ vacuous, NEG counterexamples unreachable); the liveness property used the `~>`
 form TLC rejects as a standalone PROPERTY wrapped under `[]`-fairness; and the
 negative models' defects were unreachable because retirement was atomic with
 the resolve. These were all corrected so the gate is now actually executed.
-The E10 README's claim that "§12 permits an executable fallback when TLC is
-unavailable" is withdrawn — no such §12 exists in the E10 spec (it ends at
-§11), and M8 requires the gate be runnable from committed artifacts (which it
-now is, via `scripts/verify-e11-formal.sh`).
+A later formal-closure review then found I5 was still a tautology (`P => TRUE`)
+and I3 merely checked domain-membership; this corrective adds the
+admission-phase dimension, the non-tautological I5, NEG-6, the strengthened I3,
+and hardens `verify-e11-formal.sh` to assert each negative model's EXPECTED
+NAMED property. The E10 README's claim that "§12 permits an executable fallback
+when TLC is unavailable" is withdrawn — no such §12 exists in the E10 spec (it
+ends at §11), and M8 requires the gate be runnable from committed artifacts
+(which it now is, via `scripts/verify-e11-formal.sh`).
 
 TLC IS run (see Results above + `scripts/verify-e11-formal.sh`). The formal
 gate and the **refinement map + explicit causal proof below** are complementary:
@@ -135,7 +189,8 @@ reduce to a finite-state sweep (object-identity vs numeric-address reuse).
 | --------------------- | ---------------------- | ------------------ |
 | `nodeState` | `WaitNode::state_` (atomic `State`) | winner authority |
 | `Register(n)` + bind `R` | `Scheduler::await_wait_deadline` → `register_wait_locked` + `timer_pool_.emplace_back` + `heap_push_locked` under `global_mtx_` + `q.mtx()` | structural + timer registration |
-| `AdmissionExpire(n)` | `await_wait_deadline` I5 recheck → `expire_locked` inline (clock >= deadline) | winner authority (same CS) |
+| `AdmissionExpire(n)` | `await_wait_deadline` I5 recheck → `expire_locked` inline (clock >= deadline); admission phase closes without suspension | winner authority (same CS) |
+| `CommitSuspend(n)` | `await_wait_deadline` final branch → `Fiber::make_waiting` (deadline NOT due at the recheck); admission phase -> Suspended | suspension commit (I5 boundary) |
 | `ResolveWake(n)` | `Scheduler::wake_wait_one` → `wake_one_locked` → `resolve_(Woken)` + `unlink_locked` + `retire_timer_for_node_locked` + `route_runnable_locked` | winner + scheduler wake |
 | `ResolveCancel(n)` | `Scheduler::cancel_wait` → `cancel_locked` → `resolve_(Cancelled)` + `unlink_locked` + `retire_timer_for_node_locked` + `route_runnable_locked` | winner + scheduler wake |
 | `ResolveTimer(r)` | `Scheduler::pump_deadlines_locked` → `try_claim_expiry` (ACTIVE→CONSUMED) → `expire_locked` + `unlink_locked` + `route_runnable_locked` | winner (timer claims R, then resolve_ CAS) |
@@ -199,9 +254,9 @@ state (which is gone once the node is destroyed). $\blacksquare$
 | --------- | ------------- | ---------------- | ------------------ |
 | I1 Single Resolution Winner | `resolvedCount[n] <= 1` | `resolve_` CAS (three causes, one authority) | T5, T16 |
 | I2 Single Runnable Publication | `wakeDispatched == Sum resolvedCount` | `make_runnable` exactly-once | T5, T16 |
-| I3 Wait-Epoch Isolation | `regEpoch[r]` immutable; `ResolveTimer` targets it | `TimerRegistration::node_` captures `WaitNode&` (object identity, never a reusable address) | T7; NEG-3 (same-slot reuse CE) |
+| I3 Wait-Epoch Isolation | `regState[r]="Consumed" => nodeState[regEpoch[r]]="Expired"` (a Consumed reg's bound epoch is the Expired node) | `TimerRegistration::node_` captures `WaitNode&` (object identity, never a reusable address) | T7; NEG-3 (same-slot reuse CE) |
 | I4 Timer Lifetime Closure | `ResolveTimer` gates on `regState = Active`; `DestroyNode` requires retirement | `try_claim_expiry` before deref; `retire_timer_for_node_locked` in winner CS | T8/T9/T10 (retirement-state gate); NEG-4 (lifetime CE) |
-| I5 Deadline Admission Closure | `AdmissionExpire` at registration | `await_wait_deadline` I5 recheck | T0 |
+| I5 Deadline Admission Closure | `admissionPhase[n]="Suspended" => ~suspendedDue[n]` (non-tautological; admission-phase dimension) | `await_wait_deadline` I5 recheck -> `expire_locked` inline, no `make_waiting` | T0; NEG-6 (suspend-on-due CE) |
 | I6 Deadline Park Liveness | `DeadlineParkLiveness` under fairness | bounded `park_on_wake_source` + worker-loop pump | T11, T12, T13, T15 |
 | I7 Cleanup Closure | winner retires R; terminal => no Active reg | `retire_timer_for_node_locked` | T4, T5 |
 

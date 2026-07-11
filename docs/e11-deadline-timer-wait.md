@@ -925,7 +925,7 @@ RunMode integration          external_wake_possible_locked includes
                              Drain-hang regression — E11-T14)
 ```
 
-Formal model: `docs/spec/e11_timer_wait/` (correct model + NEG-1..NEG-5).
+Formal model: `docs/spec/e11_timer_wait/` (correct model + NEG-1..NEG-6).
 Deterministic tests: `tests/e11_timer_wait_test.cpp` (E11-T0..T18).
 
 ---
