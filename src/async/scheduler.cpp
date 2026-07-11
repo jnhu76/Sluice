@@ -1063,6 +1063,36 @@ void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
     (void)fiber_ctx::context_switch(&s);
 }
 
+WaitNode* Scheduler::wake_wait_one_locked(WaitQueue& q) {
+    // E12-A: the wake_wait_one body with global_mtx_ already held. Resolves the
+    // FIFO head with Woken (wake_one_locked), retires any bound timer
+    // (retire_timer_for_node_locked, E11 I4), decrements waiting_waitq_count_,
+    // and routes the winner runnable through the canonical wake seam. Returns
+    // the winning node (nullptr if empty or head lost to a concurrent resolver).
+    //
+    // The caller MUST hold global_mtx_. q.mtx() is taken here (under global_mtx_,
+    // consistent lock order). Used by the public wake_wait_one AND
+    // event_set_broadcast's drain loop so the drain is atomic w.r.t. reset and
+    // admission (all under global_mtx_).
+    //
+    // E11 Phase 5 (Timer Lifetime Closure): a RESOURCE_WAKE winner MUST retire
+    // any active timer registration bound to the resolved node, in the SAME
+    // global_mtx_ critical section as the resolve CAS and BEFORE runnable
+    // publication (I4).
+    LockGuard qlk(q.mtx());
+    WaitNode* won = q.wake_one_locked();
+    if (won == nullptr) return nullptr;  // empty, or head lost to a cancel
+    retire_timer_for_node_locked(*won);
+    Fiber* f = won->fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
+    // succeeded. The node is terminal; make_runnable is the publication guard.
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+    }
+    return won;
+}
+
 bool Scheduler::wake_wait_one(WaitQueue& q) {
     // Resolve the FIFO head of `q` with Woken and route the winner's fiber
     // through the canonical wake seam (route_runnable_locked). The winner is
@@ -1073,28 +1103,8 @@ bool Scheduler::wake_wait_one(WaitQueue& q) {
     // make_runnable + route_runnable_locked run under global_mtx_ (the wake
     // path's coordination domain), exactly like wake_ready_flags_locked. This
     // is the single canonical runnable-enqueue seam (§8).
-    //
-    // E11 Phase 5 (Timer Lifetime Closure): a RESOURCE_WAKE winner MUST retire
-    // any active timer registration bound to the resolved node, in the SAME
-    // global_mtx_ critical section as the resolve CAS and BEFORE runnable
-    // publication. This closes the timer callback authority so a stale/lazy
-    // expiry cannot dereference the node after the fiber resumes and destroys
-    // its caller-owned WaitNode (I4). retire_timer_for_node_locked performs the
-    // ACTIVE->RETIRED CAS on the registration's independently-stable state.
     LockGuard lk(global_mtx_);
-    LockGuard qlk(q.mtx());
-    WaitNode* won = q.wake_one_locked();
-    if (won == nullptr) return false;  // empty, or head lost to a cancel
-    retire_timer_for_node_locked(*won);
-    Fiber* f = won->fiber();
-    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
-    // succeeded. The node is terminal; make_runnable is the publication guard.
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
-        return true;
-    }
-    return false;
+    return wake_wait_one_locked(q) != nullptr;
 }
 
 bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
@@ -1272,6 +1282,183 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
         return true;
     }
     return false;
+}
+
+// ---- E12-A Event wait admission / broadcast (sluice-CORE-E12-A) ----
+
+std::size_t Scheduler::event_set_broadcast(WaitQueue& waiters,
+                                            std::atomic<bool>& set_flag) {
+    // Transition `set_flag` to SET and drain every registered Event wait epoch
+    // through the canonical RESOURCE_WAKE path (wake_wait_one_locked). The store
+    // + drain are ONE atomic critical section under global_mtx_, serializing
+    // with reset() and wait admission so OLD_SET_WAKES_POST_RESET_WAITER is
+    // mechanically impossible: a waiter admitted after this drain is not in the
+    // queue during the drain, and reset() cannot interleave mid-drain.
+    //
+    // Idempotent: set() on SET re-stores true (no-op) and drains whatever
+    // waiters remain (typically none, since a prior set already drained them —
+    // but a waiter admitted between the prior set's drain and this call would
+    // be correctly drained here). Each winner is an independent resolve_(Woken)
+    // CAS + unlink + retire-timer + dec-count + make_runnable + route. One
+    // runnable publication per winning epoch (E7-T2 exactly-once).
+    //
+    // Safe to call from an external OS thread: global_mtx_ + the wake source
+    // (signal_wake_locked via route_runnable_locked) are the existing external-
+    // wake-capable mechanism. No Event-private wake channel.
+    std::size_t woken = 0;
+    LockGuard lk(global_mtx_);
+    set_flag.store(true, std::memory_order::release);
+    while (wake_wait_one_locked(waiters) != nullptr) {
+        ++woken;
+    }
+    return woken;
+}
+
+void Scheduler::event_reset(std::atomic<bool>& set_flag) {
+    // Transition `set_flag` to UNSET. Pure state flip: does NOT resolve, cancel,
+    // expire, unlink, or publish any WaitNode. A waiter already registered
+    // remains governed by future set(), deadline, or cancellation. Linearized
+    // under global_mtx_ so it serializes with set()'s drain and wait admission
+    // (the set/reset epoch isolation domain).
+    LockGuard lk(global_mtx_);
+    set_flag.store(false, std::memory_order::release);
+}
+
+void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
+                                 WaitNode& node) {
+    // E12-A Event wait admission. The lost-set closure: register + check SET +
+    // (if SET) resolve Woken inline, OR commit suspension — all under one
+    // global_mtx_ + q.mtx() critical section (the same domain set()/reset() use).
+    // Only context_switch is outside the lock. This mirrors await_wait_deadline's
+    // I5 already-due path: always register, then check the admission condition.
+    //
+    // If set_ is observed at admission (after registration), the wait resolves
+    // Woken inline via wake_node_locked (resolve_(Woken) + unlink), the timer
+    // (if any — none for this non-deadline overload) is retired, the count is
+    // decremented, and the fiber does NOT suspend. Because the current Fiber has
+    // not yet committed `waiting`, a successful admission-time Woken resolution
+    // may cause make_runnable() to return false for the RUNNING Fiber — that is
+    // expected and harmless (the fiber continues running and returns from wait).
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(q.mtx());
+        if (!q.register_wait_locked(node, me)) {
+            // Node already registered or terminal (C8): contract violation.
+            return;
+        }
+        ++waiting_waitq_count_;
+        // Admission closure: if SET is observed after registration, resolve this
+        // wait as Woken inline through the canonical resolve_ authority. The node
+        // is unlinked in the same critical section (wake_node_locked). No suspend.
+        if (set_flag.load(std::memory_order::acquire)) {
+            if (q.wake_node_locked(node)) {
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // The current Fiber is RUNNING; make_runnable may return false.
+                // That is not a reason to publish it. Return from wait normally.
+                if (me != nullptr) (void)me->make_runnable();
+            }
+            return;  // node.outcome() == woken; do NOT suspend
+        }
+        // Defense-in-depth: if the node was resolved concurrently (it cannot be,
+        // since register_wait_locked just moved it to Registered under both
+        // locks and every resolver takes global_mtx_), undo and do not suspend.
+        if (node.is_terminal()) {
+            q.unlink_locked(node);
+            --waiting_waitq_count_;
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+}
+
+void Scheduler::await_event_wait_deadline(WaitQueue& q,
+                                          const std::atomic<bool>& set_flag,
+                                          WaitNode& node, deadline_t deadline) {
+    // E12-A deadline-aware Event wait. Composes await_event_wait's admission
+    // closure with E11 TimerRegistration. The wait resolves when EXACTLY ONE
+    // cause wins the resolve_ CAS:
+    //   - set() broadcast (event_set_broadcast -> wake_wait_one_locked) -> Woken
+    //   - cancel_wait(q, node)                                   -> Cancelled
+    //   - the deadline elapsing (pump_deadlines_locked)           -> Expired
+    //
+    // Admission precedence (under global_mtx_ + q.mtx()):
+    //   1. If set_ is observed SET after registration: resolve Woken inline
+    //      (no suspend). Event readiness wins over a due deadline at admission
+    //      (the resource is ready; the deadline is moot).
+    //   2. Else if the deadline is already due: resolve Expired inline (E11 I5).
+    //   3. Else: commit suspension.
+    // A non-timer winner retires the registration in the same CS (E11 I4).
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
+    TimerRegistration* reg = nullptr;
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(q.mtx());
+        if (!q.register_wait_locked(node, me)) {
+            return;  // C8 contract violation
+        }
+        ++waiting_waitq_count_;
+        // Create the timer registration control block for this wait epoch.
+        timer_pool_.emplace_back(&node, &q, deadline);
+        reg = &timer_pool_.back();
+        ++active_deadline_count_;
+        heap_push_locked(reg);
+        recompute_earliest_deadline_locked();
+
+        // Admission closure — Event SET takes precedence: if the resource is
+        // ready, the wait resolves Woken inline (the deadline is moot).
+        if (set_flag.load(std::memory_order::acquire)) {
+            if (q.wake_node_locked(node)) {
+                if (reg->retire()) {  // ACTIVE->RETIRED (closes timer authority)
+                    --active_deadline_count_;
+                }
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                if (me != nullptr) (void)me->make_runnable();
+            }
+            return;  // node.outcome() == woken; do NOT suspend
+        }
+
+        // E11 I5 admission closure: if the deadline is ALREADY due (and the
+        // resource is NOT set), resolve Expired inline. The fiber must NOT
+        // suspend and wait for a future timer scan merely because registration
+        // happened after the deadline was due.
+        if (clock_now_unlocked() >= deadline) {
+            if (q.expire_locked(node)) {
+                reg->try_claim_expiry();  // ACTIVE->CONSUMED (winner)
+                --active_deadline_count_;
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                if (me != nullptr && me->make_runnable()) {
+                    route_runnable_locked(me, g_worker);
+                }
+                return;  // resolved at admission; do NOT suspend
+            }
+            // If expire_locked lost, a concurrent resolver won; fall through.
+        }
+
+        // Defense-in-depth: if the node was resolved concurrently, undo + return.
+        if (node.is_terminal()) {
+            q.unlink_locked(node);
+            --waiting_waitq_count_;
+            if (reg->retire()) {
+                --active_deadline_count_;
+            }
+            recompute_earliest_deadline_locked();
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
 }
 
 std::size_t Scheduler::pump_deadlines_locked() {

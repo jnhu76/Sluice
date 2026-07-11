@@ -878,3 +878,23 @@ do
             add_tests("e11_timer_wait_test")
     end
 end
+
+-- e12_event_test — Async Event synchronization primitive (sluice-CORE-E12-A).
+-- Persistent manual-reset Event on the E10/E11 substrate: basic semantics,
+-- lost-set admission closure, set-all broadcast, deadline/cancel composition,
+-- set/reset epoch isolation, external-thread set, E8 steal, Drain STALLED,
+-- destruction contract. Deterministic causal tests (NO sleep_for proof).
+-- Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e12_event_test.cpp"
+    if os.isfile(p) then
+        target("e12_event_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e12_event_test")
+    end
+end

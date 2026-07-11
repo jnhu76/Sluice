@@ -232,6 +232,24 @@ private:
         return false;  // already terminal (loser): C2/C3/C4/C5 no-op
     }
 
+    // ---- Wake a specific node (E12-A admission-time resolver, Woken) ----
+    //
+    // PRIVATE (E12-A): the Event admission path resolves a specific node with
+    // Woken when it observes SET after registration (the admission closure).
+    // Mirrors wake_one_locked's resolve CAS but targets `node` instead of the
+    // FIFO head, exactly like cancel_locked/expire_locked target a specific
+    // node. The winner CAS is the authority; a losing call (node already
+    // terminal) returns false and performs no unlink. `node` MUST belong to
+    // this queue (caller contract — the Event admission seam registers `node`
+    // into THIS queue immediately before calling this).
+    bool wake_node_locked(WaitNode& node) SLUICE_REQUIRES(mtx_) {
+        if (node.resolve_(WaitOutcome::woken)) {  // winner CAS (§2/§7)
+            unlink_locked(node);                  // SAME critical section (§7)
+            return true;
+        }
+        return false;  // already terminal (loser): concurrent cancel/expire
+    }
+
     // ---- Expire a specific node (E11 third terminal resolver, Expired) ----
     //
     // PRIVATE (E11-CORRECTIVE seal): the Scheduler resolves a deadline-elapsed

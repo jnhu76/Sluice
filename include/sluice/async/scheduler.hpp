@@ -304,6 +304,54 @@ public:
     bool expire_wait(WaitQueue& q, WaitNode& node);
 
 
+    // ---- E12-A Event wait admission / broadcast (sluice-CORE-E12-A) ----
+    // The Event persistent-readiness substrate. Event owns a persistent
+    // std::atomic<bool> set_ + a WaitQueue waiters_; these seams implement the
+    // lost-set admission closure and set-all broadcast under global_mtx_ (the
+    // existing serialization domain). No second ready-flag map, no Event-private
+    // timer, no Event-private cancellation winner, no direct Fiber manipulation.
+    //
+    // Synchronization domain: ALL Event seams take global_mtx_ (and q.mtx()
+    // inside it), the same domain await_wait / wake_wait_one / cancel_wait /
+    // expire_wait / pump_deadlines_locked use. This serializes set linearization,
+    // reset linearization, wait admission, and set's drain boundary, making
+    // OLD_SET_WAKES_POST_RESET_WAITER mechanically impossible (no generation
+    // counter needed).
+
+    // Transition `set_flag` to SET and attempt RESOURCE_WAKE resolution for
+    // every currently registered Event wait epoch in `waiters`. Each winner is
+    // resolved through the canonical path (wake_wait_one_locked: resolve_(Woken)
+    // + unlink + retire timer + dec count + make_runnable + route). Idempotent:
+    // set() on SET is a no-op (the store is a no-op; the drain finds the queue
+    // in whatever state the registered waiters left it). Returns the number of
+    // waiters resolved by THIS call. Safe to call from an external OS thread.
+    std::size_t event_set_broadcast(WaitQueue& waiters, std::atomic<bool>& set_flag);
+
+    // Transition `set_flag` to UNSET. Does NOT resolve, cancel, expire, unlink,
+    // or publish any WaitNode. A waiter already registered remains governed by
+    // future set(), deadline, or cancellation. Linearized under global_mtx_.
+    void event_reset(std::atomic<bool>& set_flag);
+
+    // Suspend the calling Fiber on `q`, registering `node`, with the Event
+    // readiness predicate `set_flag`. The admission closure: register + check
+    // SET + (if SET) resolve Woken inline through wake_node_locked, OR commit
+    // suspension. Mirrors await_wait_deadline's I5 already-due path. `node` must
+    // be Detached (fresh) and outlive this call's suspend until it is resumed.
+    // Result via node.outcome() (woken / cancelled).
+    void await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
+                          WaitNode& node);
+
+    // Deadline-aware Event wait. Composes await_event_wait with E11
+    // TimerRegistration. The wait resolves when EXACTLY ONE cause wins the
+    // resolve_ CAS: set() broadcast (Woken), cancel_wait (Cancelled), or the
+    // deadline elapsing (Expired). If set_ is observed at admission, resolves
+    // Woken inline (no suspend). If the deadline is already due at admission,
+    // the E11 I5 path resolves Expired inline (no suspend). The deadline
+    // registration is retired by a non-timer winner in the same CS (E11 I4).
+    void await_event_wait_deadline(WaitQueue& q, const std::atomic<bool>& set_flag,
+                                   WaitNode& node, deadline_t deadline);
+
+
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()
     // from an external thread to wake a parked Worker whose wake set includes
@@ -396,6 +444,12 @@ private:
     bool wake_ready_flags_locked() SLUICE_REQUIRES(global_mtx_);
     void route_runnable(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
     void route_runnable_locked(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
+    // E12-A: the wake_wait_one body with global_mtx_ already held. Resolves the
+    // FIFO head with Woken (wake_one_locked), retires any bound timer, decrements
+    // waiting_waitq_count_, and routes the winner runnable. Returns the winning
+    // node (nullptr if empty or head lost). Used by the public wake_wait_one AND
+    // event_set_broadcast's drain loop. Caller MUST hold global_mtx_.
+    WaitNode* wake_wait_one_locked(WaitQueue& q) SLUICE_REQUIRES(global_mtx_);
     void worker_loop(WorkerState* ws);
     // E9-CORRECTIVE: one internal run implementation parameterized by
     // RunMode. The worker loop reads run_mode_ to select the idle action

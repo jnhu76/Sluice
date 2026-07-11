@@ -524,18 +524,23 @@ non-destruction Event semantics (set/reset/wait/late-waiter/cardinality); it
 blocks only the destruction path, which can be specified before the destructor
 is exercised. This is recorded so it is not discovered late.
 
-**Event verdict:**
+**Event verdict (E12-A CLOSED):**
 
 ```text
-PUBLIC SEMANTICS RESOLVED:
+PUBLIC SEMANTICS RESOLVED + IMPLEMENTED:
     manual-reset persistent Event
     set() releases all registered Event waits satisfied by SET
 
-IMPLEMENTATION BOUNDARY:
-    loop wake-one vs narrow wake-many seam (audit during E12-A)
+IMPLEMENTATION BOUNDARY RESOLVED:
+    loop wake_wait_one_locked until drained (event_set_broadcast), atomic
+    under global_mtx_. No native wake-many WaitQueue API added.
 
-HUMAN DECISION:
-    destruction-with-waiters only
+DESTRUCTION CONTRACT RESOLVED:
+    caller contract violation; ~Event asserts empty in debug, no cancel/wake.
+
+E12-A CLOSED — see docs/e12-event.md (as-built topology) +
+    docs/spec/e12_event/ (formal model) +
+    scripts/verify-e12-event-formal.sh (formal gate).
 ```
 
 > Naming-collision note (fact, not a decision): the existing
