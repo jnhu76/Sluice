@@ -6,6 +6,23 @@
 >
 > **Status:** PREPARATION COMPLETE. Verdict: `E12-PREP: READY`.
 >
+> **E12-B Semaphore per-primitive authority (E12-B-SEMAPHORE-PREPARATION-
+> CORRECTIVE-1):** the §5 Semaphore authority is superseded by
+> [`docs/e12-semaphore.md`](e12-semaphore.md) (policy register A1–A5, corrected
+> permit conservation, release state machine, **Conclusion A** Scheduler-seam
+> proof) and the safety-only formal model in
+> [`docs/spec/e12_semaphore/`](spec/e12_semaphore/) (gate:
+> [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh)).
+> E12-B preparation status:
+> ```text
+> E12-B-PREPARATION-CORRECTIVE-1: COMPLETE
+> E12-B-PREPARATION: REAUDIT-REQUIRED
+> E12-B-IMPLEMENTATION: BLOCKED
+> ```
+> Only a fresh adversarial re-audit returning PASS may change E12-B to
+> `CLOSED` / `READY`. The cross-primitive preparation (this document) is
+> otherwise unchanged.
+>
 > Corrective history: `E12-PREP-CORRECTIVE-1-REVIEW` returned
 > `CORRECTIVE-REQUIRED` with six accepted defects (F-EVENT-1, F-SEM-1,
 > F-COND-1, F-GRANT-1, F-QUEUE-1, F-DEP-1). This revision is the
@@ -659,79 +676,127 @@ no longer queued demand (it has moved to `granted_not_yet_committed` on the
 supply side). Queued demand does not create, consume, or refund supply; it is
 purely a count of unsatisfied wait epochs.
 
-### 5.2 The load-bearing race
+### 5.2 The release disposition (F-SEM-ACCT-1 closure, E12-B-PREPARATION-CORRECTIVE-1)
+
+The previous draft modelled release grant by first executing `available_--`
+and then refunding on a lost CAS. That model is **deleted** (it underflows at
+`available_ == 0` and double-counts). First-scope Semaphore has **no**
+`granted_not_yet_committed` / `granted_in_flight` production state.
+
+The accepted release disposition is atomic (release runs in one
+`Scheduler::global_mtx_` critical section):
 
 ```text
-release() grants a waiter
-    ↓
-waiter's wake_wait_one resolve_ CAS wins
-    ↓ (waiter is now "granted_not_yet_committed", permit leaves free_permits)
-vs
-the same waiter's deadline expires / cancel wins BEFORE the grant's CAS
+release():
+    one pending permit is created by this release call
+
+    if an eligible queued waiter wins (FIFO head):
+        transfer that pending permit directly to exactly one waiter
+        available_ unchanged                 (no decrement, no underflow)
+        return true
+
+    if no eligible queued waiter wins:
+        if available_ == max_permits:
+            return false  with no state mutation
+        otherwise:
+            available_++
+            return true
 ```
 
-**Who owns the granted permit during that race?** This is the Semaphore
-analogue of E11's timer-lifetime closure. The grant and the cancel/expire
-compete on the SAME `resolve_` CAS (one authority, Hard Rule 4). Therefore:
+**Permit conservation law (simplified):**
 
-- The permit is **reserved for the waiter** only at the moment the grant's
-  `resolve_(woken)` CAS succeeds (it moves from `free_permits` to
-  `granted_not_yet_committed`).
-- If cancel/expire's CAS wins instead, the waiter is NOT granted; the permit
-  is **refunded** (returned to `free_permits`). There is no "cancelled waiter
-  keeps a permit."
-- If the grant's CAS wins, cancel/expire is the loser (no-op, E10 truth table)
-  and the permit stays with the waiter (`granted_not_yet_committed` →
-  `successful_acquire_count` on resume).
+```text
+available_ + acquiredCount == initial_permits + accepted_release_count
+```
 
-This requires the grant path to perform the permit decrement and the
-`resolve_(woken)` in the **same critical section**, and the cancel/expire path
-to perform the refund and `resolve_(cancelled|expired)` in its same critical
-section — exactly the E10/E11 winner-only authority shape. (The grant-commit
-insertion boundary for anonymous one-permit pre-reservation is classified in
-§14: the current Scheduler seam is sufficient for first-scope acquire-one
-because winner identity is not required for anonymous permit accounting.)
+The four counter transitions:
 
-### 5.3 Required policy decisions
+```text
+Immediate acquire (available_ > 0, no eligible queued waiter):
+    available_-- ; acquiredCount++
+
+Release transfer to an eligible queued waiter:
+    accepted_release_count++ ; acquiredCount++ ; available_ unchanged
+
+Release store (no eligible waiter, available_ < max_permits):
+    accepted_release_count++ ; available_++
+
+Overflow rejection (no eligible waiter, available_ == max_permits):
+    all counters unchanged
+```
+
+A rejected overflow release is not an accepted release. Queued demand is not a
+term in the supply law (§5.1.2). There is **no refund**: the release-created
+pending permit is either transferred, stored, or rejected — never
+pre-decremented and re-deposited.
+
+**Conclusion A — the Scheduler seam (F-SEM-SEAM-1 closure).** Whether a
+`release()` can grant W2 after W1 "loses" depends on whether a linked FIFO
+head can lose its `resolve_(Woken)` CAS while `release` observes it. An
+exhaustive audit of every private `WaitQueue` resolver call-site
+(`src/async/scheduler.cpp`; `Scheduler` sole friend at
+`include/sluice/async/wait_queue.hpp:145`) proves it cannot:
+
+```text
+wake, cancel, and expire are ALL serialized by Scheduler::global_mtx_;
+a winning cancel/expire unlinks the node in the SAME critical section as its
+resolve_ CAS, before releasing global_mtx_;
+therefore a linked FIFO head observed by wake_wait_one_locked under
+global_mtx_ + q.mtx() is necessarily Registered and eligible, and its
+resolve_(Woken) CAS cannot lose.
+```
+
+Under the production lock protocol, `wake_wait_one_locked` returns `nullptr`
+**only when the queue is empty**. W1-cancelled/W2-live behavior is therefore
+proven by **cancellation unlinking W1 before release observes the queue**
+(cancel is `global_mtx_`-serialized; release acquires `global_mtx_` next,
+observes W1 gone, grants W2) — NOT by a release-side skip-after-null. The
+existing private seam is **sufficient**; no Scheduler extension is introduced.
+Full evidence + the stable-state invariant
+(`EligibleQueuedWaiterExists => available_ == 0`) are in
+[`docs/e12-semaphore.md`](e12-semaphore.md) §5. (The grant-commit insertion
+boundary classification is unchanged: §14.3.2.)
+
+### 5.3 Required policy decisions (A1–A5 closed by E12-B-PREPARATION-CORRECTIVE-1)
 
 | Decision | Candidate | Status |
 | -------- | --------- | ------ |
-| initial permits | constructor arg `initial_supply` | RESOLVED (convention) |
-| maximum permits | **HUMAN DECISION** — bounded (reject overflow) vs unbounded | HUMAN DECISION REQUIRED |
+| initial permits | constructor arg `initial_supply`; `0 ≤ initial ≤ max` | RESOLVED (A1) |
+| maximum permits | **bounded; `max_permits > 0` mandatory; constructor violations are debug-asserted caller contract violations** | RESOLVED (A1) |
 | acquire one vs acquire N | first scope: **acquire-one only**; `acquire(N)` deferred | RESOLVED (scope) |
 | release one vs release N | first scope: **release-one only**; `release(N)` deferred | RESOLVED (scope) |
-| **waiter ordering** | **selection among ALREADY-QUEUED waiters uses E10 WaitQueue FIFO order** | RESOLVED (§5.4) |
-| **barging** | **HUMAN DECISION** — may a newly arriving acquirer barge ahead of existing queued demand? | HUMAN DECISION REQUIRED (§5.4) |
-| permit reservation | grant-at-CAS-win (§5.2); anonymous one-permit pre-reservation, seam sufficient (§14) | RESOLVED |
-| cancelled waiter refund | refund (waiter not granted) | RESOLVED (§5.2) |
-| expired waiter refund | refund (waiter not granted) | RESOLVED (§5.2) |
-| overflow on release | coupled to the max-permits decision | HUMAN DECISION REQUIRED (with max) |
-| destruction with waiters | **HUMAN DECISION** (same class as Event §4.4) | HUMAN DECISION REQUIRED |
+| **waiter ordering** | **selection among already-queued waiters uses E10 WaitQueue FIFO order** | RESOLVED (§5.4) |
+| **barging** | **forbidden** — a newly arriving acquire may not bypass an already-eligible queued waiter; `try_acquire` succeeds iff `available_>0` AND no eligible waiter has FIFO priority | RESOLVED (A2) |
+| permit reservation | none — release creates a pending permit that is transferred/stored/rejected, never pre-decremented (§5.2) | RESOLVED (A1/§5.2) |
+| cancelled waiter disposition | the cancel resolver is `global_mtx_`-serialized; no refund path exists (no permit was removed) | RESOLVED (A3/§5.2 Conclusion A) |
+| expired waiter disposition | symmetric to cancel; `acquire_until` permit-first precedence over a due deadline (A4) | RESOLVED (A4) |
+| overflow on release | `release()` returns `false` with no mutation iff no eligible waiter accepts AND `available_==max_permits` | RESOLVED (A1) |
+| `acquire_until` deadline precedence | permit admissible + deadline due → Woken; no permit + deadline due → Expired; `try_acquire` has no deadline semantics | RESOLVED (A4) |
+| `available()` semantics | observational snapshot; may stale; `available()>0` ⇒ nothing about a later `try_acquire` | RESOLVED (A5) |
+| destruction with waiters | registered wait epochs = caller contract violation; dtor cancels/wakes/synthesizes nothing; outstanding acquired permits not runtime-tracked | RESOLVED (A3) |
 
-### 5.4 FIFO vs barging (F-SEM-1 language fix)
+### 5.4 FIFO + no-barging (A2 closure)
 
-The previous draft said "waiter ordering = FIFO," which is ambiguous and, if
-barging is later allowed, false as a *global* acquisition order. Replace with
-the exact accepted fact:
+The first-scope contract is exact:
 
 ```text
 selection among ALREADY-QUEUED waiters uses E10 WaitQueue FIFO order
+AND
+barging is forbidden: a newly arriving acquire may not bypass an
+already-eligible queued waiter.
 ```
 
-Then keep separately, as HUMAN DECISION REQUIRED:
-
-```text
-may a newly arriving acquirer barge ahead of existing queued demand?
-```
-
-Do NOT claim global acquisition FIFO while barging remains open. If barging is
-allowed, a new acquirer may take a just-released permit before a queued waiter
-is selected; FIFO then governs only the order in which already-queued waiters
-are selected. These are distinct.
+`try_acquire()` succeeds only when both hold: `available_ > 0` AND no eligible
+queued waiter has FIFO priority. An immediate acquire consumes a stored permit
+only when no eligible waiter is queued. There is no global "acquisition FIFO"
+claim to qualify: barging is forbidden, so FIFO selection governs the
+admission order unconditionally.
 
 ### 5.5 Required trace accounting (S1–S4)
 
-The corrected laws reconcile the following traces:
+The simplified law
+(`available_ + acquiredCount == initial_permits + accepted_release_count`)
+reconciles:
 
 **S1.**
 
@@ -740,12 +805,10 @@ initial = 0
 W1 queues
 ```
 
-- Supply unchanged. `initial_supply = 0`, `successful_release_count = 0`,
-  `free_permits = 0`, `granted_not_yet_committed = 0`,
-  `successful_acquire_count = 0`. Law holds: `0 + 0 == 0 + 0 + 0`.
-- Queued demand = 1 (W1 is a live wait epoch demanding a permit, not yet
-  granted/expired/cancelled). Queued demand does not appear on the supply
-  side.
+- Supply unchanged: `available_=0`, `acquiredCount=0`,
+  `accepted_release_count=0`. Law holds: `0 + 0 == 0 + 0`.
+- Queued demand = 1 (W1, a live wait epoch). Queued demand is not a supply
+  term.
 
 **S2.**
 
@@ -756,49 +819,54 @@ W2 queues
 W3 queues
 ```
 
-- Supply: `initial_supply = 1`, `successful_release_count = 0`,
-  `free_permits = 0`, `granted_not_yet_committed = 0`,
-  `successful_acquire_count = 1`. Law holds: `1 + 0 == 0 + 0 + 1`.
+- Supply: `available_=0`, `acquiredCount=1`, `accepted_release_count=0`. Law
+  holds: `0 + 1 == 1 + 0`.
 - Queued demand = 2 (W2, W3). Queued demand does not create supply.
 
 **S3.**
 
 ```text
-W1 queued
+W1 queued (available_ = 0)
 release one
 CANCEL wins before grant
 ```
 
-- The newly introduced permit is accounted **exactly once** as
-  free/refunded. `successful_release_count` grows by 1; since the grant did
-  not win (`granted_not_yet_committed` unchanged, `successful_acquire_count`
-  unchanged), `free_permits` grows by 1. The permit is not double-counted and
-  not lost.
+- Under Conclusion A, cancel is `global_mtx_`-serialized and unlinks W1 before
+  the release's `wake_wait_one_locked` observes the queue. The release's
+  pending permit sees no eligible waiter, so it is stored: `available_: 0→1`,
+  `accepted_release_count: 0→1`, `acquiredCount` unchanged. Law holds:
+  `1 + 0 == 0 + 1`. There is no refund path (no permit was ever removed from
+  `available_`).
 
 **S4.**
 
 ```text
-W1 queued
+W1 queued (available_ = 0)
 release one
 RESOURCE_WAKE grant wins
-W1 not resumed yet
 ```
 
-- The permit is represented **exactly once** as `granted_not_yet_committed`.
-  `successful_release_count` grows by 1; `free_permits` unchanged;
-  `granted_not_yet_committed` grows by 1; `successful_acquire_count`
-  unchanged. Law holds. On W1's resume it moves from
-  `granted_not_yet_committed` to `successful_acquire_count` (free stays same).
+- The release's pending permit is transferred directly to W1:
+  `accepted_release_count: 0→1`, `acquiredCount: 0→1`, `available_` unchanged
+  (no decrement, no underflow). Law holds: `0 + 1 == 0 + 1`. There is no
+  `granted_not_yet_committed` state (first-scope has none); `acquiredCount`
+  counts the grant directly.
 
-**Semaphore verdict:**
+**Semaphore verdict (E12-B-PREPARATION-CORRECTIVE-1):**
 
 ```text
-supply accounting corrected (supply separated from queued demand)
+permit conservation corrected (available_ + acquiredCount ==
+    initial_permits + accepted_release_count; no granted_in_flight term)
 queued demand separate (QUEUED ∩ GRANTED = ∅)
-queued waiter selection FIFO (already-queued order)
-barging still HUMAN DECISION
-max permits / overflow HUMAN DECISION
-destruction-with-waiters HUMAN DECISION
+queued waiter selection FIFO; barging FORBIDDEN (A2)
+max permits / overflow RESOLVED (A1)
+destruction-with-waiters RESOLVED (A3)
+deadline precedence RESOLVED (A4)
+available() observational RESOLVED (A5)
+Scheduler seam: Conclusion A (sufficient; no extension)
+PREPARATION: REAUDIT-REQUIRED — IMPLEMENTATION BLOCKED
+    (see docs/e12-semaphore.md + docs/spec/e12_semaphore/ +
+     scripts/verify-e12-semaphore-formal.sh)
 ```
 
 ---
@@ -1384,7 +1452,7 @@ implement RwLock in this preparation task.
 | Primitive | Resource state | WaitQueue count | Grant/reservation state | Ownership identity | Deadline cleanup | Cancellation cleanup |
 | --------- | -------------- | --------------- | ----------------------- | ------------------ | ---------------- | -------------------- |
 | Event | bool `set_` | 1 (waiters) | none | none | unlink node (expire loses to set's per-waiter wake) | unlink node |
-| Semaphore | permit supply count | 1 (demand) | permit granted at CAS-win → `granted_not_yet_committed` (§5.1); anonymous, seam sufficient (§14) | none | refund permit if expire wins before grant | refund permit if cancel wins before grant |
+| Semaphore | `available_` (stored-permit count) | 1 (demand) | release creates a pending permit transferred/stored/rejected atomically; no pre-reservation, no refund (§5.2); seam sufficient Conclusion A (§14.3.2) | none | no permit was removed; expire serialized before release observes queue (Conclusion A) | symmetric (cancel serialized before release observes queue) |
 | Mutex | locked bool | 1 (waiters) | ownership granted at CAS-win; **direct handoff REQUIRES winner-before-publication seam (§14), conditional on handoff policy** | **Fiber identity** | none (grant is final; expire loses to grant) | none (cancel loses to grant); cancel of a *queued* waiter just unlinks |
 | Condition | none (delegates to Mutex) | 1 (its own) + Mutex's | none | via Mutex | condition epoch expire → then reacquire epoch (Model A: mandatory non-cancellable; Model B: separate, may expire — §7) | condition epoch cancel → reacquire epoch (Model A: masked; Model B: may cancel — §7) |
 | Queue | buffer + closed bool | 2 (not-empty, not-full) | **EXPLICIT item/slot reservation state required (§8.3); winner-before-publication seam (§14)** | none | item stays / slot refunded (§8.2) | symmetric |
@@ -1395,7 +1463,7 @@ implement RwLock in this preparation task.
 | Primitive | `RESOURCE_WAKE` means | `TIMER_EXPIRE` means | `CANCEL` means |
 | --------- | --------------------- | -------------------- | -------------- |
 | Event | `set()` attempted RESOURCE_WAKE for EVERY registered waiter (one `resolve_` per epoch); late `wait()` observes SET without parking | deadline elapsed while UNSET-and-waiting → `expired` | wait-cancelled → `cancelled`; Event state unchanged |
-| Semaphore | a permit granted to this waiter → `woken` (permit moves to `granted_not_yet_committed`) | deadline elapsed before grant → `expired`; permit refunded | cancel before grant → `cancelled`; permit refunded |
+| Semaphore | a permit granted to this waiter → `woken` (the release's pending permit is transferred directly; `available_` unchanged) | deadline elapsed before grant → `expired`; no permit was removed (no refund path — Conclusion A) | cancel before grant → `cancelled`; serialized before release observes the queue (Conclusion A) |
 | Mutex | ownership granted to this waiter → `woken` | deadline before grant → `expired`; no ownership | cancel before grant → `cancelled`; no ownership |
 | Condition | notify woke this waiter → proceed to reacquire (Model A: mandatory; Model B: separate epoch — §7) | condition-wait deadline → `expired`; then reacquire (§7 trace C1–C4) | condition wait cancelled → `cancelled`; then reacquire (§7 trace C1–C4) |
 | Queue (consumer) | an item reserved to this waiter via explicit reservation state → `woken` | deadline before reservation → `expired`; item stays | cancel before reservation → `cancelled`; item stays |
@@ -1437,25 +1505,46 @@ implemented in this preparation.
   `set()` occurs, waiter registers, waiter sleeps forever) — prevented by the
   `await_wait` recheck idiom.
 
-### 11.2 Semaphore
+### 11.2 Semaphore (E12-B-PREPARATION-CORRECTIVE-1 — safety model implemented)
 
-- **Correct invariant:** the **supply accounting law** (§5.1.1):
-  `initial_supply + successful_release_count == free_permits +
-  granted_not_yet_committed + successful_acquire_count` at all times;
-  `granted_not_yet_committed ∩ queued_demand = ∅` (a grant winner is no longer
-  queued demand). Queued demand is NOT on the supply side. (The previous
-  invalid `initial == free + granted + queued` is deleted.)
-- **Minimum state dimensions:** permit supply counters (`free_permits`,
-  `granted_not_yet_committed`, history counters); WaitQueue contents
-  (queued demand); per-node resolution state; deadline dimension. Supply,
-  queued demand, and grant-in-flight are separate dimensions.
-- **Required negative model — broken permit double-consumption or permit
-  loss:** a release that grants a waiter AND increments `free` (double-
-  consumption), or a cancel that neither refunds nor consumes (permit loss),
-  or counting queued demand as supply. Counterexample:
-  `initial_supply + successful_release_count ≠ free_permits +
-  granted_not_yet_committed + successful_acquire_count`, or a queued waiter
-  appearing on the supply side.
+- **Correct invariant (simplified conservation law, §5.2):**
+  `available_ + acquiredCount == initial_permits + accepted_release_count` at
+  all times. There is NO `granted_in_flight` term (first-scope has no such
+  production state); there is NO refund path (release creates a pending permit
+  that is transferred / stored / rejected, never pre-decremented). Queued
+  demand is NOT on the supply side. The full state-invariant catalog is in
+  [`docs/e12-semaphore.md`](e12-semaphore.md) §8 and modelled in
+  [`docs/spec/e12_semaphore/E12Semaphore.tla`](spec/e12_semaphore/E12Semaphore.tla):
+  `InvPermitConservation`, `InvPermitBounds`, `InvQueueWellFormed`,
+  `InvSingleResolution`, `InvSinglePublication`, `InvGrantCommitCoupling`,
+  `InvFIFOGrant`, `InvAdmissionClosure`, `InvOverflowNonMutation`,
+  `InvNoIdlePermitWithEligibleWaiter`, `InvReleaseDisposition`,
+  `InvPermitFirstDeadline`. (The previous invalid `initial == free + granted +
+  queued` and the `granted_not_yet_committed` supply term are both deleted.)
+- **Minimum state dimensions:** `available` (the stored-permit counter); the
+  explicit FIFO `queue : Seq(Node)` (ordering authority, not just set
+  membership); per-epoch `nodeState` (Detached/Registered/Woken/Cancelled/
+  Expired); `admissionPhase`; latched admission evidence
+  (`admissionSawPermit` / `admissionSawDue`) so deadline precedence is a
+  prime-free state invariant; history counters (`acceptedReleaseCount`,
+  `acquiredCount`); and ghost/history evidence (`lastAction`,
+  `lastGrantedNode`, `expectedFIFOHead`, `pre*`) so transition properties
+  (release disposition / FIFO grant / overflow non-mutation) are state
+  invariants. Each modeled Node denotes ONE wait epoch (no epoch reuse).
+- **Liveness:** NONE (safety-only model). The prior "Registered + Suspended +
+  available>0 eventually resolves" property was removed (premise unreachable
+  under `InvNoIdlePermitWithEligibleWaiter`; release is atomic external, so
+  future-release fairness would be unjustified).
+- **Required negative models (implemented, each fails its single named
+  invariant):** `E12SemNeg1AdmissionClosure` → `InvAdmissionClosure`;
+  `E12SemNeg2ReleaseLoss` → `InvPermitConservation` (grant permit lost);
+  `E12SemNeg3DoubleStore` → `InvPermitConservation` (one release stores two);
+  `E12SemNeg4NonFIFOGrant` → `InvFIFOGrant`; `E12SemNeg5OverflowMutation` →
+  `InvOverflowNonMutation`; `E12SemNeg6IdlePermitEligibleWaiter` →
+  `InvNoIdlePermitWithEligibleWaiter`; `E12SemNeg7DeadlinePrecedence` →
+  `InvPermitFirstDeadline`. Real TLC results in
+  [`docs/spec/e12_semaphore/README.md`](spec/e12_semaphore/README.md); gate:
+  [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh).
 
 ### 11.3 Mutex
 
@@ -1539,7 +1628,7 @@ implemented in this preparation.
 | Primitive | Verdict | Resolved items | Open human-authority / boundary items |
 | --------- | ------- | -------------- | ------------------------------------- |
 | **E12-A Event** | `CLOSED` (two independent corrective reviews passed) | manual-reset choice; idempotent set; reset; wait-on-set; deadline/cancel composition; set-vs-register race; reset-vs-waiter; **wake cardinality = set releases all registered waits satisfied by SET (F-EVENT-1 closed)** | ~~destruction-with-waiters~~ (resolved: caller contract violation, debug assert); ~~IMPLEMENTATION BOUNDARY: loop wake-one vs narrow wake-many seam~~ (resolved: loop wake_wait_one_locked until drained, atomic under global_mtx_) |
-| **E12-B Semaphore** | `HUMAN-DECISION-REQUIRED` | **supply accounting law (supply ≠ queued demand, F-SEM-1 closed)**; grant-at-CAS; refund on cancel/expire; already-queued FIFO selection; acquire/release-one scope | max permits / overflow; barging; destruction-with-waiters |
+| **E12-B Semaphore** | `PREPARATION-CORRECTIVE-1 COMPLETE — REAUDIT-REQUIRED — IMPLEMENTATION BLOCKED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant | none among A1–A5 + accounting + seam; preparation gated on fresh adversarial re-audit PASS — see [`docs/e12-semaphore.md`](e12-semaphore.md) + [`docs/spec/e12_semaphore/`](spec/e12_semaphore/) + [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh) |
 | **E12-C Mutex** | `HUMAN-DECISION-REQUIRED` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire | fairness / handoff / barging; destruction-with-waiters; naming coexistence with sync `Mutex`; **grant-seam dependency coupled to handoff policy (§14)** |
 | **E12-D Condition** | `HUMAN-DECISION-REQUIRED` | release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | **return-contract cluster: Model A (mandatory reacquire) vs Model B (abortable reacquire) — F-COND-1 closed**; notify-all mechanism/scope |
 | **E12-E Queue** | `HUMAN-DECISION-REQUIRED` | close-with-blocked-producers; push-after-close; reservation under cancel/timeout (with explicit reservation state); **structural lock ≠ AsyncMutex (F-DEP-1 closed)** | bounded/unbounded; close-with-buffered / close-with-consumers; **capacity-zero DEFERRED (rendezvous, F-QUEUE-1 closed)**; **EXPLICIT reservation state + winner-before-publication seam (§14)** |
@@ -1705,27 +1794,32 @@ IMPLEMENTATION BOUNDARY of §4.4, not a grant-commit boundary.)
 E12-A EVENT BLOCKED BY GRANT SEAM: NO
 ```
 
-#### 14.3.2 Semaphore
+#### 14.3.2 Semaphore (E12-B-PREPARATION-CORRECTIVE-1)
 
-For first-scope acquire-one/release-one, the grant is an **anonymous
-one-permit pre-reservation**:
+For first-scope acquire-one/release-one, release creates one **pending permit**
+that is disposed of atomically (no `free_permits -> granted_not_yet_committed`
+pre-reservation, no refund):
 
 ```text
-anonymous one-permit pre-reservation (free_permits -> granted_not_yet_committed)
-    ->
-call resource wake seam (wake_wait_one)
-    ->
-winner: reserved permit remains granted (granted_not_yet_committed)
-    ->
-no winner (head lost to cancel/expire): rollback / refund permit to free_permits
+release():
+    one pending permit is created
+    -> if an eligible FIFO waiter exists: transfer the pending permit directly
+       to that waiter (available_ unchanged; accepted_release_count++,
+       acquiredCount++)
+    -> else if available_ < max_permits: store it (available_++;
+       accepted_release_count++)
+    -> else (available_ == max_permits): reject (no mutation)
 ```
 
-Winner identity is NOT required for anonymous permit accounting (the permit is
-not bound to a specific Fiber; any winner consumes one). Under the accepted
-first-scope acquire-one/release-one semantics:
+Under **Conclusion A** (§5.2): the wake/cancel/expire resolvers are all
+serialized by `global_mtx_`, and a winning cancel/expire unlinks the node
+before releasing the mutex; therefore a linked FIFO head observed by
+`wake_wait_one_locked` under the lock is necessarily Registered and its
+`resolve_(Woken)` cannot lose. The seam is sufficient; no rollback/refund
+path exists (no permit was ever pre-decremented).
 
 ```text
-CURRENT SCHEDULER SEAM SUFFICIENT (for anonymous first-scope permit)
+CURRENT SCHEDULER SEAM SUFFICIENT (first-scope; Conclusion A)
 ```
 
 Do NOT claim this for `acquire(N)` (deferred) — multi-permit atomic grant may
