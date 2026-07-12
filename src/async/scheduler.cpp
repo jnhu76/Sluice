@@ -453,8 +453,10 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
     running_fiber_count_.store(0, std::memory_order_release);
     idle_workers_.store(0, std::memory_order_release);
     global_terminate_.store(false, std::memory_order_release);
-    // NOTE: admission_seam_* is NOT reset here — it is test-controlled state
-    // that must persist across the run() boundary (T11 arms it before run()).
+    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the test-controlled causal seam
+    // state (E7 admission, E9 park, E12 event) no longer lives on Scheduler; it
+    // is driven by the internal-testing controller and persists across the
+    // run() boundary by construction (the controller registry is external).
 
     if (worker_count == 1) {
         // Single-worker fast path: run inline (no thread spawn). This preserves
