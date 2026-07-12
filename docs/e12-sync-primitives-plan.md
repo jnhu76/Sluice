@@ -272,7 +272,7 @@ IMPLEMENTATION BOUNDARY for E12-A. See §4.1, §4.4.
 | Primitive | New state dimension | New resource accounting | New ownership law | Depends on | New cancel/deadline cleanup obligation | State-space complexity |
 | --------- | ------------------- | ----------------------- | ----------------- | ---------- | -------------------------------------- | ---------------------- |
 | **Event** | one persistent bool `set_` | none | none | WaitNode (E10) + deadline (E11) | unlink registered node on cancel/expire; no permit/ownership to reclaim | low (2 states × queue) |
-| **Semaphore** | permit supply count + grant-in-flight | **supply accounting** (§5.1): `initial_supply + successful_release_count == free_permits + granted_not_yet_committed + successful_acquire_count`; queued demand is a *separate* dimension, NOT supply | none | Event's persistent-bool pattern (optional); WaitNode + deadline | **grant vs cancel/expire race: who owns a granted permit** | medium (counter × queue) |
+| **Semaphore** | stored permit count (`available_`) | **permit accounting** (§5.1): `available_ + acquiredCount == initial_permits + accepted_release_count`; explicit FIFO queued demand is a *separate* dimension, NOT supply; no grant-in-flight state | none | Event's persistent-bool pattern (optional); WaitNode + deadline | cancel/expire serialized before release observes the queue (Conclusion A, §5.2) | medium (counter × queue) |
 | **Mutex** | locked bool + owner identity | none (one lock) | **Fiber-identity ownership + migration law** | Semaphore (permits=1 is a near-subset; but Mutex adds ownership) | **handed-off ownership loss on cancel/expire after grant** | medium (locked × owner × queue) |
 | **Condition** | none new (delegates to Mutex) | none | none (Mutex owns it) | **Mutex** (mandatory) | release/register atomic window; reacquire on wake/timeout/cancel — **return contract is one open Model-A/Model-B cluster (§7)** | medium-high (two queues + mutex reacquire) |
 | **Queue** | buffer + closed bool | **item slots** (bounded, capacity ≥ 1) or unbounded list; not-empty + not-full waiters; **explicit item/slot reservation state required (§8.3, §14)** | none | Event (not-empty/not-full are Event-like); WaitNode + deadline; **a synchronous structural lock (NOT E12-C async Mutex) for internal state** | **reserved item / reserved slot under cancel/close; winner-before-publication commit (§14)** | high (buffer × 2 queues × closed) |
@@ -323,9 +323,12 @@ IMPLEMENTATION BOUNDARY for E12-A. See §4.1, §4.4.
 
 - **Event before Semaphore.** Event introduces exactly one new state
   dimension — a persistent boolean — and reuses the closed wait substrate.
-  Semaphore introduces *accounting* (a supply conservation invariant over
-  permits/grant-in-flight, with queued demand as a separate dimension — §5.1).
-  The simpler, state-lighter primitive comes first and validates the
+  Semaphore introduces *bounded permit accounting* — a stored-permit
+  conservation invariant (`available_ + acquiredCount == initial_permits +
+  accepted_release_count`, §5.1) with an explicit FIFO queued-demand
+  dimension, an atomic release disposition (transfer / store / reject),
+  FIFO-with-no-barging selection, and deadline/cancel composition. The
+  simpler, state-lighter primitive comes first and validates the
   Event→WaitQueue integration. **Event → Semaphore.**
 - **Semaphore before Mutex.** A Mutex is, at the accounting layer, a
   Semaphore with permit count 1 PLUS an ownership identity law and a handoff
@@ -576,64 +579,51 @@ E12-A CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED — see docs/e12-event.m
 
 ## 5. Semaphore semantic authority (Task D)
 
-### 5.1 Accounting — supply vs queued demand vs grant-in-flight (F-SEM-1 closure)
+### 5.1 Permit accounting (F-SEM-1 closure; E12-B-PREPARATION-CORRECTIVE-1
+###      final authority)
 
-**The previous draft's conservation law was mathematically invalid:**
+The accepted first-scope permit conservation law is:
 
 ```text
-initial_permits == free + granted + queued_demand     // INVALID — DELETED
+available_ + acquiredCount == initial_permits + accepted_release_count
 ```
 
-Queued demand is *demand*, not permit *supply*: counting waiters on the supply
-side lets `release` by a waiter appear to create permits out of nothing, and
-lets `initial = 0` with one queued waiter falsely look like a supply change.
-This invalid equation is deleted everywhere it appeared (§3.1, §5, §11.2,
-§12; and the roadmap).
-
-The preparation must instead identify at least three **separate** state
-dimensions:
+The terms:
 
 ```text
-permit supply / accounting         (how many permits exist and where they are)
-queued demand                      (how many live wait epochs still want one)
-grant-in-flight state              (a permit committed to a CAS winner not yet resumed)
+available_              stored, unassigned permits (the atomic counter)
+acquiredCount           permits acquired by immediate acquisition OR by queued
+                        grant transfer
+initial_permits         permits created at construction
+accepted_release_count  release() calls that contributed one permit
+                        (transfer to a waiter, or store into available_)
 ```
 
-#### 5.1.1 Candidate supply accounting law
+A rejected overflow release increments no counter and is not an accepted
+release. Queued demand is NOT a term in this law (it is a separate dimension;
+see §5.1.2). There is NO `grant-in-flight` / `granted_not_yet_committed`
+production state in first-scope Semaphore.
 
-Define the first-scope candidate supply accounting conceptually as:
+The four counter transitions (mirroring §5.2's atomic release disposition):
 
 ```text
-initial_supply
-+
-successful_release_count
+Immediate acquire (available_ > 0, no eligible queued waiter):
+    available_-- ; acquiredCount++
 
-    ==
+Release transfer to an eligible queued waiter:
+    accepted_release_count++ ; acquiredCount++ ; available_ unchanged
 
-free_permits
-+
-granted_not_yet_committed
-+
-successful_acquire_count
+Release store (no eligible waiter, available_ < max_permits):
+    accepted_release_count++ ; available_++
+
+Overflow rejection (no eligible waiter, available_ == max_permits):
+    all counters unchanged
 ```
 
-(Equivalent naming is acceptable.) The terms:
+The law preserves:
 
 ```text
-initial_supply               permits created at construction
-successful_release_count     total release() calls that successfully grew supply
-                             (subject to the max-permits policy, §5.3)
-free_permits                 permits available to grant right now
-granted_not_yet_committed    permits whose resolve_(Woken) CAS won but whose
-                             Fiber has not yet resumed to consume the acquire
-successful_acquire_count     acquires whose Fiber has resumed and consumed
-```
-
-The exact history-counter representation is deferred to the Semaphore formal
-model (§11.2). The law preserves:
-
-```text
-initial = 0
+initial_permits = 0
 one waiter queues
 ```
 
@@ -641,17 +631,33 @@ with supply **unchanged** (queued demand is not on the supply side). It also
 represents:
 
 ```text
-initial = 0
+initial_permits = 0
 release
 release
 release
 ```
 
-as **supply growth** (if the maximum-permits policy allows the releases):
-`successful_release_count` grows by 3, so the RHS grows by 3 in
-`free_permits` / `granted_not_yet_committed` / `successful_acquire_count` as
-permits are granted and consumed. Queued waiter count is NEVER used on the
-supply side.
+as **supply growth** (if the max-permits policy allows the releases):
+`accepted_release_count` grows by 3, so the RHS grows by 3 across
+`available_` / `acquiredCount` as permits are stored and acquired. Queued
+waiter count is NEVER used on the supply side.
+
+> **Historical / OBSOLETE model (non-authoritative).** Earlier drafts used a
+> three-term candidate law
+> `initial_supply + successful_release_count == free_permits +
+> granted_not_yet_committed + successful_acquire_count` and described a
+> `grant-in-flight` / `granted_not_yet_committed` state. **That model is
+> obsolete and non-authoritative.** First-scope Semaphore has no such
+> production state, and the simplified two-term law above is the accepted
+> authority. The obsolete terms may appear ONLY in this labelled historical
+> passage and in name-and-reject passages; they do not describe any
+> first-scope Semaphore state. (See also §5.2 and
+> [`docs/e12-semaphore.md`](e12-semaphore.md) §3.)
+
+#### 5.1.1 (merged into §5.1)
+
+The candidate-law sub-section (§5.1.1) is merged into §5.1 above as the final
+accepted authority. No separate candidate law remains.
 
 #### 5.1.2 Queued demand law
 
@@ -671,10 +677,10 @@ number of live Semaphore wait epochs that:
     have not won CANCEL
 ```
 
-`QUEUED` and `GRANTED` are **disjoint** waiter/grant states. A grant winner is
-no longer queued demand (it has moved to `granted_not_yet_committed` on the
-supply side). Queued demand does not create, consume, or refund supply; it is
-purely a count of unsatisfied wait epochs.
+`QUEUED` and granted are **disjoint** waiter states. A grant winner is no
+longer queued demand (it has moved to `acquiredCount` on the supply side).
+Queued demand does not create, consume, or refund supply; it is purely a
+count of unsatisfied wait epochs.
 
 ### 5.2 The release disposition (F-SEM-ACCT-1 closure, E12-B-PREPARATION-CORRECTIVE-1)
 
