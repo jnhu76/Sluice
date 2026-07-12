@@ -136,18 +136,44 @@ each negative model's EXPECTED NAMED property is the violated one, runs a
 wrong-property gate (a defect must not be mis-attributed), and a compile-probe
 gate (the raw WaitQueue bypass must fail to compile).
 
+### NEG-EVENT-3 clarification (E12-A-EVENT-CORRECTIVE-2 Corrective H)
+
+NEG-EVENT-3 models ONE conceptual missing serialization rule: the shared
+`protoPhase = Idle` guard is absent from BOTH `ResetEvent` and `Register`. In
+production both operations are protected by the SAME serialization law (they
+take `global_mtx_`), so a single missing guard in the model faithfully captures
+the lost-serialization defect class. The negative model does not initialize a
+stale wake directly; it removes the guard on both Reset and Register, allowing
+the stale-set/post-reset topology to produce `wakeEpochGen < registrationGen`.
+
 ## Non-vacuity evidence (Corrective K)
 
 For each final property, the model provides property-specific evidence:
 
 | Property | Good premise/state reachable | Bad state expressible | Correct model prevents it | Negative/inherited evidence |
 | -------- | ---------------------------- | --------------------- | ------------------------- | --------------------------- |
-| E1 single resolution | Woken / Expired / Cancelled paths reachable | (a second resolution of a terminal node) | resolve_ CAS is single-shot; resolvedCount<=1 | NEG-1/2/3 still satisfy E1 (defect-specific); inherited E10 theorem |
+| E1 single resolution | Woken / Cancelled paths reachable (Expired is in the shared state domain but NOT produced by an E12 action — see "Modeled vs inherited causes" below) | (a second resolution of a terminal node) | resolve_ CAS is single-shot; resolvedCount<=1 | NEG-1/2/3 still satisfy E1 (defect-specific); inherited E10 theorem |
 | E2 single publication | publication count == 1 reachable | (a second publication for one winner) | make_runnable is the publication guard | NEG-1/2/3/4 still satisfy E2 |
 | E3 admission closure | admission observes SET → Woken inline reachable | Registered+Suspended+SET+Idle (stranded) | CommitSuspend requires UNSET | NEG-EVENT-1 CEX (stranded while SET) |
 | E4 persistent SET liveness | Suspended → eventually terminal reachable | Suspended forever while SET (wake-one) | StartSet/DrainOne/FinishSet fairness drains all | NEG-EVENT-2 CEX (stranded non-victim) |
 | E5 reset non-resolution | terminal via wake/cancel reachable | terminal with cause "Reset" | ResetEvent writes no cause | NEG-EVENT-4 CEX (reset resolves) |
 | E6 set-epoch isolation | post-reset Wnew woken by S2 reachable; old-epoch drain reachable | Wnew (gen G1) woken by old epoch (gen G0) | protoPhase serialization; registrationGeneration<=wakeEpochGen | NEG-EVENT-3 CEX (stale wake) |
+
+### Modeled vs inherited terminal causes (E12-A-EVENT-CORRECTIVE-2 Corrective G)
+
+```text
+The E12 Event formal model directly reaches Woken and Cancelled.
+Expired is part of the shared state domain (the nodeState range includes Expired)
+but is NOT produced by any E12 TIMER_EXPIRE action — the model has no such action.
+Deadline/timer correctness is inherited from and separately proven by E11.
+The E12 Event model directly explores: AdmissionSet, SetBroadcast, Cancel.
+It does not claim Expired reachability.
+```
+
+Do NOT claim a losing Timer cause is modeled where no timer action exists. The
+`Expired` value in `nodeState` exists so the shared `WaitNode` domain is faithful
+to the production type, but no E12 transition writes it; E11 is the authority for
+deadline expiry.
 
 Reachability evidence for the E6 stale topology in NEG-EVENT-3:
 `StartSet` (activeSetGen=G0) → `ResetBuggy` (resetGeneration=G1, while drain
@@ -161,17 +187,27 @@ evidence for E1/E2 (it targets E3 specifically).
 
 ## Results (actual TLC execution)
 
-TLC runtime version: `2026.07.09.134028 (rev: 227f61b)`.
-TLA+ tools release tag (recorded separately): `v1.8.0`.
+TLC runtime version (exact runtime line, reported by TLC itself):
+`TLC2 Version 2026.07.09.134028 (rev: 227f61b)`.
+
+TLA+ tools release tag: `not associated with a verified release tag`. The jar
+in use is a 2026 development build (the runtime line above is the exact build
+identifier reported by TLC). It is NOT labelled `v1.8.0` here because no jar
+metadata proves that association; a release tag must not be asserted without
+such proof. If a verified `v1.8.0` jar is used, record its exact metadata.
 
 | Model | Result | States | Distinct | Depth |
 |-------|--------|--------|----------|-------|
-| E12Event safety (E1,E2,E3,E5,E6) | PASS | 5023 | 1928 | — |
-| E12Event liveness (E4) | PASS | 5023 | 1928 | — |
-| NEG-EVENT-1 LostSet | CEX (InvEventAdmissionClosure) | 76 | 43 | — |
-| NEG-EVENT-2 WakeOne | CEX (EventSetDrainLivenessNonVacuous) | 158 | 65 | — |
-| NEG-EVENT-3 StaleSet | CEX (InvSetEpochIsolation) | 295 | 141 | — |
-| NEG-EVENT-4 ResetResolve | CEX (InvResetNonResolution) | 80 | 45 | — |
+| E12Event safety (E1,E2,E3,E5,E6) | PASS | 5023 | 1928 | not reported by this invocation |
+| E12Event liveness (E4) | PASS | 5023 | 1928 | not reported by this invocation |
+| NEG-EVENT-1 LostSet | CEX (InvEventAdmissionClosure) | 76 | 43 | not reported by this invocation |
+| NEG-EVENT-2 WakeOne | CEX (EventSetDrainLivenessNonVacuous) | 158 | 65 | not reported by this invocation |
+| NEG-EVENT-3 StaleSet | CEX (InvSetEpochIsolation) | 295 | 141 | not reported by this invocation |
+| NEG-EVENT-4 ResetResolve | CEX (InvResetNonResolution) | 80 | 45 | not reported by this invocation |
+
+Depth is `not reported by this invocation` where TLC does not print a
+comparable counterexample depth for the run. The state counts above are the
+concrete `states generated` / `distinct states` figures TLC reports.
 
 Plus: WRONG-PROPERTY gate OK (InvSetEpochIsolation not mis-flagged under a
 wrong-property config); COMPILE-PROBE gate OK (raw WaitQueue bypass sealed).

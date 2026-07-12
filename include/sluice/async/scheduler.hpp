@@ -364,15 +364,16 @@ public:
     void await_event_wait_deadline(WaitQueue& q, const std::atomic<bool>& set_flag,
                                    WaitNode& node, deadline_t deadline);
 
-    // E12-A-EVENT-CORRECTIVE-1 A2: the narrow Event cancellation authority.
-    // Resolves `node` (registered in this Event's `waiters` queue) with
-    // Cancelled through the inherited cancel_wait path on `q`. Routes the
-    // winner's fiber through the canonical wake seam. Returns true iff this
-    // call won (the node was Registered in `q` and is now Cancelled). Does NOT
-    // expose `q` to the caller (Event::cancel passes its private waiters_).
-    // A foreign node (registered in a different queue, or detached/terminal)
-    // loses the resolve_ CAS and returns false. This is the per-wait-epoch
-    // CANCEL cause; it cannot synthesize a RESOURCE_WAKE.
+    // E12-A-EVENT-CORRECTIVE-2: the narrow Event cancellation authority with
+    // EXACT queue-membership validation. Resolves `node` with Cancelled only if
+    // it is currently linked in `q` (scanned under global_mtx_ + q.mtx()). Does
+    // NOT expose `q` to the caller (Event::cancel passes its private waiters_).
+    // Returns true iff node is Registered AND linked in `q` AND CANCEL wins;
+    // otherwise returns false without mutation. A foreign node (registered in a
+    // different queue, or detached/terminal) fails the membership gate and
+    // returns false -- it is NOT resolved and NOT unlinked. This is the
+    // per-wait-epoch CANCEL cause; it cannot synthesize a RESOURCE_WAKE. Generic
+    // cancel_wait is unchanged (Event-specific membership gate only).
     bool event_cancel_wait(WaitQueue& q, WaitNode& node);
 
 

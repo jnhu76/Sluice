@@ -143,23 +143,30 @@ public:
         scheduler_.await_event_wait_deadline(waiters_, set_, node, deadline);
     }
 
-    // Narrow per-wait-epoch CANCELLATION authority (E12-A-EVENT-CORRECTIVE-1 A2).
+    // Narrow per-wait-epoch CANCELLATION authority (E12-A-EVENT-CORRECTIVE-2).
     // Resolves `node` with Cancelled through the Scheduler's cancellation path on
-    // THIS Event's private WaitQueue, WITHOUT exposing that queue. Returns true
-    // iff this call won (the node was Registered here and is now Cancelled).
+    // THIS Event's private WaitQueue, WITHOUT exposing that queue.
     //
-    // Properties:
-    //   - does NOT expose WaitQueue&
-    //   - does NOT call RESOURCE_WAKE (cannot synthesize a SET-satisfied wake)
-    //   - does NOT change Event SET/UNSET
-    //   - does NOT cancel a WaitNode belonging to another Event (a foreign node
-    //     is not registered in this Event's queue; cancel_wait loses the CAS)
-    //   - does NOT cancel a detached, terminal, or destroyed epoch (returns false)
-    //   - returns whether CANCEL won
+    // Contract (Corrective C — returns true ONLY if ALL hold):
+    //   - node is currently Registered, AND
+    //   - node is currently linked in THIS Event's private WaitQueue, AND
+    //   - CANCEL wins node.resolve_(Cancelled).
+    // Otherwise returns false WITHOUT mutation. This includes:
+    //   detached node              -> false
+    //   already Woken              -> false
+    //   already Cancelled          -> false
+    //   already Expired            -> false
+    //   live node in another Event -> false (same OR different Scheduler)
     //
-    // This is a narrow per-wait-epoch cancellation seam. It is NOT a task
-    // cancellation token, NOT cancel-all, NOT an Event close, and NOT destructor
-    // cancellation.
+    // Wrong-Event cancellation is a safe false-return case (NOT UB, NOT a debug
+    // assertion). The membership check scans THIS Event's own queue under this
+    // Scheduler's global_mtx_ + this Event's q.mtx(); it never reads a foreign
+    // node's home_ and never locks a foreign Event/Scheduler, so cross-Scheduler
+    // wrong-Event cancel is synchronized and structurally safe.
+    //
+    // This call does NOT expose WaitQueue&, does NOT call RESOURCE_WAKE, and
+    // does NOT change Event SET/UNSET. It is NOT a task cancellation token, NOT
+    // cancel-all, NOT an Event close, and NOT destructor cancellation.
     [[nodiscard]] bool cancel(WaitNode& node) {
         return scheduler_.event_cancel_wait(waiters_, node);
     }

@@ -1,7 +1,8 @@
 # E12-A — Async Event (Persistent Manual-Reset)
 
 > Status: **CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED**
-> (E12-A-EVENT-CORRECTIVE-1)
+> (E12-A-EVENT-CORRECTIVE-2; built on E12-A-EVENT-CORRECTIVE-1 +
+> ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1)
 >
 > Authority baseline: E10 CLOSED
 > ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED at
@@ -9,10 +10,18 @@
 > Preparation: [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)
 > (E12-PREP READY).
 >
-> This document is the authoritative E12-A Event specification, refined by the
-> E12-A-EVENT-CORRECTIVE-1 corrective (sealed public authority, narrow
-> cancellation, multi-step formal set protocol, NEG-EVENT-3/4). Formal model:
-> [`docs/spec/e12_event/`](spec/e12_event/). Formal gate:
+> This document is the authoritative E12-A Event specification, refined by:
+> - **ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1**: all forgeable namespace-level
+>   test friends removed from installed headers; tests driven by an isolated
+>   internal-testing runtime variant (`sluice_async_internal_testing`).
+> - **E12-A-EVENT-CORRECTIVE-1**: sealed public authority, narrow cancellation,
+>   multi-step formal set protocol, NEG-EVENT-3/4.
+> - **E12-A-EVENT-CORRECTIVE-2**: exact `Event::cancel` queue-membership
+>   validation (wrong-Event cancel → false without mutation; cross-Scheduler
+>   safe), CANCEL-1..8 tests, T28/T29/T31/T32 evidence corrections, formal
+>   Expired-not-reachable / TLC reporting accuracy.
+>
+> Formal model: [`docs/spec/e12_event/`](spec/e12_event/). Formal gate:
 > [`scripts/verify-e12-event-formal.sh`](../scripts/verify-e12-event-formal.sh).
 
 ---
@@ -160,9 +169,11 @@ WaitQueue to ordinary production code, which could combine it with
 remained UNSET and `set()` was never called. A compile-negative probe
 (`tests/e12_event_authority_probe.cpp`, gated by the formal verify script)
 mechanically verifies the bypass no longer compiles. The Event's private
-WaitQueue is reachable only through the test-only friend struct
-`E12EventTestHooks` (defined solely in the e12 test TU); an ordinary production
-TU cannot name it.
+WaitQueue is NOT reachable from ordinary production code: ASYNC-TEST-SEAM-
+AUTHORITY-CORRECTIVE-1 removed the forgeable `E12EventTestHooks` friend from the
+installed headers, so no production TU can name or define a type that grants
+access to it. Deterministic test phase seams are driven only by the non-installed
+internal-testing runtime variant (`sluice_async_internal_testing`).
 
 ### 3.1 Constructor / initial state
 
@@ -256,7 +267,7 @@ is ready; the deadline is moot). The complete matrix:
 
 The combined SET + already-due case is asserted directly by T33.
 
-### 3.8 Cancellation authority (E12-A-EVENT-CORRECTIVE-1 A2)
+### 3.8 Cancellation authority (E12-A-EVENT-CORRECTIVE-2)
 
 `CANCEL` is an inherited WaitNode resolution cause. E12-A does NOT invent a new
 public task-level cancellation token. `Event::wait` internally uses one ordinary
@@ -266,19 +277,39 @@ E10/E11 WaitNode epoch. The narrow per-wait-epoch cancellation surface is:
 [[nodiscard]] bool Event::cancel(WaitNode& node);
 ```
 
-It routes through `Scheduler::event_cancel_wait` (the inherited
-`cancel_wait` path on this Event's private WaitQueue) WITHOUT exposing that
-queue. Properties: it does not call RESOURCE_WAKE, does not change Event
-SET/UNSET, cannot cancel a WaitNode belonging to another Event (a foreign node
-loses the resolve_ CAS), cannot cancel a detached/terminal node (returns false),
-and returns whether CANCEL won. This is NOT a task cancellation token, NOT
-cancel-all, NOT an Event close, NOT destructor cancellation.
+It routes through `Scheduler::event_cancel_wait`, which validates EXACT
+queue-membership before cancelling. The final contract (Corrective C — returns
+true ONLY if ALL hold):
 
-A WaitNode registered in a DIFFERENT queue passed to `Event::cancel` is a CALLER
-CONTRACT VIOLATION (`cancel_wait`'s node must belong to the passed queue); the
-resolve_ CAS is node-state-based, not queue-identity-based, so such misuse is
-documented as the caller's responsibility. The compile probe gates external
-queue access.
+```text
+node is currently Registered, AND
+node is currently linked in THIS Event's private WaitQueue, AND
+CANCEL wins node.resolve_(Cancelled).
+Otherwise returns false WITHOUT mutation.
+```
+
+The membership check (`WaitQueue::contains_locked`, a private Scheduler-friend
+method) scans THIS Event's own intrusive list for `&node` while holding this
+Scheduler's `global_mtx_` + this Event's `q.mtx()`. It does NOT read a foreign
+node's `home_` and does NOT lock a foreign Event/Scheduler, so cross-Scheduler
+wrong-Event cancel is synchronized and structurally safe. This includes:
+
+```text
+detached node                 -> false
+already Woken                 -> false
+already Cancelled             -> false
+already Expired               -> false
+live node in another Event    -> false (same OR different Scheduler)
+```
+
+Wrong-Event cancellation is a safe false-return case (NOT UB, NOT a debug
+assertion, NOT a caller-contract violation). A foreign node is NOT resolved and
+NOT unlinked; both Event queues remain structurally intact and the original
+Event can later wake the node normally. This is NOT a task cancellation token,
+NOT cancel-all, NOT an Event close, NOT destructor cancellation. Generic
+`Scheduler::cancel_wait` is unchanged (its caller contract already guarantees
+membership; the Event-specific gate is the path reached from untrusted
+`Event::cancel` callers).
 
 ### 3.9 Destruction contract
 
@@ -661,12 +692,21 @@ action; the bug writes the forbidden "Reset" value, which the property catches.
 | T25   | Event::cancel correct Event/node wins Cancelled once | Cancelled         |
 | T26   | Event::cancel detached/terminal/empty loses safely   | false             |
 | T27   | causal set-drain BLOCKS reset (seam, global_mtx_)    | reset blocked     |
-| T28   | causal set-drain BLOCKS admission (seam)             | admission blocked |
-| T29   | post-reset Wnew waits for S2, not stale S1           | Wnew woken by S2  |
+| T28   | set-drain BLOCKS another Scheduler-global op (global-mutex proxy, NOT admission proof) | contender blocked |
+| T29   | sequential post-reset epoch sanity (NON-CAUSAL)       | Wnew woken by S2  |
 | T30   | causal admission-FIRST ordering (seam)               | setter blocked    |
-| T31   | causal set-FIRST ordering (seam)                     | admission blocked |
-| T32   | truly parked Live Worker awakened by external set    | Woken (park seam) |
+| T31   | causal set-FIRST ordering (two-phase admission marker) | admission blocked |
+| T32   | truly parked Live Worker awakened by external set (joined jthread watchdog) | Woken (park seam) |
 | T33   | SET + already-due deadline -> Woken (precedence)     | Woken             |
+| CANCEL-1 | correct Event + live Registered node -> true/Cancelled once | Cancelled |
+| CANCEL-2a | wrong Event, SAME Scheduler -> false, node intact on A | false; A wakes later |
+| CANCEL-2b | wrong Event, DIFFERENT Scheduler -> false, node intact | false; A wakes later |
+| CANCEL-3 | detached node -> false                             | false             |
+| CANCEL-4 | Woken node -> false                                | false             |
+| CANCEL-5 | Expired node -> false                              | false             |
+| CANCEL-6 | already-Cancelled node -> false                    | false             |
+| CANCEL-7 | RESOURCE_WAKE wins before cancel -> false, Woken final | false          |
+| CANCEL-8 | CANCEL wins before set -> Cancelled; later set leaves it | Cancelled     |
 
 T16 and T23 are STRESS tests (supplementary), NOT causal winner proofs — the
 causal two/three-way winner proofs are T11–T15. T20 proves the Event outcome and
@@ -675,6 +715,28 @@ the closed E8 proof (T20 does NOT independently force a steal — it runs with t
 Workers and a steal MAY occur). T19 is park-independent (its bounded sleeps are
 registration-sync only, NOT the park-entry proof); T32 is the mechanical
 park-entry proof via the E9 park-commit seam.
+
+E12-A-EVENT-CORRECTIVE-2 evidence corrections:
+- **T28** is re-documented as a global-mutex proxy (set-drain blocks another
+  Scheduler-global operation). It does NOT prove Event admission (an admission
+  fiber cannot be driven from an external thread). Actual admission blocking is
+  proven by T31.
+- **T29** is classified as a SEQUENTIAL post-reset epoch sanity test (non-causal;
+  does not arm the set-drain seam). The causal active-drain serialization is
+  proven by T27 and T31.
+- **T31** uses a TWO-PHASE admission marker (admission_attempt_before_global_lock
+  + admission_before_final_check) instead of yield()-based blocked inference.
+  The pre-lock phase is armed+blocking so the setter acquires global_mtx_ first;
+  the post-lock marker proves admission could NOT enter its CS while the drain
+  was active.
+- **T32** uses a JOINED `std::jthread` watchdog (NOT a detached thread) as a
+  bounded failure guard. On timeout it releases any armed gate + drives set() so
+  the run terminates and all threads join before the test returns (no UAF). The
+  park phase itself is observed mechanically via the E9 park-commit seam.
+- **CANCEL-1..8** prove the exact `Event::cancel` queue-membership contract,
+  including wrong-Event cancellation across the SAME and DIFFERENT Schedulers
+  (the structural-safety fix: the membership scan never reads a foreign node's
+  `home_` and never locks a foreign Event/Scheduler).
 
 ---
 
@@ -720,9 +782,11 @@ deadline path:
     TimerRegistration. SET precedence at admission; else E11 I5 already-due path.
 
 cancellation path:
-    Event::cancel(node) -> Scheduler::event_cancel_wait (inherited E10 cancel
-    on this Event's private WaitQueue, NOT exposed). The raw wait_queue()
-    accessor is REMOVED (F-EVENT-AUTH).
+    Event::cancel(node) -> Scheduler::event_cancel_wait — validates EXACT
+    queue-membership (contains_locked) under global_mtx_+q.mtx() before
+    cancelling; wrong-Event/detached/terminal nodes return false WITHOUT
+    mutation (cross-Scheduler safe). The raw wait_queue() accessor is REMOVED
+    (F-EVENT-AUTH); no forgeable test friend remains.
 
 destruction contract:
     ~Event asserts waiters_ empty in debug (~WaitQueue). No cancel/wake.
@@ -733,28 +797,50 @@ RunMode behavior:
     Drain: MW-S3 returns STALLED (no hang); unresolved waiter left for caller.
 ```
 
-## 14. Exit condition — CORRECTED (E12-A-EVENT-CORRECTIVE-1)
+## 14. Exit condition — CORRECTED (E12-A-EVENT-CORRECTIVE-2)
 
-E12-A is **CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED**. The corrective
-closed the public-authority leak, added a narrow cancellation authority,
-replaced the timing-based/vacuous proofs with mechanically-gated causal tests
-and a multi-step formal set protocol, and added NEG-EVENT-3/4. Verification:
+E12-A is **CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED** (NOT CLOSED). This
+status reflects the layered correctives:
+- ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1 (test friends isolated).
+- E12-A-EVENT-CORRECTIVE-1 (sealed authority, narrow cancel, formal protocol).
+- E12-A-EVENT-CORRECTIVE-2 (cancel queue-membership validation, CANCEL-1..8,
+  T28/T29/T31/T32 evidence corrections, formal Expired/TLC accuracy).
 
-- All deterministic tests T0–T33 pass (debug + release).
+E12-A is NOT marked CLOSED. Only after both independent reviews
+(ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1-REVIEW and
+E12-A-EVENT-CORRECTIVE-2-REVIEW) pass may the roadmap say:
+`E12-A EVENT CLOSED — E12-B SEMAPHORE MAY BEGIN`.
+
+Verification:
+
+- All deterministic tests T0–T33 + CANCEL-1..8 pass (debug + release).
 - TLA+ formal model passes: safety (E1,E2,E3,E5,E6) + liveness (E4) + all four
   negative models (NEG-EVENT-1..4) produce counterexamples violating their
   EXPECTED NAMED properties; WRONG-PROPERTY gate OK; COMPILE-PROBE gate OK.
-- TLC runtime version: `2026.07.09.134028 (rev: 227f61b)`; TLA+ tools release
-  tag (recorded separately): v1.8.0.
-- Clang TSA clean (sluice_async target compiles with -Werror=thread-safety).
-- E7–E11 regression suite passes (e7_worker, e8_steal, e9_external_wake,
+- TLC runtime version (exact): `TLC2 Version 2026.07.09.134028 (rev: 227f61b)`.
+  TLA+ tools release tag: not associated with a verified release tag (the jar is
+  a 2026 development build; no v1.8.0 association asserted without jar-metadata
+  proof). Counterexample depth: `not reported by this invocation` where TLC
+  provides none.
+- Formal model accuracy: Expired is in the shared state domain but NOT produced
+  by any E12 TIMER_EXPIRE action (deadline correctness inherited from E11).
+- Clang TSA clean (both `sluice_async` and `sluice_async_internal_testing`
+  compile with -Werror=thread-safety).
+- E7–E11 regression suite passes (e7_worker, e7_coord, e8_steal, e9_external_wake,
   e10_wait_queue, e10_scheduler_wait, e10_corrective_c1/c2_c3, e11_timer_wait).
 - **`e10_corrective_c5_test` is a PROVEN BASELINE DEFECT**: it fails to compile
   (`error: unused variable 'order_bad' [-Werror,-Wunused-variable]`) on the
-  17bca5a parent/baseline `ac3495a` as well — the defect is OUTSIDE this
-  corrective diff and is NOT silently "fixed" here. The suite is NOT "all green"
-  while this baseline compile defect remains.
-- Production bypass audit: RESOURCE_WAKE (Event::set / admission observing SET),
-  TIMER_EXPIRE (E11 deadline service), CANCEL (Event::cancel / mechanically
-  gated integration seam) all converge on WaitNode::resolve_ — no parallel
-  authority. The raw WaitQueue bypass is sealed (compile probe).
+  baseline — the defect is OUTSIDE this corrective diff and is NOT silently
+  "fixed" here. The suite is NOT "all green" while this baseline compile defect
+  remains.
+- Production authority audit (ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1): installed
+  headers declare NO test friend; production `sluice_async` exports NO test
+  phase / seam / controller symbol; the variant `sluice_async_internal_testing`
+  is the only artifact that contains them. No binary links both variants.
+- Cancellation ownership audit (E12-A-EVENT-CORRECTIVE-2): `Event::cancel`
+  validates exact queue-membership via `contains_locked` under
+  global_mtx_+q.mtx(); wrong-Event (same OR different Scheduler), detached, and
+  terminal nodes return false WITHOUT mutation (never reads foreign `home_`,
+  never locks foreign Event/Scheduler). RESOURCE_WAKE (Event::set / admission
+  observing SET), TIMER_EXPIRE (E11 deadline service), CANCEL (Event::cancel)
+  all converge on `WaitNode::resolve_` — no parallel authority.

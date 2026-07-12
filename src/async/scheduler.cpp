@@ -1339,16 +1339,41 @@ void Scheduler::event_reset(std::atomic<bool>& set_flag) {
 }
 
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
-    // E12-A-EVENT-CORRECTIVE-1 A2: the narrow Event cancellation authority. This
-    // is the inherited cancel_wait path (the CANCEL cause), exposed WITHOUT
-    // revealing the Event's private WaitQueue to the caller (Event::cancel
-    // passes its private waiters_ here). It resolves `node` with Cancelled and
-    // routes the winner through the canonical wake seam.
+    // E12-A-EVENT-CORRECTIVE-2: the narrow Event cancellation authority with
+    // EXACT queue-membership validation. Event::cancel passes its private
+    // waiters_ here (NOT exposed to the caller). The contract (Corrective C):
+    //   returns true ONLY if node is currently Registered AND currently linked
+    //   in THIS Event's private WaitQueue AND CANCEL wins node.resolve_.
+    //   Otherwise returns false WITHOUT mutation.
     //
-    // A foreign node (registered in a different queue, or detached/terminal)
-    // loses the resolve_ CAS and returns false (E10 loser semantic). This call
-    // CANNOT synthesize a RESOURCE_WAKE and CANNOT change Event SET/UNSET.
-    return cancel_wait(q, node);
+    // The membership check scans THIS queue's own intrusive list for &node
+    // while holding this Scheduler's global_mtx_ + this Event's q.mtx(). It
+    // does NOT read a foreign node's home_, does NOT lock a foreign Event or
+    // foreign Scheduler, and does NOT depend on cross-Scheduler
+    // synchronization. Wrong-Event (same OR different Scheduler), detached,
+    // Woken, Expired, and Cancelled nodes all return false safely.
+    //
+    // Generic Scheduler::cancel_wait is unchanged (its caller contract already
+    // guarantees membership); this Event-specific path is the one reached from
+    // untrusted Event::cancel callers. The resolve_ CAS remains the
+    // terminal-winner authority; contains_locked is the membership gate, taken
+    // BEFORE resolve_ so no mutation occurs on a non-member. This call CANNOT
+    // synthesize a RESOURCE_WAKE and CANNOT change Event SET/UNSET.
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(q.mtx());
+    // Membership gate: a node not linked in THIS queue is not cancellable here.
+    // Covers wrong-Event (same/different Scheduler), detached, and (because a
+    // terminal winner is already unlinked) Woken/Expired/Cancelled nodes.
+    if (!q.contains_locked(node)) return false;
+    if (!q.cancel_locked(node)) return false;  // concurrent resolver won (loser)
+    retire_timer_for_node_locked(node);
+    Fiber* f = node.fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+        return true;
+    }
+    return false;
 }
 
 void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,

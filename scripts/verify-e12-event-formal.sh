@@ -246,7 +246,9 @@ compile_probe_gate || rc=1
 echo
 echo "--- TLC runtime version (actual) ---"
 tlc_version
-echo "  TLA+ tools release tag (recorded separately): v1.8.0"
+echo "  TLA+ tools release tag: not associated with a verified release tag"
+echo "    (the jar is a 2026 development build; no v1.8.0 association asserted"
+echo "     without jar-metadata proof)"
 echo
 echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + gates) ==="
 exit "$rc"

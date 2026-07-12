@@ -1458,15 +1458,12 @@ SLUICE_TEST_CASE(e12_t26_cancel_wrong_event_detached_terminal_loses) {
 
     // --- (d) cancel against an EMPTY Event's queue (no registered node) ---
     //
-    // cancel_wait on a node that is NOT registered in this Event's queue loses
-    // the resolve_ CAS (the node is Detached) and returns false. This is the
-    // enforced property: a node that was never registered cannot be cancelled
-    // (no spurious Cancelled). Note: passing a node registered in a DIFFERENT
-    // queue to Event::cancel is a CALLER CONTRACT VIOLATION (cancel_wait's node
-    // must belong to the passed queue); the resolve_ CAS is node-state-based,
-    // not queue-identity-based, so such misuse is documented as the caller's
-    // responsibility rather than enforced here. The compile probe (T24) is what
-    // mechanically gates external access to the queue.
+    // E12-A-EVENT-CORRECTIVE-2: Event::cancel now validates EXACT queue
+    // membership (contains_locked) before attempting cancel. A node not linked
+    // in THIS Event's queue fails the membership gate and returns false WITHOUT
+    // mutation -- it is NOT resolved and NOT unlinked. A detached node is not
+    // linked anywhere, so it fails the gate. (Wrong-Event membership, including
+    // cross-Scheduler, is exercised by CANCEL-2 below.)
     {
         Event ev(sched, /*initially_set=*/false);
         WaitNode foreign;  // never registered anywhere
@@ -1475,6 +1472,358 @@ SLUICE_TEST_CASE(e12_t26_cancel_wrong_event_detached_terminal_loses) {
         SLUICE_CHECK_MSG(!ev.is_set(), "Event UNSET untouched");
         SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no wait accounting touched");
     }
+}
+
+// ===========================================================================
+// Slice 8b — Event::cancel queue-ownership validation (CANCEL-1..8)
+// (E12-A-EVENT-CORRECTIVE-2 Corrective E)
+// ===========================================================================
+//
+// Event::cancel returns true ONLY if the node is currently Registered AND
+// linked in THIS Event's queue AND CANCEL wins resolve_. Otherwise it returns
+// false WITHOUT mutation. These tests prove each case deterministically,
+// including wrong-Event cancellation across the SAME Scheduler and across
+// DIFFERENT Schedulers (the load-bearing structural-safety fix: the membership
+// scan never reads a foreign node's home_ and never locks a foreign
+// Event/Scheduler).
+
+// ---- CANCEL-1: correct Event + live Registered node -> true/Cancelled once --
+SLUICE_TEST_CASE(e12_cancel1_correct_event_live_node_wins) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+
+    Event ev(sched, /*initially_set=*/false);
+    WaitNode node;
+    std::atomic<bool> registered{false};
+
+    Fiber fwait, fcancel;
+    fwait.set_entry([&](Fiber&) {
+        registered.store(true, std::memory_order_release);
+        ev.wait(node);  // suspends on UNSET
+    });
+    fcancel.set_entry([&](Fiber&) {
+        spin_wait(registered);
+        std::this_thread::yield();
+        bool won = false;
+        for (int i = 0; i < 1000 && !won; ++i) won = ev.cancel(node);
+        SLUICE_CHECK_MSG(won, "CANCEL-1: cancel won for the registered node");
+        SLUICE_CHECK_MSG(!ev.cancel(node), "CANCEL-1: second cancel loses (terminal)");
+    });
+
+    FiberStack sw, sc;
+    SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(fcancel, sc.base(), sc.size()));
+    sched.spawn(fwait);
+    sched.spawn(fcancel);
+    sched.run(2);
+
+    SLUICE_CHECK_MSG(node.was_cancelled(), "CANCEL-1: node resolved Cancelled");
+    SLUICE_CHECK_MSG(!node.is_registered(), "CANCEL-1: node unlinked by winner");
+    SLUICE_CHECK_MSG(!ev.is_set(), "CANCEL-1: Event SET/UNSET unchanged");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "CANCEL-1: wait count at baseline");
+}
+
+// ---- CANCEL-2a: wrong Event, SAME Scheduler -> false, node intact on A -------
+SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+
+    Event ev_a(sched, /*initially_set=*/false);
+    Event ev_b(sched, /*initially_set=*/false);
+    WaitNode node;
+    std::atomic<bool> registered{false};
+
+    Fiber fwait, fcancel, fset;
+    fwait.set_entry([&](Fiber&) {
+        registered.store(true, std::memory_order_release);
+        ev_a.wait(node);  // registered on Event A
+    });
+    // Event B.cancel(node): node is registered on A, NOT on B -> false, no mutation.
+    fcancel.set_entry([&](Fiber&) {
+        spin_wait(registered);
+        std::this_thread::yield();
+        SLUICE_CHECK_MSG(!ev_b.cancel(node),
+                         "CANCEL-2a: wrong-Event (same Scheduler) cancel -> false");
+        // node remains Registered on A; both queues structurally intact.
+        SLUICE_CHECK_MSG(node.is_registered(), "CANCEL-2a: node still Registered on A");
+    });
+    // After the wrong-Event cancel, Event A can still wake the node normally.
+    fset.set_entry([&](Fiber&) {
+        spin_wait(registered);
+        std::this_thread::yield();
+        std::this_thread::yield();
+        ev_a.set();  // A.set() wakes the node (Woken) normally
+    });
+
+    FiberStack sw, sc, ss;
+    SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(fcancel, sc.base(), sc.size()));
+    SLUICE_CHECK(sched.init_fiber(fset, ss.base(), ss.size()));
+    sched.spawn(fwait);
+    sched.spawn(fcancel);
+    sched.spawn(fset);
+    sched.run(3);
+
+    SLUICE_CHECK_MSG(node.was_woken(),
+                     "CANCEL-2a: original Event A can still wake the node normally");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "CANCEL-2a: wait count at baseline");
+}
+
+// ---- CANCEL-2b: wrong Event, DIFFERENT Scheduler -> false, node intact -----
+//
+// The load-bearing cross-Scheduler case. Event A is bound to Scheduler A;
+// Event B is bound to Scheduler B. W registers on Event A (Scheduler A). Then
+// Event B.cancel(W) is attempted. The membership scan runs under Scheduler B's
+// global_mtx_ + Event B's q.mtx(); node is NOT in Event B's queue -> false,
+// WITHOUT reading node.home_ (which is protected by Scheduler A's global_mtx_,
+// a DIFFERENT mutex -- no happens-before across Schedulers). The node remains
+// Registered on Event A and is later woken by Event A.set() normally.
+SLUICE_TEST_CASE(e12_cancel2b_wrong_event_different_scheduler_loses_safely) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx_a(std::make_unique<IdleBackend>());
+    Scheduler sched_a(ctx_a);
+    AsyncIoContext ctx_b(std::make_unique<IdleBackend>());
+    Scheduler sched_b(ctx_b);
+
+    Event ev_a(sched_a, /*initially_set=*/false);
+    Event ev_b(sched_b, /*initially_set=*/false);
+    WaitNode node;
+    std::atomic<bool> registered{false};
+
+    Fiber fwait;
+    fwait.set_entry([&](Fiber&) {
+        registered.store(true, std::memory_order_release);
+        ev_a.wait(node);  // registered on Event A (Scheduler A)
+    });
+    FiberStack sw;
+    SLUICE_CHECK(sched_a.init_fiber(fwait, sw.base(), sw.size()));
+    sched_a.spawn(fwait);
+
+    // Run Scheduler A just long enough for fwait to register + suspend. Drain
+    // returns STALLED with the node Registered (MW-S3). Single-worker inline.
+    sched_a.run(1);
+    SLUICE_CHECK_MSG(node.is_registered(),
+                     "CANCEL-2b: node Registered on Event A before the wrong-Event cancel");
+
+    // From a SEPARATE thread, attempt Event B.cancel(node) (Scheduler B). This
+    // must return false without mutation -- the membership scan is under
+    // Scheduler B's global_mtx_ + Event B's q.mtx() and finds node absent.
+    std::atomic<bool> wrong_cancel_done{false};
+    std::thread b_cancel([&] {
+        SLUICE_CHECK_MSG(!ev_b.cancel(node),
+                         "CANCEL-2b: cross-Scheduler wrong-Event cancel -> false");
+        wrong_cancel_done.store(true, std::memory_order_release);
+    });
+    b_cancel.join();
+    SLUICE_CHECK_MSG(wrong_cancel_done.load(), "CANCEL-2b: wrong-Event cancel returned");
+
+    // The node is STILL Registered on Event A; Event A can wake it normally.
+    SLUICE_CHECK_MSG(node.is_registered(),
+                     "CANCEL-2b: node remains Registered on Event A (no mutation)");
+    ev_a.set();
+    // Re-run Scheduler A to drain the now-woken node.
+    sched_a.run(1);
+
+    SLUICE_CHECK_MSG(node.was_woken(),
+                     "CANCEL-2b: original Event A wakes the node normally after the wrong-Event cancel");
+    SLUICE_CHECK_MSG(sched_a.waiting_count() == 0, "CANCEL-2b: Scheduler A wait count at baseline");
+    SLUICE_CHECK_MSG(sched_b.waiting_count() == 0, "CANCEL-2b: Scheduler B wait count at baseline");
+}
+
+// ---- CANCEL-3: detached node -> false ---------------------------------------
+SLUICE_TEST_CASE(e12_cancel3_detached_node_loses) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    Event ev(sched, /*initially_set=*/false);
+    WaitNode detached;  // never registered
+
+    SLUICE_CHECK_MSG(!ev.cancel(detached), "CANCEL-3: detached node -> false");
+    SLUICE_CHECK_MSG(!detached.is_terminal(), "CANCEL-3: detached node untouched");
+    SLUICE_CHECK_MSG(!ev.is_set(), "CANCEL-3: Event UNSET untouched");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "CANCEL-3: no wait accounting touched");
+}
+
+// ---- CANCEL-4: Woken node -> false ------------------------------------------
+SLUICE_TEST_CASE(e12_cancel4_woken_node_loses) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    Event ev(sched, /*initially_set=*/true);  // SET: wait returns Woken at admission
+    WaitNode node;
+
+    Fiber f;
+    f.set_entry([&](Fiber&) { ev.wait(node); });  // observes SET -> Woken inline
+    FiberStack sw;
+    SLUICE_CHECK(sched.init_fiber(f, sw.base(), sw.size()));
+    sched.spawn(f);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(node.was_woken(), "CANCEL-4: node Woken at admission");
+    SLUICE_CHECK_MSG(!ev.cancel(node), "CANCEL-4: Woken node -> false (not in queue)");
+    SLUICE_CHECK_MSG(node.was_woken(), "CANCEL-4: outcome unchanged (still Woken)");
+}
+
+// ---- CANCEL-5: Expired node -> false ----------------------------------------
+SLUICE_TEST_CASE(e12_cancel5_expired_node_loses) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11TimerTestHooks::enable_test_clock(sched);
+    Event ev(sched, /*initially_set=*/false);
+    WaitNode node;
+    std::atomic<bool> registered{false};
+
+    Fiber f, fdriver;
+    f.set_entry([&](Fiber&) {
+        registered.store(true, std::memory_order_release);
+        ev.wait_until(node, /*deadline=*/100);
+    });
+    fdriver.set_entry([&](Fiber&) {
+        spin_wait(registered);
+        for (int i = 0; i < 200 && !node.is_terminal(); ++i) {
+            sched.advance_clock(100);
+            std::this_thread::yield();
+        }
+    });
+    FiberStack sw, sd;
+    SLUICE_CHECK(sched.init_fiber(f, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(fdriver, sd.base(), sd.size()));
+    sched.spawn(f);
+    sched.spawn(fdriver);
+    sched.run(2);
+
+    SLUICE_CHECK_MSG(node.was_expired(), "CANCEL-5: node Expired");
+    SLUICE_CHECK_MSG(!ev.cancel(node), "CANCEL-5: Expired node -> false (not in queue)");
+    SLUICE_CHECK_MSG(node.was_expired(), "CANCEL-5: outcome unchanged (still Expired)");
+}
+
+// ---- CANCEL-6: already-Cancelled node -> false ------------------------------
+SLUICE_TEST_CASE(e12_cancel6_cancelled_node_loses) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    Event ev(sched, /*initially_set=*/false);
+    WaitNode node;
+    std::atomic<bool> registered{false};
+
+    Fiber fwait, fcancel;
+    fwait.set_entry([&](Fiber&) {
+        registered.store(true, std::memory_order_release);
+        ev.wait(node);
+    });
+    fcancel.set_entry([&](Fiber&) {
+        spin_wait(registered);
+        bool won = false;
+        for (int i = 0; i < 1000 && !won; ++i) won = ev.cancel(node);
+        SLUICE_CHECK_MSG(won, "CANCEL-6: first cancel won");
+    });
+    FiberStack sw, sc;
+    SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(fcancel, sc.base(), sc.size()));
+    sched.spawn(fwait);
+    sched.spawn(fcancel);
+    sched.run(2);
+
+    SLUICE_CHECK_MSG(node.was_cancelled(), "CANCEL-6: node Cancelled by first cancel");
+    SLUICE_CHECK_MSG(!ev.cancel(node), "CANCEL-6: second cancel -> false (not in queue)");
+    SLUICE_CHECK_MSG(node.was_cancelled(), "CANCEL-6: outcome unchanged (still Cancelled)");
+}
+
+// ---- CANCEL-7: RESOURCE_WAKE wins before cancel -> false, Woken final -------
+SLUICE_TEST_CASE(e12_cancel7_resource_wake_wins_before_cancel) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    Event ev(sched, /*initially_set=*/false);
+    WaitNode node;
+    std::atomic<bool> registered{false};
+    std::atomic<bool> set_done{false};
+
+    Fiber fwait, fset, fcancel;
+    fwait.set_entry([&](Fiber&) {
+        registered.store(true, std::memory_order_release);
+        ev.wait(node);
+    });
+    fset.set_entry([&](Fiber&) {
+        spin_wait(registered);
+        std::this_thread::yield();
+        ev.set();  // RESOURCE_WAKE wins
+        set_done.store(true, std::memory_order_release);
+    });
+    fcancel.set_entry([&](Fiber&) {
+        spin_wait(set_done);  // barrier: set wins first
+        std::this_thread::yield();
+        SLUICE_CHECK_MSG(!ev.cancel(node), "CANCEL-7: cancel after RESOURCE_WAKE won -> false");
+    });
+    FiberStack sw, ss, sc;
+    SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(fset, ss.base(), ss.size()));
+    SLUICE_CHECK(sched.init_fiber(fcancel, sc.base(), sc.size()));
+    sched.spawn(fwait);
+    sched.spawn(fset);
+    sched.spawn(fcancel);
+    sched.run(3);
+
+    SLUICE_CHECK_MSG(node.was_woken(), "CANCEL-7: Woken remains final");
+    SLUICE_CHECK_MSG(ev.is_set(), "CANCEL-7: Event is SET");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "CANCEL-7: wait count at baseline");
+}
+
+// ---- CANCEL-8: CANCEL wins before set -> Cancelled; later set leaves it -----
+//
+// CANCEL wins the resolve_ CAS; the node becomes Cancelled and is unlinked.
+// A later set() finds the queue empty (the node is gone) and leaves the node
+// Cancelled. The Event becomes SET (set() still flips the flag) but the node's
+// outcome is final Cancelled.
+SLUICE_TEST_CASE(e12_cancel8_cancel_wins_before_set_leaves_cancelled) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    Event ev(sched, /*initially_set=*/false);
+    WaitNode node;
+    std::atomic<bool> registered{false};
+    std::atomic<bool> cancel_done{false};
+
+    Fiber fwait, fcancel, fset;
+    fwait.set_entry([&](Fiber&) {
+        registered.store(true, std::memory_order_release);
+        ev.wait(node);
+    });
+    fcancel.set_entry([&](Fiber&) {
+        spin_wait(registered);
+        bool won = false;
+        for (int i = 0; i < 1000 && !won; ++i) won = ev.cancel(node);
+        SLUICE_CHECK_MSG(won, "CANCEL-8: cancel won before set");
+        cancel_done.store(true, std::memory_order_release);
+    });
+    fset.set_entry([&](Fiber&) {
+        spin_wait(cancel_done);  // barrier: cancel wins first
+        ev.set();  // queue empty now (node unlinked by cancel); Event becomes SET
+    });
+    FiberStack sw, sc, ss;
+    SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(fcancel, sc.base(), sc.size()));
+    SLUICE_CHECK(sched.init_fiber(fset, ss.base(), ss.size()));
+    sched.spawn(fwait);
+    sched.spawn(fcancel);
+    sched.spawn(fset);
+    sched.run(3);
+
+    SLUICE_CHECK_MSG(node.was_cancelled(), "CANCEL-8: node remains Cancelled after later set");
+    SLUICE_CHECK_MSG(ev.is_set(), "CANCEL-8: Event became SET (set still flips the flag)");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "CANCEL-8: wait count at baseline");
 }
 
 // ===========================================================================
@@ -1574,14 +1923,19 @@ SLUICE_TEST_CASE(e12_t27_causal_set_drain_blocks_reset) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "wait count at baseline");
 }
 
-// ---- T28: causal set-drain BLOCKS Event admission ---------------------------
+// ---- T28: set-drain BLOCKS another Scheduler-global operation (global-mutex
+//      proxy evidence, NOT an Event-admission proof) -------------------------
 //
-// Companion to T27: a new admission CANNOT REGISTER/complete while an old-set
-// drain is active (holds global_mtx_). The admission thread (external) records
-// admission_attempted and, while S1 is paused, admission_completed must be
-// false. After S1 drains + releases, admission completes. The load-bearing
-// fact: Wnew was NOT registered during S1's drain (it could not enter the
-// queue while global_mtx_ was held), so S1's drain could not wake it.
+// E12-A-EVENT-CORRECTIVE-2 (Corrective F1): T28 is re-documented accurately.
+// It does NOT prove Event admission is blocked (an admission fiber cannot be
+// driven from an external thread because wait() performs a context_switch that
+// must run on a Worker). Instead it proves the weaker, still-useful fact: an
+// active set() drain holds global_mtx_, blocking ANOTHER Scheduler-global
+// operation. The contender here is ev.cancel() of a detached node (which takes
+// global_mtx_ and returns false); while S1 is paused mid-drain, the contender
+// records its attempt but CANNOT complete (global_mtx_ is held). After S1
+// releases, the contender completes. Actual Event-admission blocking is proven
+// by T31 (the two-phase admission-attempt marker).
 SLUICE_TEST_CASE(e12_t28_causal_set_drain_blocks_admission) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -1650,18 +2004,17 @@ SLUICE_TEST_CASE(e12_t28_causal_set_drain_blocks_admission) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "wait count at baseline");
 }
 
-// ---- T29: post-reset Wnew waits for S2, not stale S1 -----------------------
+// ---- T29: sequential post-reset epoch sanity (NON-CAUSAL) -------------------
 //
-// The full set/reset epoch proof (Corrective C2). Topology:
-//   1. Wold registered on UNSET.
-//   2. S1 set() — drains Wold (Wold Woken). S1 uses the store-before-drain seam
-//      so the test mechanically observes the active drain.
-//   3. reset() linearizes UNSET (after S1 releases).
-//   4. Wnew admission completes under UNSET -> Wnew Registered + Suspended.
-//   5. S2 set() -> Wnew Woken.
-// Assert: Wold woken by S1; Wnew NOT woken before S2; Wnew woken exactly once
-// by S2. Together T27+T28+T29 prove OLD_SET_WAKES_POST_RESET_WAITER is
-// impossible.
+// E12-A-EVENT-CORRECTIVE-2 (Corrective F2): T29 is re-classified as a
+// SEQUENTIAL post-reset epoch sanity test. It does NOT arm or pause the
+// set-drain seam; the fibers run under a cooperative multi-worker run with
+// spin-barriers that force a sequential trace (Wold -> S1 -> reset -> Wnew ->
+// S2). It confirms the sequential outcome (Wold woken by S1; Wnew woken by S2,
+// NOT by S1's drain) but is NOT a causal proof of epoch isolation -- the causal
+// active-drain serialization is proven by T27 (set-drain blocks reset via the
+// seam) and T31 (set-drain blocks admission via the two-phase marker). T29 is
+// supplementary sanity only.
 SLUICE_TEST_CASE(e12_t29_post_reset_waiter_waits_for_s2_not_stale_s1) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -1796,21 +2149,27 @@ SLUICE_TEST_CASE(e12_t30_causal_admission_first_ordering) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "wait count at baseline");
 }
 
-// ---- T31: causal set-FIRST ordering ----------------------------------------
+// ---- T31: causal set-FIRST ordering (TWO-PHASE admission marker) ----------
 //
-// The external setter stores SET (using the set-store-before-drain seam it
-// pauses mid-drain holding global_mtx_). A W admission (on the Worker fiber)
-// is then launched; it CANNOT complete until the setter's drain finishes and
-// global_mtx_ is released. The coordinator observes W is parked (the Worker is
-// blocked trying to acquire global_mtx_ for admission), then releases the
-// setter: it finishes its drain (empty queue, since W was not registered during
-// the drain) + releases. W's admission then observes SET and returns Woken
-// WITHOUT suspension.
+// E12-A-EVENT-CORRECTIVE-2 (Corrective F3): T31 no longer infers "admission is
+// blocked" from yield() timing. It uses TWO mechanically-observed phase markers
+// driven by the internal-testing controller:
+//   - admission_attempt_before_global_lock: armed + BLOCKING. scheduler.cpp hits
+//     it BEFORE taking global_mtx_. fwait blocks here until the test releases it,
+//     so the setter can acquire global_mtx_ first.
+//   - admission_before_final_check: set by scheduler.cpp AFTER the admission
+//     has taken global_mtx_ + q.mtx() (it entered its critical section).
 //
-// Observing "admission is blocked" mechanically: after releasing the setter, W
-// returns Woken at admission (it observed SET). The causal fact is that W was
-// NOT registered during the setter's drain (the seam proves the drain was
-// active before admission could take global_mtx_).
+// Topology: fwait blocks at the armed pre-lock phase. The setter acquires
+// global_mtx_, stores SET, pauses mid-drain. Release the pre-lock phase: fwait
+// proceeds and blocks on the global_mtx_ acquire (setter holds it). The
+// coordinator mechanically observes:
+//   setter paused after SET store, still holding global_mtx_
+//   admission_attempt_reached == true   (pre-lock point hit)
+//   is_admission_paused == false         (could NOT take global_mtx_)
+//   wait_done == false
+// This proves admission did NOT cross the active set drain. After releasing the
+// setter, admission takes global_mtx_, observes SET, and returns Woken inline.
 SLUICE_TEST_CASE(e12_t31_causal_set_first_ordering) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -1820,48 +2179,79 @@ SLUICE_TEST_CASE(e12_t31_causal_set_first_ordering) {
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
-    std::atomic<bool> set_paused_observed{false};
+    std::atomic<bool> setter_acquired{false};
     std::atomic<bool> wait_done{false};
 
-    // No pre-existing waiter: the setter's drain finds an empty queue. We arm
-    // the seam so set() pauses mid-drain. W's admission runs on the Worker and
-    // blocks on global_mtx_ until the setter releases.
-    E12EventTestHooks::arm_set_store_before_drain(sched);
-
-    std::thread set_thread([&] { ev.set(); });  // stores SET, pauses mid-drain
-
+    // Deterministic set-FIRST proof. The pre-lock admission-attempt phase is
+    // ARMED so fwait BLOCKS at the pre-lock point (before acquiring global_mtx_).
+    // The external setter then acquires the (now free) global_mtx_, stores SET,
+    // and pauses mid-drain. We then release the pre-lock phase: fwait proceeds
+    // and BLOCKS on the global_mtx_ acquire (the setter holds it). The two-phase
+    // markers prove admission could NOT enter its critical section while the
+    // setter's drain was active.
     Fiber fwait;
     fwait.set_entry([&](Fiber&) {
-        ev.wait(node);  // blocks on global_mtx_ until setter releases, then
-                        // observes SET -> Woken inline (no suspend)
+        ev.wait(node);  // pre-lock phase blocks here (armed); after release it
+                        // blocks on global_mtx_ (setter holds it) until the setter
+                        // releases, then observes SET -> Woken inline.
         wait_done.store(true, std::memory_order_release);
     });
     FiberStack sw;
     SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
     sched.spawn(fwait);
 
+    // Arm BOTH the pre-lock phase (blocks fwait before the lock) AND the
+    // set-store-before-drain phase (blocks the setter mid-drain).
+    E12EventTestHooks::reset_admission_attempt(sched);
+    sluice_async_test::arm(sched, sluice_async_test::PhaseTag::e12_admission_attempt_before_global_lock);
+    E12EventTestHooks::arm_set_store_before_drain(sched);
+
+    // Start the Live run: the Worker distributes + runs fwait, which blocks at
+    // the armed pre-lock phase (BEFORE acquiring global_mtx_).
     std::thread run_thread([&] { sched.run_live(1); });
+    spin_wait_pred([&] {
+        return E12EventTestHooks::admission_attempt_reached(sched);
+    });
 
-    // Wait for the setter to pause mid-drain (SET stored, drain active).
+    // fwait is blocked at the pre-lock phase. Now start the setter: it acquires
+    // the free global_mtx_, stores SET, and pauses mid-drain (armed).
+    std::thread set_thread([&] {
+        ev.set();
+        setter_acquired.store(true, std::memory_order_release);
+    });
     E12EventTestHooks::wait_set_paused(sched);
-    set_paused_observed.store(true, std::memory_order_release);
-    // W's admission is attempting but blocked on global_mtx_. give it a moment
-    // to record the attempt (no atomic needed: we prove the block via outcome).
-    std::this_thread::yield();
-    std::this_thread::yield();
-    SLUICE_CHECK_MSG(!wait_done.load(), "admission could not complete (setter holds serialization)");
 
-    // Release the setter: it finishes the drain (empty queue) + releases.
+    // Release the pre-lock phase: fwait proceeds and attempts LockGuard(global_mtx_).
+    // The setter HOLDS global_mtx_ (paused mid-drain), so fwait blocks on the
+    // acquire. Give it a bounded moment to record the block.
+    sluice_async_test::release(sched, sluice_async_test::PhaseTag::e12_admission_attempt_before_global_lock);
+    std::this_thread::yield();
+    std::this_thread::yield();
+
+    // Mechanical two-phase proof: pre-lock marker reached, post-lock marker NOT.
+    // fwait reached the pre-lock point but could NOT enter its CS (global_mtx_
+    // held by the active set drain). wait_done is false; the setter has not
+    // returned (still paused mid-drain).
+    SLUICE_CHECK_MSG(E12EventTestHooks::admission_attempt_reached(sched),
+                     "T31: admission pre-lock attempt reached");
+    SLUICE_CHECK_MSG(!E12EventTestHooks::is_admission_paused(sched),
+                     "T31: admission could NOT enter its CS (setter holds global_mtx_)");
+    SLUICE_CHECK_MSG(!wait_done.load(), "T31: wait did not complete while setter holds global_mtx_");
+    SLUICE_CHECK_MSG(!setter_acquired.load(), "T31: setter still paused mid-drain");
+
+    // Release the setter: it finishes the drain (empty queue, fwait not
+    // registered yet) + releases global_mtx_. fwait then acquires the lock,
+    // registers, observes SET, returns Woken inline.
     E12EventTestHooks::release_set(sched);
 
     set_thread.join();
     run_thread.join();
 
-    SLUICE_CHECK_MSG(set_paused_observed.load(), "setter paused mid-drain observed");
-    SLUICE_CHECK_MSG(wait_done.load(), "admission returned after setter released");
-    SLUICE_CHECK_MSG(node.was_woken(), "admission observed SET -> Woken inline (no suspend)");
-    SLUICE_CHECK_MSG(ev.is_set(), "Event is SET");
-    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "wait count at baseline");
+    SLUICE_CHECK_MSG(setter_acquired.load(), "T31: setter completed after release");
+    SLUICE_CHECK_MSG(wait_done.load(), "T31: admission returned after setter released");
+    SLUICE_CHECK_MSG(node.was_woken(), "T31: admission observed SET -> Woken inline (no suspend)");
+    SLUICE_CHECK_MSG(ev.is_set(), "T31: Event is SET");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "T31: wait count at baseline");
 }
 
 // ===========================================================================
@@ -1870,12 +2260,16 @@ SLUICE_TEST_CASE(e12_t31_causal_set_first_ordering) {
 
 // ---- T32: truly parked Live Worker awakened by external Event::set ---------
 //
-// Replaces the timing-based park-entry guess (old T19) with a MECHANICAL park
-// proof using the E9 park_commit seam. A Live Worker with one unresolved Event
-// wait reaches the real park commit boundary (park_commit_seam). The test
+// E12-A-EVENT-CORRECTIVE-2 (Corrective F4): T32 uses a MECHANICAL park proof
+// (E9 park_commit seam) AND a bounded failure guard built on a JOINED
+// std::jthread watchdog (NOT a detached thread). A Live Worker with one
+// unresolved Event wait reaches the real park commit boundary. The test
 // observes the park phase mechanically (no sleep_for inference), then an
 // external OS thread calls Event::set(); the Worker leaves park and resumes the
-// waiter Woken. A bounded join-timeout guards against a hang only.
+// waiter Woken. A watchdog jthread bounds the test: on timeout it releases any
+// armed gate + drives Event::set() so the run terminates and ALL threads join
+// before the test returns (no UAF from detached threads). The timeout is ONLY a
+// failure guard; the park phase itself is observed mechanically.
 SLUICE_TEST_CASE(e12_t32_parked_live_worker_awakened_by_external_set) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -1888,6 +2282,7 @@ SLUICE_TEST_CASE(e12_t32_parked_live_worker_awakened_by_external_set) {
     std::atomic<bool> waiter_registered{false};
     std::atomic<int> entries{0};
     std::atomic<bool> park_observed{false};
+    std::atomic<bool> watchdog_fired{false};
 
     Fiber fwait;
     fwait.set_entry([&](Fiber&) {
@@ -1921,14 +2316,44 @@ SLUICE_TEST_CASE(e12_t32_parked_live_worker_awakened_by_external_set) {
         ev.set();  // external-thread set: broadcast via the Scheduler wake source
     });
 
+    // Bounded failure guard: a JOINED watchdog jthread. If the external setter
+    // does not progress within the bound, the watchdog releases the park seam +
+    // drives ev.set() so the Live run terminates and run_thread joins. The
+    // watchdog is JOINED (not detached) so it cannot outlive the test and UAF
+    // the stack locals. The timeout is ONLY a failure guard -- the park phase is
+    // observed mechanically, not via the timeout.
+    std::jthread watchdog([&](std::stop_token st) {
+        constexpr auto kBound = std::chrono::seconds(10);
+        auto deadline = std::chrono::steady_clock::now() + kBound;
+        while (!st.stop_requested()) {
+            if (entries.load(std::memory_order_acquire) >= 2) return;  // success
+            if (std::chrono::steady_clock::now() >= deadline) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            if (st.stop_requested()) return;
+        }
+        // Timeout: release any armed gate + drive set() so the run terminates.
+        watchdog_fired.store(true, std::memory_order_release);
+        E12EventTestHooks::release_park_commit(sched);
+        ev.set();
+    });
+
+    // Run the Live scheduler. The watchdog's stop_callback requests stop when
+    // this scope exits; run_live returns once the run terminates (either via the
+    // external set() succeeding, or the watchdog's set()).
     sched.run_live(1);  // Live: parks on MW-S3 + external-wake-capable
     ext.join();
+    watchdog.request_stop();  // signal the watchdog to return
+    // Push the watchdog's wait predicate true so it exits its loop promptly.
+    // (request_stop is observed on its next sleep_for iteration.)
+    watchdog.join();
 
-    SLUICE_CHECK_MSG(park_observed.load(), "Worker mechanically reached the park boundary");
-    SLUICE_CHECK_MSG(entries.load() == 2, "waiter resumed via external set()");
-    SLUICE_CHECK_MSG(node.was_woken(), "waiter resolved Woken");
-    SLUICE_CHECK_MSG(ev.is_set(), "Event is SET");
-    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+    SLUICE_CHECK_MSG(!watchdog_fired.load(),
+                     "T32: watchdog did NOT fire (test completed within the bound)");
+    SLUICE_CHECK_MSG(park_observed.load(), "T32: Worker mechanically reached the park boundary");
+    SLUICE_CHECK_MSG(entries.load() == 2, "T32: waiter resumed via external set()");
+    SLUICE_CHECK_MSG(node.was_woken(), "T32: waiter resolved Woken");
+    SLUICE_CHECK_MSG(ev.is_set(), "T32: Event is SET");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "T32: no unresolved waits remain");
 }
 
 // ---- T33: SET + already-due deadline -> Woken (deadline precedence) --------

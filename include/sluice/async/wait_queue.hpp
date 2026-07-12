@@ -271,6 +271,28 @@ private:
         return false;  // already terminal (loser): timer lost to wake/cancel/expiry
     }
 
+    // ---- Queue-membership predicate (E12-A-EVENT-CORRECTIVE-2) ----
+    //
+    // Structural membership test: is `node` currently linked in THIS queue's
+    // intrusive list? Scans head_ -> next_ while the caller holds mtx_.
+    //
+    // PRIVATE + Scheduler-friend-gated. This is the structural authority for
+    // Event::cancel queue-identity validation: Scheduler::event_cancel_wait
+    // scans the TARGET Event's own queue for &node before attempting cancel,
+    // so a wrong-Event / detached / terminal node returns false WITHOUT reading
+    // a foreign node's home_ or locking a foreign Event/Scheduler. O(waiters).
+    //
+    // This is an Event-specific authority check; generic Scheduler::cancel_wait
+    // is unchanged and does NOT call it (its caller contract already guarantees
+    // the node belongs to the passed queue). The resolve_ CAS remains the
+    // terminal-winner authority; contains_locked is the membership gate.
+    bool contains_locked(const WaitNode& node) const noexcept SLUICE_REQUIRES(mtx_) {
+        for (WaitNode* cur = head_; cur != nullptr; cur = cur->next_) {
+            if (cur == &node) return true;
+        }
+        return false;
+    }
+
     // ---- Unlink (the single structural-removal seam, §7) ----
 
     // Unlink a node from the list. Called ONLY by a winning resolver
