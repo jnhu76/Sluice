@@ -13,15 +13,20 @@
 > proof) and the safety-only formal model in
 > [`docs/spec/e12_semaphore/`](spec/e12_semaphore/) (gate:
 > [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh)).
-> E12-B preparation status:
+> E12-B status:
 > ```text
 > E12-B-PREPARATION-CORRECTIVE-1: COMPLETE
-> E12-B-PREPARATION: REAUDIT-REQUIRED
-> E12-B-IMPLEMENTATION: BLOCKED
+> E12-B-PREPARATION-DOC-AUTHORITY-CORRECTIVE-2: COMPLETE
+> E12-B-PREPARATION-REAUDIT: PASS
+> E12-B-PREPARATION: CLOSED
+> E12-B-IMPLEMENTATION-1: COMPLETE
+> E12-B-IMPLEMENTATION: REVIEW-REQUIRED
 > ```
-> Only a fresh adversarial re-audit returning PASS may change E12-B to
-> `CLOSED` / `READY`. The cross-primitive preparation (this document) is
-> otherwise unchanged.
+> Preparation is CLOSED. The production Semaphore implementation is COMPLETE
+> and committed (see [`docs/e12-semaphore.md`](e12-semaphore.md) §14 As-Built);
+> status remains REVIEW-REQUIRED pending an independent adversarial
+> implementation review. This document does NOT self-declare `E12-B: CLOSED`.
+> The cross-primitive preparation (this document) is otherwise unchanged.
 >
 > Corrective history: `E12-PREP-CORRECTIVE-1-REVIEW` returned
 > `CORRECTIVE-REQUIRED` with six accepted defects (F-EVENT-1, F-SEM-1,
@@ -1634,7 +1639,7 @@ implemented in this preparation.
 | Primitive | Verdict | Resolved items | Open human-authority / boundary items |
 | --------- | ------- | -------------- | ------------------------------------- |
 | **E12-A Event** | `CLOSED` (two independent corrective reviews passed) | manual-reset choice; idempotent set; reset; wait-on-set; deadline/cancel composition; set-vs-register race; reset-vs-waiter; **wake cardinality = set releases all registered waits satisfied by SET (F-EVENT-1 closed)** | ~~destruction-with-waiters~~ (resolved: caller contract violation, debug assert); ~~IMPLEMENTATION BOUNDARY: loop wake-one vs narrow wake-many seam~~ (resolved: loop wake_wait_one_locked until drained, atomic under global_mtx_) |
-| **E12-B Semaphore** | `PREPARATION-CORRECTIVE-1 COMPLETE — REAUDIT-REQUIRED — IMPLEMENTATION BLOCKED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant | none among A1–A5 + accounting + seam; preparation gated on fresh adversarial re-audit PASS — see [`docs/e12-semaphore.md`](e12-semaphore.md) + [`docs/spec/e12_semaphore/`](spec/e12_semaphore/) + [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh) |
+| **E12-B Semaphore** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant; **production implementation COMPLETE** (public API + private Scheduler seams mirroring E12-A; TSan/ASan/UBSan clean; 31 deterministic tests + NEG compile probe) — see [`docs/e12-semaphore.md`](e12-semaphore.md) §14 As-Built | independent adversarial implementation review still required before E12-B may be declared CLOSED (not self-declared) |
 | **E12-C Mutex** | `HUMAN-DECISION-REQUIRED` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire | fairness / handoff / barging; destruction-with-waiters; naming coexistence with sync `Mutex`; **grant-seam dependency coupled to handoff policy (§14)** |
 | **E12-D Condition** | `HUMAN-DECISION-REQUIRED` | release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | **return-contract cluster: Model A (mandatory reacquire) vs Model B (abortable reacquire) — F-COND-1 closed**; notify-all mechanism/scope |
 | **E12-E Queue** | `HUMAN-DECISION-REQUIRED` | close-with-blocked-producers; push-after-close; reservation under cancel/timeout (with explicit reservation state); **structural lock ≠ AsyncMutex (F-DEP-1 closed)** | bounded/unbounded; close-with-buffered / close-with-consumers; **capacity-zero DEFERRED (rendezvous, F-QUEUE-1 closed)**; **EXPLICIT reservation state + winner-before-publication seam (§14)** |
