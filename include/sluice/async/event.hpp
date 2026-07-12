@@ -32,17 +32,19 @@
 // impossible — set()'s drain completes atomically before reset() or a new
 // admission can run. No generation counter or snapshot is needed.
 //
-// SEALED PUBLIC AUTHORITY (E12-A-EVENT-CORRECTIVE-1 F-EVENT-AUTH). The Event's
-// private WaitQueue is NOT publicly reachable: there is no wait_queue() accessor
-// on the production-public surface. The ONLY Event-specific RESOURCE_WAKE
-// authorities are set() and admission observing SET. Cancellation is the narrow
-// per-wait-epoch Event::cancel surface (CANCEL cause), which routes through the
-// inherited Scheduler::cancel_wait on this Event's private WaitQueue WITHOUT
-// exposing it. Ordinary downstream code CANNOT call wake_wait_one on an Event
-// (the required bypass `scheduler.wake_wait_one(event.wait_queue())` does not
-// compile). Deterministic test hooks (phase seams + the underlying queue) are
-// reachable ONLY through the friend struct E12EventTestHooks, defined in the
-// e12 test TU — an ordinary production TU cannot name or define that type.
+// SEALED PUBLIC AUTHORITY (ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1 +
+// E12-A-EVENT-CORRECTIVE-1 F-EVENT-AUTH). The Event's private WaitQueue is NOT
+// publicly reachable: there is no wait_queue() accessor on the production-
+// public surface, and no test friend grants access to it. The ONLY Event-
+// specific RESOURCE_WAKE authorities are set() and admission observing SET.
+// Cancellation is the narrow per-wait-epoch Event::cancel surface (CANCEL
+// cause), which routes through Scheduler::event_cancel_wait on this Event's
+// private WaitQueue WITHOUT exposing it. Ordinary downstream code CANNOT call
+// wake_wait_one on an Event (the required bypass
+// `scheduler.wake_wait_one(event.wait_queue())` does not compile). Deterministic
+// test phase seams are reached ONLY through the internal-testing runtime
+// variant (`sluice_async_internal_testing`); the production `sluice_async`
+// target declares no test friend and exports no test phase symbol.
 //
 // Scheduler binding: Event borrows Scheduler& for its lifetime. set() may be
 // called from an external OS thread; wait resolution reaches that Scheduler's
@@ -163,8 +165,6 @@ public:
     }
 
 private:
-    friend struct E12EventTestHooks;  // test-only phase seams (defined in test TU)
-
     Scheduler& scheduler_;
     std::atomic<bool> set_;
     WaitQueue waiters_;

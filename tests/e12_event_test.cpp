@@ -21,6 +21,7 @@
 //
 // Gated to x86_64 (fiber_ctx::supported): registration requires a real Fiber.
 #include "harness.hpp"
+#include "async_test_control.hpp"
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/event.hpp>
@@ -39,101 +40,19 @@
 using namespace sluice::async;
 using sluice::Result;
 
-// E11 deterministic clock/timer test seam (reused for deadline tests). Defined
-// in the sluice::async namespace so the Scheduler friend declaration matches.
-namespace sluice::async {
-struct E11TimerTestHooks {
-    static void enable_test_clock(Scheduler& s) {
-        s.test_clock_mode_.store(true, std::memory_order::release);
-        s.clock_.store(0, std::memory_order::release);
-    }
-    static void set_clock(Scheduler& s, Scheduler::deadline_t t) {
-        s.clock_.store(t, std::memory_order::release);
-    }
-    static Scheduler::deadline_t now(const Scheduler& s) {
-        return s.clock_.load(std::memory_order::acquire);
-    }
-};
-
-// E12-A-EVENT-CORRECTIVE-1 (Corrective B): deterministic Event phase seams +
-// the sealed Event WaitQueue. Defined ONLY in this test TU (inside namespace
-// sluice::async) so it matches the Scheduler/Event friend declarations. An
-// ordinary production TU cannot define this exact type and therefore cannot
-// reach the phase seams or the Event's private WaitQueue.
-//
-// The phase seams pause a thread at the load-bearing causal boundary while the
-// production lock (global_mtx_, and for admission q.mtx()) is STILL HELD. This
-// lets a causal test mechanically prove reset/admission/set ordering without
-// relying on timing.
-struct E12EventTestHooks {
-    // --- Event set-store-before-drain phase seam (Corrective C1) ---
-    // Arm: the next set() call pauses AFTER storing SET, while STILL holding
-    // global_mtx_, BEFORE the drain loop.
-    static void arm_set_store_before_drain(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.event_seam_mtx_);
-        s.event_set_store_before_drain_seam_armed_ = true;
-    }
-    static void wait_set_paused(Scheduler& s) {
-        std::unique_lock<std::mutex> lk(s.event_seam_mtx_);
-        s.event_seam_cv_.wait(lk, [&s] { return s.event_set_seam_paused_; });
-    }
-    static bool is_set_paused(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.event_seam_mtx_);
-        return s.event_set_seam_paused_;
-    }
-    static void release_set(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.event_seam_mtx_);
-        s.event_set_store_before_drain_seam_armed_ = false;
-        s.event_seam_cv_.notify_all();
-    }
-
-    // --- Event admission-before-final-check phase seam (Corrective D) ---
-    // Arm: the next Event wait admission pauses AFTER registration, while STILL
-    // holding global_mtx_+q.mtx(), BEFORE the final SET check.
-    static void arm_admission_before_final_check(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.event_seam_mtx_);
-        s.event_admission_before_final_check_seam_armed_ = true;
-    }
-    static void wait_admission_paused(Scheduler& s) {
-        std::unique_lock<std::mutex> lk(s.event_seam_mtx_);
-        s.event_seam_cv_.wait(lk, [&s] { return s.event_admission_seam_paused_; });
-    }
-    static bool is_admission_paused(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.event_seam_mtx_);
-        return s.event_admission_seam_paused_;
-    }
-    static void release_admission(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.event_seam_mtx_);
-        s.event_admission_before_final_check_seam_armed_ = false;
-        s.event_seam_cv_.notify_all();
-    }
-
-    // --- Sealed Event WaitQueue access (test-only) ---
-    // Used by a small number of tests that need the inherited
-    // Scheduler::cancel_wait on the Event's private queue for a topology the
-    // narrow Event::cancel surface cannot express (e.g. cancelling from an
-    // external thread while the node is mid-admission). Production code has NO
-    // wait_queue() accessor; this is reachable only via this friend struct.
-    static WaitQueue& event_wait_queue(Event& e) noexcept { return e.waiters_; }
-
-    // --- E9 park-commit seam access (for T32 deterministic park proof) ---
-    // Reuses the existing E9-CORRECTIVE park_commit_seam to prove a parked Live
-    // Worker is awakened by external Event::set, WITHOUT sleep_for.
-    static void arm_park_commit(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
-        s.park_commit_seam_armed_ = true;
-    }
-    static void wait_park_commit_paused(Scheduler& s) {
-        std::unique_lock<std::mutex> lk(s.park_seam_mtx_);
-        s.park_seam_cv_.wait(lk, [&s] { return s.park_seam_commit_paused_; });
-    }
-    static void release_park_commit(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
-        s.park_commit_seam_armed_ = false;
-        s.park_seam_cv_.notify_all();
-    }
-};
-}  // namespace sluice::async
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable E11TimerTestHooks +
+// E12EventTestHooks friends are removed. The clock/timer + Event phase seams +
+// the E9 park-commit seam (reused by T32) are driven by the internal-testing
+// controller facades E11TimerControl / E12EventSeam / E9ParkSeam
+// (tests/async_test_control.hpp), which route through Scheduler::AsyncTestAccess
+// (guarded) + the per-Scheduler* phase registry. The dead event_wait_queue
+// helper (C10) is dropped — no test needs raw WaitQueue access now that
+// Event::cancel is the authority. Call sites keep the historical names via
+// local aliases so the test cases read unchanged.
+namespace {
+using E11TimerTestHooks = sluice_async_test::E11TimerControl;
+using E12EventTestHooks = sluice_async_test::E12EventSeam;
+}  // namespace
 
 namespace {
 struct FiberStack {
@@ -1586,6 +1505,7 @@ SLUICE_TEST_CASE(e12_t27_causal_set_drain_blocks_reset) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);  // event seam registry
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode n_old;
@@ -1667,6 +1587,7 @@ SLUICE_TEST_CASE(e12_t28_causal_set_drain_blocks_admission) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);  // event seam registry
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode n_old;
@@ -1826,6 +1747,7 @@ SLUICE_TEST_CASE(e12_t30_causal_admission_first_ordering) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);  // event seam registry
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
@@ -1894,6 +1816,7 @@ SLUICE_TEST_CASE(e12_t31_causal_set_first_ordering) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);  // event seam registry
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
@@ -1958,6 +1881,7 @@ SLUICE_TEST_CASE(e12_t32_parked_live_worker_awakened_by_external_set) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);  // park-commit seam registry
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;

@@ -25,6 +25,7 @@
 //
 // DOES NOT PROVE: E10 WaitNode, io_uring eventfd seam, wake_one routing.
 #include "harness.hpp"
+#include "async_test_control.hpp"
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/fake_backend.hpp>
@@ -43,43 +44,10 @@
 using namespace sluice::async;
 using sluice::Result;
 
-namespace sluice::async {
-
-// Test hooks for the E9-CORRECTIVE deterministic park seams (ADR §9.4.15).
-// Mirrors the E7 SchedulerTestHooks discipline: defined in the test TU,
-// friend of Scheduler, exposes no public production contract. The hooks
-// only pause the Worker at the exact causal boundary; they do NOT modify
-// Scheduler state.
-struct E9ParkSeamHooks {
-    static void arm_candidate(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
-        s.park_candidate_seam_armed_ = true;
-    }
-    static void arm_commit(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
-        s.park_commit_seam_armed_ = true;
-    }
-    static void wait_candidate_paused(Scheduler& s) {
-        std::unique_lock<std::mutex> lk(s.park_seam_mtx_);
-        s.park_seam_cv_.wait(lk, [&s] { return s.park_seam_candidate_paused_; });
-    }
-    static void wait_commit_paused(Scheduler& s) {
-        std::unique_lock<std::mutex> lk(s.park_seam_mtx_);
-        s.park_seam_cv_.wait(lk, [&s] { return s.park_seam_commit_paused_; });
-    }
-    static void release_candidate(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
-        s.park_candidate_seam_armed_ = false;
-        s.park_seam_cv_.notify_all();
-    }
-    static void release_commit(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
-        s.park_commit_seam_armed_ = false;
-        s.park_seam_cv_.notify_all();
-    }
-};
-
-}  // namespace sluice::async
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable E9ParkSeamHooks friend
+// is removed; the park seams are driven by the internal-testing controller
+// facade E9ParkSeam (tests/async_test_control.hpp), which routes through a
+// per-Scheduler* controller registry compiled only into the variant lib.
 
 namespace {
 struct FiberStack {
@@ -279,16 +247,17 @@ SLUICE_TEST_CASE(e9_t3_publication_before_candidate) {
 
     // Arm the candidate seam BEFORE run_live so the Worker pauses at the
     // ParkCandidate boundary.
-    E9ParkSeamHooks::arm_candidate(sched);
+    sluice_async_test::ControllerGuard ctrl(sched);
+    sluice_async_test::E9ParkSeam::arm_candidate(sched);
 
     std::thread producer([&] {
         // Wait for the Worker to reach ParkCandidate (the seam pauses it).
-        E9ParkSeamHooks::wait_candidate_paused(sched);
+        sluice_async_test::E9ParkSeam::wait_candidate_paused(sched);
         // Publish persistent readiness + signal the wake epoch.
         st.flag.store(true, std::memory_order_release);
         wh.notify();
         // Release the seam: the Worker does its final drain/recheck.
-        E9ParkSeamHooks::release_candidate(sched);
+        sluice_async_test::E9ParkSeam::release_candidate(sched);
     });
 
     sched.run_live(1);
@@ -327,17 +296,18 @@ SLUICE_TEST_CASE(e9_t4_commit_before_physical_wait_race) {
 
     // Arm the commit seam: the Worker pauses immediately before the physical
     // wait (after recording observed_epoch).
-    E9ParkSeamHooks::arm_commit(sched);
+    sluice_async_test::ControllerGuard ctrl(sched);
+    sluice_async_test::E9ParkSeam::arm_commit(sched);
 
     std::thread producer([&] {
         // Wait for the Worker to pause at the commit boundary.
-        E9ParkSeamHooks::wait_commit_paused(sched);
+        sluice_async_test::E9ParkSeam::wait_commit_paused(sched);
         // Publish readiness + signal the wake epoch BEFORE the physical wait.
         st.flag.store(true, std::memory_order_release);
         wh.notify();
         // Release: the Worker records observed_epoch AFTER this point, so the
         // advanced epoch makes the wait predicate true immediately (no block).
-        E9ParkSeamHooks::release_commit(sched);
+        sluice_async_test::E9ParkSeam::release_commit(sched);
     });
 
     sched.run_live(1);

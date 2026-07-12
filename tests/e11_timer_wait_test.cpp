@@ -18,6 +18,7 @@
 //
 // Gated to x86_64 (fiber_ctx::supported): registration requires a real Fiber.
 #include "harness.hpp"
+#include "async_test_control.hpp"
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/fake_backend.hpp>
@@ -69,100 +70,16 @@ inline void spin_wait(std::atomic<bool>& flag) {
 }
 }  // namespace
 
-// E11 deterministic clock/timer test seam (M7). Enables the controllable
-// monotonic clock so race proofs never use sleep_for as causal proof. Defined
-// in the sluice::async namespace so the Scheduler friend declaration
-// (friend struct E11TimerTestHooks) matches this exact type.
-namespace sluice::async {
-struct E11TimerTestHooks {
-    static void enable_test_clock(Scheduler& s) {
-        // Flip into test-clock mode and reset the logical clock to 0 under
-        // global_mtx_. After this, advance_clock() drives time deterministically.
-        s.test_clock_mode_ = true;
-        s.clock_.store(0, std::memory_order::release);
-    }
-    static void set_clock(Scheduler& s, Scheduler::deadline_t t) {
-        // Directly set the logical clock (no pump) for setup.
-        s.clock_.store(t, std::memory_order::release);
-    }
-    static Scheduler::deadline_t now(const Scheduler& s) {
-        return s.clock_.load(std::memory_order::acquire);
-    }
-    // Active deadline count + earliest deadline (under global_mtx_). Used by the
-    // park-topology tests (T12/T13) to observe the deadline-heap state without
-    // driving expiry: they assert that the obligation set evolves correctly
-    // (new earlier deadline becomes earliest; retiring earliest leaves the next).
-    static std::size_t active_deadline_count(Scheduler& s) {
-        LockGuard lk(s.global_mtx_);
-        std::size_t n = 0;
-        for (const auto& r : s.timer_pool_) {
-            if (r.is_active()) ++n;
-        }
-        return n;
-    }
-    // E11-T18 (F3): physical timer-container sizes for the storage-reclamation
-    // contract. The pool (std::list<TimerRegistration>) and the deadline heap
-    // (vector<TimerRegistration*>) are the physical retention structures.
-    // Reading their sizes under global_mtx_ lets the test prove the ACTUAL
-    // reclamation policy: logical retirement is immediate, lifetime safety is
-    // immediate, but physical reclamation is LAZY-AT-DEADLINE (a far-future
-    // RETIRED entry remains physically present until pump_deadlines_locked pops
-    // it at its original deadline). Narrow E11 test visibility only.
-    static std::size_t timer_pool_size(const Scheduler& s) {
-        return s.timer_pool_.size();
-    }
-    static std::size_t deadline_heap_size(const Scheduler& s) {
-        return s.deadline_heap_.size();
-    }
-    // Count entries in a given lifetime state (under global_mtx_).
-    static std::size_t timer_pool_count_in_state(const Scheduler& s,
-                                                 TimerRegistration::State st) {
-        std::size_t n = 0;
-        for (const auto& r : s.timer_pool_) {
-            if (r.state() == st) ++n;
-        }
-        return n;
-    }
-    static bool earliest_active_deadline(Scheduler& s,
-                                         Scheduler::deadline_t& out) {
-        LockGuard lk(s.global_mtx_);
-        return s.earliest_active_deadline_locked(out);
-    }
-    // ---- E11-T17 park-commit seam + external registration (F2) ----
-    // The production park_commit_seam_ (E9-CORRECTIVE, ADR 9.4.15) pauses a
-    // Worker immediately before the physical cv.wait, AFTER it has computed the
-    // park obligation from earliest_active_deadline_ but BEFORE it sleeps. T17
-    // uses it to deterministically hold the Worker at the park-commit boundary
-    // (capturing deadline A's obligation). While held, the coordinator installs
-    // a NEW earlier deadline B via register_test_deadline (a non-worker-thread
-    // hook — the worker is held with global_mtx_ released), then releases the
-    // seam and proves B (not A) drives the wake. Deterministic causal proof for
-    // "new earlier deadline during an existing park obligation" — NO sleep_for,
-    // NO stress, single worker (M7).
-    static void arm_park_commit(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
-        s.park_commit_seam_armed_ = true;
-    }
-    static void wait_park_commit_paused(Scheduler& s) {
-        std::unique_lock<std::mutex> lk(s.park_seam_mtx_);
-        s.park_seam_cv_.wait(lk, [&s] { return s.park_seam_commit_paused_; });
-    }
-    static void release_park_commit(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.park_seam_mtx_);
-        s.park_commit_seam_armed_ = false;
-        s.park_seam_cv_.notify_all();
-    }
-    // Install a deadline obligation from a non-worker thread (under global_mtx_).
-    // Mirrors the pool+heap half of await_wait_deadline admission. Returns the
-    // registration pointer (nullptr if the deadline was already due).
-    static TimerRegistration* register_test_deadline(Scheduler& s, WaitNode* node,
-                                                     WaitQueue* q,
-                                                     Scheduler::deadline_t deadline) {
-        LockGuard lk(s.global_mtx_);
-        return s.register_test_deadline_locked(node, q, deadline);
-    }
-};
-}  // namespace sluice::async
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable E11TimerTestHooks
+// friend is removed. The clock/timer/park-commit controls are driven by the
+// internal-testing controller facade E11TimerControl (tests/async_test_control.hpp),
+// which routes through Scheduler::AsyncTestAccess (a guarded nested struct
+// compiled only into the variant lib) + the per-Scheduler* phase registry.
+// The call sites below keep the historical name via a local alias so the
+// 15 test cases read unchanged; the actual authority is the new controller.
+namespace {
+using E11TimerTestHooks = sluice_async_test::E11TimerControl;
+}  // namespace
 
 // =============================================================================
 // E11-T0 (Phase 1 unit): registered -> expired is a distinct terminal outcome.
@@ -959,6 +876,7 @@ SLUICE_TEST_CASE(e11_t17_new_earlier_deadline_during_park) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);  // park-commit seam registry
     E11TimerTestHooks::enable_test_clock(sched);
 
     WaitQueue qA, qB;

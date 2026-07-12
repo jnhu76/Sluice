@@ -17,6 +17,14 @@
 
 #include <utility>
 
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
+// the non-installed test-control header so the phase call sites below resolve to
+// the controller. In the production build this include is absent and the call
+// sites compile to nothing.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+#include "async_test_control_internal.hpp"
+#endif
+
 namespace sluice::async {
 
 namespace {
@@ -262,13 +270,11 @@ void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANA
     // E9-CORRECTIVE seam B: pause at the commit boundary with NO wake lock
     // held, so the test can publish + notify (signal_wake_locked) during
     // the pause without deadlocking.
-    if (park_commit_seam_armed_) {
-        std::unique_lock<std::mutex> slk(park_seam_mtx_);
-        park_seam_commit_paused_ = true;
-        park_seam_cv_.notify_all();  // signal the test we are at the boundary
-        park_seam_cv_.wait(slk, [this] { return !park_commit_seam_armed_; });
-        park_seam_commit_paused_ = false;
-    }
+    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::e9_park_commit);
+#endif
 
     std::unique_lock<Mutex> lk(wake_mtx_);
     ws->observed_epoch = wake_epoch_;  // recorded AFTER any seam publication
@@ -588,15 +594,13 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 // election is a candidate, not a commit — route_runnable_locked
                 // may have demoted it in the meantime.
                 // Test seam (E7-T11): pause here to let another worker route.
-                if (admission_seam_armed_) {
-                    std::unique_lock<std::mutex> slk(admission_seam_mtx_);
-                    admission_seam_paused_ = true;
-                    admission_seam_cv_.notify_all();  // signal the test we paused
-                    admission_seam_cv_.wait(slk, [this] {
-                        return !admission_seam_armed_;
-                    });
-                    admission_seam_paused_ = false;
-                }
+                // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the seam state no longer
+                // lives on Scheduler; the internal-testing variant calls a phase
+                // function that looks up controller state by Scheduler*.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                sluice_async_test::test_phase(*this,
+                    sluice_async_test::PhaseTag::e7_admission_phase_b);
+#endif
 
                 bool phase_b_committed = false;
                 {
@@ -703,11 +707,11 @@ void Scheduler::worker_loop(WorkerState* ws) {
                     }
                     // E9: wake any Worker parked on the wake source.
                     signal_wake_locked();
-                    {
-                        std::lock_guard<std::mutex> slk(admission_seam_mtx_);
-                        admission_seam_armed_ = false;
-                        admission_seam_cv_.notify_all();
-                    }
+                    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: release any paused
+                    // admission seam via the controller (test variant only).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                    sluice_async_test::release_all_phases(*this);
+#endif
                     break;
                 }
                 idle_workers_.store(0, std::memory_order_release);
@@ -772,13 +776,13 @@ void Scheduler::worker_loop(WorkerState* ws) {
                             }
                             // E9: wake any Worker parked on the wake source.
                             signal_wake_locked();
-                            // Release any admission-seam wait so parked test
+                            // Release any paused test phase so parked test
                             // workers can observe termination.
-                            {
-                                std::lock_guard<std::mutex> slk(admission_seam_mtx_);
-                                admission_seam_armed_ = false;
-                                admission_seam_cv_.notify_all();
-                            }
+                            // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: via the
+                            // controller (test variant only).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                            sluice_async_test::release_all_phases(*this);
+#endif
                             break;
                         }
                         idle_workers_.store(0, std::memory_order_release);
@@ -794,13 +798,11 @@ void Scheduler::worker_loop(WorkerState* ws) {
         // path) and before the physical wait setup. A test uses this to prove
         // a publication before ParkCandidate is drained (E9-T3). The seam
         // does NOT modify Scheduler state; it only pauses at the boundary.
-        if (park_candidate_seam_armed_) {
-            std::unique_lock<std::mutex> slk(park_seam_mtx_);
-            park_seam_candidate_paused_ = true;
-            park_seam_cv_.notify_all();
-            park_seam_cv_.wait(slk, [this] { return !park_candidate_seam_armed_; });
-            park_seam_candidate_paused_ = false;
-        }
+        // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::test_phase(*this,
+            sluice_async_test::PhaseTag::e9_park_candidate);
+#endif
 
         // E9: park on the unified wake source (wake_cv + wake epoch). This
         // replaces the E7 1ms inbox_cv timed park, which was a de-facto
@@ -1314,14 +1316,12 @@ std::size_t Scheduler::event_set_broadcast(WaitQueue& waiters,
     // a causal test mechanically prove reset() and a new admission CANNOT
     // complete while an old-set drain is active (the production lock is held).
     // The seam blocks on its OWN mtx/cv (global_mtx_ remains held for the
-    // pause), which is precisely the guarantee under test. TEST-ONLY.
-    if (event_set_store_before_drain_seam_armed_) {
-        std::unique_lock<std::mutex> slk(event_seam_mtx_);
-        event_set_seam_paused_ = true;
-        event_seam_cv_.notify_all();
-        event_seam_cv_.wait(slk, [this] { return !event_set_store_before_drain_seam_armed_; });
-        event_set_seam_paused_ = false;
-    }
+    // pause), which is precisely the guarantee under test.
+    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::e12_set_store_before_drain);
+#endif
     while (wake_wait_one_locked(waiters) != nullptr) {
         ++woken;
     }
@@ -1368,6 +1368,14 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
     // expected and harmless (the fiber continues running and returns from wait).
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
+    // E12-A-EVENT-CORRECTIVE-2 (T31): mark that an admission attempt has begun,
+    // BEFORE acquiring global_mtx_. A causal test observes this marker is set
+    // while a setter holds global_mtx_ mid-drain, proving the admission could
+    // not have entered its critical section yet. Controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::e12_admission_attempt_before_global_lock);
+#endif
     {
         LockGuard lk(global_mtx_);
         LockGuard qlk(q.mtx());
@@ -1386,14 +1394,12 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
         //     or about to run) cannot complete its drain until the setter
         //     releases; admission then observes SET and resolves Woken inline.
         // The seam blocks on its OWN mtx/cv (the production locks remain held),
-        // which is precisely the guarantee under test. TEST-ONLY.
-        if (event_admission_before_final_check_seam_armed_) {
-            std::unique_lock<std::mutex> slk(event_seam_mtx_);
-            event_admission_seam_paused_ = true;
-            event_seam_cv_.notify_all();
-            event_seam_cv_.wait(slk, [this] { return !event_admission_before_final_check_seam_armed_; });
-            event_admission_seam_paused_ = false;
-        }
+        // which is precisely the guarantee under test.
+        // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::test_phase(*this,
+            sluice_async_test::PhaseTag::e12_admission_before_final_check);
+#endif
         // Admission closure: if SET is observed after registration, resolve this
         // wait as Woken inline through the canonical resolve_ authority. The node
         // is unlinked in the same critical section (wake_node_locked). No suspend.
@@ -1842,5 +1848,51 @@ bool Scheduler::try_steal(WorkerState* thief) {
     }
     return false;
 }
+
+// ----------------------------------------------------------------------------
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: AsyncTestAccess definitions.
+// Compiled ONLY in the internal-testing variant. These are thin pass-throughs to
+// the dual-use production timer state; they exist so the non-installed test
+// controller can drive the clock/observe the pool WITHOUT a forgeable friend.
+// ----------------------------------------------------------------------------
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+TimerRegistration* Scheduler::AsyncTestAccess::register_test_deadline(
+    Scheduler& s, WaitNode* node, WaitQueue* q, deadline_t deadline) {
+    LockGuard lk(s.global_mtx_);
+    return s.register_test_deadline_locked(node, q, deadline);
+}
+
+// Test-coordinator diagnostic observation. Reads GUARDED_BY fields without the
+// lock; the sizes are not load-bearing for correctness (test diagnostics only).
+std::size_t Scheduler::AsyncTestAccess::timer_pool_size(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    return s.timer_pool_.size();
+}
+
+std::size_t Scheduler::AsyncTestAccess::deadline_heap_size(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    return s.deadline_heap_.size();
+}
+
+std::size_t Scheduler::AsyncTestAccess::active_deadline_count(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    return s.active_deadline_count_;
+}
+
+std::size_t Scheduler::AsyncTestAccess::timer_pool_count_in_state(
+    const Scheduler& s, TimerRegistration::State st) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    std::size_t n = 0;
+    for (const auto& r : s.timer_pool_) {
+        if (r.state() == st) ++n;
+    }
+    return n;
+}
+
+bool Scheduler::AsyncTestAccess::earliest_active_deadline(
+    Scheduler& s, deadline_t& out) SLUICE_REQUIRES(s.global_mtx_) {
+    return s.earliest_active_deadline_locked(out);
+}
+#endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 }  // namespace sluice::async

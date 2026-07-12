@@ -35,25 +35,26 @@
 
 namespace sluice::async {
 
-// Forward declaration — narrow test hook for E7-T11 deterministic admission
-// race. Defined only in test TUs; exposes no public Scheduler contract.
-struct SchedulerTestHooks;
-
-// Forward declaration — E9-CORRECTIVE deterministic park seams (ADR §9.4.15).
-// Defined only in the E9 test TU; accesses private park-seam members.
-struct E9ParkSeamHooks;
-
-// Forward declaration — E11 deterministic clock/timer test seams (M7). Defined
-// only in the E11 test TU; enables the controllable monotonic clock so race
-// proofs never use sleep_for as causal proof.
-struct E11TimerTestHooks;
-
-// Forward declaration — E12-A-EVENT-CORRECTIVE-1 deterministic Event phase
-// seams (Corrective B). Defined only in the e12 test TU; accesses private
-// Scheduler Event-phase members + Event's private WaitQueue. An ordinary
-// production TU cannot name this type (it is defined ONLY in the e12 test TU
-// inside namespace sluice::async), so the phase seams are mechanically gated.
-struct E12EventTestHooks;
+// ----------------------------------------------------------------------------
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1.
+//
+// This installed header declares NO test-hook type and grants NO test friend.
+// Previously, namespace-level forward declarations of SchedulerTestHooks /
+// E9ParkSeamHooks / E11TimerTestHooks / E12EventTestHooks lived here, each with
+// a matching `friend struct X;` inside Scheduler/Event. An ordinary production
+// TU could supply its own definition of any of those types and forge the friend
+// grant, because the type NAME was published by this installed header. That
+// forgeable authority is now REMOVED.
+//
+// Deterministic test causal seams (E7 admission, E9 park, E11 clock/timer, E12
+// event set/admission) are realized by a SEPARATE non-installed internal-
+// testing runtime (`sluice_async_internal_testing`), compiled from the same
+// authoritative sources with the private macro SLUICE_ASYNC_INTERNAL_TESTING
+// defined. Only that variant links the test-support objects and the controller
+// state; the production `sluice_async` target is hook-free and exports no test
+// phase, no test seam state, and no test controller symbol. No binary links
+// both runtime variants.
+// ----------------------------------------------------------------------------
 
 // E9 external wake handle (ADR §9.4.10). A control-block-backed handle that
 // an EXTERNAL producer thread holds so it can wake a parked Scheduler Worker
@@ -429,11 +430,7 @@ public:
     }
 
 private:
-    friend struct SchedulerTestHooks;  // E7-T11 deterministic admission seam
     friend class SchedulerWakeHandle;  // E9: notify() -> notify_external_wake
-    friend struct E9ParkSeamHooks;     // E9-CORRECTIVE park seams (T3/T4)
-    friend struct E11TimerTestHooks;   // E11 deterministic clock/timer seams
-    friend struct E12EventTestHooks;   // E12-A-CORRECTIVE Event phase seams
 
     // Wait registration with owner Worker (E7-B will use owner; E7-A stores
     // the Fiber only).
@@ -499,52 +496,17 @@ private:
     // accepted lock order.
     MwState classify_locked() const SLUICE_REQUIRES(global_mtx_);
 
-    // Test seam for E7-T11 (deterministic MW-S2 admission race). When set,
-    // the worker that reaches Phase-B commit pauses BEFORE the final
-    // reclassify+commit decision until the seam is released by the test.
-    // Exposes no public contract; private, used by a friend test.
-    bool admission_seam_armed_ = false;
-    std::mutex admission_seam_mtx_;
-    std::condition_variable admission_seam_cv_;
-    bool admission_seam_paused_ = false;
-
-    // E9-CORRECTIVE deterministic park seams (ADR §9.4.15). Two narrow
-    // TEST-only hooks at the load-bearing causal boundaries of park
-    // admission, replacing sleep-based race proofs (M7):
-    //   park_candidate_seam_  — pauses a Worker right after it reaches
-    //                           ParkCandidate (Phase-B recheck boundary).
-    //   park_commit_seam_     — pauses a Worker immediately before the
-    //                           physical wait (commit boundary).
-    // They only pause the Worker at the exact boundary; they do NOT
-    // modify Scheduler state. The test releases the seam only after the
-    // producer has published readiness + signaled the wake epoch.
-    bool park_candidate_seam_armed_ = false;
-    bool park_commit_seam_armed_ = false;
-    std::mutex park_seam_mtx_;
-    std::condition_variable park_seam_cv_;
-    bool park_seam_candidate_paused_ = false;
-    bool park_seam_commit_paused_ = false;
-
-    // E12-A-EVENT-CORRECTIVE-1 (Corrective B): deterministic Event phase seams.
-    // Narrow TEST-only hooks at the load-bearing causal boundaries of the Event
-    // set/admission protocol, so causal proofs do NOT rely on timing:
-    //   event_set_store_before_drain_seam_  — pauses a set() thread AFTER it
-    //     has stored SET and while it STILL HOLDS global_mtx_ (mid-drain). This
-    //     proves reset/admission cannot cross an active old-set drain.
-    //   event_admission_before_final_check_seam_ — pauses a wait() thread AFTER
-    //     registration and while it STILL HOLDS global_mtx_+q.mtx(), BEFORE the
-    //     final SET check. This proves set()'s drain cannot complete until the
-    //     admission releases serialization (admission-first ordering).
-    // The seam only PAUSES the thread at the boundary; it does NOT modify
-    // Scheduler state. The seam blocks on its OWN mtx/cv while the production
-    // lock remains held, which is precisely the guarantee under test. Reachable
-    // ONLY through friend E12EventTestHooks (defined in the e12 test TU).
-    bool event_set_store_before_drain_seam_armed_ = false;
-    bool event_admission_before_final_check_seam_armed_ = false;
-    std::mutex event_seam_mtx_;
-    std::condition_variable event_seam_cv_;
-    bool event_set_seam_paused_ = false;
-    bool event_admission_seam_paused_ = false;
+    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the deterministic causal pause
+    // seams (E7 admission, E9 park candidate/commit, E12 event set-store/
+    // admission-before-final-check) NO LONGER live as Scheduler fields. They
+    // were pure test-coordination state (mtx/cv/bool) with zero production
+    // readers, and the forgeable namespace-level friends that gated them have
+    // been removed. The seams are now driven by a non-installed test controller
+    // keyed on `Scheduler*`, reached ONLY through phase call sites compiled into
+    // the `sluice_async_internal_testing` variant (guarded by
+    // SLUICE_ASYNC_INTERNAL_TESTING in scheduler.cpp). The production
+    // `sluice_async` target has no such fields, no such call sites, and no such
+    // symbols. See tests/async_test_control_internal.hpp for the controller.
 
     // Get the current Worker's WorkerState (worker-local via TLS).
     static WorkerState* current_worker();
@@ -822,6 +784,63 @@ private:
         return !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
                any_active_deadline_locked();
     }
+
+    // ------------------------------------------------------------------------
+    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: internal-testing access surface.
+    //
+    // This block is compiled ONLY when SLUICE_ASYNC_INTERNAL_TESTING is defined
+    // (the `sluice_async_internal_testing` variant). In the production
+    // `sluice_async` target the macro is undefined, so these declarations do not
+    // exist: an ordinary production TU cannot name `AsyncTestAccess`, cannot
+    // drive the test clock, cannot register a test deadline, and cannot observe
+    // timer-pool internals. There is no forgeable namespace-level friend; the
+    // accessors are ordinary private members gated by the preprocessor.
+    //
+    // `AsyncTestAccess` is a thin pass-through to the dual-use production state
+    // (clock_, test_clock_mode_, timer_pool_, deadline_heap_,
+    // register_test_deadline_locked). The production fields themselves remain
+    // declared unconditionally above (production reads clock_/
+    // test_clock_mode_); only the WRITE/observation accessors are test-only.
+    // The non-installed test-support controller (tests/async_test_control.hpp)
+    // is the sole consumer.
+    // ------------------------------------------------------------------------
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+public:
+    // Internal-testing access surface. Reached only via the non-installed
+    // test-support controller; not part of the public API.
+    struct AsyncTestAccess {
+        // Enable the deterministic logical clock (test mode).
+        static void enable_test_clock(Scheduler& s) noexcept {
+            s.test_clock_mode_.store(true, std::memory_order::release);
+            s.clock_.store(0, std::memory_order::release);
+        }
+        static void set_clock(Scheduler& s, deadline_t t) noexcept {
+            s.clock_.store(t, std::memory_order::release);
+        }
+        static deadline_t clock_now(const Scheduler& s) noexcept {
+            return s.clock_.load(std::memory_order::acquire);
+        }
+
+        // Register a test deadline from a non-worker thread (the coordinator).
+        // Mirrors await_wait_deadline admission MINUS the fiber-suspend path.
+        // Acquires global_mtx_ internally (the caller does NOT hold it).
+        static TimerRegistration* register_test_deadline(Scheduler& s,
+                                                         WaitNode* node,
+                                                         WaitQueue* q,
+                                                         deadline_t deadline);
+
+        // Timer-pool observation. These read GUARDED_BY fields from a test
+        // coordinator thread for diagnostics; defined out-of-line with a TSA
+        // suppression (the pool sizes are not load-bearing for correctness).
+        static std::size_t timer_pool_size(const Scheduler& s) noexcept;
+        static std::size_t deadline_heap_size(const Scheduler& s) noexcept;
+        static std::size_t active_deadline_count(const Scheduler& s) noexcept;
+        static std::size_t timer_pool_count_in_state(const Scheduler& s,
+                                                     TimerRegistration::State st) noexcept;
+        static bool earliest_active_deadline(Scheduler& s, deadline_t& out)
+            SLUICE_REQUIRES(s.global_mtx_);
+    };
+#endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };
 
 }  // namespace sluice::async
