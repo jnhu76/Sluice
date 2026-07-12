@@ -232,6 +232,24 @@ private:
         return false;  // already terminal (loser): C2/C3/C4/C5 no-op
     }
 
+    // ---- Wake a specific node (E12-A admission-time resolver, Woken) ----
+    //
+    // PRIVATE (E12-A): the Event admission path resolves a specific node with
+    // Woken when it observes SET after registration (the admission closure).
+    // Mirrors wake_one_locked's resolve CAS but targets `node` instead of the
+    // FIFO head, exactly like cancel_locked/expire_locked target a specific
+    // node. The winner CAS is the authority; a losing call (node already
+    // terminal) returns false and performs no unlink. `node` MUST belong to
+    // this queue (caller contract — the Event admission seam registers `node`
+    // into THIS queue immediately before calling this).
+    bool wake_node_locked(WaitNode& node) SLUICE_REQUIRES(mtx_) {
+        if (node.resolve_(WaitOutcome::woken)) {  // winner CAS (§2/§7)
+            unlink_locked(node);                  // SAME critical section (§7)
+            return true;
+        }
+        return false;  // already terminal (loser): concurrent cancel/expire
+    }
+
     // ---- Expire a specific node (E11 third terminal resolver, Expired) ----
     //
     // PRIVATE (E11-CORRECTIVE seal): the Scheduler resolves a deadline-elapsed
@@ -251,6 +269,28 @@ private:
             return true;
         }
         return false;  // already terminal (loser): timer lost to wake/cancel/expiry
+    }
+
+    // ---- Queue-membership predicate (E12-A-EVENT-CORRECTIVE-2) ----
+    //
+    // Structural membership test: is `node` currently linked in THIS queue's
+    // intrusive list? Scans head_ -> next_ while the caller holds mtx_.
+    //
+    // PRIVATE + Scheduler-friend-gated. This is the structural authority for
+    // Event::cancel queue-identity validation: Scheduler::event_cancel_wait
+    // scans the TARGET Event's own queue for &node before attempting cancel,
+    // so a wrong-Event / detached / terminal node returns false WITHOUT reading
+    // a foreign node's home_ or locking a foreign Event/Scheduler. O(waiters).
+    //
+    // This is an Event-specific authority check; generic Scheduler::cancel_wait
+    // is unchanged and does NOT call it (its caller contract already guarantees
+    // the node belongs to the passed queue). The resolve_ CAS remains the
+    // terminal-winner authority; contains_locked is the membership gate.
+    bool contains_locked(const WaitNode& node) const noexcept SLUICE_REQUIRES(mtx_) {
+        for (WaitNode* cur = head_; cur != nullptr; cur = cur->next_) {
+            if (cur == &node) return true;
+        }
+        return false;
     }
 
     // ---- Unlink (the single structural-removal seam, §7) ----

@@ -422,19 +422,25 @@ hold; deterministic + sanitizer gates green. Full normative text:
 
 Only after E9-E11 should Sluice add user-facing asynchronous synchronization primitives.
 
-Planned decomposition:
+Canonical decomposition (protocol-dependency order, resolved by the E12
+preparation audit — see [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)):
 
 ```text
-E12-A Mutex
-E12-B Event
-E12-C Condition
-E12-D Queue
-E12-E Semaphore
+E12-A Event              [CLOSED — E12-A-EVENT-CORRECTIVE-2 + ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1; both independent reviews PASS; fresh formal gate PASS (0-ed) — docs/e12-event.md; formal: docs/spec/e12_event/]
+E12-B Semaphore          [NEXT — may begin]
+E12-C Mutex
+E12-D Condition
+E12-E Queue
 E12-F RwLock
-E12-G Cross-Primitive Cancellation Audit
+E12-G Cross-Primitive Cancellation / Deadline Audit
 ```
 
-The exact order may be adjusted after API audit.
+This order matches the SYNCHRONIZATION dependency trunk below (§ Summary) and
+supersedes the earlier decomposition-list order. It was chosen by protocol
+dependency (Event → Semaphore → Mutex → Condition → Queue → RwLock → Audit),
+not by API popularity, and is authoritative now that the E12 preparation
+audit is complete. The per-primitive semantic authority and the outstanding
+human decisions are recorded in the preparation document.
 
 ## Event
 
@@ -446,13 +452,17 @@ Useful to validate WaitNode integration.
 
 Introduces permit accounting and waiter queue ordering.
 
-Key invariant:
+Key invariant (supply accounting — corrected in E12-PREP-CORRECTIVE-2; see
+[`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §5.1):
 
 ```text
-permits + granted permits + queued demand
+initial_supply + successful_release_count
+    ==
+free_permits + granted_not_yet_committed + successful_acquire_count
 ```
 
-must reconcile.
+Queued demand is a *separate* dimension (count of live wait epochs still
+demanding a permit) and MUST NOT be counted on the supply side.
 
 ## Mutex
 
@@ -800,13 +810,13 @@ Deadline / timer wait integration   [CLOSED — spec: docs/e11-deadline-timer-wa
 
 E12
 Async synchronization primitives
-  E12-A Mutex
-  E12-B Event
-  E12-C Condition
-  E12-D Queue
-  E12-E Semaphore
+  E12-A Event
+  E12-B Semaphore
+  E12-C Mutex
+  E12-D Condition
+  E12-E Queue
   E12-F RwLock
-  E12-G Cross-Primitive Cancellation Audit
+  E12-G Cross-Primitive Cancellation / Deadline Audit
 
 E13
 Select / multi-wait winner protocol

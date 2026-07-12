@@ -5,6 +5,7 @@
 // precedes admission (E7-T10B). Uses a concurrency-detecting backend wrapper
 // for E7-T6 (explicit assertion, not just TSan).
 #include "harness.hpp"
+#include "async_test_control.hpp"
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/fake_backend.hpp>
@@ -570,27 +571,10 @@ SLUICE_TEST_CASE(e7_t10b_completion_readiness_not_gated_by_reap) {
 //
 // No sleeps. No timing. The seam is a cv handoff; route_runnable_locked demotes
 // the candidate so Phase-B reclassify cannot see MW-S2.
-namespace sluice::async {
-struct SchedulerTestHooks {
-    // Arm the admission seam: the next worker to reach Phase-B (candidate
-    // election) will pause and signal `paused` before its final reclassify.
-    static void arm_admission_seam(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.admission_seam_mtx_);
-        s.admission_seam_armed_ = true;
-    }
-    // Wait until some worker has paused at the seam.
-    static void wait_paused(Scheduler& s) {
-        std::unique_lock<std::mutex> lk(s.admission_seam_mtx_);
-        s.admission_seam_cv_.wait(lk, [&s] { return s.admission_seam_paused_; });
-    }
-    // Release the seam: the paused worker proceeds to Phase-B reclassify.
-    static void release(Scheduler& s) {
-        std::lock_guard<std::mutex> lk(s.admission_seam_mtx_);
-        s.admission_seam_armed_ = false;
-        s.admission_seam_cv_.notify_all();
-    }
-};
-}  // namespace sluice::async
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable SchedulerTestHooks
+// friend is removed; the seam is driven by the internal-testing controller
+// facade E7AdmissionSeam (tests/async_test_control.hpp), which routes through
+// a per-Scheduler* controller registry compiled only into the variant lib.
 
 SLUICE_TEST_CASE(e7_t11_coordinated_mw_s2_admission_race) {
     if constexpr (!fiber_ctx::supported) return;
@@ -619,6 +603,8 @@ SLUICE_TEST_CASE(e7_t11_coordinated_mw_s2_admission_race) {
     probe_ptr = probe.get();
     AsyncIoContext ctx(std::move(probe));
     Scheduler sched(ctx);
+    // Register the test controller for `sched` (must precede arm/wait/release).
+    sluice_async_test::ControllerGuard ctrl(sched);
 
     std::atomic<bool> a_flag{false};
     Completion<std::size_t> a_c;
@@ -640,16 +626,16 @@ SLUICE_TEST_CASE(e7_t11_coordinated_mw_s2_admission_race) {
     sched.spawn(fa);   // single worker; A runs on worker 0
 
     // Arm the seam BEFORE run() so W0 pauses at its first MW-S2 candidate.
-    SchedulerTestHooks::arm_admission_seam(sched);
+    sluice_async_test::E7AdmissionSeam::arm(sched);
 
     // Coordination thread: route-then-stage-then-release while W0 is paused.
     std::atomic<bool> seam_released{false};
     std::thread coord([&] {
-        SchedulerTestHooks::wait_paused(sched);  // W0 paused at candidate
+        sluice_async_test::E7AdmissionSeam::wait_paused(sched);  // W0 paused at candidate
         a_flag.store(true, std::memory_order_release);  // route A → MW-S1
         // Stage a_c so when A resumes and awaits it, the next poll reaps it.
         probe_ptr->inner().complete_oldest_with_bytes(4);
-        SchedulerTestHooks::release(sched);  // W0 does Phase-B
+        sluice_async_test::E7AdmissionSeam::release(sched);  // W0 does Phase-B
         seam_released.store(true, std::memory_order_release);
     });
 

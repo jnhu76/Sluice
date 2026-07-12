@@ -17,6 +17,14 @@
 
 #include <utility>
 
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
+// the non-installed test-control header so the phase call sites below resolve to
+// the controller. In the production build this include is absent and the call
+// sites compile to nothing.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+#include "async_test_control_internal.hpp"
+#endif
+
 namespace sluice::async {
 
 namespace {
@@ -69,16 +77,18 @@ struct SchedulerWakeHandle::Control {
     bool alive SLUICE_GUARDED_BY(mtx){false};
 
     // E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13). TEST-ONLY.
-    // When armed, notify() pauses at the exact causal boundary — AFTER it
+    // When armed, notify() pauses at the exact causal boundary - AFTER it
     // has validated alive under Control::mtx and BEFORE notify_external_wake
-    // — while STILL HOLDING the lease. This forces the notifier-wins
+    // - while STILL HOLDING the lease. This forces the notifier-wins
     // interleaving deterministically: the destructor cannot complete
     // invalidation while the notifier is paused. It does NOT alter
     // production Scheduler state; it only blocks the notifier thread.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     bool lifetime_seam_armed{false};
     bool lifetime_seam_paused{false};
     std::mutex lifetime_seam_mtx;
     std::condition_variable lifetime_seam_cv;
+#endif
 };
 
 Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
@@ -139,11 +149,12 @@ bool SchedulerWakeHandle::notify() noexcept {
         return false;  // post-destruction / unbound: no-op
     }
     // E9-LIFETIME-CORRECTIVE deterministic seam (spec 13): pause at the
-    // exact boundary — validated + lease held, just before the callback.
+    // exact boundary - validated + lease held, just before the callback.
     // Lets T1 prove the destructor cannot progress while the notifier
     // owns the lease. The seam blocks on its OWN mtx/cv; Control::mtx
     // remains held for the duration, which is precisely the guarantee
     // under test.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     if (control_->lifetime_seam_armed) {
         std::unique_lock<std::mutex> slk(control_->lifetime_seam_mtx);
         control_->lifetime_seam_paused = true;
@@ -156,6 +167,7 @@ bool SchedulerWakeHandle::notify() noexcept {
             return false;
         }
     }
+#endif
     control_->scheduler->notify_external_wake();
     return true;
 }
@@ -169,6 +181,7 @@ bool SchedulerWakeHandle::bound() const noexcept {
 // E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13). TEST-ONLY.
 // Defined here because Control is complete only in this TU. These wrap the
 // Control seam state; they do NOT touch any Scheduler state.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 void SchedulerWakeHandle::lifetime_seam_arm() noexcept {
     if (!control_) return;
     std::lock_guard<std::mutex> lk(control_->lifetime_seam_mtx);
@@ -193,6 +206,7 @@ void SchedulerWakeHandle::lifetime_seam_release() noexcept {
     control_->lifetime_seam_armed = false;
     control_->lifetime_seam_cv.notify_all();
 }
+#endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 SchedulerWakeHandle Scheduler::make_wake_handle() {
     // The control block is shared with this Scheduler; it points back here.
@@ -262,13 +276,11 @@ void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANA
     // E9-CORRECTIVE seam B: pause at the commit boundary with NO wake lock
     // held, so the test can publish + notify (signal_wake_locked) during
     // the pause without deadlocking.
-    if (park_commit_seam_armed_) {
-        std::unique_lock<std::mutex> slk(park_seam_mtx_);
-        park_seam_commit_paused_ = true;
-        park_seam_cv_.notify_all();  // signal the test we are at the boundary
-        park_seam_cv_.wait(slk, [this] { return !park_commit_seam_armed_; });
-        park_seam_commit_paused_ = false;
-    }
+    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::e9_park_commit);
+#endif
 
     std::unique_lock<Mutex> lk(wake_mtx_);
     ws->observed_epoch = wake_epoch_;  // recorded AFTER any seam publication
@@ -447,8 +459,10 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
     running_fiber_count_.store(0, std::memory_order_release);
     idle_workers_.store(0, std::memory_order_release);
     global_terminate_.store(false, std::memory_order_release);
-    // NOTE: admission_seam_* is NOT reset here — it is test-controlled state
-    // that must persist across the run() boundary (T11 arms it before run()).
+    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the test-controlled causal seam
+    // state (E7 admission, E9 park, E12 event) no longer lives on Scheduler; it
+    // is driven by the internal-testing controller and persists across the
+    // run() boundary by construction (the controller registry is external).
 
     if (worker_count == 1) {
         // Single-worker fast path: run inline (no thread spawn). This preserves
@@ -588,15 +602,13 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 // election is a candidate, not a commit — route_runnable_locked
                 // may have demoted it in the meantime.
                 // Test seam (E7-T11): pause here to let another worker route.
-                if (admission_seam_armed_) {
-                    std::unique_lock<std::mutex> slk(admission_seam_mtx_);
-                    admission_seam_paused_ = true;
-                    admission_seam_cv_.notify_all();  // signal the test we paused
-                    admission_seam_cv_.wait(slk, [this] {
-                        return !admission_seam_armed_;
-                    });
-                    admission_seam_paused_ = false;
-                }
+                // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the seam state no longer
+                // lives on Scheduler; the internal-testing variant calls a phase
+                // function that looks up controller state by Scheduler*.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                sluice_async_test::test_phase(*this,
+                    sluice_async_test::PhaseTag::e7_admission_phase_b);
+#endif
 
                 bool phase_b_committed = false;
                 {
@@ -703,11 +715,11 @@ void Scheduler::worker_loop(WorkerState* ws) {
                     }
                     // E9: wake any Worker parked on the wake source.
                     signal_wake_locked();
-                    {
-                        std::lock_guard<std::mutex> slk(admission_seam_mtx_);
-                        admission_seam_armed_ = false;
-                        admission_seam_cv_.notify_all();
-                    }
+                    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: release any paused
+                    // admission seam via the controller (test variant only).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                    sluice_async_test::release_all_phases(*this);
+#endif
                     break;
                 }
                 idle_workers_.store(0, std::memory_order_release);
@@ -772,13 +784,13 @@ void Scheduler::worker_loop(WorkerState* ws) {
                             }
                             // E9: wake any Worker parked on the wake source.
                             signal_wake_locked();
-                            // Release any admission-seam wait so parked test
+                            // Release any paused test phase so parked test
                             // workers can observe termination.
-                            {
-                                std::lock_guard<std::mutex> slk(admission_seam_mtx_);
-                                admission_seam_armed_ = false;
-                                admission_seam_cv_.notify_all();
-                            }
+                            // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: via the
+                            // controller (test variant only).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                            sluice_async_test::release_all_phases(*this);
+#endif
                             break;
                         }
                         idle_workers_.store(0, std::memory_order_release);
@@ -794,13 +806,11 @@ void Scheduler::worker_loop(WorkerState* ws) {
         // path) and before the physical wait setup. A test uses this to prove
         // a publication before ParkCandidate is drained (E9-T3). The seam
         // does NOT modify Scheduler state; it only pauses at the boundary.
-        if (park_candidate_seam_armed_) {
-            std::unique_lock<std::mutex> slk(park_seam_mtx_);
-            park_seam_candidate_paused_ = true;
-            park_seam_cv_.notify_all();
-            park_seam_cv_.wait(slk, [this] { return !park_candidate_seam_armed_; });
-            park_seam_candidate_paused_ = false;
-        }
+        // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::test_phase(*this,
+            sluice_async_test::PhaseTag::e9_park_candidate);
+#endif
 
         // E9: park on the unified wake source (wake_cv + wake epoch). This
         // replaces the E7 1ms inbox_cv timed park, which was a de-facto
@@ -1063,6 +1073,36 @@ void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
     (void)fiber_ctx::context_switch(&s);
 }
 
+WaitNode* Scheduler::wake_wait_one_locked(WaitQueue& q) {
+    // E12-A: the wake_wait_one body with global_mtx_ already held. Resolves the
+    // FIFO head with Woken (wake_one_locked), retires any bound timer
+    // (retire_timer_for_node_locked, E11 I4), decrements waiting_waitq_count_,
+    // and routes the winner runnable through the canonical wake seam. Returns
+    // the winning node (nullptr if empty or head lost to a concurrent resolver).
+    //
+    // The caller MUST hold global_mtx_. q.mtx() is taken here (under global_mtx_,
+    // consistent lock order). Used by the public wake_wait_one AND
+    // event_set_broadcast's drain loop so the drain is atomic w.r.t. reset and
+    // admission (all under global_mtx_).
+    //
+    // E11 Phase 5 (Timer Lifetime Closure): a RESOURCE_WAKE winner MUST retire
+    // any active timer registration bound to the resolved node, in the SAME
+    // global_mtx_ critical section as the resolve CAS and BEFORE runnable
+    // publication (I4).
+    LockGuard qlk(q.mtx());
+    WaitNode* won = q.wake_one_locked();
+    if (won == nullptr) return nullptr;  // empty, or head lost to a cancel
+    retire_timer_for_node_locked(*won);
+    Fiber* f = won->fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
+    // succeeded. The node is terminal; make_runnable is the publication guard.
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+    }
+    return won;
+}
+
 bool Scheduler::wake_wait_one(WaitQueue& q) {
     // Resolve the FIFO head of `q` with Woken and route the winner's fiber
     // through the canonical wake seam (route_runnable_locked). The winner is
@@ -1073,28 +1113,8 @@ bool Scheduler::wake_wait_one(WaitQueue& q) {
     // make_runnable + route_runnable_locked run under global_mtx_ (the wake
     // path's coordination domain), exactly like wake_ready_flags_locked. This
     // is the single canonical runnable-enqueue seam (§8).
-    //
-    // E11 Phase 5 (Timer Lifetime Closure): a RESOURCE_WAKE winner MUST retire
-    // any active timer registration bound to the resolved node, in the SAME
-    // global_mtx_ critical section as the resolve CAS and BEFORE runnable
-    // publication. This closes the timer callback authority so a stale/lazy
-    // expiry cannot dereference the node after the fiber resumes and destroys
-    // its caller-owned WaitNode (I4). retire_timer_for_node_locked performs the
-    // ACTIVE->RETIRED CAS on the registration's independently-stable state.
     LockGuard lk(global_mtx_);
-    LockGuard qlk(q.mtx());
-    WaitNode* won = q.wake_one_locked();
-    if (won == nullptr) return false;  // empty, or head lost to a cancel
-    retire_timer_for_node_locked(*won);
-    Fiber* f = won->fiber();
-    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
-    // succeeded. The node is terminal; make_runnable is the publication guard.
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
-        return true;
-    }
-    return false;
+    return wake_wait_one_locked(q) != nullptr;
 }
 
 bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
@@ -1272,6 +1292,265 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
         return true;
     }
     return false;
+}
+
+// ---- E12-A Event wait admission / broadcast (sluice-CORE-E12-A) ----
+
+std::size_t Scheduler::event_set_broadcast(WaitQueue& waiters,
+                                            std::atomic<bool>& set_flag) {
+    // Transition `set_flag` to SET and drain every registered Event wait epoch
+    // through the canonical RESOURCE_WAKE path (wake_wait_one_locked). The store
+    // + drain are ONE atomic critical section under global_mtx_, serializing
+    // with reset() and wait admission so OLD_SET_WAKES_POST_RESET_WAITER is
+    // mechanically impossible: a waiter admitted after this drain is not in the
+    // queue during the drain, and reset() cannot interleave mid-drain.
+    //
+    // Idempotent: set() on SET re-stores true (no-op) and drains whatever
+    // waiters remain (typically none, since a prior set already drained them —
+    // but a waiter admitted between the prior set's drain and this call would
+    // be correctly drained here). Each winner is an independent resolve_(Woken)
+    // CAS + unlink + retire-timer + dec-count + make_runnable + route. One
+    // runnable publication per winning epoch (E7-T2 exactly-once).
+    //
+    // Safe to call from an external OS thread: global_mtx_ + the wake source
+    // (signal_wake_locked via route_runnable_locked) are the existing external-
+    // wake-capable mechanism. No Event-private wake channel.
+    std::size_t woken = 0;
+    LockGuard lk(global_mtx_);
+    set_flag.store(true, std::memory_order::release);
+    // E12-A-EVENT-CORRECTIVE-1 (Corrective B): deterministic set-store-before-
+    // drain phase seam. When armed, pause the set() thread AFTER it has stored
+    // SET and while it STILL HOLDS global_mtx_, BEFORE the drain loop. This lets
+    // a causal test mechanically prove reset() and a new admission CANNOT
+    // complete while an old-set drain is active (the production lock is held).
+    // The seam blocks on its OWN mtx/cv (global_mtx_ remains held for the
+    // pause), which is precisely the guarantee under test.
+    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::e12_set_store_before_drain);
+#endif
+    while (wake_wait_one_locked(waiters) != nullptr) {
+        ++woken;
+    }
+    return woken;
+}
+
+void Scheduler::event_reset(std::atomic<bool>& set_flag) {
+    // Transition `set_flag` to UNSET. Pure state flip: does NOT resolve, cancel,
+    // expire, unlink, or publish any WaitNode. A waiter already registered
+    // remains governed by future set(), deadline, or cancellation. Linearized
+    // under global_mtx_ so it serializes with set()'s drain and wait admission
+    // (the set/reset epoch isolation domain).
+    LockGuard lk(global_mtx_);
+    set_flag.store(false, std::memory_order::release);
+}
+
+bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
+    // E12-A-EVENT-CORRECTIVE-2: the narrow Event cancellation authority with
+    // EXACT queue-membership validation. Event::cancel passes its private
+    // waiters_ here (NOT exposed to the caller). The contract (Corrective C):
+    //   returns true ONLY if node is currently Registered AND currently linked
+    //   in THIS Event's private WaitQueue AND CANCEL wins node.resolve_.
+    //   Otherwise returns false WITHOUT mutation.
+    //
+    // The membership check scans THIS queue's own intrusive list for &node
+    // while holding this Scheduler's global_mtx_ + this Event's q.mtx(). It
+    // does NOT read a foreign node's home_, does NOT lock a foreign Event or
+    // foreign Scheduler, and does NOT depend on cross-Scheduler
+    // synchronization. Wrong-Event (same OR different Scheduler), detached,
+    // Woken, Expired, and Cancelled nodes all return false safely.
+    //
+    // Generic Scheduler::cancel_wait is unchanged (its caller contract already
+    // guarantees membership); this Event-specific path is the one reached from
+    // untrusted Event::cancel callers. The resolve_ CAS remains the
+    // terminal-winner authority; contains_locked is the membership gate, taken
+    // BEFORE resolve_ so no mutation occurs on a non-member. This call CANNOT
+    // synthesize a RESOURCE_WAKE and CANNOT change Event SET/UNSET.
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(q.mtx());
+    // Membership gate: a node not linked in THIS queue is not cancellable here.
+    // Covers wrong-Event (same/different Scheduler), detached, and (because a
+    // terminal winner is already unlinked) Woken/Expired/Cancelled nodes.
+    if (!q.contains_locked(node)) return false;
+    if (!q.cancel_locked(node)) return false;  // concurrent resolver won (loser)
+    retire_timer_for_node_locked(node);
+    Fiber* f = node.fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    // The cancel CAS won: the node is terminal+unlinked and the count is closed.
+    // Return true unconditionally — the winner identity is the resolve_ CAS, not
+    // the runnable publication (mirrors wake_wait_one_locked). make_runnable is
+    // the exactly-once publication guard; a false return (fiber already runnable
+    // from a concurrent path, or null fiber) does NOT undo the cancel. Returning
+    // false here would mislead the caller into retrying or thinking the wait is
+    // still active (PR#6 review: gemini-code-assist + coderabbitai).
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+    }
+    return true;
+}
+
+void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
+                                 WaitNode& node) {
+    // E12-A Event wait admission. The lost-set closure: register + check SET +
+    // (if SET) resolve Woken inline, OR commit suspension — all under one
+    // global_mtx_ + q.mtx() critical section (the same domain set()/reset() use).
+    // Only context_switch is outside the lock. This mirrors await_wait_deadline's
+    // I5 already-due path: always register, then check the admission condition.
+    //
+    // If set_ is observed at admission (after registration), the wait resolves
+    // Woken inline via wake_node_locked (resolve_(Woken) + unlink), the timer
+    // (if any — none for this non-deadline overload) is retired, the count is
+    // decremented, and the fiber does NOT suspend. Because the current Fiber has
+    // not yet committed `waiting`, a successful admission-time Woken resolution
+    // may cause make_runnable() to return false for the RUNNING Fiber — that is
+    // expected and harmless (the fiber continues running and returns from wait).
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
+    // E12-A-EVENT-CORRECTIVE-2 (T31): mark that an admission attempt has begun,
+    // BEFORE acquiring global_mtx_. A causal test observes this marker is set
+    // while a setter holds global_mtx_ mid-drain, proving the admission could
+    // not have entered its critical section yet. Controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::e12_admission_attempt_before_global_lock);
+#endif
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(q.mtx());
+        if (!q.register_wait_locked(node, me)) {
+            // Node already registered or terminal (C8): contract violation.
+            return;
+        }
+        ++waiting_waitq_count_;
+        // E12-A-EVENT-CORRECTIVE-1 (Corrective D): deterministic admission-before-
+        // final-set-check phase seam. When armed, pause the admission thread
+        // AFTER registration and while it STILL HOLDS global_mtx_+q.mtx(), BEFORE
+        // the final SET check. This lets a causal test mechanically prove:
+        //   - admission-first: set()'s drain cannot complete until admission
+        //     releases serialization (a competing setter blocks on global_mtx_).
+        //   - set-first: if the setter stores SET first, admission (paused here
+        //     or about to run) cannot complete its drain until the setter
+        //     releases; admission then observes SET and resolves Woken inline.
+        // The seam blocks on its OWN mtx/cv (the production locks remain held),
+        // which is precisely the guarantee under test.
+        // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::test_phase(*this,
+            sluice_async_test::PhaseTag::e12_admission_before_final_check);
+#endif
+        // Admission closure: if SET is observed after registration, resolve this
+        // wait as Woken inline through the canonical resolve_ authority. The node
+        // is unlinked in the same critical section (wake_node_locked). No suspend.
+        if (set_flag.load(std::memory_order::acquire)) {
+            if (q.wake_node_locked(node)) {
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // The current Fiber is RUNNING; make_runnable may return false.
+                // That is not a reason to publish it. Return from wait normally.
+                if (me != nullptr) (void)me->make_runnable();
+            }
+            return;  // node.outcome() == woken; do NOT suspend
+        }
+        // Defense-in-depth: if the node was resolved concurrently (it cannot be,
+        // since register_wait_locked just moved it to Registered under both
+        // locks and every resolver takes global_mtx_), undo and do not suspend.
+        if (node.is_terminal()) {
+            q.unlink_locked(node);
+            --waiting_waitq_count_;
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+}
+
+void Scheduler::await_event_wait_deadline(WaitQueue& q,
+                                          const std::atomic<bool>& set_flag,
+                                          WaitNode& node, deadline_t deadline) {
+    // E12-A deadline-aware Event wait. Composes await_event_wait's admission
+    // closure with E11 TimerRegistration. The wait resolves when EXACTLY ONE
+    // cause wins the resolve_ CAS:
+    //   - set() broadcast (event_set_broadcast -> wake_wait_one_locked) -> Woken
+    //   - cancel_wait(q, node)                                   -> Cancelled
+    //   - the deadline elapsing (pump_deadlines_locked)           -> Expired
+    //
+    // Admission precedence (under global_mtx_ + q.mtx()):
+    //   1. If set_ is observed SET after registration: resolve Woken inline
+    //      (no suspend). Event readiness wins over a due deadline at admission
+    //      (the resource is ready; the deadline is moot).
+    //   2. Else if the deadline is already due: resolve Expired inline (E11 I5).
+    //   3. Else: commit suspension.
+    // A non-timer winner retires the registration in the same CS (E11 I4).
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
+    TimerRegistration* reg = nullptr;
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(q.mtx());
+        if (!q.register_wait_locked(node, me)) {
+            return;  // C8 contract violation
+        }
+        ++waiting_waitq_count_;
+        // Create the timer registration control block for this wait epoch.
+        timer_pool_.emplace_back(&node, &q, deadline);
+        reg = &timer_pool_.back();
+        ++active_deadline_count_;
+        heap_push_locked(reg);
+        recompute_earliest_deadline_locked();
+
+        // Admission closure — Event SET takes precedence: if the resource is
+        // ready, the wait resolves Woken inline (the deadline is moot).
+        if (set_flag.load(std::memory_order::acquire)) {
+            if (q.wake_node_locked(node)) {
+                if (reg->retire()) {  // ACTIVE->RETIRED (closes timer authority)
+                    --active_deadline_count_;
+                }
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                if (me != nullptr) (void)me->make_runnable();
+            }
+            return;  // node.outcome() == woken; do NOT suspend
+        }
+
+        // E11 I5 admission closure: if the deadline is ALREADY due (and the
+        // resource is NOT set), resolve Expired inline. The fiber must NOT
+        // suspend and wait for a future timer scan merely because registration
+        // happened after the deadline was due.
+        if (clock_now_unlocked() >= deadline) {
+            if (q.expire_locked(node)) {
+                reg->try_claim_expiry();  // ACTIVE->CONSUMED (winner)
+                --active_deadline_count_;
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // The current Fiber is RUNNING (has not called make_waiting());
+                // make_runnable() returns false for a Running fiber (E7-T2).
+                // Call it for state consistency but do NOT route - matches the
+                // inline SET admission path above.
+                if (me != nullptr) (void)me->make_runnable();
+                return;  // resolved at admission; do NOT suspend
+            }
+            // If expire_locked lost, a concurrent resolver won; fall through.
+        }
+
+        // Defense-in-depth: if the node was resolved concurrently, undo + return.
+        if (node.is_terminal()) {
+            q.unlink_locked(node);
+            --waiting_waitq_count_;
+            if (reg->retire()) {
+                --active_deadline_count_;
+            }
+            recompute_earliest_deadline_locked();
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
 }
 
 std::size_t Scheduler::pump_deadlines_locked() {
@@ -1610,5 +1889,52 @@ bool Scheduler::try_steal(WorkerState* thief) {
     }
     return false;
 }
+
+// ----------------------------------------------------------------------------
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: AsyncTestAccess definitions.
+// Compiled ONLY in the internal-testing variant. These are thin pass-throughs to
+// the dual-use production timer state; they exist so the non-installed test
+// controller can drive the clock/observe the pool WITHOUT a forgeable friend.
+// ----------------------------------------------------------------------------
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+TimerRegistration* Scheduler::AsyncTestAccess::register_test_deadline(
+    Scheduler& s, WaitNode* node, WaitQueue* q, deadline_t deadline) {
+    LockGuard lk(s.global_mtx_);
+    return s.register_test_deadline_locked(node, q, deadline);
+}
+
+// Test-coordinator diagnostic observation. Reads GUARDED_BY fields without the
+// lock; the sizes are not load-bearing for correctness (test diagnostics only).
+std::size_t Scheduler::AsyncTestAccess::timer_pool_size(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    return s.timer_pool_.size();
+}
+
+std::size_t Scheduler::AsyncTestAccess::deadline_heap_size(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    return s.deadline_heap_.size();
+}
+
+std::size_t Scheduler::AsyncTestAccess::active_deadline_count(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    return s.active_deadline_count_;
+}
+
+std::size_t Scheduler::AsyncTestAccess::timer_pool_count_in_state(
+    const Scheduler& s, TimerRegistration::State st) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    std::size_t n = 0;
+    for (const auto& r : s.timer_pool_) {
+        if (r.state() == st) ++n;
+    }
+    return n;
+}
+
+bool Scheduler::AsyncTestAccess::earliest_active_deadline(
+    Scheduler& s, deadline_t& out) {
+    LockGuard lk(s.global_mtx_);
+    return s.earliest_active_deadline_locked(out);
+}
+#endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 }  // namespace sluice::async

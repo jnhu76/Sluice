@@ -43,6 +43,48 @@ target("sluice_async")
     add_cxxflags("-Wthread-safety", {force = true})
     add_cxxflags("-Werror=thread-safety", {force = true})
 
+-- ---------------------------------------------------------------------------
+-- ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: internal-testing runtime variant.
+--
+-- The production `sluice_async` (above) is hook-free: it declares no test
+-- friends, no test seam state, and exports no test phase/controller symbol.
+-- The `sluice_async_internal_testing` variant is compiled from the SAME
+-- authoritative async sources (src/async/*.cpp) PLUS the non-installed test
+-- controller (tests/async_test_control.cpp), with the private macro
+-- SLUICE_ASYNC_INTERNAL_TESTING defined. Only this variant links the
+-- controller; only test binaries that need deterministic causal seams depend
+-- on it. No binary links both variants.
+--
+-- Both targets share the same source manifest + TSA configuration via the
+-- helper below (one source list, two targets).
+-- ---------------------------------------------------------------------------
+local async_sources = function()
+    return { "src/async/*.cpp" }
+end
+
+local async_tsa_flags = function()
+    add_cxxflags("-Wthread-safety", {force = true})
+    add_cxxflags("-Werror=thread-safety", {force = true})
+end
+
+target("sluice_async_internal_testing")
+    set_kind("static")
+    set_default(false)
+    set_group("test")
+    add_includedirs("include", "tests", {public = true})
+    add_deps("sluice_core")
+    add_files(async_sources())
+    -- The non-installed test controller (defines test_phase + the registry).
+    -- Lives in tests/ so the production src/async/*.cpp glob never sees it.
+    add_files("tests/async_test_control.cpp")
+    -- PUBLIC: the define must also reach the test TUs that include the
+    -- non-installed async_test_control.hpp (which references Scheduler::
+    -- AsyncTestAccess, a guarded nested struct). Dependents of this variant
+    -- see the macro; the production `sluice_async` target does NOT depend on
+    -- this variant, so production TUs never see it.
+    add_defines("SLUICE_ASYNC_INTERNAL_TESTING", {public = true})
+    async_tsa_flags()
+
 -- Bench helper library (SLUICE-CORE-010B). Linked into bench targets + the CSV test.
 -- Also contains BlockingIoPool (021S), the bounded execution model for the
 -- W1-W4 blocking bench matrix (job 022S). Pool source is here so both bench and
@@ -564,8 +606,8 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
-            add_includedirs("include")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
             add_files(p)
             add_tests("e7_coord_test")
     end
@@ -739,8 +781,8 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
-            add_includedirs("include")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
             add_files(p)
             add_tests("e9_external_wake_test")
     end
@@ -759,8 +801,8 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
-            add_includedirs("include")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
             add_files(p)
             add_tests("e9_wake_handle_lifetime_test")
     end
@@ -872,9 +914,29 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
-            add_includedirs("include")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
             add_files(p)
             add_tests("e11_timer_wait_test")
+    end
+end
+
+-- e12_event_test — Async Event synchronization primitive (sluice-CORE-E12-A).
+-- Persistent manual-reset Event on the E10/E11 substrate: basic semantics,
+-- lost-set admission closure, set-all broadcast, deadline/cancel composition,
+-- set/reset epoch isolation, external-thread set, E8 steal, Drain STALLED,
+-- destruction contract. Deterministic causal tests (NO sleep_for proof).
+-- Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e12_event_test.cpp"
+    if os.isfile(p) then
+        target("e12_event_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_event_test")
     end
 end
