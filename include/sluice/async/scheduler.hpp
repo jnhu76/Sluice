@@ -379,6 +379,91 @@ public:
     bool event_cancel_wait(WaitQueue& q, WaitNode& node);
 
 
+    // ---- E12-B Semaphore admission / release (sluice-CORE-E12-B) ----
+    // The Semaphore counting-permit substrate. A Semaphore owns an
+    // std::atomic<permit_count_t> available_ + a private WaitQueue waiters_ +
+    // a const max_permits_. These NARROW private seams implement the
+    // admission closure, release transfer/store/overflow, timed acquire, and
+    // queue-identity-safe cancellation under global_mtx_ (the existing
+    // serialization domain). No Semaphore-private wake channel, no permit
+    // ownership tracking, no grant-in-flight/refund state, no direct Fiber
+    // manipulation.
+    //
+    // Synchronization domain: ALL Semaphore seams take global_mtx_ (and
+    // waiters_.mtx() inside it), the same domain await_wait /
+    // wake_wait_one / cancel_wait / expire_wait / the Event seams use. This
+    // serializes admission, release disposition, and cancellation so the
+    // lost-wake / barging / overflow-mutation windows are mechanically closed.
+    //
+    // Lock order: global_mtx_ -> waiters_.mtx() (unchanged). `available` is
+    // passed by reference (the Semaphore's atomic); it is read/written ONLY
+    // under the authoritative locks here. It does NOT authorize lock-free
+    // acquisition.
+
+    // Attempt to acquire one permit WITHOUT suspending. Under global_mtx_ +
+    // waiters_.mtx(): if `available > 0` AND the queue is empty (no eligible
+    // queued waiter has FIFO priority), decrement `available` and return true;
+    // otherwise return false with no mutation. Safe to call from any thread.
+    // No barging.
+    [[nodiscard]] bool sem_try_acquire(WaitQueue& waiters,
+                                       std::atomic<std::uint32_t>& available);
+
+    // Acquire admission closure. Register `node` on `waiters`, then recheck
+    // resource admission under the authoritative locks:
+    //   - if `available > 0` AND `node` is now the FIFO head (admissible): consume
+    //     one stored permit (available--), resolve `node` Woken inline via
+    //     wake_node_locked, do NOT suspend.
+    //   - otherwise: commit suspension.
+    // The admission window is closed: a permit observed during the admission
+    // critical section leads to inline Woken, not a sleeping registered waiter
+    // with stored supply. Mirrors await_event_wait's lost-set closure. `node`
+    // must be Detached (fresh) and outlive this call's suspend until resumed.
+    void sem_acquire(WaitQueue& waiters,
+                     std::atomic<std::uint32_t>& available, WaitNode& node);
+
+    // Deadline-aware acquire admission closure. Composes sem_acquire's
+    // admission closure with E11 TimerRegistration. Mandatory precedence
+    // (under global_mtx_ + waiters_.mtx()):
+    //   1. authoritative permit admission (if available > 0 AND node is FIFO
+    //      head): resolve Woken inline (no suspend). Permit admission wins over
+    //      a due deadline.
+    //   2. else if the deadline is already due: resolve Expired inline (E11 I5).
+    //   3. else: commit suspension.
+    // For a registered timed wait, RESOURCE_WAKE (release) / TIMER_EXPIRE /
+    // CANCEL compete through the existing exactly-once WaitNode resolution
+    // authority. Reuses E11 timer registration/retirement. No Semaphore-local
+    // deadline mechanism.
+    void sem_acquire_until(WaitQueue& waiters,
+                           std::atomic<std::uint32_t>& available, WaitNode& node,
+                           deadline_t deadline);
+
+    // Queue-identity-safe cancellation (mirrors event_cancel_wait). Resolves
+    // `node` with Cancelled only if it is currently linked in `waiters` (scanned
+    // under global_mtx_ + waiters_.mtx()). Returns true iff node is Registered
+    // AND linked in `waiters` AND CANCEL wins; otherwise returns false WITHOUT
+    // mutation. Does NOT expose `waiters`. Does NOT change `available`. Safe
+    // against wrong-Semaphore (same/different Scheduler), detached, and terminal
+    // nodes.
+    [[nodiscard]] bool sem_cancel(WaitQueue& waiters, WaitNode& node);
+
+    // Release disposition (mirrors wake_wait_one_locked for the transfer branch
+    // and the permit store for the empty-queue branch). Under global_mtx_ +
+    // waiters_.mtx(), this release call contributes exactly one pending permit:
+    //   - if `waiters` is non-empty: wake exactly the FIFO head via
+    //     wake_wait_one_locked, transferring this release-created permit
+    //     directly to that waiter. `available` is UNCHANGED. Return true. (A
+    //     null return from wake_wait_one_locked happens ONLY when the queue is
+    //     empty — Conclusion A — so the transfer branch never falls through.)
+    //   - otherwise (queue empty): if `available == max_permits`: return false
+    //     (overflow; no mutation). Otherwise `available++` and return true.
+    // One release never both wakes a waiter AND stores. Safe to call from an
+    // external OS thread (mirrors event_set_broadcast's external-thread path:
+    // g_worker is null -> pending_spawn_ routing).
+    [[nodiscard]] bool sem_release(WaitQueue& waiters,
+                                   std::atomic<std::uint32_t>& available,
+                                   std::uint32_t max_permits);
+
+
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()
     // from an external thread to wake a parked Worker whose wake set includes

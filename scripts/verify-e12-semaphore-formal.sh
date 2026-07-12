@@ -8,8 +8,10 @@
 # generic "Invariant violated" message). Also runs a WRONG-PROPERTY gate that
 # asserts a negative's defect is property-specific.
 #
-# This is a SAFETY-ONLY gate. There is no liveness run and no compile-probe
-# gate (the corrective introduces no public API to seal).
+# This is a SAFETY-ONLY gate. There is no liveness run. The E12-B
+# implementation adds a COMPILE-PROBE gate (E12-B-IMPLEMENTATION) that asserts
+# the raw WaitQueue bypass on a Semaphore fails to compile (the Semaphore public
+# authority is sealed: no wait_queue() accessor).
 #
 #   correct safety        -> all invariants PASS
 #                            (InvPermitConservation, InvPermitBounds,
@@ -62,8 +64,11 @@ if [ ! -f "$JAR" ]; then
 fi
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-spec="$here/../docs/spec/e12_semaphore"
+repo="$here/.."
+spec="$repo/docs/spec/e12_semaphore"
 cd "$spec"
+# C++ compiler for the COMPILE-PROBE gate (the authority-sealing negative probe).
+CXX_BIN="${CXX:-c++}"
 
 # Fresh output directory per invocation (stale-output guard).
 outroot="$(mktemp -d -t e12sem-tlc.XXXXXX)"
@@ -189,7 +194,34 @@ tlc_version() {
     | sed 's/^TLC2 Version/  TLC runtime version:/' || true
 }
 
-echo "=== E12-B Semaphore formal gate (TLC2, jar=$JAR) -- SAFETY ONLY ==="
+# COMPILE-PROBE gate (E12-B-IMPLEMENTATION): the raw WaitQueue bypass on a
+# Semaphore must FAIL to compile (the Semaphore public authority is sealed).
+# F-SEM-SEAM-1: ordinary production code cannot obtain a Semaphore's WaitQueue
+# (no public wait_queue() accessor) and therefore cannot synthesize a
+# RESOURCE_WAKE via scheduler.wake_wait_one(sem.wait_queue()).
+compile_probe_gate() {
+  local probe="$repo/tests/e12_semaphore_authority_probe.cpp"
+  if [ ! -f "$probe" ]; then
+    echo "FAIL  COMPILE-PROBE gate (probe file missing: $probe)"
+    return 1
+  fi
+  local out="$outroot/probe.out"
+  # Syntax-only compile of the bypass. MUST fail.
+  if "$CXX_BIN" -std=c++20 -fsyntax-only -I"$repo/include" "$probe" >"$out" 2>&1; then
+    echo "FAIL  COMPILE-PROBE gate (bypass COMPILED -- Semaphore authority regressed)"
+    tail -10 "$out"
+    return 1
+  fi
+  if ! grep -q "wait_queue" "$out"; then
+    echo "FAIL  COMPILE-PROBE gate (compile failed but not on wait_queue -- investigate)"
+    tail -10 "$out"
+    return 1
+  fi
+  echo "OK    COMPILE-PROBE gate (raw WaitQueue bypass sealed: fails to compile)"
+  return 0
+}
+
+echo "=== E12-B Semaphore formal gate (TLC2, jar=$JAR; CXX=$CXX_BIN) -- SAFETY ONLY ==="
 echo
 rc=0
 
@@ -235,6 +267,9 @@ expect_fail "NEG-SEM-7 DeadlinePrecedence" \
 # Wrong-property gate (defect specificity).
 wrong_property_gate || rc=1
 
+# Compile-probe gate (E12-B-IMPLEMENTATION, F-SEM-SEAM-1 authority sealing).
+compile_probe_gate || rc=1
+
 echo
 echo "--- TLC runtime version (actual) ---"
 tlc_version
@@ -242,5 +277,5 @@ echo "  TLA+ tools release tag: not associated with a verified release tag"
 echo "    (the jar is a 2026 development build; no v1.8.0 association asserted"
 echo "     without jar-metadata proof)"
 echo
-echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + wrong-property gate) ==="
+echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + wrong-property gate + compile-probe) ==="
 exit "$rc"

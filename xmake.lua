@@ -940,3 +940,24 @@ do
             add_tests("e12_event_test")
     end
 end
+
+-- e12_semaphore_test — Async counting Semaphore (sluice-CORE-E12-B).
+-- Counting Semaphore on the E10/E11/E12-A substrate: construction/available,
+-- try_acquire (no barging), immediate + queued acquire, FIFO release transfer
+-- /store/overflow, deadline precedence (permit-first), queue-identity-safe
+-- cancel, external-thread release, Drain STALLED, destruction contract.
+-- Deterministic causal tests (NO sleep_for proof). Gated to x86_64
+-- (fiber_ctx::supported).
+do
+    local p = "tests/e12_semaphore_test.cpp"
+    if os.isfile(p) then
+        target("e12_semaphore_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_semaphore_test")
+    end
+end
