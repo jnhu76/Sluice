@@ -199,7 +199,7 @@ Lock-free `set_.load(acquire)`. Returns the persistent readiness state.
 
 ```text
 linearization: global_mtx_ critical section
-    set_ <- SET (acq_rel)
+    set_ <- SET (release)
     drain: loop wake_wait_one_locked until empty
         each winner: resolve_(Woken) + unlink + retire timer + dec count
                      + make_runnable + route_runnable_locked
@@ -213,7 +213,7 @@ The drain is atomic w.r.t. `reset()` and admission (all under `global_mtx_`).
 
 ```text
 linearization: global_mtx_ critical section
-    set_ <- UNSET (acq_rel)
+    set_ <- UNSET (release)
 ```
 
 `reset()` does NOT resolve a WaitNode, does NOT cancel a waiter, does NOT expire
@@ -807,8 +807,8 @@ E12-A-EVENT-CORRECTIVE-2-REVIEW) returned PASS, and the fresh formal gate
 returned 0-ed (all expected verdicts + named properties + gates). The roadmap
 may now say:
 
-```
-E12-A EVENT CLOSED — E12-B SEMAPHORE MAY BEGIN
+```text
+E12-A EVENT CLOSED - E12-B SEMAPHORE MAY BEGIN
 ```
 
 The layered correctives that closed E12-A:

@@ -501,9 +501,15 @@ SLUICE_TEST_CASE(e12_t9_one_expires_during_set_broadcast) {
     fdriver.set_entry([&](Fiber&) {
         spin_wait_pred([&] { return suspended.load(std::memory_order_acquire) >= 3; });
         std::this_thread::yield();
-        // Expire W2's deadline BEFORE set(), so W2 resolves Expired.
-        sched.advance_clock(100);
-        std::this_thread::yield();
+        // Expire W2's deadline BEFORE set(), so W2 resolves Expired. Retry
+        // advance_clock until n2 is terminal (the deadline registration
+        // commits atomically under global_mtx_ before W2 yields). This
+        // prevents a race where set() runs before W2 registers, causing W2
+        // to resolve Woken (SET precedence) instead of Expired.
+        for (int i = 0; i < 200 && !n2.is_terminal(); ++i) {
+            sched.advance_clock(100);
+            std::this_thread::yield();
+        }
         ev.set();  // W1, W3 resolve Woken; W2 already Expired
     });
 

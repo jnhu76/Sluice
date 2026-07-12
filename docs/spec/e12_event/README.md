@@ -3,7 +3,7 @@
 > sluice::async::Event (sluice-CORE-E12-A, **E12-A-EVENT-CORRECTIVE-1**).
 > Persistent manual-reset Event built on the closed E10/E11 wait substrate.
 >
-> Status: **CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED.**
+> Status: **CLOSED - two independent corrective reviews passed.**
 
 This directory contains the TLA+ / TLC formal model for the E12-A Event
 synchronization primitive. The E12-A-EVENT-CORRECTIVE-1 refactor represents the

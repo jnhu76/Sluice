@@ -132,6 +132,7 @@ DrainOne(n) ==
 
 FinishSet ==
     /\ protoPhase = "SetDrain"
+    /\ Drainable = {}
     /\ protoPhase' = "Idle"
     /\ activeSetGen' = NoGen
     /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched, eventSet,

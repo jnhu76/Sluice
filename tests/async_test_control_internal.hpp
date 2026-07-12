@@ -97,5 +97,6 @@ void wait_paused(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 bool is_paused(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 void release(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 void disarm(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
+void clear_reached(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 
 }  // namespace sluice_async_test

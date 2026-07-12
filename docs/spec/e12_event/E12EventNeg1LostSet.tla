@@ -97,12 +97,14 @@ AdmissionWake(n) ==
 
 \* DEFECT: CommitSuspendBuggy does NOT check eventSet. It allows committing
 \* suspension even when SET. The correct model requires eventSet = "UNSET".
+\* admissionSawSet is recorded honestly: (eventSet = "SET") so the authoritative
+\* E3 invariant (admissionSawSet => Woken) catches the violation.
 CommitSuspendBuggy(n) ==
     /\ nodeState[n] = "Registered"
     /\ admissionPhase[n] = "AdmissionOpen"
     \* DEFECT: no eventSet guard -- allows suspend while SET.
     /\ admissionPhase' = [admissionPhase EXCEPT ![n] = "Suspended"]
-    /\ admissionSawSet' = [admissionSawSet EXCEPT ![n] = FALSE]
+    /\ admissionSawSet' = [admissionSawSet EXCEPT ![n] = (eventSet = "SET")]
     /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched, eventSet,
                   wokenBySetDrain,
                   protoPhase, resetGeneration, registrationGeneration,
@@ -137,6 +139,7 @@ DrainOne(n) ==
 
 FinishSet ==
     /\ protoPhase = "SetDrain"
+    /\ Drainable = {}
     /\ protoPhase' = "Idle"
     /\ activeSetGen' = NoGen
     /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched, eventSet,
@@ -183,21 +186,16 @@ Next ==
 Spec == Init /\ [][Next]_Vars
 
 \* The expected violated property: InvEventAdmissionClosure (E3).
-\* E3 consequence: a wait that committed suspension (admissionPhase=Suspended)
-\* cannot have done so while SET was visible. The broken CommitSuspendBuggy
-\* allows Suspended while eventSet="SET", so this invariant is violated when:
-\*   nodeState[n]="Registered" /\ admissionPhase[n]="Suspended" /\ eventSet="SET"
-\* This is the "Event SET + WaitNode Registered + waiter suspended" counterexample.
-\* (Note: with the multi-step drain, a CORRECT model can transiently have a
-\*  Suspended+Registered node while a drain is mid-flight (protoPhase=SetDrain).
-\*  The lost-set counterexample is distinguished by protoPhase=Idle: a Suspended
-\*  node with NO active drain to resolve it, while SET.)
+\* E3 consequence: a wait whose admission observed SET must resolve Woken (it
+\* cannot be left Registered/Suspended). The broken CommitSuspendBuggy records
+\* admissionSawSet = (eventSet = "SET") = TRUE when it suspends under SET, so
+\* the authoritative invariant admissionSawSet => Woken is violated: the node is
+\* Suspended (not Woken) despite having observed SET.
+\* This is the same-named authoritative invariant from E12Event.tla (not a
+\* redefined substitute), so the gate proves violation of the real E3 property.
 InvEventAdmissionClosure ==
     \A n \in Nodes :
-        /\ nodeState[n] = "Registered"
-        /\ admissionPhase[n] = "Suspended"
-        /\ protoPhase = "Idle"
-        => eventSet = "UNSET"
+        admissionSawSet[n] = TRUE => nodeState[n] = "Woken"
 
 \* Also asserted (must still hold): these are not the target of the defect.
 InvSingleResolutionWinner ==

@@ -237,9 +237,13 @@ DrainOne(n) ==
                   activeSetGen>>
 
 \* FinishSet: release serialization, close the active set epoch. The drain is
-\* complete; protoPhase returns to Idle so Reset/Admission can proceed.
+\* complete; protoPhase returns to Idle so Reset/Admission can proceed. The
+\* drain-empty guard ensures FinishSet cannot fire while drainable waiters
+\* remain (Registered+Suspended), matching the production loop that drains
+\* until the queue is empty before releasing global_mtx_.
 FinishSet ==
     /\ protoPhase = "SetDrain"
+    /\ Drainable = {}
     /\ protoPhase' = "Idle"
     /\ activeSetGen' = NoGen
     /\ UNCHANGED <<nodeState, linked, resolvedCount, wakeDispatched, eventSet,
@@ -369,24 +373,28 @@ Inv == /\ InvSingleResolutionWinner
 
 -------------------------------------------------------------------------------
 \* E4: Persistent SET Liveness (liveness property, separate .cfg).
-\* If a node is Registered+Suspended, under fairness it eventually becomes
-\* terminal (Woken by a set-epoch drain, or Cancelled). The multi-step set
+\* If a node is Registered+Suspended while eventSet=SET, under fairness it
+\* eventually becomes terminal (Woken by a set-epoch drain). The multi-step set
 \* protocol (StartSet -> DrainOne -> FinishSet) must be able to make progress:
-\* fairness is placed on each step so a stuck drain cannot strand a waiter.
-\* EventSetDrainLivenessNonVacuous: from Registered+Suspended, eventually
+\* fairness is placed on the INTERNAL drain/finish steps so a stuck drain cannot
+\* strand a waiter. Fairness is NOT assumed for EXTERNALLY invoked StartSet/set
+\* or ResolveCancel/cancel -- those are environment actions. The liveness
+\* property is scoped to nodes waiting while eventSet = "SET" (i.e., set() has
+\* already been called), so broadcast-drain progress is proven without assuming
+\* external calls.
+\* EventSetDrainLivenessNonVacuous: from Registered+Suspended+SET, eventually
 \* terminal.
 
-FairStartSet == WF_Vars(StartSet)
 FairDrainOne == WF_Vars(\E n \in Nodes : DrainOne(n))
 FairFinishSet == WF_Vars(FinishSet)
-FairCancel == WF_Vars(\E n \in Nodes : ResolveCancel(n))
 
-LivenessSpecFair == Spec /\ FairStartSet /\ FairDrainOne /\ FairFinishSet /\ FairCancel
+LivenessSpecFair == Spec /\ FairDrainOne /\ FairFinishSet
 
 EventSetDrainLivenessNonVacuous ==
     \A n \in Nodes :
         [] ( (/\ nodeState[n] = "Registered"
-              /\ admissionPhase[n] = "Suspended")
+              /\ admissionPhase[n] = "Suspended"
+              /\ eventSet = "SET")
              => <> (isTerminal(n)) )
 
 =============================================================================

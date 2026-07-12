@@ -8,8 +8,8 @@
 
     W1 registered, W2 registered
     SetEventBuggy -> SET, resolves only W1
-    set-on-SET idempotent (cannot re-enter a drain on SET), reset absent,
-    deadline absent, cancel absent
+    set-on-SET idempotent (cannot re-enter a drain on SET); the failing trace
+    takes neither reset nor cancellation, and deadline resolution is absent
     W2 remains Registered+Suspended forever while Event remains SET
 
   Required counterexample: W2 remains Registered+Suspended forever while

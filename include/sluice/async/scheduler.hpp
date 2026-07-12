@@ -92,6 +92,7 @@ public:
     // Is this handle currently bound to a live Scheduler?
     bool bound() const noexcept;
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // ---- E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13) ----
     // TEST-ONLY. Defined in scheduler.cpp (where Control is complete).
     // Arm/pause/release the notify callback at the exact boundary: validated
@@ -102,6 +103,7 @@ public:
     void lifetime_seam_wait_paused() noexcept;
     bool lifetime_seam_is_paused() const noexcept;
     void lifetime_seam_release() noexcept;
+#endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 private:
     friend class Scheduler;
@@ -838,8 +840,7 @@ public:
         static std::size_t active_deadline_count(const Scheduler& s) noexcept;
         static std::size_t timer_pool_count_in_state(const Scheduler& s,
                                                      TimerRegistration::State st) noexcept;
-        static bool earliest_active_deadline(Scheduler& s, deadline_t& out)
-            SLUICE_REQUIRES(s.global_mtx_);
+        static bool earliest_active_deadline(Scheduler& s, deadline_t& out);
     };
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };

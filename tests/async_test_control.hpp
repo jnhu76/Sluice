@@ -186,6 +186,8 @@ struct E12EventSeam {
         // Disarm + clear reached so the next wait() re-marks it.
         sluice_async_test::disarm(
             s, PhaseTag::e12_admission_attempt_before_global_lock);
+        sluice_async_test::clear_reached(
+            s, PhaseTag::e12_admission_attempt_before_global_lock);
     }
 
     // Park-commit seam delegation (E12 reuses the E9 park-commit seam for T32).

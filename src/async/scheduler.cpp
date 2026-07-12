@@ -77,16 +77,18 @@ struct SchedulerWakeHandle::Control {
     bool alive SLUICE_GUARDED_BY(mtx){false};
 
     // E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13). TEST-ONLY.
-    // When armed, notify() pauses at the exact causal boundary — AFTER it
+    // When armed, notify() pauses at the exact causal boundary - AFTER it
     // has validated alive under Control::mtx and BEFORE notify_external_wake
-    // — while STILL HOLDING the lease. This forces the notifier-wins
+    // - while STILL HOLDING the lease. This forces the notifier-wins
     // interleaving deterministically: the destructor cannot complete
     // invalidation while the notifier is paused. It does NOT alter
     // production Scheduler state; it only blocks the notifier thread.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     bool lifetime_seam_armed{false};
     bool lifetime_seam_paused{false};
     std::mutex lifetime_seam_mtx;
     std::condition_variable lifetime_seam_cv;
+#endif
 };
 
 Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
@@ -147,11 +149,12 @@ bool SchedulerWakeHandle::notify() noexcept {
         return false;  // post-destruction / unbound: no-op
     }
     // E9-LIFETIME-CORRECTIVE deterministic seam (spec 13): pause at the
-    // exact boundary — validated + lease held, just before the callback.
+    // exact boundary - validated + lease held, just before the callback.
     // Lets T1 prove the destructor cannot progress while the notifier
     // owns the lease. The seam blocks on its OWN mtx/cv; Control::mtx
     // remains held for the duration, which is precisely the guarantee
     // under test.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     if (control_->lifetime_seam_armed) {
         std::unique_lock<std::mutex> slk(control_->lifetime_seam_mtx);
         control_->lifetime_seam_paused = true;
@@ -164,6 +167,7 @@ bool SchedulerWakeHandle::notify() noexcept {
             return false;
         }
     }
+#endif
     control_->scheduler->notify_external_wake();
     return true;
 }
@@ -177,6 +181,7 @@ bool SchedulerWakeHandle::bound() const noexcept {
 // E9-LIFETIME-CORRECTIVE deterministic test seam (spec 13). TEST-ONLY.
 // Defined here because Control is complete only in this TU. These wrap the
 // Control seam state; they do NOT touch any Scheduler state.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 void SchedulerWakeHandle::lifetime_seam_arm() noexcept {
     if (!control_) return;
     std::lock_guard<std::mutex> lk(control_->lifetime_seam_mtx);
@@ -201,6 +206,7 @@ void SchedulerWakeHandle::lifetime_seam_release() noexcept {
     control_->lifetime_seam_armed = false;
     control_->lifetime_seam_cv.notify_all();
 }
+#endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 SchedulerWakeHandle Scheduler::make_wake_handle() {
     // The control block is shared with this Scheduler; it points back here.
@@ -1371,11 +1377,17 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     retire_timer_for_node_locked(node);
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    // The cancel CAS won: the node is terminal+unlinked and the count is closed.
+    // Return true unconditionally — the winner identity is the resolve_ CAS, not
+    // the runnable publication (mirrors wake_wait_one_locked). make_runnable is
+    // the exactly-once publication guard; a false return (fiber already runnable
+    // from a concurrent path, or null fiber) does NOT undo the cancel. Returning
+    // false here would mislead the caller into retrying or thinking the wait is
+    // still active (PR#6 review: gemini-code-assist + coderabbitai).
     if (f != nullptr && f->make_runnable()) {
         route_runnable_locked(f, g_worker);
-        return true;
     }
-    return false;
+    return true;
 }
 
 void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag,
@@ -1513,9 +1525,11 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                if (me != nullptr && me->make_runnable()) {
-                    route_runnable_locked(me, g_worker);
-                }
+                // The current Fiber is RUNNING (has not called make_waiting());
+                // make_runnable() returns false for a Running fiber (E7-T2).
+                // Call it for state consistency but do NOT route - matches the
+                // inline SET admission path above.
+                if (me != nullptr) (void)me->make_runnable();
                 return;  // resolved at admission; do NOT suspend
             }
             // If expire_locked lost, a concurrent resolver won; fall through.
@@ -1917,7 +1931,8 @@ std::size_t Scheduler::AsyncTestAccess::timer_pool_count_in_state(
 }
 
 bool Scheduler::AsyncTestAccess::earliest_active_deadline(
-    Scheduler& s, deadline_t& out) SLUICE_REQUIRES(s.global_mtx_) {
+    Scheduler& s, deadline_t& out) {
+    LockGuard lk(s.global_mtx_);
     return s.earliest_active_deadline_locked(out);
 }
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)

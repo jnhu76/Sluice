@@ -524,7 +524,7 @@ non-destruction Event semantics (set/reset/wait/late-waiter/cardinality); it
 blocks only the destruction path, which can be specified before the destructor
 is exercised. This is recorded so it is not discovered late.
 
-**Event verdict (E12-A CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED):**
+**Event verdict (E12-A CLOSED - two independent corrective reviews passed):**
 
 ```text
 PUBLIC SEMANTICS RESOLVED + IMPLEMENTED:
@@ -1538,7 +1538,7 @@ implemented in this preparation.
 
 | Primitive | Verdict | Resolved items | Open human-authority / boundary items |
 | --------- | ------- | -------------- | ------------------------------------- |
-| **E12-A Event** | `HUMAN-DECISION-REQUIRED` (destruction only) | manual-reset choice; idempotent set; reset; wait-on-set; deadline/cancel composition; set-vs-register race; reset-vs-waiter; **wake cardinality = set releases all registered waits satisfied by SET (F-EVENT-1 closed)** | destruction-with-waiters; **IMPLEMENTATION BOUNDARY: loop wake-one vs narrow wake-many seam (audit E12-A)** |
+| **E12-A Event** | `CLOSED` (two independent corrective reviews passed) | manual-reset choice; idempotent set; reset; wait-on-set; deadline/cancel composition; set-vs-register race; reset-vs-waiter; **wake cardinality = set releases all registered waits satisfied by SET (F-EVENT-1 closed)** | ~~destruction-with-waiters~~ (resolved: caller contract violation, debug assert); ~~IMPLEMENTATION BOUNDARY: loop wake-one vs narrow wake-many seam~~ (resolved: loop wake_wait_one_locked until drained, atomic under global_mtx_) |
 | **E12-B Semaphore** | `HUMAN-DECISION-REQUIRED` | **supply accounting law (supply ≠ queued demand, F-SEM-1 closed)**; grant-at-CAS; refund on cancel/expire; already-queued FIFO selection; acquire/release-one scope | max permits / overflow; barging; destruction-with-waiters |
 | **E12-C Mutex** | `HUMAN-DECISION-REQUIRED` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire | fairness / handoff / barging; destruction-with-waiters; naming coexistence with sync `Mutex`; **grant-seam dependency coupled to handoff policy (§14)** |
 | **E12-D Condition** | `HUMAN-DECISION-REQUIRED` | release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | **return-contract cluster: Model A (mandatory reacquire) vs Model B (abortable reacquire) — F-COND-1 closed**; notify-all mechanism/scope |

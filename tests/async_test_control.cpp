@@ -62,10 +62,12 @@ void test_phase(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
         p.paused = p.armed;
     }
     p.cv.notify_all();  // tell the coordinator we reached + paused
-    if (p.paused) {
+    {
         std::unique_lock<std::mutex> lk(p.mtx);
-        p.cv.wait(lk, [&p] { return !p.armed; });
-        p.paused = false;
+        if (p.paused) {
+            p.cv.wait(lk, [&p] { return !p.armed; });
+            p.paused = false;
+        }
     }
 }
 
@@ -151,6 +153,16 @@ void release(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
 
 void disarm(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
     release(s, tag);
+}
+
+void clear_reached(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    PhaseState& p = phase_of(*c, tag);
+    {
+        std::lock_guard<std::mutex> lk(p.mtx);
+        p.reached = false;
+    }
 }
 
 }  // namespace sluice_async_test

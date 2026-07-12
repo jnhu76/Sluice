@@ -16,8 +16,9 @@
 #   NEG-EVENT-2           -> EventSetDrainLivenessNonVacuous FAILS (wake-one strands)
 #   NEG-EVENT-3           -> InvSetEpochIsolation FAILS (old set wakes post-reset)
 #   NEG-EVENT-4           -> InvResetNonResolution FAILS (reset resolves waiter)
-#   WRONG-PROPERTY gate   -> NEG-3 vs InvSingleResolutionWinner does NOT flag
-#                            InvSetEpochIsolation (defect is property-specific)
+#   WRONG-PROPERTY gate   -> NEG-3 vs InvSingleResolutionWinner PASSES (defect
+#                            is property-specific) and does NOT flag
+#                            InvSetEpochIsolation
 #   COMPILE-PROBE gate    -> e12_event_authority_probe.cpp FAILS to compile
 #                            (raw WaitQueue bypass is sealed)
 #
@@ -144,8 +145,11 @@ expect_fail() {
 # does NOT target must NOT flag the EXPECTED property. Concretely, NEG-3's defect
 # (lost serialization) does not violate InvSingleResolutionWinner; if the gate
 # flags InvSetEpochIsolation under that config, the property mapping is wrong.
-# We build a one-off config that checks the WRONG property and assert it does
-# NOT mention the expected property name.
+# We build a one-off config that checks the WRONG property and assert:
+#   1. TLC completes successfully (InvSingleResolutionWinner is NOT violated by
+#      NEG-3's defect -- the defect is property-specific).
+#   2. The EXPECTED property (InvSetEpochIsolation) is NOT named in the output
+#      (it is not even checked under this config).
 wrong_property_gate() {
   local out="$outroot/wrongprop.out"
   cat > "$outroot/E12Neg3WrongProp.cfg" <<'EOF'
@@ -164,14 +168,17 @@ EOF
     tail -20 "$out"
     return 1
   fi
-  # The wrong property (single resolution) may or may not be violated by NEG-3,
-  # but the EXPECTED property (InvSetEpochIsolation) must NOT be the flagged
-  # property when a DIFFERENT invariant is checked.
+  if ! tlc_passed "$out"; then
+    echo "FAIL  WRONG-PROPERTY gate (InvSingleResolutionWinner unexpectedly violated by NEG-3)"
+    grep -m1 -E 'Invariant .+ is violated|Property .+ is violated|Temporal property' "$out" || true
+    tail -8 "$out"
+    return 1
+  fi
   if named_violation "$out" "InvSetEpochIsolation"; then
     echo "FAIL  WRONG-PROPERTY gate (InvSetEpochIsolation flagged under a wrong-property config)"
     return 1
   fi
-  echo "OK    WRONG-PROPERTY gate (expected property not mis-flagged)"
+  echo "OK    WRONG-PROPERTY gate (InvSingleResolutionWinner passes; expected property not mis-flagged)"
   return 0
 }
 

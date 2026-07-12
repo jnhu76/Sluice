@@ -801,8 +801,8 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
-            add_includedirs("include")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
             add_files(p)
             add_tests("e9_wake_handle_lifetime_test")
     end
