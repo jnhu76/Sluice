@@ -1,8 +1,10 @@
 # E12-A — Async Event (Persistent Manual-Reset)
 
-> Status: **CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED**
-> (E12-A-EVENT-CORRECTIVE-2; built on E12-A-EVENT-CORRECTIVE-1 +
-> ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1)
+> Status: **CLOSED** — E12-A-EVENT-CORRECTIVE-2 + ASYNC-TEST-SEAM-AUTHORITY-
+> CORRECTIVE-1. Both independent reviews PASS
+> (ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1-REVIEW,
+> E12-A-EVENT-CORRECTIVE-2-REVIEW). Fresh formal gate PASS (0-ed).
+> (Built on E12-A-EVENT-CORRECTIVE-1 + ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1.)
 >
 > Authority baseline: E10 CLOSED
 > ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED at
@@ -799,17 +801,21 @@ RunMode behavior:
 
 ## 14. Exit condition — CORRECTED (E12-A-EVENT-CORRECTIVE-2)
 
-E12-A is **CORRECTED — INDEPENDENT CLOSURE REVIEW REQUIRED** (NOT CLOSED). This
-status reflects the layered correctives:
+E12-A is **CLOSED**. Both independent reviews
+(ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1-REVIEW and
+E12-A-EVENT-CORRECTIVE-2-REVIEW) returned PASS, and the fresh formal gate
+returned 0-ed (all expected verdicts + named properties + gates). The roadmap
+may now say:
+
+```
+E12-A EVENT CLOSED — E12-B SEMAPHORE MAY BEGIN
+```
+
+The layered correctives that closed E12-A:
 - ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1 (test friends isolated).
 - E12-A-EVENT-CORRECTIVE-1 (sealed authority, narrow cancel, formal protocol).
 - E12-A-EVENT-CORRECTIVE-2 (cancel queue-membership validation, CANCEL-1..8,
   T28/T29/T31/T32 evidence corrections, formal Expired/TLC accuracy).
-
-E12-A is NOT marked CLOSED. Only after both independent reviews
-(ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1-REVIEW and
-E12-A-EVENT-CORRECTIVE-2-REVIEW) pass may the roadmap say:
-`E12-A EVENT CLOSED — E12-B SEMAPHORE MAY BEGIN`.
 
 Verification:
 
