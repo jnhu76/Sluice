@@ -1,0 +1,1316 @@
+# E12-C — Async Mutex (Preparation Corrective-5)
+
+> Status:
+> ```text
+> E12-C-PREPARATION-CORRECTIVE-1: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-2: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-3: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-4: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-5: COMPLETE
+> E12-C-PREPARATION: REAUDIT-REQUIRED
+> E12-C-IMPLEMENTATION: BLOCKED
+> ```
+>
+> Authority baseline: E10 CLOSED
+> ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED
+> at `7715808` ([`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md));
+> E12-A Event CLOSED ([`docs/e12-event.md`](e12-event.md)); E12-B Semaphore
+> CLOSED ([`docs/e12-semaphore.md`](e12-semaphore.md)). This document does NOT
+> reopen E10/E11/E12-A/E12-B; it builds on them as authoritative.
+>
+> Cross-primitive preparation:
+> [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §6 (updated
+> by this corrective).
+>
+> This document is the authoritative E12-C Async Mutex preparation specification.
+> It is the corrective that closes the HUMAN-DECISION-REQUIRED classification
+> from the prior preparation document (§6 of e12-sync-primitives-plan.md) and
+> establishes the design authority for implementation.
+
+---
+
+## 1. Status banner
+
+```text
+E12-C-PREPARATION-CORRECTIVE-1: COMPLETE
+E12-C-PREPARATION-CORRECTIVE-2: COMPLETE
+E12-C-PREPARATION-CORRECTIVE-3: COMPLETE
+E12-C-PREPARATION-CORRECTIVE-4: COMPLETE
+E12-C-PREPARATION-CORRECTIVE-5: COMPLETE
+E12-C-PREPARATION: REAUDIT-REQUIRED
+E12-C-IMPLEMENTATION: BLOCKED
+```
+
+Only a fresh adversarial re-audit returning PASS may change preparation to
+CLOSED and implementation to READY.
+
+---
+
+## 2. Policy register
+
+The following policies are closed by this corrective as human-selected first-scope
+decisions:
+
+| ID | Decision | Selected policy | Evidence |
+| ---- | -------- | --------------- | -------- |
+| M-H1 | Unlock-with-waiters handoff | **Direct ownership handoff** — unlock transfers ownership to the eligible FIFO head waiter atomically | E10 FIFO WaitQueue; E12-B no-barging precedent (Semaphore A2); no free lock window during handoff; simpler ownership finality |
+| M-H2 | Queued waiter ordering | **FIFO** — eligible queued waiters use WaitQueue FIFO order | E10 WaitQueue is FIFO by construction (§5); no configurable policy |
+| M-H3 | Barging | **Forbidden** — a newly arriving acquirer may not bypass an already-eligible queued waiter | E12-B A2 barging forbidden; Mutex is strict generalization of Semaphore(count=1) + ownership |
+| M-H4 | try_lock vs queued waiter | **try_lock fails** while an eligible waiter has FIFO priority | Consequence of M-H3 (no barging); matches Semaphore try_acquire contract |
+
+Rationale may cite E10 FIFO WaitQueue, E12-B no-barging precedent, smaller
+starvation surface, no free lock window during handoff, and simpler ownership
+finality.
+
+```text
+Semaphore is precedent, not authority for Mutex ownership policy.
+This corrective is the human authority that selects direct handoff.
+```
+
+The permitted starvation claim is:
+
+```text
+eligible queued waiters cannot be overtaken by later arrivals,
+assuming the current owner eventually unlocks and the Scheduler
+eventually runs runnable Fibers.
+```
+
+Do not claim a wall-clock starvation bound or "bounded by queue length."
+
+---
+
+## 3. Naming authority
+
+```text
+New Fiber-suspending primitive: AsyncMutex
+Existing synchronous structural lock: Mutex (retained unchanged)
+```
+
+The existing `sluice::async::Mutex` (`include/sluice/async/mutex.hpp`) is a
+synchronous TSA-annotated `std::mutex` wrapper (CPP-STATIC-1). It blocks the OS
+thread, does not participate in Scheduler/Fiber suspension, and is used
+internally by WaitQueue (`mtx_`), Scheduler (`global_mtx_`, `wake_mtx_`), and
+`LockGuard`. It is NOT used for application-level mutual exclusion.
+
+`AsyncMutex` coexists in `sluice::async` without collision. The two types have
+distinct semantics (thread-blocking vs Fiber-suspending), distinct APIs, and
+distinct use cases. Renaming the existing `Mutex` would be source-breaking with
+no offsetting benefit in first scope.
+
+---
+
+## 4. Fiber identity authority
+
+### 4.1 Identity model
+
+The authoritative identity model is state-indexed (ADR §9.3.5.1):
+
+| Fiber phase | authoritative identity/owner state | writer | reader |
+| ----------- | ---------------------------------- | ------ | ------ |
+| Running | TLS `g_worker`; `WorkerState::current` | worker_loop (run_next_on) | running fiber |
+| Runnable | `fiber_owner_[F]` (runnable ownership record) | spawn/spawn_on (initial); try_steal (victim→thief) | steal eligibility check |
+| Waiting | `WaitReg.owner` (captured `g_worker` at suspend time) | `await_*` | wake routing |
+| Finished | None — fiber is done; no owner | make_done | no reader |
+
+### 4.2 Owner identity
+
+Mutex ownership is bound to **`Fiber*`** identity:
+
+- The `Fiber` object is non-movable (`fiber.hpp:69`), address-stable for its
+  lifetime.
+- `Fiber*` identity is independent of which Worker executes the Fiber.
+- After E8 stealing, a Fiber may resume on a thief Worker; the Mutex owner
+  check must use `Fiber*`, NOT Worker identity.
+- `g_worker` / `WorkerState::current` is the *executing* Worker, NOT the
+  Mutex owner.
+- `fiber_owner_[F]` is the *runnable-ticket* owner, NOT the Mutex owner.
+- `WaitReg.owner` is the *wake-route* owner, NOT the Mutex owner.
+
+### 4.3 Migration safety
+
+```text
+Fiber A locks AsyncMutex on Worker W0
+Fiber A is stolen by Worker W1 (E8 Model B)
+Fiber A resumes on W1
+Fiber A calls unlock()
+→ unlock succeeds (owner check is Fiber* identity, not Worker identity)
+```
+
+This is load-bearing. The runtime test plan (§17) includes a migration test
+using real E8 steal/migration.
+
+### 4.4 ID-Q answers
+
+| Question | Answer |
+| -------- | ------ |
+| What exact value identifies the Mutex owner? | `Fiber*` |
+| Can the owner Fiber migrate before unlock()? | Yes (E8 stealing) |
+| Can unlock() recover Fiber identity after migration? | Yes (`g_worker->current` at unlock time is the running Fiber) |
+| Can external OS threads call unlock() or try_lock()? | No (no Fiber identity; caller precondition violation) |
+
+### 4.5 Calling-context summary
+
+```text
+try_lock / lock / lock_until / unlock:
+    require a currently running Fiber
+
+cancel:
+    may be called from any thread
+
+construction / destruction:
+    do not require a running Fiber
+```
+
+---
+
+## 5. Public API authority
+
+### 5.1 Minimal first-scope surface
+
+```cpp
+class AsyncMutex {
+public:
+    explicit AsyncMutex(Scheduler& scheduler);
+    ~AsyncMutex();
+
+    AsyncMutex(const AsyncMutex&) = delete;
+    AsyncMutex& operator=(const AsyncMutex&) = delete;
+    AsyncMutex(AsyncMutex&&) = delete;
+    AsyncMutex& operator=(AsyncMutex&&) = delete;
+
+    [[nodiscard]] bool try_lock();
+    void lock(WaitNode& node);
+    void lock_until(WaitNode& node, Scheduler::deadline_t deadline);
+    [[nodiscard]] bool cancel(WaitNode& node);
+    void unlock();
+};
+```
+
+### 5.2 Public observation decision
+
+```text
+No public is_locked().
+```
+
+Reason:
+
+```text
+it is only observational
+it gives no admission guarantee
+it requires a separate atomic mirror to be lock-free
+it is not needed for lock correctness
+```
+
+A plain non-atomic lock-free `is_locked()` is forbidden. An
+`std::atomic<bool> locked_snapshot_` is permitted solely as an observational
+mirror but must not participate in admission, handoff, unlock authority, or
+owner validation.
+
+### 5.3 Explicitly rejected API
+
+```text
+owner()                   — no production use case
+wait_queue()              — sealed public authority (Hard Rule 5)
+lock_many()               — multi-wait is E13 territory
+unlock_from_thread()      — ownership check requires Fiber identity
+recursive mode            — complex state space, no first-scope need
+RAII guard                — deferred to library adapter
+generic Lockable interface — Hard Rule 5/6
+```
+
+---
+
+## 6. Calling-context authority
+
+### 6.1 Requires a currently running Fiber
+
+```text
+try_lock
+lock
+lock_until
+unlock
+```
+
+The current Fiber identity is established by:
+
+```text
+g_worker != nullptr
+AND
+g_worker->current != nullptr
+```
+
+These operations use `g_worker->current` as the calling Fiber. If
+`g_worker == nullptr`, the call is a caller precondition violation (debug
+assert).
+
+### 6.2 Cancel
+
+`cancel(WaitNode&)` may be invoked from **any thread**.
+
+Evidence:
+
+- `Event::cancel` and `Semaphore::cancel` are Scheduler-serialized via
+  `global_mtx_` + `q.mtx()`. They do not acquire Mutex ownership. They do not
+  require Fiber identity.
+- `AsyncMutex::cancel` follows the same pattern: membership gate
+  (`contains_locked`) under `global_mtx_` + `q.mtx()`, then `cancel_locked`
+  CAS. No ownership check.
+- A cancel from an external OS thread is structurally safe: `g_worker` is null,
+  `route_runnable_locked` pushes to `pending_spawn_`, `signal_wake_locked`
+  wakes a parked Worker.
+
+### 6.3 Object lifetime
+
+Construction and destruction do not themselves require a running Fiber, but the
+caller must satisfy the Scheduler and waiter lifetime contracts (§13).
+
+---
+
+## 7. Misuse contracts
+
+### 7.1 Recursive try_lock
+
+```text
+returns false
+debug assertion may additionally diagnose owner == current Fiber
+```
+
+### 7.2 Recursive lock / lock_until
+
+```text
+caller precondition violation
+debug assertion
+must not be described as successful acquisition or a normal release-mode no-op
+```
+
+Do not promise the caller may continue as though the lock was acquired.
+
+### 7.3 Non-owner unlock
+
+```text
+caller precondition violation
+debug assertion
+must not alter owner or wake a waiter
+```
+
+Do not describe it as an ordinary supported no-op.
+
+### 7.4 Unlock while unlocked
+
+```text
+caller precondition violation
+debug assertion
+no owner/queue mutation
+```
+
+### 7.5 External-thread try_lock / unlock
+
+```text
+caller precondition violation (g_worker == nullptr)
+debug assertion
+no owner mutation, no waiter wake
+```
+
+### 7.6 Destruction
+
+```text
+destroy while owner != NoOwner:  caller contract violation
+destroy with queued Registered epochs: caller contract violation
+destructor does not cancel, wake, force-release, or transfer ownership
+```
+
+`~AsyncMutex` debug-asserts `owner == NoOwner`. `~WaitQueue` debug-asserts
+`head_ == nullptr`. No cancel-all, no wake-all, no force-release.
+
+### 7.7 Owner abandonment
+
+A Fiber finishing without unlock is caller misuse. Equivalent to failing to
+unlock `std::mutex`. No global owned-lock registry is introduced.
+
+Do not state the invariant as "owner always points to a live Fiber" across
+misuse traces. In the supported protocol, owner denotes the acquiring Fiber
+epoch; correct clients release before Fiber destruction.
+
+---
+
+## 8. Ownership state model
+
+### 8.1 Authoritative state
+
+```text
+owner : Fiber* | NoOwner
+```
+
+Under the Scheduler coordination lock:
+
+```text
+owner == NoOwner   <=>  Mutex is unlocked
+owner != NoOwner   <=>  Mutex is owned by exactly that Fiber
+```
+
+Do not require a second authoritative plain `bool locked_`. A redundant
+ordinary bool is forbidden because it creates drift risk.
+
+### 8.2 Ownership states
+
+```text
+Unlocked:
+    owner = NoOwner
+
+Owned(F):
+    owner = F
+```
+
+### 8.3 Ownership lifecycle
+
+1. **lock() attempt succeeds (immediate):** `owner := current Fiber` under
+   `global_mtx_` + `q.mtx()`. Inline resolution: `resolve_(Woken)` +
+   unlink. Do not suspend.
+2. **lock() attempt succeeds (handoff):** `owner := winner Fiber` atomically
+   with `resolve_(Woken)` + unlink + publication. See §9.
+3. **unlock() called, queue empty:** `owner := NoOwner`. Transition to
+   Unlocked.
+4. **unlock() called, queue non-empty:** direct handoff to FIFO head (§9).
+   `owner := new winner Fiber`. Transition to `Owned(F_new)`. There is no
+   intermediate `owner := NoOwner` on this path.
+
+### 8.4 What must never be externally visible
+
+```text
+Woken winner + owner = NoOwner
+Woken winner + owner = F_old
+winner runnable before owner = winner Fiber
+Unlocked while an eligible handoff winner exists
+```
+
+Cancel or expiry after Woken cannot change owner (E10 loser truth table).
+
+---
+
+## 9. Direct-handoff decision
+
+### 9.1 Selected model
+
+**Model H1 — Direct ownership handoff.**
+
+Unlock transition when queue is non-empty:
+
+```text
+Owned(F_old), eligible FIFO head W exists
+    → atomically:
+        W resolve_(Woken) wins
+        W is unlinked
+        winner Fiber F_new is obtained (non-null by invariant)
+        owner := F_new
+        timer/wait bookkeeping is retired
+        F_new is published runnable exactly once
+        resulting state = Owned(F_new)
+```
+
+Unlock transition when queue is empty:
+
+```text
+Owned(F_old), queue empty
+    → owner := NoOwner
+    → resulting state = Unlocked
+```
+
+### 9.2 No persistent intermediate state
+
+There is no persistent `Reserved`, `HandoffPending`, or grant-in-flight state.
+Handoff is one atomic transition under `global_mtx_` + `q.mtx()`.
+
+### 9.3 Properties
+
+| Property | H1 Direct Handoff |
+| -------- | ----------------- |
+| FIFO | Yes (WaitQueue head) |
+| Barging | No |
+| Starvation | Eligible queued waiters cannot be overtaken (assuming owner unlocks and Scheduler runs) |
+| State-space complexity | Low (Unlocked / Owned(F)) |
+| Cancellation behavior | Cancel on queued waiter: unlinks it. Cancel after Woken: loses (E10 loser). |
+| Timeout behavior | Expire on queued waiter: unlinks it. Expire after Woken: loses (E10 loser). |
+| Required seam | MUTEX-HANDOFF-ONE (§10) |
+| Exactly-once ownership | Yes (CAS is single authority) |
+| Owner visibility | Owner committed before publication |
+| Testability | Deterministic via internal test seam |
+| Formal-model complexity | Low (two persistent states + one atomic transition) |
+
+---
+
+## 10. Minimum private seam specification
+
+### 10.1 Semantic boundary
+
+```text
+MUTEX-HANDOFF-ONE
+```
+
+### 10.2 Inputs
+
+```text
+the AsyncMutex private WaitQueue
+the AsyncMutex ownership state (Fiber*& owner reference)
+```
+
+### 10.3 Preconditions
+
+```text
+Scheduler::global_mtx_ held
+owner == currently executing Fiber
+queue/owner lifetime valid
+```
+
+### 10.4 Required ordering
+
+```text
+1.  lock the AsyncMutex WaitQueue mutex
+2.  identify and resolve the eligible FIFO head
+3.  unlink the winner
+4.  obtain the winner's non-null Fiber identity
+5.  commit AsyncMutex owner = winner Fiber
+6.  retire timer and wait-registration bookkeeping
+7.  perform waiting → runnable exactly once
+8.  route/publish runnable
+9.  signal Scheduler wake obligation where required
+```
+
+### 10.5 Mandatory ordering constraint
+
+```text
+Step 5 (owner commit) MUST occur BEFORE step 7 (runnable publication).
+```
+
+The exact placement of timer retirement (step 6) relative to owner commit may
+vary while `global_mtx_` remains held, provided no publication occurs before
+owner commit and no stale timer can later win.
+
+### 10.6 Invariant: non-null winner
+
+A winning linked WaitNode must have a non-null Fiber by invariant. A null
+winner Fiber is an internal invariant failure/assert, not an empty-queue
+result.
+
+### 10.7 Seam properties
+
+```text
+private
+Mutex-specific
+Scheduler-owned
+non-generic
+```
+
+### 10.8 Forbidden
+
+```text
+public winner identity
+generic callback between resolve and publication
+WaitQueue public access
+Grant framework
+Select/multi-wait
+```
+
+---
+
+## 11. Admission closure
+
+### 11.1 lock / lock_until admission path
+
+```text
+initial ownership check
+register epoch into AsyncMutex WaitQueue
+under-lock ownership/FIFO recheck
+    inline acquisition or suspension commit
+```
+
+### 11.2 Inline acquisition conditions
+
+A newly registered epoch may acquire inline only when:
+
+```text
+owner == NoOwner
+AND
+the epoch is the eligible FIFO head (node.prev_ == nullptr under q.mtx())
+```
+
+### 11.3 Inline acquisition steps
+
+```text
+owner := current Fiber
+resolve epoch Woken (wake_node_locked)
+unlink / close speculative registration
+retire timer if present
+do not suspend
+```
+
+### 11.4 Suspension commit
+
+Otherwise: `me->make_waiting()` + `context_switch`.
+
+### 11.5 Accepted locks
+
+```text
+Scheduler::global_mtx_
+    →
+AsyncMutex WaitQueue mutex
+```
+
+### 11.6 Forbidden trace
+
+No trace may end with:
+
+```text
+owner == NoOwner
+eligible waiter suspended
+newcomer able to barge
+```
+
+---
+
+## 12. Deadline and cancellation semantics
+
+### 12.1 Deadline precedence
+
+```text
+immediately admissible ownership beats an already-due deadline
+```
+
+Thus:
+
+| State at admission | Deadline at admission | Result |
+| ------------------ | --------------------- | ------ |
+| free + caller has FIFO priority | due | Woken / owner = current Fiber |
+| not admissible | due | Expired |
+| free + caller has FIFO priority | future | Woken / owner = current Fiber |
+| not admissible | future | register timed wait |
+
+### 12.2 Grant finality
+
+After direct handoff wins (Woken CAS succeeds), later expiry loses and cannot
+clear owner. Same shape as Semaphore §5.2 and E11's loser semantic.
+
+### 12.3 Cancellation authority
+
+`cancel(WaitNode&)` affects only a still-Registered epoch linked in this
+AsyncMutex's WaitQueue.
+
+### 12.4 Cannot affect
+
+```text
+current owner
+Woken handoff winner
+owner field
+unlocked/owned state
+another Mutex queue
+```
+
+### 12.5 Safe false-return cases
+
+```text
+wrong Mutex, same Scheduler     → false
+wrong Mutex, different Scheduler → false
+repeated cancel                 → false
+detached node                   → false
+already Woken                   → false
+already Cancelled               → false
+already Expired                 → false
+```
+
+### 12.6 Membership safety
+
+The membership check scans THIS AsyncMutex's own queue under
+`global_mtx_` + `q.mtx()`. It never reads a foreign node's `home_` and never
+locks a foreign Mutex or Scheduler. Cross-Scheduler wrong-Mutex cancel is
+synchronized and structurally safe.
+
+---
+
+## 13. Destruction contract
+
+```text
+~AsyncMutex() {
+    assert(owner == NoOwner && "AsyncMutex destroyed while locked");
+    // ~WaitQueue asserts head_ == nullptr in debug
+}
+```
+
+- `~AsyncMutex()` does NOT cancel waiters.
+- `~AsyncMutex()` does NOT force-release.
+- `~AsyncMutex()` does NOT wake waiters.
+- `~AsyncMutex()` does NOT transfer ownership.
+- Caller must ensure unlocked + all waits terminal before destruction.
+
+Debug assertions are mechanically available: `owner` is a member field;
+`~WaitQueue` asserts `head_ == nullptr`.
+## 14. Formal model preparation (docs/spec/e12_async_mutex/)
+
+### 14.1 Model directory
+
+```text
+docs/spec/e12_async_mutex/
+```
+
+### 14.2 Finite domains
+
+```text
+Fiber    — finite set of Fibers (includes at least F1, F2, F3)
+Epoch    — finite set of wait epochs (includes at least E1, E2, E3)
+NoOwner  — sentinel distinct from every Fiber
+```
+
+### 14.3 State variables
+
+```text
+owner : Fiber ∪ {NoOwner}
+
+queue : Seq(Epoch)                    -- FIFO ordered; only Suspended or terminal epochs
+
+nodeState :
+    Epoch -> {Detached, Registered, Woken, Cancelled, Expired}
+
+epochFiber : Epoch -> Fiber           -- the Fiber that registered this epoch
+
+-- No admissionPhase field: the production register-recheck-suspend critical
+-- section is ONE atomic step. A Registered epoch in the queue is always
+-- Suspended (has committed make_waiting). An epoch not yet Suspended does
+-- not exist as a stable queue member.
+
+runnablePublished : Epoch -> BOOLEAN
+resolutionCount : Epoch -> {0, 1}
+publicationCount : Epoch -> {0, 1}
+
+lastAction : {Init,
+              TryLockSuccess, TryLockFailure,
+              LockImmediate,
+              LockAdmissionAcquire, LockAdmissionSuspend,
+              LockUntilImmediate, LockUntilDue,
+              LockUntilAdmissionAcquire, LockUntilAdmissionSuspend,
+              UnlockNoWaiter, UnlockHandoff,
+              CancelSuspended, ExpireSuspended,
+              CancelAttemptTerminal, ExpireAttemptTerminal,
+              Destroy}
+lastActor : Fiber ∪ {None}
+lastTargetEpoch : Epoch ∪ {None}
+lastGrantedEpoch : Epoch ∪ {None}
+
+-- Pre-state ghost evidence: snapshots of authoritative state immediately
+-- before the most recent modeled action. preOwner is the PREVIOUS Mutex
+-- ownership, NOT the acting Fiber.
+preOwner : Fiber ∪ {NoOwner}
+preQueue : Seq(Epoch)
+preNodeState : Epoch -> {Detached, Registered, Woken, Cancelled, Expired}
+prePublished : Epoch -> BOOLEAN
+prePublicationCount : Epoch -> {0, 1}
+
+admissionSawFree : Epoch -> BOOLEAN
+admissionSawDue : Epoch -> BOOLEAN
+
+destroyed : BOOLEAN
+```
+
+### 14.4 Derived state
+
+```text
+EligibleQueue    == SelectSeq(queue, LAMBDA e: nodeState[e] = Registered)
+FIFOHead         == IF Len(EligibleQueue) > 0 THEN Head(EligibleQueue) ELSE None
+IsOwned          == owner /= NoOwner
+IsUnlocked       == owner = NoOwner
+EligiblePreQueue == SelectSeq(preQueue, LAMBDA e: preNodeState[e] = Registered)
+```
+
+### 14.5 Production critical section refinement
+
+The production `sem_acquire` / `await_wait` admission path holds
+`global_mtx_` + `q.mtx()` across:
+
+```text
+register node into queue
+++waiting_waitq_count_
+recheck: if admissible (FIFO head + resource free):
+    resolve Woken inline
+    --waiting_waitq_count_
+    make_runnable (no-op for running Fiber)
+    return WITHOUT suspending
+recheck: if not admissible and deadline due:
+    resolve Expired inline
+    return WITHOUT suspending
+otherwise:
+    make_waiting()
+release locks
+context_switch
+```
+
+No interleaving of another Fiber's unlock, cancel, or expire is possible
+between registration and the admission decision. Therefore the formal model
+MUST NOT expose a Registered-but-not-Suspended queue state.
+
+Each formal action below refines the complete production critical section
+as ONE atomic step. There is no standalone registration action and no
+standalone suspension action.
+
+### 14.6 Correct actions
+
+Each action records pre-state ghost evidence BEFORE its mutations.
+
+**Pre-state recording discipline:**
+```text
+For every behavior action, conceptually:
+    preOwner'            = owner             (before mutation)
+    preQueue'            = queue             (before mutation)
+    preNodeState'        = nodeState         (before mutation)
+    prePublished'        = runnablePublished (before mutation)
+    prePublicationCount' = publicationCount  (before mutation)
+```
+
+Explicitly forbidden:
+```text
+preOwner := actor    -- preOwner is previous Mutex ownership, not the acting Fiber
+```
+
+**Key semantic distinction:**
+```text
+terminal WaitNode outcome  !=  runnable-ticket publication
+
+A terminal immediate outcome (Woken/Expired) does NOT imply make_runnable()
+succeeded or was required. Only UnlockHandoff, CancelSuspended, and
+ExpireSuspended create runnable publications.
+```
+
+#### Non-epoch operations
+
+**TryLockSuccess:** (no WaitNode, no Epoch)
+```text
+precondition: owner = NoOwner /\ FIFOHead = None /\ ~destroyed
+effect:
+    owner := actor
+    lastAction := TryLockSuccess
+    lastActor := actor
+    lastTargetEpoch := None
+    lastGrantedEpoch := None
+    -- no nodeState mutation, no resolutionCount, no publication
+```
+
+**TryLockFailure:** (no WaitNode, no Epoch)
+```text
+precondition: owner /= NoOwner \/ FIFOHead /= None \/ destroyed
+effect:
+    lastAction := TryLockFailure
+    lastActor := actor
+    lastTargetEpoch := None
+    lastGrantedEpoch := None
+    -- no state mutation
+```
+
+#### Admission actions (atomic register-recheck-outcome)
+
+Each admission action refines the entire production critical section:
+register + recheck + inline-acquire or suspension-commit, all under
+`global_mtx_` + `q.mtx()`.
+
+**LockImmediate:** (free + no queued waiters → acquire without registration)
+```text
+precondition: owner = NoOwner /\ FIFOHead = None /\ ~destroyed
+    /\ nodeState[epoch] = Detached
+effect:
+    owner := actor
+    nodeState[epoch] := Woken
+    resolutionCount[epoch] := 1
+    lastAction := LockImmediate
+    lastActor := actor
+    lastGrantedEpoch := epoch
+    lastTargetEpoch := epoch
+    -- no runnable publication (Fiber is running, not suspended)
+```
+
+**LockAdmissionAcquire:** (registered, recheck finds free + FIFO head → acquire)
+```text
+precondition: nodeState[epoch] = Detached
+    /\ owner = NoOwner /\ FIFOHead = None /\ ~destroyed
+effect:
+    -- atomic: register + recheck + acquire
+    Append(queue, epoch)
+    nodeState[epoch] := Woken
+    epochFiber[epoch] := actor
+    resolutionCount[epoch] := 1
+    Remove(queue, epoch)
+    owner := actor
+    lastAction := LockAdmissionAcquire
+    lastActor := actor
+    lastGrantedEpoch := epoch
+    lastTargetEpoch := epoch
+    -- no runnable publication (Fiber is running, not suspended)
+    -- queue ends empty (registered then immediately removed)
+```
+
+**LockAdmissionSuspend:** (registered, recheck finds owned or older waiter → suspend)
+```text
+precondition: nodeState[epoch] = Detached
+    /\ ~destroyed
+    /\ NOT (owner = NoOwner /\ FIFOHead = None)
+    -- either owner exists, or an older eligible waiter is queued
+effect:
+    -- atomic: register + recheck + make_waiting
+    Append(queue, epoch)
+    nodeState[epoch] := Registered
+    epochFiber[epoch] := actor
+    lastAction := LockAdmissionSuspend
+    lastActor := actor
+    lastTargetEpoch := epoch
+    lastGrantedEpoch := None
+    -- epoch is now Registered in queue (= Suspended in production terms)
+    -- no runnable publication
+```
+
+**LockUntilImmediate:** (free + due deadline → acquire without registration)
+```text
+precondition: owner = NoOwner /\ FIFOHead = None /\ ~destroyed
+    /\ nodeState[epoch] = Detached /\ deadlineDue[epoch] = TRUE
+effect:
+    owner := actor
+    nodeState[epoch] := Woken
+    resolutionCount[epoch] := 1
+    lastAction := LockUntilImmediate
+    lastActor := actor
+    lastGrantedEpoch := epoch
+    lastTargetEpoch := epoch
+    admissionSawFree[epoch] := TRUE
+    admissionSawDue[epoch] := TRUE
+    -- no runnable publication
+```
+
+**LockUntilAdmissionAcquire:** (registered, recheck finds free + FIFO head → acquire; deadline-aware)
+```text
+precondition: nodeState[epoch] = Detached
+    /\ owner = NoOwner /\ FIFOHead = None /\ ~destroyed
+effect:
+    Append(queue, epoch)
+    nodeState[epoch] := Woken
+    epochFiber[epoch] := actor
+    resolutionCount[epoch] := 1
+    Remove(queue, epoch)
+    owner := actor
+    lastAction := LockUntilAdmissionAcquire
+    lastActor := actor
+    lastGrantedEpoch := epoch
+    lastTargetEpoch := epoch
+    admissionSawFree[epoch] := TRUE
+    admissionSawDue[epoch] := deadlineDue[epoch]
+    -- no runnable publication
+    -- queue ends empty
+```
+
+**LockUntilAdmissionSuspend:** (registered, recheck finds not admissible + deadline NOT due → suspend with pending timer)
+```text
+precondition: nodeState[epoch] = Detached
+    /\ ~destroyed
+    /\ NOT (owner = NoOwner /\ FIFOHead = None)
+    /\ deadlineDue[epoch] = FALSE
+effect:
+    Append(queue, epoch)
+    nodeState[epoch] := Registered
+    epochFiber[epoch] := actor
+    lastAction := LockUntilAdmissionSuspend
+    lastActor := actor
+    lastTargetEpoch := epoch
+    lastGrantedEpoch := None
+    admissionSawFree[epoch] := (owner = NoOwner /\ FIFOHead = None)
+    admissionSawDue[epoch] := FALSE
+    -- epoch Registered in queue with pending deadline
+```
+
+**LockUntilDue:** (registered, recheck finds not admissible + deadline ALREADY due → expire at admission)
+```text
+precondition: nodeState[epoch] = Detached
+    /\ ~destroyed
+    /\ NOT (owner = NoOwner /\ FIFOHead = None)
+    /\ deadlineDue[epoch] = TRUE
+effect:
+    -- atomic: register + recheck + expire inline
+    Append(queue, epoch)
+    nodeState[epoch] := Expired
+    epochFiber[epoch] := actor
+    resolutionCount[epoch] := 1
+    Remove(queue, epoch)
+    lastAction := LockUntilDue
+    lastActor := epochFiber[epoch]
+    lastTargetEpoch := epoch
+    lastGrantedEpoch := None
+    admissionSawFree[epoch] := FALSE
+    admissionSawDue[epoch] := TRUE
+    -- no runnable publication (Fiber has not suspended)
+    -- queue ends empty (registered then immediately expired+removed)
+```
+
+#### Unlock operations
+
+**UnlockNoWaiter:**
+```text
+precondition: owner = actor /\ FIFOHead = None /\ ~destroyed
+effect:
+    owner := NoOwner
+    lastAction := UnlockNoWaiter
+    lastActor := actor
+    lastTargetEpoch := None
+    lastGrantedEpoch := None
+```
+
+**UnlockHandoff:** (publishes ONLY a Suspended waiter)
+```text
+precondition: owner = actor /\ FIFOHead = W /\ W /= None /\ ~destroyed
+    /\ nodeState[W] = Registered
+    /\ epochFiber[W] /= None
+    -- W is Registered in queue = Suspended in production terms
+effect:
+    nodeState[W] := Woken
+    resolutionCount[W] := 1
+    owner := epochFiber[W]          -- owner commit
+    runnablePublished[W] := TRUE    -- publication AFTER owner commit
+    publicationCount[W] := 1
+    Remove(queue, W)
+    lastAction := UnlockHandoff
+    lastActor := actor
+    lastGrantedEpoch := W
+    lastTargetEpoch := W
+```
+
+#### Cancel/Expire — suspended waiter (publishes)
+
+**CancelSuspended:**
+```text
+precondition: nodeState[epoch] = Registered /\ epoch \in queue
+effect:
+    nodeState[epoch] := Cancelled
+    resolutionCount[epoch] := 1
+    Remove(queue, epoch)
+    runnablePublished[epoch] := TRUE    -- resumes the suspended Fiber
+    publicationCount[epoch] := prePublicationCount[epoch] + 1
+    lastAction := CancelSuspended
+    lastActor := None
+    lastTargetEpoch := epoch
+    lastGrantedEpoch := None
+```
+
+**ExpireSuspended:**
+```text
+precondition: nodeState[epoch] = Registered /\ epoch \in queue
+effect:
+    nodeState[epoch] := Expired
+    resolutionCount[epoch] := 1
+    Remove(queue, epoch)
+    runnablePublished[epoch] := TRUE    -- resumes the suspended Fiber
+    publicationCount[epoch] := prePublicationCount[epoch] + 1
+    lastAction := ExpireSuspended
+    lastActor := None
+    lastTargetEpoch := epoch
+    lastGrantedEpoch := None
+```
+
+#### Late terminal attempt actions (non-vacuous losers)
+
+**CancelAttemptTerminal:**
+```text
+precondition: nodeState[epoch] \in {Woken, Cancelled, Expired}
+effect:
+    lastAction := CancelAttemptTerminal
+    lastActor := None
+    lastTargetEpoch := epoch
+    lastGrantedEpoch := None
+    -- No state mutation (late attempt against terminal epoch)
+```
+
+**ExpireAttemptTerminal:**
+```text
+precondition: nodeState[epoch] \in {Woken, Cancelled, Expired}
+effect:
+    lastAction := ExpireAttemptTerminal
+    lastActor := None
+    lastTargetEpoch := epoch
+    lastGrantedEpoch := None
+    -- No state mutation (late attempt against terminal epoch)
+```
+
+#### Destruction
+
+**Destroy:**
+```text
+precondition: owner = NoOwner /\ queue = <<>> /\ ~destroyed
+effect:
+    destroyed := TRUE
+    lastAction := Destroy
+    lastActor := None
+    lastTargetEpoch := None
+    lastGrantedEpoch := None
+```
+
+### 14.7 UnlockHandoff ghost evidence
+
+`UnlockHandoff` publishes ONLY a Registered (=Suspended) waiter. The
+`admissionPhase` field is eliminated; the Registered-in-queue state IS the
+suspended state. This is a direct refinement of production: no Fiber is
+published without having committed `make_waiting()`.
+
+### 14.8 Queue membership discipline
+
+After any correct action, every epoch in `queue` satisfies:
+
+```text
+nodeState[e] = Registered    (= Suspended in production terms)
+```
+
+No epoch in `queue` is Detached, Woken, Cancelled, or Expired. Terminal
+epochs are immediately removed by the winning action.
+
+---
+
+## 15. Property classification
+
+### 15.1 State invariants
+
+```text
+InvType:
+    owner \in Fiber ∪ {NoOwner}
+
+InvQueueWellFormed:
+    queue has no duplicate Epochs
+    \A e \in queue: nodeState[e] = Registered
+
+InvSingleResolution:
+    \A e: resolutionCount[e] <= 1
+
+InvSinglePublication:
+    \A e: publicationCount[e] <= 1
+
+InvNoOwnerlessQueuedDemand:
+    owner = NoOwner => FIFOHead = None
+    (if no owner, queue has no eligible waiter; one-way, not biconditional)
+
+InvPublishedEpochTerminal:
+    \A e: runnablePublished[e] = TRUE => nodeState[e] \in {Woken, Cancelled, Expired}
+
+InvPublicationConsistency:
+    \A e: runnablePublished[e] = (publicationCount[e] = 1)
+    (publication flag and count are tightly coupled)
+```
+
+### 15.2 Transition / history-backed properties
+
+```text
+InvUnlockAuthority:
+    lastAction = UnlockNoWaiter \/ lastAction = UnlockHandoff
+    => preOwner = lastActor
+
+InvRecursiveForbidden:
+    lastAction \in {TryLockSuccess, LockImmediate, LockUntilImmediate,
+                    LockAdmissionAcquire, LockUntilAdmissionAcquire}
+    => preOwner = NoOwner
+
+InvFIFOGrant:
+    lastAction = UnlockHandoff
+    => lastGrantedEpoch = Head(preQueue)
+
+InvEligiblePreQueue:
+    lastAction \in {UnlockHandoff, CancelSuspended, ExpireSuspended}
+    => lastTargetEpoch = Head(EligiblePreQueue)
+
+InvNoBarging:
+    lastAction \in {TryLockSuccess, LockImmediate, LockUntilImmediate,
+                    LockAdmissionAcquire, LockUntilAdmissionAcquire}
+    => preOwner = NoOwner /\ EligiblePreQueue = <<>>
+
+InvAdmissionFIFO:
+    lastAction \in {LockAdmissionAcquire, LockUntilAdmissionAcquire}
+    => lastTargetEpoch = Head(EligiblePreQueue)
+
+InvGrantOwnerCommit:
+    lastAction = UnlockHandoff
+    => lastGrantedEpoch /= None
+       AND owner = epochFiber[lastGrantedEpoch]
+
+InvGrantPublicationCoupling:
+    lastAction = UnlockHandoff
+    => owner = epochFiber[lastGrantedEpoch]
+       AND runnablePublished[lastGrantedEpoch] = TRUE
+       AND prePublished[lastGrantedEpoch] = FALSE
+       AND publicationCount[lastGrantedEpoch] = prePublicationCount[lastGrantedEpoch] + 1
+
+InvAdmissionClosure:
+    lastAction = LockAdmissionSuspend \/ lastAction = LockUntilAdmissionSuspend
+    => preOwner /= NoOwner \/ Head(EligiblePreQueue) /= lastTargetEpoch
+    (suspension only when Mutex is owned OR an older eligible waiter exists)
+
+InvDeadlinePrecedence:
+    lastAction \in {LockUntilImmediate, LockUntilAdmissionAcquire}
+    => admissionSawFree[lastTargetEpoch] = TRUE
+       /\ admissionSawDue[lastTargetEpoch] = TRUE
+       /\ nodeState[lastTargetEpoch] = Woken
+
+InvGrantFinality:
+    lastAction \in {CancelAttemptTerminal, ExpireAttemptTerminal}
+    /\ preNodeState[lastTargetEpoch] = Woken
+    => owner = preOwner
+       /\ nodeState[lastTargetEpoch] = Woken
+       /\ publicationCount[lastTargetEpoch] = prePublicationCount[lastTargetEpoch]
+
+InvPublicationRequiresSuspensionOrHandoff:
+    \A e: publicationCount[e] > 0
+    => lastAction \in {UnlockHandoff, CancelSuspended, ExpireSuspended}
+       /\ lastGrantedEpoch = e
+
+InvDestructionPrecondition:
+    lastAction = Destroy
+    => preOwner = NoOwner /\ preQueue = <<>>
+```
+
+### 15.3 Classification notes
+
+- `nodeState[e] = Woken => owner = epochFiber[e]` is **NOT** valid: owner
+  may later unlock.
+- No-barging is **history-backed**, not a plain state invariant.
+- Deadline precedence is **history-backed** using latched admission evidence.
+- TLA+ proves grant/publication **coupling**; production intra-action
+  ordering is a separate refinement obligation (§15.4).
+- Queue epochs are always Registered (= Suspended in production). The
+  production `admissionPhase` field is eliminated because the model's
+  atomic admission actions collapse register+recheck+suspend into one step.
+
+### 15.4 Production structural refinement obligation
+
+```text
+MUTEX-HANDOFF-ONE must execute:
+
+    owner = winner Fiber
+        BEFORE
+    Fiber::make_runnable / route_runnable_locked
+
+Proven by:
+    production source inspection
+    deterministic internal test seam after owner commit and before publication
+```
+
+---
+
+## 16. Negative-model matrix
+
+| NEG | Broken action | Counterexample shape | Expected named invariant |
+| --- | ----------- | -------------------- | ------------------------ |
+| NEG-M1 NonOwnerUnlock | foreign Fiber F2 calls UnlockNoWaiter when owner = F1 | `preOwner = F1 /\ lastActor = F2 /\ lastAction = UnlockNoWaiter` | InvUnlockAuthority |
+| NEG-M2 RecursiveAcquire | TryLockSuccess when owner = F1 and lastActor = F1 | `preOwner = F1 /\ lastAction = TryLockSuccess` | InvRecursiveForbidden |
+| NEG-M3 NonFIFOGrant | UnlockHandoff selects epoch other than Head(preQueue) | `lastAction = UnlockHandoff /\ lastGrantedEpoch /= Head(preQueue)` | InvFIFOGrant |
+| NEG-M4 Barging | LockImmediate while EligiblePreQueue /= <<>> | `lastAction = LockImmediate /\ preOwner = NoOwner /\ EligiblePreQueue /= <<>>` | InvNoBarging |
+| NEG-M5 GrantWithoutOwnerCommit | UnlockHandoff resolves E but owner = NoOwner or wrong Fiber | `lastAction = UnlockHandoff /\ owner /= epochFiber[lastGrantedEpoch]` | InvGrantOwnerCommit |
+| NEG-M6 PublicationWithoutGrantCoupling | UnlockHandoff publishes W but owner != epochFiber[W] | `lastAction = UnlockHandoff /\ runnablePublished[lastGrantedEpoch] = TRUE /\ owner /= epochFiber[lastGrantedEpoch]` | InvGrantPublicationCoupling |
+| NEG-M7 AdmissionLostWake | LockAdmissionSuspend when Mutex is free and epoch is FIFO head | `lastAction = LockAdmissionSuspend /\ preOwner = NoOwner /\ Head(EligiblePreQueue) = lastTargetEpoch` | InvAdmissionClosure |
+| NEG-M8 CancelRevokesHandoff | late CancelAttemptTerminal of Woken epoch changes owner or republishes | `lastAction = CancelAttemptTerminal /\ preNodeState[lastTargetEpoch] = Woken /\ (owner /= preOwner \/ publicationCount[lastTargetEpoch] /= prePublicationCount[lastTargetEpoch])` | InvGrantFinality |
+| NEG-M9 DeadlineRevokesHandoff | late ExpireAttemptTerminal of Woken epoch changes owner or republishes | `lastAction = ExpireAttemptTerminal /\ preNodeState[lastTargetEpoch] = Woken /\ (owner /= preOwner \/ publicationCount[lastTargetEpoch] /= prePublicationCount[lastTargetEpoch])` | InvGrantFinality |
+| NEG-M10 ImmediatePublication | LockImmediate creates a runnable publication | `lastAction = LockImmediate /\ publicationCount[lastGrantedEpoch] > 0` | InvPublicationRequiresSuspensionOrHandoff |
+| NEG-M11 DestructionWhileOwnedOrQueued | Destroy with owner != NoOwner or queue non-empty | `lastAction = Destroy /\ (preOwner /= NoOwner \/ preQueue /= <<>>)` | InvDestructionPrecondition |
+
+### 16.1 Omission notes
+
+- **DoubleOwner** structurally impossible (single-valued `owner`).
+- **Worker identity ownership failure** is runtime-only (E8 migration test).
+- Each NEG has exactly ONE broken rule and ONE expected violated invariant.
+- NEG-M7 targets `LockAdmissionSuspend` (the suspension action), not a
+  removed standalone `LockSuspend`.
+- No stale `Cancel`/`Expire` action names remain.
+
+---
+
+## 17. Runtime test authority
+
+### 17.1 Required deterministic tests
+
+| Category | Tests |
+| -------- | ----- |
+| Construction / API | initial unlocked, copy/move forbidden, public WaitQueue inaccessible |
+| Immediate ownership | try_lock success, try_lock failure while owned, lock immediate success |
+| Ownership misuse | non-owner unlock, unlock while unlocked, recursive try_lock, recursive lock, unlock after Worker migration |
+| FIFO / handoff | W1 before W2 → W1 acquires, W1 cancelled before unlock → W2 acquires, W1 expired before unlock → W2 acquires |
+| No-barging | W1 queued + new try_lock → newcomer fails |
+| Admission closure | A registers + owner unlocks in registration window → A does not strand |
+| Deadline | free + due → Woken, owned + due → Expired, unlock beats timer, timer beats unlock |
+| Cancellation | cancel suspended waiter, cancel after handoff, wrong Mutex same Scheduler, wrong Mutex different Scheduler |
+| Migration | Fiber locks before migration, unlocks after real E8 steal/migration |
+| Destruction | safe destruction unlocked/empty, debug assertion locked/queued |
+| Exactly-once | handoff winner resumes once, late timer/cancel does not republish |
+| Immediate no-publish | immediate lock does not create runnable ticket |
+
+### 17.2 Causal proof requirements
+
+- No sleep-based causal proof.
+- Deterministic phase control for race tests.
+- Owner-before-publication test via internal test seam.
+- No test hooks in installed public headers.
+
+### 17.3 Migration test
+
+```text
+Fiber A locks AsyncMutex on Worker W0
+Fiber A is stolen by Worker W1 (real E8 steal)
+Fiber A resumes on W1
+Fiber A unlocks AsyncMutex → succeeds
+```
+
+---
+
+## 18. Non-goals
+
+```text
+E12-D Condition                    — separate E12 subphase
+release-and-wait atomic API        — Condition territory
+notify_one / notify_all            — Condition territory
+RAII condition wait composition    — Condition territory
+RwLock                             — E12-F
+Queue                              — E12-E
+Select / multi-wait                — E13
+recursive Mutex                    — deferred
+priority inheritance               — deferred
+deadlock detection                 — deferred
+lock graph runtime                 — deferred
+owner abandonment recovery         — deferred
+cross-process Mutex                — deferred
+OS futex Mutex                     — deferred
+generic Lockable / AwaitableLock   — Hard Rule 5/6
+grant framework                    — Hard Rule 5/6
+```
+
+---
+
+## 19. Implementation readiness verdict
+
+```text
+E12-C-PREPARATION-CORRECTIVE-1: COMPLETE
+E12-C-PREPARATION-CORRECTIVE-2: COMPLETE
+E12-C-PREPARATION-CORRECTIVE-3: COMPLETE
+E12-C-PREPARATION-CORRECTIVE-4: COMPLETE
+E12-C-PREPARATION-CORRECTIVE-5: COMPLETE
+E12-C-PREPARATION: REAUDIT-REQUIRED
+E12-C-IMPLEMENTATION: BLOCKED
+```
+
+All material semantic decisions are resolved:
+
+```text
+naming:              AsyncMutex (§3)
+owner identity:      Fiber* (§4)
+public API:          §5 (no is_locked; no RAII guard)
+calling context:     Fiber for lock/unlock; any thread for cancel (§6)
+misuse contracts:    §7 (all classified)
+ownership model:     single Fiber* owner, no redundant bool (§8)
+handoff model:       H1 direct (§9)
+FIFO / barging:      FIFO, no barging (§2 M-H1–M-H4)
+seam:                MUTEX-HANDOFF-ONE, owner before publication (§10)
+admission closure:   §14.5 (atomic register-recheck-outcome, no interleaving)
+deadline:            resource-first (§12)
+cancellation:        queue-membership gate, any-thread (§12)
+destruction:         caller contract violation (§13)
+formal model:        §14 (collapsed admission, no admissionPhase,
+                     queue = only Suspended epochs, publication discipline)
+properties:          §15 (14 invariants, honest classification)
+negative models:     §16 (11 focused models)
+runtime tests:       ~27 deterministic (§17)
+```
+
+The architecture is viable. One private Scheduler seam (MUTEX-HANDOFF-ONE) is
+required. No broad redesign is needed. A fresh adversarial re-audit returning
+PASS may change status to CLOSED / READY.

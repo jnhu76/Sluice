@@ -28,6 +28,27 @@
 > implementation review. This document does NOT self-declare `E12-B: CLOSED`.
 > The cross-primitive preparation (this document) is otherwise unchanged.
 >
+> **E12-C Async Mutex per-primitive authority (E12-C-PREPARATION-CORRECTIVE-1
+> through CORRECTIVE-5):**
+> the §6 Mutex authority is superseded by
+> [`docs/e12-async-mutex.md`](e12-async-mutex.md) (policy register M-H1–M-H4,
+> ownership state model, naming authority `AsyncMutex`, minimum private seam
+> `MUTEX-HANDOFF-ONE`, collapsed atomic admission actions (no interleaving
+> window), formal model with no admissionPhase field, queue = only Suspended
+> epochs, publication discipline, property classification, negative-model
+> matrix). E12-C status:
+> ```text
+> E12-C-PREPARATION-CORRECTIVE-1: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-2: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-3: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-4: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-5: COMPLETE
+> E12-C-PREPARATION: REAUDIT-REQUIRED
+> E12-C-IMPLEMENTATION: BLOCKED
+> ```
+> The cross-primitive preparation (this document) §6, §10.1, §10.2, §11.3,
+> §12, §14.3.3, and §14.5 are updated to reflect the corrective closure.
+>
 > Corrective history: `E12-PREP-CORRECTIVE-1-REVIEW` returned
 > `CORRECTIVE-REQUIRED` with six accepted defects (F-EVENT-1, F-SEM-1,
 > F-COND-1, F-GRANT-1, F-QUEUE-1, F-DEP-1). This revision is the
@@ -278,7 +299,7 @@ IMPLEMENTATION BOUNDARY for E12-A. See §4.1, §4.4.
 | --------- | ------------------- | ----------------------- | ----------------- | ---------- | -------------------------------------- | ---------------------- |
 | **Event** | one persistent bool `set_` | none | none | WaitNode (E10) + deadline (E11) | unlink registered node on cancel/expire; no permit/ownership to reclaim | low (2 states × queue) |
 | **Semaphore** | stored permit count (`available_`) | **permit accounting** (§5.1): `available_ + acquiredCount == initial_permits + accepted_release_count`; explicit FIFO queued demand is a *separate* dimension, NOT supply; no grant-in-flight state | none | Event's persistent-bool pattern (optional); WaitNode + deadline | cancel/expire serialized before release observes the queue (Conclusion A, §5.2) | medium (counter × queue) |
-| **Mutex** | locked bool + owner identity | none (one lock) | **Fiber-identity ownership + migration law** | Semaphore (permits=1 is a near-subset; but Mutex adds ownership) | **handed-off ownership loss on cancel/expire after grant** | medium (locked × owner × queue) |
+| **Mutex** | `owner : Fiber* \| NoOwner` | none (one lock) | **Fiber-identity ownership + migration law** | Semaphore (permits=1 is a near-subset; but Mutex adds ownership) | cancel/expire before grant unlink queued demand; cancel/expire after Woken handoff lose and cannot change owner | medium (owner × queue) |
 | **Condition** | none new (delegates to Mutex) | none | none (Mutex owns it) | **Mutex** (mandatory) | release/register atomic window; reacquire on wake/timeout/cancel — **return contract is one open Model-A/Model-B cluster (§7)** | medium-high (two queues + mutex reacquire) |
 | **Queue** | buffer + closed bool | **item slots** (bounded, capacity ≥ 1) or unbounded list; not-empty + not-full waiters; **explicit item/slot reservation state required (§8.3, §14)** | none | Event (not-empty/not-full are Event-like); WaitNode + deadline; **a synchronous structural lock (NOT E12-C async Mutex) for internal state** | **reserved item / reserved slot under cancel/close; winner-before-publication commit (§14)** | high (buffer × 2 queues × closed) |
 | **RwLock** | reader count + writer bool + (upgrade state) | reader count accounting | writer owner identity | Semaphore (read permits) + Mutex (write) | reader/writer starvation; upgrade downgrade cancellation; **writer winner-before-publication commit (§14)** | **highest** |
@@ -884,6 +905,27 @@ PREPARATION: REAUDIT-REQUIRED — IMPLEMENTATION BLOCKED
 
 ## 6. Mutex semantic authority (Task E)
 
+> **E12-C-PREPARATION-CORRECTIVE-1 through CORRECTIVE-5:** §6 is
+> superseded by
+> [`docs/e12-async-mutex.md`](e12-async-mutex.md) (policy register M-H1–M-H4,
+> ownership state model, naming authority, seam specification, collapsed
+> atomic admission actions (no interleaving window), formal model with no
+> admissionPhase field, queue = only Suspended epochs, property classification,
+> negative-model matrix). The per-primitive authority is the new document.
+> This section is retained as the cross-primitive preparation record and
+> updated to reflect the corrective closures.
+>
+> E12-C status:
+> ```text
+> E12-C-PREPARATION-CORRECTIVE-1: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-2: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-3: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-4: COMPLETE
+> E12-C-PREPARATION-CORRECTIVE-5: COMPLETE
+> E12-C-PREPARATION: REAUDIT-REQUIRED
+> E12-C-IMPLEMENTATION: BLOCKED
+> ```
+
 ### 6.1 Fiber identity and execution ownership after E8 stealing
 
 E8 established that a stolen Fiber may resume on the thief Worker; wake routes
@@ -894,7 +936,7 @@ pinning. `owner_of(f)` / `owner_id_of(f)` exist as diagnostics
 *identity* is the `Fiber` object address (stable, non-movable —
 `fiber.hpp`); it is independent of which Worker executes it.
 
-### 6.2 Answers (1–8)
+### 6.2 Answers (1–8) — CLOSED by E12-C-PREPARATION-CORRECTIVE-1
 
 1. **Is Mutex ownership bound to:** **Fiber identity.** The lock is acquired
    and released by a logical task (Fiber), and the ownership check must be
@@ -907,25 +949,21 @@ pinning. `owner_of(f)` / `owner_id_of(f)` exist as diagnostics
    the direct consequence of Fiber-identity ownership + E8 steal. The unlock
    checks the owner *Fiber*, not the *Worker*.
 
-3. **Is unlock ownership checked?** **RESOLVED: yes, debug-assert + release
-   error.** Unlock by a non-owner Fiber is a contract violation (mirrors
-   `Completion::result()` before ready — debug assert, release
-   `invalid_state`). This is required for correctness; an unchecked unlock
-   breaks mutual exclusion silently.
+3. **Is unlock ownership checked?** **RESOLVED: yes.** Unlock by a non-owner
+   Fiber is a caller contract violation; debug assertion; must not mutate owner
+   or queue; not a supported successful no-op contract. This is required for
+   correctness; an unchecked unlock breaks mutual exclusion silently.
 
 4. **Recursive locking:** **FORBIDDEN in first scope.** A second `lock()` by
-   the owner Fiber is a contract violation (debug assert / release error).
-   Recursive locking multiplies the state space (per-owner recursion count)
-   and is not needed for the first scope. Detection = assertion on the owner
-   identity. (Deferred, not supported — same as the existing synchronous
-   `Mutex` which is non-recursive.)
+   the owner Fiber is a contract violation (debug assert). Recursive locking
+   multiplies the state space (per-owner recursion count) and is not needed
+   for the first scope. Detection = assertion on the owner identity.
 
-5. **On unlock with waiters:** **HUMAN DECISION — direct handoff vs
-   competitive reacquire vs hybrid.** This is the roadmap's explicit
-   "fairness / handoff / barging" decision. See §6.3. (The grant-commit
-   insertion boundary for direct handoff is coupled to this decision — §14:
-   direct handoff REQUIRES a winner-before-publication commit seam; competitive
-   reacquire may not.)
+5. **On unlock with waiters:** **CLOSED — direct ownership handoff (M-H1).**
+   Unlock resolves the eligible FIFO head with Woken, commits ownership to the
+   winner Fiber BEFORE publishing it as runnable, and publishes the winner
+   AFTER ownership is committed. See [`docs/e12-async-mutex.md`](e12-async-mutex.md)
+   §8.3 and §9.
 
 6. **Timeout meaning if a waiter has been granted ownership but not resumed:**
    The grant's `resolve_(woken)` CAS already won; the deadline/expire path is
@@ -936,58 +974,51 @@ pinning. `owner_of(f)` / `owner_id_of(f)` exist as diagnostics
 7. **Can cancellation reclaim a handed-off lock?** Symmetric to (6): if
    handoff won the CAS, cancel is the loser. **RESOLVED: no.** A handed-off
    lock is not reclaimable by a cancellation that arrives after handoff.
-   (Cancelling a *queued* waiter — before grant — is fine and just unlinks it.)
 
-8. **Fairness guarantee:** **HUMAN DECISION** — coupled to (5). Options: FIFO
-   strict (no barging, direct handoff), barging-allowed (higher throughput,
-   possible starvation), or FIFO-with-barging-fallback.
+8. **Fairness guarantee:** **CLOSED — FIFO + no barging (M-H2, M-H3, M-H4).**
+   Eligible queued waiters use FIFO order; barging is forbidden; try_lock fails
+   while an eligible waiter has FIFO priority. See
+   [`docs/e12-async-mutex.md`](e12-async-mutex.md) §2.
 
-### 6.3 Mutex — HUMAN DECISION REQUIRED (the roadmap's three)
+### 6.3 Mutex — CLOSED by E12-C-PREPARATION-CORRECTIVE-1
 
-The roadmap explicitly names: **fairness, handoff, barging.** These are one
-decision in three facets:
+The roadmap's three decisions — **fairness, handoff, barging** — are closed
+by E12-C-PREPARATION-CORRECTIVE-1 (policy register M-H1–M-H4 in
+[`docs/e12-async-mutex.md`](e12-async-mutex.md) §2):
 
-- **Fairness:** FIFO (WaitQueue is already FIFO) vs barging-allowed.
-- **Handoff vs competitive reacquire on unlock-with-waiters:**
-  - direct handoff: unlock transfers ownership to the FIFO head waiter (via a
-    grant CAS), no barging window.
-  - competitive: unlock just marks free + wakes one; the wakee must re-acquire
-    (a third Fiber could barge in).
-  - hybrid: handoff when waiters exist, barging otherwise.
-- **Barging:** whether a new acquirer may take a just-released permit ahead of
-  a queued waiter.
+```text
+M-H1:  unlock-with-waiters uses direct ownership handoff
+M-H2:  eligible queued waiters use FIFO order
+M-H3:  barging is forbidden
+M-H4:  try_lock fails while an eligible waiter has FIFO priority
+```
 
-These materially change observable behavior (throughput vs starvation
-guarantees) and production evidence does not pick one. Plus the §4.4-style
-destruction-with-waiters question.
+The Semaphore (E12-B A2) is precedent, not authority for Mutex ownership
+policy. This corrective is the human authority that selects direct handoff.
 
-**Grant-seam coupling (F-GRANT-1).** The grant-commit insertion boundary
-(§14) is coupled to the unresolved handoff policy: direct handoff requires
-the exact winner identity before runnable publication (`owner = W.fiber`
-committed between the CAS win and `make_runnable`), which the current
-`wake_wait_one` caller seam does NOT expose (§14). If Mutex later chooses
-competitive reacquire instead of direct handoff, the required insertion
-boundary may differ (competitive reacquire may commit only "free = true"
-anonymously). Therefore:
+**Grant-seam coupling (F-GRANT-1) — CLOSED.** Direct handoff requires the
+exact winner identity before runnable publication. The minimum private seam
+`MUTEX-HANDOFF-ONE` is specified in
+[`docs/e12-async-mutex.md`](e12-async-mutex.md) §10. The seam classification
+is now:
 
 ```text
 MUTEX GRANT SEAM:
-    conditional on selected handoff policy
-    direct handoff  -> REQUIRES WINNER-BEFORE-PUBLICATION COMMIT SEAM (§14)
-    competitive     -> boundary may differ (audit at E12-C)
+    MINIMUM MUTEX-SPECIFIC PRIVATE SEAM REQUIRED (§10 of e12-async-mutex.md)
 ```
 
-This dependency is recorded; it is NOT resolved here.
+The conditional dependency on unresolved handoff policy is removed.
 
-**Mutex verdict: `HUMAN-DECISION-REQUIRED`** (fairness/handoff/barging +
-destruction, with the grant-seam dependency coupled to the handoff choice).
-All identity, recursive-lock, grant-vs-cancel, and ownership-check questions
-are RESOLVED.
+**Mutex verdict: `PREPARATION CORRECTIVE COMPLETE — REAUDIT REQUIRED`** —
+all identity, recursive-lock, grant-vs-cancel, ownership-check,
+fairness/handoff/barging, naming, and seam questions are CLOSED. A fresh
+adversarial re-audit may change preparation to CLOSED and implementation to
+READY.
 
-> Do not copy `std::mutex` (roadmap). The existing synchronous
-> `sluice::async::Mutex` is `std::mutex`; the async primitive is a different
-> object with Fiber-identity ownership and Fiber-suspending `lock()`. See the
-> naming note in §4.4.
+> The existing synchronous `sluice::async::Mutex` is a TSA-annotated
+> `std::mutex` wrapper (structural lock). The async primitive is named
+> `AsyncMutex` to coexist without collision. See
+> [`docs/e12-async-mutex.md`](e12-async-mutex.md) §3.
 
 ---
 
@@ -1464,7 +1495,7 @@ implement RwLock in this preparation task.
 | --------- | -------------- | --------------- | ----------------------- | ------------------ | ---------------- | -------------------- |
 | Event | bool `set_` | 1 (waiters) | none | none | unlink node (expire loses to set's per-waiter wake) | unlink node |
 | Semaphore | `available_` (stored-permit count) | 1 (demand) | release creates a pending permit transferred/stored/rejected atomically; no pre-reservation, no refund (§5.2); seam sufficient Conclusion A (§14.3.2) | none | no permit was removed; expire serialized before release observes queue (Conclusion A) | symmetric (cancel serialized before release observes queue) |
-| Mutex | locked bool | 1 (waiters) | ownership granted at CAS-win; **direct handoff REQUIRES winner-before-publication seam (§14), conditional on handoff policy** | **Fiber identity** | none (grant is final; expire loses to grant) | none (cancel loses to grant); cancel of a *queued* waiter just unlinks |
+| Mutex | `owner : Fiber* \| NoOwner` | 1 (waiters) | ownership granted at CAS-win; **direct handoff REQUIRES minimum private MUTEX-HANDOFF-ONE seam (§14.3.3; E12-C-PREPARATION-CORRECTIVE-1 closed)** | **Fiber identity** | cancel/expire before grant unlink queued demand; cancel/expire after Woken handoff lose and cannot change owner | none (cancel loses to grant); cancel of a *queued* waiter just unlinks |
 | Condition | none (delegates to Mutex) | 1 (its own) + Mutex's | none | via Mutex | condition epoch expire → then reacquire epoch (Model A: mandatory non-cancellable; Model B: separate, may expire — §7) | condition epoch cancel → reacquire epoch (Model A: masked; Model B: may cancel — §7) |
 | Queue | buffer + closed bool | 2 (not-empty, not-full) | **EXPLICIT item/slot reservation state required (§8.3); winner-before-publication seam (§14)** | none | item stays / slot refunded (§8.2) | symmetric |
 | RwLock | reader count + writer bool (+ policy) | 1–2 (readers, writers) | read-permit (anonymous, may pre-increment) / write at CAS-win (**writer needs winner-before-publication seam, §14**) | writer: Fiber identity | refund read permit if expire wins before grant | refund / unlink |
@@ -1475,7 +1506,7 @@ implement RwLock in this preparation task.
 | --------- | --------------------- | -------------------- | -------------- |
 | Event | `set()` attempted RESOURCE_WAKE for EVERY registered waiter (one `resolve_` per epoch); late `wait()` observes SET without parking | deadline elapsed while UNSET-and-waiting → `expired` | wait-cancelled → `cancelled`; Event state unchanged |
 | Semaphore | a permit granted to this waiter → `woken` (the release's pending permit is transferred directly; `available_` unchanged) | deadline elapsed before grant → `expired`; no permit was removed (no refund path — Conclusion A) | cancel before grant → `cancelled`; serialized before release observes the queue (Conclusion A) |
-| Mutex | ownership granted to this waiter → `woken` | deadline before grant → `expired`; no ownership | cancel before grant → `cancelled`; no ownership |
+| Mutex | ownership granted to this waiter → `woken` (direct handoff: owner = winner Fiber BEFORE publication) | deadline before grant → `expired`; no ownership | cancel before grant → `cancelled`; no ownership |
 | Condition | notify woke this waiter → proceed to reacquire (Model A: mandatory; Model B: separate epoch — §7) | condition-wait deadline → `expired`; then reacquire (§7 trace C1–C4) | condition wait cancelled → `cancelled`; then reacquire (§7 trace C1–C4) |
 | Queue (consumer) | an item reserved to this waiter via explicit reservation state → `woken` | deadline before reservation → `expired`; item stays | cancel before reservation → `cancelled`; item stays |
 | Queue (producer) | a slot reserved to this waiter via explicit reservation state → `woken` | deadline before reservation → `expired`; slot refunded | cancel before reservation → `cancelled`; slot refunded |
@@ -1557,20 +1588,36 @@ implemented in this preparation.
   [`docs/spec/e12_semaphore/README.md`](spec/e12_semaphore/README.md); gate:
   [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh).
 
-### 11.3 Mutex
+### 11.3 Mutex (E12-C-PREPARATION-CORRECTIVE-1 through CORRECTIVE-5)
 
 - **Correct invariant:** mutual exclusion (at most one owner); the ownership
   identity is a single Fiber; unlock-by-non-owner rejected; grant is final
-  (expire/cancel after grant are losers).
-- **Minimum state dimensions:** `locked` bool; `owner ∈ Fiber ∪ {none}`;
-  WaitQueue contents; per-node resolution state; deadline dimension.
-- **Required negative model — broken double ownership or handed-off
-  ownership loss:** two Fibers both believing they own the lock (double
-  ownership), or a handed-off grant lost when a straggler cancel/expire
-  "reclaims" it, or (direct-handoff) the winner identity committed after
-  publication so a different Fiber resumes believing it owns the lock.
-  Counterexample: `owner` set to two distinct Fibers, or `owner` cleared by a
-  losing cancel, or owner committed after `make_runnable`.
+  (late terminal attempts against Woken epochs cannot change owner); direct
+  handoff commits owner before publication; immediate-path outcomes resolve
+  terminal but do NOT publish runnable; register-recheck-suspend is a single
+  atomic admission action (no interleaving window); queue contains only
+  Suspended epochs. See
+  [`docs/e12-async-mutex.md`](e12-async-mutex.md) §14.
+- **Minimum state dimensions:** `owner ∈ Fiber ∪ {NoOwner}` (NO redundant
+  `locked` bool); FIFO `queue : Seq(Epoch)` (only Registered/Suspended
+  epochs); per-epoch `nodeState`
+  (Detached/Registered/Woken/Cancelled/Expired); latched admission evidence
+  (`admissionSawFree`/`admissionSawDue`) for deadline precedence;
+  `runnablePublished`/`publicationCount` with publication only from
+  UnlockHandoff/CancelSuspended/ExpireSuspended; ghost/history evidence
+  (`preOwner`, `preQueue`, `preNodeState`, `prePublished`,
+  `prePublicationCount`, `lastGrantedEpoch`, `EligiblePreQueue`).
+  No `admissionPhase` field — the production register-recheck-suspend
+  critical section is ONE atomic step in the model.
+  Late cancel/expire attempts against terminal epochs are explicit non-vacuous
+  actions (CancelAttemptTerminal/ExpireAttemptTerminal).
+  See [`docs/e12-async-mutex.md`](e12-async-mutex.md) §14.
+- **Liveness:** NONE (safety-only model, matching Semaphore precedent).
+- **Required negative models (11 total):** NEG-M1 through NEG-M11 as
+  specified in [`docs/e12-async-mutex.md`](e12-async-mutex.md) §16. Each
+  breaks one specific rule and fails one expected named invariant. Runtime-only
+  negative (Worker identity ownership failure) is handled by a deterministic
+  E8 migration test.
 
 ### 11.4 Condition
 
@@ -1640,7 +1687,7 @@ implemented in this preparation.
 | --------- | ------- | -------------- | ------------------------------------- |
 | **E12-A Event** | `CLOSED` (two independent corrective reviews passed) | manual-reset choice; idempotent set; reset; wait-on-set; deadline/cancel composition; set-vs-register race; reset-vs-waiter; **wake cardinality = set releases all registered waits satisfied by SET (F-EVENT-1 closed)** | ~~destruction-with-waiters~~ (resolved: caller contract violation, debug assert); ~~IMPLEMENTATION BOUNDARY: loop wake-one vs narrow wake-many seam~~ (resolved: loop wake_wait_one_locked until drained, atomic under global_mtx_) |
 | **E12-B Semaphore** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant; **production implementation COMPLETE** (public API + private Scheduler seams mirroring E12-A; TSan/ASan/UBSan clean; 31 deterministic tests + NEG compile probe) — see [`docs/e12-semaphore.md`](e12-semaphore.md) §14 As-Built | independent adversarial implementation review still required before E12-B may be declared CLOSED (not self-declared) |
-| **E12-C Mutex** | `HUMAN-DECISION-REQUIRED` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire | fairness / handoff / barging; destruction-with-waiters; naming coexistence with sync `Mutex`; **grant-seam dependency coupled to handoff policy (§14)** |
+| **E12-C Mutex** | `PREPARATION CORRECTIVE-4 COMPLETE — REAUDIT-REQUIRED` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire; **naming = AsyncMutex** (coexists with sync Mutex); **direct handoff (M-H1)**; **FIFO no-barging (M-H2–M-H4)**; destruction = caller violation; **minimum MUTEX-HANDOFF-ONE seam specified**; **formal model with corrected ghost semantics, register-recheck admission actions, non-vacuous late-attempt actions, publication discipline** (§14–§16 of e12-async-mutex.md) | independent adversarial re-audit required before CLOSED/READY |
 | **E12-D Condition** | `HUMAN-DECISION-REQUIRED` | release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | **return-contract cluster: Model A (mandatory reacquire) vs Model B (abortable reacquire) — F-COND-1 closed**; notify-all mechanism/scope |
 | **E12-E Queue** | `HUMAN-DECISION-REQUIRED` | close-with-blocked-producers; push-after-close; reservation under cancel/timeout (with explicit reservation state); **structural lock ≠ AsyncMutex (F-DEP-1 closed)** | bounded/unbounded; close-with-buffered / close-with-consumers; **capacity-zero DEFERRED (rendezvous, F-QUEUE-1 closed)**; **EXPLICIT reservation state + winner-before-publication seam (§14)** |
 | **E12-F RwLock** | `HUMAN-DECISION-REQUIRED` | upgrade/downgrade DEFER; recursive read/write FORBID | fairness policy (reader-pref/writer-pref/phase/FIFO); **writer winner-before-publication seam (§14)** |
@@ -1675,8 +1722,10 @@ E12 implementation (any subphase) MUST stop and request human authority when:
    (ownership / item / slot / writer identity) for the exact CAS winner
    BEFORE runnable publication, and the current `wake_wait_one` caller seam
    does not expose the winner (§14). Stop and resolve the
-   winner-before-publication commit seam (or choose a policy that does not
-   require it, e.g. competitive Mutex reacquire) before implementing that
+   winner-before-publication commit seam before implementing that
+   primitive's grant path. (Note: E12-C Mutex seam is RESOLVED —
+   `MUTEX-HANDOFF-ONE` specified in
+   [`docs/e12-async-mutex.md`](e12-async-mutex.md) §9.)
    primitive's grant path.
 7. A Queue (or other buffered primitive) is implemented without explicit
    item/slot reservation state (§8.3) — the `resolve_` CAS alone does NOT
@@ -1836,9 +1885,9 @@ CURRENT SCHEDULER SEAM SUFFICIENT (first-scope; Conclusion A)
 Do NOT claim this for `acquire(N)` (deferred) — multi-permit atomic grant may
 require winner-aware accounting and is out of first scope.
 
-#### 14.3.3 Mutex
+#### 14.3.3 Mutex (E12-C-PREPARATION-CORRECTIVE-1 through CORRECTIVE-5)
 
-For direct handoff:
+For direct handoff (M-H1):
 
 ```text
 winner W resolve_(Woken)
@@ -1849,18 +1898,21 @@ publish W
 ```
 
 Current `wake_wait_one` caller seam does NOT expose W before publication.
-Classify:
+The direct handoff policy is now CLOSED (M-H1). The minimum private seam
+`MUTEX-HANDOFF-ONE` is specified in
+[`docs/e12-async-mutex.md`](e12-async-mutex.md) §10. Classify:
 
 ```text
-REQUIRES WINNER-BEFORE-PUBLICATION COMMIT SEAM  (for direct handoff)
+MINIMUM MUTEX-SPECIFIC PRIVATE SEAM REQUIRED (MUTEX-HANDOFF-ONE)
 ```
 
-If later Mutex chooses competitive reacquire instead of direct handoff, the
-required insertion boundary may differ (competitive reacquire may commit only
-"free = true" anonymously, like Semaphore). The grant-seam dependency is
-therefore **coupled to the unresolved Mutex handoff policy** (§6.3). Do NOT
-falsely state E12-C definitely requires the new seam if competitive reacquire
-remains a valid unresolved Mutex policy.
+The seam is private, Mutex-specific, Scheduler-owned, and non-generic. The
+conditional dependency on unresolved handoff policy is removed.
+
+```text
+E12-C MUTEX BLOCKED BY GRANT SEAM:
+    NO — seam is specified; implementation may proceed after reaudit
+```
 
 #### 14.3.4 Queue
 
@@ -1944,8 +1996,8 @@ E12-B SEMAPHORE BLOCKED BY GRANT SEAM (first-scope anonymous):
     NO
 
 E12-C MUTEX BLOCKED BY GRANT SEAM:
-    CONDITIONAL — yes if direct handoff is chosen; possibly no if competitive
-    reacquire is chosen. Coupled to the unresolved handoff policy (§6.3).
+    NO — minimum MUTEX-HANDOFF-ONE seam specified
+    (E12-C-PREPARATION-CORRECTIVE-1 through CORRECTIVE-5)
 
 E12-D CONDITION:
     no grant state of its own (delegates to Mutex); not independently blocked.
@@ -1961,14 +2013,9 @@ Earliest phase whose **selected** semantics **definitely** require the new
 winner-before-publication seam:
 
 ```text
-E12-E Queue (item reservation)
+E12-C Mutex (MUTEX-HANDOFF-ONE — E12-C-PREPARATION-CORRECTIVE-1 through CORRECTIVE-5)
+    followed by E12-E Queue (item reservation)
 ```
-
-with E12-C Mutex **potentially** requiring it earlier *if* direct-handoff is
-chosen (currently unresolved). Therefore the first phase that unconditionally
-needs the seam is Queue; Mutex may need it earlier conditionally. Do NOT
-falsely state E12-C definitely requires the seam while competitive reacquire
-remains a valid unresolved policy.
 
 ---
 
@@ -1980,6 +2027,12 @@ remains a valid unresolved policy.
   [`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md)
 - E11 insertion audit (style precedent for this document):
   [`docs/e11-arch-recon-audit.md`](e11-arch-recon-audit.md)
+- E12-A Event as-built (CLOSED):
+  [`docs/e12-event.md`](e12-event.md)
+- E12-B Semaphore (REVIEW-REQUIRED):
+  [`docs/e12-semaphore.md`](e12-semaphore.md)
+- E12-C Async Mutex preparation corrective:
+  [`docs/e12-async-mutex.md`](e12-async-mutex.md)
 - Construction method (M1–M9, binding):
   [`docs/async-runtime-construction-method.md`](async-runtime-construction-method.md)
 - Roadmap (E12 placement; updated in the same commit):
