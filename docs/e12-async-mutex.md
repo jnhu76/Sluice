@@ -9,7 +9,10 @@
 > E12-C-PREPARATION-CORRECTIVE-5: COMPLETE
 > E12-C-PREPARATION-CORRECTIVE-5-REAUDIT: PASS
 > E12-C-PREPARATION: CLOSED
-> E12-C-IMPLEMENTATION: READY
+>
+> E12-C-FORMAL-1: COMPLETE
+> E12-C-IMPLEMENTATION-1: COMPLETE
+> E12-C-IMPLEMENTATION: REVIEW-REQUIRED
 > ```
 >
 > Authority baseline: E10 CLOSED
@@ -40,7 +43,10 @@ E12-C-PREPARATION-CORRECTIVE-4: COMPLETE
 E12-C-PREPARATION-CORRECTIVE-5: COMPLETE
 E12-C-PREPARATION-CORRECTIVE-5-REAUDIT: PASS
 E12-C-PREPARATION: CLOSED
-E12-C-IMPLEMENTATION: READY
+
+E12-C-FORMAL-1: COMPLETE
+E12-C-IMPLEMENTATION-1: COMPLETE
+E12-C-IMPLEMENTATION: REVIEW-REQUIRED
 ```
 
 The preparation authority was closed by independent adversarial re-audit
@@ -1317,3 +1323,218 @@ runtime tests:       ~27 deterministic (§17)
 The architecture is viable. One private Scheduler seam (MUTEX-HANDOFF-ONE) is
 required. No broad redesign is needed. Preparation was closed by independent
 adversarial re-audit returning PASS.
+
+---
+
+## 20. As-built implementation evidence (E12-C-IMPLEMENTATION-1)
+
+> This section records the as-built production + formal + test evidence. It is
+> NOT preparation authority; preparation history (§§1–19) is preserved unchanged
+> above. An independent adversarial implementation review is still required
+> (E12-C-IMPLEMENTATION: REVIEW-REQUIRED).
+
+### 20.1 Public API as built
+
+```cpp
+// include/sluice/async/async_mutex.hpp
+namespace sluice::async {
+class AsyncMutex {
+public:
+    explicit AsyncMutex(Scheduler& scheduler) noexcept;
+    ~AsyncMutex();  // debug-asserts owner_ == nullptr
+    AsyncMutex(const AsyncMutex&) = delete;
+    AsyncMutex& operator=(const AsyncMutex&) = delete;
+    AsyncMutex(AsyncMutex&&) = delete;
+    AsyncMutex& operator=(AsyncMutex&&) = delete;
+    [[nodiscard]] bool try_lock();
+    void lock(WaitNode& node);
+    void lock_until(WaitNode& node, Scheduler::deadline_t deadline);
+    [[nodiscard]] bool cancel(WaitNode& node);
+    void unlock();
+private:
+    Scheduler& scheduler_;
+    Fiber* owner_;        // SOLE ownership authority; nullptr == NoOwner
+    WaitQueue waiters_;   // private; not publicly reachable
+};
+}
+```
+
+No `is_locked()`, `owner()`, or `wait_queue()` accessor. The existing
+synchronous `Mutex` (`include/sluice/async/mutex.hpp`) is unchanged.
+
+### 20.2 Production file topology
+
+| File | Role |
+| ---- | ---- |
+| `include/sluice/async/async_mutex.hpp` | Thin-shell AsyncMutex (state + 6 one-line forwards) |
+| `include/sluice/async/scheduler.hpp` | Private `mutex_*` seam declarations (lines ~466–559) |
+| `src/async/scheduler.cpp` | `mutex_*` implementations (lines 1835–2126) |
+| `tests/async_test_control_internal.hpp` | `PhaseTag::e12_mutex_handoff_before_publication` (phases[7]) |
+| `tests/async_test_control.hpp` | `E12MutexSeam` facade |
+| `tests/async_test_control.cpp` | `std::size(c->phases)` loop (no hardcoded count) |
+| `tests/e12_async_mutex_test.cpp` | T0–T20 deterministic + 500/500 coordination |
+| `tests/e12_async_mutex_authority_probe.cpp` | Negative compile probe (must-not-compile) |
+
+### 20.3 Private Scheduler helpers
+
+```text
+mutex_try_lock              scheduler.cpp:1835   global_mtx_ -> waiters.mtx()
+mutex_lock                  scheduler.cpp:1863   admission closure (register+recheck+suspend)
+mutex_lock_until            scheduler.cpp:1939   + E11 timer; resource-first precedence
+mutex_cancel                scheduler.cpp:2026   any-thread; queue-identity gate
+mutex_handoff_one_locked    scheduler.cpp:2056   MUTEX-HANDOFF-ONE (owner before publication)
+mutex_unlock                scheduler.cpp:2099   handoff or UnlockNoWaiter
+```
+
+### 20.4 MUTEX-HANDOFF-ONE — owner-before-publication source order
+
+`mutex_handoff_one_locked` (`src/async/scheduler.cpp:2056–2097`), caller holds
+`global_mtx_`:
+
+```text
+2072  LockGuard qlk(waiters.mtx());              // global_mtx_ -> waiters.mtx()
+2073  WaitNode* won = waiters.wake_one_locked(); // resolve FIFO head Woken + unlink
+2075  Fiber* f = won->fiber();
+2076  assert(f != nullptr);                       // non-null winner (§10.6)
+2079  owner = f;                                  // <-- owner commit (BEFORE publication)
+2080–2088  [internal-testing phase seam: paused here]
+2089  retire_timer_for_node_locked(*won);         // E11 I4 timer closure
+2090  --waiting_waitq_count_;
+2093  if (f->make_runnable()) {                    // <-- publication guard
+2094      route_runnable_locked(f, g_worker);      // <-- runnable publication (AFTER owner)
+2095  }
+```
+
+Load-bearing order: `owner = f` (line 2079) BEFORE `make_runnable` (line 2093)
+and `route_runnable_locked` (line 2094). No intermediate `owner = nullptr` on
+the handoff path. The deterministic test seam
+(`PhaseTag::e12_mutex_handoff_before_publication`) pauses at lines 2080–2088,
+proving owner==winner and winner-not-yet-published (test T5).
+
+### 20.5 Lock order
+
+Every `mutex_*` path acquires `Scheduler::global_mtx_` first, then
+`waiters_.mtx()` inside it (unchanged E10/E11/E12-A/E12-B lock order). No
+inverse acquisition. `mutex_handoff_one_locked` takes `waiters.mtx()` at line
+2072 inside the caller-held `global_mtx_`. No `context_switch` while holding
+`waiters.mtx()` (the switch in `mutex_lock`/`mutex_lock_until` is outside the
+lock scope). No user callback under internal locks; no allocation or generic
+callback in the handoff hot path.
+
+### 20.6 Formal verification evidence
+
+Gate: `scripts/verify-e12-async-mutex-formal.sh` (TLC2, jar `/tmp/tla2tools.jar`,
+rev `227f61b`, TLC runtime `2026.07.09.134028`).
+
+```text
+PASS  E12AsyncMutex [safety, 19 invariants]  (490943 distinct states, depth 13)
+CEX   NEG-M1  NonOwnerUnlock              -> InvUnlockAuthority
+CEX   NEG-M2  RecursiveAcquire            -> InvRecursiveForbidden
+CEX   NEG-M3  NonFIFOGrant                -> InvFIFOGrant
+CEX   NEG-M4  Barging                     -> InvNoBarging
+CEX   NEG-M5  GrantWithoutOwnerCommit     -> InvGrantOwnerCommit
+CEX   NEG-M6  PublicationWithoutGrantCoupling -> InvGrantPublicationCoupling
+CEX   NEG-M7  AdmissionClosureFailure     -> InvAdmissionClosure
+CEX   NEG-M8  CancelRevokesHandoff        -> InvGrantFinality
+CEX   NEG-M9  DeadlineRevokesHandoff      -> InvGrantFinality
+CEX   NEG-M10 ImmediatePublication        -> InvPublicationRequiresSuspensionOrHandoff
+CEX   NEG-M11 DestructionWhileOwnedOrQueued -> InvDestructionPrecondition
+OK    WRONG-PROPERTY gate (NEG-M3 vs InvGrantOwnerCommit: passes, not mis-flagged)
+OK    COMPILE-PROBE gate (raw WaitQueue/owner/is_locked bypass sealed)
+```
+
+### 20.7 Runtime test inventory
+
+`tests/e12_async_mutex_test.cpp` — 21 cases (T0–T20):
+
+| Category | Tests |
+| -------- | ----- |
+| Construction / immediate | T0–T2 (construct/destroy, try_lock immediate + recursive-fails, immediate lock Woken + unlock-no-waiter) |
+| FIFO handoff | T3 (two-waiter Owned→Owned→Owned) |
+| No barging | T4 (newcomer try_lock fails while queued) |
+| Owner-before-publication | T5 (deterministic phase seam) |
+| Admission closure | T6 (owner releases in admission window; no strand) |
+| Cancellation | T7–T10 (cancel suspended + repeated-false, cancel-after-handoff false, wrong-mutex same/different Scheduler, external OS-thread cancel) |
+| Deadline precedence | T11–T14 (free+due→Woken, owned+due→Expired, unlock-vs-timer both orderings) |
+| Cancel races | T15–T16 (cancel-wins, handoff-wins; no republish) |
+| Exactly-once | T17 (one resolve, one publication, one resume) |
+| Destruction | T18 (safe unlocked/empty) |
+| Real E8 migration | T19 (lock on W0, unlock after possible steal) |
+| Coordination 500/500 | T20 (500-iteration assertion-only gate) |
+
+### 20.8 Coordination stress result
+
+```text
+E12-C coordination: 500 / 500 PASS
+```
+
+(T20: 500 iterations, K=2 waiters each, total_resolved == ITERS*K; cancel and
+handoff each win at least once; no queue/timer leak per iteration. Per repo
+convention the gate is assertion-only, matching e12_semaphore_test T30 /
+e12_event_test.)
+
+### 20.9 Sanitizer + regression results
+
+```text
+TSan     (clang -m tsan):     ALL TESTS PASSED (21 cases)
+ASan     (clang -m asan):     ALL TESTS PASSED (21 cases)
+UBSan    (clang -m ubsan):    ALL TESTS PASSED (21 cases)
+Valgrind (clang -m valgrind): ALL TESTS PASSED, 0 errors, 0 leaks (5009 allocs / 5009 frees)
+
+Regression:
+  E10 (e10_wait_queue_test):      ALL TESTS PASSED
+  E11 (e11_timer_wait_test):      ALL TESTS PASSED
+  E12-A (e12_event_test):         ALL TESTS PASSED
+  E12-B (e12_semaphore_test):     ALL TESTS PASSED
+  E12-C (e12_async_mutex_test):   ALL TESTS PASSED
+  full suite:                     42 targets PASS, 0 fail, 1 skip
+    (skip: e10_corrective_c5_test — pre-existing Clang -Werror=unused-variable
+     on `order_bad` at line 97, last touched 3cd17c6, unrelated to E12-C)
+```
+
+### 20.10 Production/formal refinement map
+
+| Formal action | Production path | Linearization point | Publication? |
+| ------------- | --------------- | ------------------- | -----------: |
+| TryLockSuccess | `mutex_try_lock` (1835) | `owner = me` under global_mtx_+mtx | no |
+| TryLockFailure | `mutex_try_lock` (1835) | return false (no mutation) | no |
+| LockImmediate | `mutex_lock` (1863) | inline `wake_node_locked` + `owner=me` | no |
+| LockAdmissionAcquire | `mutex_lock` (1863) | recheck `wake_node_locked` + `owner=me` | no |
+| LockAdmissionSuspend | `mutex_lock` (1863) | `make_waiting` (Registered in queue) | not yet |
+| LockUntilImmediate | `mutex_lock_until` (1939) | inline Woken + `owner=me` + retire timer | no |
+| LockUntilAdmissionAcquire | `mutex_lock_until` (1939) | recheck Woken + `owner=me` | no |
+| LockUntilAdmissionSuspend | `mutex_lock_until` (1939) | `make_waiting` (timed) | not yet |
+| LockUntilDue | `mutex_lock_until` (1939) | inline `expire_locked` | no |
+| UnlockNoWaiter | `mutex_unlock` (2099) | `owner = nullptr` | no |
+| UnlockHandoff | `mutex_handoff_one_locked` (2056) | owner commit / wake coupling (2079/2094) | yes |
+| CancelSuspended | `mutex_cancel` (2026) | `cancel_locked` CAS | yes |
+| ExpireSuspended | `pump_deadlines_locked` → `expire_wait` | `expire_locked` CAS | yes |
+| terminal attempts | `mutex_cancel` / timer (loser) | losing CAS/membership gate | no |
+| Destroy | `~AsyncMutex` (async_mutex.hpp) | precondition assert | no |
+
+Component map: owner authority = `AsyncMutex::owner_` (Fiber*, sole); current
+Fiber lookup = `g_worker->current`; queue authority = `waiters_` (private
+WaitQueue); timer retirement = `retire_timer_for_node_locked`; waiting-count
+closure = `waiting_waitq_count_`; make_runnable = `Fiber::make_runnable`;
+route_runnable = `route_runnable_locked`; wake signaling =
+`signal_wake_locked`; test seam placement = `mutex_handoff_one_locked:2080–2088`
+(`PhaseTag::e12_mutex_handoff_before_publication`, internal-testing only).
+
+### 20.11 Commit attribution
+
+```text
+ba0459b  formal(async): model E12-C AsyncMutex protocol        (Commit C)
+7a2f2ac  feat(async): implement Fiber-aware AsyncMutex         (Commit D)
+26c2902  test(async): close E12-C handoff and race coverage    (Commit E)
+(F)      docs(async): record E12-C implementation evidence     (this commit)
+```
+
+Preparation commits A (`c640d6e`) and B (`4716ecf`) are on the base branch.
+
+### 20.12 Known non-goals (unchanged)
+
+E12-D Condition, release-and-wait atomic API, notify_one/notify_all, RwLock,
+Queue, Select/multi-wait, recursive Mutex, priority inheritance, deadlock
+detection, owner-abandonment recovery, generic Lockable/AwaitableLock, and
+grant framework remain deferred non-goals (§18). They are not defects.
+
