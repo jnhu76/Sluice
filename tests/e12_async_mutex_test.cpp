@@ -935,32 +935,105 @@ SLUICE_TEST_CASE(e12_mtx_t18_destruction_safe_unlocked_empty) {
 
 // ---- T19: lock then unlock after real E8 steal/migration ------------------
 //
-// Fiber A locks the AsyncMutex on Worker W0. With run(2), A may be stolen to
-// W1. A unlocks; unlock succeeds because owner identity is Fiber* (not Worker).
+// DETERMINISTIC proof that AsyncMutex ownership is Fiber*-based, not Worker-
+// based. Uses the E8 steal pattern (E8-T1/T3):
+//
+//   1. f_idle completes on W1 -> W1 idle.
+//   2. f_blocker holds W0 busy (spinning).
+//   3. f_blocker spawns fA on W0's queue via spawn_on (stealable).
+//   4. W1 steals fA from W0 -> fA runs on W1.
+//   5. fA acquires mutex on W1, records worker ID, unlocks on W1.
+//   6. f2 acquires mutex after fA unlocks (proves ownership released).
+//
+// The coordinator uses a spawn-then-gate pattern: f_blocker signals when fA
+// has been spawned (making it stealable), and only releases AFTER fA unlocks.
+// This keeps W0 busy long enough for W1 to steal fA.
 SLUICE_TEST_CASE(e12_mtx_t19_migration_lock_then_unlock_after_steal) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncMutex mtx(sched);
     WaitNode nA;
-    std::atomic<bool> a_acquired{false}, a_released{false};
+    std::atomic<bool> a_spawned{false};
+    std::atomic<bool> a_acquired{false};
+    std::atomic<unsigned> wid_before{static_cast<unsigned>(-1)};
+    std::atomic<unsigned> wid_after{static_cast<unsigned>(-1)};
+    std::atomic<bool> a_released{false};
+    std::atomic<bool> f2_acquired{false};
+    WaitNode nF2;
 
+    // f_idle: completes immediately on W1 -> W1 goes idle (ready to steal).
+    Fiber f_idle;
+    f_idle.set_entry([&](Fiber&) {});
+
+    // fA: the migration subject. Declared first so f_blocker can reference it.
     Fiber fA;
     fA.set_entry([&](Fiber&) {
-        mtx.lock(nA);  // A owns
+        wid_before.store(Scheduler::current_worker_id(), std::memory_order_release);
+        mtx.lock(nA);
         a_acquired.store(true, std::memory_order_release);
-        mtx.unlock();  // unlock on the (possibly migrated) worker
+        wid_after.store(Scheduler::current_worker_id(), std::memory_order_release);
+        mtx.unlock();
         a_released.store(true, std::memory_order_release);
     });
-    FiberStack sA;
-    SLUICE_CHECK(sched.init_fiber(fA, sA.base(), sA.size()));
-    sched.spawn_on(fA, /*worker=*/0);
+
+    // f_blocker: holds W0 busy. Spawns fA on W0's queue, signals the
+    // coordinator, then spins until released. The spin keeps W0 busy so W1
+    // (idle) steals fA from W0's queue.
+    std::atomic<bool> release_blocker{false};
+    Fiber f_blocker;
+    f_blocker.set_entry([&](Fiber&) {
+        sched.spawn_on(fA, Scheduler::current_worker_id());
+        a_spawned.store(true, std::memory_order_release);
+        while (!release_blocker.load(std::memory_order_acquire)) {}
+    });
+
+    // f2: acquires mutex AFTER A unlocks, proving unlock released ownership.
+    Fiber f2;
+    f2.set_entry([&](Fiber&) {
+        mtx.lock(nF2);
+        f2_acquired.store(true, std::memory_order_release);
+        mtx.unlock();
+    });
+
+    FiberStack si, sb, sA2, s2;
+    SLUICE_CHECK(sched.init_fiber(f_idle, si.base(), si.size()));
+    SLUICE_CHECK(sched.init_fiber(f_blocker, sb.base(), sb.size()));
+    SLUICE_CHECK(sched.init_fiber(fA, sA2.base(), sA2.size()));
+    SLUICE_CHECK(sched.init_fiber(f2, s2.base(), s2.size()));
+    // f_blocker first (-> W0), f_idle second (-> W1).
+    sched.spawn(f_blocker);   // W0
+    sched.spawn(f_idle);      // W1
+
     std::thread runner([&] { sched.run(2); });
+
+    // Wait for fA to be spawned on W0 (stealable).
+    spin_wait(a_spawned);
+
+    // Wait for fA to be stolen by W1 and acquire the mutex.
     spin_wait(a_acquired);
+
+    // Spawn f2 so it will acquire after A unlocks.
+    sched.spawn(f2);
+
+    // Wait for A to unlock.
+    spin_wait(a_released);
+
+    // Release the blocker so the run can terminate.
+    release_blocker.store(true, std::memory_order_release);
     runner.join();
-    SLUICE_CHECK_MSG(a_released.load(), "A unlocked after (possible) migration");
+
+    unsigned wa = wid_after.load(std::memory_order_acquire);
+
+    // THE MIGRATION ASSERTION: fA ran on W1 (the thief), NOT on W0.
+    SLUICE_CHECK_MSG(wa == 1, "after_worker == W1 (fA ran on the thief)");
+    SLUICE_CHECK_MSG(a_released.load(), "A unlocked after migration");
     SLUICE_CHECK_MSG(nA.was_woken(), "A acquired (Woken)");
+    SLUICE_CHECK_MSG(f2_acquired.load(), "F2 acquired after A unlock");
+    SLUICE_CHECK_MSG(nF2.was_woken(), "F2 resolved Woken");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+    SLUICE_CHECK_MSG(fA.state() == FiberState::done, "fA completed");
+    SLUICE_CHECK_MSG(f2.state() == FiberState::done, "f2 completed");
 }
 
 // ===========================================================================
@@ -1142,23 +1215,21 @@ SLUICE_TEST_CASE(e12_mtx_t22_cancelled_head_then_handoff) {
     Fiber w1;
     w1.set_entry([&](Fiber&) {
         w1_registered.store(true, std::memory_order_release);
-        release_f0.set();   // signal that W1 is queued (F0 can now unlock after newcomer)
-        mtx.lock(n1);  // suspends
+        release_f0.set();   // signal that W1 is queued; F0 unlocks after newcomer tries
+        mtx.lock(n1);  // suspends (owned by F0, then handoff to W1)
         // cancelled; do not unlock
     });
     Fiber w2;
     w2.set_entry([&](Fiber&) {
         sched.await_ready_flag(w1_registered);
-        std::this_thread::yield();
         w2_registered.store(true, std::memory_order_release);
-        mtx.lock(n2);  // suspends (owned by F0, then W1)
+        mtx.lock(n2);  // suspends (owned by F0, then handoff to W1)
         w2_resumed.store(true, std::memory_order_release);
         mtx.unlock();
     });
     Fiber fcan;
     fcan.set_entry([&](Fiber&) {
         sched.await_ready_flag(w2_registered);
-        std::this_thread::yield();
         for (int i = 0; i < 200 && !n1.is_terminal(); ++i) {
             if (mtx.cancel(n1)) { w1_cancelled.store(true, std::memory_order_release); break; }
             std::this_thread::yield();
@@ -1167,7 +1238,6 @@ SLUICE_TEST_CASE(e12_mtx_t22_cancelled_head_then_handoff) {
     Fiber newcomer;
     newcomer.set_entry([&](Fiber&) {
         sched.await_ready_flag(w1_cancelled);
-        std::this_thread::yield();
         newcomer_result.store(!mtx.try_lock(), std::memory_order_release);  // expect false
     });
 
