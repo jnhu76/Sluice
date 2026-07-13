@@ -1459,7 +1459,7 @@ OK    COMPILE-PROBE gate (raw WaitQueue/owner/is_locked bypass sealed)
 | Cancel races | T15–T16 (cancel-wins, handoff-wins; no republish) |
 | Exactly-once | T17 (one resolve, one publication, one resume) |
 | Destruction | T18 (safe unlocked/empty) |
-| Real E8 migration | T19 (lock on W0, unlock after possible steal) |
+| Real E8 migration | T19 (lock on W0, deterministic steal to W1, unlock on W1) |
 | Coordination 500/500 | T20 (500-iteration assertion-only gate) |
 | Three-party no-barging | T21 (F0→W1→W2 handoff; newcomer cannot barge) |
 | Cancelled-head handoff | T22 (W1 cancelled; newcomer cannot barge; W2 receives ownership) |
