@@ -2109,12 +2109,12 @@ void Scheduler::mutex_unlock(WaitQueue& waiters, Fiber*& owner) {
     // Non-owner unlock and unlock-while-unlocked are caller-precondition debug
     // asserts with no owner/queue mutation. Requires a running Fiber
     // (g_worker->current); the current Fiber must equal `owner`.
-    WorkerState* ws = g_worker;
-    Fiber* me = ws->current;
+    Fiber* me = g_worker->current;
     assert(me != nullptr && "AsyncMutex::unlock requires a running Fiber");
     LockGuard lk(global_mtx_);
     assert(owner == me && "AsyncMutex::unlock by non-owner is a caller "
                           "precondition violation (no owner/queue mutation)");
+    (void)me;  // debug-only precondition check; release path does not need me
     // Handoff branch: mutex_handoff_one_locked acquires waiters_.mtx() inside
     // global_mtx_ (consistent lock order) and resolves the FIFO head. nullptr
     // means the queue is empty (Conclusion A).

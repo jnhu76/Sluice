@@ -94,7 +94,9 @@ SLUICE_TEST_CASE(e10_corrective_c5_scheduler_integrated_topology) {
     std::atomic<int> a_woken{0}, b_cancelled{0}, c_survived{0};
     std::atomic<int> double_resolve{0};  // any iteration with != exactly A,B resolved
     std::atomic<int> final_count_bad{0}; // waiting_count() != 0 after C resolved
-    std::atomic<int> order_bad{0};       // B resolved before A (FIFO order violated)
+    // order_bad removed: FIFO head resolution ordering is a property of
+    // wake_wait_one (always resolves the head), not a concurrent-thread
+    // completion-order invariant.
 
     for (int it = 0; it < kIters; ++it) {
         AsyncIoContext ctx(std::make_unique<IdleBackend>());

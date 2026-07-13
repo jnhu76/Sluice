@@ -1043,3 +1043,151 @@ SLUICE_TEST_CASE(e12_mtx_t20_coordination_500) {
     SLUICE_CHECK_MSG(total_cancelled > 0, "cancel won at least once");
     SLUICE_CHECK_MSG(total_woken > 0, "handoff won at least once");
 }
+
+// ===========================================================================
+// Slice 8 — Three-party no-barging causal proof
+// ===========================================================================
+
+// ---- T21: three-party no-barging — newcomer try_lock fails while two waiters queued
+//
+// F0 owns AsyncMutex. W1 queues first. W2 queues second.
+// Newcomer N attempts try_lock -> false (F0 owns, W1 + W2 queued).
+// F0 unlocks -> W1 owns. W1 unlocks -> W2 owns.
+// This is the runtime proof of the no-barging topology theorem:
+//   InvNoOwnerlessQueuedDemand + InvImmediateAcquireRequiresEmptyEligiblePreQueue
+//   + InvFIFOGrant + InvGrantOwnerCommit imply an arriving Fiber cannot bypass
+//   an older eligible queued waiter.
+SLUICE_TEST_CASE(e12_mtx_t21_three_party_no_barging) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    WaitNode n0, n1, n2;
+    std::atomic<bool> w1_registered{false}, w2_registered{false};
+    std::atomic<bool> newcomer_result{true};  // expect false
+    std::atomic<bool> w1_resumed{false}, w2_resumed{false};
+    ReadyFlag release_f0;
+
+    Fiber f0;
+    f0.set_entry([&](Fiber&) {
+        mtx.lock(n0);  // F0 owns
+        sched.await_ready_flag(release_f0.v);  // yield until both queued + newcomer tried
+        mtx.unlock();  // handoff to W1 (FIFO head)
+    });
+    Fiber w1;
+    w1.set_entry([&](Fiber&) {
+        w1_registered.store(true, std::memory_order_release);
+        mtx.lock(n1);  // suspends (owned by F0)
+        w1_resumed.store(true, std::memory_order_release);
+        mtx.unlock();  // handoff to W2
+    });
+    Fiber w2;
+    w2.set_entry([&](Fiber&) {
+        sched.await_ready_flag(w1_registered);
+        std::this_thread::yield();
+        w2_registered.store(true, std::memory_order_release);
+        mtx.lock(n2);  // suspends (owned by F0, then W1)
+        w2_resumed.store(true, std::memory_order_release);
+        mtx.unlock();
+    });
+    Fiber newcomer;
+    newcomer.set_entry([&](Fiber&) {
+        sched.await_ready_flag(w2_registered);  // both queued
+        std::this_thread::yield();
+        newcomer_result.store(!mtx.try_lock(), std::memory_order_release);  // expect false
+        release_f0.set();  // let F0 unlock
+    });
+
+    FiberStack s0, s1, s2, sn;
+    SLUICE_CHECK(sched.init_fiber(f0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(w1, s1.base(), s1.size()));
+    SLUICE_CHECK(sched.init_fiber(w2, s2.base(), s2.size()));
+    SLUICE_CHECK(sched.init_fiber(newcomer, sn.base(), sn.size()));
+    sched.spawn(f0);    // F0 acquires + suspends first
+    sched.spawn(w1);    // W1 queues
+    sched.spawn(w2);    // W2 queues
+    sched.spawn(newcomer);  // newcomer try_lock fails, releases F0
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(newcomer_result.load(), "newcomer try_lock failed (F0 owns, W1+W2 queued)");
+    SLUICE_CHECK_MSG(w1_resumed.load(), "W1 resumed owning after F0 unlock");
+    SLUICE_CHECK_MSG(w2_resumed.load(), "W2 received ownership after W1 unlock");
+    SLUICE_CHECK_MSG(n1.was_woken(), "W1 resolved Woken (handoff from F0)");
+    SLUICE_CHECK_MSG(n2.was_woken(), "W2 resolved Woken (handoff from W1)");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// ---- T22: cancelled-head then handoff — newcomer cannot barge ---------------
+//
+// F0 owns. W1 queues. W2 queues. W1 cancellation wins.
+// Newcomer attempts try_lock before F0 unlocks -> false (W2 still queued).
+// F0 unlocks -> W2 receives ownership.
+SLUICE_TEST_CASE(e12_mtx_t22_cancelled_head_then_handoff) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    WaitNode n0, n1, n2;
+    std::atomic<bool> w1_registered{false}, w2_registered{false};
+    std::atomic<bool> w1_cancelled{false}, newcomer_result{true};  // expect false
+    std::atomic<bool> w2_resumed{false};
+    ReadyFlag release_f0;
+
+    Fiber f0;
+    f0.set_entry([&](Fiber&) {
+        mtx.lock(n0);
+        sched.await_ready_flag(release_f0.v);  // yield until newcomer tried
+        mtx.unlock();  // queue has W2 (W1 cancelled) -> handoff to W2
+    });
+    Fiber w1;
+    w1.set_entry([&](Fiber&) {
+        w1_registered.store(true, std::memory_order_release);
+        release_f0.set();   // signal that W1 is queued (F0 can now unlock after newcomer)
+        mtx.lock(n1);  // suspends
+        // cancelled; do not unlock
+    });
+    Fiber w2;
+    w2.set_entry([&](Fiber&) {
+        sched.await_ready_flag(w1_registered);
+        std::this_thread::yield();
+        w2_registered.store(true, std::memory_order_release);
+        mtx.lock(n2);  // suspends (owned by F0, then W1)
+        w2_resumed.store(true, std::memory_order_release);
+        mtx.unlock();
+    });
+    Fiber fcan;
+    fcan.set_entry([&](Fiber&) {
+        sched.await_ready_flag(w2_registered);
+        std::this_thread::yield();
+        for (int i = 0; i < 200 && !n1.is_terminal(); ++i) {
+            if (mtx.cancel(n1)) { w1_cancelled.store(true, std::memory_order_release); break; }
+            std::this_thread::yield();
+        }
+    });
+    Fiber newcomer;
+    newcomer.set_entry([&](Fiber&) {
+        sched.await_ready_flag(w1_cancelled);
+        std::this_thread::yield();
+        newcomer_result.store(!mtx.try_lock(), std::memory_order_release);  // expect false
+    });
+
+    FiberStack s0, s1, s2, sc, sn;
+    SLUICE_CHECK(sched.init_fiber(f0, s0.base(), s0.size()));
+    SLUICE_CHECK(sched.init_fiber(w1, s1.base(), s1.size()));
+    SLUICE_CHECK(sched.init_fiber(w2, s2.base(), s2.size()));
+    SLUICE_CHECK(sched.init_fiber(fcan, sc.base(), sc.size()));
+    SLUICE_CHECK(sched.init_fiber(newcomer, sn.base(), sn.size()));
+    sched.spawn(f0);
+    sched.spawn(w1);
+    sched.spawn(w2);
+    sched.spawn(fcan);
+    sched.spawn(newcomer);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(w1_cancelled.load(), "W1 cancelled");
+    SLUICE_CHECK_MSG(newcomer_result.load(), "newcomer try_lock failed (W2 still queued)");
+    SLUICE_CHECK_MSG(w2_resumed.load(), "W2 received ownership after F0 unlock");
+    SLUICE_CHECK_MSG(n1.was_cancelled(), "W1 resolved Cancelled");
+    SLUICE_CHECK_MSG(n2.was_woken(), "W2 resolved Woken (handoff from F0)");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
