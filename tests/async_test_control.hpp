@@ -202,4 +202,29 @@ struct E12EventSeam {
     }
 };
 
+// ---- E12-C AsyncMutex owner-before-publication seam ----
+// The MUTEX-HANDOFF-ONE phase: paused AFTER owner_ = winner Fiber commit, BEFORE
+// make_runnable / route_runnable_locked publication. A test observing this phase
+// proves owner == winner Fiber, winner not yet published runnable, old owner
+// cannot reacquire, and a newcomer try_lock cannot barge.
+struct E12MutexSeam {
+    static void arm_handoff_before_publication(
+        sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(
+            s, PhaseTag::e12_mutex_handoff_before_publication);
+    }
+    static void wait_handoff_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(
+            s, PhaseTag::e12_mutex_handoff_before_publication);
+    }
+    static bool is_handoff_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(
+            s, PhaseTag::e12_mutex_handoff_before_publication);
+    }
+    static void release_handoff(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(
+            s, PhaseTag::e12_mutex_handoff_before_publication);
+    }
+};
+
 }  // namespace sluice_async_test

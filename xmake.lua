@@ -961,3 +961,24 @@ do
             add_tests("e12_semaphore_test")
     end
 end
+
+-- e12_async_mutex_test — Fiber-suspending Async Mutex (sluice-CORE-E12-C).
+-- AsyncMutex on the E10/E11/E12-A/E12-B substrate: construction/try_lock,
+-- immediate + queued lock, FIFO direct handoff, owner-before-publication,
+-- deadline precedence (resource-first), queue-identity-safe cancel,
+-- external-thread cancel, migration, destruction contract, 500/500 coordination.
+-- Deterministic causal tests (NO sleep_for proof). Gated to x86_64
+-- (fiber_ctx::supported).
+do
+    local p = "tests/e12_async_mutex_test.cpp"
+    if os.isfile(p) then
+        target("e12_async_mutex_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_async_mutex_test")
+    end
+end
