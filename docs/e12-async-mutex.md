@@ -1204,7 +1204,7 @@ Proven by:
 | NEG-M1 NonOwnerUnlock | foreign Fiber F2 calls UnlockNoWaiter when owner = F1 | `preOwner = F1 /\ lastActor = F2 /\ lastAction = UnlockNoWaiter` | InvUnlockAuthority |
 | NEG-M2 RecursiveAcquire | TryLockSuccess when owner = F1 and lastActor = F1 | `preOwner = F1 /\ lastAction = TryLockSuccess` | InvRecursiveForbidden |
 | NEG-M3 NonFIFOGrant | UnlockHandoff selects epoch other than Head(preQueue) | `lastAction = UnlockHandoff /\ lastGrantedEpoch /= Head(preQueue)` | InvFIFOGrant |
-| NEG-M4 Barging | LockImmediate while EligiblePreQueue /= <<>> | `lastAction = LockImmediate /\ preOwner = NoOwner /\ EligiblePreQueue /= <<>>` | InvNoBarging |
+| NEG-M4 HandoffFreeWindow | UnlockHandoff resolves FIFO head Woken but does not commit owner (owner := NoOwner) | `lastAction = UnlockHandoff /\ owner = NoOwner /\ EligibleQueue /= <<>>` | InvNoOwnerlessQueuedDemand |
 | NEG-M5 GrantWithoutOwnerCommit | UnlockHandoff resolves E but owner = NoOwner or wrong Fiber | `lastAction = UnlockHandoff /\ owner /= epochFiber[lastGrantedEpoch]` | InvGrantOwnerCommit |
 | NEG-M6 PublicationWithoutGrantCoupling | UnlockHandoff publishes W but owner != epochFiber[W] | `lastAction = UnlockHandoff /\ runnablePublished[lastGrantedEpoch] = TRUE /\ owner /= epochFiber[lastGrantedEpoch]` | InvGrantPublicationCoupling |
 | NEG-M7 AdmissionLostWake | LockAdmissionSuspend when Mutex is free and epoch is FIFO head | `lastAction = LockAdmissionSuspend /\ preOwner = NoOwner /\ Head(EligiblePreQueue) = lastTargetEpoch` | InvAdmissionClosure |
@@ -1234,7 +1234,7 @@ Proven by:
 | Immediate ownership | try_lock success, try_lock failure while owned, lock immediate success |
 | Ownership misuse | non-owner unlock, unlock while unlocked, recursive try_lock, recursive lock, unlock after Worker migration |
 | FIFO / handoff | W1 before W2 → W1 acquires, W1 cancelled before unlock → W2 acquires, W1 expired before unlock → W2 acquires |
-| No-barging | W1 queued + new try_lock → newcomer fails |
+| No-barging | W1 queued + new try_lock → newcomer fails; three-party (W1+W2 queued + newcomer fails); cancelled-head + newcomer fails |
 | Admission closure | A registers + owner unlocks in registration window → A does not strand |
 | Deadline | free + due → Woken, owned + due → Expired, unlock beats timer, timer beats unlock |
 | Cancellation | cancel suspended waiter, cancel after handoff, wrong Mutex same Scheduler, wrong Mutex different Scheduler |
@@ -1431,7 +1431,7 @@ PASS  E12AsyncMutex [safety, 19 invariants]  (490943 distinct states, depth 13)
 CEX   NEG-M1  NonOwnerUnlock              -> InvUnlockAuthority
 CEX   NEG-M2  RecursiveAcquire            -> InvRecursiveForbidden
 CEX   NEG-M3  NonFIFOGrant                -> InvFIFOGrant
-CEX   NEG-M4  Barging                     -> InvNoBarging
+CEX   NEG-M4  HandoffFreeWindow         -> InvNoOwnerlessQueuedDemand
 CEX   NEG-M5  GrantWithoutOwnerCommit     -> InvGrantOwnerCommit
 CEX   NEG-M6  PublicationWithoutGrantCoupling -> InvGrantPublicationCoupling
 CEX   NEG-M7  AdmissionClosureFailure     -> InvAdmissionClosure
@@ -1445,13 +1445,13 @@ OK    COMPILE-PROBE gate (raw WaitQueue/owner/is_locked bypass sealed)
 
 ### 20.7 Runtime test inventory
 
-`tests/e12_async_mutex_test.cpp` — 21 cases (T0–T20):
+`tests/e12_async_mutex_test.cpp` — 23 cases (T0–T22):
 
 | Category | Tests |
 | -------- | ----- |
 | Construction / immediate | T0–T2 (construct/destroy, try_lock immediate + recursive-fails, immediate lock Woken + unlock-no-waiter) |
 | FIFO handoff | T3 (two-waiter Owned→Owned→Owned) |
-| No barging | T4 (newcomer try_lock fails while queued) |
+| No barging | T4 (newcomer try_lock fails while queued), T21 (three-party: newcomer fails while W1+W2 queued) |
 | Owner-before-publication | T5 (deterministic phase seam) |
 | Admission closure | T6 (owner releases in admission window; no strand) |
 | Cancellation | T7–T10 (cancel suspended + repeated-false, cancel-after-handoff false, wrong-mutex same/different Scheduler, external OS-thread cancel) |
@@ -1461,6 +1461,8 @@ OK    COMPILE-PROBE gate (raw WaitQueue/owner/is_locked bypass sealed)
 | Destruction | T18 (safe unlocked/empty) |
 | Real E8 migration | T19 (lock on W0, unlock after possible steal) |
 | Coordination 500/500 | T20 (500-iteration assertion-only gate) |
+| Three-party no-barging | T21 (F0→W1→W2 handoff; newcomer cannot barge) |
+| Cancelled-head handoff | T22 (W1 cancelled; newcomer cannot barge; W2 receives ownership) |
 
 ### 20.8 Coordination stress result
 
@@ -1476,20 +1478,56 @@ e12_event_test.)
 ### 20.9 Sanitizer + regression results
 
 ```text
-TSan     (clang -m tsan):     ALL TESTS PASSED (21 cases)
-ASan     (clang -m asan):     ALL TESTS PASSED (21 cases)
-UBSan    (clang -m ubsan):    ALL TESTS PASSED (21 cases)
+TSan     (clang -m tsan):     ALL TESTS PASSED (23 cases)
+ASan     (clang -m asan):     ALL TESTS PASSED (23 cases)
+UBSan    (clang -m ubsan):    ALL TESTS PASSED (23 cases)
 Valgrind (clang -m valgrind): ALL TESTS PASSED, 0 errors, 0 leaks (5009 allocs / 5009 frees)
 
 Regression:
   E10 (e10_wait_queue_test):      ALL TESTS PASSED
+  E10 (e10_corrective_c5_test):   ALL TESTS PASSED
   E11 (e11_timer_wait_test):      ALL TESTS PASSED
   E12-A (e12_event_test):         ALL TESTS PASSED
   E12-B (e12_semaphore_test):     ALL TESTS PASSED
-  E12-C (e12_async_mutex_test):   ALL TESTS PASSED
-  full suite:                     42 targets PASS, 0 fail, 1 skip
-    (skip: e10_corrective_c5_test — pre-existing Clang -Werror=unused-variable
-     on `order_bad` at line 97, last touched 3cd17c6, unrelated to E12-C)
+  E12-C (e12_async_mutex_test):   ALL TESTS PASSED (23 cases, 0 fail, 0 skip)
+  full suite:                     ALL TESTS PASSED (0 fail, 0 skip)
+```
+
+### 20.9.1 No-barging formal closure
+
+```text
+No-barging is proved by a composition of four TLC-checked properties:
+
+  InvNoOwnerlessQueuedDemand:
+      owner = NoOwner => EligibleQueue = <<>>
+  (no ownerless queued-demand state)
+
+  InvImmediateAcquireRequiresEmptyEligiblePreQueue:
+      lastAction in {TryLockSuccess, LockImmediate, LockUntilImmediate,
+                     LockAdmissionAcquire, LockUntilAdmissionAcquire}
+      => preOwner = NoOwner /\ EligiblePreQueue = <<>>
+  (immediate acquire requires empty eligible pre-queue)
+
+  InvFIFOGrant:
+      lastAction = UnlockHandoff
+      => lastGrantedEpoch = Head(EligiblePreQueue)
+  (FIFO handoff)
+
+  InvGrantOwnerCommit:
+      lastAction = UnlockHandoff
+      => owner = epochFiber[lastGrantedEpoch]
+  (exact winner owner commit)
+
+Theorem (NoBargingByTopology):
+  InvNoOwnerlessQueuedDemand
+  /\ InvImmediateAcquireRequiresEmptyEligiblePreQueue
+  /\ InvFIFOGrant
+  /\ InvGrantOwnerCommit
+  imply an arriving Fiber cannot bypass an older eligible queued waiter.
+
+NEG-M4 HandoffFreeWindow breaks the handoff topology by creating an
+ownerless queued-demand state (owner := NoOwner after UnlockHandoff) and
+is caught by InvNoOwnerlessQueuedDemand.
 ```
 
 ### 20.10 Production/formal refinement map
@@ -1527,6 +1565,8 @@ ba0459b  formal(async): model E12-C AsyncMutex protocol        (Commit C)
 7a2f2ac  feat(async): implement Fiber-aware AsyncMutex         (Commit D)
 26c2902  test(async): close E12-C handoff and race coverage    (Commit E)
 (F)      docs(async): record E12-C implementation evidence     (this commit)
+(G)      formal(async): close E12-C no-barging proof topology  (NEG-M4 HandoffFreeWindow)
+(H)      test(async): restore full Clang regression gate       (E10 warning + T21/T22)
 ```
 
 Preparation commits A (`c640d6e`) and B (`4716ecf`) are on the base branch.

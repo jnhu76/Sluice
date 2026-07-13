@@ -144,15 +144,30 @@ NEGM3 = r'''UnlockHandoff(actor) ==
                    admissionSawFree, admissionSawDue>>
 '''
 
-# NEG-M4 Barging: TryLockSuccess succeeds while the mutex is OWNED AND an
-# eligible waiter is queued (it drops owner = NoOwner AND FIFOHead = None). A
-# newcomer steals ownership over a queued waiter. Expected: InvNoBarging.
-NEGM4 = r'''TryLockSuccess(actor) ==
+# NEG-M4 HandoffFreeWindow: UnlockHandoff resolves the FIFO head Woken and
+# publishes but does NOT commit ownership (owner := NoOwner). This creates a
+# free window: owner = NoOwner while an eligible queued waiter remains.
+# Expected: InvNoOwnerlessQueuedDemand.
+NEGM4 = r'''UnlockHandoff(actor) ==
     /\ ~destroyed
-    /\ owner' = actor
-    /\ Mark("TryLockSuccess", actor, None, None)
-    /\ UNCHANGED <<queue, nodeState, epochFiber, deadlineDue, runnablePublished,
-                   resolutionCount, publicationCount, destroyed,
+    /\ owner = actor
+    /\ FIFOHead # None
+    /\ nodeState[FIFOHead] = "Registered"
+    /\ epochFiber[FIFOHead] # None
+    /\ expectedFIFOHead' = FIFOHead
+    /\ LET w == FIFOHead IN
+       /\ nodeState' = [nodeState EXCEPT ![w] = "Woken"]
+       /\ resolutionCount' = [resolutionCount EXCEPT ![w] = 1]
+       /\ owner' = NoOwner               \* DEFECT: no owner commit to winner
+       /\ runnablePublished' = [runnablePublished EXCEPT ![w] = TRUE]
+       /\ publicationCount' = [publicationCount EXCEPT ![w] = 1]
+       /\ queue' = RemoveFromQueue(queue, w)
+       /\ lastAction' = "UnlockHandoff"
+       /\ lastActor' = actor
+       /\ lastTargetEpoch' = w
+       /\ lastGrantedEpoch' = w
+       /\ SnapPre
+    /\ UNCHANGED <<epochFiber, deadlineDue, destroyed,
                    admissionSawFree, admissionSawDue>>
 '''
 
@@ -297,8 +312,8 @@ CASES = [
      [("TryLockSuccess", NEGM2)], "InvRecursiveForbidden"),
     ("E12AsyncMutexNegM3", "NEG-M3 NonFIFOGrant: with >= 2 eligible waiters, UnlockHandoff grants the second instead of the FIFO head.",
      [("UnlockHandoff", NEGM3)], "InvFIFOGrant"),
-    ("E12AsyncMutexNegM4", "NEG-M4 Barging: TryLockSuccess drops owner = NoOwner and FIFOHead = None; a newcomer steals ownership over a queued waiter.",
-     [("TryLockSuccess", NEGM4)], "InvNoBarging"),
+    ("E12AsyncMutexNegM4", "NEG-M4 HandoffFreeWindow: UnlockHandoff resolves FIFO head Woken + published but does NOT commit owner (owner := NoOwner). Free window: ownerless while eligible waiter queued.",
+     [("UnlockHandoff", NEGM4)], "InvNoOwnerlessQueuedDemand"),
     ("E12AsyncMutexNegM5", "NEG-M5 GrantWithoutOwnerCommit: UnlockHandoff resolves + publishes but leaves owner = NoOwner.",
      [("UnlockHandoff", NEGM5)], "InvGrantOwnerCommit"),
     ("E12AsyncMutexNegM6", "NEG-M6 PublicationWithoutGrantCoupling: UnlockHandoff publishes but commits owner to the old actor (not the winner).",

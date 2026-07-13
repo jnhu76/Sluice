@@ -26,7 +26,7 @@
 #   NEG-M1  NonOwnerUnlock              -> InvUnlockAuthority FAILS
 #   NEG-M2  RecursiveAcquire            -> InvRecursiveForbidden FAILS
 #   NEG-M3  NonFIFOGrant                -> InvFIFOGrant FAILS
-#   NEG-M4  Barging                     -> InvNoBarging FAILS
+#   NEG-M4  HandoffFreeWindow          -> InvNoOwnerlessQueuedDemand FAILS
 #   NEG-M5  GrantWithoutOwnerCommit     -> InvGrantOwnerCommit FAILS
 #   NEG-M6  PublicationWithoutGrantCoupling -> InvGrantPublicationCoupling FAILS
 #   NEG-M7  AdmissionClosureFailure     -> InvAdmissionClosure FAILS
@@ -252,10 +252,10 @@ expect_fail "NEG-M3 NonFIFOGrant" \
             E12AsyncMutexNegM3 E12AsyncMutexNegM3.cfg \
             InvFIFOGrant E12AsyncMutexNegM3 || rc=1
 
-# NEG-M4: Barging.
-expect_fail "NEG-M4 Barging" \
+# NEG-M4: HandoffFreeWindow.
+expect_fail "NEG-M4 HandoffFreeWindow" \
             E12AsyncMutexNegM4 E12AsyncMutexNegM4.cfg \
-            InvNoBarging E12AsyncMutexNegM4 || rc=1
+            InvNoOwnerlessQueuedDemand E12AsyncMutexNegM4 || rc=1
 
 # NEG-M5: GrantWithoutOwnerCommit.
 expect_fail "NEG-M5 GrantWithoutOwnerCommit" \

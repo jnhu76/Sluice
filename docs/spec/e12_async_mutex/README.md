@@ -44,7 +44,7 @@ model safety-only (no scheduler-fairness liveness).
 | `E12AsyncMutexNegM1.tla/.cfg` | NEG-M1: non-owner unlock → `InvUnlockAuthority` |
 | `E12AsyncMutexNegM2.tla/.cfg` | NEG-M2: recursive acquire → `InvRecursiveForbidden` |
 | `E12AsyncMutexNegM3.tla/.cfg` | NEG-M3: non-FIFO grant → `InvFIFOGrant` |
-| `E12AsyncMutexNegM4.tla/.cfg` | NEG-M4: barging → `InvNoBarging` |
+| `E12AsyncMutexNegM4.tla/.cfg` | NEG-M4: handoff free window → `InvNoOwnerlessQueuedDemand` |
 | `E12AsyncMutexNegM5.tla/.cfg` | NEG-M5: grant without owner commit → `InvGrantOwnerCommit` |
 | `E12AsyncMutexNegM6.tla/.cfg` | NEG-M6: publication without grant coupling → `InvGrantPublicationCoupling` |
 | `E12AsyncMutexNegM7.tla/.cfg` | NEG-M7: admission closure failure → `InvAdmissionClosure` |
