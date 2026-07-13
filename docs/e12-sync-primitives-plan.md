@@ -43,8 +43,9 @@
 > E12-C-PREPARATION-CORRECTIVE-3: COMPLETE
 > E12-C-PREPARATION-CORRECTIVE-4: COMPLETE
 > E12-C-PREPARATION-CORRECTIVE-5: COMPLETE
-> E12-C-PREPARATION: REAUDIT-REQUIRED
-> E12-C-IMPLEMENTATION: BLOCKED
+> E12-C-PREPARATION-CORRECTIVE-5-REAUDIT: PASS
+> E12-C-PREPARATION: CLOSED
+> E12-C-IMPLEMENTATION: READY
 > ```
 > The cross-primitive preparation (this document) §6, §10.1, §10.2, §11.3,
 > §12, §14.3.3, and §14.5 are updated to reflect the corrective closure.
@@ -922,8 +923,9 @@ PREPARATION: REAUDIT-REQUIRED — IMPLEMENTATION BLOCKED
 > E12-C-PREPARATION-CORRECTIVE-3: COMPLETE
 > E12-C-PREPARATION-CORRECTIVE-4: COMPLETE
 > E12-C-PREPARATION-CORRECTIVE-5: COMPLETE
-> E12-C-PREPARATION: REAUDIT-REQUIRED
-> E12-C-IMPLEMENTATION: BLOCKED
+> E12-C-PREPARATION-CORRECTIVE-5-REAUDIT: PASS
+> E12-C-PREPARATION: CLOSED
+> E12-C-IMPLEMENTATION: READY
 > ```
 
 ### 6.1 Fiber identity and execution ownership after E8 stealing
@@ -1588,7 +1590,7 @@ implemented in this preparation.
   [`docs/spec/e12_semaphore/README.md`](spec/e12_semaphore/README.md); gate:
   [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh).
 
-### 11.3 Mutex (E12-C-PREPARATION-CORRECTIVE-1 through CORRECTIVE-5)
+### 11.3 Mutex (E12-C-PREPARATION CLOSED — CORRECTIVE-1 through CORRECTIVE-5 + reaudit PASS)
 
 - **Correct invariant:** mutual exclusion (at most one owner); the ownership
   identity is a single Fiber; unlock-by-non-owner rejected; grant is final
@@ -1687,7 +1689,7 @@ implemented in this preparation.
 | --------- | ------- | -------------- | ------------------------------------- |
 | **E12-A Event** | `CLOSED` (two independent corrective reviews passed) | manual-reset choice; idempotent set; reset; wait-on-set; deadline/cancel composition; set-vs-register race; reset-vs-waiter; **wake cardinality = set releases all registered waits satisfied by SET (F-EVENT-1 closed)** | ~~destruction-with-waiters~~ (resolved: caller contract violation, debug assert); ~~IMPLEMENTATION BOUNDARY: loop wake-one vs narrow wake-many seam~~ (resolved: loop wake_wait_one_locked until drained, atomic under global_mtx_) |
 | **E12-B Semaphore** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant; **production implementation COMPLETE** (public API + private Scheduler seams mirroring E12-A; TSan/ASan/UBSan clean; 31 deterministic tests + NEG compile probe) — see [`docs/e12-semaphore.md`](e12-semaphore.md) §14 As-Built | independent adversarial implementation review still required before E12-B may be declared CLOSED (not self-declared) |
-| **E12-C Mutex** | `PREPARATION CORRECTIVE-4 COMPLETE — REAUDIT-REQUIRED` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire; **naming = AsyncMutex** (coexists with sync Mutex); **direct handoff (M-H1)**; **FIFO no-barging (M-H2–M-H4)**; destruction = caller violation; **minimum MUTEX-HANDOFF-ONE seam specified**; **formal model with corrected ghost semantics, register-recheck admission actions, non-vacuous late-attempt actions, publication discipline** (§14–§16 of e12-async-mutex.md) | independent adversarial re-audit required before CLOSED/READY |
+| **E12-C Mutex** | `PREPARATION CLOSED — IMPLEMENTATION READY` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire; **naming = AsyncMutex** (coexists with sync Mutex); **direct handoff (M-H1)**; **FIFO no-barging (M-H2–M-H4)**; destruction = caller violation; **minimum MUTEX-HANDOFF-ONE seam specified**; **collapsed atomic admission actions**; **formal model complete with 14 invariants + 11 negative models** (§14–§16 of e12-async-mutex.md) | implementation may proceed |
 | **E12-D Condition** | `HUMAN-DECISION-REQUIRED` | release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | **return-contract cluster: Model A (mandatory reacquire) vs Model B (abortable reacquire) — F-COND-1 closed**; notify-all mechanism/scope |
 | **E12-E Queue** | `HUMAN-DECISION-REQUIRED` | close-with-blocked-producers; push-after-close; reservation under cancel/timeout (with explicit reservation state); **structural lock ≠ AsyncMutex (F-DEP-1 closed)** | bounded/unbounded; close-with-buffered / close-with-consumers; **capacity-zero DEFERRED (rendezvous, F-QUEUE-1 closed)**; **EXPLICIT reservation state + winner-before-publication seam (§14)** |
 | **E12-F RwLock** | `HUMAN-DECISION-REQUIRED` | upgrade/downgrade DEFER; recursive read/write FORBID | fairness policy (reader-pref/writer-pref/phase/FIFO); **writer winner-before-publication seam (§14)** |
@@ -1911,7 +1913,7 @@ conditional dependency on unresolved handoff policy is removed.
 
 ```text
 E12-C MUTEX BLOCKED BY GRANT SEAM:
-    NO — seam is specified; implementation may proceed after reaudit
+    NO — seam is specified; implementation is ready
 ```
 
 #### 14.3.4 Queue
@@ -1997,7 +1999,7 @@ E12-B SEMAPHORE BLOCKED BY GRANT SEAM (first-scope anonymous):
 
 E12-C MUTEX BLOCKED BY GRANT SEAM:
     NO — minimum MUTEX-HANDOFF-ONE seam specified
-    (E12-C-PREPARATION-CORRECTIVE-1 through CORRECTIVE-5)
+    (E12-C-PREPARATION CLOSED, CORRECTIVE-1 through CORRECTIVE-5 + reaudit PASS)
 
 E12-D CONDITION:
     no grant state of its own (delegates to Mutex); not independently blocked.
@@ -2013,7 +2015,7 @@ Earliest phase whose **selected** semantics **definitely** require the new
 winner-before-publication seam:
 
 ```text
-E12-C Mutex (MUTEX-HANDOFF-ONE — E12-C-PREPARATION-CORRECTIVE-1 through CORRECTIVE-5)
+E12-C Mutex (MUTEX-HANDOFF-ONE — PREPARATION CLOSED, CORRECTIVE-1 through CORRECTIVE-5 + reaudit PASS)
     followed by E12-E Queue (item reservation)
 ```
 
