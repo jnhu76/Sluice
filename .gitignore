@@ -1,5 +1,7 @@
 # skill
 .agents
+.zcode
+.mimocode
 
 # Xmake cache
 .xmake/

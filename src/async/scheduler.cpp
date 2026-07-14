@@ -1553,6 +1553,579 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
     (void)fiber_ctx::context_switch(&s);
 }
 
+// ---- E12-B Semaphore admission / release (sluice-CORE-E12-B) ----
+
+bool Scheduler::sem_try_acquire(WaitQueue& waiters,
+                                std::atomic<std::uint32_t>& available) {
+    // Lock-free try_acquire is FORBIDDEN: it would bypass the FIFO queue and
+    // admit a newcomer ahead of an eligible head (barging). The authoritative
+    // decision is made under global_mtx_ + waiters_.mtx(), the SAME domain every
+    // release / cancel / expire / admission path takes. `available` is atomic
+    // ONLY to support lock-free observation via Semaphore::available(); it does
+    // NOT authorize lock-free acquisition.
+    //
+    // No barging: if a waiter is already queued (eligible FIFO head exists),
+    // try_acquire MUST fail even when available_ > 0 — a newcomer may not bypass
+    // the queued waiter's priority. This preserves the stable-state invariant
+    // (EligibleQueuedWaiterExists => available_ == 0): an eligible waiter is
+    // never left stranded while a stored permit exists.
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(waiters.mtx());
+    if (waiters.empty_locked()) {
+        const std::uint32_t cur = available.load(std::memory_order::acquire);
+        if (cur > 0) {
+            available.store(cur - 1, std::memory_order::release);
+            return true;
+        }
+    }
+    return false;  // no stored permit, OR an eligible queued waiter has priority
+}
+
+void Scheduler::sem_acquire(WaitQueue& waiters,
+                            std::atomic<std::uint32_t>& available,
+                            WaitNode& node) {
+    // E12-B acquire admission. The lost-wake closure: register + recheck
+    // admission + commit suspension — all under one global_mtx_ + waiters_.mtx()
+    // critical section (the same domain release / cancel / expire / admission
+    // use). Only context_switch is outside the lock. This mirrors
+    // await_event_wait's lost-set closure (the canonical lost-wake-closed idiom,
+    // commit 422036c) but the admission predicate is "a stored permit is
+    // admissible to THIS newly-registered FIFO head" instead of "SET observed".
+    //
+    // The admission window is closed: a permit observed during the admission
+    // critical section leads to inline Woken, not a sleeping registered waiter
+    // with stored supply. The trace
+    //     initial check sees no permit
+    //     waiter registers
+    //     release occurs
+    //     waiter attempts suspension
+    // cannot strand the waiter because release() takes global_mtx_ to transfer
+    // its permit, and this admission recheck runs under the same global_mtx_
+    // after registration — release either completed before registration (its
+    // transfer targeted the prior head / stored the permit, which the recheck
+    // observes) or runs after this critical section (it sees this registered
+    // node and transfers to it).
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(waiters.mtx());
+        if (!waiters.register_wait_locked(node, me)) {
+            // Node already registered or terminal (C8): contract violation.
+            return;
+        }
+        ++waiting_waitq_count_;
+
+        // Admission recheck: a stored permit is admissible to THIS node only if
+        // it is the FIFO head (no earlier waiter has priority). register_wait_
+        // locked links at the FIFO TAIL, so this node is the head iff it has no
+        // predecessor (node.prev_ == nullptr). The link field prev_ is read here
+        // while holding waiters_.mtx() (the structural authority). wake_node_
+        // locked resolves THIS specific node with Woken, so we target it
+        // directly — there is no head-identity ambiguity at the resolve CAS.
+        //
+        // If an earlier waiter is queued (node.prev_ != nullptr), this node MUST
+        // NOT consume a stored permit even when available_ > 0: the earlier
+        // waiter has FIFO priority. The stable-state invariant
+        // (EligibleQueuedWaiterExists => available_ == 0) holds in production
+        // because a release transfers to the head rather than storing when a
+        // waiter is queued, so available_ > 0 with a queued earlier waiter is a
+        // transient that this check correctly refuses to admit.
+        if (node.prev_ == nullptr &&
+            available.load(std::memory_order::acquire) > 0) {
+            if (waiters.wake_node_locked(node)) {
+                available.store(available.load(std::memory_order::acquire) - 1,
+                                std::memory_order::release);
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // The current Fiber is RUNNING (has not called make_waiting());
+                // make_runnable may return false. That is not a reason to
+                // publish it.
+                if (me != nullptr) (void)me->make_runnable();
+            }
+            return;  // node.outcome() == woken; do NOT suspend
+        }
+
+        // Defense-in-depth: if the node was resolved concurrently (it cannot be,
+        // since register_wait_locked just moved it to Registered under both
+        // locks and every resolver takes global_mtx_), undo and do not suspend.
+        if (node.is_terminal()) {
+            waiters.unlink_locked(node);
+            --waiting_waitq_count_;
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+}
+
+void Scheduler::sem_acquire_until(WaitQueue& waiters,
+                                  std::atomic<std::uint32_t>& available,
+                                  WaitNode& node, deadline_t deadline) {
+    // E12-B deadline-aware acquire. Composes sem_acquire's admission closure
+    // with E11 TimerRegistration. The wait resolves when EXACTLY ONE cause wins
+    // the resolve_ CAS:
+    //   - release() transfer (sem_release -> wake_wait_one_locked) -> Woken
+    //   - cancel(node) (sem_cancel)                              -> Cancelled
+    //   - the deadline elapsing (pump_deadlines_locked)          -> Expired
+    //
+    // Admission precedence (A4, under global_mtx_ + waiters_.mtx()):
+    //   1. If a permit is admissible (available > 0 AND node is FIFO head):
+    //      resolve Woken inline (no suspend). Permit admission wins over a due
+    //      deadline (the resource is ready; the deadline is moot).
+    //   2. Else if the deadline is already due: resolve Expired inline (E11 I5).
+    //   3. Else: commit suspension.
+    // A non-timer winner retires the registration in the same CS (E11 I4).
+    WorkerState* ws = g_worker;
+    Fiber* me = ws->current;
+    TimerRegistration* reg = nullptr;
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(waiters.mtx());
+        if (!waiters.register_wait_locked(node, me)) {
+            return;  // C8 contract violation
+        }
+        ++waiting_waitq_count_;
+        // Create the timer registration control block for this wait epoch.
+        timer_pool_.emplace_back(&node, &waiters, deadline);
+        reg = &timer_pool_.back();
+        ++active_deadline_count_;
+        heap_push_locked(reg);
+        recompute_earliest_deadline_locked();
+
+        // Admission precedence 1: permit admission wins over a due deadline. If
+        // a stored permit is available AND this node is the FIFO head (no earlier
+        // waiter has priority — node.prev_ == nullptr, read under waiters_.mtx()),
+        // resolve Woken inline and retire the timer (the deadline is moot).
+        if (node.prev_ == nullptr &&
+            available.load(std::memory_order::acquire) > 0) {
+            if (waiters.wake_node_locked(node)) {
+                available.store(
+                    available.load(std::memory_order::acquire) - 1,
+                    std::memory_order::release);
+                if (reg->retire()) {  // ACTIVE->RETIRED (closes timer)
+                    --active_deadline_count_;
+                }
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                if (me != nullptr) (void)me->make_runnable();
+            }
+            return;  // node.outcome() == woken; do NOT suspend
+        }
+
+        // Admission precedence 2: E11 I5 — if the deadline is ALREADY due (and
+        // no permit is admissible), resolve Expired inline. The fiber must NOT
+        // suspend and wait for a future timer scan merely because registration
+        // happened after the deadline was due.
+        if (clock_now_unlocked() >= deadline) {
+            if (waiters.expire_locked(node)) {
+                reg->try_claim_expiry();  // ACTIVE->CONSUMED (winner)
+                --active_deadline_count_;
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                if (me != nullptr) (void)me->make_runnable();
+                return;  // resolved at admission; do NOT suspend
+            }
+            // If expire_locked lost, a concurrent resolver won; fall through.
+        }
+
+        // Defense-in-depth: if the node was resolved concurrently, undo + return.
+        if (node.is_terminal()) {
+            waiters.unlink_locked(node);
+            --waiting_waitq_count_;
+            if (reg->retire()) {
+                --active_deadline_count_;
+            }
+            recompute_earliest_deadline_locked();
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+}
+
+bool Scheduler::sem_cancel(WaitQueue& waiters, WaitNode& node) {
+    // E12-B queue-identity-safe cancellation. Mirrors event_cancel_wait exactly.
+    // Semaphore::cancel passes its private waiters_ here (NOT exposed to the
+    // caller). The contract:
+    //   returns true ONLY if node is currently Registered AND currently linked
+    //   in THIS Semaphore's private WaitQueue AND CANCEL wins node.resolve_.
+    //   Otherwise returns false WITHOUT mutation.
+    //
+    // The membership check scans THIS queue's own intrusive list for &node
+    // while holding this Scheduler's global_mtx_ + this Semaphore's
+    // waiters_.mtx(). It does NOT read a foreign node's home_, does NOT lock a
+    // foreign Semaphore or foreign Scheduler. Wrong-Semaphore (same OR different
+    // Scheduler), detached, Woken, Expired, and Cancelled nodes all return false
+    // safely. This call CANNOT synthesize a RESOURCE_WAKE and CANNOT change
+    // available_.
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(waiters.mtx());
+    // Membership gate: a node not linked in THIS queue is not cancellable here.
+    if (!waiters.contains_locked(node)) return false;
+    if (!waiters.cancel_locked(node)) return false;  // concurrent resolver won
+    retire_timer_for_node_locked(node);
+    Fiber* f = node.fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+    }
+    return true;
+}
+
+bool Scheduler::sem_release(WaitQueue& waiters,
+                            std::atomic<std::uint32_t>& available,
+                            std::uint32_t max_permits) {
+    // E12-B release disposition. Under global_mtx_, this call contributes
+    // exactly ONE pending permit. The disposition is exactly one of:
+    //   - transferred to the FIFO head waiter (available_ UNCHANGED)
+    //   - stored into available_ (available_++)
+    //   - rejected: queue empty AND available_ == max_permits_ (no mutation)
+    //
+    // Transfer branch: wake_wait_one_locked takes global_mtx_ (held here) and
+    // waiters_.mtx() (acquired INSIDE it), resolves the FIFO head with Woken,
+    // and routes the winner. By Conclusion A, a linked FIFO head observed under
+    // global_mtx_ + waiters_.mtx() is Registered and eligible; its
+    // resolve_(Woken) cannot lose, and wake_wait_one_locked returns nullptr ONLY
+    // when the queue is empty. Therefore a non-empty queue produces exactly one
+    // winner and the transfer branch returns true with available_ UNCHANGED.
+    //
+    // Empty-queue branch: wake_wait_one_locked returned nullptr (queue empty at
+    // the moment of the check). Store the permit, or reject overflow. A later
+    // acquire that registers after this store is handled by its admission
+    // recheck (which observes the stored permit and resolves Woken inline), so
+    // no permit is stranded. available_ is bounded by max_permits_; no mutation
+    // on overflow.
+    //
+    // Forbidden shapes (NOT present): available_-- before waking a waiter;
+    // refund after a lost wake; reserve-then-commit; a grant-in-flight field;
+    // increment available_ AND wake a waiter in one release; retry after a null
+    // wake; skip-after-null. A queued grant from available_ == 0 succeeds
+    // without decrement or integer underflow (the permit is transferred, not
+    // withdrawn and re-deposited).
+    //
+    // Safe to call from an external OS thread: g_worker is null on a non-worker
+    // thread, so route_runnable_locked routes the winner through pending_spawn_
+    // and signal_wake_locked wakes a parked Scheduler worker — exactly the
+    // event_set_broadcast external-thread path.
+    LockGuard lk(global_mtx_);
+    // Transfer branch: wake_wait_one_locked acquires waiters_.mtx() inside
+    // global_mtx_ (consistent lock order) and resolves the FIFO head. nullptr
+    // means the queue is empty (Conclusion A). One release never both wakes a
+    // waiter AND stores: a non-empty queue fully consumes this release.
+    if (wake_wait_one_locked(waiters) != nullptr) {
+        return true;  // permit transferred to the FIFO head; available_ unchanged
+    }
+    // Empty-queue branch: store the permit, or reject overflow.
+    const std::uint32_t cur = available.load(std::memory_order::acquire);
+    if (cur >= max_permits) {
+        return false;  // overflow: no authoritative mutation
+    }
+    available.store(cur + 1, std::memory_order::release);
+    return true;
+}
+
+// ---- E12-C AsyncMutex admission / handoff (sluice-CORE-E12-C) ----
+
+bool Scheduler::mutex_try_lock(WaitQueue& waiters, Fiber*& owner) {
+    // Authoritative try_lock under global_mtx_ + waiters_.mtx() (the SAME
+    // domain every unlock / cancel / expire / admission path takes). owner is
+    // passed by reference (the AsyncMutex's Fiber* owner_); nullptr == NoOwner.
+    //
+    // No barging: if a waiter is already queued (eligible FIFO head exists),
+    // try_lock MUST fail even when owner_ == nullptr — a newcomer may not bypass
+    // the queued waiter's priority.
+    //
+    // Recursive acquire (current Fiber == owner) returns false with no mutation
+    // (recursive locking is forbidden, §7.1). A null current Fiber (external
+    // thread / no g_worker) is a caller-precondition debug assert.
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncMutex::try_lock requires a running Fiber");
+    Fiber* me = ws->current;
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(waiters.mtx());
+    if (owner == me) {
+        // Recursive try_lock: forbidden. Return false, no mutation.
+        return false;
+    }
+    if (owner == nullptr && waiters.empty_locked()) {
+        owner = me;
+        return true;
+    }
+    return false;  // owned, OR an eligible queued waiter has FIFO priority
+}
+
+void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
+    // E12-C lock admission. The lost-wake closure: register + recheck admission
+    // + commit suspension — all under one global_mtx_ + waiters_.mtx() critical
+    // section (the same domain unlock / cancel / expire / admission use). Only
+    // context_switch is outside the lock. Mirrors sem_acquire's lost-set closure
+    // but the admission predicate is "owner_ == nullptr AND this node is the
+    // eligible FIFO head" instead of "a stored permit is admissible".
+    //
+    // The admission window is closed: an ownership-free observation during the
+    // admission critical section leads to inline Woken, not a sleeping
+    // registered waiter. The trace
+    //     initial check sees owner_ != nullptr
+    //     waiter registers
+    //     owner unlocks (handoff or free)
+    //     waiter attempts suspension
+    // cannot strand the waiter because unlock() takes global_mtx_ to hand off
+    // or free, and this admission recheck runs under the same global_mtx_ after
+    // registration — unlock either completed before registration (its handoff
+    // targeted the prior head / freed owner_, which the recheck observes) or
+    // runs after this critical section (it sees this registered node and hands
+    // off to it).
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncMutex::lock requires a running Fiber");
+    Fiber* me = ws->current;
+    assert(owner != me && "AsyncMutex::lock recursive acquisition is a caller "
+                          "precondition violation (not a successful acquisition)");
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(waiters.mtx());
+        if (!waiters.register_wait_locked(node, me)) {
+            // Node already registered or terminal (C8): contract violation.
+            return;
+        }
+        ++waiting_waitq_count_;
+
+        // Admission recheck: ownership is admissible to THIS node only if owner_
+        // is free (nullptr) AND it is the FIFO head (no earlier waiter has
+        // priority). register_wait_locked links at the FIFO TAIL, so this node
+        // is the head iff node.prev_ == nullptr (read under waiters_.mtx(), the
+        // structural authority). wake_node_locked resolves THIS specific node
+        // with Woken, so there is no head-identity ambiguity at the resolve CAS.
+        //
+        // If an earlier waiter is queued (node.prev_ != nullptr), this node MUST
+        // NOT acquire even when owner_ == nullptr: the earlier waiter has FIFO
+        // priority. A concurrent unlock hands off to the head (this node, if it
+        // is the head) rather than freeing, so owner_ == nullptr with a queued
+        // earlier waiter is a transient that this check correctly refuses to
+        // admit.
+        if (node.prev_ == nullptr && owner == nullptr) {
+            if (waiters.wake_node_locked(node)) {
+                owner = me;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // The current Fiber is RUNNING (has not called make_waiting());
+                // make_runnable may return false. That is not a reason to
+                // publish it.
+                if (me != nullptr) (void)me->make_runnable();
+            }
+            return;  // node.outcome() == woken; do NOT suspend
+        }
+
+        // Defense-in-depth: if the node was resolved concurrently (it cannot be,
+        // since register_wait_locked just moved it to Registered under both
+        // locks and every resolver takes global_mtx_), undo and do not suspend.
+        if (node.is_terminal()) {
+            waiters.unlink_locked(node);
+            --waiting_waitq_count_;
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+}
+
+void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
+                                 WaitNode& node, deadline_t deadline) {
+    // E12-C deadline-aware lock. Composes mutex_lock's admission closure with
+    // E11 TimerRegistration. The wait resolves when EXACTLY ONE cause wins the
+    // resolve_ CAS:
+    //   - unlock() handoff (mutex_unlock -> mutex_handoff_one_locked) -> Woken
+    //   - cancel(node) (mutex_cancel)                              -> Cancelled
+    //   - the deadline elapsing (pump_deadlines_locked)            -> Expired
+    //
+    // Admission precedence (resource-first, under global_mtx_ + waiters_.mtx()):
+    //   1. If ownership is admissible (owner == nullptr AND node is FIFO head):
+    //      resolve Woken inline (no suspend). Ownership admission wins over a
+    //      due deadline (the resource is ready; the deadline is moot).
+    //   2. Else if the deadline is already due: resolve Expired inline (E11 I5).
+    //   3. Else: commit suspension.
+    // A non-timer winner retires the registration in the same CS (E11 I4).
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncMutex::lock_until requires a running Fiber");
+    Fiber* me = ws->current;
+    assert(owner != me && "AsyncMutex::lock_until recursive acquisition is a "
+                          "caller precondition violation");
+    TimerRegistration* reg = nullptr;
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(waiters.mtx());
+        if (!waiters.register_wait_locked(node, me)) {
+            return;  // C8 contract violation
+        }
+        ++waiting_waitq_count_;
+        // Create the timer registration control block for this wait epoch.
+        timer_pool_.emplace_back(&node, &waiters, deadline);
+        reg = &timer_pool_.back();
+        ++active_deadline_count_;
+        heap_push_locked(reg);
+        recompute_earliest_deadline_locked();
+
+        // Admission precedence 1: ownership admission wins over a due deadline.
+        // If owner_ is free AND this node is the FIFO head (no earlier waiter —
+        // node.prev_ == nullptr, read under waiters_.mtx()), resolve Woken
+        // inline, commit ownership, and retire the timer (the deadline is moot).
+        if (node.prev_ == nullptr && owner == nullptr) {
+            if (waiters.wake_node_locked(node)) {
+                owner = me;
+                if (reg->retire()) {  // ACTIVE->RETIRED (closes timer)
+                    --active_deadline_count_;
+                }
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                if (me != nullptr) (void)me->make_runnable();
+            }
+            return;  // node.outcome() == woken; do NOT suspend
+        }
+
+        // Admission precedence 2: E11 I5 — if the deadline is ALREADY due (and
+        // ownership is not admissible), resolve Expired inline. The fiber must
+        // NOT suspend and wait for a future timer scan merely because
+        // registration happened after the deadline was due.
+        if (clock_now_unlocked() >= deadline) {
+            if (waiters.expire_locked(node)) {
+                reg->try_claim_expiry();  // ACTIVE->CONSUMED (winner)
+                --active_deadline_count_;
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                if (me != nullptr) (void)me->make_runnable();
+                return;  // resolved at admission; do NOT suspend
+            }
+            // If expire_locked lost, a concurrent resolver won; fall through.
+        }
+
+        // Defense-in-depth: if the node was resolved concurrently, undo + return.
+        if (node.is_terminal()) {
+            waiters.unlink_locked(node);
+            --waiting_waitq_count_;
+            if (reg->retire()) {
+                --active_deadline_count_;
+            }
+            recompute_earliest_deadline_locked();
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+}
+
+bool Scheduler::mutex_cancel(WaitQueue& waiters, WaitNode& node) {
+    // E12-C queue-identity-safe cancellation. Mirrors sem_cancel exactly.
+    // AsyncMutex::cancel passes its private waiters_ here (NOT exposed to the
+    // caller). The contract:
+    //   returns true ONLY if node is currently Registered AND currently linked
+    //   in THIS AsyncMutex's private WaitQueue AND CANCEL wins node.resolve_.
+    //   Otherwise returns false WITHOUT mutation.
+    //
+    // May run from ANY OS thread (g_worker may be null): cancel does not acquire
+    // Mutex ownership and does not require Fiber identity. The membership check
+    // scans THIS queue's own intrusive list for &node while holding this
+    // Scheduler's global_mtx_ + this AsyncMutex's waiters_.mtx(). It does NOT
+    // read a foreign node's home_, does NOT lock a foreign Mutex or foreign
+    // Scheduler. Wrong-Mutex (same OR different Scheduler), detached, Woken,
+    // Expired, and Cancelled nodes all return false safely. This call CANNOT
+    // synthesize a RESOURCE_WAKE and CANNOT change owner_.
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(waiters.mtx());
+    // Membership gate: a node not linked in THIS queue is not cancellable here.
+    if (!waiters.contains_locked(node)) return false;
+    if (!waiters.cancel_locked(node)) return false;  // concurrent resolver won
+    retire_timer_for_node_locked(node);
+    Fiber* f = node.fiber();
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+    }
+    return true;
+}
+
+WaitNode* Scheduler::mutex_handoff_one_locked(WaitQueue& waiters, Fiber*& owner) {
+    // MUTEX-HANDOFF-ONE (docs §10): the narrow private seam that resolves the
+    // eligible FIFO head Woken, commits owner_ = winner Fiber, retires any
+    // bound timer, and publishes the winner runnable — in THAT source order
+    // (owner commit BEFORE make_runnable / route_runnable_locked). This is the
+    // load-bearing owner-before-publication refinement obligation (§10.5/§15.4).
+    //
+    // Mirrors wake_wait_one_locked EXCEPT it writes the winner's fiber() into
+    // the caller's `owner` reference between resolution and publication. The
+    // Semaphore has no ownership to commit; the Mutex does.
+    //
+    // The caller MUST hold global_mtx_. waiters_.mtx() is taken here (under
+    // global_mtx_, consistent lock order). Returns the winning node (nullptr if
+    // the queue is empty or the head lost to a concurrent resolver). A winning
+    // linked node with null Fiber is an internal-invariant debug assert, NOT an
+    // empty-queue result (§10.6).
+    LockGuard qlk(waiters.mtx());
+    WaitNode* won = waiters.wake_one_locked();  // resolve FIFO head Woken + unlink
+    if (won == nullptr) return nullptr;  // empty, or head lost to a cancel
+    Fiber* f = won->fiber();
+    assert(f != nullptr && "MUTEX-HANDOFF-ONE winner has null Fiber "
+                           "(internal invariant failure, NOT empty queue)");
+    // ---- owner commit BEFORE publication (§10.5 load-bearing order) ----
+    owner = f;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic test phase: after owner commit, BEFORE runnable publication.
+    // A test observing this phase can prove owner == winner Fiber, winner not
+    // yet published, old owner cannot reacquire, newcomer try_lock cannot barge.
+    // No allocation, no callback, no lock held beyond global_mtx_ (already held
+    // by the caller); compiled ONLY for the internal-testing variant.
+    sluice_async_test::test_phase(
+        *this, sluice_async_test::PhaseTag::e12_mutex_handoff_before_publication);
+#endif
+    retire_timer_for_node_locked(*won);  // E11 I4 timer closure (same CS)
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
+    // succeeded. The node is terminal; make_runnable is the publication guard.
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, g_worker);
+    }
+    return won;
+}
+
+void Scheduler::mutex_unlock(WaitQueue& waiters, Fiber*& owner) {
+    // E12-C unlock with direct ownership handoff. Under global_mtx_, the calling
+    // (owner) Fiber releases ownership:
+    //   - if the queue has an eligible FIFO head: MUTEX-HANDOFF-ONE resolves it
+    //     Woken, commits owner_ = winner Fiber (BEFORE publication), retires the
+    //     timer, and publishes the winner runnable exactly once. The ownership
+    //     transition is Owned(F_old) -> Owned(F_new) with NO intermediate
+    //     owner_ = nullptr.
+    //   - otherwise (queue empty): owner_ = nullptr (UnlockNoWaiter).
+    //
+    // Non-owner unlock and unlock-while-unlocked are caller-precondition debug
+    // asserts with no owner/queue mutation. Requires a running Fiber
+    // (g_worker->current); the current Fiber must equal `owner`.
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncMutex::unlock requires a running Fiber");
+    Fiber* me = ws->current;
+    LockGuard lk(global_mtx_);
+    assert(owner == me && "AsyncMutex::unlock by non-owner is a caller "
+                          "precondition violation (no owner/queue mutation)");
+    (void)me;  // debug-only precondition check; release path does not need me
+    // Handoff branch: mutex_handoff_one_locked acquires waiters_.mtx() inside
+    // global_mtx_ (consistent lock order) and resolves the FIFO head. nullptr
+    // means the queue is empty (Conclusion A).
+    if (mutex_handoff_one_locked(waiters, owner) != nullptr) {
+        return;  // ownership transferred to the FIFO head; owner_ = winner
+    }
+    // Empty-queue branch: release ownership. No waiter to hand off to.
+    owner = nullptr;
+}
+
 std::size_t Scheduler::pump_deadlines_locked() {
     // Drive due timers: for every heap-min whose deadline <= now and whose
     // registration is still ACTIVE, claim it (try_claim_expiry) and resolve its

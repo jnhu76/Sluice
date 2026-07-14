@@ -16,6 +16,7 @@
 #include <sluice/async/scheduler.hpp>
 
 #include <mutex>
+#include <iterator>
 #include <unordered_map>
 
 namespace sluice_async_test {
@@ -75,7 +76,7 @@ void release_all_phases(sluice::async::Scheduler& s) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
     // Disarm every phase so any paused worker observes termination.
-    for (std::size_t i = 0; i < 6; ++i) {
+    for (std::size_t i = 0; i < std::size(c->phases); ++i) {
         PhaseState& p = c->phases[i];
         {
             std::lock_guard<std::mutex> lk(p.mtx);

@@ -1,17 +1,20 @@
-# E12-B — Async Semaphore (Preparation Corrective-1)
+# E12-B — Async Semaphore (Preparation Corrective-1 + As-Built Implementation)
 
 > Status:
 > ```text
 > E12-B-PREPARATION-CORRECTIVE-1: COMPLETE
-> E12-B-PREPARATION: REAUDIT-REQUIRED
-> E12-B-IMPLEMENTATION: BLOCKED
+> E12-B-PREPARATION-DOC-AUTHORITY-CORRECTIVE-2: COMPLETE
+> E12-B-PREPARATION-REAUDIT: PASS
+> E12-B-PREPARATION: CLOSED
+> E12-B-IMPLEMENTATION-1: COMPLETE
+> E12-B-IMPLEMENTATION: REVIEW-REQUIRED
 > ```
 >
-> This corrective closes the E12-B Semaphore preparation authority's two open
-> defect classes: (1) the five human policy decisions (A1–A5) and (2) the
-> permit-accounting contradictions. It does **not** mark preparation CLOSED. Only
-> a fresh adversarial re-audit returning PASS may change the status to
-> `E12-B-PREPARATION: CLOSED` / `E12-B-IMPLEMENTATION: READY`.
+> The sections §1–§13 below are the **preparation authority** (CLOSED, preserved
+> verbatim). §14 (As-Built Implementation) records the production implementation
+> produced under E12-B-IMPLEMENTATION-1. An independent adversarial
+> implementation review is still required before E12-B may be declared CLOSED;
+> this document does NOT self-declare `E12-B: CLOSED`.
 >
 > Authority baseline: E10 CLOSED
 > ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED
@@ -21,15 +24,16 @@
 >
 > Cross-primitive preparation:
 > [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §5 (updated
-> in this corrective).
+> in the preparation corrective).
 >
 > Formal model: [`docs/spec/e12_semaphore/`](spec/e12_semaphore/). Formal gate
-> (safety-only): [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh).
+> (safety-only + compile-probe): [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh).
 >
-> Scope of this corrective: **documentation, design-authority, and formal-model
-> only.** No production Semaphore code, no production tests, no new public API,
-> no generic grant framework, no public WaitQueue access, no Scheduler refactor,
-> no Scheduler seam extension. Production implementation remains BLOCKED.
+> Scope of §1–§13 (preparation): documentation, design-authority, and
+> formal-model only. Scope of §14 (as-built): the production Semaphore public
+> API + its narrow private Scheduler integration, mirroring the E12-A Event
+> pattern (no generic grant framework, no public WaitQueue access, no Scheduler
+> refactor).
 
 ---
 
@@ -564,6 +568,301 @@ double-publication negative is not added in this corrective.
     implementation is BLOCKED. Only a fresh adversarial re-audit returning PASS
     may change the status to `E12-B-PREPARATION: CLOSED` /
     `E12-B-IMPLEMENTATION: READY`.
+
+---
+
+## 14. As-Built Implementation (E12-B-IMPLEMENTATION-1)
+
+This section records the production Semaphore implementation. It is an as-built
+record, not a reopening of §1–§13 (the CLOSED preparation authority).
+
+### 14.1 Files
+
+```text
+include/sluice/async/semaphore.hpp    (new)   public Semaphore API
+include/sluice/async/scheduler.hpp    (+)     private E12-B Scheduler seams
+src/async/scheduler.cpp               (+)     E12-B Scheduler implementation
+tests/e12_semaphore_test.cpp          (new)   deterministic runtime tests
+tests/e12_semaphore_authority_probe.cpp (new) NEG compile probe (F-SEM-SEAM-1)
+xmake.lua                             (+)     e12_semaphore_test target
+scripts/verify-e12-semaphore-formal.sh (+)   compile-probe gate added
+```
+
+### 14.2 Public API and representation
+
+```cpp
+class Semaphore {
+public:
+    using permit_count_t = std::uint32_t;
+    Semaphore(Scheduler& scheduler, permit_count_t initial_permits,
+              permit_count_t max_permits) noexcept;
+    ~Semaphore() = default;
+    Semaphore(const Semaphore&) = delete;
+    Semaphore& operator=(const Semaphore&) = delete;
+    Semaphore(Semaphore&&) = delete;
+    Semaphore& operator=(Semaphore&&) = delete;
+
+    [[nodiscard]] permit_count_t available() const noexcept;
+    [[nodiscard]] bool try_acquire();
+    void acquire(WaitNode& node);
+    void acquire_until(WaitNode& node, Scheduler::deadline_t deadline);
+    [[nodiscard]] bool cancel(WaitNode& node);
+    [[nodiscard]] bool release();
+private:
+    Scheduler& scheduler_;
+    std::atomic<permit_count_t> available_;
+    const permit_count_t max_permits_;
+    WaitQueue waiters_;
+};
+```
+
+Constructor preconditions (caller contract, debug assertions, no exception):
+`max_permits > 0` and `initial_permits <= max_permits`. Destructor contract:
+destroying a Semaphore with registered wait epochs is a caller contract
+violation; the destructor does NOT cancel/wake/synthesize (the WaitQueue's
+debug empty-assert is the guard). No cancel-all, no wake-all.
+
+Production state fields exactly:
+```text
+Scheduler& scheduler_;
+std::atomic<permit_count_t> available_;
+const permit_count_t max_permits_;
+WaitQueue waiters_;
+```
+None of the forbidden ghost/history fields exist in production
+(`acquiredCount` / `acceptedReleaseCount` / `granted_in_flight` /
+`granted_not_yet_committed` / `releasePending` / `reservedPermit` /
+`refundCount` / permit-owner tracking exist only in the formal model).
+
+### 14.3 Private Scheduler integration (mirrors E12-A Event)
+
+The Semaphore delegates every authoritative decision to NARROW private
+Scheduler seams — the same pattern E12-A Event uses (`event_set_broadcast`,
+`await_event_wait`, `event_cancel_wait`). No Semaphore-private wake channel,
+no permit-ownership tracking, no Scheduler refactor:
+
+```text
+Scheduler::sem_try_acquire(waiters, available)            -> bool
+Scheduler::sem_acquire(waiters, available, node)          -> void
+Scheduler::sem_acquire_until(waiters, available, node, d) -> void
+Scheduler::sem_cancel(waiters, node)                      -> bool
+Scheduler::sem_release(waiters, available, max_permits)   -> bool
+```
+
+These seams are PUBLIC Scheduler methods (so the inline Semaphore wrappers can
+call them) but they take `WaitQueue&` / `std::atomic<uint32_t>&` by reference.
+Ordinary production code CANNOT obtain a Semaphore's private `waiters_` (no
+`wait_queue()` accessor) and therefore cannot synthesize a RESOURCE_WAKE —
+proven by the NEG compile probe (`e12_semaphore_authority_probe.cpp`).
+
+### 14.4 Lock order and synchronization domain
+
+```text
+Scheduler::global_mtx_
+    -> Semaphore waiters_.mtx()
+```
+(unchanged from E10/E11/E12-A). No separate Semaphore state mutex. `available_`
+is atomic ONLY to support lock-free observation via `available()`; it does NOT
+authorize lock-free acquisition. Every authoritative `available_` read/write
+occurs under `global_mtx_` (and the release/acquire admission paths additionally
+under `waiters_.mtx()` where structural membership is inspected).
+
+### 14.5 Operation linearization points
+
+| Operation | Locks held | Linearization point | Permit effect | WaitNode effect | Runnable publication |
+| --------- | ---------- | ------------------- | ------------- | --------------- | -------------------- |
+| `available()` | none | atomic acquire load | none | none | none |
+| `try_acquire` success | `global_mtx_`+`waiters_.mtx()` | `available_.store(cur-1)` | available-- | none | none (no wait) |
+| `try_acquire` failure | `global_mtx_`+`waiters_.mtx()` | release of locks (no mutation) | none | none | none |
+| `acquire` immediate | `global_mtx_`+`waiters_.mtx()` | `wake_node_locked` CAS + `available_.store(cur-1)` | available-- | Woken, unlinked | make_runnable (running fiber) |
+| `acquire` register/suspend | `global_mtx_`+`waiters_.mtx()` then release before switch | `make_waiting()` then `context_switch` | none | Registered | none (suspended) |
+| `acquire_until` immediate Woken | `global_mtx_`+`waiters_.mtx()` | `wake_node_locked` CAS + retire timer + `available_.store(cur-1)` | available-- | Woken, unlinked | make_runnable (running fiber) |
+| `acquire_until` immediate Expired | `global_mtx_`+`waiters_.mtx()` | `expire_locked` CAS + claim timer | none | Expired, unlinked | make_runnable (running fiber) |
+| `release` transfer | `global_mtx_` (wake_wait_one_locked takes `waiters_.mtx()` inside) | `wake_one_locked` CAS | none (available_ UNCHANGED) | head Woken, unlinked | make_runnable + route |
+| `release` store | `global_mtx_` | `available_.store(cur+1)` | available++ | none | none |
+| `release` overflow | `global_mtx_` | release of lock (no mutation) | none | none | none |
+| `cancel` success | `global_mtx_`+`waiters_.mtx()` | `cancel_locked` CAS + retire timer | none | Cancelled, unlinked | make_runnable + route |
+| `cancel` failure | `global_mtx_`+`waiters_.mtx()` | release of locks (no mutation) | none | none | none |
+
+### 14.6 Admission closure implementation
+
+`sem_acquire` / `sem_acquire_until` register `node` at the FIFO tail, then
+recheck admission under the SAME `global_mtx_` + `waiters_.mtx()` critical
+section. A stored permit is admitted ONLY to the FIFO head
+(`node.prev_ == nullptr`, read under `waiters_.mtx()`); `wake_node_locked`
+resolves THIS specific node with Woken inline. This closes the lost-wake window
+described in §8 / §10.2: a release that occurs must either (a) have completed
+before this CS (its transfer/store is observed by the recheck) or (b) run after
+this CS (it sees this registered node and transfers to it). No stranding.
+
+The FIFO-head predicate (`node.prev_ == nullptr`) is what enforces no-barging
+at admission: a later-arriving node cannot consume a permit ahead of an earlier
+queued waiter, even if a transient stored permit exists. Combined with
+`try_acquire`'s non-empty-queue gate, the stable-state invariant
+(`EligibleQueuedWaiterExists => available_ == 0`) holds in production.
+
+### 14.7 Release disposition implementation
+
+`sem_release` holds `global_mtx_` and calls `wake_wait_one_locked(waiters)`
+(which takes `waiters_.mtx()` inside `global_mtx_`). By Conclusion A (§5), a
+linked FIFO head observed under these locks is Registered and eligible, so its
+`resolve_(Woken)` cannot lose; `wake_wait_one_locked` returns `nullptr` ONLY
+when the queue is empty. Therefore:
+
+```text
+non-empty queue  -> exactly one waiter Woken, available_ UNCHANGED (transfer)
+empty queue      -> available_ < max: available_++ (store)
+                  -> available_ == max: return false (overflow, no mutation)
+```
+One release never both wakes a waiter AND stores. A queued grant from
+`available_ == 0` succeeds without decrement or integer underflow. No
+forbidden shapes (pre-decrement / refund / reserve-then-commit /
+grant-in-flight / retry-after-null / skip-after-null).
+
+### 14.8 Deadline precedence implementation
+
+`sem_acquire_until` admission precedence (A4), under `global_mtx_` +
+`waiters_.mtx()`:
+1. permit admissible (`available_ > 0` AND `node` is FIFO head) -> Woken inline
+   (permit admission wins over a due deadline). Timer retired in the same CS.
+2. else deadline already due -> Expired inline (E11 I5). Timer claimed.
+3. else commit suspension. For a registered timed wait, RESOURCE_WAKE
+   (release) / TIMER_EXPIRE / CANCEL compete through the existing exactly-once
+   `resolve_` CAS authority.
+
+### 14.9 Cancellation implementation
+
+`sem_cancel` mirrors `event_cancel_wait`: membership gate
+(`waiters_.contains_locked(node)`) BEFORE the `cancel_locked` CAS, all under
+`global_mtx_` + `waiters_.mtx()`. Returns true ONLY if Registered AND linked in
+THIS queue AND CANCEL wins; otherwise false without mutation. The membership
+scan is over THIS Semaphore's own queue; it never reads a foreign node's `home_`
+and never locks a foreign Scheduler — cross-Scheduler wrong-Semaphore cancel is
+synchronized and structurally safe.
+
+### 14.10 Conclusion A refinement
+
+The implemented release path preserves the accepted proof (§5) unchanged:
+`sem_release` -> `wake_wait_one_locked` is the SAME canonical path
+`wake_wait_one` / `event_set_broadcast` use. Every winning `unlink_locked` runs
+in the same critical section as its winning `resolve_`, under `global_mtx_` +
+`waiters_.mtx()`. No new resolver path and no new unlink site was introduced.
+`wake_wait_one_locked` returns `nullptr` ONLY when the queue is empty
+(Conclusion A), so the release transfer branch never falls through to a store
+for the SAME release.
+
+### 14.11 External-thread release
+
+`sem_release` is safe from an external OS thread exactly as `event_set_broadcast`
+is: `g_worker` is null on a non-worker thread, so `route_runnable_locked` routes
+the winner through `pending_spawn_` and `signal_wake_locked` wakes a parked
+Scheduler worker. No Semaphore-private wake channel. (Proven by
+`e12_sem_t26_external_thread_release_wakes_live`.)
+
+### 14.12 Test inventory
+
+`tests/e12_semaphore_test.cpp` (31 cases):
+
+```text
+T0  construction + available() snapshot
+T1  try_acquire consumes exactly one
+T2  try_acquire failure at zero (no mutation/underflow)
+T3  immediate acquire resolves Woken
+T4  immediate acquisitions stop at zero
+T5  zero-permit acquire suspends; one release grants
+T6  no-waiter release increments available (store)
+T7  release at capacity -> false (overflow)
+T8  one release never both wakes and stores
+T9  queued grant from zero does not underflow
+T10 FIFO: W1 before W2 (release1->W1, release2->W2)
+T11 W2 cannot steal W1's release permit
+T12 try_acquire cannot bypass a queued waiter (no barging)
+T13 W1 cancelled before release CS -> release grants W2
+T14 permit + due deadline -> Woken (permit precedence)
+T15 no permit + due deadline -> Expired (I5)
+T16 permit + future deadline -> immediate Woken
+T17 release wins before timer -> Woken
+T18 timer wins before release -> Expired
+T19 registered cancel -> true, Cancelled
+T20 cancel after grant (Woken) -> false
+T21 cancel after expiry (Expired) -> false
+T22 repeated cancel -> second false
+T23 detached node cancel -> false
+T24 wrong Semaphore, same Scheduler -> false
+T25 wrong Semaphore, different Scheduler -> false
+T26 external-thread release wakes a parked Live Scheduler
+T27 terminal waits leave the queue empty (no leak)
+T28 terminal timed waits leave no timer registration
+T29 safe destruction after terminal closure
+T30 repeated mixed multi-waiter stress (100x K=3)
+```
+
+NEG compile probe: `tests/e12_semaphore_authority_probe.cpp` (F-SEM-SEAM-1
+authority sealing).
+
+### 14.13 Verification results (autonomous run)
+
+```text
+targeted e12_semaphore_test (debug)            PASS (31/31)
+targeted e12_semaphore_test (release)          PASS
+TSan  e12_semaphore_test (clang tsan)          PASS (0 warnings)
+ASan  e12_semaphore_test (clang asan)          PASS (0 errors, 0 leaks)
+UBSan e12_semaphore_test (clang asanubsan)     PASS (0 errors, 0 leaks)
+TSan regression: e12_event_test                PASS (0 warnings)
+TSan regression: e11_timer_wait_test           PASS (0 warnings)
+TSan regression: e9_external_wake_test         PASS (0 warnings)
+async regression (debug): E12-A/E11/E10/E9     PASS (GREEN)
+formal gate (verify-e12-semaphore-formal.sh)   exit 0
+  correct safety model                         PASS (58332 states / 12214 distinct)
+  NEG-SEM-1 AdmissionClosure                   CEX InvAdmissionClosure
+  NEG-SEM-2 ReleaseLoss                        CEX InvPermitConservation
+  NEG-SEM-3 DoubleStore                        CEX InvPermitConservation
+  NEG-SEM-4 NonFIFOGrant                       CEX InvFIFOGrant
+  NEG-SEM-5 OverflowMutation                   CEX InvOverflowNonMutation
+  NEG-SEM-6 IdlePermitEligibleWaiter           CEX InvNoIdlePermitWithEligibleWaiter
+  NEG-SEM-7 DeadlinePrecedence                 CEX InvPermitFirstDeadline
+  WRONG-PROPERTY gate                          OK
+  COMPILE-PROBE gate (F-SEM-SEAM-1)            OK (bypass fails to compile)
+TLC runtime version                            2026.07.09.134028 (rev 227f61b)
+```
+
+### 14.14 Autonomous self-review findings
+
+See the final implementation report's section N. No blocking defect was found
+during the autonomous adversarial self-review; one non-blocking pre-existing
+observation was recorded (the `e10_corrective_c5_test` `-Wunused-variable` on
+`order_bad`, unrelated to E12-B, present at HEAD `aab46e4`, out of scope).
+
+### 14.15 Scope audit (autonomous)
+
+```text
+generic grant framework            NO
+public WaitQueue access            NO (no wait_queue() accessor; NEG probe)
+new winner seam                    NO
+Scheduler refactor                 NO (mirrors E12-A Event pattern)
+production test hooks              NO (test seams isolated to internal_testing)
+formal weakening                   NO (model unchanged; PASS + 7 NEG CEX)
+grant-in-flight state              NO
+refund path                        NO
+E12-C..G changes                   NO
+```
+
+### 14.16 Commit attribution
+
+```text
+production+tests commit   feat(async): implement E12-B counting semaphore
+documentation commit      docs(async): record E12-B semaphore implementation
+```
+(See the final implementation report for exact SHAs after commit.)
+
+### 14.17 Known limitations
+
+- `try_acquire` is NOT lock-free: it takes `global_mtx_` + `waiters_.mtx()` to
+  enforce no-barging. `available()` IS lock-free (observational only).
+- Destroying a Semaphore with registered wait epochs is a caller contract
+  violation (no cancel-all). Callers must drain all waits to terminal first.
+- The autonomous self-review does NOT count as the independent closure review.
+  Status remains `E12-B-IMPLEMENTATION: REVIEW-REQUIRED`.
 
 ---
 
