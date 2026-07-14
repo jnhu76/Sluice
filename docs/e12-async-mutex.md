@@ -1259,6 +1259,42 @@ Fiber A resumes on W1
 Fiber A unlocks AsyncMutex → succeeds
 ```
 
+#### 17.3.1 Corrective history (T19 blocker-execution race)
+
+T19 passed through three correctives (full record: `docs/reviews/E12-C-REVIEW.md` §L):
+
+- **Corrective-1** rewrote T19 with an E8-T1/T3 steal pattern but left the run
+  hanging/nondeterministic (DRAIN + `pending_spawn_` routing).
+- **Corrective-2** switched to `run_live(2)` and established the intended causal
+  trace (acquire on W0 → migrate to W1 while owning → unlock on W1). It gated
+  `flag_wake` on `a_suspended` + `waiting_count()>0`. **Defect:** both flip
+  BEFORE W0 pops `f_blocker`, so `f_blocker` was still stealable in W0's queue
+  when the coordinator freed W1. Passing repetitions only *inferred* that
+  `f_blocker` was running on W0.
+- **Corrective-3 (current)** closes the race with an explicit observed
+  `blocker_running` handshake: `f_blocker` asserts `current_worker_id()==0` and
+  release-stores `blocker_running=true` as its first meaningful act. The
+  coordinator must observe `a_suspended` AND `waiting_count()>0` AND
+  `blocker_running` before setting `flag_wake`. Observing `blocker_running`
+  proves `f_blocker` is `ws->current` on W0 (written from W0's TLS context),
+  hence popped from W0's runnable queue and no longer stealable. This state is
+  OBSERVED, not inferred. T19's coordinator waits were also made bounded
+  (test-local `bounded_wait`/`bounded_wait_pred`), so a failed gate fails the
+  test instead of hanging.
+
+Ordered causal checkpoints now asserted by T19:
+
+```text
+A_LOCKED_ON_W0          fA acquires on W0
+A_WAITING_WHILE_OWNING  fA suspends while owning
+BLOCKER_RUNNING_ON_W0   f_blocker is ws->current on W0 (anti-race handshake)
+WAKE_RELEASED           coordinator sets flag_wake (all three gates passed)
+A_RESUMED_ON_W1         fA resumes on the thief W1
+A_UNLOCKED_ON_W1        fA unlocks on W1 (unlock_worker == 1)
+BLOCKER_RELEASED        coordinator releases f_blocker (after unlock observed)
+F2_ACQUIRED             f2 acquires the now-free mutex
+```
+
 ---
 
 ## 18. Non-goals
@@ -1459,7 +1495,7 @@ OK    COMPILE-PROBE gate (raw WaitQueue/owner/is_locked bypass sealed)
 | Cancel races | T15–T16 (cancel-wins, handoff-wins; no republish) |
 | Exactly-once | T17 (one resolve, one publication, one resume) |
 | Destruction | T18 (safe unlocked/empty) |
-| Real E8 migration | T19 (lock on W0, deterministic steal to W1, unlock on W1) |
+| Real E8 migration | T19 (lock on W0, deterministic steal to W1, unlock on W1; explicit observed `blocker_running` handshake + bounded coordinator waits — Corrective-3) |
 | Coordination 500/500 | T20 (500-iteration assertion-only gate) |
 | Three-party no-barging | T21 (F0→W1→W2 handoff; newcomer cannot barge) |
 | Cancelled-head handoff | T22 (W1 cancelled; newcomer cannot barge; W2 receives ownership) |
@@ -1483,6 +1519,10 @@ ASan     (clang -m asan):     ALL TESTS PASSED (23 cases)
 UBSan    (clang -m ubsan):    ALL TESTS PASSED (23 cases)
 Valgrind (clang -m valgrind): ALL TESTS PASSED, 0 errors, 0 leaks (5009 allocs / 5009 frees)
 
+Re-confirmed after Corrective-3 (blocker-running handshake): freshly rebuilt per
+mode (no reused binaries). TSan executes the T19 handshake repeatedly (T19 direct
+×5 under TSan: clean); full suite clean under TSan/ASan/UBSan.
+
 Regression:
   E10 (e10_wait_queue_test):      ALL TESTS PASSED
   E10 (e10_corrective_c5_test):   ALL TESTS PASSED
@@ -1490,8 +1530,22 @@ Regression:
   E12-A (e12_event_test):         ALL TESTS PASSED
   E12-B (e12_semaphore_test):     ALL TESTS PASSED
   E12-C (e12_async_mutex_test):   ALL TESTS PASSED (23 cases, 0 fail, 0 skip)
+  E8 steal (e8_steal_test e8_t3): 500 / 500 PASS
   full suite:                     ALL TESTS PASSED (0 fail, 0 skip)
 ```
+
+#### 20.9.1 Migration 500/500 gate (post Corrective-3)
+
+```text
+T19 ownership migration: 500 / 500 PASS   (e12_async_mutex_test e12_mtx_t19_real_migration)
+E8 steal regression:     500 / 500 PASS   (e8_steal_test e8_t3)
+E12-C coordination:      500 / 500 PASS   (e12_async_mutex_test e12_mtx_t20_coordination_500)
+```
+
+Runner: `scripts/verify-e8-stability.sh release <binary> <filter> 500`. Each T19
+invocation started the binary, executed T19, asserted `blocker_running` on W0,
+asserted `acquire_worker==0` and `unlock_worker==1`, and exited successfully:
+0 launch failures, 0 retries, 0 skips.
 
 ### 20.9.1 No-barging formal closure
 

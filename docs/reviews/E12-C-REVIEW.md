@@ -241,9 +241,100 @@ No other findings in production code, formal model, test infrastructure, build s
 **Full Clang regression:** ALL TESTS PASSED.
 **E8 steal regression:** ALL TESTS PASSED (11 cases).
 
+### E12-C-MIGRATION-EVIDENCE-CORRECTIVE-2
+
+**Residual defect left by Corrective-1:** the coordinator-thread routing used
+`run(2)` (DRAIN), which terminates as soon as fA suspends (MW-S3-unresolved),
+and routed the resumed fiber to `pending_spawn_` rather than back onto W0's
+queue. The combination made T19 hang and behave nondeterministically.
+
+**Corrective applied:**
+- Switched the run to `run_live(2)` (LIVE: stays resident while fA is suspended
+  in `waiting_ready_`; W1 parks instead of terminating).
+- Rewrote the steal topology to mirror e8_t3: fA spawns `f_blocker` onto W0's
+  queue (behind the still-running fA) via `spawn_on`; `f_idle` spins on W1 to
+  keep it busy; `f_blocker` spins on W0 to keep it busy. This establishes the
+  intended causal trace (acquire on W0 → migrate to W1 while owning → unlock on
+  W1), not merely steal-before-acquisition.
+
+**Defect remaining after Corrective-2 (the blocker-execution race):** the
+coordinator gated `flag_wake` on `a_suspended` + `waiting_count()>0`. BOTH flip
+BEFORE W0's worker loop pops `f_blocker` (`a_suspended` is set by fA right
+before `await_ready_flag`; `waiting_count` flips when fA registers in
+`waiting_ready_`, inside `await_ready_flag`). So there was a window in which
+`f_blocker` was still STEALABLE in W0's runnable queue at the instant the
+coordinator released `flag_wake` (freeing W1). Corrective-2 *established the
+intended trace* but did not *structurally exclude* `f_blocker` being stolen to
+W1 — passing repetitions only *inferred* that f_blocker was running on W0.
+
+### E12-C-MIGRATION-EVIDENCE-CORRECTIVE-3 (COMPLETE — awaiting narrow re-review)
+
+**Original defect:** the blocker-execution race described above (Corrective-2's
+initial version lacked an explicit `blocker_running` handshake).
+
+**Corrective applied (test-only; no production semantics touched):**
+- Added a test-local atomic `blocker_running`. The first meaningful operation in
+  `f_blocker` is an assertion `current_worker_id()==0` followed by a release
+  store of `blocker_running=true`. Because `blocker_running` is written from
+  W0's TLS context, observing it proves `f_blocker` is `ws->current` on W0 —
+  popped from W0's runnable queue and therefore NO LONGER STEALABLE from W0.
+  This state is OBSERVED, not inferred from `waiting_count`,
+  `running_fiber_count`, final worker IDs, or successful completion.
+- The coordinator must now observe ALL THREE of `a_suspended`,
+  `waiting_count()>0`, AND `blocker_running` before setting `flag_wake`. By the
+  time W1 becomes free, `f_blocker` is provably running on W0.
+- The coordinator releases `f_blocker` only AFTER observing `unlock_worker==1`
+  AND `a_unlocked==true`.
+- Added ordered causal checkpoints: `A_LOCKED_ON_W0`, `A_WAITING_WHILE_OWNING`,
+  `BLOCKER_RUNNING_ON_W0`, `WAKE_RELEASED`, `A_RESUMED_ON_W1`,
+  `A_UNLOCKED_ON_W1`, `BLOCKER_RELEASED`, `F2_ACQUIRED`.
+- Bounded failure behaviour (§3): replaced the unbounded `spin_wait` coordinator
+  waits in T19 with test-local bounded variants (`bounded_wait` /
+  `bounded_wait_pred`, 200000 yield-cycles) that return false on timeout and
+  produce a test failure instead of hanging. On any gate failure the
+  coordinator sets the release flags so `run_live` drains and `runner.join()`
+  returns. `sleep_for` is not used as causal synchronisation.
+
+**Evidence (500/500, freshly built clang release; 0 launch failures / 0 retries):**
+
+| Gate | Binary | Filter | Result |
+| --- | --- | --- | --- |
+| T19 ownership migration | e12_async_mutex_test | e12_mtx_t19_real_migration | 500 / 500 PASS |
+| E8 steal regression | e8_steal_test | e8_t3 | 500 / 500 PASS |
+| E12-C coordination | e12_async_mutex_test | e12_mtx_t20_coordination_500 | 500 / 500 PASS |
+
+Runner: `scripts/verify-e8-stability.sh <mode> <binary> <filter> 500`. Each of
+the 500 invocations started the binary, executed T19, asserted `blocker_running`
+on W0, asserted `acquire_worker==0`, asserted `unlock_worker==1`, and exited
+successfully. No failed iteration was replaced by a later successful run.
+
+**Sanitizers (freshly rebuilt per mode; not reused across modes):**
+
+| Mode | Result |
+| --- | --- |
+| TSan (clang -m tsan) | PASS, no races (full suite; T19 handshake executed repeatedly) |
+| ASan (clang -m asan) | PASS |
+| UBSan (clang -m ubsan) | PASS |
+
+**Worker & fiber evidence (all observed by fA itself):**
+
+```text
+acquire_worker == 0            (fA acquired on W0)
+unlock_worker == 1             (fA unlocked on W1 after real E8 steal)
+acquire_worker != unlock_worker
+mtx.lock()    occurs before suspension
+mtx.unlock()  occurs after resume on W1
+f2 acquires only after fA unlocks
+blocker_running observed while fA is registered waiting (f_blocker = ws->current on W0)
+```
+
+No production ownership state was manually changed.
+
 ### Updated verdict
 
-F1 (P1): **RESOLVED** — T19 now deterministically proves real E8 migration.
+F1 (P1): **RESOLVED** — T19 now deterministically proves real E8 migration, and
+Corrective-3 closes the blocker-execution race via an explicit observed
+`blocker_running` handshake (not inferred from secondary state).
 
 No remaining P1 or P2 findings.
 
@@ -253,8 +344,13 @@ No remaining P1 or P2 findings.
 
 E12-C-IMPLEMENTATION-1-INDEPENDENT-REVIEW: **PASS** (corrective applied).
 E12-C-MIGRATION-EVIDENCE-CORRECTIVE-1: **COMPLETE**.
+E12-C-MIGRATION-EVIDENCE-CORRECTIVE-2: **COMPLETE** (intended trace established;
+residual blocker-execution race carried to Corrective-3).
+E12-C-MIGRATION-EVIDENCE-CORRECTIVE-3: **COMPLETE** — blocker-execution race
+closed by explicit `blocker_running` handshake.
 
-Await narrow independent corrective re-review. On PASS:
+Await narrow independent corrective re-review (see §N of the corrective spec).
+On PASS:
 ```
 E12-C-IMPLEMENTATION: CLOSED
 E12-C: CLOSED
