@@ -28,3 +28,5 @@ a.out
 
 # TLC (TLA+) transient disk state (checker fingerprint-set output)
 states/
+# TLC counterexample trace exploration specs (regenerated on each CEX run)
+*_TTrace*.tla
