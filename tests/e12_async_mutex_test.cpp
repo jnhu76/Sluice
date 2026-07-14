@@ -39,7 +39,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
-#include <cstdio>
 #include <thread>
 
 using namespace sluice::async;
@@ -84,6 +83,30 @@ public:
     while (!pred()) {
         std::this_thread::yield();
     }
+}
+
+// Bounded variants: a failed wait must produce a test failure rather than hang
+// indefinitely (E12-C Corrective-3 §3: bounded failure behaviour). They poll
+// for at most `max_iters` yield-cycles and return false on timeout. A bounded
+// wait is a FAILURE GUARD ONLY — it is never used as causal synchronisation.
+constexpr unsigned kBoundedWaitIters = 200000;
+
+[[maybe_unused]] inline bool bounded_wait(std::atomic<bool>& flag,
+                                          unsigned max_iters = kBoundedWaitIters) {
+    for (unsigned i = 0; i < max_iters; ++i) {
+        if (flag.load(std::memory_order::acquire)) return true;
+        std::this_thread::yield();
+    }
+    return flag.load(std::memory_order::acquire);
+}
+
+[[maybe_unused]] inline bool bounded_wait_pred(auto&& pred,
+                                               unsigned max_iters = kBoundedWaitIters) {
+    for (unsigned i = 0; i < max_iters; ++i) {
+        if (pred()) return true;
+        std::this_thread::yield();
+    }
+    return pred();
 }
 
 // A ready-flag the owner awaits to yield the worker while holding the lock.
@@ -933,62 +956,129 @@ SLUICE_TEST_CASE(e12_mtx_t18_destruction_safe_unlocked_empty) {
 // Slice 6 — Real E8 migration
 // ===========================================================================
 
-// ---- T19: lock then unlock after real E8 steal/migration ------------------
+// ---- T19: lock-own-migrate-unlock — ownership survives real E8 steal -----
 //
-// DETERMINISTIC proof that AsyncMutex ownership is Fiber*-based, not Worker-
-// based. Uses the E8 steal pattern (E8-T1/T3):
+// DETERMINISTIC proof that AsyncMutex Fiber*-ownership survives real E8
+// migration BETWEEN lock and unlock. Corrective-3: proves the required trace
+// (acquire on W0 -> migrate to W1 while owning -> unlock on W1), AND closes
+// the blocker-execution race left open by Corrective-2.
 //
-//   1. f_idle completes on W1 -> W1 idle.
-//   2. f_blocker holds W0 busy (spinning).
-//   3. f_blocker spawns fA on W0's queue via spawn_on (stealable).
-//   4. W1 steals fA from W0 -> fA runs on W1.
-//   5. fA acquires mutex on W1, records worker ID, unlocks on W1.
-//   6. f2 acquires mutex after fA unlocks (proves ownership released).
+// THE BLOCKER-EXECUTION RACE (Corrective-2's residual defect): the Corrective-2
+// coordinator gated `flag_wake` on `a_suspended` + `waiting_count()>0`. BOTH
+// flip BEFORE W0's worker loop pops f_blocker:
+//   - a_suspended    is set by fA immediately before await_ready_flag;
+//   - waiting_count  flips when fA registers in waiting_ready_ (inside
+//                    await_ready_flag).
+// So there was a window where f_blocker was still STEALABLE in W0's runnable
+// queue at the moment the coordinator released flag_wake (freeing W1). Passing
+// repetitions did not structurally exclude f_blocker being stolen to W1.
 //
-// The coordinator uses a spawn-then-gate pattern: f_blocker signals when fA
-// has been spawned (making it stealable), and only releases AFTER fA unlocks.
-// This keeps W0 busy long enough for W1 to steal fA.
-SLUICE_TEST_CASE(e12_mtx_t19_migration_lock_then_unlock_after_steal) {
+// THE HANDSHAKE THAT CLOSES IT (Corrective-3): an explicit `blocker_running`
+// atomic published by f_blocker WHILE EXECUTING ON W0 — after an assertion that
+// current_worker_id()==0. The coordinator must observe ALL THREE of
+// `a_suspended`, `waiting_count()>0`, AND `blocker_running` before setting
+// flag_wake. Once blocker_running is true, f_blocker wrote it from W0's TLS
+// context, i.e. it is ws->current on W0 — popped from W0's runnable queue and
+// therefore no longer stealable from it. This state is OBSERVED, not inferred
+// from waiting_count/running_fiber_count/final worker IDs/completion.
+//
+// Determinism discipline (mirrors e8_t3): a steal is deterministic ONLY when
+// the victim (W0) is provably BUSY running a fiber (cannot pop its own queue)
+// and the thief (W1) is IDLE (so it steals). Two load-bearing anti-race gates:
+//   (1) f_idle spins on flag_wake on W1 — W1 cannot steal f_blocker while fA
+//       is between "queued f_blocker" and "suspended + blocker_running". By the
+//       time flag_wake is set, f_blocker is already RUNNING on W0 (observed).
+//   (2) f_blocker spins on W0 — W0 cannot pop fA after fA is routed. Released
+//       only AFTER the coordinator observes unlock_worker==1.
+//
+// ORDERED CAUSAL TRACE (checkpoints recorded below):
+//   A_LOCKED_ON_W0       fA acquires on W0
+//   A_WAITING_WHILE_OWNING fA suspends while owning (a_suspended)
+//   BLOCKER_RUNNING_ON_W0 W0 popped f_blocker; it is ws->current on W0
+//   WAKE_RELEASED        coordinator sets flag_wake (all three gates passed)
+//   A_RESUMED_ON_W1      fA resumes on the thief W1
+//   A_UNLOCKED_ON_W1     fA unlocks on W1 (unlock_worker==1)
+//   BLOCKER_RELEASED     coordinator releases f_blocker (after unlock observed)
+//   F2_ACQUIRED          f2 acquires the now-free mutex (ownership released)
+//
+// run_live (NOT run/drain) is mandatory: while fA is suspended in waiting_ready_
+// the classifier is MW-S3-unresolved; DRAIN would RETURN STALLED. external_wake
+// is possible (waiting_ready_ non-empty), so LIVE keeps W1 resident (parks).
+//
+// Suspension mechanism: await_ready_flag / wake_ready_flags_locked. The ready
+// flag is an INDEPENDENT test mechanism (a plain atomic); it does NOT touch the
+// AsyncMutex owner or WaitNode. fA retains AsyncMutex ownership throughout.
+SLUICE_TEST_CASE(e12_mtx_t19_real_migration_lock_own_unlock) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncMutex mtx(sched);
-    WaitNode nA;
-    std::atomic<bool> a_spawned{false};
-    std::atomic<bool> a_acquired{false};
-    std::atomic<unsigned> wid_before{static_cast<unsigned>(-1)};
-    std::atomic<unsigned> wid_after{static_cast<unsigned>(-1)};
-    std::atomic<bool> a_released{false};
-    std::atomic<bool> f2_acquired{false};
-    WaitNode nF2;
 
-    // f_idle: completes immediately on W1 -> W1 goes idle (ready to steal).
-    Fiber f_idle;
-    f_idle.set_entry([&](Fiber&) {});
+    // Independent ready flag (the suspend/resume mechanism; does NOT touch
+    // the AsyncMutex owner or WaitNode). Set by the coordinator OS-thread;
+    // observed by the worker-loop classify (wake_ready_flags_locked).
+    std::atomic<bool> flag_wake{false};
 
-    // fA: the migration subject. Declared first so f_blocker can reference it.
-    Fiber fA;
-    fA.set_entry([&](Fiber&) {
-        wid_before.store(Scheduler::current_worker_id(), std::memory_order_release);
-        mtx.lock(nA);
-        a_acquired.store(true, std::memory_order_release);
-        wid_after.store(Scheduler::current_worker_id(), std::memory_order_release);
-        mtx.unlock();
-        a_released.store(true, std::memory_order_release);
-    });
+    // Checkpoint atomics and WaitNodes. Ordered per the causal trace above.
+    std::atomic<bool> a_acquired{false};        // A_LOCKED_ON_W0
+    std::atomic<bool> a_suspended{false};       // A_WAITING_WHILE_OWNING
+    std::atomic<bool> blocker_running{false};   // BLOCKER_RUNNING_ON_W0
+    std::atomic<bool> wake_released{false};     // WAKE_RELEASED
+    std::atomic<bool> a_unlocked{false};        // A_UNLOCKED_ON_W1
+    std::atomic<unsigned> acquire_worker{static_cast<unsigned>(-1)};
+    std::atomic<unsigned> unlock_worker{static_cast<unsigned>(-1)};
+    std::atomic<bool> f2_acquired{false};       // F2_ACQUIRED
+    WaitNode nA;   // fA's mutex lock WaitNode
+    WaitNode nF2;  // f2's mutex lock WaitNode
 
-    // f_blocker: holds W0 busy. Spawns fA on W0's queue, signals the
-    // coordinator, then spins until released. The spin keeps W0 busy so W1
-    // (idle) steals fA from W0's queue.
+    // f_blocker: queued on W0 by fA (spawn_on from inside fA). After fA
+    // suspends, W0 pops f_blocker. Its FIRST meaningful act is to assert it is
+    // on W0 and publish blocker_running=true (release) — the handshake that
+    // proves f_blocker is ws->current on W0 (no longer stealable). It then
+    // spins on release_blocker, keeping W0 busy until the coordinator observes
+    // unlock_worker==1. blocker_running is the OBSERVED anti-race state; it is
+    // not inferred from waiting_count/running_fiber_count/completion.
     std::atomic<bool> release_blocker{false};
     Fiber f_blocker;
     f_blocker.set_entry([&](Fiber&) {
-        sched.spawn_on(fA, Scheduler::current_worker_id());
-        a_spawned.store(true, std::memory_order_release);
+        SLUICE_CHECK_MSG(Scheduler::current_worker_id() == 0,
+                         "f_blocker executes on W0");
+        blocker_running.store(true, std::memory_order_release);
         while (!release_blocker.load(std::memory_order_acquire)) {}
     });
 
-    // f2: acquires mutex AFTER A unlocks, proving unlock released ownership.
+    // fA: acquires mutex on W0, queues f_blocker on W0 (behind the still-
+    // running fA), then suspends on flag_wake while STILL OWNING the mutex.
+    Fiber fA;
+    fA.set_entry([&](Fiber&) {
+        acquire_worker.store(Scheduler::current_worker_id(), std::memory_order_release);
+        mtx.lock(nA);  // ACQUIRE on W0 (immediate; free mutex)
+        // Queue f_blocker on THIS worker (W0) while fA is still Running, so
+        // f_blocker sits in W0's local_runnable behind fA. W0 cannot pop it
+        // until fA suspends.
+        sched.spawn_on(f_blocker, Scheduler::current_worker_id());
+        a_acquired.store(true, std::memory_order_release);
+        a_suspended.store(true, std::memory_order_release);  // about to suspend
+        // Suspend on the independent flag while STILL OWNING the mutex.
+        sched.await_ready_flag(flag_wake);
+        // RESUMED on W1 (after W1 stole fA from W0's queue).
+        unlock_worker.store(Scheduler::current_worker_id(), std::memory_order_release);
+        mtx.unlock();  // UNLOCK on W1
+        a_unlocked.store(true, std::memory_order_release);
+    });
+
+    // f_idle: runs on W1. SPINS until flag_wake is set, keeping W1 BUSY so it
+    // cannot steal f_blocker off W0's queue while fA is between "queued
+    // f_blocker" and "blocker_running observed". Only after the coordinator
+    // sets flag_wake (all three gates passed) does f_idle complete, leaving W1
+    // idle to steal — by which point f_blocker is RUNNING on W0 (not stealable)
+    // and the only stealable ticket on W0 will be fA once the classify routes it.
+    Fiber f_idle;
+    f_idle.set_entry([&](Fiber&) {
+        while (!flag_wake.load(std::memory_order_acquire)) {}
+    });
+
+    // f2: acquires mutex AFTER fA unlocks, proving ownership was released.
     Fiber f2;
     f2.set_entry([&](Fiber&) {
         mtx.lock(nF2);
@@ -996,40 +1086,108 @@ SLUICE_TEST_CASE(e12_mtx_t19_migration_lock_then_unlock_after_steal) {
         mtx.unlock();
     });
 
-    FiberStack si, sb, sA2, s2;
+    FiberStack sA, si, sb, s2;
+    SLUICE_CHECK(sched.init_fiber(fA, sA.base(), sA.size()));
     SLUICE_CHECK(sched.init_fiber(f_idle, si.base(), si.size()));
     SLUICE_CHECK(sched.init_fiber(f_blocker, sb.base(), sb.size()));
-    SLUICE_CHECK(sched.init_fiber(fA, sA2.base(), sA2.size()));
     SLUICE_CHECK(sched.init_fiber(f2, s2.base(), s2.size()));
-    // f_blocker first (-> W0), f_idle second (-> W1).
-    sched.spawn(f_blocker);   // W0
-    sched.spawn(f_idle);      // W1
+    // fA first (-> W0), f_idle second (-> W1). Round-robin: next_spawn=0.
+    sched.spawn(fA);       // W0
+    sched.spawn(f_idle);   // W1
 
-    std::thread runner([&] { sched.run(2); });
+    // run_live: the run stays resident while fA is suspended (MW-S3 + external
+    // wake capable -> W1 parks instead of terminating the run). With run(2)
+    // (drain) the run would RETURN STALLED as soon as fA suspends.
+    std::thread runner([&] { sched.run_live(2); });
 
-    // Wait for fA to be spawned on W0 (stealable).
-    spin_wait(a_spawned);
+    // On any coordinator-side gate failure, set the release flags so the LIVE
+    // run can drain and runner.join() returns instead of hanging. These guards
+    // are FAILURE BOUNDS, not causal synchronisation.
+    auto release_for_drain = [&] {
+        release_blocker.store(true, std::memory_order_release);
+        flag_wake.store(true, std::memory_order_release);
+    };
 
-    // Wait for fA to be stolen by W1 and acquire the mutex.
-    spin_wait(a_acquired);
+    // 1. Wait for fA to have acquired the mutex AND reached its suspend point.
+    //    a_suspended is set immediately before await_ready_flag, so by the time
+    //    we observe it fA is (or is about to be) registered in waiting_ready_.
+    if (!bounded_wait(a_acquired)) {
+        release_for_drain();
+        runner.join();
+        SLUICE_CHECK_MSG(a_acquired.load(), "A_LOCKED_ON_W0: fA acquired on W0");
+        return;
+    }
+    if (!bounded_wait(a_suspended)) {
+        release_for_drain();
+        runner.join();
+        SLUICE_CHECK_MSG(a_suspended.load(),
+                         "A_WAITING_WHILE_OWNING: fA suspended while owning");
+        return;
+    }
 
-    // Spawn f2 so it will acquire after A unlocks.
+    // 2. THE ANTI-RACE HANDSHAKE. Observe ALL THREE conditions before releasing
+    //    flag_wake: a_suspended, waiting_count()>0 (fA registered in
+    //    waiting_ready_, so the LIVE run keeps W1 resident), AND blocker_running
+    //    (f_blocker popped by W0 and ws->current on W0 — NOT stealable). This
+    //    is state OBSERVATION, never sleep_for-based causal sync.
+    bool wc_ok = bounded_wait_pred(
+        [&] { return sched.waiting_count() > 0; });
+    bool br_ok = bounded_wait_pred(
+        [&] { return blocker_running.load(std::memory_order_acquire); });
+    if (!(wc_ok && br_ok)) {
+        release_for_drain();
+        runner.join();
+        SLUICE_CHECK_MSG(blocker_running.load(),
+                         "BLOCKER_RUNNING_ON_W0: f_blocker running on W0 before wake");
+        return;
+    }
+    // blocker_running observed while sched has a waiting entry: f_blocker is
+    // ws->current on W0 (wrote the flag from W0's TLS context), hence popped
+    // from W0's runnable queue and not stealable from W0.
+
+    // 3. WAKE_RELEASED. Make fA runnable: set flag_wake. The worker-loop
+    //    classify (wake_ready_flags_locked) routes fA back onto W0's queue
+    //    (owner=W0, recorded at await_ready_flag time). W0 is busy spinning
+    //    f_blocker, so W0 cannot pop fA; the idle W1 steals it.
+    flag_wake.store(true, std::memory_order_release);
+    wake_released.store(true, std::memory_order_release);
+
+    // 4. Wait for fA to resume on W1 (the thief) and unlock.
+    if (!bounded_wait(a_unlocked)) {
+        release_for_drain();
+        runner.join();
+        SLUICE_CHECK_MSG(a_unlocked.load(), "A_UNLOCKED_ON_W1: fA resumed on W1 and unlocked");
+        return;
+    }
+
+    // 5. The coordinator releases f_blocker ONLY AFTER observing unlock_worker
+    //    == 1 AND a_unlocked. spawn f2 so it acquires AFTER fA unlocks (proves
+    //    ownership released). It is routed round-robin and acquires the now-free
+    //    mutex.
     sched.spawn(f2);
+    if (!bounded_wait(f2_acquired)) {
+        release_for_drain();
+        runner.join();
+        SLUICE_CHECK_MSG(f2_acquired.load(), "F2_ACQUIRED: f2 acquired after unlock");
+        return;
+    }
 
-    // Wait for A to unlock.
-    spin_wait(a_released);
-
-    // Release the blocker so the run can terminate.
+    // 6. Release f_blocker so the run can terminate cleanly.
     release_blocker.store(true, std::memory_order_release);
     runner.join();
 
-    unsigned wa = wid_after.load(std::memory_order_acquire);
+    unsigned aw = acquire_worker.load(std::memory_order_acquire);
+    unsigned uw = unlock_worker.load(std::memory_order_acquire);
 
-    // THE MIGRATION ASSERTION: fA ran on W1 (the thief), NOT on W0.
-    SLUICE_CHECK_MSG(wa == 1, "after_worker == W1 (fA ran on the thief)");
-    SLUICE_CHECK_MSG(a_released.load(), "A unlocked after migration");
-    SLUICE_CHECK_MSG(nA.was_woken(), "A acquired (Woken)");
-    SLUICE_CHECK_MSG(f2_acquired.load(), "F2 acquired after A unlock");
+    // THE OWNERSHIP-MIGRATION ASSERTIONS (all observed by fA itself).
+    SLUICE_CHECK_MSG(blocker_running.load(),
+                     "f_blocker was executing on W0 (anti-race handshake observed)");
+    SLUICE_CHECK_MSG(aw == 0, "acquire_worker == W0");
+    SLUICE_CHECK_MSG(uw == 1, "unlock_worker == W1 (stolen from W0 while owning)");
+    SLUICE_CHECK_MSG(aw != uw, "worker changed between lock and unlock");
+    SLUICE_CHECK_MSG(a_unlocked.load(), "fA resumed after migration and unlocked");
+    SLUICE_CHECK_MSG(nA.was_woken(), "mutex acquired (Woken)");
+    SLUICE_CHECK_MSG(f2_acquired.load(), "F2 acquired after unlock (ownership released)");
     SLUICE_CHECK_MSG(nF2.was_woken(), "F2 resolved Woken");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
     SLUICE_CHECK_MSG(fA.state() == FiberState::done, "fA completed");
