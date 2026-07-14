@@ -206,9 +206,10 @@ E12-C builds on E10 (WaitQueue, WaitNode), E11 (DeadlineTimer), and E12-A/E12-B 
 
 | ID | Severity | File | Finding | Status |
 |----|----------|------|---------|--------|
-| F1 | P1 | T19 / §17.3 | T19 does not prove actual E8 migration; doc claim overstated | OPEN |
-| F2 | P3 | §20.7 | Table header says "Real" but test CHECK says "possible" — doc drift | COVERS F1 |
-| F3 | P3 | T19 | Comment says "after_steal" but no steal is forced — misleading naming | COVERS F1 |
+| F1 | P1 | T19 / §17.3 | T19 does not prove actual E8 migration; doc claim overstated | RESOLVED (C1–C3) |
+| F2 | P3 | §20.7 | Table header says "Real" but test CHECK says "possible" — doc drift | RESOLVED (C3) |
+| F3 | P3 | T19 | Comment says "after_steal" but no steal is forced — misleading naming | RESOLVED (C1) |
+| F4 | P2 | T19 coordinator | Unsynchronized `waiting_count()` read of Scheduler guarded state (data race) | RESOLVED (C4) |
 
 No other findings in production code, formal model, test infrastructure, build system, or documentation.
 
@@ -267,7 +268,7 @@ coordinator released `flag_wake` (freeing W1). Corrective-2 *established the
 intended trace* but did not *structurally exclude* `f_blocker` being stolen to
 W1 — passing repetitions only *inferred* that f_blocker was running on W0.
 
-### E12-C-MIGRATION-EVIDENCE-CORRECTIVE-3 (COMPLETE — awaiting narrow re-review)
+### E12-C-MIGRATION-EVIDENCE-CORRECTIVE-3 (COMPLETE)
 
 **Original defect:** the blocker-execution race described above (Corrective-2's
 initial version lacked an explicit `blocker_running` handshake).
@@ -294,6 +295,26 @@ initial version lacked an explicit `blocker_running` handshake).
   produce a test failure instead of hanging. On any gate failure the
   coordinator sets the release flags so `run_live` drains and `runner.join()`
   returns. `sleep_for` is not used as causal synchronisation.
+
+### E12-C-MIGRATION-EVIDENCE-CORRECTIVE-4 (COMPLETE — awaiting micro-review)
+
+**Residual defect left by Corrective-3:** the T19 coordinator called
+`Scheduler::waiting_count()` without `global_mtx_` while Worker threads
+concurrently modified the guarded `waiting_ready_` container — a genuine C++
+data race (undefined behaviour). TSan silence did not make the access valid.
+
+**Corrective applied (test-only; no production semantics touched):**
+- Removed the unsynchronized `waiting_count()` observation (`bounded_wait_pred`
+  reading `sched.waiting_count() > 0`) from the T19 coordinator gate.
+- The coordinator now gates solely on `a_suspended` + `blocker_running`.
+  `blocker_running` is the authoritative suspension and W0-occupancy proof:
+  because `f_blocker` was queued behind `fA` on W0's `local_runnable`, it can
+  execute only after `fA` completed `await_ready_flag` (registered in
+  `waiting_ready_`, committed Waiting via `make_waiting()`, and context-switched
+  away).
+- Removed the unused `wake_released` diagnostic variable.
+- Removed the now-unused `bounded_wait_pred` utility (dead code).
+- No production semantics touched. No new public or test-only APIs added.
 
 **Evidence (500/500, freshly built clang release; 0 launch failures / 0 retries):**
 
@@ -336,6 +357,11 @@ F1 (P1): **RESOLVED** — T19 now deterministically proves real E8 migration, an
 Corrective-3 closes the blocker-execution race via an explicit observed
 `blocker_running` handshake (not inferred from secondary state).
 
+F4 (P2): **RESOLVED** — Corrective-4 removes the unsynchronized `waiting_count()`
+observation, closing the test-only C++ data race. `sched.waiting_count()` at the
+end of T19 (post-`runner.join()`) is safe because no threads are concurrently
+modifying containers.
+
 No remaining P1 or P2 findings.
 
 ---
@@ -348,8 +374,11 @@ E12-C-MIGRATION-EVIDENCE-CORRECTIVE-2: **COMPLETE** (intended trace established;
 residual blocker-execution race carried to Corrective-3).
 E12-C-MIGRATION-EVIDENCE-CORRECTIVE-3: **COMPLETE** — blocker-execution race
 closed by explicit `blocker_running` handshake.
+E12-C-MIGRATION-EVIDENCE-CORRECTIVE-4: **COMPLETE** — unsynchronized
+`waiting_count()` removed; coordinator gates solely on `a_suspended` +
+`blocker_running`; data race closed.
 
-Await narrow independent corrective re-review (see §N of the corrective spec).
+Await final E12-C migration data-race micro-review (see §N of the corrective spec).
 On PASS:
 ```
 E12-C-IMPLEMENTATION: CLOSED

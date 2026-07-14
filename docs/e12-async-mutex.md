@@ -1271,7 +1271,7 @@ T19 passed through three correctives (full record: `docs/reviews/E12-C-REVIEW.md
   BEFORE W0 pops `f_blocker`, so `f_blocker` was still stealable in W0's queue
   when the coordinator freed W1. Passing repetitions only *inferred* that
   `f_blocker` was running on W0.
-- **Corrective-3 (current)** closes the race with an explicit observed
+- **Corrective-3** closes the race with an explicit observed
   `blocker_running` handshake: `f_blocker` asserts `current_worker_id()==0` and
   release-stores `blocker_running=true` as its first meaningful act. The
   coordinator must observe `a_suspended` AND `waiting_count()>0` AND
@@ -1281,14 +1281,24 @@ T19 passed through three correctives (full record: `docs/reviews/E12-C-REVIEW.md
   OBSERVED, not inferred. T19's coordinator waits were also made bounded
   (test-local `bounded_wait`/`bounded_wait_pred`), so a failed gate fails the
   test instead of hanging.
+- **Corrective-4** removes the unsynchronized `waiting_count()` observation from
+  the T19 coordinator. `sched.waiting_count()` accessed Scheduler guarded
+  containers (`waiting_ready_`) without `global_mtx_` — a genuine C++ data race
+  (undefined behaviour) that TSan silence did not make valid. The coordinator
+  now gates solely on `a_suspended` + `blocker_running`. `blocker_running` is
+  the authoritative suspension and W0-occupancy proof: because `f_blocker` was
+  queued behind `fA` on W0's `local_runnable`, it can execute only after `fA`
+  has completed `await_ready_flag` (registered in `waiting_ready_`, committed
+  Waiting via `make_waiting()`, and context-switched away). The unused
+  `wake_released` diagnostic and `bounded_wait_pred` utility are also removed.
 
 Ordered causal checkpoints now asserted by T19:
 
 ```text
 A_LOCKED_ON_W0          fA acquires on W0
-A_WAITING_WHILE_OWNING  fA suspends while owning
+A_WAITING_WHILE_OWNING  fA suspends while owning (source-order marker)
 BLOCKER_RUNNING_ON_W0   f_blocker is ws->current on W0 (anti-race handshake)
-WAKE_RELEASED           coordinator sets flag_wake (all three gates passed)
+WAKE_RELEASED           coordinator sets flag_wake (a_suspended + blocker_running)
 A_RESUMED_ON_W1         fA resumes on the thief W1
 A_UNLOCKED_ON_W1        fA unlocks on W1 (unlock_worker == 1)
 BLOCKER_RELEASED        coordinator releases f_blocker (after unlock observed)
@@ -1495,7 +1505,7 @@ OK    COMPILE-PROBE gate (raw WaitQueue/owner/is_locked bypass sealed)
 | Cancel races | T15–T16 (cancel-wins, handoff-wins; no republish) |
 | Exactly-once | T17 (one resolve, one publication, one resume) |
 | Destruction | T18 (safe unlocked/empty) |
-| Real E8 migration | T19 (lock on W0, deterministic steal to W1, unlock on W1; explicit observed `blocker_running` handshake + bounded coordinator waits — Corrective-3) |
+| Real E8 migration | T19 (lock on W0, deterministic steal to W1, unlock on W1; explicit observed `blocker_running` handshake — Corrective-3/4 closure; no unsynchronized Scheduler reads) |
 | Coordination 500/500 | T20 (500-iteration assertion-only gate) |
 | Three-party no-barging | T21 (F0→W1→W2 handoff; newcomer cannot barge) |
 | Cancelled-head handoff | T22 (W1 cancelled; newcomer cannot barge; W2 receives ownership) |
@@ -1519,9 +1529,10 @@ ASan     (clang -m asan):     ALL TESTS PASSED (23 cases)
 UBSan    (clang -m ubsan):    ALL TESTS PASSED (23 cases)
 Valgrind (clang -m valgrind): ALL TESTS PASSED, 0 errors, 0 leaks (5009 allocs / 5009 frees)
 
-Re-confirmed after Corrective-3 (blocker-running handshake): freshly rebuilt per
-mode (no reused binaries). TSan executes the T19 handshake repeatedly (T19 direct
-×5 under TSan: clean); full suite clean under TSan/ASan/UBSan.
+Re-confirmed after Corrective-4 (unsynchronized `waiting_count()` removed):
+freshly rebuilt per mode (no reused binaries). TSan executes the corrected T19
+handshake (no unsynchronized Scheduler state reads); full suite clean under
+TSan/ASan/UBSan.
 
 Regression:
   E10 (e10_wait_queue_test):      ALL TESTS PASSED
@@ -1534,7 +1545,7 @@ Regression:
   full suite:                     ALL TESTS PASSED (0 fail, 0 skip)
 ```
 
-#### 20.9.1 Migration 500/500 gate (post Corrective-3)
+#### 20.9.1 Migration 500/500 gate (post Corrective-4)
 
 ```text
 T19 ownership migration: 500 / 500 PASS   (e12_async_mutex_test e12_mtx_t19_real_migration)
