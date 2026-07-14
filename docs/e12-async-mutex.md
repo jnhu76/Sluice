@@ -728,7 +728,7 @@ EligiblePreQueue == SelectSeq(preQueue, LAMBDA e: preNodeState[e] = Registered)
 
 ### 14.5 Production critical section refinement
 
-The production `sem_acquire` / `await_wait` admission path holds
+The production `mutex_lock` / `mutex_lock_until` admission path holds
 `global_mtx_` + `q.mtx()` across:
 
 ```text
@@ -1418,7 +1418,7 @@ synchronous `Mutex` (`include/sluice/async/mutex.hpp`) is unchanged.
 | `tests/async_test_control_internal.hpp` | `PhaseTag::e12_mutex_handoff_before_publication` (phases[7]) |
 | `tests/async_test_control.hpp` | `E12MutexSeam` facade |
 | `tests/async_test_control.cpp` | `std::size(c->phases)` loop (no hardcoded count) |
-| `tests/e12_async_mutex_test.cpp` | T0–T20 deterministic + 500/500 coordination |
+| `tests/e12_async_mutex_test.cpp` | T0–T22 deterministic + 500/500 coordination |
 | `tests/e12_async_mutex_authority_probe.cpp` | Negative compile probe (must-not-compile) |
 
 ### 20.3 Private Scheduler helpers

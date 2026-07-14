@@ -1845,8 +1845,8 @@ bool Scheduler::mutex_try_lock(WaitQueue& waiters, Fiber*& owner) {
     // (recursive locking is forbidden, §7.1). A null current Fiber (external
     // thread / no g_worker) is a caller-precondition debug assert.
     WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncMutex::try_lock requires a running Fiber");
     Fiber* me = ws->current;
-    assert(me != nullptr && "AsyncMutex::try_lock requires a running Fiber");
     LockGuard lk(global_mtx_);
     LockGuard qlk(waiters.mtx());
     if (owner == me) {
@@ -1882,8 +1882,8 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
     // runs after this critical section (it sees this registered node and hands
     // off to it).
     WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncMutex::lock requires a running Fiber");
     Fiber* me = ws->current;
-    assert(me != nullptr && "AsyncMutex::lock requires a running Fiber");
     assert(owner != me && "AsyncMutex::lock recursive acquisition is a caller "
                           "precondition violation (not a successful acquisition)");
     {
@@ -1953,8 +1953,8 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
     //   3. Else: commit suspension.
     // A non-timer winner retires the registration in the same CS (E11 I4).
     WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncMutex::lock_until requires a running Fiber");
     Fiber* me = ws->current;
-    assert(me != nullptr && "AsyncMutex::lock_until requires a running Fiber");
     assert(owner != me && "AsyncMutex::lock_until recursive acquisition is a "
                           "caller precondition violation");
     TimerRegistration* reg = nullptr;
@@ -2109,8 +2109,9 @@ void Scheduler::mutex_unlock(WaitQueue& waiters, Fiber*& owner) {
     // Non-owner unlock and unlock-while-unlocked are caller-precondition debug
     // asserts with no owner/queue mutation. Requires a running Fiber
     // (g_worker->current); the current Fiber must equal `owner`.
-    Fiber* me = g_worker->current;
-    assert(me != nullptr && "AsyncMutex::unlock requires a running Fiber");
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncMutex::unlock requires a running Fiber");
+    Fiber* me = ws->current;
     LockGuard lk(global_mtx_);
     assert(owner == me && "AsyncMutex::unlock by non-owner is a caller "
                           "precondition violation (no owner/queue mutation)");

@@ -54,6 +54,8 @@ enum class PhaseTag : unsigned char {
     // Fiber), BEFORE make_runnable / route_runnable_locked publication. Holding
     // global_mtx_ (+ waiters_.mtx() inside). Proves owner-before-publication.
     e12_mutex_handoff_before_publication,
+
+    count
 };
 
 // Per-PhaseTag controller state. Owned by the controller registry, keyed on
@@ -70,7 +72,7 @@ struct PhaseState {
 // The controller entry for one Scheduler. Holds one PhaseState per tag. The
 // array is indexed by PhaseTag (cast to size_t). Lookups are O(1).
 struct SchedulerController {
-    PhaseState phases[7]{};
+    PhaseState phases[static_cast<std::size_t>(PhaseTag::count)]{};
 };
 
 // --- Called from scheduler.cpp (under SLUICE_ASYNC_INTERNAL_TESTING) ---
