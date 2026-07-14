@@ -56,7 +56,7 @@ CONSTANTS
     Fibers, F1, F2, F3,
     ConditionEpochs, C1, C2, C3,
     ReacquireEpochs, R1, R2, R3,
-    OrdinaryEpochs, O1, O2
+    OrdinaryEpochs, O1, O2, O3
 
 \* Unified mutex epoch domain (reacquire + ordinary).
 MutexEpochs == ReacquireEpochs \cup OrdinaryEpochs
@@ -157,7 +157,7 @@ ASSUME /\ Fibers # {}
        /\ R1 # R2 /\ R2 # R3 /\ R1 # R3
        /\ OrdinaryEpochs # {}
        /\ O1 \in OrdinaryEpochs /\ O2 \in OrdinaryEpochs
-       /\ O1 # O2
+       /\ O1 # O2 /\ O2 # O3 /\ O1 # O3
        \* Domain separation: no overlap between epoch types.
        /\ ConditionEpochs \cap ReacquireEpochs = {}
        /\ ConditionEpochs \cap OrdinaryEpochs = {}
@@ -863,6 +863,39 @@ InvReacquireAdmissionClosure ==
     lastAction = "ReacquireSuspend"
     => \/ preMutexOwner # NoOwner
        \/ Len(EligiblePreMutexQueue) > 0
+
+\* ===========================================================================
+\* POSITIVE REACHABILITY GATES (C9/C10 enabling evidence)
+\* ===========================================================================
+\* These prove MutexUnlockHandoff is reachable with >=2 eligible waiters in
+\* BOTH mixed-kind FIFO orders. Without OrdinaryEpochs expanded to >=3 and the
+\* resulting contention topology, the queue never reaches length 2 and the C9
+\* ("always grant R1") / C10 ("reacquire-only head") mutations are
+\* indistinguishable from correct FIFO behavior.
+\*
+\* Encoded as invariant-NEGATION probes: each invariant is the logical negation
+\* of the desired reachable state, so a counterexample IS the target state and
+\* proves reachability. The temporal operator <>P is the WRONG tool here -- it
+\* asserts every path eventually reaches P (liveness), which stuttering paths
+\* violate even when P is genuinely reachable.
+ReachOrdThenReqState ==
+    /\ lastAction = "MutexUnlockHandoff"
+    /\ Len(preMutexQueue) >= 2
+    /\ \A i \in 1..2 : preMutexNodeState[preMutexQueue[i]] = "Registered"
+    /\ preMutexQueue[1] \in OrdinaryEpochs
+    /\ preMutexQueue[2] \in ReacquireEpochs
+
+ReachReqThenOrdState ==
+    /\ lastAction = "MutexUnlockHandoff"
+    /\ Len(preMutexQueue) >= 2
+    /\ \A i \in 1..2 : preMutexNodeState[preMutexQueue[i]] = "Registered"
+    /\ preMutexQueue[1] \in ReacquireEpochs
+    /\ preMutexQueue[2] \in OrdinaryEpochs
+
+\* Invariant-negation probes: FALSE exactly at the reachable target state.
+\* NOT part of Inv (these are reachability evidence, not safety properties).
+NoReachOrdThenReq == ~ReachOrdThenReqState
+NoReachReqThenOrd == ~ReachReqThenOrdState
 
 \* ---- Full invariant conjunction ----
 Inv == /\ InvType

@@ -166,7 +166,8 @@ R3 = R3
 ReacquireEpochs = {R1, R2, R3}
 O1 = O1
 O2 = O2
-OrdinaryEpochs = {O1, O2}
+O3 = O3
+OrdinaryEpochs = {O1, O2, O3}
 EOF
   run E12AsyncConditionNegC6 "$outroot/E12AsyncConditionNegC6WrongProp.cfg" "$out"
   if ! tlc_launched "$out"; then
@@ -200,6 +201,19 @@ rc=0
 # Correct safety model (all invariants).
 expect_pass "E12AsyncCondition [safety, Inv]" \
             E12AsyncCondition E12AsyncCondition.cfg E12AsyncCondition.safety || rc=1
+
+# POSITIVE REACHABILITY GATES (C9/C10 enabling evidence).
+# These prove MutexUnlockHandoff is reachable with >=2 eligible waiters in
+# BOTH mixed-kind FIFO orders (Ordinary-then-Reacquire and Reacquire-then-
+# Ordinary). Without OrdinaryEpochs >= 3 the contention topology is absent and
+# the C9/C10 mutations are indistinguishable from correct FIFO behavior.
+# Encoded as invariant-negation: expect_fail = the target state IS reachable.
+expect_fail "REACH OrdThenReq" \
+            E12AsyncCondition E12AsyncCondition.reach1.cfg \
+            NoReachOrdThenReq E12AsyncCondition.reach1 || rc=1
+expect_fail "REACH ReqThenOrd" \
+            E12AsyncCondition E12AsyncCondition.reach2.cfg \
+            NoReachReqThenOrd E12AsyncCondition.reach2 || rc=1
 
 # NEG-C1: NonOwnerWait.
 expect_fail "NEG-C1 NonOwnerWait" \

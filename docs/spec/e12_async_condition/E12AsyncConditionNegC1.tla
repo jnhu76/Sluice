@@ -56,7 +56,7 @@ CONSTANTS
     Fibers, F1, F2, F3,
     ConditionEpochs, C1, C2, C3,
     ReacquireEpochs, R1, R2, R3,
-    OrdinaryEpochs, O1, O2
+    OrdinaryEpochs, O1, O2, O3
 
 \* Unified mutex epoch domain (reacquire + ordinary).
 MutexEpochs == ReacquireEpochs \cup OrdinaryEpochs
@@ -157,7 +157,7 @@ ASSUME /\ Fibers # {}
        /\ R1 # R2 /\ R2 # R3 /\ R1 # R3
        /\ OrdinaryEpochs # {}
        /\ O1 \in OrdinaryEpochs /\ O2 \in OrdinaryEpochs
-       /\ O1 # O2
+       /\ O1 # O2 /\ O2 # O3 /\ O1 # O3
        \* Domain separation: no overlap between epoch types.
        /\ ConditionEpochs \cap ReacquireEpochs = {}
        /\ ConditionEpochs \cap OrdinaryEpochs = {}
