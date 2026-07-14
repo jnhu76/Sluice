@@ -100,15 +100,6 @@ constexpr unsigned kBoundedWaitIters = 200000;
     return flag.load(std::memory_order::acquire);
 }
 
-[[maybe_unused]] inline bool bounded_wait_pred(auto&& pred,
-                                               unsigned max_iters = kBoundedWaitIters) {
-    for (unsigned i = 0; i < max_iters; ++i) {
-        if (pred()) return true;
-        std::this_thread::yield();
-    }
-    return pred();
-}
-
 // A ready-flag the owner awaits to yield the worker while holding the lock.
 // The setter (newcomer/waiter coordinator) sets it to release the owner.
 struct ReadyFlag {
@@ -973,14 +964,24 @@ SLUICE_TEST_CASE(e12_mtx_t18_destruction_safe_unlocked_empty) {
 // queue at the moment the coordinator released flag_wake (freeing W1). Passing
 // repetitions did not structurally exclude f_blocker being stolen to W1.
 //
-// THE HANDSHAKE THAT CLOSES IT (Corrective-3): an explicit `blocker_running`
-// atomic published by f_blocker WHILE EXECUTING ON W0 — after an assertion that
-// current_worker_id()==0. The coordinator must observe ALL THREE of
-// `a_suspended`, `waiting_count()>0`, AND `blocker_running` before setting
-// flag_wake. Once blocker_running is true, f_blocker wrote it from W0's TLS
-// context, i.e. it is ws->current on W0 — popped from W0's runnable queue and
-// therefore no longer stealable from it. This state is OBSERVED, not inferred
-// from waiting_count/running_fiber_count/final worker IDs/completion.
+// THE HANDSHAKE THAT CLOSES IT (Corrective-3 + Corrective-4):
+//   Corrective-3 added the explicit `blocker_running` handshake.
+//   Waiting_count()>0 was also part of the Corrective-3 gate but was an
+//   unsynchronized read of Scheduler guarded state (a C++ data race).
+//   Corrective-4 removes it: blocker_running alone is the authoritative
+//   suspension and W0-occupancy proof.
+//
+// f_blocker was queued behind fA on W0. f_blocker can execute only after
+// fA has context-switched out through await_ready_flag (completed
+// registration, committed Waiting via make_waiting(), and yielded the
+// worker). Therefore observing blocker_running==true proves fA completed
+// its suspension transition AND f_blocker is ws->current on W0 — popped
+// from W0's runnable queue and no longer stealable.
+//
+// blocker_running is published by f_blocker WHILE EXECUTING ON W0 — after
+// an assertion that current_worker_id()==0 — using release store. The
+// coordinator acquire-loads it. This is state OBSERVATION, never
+// sleep_for-based causal sync.
 //
 // Determinism discipline (mirrors e8_t3): a steal is deterministic ONLY when
 // the victim (W0) is provably BUSY running a fiber (cannot pop its own queue)
@@ -1023,7 +1024,6 @@ SLUICE_TEST_CASE(e12_mtx_t19_real_migration_lock_own_unlock) {
     std::atomic<bool> a_acquired{false};        // A_LOCKED_ON_W0
     std::atomic<bool> a_suspended{false};       // A_WAITING_WHILE_OWNING
     std::atomic<bool> blocker_running{false};   // BLOCKER_RUNNING_ON_W0
-    std::atomic<bool> wake_released{false};     // WAKE_RELEASED
     std::atomic<bool> a_unlocked{false};        // A_UNLOCKED_ON_W1
     std::atomic<unsigned> acquire_worker{static_cast<unsigned>(-1)};
     std::atomic<unsigned> unlock_worker{static_cast<unsigned>(-1)};
@@ -1125,32 +1125,27 @@ SLUICE_TEST_CASE(e12_mtx_t19_real_migration_lock_own_unlock) {
         return;
     }
 
-    // 2. THE ANTI-RACE HANDSHAKE. Observe ALL THREE conditions before releasing
-    //    flag_wake: a_suspended, waiting_count()>0 (fA registered in
-    //    waiting_ready_, so the LIVE run keeps W1 resident), AND blocker_running
-    //    (f_blocker popped by W0 and ws->current on W0 — NOT stealable). This
-    //    is state OBSERVATION, never sleep_for-based causal sync.
-    bool wc_ok = bounded_wait_pred(
-        [&] { return sched.waiting_count() > 0; });
-    bool br_ok = bounded_wait_pred(
-        [&] { return blocker_running.load(std::memory_order_acquire); });
-    if (!(wc_ok && br_ok)) {
+    // 2. THE ANTI-RACE HANDSHAKE. Observe blocker_running before releasing
+    //    flag_wake. blocker_running==true proves f_blocker is executing on W0
+    //    (wrote the flag from W0's TLS context after asserting
+    //    current_worker_id()==0). Because f_blocker was queued behind fA on
+    //    W0, f_blocker can execute only after fA completed await_ready_flag
+    //    (registered in waiting_ready_, committed Waiting via make_waiting(),
+    //    and context-switched away). Therefore blocker_running is the
+    //    authoritative suspension AND W0-occupancy proof.
+    if (!bounded_wait(blocker_running)) {
         release_for_drain();
         runner.join();
         SLUICE_CHECK_MSG(blocker_running.load(),
                          "BLOCKER_RUNNING_ON_W0: f_blocker running on W0 before wake");
         return;
     }
-    // blocker_running observed while sched has a waiting entry: f_blocker is
-    // ws->current on W0 (wrote the flag from W0's TLS context), hence popped
-    // from W0's runnable queue and not stealable from W0.
 
     // 3. WAKE_RELEASED. Make fA runnable: set flag_wake. The worker-loop
     //    classify (wake_ready_flags_locked) routes fA back onto W0's queue
     //    (owner=W0, recorded at await_ready_flag time). W0 is busy spinning
     //    f_blocker, so W0 cannot pop fA; the idle W1 steals it.
     flag_wake.store(true, std::memory_order_release);
-    wake_released.store(true, std::memory_order_release);
 
     // 4. Wait for fA to resume on W1 (the thief) and unlock.
     if (!bounded_wait(a_unlocked)) {
