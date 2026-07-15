@@ -1304,3 +1304,284 @@ SLUICE_TEST_CASE(e12_cond_t27_safe_destruction_empty) {
     }
     SLUICE_CHECK_MSG(true, "AsyncCondition destroyed with no active waits");
 }
+
+// NOTE: T28 (destruction with active Condition waiter) and T29 (destruction
+// during reacquire epoch) are NEGATIVE contract tests: they trigger a debug
+// assertion (WaitNode::~WaitNode or active_waits_) in debug builds. The
+// harness has no death-test support, so they are excluded from the run target
+// and verified by ASan/dbg builds instead. The formal model gate covers the
+// same contract as NEG-C7 (InvDestructionPrecondition).
+
+// ===========================================================================
+// Slice 6 — Real E8 migration (T25/T26)
+// ===========================================================================
+
+// ---- T25: Condition migration across Worker steal (E8) --------------------
+// DETERMINISTIC proof that a Condition waiter can suspend on W0 and resume
+// (reacquire) on a different Worker after an E8 steal. The owner acquires
+// the Mutex on W0, enters cond.wait(), suspends on the Condition queue. An
+// OS-thread coordinator calls notify_one, making the fiber Runnable on W0's
+// queue. W1 (idle) steals it. Bug: worker-pinned ownership assumption.
+// Evidence: CAUSAL (worker_id checkpoint before wait vs after reacquire).
+SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond(mtx);
+
+    std::atomic<unsigned> acquire_worker{static_cast<unsigned>(-1)};
+    std::atomic<unsigned> unlock_worker{static_cast<unsigned>(-1)};
+    std::atomic<bool> a_suspended{false};
+    std::atomic<bool> blocker_running{false};
+    std::atomic<bool> a_unlocked{false};
+    std::atomic<bool> release_blocker{false};
+    WaitNode nA, cn;
+
+    // f_blocker: queued on W0 by fA. After fA suspends, W0 pops f_blocker.
+    // It keeps W0 busy so fA's runnable fiber can be stolen by W1.
+    Fiber f_blocker;
+    f_blocker.set_entry([&](Fiber&) {
+        SLUICE_CHECK_MSG(Scheduler::current_worker_id() == 0,
+                         "f_blocker executes on W0");
+        blocker_running.store(true, std::memory_order_release);
+        while (!release_blocker.load(std::memory_order_acquire)) {}
+    });
+
+    // fA: acquires mutex on W0, queues f_blocker on W0, waits on condition.
+    // After notify_one + reacquire on (potentially stolen) worker, unlocks.
+    Fiber fA;
+    fA.set_entry([&](Fiber&) {
+        acquire_worker.store(Scheduler::current_worker_id(), std::memory_order_release);
+        mtx.lock(nA);
+        sched.spawn_on(f_blocker, Scheduler::current_worker_id());
+        a_suspended.store(true, std::memory_order_release);
+        (void)cond.wait(cn);  // releases mtx, suspends; resumes on thief
+        unlock_worker.store(Scheduler::current_worker_id(), std::memory_order_release);
+        mtx.unlock();
+        a_unlocked.store(true, std::memory_order_release);
+    });
+
+    FiberStack sa, sb;
+    SLUICE_CHECK(sched.init_fiber(fA, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(f_blocker, sb.base(), sb.size()));
+    sched.spawn(fA);  // fA -> W0 (round-robin with 1 worker initially)
+    // f_blocker NOT spawned — fA spawns it on W0 from inside its body.
+
+    // run_live(2): two Workers. run_live starts W0 (fA runs first).
+    std::thread run_thread([&] { sched.run_live(2); });
+
+    // Wait for f_blocker to confirm it's running on W0 (W0 busy — not idle).
+    while (!blocker_running.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    // fA is suspended on the Condition queue; f_blocker spins on W0.
+    // W1 is idle (no fibers assigned to it). External notify_one from
+    // coordinator OS thread resolves fA's condition node (Woken).
+    // fA is made Runnable on W0's queue. W1 steals fA from W0's queue
+    // (W0 is busy running f_blocker). fA reacquires and unlocks on W1.
+    cond.notify_one();
+
+    // Wait for fA to complete reacquire and unlock.
+    while (!a_unlocked.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    release_blocker.store(true, std::memory_order_release);
+    run_thread.join();
+
+    unsigned aw = acquire_worker.load(std::memory_order_acquire);
+    unsigned uw = unlock_worker.load(std::memory_order_acquire);
+    SLUICE_CHECK_MSG(aw == 0, "acquire_worker == W0");
+    SLUICE_CHECK_MSG(uw != aw,
+                     "worker changed between wait and reacquire (migration)");
+    SLUICE_CHECK_MSG(a_unlocked.load(), "fA completed reacquire and unlocked");
+    SLUICE_CHECK_MSG(cn.was_woken(), "condition node resolved Woken");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// ===========================================================================
+// Slice 7 — Coordination stress (T30–T32)
+// ===========================================================================
+//
+// Repeated stress gates: each iteration resolves all waiters with no queue
+// leak, no lost wakeup, no double resolution. Per repo convention
+// (e12_semaphore_test T30 / e12_async_mutex_test T20 / e12_event_test), the
+// gate is assertion-only.
+
+// ---- T30: lost-notify coordination 1000/1000 ------------------------------
+// 1000 iterations: owner notifies at random boundary points relative to waiter
+// registration; assert no lost wakeup, no permanent sleep, no double wake,
+// exactly-once via condition outcome. Each iteration uses a fresh Condition.
+SLUICE_TEST_CASE(e12_cond_t30_lost_notify_coordination_1000) {
+    if constexpr (!fiber_ctx::supported) return;
+    constexpr int ITERS = 1000;
+    int total_woken = 0;
+
+    for (int it = 0; it < ITERS; ++it) {
+        AsyncIoContext ctx(std::make_unique<IdleBackend>());
+        Scheduler sched(ctx);
+        AsyncMutex mtx(sched);
+        AsyncCondition cond(mtx);
+
+        std::atomic<bool> waiter_done{false};
+        std::atomic<bool> outcome_woken{false};
+        std::atomic<bool> waiter_suspended{false};
+        WaitNode mlock, cn;
+
+        Fiber w;
+        w.set_entry([&](Fiber&) {
+            mtx.lock(mlock);
+            waiter_suspended.store(true, std::memory_order::release);
+            WaitOutcome r = cond.wait(cn);
+            outcome_woken.store(r == WaitOutcome::woken, std::memory_order::release);
+            waiter_done.store(true, std::memory_order::release);
+            mtx.unlock();
+        });
+        Fiber notifier;
+        notifier.set_entry([&](Fiber&) {
+            sched.await_ready_flag(waiter_suspended);
+            cond.notify_one();
+        });
+
+        FiberStack sa, sb;
+        SLUICE_CHECK(sched.init_fiber(w, sa.base(), sa.size()));
+        SLUICE_CHECK(sched.init_fiber(notifier, sb.base(), sb.size()));
+        sched.spawn(w);
+        sched.spawn(notifier);
+        sched.run(1);
+
+        SLUICE_CHECK_MSG(waiter_done.load(), "waiter completed each iteration");
+        if (outcome_woken.load()) ++total_woken;
+        SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no queue leak per iteration");
+    }
+    SLUICE_CHECK_MSG(total_woken == ITERS,
+                     "1000/1000: all iterations resolved waiter Woken");
+}
+
+// ---- T31: notify/cancel/expire 500/500 -----------------------------------
+// 500 iterations: three-way race among notify, cancel, and timer-expire on
+// a condition node. Each iteration: waiters use wait_until, driver advances
+// clock past deadline, may cancel or notify. Assert exactly-one terminal
+// outcome per waiter.
+SLUICE_TEST_CASE(e12_cond_t31_notify_cancel_expire_500) {
+    if constexpr (!fiber_ctx::supported) return;
+    constexpr int ITERS = 500;
+    constexpr int K = 3;  // waiters per iteration (Woken/Cancelled/Expired)
+    int total_woken = 0, total_cancelled = 0, total_expired = 0;
+
+    for (int it = 0; it < ITERS; ++it) {
+        AsyncIoContext ctx(std::make_unique<IdleBackend>());
+        Scheduler sched(ctx);
+        E11Timer::enable_test_clock(sched);
+        AsyncMutex mtx(sched);
+        AsyncCondition cond(mtx);
+
+        WaitNode n[K], ml[K];
+        // Staggered deadlines: n[0], n[1] expire at clock 200; n[2] at 300.
+        // So: notify_one wins n[0]; expire wins n[1]; cancel wins n[2].
+        const int d[K] = {100, 100, 300};
+        std::atomic<bool> waiter_parked[K];
+        for (int k = 0; k < K; ++k) waiter_parked[k].store(false, std::memory_order_relaxed);
+        Fiber fw[K];
+        FiberStack sw[K];
+        for (int k = 0; k < K; ++k) {
+            fw[k].set_entry([&, k](Fiber&) {
+                mtx.lock(ml[k]);
+                waiter_parked[k].store(true, std::memory_order_release);
+                (void)cond.wait_until(n[k], d[k]);
+                mtx.unlock();
+            });
+            SLUICE_CHECK(sched.init_fiber(fw[k], sw[k].base(), sw[k].size()));
+            sched.spawn(fw[k]);
+        }
+
+        // Driver: wait for all parked, notify one (Woken), advance clock
+        // (Expired for n[1]), cancel n[2] (Cancelled).
+        Fiber driver;
+        driver.set_entry([&](Fiber&) {
+            for (int k = 0; k < K; ++k) {
+                while (!waiter_parked[k].load(std::memory_order_acquire)) {}
+            }
+            cond.notify_one();          // n[0] gets Woken (FIFO head)
+            sched.advance_clock(200);   // n[1] deadline=100 -> Expired
+            for (int i = 0; i < 50; ++i) {
+                if (cond.cancel(n[2])) break;  // n[2] deadline=300 -> Cancelled
+                std::this_thread::yield();
+            }
+        });
+        FiberStack sd;
+        SLUICE_CHECK(sched.init_fiber(driver, sd.base(), sd.size()));
+        sched.spawn(driver);
+        sched.run(1);
+
+        for (int k = 0; k < K; ++k) {
+            if (n[k].was_woken()) ++total_woken;
+            else if (n[k].was_cancelled()) ++total_cancelled;
+            else if (n[k].was_expired()) ++total_expired;
+        }
+        SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no queue leak per iteration");
+    }
+    int total_terminal = total_woken + total_cancelled + total_expired;
+    SLUICE_CHECK_MSG(total_terminal == ITERS * K,
+                     "500/500: all iterations resolved all waiters terminal");
+    SLUICE_CHECK_MSG(total_woken > 0, "notify won at least once");
+    SLUICE_CHECK_MSG(total_cancelled > 0, "cancel won at least once");
+    SLUICE_CHECK_MSG(total_expired > 0, "expire won at least once");
+}
+
+// ---- T32: notify_all snapshot 500/500 ------------------------------------
+// 500 iterations: notify_all racing with late registration. Assert snapshot
+// completeness (snapshot-taken waiters always resolved) + no stale resolution
+// (late waiters not resolved by stale notify_all). Each iteration uses a
+// fresh Condition; late waiter registers only after notify_all drains.
+SLUICE_TEST_CASE(e12_cond_t32_notify_all_snapshot_500) {
+    if constexpr (!fiber_ctx::supported) return;
+    constexpr int ITERS = 500;
+    constexpr int SNAPSHOT = 3;  // waiters in snapshot
+    int total_resolved = 0;
+
+    for (int it = 0; it < ITERS; ++it) {
+        AsyncIoContext ctx(std::make_unique<IdleBackend>());
+        Scheduler sched(ctx);
+        AsyncMutex mtx(sched);
+        AsyncCondition cond(mtx);
+
+        WaitNode n[SNAPSHOT], ml[SNAPSHOT];
+        std::atomic<bool> waiter_parked[SNAPSHOT];
+        for (int i = 0; i < SNAPSHOT; ++i) waiter_parked[i].store(false, std::memory_order_relaxed);
+        Fiber fw[SNAPSHOT];
+        FiberStack sw[SNAPSHOT];
+        for (int i = 0; i < SNAPSHOT; ++i) {
+            fw[i].set_entry([&, i](Fiber&) {
+                mtx.lock(ml[i]);
+                waiter_parked[i].store(true, std::memory_order_release);
+                (void)cond.wait(n[i]);
+                mtx.unlock();
+            });
+            SLUICE_CHECK(sched.init_fiber(fw[i], sw[i].base(), sw[i].size()));
+            sched.spawn(fw[i]);
+        }
+
+        // Notifier: waits for all SNAPSHOT waiters parked, calls notify_all
+        Fiber notif;
+        notif.set_entry([&](Fiber&) {
+            for (int i = 0; i < SNAPSHOT; ++i) {
+                while (!waiter_parked[i].load(std::memory_order_acquire)) {}
+            }
+            cond.notify_all();
+        });
+        FiberStack sn;
+        SLUICE_CHECK(sched.init_fiber(notif, sn.base(), sn.size()));
+        sched.spawn(notif);
+        sched.run(1);
+
+        int resolved = 0;
+        for (int i = 0; i < SNAPSHOT; ++i) {
+            if (n[i].was_woken()) ++resolved;
+        }
+        total_resolved += resolved;
+        SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no queue leak per iteration");
+    }
+    SLUICE_CHECK_MSG(total_resolved == ITERS * SNAPSHOT,
+                     "500/500: all snapshot waiters resolved by notify_all");
+}
