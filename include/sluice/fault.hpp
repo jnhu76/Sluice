@@ -27,8 +27,8 @@ class MemoryWriter final : public Writer {
     explicit MemoryWriter(std::vector<std::byte> initial) : buf_(std::move(initial)) {}
 
     static MemoryWriter from_string(std::string_view s) {
-        const auto* p = reinterpret_cast<const std::byte*>(s.data());
-        return MemoryWriter({p, p + s.size()});
+        auto bs = std::as_bytes(std::span(s.data(), s.size()));
+        return MemoryWriter({bs.begin(), bs.end()});
     }
 
     Result<std::size_t> write_some(std::span<const std::byte> src) override {
@@ -50,8 +50,8 @@ class MemoryReader final : public Reader {
     explicit MemoryReader(std::vector<std::byte> data) : buf_(std::move(data)) {}
 
     static MemoryReader from_string(std::string_view s) {
-        const auto* p = reinterpret_cast<const std::byte*>(s.data());
-        return MemoryReader({p, p + s.size()});
+        auto bs = std::as_bytes(std::span(s.data(), s.size()));
+        return MemoryReader({bs.begin(), bs.end()});
     }
 
     // Convenience factory from a byte span (CPPIO-CORE-015B). Mirrors

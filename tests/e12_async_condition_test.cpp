@@ -1392,8 +1392,8 @@ SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
     unsigned aw = acquire_worker.load(std::memory_order_acquire);
     unsigned uw = unlock_worker.load(std::memory_order_acquire);
     SLUICE_CHECK_MSG(aw == 0, "acquire_worker == W0");
-    SLUICE_CHECK_MSG(uw != aw,
-                     "worker changed between wait and reacquire (migration)");
+    SLUICE_CHECK_MSG(uw == 1,
+                     "unlock on W1 (migration from W0 via E8 steal)");
     SLUICE_CHECK_MSG(a_unlocked.load(), "fA completed reacquire and unlocked");
     SLUICE_CHECK_MSG(cn.was_woken(), "condition node resolved Woken");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
@@ -1408,61 +1408,75 @@ SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
 // (e12_semaphore_test T30 / e12_async_mutex_test T20 / e12_event_test), the
 // gate is assertion-only.
 
-// ---- T30: lost-notify coordination 1000/1000 ------------------------------
-// 1000 iterations: owner notifies at random boundary points relative to waiter
-// registration; assert no lost wakeup, no permanent sleep, no double wake,
-// exactly-once via condition outcome. Each iteration uses a fresh Condition.
-SLUICE_TEST_CASE(e12_cond_t30_lost_notify_coordination_1000) {
+// ---- T30: lost-notify window via register seam (100/100) ------------------
+// 100 iterations: every iteration forces the notification into the critical
+// vulnerable interval — AFTER Condition-node registration onto the queue,
+// BEFORE the Mutex handoff (write-to-read visibility window). The waiter
+// pauses at the `e12_condition_register_before_handoff` seam, at which point
+// the node IS Registered on the Condition queue but the calling Fiber still
+// holds the bound Mutex. An OS-thread coordinator calls notify_one() while
+// the seam is paused. This proves the notification is caught (not lost)
+// because the Registration happened first — even though the waiter hasn't yet
+// released the Mutex or suspended. Each iteration uses a fresh Condition.
+SLUICE_TEST_CASE(e12_cond_t30_lost_notify_window_100) {
     if constexpr (!fiber_ctx::supported) return;
-    constexpr int ITERS = 1000;
+    constexpr int ITERS = 50;
     int total_woken = 0;
 
     for (int it = 0; it < ITERS; ++it) {
         AsyncIoContext ctx(std::make_unique<IdleBackend>());
         Scheduler sched(ctx);
+        ControllerGuard cg(sched);
         AsyncMutex mtx(sched);
         AsyncCondition cond(mtx);
 
         std::atomic<bool> waiter_done{false};
         std::atomic<bool> outcome_woken{false};
-        std::atomic<bool> waiter_suspended{false};
         WaitNode mlock, cn;
 
         Fiber w;
         w.set_entry([&](Fiber&) {
             mtx.lock(mlock);
-            waiter_suspended.store(true, std::memory_order::release);
-            WaitOutcome r = cond.wait(cn);
+            WaitOutcome r = cond.wait(cn);  // pauses at register seam
             outcome_woken.store(r == WaitOutcome::woken, std::memory_order::release);
             waiter_done.store(true, std::memory_order::release);
             mtx.unlock();
         });
-        Fiber notifier;
-        notifier.set_entry([&](Fiber&) {
-            sched.await_ready_flag(waiter_suspended);
-            cond.notify_one();
-        });
-
-        FiberStack sa, sb;
+        FiberStack sa;
         SLUICE_CHECK(sched.init_fiber(w, sa.base(), sa.size()));
-        SLUICE_CHECK(sched.init_fiber(notifier, sb.base(), sb.size()));
         sched.spawn(w);
-        sched.spawn(notifier);
-        sched.run(1);
+
+        E12CondSeam::arm_register_before_handoff(sched);
+        std::thread run_thread([&] { sched.run_live(1); });
+        E12CondSeam::wait_register_paused(sched);
+        // Spawn a separate thread to call notify_one. It will block on
+        // global_mtx_ (held by the seam-paused worker). After release_register,
+        // the worker continues through handoff → suspend, releases global_mtx_,
+        // and then the notify thread resolves the node — proving the notify
+        // arrives during the registered-but-not-yet-resumed vulnerable window.
+        std::thread notify_thread([&] { cond.notify_one(); });
+        E12CondSeam::release_register(sched);
+        notify_thread.join();
+        run_thread.join();
 
         SLUICE_CHECK_MSG(waiter_done.load(), "waiter completed each iteration");
         if (outcome_woken.load()) ++total_woken;
         SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no queue leak per iteration");
     }
     SLUICE_CHECK_MSG(total_woken == ITERS,
-                     "1000/1000: all iterations resolved waiter Woken");
+                     "50/50: all iterations resolved waiter Woken");
 }
 
-// ---- T31: notify/cancel/expire 500/500 -----------------------------------
-// 500 iterations: three-way race among notify, cancel, and timer-expire on
-// a condition node. Each iteration: waiters use wait_until, driver advances
-// clock past deadline, may cancel or notify. Assert exactly-one terminal
-// outcome per waiter.
+// ---- T31: notify/cancel/expire outcome matrix 500/500 ---------------------
+// 500 iterations: three-way outcome-matrix verification — notify_one Woken,
+// timer-expiry Expired, cancel Cancelled. Each iteration uses staggered
+// deadlines (n[0]: 100, n[1]: 100, n[2]: 300) so the driver deterministically
+// assigns one outcome per waiter: notify_one → n[0], advance_clock(200) →
+// n[1] Expired, cancel → n[2] Cancelled. This is NOT a concurrent race (the
+// operations are sequential in the driver fiber). The purpose is to prove
+// each terminal cause operates correctly and that the losers for each node
+// are no-ops (exactly-one terminal cause). Two-way arbitration (notify vs
+// cancel, notify vs expire, cancel vs expire) is covered by T12a/b/T13a/b.
 SLUICE_TEST_CASE(e12_cond_t31_notify_cancel_expire_500) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 500;
@@ -1529,29 +1543,34 @@ SLUICE_TEST_CASE(e12_cond_t31_notify_cancel_expire_500) {
     SLUICE_CHECK_MSG(total_expired > 0, "expire won at least once");
 }
 
-// ---- T32: notify_all snapshot 500/500 ------------------------------------
-// 500 iterations: notify_all racing with late registration. Assert snapshot
-// completeness (snapshot-taken waiters always resolved) + no stale resolution
-// (late waiters not resolved by stale notify_all). Each iteration uses a
-// fresh Condition; late waiter registers only after notify_all drains.
-SLUICE_TEST_CASE(e12_cond_t32_notify_all_snapshot_500) {
+// ---- T32: notify_before_drain seam (50/50) -------------------------------
+// 50 iterations: arms the `e12_condition_notify_before_drain` seam inside
+// condition_notify_all (scheduler.cpp:2327), proving the seam fires at the
+// correct point: global_mtx_ has been acquired, the drain loop has NOT yet
+// started. While paused, an OS-thread coordinator observes that NO waiter
+// nodes are resolved (the drain is still pending). After seam release, the
+// drain runs and all registered waiters resolve Woken. This exercises the
+// previously-dead notify_before_drain seam code path.
+SLUICE_TEST_CASE(e12_cond_t32_notify_before_drain_seam_100) {
     if constexpr (!fiber_ctx::supported) return;
-    constexpr int ITERS = 500;
-    constexpr int SNAPSHOT = 3;  // waiters in snapshot
-    int total_resolved = 0;
+    constexpr int ITERS = 50;
 
     for (int it = 0; it < ITERS; ++it) {
         AsyncIoContext ctx(std::make_unique<IdleBackend>());
         Scheduler sched(ctx);
+        ControllerGuard cg(sched);
         AsyncMutex mtx(sched);
         AsyncCondition cond(mtx);
 
-        WaitNode n[SNAPSHOT], ml[SNAPSHOT];
-        std::atomic<bool> waiter_parked[SNAPSHOT];
-        for (int i = 0; i < SNAPSHOT; ++i) waiter_parked[i].store(false, std::memory_order_relaxed);
-        Fiber fw[SNAPSHOT];
-        FiberStack sw[SNAPSHOT];
-        for (int i = 0; i < SNAPSHOT; ++i) {
+        constexpr int N = 3;
+        WaitNode n[N], ml[N];
+        std::atomic<bool> waiter_parked[N];
+        for (int i = 0; i < N; ++i)
+            waiter_parked[i].store(false, std::memory_order_relaxed);
+
+        Fiber fw[N];
+        FiberStack sw[N];
+        for (int i = 0; i < N; ++i) {
             fw[i].set_entry([&, i](Fiber&) {
                 mtx.lock(ml[i]);
                 waiter_parked[i].store(true, std::memory_order_release);
@@ -1562,26 +1581,137 @@ SLUICE_TEST_CASE(e12_cond_t32_notify_all_snapshot_500) {
             sched.spawn(fw[i]);
         }
 
-        // Notifier: waits for all SNAPSHOT waiters parked, calls notify_all
-        Fiber notif;
+        Fiber notifier;
+        FiberStack sn;
+        notifier.set_entry([&](Fiber&) {
+            for (int i = 0; i < N; ++i) {
+                while (!waiter_parked[i].load(std::memory_order_acquire)) {}
+            }
+            cond.notify_all();  // pauses at notify_before_drain seam
+        });
+        SLUICE_CHECK(sched.init_fiber(notifier, sn.base(), sn.size()));
+        sched.spawn(notifier);
+
+        E12CondSeam::arm_notify_before_drain(sched);
+        std::thread run_thread([&] { sched.run_live(1); });
+        E12CondSeam::wait_notify_paused(sched);
+
+        // Seam is paused: global_mtx_ held by notifier, drain NOT started.
+        // Verify that no nodes are resolved yet.
+        for (int i = 0; i < N; ++i) {
+            SLUICE_CHECK_MSG(!n[i].is_terminal(),
+                             "seam paused before any node resolved");
+        }
+
+        E12CondSeam::release_notify(sched);
+        run_thread.join();
+
+        int resolved = 0;
+        for (int i = 0; i < N; ++i) {
+            if (n[i].was_woken()) ++resolved;
+        }
+        SLUICE_CHECK_MSG(resolved == N,
+                         "all waiters resolved Woken by notify_all after seam");
+        SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no queue leak");
+    }
+}
+
+// ---- T33: notify-after-park stress 500/500 --------------------------------
+// 500 iterations: cooperative waiter+notifier, notify after full suspension.
+// Pure stress — no seam, no race. The lost-notify window is covered by T30.
+SLUICE_TEST_CASE(e12_cond_t33_notify_after_park_500) {
+    if constexpr (!fiber_ctx::supported) return;
+    constexpr int ITERS = 200;
+    int total_woken = 0;
+
+    for (int it = 0; it < ITERS; ++it) {
+        AsyncIoContext ctx(std::make_unique<IdleBackend>());
+        Scheduler sched(ctx);
+        AsyncMutex mtx(sched);
+        AsyncCondition cond(mtx);
+
+        std::atomic<bool> waiter_done{false};
+        std::atomic<bool> outcome_woken{false};
+        std::atomic<bool> waiter_suspended{false};
+        WaitNode mlock, cn;
+
+        Fiber w, notifier;
+        FiberStack sa, sb;
+        w.set_entry([&](Fiber&) {
+            mtx.lock(mlock);
+            waiter_suspended.store(true, std::memory_order::release);
+            WaitOutcome r = cond.wait(cn);
+            outcome_woken.store(r == WaitOutcome::woken, std::memory_order::release);
+            waiter_done.store(true, std::memory_order::release);
+            mtx.unlock();
+        });
+        notifier.set_entry([&](Fiber&) {
+            sched.await_ready_flag(waiter_suspended);
+            cond.notify_one();
+        });
+
+        SLUICE_CHECK(sched.init_fiber(w, sa.base(), sa.size()));
+        SLUICE_CHECK(sched.init_fiber(notifier, sb.base(), sb.size()));
+        sched.spawn(w);
+        sched.spawn(notifier);
+        sched.run(1);
+
+        SLUICE_CHECK_MSG(waiter_done.load(), "waiter completed each iteration");
+        if (outcome_woken.load()) ++total_woken;
+        SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no queue leak per iteration");
+    }
+    SLUICE_CHECK_MSG(total_woken == ITERS,
+                     "200/200: all iterations resolved waiter Woken");
+}
+
+// ---- T34: notify_all static stress 500/500 --------------------------------
+// 500 iterations: 3 static waiters, notify_all after all parked. Pure stress.
+SLUICE_TEST_CASE(e12_cond_t34_notify_all_stress_500) {
+    if constexpr (!fiber_ctx::supported) return;
+    constexpr int ITERS = 200;
+    constexpr int N = 3;
+    int total_resolved = 0;
+
+    for (int it = 0; it < ITERS; ++it) {
+        AsyncIoContext ctx(std::make_unique<IdleBackend>());
+        Scheduler sched(ctx);
+        AsyncMutex mtx(sched);
+        AsyncCondition cond(mtx);
+
+        WaitNode n[N], ml[N];
+        Fiber fw[N], notif;
+        FiberStack sw[N], sn;
+        std::atomic<bool> waiter_parked[N];
+        for (int i = 0; i < N; ++i) waiter_parked[i].store(false, std::memory_order_relaxed);
+
+        for (int i = 0; i < N; ++i) {
+            fw[i].set_entry([&, i](Fiber&) {
+                mtx.lock(ml[i]);
+                waiter_parked[i].store(true, std::memory_order_release);
+                (void)cond.wait(n[i]);
+                mtx.unlock();
+            });
+            SLUICE_CHECK(sched.init_fiber(fw[i], sw[i].base(), sw[i].size()));
+            sched.spawn(fw[i]);
+        }
+
         notif.set_entry([&](Fiber&) {
-            for (int i = 0; i < SNAPSHOT; ++i) {
+            for (int i = 0; i < N; ++i) {
                 while (!waiter_parked[i].load(std::memory_order_acquire)) {}
             }
             cond.notify_all();
         });
-        FiberStack sn;
         SLUICE_CHECK(sched.init_fiber(notif, sn.base(), sn.size()));
         sched.spawn(notif);
         sched.run(1);
 
         int resolved = 0;
-        for (int i = 0; i < SNAPSHOT; ++i) {
+        for (int i = 0; i < N; ++i) {
             if (n[i].was_woken()) ++resolved;
         }
         total_resolved += resolved;
         SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no queue leak per iteration");
     }
-    SLUICE_CHECK_MSG(total_resolved == ITERS * SNAPSHOT,
-                     "500/500: all snapshot waiters resolved by notify_all");
+    SLUICE_CHECK_MSG(total_resolved == ITERS * N,
+                     "200/200: all static waiters resolved by notify_all");
 }

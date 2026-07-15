@@ -295,7 +295,9 @@ void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANA
     // iteration, so liveness (I6) holds even if the cache briefly lags. If the
     // deadline is already due, use a near-zero timeout so the loop re-drains +
     // pumps the timer promptly. Production default is the E9 2ms backstop.
-    auto wake_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(2);
+    static constexpr auto kParkBackstop = std::chrono::milliseconds(2);
+    static constexpr auto kTestParkPoll = std::chrono::milliseconds(1);
+    auto wake_deadline = std::chrono::steady_clock::now() + kParkBackstop;
     deadline_t earliest = earliest_active_deadline_.load(std::memory_order::acquire);
     if (earliest != kNoDeadline) {
         deadline_t now_ticks = clock_now_unlocked();
@@ -306,13 +308,13 @@ void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANA
             if (test_clock_mode_.load(std::memory_order::acquire)) {
                 // Test mode: the clock is logical; cap at a short poll so
                 // advance_clock()'s pump drives expiry deterministically.
-                wake_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(1);
+                wake_deadline = std::chrono::steady_clock::now() + kTestParkPoll;
             } else {
                 // Production: compute the actual remaining time to the earliest
                 // deadline, capped at the E9 2ms backstop. Avoids a fixed 1ms
                 // poll that would cause ~1000 wakeups/s per active deadline.
                 auto delay = std::min(std::chrono::milliseconds(remaining),
-                                      std::chrono::milliseconds(2));
+                                      kParkBackstop);
                 wake_deadline = std::chrono::steady_clock::now() + delay;
             }
         }
