@@ -62,6 +62,8 @@ repo="$here/.."
 spec="$repo/docs/spec/e12_async_condition"
 cd "$spec"
 
+# C++ compiler for the COMPILE-PROBE authority-seal gate (§1.4).
+CXX_BIN="${CXX:-c++}"
 # Fresh output directory per invocation (stale-output guard).
 outroot="$(mktemp -d -t e12cnd-tlc.XXXXXX)"
 cleanup() {
@@ -194,6 +196,41 @@ tlc_version() {
     | sed 's/^TLC2 Version/  TLC runtime version:/' || true
 }
 
+# COMPILE-PROBE authority-seal gate (construction authorization §1.4). Each of
+# the seven sealed accessors / bypasses must FAIL to compile INDEPENDENTLY. The
+# gate compiles the probe once per -DPROBE_CASE=N (1..7), expecting FAILURE each
+# time. §1.4 forbids a single-file/single-error weak gate: every case is
+# verified separately. If any case unexpectedly compiles, the AsyncCondition
+# public authority has regressed (a sealed accessor was added or the Condition
+# queue became reachable by ordinary code).
+#
+# Each case targets exactly one sealed surface:
+#   1. wait_queue()        2. mutex()           3. waiting_count()
+#   4. notify_n()          5. reacquire_node()  6. Scheduler private seam
+#   7. wake_wait_one bypass via the private queue
+compile_probe_gate() {
+  local probe="$repo/tests/e12_async_condition_authority_probe.cpp"
+  if [ ! -f "$probe" ]; then
+    echo "FAIL  COMPILE-PROBE gate (probe file missing: $probe)"
+    return 1
+  fi
+  local rc_probe=0
+  local n
+  for n in 1 2 3 4 5 6 7; do
+    local out="$outroot/probe_case${n}.out"
+    # Syntax-only compile of case N. MUST fail (sealed name / unreachable seam).
+    if "$CXX_BIN" -std=c++20 -fsyntax-only -DPROBE_CASE="$n" \
+        -I"$repo/include" "$probe" >"$out" 2>&1; then
+      echo "FAIL  COMPILE-PROBE case ${n} (bypass COMPILED -- authority regressed)"
+      tail -10 "$out"
+      rc_probe=1
+      continue
+    fi
+    echo "OK    COMPILE-PROBE case ${n} (sealed: fails to compile)"
+  done
+  return $rc_probe
+}
+
 echo "=== E12-D AsyncCondition formal gate (TLC2, jar=$JAR) -- SAFETY ONLY ==="
 echo
 rc=0
@@ -268,6 +305,15 @@ expect_fail "NEG-C10 SeparateQueues" \
 # Wrong-property gate (defect specificity).
 wrong_property_gate || rc=1
 
+# Authority-seal compile-probe gate (construction authorization §1.4). Enforced
+# only when the production probe exists. Each of the seven sealed surfaces must
+# fail to compile independently.
+if [ -f "$repo/tests/e12_async_condition_authority_probe.cpp" ]; then
+  compile_probe_gate || rc=1
+else
+  echo "SKIP  COMPILE-PROBE gate (production probe not yet present)"
+fi
+
 echo
 echo "--- TLC runtime version (actual) ---"
 tlc_version
@@ -275,5 +321,5 @@ echo "  TLA+ tools release tag: not associated with a verified release tag"
 echo "    (the jar is a 2026 development build; no v1.8.0 association asserted"
 echo "     without jar-metadata proof)"
 echo
-echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + wrong-property gate) ==="
+echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + wrong-property gate + compile-probe) ==="
 exit "$rc"

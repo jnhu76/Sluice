@@ -559,6 +559,98 @@ public:
         SLUICE_REQUIRES(global_mtx_);
 
 
+    // ---- E12-D AsyncCondition (sluice-CORE-E12-D) ----
+    // The Fiber-suspending condition variable substrate. An AsyncCondition owns
+    // a private Condition WaitQueue `cond_waiters` and is bound to one AsyncMutex
+    // (whose `mutex_waiters` + `owner` are passed BY REFERENCE, exactly as the
+    // Mutex's own methods pass them into the Mutex seams above). These NARROW
+    // private seams implement the CONDITION-WAIT-PREPARE combined step (register
+    // Condition node + release/handoff bound Mutex + make_waiting, under one
+    // global_mtx_ CS), the Condition notify_one/notify_all resolution, the
+    // queue-identity-gated Condition cancel, and the deadline-aware variant.
+    //
+    // Synchronization domain: same as the E12-A/B/C seams — global_mtx_ (and the
+    // relevant queue mtx() inside it). The Condition queue mtx and the Mutex
+    // queue mtx are taken SEQUENTIALLY under global_mtx_, NEVER simultaneously
+    // (docs §6.3): the prepare seam locks cond_waiters.mtx() to register the
+    // node, UNLOCKS it, then calls mutex_handoff_one_locked which takes
+    // mutex_waiters.mtx() internally. There is no Condition-queue-to-Mutex-
+    // queue lock edge.
+    //
+    // Mutex authority (construction authorization §1.1): the prepare seam
+    // releases the bound Mutex by reusing the ONE accepted
+    // mutex_handoff_one_locked (owner-before-publication already load-bearing).
+    // It does NOT write `owner` directly, does NOT register on mutex_waiters,
+    // and does NOT implement a second handoff. The Scheduler is the sole Mutex
+    // state-machine executor.
+    //
+    // notify_one/notify_all resolve Condition nodes Woken via the existing
+    // wake_one_locked / drain pattern and publish the winner runnable
+    // (Condition-epoch publication). They do NOT mutate Mutex state: the winner
+    // Fiber resumes and runs its OWN reacquire body (mutex_.lock(reacquire_node))
+    // — the reacquire epoch is NOT the notifier's concern.
+
+    // CONDITION-WAIT-PREPARE combined seam (docs §7). Under one global_mtx_ CS:
+    //   1. register `cond_node` into `cond_waiters` (Detached -> Registered);
+    //   2. release the bound Mutex: if `mutex_waiters` has an eligible FIFO head,
+    //      mutex_handoff_one_locked resolves it Woken + commits `owner = winner`
+    //      (BEFORE publication); else `owner = nullptr` (no waiter). NO
+    //      intermediate owner = nullptr window during handoff;
+    //   3. make the calling Fiber Waiting.
+    // Then context_switch. The calling Fiber MUST currently own the bound Mutex
+    // (caller precondition; non-owner wait is a debug assert). Returns the
+    // latched Condition-node terminal outcome (Woken/Expired/Cancelled) read
+    // from `cond_node` after the resume. The reacquire epoch is run by the
+    // CALLER (AsyncCondition::wait) after this returns, NOT by this seam.
+    WaitOutcome condition_wait_prepare(WaitQueue& cond_waiters, WaitNode& cond_node,
+                                       WaitQueue& mutex_waiters, Fiber*& owner);
+
+    // Deadline-aware CONDITION-WAIT-PREPARE. Composes condition_wait_prepare
+    // with an E11 TimerRegistration on `cond_node` (C-H4: deadline governs ONLY
+    // the Condition epoch). Admission precedence (under global_mtx_):
+    //   1. if the deadline is ALREADY due at admission: resolve `cond_node`
+    //      Expired INLINE — do NOT release the Mutex, do NOT suspend, do NOT
+    //      create a reacquire epoch. Return Expired; the caller RETAINS
+    //      ownership (WaitDueInline / InvDueInlineRetainsOwnership). Sets
+    //      `released_mutex = false`;
+    //   2. else: register the node + timer, release/handoff the Mutex,
+    //      make_waiting, context_switch; return the latched outcome and set
+    //      `released_mutex = true` (the caller MUST run the reacquire epoch).
+    // `released_mutex` distinguishes the inline-Expired path (no reacquire) from
+    // a suspended resolution (Woken/Cancelled/suspended-Expired, all reacquire),
+    // since both an inline-Expired and a suspended-Expired return the SAME
+    // outcome (Expired) but have opposite reacquire obligations.
+    WaitOutcome condition_wait_prepare_until(WaitQueue& cond_waiters,
+                                             WaitNode& cond_node,
+                                             WaitQueue& mutex_waiters,
+                                             Fiber*& owner, deadline_t deadline,
+                                             bool& released_mutex);
+
+    // notify_one: under global_mtx_ + cond_waiters.mtx(), resolve the eligible
+    // FIFO head of the Condition queue with Woken, retire any bound timer,
+    // decrement waiting_waitq_count_, and publish the winner runnable. Empty
+    // queue is a no-op. Does NOT mutate Mutex state. Safe from any OS thread.
+    void condition_notify_one(WaitQueue& cond_waiters);
+
+    // notify_all: under one continuous global_mtx_ CS, loop
+    // wake_wait_one_locked(cond_waiters) until nullptr (mirrors
+    // event_set_broadcast's drain). Each winner resolves Woken exactly once,
+    // retires its timer, and is published runnable. Waiters registered after the
+    // snapshot linearization point are excluded (admission needs global_mtx_).
+    // Returns the count of resolved winners. Does NOT mutate Mutex state.
+    std::size_t condition_notify_all(WaitQueue& cond_waiters);
+
+    // Queue-identity-safe Condition cancel (mirrors event_cancel_wait /
+    // mutex_cancel). Resolves `cond_node` with Cancelled ONLY if it is currently
+    // Registered AND linked in `cond_waiters` (scanned under global_mtx_ +
+    // cond_waiters.mtx()) AND the CANCEL CAS wins. Otherwise returns false
+    // WITHOUT mutation. Does NOT expose `cond_waiters`. Does NOT change Mutex
+    // `owner`. Safe from any OS thread. Safe against wrong-Condition, detached,
+    // and terminal nodes.
+    [[nodiscard]] bool condition_cancel_wait(WaitQueue& cond_waiters,
+                                             WaitNode& cond_node);
+
+
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()
     // from an external thread to wake a parked Worker whose wake set includes

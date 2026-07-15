@@ -964,9 +964,9 @@ end
 
 -- e12_async_mutex_test — Fiber-suspending Async Mutex (sluice-CORE-E12-C).
 -- AsyncMutex on the E10/E11/E12-A/E12-B substrate: construction/try_lock,
--- immediate + queued lock, FIFO direct handoff, owner-before-publication,
--- deadline precedence (resource-first), queue-identity-safe cancel,
--- external-thread cancel, migration, destruction contract, 500/500 coordination.
+-- immediate + queued lock, FIFO direct handoff, deadline precedence
+-- (resource-first), queue-identity-safe cancel, external-thread cancel,
+-- migration, destruction contract, 500/500 coordination.
 -- Deterministic causal tests (NO sleep_for proof). Gated to x86_64
 -- (fiber_ctx::supported).
 do
@@ -980,5 +980,29 @@ do
             add_includedirs("include", "tests")
             add_files(p)
             add_tests("e12_async_mutex_test")
+    end
+end
+
+-- e12_async_condition_test — Fiber-suspending async condition variable
+-- (sluice-CORE-E12-D). AsyncCondition bound to one AsyncMutex: two-epoch
+-- (Condition wait + mandatory reacquire) protocol, register-before-release
+-- lost-notify closure, notify_one FIFO, notify_all snapshot/drain,
+-- notify/cancel/expire winner matrix, Ordinary<->Reacquire FIFO mixing,
+-- owner-before-publication, inline-Expired retains ownership, destruction
+-- contract. Deterministic causal tests via E12ConditionSeam phase seams
+-- (NO sleep_for proof). Gated to x86_64 (fiber_ctx::supported). The authority
+-- probe (e12_async_condition_authority_probe.cpp) is NOT a target: it is a
+-- negative-compile probe driven by the verify script's compile-probe gate.
+do
+    local p = "tests/e12_async_condition_test.cpp"
+    if os.isfile(p) then
+        target("e12_async_condition_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_async_condition_test")
     end
 end

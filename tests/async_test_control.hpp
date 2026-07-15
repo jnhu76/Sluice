@@ -227,4 +227,49 @@ struct E12MutexSeam {
     }
 };
 
+// ---- E12-D AsyncCondition register-before-release + notify-before-drain seams
+// CONDITION-WAIT-PREPARE phase: paused AFTER the Condition node is Registered +
+// linked in the Condition queue (Mutex STILL owned by the waiter), BEFORE the
+// bound Mutex is released/handed off. Proves InvNoLostNotifyWindow / NEG-C8 and
+// that a concurrent notify observes the registered node.
+// notify_all phase: paused AFTER acquiring global_mtx_ authority, BEFORE the
+// drain loop begins. Proves late registration/cancel/expiry serialize AFTER the
+// snapshot (C-H10).
+struct E12ConditionSeam {
+    static void arm_register_before_handoff(
+        sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(
+            s, PhaseTag::e12_condition_register_before_handoff);
+    }
+    static void wait_register_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(
+            s, PhaseTag::e12_condition_register_before_handoff);
+    }
+    static bool is_register_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(
+            s, PhaseTag::e12_condition_register_before_handoff);
+    }
+    static void release_register(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(
+            s, PhaseTag::e12_condition_register_before_handoff);
+    }
+
+    static void arm_notify_before_drain(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(
+            s, PhaseTag::e12_condition_notify_before_drain);
+    }
+    static void wait_notify_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(
+            s, PhaseTag::e12_condition_notify_before_drain);
+    }
+    static bool is_notify_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(
+            s, PhaseTag::e12_condition_notify_before_drain);
+    }
+    static void release_notify(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(
+            s, PhaseTag::e12_condition_notify_before_drain);
+    }
+};
+
 }  // namespace sluice_async_test

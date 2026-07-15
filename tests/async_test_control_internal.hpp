@@ -54,6 +54,17 @@ enum class PhaseTag : unsigned char {
     // Fiber), BEFORE make_runnable / route_runnable_locked publication. Holding
     // global_mtx_ (+ waiters_.mtx() inside). Proves owner-before-publication.
     e12_mutex_handoff_before_publication,
+    // E12-D: CONDITION-WAIT-PREPARE paused AFTER the Condition node is Registered
+    // + linked in the Condition queue, holding global_mtx_, BEFORE the bound
+    // Mutex is released/handed off. A test observing this phase proves the
+    // register-before-release ordering (InvNoLostNotifyWindow / NEG-C8) and that
+    // a concurrent notify sees the registered node while the Mutex is still
+    // owned. The Condition queue mtx has been released; only global_mtx_ held.
+    e12_condition_register_before_handoff,
+    // E12-D: notify_all paused AFTER acquiring global_mtx_ authority, BEFORE the
+    // drain loop begins. A test observing this phase proves late registration /
+    // cancel / expiry serialize AFTER the snapshot (they need global_mtx_).
+    e12_condition_notify_before_drain,
 
     count
 };
