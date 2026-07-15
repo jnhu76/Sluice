@@ -701,65 +701,64 @@ Every Fiber in mutexQueue eventually leaves (every registered Mutex wait
 
 ## 17. Negative-model preparation
 
-Each negative breaks exactly one rule:
+Each negative breaks exactly one rule. The identifiers, mutation names, and
+expected-failure properties below are the **canonical register** and are kept in
+sync with `scripts/verify-e12-async-condition-formal.sh` and the per-model
+`E12AsyncConditionNegC{N}.cfg` files. Ten models (NEG-C1..NEG-C10) are
+implemented; each TLC-runs its model and asserts the named invariant fails.
 
 ```text
-NEG-C1  ReleaseBeforeRegisterLostNotify
-        — Mutex released before Condition node registered; notify in gap is lost
-        Expected failure: InvNoLostNotifyWindow
-
-NEG-C2  SuspendedWaiterStillOwnsMutex
-        — Fiber mutexOwner after ConditionWaiting
+NEG-C1  NonOwnerWait
+        — removes the mutexOwner = actor precondition AND lets the actor KEEP
+          the mutex after entering ConditionWaiting (breaks C-H3)
         Expected failure: InvConditionWaiterDoesNotOwnMutex
 
-NEG-C3  NotifyOneNonFIFO
-        — NotifyOne selects non-head from conditionQueue
-        Expected failure: InvNotifyOneFIFO
+NEG-C2  NotifyAnyNonRegistered
+        — CancelCondition/notify drops the Registered + InConditionQueue guards,
+          allowing resolution of any epoch (including Detached)
+        Expected failure: InvConditionResolvedFinality
 
-NEG-C4  NotifyAllMissesSnapshotWaiter
-        — NotifyAll skips a waiter in the snapshot
-        Expected failure: InvNotifyAllSnapshotComplete
-
-NEG-C5  NotifyAllWakesLateWaiter
-        — NotifyAll resolves a waiter registered after the snapshot
-        Expected failure: InvNotifyAllExcludesLateWaiter
-
-NEG-C6  CancelRevokesNotifiedReason
-        — cancel after Woken changes the reason
-        Expected failure: InvConditionReasonFinal
-
-NEG-C7  ExpireRevokesNotifiedReason
-        — expire after Woken changes the reason
-        Expected failure: InvConditionReasonFinal
-
-NEG-C8  ReturnWithoutReacquire
-        — Fiber returns from wait without holding Mutex
+NEG-C3  ReturnOwnedNoGrant
+        — ReturnOwned does NOT give the mutex to the returning fiber
+          (violates C-H1: caller must own the Mutex after wait returns)
         Expected failure: InvReturnedOwnsMutex
 
-NEG-C9  ReacquireWrongFiber
-        — Fiber F2 reacquires Mutex that F1 waited on
-        Expected failure: InvReacquireSameFiber
+NEG-C4  CancelReacquireEpoch
+        — a late terminal attempt mutates protected reacquire/terminal state
+          instead of being a no-op loser (breaks C-H5 finality)
+        Expected failure: InvTerminalAttemptFinality
 
-NEG-C10 DoubleConditionPublication
-        — two wake_one resolutions for the same Condition node
-        Expected failure: InvSingleConditionPublication
+NEG-C5  NotifyAllNoDrain
+        — NotifyAll marks waiters resolved but does NOT drain them from the
+          Condition queue (breaks queue well-formedness)
+        Expected failure: InvConditionQueueWellFormed
 
-NEG-C11 DoubleReacquirePublication
-        — two wake_one resolutions for the same reacquire node
-        Expected failure: InvSingleReacquirePublication
+NEG-C6  ReacquireNonFIFO
+        — MutexUnlockHandoff corrupts expectedFIFOHead (records a wrong epoch
+          while still granting the real FIFO head)
+        Expected failure: InvFIFOGrant
 
-NEG-C12 MutexGrantPublishedBeforeOwnerCommit
-        — winner published runnable before owner_ committed
-        Expected failure: InvMutexOwnerBeforePublication
-
-NEG-C13 DueInlineReleasesMutex
-        — WaitDueInline releases Mutex instead of retaining ownership
-        Expected failure: InvDueInlineRetainsOwnership
-
-NEG-C14 DestroyWithActiveWait
-        — Destroy while Condition waiter is Registered
+NEG-C7  DestroyWithActiveWaiters
+        — destroyed' = TRUE can fire even while fibers are waiting on
+          conditions (no queue-empty / no-waiter guard)
         Expected failure: InvDestructionPrecondition
+
+NEG-C8  WaitReleaseBeforeRegister
+        — the mutex is released but the Condition node is NEVER registered
+          (the lost-notify window)
+        Expected failure: InvNoLostNotifyWindow
+
+NEG-C9  HandoffNonFIFO
+        — MutexUnlockHandoff always grants to epoch R1 regardless of FIFO
+          order, skipping other eligible waiters (breaks C-H8)
+        Expected failure: InvEligiblePreMutexQueue
+
+NEG-C10 SeparateQueues
+        — MutexUnlockHandoff grants only to ReacquireEpochs, skipping
+          OrdinaryEpochs (breaks unified FIFO, C-H8)
+        Expected failure: InvOrdinaryAndReacquireFIFO
 ```
+
 
 ---
 

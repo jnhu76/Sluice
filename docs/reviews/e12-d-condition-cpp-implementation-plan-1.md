@@ -39,7 +39,7 @@ awaits external approval; no implementation is performed in this task.
 | Formal commits present | `8202776` (fix C6; positive 24 invariants pass; NegC6 pierces `InvFIFOGrant`) and `4501585` (extend `OrdinaryEpochs`; reach1/reach2 CEX; NegC9/NegC10 Mark guards; C9/C10 named-property CEX) |
 | Formal gate script | `scripts/verify-e12-async-condition-formal.sh` exists, executable, safety-only (no liveness run) |
 | Formal gate status (declared) | gate 0-ed: positive PASS; reach1/reach2 expected CEX; NEG-C1..C10 each violate its one named property; WRONG-PROPERTY gate PASS |
-| AsyncCondition C++ code | **none** — `grep -rn 'AsyncCondition|class Condition' include/ src/ tests/` returns zero matches (clean slate) |
+| AsyncCondition C++ code | **none** — `grep -rn -e 'AsyncCondition' -e 'class Condition' include/ src/ tests/` returns zero matches (clean slate) |
 | `e12_async_condition_test.cpp` | does not exist (to be created) |
 | `e12_async_condition_authority_probe.cpp` | does not exist (to be created) |
 | Existing related tests (status: pass on `8202776`/`4501585` per prep audit) | `tests/e12_async_mutex_test.cpp`, `tests/e12_event_test.cpp`, `tests/e12_semaphore_test.cpp` |
@@ -457,7 +457,7 @@ public accessor is added).
 Single canonical order, unchanged: `global_mtx_` → (Condition queue mtx OR Mutex queue mtx,
 taken **sequentially** per prep §6.3, never simultaneously). Within the CONDITION-WAIT-PREPARE
 CS:
-```
+```text
 hold global_mtx_
   lock cond_waiters.mtx(); register condition node (+ timer); unlock cond_waiters.mtx();
   // mutex_handoff_one_locked takes mutex_waiters.mtx() internally under global_mtx_:

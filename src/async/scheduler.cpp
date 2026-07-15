@@ -2150,12 +2150,20 @@ void Scheduler::mutex_unlock(WaitQueue& waiters, Fiber*& owner) {
 WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
                                               WaitNode& cond_node,
                                               WaitQueue& mutex_waiters,
-                                              Fiber*& owner) {
+                                              Fiber*& owner,
+                                              bool& released_mutex) {
     // CONDITION-WAIT-PREPARE (docs §7). One global_mtx_ critical section makes
     // register-Condition-node + release-Mutex + make_waiting ATOMIC w.r.t. every
     // Condition notify/cancel/expire path (which also need global_mtx_). This is
     // the lost-notify closure (docs §6): a notify CANNOT interleave between
     // Condition registration and Mutex release.
+    //
+    // `released_mutex` mirrors condition_wait_prepare_until: false on the C8
+    // registration-failure path (the Mutex is NOT released — the caller retains
+    // ownership and runs NO reacquire epoch), true after the Mutex has been
+    // released/handed off (the caller MUST run the reacquire epoch). The untimed
+    // path has no inline-Expired-at-admission branch, so every other path
+    // releases the Mutex.
     WorkerState* ws = g_worker;
     assert(ws != nullptr && "AsyncCondition::wait requires a running Fiber");
     Fiber* me = ws->current;
@@ -2171,6 +2179,7 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
                 // C8 contract violation (node already registered/terminal). Do
                 // NOT release the Mutex; the caller retains ownership. Return
                 // the node's (terminal) outcome.
+                released_mutex = false;
                 return cond_node.outcome();
             }
             ++waiting_waitq_count_;
@@ -2191,6 +2200,9 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
         if (mutex_handoff_one_locked(mutex_waiters, owner) == nullptr) {
             owner = nullptr;  // UnlockNoWaiter: no Mutex waiter to hand off to
         }
+        // The Mutex has been released/handed off; the caller MUST run the
+        // reacquire epoch regardless of the outcome below.
+        released_mutex = true;
         // Defense-in-depth: if the Condition node was resolved concurrently
         // (notify/cancel/expire all need global_mtx_, so this cannot happen
         // while this CS holds it, but guard anyway), undo the registration and

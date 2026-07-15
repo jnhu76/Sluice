@@ -275,7 +275,11 @@ Mark(act, actor, tgt, granted) ==
     /\ lastActor' = actor
     /\ lastTargetEpoch' = tgt
     /\ lastGrantedEpoch' = granted
-    /\ expectedFIFOHead' = None
+    \* Preserve the handoff's explicit expectedFIFOHead assignment (see E12AsyncCondition).
+    \* MutexUnlockHandoff sets expectedFIFOHead' = w (the granted FIFO head) in its body;
+    \* resetting it to None here would make the conjunction unsatisfiable (w # None) and
+    \* silence the action entirely. Only non-handoff actions reset the ghost to None.
+    /\ (act # "MutexUnlockHandoff") => expectedFIFOHead' = None
     /\ SnapPre
 
 \* ===========================================================================

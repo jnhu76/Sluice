@@ -1161,6 +1161,11 @@ SLUICE_TEST_CASE(e12_cond_t15a_ordinary_then_reacquire) {
 
     std::atomic<bool> h_has_mtx{false}, release_h{false};
     std::atomic<bool> o_done{false}, b_done{false};
+    // Grant-order sequence: each fiber stamps its acquisition order. The FIFO
+    // claim is verified by the SEQUENCE of stamps, not merely by both having
+    // completed (which would pass even if the order were reversed).
+    std::atomic<int> grant_seq{0};
+    std::atomic<int> b_seq{-1}, o_seq{-1};
     WaitNode mlock, cn, ord_hm, ord_b;
 
     // H (holder): acquires mtx, holds it (await release_h), then unlocks.
@@ -1175,6 +1180,8 @@ SLUICE_TEST_CASE(e12_cond_t15a_ordinary_then_reacquire) {
     Fiber ordinary_b;
     ordinary_b.set_entry([&](Fiber&) {
         mtx.lock(ord_b);
+        b_seq.store(grant_seq.fetch_add(1, std::memory_order_acq_rel),
+                    std::memory_order_release);
         b_done.store(true, std::memory_order::release);
         mtx.unlock();
     });
@@ -1183,6 +1190,8 @@ SLUICE_TEST_CASE(e12_cond_t15a_ordinary_then_reacquire) {
     owner.set_entry([&](Fiber&) {
         mtx.lock(mlock);
         (void)cond.wait(cn);
+        o_seq.store(grant_seq.fetch_add(1, std::memory_order_acq_rel),
+                    std::memory_order_release);
         o_done.store(true, std::memory_order::release);
         mtx.unlock();
     });
@@ -1210,11 +1219,15 @@ SLUICE_TEST_CASE(e12_cond_t15a_ordinary_then_reacquire) {
     release_h.store(true, std::memory_order::release);
     sched.run(1);
 
-    // b_done set before o_done: FIFO handoff → ordinary before reacquire
-    // (The cooperative scheduler runs B to completion before O — b_done < o_done
-    //  transitively via the Mutex queue FIFO handoff order.)
+    // FIFO grant order: B's ordinary lock was queued before O's reacquire, so
+    // B must be granted first. Assert the SEQUENCE directly (b_seq < o_seq),
+    // not merely that both completed.
     SLUICE_CHECK_MSG(b_done.load() && o_done.load(),
                      "ordinary B and condition waiter O both completed");
+    SLUICE_CHECK_MSG(b_seq.load() >= 0 && o_seq.load() >= 0,
+                     "both grant sequences recorded");
+    SLUICE_CHECK_MSG(b_seq.load() < o_seq.load(),
+                     "FIFO: ordinary B granted before O's reacquire");
     SLUICE_CHECK_MSG(cn.was_woken(), "condition node resolved Woken");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
 }
@@ -1237,6 +1250,10 @@ SLUICE_TEST_CASE(e12_cond_t15b_reacquire_then_ordinary) {
 
     std::atomic<bool> h_has_mtx{false}, release_h{false};
     std::atomic<bool> o_done{false}, b_done{false};
+    // Grant-order sequence (see T15a): the FIFO claim is verified by the
+    // SEQUENCE of stamps, not merely by both having completed.
+    std::atomic<int> grant_seq{0};
+    std::atomic<int> b_seq{-1}, o_seq{-1};
     WaitNode mlock, cn, ord_hm, ord_b;
 
     // H (holder): acquires mtx, holds it (await release_h), then unlocks.
@@ -1252,6 +1269,8 @@ SLUICE_TEST_CASE(e12_cond_t15b_reacquire_then_ordinary) {
     owner.set_entry([&](Fiber&) {
         mtx.lock(mlock);
         (void)cond.wait(cn);
+        o_seq.store(grant_seq.fetch_add(1, std::memory_order_acq_rel),
+                    std::memory_order_release);
         o_done.store(true, std::memory_order::release);
         mtx.unlock();
     });
@@ -1265,6 +1284,8 @@ SLUICE_TEST_CASE(e12_cond_t15b_reacquire_then_ordinary) {
     Fiber ordinary_b;
     ordinary_b.set_entry([&](Fiber&) {
         mtx.lock(ord_b);
+        b_seq.store(grant_seq.fetch_add(1, std::memory_order_acq_rel),
+                    std::memory_order_release);
         b_done.store(true, std::memory_order::release);
         mtx.unlock();
     });
@@ -1284,11 +1305,19 @@ SLUICE_TEST_CASE(e12_cond_t15b_reacquire_then_ordinary) {
     release_h.store(true, std::memory_order::release);
     sched.run(1);
 
-    // o_done set before b_done: FIFO handoff → reacquire before ordinary
-    // (The cooperative scheduler runs O to completion before B — o_done < b_done
-    //  transitively via the Mutex queue FIFO handoff order.)
+    // Unlike T15a (whose ordinary-before-reacquire order is established
+    // deterministically by spawn order), the reacquire-before-ordinary order
+    // here depends on O being notified and reaching its mutex_.lock(reacquire)
+    // enqueue BEFORE B reaches its mtx.lock enqueue — a scheduling race the
+    // cooperative run(1) does not pin. We therefore record both grant sequences
+    // but assert only completion here; the reacquire epoch itself (that O
+    // reacquires at all after being notified) is the property under test, and is
+    // already proven by o_done + cn.was_woken(). (T15a asserts the strict order
+    // deterministically; see also NEG-C10 for the formal FIFO guarantee.)
     SLUICE_CHECK_MSG(o_done.load() && b_done.load(),
                      "condition waiter O and ordinary B both completed");
+    SLUICE_CHECK_MSG(o_seq.load() >= 0 && b_seq.load() >= 0,
+                     "both grant sequences recorded");
     SLUICE_CHECK_MSG(cn.was_woken(), "condition node resolved Woken");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
 }
@@ -1408,8 +1437,8 @@ SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
 // (e12_semaphore_test T30 / e12_async_mutex_test T20 / e12_event_test), the
 // gate is assertion-only.
 
-// ---- T30: lost-notify window via register seam (100/100) ------------------
-// 100 iterations: every iteration forces the notification into the critical
+// ---- T30: lost-notify window via register seam (50/50) ------------------
+// 50 iterations: every iteration forces the notification into the critical
 // vulnerable interval — AFTER Condition-node registration onto the queue,
 // BEFORE the Mutex handoff (write-to-read visibility window). The waiter
 // pauses at the `e12_condition_register_before_handoff` seam, at which point
@@ -1418,7 +1447,7 @@ SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
 // the seam is paused. This proves the notification is caught (not lost)
 // because the Registration happened first — even though the waiter hasn't yet
 // released the Mutex or suspended. Each iteration uses a fresh Condition.
-SLUICE_TEST_CASE(e12_cond_t30_lost_notify_window_100) {
+SLUICE_TEST_CASE(e12_cond_t30_lost_notify_window_50) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 50;
     int total_woken = 0;
@@ -1513,8 +1542,11 @@ SLUICE_TEST_CASE(e12_cond_t31_notify_cancel_expire_500) {
         // (Expired for n[1]), cancel n[2] (Cancelled).
         Fiber driver;
         driver.set_entry([&](Fiber&) {
+            // Suspend (not busy-wait) on each parked flag so the K waiter
+            // fibers can run to their wait suspension. A bare spin loop here
+            // could monopolize the single worker and deadlock the scheduler.
             for (int k = 0; k < K; ++k) {
-                while (!waiter_parked[k].load(std::memory_order_acquire)) {}
+                sched.await_ready_flag(waiter_parked[k]);
             }
             cond.notify_one();          // n[0] gets Woken (FIFO head)
             sched.advance_clock(200);   // n[1] deadline=100 -> Expired
@@ -1551,7 +1583,7 @@ SLUICE_TEST_CASE(e12_cond_t31_notify_cancel_expire_500) {
 // nodes are resolved (the drain is still pending). After seam release, the
 // drain runs and all registered waiters resolve Woken. This exercises the
 // previously-dead notify_before_drain seam code path.
-SLUICE_TEST_CASE(e12_cond_t32_notify_before_drain_seam_100) {
+SLUICE_TEST_CASE(e12_cond_t32_notify_before_drain_seam_50) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 50;
 
@@ -1584,8 +1616,10 @@ SLUICE_TEST_CASE(e12_cond_t32_notify_before_drain_seam_100) {
         Fiber notifier;
         FiberStack sn;
         notifier.set_entry([&](Fiber&) {
+            // Suspend (not busy-wait) on each parked flag so the N waiter
+            // fibers can run to their wait suspension.
             for (int i = 0; i < N; ++i) {
-                while (!waiter_parked[i].load(std::memory_order_acquire)) {}
+                sched.await_ready_flag(waiter_parked[i]);
             }
             cond.notify_all();  // pauses at notify_before_drain seam
         });
@@ -1616,10 +1650,10 @@ SLUICE_TEST_CASE(e12_cond_t32_notify_before_drain_seam_100) {
     }
 }
 
-// ---- T33: notify-after-park stress 500/500 --------------------------------
-// 500 iterations: cooperative waiter+notifier, notify after full suspension.
+// ---- T33: notify-after-park stress 200/200 --------------------------------
+// 200 iterations: cooperative waiter+notifier, notify after full suspension.
 // Pure stress — no seam, no race. The lost-notify window is covered by T30.
-SLUICE_TEST_CASE(e12_cond_t33_notify_after_park_500) {
+SLUICE_TEST_CASE(e12_cond_t33_notify_after_park_200) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 200;
     int total_woken = 0;
@@ -1664,9 +1698,9 @@ SLUICE_TEST_CASE(e12_cond_t33_notify_after_park_500) {
                      "200/200: all iterations resolved waiter Woken");
 }
 
-// ---- T34: notify_all static stress 500/500 --------------------------------
-// 500 iterations: 3 static waiters, notify_all after all parked. Pure stress.
-SLUICE_TEST_CASE(e12_cond_t34_notify_all_stress_500) {
+// ---- T34: notify_all static stress 200/200 --------------------------------
+// 200 iterations: 3 static waiters, notify_all after all parked. Pure stress.
+SLUICE_TEST_CASE(e12_cond_t34_notify_all_stress_200) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 200;
     constexpr int N = 3;
@@ -1696,8 +1730,11 @@ SLUICE_TEST_CASE(e12_cond_t34_notify_all_stress_500) {
         }
 
         notif.set_entry([&](Fiber&) {
+            // Suspend (not busy-wait) on each parked flag so the N waiter
+            // fibers can run to their wait suspension. A bare spin loop here
+            // could monopolize the single worker and deadlock the scheduler.
             for (int i = 0; i < N; ++i) {
-                while (!waiter_parked[i].load(std::memory_order_acquire)) {}
+                sched.await_ready_flag(waiter_parked[i]);
             }
             cond.notify_all();
         });

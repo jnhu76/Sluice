@@ -224,10 +224,21 @@ inline WaitOutcome AsyncCondition::wait(WaitNode& condition_node) {
     ActiveWaitGuard guard(active_waits_);  // (§1.2.1/§1.2.2) covers all paths
     // CONDITION-WAIT-PREPARE: register Condition node + release bound Mutex +
     // make_waiting, under one global_mtx_ CS; then context_switch. Returns the
-    // latched Condition outcome. The untimed path ALWAYS releases the Mutex, so
-    // the reacquire epoch is MANDATORY for every terminal outcome (C-H1).
+    // latched Condition outcome. `released_mutex` distinguishes the C8
+    // registration-failure path (the Mutex was NOT released — the caller
+    // retains ownership and runs NO reacquire epoch) from every other path
+    // (Woken/Cancelled/suspended-Expired, all of which released the Mutex and
+    // MUST run the mandatory reacquire, C-H1). This mirrors wait_until's
+    // handling of its inline-Expired-at-admission path.
+    bool released_mutex = false;
     WaitOutcome reason = scheduler_.condition_wait_prepare(
-        waiters_, condition_node, mutex_.waiters_, mutex_.owner_);
+        waiters_, condition_node, mutex_.waiters_, mutex_.owner_, released_mutex);
+    // The C8 registration-failure path (node already registered/terminal) did
+    // NOT release the Mutex: the caller RETAINS ownership and runs NO reacquire
+    // epoch. Every other path released the Mutex and MUST reacquire (C-H1).
+    if (!released_mutex) {
+        return reason;  // caller still owns the Mutex; no reacquire
+    }
     // Mandatory reacquire epoch (C-H1/C-H3/C-H5): create a stack-local
     // reacquire WaitNode and call the bound Mutex's ordinary lock(). The Fiber
     // is stackful, so this local object remains alive across the reacquire

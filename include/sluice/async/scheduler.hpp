@@ -602,8 +602,17 @@ public:
     // latched Condition-node terminal outcome (Woken/Expired/Cancelled) read
     // from `cond_node` after the resume. The reacquire epoch is run by the
     // CALLER (AsyncCondition::wait) after this returns, NOT by this seam.
+    //
+    // `released_mutex` mirrors the timed seam (condition_wait_prepare_until):
+    // false on the C8 registration-failure path (the Mutex was NOT released —
+    // the caller retains ownership and must run NO reacquire epoch), and true
+    // after the Mutex has been released/handed off (the caller MUST run the
+    // reacquire epoch). The untimed path has no inline-Expired-at-admission
+    // branch (no deadline), so every non-registration-failure path releases
+    // the Mutex.
     WaitOutcome condition_wait_prepare(WaitQueue& cond_waiters, WaitNode& cond_node,
-                                       WaitQueue& mutex_waiters, Fiber*& owner);
+                                       WaitQueue& mutex_waiters, Fiber*& owner,
+                                       bool& released_mutex);
 
     // Deadline-aware CONDITION-WAIT-PREPARE. Composes condition_wait_prepare
     // with an E11 TimerRegistration on `cond_node` (C-H4: deadline governs ONLY
