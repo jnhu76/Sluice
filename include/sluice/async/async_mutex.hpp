@@ -205,6 +205,19 @@ public:
     }
 
 private:
+    // E12-D (construction authorization §1.1): AsyncCondition friends AsyncMutex
+    // SOLELY so it can (a) read scheduler_ to reach the SAME Scheduler as this
+    // Mutex (C-H2), and (b) pass waiters_/owner_ BY REFERENCE into Scheduler's
+    // private Condition seams — exactly as this Mutex's own methods pass them
+    // into Scheduler's Mutex seams (e.g. scheduler_.mutex_lock(waiters_,
+    // owner_, node)). AsyncCondition does NOT write owner_ directly, does NOT
+    // register/wake/unlink on waiters_, does NOT implement its own handoff, and
+    // does NOT grant ownership. All Mutex state transitions are performed by the
+    // Scheduler (the authoritative Mutex state-machine executor) via the ONE
+    // accepted mutex_handoff_one_locked / mutex_lock seam. No PUBLIC Mutex
+    // accessor is added (the authority probe still seals wait_queue()/owner()).
+    friend class AsyncCondition;
+
     Scheduler& scheduler_;
     Fiber* owner_;
     WaitQueue waiters_;
