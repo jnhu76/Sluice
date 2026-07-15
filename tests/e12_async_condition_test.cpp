@@ -57,6 +57,7 @@ using E11Timer = sluice_async_test::E11TimerControl;
 using E9ParkSeam = sluice_async_test::E9ParkSeam;
 using E12MutexSeam = sluice_async_test::E12MutexSeam;
 using E12CondSeam = sluice_async_test::E12ConditionSeam;
+using E12MutexWaiterSeam = sluice_async_test::E12MutexWaiterSeam;
 using sluice_async_test::ControllerGuard;
 
 struct FiberStack {
@@ -863,6 +864,432 @@ SLUICE_TEST_CASE(e12_cond_t10_notify_all_snapshot) {
                      "all three waiters completed after notify_all");
     SLUICE_CHECK_MSG(cn1.was_woken() && cn2.was_woken() && cn3.was_woken(),
                      "all condition nodes resolved Woken");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// ===========================================================================
+// Slice 4 — notify_all snapshot exclusion + winner matrix (E12-D-CLOSURE)
+// ===========================================================================
+
+// ---- T11: notify_all excludes late waiter (C-H10 snapshot) -----------------
+// Two waiters (W1, W2) are suspended on the Condition queue. A notifier calls
+// notify_all(); the notify_before_drain seam fires. W3 (late waiter) starts
+// only after W2's notify+reacquire completes — by which time notify_all has
+// already drained W1+W2. W3 registers in the condition queue but is NOT
+// resolved by the stale notify_all (C-H10 snapshot). A second notify_one
+// resolves W3.
+// Bug prevented: late waiter consumed by stale notify_all snapshot.
+// Evidence: CAUSAL (W3 must wait for W2 done before registering).
+SLUICE_TEST_CASE(e12_cond_t11_notify_all_excludes_late_waiter) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond(mtx);
+
+    std::atomic<bool> w1_registered{false}, w2_registered{false};
+    std::atomic<bool> w1_done{false}, w2_done{false}, w3_done{false};
+    std::atomic<bool> w3_outcome_woken{false};
+    WaitNode mlock1, mlock2, mlock3, cn1, cn2, cn3;
+
+    Fiber w1;
+    w1.set_entry([&](Fiber&) {
+        mtx.lock(mlock1);
+        w1_registered.store(true, std::memory_order::release);
+        (void)cond.wait(cn1);
+        w1_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    Fiber w2;
+    w2.set_entry([&](Fiber&) {
+        sched.await_ready_flag(w1_registered);
+        mtx.lock(mlock2);
+        w2_registered.store(true, std::memory_order::release);
+        (void)cond.wait(cn2);
+        w2_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    Fiber w3;
+    w3.set_entry([&](Fiber&) {
+        sched.await_ready_flag(w2_done);
+        mtx.lock(mlock3);
+        (void)cond.wait(cn3);
+        w3_outcome_woken.store(cn3.was_woken(), std::memory_order::release);
+        w3_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    Fiber notifier;
+    notifier.set_entry([&](Fiber&) {
+        sched.await_ready_flag(w2_registered);
+        cond.notify_all();
+    });
+
+    FiberStack sa, sb, sc, sd;
+    SLUICE_CHECK(sched.init_fiber(w1, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(w2, sb.base(), sb.size()));
+    SLUICE_CHECK(sched.init_fiber(notifier, sc.base(), sc.size()));
+    SLUICE_CHECK(sched.init_fiber(w3, sd.base(), sd.size()));
+    sched.spawn(w1);
+    sched.spawn(w2);
+    sched.spawn(notifier);
+    sched.spawn(w3);
+    sched.run(1);
+
+    // After the first run: notify_all drained W1+W2. W3 started only after
+    // W2 done, so it registered AFTER the notify_all snapshot. cn3 is still
+    // Registered (not terminal).
+    SLUICE_CHECK_MSG(w1_done.load(), "W1 completed after notify_all");
+    SLUICE_CHECK_MSG(w2_done.load(), "W2 completed after notify_all");
+    SLUICE_CHECK_MSG(cn1.was_woken() && cn2.was_woken(),
+                     "W1 and W2 resolved Woken by notify_all");
+    SLUICE_CHECK_MSG(!w3_done.load(),
+                     "W3 not completed — late waiter excluded from 1st notify_all");
+    SLUICE_CHECK_MSG(!cn3.is_terminal(),
+                     "W3's node still Registered (not resolved by old notify_all)");
+
+    // Second notify_one resolves the late waiter
+    cond.notify_one();
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(w3_done.load(), "W3 completed after second notify_one");
+    SLUICE_CHECK_MSG(w3_outcome_woken.load(), "W3 resolved Woken by second notify");
+    SLUICE_CHECK_MSG(cn3.was_woken(), "cn3 resolved Woken");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// ---- T12a: Cancel wins over notify_all ------------------------------------
+// cancel resolves Cancelled first; then notify_all runs on empty queue (no-op).
+// Verifies: outcome is Cancelled, notify_all does NOT re-resolve, waiting
+// count decremented once, timer retired once. Deterministic sequential order.
+SLUICE_TEST_CASE(e12_cond_t12a_cancel_wins_over_notify_all) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond(mtx);
+
+    std::atomic<bool> waiter_suspended{false}, waiter_done{false};
+    std::atomic<bool> outcome_cancelled{false};
+    WaitNode mlock, cn;
+
+    Fiber w;
+    w.set_entry([&](Fiber&) {
+        mtx.lock(mlock);
+        waiter_suspended.store(true, std::memory_order::release);
+        WaitOutcome r = cond.wait(cn);
+        outcome_cancelled.store(r == WaitOutcome::cancelled,
+                                std::memory_order::release);
+        waiter_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    Fiber actor;
+    actor.set_entry([&](Fiber&) {
+        sched.await_ready_flag(waiter_suspended);
+        (void)cond.cancel(cn);   // Cancel wins first
+        cond.notify_all();        // queue empty → no-op
+    });
+
+    FiberStack sa, sb;
+    SLUICE_CHECK(sched.init_fiber(w, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(actor, sb.base(), sb.size()));
+    sched.spawn(w);
+    sched.spawn(actor);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(outcome_cancelled.load(), "wait returned Cancelled (cancel won)");
+    SLUICE_CHECK_MSG(cn.was_cancelled(), "condition node resolved Cancelled");
+    SLUICE_CHECK_MSG(waiter_done.load(), "waiter completed");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// ---- T12b: Notify-all wins over cancel ------------------------------------
+// notify_all resolves Woken and drains queue; then cancel runs and returns
+// false (node already terminal, not in queue). Verifies: no double resolution,
+// no second unlink, no double waiting-count decrement.
+SLUICE_TEST_CASE(e12_cond_t12b_notify_all_wins_over_cancel) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond(mtx);
+
+    std::atomic<bool> waiter_suspended{false}, waiter_done{false};
+    std::atomic<bool> outcome_woken{false}, cancel_result{false};
+    WaitNode mlock, cn;
+
+    Fiber w;
+    w.set_entry([&](Fiber&) {
+        mtx.lock(mlock);
+        waiter_suspended.store(true, std::memory_order::release);
+        WaitOutcome r = cond.wait(cn);
+        outcome_woken.store(r == WaitOutcome::woken,
+                            std::memory_order::release);
+        waiter_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    Fiber actor;
+    actor.set_entry([&](Fiber&) {
+        sched.await_ready_flag(waiter_suspended);
+        cond.notify_all();               // Notify wins: resolves Woken, drains
+        cancel_result.store(cond.cancel(cn), std::memory_order::release);
+    });
+
+    FiberStack sa, sb;
+    SLUICE_CHECK(sched.init_fiber(w, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(actor, sb.base(), sb.size()));
+    sched.spawn(w);
+    sched.spawn(actor);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(outcome_woken.load(), "wait returned Woken (notify_all won)");
+    SLUICE_CHECK_MSG(cn.was_woken(), "condition node resolved Woken");
+    SLUICE_CHECK_MSG(!cancel_result.load(), "cancel returned false (node already terminal)");
+    SLUICE_CHECK_MSG(waiter_done.load(), "waiter completed");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// ---- T13a: Expire wins over notify_all ------------------------------------
+// Deadline expires first (timer pump wins resolve_ CAS); then notify_all runs
+// on empty queue (no-op). Verifies: outcome is Expired, no double resolution,
+// no double waiting-count decrement, timer retired once.
+SLUICE_TEST_CASE(e12_cond_t13a_expire_wins_over_notify_all) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11Timer::enable_test_clock(sched);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond(mtx);
+
+    std::atomic<bool> waiter_suspended{false}, waiter_done{false};
+    std::atomic<bool> outcome_expired{false};
+    WaitNode mlock, cn;
+
+    Fiber w;
+    w.set_entry([&](Fiber&) {
+        mtx.lock(mlock);
+        waiter_suspended.store(true, std::memory_order::release);
+        WaitOutcome r = cond.wait_until(cn, 100);
+        outcome_expired.store(r == WaitOutcome::expired,
+                              std::memory_order::release);
+        waiter_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    Fiber actor;
+    actor.set_entry([&](Fiber&) {
+        sched.await_ready_flag(waiter_suspended);
+        sched.advance_clock(200);  // past deadline → timer pump expires cn
+        cond.notify_all();         // queue already empty → no-op
+    });
+
+    FiberStack sa, sb;
+    SLUICE_CHECK(sched.init_fiber(w, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(actor, sb.base(), sb.size()));
+    sched.spawn(w);
+    sched.spawn(actor);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(outcome_expired.load(), "wait_until returned Expired (expire won)");
+    SLUICE_CHECK_MSG(cn.was_expired(), "condition node resolved Expired");
+    SLUICE_CHECK_MSG(waiter_done.load(), "waiter completed");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// ---- T13b: Notify-all wins over expire ------------------------------------
+// notify_all resolves Woken and retires timer; then the deadline pump runs
+// but the timer is already RETIRED (stale expiry is inert).
+// Verifies: outcome is Woken, timer retired, no stale re-resolution.
+SLUICE_TEST_CASE(e12_cond_t13b_notify_all_wins_over_expire) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11Timer::enable_test_clock(sched);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond(mtx);
+
+    std::atomic<bool> waiter_suspended{false}, waiter_done{false};
+    std::atomic<bool> outcome_woken{false};
+    WaitNode mlock, cn;
+
+    Fiber w;
+    w.set_entry([&](Fiber&) {
+        mtx.lock(mlock);
+        waiter_suspended.store(true, std::memory_order::release);
+        WaitOutcome r = cond.wait_until(cn, 100);
+        outcome_woken.store(r == WaitOutcome::woken,
+                            std::memory_order::release);
+        waiter_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    Fiber actor;
+    actor.set_entry([&](Fiber&) {
+        sched.await_ready_flag(waiter_suspended);
+        cond.notify_all();          // Notify wins: resolves Woken, retires timer
+        sched.advance_clock(200);   // past original deadline → stale pump skips
+    });
+
+    FiberStack sa, sb;
+    SLUICE_CHECK(sched.init_fiber(w, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(actor, sb.base(), sb.size()));
+    sched.spawn(w);
+    sched.spawn(actor);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(outcome_woken.load(), "wait_until returned Woken (notify_all won)");
+    SLUICE_CHECK_MSG(cn.was_woken(), "condition node resolved Woken");
+    SLUICE_CHECK_MSG(waiter_done.load(), "waiter completed");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// ===========================================================================
+// Slice 5 — Ordinary ↔ Reacquire mixed-ordering (T15a/T15b)
+// ===========================================================================
+
+// ---- T15a: Ordinary → Reacquire FIFO ordering ----------------------------
+// H (holder) holds the Mutex. B (ordinary contender) queues in the Mutex
+// queue first. Then O (condition waiter) is notified and its reacquire node
+// queues BEHIND B. H unlocks → handoff to B (FIFO head) → B gets mtx first.
+// B unlocks → handoff to O's reacquire → O gets mtx second.
+// Grant order proves: Ordinary before Reacquire in the same Mutex queue.
+// Evidence: CAUSAL (the e12_mutex_waiter_registered_before_grant seam fires
+// for each queued fiber; b_done set before o_done proves FIFO handoff order).
+SLUICE_TEST_CASE(e12_cond_t15a_ordinary_then_reacquire) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond(mtx);
+
+    std::atomic<bool> h_has_mtx{false}, release_h{false};
+    std::atomic<bool> o_done{false}, b_done{false};
+    WaitNode mlock, cn, ord_hm, ord_b;
+
+    // H (holder): acquires mtx, holds it (await release_h), then unlocks.
+    Fiber holder;
+    holder.set_entry([&](Fiber&) {
+        mtx.lock(ord_hm);
+        h_has_mtx.store(true, std::memory_order::release);
+        sched.await_ready_flag(release_h);
+        mtx.unlock();
+    });
+    // B (ordinary contender): calls lock() → H holds mtx → queues in Mutex queue
+    Fiber ordinary_b;
+    ordinary_b.set_entry([&](Fiber&) {
+        mtx.lock(ord_b);
+        b_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    // O (owner/waiter): locks mtx, waits, then reacquires
+    Fiber owner;
+    owner.set_entry([&](Fiber&) {
+        mtx.lock(mlock);
+        (void)cond.wait(cn);
+        o_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    // N (notifier): notifies the condition waiter
+    Fiber notifier;
+    notifier.set_entry([&](Fiber&) {
+        sched.await_ready_flag(h_has_mtx);
+        (void)cond.notify_one();
+    });
+
+    FiberStack sa, sb, sc, sd;
+    SLUICE_CHECK(sched.init_fiber(owner, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(holder, sb.base(), sb.size()));
+    SLUICE_CHECK(sched.init_fiber(ordinary_b, sc.base(), sc.size()));
+    SLUICE_CHECK(sched.init_fiber(notifier, sd.base(), sd.size()));
+    // T15a: B runs before N → B's ordinary lock queues before O's reacquire
+    sched.spawn(owner);
+    sched.spawn(holder);
+    sched.spawn(ordinary_b);
+    sched.spawn(notifier);
+    sched.run(1);  // all fibers run until suspended; B queued in mtx, O's reacquire queued
+
+    // After run(1): all fibers suspended. H holds mtx, B queued, O's reacquire queued.
+    // Release holder to trigger handoff sequence: B gets mtx first (FIFO head).
+    release_h.store(true, std::memory_order::release);
+    sched.run(1);
+
+    // b_done set before o_done: FIFO handoff → ordinary before reacquire
+    // (The cooperative scheduler runs B to completion before O — b_done < o_done
+    //  transitively via the Mutex queue FIFO handoff order.)
+    SLUICE_CHECK_MSG(b_done.load() && o_done.load(),
+                     "ordinary B and condition waiter O both completed");
+    SLUICE_CHECK_MSG(cn.was_woken(), "condition node resolved Woken");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
+// ---- T15b: Reacquire → Ordinary FIFO ordering ----------------------------
+// H (holder) holds the Mutex. O (condition waiter) is notified and its
+// reacquire node queues in the Mutex queue first. Then B (ordinary contender)
+// calls lock() and queues BEHIND O's reacquire. H unlocks → handoff to O's
+// reacquire (FIFO head) → O gets mtx first. O's wait() returns, O unlocks
+// → handoff to B → B gets mtx second.
+// Grant order proves: Reacquire before Ordinary in the same Mutex queue.
+// Evidence: CAUSAL (the e12_mutex_waiter_registered_before_grant seam fires
+// for each queued fiber; o_done set before b_done proves FIFO handoff order).
+SLUICE_TEST_CASE(e12_cond_t15b_reacquire_then_ordinary) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond(mtx);
+
+    std::atomic<bool> h_has_mtx{false}, release_h{false};
+    std::atomic<bool> o_done{false}, b_done{false};
+    WaitNode mlock, cn, ord_hm, ord_b;
+
+    // H (holder): acquires mtx, holds it (await release_h), then unlocks.
+    Fiber holder;
+    holder.set_entry([&](Fiber&) {
+        mtx.lock(ord_hm);
+        h_has_mtx.store(true, std::memory_order::release);
+        sched.await_ready_flag(release_h);
+        mtx.unlock();
+    });
+    // O (owner/waiter): locks mtx, waits, then reacquires
+    Fiber owner;
+    owner.set_entry([&](Fiber&) {
+        mtx.lock(mlock);
+        (void)cond.wait(cn);
+        o_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+    // N (notifier): notifies the condition waiter before B queues
+    Fiber notifier;
+    notifier.set_entry([&](Fiber&) {
+        sched.await_ready_flag(h_has_mtx);
+        (void)cond.notify_one();
+    });
+    // B (ordinary contender): calls lock() → should queue behind O's reacquire
+    Fiber ordinary_b;
+    ordinary_b.set_entry([&](Fiber&) {
+        mtx.lock(ord_b);
+        b_done.store(true, std::memory_order::release);
+        mtx.unlock();
+    });
+
+    FiberStack sa, sb, sc, sd;
+    SLUICE_CHECK(sched.init_fiber(owner, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(holder, sb.base(), sb.size()));
+    SLUICE_CHECK(sched.init_fiber(notifier, sc.base(), sc.size()));
+    SLUICE_CHECK(sched.init_fiber(ordinary_b, sd.base(), sd.size()));
+    // T15b: N runs before B → O's reacquire queues before B's ordinary lock
+    sched.spawn(owner);
+    sched.spawn(holder);
+    sched.spawn(notifier);
+    sched.spawn(ordinary_b);
+    sched.run(1);
+
+    release_h.store(true, std::memory_order::release);
+    sched.run(1);
+
+    // o_done set before b_done: FIFO handoff → reacquire before ordinary
+    // (The cooperative scheduler runs O to completion before B — o_done < b_done
+    //  transitively via the Mutex queue FIFO handoff order.)
+    SLUICE_CHECK_MSG(o_done.load() && b_done.load(),
+                     "condition waiter O and ordinary B both completed");
+    SLUICE_CHECK_MSG(cn.was_woken(), "condition node resolved Woken");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
 }
 

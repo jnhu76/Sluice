@@ -65,6 +65,10 @@ enum class PhaseTag : unsigned char {
     // drain loop begins. A test observing this phase proves late registration /
     // cancel / expiry serialize AFTER the snapshot (they need global_mtx_).
     e12_condition_notify_before_drain,
+    // E12-D-CLOSURE: mutex_lock queuing path. Fires AFTER register_wait_locked
+    // succeeds and the fiber WILL suspend (no immediate ownership). Proves this
+    // fiber's WaitNode is registered in the Mutex waiter queue (T15a/T15b).
+    e12_mutex_waiter_registered_before_grant,
 
     count
 };

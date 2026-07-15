@@ -227,6 +227,34 @@ struct E12MutexSeam {
     }
 };
 
+// ---- E12-D-CLOSURE: mutex waiter-registered seam (T15a/T15b) ----
+// The MUTEX-WAITER-REGISTERED phase: fired inside mutex_lock when a fiber's
+// WaitNode has been successfully registered in the Mutex waiter queue AND the
+// fiber will suspend (no immediate ownership). A test observing this phase
+// proves the node entered the Mutex queue (not immediately granted).
+struct E12MutexWaiterSeam {
+    static void arm_waiter_registered(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(
+            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+    }
+    static void wait_waiter_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(
+            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+    }
+    static bool is_waiter_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(
+            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+    }
+    static bool is_waiter_registered_reached(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(
+            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+    }
+    static void release_waiter(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(
+            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+    }
+};
+
 // ---- E12-D AsyncCondition register-before-release + notify-before-drain seams
 // CONDITION-WAIT-PREPARE phase: paused AFTER the Condition node is Registered +
 // linked in the Condition queue (Mutex STILL owned by the waiter), BEFORE the

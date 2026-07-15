@@ -1928,6 +1928,13 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
             --waiting_waitq_count_;
             return;
         }
+        // E12-D-CLOSURE: this fiber's node is registered in the Mutex waiter
+        // queue and the fiber will suspend (no immediate ownership). A test
+        // observing this phase proves the node queued (T15a/T15b).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::test_phase(
+            *this, sluice_async_test::PhaseTag::e12_mutex_waiter_registered_before_grant);
+#endif
         me->make_waiting();
     }
     fiber_ctx::Switch s;
