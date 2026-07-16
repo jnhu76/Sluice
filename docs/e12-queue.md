@@ -1,15 +1,19 @@
-# E12-E-QUEUE-PREPARATION-AUDIT-1 — Async Queue Preparation Audit
+# E12-E Queue — Semantic Authority and Preparation Audit
 
-> **Audit identity:** `E12-E-QUEUE-PREPARATION-AUDIT-1`
+> **Preparation audit identity:** `E12-E-QUEUE-PREPARATION-AUDIT-1`
+> **Semantic decision identity:** `E12-E-QUEUE-SEMANTIC-DECISION-1`
 >
-> **Scope:** DISCOVERY AND PREPARATION AUDIT ONLY for
-> `E12-E Queue — Blocking / Asynchronous Queue`.
+> **This document has two parts.**
 >
-> **This document is NOT an authoritative specification.** No E12-E code, no
-> runtime tests, and no formal model are produced here. The cross-primitive
-> authority remains [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)
-> §8; this audit deepens §8 only as a preparation record and explicitly does
-> **not** close any decision marked `HUMAN DECISION REQUIRED` there.
+> **Part 1 (§E12-E-QUEUE-SEMANTIC-DECISION-1 below) records the binding
+> semantic and architectural decisions that close the E12-E Queue design.**
+> These decisions are authoritative. They supersede the `HUMAN DECISION
+> REQUIRED` status previously recorded in
+> [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §8/§12.
+>
+> **Part 2 (§A–§O) is the historical preparation audit** that informed the
+> decisions. It remains as a discovery record. The decisions are authoritative;
+> the audit is advisory.
 >
 > **Construction method binding:**
 > [`docs/async-runtime-construction-method.md`](async-runtime-construction-method.md)
@@ -26,7 +30,271 @@
 
 ---
 
+## E12-E-QUEUE-SEMANTIC-DECISION-1 — Authoritative Semantic Decisions
+
+> **Decision identity:** `E12-E-QUEUE-SEMANTIC-DECISION-1`
+> **Status:** `PASS`
+> **Implementation remains unauthorized.** See §M.
+
+### Decision sources
+
+The following hierarchy was used (highest authority first):
+
+1. **Repository evidence** — Sluice E10/E11/E12 scheduler, waiter, timer,
+   cancellation, locking, testing-seam, and lifecycle authorities.
+2. **Preparation audit** — `docs/e12-queue.md` §A–§O (the discovery record).
+3. **Cross-primitive plan** — `docs/e12-sync-primitives-plan.md` §8.
+4. **External research evidence** — CQS, Kotlin Channels, Kotlin Channel
+   close/buffering/receive/send/cancellation semantics. Adapted to Sluice
+   authorities; not copied as lock-free implementation.
+
+### Binding decisions
+
+#### Queue shape
+
+| Decision | Value | Basis |
+| --- | --- | --- |
+| Type name | `AsyncQueue<T>` | Consistent with `AsyncMutex`/`AsyncCondition` naming; avoids collision with `WaitQueue` |
+| Concurrency topology | MPMC | The existing `WaitQueue` substrate supports multiple producers and consumers; no restriction is necessary |
+| Capacity | runtime fixed, `capacity >= 1` | Matches Semaphore `max_permits_` runtime pattern; compile-time capacity is a future option |
+| Buffer order | FIFO | Standard queue semantics; matches `WaitQueue` FIFO discipline |
+| Producer waiter order | FIFO eligible-waiter grant | `WaitQueue` FIFO + no-barging (Semaphore A2 precedent) |
+| Consumer waiter order | FIFO eligible-waiter grant | Same |
+| Backpressure | producer suspends when full | Bounded queue requirement; plan §8.1 |
+| Deferred | rendezvous (capacity-0), unbounded, direct handoff, overflow drop, conflation, Select, close-with-cause | See deferred list below |
+
+#### Success protocol
+
+```text
+RESULT-BEARING SELECTED-WAITER GRANT
+```
+
+A successful suspended operation resumes only after its concrete item or
+committed producer payload has been bound to that exact wait epoch. A `woken`
+scheduler outcome alone is not sufficient to mean Queue success. Queue
+operation completion is recorded in Queue-specific state (separate from
+`WaitOutcome`).
+
+#### Internal pre-grant retry
+
+```text
+INTERNAL PRE-GRANT RETRY / SKIP
+```
+
+Cancelled, expired, terminal, or otherwise ineligible candidate waiters are
+skipped internally before grant. Internal retry does not publish Queue
+success, does not consume/duplicate an item, does not consume/leak capacity,
+and does not permit a newly arriving operation to barge over an older eligible
+queued waiter. The resource remains in primitive ownership throughout.
+
+#### Payload path
+
+```text
+producer → authoritative bounded buffer → consumer
+```
+
+Direct producer-to-consumer payload bypass is not part of the first version.
+Even when a consumer is already waiting, the payload is semantically committed
+to the authoritative FIFO buffer before the oldest eligible consumer receives
+the buffer head. An implementation may later optimize this sequence only if it
+proves observational equivalence.
+
+#### Stable payload ownership
+
+```text
+ItemNode<T> owns one constructed T
+Queue buffer = fixed-capacity ring of owning ItemNode handles
+```
+
+`T` construction occurs before acquiring Queue or Scheduler locks. Queue
+capacity storage is allocated during Queue construction. Grant/commit critical
+sections perform only non-throwing handle, index, waiter-state, and ownership
+operations. No user-defined `T` operation runs under `Scheduler::global_mtx_`
+or under any Queue internal structural lock. After a consumer is granted an
+ItemNode, `T` is moved out and the node is destroyed after all Queue and
+Scheduler locks have been released.
+
+#### Type requirements
+
+```cpp
+std::is_object_v<T>
+std::is_nothrow_move_constructible_v<T>
+std::is_nothrow_destructible_v<T>
+```
+
+`emplace` is deferred to a separate exception/constructor protocol.
+
+#### Separate scheduler outcome from Queue completion
+
+`WaitOutcome` decides which scheduler wait cause won. Queue operation
+completion decides whether a payload/slot commit occurred and what the
+operation returns. These are separate. The primitive must inspect Queue
+completion state; it must never infer success from generic `woken` alone.
+
+#### Cancellation and deadline contract
+
+Sluice's existing final-winner semantics apply:
+
+- **Case A** (cancel/expire wins `resolve_` before grant): the waiter becomes
+  terminal; the grant path must not commit an item or producer payload to it;
+  the resource remains with its prior owner; a grant operation skips/retries
+  another candidate.
+- **Case B** (grant `resolve_(woken)` wins): the Queue commit is completed
+  before runnable publication; later cancel/expire attempts are losers; wait
+  cancellation cannot revoke the committed grant.
+- **Post-resume abandonment**: once grant commits, the operation owns its
+  result. Abandonment after resume is outside E12-E v1.
+- Prompt post-commit cancellation (Kotlin Channel style) is **explicitly
+  rejected** for E12-E v1: it conflicts with Sluice's single-CAS final-winner
+  authority and would require a separate undelivered-element protocol.
+
+#### Push failure retains payload
+
+A push that does not commit must return ownership of the original payload to
+the caller. No silent destruction of a producer payload merely because a
+blocked push was closed, cancelled, or expired.
+
+#### Close contract
+
+```text
+idempotent, monotonic, drain-on-close, no reopen, no close cause in v1
+```
+
+Close linearization point: `closed: false → true` under the Queue structural
+state authority. After this point: no new producer may commit; new push
+operations return `closed` with the undelivered payload; blocked producers
+complete `closed` with their undelivered payload; already-committed buffered
+items remain FIFO-consumable; waiting consumers receive available buffered
+items in eligible FIFO order; once the buffer is empty, remaining waiting
+consumers complete `closed`; new pop operations continue to receive buffered
+items; closed-and-empty pop returns `closed`; close never discards buffered
+items; close never reopens.
+
+#### Fairness and no-barging
+
+Guaranteed:
+- FIFO order of buffered elements
+- FIFO grant order among eligible queued producers
+- FIFO grant order among eligible queued consumers
+- no barging over an older eligible waiter
+
+Not guaranteed:
+- FIFO scheduler execution, FIFO user-code resumption, FIFO operation return,
+  global starvation freedom
+
+Fast paths must not bypass an eligible queued waiter.
+
+#### Destructor contract
+
+Quiet-state caller contract: no concurrent Queue operation; no registered
+producer waiter; no registered consumer waiter; no granted-but-not-resumed
+operation that references Queue state. The destructor does not implicitly call
+close, does not wake or cancel waiters, and debug-asserts the quiet-state
+preconditions. A non-empty but quiescent buffer is permitted at destruction.
+
+#### Rebalancing/drain obligation
+
+A conceptual non-throwing Queue reconciliation operation, while holding the
+authoritative locks, repeatedly performs all immediately possible commits:
+grant buffered FIFO items to eligible consumer waiters; after item removal
+creates capacity, commit oldest eligible producer payloads into the buffer;
+newly committed producer payloads may then satisfy eligible consumers; skip
+terminal/CAS-losing candidates internally; stop when no further immediate
+commit is possible.
+
+#### Producer commit protocol
+
+```text
+1. Under authoritative lock order, inspect FIFO producer wait queue.
+2. Skip/unlink any terminal or CAS-losing candidate.
+3. Select the oldest eligible producer.
+4. Win that wait epoch via resolve_(woken).
+5. Move its ItemNode handle into the authoritative buffer.
+6. Mark the producer Queue completion as committed.
+7. Publish the waiter runnable.
+```
+
+Steps 4–7 are one winner-before-publication commit region. No user-defined
+`T` operation and no potentially-throwing allocation occurs in this region.
+
+Push linearization point: the ItemNode ownership transfer into the
+authoritative buffer (before runnable publication for blocked pushes).
+
+#### Consumer commit protocol
+
+```text
+1. Under authoritative lock order, inspect FIFO consumer wait queue.
+2. Skip/unlink any terminal or CAS-losing candidate.
+3. Select the oldest eligible consumer.
+4. Win that wait epoch via resolve_(woken).
+5. Remove the FIFO head ItemNode from the authoritative buffer.
+6. Bind that ItemNode to the selected consumer operation state.
+7. Mark the consumer Queue completion as committed.
+8. Publish the waiter runnable.
+```
+
+Steps 4–8 are one winner-before-publication commit region. After resume, the
+consumer moves `T` out of the node outside all internal locks.
+
+Pop linearization point: the FIFO ItemNode ownership transfer from the buffer
+to the selected consumer operation (before runnable publication for blocked
+pops).
+
+#### Candidate linearization points (closed)
+
+| Operation | Linearization point |
+| --- | --- |
+| Fast successful push | ItemNode enters authoritative buffer |
+| Blocked successful push | ItemNode enters buffer before runnable publication |
+| Fast successful pop | FIFO ItemNode leaves buffer, becomes owned by consumer operation |
+| Blocked successful pop | ItemNode becomes owned by consumer operation before runnable publication |
+| Failed push due to close | Observes already-linearized closed state; retains payload |
+| Failed pop due to closed-and-empty | Observes `closed && buffer.empty` under structural state authority |
+| Cancelled/expired wait | Corresponding `resolve_` CAS wins before any Queue grant commit |
+| Close | `closed` changes `false → true` |
+
+#### Formal-model stages
+
+| Model | Scope | Status |
+| --- | --- | --- |
+| A | Bounded MPMC FIFO buffer + producer/consumer selected-waiter grant; no close, timeout, or cancellation | Required for v1 |
+| B | Add close, drain-on-close, producer rejection, closed-and-empty consumers | Required for v1 |
+| C | Add timeout and cancellation as pre-grant competing winners; internal retry over terminal candidates | Required for v1 |
+| D | Direct-handoff optimization | Deferred |
+
+#### Deferred from E12-E v1
+
+```text
+Direct payload handoff (producer→consumer bypass)
+Rendezvous (capacity-0)
+Unbounded queue
+Overflow drop policies
+Conflation
+Select integration (deferred to E13)
+Close with cause
+emplace (deferred to separate exception/constructor protocol)
+Post-resume abandonment protocol
+```
+
+### Evidence-to-decision matrix
+
+| External source | Evidence adopted | Evidence adapted | Evidence explicitly not copied |
+| --- | --- | --- | --- |
+| CQS | Single-winner grant authority; internal retry over failed candidates; separation of scheduler outcome from primitive completion | Adapted to Sluice's serialized `global_mtx_` + `resolve_` CAS model; no `REFUSE` state unless implementation evidence requires it | Lock-free infinite-array/FAA implementation; CQS `REFUSE` as a literal state |
+| Kotlin Channels | Close semantics (drain-on-close, idempotent, monotonic); FIFO buffer + grant; payload retention on close/cancel | Adapted to Sluice's existing deadline/cancellation final-winner semantics | Prompt post-commit cancellation (rejected v1); Kotlin's undelivered-element callback protocol |
+| Kotlin Channel close | `close` as monotonic lifecycle terminal; buffered items drain after close; producers rejected after close | Adapted to the `closed` Queue completion state (separate from `WaitOutcome`) | Close-with-cause (deferred) |
+
+### Remaining unresolved questions
+
+Only API spelling and concrete private type/function names may remain open.
+No payload-ownership, close, cancellation, fairness, transfer, or
+linearization question remains unresolved.
+
+---
+
 ## A. Verdict
+
+(Historical audit follows.)
 
 ```text
 E12-E-QUEUE-PREPARATION-AUDIT-1: READY-FOR-SPEC

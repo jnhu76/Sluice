@@ -1283,12 +1283,12 @@ no-spurious-wake are RESOLVED.
 ### 8.1 First-scope minimum
 
 ```text
-bounded vs unbounded          — HUMAN DECISION (see §8.2)
+bounded vs unbounded          — RESOLVED: bounded (runtime capacity, >= 1)
 capacity zero semantics       — DEFERRED (rendezvous is a separate protocol, §8.5)
-capacity >= 1                 — the first-scope bounded-Queue minimum (if bounded chosen)
+capacity >= 1                 — the first-scope bounded-Queue minimum
 send / push                   — producer op; may block on not-full
 recv / pop                    — consumer op; may block on not-empty
-close                         — lifecycle terminal
+close                         — lifecycle terminal (drain-on-close, idempotent, monotonic)
 producer wait queue           — not-full waiters (WaitQueue)
 consumer wait queue           — not-empty waiters (WaitQueue)
 internal structural lock      — SYNCHRONOUS structural lock, NOT E12-C async Mutex (§8.4)
@@ -1302,15 +1302,21 @@ semantics`.
 
 | Decision | Resolution |
 | -------- | ---------- |
-| bounded vs unbounded | **HUMAN DECISION REQUIRED.** Bounded enforces backpressure (needs slot accounting + not-full waiters); unbounded drops not-full entirely (simpler, no backpressure). Materially different APIs. |
-| **capacity zero** | **DEFERRED from first-scope Queue.** Rendezvous is a *separate protocol* (producer/consumer pairing + direct transfer), NOT a derived case of bounded Queue (§8.5). Recommended first-scope stance: constructor rejects zero capacity; zero-capacity public semantics are not shipped; rendezvous Channel semantics belong to a later explicit protocol decision. Do not implement this recommendation. If bounded-vs-unbounded itself remains HUMAN DECISION REQUIRED, capacity-zero is an *additional independent* protocol choice — it is not resolved by the bounded/unbounded decision. |
-| close with buffered items | **HUMAN DECISION REQUIRED** — drain-on-close (consumers may still recv remaining items, producers reject) vs immediate-discard. |
+| bounded vs unbounded | **RESOLVED: bounded.** Runtime fixed capacity, `capacity >= 1`. Unbounded deferred. |
+| **capacity zero** | **DEFERRED from first-scope Queue.** Rendezvous is a *separate protocol* (producer/consumer pairing + direct transfer), NOT a derived case of bounded Queue (§8.5). |
+| close with buffered items | **RESOLVED: drain-on-close.** Buffered items remain FIFO-consumable after close. Close never discards buffered items. |
 | close with blocked producers | **RESOLVED: producers wake with a `closed` outcome** (analogous to `cancelled`/`expired`); their `send` returns an error. No deadlock. |
-| close with blocked consumers | **HUMAN DECISION REQUIRED** — wake with `closed` (recv returns "no more data") vs let them drain buffered items first then `closed`. Coupled to the close-with-buffered decision. |
-| push after close | **RESOLVED: error** (`closed`), no enqueue. |
-| pop after close but data remains | coupled to close-with-buffered decision — **HUMAN DECISION REQUIRED**. |
+| close with blocked consumers | **RESOLVED: drain then close.** Waiting consumers receive available buffered items in eligible FIFO order; once the buffer is empty, remaining waiting consumers complete `closed`. |
+| push after close | **RESOLVED: error** (`closed`), no enqueue. Payload returned to caller. |
+| pop after close but data remains | **RESOLVED: allowed.** Buffered items remain FIFO-consumable after close. |
 | timeout after item reservation | **RESOLVED by §5.2 analogue + §8.3:** if the consumer's `resolve_(woken)` won, the item is reserved to it via explicit reservation state; a late expire is the loser. If expire won before reservation, the item stays for another consumer. |
-| cancel after slot reservation | **RESOLVED by §5.2 analogue + §8.3:** symmetric — cancel losing to a grant leaves the slot reserved; cancel winning refunds the slot. |
+| cancel after slot reservation | **RESOLVED by §5.2 analogue + §8.3:** symmetric — cancel losing to a grant leaves the slot reserved; cancel winning (before grant) leaves the slot available. |
+| close idempotence | **RESOLVED: idempotent.** |
+| reopening | **RESOLVED: no reopen.** Close is monotonic. |
+| close with cause | **DEFERRED** from first scope. |
+| direct handoff | **DEFERRED** from first scope. Buffer-first only. |
+| unbounded variant | **DEFERRED** from first scope. |
+| emplace | **DEFERRED** to separate exception/constructor protocol. |
 
 ### 8.3 Explicit item/slot reservation state (F-GRANT-1 / F-QUEUE-1 closure)
 
@@ -1694,7 +1700,7 @@ implemented in this preparation.
 | **E12-B Semaphore** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant; **production implementation COMPLETE** (public API + private Scheduler seams mirroring E12-A; TSan/ASan/UBSan clean; 31 deterministic tests + NEG compile probe) — see [`docs/e12-semaphore.md`](e12-semaphore.md) §14 As-Built | independent adversarial implementation review still required before E12-B may be declared CLOSED (not self-declared) |
 | **E12-C Mutex** | `PREPARATION CLOSED — IMPLEMENTATION READY` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire; **naming = AsyncMutex** (coexists with sync Mutex); **direct handoff (M-H1)**; **FIFO no-barging (M-H2–M-H4)**; destruction = caller violation; **minimum MUTEX-HANDOFF-ONE seam specified**; **collapsed atomic admission actions**; **formal model complete with 14 invariants + 11 negative models** (§14–§16 of e12-async-mutex.md) | implementation may proceed |
 | **E12-D Condition** | `HUMAN-DECISION-REQUIRED` | release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | **return-contract cluster: Model A (mandatory reacquire) vs Model B (abortable reacquire) — F-COND-1 closed**; notify-all mechanism/scope |
-| **E12-E Queue** | `HUMAN-DECISION-REQUIRED` | close-with-blocked-producers; push-after-close; reservation under cancel/timeout (with explicit reservation state); **structural lock ≠ AsyncMutex (F-DEP-1 closed)** | bounded/unbounded; close-with-buffered / close-with-consumers; **capacity-zero DEFERRED (rendezvous, F-QUEUE-1 closed)**; **EXPLICIT reservation state + winner-before-publication seam (§14)** |
+| **E12-E Queue** | `CLOSED` (E12-E-QUEUE-SEMANTIC-DECISION-1: PASS) | bounded (runtime capacity, >= 1); MPMC; FIFO buffer + FIFO waiter grant + no-barging; **result-bearing selected-waiter grant**; closed via `resolve_(woken)` with explicit item/slot reservation state; **internal pre-grant retry/skip** over terminal candidates; **drain-on-close** (idempotent, monotonic, no reopen); **success = `committed` Queue completion separate from `WaitOutcome`**; **winner-before-publication commit seam**; **nothrow-move T requirements**; **no user T op under any Queue/Scheduler lock**; **`closed` outcome**; **close-and-cancel race via single `resolve_` CAS**; **payload retention on failed push**; **quiet-state destructor**; no rendezvous, no direct handoff, no unbounded, no overflow-drop, no conflation, no Select in v1; formal-model scope Models A–C | implementation not authorized (see `docs/e12-queue.md` §M) |
 | **E12-F RwLock** | `HUMAN-DECISION-REQUIRED` | upgrade/downgrade DEFER; recursive read/write FORBID | fairness policy (reader-pref/writer-pref/phase/FIFO); **writer winner-before-publication seam (§14)** |
 | **E12-G Audit** | `DEFERRED` (runs after A–F) | uses the §10 matrix as baseline | — |
 
