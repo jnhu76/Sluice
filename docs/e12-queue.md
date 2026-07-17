@@ -313,12 +313,39 @@ idempotent, monotonic, drain-on-close, no reopen, no close cause in v1
 Close linearization point: `closed: false → true` under the Queue structural
 state authority. After this point: no new producer may commit; new push
 operations return `closed` with the undelivered payload; blocked producers
-complete `closed` with their undelivered payload; already-committed buffered
-items remain FIFO-consumable; waiting consumers receive available buffered
-items in eligible FIFO order; once the buffer is empty, remaining waiting
-consumers complete `closed`; new pop operations continue to receive buffered
-items; closed-and-empty pop returns `closed`; close never discards buffered
-items; close never reopens.
+complete with a `closed` outcome and their undelivered payload; already-committed
+buffered items remain FIFO-consumable; waiting consumers receive available
+buffered items in eligible FIFO order; once the buffer is empty, remaining
+waiting consumers complete with a `closed` outcome; new pop operations continue
+to receive buffered items; closed-and-empty pop returns `closed`; close never
+discards buffered items; close never reopens.
+
+#### Close-vs-producer commit race
+
+Close and producer commit are serialized by G+S. The authoritative lock order
+is: global_mtx_ (G) then state_mtx_ (S). Close acquires G+S and sets
+`closed = true` before releasing. Producer commit (P6) acquires G+S and
+transfers the ItemNode into the ring before releasing. Since both operations
+hold G+S for their entire critical section, exactly one of the following holds:
+
+```text
+close linearizes before producer commit:
+    producer's G+S acquisition observes closed == true
+    producer returns closed with undelivered payload
+    no ItemNode enters the ring
+
+producer commit linearizes before close:
+    producer's G+S acquisition observes closed == false
+    ItemNode enters the ring
+    close observes the ring entry and drains it
+```
+
+There is no interleaving window: the G+S critical section is atomic with
+respect to both the closed-state check and the ring transfer. A producer
+selected before close but not yet in G+S will observe closed on entry and
+fail. A producer already in G+S will complete its commit before close can
+acquire G. This is the same serialization that prevents concurrent admits
+from violating ring uniqueness.
 
 #### Fairness and no-barging
 
