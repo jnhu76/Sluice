@@ -37,8 +37,8 @@ mkdir -p "$(dirname "$LOG")"
 
 cd "$spec" || { echo "error: spec dir $spec missing" >&2; exit 2; }
 
-JVM="-XX:+UseParallelGC -cp $JAR tlc2.TLC -nowarning"
-TLC_PIDFILE=/tmp/e12-tlc-current.pid
+JVM=("-XX:+UseParallelGC" "-cp" "$JAR" "tlc2.TLC" "-nowarning")
+JFLAGS_EXTRA=("${JFLAGS_EXTRA[@]+"${JFLAGS_EXTRA[@]}"}")
 
 # 判定辅助 ---------------------------------------------------------------
 tlc_launched()  { grep -q '^Starting\.\.\.' "$1"; }      # TLC 真正跑起来了
@@ -56,7 +56,7 @@ run_one() {
   echo "  expect: $expect${inv:+ (must violate $inv)}"
   echo "--- TLC output (live) ---"
   # 实时输出 stdout, 同时存文件
-  java $JVM $JFLAGS_EXTRA -config "$cfg" "$model" 2>&1 | tee "$out"
+  java "${JVM[@]}" "${JFLAGS_EXTRA[@]}" -config "$cfg" "$model" 2>&1 | tee "$out" | tee -a "$LOG"
   echo "--- end [$num] ---"
 
   local verdict="??" rc=0
@@ -82,15 +82,15 @@ run_one() {
 }
 
 # 主流程 -----------------------------------------------------------------
+: > "$LOG.summary"
 echo "E12-D AsyncCondition 全量 TLC 检验  (jar=$JAR)" | tee -a "$LOG.summary"
 echo "started: $(date)"                                  | tee -a "$LOG.summary"
 echo "log: $LOG"
-: > "$LOG.summary"
 
 overall=0
 run_one 1  "正确性 safety"                  PASS ""                       E12AsyncCondition          E12AsyncCondition.cfg            || overall=1
-run_one 2  "reach1 OrdThenReq"              FAIL ""                       E12AsyncCondition          E12AsyncCondition.reach1.cfg     || overall=1
-run_one 3  "reach2 ReqThenOrd"              FAIL ""                       E12AsyncCondition          E12AsyncCondition.reach2.cfg     || overall=1
+run_one 2  "reach1 OrdThenReq"              FAIL NoReachOrdThenReq        E12AsyncCondition          E12AsyncCondition.reach1.cfg     || overall=1
+run_one 3  "reach2 ReqThenOrd"              FAIL NoReachReqThenOrd        E12AsyncCondition          E12AsyncCondition.reach2.cfg     || overall=1
 run_one 4  "NEG-C1 NonOwnerWait"            FAIL InvConditionWaiterDoesNotOwnMutex  E12AsyncConditionNegC1  E12AsyncConditionNegC1.cfg      || overall=1
 run_one 5  "NEG-C2 NotifyAnyNonRegistered"  FAIL InvConditionResolvedFinality        E12AsyncConditionNegC2  E12AsyncConditionNegC2.cfg      || overall=1
 run_one 6  "NEG-C3 ReturnOwnedNoGrant"      FAIL InvReturnedOwnsMutex                E12AsyncConditionNegC3  E12AsyncConditionNegC3.cfg      || overall=1
