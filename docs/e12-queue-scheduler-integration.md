@@ -14,9 +14,10 @@
 > REQUEST-CHANGES`
 >
 > **Dependent substrate:**
-> `ASYNC-MUTEX-NOTHROW-AUTHORITY-1: DESIGN PASS — IMPLEMENTATION UNAUTHORIZED`
+> `ASYNC-MUTEX-NOTHROW-AUTHORITY-1: DESIGN PASS — PRODUCTION IMPLEMENTED —
+> INDEPENDENT REVIEW PASS (B1)`
 >
-> **Review gate:** `INDEPENDENT ADVERSARIAL REVIEW REQUIRED`
+> **Review gate:** `INDEPENDENT ADVERSARIAL REVIEW REQUIRED — B2 OPEN`
 
 This is document design only. It does not authorize or modify Queue,
 Scheduler, Mutex, WaitQueue, TimerRegistration, tests, build rules, production
@@ -31,7 +32,13 @@ VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
 19/19 canonical transitions
 6/6 publication transitions
 
-E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+E12-E IMPLEMENTATION AUTHORIZATION: DENIED — B2/B4 OPEN
+
+Gate status (current):
+  B1 Mutex no-throw substrate:               PASS  (independent review complete)
+  B2 Corrective-2 independent review:        OPEN
+  B3 Condition T25 migration/reacquire:      PASS  (W1 corrective db656b5)
+  B4 Queue formal model:                     OPEN
 ```
 
 ## 1. Disposition and root-cause record

@@ -14,7 +14,7 @@
 > `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1-REVIEW:
 > REQUEST-CHANGES`
 >
-> **Implementation status:** `DENIED`
+> **Implementation status:** `DENIED — B2/B4 OPEN`
 
 This document normalizes the abstract Queue machine to the Corrective-2
 one-shot lease, unrestricted active-victim ticket stealing, and irreversible
@@ -29,6 +29,12 @@ TARGET COVERAGE:
 VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
 19/19 canonical transitions
 6/6 publication transitions
+
+Gate status (current):
+  B1 Mutex no-throw substrate:               PASS  (independent review complete)
+  B2 Corrective-2 independent review:        OPEN
+  B3 Condition T25 migration/reacquire:      PASS  (W1 corrective db656b5)
+  B4 Queue formal model:                     OPEN
 ```
 
 ## 1. Binding state domains
@@ -467,7 +473,7 @@ VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
 6/6 publication transitions
 
 AUTHOR SELF-ASSESSMENT
-INDEPENDENT ADVERSARIAL REVIEW REQUIRED
+INDEPENDENT ADVERSARIAL REVIEW REQUIRED (B2 OPEN)
 
-E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+E12-E IMPLEMENTATION AUTHORIZATION: DENIED — B2/B4 OPEN
 ```

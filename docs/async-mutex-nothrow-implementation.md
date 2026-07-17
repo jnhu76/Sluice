@@ -4,8 +4,10 @@
 >
 > **Status:** `PASS — AUTHOR SELF-ASSESSMENT`
 >
-> **Independent adversarial implementation review:** `REQUIRED` (this document
-> is the author's own evidence, not an independent review).
+> **Independent adversarial implementation review:** `PASS (B1)` — completed in
+> `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
+> (commit `15dc9b4`). This document remains the author's own evidence; the
+> independent review is a separate artifact.
 
 This document records the production realization of the
 `ASYNC-MUTEX-NOTHROW-AUTHORITY-1` design (Candidate A: make the existing
@@ -22,15 +24,17 @@ document satisfies §L of the implementation task.
 ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1:
 PASS — AUTHOR SELF-ASSESSMENT
 
-INDEPENDENT ADVERSARIAL IMPLEMENTATION REVIEW REQUIRED
+INDEPENDENT ADVERSARIAL IMPLEMENTATION REVIEW: PASS (B1)
+  docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md
 
-E12-E QUEUE IMPLEMENTATION AUTHORIZATION:
-STILL DENIED
+E12-E QUEUE IMPLEMENTATION AUTHORIZATION (Queue-level gate):
+STILL DENIED — B2/B4 OPEN
+  (B1 PASS, B3 PASS)
 ```
 
-This is an author self-assessment, not a closed gate. The Queue is not
-authorized by this document; B2/B3/B4 remain open, and B1 still requires a
-separate independent implementation review.
+This is an author self-assessment; the independent review has now passed (B1
+closed). The Queue is still not authorized by this document; B2 (Corrective-2
+independent review) and B4 (Queue formal model) remain open.
 
 ---
 

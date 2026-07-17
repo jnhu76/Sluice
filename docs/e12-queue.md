@@ -18,9 +18,9 @@
 >
 > **Dependent substrate:**
 > `ASYNC-MUTEX-NOTHROW-AUTHORITY-1:
-> DESIGN PASS — IMPLEMENTATION UNAUTHORIZED`
+> DESIGN PASS — PRODUCTION IMPLEMENTED — INDEPENDENT REVIEW PASS (B1)`
 >
-> **Implementation authorization:** `DENIED`
+> **Implementation authorization:** `DENIED — B2/B4 OPEN`
 
 Corrective-2 retains the Queue-v1 semantics but replaces the rejected reusable
 item reference, active-owner steal veto, ordinary quiet drain, broad call
@@ -143,29 +143,36 @@ formal PASS is claimed.
 
 ```text
 E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1:
-SEPARATE REQUIRED TASK
+PASS — closed by W1 corrective (db656b5)
 
 Condition build: PASS
-Condition runtime suite: INCOMPLETE
-T25 migration/reacquire: HANG OBSERVED
+Condition runtime suite: PASS (Clang Debug/ASan/TSan full suite green)
+T25 migration/reacquire: PASS (deterministic rewrite)
 ```
 
-The T25 hang neither proves nor disproves active-victim Queue ticket stealing,
-but it must close independently before Queue implementation.
+The T25 hang was root-caused to a test-harness defect (unbounded coordinator
+waits, missing `f_idle`/`bounded_wait`/suspension handshake) and closed by
+mirroring the Mutex T19 determinism discipline; no production code was
+touched. Evidence: `docs/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1.
 
 ### Authorization gates
 
 Before production implementation:
 
-1. the accepted Mutex substrate design still needs separate implementation
-   authorization and realization;
-2. Corrective-2 needs a fresh independent adversarial review;
-3. Condition T25 needs its separate hang audit;
+1. ~~the accepted Mutex substrate design still needs separate implementation
+   authorization and realization~~ — **B1 PASS**: production fail-fast Mutex
+   landed (`be07564`) with death tests (`e2cfe61`), independent production
+   implementation review PASS
+   (`docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`,
+   commit `15dc9b4`);
+2. Corrective-2 needs a fresh independent adversarial review — **B2 OPEN**;
+3. ~~Condition T25 needs its separate hang audit~~ — **B3 PASS** (W1
+   corrective `db656b5`);
 4. later formal normalization must preserve the one-shot lease and corrected
-   steal/teardown semantics.
+   steal/teardown semantics — **B4 OPEN** (no Queue TLA+ model yet).
 
 ```text
-E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+E12-E IMPLEMENTATION AUTHORIZATION: DENIED — B2/B4 OPEN
 ```
 
 ---
