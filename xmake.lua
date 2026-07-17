@@ -36,12 +36,17 @@ target("sluice_async")
     add_includedirs("include", {public = true})
     add_deps("sluice_core")
     add_files("src/async/*.cpp")
-    -- CPP-STATIC-1: Clang TSA gate.  Add TSA flags for this target.
-    -- The flags are Clang-specific; GCC does not recognize -Wthread-safety
-    -- and xmake filters it out of the GCC compile command, so the gate is
-    -- Clang-only and the GCC build is unaffected.
-    add_cxxflags("-Wthread-safety", {force = true})
-    add_cxxflags("-Werror=thread-safety", {force = true})
+    -- CPP-STATIC-1: Clang TSA gate.
+    -- ASYNC-GCC-TSA-FLAG-ROUTING-CORRECTIVE-1 (W3): the flags are scoped to
+    -- the Clang frontends via the `tools` option. {force=true} previously
+    -- bypassed xmake's per-compiler flag filtering, which caused GCC to
+    -- receive the Clang-only -Wthread-safety and fail. Dropping force and
+    -- using {tools={"clang","clang_cl"}} scopes the flags to BOTH Clang
+    -- frontends (the Linux/Mac clang driver AND the Windows clang-cl driver),
+    -- so Windows/clang-cl builds keep TSA coverage; GCC never receives them.
+    -- Verified against the official xmake docs (add_cxxflags {tools=...}).
+    add_cxxflags("-Wthread-safety", "-Werror=thread-safety",
+                 {tools = {"clang", "clang_cl"}})
 
 -- ---------------------------------------------------------------------------
 -- ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: internal-testing runtime variant.
@@ -62,9 +67,11 @@ local async_sources = function()
     return { "src/async/*.cpp" }
 end
 
+-- TSA flags scoped to the Clang frontends only (W3 corrective). See the note
+-- on sluice_async above. Used by sluice_async_internal_testing.
 local async_tsa_flags = function()
-    add_cxxflags("-Wthread-safety", {force = true})
-    add_cxxflags("-Werror=thread-safety", {force = true})
+    add_cxxflags("-Wthread-safety", "-Werror=thread-safety",
+                 {tools = {"clang", "clang_cl"}})
 end
 
 target("sluice_async_internal_testing")
