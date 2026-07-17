@@ -53,6 +53,28 @@
 > The cross-primitive preparation (this document) §6, §10.1, §10.2, §11.3,
 > §12, §14.3.3, and §14.5 are updated to reflect the corrective closure.
 >
+> **E12-E Queue Corrective-2 authority:**
+> ```text
+> E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1:
+> SUPERSEDED — REQUEST-CHANGES
+> E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1-REVIEW:
+> REQUEST-CHANGES
+> E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2:
+> PASS — AUTHOR SELF-ASSESSMENT — INDEPENDENT REVIEW REQUIRED
+> E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+> ```
+> Queue depends on `ASYNC-MUTEX-NOTHROW-AUTHORITY-1`, whose design is accepted
+> but whose substrate implementation remains separately unauthorized.
+>
+> **Condition baseline isolation:**
+> ```text
+> E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1:
+> SEPARATE REQUIRED TASK
+> Condition build: PASS
+> Condition runtime suite: INCOMPLETE
+> T25 migration/reacquire: HANG OBSERVED
+> ```
+>
 > Corrective history: `E12-PREP-CORRECTIVE-1-REVIEW` returned
 > `CORRECTIVE-REQUIRED` with six accepted defects (F-EVENT-1, F-SEM-1,
 > F-COND-1, F-GRANT-1, F-QUEUE-1, F-DEP-1). This revision is the
@@ -305,7 +327,7 @@ IMPLEMENTATION BOUNDARY for E12-A. See §4.1, §4.4.
 | **Semaphore** | stored permit count (`available_`) | **permit accounting** (§5.1): `available_ + acquiredCount == initial_permits + accepted_release_count`; explicit FIFO queued demand is a *separate* dimension, NOT supply; no grant-in-flight state | none | Event's persistent-bool pattern (optional); WaitNode + deadline | cancel/expire serialized before release observes the queue (Conclusion A, §5.2) | medium (counter × queue) |
 | **Mutex** | `owner : Fiber* \| NoOwner` | none (one lock) | **Fiber-identity ownership + migration law** | Semaphore (permits=1 is a near-subset; but Mutex adds ownership) | cancel/expire before grant unlink queued demand; cancel/expire after Woken handoff lose and cannot change owner | medium (owner × queue) |
 | **Condition** | none new (delegates to Mutex) | none | none (Mutex owns it) | **Mutex** (mandatory) | release/register atomic window; reacquire on wake/timeout/cancel — **return contract is one open Model-A/Model-B cluster (§7)** | medium-high (two queues + mutex reacquire) |
-| **Queue** | buffer + closed bool | **item slots** (bounded, capacity ≥ 1) or unbounded list; not-empty + not-full waiters; **explicit item/slot reservation state required (§8.3, §14)** | none | Event (not-empty/not-full are Event-like); WaitNode + deadline; **a synchronous structural lock (NOT E12-C async Mutex) for internal state** | **reserved item / reserved slot under cancel/close; winner-before-publication commit (§14)** | high (buffer × 2 queues × closed) |
+| **Queue** | fixed-capacity FIFO ring + closed bool | bounded capacity >= 1; producer + consumer wait epochs; operation-owned payload handles; no independent reservation owner | suspended operation epoch | WaitNode + deadline; fixed QueuePort; **a synchronous structural lock (NOT E12-C async Mutex) for internal state** | expiry/close/grant winner commits payload/completion before intrusive runnable publication; external cancellation deferred (§8, §14.3.4) | high (ring × 2 queues × closed × publication) |
 | **RwLock** | reader count + writer bool + (upgrade state) | reader count accounting | writer owner identity | Semaphore (read permits) + Mutex (write) | reader/writer starvation; upgrade downgrade cancellation; **writer winner-before-publication commit (§14)** | **highest** |
 
 ### 3.2 Dependency graph
@@ -377,8 +399,8 @@ IMPLEMENTATION BOUNDARY for E12-A. See §4.1, §4.4.
   for its internal state (§8.4 — it uses a short synchronous structural lock).
   Condition comes before Queue in the trunk because Queue is the first
   primitive with *two* wait queues (producer/consumer), a `close` lifecycle,
-  AND an explicit item/slot reservation state with a winner-before-publication
-  commit obligation (§14) — a state-space / protocol-complexity step beyond
+  AND a one-shot payload lease plus winner-before-publication ownership-transfer
+  obligation (§14) — a state-space / protocol-complexity step beyond
   Condition's two-queue-but-no-buffer shape. Ordering Condition before Queue
   keeps state-space / protocol complexity monotonically increasing.
   **Condition → Queue.** (This edge is justified by complexity progression,
@@ -1278,156 +1300,164 @@ no-spurious-wake are RESOLVED.
 
 ---
 
-## 8. Queue semantic authority (Task G)
+## 8. Queue semantic authority (Task G) — Corrective-2 binding override
 
-### 8.1 First-scope minimum
+> **Current authority:**
+> `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2:
+> PASS — AUTHOR SELF-ASSESSMENT`
+>
+> **Applied disposition:**
+> `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1:
+> SUPERSEDED — REQUEST-CHANGES`
+>
+> `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1-REVIEW:
+> REQUEST-CHANGES`
+>
+> **Implementation authorization:** `DENIED`
+>
+> This section supersedes every older Queue-specific statement elsewhere in
+> this preparation document. Any remaining Queue reference to
+> `HUMAN-DECISION-REQUIRED`, reusable item-reference admission, explicit
+> item/slot reservation, active-owner steal prohibition, ordinary quiet drain,
+> cancellation in v1, direct handoff, terminal skip, 21/8 transitions, or the
+> original integration PASS is `NON-BINDING HISTORICAL ANALYSIS`.
 
-```text
-bounded vs unbounded          — HUMAN DECISION (see §8.2)
-capacity zero semantics       — DEFERRED (rendezvous is a separate protocol, §8.5)
-capacity >= 1                 — the first-scope bounded-Queue minimum (if bounded chosen)
-send / push                   — producer op; may block on not-full
-recv / pop                    — consumer op; may block on not-empty
-close                         — lifecycle terminal
-producer wait queue           — not-full waiters (WaitQueue)
-consumer wait queue           — not-empty waiters (WaitQueue)
-internal structural lock      — SYNCHRONOUS structural lock, NOT E12-C async Mutex (§8.4)
-item/slot reservation         — EXPLICIT reservation state required (§8.3, §14)
-```
-
-The roadmap requires: `not-empty waiters`, `not-full waiters`, `close
-semantics`.
-
-### 8.2 Policy decisions
-
-| Decision | Resolution |
-| -------- | ---------- |
-| bounded vs unbounded | **HUMAN DECISION REQUIRED.** Bounded enforces backpressure (needs slot accounting + not-full waiters); unbounded drops not-full entirely (simpler, no backpressure). Materially different APIs. |
-| **capacity zero** | **DEFERRED from first-scope Queue.** Rendezvous is a *separate protocol* (producer/consumer pairing + direct transfer), NOT a derived case of bounded Queue (§8.5). Recommended first-scope stance: constructor rejects zero capacity; zero-capacity public semantics are not shipped; rendezvous Channel semantics belong to a later explicit protocol decision. Do not implement this recommendation. If bounded-vs-unbounded itself remains HUMAN DECISION REQUIRED, capacity-zero is an *additional independent* protocol choice — it is not resolved by the bounded/unbounded decision. |
-| close with buffered items | **HUMAN DECISION REQUIRED** — drain-on-close (consumers may still recv remaining items, producers reject) vs immediate-discard. |
-| close with blocked producers | **RESOLVED: producers wake with a `closed` outcome** (analogous to `cancelled`/`expired`); their `send` returns an error. No deadlock. |
-| close with blocked consumers | **HUMAN DECISION REQUIRED** — wake with `closed` (recv returns "no more data") vs let them drain buffered items first then `closed`. Coupled to the close-with-buffered decision. |
-| push after close | **RESOLVED: error** (`closed`), no enqueue. |
-| pop after close but data remains | coupled to close-with-buffered decision — **HUMAN DECISION REQUIRED**. |
-| timeout after item reservation | **RESOLVED by §5.2 analogue + §8.3:** if the consumer's `resolve_(woken)` won, the item is reserved to it via explicit reservation state; a late expire is the loser. If expire won before reservation, the item stays for another consumer. |
-| cancel after slot reservation | **RESOLVED by §5.2 analogue + §8.3:** symmetric — cancel losing to a grant leaves the slot reserved; cancel winning refunds the slot. |
-
-### 8.3 Explicit item/slot reservation state (F-GRANT-1 / F-QUEUE-1 closure)
-
-**The previous draft's claim is false/incomplete:**
+### 8.1 Queue v1 scope
 
 ```text
-"the reservation is captured by the resolve_(Woken) CAS itself"     // FALSE — DELETED
+bounded MPMC, runtime capacity >= 1
+FIFO ring + FIFO producer/consumer WaitQueues
+no barging
+result-bearing selected-waiter grant
+producer -> ring -> consumer only
+one-shot move-only QueueItemLease admission
+failed push returns the complete original opaque lease
+drain-on-close; close monotonic and idempotent
+deadline expiry retained
+external cancellation deferred
+own-oldest ticket selection, otherwise global-oldest
+active admission owner does not block stealing
+irreversible QueueTeardownSession destruction protocol
 ```
 
-The `resolve_(Woken)` CAS identifies the *winning wait epoch*; it does NOT
-store an item, a slot reservation, or a payload. For a consumer winner:
+Rendezvous, unbounded capacity, direct handoff, close-with-cause, Select,
+overflow drop/conflation, and emplace are deferred.
+
+### 8.2 Atomic move-only lease ownership, not reservation
+
+Queue v1 has no independent item/slot reservation state and accepts no reusable
+`QueueItemBase&`/pointer. QueuePort consumes one unforgeable lease by value.
+Entry requires a non-empty lease, matching immutable port identity, and
+`location == detached`; it then establishes:
 
 ```text
-item X
-    ->
-must remain explicitly associated with the winning wait epoch
-until recv() resumes and returns it
+detached -> producer operation
+producer operation -> ring on commit
+producer operation -> detached + exact lease return on failure
+ring -> consumer operation on pop
+consumer operation -> released during typed extraction
+ring -> teardown -> released during destruction
 ```
 
-Possible representation classes include:
+The fixed ring stores move-only lease slots. Move empties the source and
+requires an empty destination, so one control cannot occupy two positions.
+Committed opaque push results contain no lease; Closed/Expired/WouldBlock
+results contain the complete original lease. Typed conversion validates
+port/type and moves `T` exactly once through `failed(Status,T&&)` outside locks.
+
+`resolve_(Woken)` identifies the winner; Queue-specific payload transfer and
+completion execute immediately afterward under the same lock-held CommitGap.
+The integration's embedded operation state is the final owner, not an
+outstanding permit/reservation. Tokio-style Permit remains a Queue-v2
+candidate and is not mixed into this machine.
 
 ```text
-caller-owned result slot bound to WaitNode lifetime
-Queue-owned reservation keyed by wait epoch
-another explicit reservation state
+SUPERSEDED FOR QUEUE V1
+
+Queue v1 uses atomic move-only lease ownership transfer into the
+fixed ring. Explicit slot reservation/Permit remains a Queue v2
+candidate only.
 ```
 
-This preparation does NOT choose one (Hard Rule 5; do not prescribe a generic
-reservation framework). State:
+Timed admission retains `global_mtx_` continuously from deadline-heap capacity
+reservation through immediate PREPARED discard or PREPARED->ACTIVE linkage;
+the reserved vector slot therefore cannot be consumed by another admission.
+State/resource outcomes precede an already-due deadline: Closed/immediate
+capacity for push, and an immediate item or Closed+empty for pop; expiry is the
+inline result only when the operation would otherwise register.
+
+### 8.3 Ticket stealing, teardown, counters, cancellation, and targets
+
+Winner publication uses the stable `fiber_owner_` mapped-value address captured
+before registration. The referenced entry may not be erased until the ticket
+is removed, the Fiber resumes, and the operation releases the slot. Rehash may
+invalidate iterators but not the stored element address; steal writes only the
+existing mapped value under G.
 
 ```text
-EXPLICIT RESERVATION STATE REQUIRED
+worker has own Queue ticket -> choose own oldest
+otherwise                   -> choose global oldest
+admission owner active      -> still stealable
 ```
 
-If exact winner identity must be known to bind item X before publication,
-then (§14):
+Ordinary `take_quiescent_item` is removed. Quiet destruction transitions
+irreversibly to `tearing_down` and returns one non-copyable
+`QueueTeardownSession`. The session drains unique leases outside ordinary
+CallGuard. `active_port_calls_` counts only ordinary operations inside the
+non-template QueuePort; it does not prove the complete typed method returned.
+
+Current `CancelToken` is polling-only and cannot safely wake a suspended Queue
+operation. Queue v1 therefore ships no cancellation API, private Scheduler
+cancel seam, or cancelled result.
 
 ```text
-REQUIRES WINNER-BEFORE-PUBLICATION COMMIT SEAM
+P8/C7: RESERVED — DEFERRED — NOT IN QUEUE V1
+PUB-P-CANCEL/PUB-C-CANCEL: RESERVED — DEFERRED
+
+TARGET COVERAGE:
+19 canonical transitions
+6 publication transitions
+
+VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
+19/19 canonical transitions
+6/6 publication transitions
 ```
 
-The symmetric analysis applies to producer slot reservation: a producer
-winner must have its slot explicitly associated with its wait epoch until
-`send` commits. The reservation representation must survive E8 Worker
-migration (it is keyed by wait epoch / WaitNode, not by Worker). See §14 for
-the per-primitive grant-boundary classification.
+Expiry remains P9/C8; numbering is preserved.
 
-### 8.4 Queue structural synchronization (F-DEP-1 closure)
+### 8.4 Structural synchronization and dependency
 
-The repository contains:
+Queue uses synchronous TSA-annotated `Mutex` for short structural critical
+sections; it never awaits the Fiber-aware `AsyncMutex` internally. Lock order:
 
 ```text
-include/sluice/async/mutex.hpp
+Scheduler global -> Queue state -> at most one role WaitQueue
+Scheduler global -> wake mutex
 ```
 
-which is the **synchronous TSA-annotated structural `std::mutex` wrapper**
-(`SLUICE_CAPABILITY("mutex")`; `lock()` calls `impl_.lock()` synchronously,
-blocking the OS thread — no Fiber suspension, no Scheduler involvement). E12-C
-is a future **asynchronous Fiber-suspending** Mutex primitive. They are
-distinct.
+The current `Mutex::lock()` can propagate `std::system_error`. Queue therefore
+depends on [`ASYNC-MUTEX-NOTHROW-AUTHORITY-1`](async-mutex-nothrow-authority.md),
+which selects no-throw/fail-fast authoritative acquisition. No production
+Queue work may begin until that substrate passes independent review and is
+separately authorized.
 
-For Queue internal structural state, define:
+### 8.5 Exact architecture references
+
+Binding details live in:
+
+* [`docs/e12-queue.md`](e12-queue.md) current semantic authority;
+* [`docs/e12-queue-state-machine.md`](e12-queue-state-machine.md) corrected
+  Corrective-2 lease/control state machine and 19/6 target;
+* [`docs/e12-queue-scheduler-integration.md`](e12-queue-scheduler-integration.md)
+  fixed QueuePort access graph, exact public results, one-shot lease,
+  teardown session, concrete PREPARED guard, active-victim runnable route,
+  counter ledger, transition matrix, and adversarial traces;
+* [`docs/async-mutex-nothrow-authority.md`](async-mutex-nothrow-authority.md)
+  dependent lock-failure policy.
 
 ```text
-short critical-section synchronous structural lock
-(or equivalent Scheduler-owned serialization)
+E12-E IMPLEMENTATION AUTHORIZATION: DENIED
 ```
-
-Normative requirements:
-
-```text
-Queue does NOT await E12-C AsyncMutex internally.
-
-Queue structural lock protects:
-    buffer
-    closed state
-    producer/consumer structural bookkeeping
-
-The structural lock MUST NOT be held across:
-    Fiber suspension
-    context_switch
-    asynchronous Mutex acquire
-```
-
-Queue depends on a lock that protects its buffer; that lock is the
-synchronous structural lock, NOT the E12-C async Mutex. Do NOT claim Queue
-depends on E12-C AsyncMutex merely because a lock protects its buffer. The
-§3.1/§3.2/§3.3 dependency statements, §8 semantics, §10 matrices, and §11.5
-formal target all agree on this.
-
-### 8.5 Rendezvous state dimensions (F-QUEUE-1 closure)
-
-Rendezvous (`capacity == 0`) is NOT a derived case of bounded Queue. It is a
-separate protocol that adds:
-
-```text
-producer-consumer pairing
-direct item transfer (no buffered item)
-producer wait epoch
-consumer wait epoch
-pairing/grant authority
-deadline/cancel race on both sides
-```
-
-Therefore it is **not** represented by the current Queue formal target
-(`buffer`, `closed`, `not-empty queue`, `not-full queue` — §11.5): a
-rendezvous has no buffer and no `not-full`/`not-empty` in the buffered sense;
-it has a *pairing* relation instead. Rendezvous semantics belong to a later
-explicit protocol decision (DEFERRED).
-
-**Queue verdict: `HUMAN-DECISION-REQUIRED`** (bounded/unbounded +
-close-with-buffered/close-with-consumers, which are one cluster). Capacity-zero
-is DEFERRED (rendezvous). Explicit item/slot reservation state is REQUIRED
-(§8.3) and the winner-before-publication commit seam is identified (§14).
-Reservation under cancel/timeout is RESOLVED by composition with §5.2 once
-the reservation state exists. Queue does NOT depend on E12-C AsyncMutex
-(§8.4).
 
 ---
 
@@ -1502,7 +1532,7 @@ implement RwLock in this preparation task.
 | Semaphore | `available_` (stored-permit count) | 1 (demand) | release creates a pending permit transferred/stored/rejected atomically; no pre-reservation, no refund (§5.2); seam sufficient Conclusion A (§14.3.2) | none | no permit was removed; expire serialized before release observes queue (Conclusion A) | symmetric (cancel serialized before release observes queue) |
 | Mutex | `owner : Fiber* \| NoOwner` | 1 (waiters) | ownership granted at CAS-win; **direct handoff REQUIRES minimum private MUTEX-HANDOFF-ONE seam (§14.3.3; E12-C-PREPARATION-CORRECTIVE-1 closed)** | **Fiber identity** | cancel/expire before grant unlink queued demand; cancel/expire after Woken handoff lose and cannot change owner | none (cancel loses to grant); cancel of a *queued* waiter just unlinks |
 | Condition | none (delegates to Mutex) | 1 (its own) + Mutex's | none | via Mutex | condition epoch expire → then reacquire epoch (Model A: mandatory non-cancellable; Model B: separate, may expire — §7) | condition epoch cancel → reacquire epoch (Model A: masked; Model B: may cancel — §7) |
-| Queue | buffer + closed bool | 2 (not-empty, not-full) | **EXPLICIT item/slot reservation state required (§8.3); winner-before-publication seam (§14)** | none | item stays / slot refunded (§8.2) | symmetric |
+| Queue | FIFO ring + closed bool | 2 (producers, consumers) | no independent reservation owner; winner transfers `producer operation -> ring` or `ring -> consumer operation` before publication (§8.2, §14.3.4) | operation epoch while suspended | expiry winner retains producer payload / leaves ring item in place | external cancellation deferred in v1 |
 | RwLock | reader count + writer bool (+ policy) | 1–2 (readers, writers) | read-permit (anonymous, may pre-increment) / write at CAS-win (**writer needs winner-before-publication seam, §14**) | writer: Fiber identity | refund read permit if expire wins before grant | refund / unlink |
 
 ### 10.2 Resolution-cause matrix
@@ -1513,8 +1543,8 @@ implement RwLock in this preparation task.
 | Semaphore | a permit granted to this waiter → `woken` (the release's pending permit is transferred directly; `available_` unchanged) | deadline elapsed before grant → `expired`; no permit was removed (no refund path — Conclusion A) | cancel before grant → `cancelled`; serialized before release observes the queue (Conclusion A) |
 | Mutex | ownership granted to this waiter → `woken` (direct handoff: owner = winner Fiber BEFORE publication) | deadline before grant → `expired`; no ownership | cancel before grant → `cancelled`; no ownership |
 | Condition | notify woke this waiter → proceed to reacquire (Model A: mandatory; Model B: separate epoch — §7) | condition-wait deadline → `expired`; then reacquire (§7 trace C1–C4) | condition wait cancelled → `cancelled`; then reacquire (§7 trace C1–C4) |
-| Queue (consumer) | an item reserved to this waiter via explicit reservation state → `woken` | deadline before reservation → `expired`; item stays | cancel before reservation → `cancelled`; item stays |
-| Queue (producer) | a slot reserved to this waiter via explicit reservation state → `woken` | deadline before reservation → `expired`; slot refunded | cancel before reservation → `cancelled`; slot refunded |
+| Queue (consumer) | ring head atomically transferred to this operation before publication → `woken` | expiry wins first → `expired`; item stays in ring | deferred/not reachable in Queue v1 |
+| Queue (producer) | this operation's payload atomically transferred into ring before publication → `woken` | expiry wins first → `expired`; operation retains payload | deferred/not reachable in Queue v1 |
 | RwLock (reader) | read-permit granted → `woken` | deadline before grant → `expired`; permit refunded | cancel before grant → `cancelled`; permit refunded |
 | RwLock (writer) | write granted → `woken` (writer owner = winner Fiber) | deadline before grant → `expired` | cancel before grant → `cancelled` |
 
@@ -1650,23 +1680,33 @@ implemented in this preparation.
 
 ### 11.5 Queue
 
-- **Correct invariant:** item/slot reservation is exactly-once per
-  `resolve_(woken)` winner via **explicit reservation state** (§8.3); close is
-  monotonic (once closed, stays closed); no item is both buffered and
-  reserved; no slot is both free and reserved.
-- **Minimum state dimensions:** buffer contents; `closed` bool; not-empty
-  WaitQueue; not-full WaitQueue; **explicit item/slot reservation state**;
-  per-node resolution state; deadline dimension.
+- **Correct invariant:** every ItemId has exactly one control location and one
+  non-empty move-only lease until released. The fixed ring owns unique leases;
+  the winning resolver commits the lease transfer and QueueCompletion before
+  runnable publication. There is no reusable item reference or v1 reservation
+  owner.
+- **Minimum state dimensions:** ring lease contents; `closed` bool; independent
+  `operational/tearing_down` lifecycle; producer and consumer WaitQueues;
+  per-operation completion/publication; per-node resolution;
+  PREPARED/ACTIVE/RETIRED/CONSUMED timer state; control location; stable owner
+  slot and ticket eligibility.
 - **Not represented by this target:** rendezvous (`capacity == 0`) —
   producer/consumer pairing + direct transfer + no buffer is a separate
-  protocol (§8.5, DEFERRED). The `buffer / closed / not-empty / not-full`
+  protocol (§8.1, DEFERRED). The `buffer / closed / not-empty / not-full`
   dimensions do not model pairing.
-- **Required negative model — broken item/slot reservation under
-  cancellation or close:** a consumer is reserved an item AND the item
-  remains in the buffer (double-consumption), or a closed Queue still accepts
-  sends, or a reservation bound to a losing (cancelled/expired) wait epoch is
-  not refunded. Counterexample: an item reachable after close-send, or a slot
-  counted both free and reserved, or item X delivered to two consumers.
+- **Required negative model — broken ownership/publication:** an ItemId appears
+  in ring and consumer simultaneously, a closed Queue accepts a producer
+  commit, an expired waiter receives a grant, or a runnable ticket is visible
+  before QueueCompletion/payload ownership is final.
+- **Required stealing trace:** while W0 remains active and runs a blocker, W1
+  may steal F's global-oldest Queue ticket, update the existing owner slot under
+  G, and resume F. Owner activity is not an eligibility predicate.
+- **Formal status:** Corrective-2 changes no TLA+ artifact; formal PASS is not
+  claimed until a separate formal normalization task is performed.
+- **Queue v1 cancellation:** deferred. P8/C7 and cancellation publications are
+  reserved but absent; the target is 19 canonical and 6 publication
+  transitions, author-verified 19/19 and 6/6; independent review remains
+  required.
 
 ### 11.6 RwLock
 
@@ -1692,9 +1732,9 @@ implemented in this preparation.
 | --------- | ------- | -------------- | ------------------------------------- |
 | **E12-A Event** | `CLOSED` (two independent corrective reviews passed) | manual-reset choice; idempotent set; reset; wait-on-set; deadline/cancel composition; set-vs-register race; reset-vs-waiter; **wake cardinality = set releases all registered waits satisfied by SET (F-EVENT-1 closed)** | ~~destruction-with-waiters~~ (resolved: caller contract violation, debug assert); ~~IMPLEMENTATION BOUNDARY: loop wake-one vs narrow wake-many seam~~ (resolved: loop wake_wait_one_locked until drained, atomic under global_mtx_) |
 | **E12-B Semaphore** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant; **production implementation COMPLETE** (public API + private Scheduler seams mirroring E12-A; TSan/ASan/UBSan clean; 31 deterministic tests + NEG compile probe) — see [`docs/e12-semaphore.md`](e12-semaphore.md) §14 As-Built | independent adversarial implementation review still required before E12-B may be declared CLOSED (not self-declared) |
-| **E12-C Mutex** | `PREPARATION CLOSED — IMPLEMENTATION READY` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire; **naming = AsyncMutex** (coexists with sync Mutex); **direct handoff (M-H1)**; **FIFO no-barging (M-H2–M-H4)**; destruction = caller violation; **minimum MUTEX-HANDOFF-ONE seam specified**; **collapsed atomic admission actions**; **formal model complete with 14 invariants + 11 negative models** (§14–§16 of e12-async-mutex.md) | implementation may proceed |
-| **E12-D Condition** | `HUMAN-DECISION-REQUIRED` | release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | **return-contract cluster: Model A (mandatory reacquire) vs Model B (abortable reacquire) — F-COND-1 closed**; notify-all mechanism/scope |
-| **E12-E Queue** | `HUMAN-DECISION-REQUIRED` | close-with-blocked-producers; push-after-close; reservation under cancel/timeout (with explicit reservation state); **structural lock ≠ AsyncMutex (F-DEP-1 closed)** | bounded/unbounded; close-with-buffered / close-with-consumers; **capacity-zero DEFERRED (rendezvous, F-QUEUE-1 closed)**; **EXPLICIT reservation state + winner-before-publication seam (§14)** |
+| **E12-C Mutex** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire; **naming = AsyncMutex** (coexists with sync Mutex); **direct handoff (M-H1)**; **FIFO no-barging (M-H2–M-H4)**; destruction = caller violation; **minimum MUTEX-HANDOFF-ONE seam specified**; **collapsed atomic admission actions**; **formal model complete with 14 invariants + 11 negative models** (§14–§16 of e12-async-mutex.md) | independent implementation review remains required |
+| **E12-D Condition** | `RUNTIME SUITE INCOMPLETE — T25 HANG OBSERVED` | build PASS; release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1: SEPARATE REQUIRED TASK`; do not claim a green runtime baseline |
+| **E12-E Queue** | `CORRECTIVE-2 AUTHOR PASS — IMPLEMENTATION DENIED` | one-shot unforgeable `QueueItemLease`; unique lease ring; exact opaque failed-lease return; no reservation owner; expiry retained; cancellation deferred; concrete PREPARED guard; own-oldest/global-oldest active-victim stealing; stable no-erase owner slot; irreversible teardown session; narrow `active_port_calls_`; author-verified 19/19 canonical and 6/6 publication targets | `ASYNC-MUTEX-NOTHROW` design accepted but implementation unauthorized; Corrective-2 independent review required; Condition T25 separate; `E12-E IMPLEMENTATION AUTHORIZATION: DENIED` |
 | **E12-F RwLock** | `HUMAN-DECISION-REQUIRED` | upgrade/downgrade DEFER; recursive read/write FORBID | fairness policy (reader-pref/writer-pref/phase/FIFO); **writer winner-before-publication seam (§14)** |
 | **E12-G Audit** | `DEFERRED` (runs after A–F) | uses the §10 matrix as baseline | — |
 
@@ -1719,8 +1759,8 @@ E12 implementation (any subphase) MUST stop and request human authority when:
    stable across E8 migration (Mutex/RwLock writer).
 4. The formal model (per §11) would omit a load-bearing dimension (M2) —
    specifically the resource/accounting/ownership dimension the primitive
-   introduces (e.g. queued demand for Semaphore, explicit reservation state
-   for Queue, reacquire-outcome for Condition Model B).
+   introduces (e.g. queued demand for Semaphore, Queue ring/operation payload
+   ownership plus publication state, reacquire-outcome for Condition Model B).
 5. The grant-vs-cancel/expire race (§5.2, generalized) cannot be closed on
    the single `resolve_` CAS.
 6. A grant-bearing primitive needs to commit primitive resource state
@@ -1732,14 +1772,18 @@ E12 implementation (any subphase) MUST stop and request human authority when:
    `MUTEX-HANDOFF-ONE` specified in
    [`docs/e12-async-mutex.md`](e12-async-mutex.md) §9.)
    primitive's grant path.
-7. A Queue (or other buffered primitive) is implemented without explicit
-   item/slot reservation state (§8.3) — the `resolve_` CAS alone does NOT
-   capture item/slot reservation.
+7. A Queue is implemented without an operation-owned payload handle and the
+   one-shot move-only lease transfer `detached -> producer operation -> ring`
+   or `ring -> consumer operation` before runnable publication (§8.2). The
+   `resolve_` CAS identifies the winner but does not transfer ownership.
 8. A primitive's internal structural lock is held across Fiber suspension /
    `context_switch` / async Mutex acquire (§8.4), or a Queue is built on the
    E12-C async Mutex for internal structural state.
 9. A bounded Queue is specified with `capacity == 0` as if it were a derived
-   case (§8.5) — rendezvous is a separate DEFERRED protocol.
+   case (§8.1) — rendezvous is a separate DEFERRED protocol.
+10. Queue implementation starts while the no-throw Mutex substrate remains
+    unauthorized, Corrective-2 lacks independent adversarial acceptance, or
+    the separate Condition T25 migration/reacquire hang remains unresolved.
 
 ---
 
@@ -1921,29 +1965,32 @@ E12-C MUTEX BLOCKED BY GRANT SEAM:
 
 #### 14.3.4 Queue
 
-Correct the previous (false) claim that "`resolve_(Woken)` CAS itself captures
-item/slot reservation" (§8.3). The CAS identifies the winning wait epoch; it
-does NOT store item X, a slot reservation, or a payload.
-
-For a consumer winner, item X must remain explicitly associated with the
-winning wait epoch until `recv()` resumes and returns it. This requires
-EXPLICIT RESERVATION STATE (§8.3). If exact winner identity must be known to
-bind item X before publication:
+The `resolve_(Woken)` CAS identifies the winning wait epoch; it does not by
+itself move a payload. Queue v1 therefore uses a Queue-specific Scheduler seam
+that receives the exact sealed operation object and, while holding
+`global_mtx_ -> state_mtx_ -> one role WaitQueue mutex`, performs:
 
 ```text
-REQUIRES WINNER-BEFORE-PUBLICATION COMMIT SEAM  (consumer item reservation)
+winner CAS
+-> unlink
+-> timer close
+-> producer operation -> ring OR ring -> consumer operation
+-> QueueCompletion write
+-> embedded runnable-ticket publication
 ```
 
-Symmetric analysis for producer slot reservation: a producer winner's slot
-must be explicitly associated with its wait epoch until `send` commits; if
-winner identity is needed before publication, the same seam is required. The
-reservation representation must survive E8 Worker migration (keyed by wait
-epoch / WaitNode, not by Worker).
+The operation's one-shot `QueueItemLease` is final ownership state, not an
+independent reservation or refundable permit. Producer grants always enter the
+ring; no direct producer-to-consumer handoff exists. The fixed non-template
+QueuePort is the only Scheduler friend, and the full private seam is specified
+by `docs/e12-queue-scheduler-integration.md` Corrective-2. Ticket publication
+does not choose a Worker; consumption chooses own-oldest or global-oldest and
+allows stealing from an active admission owner.
 
 ```text
-Queue:
-    EXPLICIT RESERVATION STATE REQUIRED
-    REQUIRES WINNER-BEFORE-PUBLICATION COMMIT SEAM (item/slot binding)
+QUEUE-SPECIFIC WINNER-BEFORE-PUBLICATION SEAM REQUIRED AND SPECIFIED
+REUSABLE ITEM REFERENCE: FORBIDDEN
+EXPLICIT SLOT RESERVATION/PERMIT: QUEUE V2 CANDIDATE ONLY
 ```
 
 #### 14.3.5 RwLock
@@ -2008,7 +2055,9 @@ E12-D CONDITION:
     no grant state of its own (delegates to Mutex); not independently blocked.
 
 E12-E QUEUE:
-    definitely requires winner-before-publication seam for item/slot reservation.
+    requires winner-before-publication lease transfer and completion;
+    Corrective-2 author self-assessment PASS; independent review required;
+    implementation is denied.
 
 E12-F RWLOCK:
     writer requires winner-before-publication seam; reader likely does not.
@@ -2019,7 +2068,7 @@ winner-before-publication seam:
 
 ```text
 E12-C Mutex (MUTEX-HANDOFF-ONE — PREPARATION CLOSED, CORRECTIVE-1 through CORRECTIVE-5 + reaudit PASS)
-    followed by E12-E Queue (item reservation)
+    followed by E12-E Queue (one-shot lease ownership transfer)
 ```
 
 ---
