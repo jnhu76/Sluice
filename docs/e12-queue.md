@@ -1,36 +1,186 @@
-# E12-E Queue — Semantic Authority and Preparation Audit
+# E12-E Queue — Corrective-2 Semantic Authority and Historical Audit
 
-> **Preparation audit identity:** `E12-E-QUEUE-PREPARATION-AUDIT-1`
-> **Semantic decision identity:** `E12-E-QUEUE-SEMANTIC-DECISION-1`
+> **Current authority:**
+> `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2: PASS`
 >
-> **This document has two parts.**
+> **Status:** `PASS — AUTHOR SELF-ASSESSMENT — INDEPENDENT REVIEW REQUIRED`
 >
-> **Part 1 (§E12-E-QUEUE-SEMANTIC-DECISION-1 below) records the binding
-> semantic and architectural decisions that close the E12-E Queue design.**
-> These decisions are authoritative. They supersede the `HUMAN DECISION
-> REQUIRED` status previously recorded in
-> [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §8/§12.
+> **Applied disposition:**
+> `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1:
+> SUPERSEDED — REQUEST-CHANGES`
 >
-> **Part 2 (§A–§O) is the historical preparation audit** that informed the
-> decisions. It remains as a discovery record. The decisions are authoritative;
-> the audit is advisory.
+> `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1-REVIEW:
+> REQUEST-CHANGES`
 >
-> **Construction method binding:**
-> [`docs/async-runtime-construction-method.md`](async-runtime-construction-method.md)
-> (M1–M9).
+> **State-machine authority:**
+> `E12-E-QUEUE-STATE-MACHINE-DESIGN-CORRECTIVE-2:
+> PASS — AUTHOR SELF-ASSESSMENT`
 >
-> **Evidence baseline:** E10 CLOSED ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)),
-> E11 CLOSED ([`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md)),
-> E12-A Event CLOSED ([`docs/e12-event.md`](e12-event.md)),
-> E12-B Semaphore COMPLETE–REVIEW-REQUIRED ([`docs/e12-semaphore.md`](e12-semaphore.md)),
-> E12-C AsyncMutex PREPARATION CLOSED ([`docs/e12-async-mutex.md`](e12-async-mutex.md)),
-> E12-D AsyncCondition COMPLETE (commit `aeb9255`).
+> **Dependent substrate:**
+> `ASYNC-MUTEX-NOTHROW-AUTHORITY-1:
+> DESIGN PASS — IMPLEMENTATION UNAUTHORIZED`
 >
-> **Repository snapshot:** branch `e12-e`, parent `aeb9255` (E12-D merge).
+> **Implementation authorization:** `DENIED`
+
+Corrective-2 retains the Queue-v1 semantics but replaces the rejected reusable
+item reference, active-owner steal veto, ordinary quiet drain, broad call
+counter, and abstract PREPARED timer guard.
+
+## Current binding semantic decisions
+
+### Queue v1 scope
+
+| Dimension | Binding value |
+| --- | --- |
+| public type | `AsyncQueue<T>`; copy/move deleted |
+| topology | bounded MPMC, runtime fixed capacity >= 1 |
+| ordering | FIFO lease ring; FIFO producer/consumer waiters; no barging |
+| transfer | detached -> producer operation -> ring -> consumer operation -> released; no direct handoff |
+| admission authority | one-shot move-only unforgeable `QueueItemLease`, consumed by value |
+| failed push | complete original opaque lease returned, then exact typed payload recovered |
+| close | monotonic/idempotent; buffered items drain; later producers fail Closed |
+| expiry | distinct pre-grant winner; external cancellation remains deferred |
+| timed admission | concrete list-iterator PREPARED guard; ACTIVE/RETIRED/CONSUMED afterward |
+| runnable selection | current Worker own-oldest, otherwise global-oldest; active victims are stealable |
+| owner slot | mapped-value address captured before registration; no erase until ticket removal, resume, and operation release |
+| teardown | irreversible unique `QueueTeardownSession`; ordinary drain API removed |
+| call counter | `active_port_calls_` covers only ordinary non-template QueuePort interval |
+| Scheduler | borrowed `Scheduler&`; Scheduler outlives Queue and all epochs |
+
+### Public outcomes and exact failed ownership
+
+```text
+push:       committed | closed(T)
+push_until: committed | closed(T) | expired(T)
+try_push:   committed | closed(T) | would_block(T)
+
+pop:        item(T) | closed
+pop_until:  item(T) | closed | expired
+try_pop:    item(T) | closed | would_block
+```
+
+Queue v1 has no cancelled outcome. The non-template push seam obeys:
+
+```text
+committed => opaque result lease empty
+closed/expired/would_block => opaque result owns exactly one original lease
+```
+
+Typed failure conversion moves out that complete lease, validates port and
+type, changes the control to released, moves `T` once through a `T&&` failed
+factory, and destroys the exact typed node outside locks. It never reconstructs
+authority from a raw pointer or borrowed reference.
+
+### Element and ring constraints
+
+```cpp
+std::is_object_v<T>
+std::is_nothrow_move_constructible_v<T>
+std::is_nothrow_destructible_v<T>
+```
+
+Every control has exactly one location: detached, producer operation, ring,
+consumer operation, teardown, or released. Every non-empty ring slot owns a
+move-only lease; transfer empties its source and requires an empty destination.
+This makes ring ItemIds unique in production structure. QueueCore never moves,
+destroys, or invokes `T` under Queue/Scheduler locks.
+
+### Architecture and lifetime boundary
+
+`detail::QueuePort` is the fixed non-template Scheduler friend. Downstream code
+cannot construct a lease from a control pointer, mutate location, construct a
+teardown session, call reconciliation, forge a ticket, or mutate the owner map.
+The complete type graph, timer guard, call ledger, 19/6 rows, and 33
+counterexamples are binding in
+[`docs/e12-queue-scheduler-integration.md`](e12-queue-scheduler-integration.md).
+
+`begin_teardown()` requires zero ordinary port calls, linked waits, ACTIVE
+Queue timers, and granted-not-resumed operations, plus empty WaitQueues. It
+irreversibly changes lifecycle to tearing-down. The unique session drains ring
+leases and the typed layer destroys nodes outside locks. These counters do not
+prove arbitrary callers have disappeared; concurrent destruction is still a
+caller contract violation.
+
+### Transition target and evidence status
+
+```text
+TARGET COVERAGE:
+19 canonical transitions
+6 publication transitions
+
+VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
+19/19 canonical transitions
+6/6 publication transitions
+
+P8/C7: RESERVED — DEFERRED — NOT IN QUEUE V1
+PUB-P-CANCEL/PUB-C-CANCEL: RESERVED — DEFERRED
+```
+
+Expiry remains P9/C8 and return remains P10/C9; numbering is unchanged.
+
+### Deferred alternatives
+
+```text
+capacity zero/rendezvous
+unbounded Queue
+direct handoff
+overflow drop/conflation
+Select/multi-wait
+close with cause
+external cancellation registration
+explicit slot reservation / Permit
+Kotlin CQS/segmented channel algorithm
+```
+
+For Queue v1, explicit item/slot reservation is superseded. The fixed ring uses
+atomic move-only lease ownership transfer. Permit remains a Queue-v2 candidate
+only.
+
+### Formal and Condition baseline
+
+Corrective-2 modifies no TLA+ artifact. Formal status is not updated and no
+formal PASS is claimed.
+
+```text
+E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1:
+SEPARATE REQUIRED TASK
+
+Condition build: PASS
+Condition runtime suite: INCOMPLETE
+T25 migration/reacquire: HANG OBSERVED
+```
+
+The T25 hang neither proves nor disproves active-victim Queue ticket stealing,
+but it must close independently before Queue implementation.
+
+### Authorization gates
+
+Before production implementation:
+
+1. the accepted Mutex substrate design still needs separate implementation
+   authorization and realization;
+2. Corrective-2 needs a fresh independent adversarial review;
+3. Condition T25 needs its separate hang audit;
+4. later formal normalization must preserve the one-shot lease and corrected
+   steal/teardown semantics.
+
+```text
+E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+```
 
 ---
 
-## E12-E-QUEUE-SEMANTIC-DECISION-1 — Authoritative Semantic Decisions
+# NON-BINDING HISTORICAL ANALYSIS
+
+Everything below this marker is retained as the original preparation and
+semantic-decision record. It is non-binding even where an old heading says
+`PASS`, `authoritative`, `CLOSED`, `HUMAN-DECISION-REQUIRED`, or
+`implementation ready`. In particular, old reusable-item, active-owner veto,
+quiet-drain, broad-counter, cancellation, 21/8 transition, template-friend,
+explicit-reservation, terminal-skip, direct-handoff, and unspecified-result
+statements are superseded by the current authority above.
+
+## Historical E12-E-QUEUE-SEMANTIC-DECISION-1
 
 > **Decision identity:** `E12-E-QUEUE-SEMANTIC-DECISION-1`
 > **Status:** `PASS`
@@ -1735,3 +1885,10 @@ cluster (§I), production of the documents in §L in the order of §L.2, and a
 separate independent authorization act. The cross-primitive authority
 (`docs/e12-sync-primitives-plan.md` §8) remains `HUMAN-DECISION-REQUIRED` for
 the core Queue shape.
+
+> **SUPERSEDED HISTORICAL END NOTE:** The preceding historical denial reason is
+> no longer current. The binding denial and remaining gates are stated in this
+> file's opening Current Authority section: independent approval/production
+> realization of `ASYNC-MUTEX-NOTHROW-AUTHORITY-1`, independent adversarial
+> review of Corrective-2, and the separate Condition T25 hang audit.
+> Implementation remains denied.
