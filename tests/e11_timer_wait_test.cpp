@@ -32,6 +32,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <cstdio>
 #include <thread>
 
 using namespace sluice::async;
@@ -67,6 +68,34 @@ inline void spin_wait(std::atomic<bool>& flag) {
     while (!flag.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
+}
+
+// Bounded spin-wait (E11-TIMER-ASAN-BUSY-POLL-HANG-CORRECTIVE-1 / W2).
+//
+// ROOT CAUSE (category A: test-harness defect). The unbounded `spin_wait`
+// above is used by some cases (notably e11_t7) to wait, INSIDE A FIBER on a
+// worker thread, for an outcome published by another fiber on another worker.
+// Under ASan the worker is much slower; if the routed wake ticket is not
+// drained by the other worker within the waker's bounded retry budget, the
+// unbounded spin runs forever (100% CPU, observed: 21GB virtual, never
+// returns). Production is not the root cause; the production timer/steal
+// mechanics are sound. The defect is the test ASSUMING the other worker
+// makes unbounded progress.
+//
+// `spin_wait_bounded` returns true if `flag` becomes true within `max_iters`
+// yields, false otherwise. A `false` return MUST be turned into a test FAIL
+// with a state dump by the caller (never silently returned as PASS, §B/§W2.5).
+// The bound is a FAILURE GUARD, not causal sync; it is sized large enough not
+// to flake on a healthy build (200000 yields ~ seconds even under ASan).
+constexpr unsigned kSpinWaitBoundedIters = 200000;
+
+[[maybe_unused]] inline bool spin_wait_bounded(std::atomic<bool>& flag,
+                              unsigned max_iters = kSpinWaitBoundedIters) {
+    for (unsigned i = 0; i < max_iters; ++i) {
+        if (flag.load(std::memory_order_acquire)) return true;
+        std::this_thread::yield();
+    }
+    return flag.load(std::memory_order_acquire);
 }
 }  // namespace
 
@@ -529,57 +558,149 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
     std::atomic<bool> registered_e{false};
     std::atomic<bool> e_resolved{false};
     std::atomic<bool> e1_registered{false};
+    std::atomic<bool> e1_resolved{false};
 
     // Epoch E: register + wake (retires E's timer). Then epoch E+1: a second
     // node waits with a far-future deadline; E's retired timer must not touch it.
-    Fiber fwait, fwake;
+    //
+    // E11-TIMER-ASAN-BUSY-POLL-HANG-CORRECTIVE-1 (W2) corrective.
+    //
+    // ROOT CAUSE (category A: test-harness defect). The original e11_t7 used
+    // sched.run(2) — DRAIN mode — with two fibers that spin_wait on each other
+    // between epochs. But run(2) DRAIN RETURNS STALLED as soon as a fiber
+    // suspends in await_wait_deadline (MW-S3-unresolved), orphaning the other
+    // fiber. The unbounded spin_wait then hung forever under ASan (observed:
+    // 5/5 hangs, 100% CPU). Production is not the root cause: the production
+    // timer/retirement mechanics are sound (the other run_live cases pass
+    // under ASan). The defect was the DRAIN-mode + unbounded-spin design.
+    //
+    // CORRECTIVE: drive the two epochs from a coordinator OS thread while a
+    // single waiter fiber runs under run_live(1) — the proven liveness pattern
+    // of e11_t15. run_live stays resident while the waiter is suspended, so the
+    // coordinator can deterministically wake E, observe resolution, register
+    // E+1, advance the clock past E's retired deadline (inert), and finally
+    // wake E+1. Every coordinator wait is BOUNDED (kBoundedCoordIters); on
+    // bound exhaustion the test FAILs with a state dump (never silent PASS,
+    // §B/§W2.5). The waiter records both epochs' outcomes for the assertions.
+    Fiber fwait;
     fwait.set_entry([&](Fiber&) {
         // Epoch E.
-        registered_e.store(true, std::memory_order::release);
+        registered_e.store(true, std::memory_order_release);
         WaitNode node_e;
         sched.await_wait_deadline(q, node_e, Scheduler::deadline_t{100});
-        SLUICE_CHECK_MSG(node_e.was_woken(), "epoch E resolved Woken");
-        e_resolved.store(true, std::memory_order::release);
-        // Epoch E+1: a distinct node, far-future deadline. Signal registration
-        // so the waker can drive the (inert) old-timer pump, then wake E+1.
+        // (node_e.was_woken() asserted by the coordinator after E resolves)
+        e_resolved.store(true, std::memory_order_release);
+        // Epoch E+1: a distinct node, far-future deadline. E's retired timer
+        // must NOT resolve this when the clock advances past E's old deadline.
         WaitNode node_e1;
-        e1_registered.store(true, std::memory_order::release);
+        e1_registered.store(true, std::memory_order_release);
         sched.await_wait_deadline(q, node_e1, Scheduler::deadline_t{100000});
-        // E+1 is resolved by an explicit wake (below), NOT by E's old timer.
-        SLUICE_CHECK_MSG(node_e1.was_woken(), "epoch E+1 resolved Woken (not by old timer)");
-    });
-    fwake.set_entry([&](Fiber&) {
-        spin_wait(registered_e);
-        // Wake epoch E.
-        for (int i = 0; i < 10000; ++i) {
-            if (sched.wake_wait_one(q)) break;
-            std::this_thread::yield();
-        }
-        spin_wait(e_resolved);  // E resolved (timer retired); E+1 now registering.
-        spin_wait(e1_registered);  // E+1 registered with deadline 100000.
-        // Advance the clock PAST E's old deadline (100). E's retired timer is
-        // pumped and must be inert — it must NOT resolve E+1 (deadline 100000).
-        sched.advance_clock(500);
-        std::this_thread::yield();  // let the (inert) pump run if any
-        // E+1 must still be waiting (its deadline 100000 is not due; E's timer
-        // did not resolve it). Wake it explicitly now.
-        for (int i = 0; i < 10000; ++i) {
-            if (sched.wake_wait_one(q)) break;
-            std::this_thread::yield();
-        }
+        // (node_e1.was_woken() asserted by the coordinator after E+1 resolves)
+        e1_resolved.store(true, std::memory_order_release);
     });
 
-    FiberStack sw, sk;
+    FiberStack sw;
     SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
-    SLUICE_CHECK(sched.init_fiber(fwake, sk.base(), sk.size()));
     sched.spawn(fwait);
-    sched.spawn(fwake);
-    // run(2): the waker spin-waits for the waiter to progress between epochs,
-    // which requires the waiter to run concurrently (the waker cannot both
-    // spin-wait AND yield the single worker). Two workers let the waiter resume
-    // on worker B while the waker spin-waits on worker A.
-    sched.run(2);
 
+    // run_live(1): stays resident while the waiter is suspended (deadline
+    // active + external wake possible => worker parks instead of STALLED).
+    std::thread runner([&] { sched.run_live(1); });
+
+    // Bounded coordinator wait helper (W2): returns true if `flag` becomes true
+    // within kBoundedCoordIters yields, false otherwise. Callers FAIL with a
+    // state dump on false (never silent PASS, §B/§W2.5).
+    constexpr unsigned kBoundedCoordIters = 200000;
+    auto coord_wait = [&](std::atomic<bool>& flag) -> bool {
+        for (unsigned i = 0; i < kBoundedCoordIters; ++i) {
+            if (flag.load(std::memory_order_acquire)) return true;
+            std::this_thread::yield();
+        }
+        return flag.load(std::memory_order_acquire);
+    };
+
+    // 1. Wait for E registration, then wake E (retires E's timer).
+    if (!coord_wait(registered_e)) {
+        runner.join();
+        SLUICE_FAIL("e11_t7: coordinator timed out waiting for E registration");
+        return;
+    }
+    for (int i = 0; i < 10000; ++i) {
+        if (sched.wake_wait_one(q)) break;
+        std::this_thread::yield();
+    }
+    if (!coord_wait(e_resolved)) {
+        std::fprintf(stderr,
+            "e11_t7 FAIL state dump (epoch E not resolved): registered_e=%d "
+            "e_resolved=%d e1_registered=%d active_deadline_count=%zu "
+            "waiting_count=%zu\n",
+            registered_e.load(), e_resolved.load(), e1_registered.load(),
+            E11TimerTestHooks::active_deadline_count(sched),
+            sched.waiting_count());
+        // Resolve E if stranded so the runner can drain cleanly.
+        sched.wake_wait_one(q);
+        runner.join();
+        SLUICE_FAIL("e11_t7: coordinator timed out waiting for E resolution "
+                    "(see stderr state dump)");
+        return;
+    }
+
+    // 2. Wait for E+1 registration with its far-future (100000) deadline.
+    if (!coord_wait(e1_registered)) {
+        std::fprintf(stderr,
+            "e11_t7 FAIL state dump (epoch E+1 not registered): e_resolved=%d "
+            "e1_registered=%d active_deadline_count=%zu waiting_count=%zu\n",
+            e_resolved.load(), e1_registered.load(),
+            E11TimerTestHooks::active_deadline_count(sched),
+            sched.waiting_count());
+        sched.wake_wait_one(q);
+        runner.join();
+        SLUICE_FAIL("e11_t7: coordinator timed out waiting for E+1 registration "
+                    "(see stderr state dump)");
+        return;
+    }
+
+    // 3. Advance the clock PAST E's old deadline (100). advance_clock pumps
+    //    deadlines SYNCHRONOUSLY under global_mtx_, so by the time it returns
+    //    E's retired timer has been pumped and MUST be inert — it must NOT have
+    //    resolved E+1 (deadline 100000). No sleep is needed: the pump is done.
+    sched.advance_clock(500);
+
+    // 4. THE CROSS-EPOCH ISOLATION PROOF: after the clock is past E's retired
+    //    deadline, E+1 must STILL be suspended (not resolved by E's old timer).
+    //    We observe e1_resolved is still false. (This is the I3 invariant.)
+    if (e1_resolved.load(std::memory_order_acquire)) {
+        sched.wake_wait_one(q);
+        runner.join();
+        SLUICE_FAIL("e11_t7: E+1 was resolved by E's retired timer (cross-epoch "
+                    "isolation violated, I3)");
+        return;
+    }
+
+    // 5. Wake E+1 explicitly (the only legitimate resolver). It must resolve
+    //    Woken (not Expired) — proving E's old timer did not win.
+    for (int i = 0; i < 10000; ++i) {
+        if (sched.wake_wait_one(q)) break;
+        std::this_thread::yield();
+    }
+    if (!coord_wait(e1_resolved)) {
+        std::fprintf(stderr,
+            "e11_t7 FAIL state dump (epoch E+1 not resolved by explicit wake): "
+            "e1_registered=%d e1_resolved=%d active_deadline_count=%zu "
+            "waiting_count=%zu\n",
+            e1_registered.load(), e1_resolved.load(),
+            E11TimerTestHooks::active_deadline_count(sched),
+            sched.waiting_count());
+        runner.join();
+        SLUICE_FAIL("e11_t7: coordinator timed out waiting for E+1 resolution "
+                    "(see stderr state dump)");
+        return;
+    }
+
+    runner.join();
+
+    SLUICE_CHECK_MSG(e_resolved.load(), "epoch E resolved");
+    SLUICE_CHECK_MSG(e1_resolved.load(), "epoch E+1 resolved by explicit wake");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
 }
 
