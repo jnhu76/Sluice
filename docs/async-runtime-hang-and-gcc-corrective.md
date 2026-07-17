@@ -176,12 +176,12 @@ W2/W3 do not change Queue authorization.
 
 ```text
 branch:           e12-e-queue-production-impl
-HEAD:             47b9d91 (docs(async): record runtime-hang and GCC TSA corrective evidence)
+HEAD:             <see `git rev-parse HEAD` — the docs commit at branch tip>
 commits (this task, since prior task HEAD e4b08b1):
     db656b5  test(async): make Condition T25 migration trace deterministic   (W1)
     7045e31  test(async): close E11 timer ASan busy-poll hang                (W2)
     63cf850  build(async): route TSA flags only to Clang                     (W3)
-    47b9d91  docs(async): record runtime-hang and GCC TSA corrective evidence (this doc)
+    <tip>    docs(async): record runtime-hang and GCC TSA corrective evidence (this doc)
 working tree:     clean (no modified tracked files)
 untracked files:  docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md
                     (independent Mutex implementation review; authored by a
@@ -191,3 +191,7 @@ untracked files:  docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-R
                   tla2tools.jar              (pre-existing, unrelated; untouched)
 pushed:           no   (no upstream configured for this branch; no push / merge / PR)
 ```
+
+(The docs-commit hash is inherently self-referential — it changes when this
+file is amended. The three workstream commit hashes `db656b5` / `7045e31` /
+`63cf850` are stable; the docs tip is whatever `git log -1` reports.)
