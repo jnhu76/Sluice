@@ -3,7 +3,7 @@
 > **Current authority:**
 > `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2: PASS`
 >
-> **Status:** `PASS — AUTHOR SELF-ASSESSMENT — INDEPENDENT REVIEW REQUIRED`
+> **Status:** `PASS — INDEPENDENT ADVERSARIAL REVIEW PASS (B2)`
 >
 > **Applied disposition:**
 > `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1:
@@ -165,14 +165,18 @@ Before production implementation:
    implementation review PASS
    (`docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`,
    commit `15dc9b4`);
-2. Corrective-2 needs a fresh independent adversarial review — **B2 OPEN**;
+2. ~~Corrective-2 needs a fresh independent adversarial review~~ — **B2 PASS**:
+   independent adversarial design review PASS
+   (`docs/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`,
+   commit `4f81d6c`; 11/11 topics verified, 33/33 counterexamples
+   dispositioned, 6 compile probes green, 0 blocking findings);
 3. ~~Condition T25 needs its separate hang audit~~ — **B3 PASS** (W1
    corrective `db656b5`);
 4. later formal normalization must preserve the one-shot lease and corrected
    steal/teardown semantics — **B4 OPEN** (no Queue TLA+ model yet).
 
 ```text
-E12-E IMPLEMENTATION AUTHORIZATION: DENIED — B2/B4 OPEN
+E12-E IMPLEMENTATION AUTHORIZATION: DENIED — B4 OPEN
 ```
 
 ---
