@@ -34,6 +34,7 @@
 #pragma once
 
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/detail/mutex_test_seam.hpp>
 #include <sluice/async/thread_annotations.hpp>
 
 #include <mutex>
@@ -52,6 +53,16 @@ public:
 
     void lock() noexcept SLUICE_ACQUIRE() {
         try {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // Internal-testing seam: throws a dedicated test fault when an
+            // armed countdown matches this lock. The throw is caught by the
+            // SAME catch (...) below that handles a real underlying failure,
+            // so the death-test exercises the production fail-fast boundary.
+            // The macro is undefined in the production `sluice_async` target,
+            // so this call (and its symbol) is absent from the production
+            // archive and the production preprocessed header.
+            detail::maybe_inject_mutex_failure(detail::MutexTestOperation::lock);
+#endif
             impl_.lock();
         } catch (...) {
             detail::async_mutex_lock_fail_fast();
@@ -59,6 +70,9 @@ public:
     }
     bool try_lock() noexcept SLUICE_TRY_ACQUIRE(true) {
         try {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            detail::maybe_inject_mutex_failure(detail::MutexTestOperation::try_lock);
+#endif
             return impl_.try_lock();
         } catch (...) {
             detail::async_mutex_lock_fail_fast();

@@ -1006,3 +1006,50 @@ do
             add_tests("e12_async_condition_test")
     end
 end
+
+-- e12_async_mutex_death_test — verifies the Mutex acquisition fail-fast
+-- boundary (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1 §F) via a POSIX
+-- fork/exec/waitpid child-process harness. Each case (T1 lock / T2 try_lock /
+-- T3 condition_variable_any reacquire / T4 control) re-execs this binary with
+-- --death-child=<case>; the child installs a deterministic terminate handler
+-- and the parent asserts the exact exit code. The unit under test is the real
+-- sluice::async::Mutex entry linked against sluice_async_internal_testing
+-- (whose SLUICE_ASYNC_INTERNAL_TESTING define exposes the injection seam).
+-- POSIX-only (fork/exec/waitpid): gated to linux/macosx. Windows is NOT RUN
+-- in this task (the harness is not implemented there); see
+-- tests/death_test_runner_posix.hpp.
+do
+    local p = "tests/e12_async_mutex_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e12_async_mutex_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_async_mutex_death_test")
+    end
+end
+
+-- e12_async_mutex_nothrow_authority_probe — positive-compile + run probe for
+-- the Mutex noexcept contract (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1
+-- §I1). Holds the static_asserts over noexcept(...) and
+-- std::is_nothrow_invocable_v<...> for lock/try_lock/unlock so a regression of
+-- the noexcept function-type is caught at compile time. NOT a substitute for
+-- the death tests (those verify runtime fail-fast behavior). Depends on the
+-- internal_testing variant so the seam header resolves, though the probe
+-- itself exercises the production Mutex entries.
+do
+    local p = "tests/e12_async_mutex_nothrow_authority_probe.cpp"
+    if os.isfile(p) then
+        target("e12_async_mutex_nothrow_authority_probe")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_async_mutex_nothrow_authority_probe")
+    end
+end
