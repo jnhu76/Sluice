@@ -374,6 +374,9 @@ public:
 private:
     QueueOpaquePushStatus status_;
     QueueItemLease lease_;
+
+    QueueOpaquePushResult(QueueOpaquePushStatus s, QueueItemLease&& l) noexcept
+        : status_(s), lease_(std::move(l)) {}
 };
 
 class QueuePort final {
@@ -585,6 +588,9 @@ private:
     TimerPool::iterator iterator_{};
     bool armed_{false};
 
+    PreparedQueueTimer(Scheduler& sched, TimerPool::iterator it, bool armed) noexcept
+        : scheduler_(&sched), iterator_(it), armed_(armed) {}
+
     friend class Scheduler;
 };
 ```
@@ -608,6 +614,25 @@ PreparedQueueTimer prepared = prepare_queue_timer_locked(deadline);
 C++ destroys automatic objects in reverse construction order. Therefore
 `prepared` is destroyed before `global_lock` on exception and every early
 return. The reverse declaration order is forbidden.
+
+### 8.1 Lease consumption after fallible preparation
+
+All fallible preparation (allocation, timer-pool emplace, deadline-heap
+reserve) must complete BEFORE consuming the `QueueItemLease` by value. The
+binding push_until sequence is:
+
+```text
+1. prepare_queue_timer_locked() — may throw allocation exceptions
+2. consume the lease by value into QueuePort::push_until parameter
+3. perform admission under G+S
+4. explicit discard or activation
+```
+
+If `prepare_queue_timer_locked()` throws, the lease remains with the caller
+and is not consumed. The `QueueItemLease` destructor is fail-fast and never
+deletes a typed node; therefore the lease MUST NOT be consumed before
+preparation completes. This ordering is enforced by the declaration sequence:
+the lease is passed by value only after the prepared timer is constructed.
 
 Generic and Queue constructors remain distinct:
 
