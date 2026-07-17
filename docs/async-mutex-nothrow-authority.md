@@ -4,12 +4,17 @@
 >
 > **Design status:** `PASS — INDEPENDENT REVIEW REQUIRED`
 >
-> **Production status:** `NOT IMPLEMENTED`
+> **Production status:**
+> `IMPLEMENTED — AUTHOR SELF-ASSESSMENT —`
+> `INDEPENDENT IMPLEMENTATION REVIEW REQUIRED`
 >
 > This document is a substrate design authority only. It does not authorize a
 > production change. E12-E Queue depends on this decision and remains
 > implementation-denied until this decision has passed an independent review
-> and its production realization has been separately authorized.
+> and its production realization has been separately authorized. The author's
+> self-assessment that production implementation has landed is recorded in
+> `docs/async-mutex-nothrow-implementation.md`; it is **not** a closed gate
+> and does not authorize the Queue.
 
 ## 1. Current-source fact
 

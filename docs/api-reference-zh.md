@@ -362,6 +362,44 @@ uint64_t durable_lsn() const;
 
 ---
 
+## 异步同步原语
+
+`sluice::async::Mutex`（头文件 `#include <sluice/async/mutex.hpp>`）是异步
+Scheduler 内部使用的、带 Clang TSA 注解的独占锁。它是 `std::mutex` 的薄封装，
+满足 `BasicLockable` 与 `Lockable`，因此 `std::lock_guard<Mutex>`、
+`std::unique_lock<Mutex>`、`std::condition_variable_any` 以及
+`sluice::async::LockGuard` 均可基于它使用。
+
+```cpp
+class Mutex {
+public:
+    void lock() noexcept;       // 获取锁；不会抛出
+    bool try_lock() noexcept;   // 非阻塞获取；不会抛出
+    void unlock() noexcept;     // 释放锁；不会抛出
+};
+```
+
+**失败契约（fail-fast）。** `lock()`、`try_lock()` 与 `unlock()` 均为
+`noexcept`。底层获取失败——即 `std::mutex::lock()`/`try_lock()` 在资源耗尽或
+其他平台错误时可能抛出的 `std::system_error`——**不会**作为可恢复异常向外传播。
+`Mutex` 边界会将其转换为进程终止（fail-fast，经 `std::terminate`）。在权威
+Scheduler 转移中，运行时无法在一次锁失败之后既能恢复用户执行又能保持所有权、
+队列成员、发布等不变量，因此可恢复异常边界的存在是不正确的。该契约记录于
+`docs/async-mutex-nothrow-authority.md`。
+
+违反 `unlock()` 所有权前置条件（解锁一个你不拥有的 `Mutex`）属于程序不变量违反
+（未定义行为），而非可恢复错误；此处的 `noexcept` 仅用于说明不存在恢复路径。
+
+**源码/ABI 说明。** `noexcept` 是函数类型的一部分。取成员地址的下游代码
+（例如 `&sluice::async::Mutex::lock`）必须重新编译此头文件，使函数指针类型匹配。
+**仓库内没有任何翻译单元取该类地址**（已验证：零命中），且 `Mutex` 接口完全
+内联在头文件中，因此每个 TU 都会重新编译。在当前已验证工具链对应的 Itanium ABI
+下，`noexcept` 不参与符号修饰，因此符号名不变。此处**不**声称在所有工具链/平台上
+对 ABI 绝对不受影响；仅限于实际验证过的平台与编译器（已验证集合见
+`docs/async-mutex-nothrow-implementation.md`）。
+
+---
+
 ## 测量
 
 所有统计结构体由调用者拥有，默认初始化为零，通过可空指针附加（null = 不计数）。
