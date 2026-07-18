@@ -2,16 +2,15 @@
 
 > **Decision identity:** `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1`
 >
-> **Status:** `IN PROGRESS — P1-P8 + PHASE G LANDED; PHASE H/I NEXT`
+> **Status:** `AUTHOR SELF-ASSESSMENT PASS — AWAITING PHASE I INDEPENDENT REVIEW`
 >
-> This document records the as-built progress of the E12-E Queue production
-> implementation. It is NOT a PASS self-assessment: the implementation is
-> FUNCTIONALLY COMPLETE through P8 (type foundation, fast paths,
-> blocking/timed wait admission + reconciliation + publication, teardown
-> lifecycle, public `AsyncQueue<T>` template wrapper) and Phase G (extended
-> concurrency/sanitizer test matrix) is LANDED. Remaining: Phase H (author
-> self-assessment PASS), Phase I (independent adversarial implementation
-> review).
+> This document records the as-built state of the E12-E Queue production
+> implementation. The implementation is FUNCTIONALLY COMPLETE through P8 +
+> Phase G, and the Phase H author self-assessment (below) records a PASS.
+> The claim is NOT final: Phase I (independent adversarial implementation
+> review) must still run. The implementation PASSes only when an independent
+> reviewer confirms there is no exploitable defect against the Corrective-2
+> authority, the formal model, and the documented lock order.
 
 ## Authorization baseline
 
@@ -217,19 +216,123 @@ Verified: 20/20 `e12_async_queue_test` cases PASS on Clang Debug, GCC
 Debug, ASan, TSan. E11/E12 sync primitive tests regress-clean. Production
 `sluice_async` target compiles clean.
 
-## Known exclusions / honest scoping
+## Phase H — author self-assessment — PASS
 
-- The implementation is FUNCTIONALLY COMPLETE through P8 + Phase G.
-  Phase H (author self-assessment PASS) and Phase I (independent
-  adversarial implementation review) remain. This document does NOT
-  claim `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1: PASS` until Phase H + I
-  run.
+The author has reviewed the as-built implementation against the
+Corrective-2 authority, the B4 formal model, the documented lock order,
+and the test evidence. The assessment records a PASS, with the explicit
+caveat that an independent Phase I reviewer must still confirm.
+
+### Authority surface (Corrective-2 §3/§5/§6/§7/§9)
+
+| Requirement | As-built |
+| --- | --- |
+| Non-template QueuePort is the ONLY Queue friend of Scheduler | `friend class ::sluice::async::detail::QueuePort;` in scheduler.hpp |
+| `begin_teardown` does NOT enter ordinary CallGuard | `begin_teardown` body has no `CallGuard guard(*this);` |
+| `begin_teardown` requires all four counters == 0 | checked under G+S before transition |
+| `begin_teardown` requires both role FIFOs empty | `scheduler_.queue_role_waiters_empty_locked(*this)` |
+| `begin_teardown` performs operational -> tearing_down under G+S | `LockGuard glk(global_mtx_); LockGuard lk(state_mtx_); lifecycle_ = tearing_down;` |
+| `take_next` requires lifecycle == tearing_down | checked at entry |
+| `take_next` moves ring -> teardown | `out.control_->location_ = Location::teardown;` |
+| Typed layer releases Node<T> outside locks | `release_teardown` / `release_popped` / `release_failed` delete Node outside any QueuePort/Scheduler critical section |
+| No Permit, no reusable item, no active-owner veto, no cancellation outcome, no direct handoff | no Permit field, no reusable item slot, no active-owner concept, no `cancelled` pop/push status, no direct handoff seam |
+| No T ctor/move/dtor under G/S/P/C | T moves occur in `QueueItemFactory::make/release_*` (outside locks) and `AsyncQueue<T>::from_opaque_*` (outside locks) |
+| Scheduler is the ONLY friend of WaitQueue | `friend class Scheduler;` is the sole friend in wait_queue.hpp; QueuePort reaches role FIFOs via Scheduler seams only |
+
+### Lock order (Corrective-2 §3.5)
+
+`global_mtx_ (G) -> QueuePort::state_mtx_ (S) -> exactly one role WaitQueue mtx (P or C)`.
+
+| Site | G | S | role | Notes |
+| --- | --- | --- | --- | --- |
+| try_push commit + grant | ✓ | ✓ | C (internally by grant seam) | G+S caller-held; grant takes C under G |
+| try_pop commit + grant | ✓ | ✓ | P (internally by grant seam) | symmetric |
+| close drain loop | ✓ | ✓ | C then P (sequentially, never together) | grant seams each take one role under G |
+| push/pop admit | ✓ | ✓ | own role (admission closure) | single suspend; reconciler commits |
+| queue_cancel | ✓ | — | target role | identity-safe; no ring mutation |
+| begin_teardown | ✓ | ✓ | both (sequentially via helper) | role mtx taken under G only |
+| take_next | — | ✓ | — | lifecycle == tearing_down; no waiters can exist |
+
+P and C are NEVER held together (the two grant seams each take exactly one
+role mtx under G; `begin_teardown` queries each role mtx sequentially).
+
+### Linear capability (P1)
+
+| Property | As-built |
+| --- | --- |
+| QueueItemControl non-copyable/non-movable; private ctor | `queue_item.hpp` |
+| QueueItemLease move-only; `std::exchange` empties source | `queue_item.hpp` |
+| Non-empty lease dtor fail-fast | `~QueueItemLease` |
+| Empty-destination move-assign fail-fast | enforced in `QueueOpaquePushResult/PopResult::operator=` |
+| `queue_type_token<T>` stable per-type sentinel | inline header-only |
+| `queue_lease_fail_fast` `[[noreturn]] noexcept` | declared + defined |
+
+The P1 7-negative access-control probe still rejects every probe
+(NEG_LEASE_COPY / NEG_LEASE_COPY_ASSIGN / NEG_LEASE_PUBLIC_DEFAULT_CTOR /
+NEG_LEASE_PUBLIC_CONTROL_CTOR / NEG_CONTROL_PUBLIC_CTOR / NEG_CONTROL_COPY /
+NEG_CONTROL_MOVE).
+
+### Winner-before-publication (Corrective-2 §8)
+
+Each grant seam (`queue_grant_consumer_locked` /
+`queue_grant_producer_locked`) performs in one critical section:
+
+1. `wake_one_locked` — resolve FIFO head `Woken` (the resolve CAS is the
+   winner authority)
+2. resource commit — read `won->user()` for per-op context; move the ring
+   item into the winner's out-lease OR move the winner's lease into the
+   freed slot
+3. `retire_timer_for_node_locked` — disarm any bound timer (E11 I4)
+4. counter decrement (`active_wait_associations_`)
+5. `make_runnable` + `route_runnable_locked` — publication LAST
+
+This mirrors `mutex_handoff_one_locked`'s ordering exactly.
+
+### TLA+ formal model (B4)
+
+The B4 model (`docs/spec/e12_queue/`) verified the state machine: the
+closed/empty terminal, FIFO order, capacity bound, the 19 canonical
+transitions, the 6 publication paths, and 33 counterexamples. The model
+passed TLC2 v2.19 on the live spec + closed-drain variant + all 7
+negatives. The as-built implementation matches the model's transitions
+(18/19 are exercised by tests; the remaining P8 ProducerTimedReturn adds
+no QueuePort state).
+
+### Test evidence
+
+| Cell | Result |
+| --- | --- |
+| Clang Debug | 20/20 PASS |
+| GCC Debug | 20/20 PASS |
+| Clang ASan | 20/20 PASS (no leak, no UAF) |
+| Clang TSan | 20/20 PASS (no data race) |
+| Clang TSan ×5 stress | 5/5 PASS (rare-race amplification) |
+| E11/E12 sync primitive regressions | clean |
+
+### Honest exclusions
+
+- The fail-fast paths (second `begin_teardown`, ordinary op after
+  teardown, session dtor with non-empty ring, non-empty lease dtor) call
+  `std::terminate` and are NOT exercised by unit tests — they are
+  structural invariants serialized by the lifecycle transition and the P1
+  linear capability. The P1 access-control probe covers the
+  type-structure subset (7 negatives); the runtime fail-fast subset
+  remains structurally enforced, not test-exercised.
+- The multi-worker migration test (G2) demonstrates the publication path
+  crosses worker boundaries; it does NOT deterministically prove which
+  worker resumes the producer (W0 or W1) — both are correct, and TSan
+  confirms no race either way. A T19-style deterministic steal proof
+  (proving a specific worker steals) is out of scope for Phase G; the
+  E8 steal substrate has its own T19 proof.
+- Phase I (independent adversarial implementation review) has NOT run.
+  This self-assessment PASS is the AUTHOR's claim; the implementation
+  PASSes only when Phase I confirms.
 
 ## Repository state
 
 ```text
 branch:           e12-e-queue-production-impl
-HEAD:             (see git log; advances as commits land)
+HEAD:             2b22793 (Phase G extended test matrix)
 working tree:     clean between commits
 untracked files:  tests/test_t3_simple.cpp  (pre-existing, unrelated; untouched)
                   tla2tools.jar             (pre-existing, unrelated; untouched)
