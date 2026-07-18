@@ -14,6 +14,9 @@
 #include <sluice/async/detail/queue_item.hpp>
 #include <sluice/async/detail/queue_port.hpp>
 #include <sluice/async/lock_guard.hpp>  // LockGuard
+#include <sluice/async/scheduler.hpp>   // Scheduler (full def for seam calls)
+
+#include "queue_detail.hpp"  // QueueWaitCtx (shared with scheduler.cpp)
 
 #include <cstdlib>
 #include <exception>  // std::terminate
@@ -180,6 +183,10 @@ QueueOpaquePushResult QueuePort::try_push(QueueItemLease lease) {
     // producer operation).
     c->location_ = QueueItemControl::Location::producer_operation;
 
+    // G -> S (P5 lock order). Reconciliation of the OTHER role happens under
+    // these same locks so a fast-path commit + wake is atomic with respect to
+    // blocking admission.
+    LockGuard glk(scheduler_.global_mtx_);
     LockGuard lk(state_mtx_);
     // P3 PushClosed: closed rejects the producer; return the EXACT original
     // lease (producer_operation -> detached; no copy / alias / default).
@@ -202,6 +209,11 @@ QueueOpaquePushResult QueuePort::try_push(QueueItemLease lease) {
     c->location_ = QueueItemControl::Location::ring;
     ring_[tail] = std::move(lease);  // source `lease` now empty
     ++ring_count_;
+    // P5 reconciliation: a new item arrived. If a consumer is parked, grant it
+    // the OLDEST ring item (ring_[head] — FIFO) atomically, winner-before-
+    // publication (resolve Woken + ring move + retire + publish in one critical
+    // section inside queue_grant_consumer_locked).
+    (void)scheduler_.queue_grant_consumer_locked(*this);
     return QueueOpaquePushResult::committed();
 }
 
@@ -223,6 +235,8 @@ QueueOpaquePopResult QueuePort::try_pop() {
     }
     CallGuard guard(*this);
 
+    // G -> S (P5 lock order).
+    LockGuard glk(scheduler_.global_mtx_);
     LockGuard lk(state_mtx_);
     // C1 FastPopCommit: move the head slot's lease out; ring slot becomes
     // empty; control location ring -> consumer_operation.
@@ -236,6 +250,10 @@ QueueOpaquePopResult QueuePort::try_pop() {
         // Mark the moved-out control at consumer_operation (friend access).
         out.control_->location_ =
             QueueItemControl::Location::consumer_operation;
+        // P5 reconciliation: a slot opened. If a producer is parked, grant it
+        // the freed slot atomically (queue_grant_producer_locked moves the
+        // winner's lease into the slot, winner-before-publication).
+        (void)scheduler_.queue_grant_producer_locked(*this);
         return QueueOpaquePopResult::item(std::move(out));
     }
     // C2 PopClosedEmpty: closed + empty consumer terminal.
@@ -247,8 +265,13 @@ QueueOpaquePopResult QueuePort::try_pop() {
 }
 
 // close (CL1 / CL2): monotonic Open -> Closed. Idempotent on Closed.
-// P5 adds closed-reconciliation (drain to eligible consumers, complete blocked
-// producers/consumers); P3 closes the linearization point only.
+// P5 closed-reconciliation: wake every blocked producer (P7 closed outcome —
+// each retains its lease) and every blocked consumer (consumers pop buffered
+// items on resume while the ring still has them; once empty, remaining
+// consumers get the closed outcome). The wake is signaling only; each woken
+// Fiber's admission loop re-checks under G + S + role and finalizes its own
+// outcome (commit-to-ring for a producer if a slot somehow opened; pop for a
+// consumer if an item remains; closed otherwise).
 void QueuePort::close() noexcept {
     // Lifecycle gate + CallGuard.
     {
@@ -259,36 +282,126 @@ void QueuePort::close() noexcept {
     }
     CallGuard guard(*this);
 
+    LockGuard glk(scheduler_.global_mtx_);
     LockGuard lk(state_mtx_);
     // CL1 Open -> Closed; CL2 Closed -> Closed (idempotent). Monotone.
     closed_ = true;
-    // P5 reconciliation runs here under G+S once linked waiters exist.
+    // Closed-reconciliation (P5/P7): drain the consumer FIFO by granting each
+    // parked consumer the next buffered item until the ring is empty; further
+    // consumers are granted closed+empty (queue_grant_consumer_locked leaves
+    // their out empty when the ring is empty). Then drain the producer FIFO:
+    // each parked producer is granted "closed" (queue_grant_producer_locked
+    // sees closed_ and leaves its lease retained; the producer resume returns
+    // it as closed). Both grant seams commit winner-before-publication.
+    while (scheduler_.queue_grant_consumer_locked(*this) != nullptr) {
+        // keep draining consumers (each gets one buffered item, or closed once
+        // the ring is empty)
+    }
+    while (scheduler_.queue_grant_producer_locked(*this) != nullptr) {
+        // keep draining producers (each returns its lease as closed)
+    }
 }
 
-// --- blocking / timed (P4-P6 deferred) ------------------------------------
+// --- blocking / timed (P4-P6) ---------------------------------------------
 //
-// These require Scheduler wait admission, PREPARED timers, reconciliation,
-// and publication. Until P4-P6 land, they throw std::logic_error so the
-// compile type graph is complete and the fast paths are independently
-// testable. (This is NOT a winner-path exception; blocking is a caller-facing
-// API that may legitimately surface "not implemented" while the wait
-// substrate is wired.)
-QueueOpaquePushResult QueuePort::push(QueueItemLease /*lease*/) {
-    throw std::logic_error(
-        "AsyncQueue blocking push: wait admission not yet implemented (P4-P6)");
+// The blocking/timed substrate. Each sets up the per-op context (control
+// location detached -> producer_operation for push; an empty out-lease for
+// pop), allocates a stack WaitNode, delegates to the Scheduler admit closure
+// (which suspends until the reconciler commits + publishes), and reads the
+// post-resume state to build the opaque result:
+//   push: lease empty => committed; lease retained => closed/expired.
+//   pop:  out non-empty => item; out empty => closed/expired.
+//
+// These run inside a Fiber (the admit closures assert g_worker != null). They
+// are NOT safe to call from a non-Fiber thread.
+QueueOpaquePushResult QueuePort::push(QueueItemLease lease) {
+    {
+        LockGuard lk(state_mtx_);
+        if (lifecycle_ != QueueLifecycle::operational) {
+            queue_lease_fail_fast();
+        }
+    }
+    CallGuard guard(*this);
+    QueueItemControl* c = lease.control_;
+    if (c == nullptr || c->owner_port_ != this ||
+        c->location_ != QueueItemControl::Location::detached) {
+        queue_lease_fail_fast();
+    }
+    c->location_ = QueueItemControl::Location::producer_operation;
+    WaitNode node;
+    scheduler_.queue_push_admit(*this, node, lease);
+    // On return: lease empty => committed (ring owns it); non-empty => closed
+    // (untimed push never expires). Distinguish by reading the lease.
+    if (lease.control_ == nullptr) {
+        return QueueOpaquePushResult::committed();
+    }
+    // closed: the operation retained the lease; control is still at
+    // producer_operation. Move the lease whole into the failed result.
+    return QueueOpaquePushResult::failed(
+        QueueOpaquePushStatus::closed, std::move(lease));
 }
-QueueOpaquePushResult QueuePort::push_until(QueueItemLease /*lease*/,
-                                            queue_deadline_t /*deadline*/) {
-    throw std::logic_error(
-        "AsyncQueue push_until: timed wait admission not yet implemented (P4-P6)");
+
+QueueOpaquePushResult QueuePort::push_until(QueueItemLease lease,
+                                            queue_deadline_t deadline) {
+    {
+        LockGuard lk(state_mtx_);
+        if (lifecycle_ != QueueLifecycle::operational) {
+            queue_lease_fail_fast();
+        }
+    }
+    CallGuard guard(*this);
+    QueueItemControl* c = lease.control_;
+    if (c == nullptr || c->owner_port_ != this ||
+        c->location_ != QueueItemControl::Location::detached) {
+        queue_lease_fail_fast();
+    }
+    c->location_ = QueueItemControl::Location::producer_operation;
+    WaitNode node;
+    scheduler_.queue_push_admit_until(*this, node, lease, deadline);
+    if (lease.control_ == nullptr) {
+        return QueueOpaquePushResult::committed();
+    }
+    const bool expired = node.was_expired();
+    return QueueOpaquePushResult::failed(
+        expired ? QueueOpaquePushStatus::expired
+                : QueueOpaquePushStatus::closed,
+        std::move(lease));
 }
+
 QueueOpaquePopResult QueuePort::pop() {
-    throw std::logic_error(
-        "AsyncQueue blocking pop: wait admission not yet implemented (P4-P6)");
+    {
+        LockGuard lk(state_mtx_);
+        if (lifecycle_ != QueueLifecycle::operational) {
+            queue_lease_fail_fast();
+        }
+    }
+    CallGuard guard(*this);
+    QueueItemLease out;  // empty; the reconciler moves a ring item into it
+    WaitNode node;
+    scheduler_.queue_pop_admit(*this, node, out);
+    if (out.control_ != nullptr) {
+        return QueueOpaquePopResult::item(std::move(out));
+    }
+    return QueueOpaquePopResult::closed();
 }
-QueueOpaquePopResult QueuePort::pop_until(queue_deadline_t /*deadline*/) {
-    throw std::logic_error(
-        "AsyncQueue pop_until: timed wait admission not yet implemented (P4-P6)");
+
+QueueOpaquePopResult QueuePort::pop_until(queue_deadline_t deadline) {
+    {
+        LockGuard lk(state_mtx_);
+        if (lifecycle_ != QueueLifecycle::operational) {
+            queue_lease_fail_fast();
+        }
+    }
+    CallGuard guard(*this);
+    QueueItemLease out;
+    WaitNode node;
+    scheduler_.queue_pop_admit_until(*this, node, out, deadline);
+    if (out.control_ != nullptr) {
+        return QueueOpaquePopResult::item(std::move(out));
+    }
+    const bool expired = node.was_expired();
+    return expired ? QueueOpaquePopResult::expired()
+                   : QueueOpaquePopResult::closed();
 }
 
 // --- teardown (P7: structural skeleton; full drain wired in P7) -----------

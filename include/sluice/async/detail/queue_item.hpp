@@ -116,6 +116,8 @@ private:
     friend class QueueItemLease;
     friend class QueueTeardownSession;
     friend class QueueItemFactory;
+    friend class ::sluice::async::Scheduler;  // E12-E admit closures commit
+                                              // location_ under G+S+role
 };
 
 class QueueItemLease final {
@@ -166,6 +168,8 @@ private:
     friend class QueueOpaquePopResult;
     friend class QueueTeardownSession;
     friend class QueueItemFactory;
+    friend class ::sluice::async::Scheduler;  // E12-E admit closures read/
+                                              // mutate control_ custody
 };
 
 }  // namespace sluice::async::detail

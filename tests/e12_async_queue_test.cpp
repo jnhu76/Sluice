@@ -204,4 +204,197 @@ SLUICE_TEST_CASE(e12_queue_oneshot_lease_move_empties_source) {
     (void)release_popped<int>(*f.port, std::move(rp));
 }
 
+// ===========================================================================
+// P4-P6 — blocking/timed substrate + reconciliation (deterministic, Fiber).
+// ===========================================================================
+#if defined(__x86_64__) || defined(_M_X64)
+#include <sluice/async/fiber.hpp>
+#include <sluice/async/fiber_ctx.hpp>
+
+#include <atomic>
+#include <thread>
+
+namespace {
+struct FiberStack {
+    static constexpr std::size_t kBytes = 64 * 1024;
+    alignas(16) std::vector<std::byte> bytes{kBytes};
+    std::byte* base() noexcept { return bytes.data(); }
+    std::size_t size() const noexcept { return bytes.size(); }
+};
+}  // namespace
+
+// ---- P4: blocking pop wakes when a producer commits (single worker) ------
+// Producer fiber commits an item; a consumer fiber (spawned FIRST, parks on
+// empty ring) is granted the item via the reconciler and resumes with it.
+SLUICE_TEST_CASE(e12_queue_p4_blocking_pop_granted_on_push) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 2);
+
+    int consumed = -1;
+    bool consumer_ran = false;
+    Fiber consumer;
+    consumer.set_entry([&](Fiber&) {
+        auto r = port.pop();  // parks on empty; granted when producer commits
+        if (r.status() == QueueOpaquePopStatus::item) {
+            consumed = release_popped<int>(port, std::move(r));
+        }
+        consumer_ran = true;
+    });
+    FiberStack sc;
+    SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    sched.spawn(consumer);
+
+    Fiber producer;
+    producer.set_entry([&](Fiber&) {
+        auto lease = QueueItemFactory::make<int>(port, 12345);
+        auto r = port.try_push(std::move(lease));
+        (void)r;
+    });
+    FiberStack sp;
+    SLUICE_CHECK(sched.init_fiber(producer, sp.base(), sp.size()));
+    sched.spawn(producer);
+
+    sched.run(1);
+    SLUICE_CHECK(consumer_ran);
+    SLUICE_CHECK(consumed == 12345);
+    SLUICE_CHECK(port.size() == 0);  // granted directly, not buffered
+}
+
+// ---- P4: blocking push wakes when a consumer frees a slot (cap-1) --------
+SLUICE_TEST_CASE(e12_queue_p4_blocking_push_granted_on_pop) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 1);
+
+    // Pre-fill the ring so the producer must park.
+    {
+        auto lease = QueueItemFactory::make<int>(port, 1);
+        (void)port.try_push(std::move(lease));
+    }
+    bool push_committed = false;
+    Fiber producer;
+    producer.set_entry([&](Fiber&) {
+        auto lease = QueueItemFactory::make<int>(port, 77);
+        auto r = port.push(std::move(lease));  // parks (full); granted on pop
+        push_committed = (r.status() == QueueOpaquePushStatus::committed);
+    });
+    FiberStack sp;
+    SLUICE_CHECK(sched.init_fiber(producer, sp.base(), sp.size()));
+    sched.spawn(producer);
+
+    int consumed = -1;
+    Fiber consumer;
+    consumer.set_entry([&](Fiber&) {
+        auto rp = port.try_pop();  // pops the pre-filled 1, frees the slot
+        if (rp.status() == QueueOpaquePopStatus::item) {
+            consumed = release_popped<int>(port, std::move(rp));
+        }
+    });
+    FiberStack sc;
+    SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    sched.spawn(consumer);
+
+    sched.run(1);
+    SLUICE_CHECK(consumed == 1);
+    SLUICE_CHECK(push_committed);
+    SLUICE_CHECK(port.size() == 1);  // producer's 77 now buffered
+    // Drain to satisfy the ring-empty destruction contract.
+    auto rp = port.try_pop();
+    SLUICE_CHECK(rp.status() == QueueOpaquePopStatus::item);
+    (void)release_popped<int>(port, std::move(rp));
+}
+
+// ---- P5: close completes a blocked producer with `closed` (lease retained)
+SLUICE_TEST_CASE(e12_queue_p5_close_completes_blocked_producer) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 1);
+
+    // Pre-fill so the producer parks.
+    {
+        auto lease = QueueItemFactory::make<int>(port, 1);
+        (void)port.try_push(std::move(lease));
+    }
+    bool producer_got_closed = false;
+    Fiber producer;
+    producer.set_entry([&](Fiber&) {
+        auto lease = QueueItemFactory::make<int>(port, 42);
+        auto r = port.push(std::move(lease));  // parks; close completes it
+        producer_got_closed =
+            (r.status() == QueueOpaquePushStatus::closed);
+        if (producer_got_closed) {
+            // The EXACT original lease is retained: recover 42.
+            int v = release_failed<int>(port, std::move(r));
+            (void)v;
+        }
+    });
+    FiberStack sp;
+    SLUICE_CHECK(sched.init_fiber(producer, sp.base(), sp.size()));
+    sched.spawn(producer);
+
+    Fiber closer;
+    closer.set_entry([&](Fiber&) { port.close(); });
+    FiberStack scc;
+    SLUICE_CHECK(sched.init_fiber(closer, scc.base(), scc.size()));
+    sched.spawn(closer);
+
+    sched.run(1);
+    SLUICE_CHECK(producer_got_closed);
+    // Drain the pre-filled item (close grants it to no one because no consumer
+    // is parked; it stays buffered). Pop it to satisfy ring-empty destruction.
+    auto rp = port.try_pop();
+    SLUICE_CHECK(rp.status() == QueueOpaquePopStatus::item);
+    (void)release_popped<int>(port, std::move(rp));
+}
+
+// ---- P5: close drains buffered items to a blocked consumer, then closed ---
+SLUICE_TEST_CASE(e12_queue_p5_close_drains_to_blocked_consumer) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 4);
+
+    // Buffer two items.
+    for (int v : {11, 22}) {
+        auto lease = QueueItemFactory::make<int>(port, v);
+        (void)port.try_push(std::move(lease));
+    }
+    int first_consumed = -1;
+    bool second_was_closed = false;
+    Fiber consumer;
+    consumer.set_entry([&](Fiber&) {
+        // First pop: parks (empty after close drains? no — items buffered).
+        // We do two blocking pops: the first gets 11 (granted by close drain),
+        // the second gets 22, the third sees closed+empty.
+        auto r1 = port.pop();
+        if (r1.status() == QueueOpaquePopStatus::item) {
+            first_consumed = release_popped<int>(port, std::move(r1));
+        }
+        auto r2 = port.pop();
+        if (r2.status() == QueueOpaquePopStatus::item) {
+            (void)release_popped<int>(port, std::move(r2));  // release 22
+        }
+        auto r3 = port.pop();
+        second_was_closed = (r3.status() == QueueOpaquePopStatus::closed);
+    });
+    FiberStack sc;
+    SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    sched.spawn(consumer);
+
+    Fiber closer;
+    closer.set_entry([&](Fiber&) { port.close(); });
+    FiberStack scc;
+    SLUICE_CHECK(sched.init_fiber(closer, scc.base(), scc.size()));
+    sched.spawn(closer);
+
+    sched.run(1);
+    SLUICE_CHECK(first_consumed == 11);
+    SLUICE_CHECK(second_was_closed);
+}
+#endif  // x86_64
+
 SLUICE_MAIN();

@@ -29,6 +29,8 @@
 #include <sluice/async/detail/queue_item.hpp>
 #include <sluice/async/mutex.hpp>            // sluice::async::Mutex (state_mtx_)
 #include <sluice/async/timer_registration.hpp>  // deadline_tick_t
+#include <sluice/async/wait_node.hpp>        // WaitNode (admission node)
+#include <sluice/async/wait_queue.hpp>       // WaitQueue (role waiter FIFOs)
 
 #include <cstddef>
 #include <cstdint>
@@ -47,6 +49,16 @@ namespace sluice::async::detail {
 // (== deadline_tick_t). The Scheduler forward-declaration is sufficient for
 // the QueuePort declarations; the .cpp includes the full scheduler.hpp.
 using queue_deadline_t = ::sluice::async::deadline_tick_t;
+
+// Waiter role: which of the two role FIFOs a Queue wait epoch belongs to.
+// Producer waiters park on push/push_until when the ring is full / closed-
+// race-blocked; consumer waiters park on pop/pop_until when the ring is empty.
+// The two role mutexes are NEVER held together (lock order G -> S -> exactly
+// one role).
+enum class QueueRole : std::uint8_t {
+    producer = 0,
+    consumer = 1,
+};
 
 // ---------------------------------------------------------------------------
 // Opaque push result (non-template push seam output).
@@ -399,6 +411,14 @@ private:
     QueueLifecycle lifecycle_{QueueLifecycle::operational};
     bool closed_{false};
 
+    // Two role waiter FIFOs. Producer waiters park on push/push_until when
+    // the ring is full or the close race blocks them; consumer waiters park
+    // on pop/pop_until when the ring is empty. The two role mutexes are
+    // NEVER held together. The Scheduler resolves the FIFO head of a role
+    // under G + role.mtx() (the canonical seam). No public wait_queue()
+    // accessor (sealed authority — mirrors Semaphore/AsyncMutex).
+    WaitQueue waiters_[2];  // [producer, consumer]
+
     // Counter ledger (§7). active_port_calls_ counts ordinary QueuePort
     // call intervals ONLY (not typed conversion / arbitrary callers).
     std::size_t active_port_calls_{0};
@@ -406,12 +426,13 @@ private:
     std::size_t active_queue_timers_{0};
     std::size_t granted_not_resumed_{0};
 
-    // --- internal helpers (P2: ring + lifecycle primitives) ---
+    // --- internal helpers (ring + lifecycle primitives) ---
     bool ring_empty_locked() const noexcept { return ring_count_ == 0; }
     bool ring_full_locked() const noexcept { return ring_count_ == capacity_; }
     std::size_t ring_slot(std::size_t logical_index) const noexcept {
         return (ring_head_ + logical_index) % capacity_;
     }
+    WaitQueue& role_queue(QueueRole r) noexcept { return waiters_[static_cast<std::size_t>(r)]; }
 
     // CallGuard: ordinary QueuePort entry/return bracket. The guard enters
     // after the lifecycle check and decrements on every return path.
@@ -422,7 +443,7 @@ private:
     friend class QueueItemControl;
     friend class QueueItemLease;
     friend class QueueTeardownSession;
-    friend class Scheduler;
+    friend class ::sluice::async::Scheduler;
 };
 
 }  // namespace sluice::async::detail
