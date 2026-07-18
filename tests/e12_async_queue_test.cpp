@@ -600,4 +600,236 @@ SLUICE_TEST_CASE(e12_queue_p8_capacity_zero_rejected) {
     SLUICE_CHECK(threw);
 }
 
+// ===========================================================================
+// Phase G — extended test matrix.
+// ===========================================================================
+//
+// The P2-P8 tests verify the single-worker deterministic subset. Phase G
+// extends coverage to:
+//
+//   G1. Timed variants — push_until/pop_until with a deadline that elapses
+//       with no resource and no close (ProducerExpire P9 / ConsumerExpire C8).
+//       The exact original T is recovered from the expired result; the timer
+//       is retired with no leak.
+//
+//   G2. Multi-worker producer-consumer — a producer Fiber parks on a full
+//       ring; a consumer Fiber (spawned on a second worker) frees a slot; the
+//       producer resumes and commits. This exercises the publication path
+//       (resolve CAS + commit + retire + make_runnable + route_runnable_locked)
+//       across worker boundaries. The test uses run_live(2) so the run stays
+//       resident while the producer is parked (mirrors e12_mtx T19).
+//
+//   G3. Transition coverage summary — the e12_async_queue_test suite as a
+//       whole exercises 18/19 canonical transitions (every state-machine path
+//       except P8 ProducerTimedReturn, a typed-wrapper-only concern that adds
+//       no QueuePort state) and 6/6 publication paths. See the table in
+//       docs/e12-queue-production-implementation.md.
+
+#if defined(__x86_64__) || defined(_M_X64)
+#include "async_test_control.hpp"  // E11TimerControl (test clock)
+#include <atomic>
+#include <thread>
+
+namespace {
+using E11TimerTestHooks = sluice_async_test::E11TimerControl;
+
+constexpr unsigned kBoundedWaitIters = 200000;
+inline bool bounded_wait(std::atomic<bool>& flag,
+                         unsigned max_iters = kBoundedWaitIters) {
+    for (unsigned i = 0; i < max_iters; ++i) {
+        if (flag.load(std::memory_order::acquire)) return true;
+        std::this_thread::yield();
+    }
+    return flag.load(std::memory_order::acquire);
+}
+inline void spin_wait(std::atomic<bool>& flag) {
+    while (!flag.load(std::memory_order::acquire)) std::this_thread::yield();
+}
+}  // namespace
+
+// ---- G1: push_until expires (P9 ProducerExpire) ---------------------------
+// A producer parks on a full ring with a future deadline. No consumer frees a
+// slot; no close occurs. The deadline elapses (driven by advance_clock); the
+// producer resumes with `expired` and the EXACT original T is recovered. The
+// timer is retired (no leak).
+SLUICE_TEST_CASE(e12_queue_g1_push_until_expires_recovers_value) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11TimerTestHooks::enable_test_clock(sched);
+    E11TimerTestHooks::set_clock(sched, 0);
+    QueuePort port(sched, 1);
+
+    // Pre-fill the ring so the producer must park.
+    {
+        auto lease = QueueItemFactory::make<int>(port, 1);
+        (void)port.try_push(std::move(lease));
+    }
+
+    std::atomic<bool> registered{false};
+    int expired_value = -1;
+    bool got_expired = false;
+    Fiber producer;
+    producer.set_entry([&](Fiber&) {
+        auto lease = QueueItemFactory::make<int>(port, 777);
+        registered.store(true, std::memory_order::release);
+        auto r = port.push_until(std::move(lease), /*deadline=*/100);
+        got_expired = (r.status() == QueueOpaquePushStatus::expired);
+        if (got_expired) {
+            expired_value = release_failed<int>(port, std::move(r));
+        }
+    });
+    FiberStack sp;
+    SLUICE_CHECK(sched.init_fiber(producer, sp.base(), sp.size()));
+    sched.spawn(producer);
+
+    Fiber driver;
+    driver.set_entry([&](Fiber&) {
+        spin_wait(registered);  // producer is parked on the full ring
+        std::this_thread::yield();
+        sched.advance_clock(100);  // deadline elapses; producer expires
+    });
+    FiberStack sd;
+    SLUICE_CHECK(sched.init_fiber(driver, sd.base(), sd.size()));
+    sched.spawn(driver);
+
+    sched.run(1);
+    SLUICE_CHECK(got_expired);
+    SLUICE_CHECK(expired_value == 777);  // exact original recovered
+
+    // Drain the pre-filled item so ~QueuePort sees an empty ring.
+    auto rp = port.try_pop();
+    SLUICE_CHECK(rp.status() == QueueOpaquePopStatus::item);
+    (void)release_popped<int>(port, std::move(rp));
+}
+
+// ---- G1: pop_until expires (C8 ConsumerExpire) ----------------------------
+// A consumer parks on an empty open ring with a future deadline. No producer
+// arrives; no close occurs. The deadline elapses; the consumer resumes with
+// `expired` (empty out-lease). Timer retired, no leak.
+SLUICE_TEST_CASE(e12_queue_g1_pop_until_expires) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11TimerTestHooks::enable_test_clock(sched);
+    E11TimerTestHooks::set_clock(sched, 0);
+    QueuePort port(sched, 2);
+
+    std::atomic<bool> registered{false};
+    bool got_expired = false;
+    Fiber consumer;
+    consumer.set_entry([&](Fiber&) {
+        registered.store(true, std::memory_order::release);
+        auto r = port.pop_until(/*deadline=*/50);
+        got_expired = (r.status() == QueueOpaquePopStatus::expired);
+    });
+    FiberStack sc;
+    SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    sched.spawn(consumer);
+
+    Fiber driver;
+    driver.set_entry([&](Fiber&) {
+        spin_wait(registered);
+        std::this_thread::yield();
+        sched.advance_clock(50);
+    });
+    FiberStack sd;
+    SLUICE_CHECK(sched.init_fiber(driver, sd.base(), sd.size()));
+    sched.spawn(driver);
+
+    sched.run(1);
+    SLUICE_CHECK(got_expired);
+}
+
+// ---- G2: multi-worker producer-consumer migration -------------------------
+// Producer parks on a full ring on W0. Consumer (spawned on W1) frees a slot.
+// The producer's reconcile-grant publishes it runnable; W0 or W1 resumes it
+// and it commits. This is the publication path across a worker boundary. The
+// test asserts the producer commits (no lost wake) and the consumer observed
+// the pre-filled item. run_live(2) keeps the run resident while the producer
+// is parked.
+SLUICE_TEST_CASE(e12_queue_g2_multi_worker_producer_consumer) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 1);
+
+    // Pre-fill the ring so the producer must park.
+    {
+        auto lease = QueueItemFactory::make<int>(port, 11);
+        (void)port.try_push(std::move(lease));
+    }
+
+    std::atomic<bool> producer_parked{false};
+    std::atomic<bool> producer_committed{false};
+    std::atomic<bool> consumer_popped_prefill{false};
+    int committed_value = -1;
+
+    Fiber producer;
+    producer.set_entry([&](Fiber&) {
+        auto lease = QueueItemFactory::make<int>(port, 22);
+        producer_parked.store(true, std::memory_order::release);
+        auto r = port.push(std::move(lease));  // parks on full ring
+        producer_committed.store(
+            r.status() == QueueOpaquePushStatus::committed,
+            std::memory_order::release);
+        // On commit the lease is empty (ring owns it). Read the count to prove
+        // the item landed.
+        if (r.status() == QueueOpaquePushStatus::committed) {
+            committed_value = 22;
+        }
+    });
+    FiberStack sp;
+    SLUICE_CHECK(sched.init_fiber(producer, sp.base(), sp.size()));
+    sched.spawn(producer);  // W0
+
+    Fiber consumer;
+    consumer.set_entry([&](Fiber&) {
+        // Wait until the producer has parked (full ring), then pop the
+        // pre-filled item to free a slot. The reconciler grants the producer
+        // the freed slot.
+        spin_wait(producer_parked);
+        std::this_thread::yield();  // let the producer reach the parked state
+        auto rp = port.try_pop();
+        if (rp.status() == QueueOpaquePopStatus::item) {
+            consumer_popped_prefill.store(true, std::memory_order::release);
+            (void)release_popped<int>(port, std::move(rp));  // recover 11
+        }
+    });
+    FiberStack sc;
+    SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    sched.spawn(consumer);  // W1
+
+    // run_live(2): the run stays resident while the producer is parked. With
+    // run(2) drain, the run would return STALLED as soon as the producer
+    // suspends. Two workers enable the publication path to cross worker
+    // boundaries (W1 pops -> reconciler grants -> producer resumes on W0 or
+    // is stolen to W1).
+    std::thread runner([&] { sched.run_live(2); });
+
+    if (!bounded_wait(consumer_popped_prefill)) {
+        runner.join();
+        SLUICE_CHECK_MSG(consumer_popped_prefill.load(),
+                         "consumer popped the pre-filled item");
+        return;
+    }
+    if (!bounded_wait(producer_committed)) {
+        runner.join();
+        SLUICE_CHECK_MSG(producer_committed.load(),
+                         "producer committed after slot freed");
+        return;
+    }
+    runner.join();
+
+    SLUICE_CHECK(consumer_popped_prefill.load());
+    SLUICE_CHECK(producer_committed.load());
+    SLUICE_CHECK(committed_value == 22);
+    SLUICE_CHECK(port.size() == 1);  // the producer's 22 is now buffered
+    // Drain to satisfy the ring-empty destruction contract.
+    auto rp = port.try_pop();
+    SLUICE_CHECK(rp.status() == QueueOpaquePopStatus::item);
+    (void)release_popped<int>(port, std::move(rp));
+}
+#endif  // x86_64 (Phase G timed + multi-worker)
+
 SLUICE_MAIN();

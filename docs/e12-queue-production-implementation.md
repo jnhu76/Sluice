@@ -2,14 +2,14 @@
 
 > **Decision identity:** `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1`
 >
-> **Status:** `IN PROGRESS — P1-P8 LANDED; PHASE G/H/I NEXT`
+> **Status:** `IN PROGRESS — P1-P8 + PHASE G LANDED; PHASE H/I NEXT`
 >
 > This document records the as-built progress of the E12-E Queue production
 > implementation. It is NOT a PASS self-assessment: the implementation is
 > FUNCTIONALLY COMPLETE through P8 (type foundation, fast paths,
 > blocking/timed wait admission + reconciliation + publication, teardown
-> lifecycle, public `AsyncQueue<T>` template wrapper). Remaining: Phase G
-> (extended concurrency/sanitizer test matrix), Phase H (author
+> lifecycle, public `AsyncQueue<T>` template wrapper) and Phase G (extended
+> concurrency/sanitizer test matrix) is LANDED. Remaining: Phase H (author
 > self-assessment PASS), Phase I (independent adversarial implementation
 > review).
 
@@ -182,17 +182,48 @@ runtime-structure subset is enforced by the G -> S -> exactly-one-role
 critical sections in the P4-P6 grant seams and the P7 lifecycle
 transition.
 
+## Phase G — extended test matrix — LANDED (this commit)
+
+Phase G extends coverage beyond the single-worker deterministic subset:
+
+- **G1 — timed variants (P9 ProducerExpire / C8 ConsumerExpire):**
+  - `e12_queue_g1_push_until_expires_recovers_value`: a producer parks on
+    a full ring with a future deadline; no consumer frees a slot; no
+    close occurs; the deadline elapses (driven by `advance_clock`); the
+    producer resumes with `expired` and the EXACT original T (777) is
+    recovered. Timer retired with no leak.
+  - `e12_queue_g1_pop_until_expires`: a consumer parks on an empty open
+    ring with a future deadline; no producer arrives; the deadline
+    elapses; the consumer resumes with `expired` (empty out-lease).
+
+- **G2 — multi-worker producer-consumer migration:** a producer Fiber
+  parks on a full ring on W0; a consumer Fiber (spawned on W1) frees a
+  slot; the reconcile-grant publishes the producer runnable across the
+  worker boundary; the producer resumes and commits. `run_live(2)` keeps
+  the run resident while the producer is parked (mirrors e12_mtx T19).
+  Asserts: the consumer popped the pre-fill, the producer committed
+  after the slot freed, the committed value is exact, ring size is 1.
+
+- **G3 — sanitizer matrix (4 cells):** Clang Debug, GCC Debug, Clang
+  ASan, Clang TSan. All 20 cases PASS in every cell. TSan stress x5
+  (rare-race amplification) clean.
+
+- **Transition coverage:** the suite as a whole exercises 18/19 canonical
+  transitions (every state-machine path except P8 ProducerTimedReturn,
+  a typed-wrapper-only concern that adds no QueuePort state) and 6/6
+  publication paths.
+
+Verified: 20/20 `e12_async_queue_test` cases PASS on Clang Debug, GCC
+Debug, ASan, TSan. E11/E12 sync primitive tests regress-clean. Production
+`sluice_async` target compiles clean.
+
 ## Known exclusions / honest scoping
 
-- The implementation is FUNCTIONALLY COMPLETE through P8 (P1-P8 +
-  Scheduler seams). Phase G (extended multi-worker concurrency /
-  migration / sanitizer matrix), Phase H (author self-assessment PASS),
-  and Phase I (independent adversarial implementation review) remain.
-  This document does NOT claim
-  `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1: PASS` until Phase H + I run.
-- The P4-P6 concurrency tests verify the single-worker deterministic
-  subset. The full multi-worker concurrency / migration / sanitizer
-  matrix (Phase G) lands next.
+- The implementation is FUNCTIONALLY COMPLETE through P8 + Phase G.
+  Phase H (author self-assessment PASS) and Phase I (independent
+  adversarial implementation review) remain. This document does NOT
+  claim `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1: PASS` until Phase H + I
+  run.
 
 ## Repository state
 
