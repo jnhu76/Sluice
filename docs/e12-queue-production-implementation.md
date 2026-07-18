@@ -2,39 +2,23 @@
 
 > **Decision identity:** `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1`
 >
-> **Status:** `CORRECTIVE LOOP APPLIED — AWAITING PHASE I RE-REVIEW`
+> **Status:** `PASS — PHASE I INDEPENDENT ADVERSARIAL REVIEW PASS (WITH OBSERVATIONS)`
 >
 > This document records the as-built state of the E12-E Queue production
-> implementation. Phase I independent adversarial review (the first pass)
-> returned **BLOCKED** with 4 MAJOR/BLOCKING findings (F.1 timer-counter
-> leak, F.2 dead counters, F.3 §8 substrate absent, F.4 lifecycle TOCTOU)
-> plus 2 MINOR (F.5 is_closed data race, F.6 grant commit/retire order)
-> and 2 OBSERVATIONS (F.7 test gap, F.8 dead-but-correct queue_cancel).
+> implementation. The implementation is FUNCTIONALLY COMPLETE through P8 +
+> Phase G, and the Phase I independent adversarial review (initial pass
+> returned BLOCKED with 8 findings; corrective loop applied; re-review
+> returned PASS WITH OBSERVATIONS) confirms there is no exploitable defect
+> against the Corrective-2 authority (as superseded by Corrective-3 for
+> the timer substrate), the formal model, and the documented lock order.
 >
-> All BLOCKING + MAJOR + MINOR findings have been corrected:
->   - F.1 (BLOCKING): the pump-driven timer-expiry path now decrements
->     `active_wait_associations_` and `active_queue_timers_` via a type-
->     erased on-resolve hook on TimerRegistration (Corrective-3 supersedes
->     §8's prepared-timer substrate).
->   - F.2 (MAJOR): both `active_queue_timers_` and `granted_not_resumed_`
->     are now wired (incremented/decremented at their authority sites).
->   - F.3 (MAJOR): documented as Corrective-3 supersession
->     (`docs/e12-queue-corrective-3.md`); the §8 PreparedQueueTimer
->     substrate is NON-BINDING historical.
->   - F.4 (MAJOR): the lifecycle gate + `active_port_calls_` increment are
->     now atomic w.r.t. `begin_teardown` (held under G+S through the
->     increment; CallGuard adopts the already-incremented counter).
->   - F.5 (MINOR): `closed_` is now `std::atomic<bool>` (release in close,
->     acquire in is_closed).
->   - F.6 (MINOR): grant seams now retire BEFORE commit (§12 verbatim
->     order).
->   - F.7 (OBSERVATION): the G1 timed tests now call `begin_teardown`
->     after the expiry — they fail-fasted 5/5 pre-fix and PASS post-fix.
->
-> The corrective loop is verified by re-running the test matrix: all 20
-> cases PASS on Clang Debug, GCC Debug, ASan, TSan; E11/E12 sync primitive
-> regressions clean. The claim is NOT final: an independent Phase I
-> re-review must confirm the corrective loop closes every finding.
+> The 4 non-blocking OBSERVATIONS from the re-review (O-1 inline-path
+> CAS/hook ordering not structurally enforced; O-2 pump-publication
+> counter asymmetry; O-3 queue_cancel counter asymmetry; O-4 timer-pool
+> allocation-failure leak) are documented in the review and are either
+> pre-existing or harmless under the current invariants. They are tracked
+> for a future hardening pass, not blockers for the production
+> implementation PASS.
 
 ## Authorization baseline
 
@@ -356,7 +340,7 @@ no QueuePort state).
 
 ```text
 branch:           e12-e-queue-production-impl
-HEAD:             2b22793 (Phase G extended test matrix)
+HEAD:             18db6ee (Phase I re-review PASS WITH OBSERVATIONS)
 working tree:     clean between commits
 untracked files:  tests/test_t3_simple.cpp  (pre-existing, unrelated; untouched)
                   tla2tools.jar             (pre-existing, unrelated; untouched)
