@@ -738,6 +738,17 @@ public:
     // the winner Woken with the lease RETAINED (the producer returns closed).
     WaitNode* queue_grant_producer_locked(detail::QueuePort& port);
 
+    // E12-E P7 teardown precondition helper. Reports whether BOTH role FIFOs
+    // of `port` are empty (no producer parked, no consumer parked). Called by
+    // QueuePort::begin_teardown under global_mtx_; the QueuePort itself is not
+    // a friend of WaitQueue (only the Scheduler is), so the emptiness query is
+    // the Scheduler's authority. Each role.mtx() is taken sequentially under
+    // global_mtx_ (the canonical lock order G -> exactly one role); the two
+    // role mutexes are NEVER held together. Returns true iff both FIFOs have
+    // no linked WaitNode at the instant of observation.
+    bool queue_role_waiters_empty_locked(detail::QueuePort& port)
+        SLUICE_REQUIRES(global_mtx_);
+
 
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()

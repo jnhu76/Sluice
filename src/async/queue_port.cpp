@@ -404,15 +404,41 @@ QueueOpaquePopResult QueuePort::pop_until(queue_deadline_t deadline) {
                    : QueueOpaquePopResult::closed();
 }
 
-// --- teardown (P7: structural skeleton; full drain wired in P7) -----------
+// --- teardown (P7) ---------------------------------------------------------
 //
-// P7 implements the irreversible operational -> tearing_down transition under
-// G+S with the full precondition check (active_port_calls_==0, etc.). P2
-// stubs begin_teardown so the type graph is complete; P7 replaces the body.
+// begin_teardown performs the irreversible operational -> tearing_down
+// transition. It does NOT enter the ordinary CallGuard (§7) — teardown is the
+// exclusive authority and the four counters below replace the CallGuard's
+// "no ordinary op in flight" guarantee. Under G + S it requires ALL of:
+//
+//   lifecycle_         == operational       (no earlier teardown)
+//   active_port_calls_ == 0                 (no ordinary op inside QueuePort)
+//   active_wait_associations_ == 0          (no linked Queue wait epoch)
+//   active_queue_timers_ == 0               (no ACTIVE Queue timer)
+//   granted_not_resumed_ == 0               (no published suspended winner)
+//   producer WaitQueue empty                (no parked producer)
+//   consumer WaitQueue empty                (no parked consumer)
+//
+// The lifecycle transition serializes against ordinary call entry: an earlier
+// ordinary call makes active_port_calls_ != 0; an earlier teardown makes
+// every later ordinary entry fail-fast before CallGuard construction. Once
+// tearing_down, the port admits no push/pop/try/timed/close/snapshot/second
+// teardown/waiter/timer/ticket.
 QueueTeardownSession QueuePort::begin_teardown() noexcept {
-    // P7 will perform the precondition check + lifecycle transition under
-    // G+S. For P2, return a session bound to this port (the session's
-    // take_next / empty / dtor are wired in P7).
+    LockGuard glk(scheduler_.global_mtx_);  // G
+    LockGuard lk(state_mtx_);               // S (under G)
+
+    if (lifecycle_ != QueueLifecycle::operational ||
+        active_port_calls_ != 0 || active_wait_associations_ != 0 ||
+        active_queue_timers_ != 0 || granted_not_resumed_ != 0 ||
+        !scheduler_.queue_role_waiters_empty_locked(*this)) {
+        queue_lease_fail_fast();
+    }
+
+    // Irreversible operational -> tearing_down. After this point every ordinary
+    // entry fails-fast on the lifecycle check before constructing a CallGuard,
+    // and a second begin_teardown fails-fast here (lifecycle_ != operational).
+    lifecycle_ = QueueLifecycle::tearing_down;
     return QueueTeardownSession{*this};
 }
 
@@ -426,10 +452,11 @@ QueueItemLease QueueTeardownSession::take_next() noexcept {
     if (port_->lifecycle_ != QueueLifecycle::tearing_down) {
         queue_lease_fail_fast();
     }
-    // P7: drain ring slots one-by-one (ring -> teardown). P2 skeleton: once
-    // tearing_down is set (P7), move the head slot out. Until P7 wires the
-    // lifecycle transition, the ring is empty at teardown (no producer path),
-    // so take_next returns an empty lease here.
+    // Drain ring slots one-by-one (ring -> teardown). The session was minted
+    // by begin_teardown under G+S with all four counters zero and both role
+    // FIFOs empty, so no concurrent producer/consumer can refill the ring
+    // (ordinary entry rejects tearing_down before CallGuard). Move the head
+    // slot's lease whole into the result; the source slot becomes empty.
     if (port_->ring_empty_locked()) {
         return QueueItemLease{};
     }

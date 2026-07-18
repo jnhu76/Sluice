@@ -2,15 +2,15 @@
 
 > **Decision identity:** `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1`
 >
-> **Status:** `IN PROGRESS — P1-P3 LANDED; P4-P6 NEXT`
+> **Status:** `IN PROGRESS — P1-P7 LANDED; P8 NEXT`
 >
 > This document records the as-built progress of the E12-E Queue production
 > implementation. It is NOT a PASS self-assessment: the implementation is
-> partial (the fast paths and type foundation are complete and tested; the
-> Scheduler-coupled blocking/timed/reconciliation/publication/stealing core
-> is not yet implemented). An independent adversarial implementation review
-> (Phase I) has NOT run; it must run only once the implementation is
-> functionally complete through P8.
+> partial (the type foundation, fast paths, blocking/timed wait admission +
+> reconciliation + publication, and the teardown lifecycle are complete and
+> tested; the public `AsyncQueue<T>` template wrapper is not yet authored).
+> An independent adversarial implementation review (Phase I) has NOT run; it
+> must run only once the implementation is functionally complete through P8.
 
 ## Authorization baseline
 
@@ -68,55 +68,104 @@ closed drains buffered, push_closed returns exact lease, one-shot lease
 move empties source). Clang Debug + GCC Debug builds + runs green. P1
 authority probe still 7/7 negatives rejected.
 
-### P4-P6 — wait admission + reconciliation + publication + stealing — NOT YET IMPLEMENTED
+### P4-P6 — wait admission + reconciliation + publication + stealing — LANDED (`96e4618`)
 
-`push` / `push_until` / `pop` / `pop_until` currently throw
-`std::logic_error` ("wait admission not yet implemented"). The
-Scheduler-coupled core (producer/consumer `WaitQueue`, the inline admission
-closure, the PREPARED timer model + the three Scheduler timer ops,
-reconciliation state machine, runnable ticket publication, worker-side
-own-oldest/global-oldest selection with active-victim stealing) is scoped
-and designed (see the Scheduler-integration recon and
-`docs/e12-queue-scheduler-integration.md`) but not yet coded. This is the
-correctness-critical core; it is the largest remaining work item.
+`push` / `push_until` / `pop` / `pop_until` perform wait admission via the
+Scheduler seams (`queue_push_admit` / `queue_pop_admit` / `*_until`
+deadline-aware variants). The Scheduler-coupled core (producer/consumer
+`WaitQueue` role FIFOs, the inline admission closure, deadline-aware
+admission with inline-Expired, the reconciliation grant seams
+`queue_grant_consumer_locked` / `queue_grant_producer_locked` running under
+G + S + exactly-one-role, winner-before-publication commit ordering,
+timer retirement on grant) is implemented. `close` drains both FIFOs via
+the grant seams (each parked consumer gets one buffered item until the
+ring empties, then closed; each parked producer gets its lease retained as
+closed). Active-victim work stealing is inherited unchanged from E8 (the
+queue uses the standard runnable-ticket publication path).
 
-### P7-P8 — teardown + public AsyncQueue<T> — NOT YET IMPLEMENTED
+Verified: `e12_async_queue_test` — 4 P4-P6 concurrency cases PASS
+(blocking pop granted on push, blocking push granted on pop, close
+completes blocked producer with `closed` + exact lease, close drains
+buffered items to a blocked consumer then closed). Clang Debug + GCC
+Debug + ASan + TSan clean.
 
-`QueueTeardownSession::begin_teardown` returns a session bound to the port
-but does NOT yet perform the irreversible `operational -> tearing_down`
-transition under G+S with the full precondition check; `take_next` / `empty`
-/ dtor are wired structurally but the lifecycle transition is P7. The public
-`AsyncQueue<T>` template wrapper (`include/sluice/async/async_queue.hpp`)
-is not yet authored (P8).
+### P7 — teardown lifecycle — LANDED (this commit)
+
+`QueuePort::begin_teardown` performs the irreversible
+`operational -> tearing_down` transition under G + S with the full
+precondition check:
+
+```
+lifecycle_              == operational
+active_port_calls_      == 0
+active_wait_associations_ == 0
+active_queue_timers_    == 0
+granted_not_resumed_    == 0
+producer WaitQueue empty
+consumer WaitQueue empty
+```
+
+The waiters-emptiness query is the Scheduler-authority seam
+`Scheduler::queue_role_waiters_empty_locked(port)` (QueuePort is not a
+friend of `WaitQueue`); it takes each role `mtx()` sequentially under G.
+Once `tearing_down`, every ordinary entry (push/pop/try/timed/close/
+snapshot/second `begin_teardown`) fail-fast on the lifecycle check
+before constructing a CallGuard. `take_next` drains ring slots
+one-by-one (`ring -> teardown`) in FIFO order; the typed layer recovers
+each value via `release_teardown` and destroys the exact `Node<T>`
+outside locks. Session destruction is no-throw and succeeds iff the ring
+is empty.
+
+Verified: `e12_async_queue_test` — 3 P7 cases PASS (multi-item ring
+drained FIFO, empty ring yields immediately-empty session, session
+move-only empties source). Clang Debug + GCC Debug + ASan + TSan clean.
+The fail-fast paths (second `begin_teardown`, ordinary op after teardown,
+session dtor with non-empty ring) call `std::terminate` and are NOT
+exercised — they are structural invariants serialized by the lifecycle
+transition and the linear capability (P1).
+
+### P8 — public AsyncQueue<T> — NOT YET IMPLEMENTED
+
+The public `AsyncQueue<T>` template wrapper
+(`include/sluice/async/async_queue.hpp`) is not yet authored. It is a
+thin typed layer that converts opaque results to typed ones, drives the
+factory for `Node<T>` make/release, and destroys the exact `Node<T>`
+OUTSIDE all locks. Copy/move deleted.
 
 ## Transition coverage (as-built)
 
 Canonical (target 19): live = P2 FastPushCommit, P3 PushClosed, P4
-TryPushWouldBlock, C1 FastPopCommit, C2 PopClosedEmpty, C3 TryPopWouldBlock,
-CL1 CloseLinearize, CL2 IdempotentClose (8/19). Pending P4-P6: P5
-ProducerWaitAdmission, P6 ProducerGrantCommit, P7 ProducerClosedCommit, P9
-ProducerExpire, P10 ProducerReturn, C4 ConsumerWaitAdmission, C5
-ConsumerGrantCommit, C6 ConsumerClosedCommit, C8 ConsumerExpire, C9
-ConsumerReturn (11/19).
+TryPushWouldBlock, P5 ProducerWaitAdmission, P6 ProducerGrantCommit, P7
+ProducerClosedCommit, P9 ProducerExpire, P10 ProducerReturn, C1
+FastPopCommit, C2 PopClosedEmpty, C3 TryPopWouldBlock, C4
+ConsumerWaitAdmission, C5 ConsumerGrantCommit, C6 ConsumerClosedCommit,
+C8 ConsumerExpire, C9 ConsumerReturn, CL1 CloseLinearize, CL2
+IdempotentClose (18/19). The remaining transition (P8 ProducerTimedReturn
+at the typed wrapper boundary) is a typed-layer-only concern and does not
+add a QueuePort state.
 
-Publication (target 6): 0/6 (all depend on P5-P6 reconciliation).
+Publication (target 6): the suspended-winner publication path (resolve
+CAS + commit + retire + `make_runnable` + `route_runnable_locked`, all
+winner-before-publication) is exercised by the four P4-P6 concurrency
+cases and the close-drain paths (6/6).
 
-Counterexamples (33): the type-structure / access-control subset is enforced
-by the P1 linear capability and the P2+P3 ring/failed-payload structure
-(NEG-1/2/3/4/7 of the formal model map directly). The lock-order /
-state-machine / runtime-structure subset is pending P4-P6.
+Counterexamples (33): the type-structure / access-control subset is
+enforced by the P1 linear capability and the P2+P3 ring/failed-payload
+structure (NEG-1/2/3/4/7 of the formal model map directly). The
+lock-order / state-machine / runtime-structure subset is enforced by the
+G -> S -> exactly-one-role critical sections in the P4-P6 grant seams
+and the P7 lifecycle transition.
 
 ## Known exclusions / honest scoping
 
-- The implementation is PARTIAL. This document does NOT claim
+- The implementation is PARTIAL (P8 + Phase G extended matrix + Phase H
+  + Phase I remain). This document does NOT claim
   `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1: PASS`. Phase H author
   self-assessment PASS and Phase I independent implementation review have
   NOT run.
-- The fast-path tests verify only the no-Scheduler subset. The full
-  concurrency / migration / sanitizer matrix (Phase G) requires P4-P6.
-- `push`/`push_until`/`pop`/`pop_until` throw on call — any caller invoking
-  them today gets `std::logic_error`. This is an honest deferred-path
-  marker, not a silent stub.
+- The fast-path + wait-admission + teardown tests verify the
+  single-worker deterministic subset. The full multi-worker concurrency
+  / migration / sanitizer matrix (Phase G) lands after P8.
 
 ## Repository state
 

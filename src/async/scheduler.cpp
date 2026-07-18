@@ -2486,6 +2486,26 @@ WaitNode* Scheduler::queue_grant_producer_locked(detail::QueuePort& port)
     return won;
 }
 
+bool Scheduler::queue_role_waiters_empty_locked(detail::QueuePort& port)
+    SLUICE_REQUIRES(global_mtx_) {
+    // P7 teardown precondition query. Caller holds global_mtx_; we take each
+    // role mtx() SEQUENTIALLY under G (the canonical G -> exactly-one-role
+    // lock order — the two role mutexes are NEVER held together). The
+    // QueuePort is not a friend of WaitQueue (only the Scheduler is), so this
+    // is the sole authority for "no Queue wait epoch is registered". Both
+    // FIFOs must be empty for begin_teardown to perform the irreversible
+    // operational -> tearing_down transition.
+    {
+        LockGuard qlk(port.waiters_[0].mtx());  // producer FIFO
+        if (!port.waiters_[0].empty_locked()) return false;
+    }
+    {
+        LockGuard qlk(port.waiters_[1].mtx());  // consumer FIFO
+        if (!port.waiters_[1].empty_locked()) return false;
+    }
+    return true;
+}
+
 // ===========================================================================
 //
 // CONDITION-WAIT-PREPARE combined step + Condition notify/cancel. Mirrors the

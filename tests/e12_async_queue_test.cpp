@@ -1,25 +1,32 @@
 // e12_async_queue_test — sluice::async::AsyncQueue (sluice-CORE-E12-E).
 //
-// P2+P3 scope: the Queue fast paths (try_push / try_pop / close / snapshot),
-// exercised through the non-template QueuePort authority + QueueItemFactory
-// (the public AsyncQueue<T> wrapper is P8; until then we drive the authority
-// directly). These tests verify:
+// Exercises the E12-E Queue through the non-template QueuePort authority +
+// QueueItemFactory (the public AsyncQueue<T> wrapper is P8; until then we
+// drive the authority directly). Coverage:
 //
-//   - capacity-1 and capacity-N fixed ring
-//   - FIFO buffer order (push a,b,c; pop a,b,c)
-//   - try_push committed / try_push would_block (full)
-//   - try_pop item / try_pop would_block (empty, open)
-//   - close is idempotent + monotone (CL1/CL2)
-//   - closed + empty => try_pop closed (C2)
-//   - closed rejects producer with the EXACT original lease (P3 PushClosed)
-//   - failed-payload identity: a closed/would_block result carries the
-//     original control, recovered as the exact typed T via the factory
-//     (no copy / alias / default / loss)
-//   - one-shot lease: moving the lease empties the source
+//   P2+P3 fast paths: try_push / try_pop / close / snapshot
+//     - capacity-1 and capacity-N fixed ring
+//     - FIFO buffer order (push a,b,c; pop a,b,c)
+//     - try_push committed / try_push would_block (full)
+//     - try_pop item / try_pop would_block (empty, open)
+//     - close is idempotent + monotone (CL1/CL2)
+//     - closed + empty => try_pop closed (C2)
+//     - closed rejects producer with the EXACT original lease (P3 PushClosed)
+//     - failed-payload identity: closed/would_block carries the original
+//       control, recovered as the exact typed T via the factory
+//       (no copy / alias / default / loss)
+//     - one-shot lease: moving the lease empties the source
 //
-// The blocking/timed wait-admission paths (push/pop/push_until/pop_until) and
-// Scheduler reconciliation / publication land in P4-P6; the cases here cover
-// only the no-Scheduler fast paths, which are independently testable.
+//   P4-P6 wait admission + reconciliation + close drain (single-worker Fiber):
+//     - blocking pop granted on push (reconciler commits ring -> winner)
+//     - blocking push granted on pop (reconciler commits winner -> freed slot)
+//     - close completes a blocked producer with `closed` + exact lease
+//     - close drains buffered items to a blocked consumer, then closed
+//
+//   P7 teardown lifecycle:
+//     - begin_teardown drains a multi-item ring in FIFO order via take_next
+//     - begin_teardown on an empty ring yields an immediately-empty session
+//     - session is move-only; move empties the source
 #include "harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>
@@ -396,5 +403,90 @@ SLUICE_TEST_CASE(e12_queue_p5_close_drains_to_blocked_consumer) {
     SLUICE_CHECK(second_was_closed);
 }
 #endif  // x86_64
+
+// ===========================================================================
+// P7 — teardown lifecycle.
+// ===========================================================================
+//
+// begin_teardown performs the irreversible operational -> tearing_down
+// transition under G+S with the full precondition check. take_next drains ring
+// slots one-by-one (ring -> teardown) in FIFO order; the typed layer recovers
+// each value via release_teardown and destroys the exact Node<T> outside
+// locks. Session destruction is no-throw and succeeds iff the ring is empty.
+//
+// The fail-fast paths (second begin_teardown, ordinary op after teardown,
+// session dtor with non-empty ring) call std::terminate and are NOT exercised
+// here — they are structural invariants serialized by the lifecycle transition
+// and the linear capability (P1). The positive paths below cover the contract
+// surface a well-formed caller observes.
+
+// ---- P7: begin_teardown drains a multi-item ring in FIFO order ------------
+SLUICE_TEST_CASE(e12_queue_p7_teardown_drains_ring_fifo) {
+    Fixture f{4};
+    // Buffer three items.
+    for (int v : {10, 20, 30}) {
+        auto lease = make_lease<int>(*f.port, v);
+        SLUICE_CHECK(
+            f.port->try_push(std::move(lease)).status() ==
+            QueueOpaquePushStatus::committed);
+    }
+    SLUICE_CHECK(f.port->size() == 3);
+
+    // begin_teardown: operational -> tearing_down. The four counters are zero
+    // (no ordinary op in flight, no parked waiter, no active timer, no
+    // published winner) and both role FIFOs are empty, so the transition is
+    // admitted.
+    QueueTeardownSession session = f.port->begin_teardown();
+    SLUICE_CHECK(!session.empty());  // ring still holds 3 items
+
+    // Drain in FIFO order: 10, 20, 30. Each take_next moves ring -> teardown.
+    int recovered[3] = {-1, -1, -1};
+    for (int i = 0; i < 3; ++i) {
+        QueueItemLease lease = session.take_next();
+        SLUICE_CHECK(static_cast<bool>(lease));
+        recovered[i] = QueueItemFactory::release_teardown<int>(*f.port,
+                                                               std::move(lease));
+    }
+    SLUICE_CHECK(recovered[0] == 10);
+    SLUICE_CHECK(recovered[1] == 20);
+    SLUICE_CHECK(recovered[2] == 30);
+    // Ring drained: take_next now returns an empty lease; empty() is true.
+    SLUICE_CHECK(session.empty());
+    SLUICE_CHECK(!static_cast<bool>(session.take_next()));
+}
+// The session (now drained) and the port are destroyed at scope exit. The
+// session dtor sees ring-empty; ~QueuePort sees ring_count_ == 0. Both succeed.
+
+// ---- P7: begin_teardown on an empty ring yields an immediately-empty session
+SLUICE_TEST_CASE(e12_queue_p7_teardown_empty_ring) {
+    Fixture f{2};
+    QueueTeardownSession session = f.port->begin_teardown();
+    SLUICE_CHECK(session.empty());
+    SLUICE_CHECK(!static_cast<bool>(session.take_next()));
+}
+// Session + port destroyed cleanly (ring empty + lifecycle tearing_down).
+
+// ---- P7: teardown session is move-only; move empties the source -----------
+SLUICE_TEST_CASE(e12_queue_p7_session_move_only) {
+    Fixture f{2};
+    {
+        auto lease = make_lease<int>(*f.port, 7);
+        (void)f.port->try_push(std::move(lease));
+    }
+    QueueTeardownSession a = f.port->begin_teardown();
+    SLUICE_CHECK(!a.empty());
+    QueueTeardownSession b = std::move(a);  // a.port_ cleared
+    // b now owns the session; a is a valid empty shell (empty() == true, since
+    // a null port_ short-circuits to true).
+    SLUICE_CHECK(a.empty());
+    SLUICE_CHECK(!b.empty());
+    // Drain via b so the session dtor at scope exit sees an empty ring.
+    QueueItemLease lease = b.take_next();
+    SLUICE_CHECK(static_cast<bool>(lease));
+    (void)QueueItemFactory::release_teardown<int>(*f.port, std::move(lease));
+    SLUICE_CHECK(b.empty());
+}
+// b is destroyed first (LIFO); a's dtor is a no-op (port_ == nullptr). The
+// port is then destroyed with an empty ring.
 
 SLUICE_MAIN();
