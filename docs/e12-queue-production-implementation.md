@@ -2,15 +2,16 @@
 
 > **Decision identity:** `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1`
 >
-> **Status:** `IN PROGRESS — P1-P7 LANDED; P8 NEXT`
+> **Status:** `IN PROGRESS — P1-P8 LANDED; PHASE G/H/I NEXT`
 >
 > This document records the as-built progress of the E12-E Queue production
 > implementation. It is NOT a PASS self-assessment: the implementation is
-> partial (the type foundation, fast paths, blocking/timed wait admission +
-> reconciliation + publication, and the teardown lifecycle are complete and
-> tested; the public `AsyncQueue<T>` template wrapper is not yet authored).
-> An independent adversarial implementation review (Phase I) has NOT run; it
-> must run only once the implementation is functionally complete through P8.
+> FUNCTIONALLY COMPLETE through P8 (type foundation, fast paths,
+> blocking/timed wait admission + reconciliation + publication, teardown
+> lifecycle, public `AsyncQueue<T>` template wrapper). Remaining: Phase G
+> (extended concurrency/sanitizer test matrix), Phase H (author
+> self-assessment PASS), Phase I (independent adversarial implementation
+> review).
 
 ## Authorization baseline
 
@@ -124,13 +125,36 @@ session dtor with non-empty ring) call `std::terminate` and are NOT
 exercised — they are structural invariants serialized by the lifecycle
 transition and the linear capability (P1).
 
-### P8 — public AsyncQueue<T> — NOT YET IMPLEMENTED
+### P8 — public AsyncQueue<T> — LANDED (this commit)
 
-The public `AsyncQueue<T>` template wrapper
-(`include/sluice/async/async_queue.hpp`) is not yet authored. It is a
-thin typed layer that converts opaque results to typed ones, drives the
-factory for `Node<T>` make/release, and destroys the exact `Node<T>`
-OUTSIDE all locks. Copy/move deleted.
+`include/sluice/async/async_queue.hpp`: the public typed template wrapper.
+
+- `QueuePushStatus` / `QueuePopStatus` aliases to the opaque enums (status
+  values are type-erased; only the payload is typed).
+- `QueuePushResult<T>` / `QueuePopResult<T>` move-only typed results
+  holding `std::optional<T>` storage. The `committed`/`closed`/`expired`/
+  `would_block`/`item` factory methods construct the appropriate state;
+  `take_value()` recovers the exact T (one move). Storage is `optional<T>`
+  so T need NOT be default-constructible or move-assignable — the runtime
+  constraint is nothrow-move-constructible + nothrow-destructible
+  (mirrors `QueueItemFactory::make<T>`).
+- `AsyncQueue<T>`: thin template over an embedded non-template `QueuePort`.
+  `try_push` / `push` / `push_until` mint the typed `Node<T>` OUTSIDE
+  locks via `QueueItemFactory::make<T>`, drive the QueuePort seam, and
+  convert the opaque result back to typed (releasing the `Node<T>` via
+  `release_failed<T>` / `release_popped<T>` OUTSIDE locks — typed
+  conversion is explicitly NOT counted in `active_port_calls_` per §7).
+  `try_pop` / `pop` / `pop_until` symmetric. `close`, snapshots,
+  `begin_teardown` are thin forwards. `release_teardown(session)` is the
+  typed helper to drain via the unique session.
+- Copy/move deleted (the embedded QueuePort is non-movable).
+- `static_assert` enforces T is object + nothrow-move-constructible +
+  nothrow-destructible.
+
+Verified: `e12_async_queue_test` — 3 P8 cases PASS (typed FIFO + failure
+recovery with exact-T `would_block` and `closed`, typed teardown via
+`release_teardown`, capacity-0 ctor rejection). Clang Debug + GCC Debug
++ ASan + TSan clean. Production `sluice_async` target compiles clean.
 
 ## Transition coverage (as-built)
 
@@ -150,22 +174,25 @@ winner-before-publication) is exercised by the four P4-P6 concurrency
 cases and the close-drain paths (6/6).
 
 Counterexamples (33): the type-structure / access-control subset is
-enforced by the P1 linear capability and the P2+P3 ring/failed-payload
-structure (NEG-1/2/3/4/7 of the formal model map directly). The
-lock-order / state-machine / runtime-structure subset is enforced by the
-G -> S -> exactly-one-role critical sections in the P4-P6 grant seams
-and the P7 lifecycle transition.
+enforced by the P1 linear capability, the P2+P3 ring/failed-payload
+structure, and the P8 typed wrapper's `static_assert` + `optional<T>`
+storage + factory `release_*` identity validation (NEG-1/2/3/4/7 of the
+formal model map directly). The lock-order / state-machine /
+runtime-structure subset is enforced by the G -> S -> exactly-one-role
+critical sections in the P4-P6 grant seams and the P7 lifecycle
+transition.
 
 ## Known exclusions / honest scoping
 
-- The implementation is PARTIAL (P8 + Phase G extended matrix + Phase H
-  + Phase I remain). This document does NOT claim
-  `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1: PASS`. Phase H author
-  self-assessment PASS and Phase I independent implementation review have
-  NOT run.
-- The fast-path + wait-admission + teardown tests verify the
-  single-worker deterministic subset. The full multi-worker concurrency
-  / migration / sanitizer matrix (Phase G) lands after P8.
+- The implementation is FUNCTIONALLY COMPLETE through P8 (P1-P8 +
+  Scheduler seams). Phase G (extended multi-worker concurrency /
+  migration / sanitizer matrix), Phase H (author self-assessment PASS),
+  and Phase I (independent adversarial implementation review) remain.
+  This document does NOT claim
+  `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1: PASS` until Phase H + I run.
+- The P4-P6 concurrency tests verify the single-worker deterministic
+  subset. The full multi-worker concurrency / migration / sanitizer
+  matrix (Phase G) lands next.
 
 ## Repository state
 

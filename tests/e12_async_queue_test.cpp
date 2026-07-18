@@ -30,6 +30,7 @@
 #include "harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/async_queue.hpp>  // public AsyncQueue<T> (P8)
 #include <sluice/async/detail/queue_item.hpp>
 #include <sluice/async/detail/queue_port.hpp>
 #include <sluice/async/fake_backend.hpp>
@@ -37,6 +38,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <stdexcept>  // std::invalid_argument (P8 capacity-0 rejection)
 #include <string>
 #include <utility>
 
@@ -488,5 +490,114 @@ SLUICE_TEST_CASE(e12_queue_p7_session_move_only) {
 }
 // b is destroyed first (LIFO); a's dtor is a no-op (port_ == nullptr). The
 // port is then destroyed with an empty ring.
+
+// ===========================================================================
+// P8 — public AsyncQueue<T> typed wrapper.
+// ===========================================================================
+//
+// AsyncQueue<T> is the thin public typed layer: it mints the typed Node<T>
+// outside locks, drives the QueuePort seam, and converts the opaque result to
+// a typed one (releasing the Node<T> outside locks). These tests exercise the
+// public surface through the typed API, mirroring the P2-P7 authority-direct
+// tests but at the typed boundary. They confirm:
+//
+//   - typed FIFO order on try_push/try_pop
+//   - typed try_push would_block + closed recover the exact original T
+//   - typed try_pop would_block / closed / item
+//   - close + drain via the typed wrapper
+//   - begin_teardown + typed release_teardown
+
+// ---- P8: AsyncQueue<T> typed FIFO + failure recovery ----------------------
+SLUICE_TEST_CASE(e12_queue_p8_typed_fifo_and_failure_recovery) {
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncQueue<std::string> q(sched, 3);
+
+    // Typed FIFO: push "a","b","c"; pop yields them in order.
+    SLUICE_CHECK(q.try_push(std::string("a")).status() == QueuePushStatus::committed);
+    SLUICE_CHECK(q.try_push(std::string("b")).status() == QueuePushStatus::committed);
+    SLUICE_CHECK(q.try_push(std::string("c")).status() == QueuePushStatus::committed);
+    SLUICE_CHECK(q.size() == 3);
+
+    auto r1 = q.try_pop();
+    SLUICE_CHECK(r1.status() == QueuePopStatus::item);
+    SLUICE_CHECK(std::move(r1).take_value() == "a");
+    auto r2 = q.try_pop();
+    SLUICE_CHECK(r2.status() == QueuePopStatus::item);
+    SLUICE_CHECK(std::move(r2).take_value() == "b");
+    auto r3 = q.try_pop();
+    SLUICE_CHECK(r3.status() == QueuePopStatus::item);
+    SLUICE_CHECK(std::move(r3).take_value() == "c");
+
+    // Fill the ring again (cap 3) so the next push would_block. The exact
+    // original T is recovered via take_value (no copy/alias/default).
+    SLUICE_CHECK(q.try_push(std::string("x")).status() == QueuePushStatus::committed);
+    SLUICE_CHECK(q.try_push(std::string("y")).status() == QueuePushStatus::committed);
+    SLUICE_CHECK(q.try_push(std::string("z")).status() == QueuePushStatus::committed);
+    SLUICE_CHECK(q.size() == 3);
+    auto blocked = q.try_push(std::string("payload"));
+    SLUICE_CHECK(blocked.status() == QueuePushStatus::would_block);
+    SLUICE_CHECK(std::move(blocked).take_value() == "payload");
+
+    // Drain the 3 buffered items so the ring is empty again.
+    for (int i = 0; i < 3; ++i) {
+        auto r = q.try_pop();
+        SLUICE_CHECK(r.status() == QueuePopStatus::item);
+        (void)std::move(r).take_value();
+    }
+    // Empty + open: would_block (no payload).
+    SLUICE_CHECK(q.try_pop().status() == QueuePopStatus::would_block);
+
+    // Closed + empty: closed (terminal, no payload). Closed push recovers T.
+    q.close();
+    auto pclosed = q.try_push(std::string("rejected"));
+    SLUICE_CHECK(pclosed.status() == QueuePushStatus::closed);
+    SLUICE_CHECK(std::move(pclosed).take_value() == "rejected");
+    SLUICE_CHECK(q.try_pop().status() == QueuePopStatus::closed);
+}
+
+// ---- P8: AsyncQueue<T> teardown drains ring via typed release_teardown -----
+SLUICE_TEST_CASE(e12_queue_p8_typed_teardown_drains_fifo) {
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncQueue<int> q(sched, 4);
+
+    // Buffer three items.
+    for (int v : {100, 200, 300}) {
+        SLUICE_CHECK(q.try_push(v).status() == QueuePushStatus::committed);
+    }
+    SLUICE_CHECK(q.size() == 3);
+
+    // begin_teardown: operational -> tearing_down. The unique session drains
+    // the ring via the typed release_teardown helper (moves T once, destroys
+    // Node<T> outside locks).
+    auto session = q.begin_teardown();
+    SLUICE_CHECK(!session.empty());
+
+    int recovered[3] = {-1, -1, -1};
+    for (int i = 0; i < 3; ++i) {
+        recovered[i] = q.release_teardown(session);
+    }
+    SLUICE_CHECK(recovered[0] == 100);
+    SLUICE_CHECK(recovered[1] == 200);
+    SLUICE_CHECK(recovered[2] == 300);
+    SLUICE_CHECK(session.empty());
+}
+// Session (drained) + AsyncQueue destroyed cleanly: ~QueuePort sees ring_count_
+// == 0 and the session dtor sees an empty ring.
+
+// ---- P8: AsyncQueue<T> ctor rejects capacity 0 ----------------------------
+SLUICE_TEST_CASE(e12_queue_p8_capacity_zero_rejected) {
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    bool threw = false;
+    try {
+        AsyncQueue<int> q(sched, 0);
+        (void)q;
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    SLUICE_CHECK(threw);
+}
 
 SLUICE_MAIN();
