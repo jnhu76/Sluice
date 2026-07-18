@@ -32,13 +32,14 @@ VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
 19/19 canonical transitions
 6/6 publication transitions
 
-E12-E IMPLEMENTATION AUTHORIZATION: DENIED — B4 OPEN
+E12-E IMPLEMENTATION AUTHORIZATION: all four prerequisite gates PASS.
+See docs/e12-queue-implementation-authorization.md (AUTHORIZATION-2).
 
 Gate status (current):
   B1 Mutex no-throw substrate:               PASS  (independent review complete)
   B2 Corrective-2 independent review:        PASS  (independent adversarial review complete)
   B3 Condition T25 migration/reacquire:      PASS  (W1 corrective db656b5)
-  B4 Queue formal model:                     OPEN
+  B4 Queue formal model:                     PASS  (independent formal review complete)
 ```
 
 ## 1. Disposition and root-cause record

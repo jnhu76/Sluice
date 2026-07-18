@@ -452,3 +452,219 @@ pushed:           no
 No commit has been made. The branch was created from `master` at `c6efa13`
 for this investigation; only this authorization report is staged for
 commit, pending user direction.
+
+---
+
+# E12-E Queue Production Implementation Authorization — 2 (re-authorization)
+
+> **Decision identity:** `E12-E-QUEUE-IMPLEMENTATION-AUTHORIZATION-2`
+>
+> **Phase:** 0 — Implementation authorization gate (RE-AUTHORIZATION)
+>
+> **Verdict:**
+>
+> ```text
+> E12-E-QUEUE-IMPLEMENTATION-AUTHORIZATION-2:
+> PASS
+>
+> E12-E QUEUE PRODUCTION IMPLEMENTATION:
+> AUTHORIZED
+> ```
+
+The section above (`AUTHORIZATION-1`, HEAD `c6efa13`) is retained verbatim
+as a historical snapshot: it correctly recorded `BLOCKED` against the tree
+as it stood then (B1–B4 all open). It is **not** current authority. This
+section is the current authorization, investigated independently against
+the tree at HEAD `6aa2334`. Every claim below is anchored to a current
+`file:line` or commit hash; no claim is copied from `AUTHORIZATION-1`.
+
+## Re-authorization investigation method
+
+Each of the four preconditions was re-investigated independently against
+the current repository. The re-authorization reads current source, current
+authority docs, the landed independent review reports, the formal
+artifacts, the test evidence, and the commit history. No production Queue
+code exists yet (verified: `grep -rln "AsyncQueue|QueueItemLease|QueuePort|
+QueueTeardownSession" include/ src/ tests/` returns zero hits), which is
+correct and expected — authorization must precede implementation.
+
+---
+
+## B1. Mutex no-throw substrate — PASS
+
+**Required:** `ASYNC-MUTEX-NOTHROW-AUTHORITY-1` independently implemented
+in production; `Mutex::lock/unlock` no-throw/fail-fast; compile, TSA, and
+runtime tests passing; independent production implementation review PASS.
+
+**Evidence (current HEAD `6aa2334`):**
+
+- Production fail-fast Mutex landed: commit `be07564`
+  ("feat(async): make Mutex acquisition fail-fast").
+  `include/sluice/async/mutex.hpp` declares `lock() noexcept` /
+  `try_lock() noexcept` / `unlock() noexcept`; failures route to
+  `detail::async_mutex_lock_fail_fast()` (`[[noreturn]] noexcept`,
+  allocation/lock/I/O-free → `std::terminate`).
+- Death tests landed: commit `e2cfe61`
+  ("test(async): verify Mutex acquisition failure terminates") —
+  `tests/e12_async_mutex_death_test.cpp` T1–T4 exercise the production
+  entry (direct lock, try_lock, condition_variable reacquire, control).
+- Contract documented: commit `e4b08b1`.
+- Independent production implementation review PASS:
+  `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
+  (commit `15dc9b4`) — verdict `PASS`; fail-fast contract, zero-symbol
+  production archive, real death tests T1–T4, sanitizer matrix green, 25
+  counterexamples blocked by type/build/test structure.
+
+**Conclusion B1: PASS.**
+
+---
+
+## B2. Corrective-2 independent adversarial review — PASS
+
+**Required:** a genuine independent (non-author) adversarial review of
+Corrective-2 covering one-shot lease unforgery, failed-push original
+payload, ring lease uniqueness, active-victim ticket stealing, owner-slot
+lifetime, PREPARED timer, teardown uniqueness, `active_port_calls_`, 19/19
+canonical transitions, 6/6 publication transitions, and the 33
+counterexamples blocked by production structure.
+
+**Evidence:**
+
+- Independent adversarial design review PASS:
+  `docs/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`
+  (commit `4f81d6c`) — verdict `PASS`; 11/11 required topics verified
+  against current source; 19/19 canonical + 6/6 publication transitions
+  independently recounted; 33/33 counterexamples dispositioned (each
+  BLOCKED by type structure / access control / lock order / state machine /
+  testable runtime structure — none by debug assertion); 6 repo-external
+  compile-feasibility probes green; 0 blocking findings, 3 MINOR wording
+  clarifications (non-blocking).
+
+**Conclusion B2: PASS.**
+
+---
+
+## B3. Condition T25 migration-reacquire-hang audit — PASS
+
+**Required:** `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1` closed
+with reproducible original hang evidence, root cause, fix, full Condition
+runtime suite green, no hidden timeouts / skipped tests / weakened
+assertions.
+
+**Evidence:**
+
+- Closed by W1 corrective: commit `db656b5`
+  ("test(async): make Condition T25 migration trace deterministic").
+- Root cause: test-harness defect — T25's coordinator used unbounded
+  `while(!flag) yield()` loops with no `bounded_wait`, no `release_for_drain`,
+  no `f_idle`, no suspension handshake. The "W1 steals fA" trace was
+  assumed, not established. No production code changed.
+- Fix mirrors the Mutex T19 determinism discipline: `f_idle` on W1,
+  three-way handshake, `bounded_wait` on every gate, `release_for_drain`
+  on gate failure.
+- Evidence report: `docs/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1:
+  - T25 alone ×20 Clang Debug: 20/20 PASS (was 2/3 HANG pre-fix);
+  - T25 alone ×10 Clang ASan: 10/10 PASS;
+  - T25 alone ×10 Clang TSan: 10/10 PASS (was 3/3 SEGV pre-fix);
+  - full Condition suite Clang Debug/ASan/TSan: exit 0, no race report.
+- Watchdog discipline: every sanitizer run used an external `timeout`;
+  a watchdog kill (exit 124/137) is recorded FAIL, never PASS. No test-
+  internal timeout added, no assertion weakened, no case skipped.
+
+**Conclusion B3: PASS.**
+
+---
+
+## B4. Queue formal model normalization — PASS
+
+**Required:** a Queue formal model covering Model A (bounded MPMC FIFO)
+and Model B (Open/Closed monotonicity), reflecting the Corrective-2 shape,
+with a positive TLC gate, named invariants, a corresponding negative
+model, a wrong-property gate, a verify script, and repeatable commands;
+plus an independent formal review.
+
+**Evidence:**
+
+- Formal model authored: commit `9572985`
+  ("spec(async): add E12-E Queue TLA+ formal model (B4)").
+  - Model A (`docs/spec/e12_queue/E12Queue.tla`): bounded MPMC FIFO, 12
+    pure-state invariants (CapacityBound, UniqueItemOwner, UniqueRingItem,
+    NoLostItem, NoDuplicatedItem, FIFOBufferOrder, ProducerWaiterFIFO,
+    ConsumerWaiterFIFO, NoBarging, CommittedBeforePublished,
+    NoPublishedPendingCompletion, LocationConsistency). TLC PASS
+    (~1.6M states / ~352k distinct).
+  - Model B (`docs/spec/e12_queue/E12QueueClosed.tla`): Open/Closed
+    monotonicity, 7 invariants (ClosedAbsorbing, NoCommitAfterClose,
+    CommittedBeforeCloseRemainsDrainable, FailedPushRetainsOriginalItem,
+    ClosedEmptyConsumerTerminal, NoBufferedItemDiscardOnClose,
+    CloseProducerRaceLinearizable). TLC PASS (~10M states / ~1.96M
+    distinct after the F.1.1 corrective).
+  - 7 negative models, each a single-defect mutation producing a real CEX
+    (not deadlock) on its NAMED invariant.
+  - Corrective-2 conformance: one-shot lease, no Permit, no direct
+    handoff, selected-waiter grant, no barging, winner-before-publication,
+    close monotonicity. No superseded semantics (reusable item,
+    active-owner veto, cancellation outcome) in model code.
+  - 4 topics (ActiveVictim worker-selection, OwnerSlot address lifetime,
+    PreparedTimer pump visibility, Teardown reuse) documented out of B4
+    scope with precise justification and named coverage (in-scope
+    invariant / deferred Model C); no false-PASS.
+- Gate: `scripts/verify-e12-queue-formal.sh` (commit `43d47a0`) — exit 0
+  (positive models PASS, all 7 negatives CEX on named invariants,
+  wrong-property gate OK, fresh output dir, TLC version capture).
+- Corrective: commit `f53faf0` fixed the BLOCKING F.1.1 finding from the
+  first formal review (Model B `ReleaseItem` dead action; `consumerDrained`
+  ghost never written; B3/B6 `Released`-antecedent clauses vacuous). Fix
+  verified: Model B state space expanded ~40% (1.17M → 1.96M distinct),
+  previously-vacuous clauses now live, all gates still green.
+- Independent formal review PASS:
+  `docs/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`
+  (commit `6aa2334`) — verdict `PASS`; F.1.1 fix verified real and
+  complete; zero primed/UNCHANGED conflicts across all 159 actions in all
+  9 model files; full gate green; no new vacuity/defect; MAJOR/MINOR
+  resolved; conformance clean.
+
+**Conclusion B4: PASS.**
+
+---
+
+## Re-authorization conclusion
+
+```text
+E12-E-QUEUE-IMPLEMENTATION-AUTHORIZATION-2:
+PASS
+
+E12-E QUEUE PRODUCTION IMPLEMENTATION:
+AUTHORIZED
+```
+
+All four preconditions are independently satisfied against the current
+tree:
+
+| Gate | Verdict | Primary evidence |
+|------|---------|------------------|
+| B1 Mutex no-throw substrate | PASS | `be07564` + `e2cfe61` + review `15dc9b4` |
+| B2 Corrective-2 independent adversarial review | PASS | review `4f81d6c` (11/11, 33/33, 6 probes) |
+| B3 Condition T25 migration/reacquire | PASS | W1 corrective `db656b5` + evidence report |
+| B4 Queue formal model + independent review | PASS | model `9572985` + corrective `f53faf0` + review `6aa2334` |
+
+The Queue production implementation is now **AUTHORIZED**. The
+implementation must obey the Corrective-2 authority (B2 PASS), the formal
+invariants (B4), the lock order and winner-before-publication rules, and
+the commit discipline (single-responsibility commits, no production code
+under locks doing T operations, failed-push exact payload return, etc.).
+No commit, push, merge, or PR is implied by this authorization — those
+remain governed by the task's commit discipline and repository hygiene.
+
+---
+
+## Repository state at end of re-authorization
+
+```text
+branch:           e12-e-queue-production-impl
+HEAD:             6aa2334
+working tree:     clean except this file's edit (status-update commits follow)
+untracked files:  tests/test_t3_simple.cpp  (pre-existing, unrelated; untouched)
+                  tla2tools.jar             (pre-existing, unrelated; untouched)
+pushed:           no   (no upstream; no push / merge / PR)
+```
