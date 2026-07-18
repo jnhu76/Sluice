@@ -148,18 +148,23 @@ checked against `NoBarging`) confirms the defects are property-specific.
 ## Out-of-scope negatives (4) — justification and coverage
 
 The Corrective-2 audit identified four additional defect classes that B4 does
-NOT model as negatives. Each is out of scope for a precise, non-vacuous reason,
-and each has named coverage elsewhere (production test, Model A/B invariant, or
-deferred Model C). No B4 false-PASS arises from their omission because each is
-either (i) already pinned by an existing invariant that a modelled negative
-exercises, or (ii) a property of machinery the model deliberately does not own.
+NOT model as negatives. Each is out of scope for a precise, non-vacuous reason.
+Three (ActiveVictim, OwnerSlotEarlyErase, PreparedTimerVisibleToPump) have named
+coverage: an in-scope invariant exercised by a modelled negative, or a deferred
+Model C. The fourth (TeardownReusable) is on a production axis (`ObjectLifecycle
+= operational | tearing_down`) that B4 does not model at all; it is explicitly
+UNcovered here and deferred to a future teardown Model C — this is not a
+false-PASS because teardown irreversibility is outside the B4 §C2/§C3 minimum
+(bounded MPMC FIFO + Open/Closed), not silently dropped. No B4 false-PASS arises
+from these omissions: each modelled property is non-vacuous and exercised, and
+each unmodelled property is honestly deferred with its refinement boundary stated.
 
 | Topic | Why out of B4 scope | Coverage |
 |-------|---------------------|----------|
-| **ActiveVictimUnstealable** (a suspended waiter whose grant is stolen by a latecomer cannot be left "active-victim") | The selected-waiter grant (only the FIFO head of the eligible role is granted) is fully pinned by `NoBarging` (A9) + `ProducerWaiterFIFO`/`ConsumerWaiterFIFO` (A7/A8) + the `expectedProdHead`/`lastProdGranted` history. There is no separate "steal" action in the model: a grant always targets the latched FIFO head. A "steal" negative would just be another `NoBarging`/FIFO mutation, duplicating NEG-QUEUE-3. | `NoBarging` (A9), `ProducerWaiterFIFO` (A7), `ConsumerWaiterFIFO` (A8); production test coverage in the Queue scheduler-integration suite (`docs/e12-queue-scheduler-integration.md`). |
+| **ActiveVictimUnstealable** (a suspended waiter whose grant is stolen by a latecomer cannot be left "active-victim") | The selected-waiter grant (only the FIFO head of the eligible role is granted) is fully pinned by `NoBarging` (A9) + `ProducerWaiterFIFO`/`ConsumerWaiterFIFO` (A7/A8) + the `expectedProdHead`/`lastProdGranted` history. There is no separate "steal" action in the model: a grant always targets the latched FIFO head. A "steal" negative would just be another `NoBarging`/FIFO mutation, duplicating NEG-QUEUE-3. | `NoBarging` (A9), `ProducerWaiterFIFO` (A7), `ConsumerWaiterFIFO` (A8). (The full worker-selection active-victim stealing property is an E7–E9 Scheduler concern outside the bounded-MPMC-FIFO refinement boundary; future production tests, none existing yet because Queue implementation is unauthorized pending B4, will cover the worker-selection half.) |
 | **OwnerSlotEarlyErase** (a producer/consumer operation's item slot is erased before the operation reaches a terminal outcome) | The one-shot lease makes `prodItem`/`consItem` erase and terminal-outcome finalization the SAME atomic step (every move empties its source AND finalizes). There is no window in which an operation is non-terminal yet holds no item. An "early-erase" negative would mutate a rule to clear the slot without finalizing, which is exactly the `UniqueItemOwner` (A2) / `LocationConsistency` (A12) defect class already covered by NEG-QUEUE-2. | `UniqueItemOwner` (A2), `LocationConsistency` (A12); NEG-QUEUE-2 exercises the same defect class. |
 | **PreparedTimerVisibleToPump** (a timer prepared by an E11 expiry must be visible to the scheduler pump before it fires) | The E12-E model does not own E11 timer/expiry state machinery — expiry is the E11 authority (mirroring the E12-B Semaphore decision). Model B reaches `ClosedOutcome` via `PushClosed`/`PopClosedEmpty` directly to close the close-race proof; it does not model the timer-pump interleaving. Modelling it here would require importing E11's timer state, which is out of B4's refinement boundary. | Deferred to a cross-cutting E11×E12 Model C; the close-race half that B4 owns is pinned by `CloseProducerRaceLinearizable` (B7) and exercised by NEG-QUEUE-5. |
-| **TeardownReusable** (a torn-down Queue must not be reusable: no operation on a Closed+drained Queue can resurrect it) | `ClosedAbsorbing` (B1) pins that `queueState` is monotonic Open→Closed and close is absorbing (every post-close state is Closed; `IdempotentClose` only re-reconciles). There is no "reopen" action in the model. A "reuse" negative would need to add a reopen rule that does not exist in the Corrective-2 design; that is a liveness/progress question, not a safety defect, and B4 is safety-only. | `ClosedAbsorbing` (B1); reuse-freedom is a corollary of monotonicity. Production teardown tests in the Queue suite. |
+| **TeardownReusable** (a torn-down Queue must not be reusable: no operation on a Closed+drained Queue can resurrect it) | The teardown lifecycle `ObjectLifecycle = operational \| tearing_down` (Corrective-2 state-machine §1.1, §9) is a **separate axis** from `QueueState = Open \| Closed` and is **not modelled** in B4 at all — there is no `tearing_down` variable. B4 verifies close-monotonicity only; `ClosedAbsorbing` (B1) pins the close axis, NOT teardown irreversibility. A teardown-irreversibility model would need to add the `ObjectLifecycle` axis and the teardown preconditions (zero active port calls, zero wait associations, empty WaitQueues, etc.), which is outside the B4 §C2/§C3 minimum (bounded MPMC FIFO + Open/Closed). | Not covered by any B4 invariant (the `tearing_down` axis is absent). Deferred to a future teardown Model C that adds the `ObjectLifecycle` axis. (No production teardown tests exist yet; Queue implementation is unauthorized pending B4.) |
 
 ## Design notes (refinement / scope)
 
@@ -208,20 +213,23 @@ TLC runtime version (exact runtime line, reported by TLC itself):
 
 | Model | Result | States generated | Distinct states | Depth |
 |-------|--------|-----------------|-----------------|-------|
-| E12Queue [Model A, 12 invariants] | PASS | 1614934 | 352131 | 15 |
-| E12QueueClosed [Model B, 7 invariants] | PASS | 5820858 | 1168618 | 15 |
+| E12Queue [Model A, 12 invariants] | PASS | ~1.6M | ~352k | 13–15 |
+| E12QueueClosed [Model B, 7 invariants] | PASS | ~8M–10M | ~1.9M–2.0M | 14–15 |
 | NEG-QUEUE-1 DuplicateLease | CEX (`UniqueRingItem`) | 6 | 4 | 3 |
-| NEG-QUEUE-2 MoveNotEmptied | CEX (`UniqueItemOwner`) | 14035 | 9089 | 7 |
-| NEG-QUEUE-3 Barging | CEX (`NoBarging`) | 14064 | 9109 | 7 |
-| NEG-QUEUE-4 PublishBeforeCommit | CEX (`NoPublishedPendingCompletion`) | 14068 | 9111 | 6 |
-| NEG-QUEUE-5 CommitAfterClose | CEX (`NoCommitAfterClose`) | 64 | 47 | 3 |
-| NEG-QUEUE-6 CloseDiscardsBuffer | CEX (`NoBufferedItemDiscardOnClose`) | 53 | 36 | 3 |
-| NEG-QUEUE-7 FailedPushLosesItem | CEX (`FailedPushRetainsOriginalItem`) | 64 | 47 | 4 |
+| NEG-QUEUE-2 MoveNotEmptied | CEX (`UniqueItemOwner`) | ~5k–14k | ~3.7k–9k | 6–7 |
+| NEG-QUEUE-3 Barging | CEX (`NoBarging`) | ~7k–14k | ~5.4k–9k | 6–7 |
+| NEG-QUEUE-4 PublishBeforeCommit | CEX (`NoPublishedPendingCompletion`) | ~6k–14k | ~4.8k–9k | 6 |
+| NEG-QUEUE-5 CommitAfterClose | CEX (`NoCommitAfterClose`) | ~38–134 | ~21–97 | 3 |
+| NEG-QUEUE-6 CloseDiscardsBuffer | CEX (`NoBufferedItemDiscardOnClose`) | ~51–127 | ~34–80 | 3 |
+| NEG-QUEUE-7 FailedPushLosesItem | CEX (`FailedPushRetainsOriginalItem`) | ~38–125 | ~21–101 | 3–4 |
 | WRONG-PROPERTY gate (NEG-1 vs `NoBarging`) | OK (passes; defect specific) | — | — | — |
 
-State counts vary slightly run-to-run (TLC's state enumeration is
-worker/scheduling-dependent); the verdicts are deterministic. The above are
-representative single-run figures from the verify gate.
+State counts vary run-to-run (TLC's state enumeration is
+worker/scheduling-dependent); the verdicts are deterministic. Ranges span
+independent reproductions (author + independent reviewer). Note: Model B's
+distinct-state count rose from ~1.17M to ~1.9M–2.0M after the F.1.1 corrective
+(the previously-dead `ReleaseItem` action had hidden ~40% of the intended state
+space; the `consumerDrained` ghost and the `Released` location are now live).
 
 Reproduce: `scripts/verify-e12-queue-formal.sh`
 (default JAR: `$repo/tla2tools.jar`; override with `TLA2TOOLS_JAR=...`).

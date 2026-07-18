@@ -422,7 +422,7 @@ ReleaseItem(c) ==
        /\ consItem' = [consItem EXCEPT ![c] = NoItem]
        /\ consumerDrained' = consumerDrained \cup {it}
        /\ MarkOther("ReleaseItem")
-       /\ UNCHANGED <<ring, prodWaiters, consWaiters, prodState, consState, prodPhase, consPhase, prodCompletion, consCompletion, prodResolved, consResolved, prodItem, wakeDispatched, queueState, failedPushItem, admittedItem, closedRing, consumerDrained>>
+       /\ UNCHANGED <<ring, prodWaiters, consWaiters, prodState, consState, prodPhase, consPhase, prodCompletion, consCompletion, prodResolved, consResolved, prodItem, wakeDispatched, queueState, failedPushItem, admittedItem, closedRing>>
 
 -------------------------------------------------------------------------------
 \* CLOSE: CL1 Open -> Closed (monotonic linearization point under G+S).
