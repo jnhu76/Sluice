@@ -629,3 +629,408 @@ after the expiry, before this implementation can merge. A follow-up
 Corrective-2 review should re-verify the timer-expiry counter flow end-to-end
 and confirm the lifecycle gate is genuinely atomic with respect to
 `begin_teardown`.
+
+---
+
+# Re-Review 1 — Corrective Loop Verification
+
+> **Date:** 2026-07-19
+> **Commit reviewed:** `1e8e747` (Phase I corrective loop)
+> **Reviewer:** independent (Phase I re-review)
+
+## Re-Verdict
+
+**PASS WITH OBSERVATIONS**
+
+The corrective loop (commit `1e8e747`) **genuinely closes every actionable
+finding F.1-F.7**. The F.1 BLOCKING defect is reproduced-closed end-to-end
+(two rebuilt probes, push_until + pop_until, 5/5 PASS each, exit 0 with
+`begin_teardown` succeeding). F.2 wires both previously-dead counters via
+distinct, single-fire paths. F.3 is superseded by a binding Corrective-3
+document. F.4 makes the lifecycle gate + counter increment atomic w.r.t.
+`begin_teardown`. F.5 makes `closed_` `std::atomic<bool>`. F.6 swaps commit /
+retire to the §12 order. F.7 extends both G1 tests to call `begin_teardown`
+after the pump-driven expiry. The 4-cell sanitizer×toolchain matrix is 20/20
+green across Clang Debug, GCC Debug, Clang ASan, Clang TSan.
+
+The "WITH OBSERVATIONS" qualifier covers four residual items uncovered by the
+new-defect scan. None is BLOCKING; three are pre-existing latent concerns
+correctly acknowledged in Corrective-3's "Honest residual scope" or in the
+original F.3/F.8; one is a structural-fragility note on the on-resolve hook
+that is safe under the current lock invariant but is not enforced structurally.
+Each is documented below with file:line.
+
+## Per-finding verification
+
+### F.1 — CLOSED
+
+**Fix site.** `src/async/scheduler.cpp:2879-2886` (`pump_deadlines_locked`):
+
+```cpp
+if (top->has_on_resolve()) {
+    auto* port = static_cast<detail::QueuePort*>(top->owner_ctx_);
+    if (port != nullptr && port->active_wait_associations_ > 0) {
+        --port->active_wait_associations_;
+    }
+    top->fire_on_resolve_locked(/*timer_won=*/true);  // -> --active_queue_timers_
+}
+```
+
+For a Queue-bound registration the pump now decrements BOTH per-port counters
+under G + `q->mtx()`: `active_wait_associations_` directly via `owner_ctx_`,
+and `active_queue_timers_` indirectly via the on-resolve thunk. Non-Queue
+registrations have a null `on_resolve_` and skip the block unchanged.
+
+**Resolution-path coverage.** I traced every ACTIVE->terminal transition for a
+Queue-bound registration against the single `++active_wait_associations_`
+admit-time increment (`scheduler.cpp:2233,2289,2343,2422`):
+
+| Path | Site | `--active_wait_associations_` | `--active_queue_timers_` (via hook) |
+| --- | --- | --- | --- |
+| Inline commit (admit-time) | `scheduler.cpp:2244,2364` | manual | `fire_on_resolve_locked(false)` `2363` |
+| Inline closed (admit-time) | `scheduler.cpp:2251,2374` | manual | `fire_on_resolve_locked(false)` `2373` |
+| Inline already-due expired | `scheduler.cpp:2385,2462` | manual | `fire_on_resolve_locked(true)` `2384,2461` |
+| Grant-seam retire (consumer) | `scheduler.cpp:2524` | manual | via `retire_timer_for_node_locked` `2514` -> `2929` |
+| Grant-seam retire (producer) | `scheduler.cpp:2558` | manual | via `retire_timer_for_node_locked` `2547` -> `2929` |
+| `queue_cancel` retire | `scheduler.cpp:2495` | manual | via `retire_timer_for_node_locked` `2493` -> `2929` |
+| Pump-driven expiry (F.1) | `scheduler.cpp:2883` | via `owner_ctx_` | `fire_on_resolve_locked(true)` `2885` |
+
+Every row has exactly one decrement of each counter. The C8 contract-violation
+early-return at `scheduler.cpp:2340-2342,2419-2421` returns BEFORE the
+increment, so no decrement is owed.
+
+**Re-run.** The original `/tmp/e12_queue_leak_probe*.cpp` probes are gone (per
+the task brief). I rebuilt two self-contained probes that mirror G1 exactly
+and then call `begin_teardown`:
+
+- `/tmp/e12_queue_reprobe.cpp` — `push_until` expiry + `begin_teardown`.
+- `/tmp/e12_queue_reprobe2.cpp` — symmetric `pop_until` expiry + `begin_teardown`.
+
+Built against `build/linux/x86_64/debug/libsluice_async_internal_testing.a` +
+`libsluice_core.a` with the documented flags. Both exit 0 (PASS) 5/5 runs each;
+`begin_teardown` returns a session; `session.empty()` is true. Pre-corrective
+these probes would have printed `TERMINATE called` and exited 42 (the
+`std::set_terminate` -> `std::_Exit(42)` handler).
+
+```
+probe: producer push_until got_expired=1 value=777
+about to call begin_teardown...
+begin_teardown returned; session.empty=1
+EXIT_CODE=0 (PASS)   (5/5 runs, Clang Debug; symmetric for pop_until probe)
+```
+
+**F.1 is genuinely closed.** The fix is structural (an explicit hook fired on
+the pump's consume transition), not a papered-over counter nudge.
+
+### F.2 — CLOSED
+
+**`active_queue_timers_`.** Incremented exactly once at admit-time registration
+(`scheduler.cpp:2349,2428`) immediately after `timer_pool_.emplace_back` +
+`on_resolve_` install, under G+S+role. Decremented exactly once via the
+`queue_timer_on_resolve` static thunk (`scheduler.cpp:2196-2206`), fired by
+`fire_on_resolve_locked` on every ACTIVE->terminal transition (the seven rows
+of the F.1 table above). The thunk is guarded `if (> 0)` so a hypothetical
+double-fire would be idempotent, but the single-fire analysis (F.1 table)
+shows no double-fire path exists.
+
+**`granted_not_resumed_`.** Incremented at grant-seam publication
+(`scheduler.cpp:2528,2562`) inside the `if (f->make_runnable())` block under
+G+S+role. Decremented at admit-seam resume (`scheduler.cpp:2266,2319,2401,2478`)
+under G after `context_switch` returns. The four decrement sites each fire ONLY
+when `context_switch` returned — i.e. when the fiber was suspended and then
+resumed by a reconciler publication (which always incremented). The inline
+admit-time paths return BEFORE `context_switch`, so they never reach the
+decrement; symmetry holds. See "New-defect scan" for the one asymmetry
+(pump-driven publication does not increment, relying on `active_port_calls_`).
+
+**Counter ledger is consistent.** All four counters are wired, single-fire,
+and exercised by the G1+G2 matrix.
+
+### F.3 — CLOSED (via binding supersession)
+
+The `docs/e12-queue-corrective-3.md` document is a properly-formed BINDING
+supersession of Corrective-2 §8. It explicitly documents:
+
+- The authority conflict (§8 binds `PreparedQueueTimer` / `prepare_*` /
+  `activate_*` / `discard_prepared_*`; production implements none of them).
+- The Corrective-3 replacement model (ACTIVE-on-creation `TimerRegistration`
+  + the type-erased on-resolve hook).
+- A row-by-row table mapping each §8 binding to its Corrective-3 equivalent
+  (or its NON-binding-historical status).
+- An "Honest residual scope" section that explicitly acknowledges the §8.1
+  lease-consumption-ordering residual (allocation happens under G+S+role,
+  AFTER the lease was moved in by the caller — a mid-admit allocation failure
+  would strand the lease).
+
+This is the correct way to resolve an authority/implementation drift: re-derive
+the binding contract and document the residual. **F.3 is closed** in the form
+the original review's fix recommendation explicitly permitted ("explicitly
+supersede §8 with a Corrective-3 that re-binds the Queue timer model to the
+generic ACTIVE-on-creation registration").
+
+### F.4 — CLOSED
+
+**Fix site.** Every ordinary entry (`try_push`, `try_pop`, `close`, `push`,
+`push_until`, `pop`, `pop_until`) now performs the lifecycle check AND the
+`++active_port_calls_` increment inside ONE G+S critical section, then
+constructs `CallGuard` with `adopt_tag` (no second increment):
+
+```cpp
+// src/async/queue_port.cpp:182-190 (try_push; symmetric at 250-258, 299-307,
+// 344-352, 374-383, 404-412, 423-432)
+{
+    LockGuard glk(scheduler_.global_mtx_);
+    LockGuard lk(state_mtx_);
+    if (lifecycle_ != QueueLifecycle::operational) {
+        queue_lease_fail_fast();
+    }
+    ++active_port_calls_;  // observed under G+S by begin_teardown
+}
+CallGuard guard(*this, CallGuard::adopt_tag{});
+```
+
+The `adopt_tag` ctor (`queue_port.cpp:88`) stores the port pointer without
+incrementing; the dtor (`queue_port.cpp:89-93`) owns the matching decrement.
+
+**TOCTOU closure proof.** `begin_teardown` reads `active_port_calls_` under
+G+S (`queue_port.cpp:465-473`). The increment at `queue_port.cpp:188` happens
+under G+S and is published before G+S is released. Therefore: (a) if Thread A
+has incremented, Thread B's `begin_teardown` observed under G+S will see the
+non-zero counter and fail-fast; (b) if Thread A has NOT yet incremented, it is
+still blocked on G+S (which B holds), so it cannot race past the lifecycle
+check while B is mid-transition. The intermediate G+S release between the gate
+and the body does NOT reopen the race, because `active_port_calls_` stays
+non-zero across that window (the CallGuard has been constructed), so
+`begin_teardown` cannot observe all-zero counters during it.
+
+**Body lifecycle non-recheck is safe.** The body re-acquires G+S at
+`queue_port.cpp:208-209` (and symmetric) WITHOUT re-checking `lifecycle_`. I
+verified this is safe: `begin_teardown` can only transition
+`operational -> tearing_down` when `active_port_calls_ == 0`
+(`queue_port.cpp:468-470`), and the in-flight op holds the counter > 0 from
+gate-increment through CallGuard-destruction, so no concurrent
+`begin_teardown` can have flipped lifecycle during the body.
+
+**No new lock-order issue.** Every ordinary entry's lock order is now G->S
+(gate) then G->S (body); `close()` body additionally calls the grant seams
+which take role mtx under G+S — same order as the rest of the Queue surface.
+No re-entrant acquisition of G or S. No deadlock.
+
+### F.5 — CLOSED
+
+`closed_` is now `std::atomic<bool>`
+(`include/sluice/async/detail/queue_port.hpp:416`). The two semantic ops are
+explicit:
+
+- `is_closed()` at `queue_port.cpp:144`: `closed_.load(std::memory_order::acquire)`.
+- `close()` at `queue_port.cpp:313`: `closed_.store(true, std::memory_order::release)`.
+
+The remaining reads at `queue_port.cpp:212,282` and `scheduler.cpp:2237,2249,
+2303,2354,2369,2447,2549` use the implicit `std::atomic<bool>::operator
+bool()` (C++11), which performs a `seq_cst` load — STRONGER than acquire, no
+correctness loss; no data race under any memory model. I verified the project
+compiles clean under `-Wall -Wextra` (Clang 20, GCC 15) with no conversion
+warnings. The single write site is `queue_port.cpp:313` (release store under
+G+S). **No caller depended on the old non-atomic semantics** — every prior
+access was already under G+S or via `is_closed()`.
+
+### F.6 — CLOSED
+
+**Fix site.** Both grant seams now perform retire BEFORE commit, matching §12
+verbatim:
+
+```cpp
+// src/async/scheduler.cpp:2513-2523 (queue_grant_consumer_locked; symmetric
+// at 2546-2557 for queue_grant_producer_locked)
+// ---- retire BEFORE commit (§12 verbatim order; F.6 corrective) ----
+retire_timer_for_node_locked(*won);  // ACTIVE->RETIRED CAS (no throw)
+// ---- resource commit BEFORE publication ----
+if (!port.ring_empty_locked()) {
+    *ctx->cons_out = std::move(port.ring_[head]);   // ring-lease move (no throw)
+    ...
+}
+```
+
+**Winner-before-publication preserved.** Both the retire (a CAS on the timer
+registration's atomic state) and the commit (a `QueueItemLease` move —
+allocation-free, no throw) happen BEFORE `make_runnable` / `route_runnable_locked`
+at `scheduler.cpp:2527-2530,2561-2564`. The winner observes both completed on
+resume. **No observable behavior change** vs the prior commit-then-retire
+order: both steps are noexcept and were already both-before-publication; the
+swap only aligns the micro-order with §12. The retire CAS firing the on-resolve
+hook (F.2) is also before publication, so the `--active_queue_timers_` is
+observed by the winner on resume — consistent.
+
+### F.7 — CLOSED
+
+Both G1 tests now call `begin_teardown` after the pump-driven expiry:
+
+- `tests/e12_async_queue_test.cpp:705-710`
+  (`e12_queue_g1_push_until_expires_recovers_value`):
+  `QueueTeardownSession session = port.begin_teardown(); SLUICE_CHECK(session.empty());`
+- `tests/e12_async_queue_test.cpp:750-754` (`e12_queue_g1_pop_until_expires`):
+  same.
+
+Both tests use `spin_wait(registered)` + `advance_clock(deadline)` so the
+producer/consumer parks BEFORE the deadline elapses — i.e. the resolution
+genuinely goes through `pump_deadlines_locked`, not the inline-already-due
+admit path. The `begin_teardown` call therefore exercises the F.1 closure
+end-to-end. Pre-corrective these calls would have terminated the test process;
+post-corrective they PASS. **F.7 regression guard is genuine.**
+
+## New-defect scan
+
+**On-resolve hook fires exactly once per ACTIVE->terminal.** I traced every
+`fire_on_resolve_locked` call site (`scheduler.cpp:2363,2373,2384,2442,2451,
+2461,2885,2929`) against the matching ACTIVE->terminal CAS
+(`try_claim_expiry` at `2381,2458,2845`; `retire()` at `2361,2371,2440,2449,
+2922`). The pump path (`2845` -> `2885`) and the retire path (`2922` -> `2929`)
+fire only on a successful CAS — strict single-fire. **The four admit-time
+inline paths (`2361-2363, 2371-2373, 2381-2384, 2440-2442, 2449-2451,
+2458-2461`) fire the hook UNCONDITIONALLY on the same line as a CAS whose
+return value is ignored or whose `if` block does not enclose the fire.** Under
+the G+S+role_mtx invariant held throughout the admit critical section, the CAS
+cannot fail (the registration is freshly ACTIVE; no other resolver can run),
+so the unconditional fire is safe in practice. This is a **structural
+fragility (OBSERVATION O-1, non-blocking)**: the fire is not gated by the CAS
+result, so a future restructuring that dropped a lock between registration and
+inline expiry would silently introduce a double-fire. Cheap to harden: gate
+the fire on the CAS return.
+
+**A registration that was never ACTIVE does not fire the hook.** The only
+registration construction sites for Queue waits are `timer_pool_.emplace_back`
+at `scheduler.cpp:2345,2424`; both immediately install `on_resolve_` and the
+registration's default state is ACTIVE (`timer_registration.hpp:178`). So a
+Queue-bound registration is ALWAYS born ACTIVE; there is no path that installs
+the hook on a non-ACTIVE registration. The hook therefore fires exactly once
+per Queue registration lifetime. **Clean.**
+
+**F.4 fix (G+S through the increment) introduces no new deadlock or lock-order
+issue.** Verified above (F.4). The intermediate G+S release between the gate
+and the body does not reopen the TOCTOU because `active_port_calls_` is
+non-zero across the window. No caller can re-enter the gate while holding G or
+S (the grant seams take role mtx only, never G or S re-entrantly). **Clean.**
+
+**`closed_` atomic change is consistent across all G+S-held sites.** Verified
+above (F.5). The implicit `operator bool()` calls at eight sites perform
+`seq_cst` loads, stronger than the explicit `acquire` in `is_closed()`; no
+site depended on the old non-atomic semantics. **Clean.**
+
+**F.6 commit/retire order swap preserves winner-before-publication.** Verified
+above (F.6). The commit is a `QueueItemLease` move (noexcept, allocation-free)
+and the retire is an atomic CAS (noexcept); both are before `make_runnable`.
+No observable behavior change. **Clean.**
+
+**`granted_not_resumed_` decrement at resume — counter-asymmetry
+(OBSERVATION O-2, non-blocking).** The grant seams increment
+`granted_not_resumed_` at publication (`scheduler.cpp:2528,2562`). The pump
+publication path (`scheduler.cpp:2888-2891`) does NOT increment it. The four
+admit-seam resume sites decrement it under G after `context_switch`
+(`scheduler.cpp:2266,2319,2401,2478`), guarded by `if (> 0)`. Net effect: a
+pump-driven expiry never makes the counter positive, and the resume-time
+decrement is a no-op. This is an asymmetry vs the documented Corrective-3
+model ("incremented at grant-seam publication; decremented at admit-seam
+resume") — the pump is also a publication path. **The asymmetry is harmless**:
+the `active_port_calls_` counter (CallGuard, held from gate-increment through
+CallGuard-destruction) closes the same "winner-resume in flight" window that
+`granted_not_resumed_` would have closed, so `begin_teardown` still cannot
+proceed during a pump-expiry resume. The guarded decrement prevents underflow.
+Correct but asymmetric; documenting for future-Corrective-4 alignment.
+
+**`queue_cancel` does not increment `granted_not_resumed_` on its
+`make_runnable` (OBSERVATION O-3, non-blocking, pre-existing).**
+`scheduler.cpp:2497-2499` publishes a cancelled winner via `make_runnable` +
+`route_runnable_locked` without incrementing `granted_not_resumed_`. If the
+admit seam's resume-time decrement fired on this path, it would underflow
+(guarded, so no actual underflow). F.8 documents that `queue_cancel` is
+unreachable from any caller (v1-deferred); grep confirms zero callers. So the
+defect is currently unreachable. Latent only; the `> 0` guard rescues it even
+if v2 wires it. **Pre-existing, deferred with F.8.**
+
+**`timer_pool_.emplace_back` allocation-failure leak (OBSERVATION O-4,
+non-blocking, pre-existing).** `scheduler.cpp:2345,2424` emplace a
+`TimerRegistration` under G+S+role AFTER `++active_wait_associations_` /
+`++waiting_waitq_count_` / `register_wait_locked`. If `emplace_back` throws
+(`std::bad_alloc`), the three LockGuards unwind releasing the locks, but the
+counter increments and the FIFO registration are NOT rolled back — the next
+`begin_teardown` would fail-fast. This is the same residual the original
+review's F.3 flagged ("an allocation failure mid-admit would leave the lease
+stranded inside the operation with the timer half-registered") and that
+Corrective-3 "Honest residual scope" explicitly acknowledges ("the risk is
+probabilistic zero, not structural zero"). The corrective loop neither
+introduced nor worsened this; the new counter increments at `2343,2344` add
+two more unrolled-back side effects on the same path, but the path is the
+same one already acknowledged. **Pre-existing, acknowledged; not blocking.**
+
+## Test matrix
+
+Re-ran the 4-cell matrix independently (Clang 20 / GCC 15, Debug + ASan + TSan,
+WSL2 x86_64). All 20 cases PASS in every cell; the F.7-extended G1 cases
+(`e12_queue_g1_push_until_expires_recovers_value`,
+`e12_queue_g1_pop_until_expires`) exercise the F.1 closure end-to-end in every
+cell. TSan is clean on `e12_queue_g2_multi_worker_producer_consumer` (the only
+cross-OS-thread publication test).
+
+```
+# Clang Debug
+xmake f -m debug --toolchain=clang -y && xmake build e12_async_queue_test && xmake run e12_async_queue_test
+ALL TESTS PASSED
+
+# GCC Debug
+xmake f -m debug --toolchain=gcc -y && xmake build e12_async_queue_test && xmake run e12_async_queue_test
+ALL TESTS PASSED
+
+# Clang ASan
+xmake f -m asan --toolchain=clang -y && xmake build e12_async_queue_test && xmake run e12_async_queue_test
+ALL TESTS PASSED   (no ASan reports)
+
+# Clang TSan
+xmake f -m tsan --toolchain=clang -y && xmake build e12_async_queue_test && xmake run e12_async_queue_test
+ALL TESTS PASSED   (no TSan reports)
+```
+
+**F.1 reproduction (rebuilt probes, Clang Debug, linking the just-built
+libsluice_async_internal_testing.a + libsluice_core.a):**
+
+```
+# /tmp/e12_queue_reprobe.cpp   (push_until + begin_teardown)
+# /tmp/e12_queue_reprobe2.cpp  (pop_until + begin_teardown)
+probe: producer push_until got_expired=1 value=777
+about to call begin_teardown...
+begin_teardown returned; session.empty=1
+EXIT_CODE=0 (PASS)   (5/5 runs each probe; pre-corrective would have exit=42)
+```
+
+## Conclusion
+
+The Phase I corrective loop **genuinely closes every actionable finding**.
+F.1 (the BLOCKING defect) is reproduced-closed end-to-end via two rebuilt
+probes plus the F.7-extended G1 matrix in all four sanitizer cells; the fix is
+structural (an explicit on-resolve hook fired exactly once per ACTIVE->terminal
+transition), not a counter patch. F.2 wires both previously-dead counters via
+single-fire paths traced across all seven resolution rows. F.3 is closed by a
+properly-formed binding Corrective-3 supersession with an honest
+residual-scope section. F.4 closes the TOCTOU by holding G+S through the
+lifecycle check + counter increment; the body's non-recheck of lifecycle is
+proven safe by the `active_port_calls_` invariant. F.5 is a clean
+atomic<bool> release/acquire pair. F.6 swaps to the §12 retire-before-commit
+order with no observable behavior change. F.7's regression guard is genuine
+(park-then-advance_clock forces the pump path).
+
+The new-defect scan produced four OBSERVATIONS (O-1 through O-4), all
+non-blocking: one structural-fragility note on the unconditional on-resolve
+fire in the admit-time inline paths (safe under the current lock invariant,
+not structurally enforced); one counter-asymmetry where the pump publication
+path skips the `granted_not_resumed_` increment (closed by
+`active_port_calls_`); and two pre-existing latent concerns (the unreachable
+`queue_cancel` missing-increment, and the `emplace_back` allocation-failure
+leak) that were already acknowledged in the original review's F.3/F.8 and in
+Corrective-3's "Honest residual scope". None of these is introduced or
+worsened by the corrective loop.
+
+**Re-Verdict: PASS WITH OBSERVATIONS.** The implementation is fit to merge.
+The four observations should be tracked as follow-up items (a future
+Corrective-4 could harden the admit-time fire-on-CAS-success gate, align the
+pump-publication `granted_not_resumed_` increment, and add a `try/catch`
+rollback around `timer_pool_.emplace_back`), but none blocks the Phase I
+merge.
