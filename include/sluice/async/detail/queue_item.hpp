@@ -73,10 +73,16 @@ class QueueItemFactory;
 // Type-token helper: a stable per-type sentinel address used to validate that
 // a lease being released through `AsyncQueue<T>` was minted by an
 // `AsyncQueue<T>` factory of the SAME `T` (a wrong-type release is fail-fast).
-// Defined out-of-line in queue_port.cpp; declared here so the factory (in
-// queue_port.hpp) and the control share one authority.
+// Header-only (inline) because it is instantiated per-`T` at each
+// AsyncQueue<T> use site; the address of a function-local static byte is a
+// stable, per-instantiation, linkage-unique address with no heap and no
+// thread-safety hazard beyond the trivial zero-init of one byte.
 template <class T>
-const void* queue_type_token() noexcept;
+inline const void* queue_type_token() noexcept {
+    static_assert(std::is_object_v<T>, "AsyncQueue<T> requires an object type");
+    static const std::byte token{0};
+    return &token;
+}
 
 class QueueItemControl final {
 public:

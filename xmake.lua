@@ -1014,6 +1014,30 @@ do
     end
 end
 
+-- e12_async_queue_test — AsyncQueue (sluice-CORE-E12-E).
+-- P2+P3 scope: QueuePort fast paths (try_push / try_pop / close / snapshot),
+-- capacity/FIFO, failed-payload identity, one-shot lease, close idempotency,
+-- closed+empty terminal. Exercised via the non-template QueuePort authority +
+-- QueueItemFactory (the public AsyncQueue<T> wrapper lands in P8). The
+-- blocking/timed wait-admission paths (P4-P6) and Scheduler reconciliation
+-- land later; this target covers only the no-Scheduler fast paths. Links
+-- sluice_async_internal_testing (the authority lives in the non-template
+-- QueuePort, which is in sluice_async; the internal-testing variant keeps
+-- the option open for the deterministic phase seams added in P5/P6).
+do
+    local p = "tests/e12_async_queue_test.cpp"
+    if os.isfile(p) then
+        target("e12_async_queue_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_async_queue_test")
+    end
+end
+
 -- e12_async_mutex_death_test — verifies the Mutex acquisition fail-fast
 -- boundary (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1 §F) via a POSIX
 -- fork/exec/waitpid child-process harness. Each case (T1 lock / T2 try_lock /
