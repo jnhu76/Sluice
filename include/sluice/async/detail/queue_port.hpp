@@ -32,6 +32,7 @@
 #include <sluice/async/wait_node.hpp>        // WaitNode (admission node)
 #include <sluice/async/wait_queue.hpp>       // WaitQueue (role waiter FIFOs)
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -409,7 +410,10 @@ private:
     // are held: G -> S -> exactly one role WaitQueue).
     Mutex state_mtx_;
     QueueLifecycle lifecycle_{QueueLifecycle::operational};
-    bool closed_{false};
+    // F.5 corrective: closed_ is read lock-free by is_closed() (a public
+    // projection) from any OS thread, so it MUST be atomic. Mutated under
+    // G+S only in close() (release store); is_closed() does an acquire load.
+    std::atomic<bool> closed_{false};
 
     // Two role waiter FIFOs. Producer waiters park on push/push_until when
     // the ring is full or the close race blocks them; consumer waiters park

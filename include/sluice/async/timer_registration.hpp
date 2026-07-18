@@ -68,8 +68,24 @@ using deadline_tick_t = std::uint64_t;
 // is its identity for the deadline-heap ordering back-reference). The atomic
 // `state` is the retirement authority; the raw {node, queue} pointers are the
 // live-wait binding, read only while ACTIVE is observed.
+//
+// E12-E Queue hook (Corrective-2 §8 supersession): a Queue-bound registration
+// carries an optional `owner_ctx_` + `on_resolve_` thunk so the Scheduler can
+// perform per-port counter bookkeeping at retire/consume. Non-Queue waits
+// (Event/Semaphore/Mutex/Condition) leave both null and the Scheduler's
+// default `--waiting_waitq_count_` accounting applies unchanged. The thunk is
+// a plain fn ptr (no allocation, no capture); the Scheduler calls it under
+// global_mtx_ exactly once per registration resolution.
 class TimerRegistration {
 public:
+    // Per-resolution bookkeeping callback. Invoked by the Scheduler under
+    // global_mtx_ when this registration transitions out of ACTIVE (either
+    // via retire, by a non-timer winner, or via consume, by an expiry). The
+    // `owner_ctx` is opaque to the Scheduler; the registrant (QueuePort)
+    // interprets it. The bool argument is true if the timer WON the resolution
+    // (consumed) and false if it lost (retired by another resolver).
+    using OnResolveFn = void (*)(void* owner_ctx, bool timer_won) noexcept;
+
     // Independently-stable timer callback authority (distinct from WaitNode
     // terminal state). See file banner for the lifetime law.
     enum class State : std::uint8_t {
@@ -135,6 +151,21 @@ public:
     WaitQueue* queue() const noexcept { return queue_; }
     deadline_tick_t deadline() const noexcept { return deadline_; }
 
+    // E12-E Queue per-port resolution hook. Returns true iff this registration
+    // is bound to a Queue wait (an on_resolve_ thunk + owner_ctx_ were
+    // installed at admit time). The Scheduler calls fire_on_resolve_locked()
+    // exactly once per ACTIVE->terminal transition under global_mtx_.
+    bool has_on_resolve() const noexcept { return on_resolve_ != nullptr; }
+    void fire_on_resolve_locked(bool timer_won) noexcept {
+        // Caller MUST hold global_mtx_ AND have just performed the ACTIVE->
+        // terminal CAS that won/lost this registration. The thunk is
+        // idempotent under that serialisation (it is invoked exactly once per
+        // registration lifetime).
+        if (on_resolve_ != nullptr) {
+            on_resolve_(owner_ctx_, timer_won);
+        }
+    }
+
     // Heap/pool linkage used by the Scheduler's deadline container. The
     // Scheduler stores TimerRegistration in a pointer-stable container
     // (std::list), so these index fields are for the binary-heap position
@@ -148,6 +179,9 @@ private:
     WaitNode* node_{nullptr};
     WaitQueue* queue_{nullptr};
     deadline_tick_t deadline_{0};
+    // E12-E Queue per-port bookkeeping. Both null for non-Queue waits.
+    OnResolveFn on_resolve_{nullptr};
+    void* owner_ctx_{nullptr};
 };
 
 }  // namespace sluice::async

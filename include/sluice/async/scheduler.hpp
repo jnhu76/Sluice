@@ -749,6 +749,16 @@ public:
     bool queue_role_waiters_empty_locked(detail::QueuePort& port)
         SLUICE_REQUIRES(global_mtx_);
 
+    // E12-E Queue timer-counter on-resolve thunk (F.1/F.2 corrective). A
+    // Queue-bound TimerRegistration installs this as its on_resolve_ hook +
+    // `&port` as owner_ctx_ at admit time. The Scheduler fires it exactly once
+    // per ACTIVE->terminal timer transition (pump on consume,
+    // retire_timer_for_node_locked on retire) under global_mtx_. It is a STATIC
+    // MEMBER (not a free function) so it can reach QueuePort's private
+    // active_queue_timers_ counter via Scheduler's friend grant. The signature
+    // matches TimerRegistration::OnResolveFn.
+    static void queue_timer_on_resolve(void* owner_ctx, bool timer_won) noexcept;
+
 
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()

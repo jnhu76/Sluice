@@ -701,6 +701,13 @@ SLUICE_TEST_CASE(e12_queue_g1_push_until_expires_recovers_value) {
     auto rp = port.try_pop();
     SLUICE_CHECK(rp.status() == QueueOpaquePopStatus::item);
     (void)release_popped<int>(port, std::move(rp));
+
+    // F.1 regression guard: the pump-driven timer expiry MUST have decremented
+    // active_wait_associations_ and active_queue_timers_. begin_teardown checks
+    // all four counters == 0 under G+S; a leak (the F.1 defect) would fail-
+    // fast here. This call MUST succeed.
+    QueueTeardownSession session = port.begin_teardown();
+    SLUICE_CHECK(session.empty());  // ring already drained above
 }
 
 // ---- G1: pop_until expires (C8 ConsumerExpire) ----------------------------
@@ -739,6 +746,12 @@ SLUICE_TEST_CASE(e12_queue_g1_pop_until_expires) {
 
     sched.run(1);
     SLUICE_CHECK(got_expired);
+
+    // F.1 regression guard: begin_teardown after a pump-driven pop_until
+    // expiry MUST succeed (all four counters == 0). Symmetric to the
+    // push_until case above.
+    QueueTeardownSession session = port.begin_teardown();
+    SLUICE_CHECK(session.empty());
 }
 
 // ---- G2: multi-worker producer-consumer migration -------------------------

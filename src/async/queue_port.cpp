@@ -72,9 +72,20 @@ QueueItemLease::~QueueItemLease() noexcept {
 // serializes against this counter — once tearing_down, active_port_calls_ is
 // frozen at 0 and any ordinary entry is rejected before construction).
 struct QueuePort::CallGuard final {
+    // F.4 corrective: an ordinary entry increments active_port_calls_ under
+    // G+S in the caller (so the increment is atomic with the lifecycle gate
+    // and observed by begin_teardown), then constructs the guard with the
+    // adopt_tag (no second increment). The guard's dtor always decrements.
+    struct adopt_tag {};
+    // Increment-then-manage form (untimed fast paths that do NOT take G before
+    // the lifecycle check — kept for the snapshot projections where the
+    // lifecycle check is structurally inside the same scope).
     explicit CallGuard(QueuePort& port) noexcept : port_(&port) {
         ++port_->active_port_calls_;
     }
+    // Adopt form: the caller has ALREADY incremented under G+S; the guard
+    // owns the decrement at scope exit.
+    CallGuard(QueuePort& port, adopt_tag) noexcept : port_(&port) {}
     ~CallGuard() noexcept {
         if (port_ != nullptr) {
             --port_->active_port_calls_;
@@ -128,7 +139,9 @@ QueuePort::~QueuePort() {
 // ring_count_ which is mutated under state_mtx_, so a cheap lock makes the
 // observation consistent. (Snapshot is in the CallGuard list per §7.)
 bool QueuePort::is_closed() const noexcept {
-    return closed_;
+    // F.5 corrective: lock-free acquire load. close() does the matching release
+    // store under G+S. Callers may invoke this from any OS thread.
+    return closed_.load(std::memory_order::acquire);
 }
 
 std::size_t QueuePort::capacity() const noexcept {
@@ -160,15 +173,21 @@ std::size_t QueuePort::size() const noexcept {
 // added in P5 (it serializes under global_mtx_ which the fast path does not
 // take; for P3 the fast path correctly returns would_block when full).
 QueueOpaquePushResult QueuePort::try_push(QueueItemLease lease) {
-    // Lifecycle gate BEFORE CallGuard: a tearing_down port rejects ordinary
-    // entry without incrementing the counter.
+    // F.4 corrective: the lifecycle gate + active_port_calls_ increment MUST
+    // be atomic with respect to begin_teardown (which takes G+S and checks
+    // active_port_calls_). Hold G+S across the lifecycle check AND the
+    // increment; then construct the CallGuard with adopt_tag (no second
+    // increment) so its dtor owns the matching decrement. The body re-
+    // acquires G+S at the commit step.
     {
+        LockGuard glk(scheduler_.global_mtx_);
         LockGuard lk(state_mtx_);
         if (lifecycle_ != QueueLifecycle::operational) {
             queue_lease_fail_fast();
         }
+        ++active_port_calls_;  // observed under G+S by begin_teardown
     }
-    CallGuard guard(*this);
+    CallGuard guard(*this, CallGuard::adopt_tag{});
 
     // Entry contract: non-empty lease of this port at detached. Validate via
     // the lease's control pointer WITHOUT releasing it yet — the lease keeps
@@ -227,13 +246,16 @@ QueueOpaquePushResult QueuePort::try_push(QueueItemLease lease) {
 //
 // As with try_push, the older-consumer check is trivially true until P5.
 QueueOpaquePopResult QueuePort::try_pop() {
+    // F.4 corrective: lifecycle gate + increment atomic w.r.t. begin_teardown.
     {
+        LockGuard glk(scheduler_.global_mtx_);
         LockGuard lk(state_mtx_);
         if (lifecycle_ != QueueLifecycle::operational) {
             queue_lease_fail_fast();
         }
+        ++active_port_calls_;
     }
-    CallGuard guard(*this);
+    CallGuard guard(*this, CallGuard::adopt_tag{});
 
     // G -> S (P5 lock order).
     LockGuard glk(scheduler_.global_mtx_);
@@ -273,19 +295,22 @@ QueueOpaquePopResult QueuePort::try_pop() {
 // outcome (commit-to-ring for a producer if a slot somehow opened; pop for a
 // consumer if an item remains; closed otherwise).
 void QueuePort::close() noexcept {
-    // Lifecycle gate + CallGuard.
+    // F.4 corrective: lifecycle gate + increment atomic w.r.t. begin_teardown.
     {
+        LockGuard glk(scheduler_.global_mtx_);
         LockGuard lk(state_mtx_);
         if (lifecycle_ != QueueLifecycle::operational) {
             queue_lease_fail_fast();
         }
+        ++active_port_calls_;
     }
-    CallGuard guard(*this);
+    CallGuard guard(*this, CallGuard::adopt_tag{});
 
     LockGuard glk(scheduler_.global_mtx_);
     LockGuard lk(state_mtx_);
     // CL1 Open -> Closed; CL2 Closed -> Closed (idempotent). Monotone.
-    closed_ = true;
+    // F.5 corrective: release store pairs with the acquire load in is_closed().
+    closed_.store(true, std::memory_order::release);
     // Closed-reconciliation (P5/P7): drain the consumer FIFO by granting each
     // parked consumer the next buffered item until the ring is empty; further
     // consumers are granted closed+empty (queue_grant_consumer_locked leaves
@@ -315,13 +340,16 @@ void QueuePort::close() noexcept {
 // These run inside a Fiber (the admit closures assert g_worker != null). They
 // are NOT safe to call from a non-Fiber thread.
 QueueOpaquePushResult QueuePort::push(QueueItemLease lease) {
+    // F.4 corrective: lifecycle gate + increment atomic w.r.t. begin_teardown.
     {
+        LockGuard glk(scheduler_.global_mtx_);
         LockGuard lk(state_mtx_);
         if (lifecycle_ != QueueLifecycle::operational) {
             queue_lease_fail_fast();
         }
+        ++active_port_calls_;
     }
-    CallGuard guard(*this);
+    CallGuard guard(*this, CallGuard::adopt_tag{});
     QueueItemControl* c = lease.control_;
     if (c == nullptr || c->owner_port_ != this ||
         c->location_ != QueueItemControl::Location::detached) {
@@ -343,13 +371,16 @@ QueueOpaquePushResult QueuePort::push(QueueItemLease lease) {
 
 QueueOpaquePushResult QueuePort::push_until(QueueItemLease lease,
                                             queue_deadline_t deadline) {
+    // F.4 corrective: lifecycle gate + increment atomic w.r.t. begin_teardown.
     {
+        LockGuard glk(scheduler_.global_mtx_);
         LockGuard lk(state_mtx_);
         if (lifecycle_ != QueueLifecycle::operational) {
             queue_lease_fail_fast();
         }
+        ++active_port_calls_;
     }
-    CallGuard guard(*this);
+    CallGuard guard(*this, CallGuard::adopt_tag{});
     QueueItemControl* c = lease.control_;
     if (c == nullptr || c->owner_port_ != this ||
         c->location_ != QueueItemControl::Location::detached) {
@@ -369,13 +400,16 @@ QueueOpaquePushResult QueuePort::push_until(QueueItemLease lease,
 }
 
 QueueOpaquePopResult QueuePort::pop() {
+    // F.4 corrective: lifecycle gate + increment atomic w.r.t. begin_teardown.
     {
+        LockGuard glk(scheduler_.global_mtx_);
         LockGuard lk(state_mtx_);
         if (lifecycle_ != QueueLifecycle::operational) {
             queue_lease_fail_fast();
         }
+        ++active_port_calls_;
     }
-    CallGuard guard(*this);
+    CallGuard guard(*this, CallGuard::adopt_tag{});
     QueueItemLease out;  // empty; the reconciler moves a ring item into it
     WaitNode node;
     scheduler_.queue_pop_admit(*this, node, out);
@@ -386,13 +420,16 @@ QueueOpaquePopResult QueuePort::pop() {
 }
 
 QueueOpaquePopResult QueuePort::pop_until(queue_deadline_t deadline) {
+    // F.4 corrective: lifecycle gate + increment atomic w.r.t. begin_teardown.
     {
+        LockGuard glk(scheduler_.global_mtx_);
         LockGuard lk(state_mtx_);
         if (lifecycle_ != QueueLifecycle::operational) {
             queue_lease_fail_fast();
         }
+        ++active_port_calls_;
     }
-    CallGuard guard(*this);
+    CallGuard guard(*this, CallGuard::adopt_tag{});
     QueueItemLease out;
     WaitNode node;
     scheduler_.queue_pop_admit_until(*this, node, out, deadline);

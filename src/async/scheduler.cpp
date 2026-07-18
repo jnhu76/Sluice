@@ -2168,6 +2168,42 @@ void Scheduler::mutex_unlock(WaitQueue& waiters, Fiber*& owner) {
 // timer retire all happen in the SAME G + S + role critical section, BEFORE
 // make_runnable/route_runnable_locked (publication). A woken Fiber observes
 // the final state on resume.
+//
+// E12-E Queue timer bookkeeping (Corrective-2 §8 supersession). The
+// non-template QueuePort owns TWO per-port counters that bracket a Queue
+// timed wait:
+//   - `active_wait_associations_` (incremented on every successful
+//     registration; decremented on every resolution path — inline admit,
+//     grant seam, queue_cancel, AND the pump-driven timer expiry).
+//   - `active_queue_timers_` (incremented at timer registration; decremented
+//     when the timer is consumed or retired).
+// `active_wait_associations_` is decremented manually at each resolution
+// site that can name the port (the four admit seams, the two grant seams,
+// queue_cancel). The pump_deadlines_locked path cannot otherwise reach the
+// port, so for a Queue-bound registration it uses the registration's
+// `owner_ctx_` to perform the `--active_wait_associations_` decrement.
+// `active_queue_timers_` is decremented via the on-resolve thunk installed
+// on the TimerRegistration (fired by pump on consume and by
+// retire_timer_for_node_locked on retire); this keeps the timer-counter
+// bookkeeping localized to the timer's ACTIVE->terminal transition.
+// Non-Queue waits leave the hook null and the Scheduler's default
+// `--waiting_waitq_count_` accounting applies unchanged.
+//
+// The §8 PreparedQueueTimer/prepare/activate/discard substrate is
+// SUPERSEDED by this minimal model (see docs/e12-queue-corrective-3.md).
+//
+// static
+void Scheduler::queue_timer_on_resolve(void* owner_ctx,
+                                       bool /*timer_won*/) noexcept {
+    // The on-resolve thunk for a Queue-bound TimerRegistration. Decrements
+    // `active_queue_timers_` exactly once. Idempotent under the caller's
+    // global_mtx_ + the registration's single ACTIVE->terminal transition.
+    // Static-member form so it can reach QueuePort's private counter via
+    // Scheduler's friend grant.
+    auto* port = static_cast<detail::QueuePort*>(owner_ctx);
+    if (port == nullptr) return;
+    if (port->active_queue_timers_ > 0) --port->active_queue_timers_;
+}
 
 
 void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
@@ -2222,6 +2258,13 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+    // F.2 corrective: this fiber has now RESUMED from a suspended-winner
+    // publication. Decrement the per-port `granted_not_resumed_` counter under
+    // G (the publication side incremented it under G in the grant seam).
+    {
+        LockGuard lk(global_mtx_);
+        if (port.granted_not_resumed_ > 0) --port.granted_not_resumed_;
+    }
     // On resume the reconciler already finalized: lease.control_==null means
     // committed, non-null means closed/expired/cancelled.
 }
@@ -2269,6 +2312,12 @@ void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+    // F.2 corrective: this fiber has RESUMED from a suspended-winner
+    // publication. Decrement granted_not_resumed_ under G.
+    {
+        LockGuard lk(global_mtx_);
+        if (port.granted_not_resumed_ > 0) --port.granted_not_resumed_;
+    }
 }
 
 void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
@@ -2295,6 +2344,9 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         ++waiting_waitq_count_;
         timer_pool_.emplace_back(&node, &port.waiters_[0], deadline);
         reg = &timer_pool_.back();
+        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // F.1/F.2 wiring
+        reg->owner_ctx_ = &port;
+        ++port.active_queue_timers_;
         ++active_deadline_count_;
         heap_push_locked(reg);
         recompute_earliest_deadline_locked();
@@ -2308,6 +2360,7 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
             port.waiters_[0].wake_node_locked(node);
             if (reg->retire()) { --active_deadline_count_; }
             recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
             if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
             return;
@@ -2317,6 +2370,7 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
             port.waiters_[0].wake_node_locked(node);
             if (reg->retire()) { --active_deadline_count_; }
             recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
             if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
             return;
@@ -2327,6 +2381,7 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
                 reg->try_claim_expiry();
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();
+                reg->fire_on_resolve_locked(/*timer_won=*/true);
                 if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 return;  // expired; lease retained
@@ -2338,6 +2393,13 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+    // F.2 corrective: this fiber has RESUMED from a suspended-winner
+    // publication (or a timer-expiry publication). Decrement
+    // granted_not_resumed_ under G.
+    {
+        LockGuard lk(global_mtx_);
+        if (port.granted_not_resumed_ > 0) --port.granted_not_resumed_;
+    }
 }
 
 void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
@@ -2361,6 +2423,9 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         ++waiting_waitq_count_;
         timer_pool_.emplace_back(&node, &port.waiters_[1], deadline);
         reg = &timer_pool_.back();
+        reg->on_resolve_ = &Scheduler::queue_timer_on_resolve;  // F.1/F.2 wiring
+        reg->owner_ctx_ = &port;
+        ++port.active_queue_timers_;
         ++active_deadline_count_;
         heap_push_locked(reg);
         recompute_earliest_deadline_locked();
@@ -2374,6 +2439,7 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
             port.waiters_[1].wake_node_locked(node);
             if (reg->retire()) { --active_deadline_count_; }
             recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
             if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
             return;
@@ -2382,6 +2448,7 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
             port.waiters_[1].wake_node_locked(node);
             if (reg->retire()) { --active_deadline_count_; }
             recompute_earliest_deadline_locked();
+            reg->fire_on_resolve_locked(/*timer_won=*/false);
             if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
             if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
             return;
@@ -2391,6 +2458,7 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
                 reg->try_claim_expiry();
                 --active_deadline_count_;
                 recompute_earliest_deadline_locked();
+                reg->fire_on_resolve_locked(/*timer_won=*/true);
                 if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 return;  // expired; out stays empty
@@ -2402,6 +2470,13 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+    // F.2 corrective: this fiber has RESUMED from a suspended-winner
+    // publication (or a timer-expiry publication). Decrement
+    // granted_not_resumed_ under G.
+    {
+        LockGuard lk(global_mtx_);
+        if (port.granted_not_resumed_ > 0) --port.granted_not_resumed_;
+    }
 }
 
 bool Scheduler::queue_cancel(detail::QueuePort& port, detail::QueueRole role,
@@ -2435,6 +2510,8 @@ WaitNode* Scheduler::queue_grant_consumer_locked(detail::QueuePort& port)
     WaitNode* won = port.waiters_[1].wake_one_locked();  // resolve FIFO head Woken + unlink
     if (won == nullptr) return nullptr;  // no consumer parked / head lost
     auto* ctx = static_cast<QueueWaitCtx*>(won->user());
+    // ---- retire BEFORE commit (§12 verbatim order; F.6 corrective) ----
+    retire_timer_for_node_locked(*won);  // E11 I4 (fires F.2 thunk if Queue timer)
     // ---- resource commit BEFORE publication ----
     if (!port.ring_empty_locked()) {
         const std::size_t head = port.ring_head_;
@@ -2444,11 +2521,11 @@ WaitNode* Scheduler::queue_grant_consumer_locked(detail::QueuePort& port)
         ctx->cons_out->control_->location_ =
             detail::QueueItemControl::Location::consumer_operation;
     }  // else: ring empty (close race) => leave out empty; caller returns closed
-    retire_timer_for_node_locked(*won);  // E11 I4
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     Fiber* f = won->fiber();
     if (f != nullptr && f->make_runnable()) {  // publication LAST
+        ++port.granted_not_resumed_;  // F.2: published suspended-winner ticket
         route_runnable_locked(f, g_worker);
     }
     return won;
@@ -2466,6 +2543,8 @@ WaitNode* Scheduler::queue_grant_producer_locked(detail::QueuePort& port)
     WaitNode* won = port.waiters_[0].wake_one_locked();
     if (won == nullptr) return nullptr;
     auto* ctx = static_cast<QueueWaitCtx*>(won->user());
+    // ---- retire BEFORE commit (§12 verbatim order; F.6 corrective) ----
+    retire_timer_for_node_locked(*won);
     // ---- resource commit BEFORE publication ----
     if (!port.closed_ && !port.ring_full_locked()) {
         detail::QueueItemControl* c = ctx->prod_control;
@@ -2476,11 +2555,11 @@ WaitNode* Scheduler::queue_grant_producer_locked(detail::QueuePort& port)
         ++port.ring_count_;
     }  // else: Closed (or race-full) => leave producer's lease retained; the
        // producer resume returns it as closed.
-    retire_timer_for_node_locked(*won);
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     Fiber* f = won->fiber();
     if (f != nullptr && f->make_runnable()) {
+        ++port.granted_not_resumed_;  // F.2: published suspended-winner ticket
         route_runnable_locked(f, g_worker);
     }
     return won;
@@ -2791,6 +2870,20 @@ std::size_t Scheduler::pump_deadlines_locked() {
             LockGuard qlk(q->mtx());
             if (q->expire_locked(*n)) {
                 Fiber* f = n->fiber();
+                // E12-E Queue (F.1 + F.2): for a Queue-bound registration the
+                // pump performs the per-port `--active_wait_associations_`
+                // (via owner_ctx) and `--active_queue_timers_` (via the
+                // on-resolve thunk) decrements. Non-Queue registrations have
+                // no thunk and no owner_ctx; the `--waiting_waitq_count_`
+                // Scheduler-wide accounting below applies unchanged.
+                if (top->has_on_resolve()) {
+                    auto* port = static_cast<detail::QueuePort*>(top->owner_ctx_);
+                    if (port != nullptr &&
+                        port->active_wait_associations_ > 0) {
+                        --port->active_wait_associations_;
+                    }
+                    top->fire_on_resolve_locked(/*timer_won=*/true);
+                }
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 if (f != nullptr && f->make_runnable()) {
                     route_runnable_locked(f, g_worker);
@@ -2828,6 +2921,12 @@ void Scheduler::retire_timer_for_node_locked(WaitNode& node) {
         if (r.node() == &node) {
             if (r.retire()) {  // ACTIVE->RETIRED
                 --active_deadline_count_;
+                // E12-E Queue (F.2): a Queue-bound timer's retire decrements
+                // the per-port active_queue_timers_ counter via the on-resolve
+                // thunk. timer_won=false (the timer LOST — a non-timer winner
+                // retired it). Idempotent: the CAS above is the single
+                // ACTIVE->terminal transition.
+                r.fire_on_resolve_locked(/*timer_won=*/false);
             }
             recompute_earliest_deadline_locked();  // refresh park-timeout cache
             return;
