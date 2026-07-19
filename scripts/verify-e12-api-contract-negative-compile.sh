@@ -43,8 +43,12 @@ for macro in "${negative_macros[@]}"; do
   if "$cxx_bin" "${common_flags[@]}" "-D$macro" "$probe" >"$log" 2>&1; then
     printf '%s EXIT=0 CLASSIFICATION=FAIL — COMPILE UNEXPECTEDLY SUCCEEDED\n' "$macro"
     failures=$((failures + 1))
+  elif ! grep -q 'deleted' "$log"; then
+    printf '%s EXIT=nonzero CLASSIFICATION=FAIL — WRONG FAILURE REASON (no deleted-member diagnostic)\n' "$macro"
+    sed -n '1,20p' "$log"
+    failures=$((failures + 1))
   else
-    printf '%s EXIT=nonzero CLASSIFICATION=PASS — EXPECTED NEGATIVE DIAGNOSTIC\n' "$macro"
+    printf '%s EXIT=nonzero CLASSIFICATION=PASS — deleted-member diagnostic confirmed\n' "$macro"
   fi
 done
 

@@ -426,7 +426,7 @@ Canonical decomposition (protocol-dependency order, resolved by the E12
 preparation audit — see [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)):
 
 ```text
-E12-A Event              [CLOSED — E12-A-EVENT-CORRECTIVE-2 + ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1; both independent reviews PASS; fresh formal gate PASS (0-ed) — docs/e12-event.md; formal: docs/spec/e12_event/]
+E12-A Event              [CLOSED — E12-A-EVENT-CORRECTIVE-2 + ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1; both independent reviews PASS; formal script exit 1 under current TLC runtime, PREEXISTING TOOLCHAIN-SENSITIVE LIMITATION WITH BASELINE PARITY — docs/e12-event.md; formal: docs/spec/e12_event/]
 E12-B Semaphore          [IMPLEMENTATION COMPLETE — REVIEW-REQUIRED — docs/e12-semaphore.md]
 E12-C AsyncMutex         [IMPLEMENTATION COMPLETE — REVIEW-REQUIRED — docs/e12-async-mutex.md]
 E12-D AsyncCondition     [IMPLEMENTATION COMPLETE — REVIEW-REQUIRED — docs/e12-condition.md]
