@@ -22,7 +22,7 @@ Review of the E12-B Semaphore production implementation (`sluice-CORE-E12-B`):
 
 The E12-B Semaphore implementation is clean, well-structured, and demonstrably correct. The 12-invariant TLA+ safety model passes, all 31 runtime tests pass (debug + release), all 7 negative models produce the expected named counterexample, and the authority-sealing compile probe successfully rejects the forbidden WaitQueue bypass. The implementation follows the E12-A Event pattern faithfully (same Scheduler seam design, same test discipline, same lock order), extends no Scheduler refactor, and introduces no generic grant framework.
 
-**Verdict: ACCEPT.** No blocking defects were found. Three non-blocking observations are recorded below.
+**Verdict: ACCEPT (WITH OBSERVATIONS).** No blocking defects were found. Three non-blocking observations are recorded below.
 
 ---
 

@@ -8,7 +8,7 @@
 
 实现语义正确，贯穿整个协议：
 
-- **两阶段协议正确**：两个不同的 `WaitNode` 实例 —— 调用者提供的 `condition_node`（条件阶段）和栈中的 `reacquire_node`（强制重获取阶段）。条件节点在重获取之前已变为终端并从条件队列中取消链接（`condition.hpp:234` 与 `condition.hpp:250`）。
+- **两阶段协议正确**：使用两个不同的 `WaitNode` 实例——调用者提供的 `condition_node` 和栈上的 `reacquire_node`。`Scheduler::condition_wait_prepare` / `condition_wait_prepare_until` 只在 Condition epoch 已解析后返回；wake/cancel/expiry resolver 将 Condition node 终态化并从 Condition queue 取消链接。随后 `AsyncCondition::wait*` 才创建 `reacquire_node` 并执行强制 Mutex reacquire。
 - **原子释放和等待**：`condition_wait_prepare`（`scheduler.cpp:2628-2670`）在单个 `global_mtx_` CS 内注册条件节点、释放互斥锁并挂起纤程。通知窗口在注册完成之前保持关闭。
 - **通知不接触互斥锁所有者**：`condition_notify_one` 调用 `wake_wait_one_locked(cond_waiters)`（`scheduler.cpp:2680`）—— 仅解析条件队列，不修改互斥锁状态。获胜者自行重获取。
 - **抢占优先的终端路径正确**：`condition_wait_prepare_until`（`scheduler.cpp:2711-2722`）在未调度已过期时间时将预检查优先级提升到表达式 3：立即返回 `Expired`，`released_mutex=false`，无重获取。`wait_until` 调用者通过 `if (!released_mutex) return reason;`（`condition.hpp:297`）跳过重获取。
