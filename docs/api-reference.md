@@ -407,7 +407,213 @@ platforms; it is limited to the platforms and compilers actually verified
 
 ---
 
-## Measurement
+## Async Synchronization (E10–E12)
+
+The async synchronization primitives are built on the E10 `WaitNode`/`WaitQueue` substrate
+and the E11 deadline/timer integration. See `docs/e10-e12-api-semantic-closure.md` for the
+cross-primitive authority.
+
+### `sluice::async::WaitOutcome`
+
+```cpp
+enum class WaitOutcome : std::uint8_t {
+    unresolved = 0,  // Not yet terminal (the only non-terminal value)
+    woken = 1,       // Resolved by wake (RESOURCE_WAKE)
+    cancelled = 2,   // Resolved by wait-epoch cancellation (CANCEL)
+    expired = 3,     // Resolved by deadline expiry (TIMER_EXPIRE, E11)
+};
+```
+
+`WaitOutcome` is a four-value enum: `unresolved` is the only non-terminal
+value, and `woken` / `cancelled` / `expired` are the three terminal outcomes
+(absorbing — once terminal, the value does not change). `AsyncQueue<T>` does
+NOT use `WaitOutcome`; it returns the typed `QueuePushResult<T>` /
+`QueuePopResult<T>` whose `status()` carries `committed`/`item`/`closed`/
+`expired`/`would_block`.
+
+### `sluice::async::WaitNode`
+
+One canonical wait lifecycle. Caller-owned, address-stable, non-copyable, non-movable.
+One fresh `WaitNode` per wait epoch. The caller provides it to blocking operations
+and queries `node.outcome()` after resume.
+
+Fresh-per-epoch is enforced by the absorbing `WaitNode` state machine and the
+registration precondition that registration succeeds only from `Detached`.
+Deleted copy/move operations preserve object identity and address stability;
+they do not by themselves prevent terminal-node reuse.
+
+```cpp
+class WaitNode {
+public:
+    WaitNode() noexcept;
+    explicit WaitNode(Fiber* fiber) noexcept;
+    ~WaitNode();  // assert(!is_registered())
+
+    bool is_registered() const noexcept;
+    bool is_terminal() const noexcept;
+    WaitOutcome outcome() const noexcept;
+    bool was_woken() const noexcept;
+    bool was_cancelled() const noexcept;
+    bool was_expired() const noexcept;  // E11
+    Fiber* fiber() const noexcept;
+};
+```
+
+### `sluice::async::Event`
+
+Persistent manual-reset async Event. Non-copyable, non-movable.
+
+```cpp
+class Event {
+public:
+    explicit Event(Scheduler& scheduler, bool initially_set = false) noexcept;
+    ~Event();
+
+    [[nodiscard]] bool is_set() const noexcept;
+    void set();                          // broadcast to all registered waiters; ext-thread safe
+    void reset();                        // does NOT cancel waiters
+    void wait(WaitNode& node);           // Fiber-only; suspend until SET or cancel
+    void wait_until(WaitNode& node, Scheduler::deadline_t deadline);  // Fiber-only
+    [[nodiscard]] bool cancel(WaitNode& node);  // per-wait-epoch cancel; any thread
+};
+```
+
+### `sluice::async::Semaphore`
+
+Async counting Semaphore. Non-copyable, non-movable.
+
+```cpp
+class Semaphore {
+public:
+    using permit_count_t = std::uint32_t;
+    Semaphore(Scheduler& scheduler, permit_count_t initial_permits,
+              permit_count_t max_permits) noexcept;
+    ~Semaphore();
+
+    [[nodiscard]] permit_count_t available() const noexcept;  // lock-free snapshot
+    [[nodiscard]] bool try_acquire();          // no barging; any thread
+    void acquire(WaitNode& node);              // Fiber-only
+    void acquire_until(WaitNode& node, Scheduler::deadline_t deadline);  // Fiber-only
+    [[nodiscard]] bool cancel(WaitNode& node); // per-wait-epoch cancel; any thread
+    [[nodiscard]] bool release();              // transfer/store/overflow; ext-thread safe
+};
+```
+
+### `sluice::async::AsyncMutex`
+
+Fiber-suspending async Mutex. Non-copyable, non-movable. Ownership is `Fiber*` identity
+(survives E8 work stealing).
+
+```cpp
+class AsyncMutex {
+public:
+    explicit AsyncMutex(Scheduler& scheduler) noexcept;
+    ~AsyncMutex();  // assert(owner_ == nullptr)
+
+    [[nodiscard]] bool try_lock();              // Fiber-only; recursive→false
+    void lock(WaitNode& node);                  // Fiber-only
+    void lock_until(WaitNode& node, Scheduler::deadline_t deadline);  // Fiber-only
+    [[nodiscard]] bool cancel(WaitNode& node);  // per-wait-epoch cancel; any thread
+    void unlock();                              // Fiber-only; must be owner
+};
+```
+
+### `sluice::async::AsyncCondition`
+
+Fiber-suspending async condition variable. Bound to one `AsyncMutex` at construction.
+Non-copyable, non-movable. Two-epoch protocol: Condition epoch + mandatory Mutex reacquire.
+
+```cpp
+class AsyncCondition {
+public:
+    explicit AsyncCondition(AsyncMutex& mutex) noexcept;
+    ~AsyncCondition();  // assert(active_waits_ == 0)
+
+    [[nodiscard]] WaitOutcome wait(WaitNode& condition_node);           // Fiber-only; must own Mutex
+    [[nodiscard]] WaitOutcome wait_until(WaitNode& condition_node,      // Fiber-only; must own Mutex
+                                          Scheduler::deadline_t deadline);
+    [[nodiscard]] bool cancel(WaitNode& condition_node);  // per-Condition-epoch cancel; any thread
+    void notify_one();                                    // any thread; non-persistent
+    void notify_all();                                    // any thread; atomic snapshot-drain
+};
+```
+
+### `sluice::async::AsyncQueue<T>`
+
+Bounded MPMC FIFO channel. Non-copyable, non-movable. `T` must be an object type,
+nothrow-move-constructible, and nothrow-destructible. `T` need NOT be default-constructible
+or move-assignable.
+
+`AsyncQueue<T>` v1 has **no public wait-epoch cancellation API** and **no
+`Cancelled` result**. `close()` and deadline expiry are distinct Queue
+state-machine causes (`closed` / `expired` statuses), not cancellation. There
+is no `cancel(WaitNode&)` on `AsyncQueue<T>`; per-wait-epoch cancellation is
+deferred to a future authority (see
+`docs/e10-e12-api-semantic-closure.md` D4).
+
+```cpp
+template <class T>
+class AsyncQueue final {
+public:
+    explicit AsyncQueue(Scheduler& scheduler, std::size_t capacity);  // throws if capacity == 0
+    ~AsyncQueue();
+
+    // Fast paths (no suspend)
+    [[nodiscard]] QueuePushResult<T> try_push(T value);
+    [[nodiscard]] QueuePopResult<T> try_pop();
+    void close() noexcept;  // idempotent, monotonic
+    [[nodiscard]] bool is_closed() const noexcept;
+    [[nodiscard]] std::size_t capacity() const noexcept;
+    [[nodiscard]] std::size_t size() const noexcept;
+
+    // Blocking (Fiber-only)
+    [[nodiscard]] QueuePushResult<T> push(T value);
+    [[nodiscard]] QueuePushResult<T> push_until(T value, Scheduler::deadline_t deadline);
+    [[nodiscard]] QueuePopResult<T> pop();
+    [[nodiscard]] QueuePopResult<T> pop_until(Scheduler::deadline_t deadline);
+
+    // Teardown (irreversible)
+    QueueTeardownSession begin_teardown() noexcept;
+    T release_teardown(QueueTeardownSession& session) noexcept;
+};
+```
+
+**Result types:**
+- `QueuePushResult<T>` — `status()` returns `committed | closed | expired | would_block`;
+  `take_value()` recovers the exact `T` on failure.
+- `QueuePopResult<T>` — `status()` returns `item | closed | expired | would_block`;
+  `take_value()` recovers the popped `T`.
+- Both are move-only, non-copyable. Move-assignment is hand-written (destroy-and-rebuild)
+  so `T` need not be move-assignable (PR #12 corrective).
+
+### Common Vocabulary
+
+| Term | Meaning |
+|------|---------|
+| `wait-epoch` | One fresh `WaitNode` registration → one terminal outcome. Identified by `WaitNode` object identity. |
+| `wait-epoch cancellation` | `cancel(WaitNode&)` resolves exactly one registered wait epoch. NOT task/Fiber/I/O cancellation. |
+| `absolute monotonic deadline` | `Scheduler::deadline_t` = `uint64_t` monotonic ticks. `expired iff now >= deadline`. |
+| `already-due deadline` | A deadline ≤ `monotonic_now()` at admission time. All primitives resolve inline without suspending. |
+| `admission precedence` | Resource readiness checked BEFORE already-due deadline (resource-first). |
+| `registered race` | After registration, RESOURCE_WAKE / TIMER_EXPIRE / CANCEL compete through the single `WaitNode::resolve_` CAS. |
+| `FIFO waiter selection` | Waiters are selected in FIFO registration order. Does NOT guarantee strict completion order. |
+| `no barging` | `try_*` operations fail if a queued waiter has FIFO priority. |
+| `destroy` | Destructor. Requires waiters empty (debug assert). Does NOT cancel/wake/clean up. |
+| `close` | Monotonic Open→Closed (Queue only). Drains role FIFOs. |
+| `begin_teardown` | Irreversible operational→tearing_down (Queue only). Returns `QueueTeardownSession`. |
+
+### Thread Calling Boundaries
+
+| Operation Class | Examples | Requires Fiber | Safe from Ext Thread |
+|----------------|----------|---------------|---------------------|
+| Blocking/timed wait | `wait`, `acquire`, `lock`, `push`, `pop` | Yes | No |
+| Non-blocking try | `try_acquire`, `try_lock`, `try_push`, `try_pop` | No | Yes |
+| Wake/notify | `set`, `release`, `notify_one`, `notify_all` | No | Yes |
+| Cancel | `cancel` (all primitives with cancel) | No | Yes |
+| Observation | `is_set`, `available`, `is_closed`, `capacity`, `size` | No | Yes |
+| Construction/destruction | ctors, dtors | No | Yes |
+
+---
 
 All stats structs are caller-owned, default-initialized to zero, and attached via nullable pointer (null = no counting).
 

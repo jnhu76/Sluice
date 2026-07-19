@@ -571,6 +571,18 @@ Transition deltas use `(A,W,T,R)` for these four counters:
 
 ## 8. PREPARED timer physical representation
 
+> **SUPERSESSION NOTICE (E10-E12-API-SEMANTIC-CLOSURE-1, finding F1).** The
+> `PreparedQueueTimer` design described in this section is **SUPERSEDED** for the
+> production implementation. The authority for the queue timer model is
+> `docs/e12-queue-corrective-3.md`, which records that production never
+> implemented `PreparedQueueTimer`: timers are constructed directly ACTIVE via
+> the generic `TimerRegistration` path with an `on_resolve_` hook, and the
+> PREPARED/ACTIVE split below is preserved here only as the historical design
+> record that Corrective-3 supersedes. No code change resulted from this notice;
+> it clarifies document authority only. See
+> `docs/e10-e12-api-semantic-closure.md` finding F1 for the cross-document
+> trace.
+
 The concrete pool remains `std::list<TimerRegistration>`. PREPARED and ACTIVE
 registrations occupy the same list element. List insertion does not relocate
 existing elements and does not invalidate their iterators/references; erasing

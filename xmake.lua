@@ -1084,3 +1084,49 @@ do
             add_tests("e12_async_mutex_nothrow_authority_probe")
     end
 end
+
+-- e12_api_contract_probes — cross-primitive compile-time contract probe
+-- (E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1, decisions D2/D5/D6/D10).
+-- Verifies that every public async synchronization primitive is non-copyable
+-- AND non-movable (D6), that WaitOutcome is the four-value vocabulary enum
+-- (D2), and that the typed Queue result types remain move-assignable even when
+-- T is NOT move-assignable (PR #12 corrective). PURE compile-time probe: all
+-- verification is static_assert; main() is trivial. Does NOT replace the
+-- per-primitive authority probes — this gates the cross-primitive parity
+-- contract only. Depends on sluice_async_internal_testing so the seam header
+-- resolves (the probe itself exercises the public production surface).
+do
+    local p = "tests/e12_api_contract_probes.cpp"
+    if os.isfile(p) then
+        target("e12_api_contract_probes")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_api_contract_probes")
+    end
+end
+
+-- e12_cross_primitive_parity_test — cross-primitive semantic parity tests
+-- (E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1, decisions D3/D7/D8). Verifies
+-- that the cross-primitive contract documented in the semantic-closure
+-- authority holds UNIFORMLY across Event / Semaphore / AsyncMutex /
+-- AsyncCondition: resource-first deadline precedence (D3), queue-identity
+-- cancellation (D7), and terminal-outcome exclusivity (D8). Does NOT replace
+-- the per-primitive test suites; verifies the cross-primitive PARITY contract
+-- only. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e12_cross_primitive_parity_test.cpp"
+    if os.isfile(p) then
+        target("e12_cross_primitive_parity_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_cross_primitive_parity_test")
+    end
+end

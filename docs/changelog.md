@@ -2,6 +2,57 @@
 
 ## unreleased — async substrate
 
+### Added
+
+- **E10 WaitNode and WaitQueue** (`sluice-CORE-E10`). One canonical wait
+  lifecycle primitive: `WaitNode` (caller-owned, non-copyable, non-movable,
+  one-per-epoch) with `WaitOutcome` enum (`unresolved`, with terminal outcomes
+  `woken` / `cancelled` / `expired`). `WaitQueue` is a Scheduler-integrated
+  runtime substrate (intrusive FIFO, **sealed authority** — Scheduler is the
+  sole registration and resolution friend; not a standalone user
+  synchronization primitive). One-winner `resolve_` CAS protocol.
+  See `docs/e10-waitnode-wait-queue.md`.
+
+- **E11 Deadline / Timer Wait** (`sluice-CORE-E11`). `TimerRegistration`
+  control block (Scheduler-integrated runtime substrate, not a standalone
+  user synchronization primitive) with independently-stable retirement state
+  (`ACTIVE`/`RETIRED`/`CONSUMED`). `Scheduler::deadline_t` (monotonic
+  absolute deadline). `await_wait_deadline`, `expire_wait`, `monotonic_now`.
+  See `docs/e11-deadline-timer-wait.md`.
+
+- **E12-A Event** (`sluice-CORE-E12-A`). Persistent manual-reset async
+  `Event`: `set()`/`reset()`/`wait(WaitNode&)`/`wait_until(WaitNode&,
+  deadline_t)`/`cancel(WaitNode&)`. `set()` broadcasts to all registered
+  waiters. Queue-identity-gated cancellation. See `docs/e12-event.md`.
+
+- **E12-B Semaphore** (`sluice-CORE-E12-B`). Async counting `Semaphore`:
+  `acquire(WaitNode&)`/`acquire_until(WaitNode&, deadline_t)`/
+  `try_acquire()`/`release()`/`cancel(WaitNode&)`. Permit transfer or store.
+  No barging. See `docs/e12-semaphore.md`.
+
+- **E12-C AsyncMutex** (`sluice-CORE-E12-C`). Fiber-suspending async
+  `AsyncMutex`: `lock(WaitNode&)`/`lock_until(WaitNode&, deadline_t)`/
+  `try_lock()`/`unlock()`/`cancel(WaitNode&)`. Direct ownership handoff
+  (owner commit BEFORE publication). See `docs/e12-async-mutex.md`.
+
+- **E12-D AsyncCondition** (`sluice-CORE-E12-D`). Fiber-suspending async
+  condition variable: `wait(WaitNode&)`/`wait_until(WaitNode&, deadline_t)`/
+  `notify_one()`/`notify_all()`/`cancel(WaitNode&)`. Two-epoch protocol
+  (Condition epoch + mandatory Mutex reacquire). Returns `WaitOutcome`
+  directly. See `docs/e12-condition.md`.
+
+- **E12-E AsyncQueue\<T\>** (`sluice-CORE-E12-E`). Bounded MPMC FIFO
+  channel: `push(T)`/`push_until(T, deadline_t)`/`try_push(T)`/
+  `pop()`/`pop_until(deadline_t)`/`try_pop()`/`close()`/
+  `begin_teardown()`. Typed result objects (`QueuePushResult<T>`,
+  `QueuePopResult<T>`). Non-template `QueuePort` core + thin template
+  wrapper. See `docs/e12-queue.md`.
+
+- **E10-E12 API & Semantic Closure** (`E10-E12-ASYNC-SYNC-API-SEMANTIC-
+  CLOSURE-1`). Cross-primitive API inventory, semantic contract matrix,
+  D1-D10 decision register, E13 Select dependency contract.
+  See `docs/e10-e12-api-semantic-closure.md`.
+
 ### Changed
 
 - **`sluice::async::Mutex` acquisition is now `noexcept` / fail-fast.**

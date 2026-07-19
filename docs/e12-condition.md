@@ -5,19 +5,33 @@
 > E12-D-CONDITION-PREPARATION-AUDIT-1: CORRECTIVE-COMPLETE
 > E12-D-CONDITION-PREPARATION-CORRECTIVE-1: COMPLETE
 > E12-D-PREPARATION: REVIEW-REQUIRED
-> E12-D-IMPLEMENTATION: BLOCKED
+> E12-D-IMPLEMENTATION: COMPLETE
+> E12-D-IMPLEMENTATION-REVIEW: REVIEW-REQUIRED
 > ```
 >
-> Authority baseline:
+> NOTE: Implementation was unblocked as part of the E12 dependency trunk
+> (Event → Semaphore → Mutex → Condition → Queue). The production code
+> in `include/sluice/async/condition.hpp` is fully implemented and passes
+> all 34 test cases. The status banner was stale; corrected by
+> E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1.
+>
+> Authority baseline (reconstructed from actual review artifacts by
+> E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-CORRECTIVE-1, C3):
 > - E10 CLOSED ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md))
 > - E11 CLOSED (`7715808`, [`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md))
 > - E12-A Event CLOSED ([`docs/e12-event.md`](e12-event.md))
-> - E12-B Semaphore CLOSED ([`docs/e12-semaphore.md`](e12-semaphore.md))
-> - E12-C AsyncMutex IMPLEMENTATION CLOSED
->   ([`docs/e12-async-mutex.md`](e12-async-mutex.md);
->   E12-C-IMPLEMENTATION-1-INDEPENDENT-REVIEW: PASS,
->   E12-C-IMPLEMENTATION: CLOSED)
-> - E12-C: CLOSED
+> - E12-B Semaphore: PREPARATION CLOSED; IMPLEMENTATION REVIEW-REQUIRED
+>   ([`docs/e12-semaphore.md`](e12-semaphore.md)). No independent
+>   implementation-review artifact exists for E12-B; the previous "E12-B
+>   Semaphore CLOSED" line was an overstatement and is corrected here.
+> - E12-C AsyncMutex: PREPARATION CLOSED; IMPLEMENTATION-REVIEW PASS (after
+>   corrective) → E12-C IMPLEMENTATION CLOSED, E12-C CLOSED. Independent
+>   review: [`docs/reviews/E12-C-REVIEW.md`](reviews/E12-C-REVIEW.md)
+>   (E12-C-IMPLEMENTATION-1-INDEPENDENT-REVIEW: PASS).
+>   Note: the status banner inside
+>   [`docs/e12-async-mutex.md`](e12-async-mutex.md) still reads
+>   `E12-C-IMPLEMENTATION: REVIEW-REQUIRED`; that banner predates the
+>   independent-review PASS and is itself stale (see C3 of this closure).
 >
 > Cross-primitive preparation:
 > [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §7.

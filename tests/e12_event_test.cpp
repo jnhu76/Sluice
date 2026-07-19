@@ -1294,6 +1294,15 @@ SLUICE_TEST_CASE(e12_t23_multi_waiter_mixed_outcome_stress) {
         });
         fdriver.set_entry([&](Fiber&) {
             spin_wait_pred([&] { return suspended.load(std::memory_order_acquire) >= 4; });
+            // E10-E12-CORRECTIVE-1 (C1): the single yield() here is a
+            // COOPERATIVE yield point (lets this worker pick up other runnable
+            // fibers in the sched.run(3) cooperative dispatch), NOT causal
+            // synchronization. The causal ordering of the driver's
+            // advance_clock/cancel/set relative to the waiters' registrations
+            // is supplied by the bounded retry loops below: each loop retries
+            // until the target node reaches the expected terminal state, so a
+            // not-yet-registered waiter simply makes the loop iterate again.
+            // No yield/sleep_for is used as causal proof (H7).
             std::this_thread::yield();
             // Expire W2: retry advance_clock until W2 resolves. W2's deadline
             // registration commits atomically (under global_mtx_) before W2
@@ -1532,6 +1541,23 @@ SLUICE_TEST_CASE(e12_cancel1_correct_event_live_node_wins) {
 }
 
 // ---- CANCEL-2a: wrong Event, SAME Scheduler -> false, node intact on A -------
+//
+// E10-E12-CORRECTIVE-1 (C1): the original coordinator used
+//   spin_wait(registered); yield(); yield();
+// in fset to "let fcancel finish before set()" — that is the forbidden
+// yield-as-causal-synchronization pattern. Under ASan the slower scheduling
+// widened the yield window so ev_a.set() occasionally ran BEFORE fcancel's
+// node.is_registered() assertion (line below), waking the node mid-check.
+//
+// The deterministic closure: fcancel publishes `cancel_done` AFTER its
+// assertion block completes (release store), and fset spin_waits on
+// `cancel_done` (acquire load) before calling ev_a.set(). The release/acquire
+// edge mechanically orders:
+//   B.cancel(node) -> false  (and node.is_registered() check)
+//   HAPPENS-BEFORE
+//   A.set()  (which wakes the node, leaving it no longer Registered)
+// No yield()/sleep_for inference. The registered flag alone still gates fwait
+// vs fcancel/fset; cancel_done is the additional fcancel-vs-fset gate.
 SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -1542,6 +1568,7 @@ SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
     Event ev_b(sched, /*initially_set=*/false);
     WaitNode node;
     std::atomic<bool> registered{false};
+    std::atomic<bool> cancel_done{false};
 
     Fiber fwait, fcancel, fset;
     fwait.set_entry([&](Fiber&) {
@@ -1551,17 +1578,31 @@ SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
     // Event B.cancel(node): node is registered on A, NOT on B -> false, no mutation.
     fcancel.set_entry([&](Fiber&) {
         spin_wait(registered);
-        std::this_thread::yield();
+        // Retry until the wrong-Event cancel is observed by a Registered node
+        // (cancel returns false for a Detached/terminal node too). The retry
+        // is a bounded guard, not causal sync — the causal order is supplied
+        // by cancel_done below.
+        bool observed_registered = false;
+        for (int i = 0; i < 1000; ++i) {
+            if (node.is_registered()) { observed_registered = true; break; }
+            std::this_thread::yield();
+        }
+        SLUICE_CHECK_MSG(observed_registered,
+                         "CANCEL-2a: target node reached Registered before wrong-Event cancel");
         SLUICE_CHECK_MSG(!ev_b.cancel(node),
                          "CANCEL-2a: wrong-Event (same Scheduler) cancel -> false");
-        // node remains Registered on A; both queues structurally intact.
+        // node remains Registered on A; both queues structurally intact. This
+        // assertion runs BEFORE cancel_done is published, so it is causally
+        // ordered before fset's ev_a.set() (which would wake the node).
         SLUICE_CHECK_MSG(node.is_registered(), "CANCEL-2a: node still Registered on A");
+        cancel_done.store(true, std::memory_order_release);
     });
-    // After the wrong-Event cancel, Event A can still wake the node normally.
+    // After the wrong-Event cancel (and its assertion block) completes, Event A
+    // can wake the node normally. The spin_wait on cancel_done supplies the
+    // release/acquire edge that mechanically orders B.cancel-before-A.set.
     fset.set_entry([&](Fiber&) {
         spin_wait(registered);
-        std::this_thread::yield();
-        std::this_thread::yield();
+        spin_wait(cancel_done);
         ev_a.set();  // A.set() wakes the node (Woken) normally
     });
 

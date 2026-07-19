@@ -1334,6 +1334,85 @@ SLUICE_TEST_CASE(e12_cond_t27_safe_destruction_empty) {
     SLUICE_CHECK_MSG(true, "AsyncCondition destroyed with no active waits");
 }
 
+// ===========================================================================
+// Slice 5b — AsyncCondition::cancel queue-identity gate
+// (E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1, decision D7 / finding F5)
+// ===========================================================================
+//
+// cancel(condition_node) returns true ONLY if the node is currently Registered
+// AND linked in THIS AsyncCondition's queue AND CANCEL wins resolve_. A node
+// not linked in this condition (Detached, or linked in a DIFFERENT condition
+// or a different primitive on the same Scheduler) fails the membership gate
+// and returns false WITHOUT mutation. This mirrors the Event/Semaphore/
+// AsyncMutex queue-identity cancellation contract (decision D7: queue-identity-
+// gated cancellation — wrong-object returns false). The two cases below prove
+// (a) cancel against an unregistered/Detached node and (b) cancel against a
+// node registered in a DIFFERENT AsyncCondition on the same Mutex/Scheduler.
+
+// ---- T30: cancel against a Detached (unregistered) node -> false, no mutation
+SLUICE_TEST_CASE(e12_cond_t30_cancel_detached_node_returns_false) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond(mtx);
+
+    WaitNode foreign;  // never registered anywhere
+    SLUICE_CHECK_MSG(!cond.cancel(foreign),
+                     "cancel of an unregistered (Detached) node -> false");
+    SLUICE_CHECK_MSG(!foreign.is_terminal(), "foreign node untouched");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no wait accounting touched");
+}
+
+// ---- T31: cancel against a node registered in a DIFFERENT condition -> false
+// Two conditions share the same Mutex (legal: the Mutex is the reacquire
+// target). A waiter parked on cond_B cannot be cancelled via cond_A.cancel():
+// the membership gate rejects it. Bug prevented: cancel across conditions.
+// Evidence: CAUSAL.
+SLUICE_TEST_CASE(e12_cond_t31_cancel_wrong_condition_returns_false) {
+    if constexpr (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    AsyncMutex mtx(sched);
+    AsyncCondition cond_a(mtx);
+    AsyncCondition cond_b(mtx);
+
+    std::atomic<bool> waiter_suspended{false};
+    WaitNode mlock, cn_b;  // cn_b will be registered in cond_B, not cond_A
+
+    Fiber owner;
+    owner.set_entry([&](Fiber&) {
+        mtx.lock(mlock);
+        waiter_suspended.store(true, std::memory_order::release);
+        // Park on cond_B. The Mutex is released inside cond_B.wait().
+        (void)cond_b.wait(cn_b);
+        mtx.unlock();
+    });
+    Fiber canceller;
+    canceller.set_entry([&](Fiber&) {
+        sched.await_ready_flag(waiter_suspended);
+        // WRONG-object cancel: cn_b is registered in cond_B, not cond_A.
+        // Must return false without resolving cn_b and without touching
+        // cond_B's queue.
+        SLUICE_CHECK_MSG(!cond_a.cancel(cn_b),
+                         "cancel via wrong condition -> false (no mutation)");
+        // Now cancel via the CORRECT condition to release the waiter.
+        SLUICE_CHECK_MSG(cond_b.cancel(cn_b),
+                         "cancel via correct condition -> true");
+    });
+
+    FiberStack sa, sb;
+    SLUICE_CHECK(sched.init_fiber(owner, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(canceller, sb.base(), sb.size()));
+    sched.spawn(owner);
+    sched.spawn(canceller);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(cn_b.was_cancelled(),
+                     "cn_b resolved Cancelled via correct condition");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}
+
 // NOTE: T28 (destruction with active Condition waiter) and T29 (destruction
 // during reacquire epoch) are NEGATIVE contract tests: they trigger a debug
 // assertion (WaitNode::~WaitNode or active_waits_) in debug builds. The
