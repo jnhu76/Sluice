@@ -4,9 +4,11 @@
 > ```text
 > E12-D-CONDITION-PREPARATION-AUDIT-1: CORRECTIVE-COMPLETE
 > E12-D-CONDITION-PREPARATION-CORRECTIVE-1: COMPLETE
-> E12-D-PREPARATION: REVIEW-REQUIRED
-> E12-D-IMPLEMENTATION: COMPLETE
-> E12-D-IMPLEMENTATION-REVIEW: REVIEW-REQUIRED
+> E12-D-PREPARATION: CLOSED
+> E12-D-IMPLEMENTATION-1: COMPLETE
+> E12-D-IMPLEMENTATION-REVIEW: PASS — E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW, 2026-07-19
+> E12-D-IMPLEMENTATION: CLOSED
+> E12-D: CLOSED
 > ```
 >
 > NOTE: Implementation was unblocked as part of the E12 dependency trunk
@@ -15,21 +17,19 @@
 > all 34 test cases. The status banner was stale; corrected by
 > E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1.
 >
-> Authority baseline (reconstructed from actual review artifacts by
-> E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-CORRECTIVE-1, C3):
+> E12-D preparation and implementation were independently reviewed by
+> [`docs/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md`](reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md)
+> (2026-07-19), verdict PASS (see §K of that artifact for the design-consistency
+> matrix covering preparation policy points 1–12). E12-D is CLOSED.
+>
+> Authority baseline:
 > - E10 CLOSED ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md))
 > - E11 CLOSED (`7715808`, [`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md))
 > - E12-A Event CLOSED ([`docs/e12-event.md`](e12-event.md))
-> - E12-B Semaphore: PREPARATION CLOSED; IMPLEMENTATION REVIEW-REQUIRED
->   ([`docs/e12-semaphore.md`](e12-semaphore.md)). No independent
->   implementation-review artifact exists for E12-B; the previous "E12-B
->   Semaphore CLOSED" line was an overstatement and is corrected here.
-> - E12-C AsyncMutex: PREPARATION CLOSED; IMPLEMENTATION COMPLETE;
->   IMPLEMENTATION REVIEW-REQUIRED. The latest section of
->   [`docs/reviews/E12-C-REVIEW.md`](reviews/E12-C-REVIEW.md) explicitly says
->   to await the final migration data-race micro-review; no later artifact
->   supplies that verdict. The `e12-async-mutex.md` REVIEW-REQUIRED banner is
->   therefore current, and E12-C is not CLOSED.
+> - E12-B Semaphore CLOSED
+>   ([`docs/e12-semaphore.md`](e12-semaphore.md))
+> - E12-C AsyncMutex CLOSED
+>   ([`docs/e12-async-mutex.md`](e12-async-mutex.md))
 >
 > Cross-primitive preparation:
 > [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §7.

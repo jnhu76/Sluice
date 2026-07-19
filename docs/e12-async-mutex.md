@@ -12,14 +12,22 @@
 >
 > E12-C-FORMAL-1: COMPLETE
 > E12-C-IMPLEMENTATION-1: COMPLETE
-> E12-C-IMPLEMENTATION: REVIEW-REQUIRED
+> E12-C-IMPLEMENTATION-REVIEW: PASS — E12-C-ASYNC-MUTEX-MIGRATION-DATA-RACE-MICRO-REVIEW-1, 2026-07-19
+> E12-C-IMPLEMENTATION: CLOSED
+> E12-C: CLOSED
 > ```
+>
+> The migration/data-race micro-review closing Corrective-4 was completed by
+> [`docs/reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md`](reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md)
+> (2026-07-19), verdict PASS. The final governance effect is also recorded in
+> the FINAL STATUS block at the end of
+> [`docs/reviews/E12-C-REVIEW.md`](reviews/E12-C-REVIEW.md). E12-C is CLOSED.
 >
 > Authority baseline: E10 CLOSED
 > ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED
 > at `7715808` ([`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md));
 > E12-A Event CLOSED ([`docs/e12-event.md`](e12-event.md)); E12-B Semaphore
-> PREPARATION CLOSED, IMPLEMENTATION COMPLETE / REVIEW-REQUIRED
+> CLOSED
 > ([`docs/e12-semaphore.md`](e12-semaphore.md)). This document does NOT reopen
 > E10/E11/E12-A/E12-B preparation; it builds on those authorities.
 >
