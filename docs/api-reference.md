@@ -733,7 +733,7 @@ Both result types are move-only. Move-assignment uses destroy-and-rebuild so
 | `wait-epoch cancellation` | `cancel(WaitNode&)` resolves exactly one registered wait epoch. NOT task/Fiber/I/O cancellation. |
 | `absolute monotonic deadline` | `Scheduler::deadline_t` = `uint64_t` monotonic ticks. `expired iff now >= deadline`. |
 | `already-due deadline` | A deadline ≤ `monotonic_now()` at admission time. All primitives resolve inline without suspending. |
-| `admission precedence` | Resource readiness checked BEFORE already-due deadline (resource-first). |
+| `admission precedence` | Resource readiness checked BEFORE already-due deadline (resource-first), except AsyncCondition which uses deadline-first (already-due → Expired inline). |
 | `registered race` | After registration, RESOURCE_WAKE / TIMER_EXPIRE / CANCEL compete through the single `WaitNode::resolve_` CAS. |
 | `FIFO waiter selection` | Waiters are selected in FIFO registration order. Does NOT guarantee strict completion order. |
 | `no barging` | `try_*` operations fail if a queued waiter has FIFO priority. |
@@ -746,7 +746,7 @@ Both result types are move-only. Move-assignment uses destroy-and-rebuild so
 | Operation Class | Examples | Requires Fiber | Safe from Ext Thread |
 |----------------|----------|---------------|---------------------|
 | Blocking/timed wait | `wait`, `acquire`, `lock`, `push`, `pop` | Yes | No |
-| Non-blocking try | `try_acquire`, `try_lock`, `try_push`, `try_pop` | No | Yes |
+| Non-blocking try | `try_acquire`, `try_push`, `try_pop` | No | Yes |
 | Wake/notify | `set`, `release`, `notify_one`, `notify_all` | No | Yes |
 | Cancel | `cancel` (all primitives with cancel) | No | Yes |
 | Observation | `is_set`, `available`, `is_closed`, `capacity`, `size` | No | Yes |

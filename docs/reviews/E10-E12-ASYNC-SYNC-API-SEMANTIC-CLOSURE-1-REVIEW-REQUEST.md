@@ -189,7 +189,8 @@ By constraint, neither the original closure nor Corrective-2 may modify:
   `tla2tools.jar` (explicitly protected by the task spec).
 
 The reviewer must confirm via baseline-to-final-HEAD diff AND `git status --short`
-that the diff is confined to `docs/`, the two new test TUs, the augmented test TUs
+that the diff is confined to `docs/`, `scripts/verify-e12-api-contract-negative-compile.sh`,
+the two new test TUs, the augmented test TUs
 (including the C1 Event test-harness fix), and `xmake.lua`. **The reviewer
 MUST verify that no file under `include/sluice/async/`, `src/async/`, or
 `docs/spec/` appears in the diff.** The reviewer MUST also verify via

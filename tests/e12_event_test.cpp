@@ -1636,11 +1636,6 @@ SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
     fset.set_entry([&](Fiber&) {
         cancel_done_observed = spin_wait_pred_guarded(
             [&] { return cancel_done.load(std::memory_order_acquire); });
-        if (!cancel_done_observed) {
-            // Failure cleanup: SET still drains A; the case remains failed.
-            ev_a.set();
-            return;
-        }
         ev_a.set();  // A.set() wakes the node (Woken) normally
     });
 
