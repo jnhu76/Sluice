@@ -2,11 +2,19 @@
 
 **Task**: `E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1`
 
-**Status**: `PASS — AUTHOR SELF-ASSESSMENT (Corrective-1 applied); INDEPENDENT REVIEW REQUIRED`
+**Status**: `CORRECTIVE-2 READY — AUTHOR SELF-ASSESSMENT; INDEPENDENT RE-REVIEW REQUIRED`
 
 **Branch**: `audit/e10-e12-api-semantic-closure`
 
-> **Corrective-1 (this revision).** Applies C1–C7 from
+> **Corrective-2 (current revision).** An independent adversarial review found
+> that Corrective-1 still overstated T23 registration, parity coverage,
+> negative-compile automation, E12-C review status, Queue cancellation
+> vocabulary, and parts of the public API inventory. Corrective-2 replaces the
+> test-only registration protocol, adds an automated negative-compile gate,
+> and reconciles the affected documentation. It does not independently approve
+> its own corrective; semantic closure remains denied pending re-review.
+>
+> **Corrective-1 (superseded claims).** Applied C1–C7 from
 > `E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-CORRECTIVE-1`: closes the Event
 > T23/CANCEL-2a ASan flake deterministically (no Event production-code
 > change), corrects the E13 cancellation contract, repairs stale residual
@@ -16,18 +24,27 @@
 > `WaitQueue`/`TimerRegistration` substrate wording, and strengthens the D1
 > rationale. The full Clang ASan matrix was re-run ×3 with **no exclusions**
 > and was green each time. See §11.3, §11.4, §12, §14.
+>
+> **Fresh Corrective-2 verification.** The reproducible matrix is now recorded
+> in §11.3. A sandbox-external Clang ASan+LSan run completed all 15 configured
+> E10/E11/E12 binaries three consecutive times (45/45, no filters or target
+> exclusions). Earlier diagnostic attempts, including one baseline-matched T16
+> `DEADLYSIGNAL`, remain recorded rather than being overwritten by the green
+> rerun. Four formal gates exit 0; E11 and Event exit 1 because this TLC build
+> emits an unnamed temporal counterexample for the two liveness negative
+> models. Matched baseline runs have the same result and the counterexamples
+> are non-vacuous; see §11.3 and the Corrective-2 review artifact.
 
 ---
 
 ## 1. Baseline
 
 ```text
-BASE_BRANCH: master
-HEAD:       d0cd915159a49ee30e88b0fdaec04a7b78260af1
-origin/master: d0cd915159a49ee30e88b0fdaec04a7b78260af1
-HEAD == origin/master: YES
-Commit:     d0cd915 — Merge pull request #12 from jnhu76/e12-e-queue-production-impl
-Worktree:   clean (only untracked: tests/test_t3_simple.cpp, tla2tools.jar)
+BASE_BRANCH:         master
+BASE_COMMIT:         d0cd915159a49ee30e88b0fdaec04a7b78260af1
+INITIAL_REVIEW_HEAD: a97aca1bb9248a2c5bc05d914ba8670de590ed34
+HEAD_BRANCH:         audit/e10-e12-api-semantic-closure
+PREEXISTING_UNTRACKED: tests/test_t3_simple.cpp, tla2tools.jar
 ```
 
 ---
@@ -53,6 +70,11 @@ All signatures extracted from installed headers (`include/sluice/async/`). Evide
 | user | `void* user() const noexcept` (L150) | yes | — | — | yes | no | E12-E Queue ctx |
 | set_user | `void set_user(void*) noexcept` (L151) | yes | — | — | yes | no | |
 
+`next_`, `prev_`, and `home_` are also public data members in the installed
+header. They exist for intrusive implementation access and are owned by
+`WaitQueue` under its mutex; public visibility does not make user mutation a
+supported operation. Copy and move construction/assignment are all deleted.
+
 **WaitOutcome** (L81-99):
 ```cpp
 enum class WaitOutcome : std::uint8_t {
@@ -69,7 +91,10 @@ enum class WaitOutcome : std::uint8_t {
 
 ### 2.2 E10: WaitQueue (wait_queue.hpp)
 
-WaitQueue is a PRIVATE, SEALED authority. Its structural operations are reachable ONLY through Scheduler (the sole friend). There is no public API surface beyond construction/destruction.
+WaitQueue is a publicly nameable installed-header type whose structural
+authority is PRIVATE and SEALED. Its structural operations are reachable ONLY
+through Scheduler (the sole friend). Its public surface is construction,
+destruction, and deleted copy/move special members.
 
 | Method | Signature | Notes |
 |--------|-----------|-------|
@@ -94,6 +119,12 @@ WaitQueue is a PRIVATE, SEALED authority. Its structural operations are reachabl
 | deadline | `deadline_tick_t deadline() const noexcept` (L152) | yes | |
 | has_on_resolve | `bool has_on_resolve() const noexcept` (L158) | yes | E12-E Queue |
 | fire_on_resolve_locked | `void fire_on_resolve_locked(bool) noexcept` (L159) | yes | |
+
+The public type surface also includes `OnResolveFn`, public nested enum
+`State { active, retired, consumed }`, deleted copy/move special members, and
+public data member `std::size_t heap_index`. This visibility is documented even
+though `TimerRegistration` is Scheduler-integrated substrate rather than a
+standalone synchronization primitive.
 
 **E11 Scheduler deadline API** (scheduler.hpp):
 - `deadline_t monotonic_now() const noexcept` (L275)
@@ -198,19 +229,33 @@ static_assert(std::is_nothrow_destructible_v<T>);
 | push_until | `QueuePushResult<T> push_until(T, deadline_t)` (L299) | typed | no | yes | yes | no | yes | |
 | pop | `QueuePopResult<T> pop()` (L311) | typed | no | yes | yes | no | yes | |
 | pop_until | `QueuePopResult<T> pop_until(deadline_t)` (L320) | typed | no | yes | yes | no | yes | |
-| begin_teardown | `QueueTeardownSession begin_teardown() noexcept` (L333) | session | yes | — | — | yes | no | irreversible |
-| release_teardown | `T release_teardown(QueueTeardownSession&) noexcept` (L342) | T | yes | — | — | yes | no | |
+| begin_teardown | `detail::QueueTeardownSession begin_teardown() noexcept` (L333) | session | yes | — | — | yes | no | irreversible |
+| release_teardown | `T release_teardown(detail::QueueTeardownSession&) noexcept` (L342) | T | yes | — | — | yes | no | |
 
 **Result types**:
 - `QueuePushResult<T>`: status → `committed | closed | expired | would_block`; `take_value()` recovers T
 - `QueuePopResult<T>`: status → `item | closed | expired | would_block`; `take_value()` recovers T
 - Both hand-written `operator=` with destroy-and-rebuild (PR #12 corrective) — T need NOT be move-assignable
+- Both expose a defaulted noexcept move constructor, noexcept move assignment,
+  deleted copy construction/assignment, defaulted destructor, `status() const
+  noexcept`, and `take_value() && noexcept`. `QueuePushResult` exposes
+  `committed()`/`failed(status,T&&)`; `QueuePopResult` exposes
+  `item(T&&)`/`closed()`/`expired()`/`would_block()`, all `noexcept`.
+- `QueuePushResult<T>` and `QueuePopResult<T>` themselves declare no explicit
+  `requires` clause or `static_assert`; the three `T` constraints above belong
+  to `AsyncQueue<T>`. Their public operations are nevertheless declared
+  `noexcept` exactly as shown.
 
 **WaitNode visibility**: WaitNode is HIDDEN from the user. Internal to QueuePort (role queues).
 
-**Cancellation**: `AsyncQueue<T>` v1 has **no public wait-epoch cancellation API and no `Cancelled` result**. `close()` and deadline expiry are distinct Queue state-machine causes (`closed` / `expired` statuses), not cancellation. There is no `cancel(WaitNode&)` on `AsyncQueue<T>`; per-wait-epoch cancellation is DEFERRED (P8/C7 in the state machine) to a future authority.
+**Cancellation**: `AsyncQueue<T>` v1 has **no public wait-epoch cancellation API and no `Cancelled` result**. `close()` and deadline expiry are distinct Queue state-machine causes (`closed` / `expired` statuses), not cancellation. There is no `cancel(WaitNode&)` on `AsyncQueue<T>`; per-wait-epoch cancellation is deferred by D4 to a future authority.
 
-**Teardown** (L327-346): `begin_teardown()` → `QueueTeardownSession` (move-only, irreversible). `release_teardown(session)` recovers typed T from drained ring.
+**Teardown** (L327-346): `begin_teardown()` →
+`detail::QueueTeardownSession` (move constructor `noexcept`; move assignment
+and both copy operations deleted; destructor `noexcept`; public
+`take_next() noexcept` and `empty() const noexcept`). Although it lives in a
+`detail` namespace, it is part of `AsyncQueue<T>`'s public signature.
+`release_teardown(session)` recovers typed T from the drained ring.
 
 ---
 
@@ -306,7 +351,7 @@ Each cell marked with status and evidence.
 | Semaphore | per-wait-epoch cancel; queue-identity-gated | PROVEN | `semaphore.hpp:177-200` |
 | AsyncMutex | per-wait-epoch cancel; queue-identity-gated | PROVEN | `async_mutex.hpp:166-190` |
 | AsyncCondition | per-Condition-epoch cancel; queue-identity-gated; reacquire NOT cancellable | PROVEN | `condition.hpp:161-169` |
-| AsyncQueue<T> | **No public wait-epoch cancellation API and no Cancelled result in v1.** `close()` and deadline expiry are distinct Queue state-machine causes (`closed` / `expired`), not cancellation surfaces. Cancel is DEFERRED (P8/C7). | INTENTIONALLY-DIFFERENT | `queue_port.hpp:683` |
+| AsyncQueue<T> | **No public wait-epoch cancellation API and no Cancelled result in v1.** `close()` and deadline expiry are distinct Queue state-machine causes (`closed` / `expired`), not cancellation surfaces. Wait-epoch cancel is deferred by D4. | INTENTIONALLY-DIFFERENT | `queue_port.hpp:683` |
 
 ### 3.10 External-Thread-Safe Operations
 
@@ -503,7 +548,7 @@ CURRENT FACT:
   - Queue-identity-gated: wrong-object cancel returns false, no mutation, no UB
   - Cross-Scheduler safe: membership check scans THIS object's queue only
   - NOT task cancellation, NOT Fiber cancellation, NOT cancel-all, NOT object close
-  - AsyncQueue<T> has NO public cancel() — INTENTIONALLY DEFERRED (P8/C7)
+  - AsyncQueue<T> has NO public cancel() — INTENTIONALLY DEFERRED (D4)
 CONFLICT:
   None. All existing cancel implementations are consistent.
 DECISION:
@@ -1148,9 +1193,11 @@ Impact: Breaking if it changes destruction contract. Requires separate
 | E12-D AsyncCondition | Yes | Yes | Yes | Yes | Yes | Yes (T30/T31) | Yes | Yes | Yes |
 | E12-E Queue | Yes | Yes | Yes | Yes (H1–H4) | n/a (no cancel API) | n/a | Yes | Yes | Yes (G2) |
 
-> Queue has no public `cancel(WaitNode&)` API (its cancellation surface is
-> `close()` + deadline `expired`); the Cancel / Wrong-Obj Cancel columns are
-> `n/a` for Queue by design (D7), not a gap.
+> `AsyncQueue<T>` v1 has no public wait-epoch cancellation API. `close()` is an
+> independent monotonic Queue state transition; deadline expiry is an
+> independent terminal operation result. Neither is a cancellation surface,
+> and Queue v1 has no `Cancelled` public result. The Cancel / Wrong-Obj Cancel
+> columns are therefore `n/a` by D4, not a gap.
 
 ### 11.2 Required Test Additions
 
@@ -1158,9 +1205,9 @@ Impact: Breaking if it changes destruction contract. Requires separate
 > this closure. The new TUs are `tests/e12_api_contract_probes.cpp` (T3),
 > `tests/e12_cross_primitive_parity_test.cpp` (T2), and additions to
 > `tests/e12_async_queue_test.cpp` (T1) and `tests/e12_async_condition_test.cpp`
-> (T4). All are wired into `xmake.lua` under the `test` group and ran green
-> under Clang/GCC Debug + Clang ASan + Clang TSan. See §11.3 for the
-> reproduced matrix.
+> (T4). All are wired into `xmake.lua` under the `test` group. Corrective-2
+> requires a fresh toolchain matrix; §11.3 intentionally does not reuse the
+> earlier author summary.
 
 #### T1: Queue Already-Due Deadline Tests — IMPLEMENTED (H1–H4)
 - push_until with already-due deadline: resource-first (slot available → committed) — `e12_queue_h1_push_until_already_due_free_slot_committed`
@@ -1168,20 +1215,31 @@ Impact: Breaking if it changes destruction contract. Requires separate
 - pop_until with already-due deadline + empty ring: Expired — `e12_queue_h4_pop_until_already_due_empty_ring_expired`
 - pop_until with already-due deadline + item available: item — `e12_queue_h3_pop_until_already_due_item_available`
 
-#### T2: Cross-Primitive Parity Tests — IMPLEMENTED (D3/D7/D8)
-- terminal outcome absorbing + four-value distinctness — `e12_parity_d8_waitoutcome_values_are_distinct`
+#### T2: Cross-Primitive Parity Tests — IMPLEMENTED (scoped evidence)
+- `PROVEN_BY_THIS_NEW_TU`: pairwise distinct `WaitOutcome` enum values + fresh
+  node unresolved — `e12_parity_waitoutcome_values_are_distinct_and_fresh_unresolved`.
+  This is not a dynamic absorbing-state or concurrent-publication proof.
 - resource-first admission consistency (Event/Semaphore/AsyncMutex) — `e12_parity_d3_event_set_plus_already_due_woken`, `e12_parity_d3_semaphore_permit_plus_already_due_woken`, `e12_parity_d3_mutex_free_plus_already_due_woken`
-- wrong-object cancel no mutation (Event/Semaphore/AsyncMutex) — `e12_parity_d7_event_cancel_wrong_event_returns_false`, `e12_parity_d7_semaphore_cancel_wrong_semaphore_returns_false`, `e12_parity_d7_mutex_cancel_wrong_mutex_returns_false`
-- (AsyncCondition already-due retains ownership is covered by the existing `e12_cond_t1_already_due_inline_expired_retains_ownership`; cross-primitive inclusion is recorded in the matrix §3.7.)
-- (queue closed/deadline/resource precedence is covered by H1–H4 above plus the existing G1 cases.)
-- (fresh WaitNode per epoch: asserted structurally by every blocking test — each constructs its own `WaitNode`.)
+- D4 wrong-object cancel no mutation (Event/Semaphore/AsyncMutex) —
+  `e12_parity_d4_event_cancel_wrong_event_returns_false`,
+  `e12_parity_d4_semaphore_cancel_wrong_semaphore_returns_false`,
+  `e12_parity_d4_mutex_cancel_wrong_mutex_returns_false`.
+- `PROVEN_BY_EXISTING_PER_PRIMITIVE_TEST`: AsyncCondition already-due/ownership
+  (`e12_cond_t1_already_due_inline_expired_retains_ownership`) and D4
+  wrong-Condition (`e12_cond_t31_cancel_wrong_condition_returns_false`); Queue
+  D3 through H1–H4; absorbing terminals and concurrent exactly-once publication
+  through each primitive's race/terminal suite.
+- `NOT_APPLICABLE`: Queue D4 cancellation (no public wait-epoch cancel API).
 
 #### T3: Compile-Time API Contract Probes — IMPLEMENTED
-- All primitives non-copyable, non-movable (static_assert) — `tests/e12_api_contract_probes.cpp` D6 block
-- QueueResult move-only, non-copyable (static_assert) — same file D5 block
+- All primitives non-copyable, non-movable (static_assert) — `tests/e12_api_contract_probes.cpp` D5 lifecycle block
+- QueueResult move-only, non-copyable (static_assert) — same file D1/D9 block
 - QueueResult move-assignable with MoveConstructOnly (static_assert) — same file PR #12 block, using a hand-written `NonMoveAssignable` test type
-- WaitOutcome four-value enum distinctness (static_assert) — same file D2 block
-- Negative-compile blocks (`NEG_WAITNODE_COPY`, `NEG_EVENT_COPY`, `NEG_SEMAPHORE_MOVE`, `NEG_ASYNCMUTEX_COPY`, `NEG_ASYNCCONDITION_MOVE`, `NEG_QUEUE_COPY`, `NEG_QUEUE_PUSH_RESULT_COPY`, `NEG_QUEUE_POP_RESULT_COPY`) — same file, gated by `-DNEG_<name>`; spot-verified to fail compilation.
+- WaitOutcome four-value enum distinctness (static_assert) — same file vocabulary block
+- Nine negative-compile blocks (including `NEG_WAITNODE_MOVE`) are executed by
+  `scripts/verify-e12-api-contract-negative-compile.sh`. The gate defines each
+  macro separately, requires compilation to fail, verifies the deleted-member
+  diagnostic, and fails if any negative compile succeeds.
 - Authority negative probes (already exist for all primitives): verified still green via the formal verify scripts (§11.3).
 
 #### T4: Missing Wrong-Object Cancel Test for AsyncCondition — IMPLEMENTED (T30/T31)
@@ -1191,52 +1249,70 @@ Impact: Breaking if it changes destruction contract. Requires separate
 
 ### 11.3 Verification Matrix
 
-Reproduced on the audit branch `audit/e10-e12-api-semantic-closure` after
-Corrective-1 (C1: Event T23/CANCEL-2a deterministic closure applied). Linux
-x86_64, WSL2, kernel 6.18. Toolchains: Clang 21.1.8, GCC 15.2.0.
+Corrective-2 invalidated the earlier reproduced-result summary because it
+changed test sources. The following results are from fresh isolated build
+directories at the corrected source. The complete commands, per-binary exits,
+failure accounting, formal classifications, and baseline traces are preserved
+in the Corrective-2 review artifact.
+
+| Gate | Actual result | Classification |
+|------|---------------|----------------|
+| Clang Debug | 15/15 configured E10/E11/E12 binaries, exit 0 | PASS |
+| GCC Debug | 15/15 configured E10/E11/E12 binaries, exit 0 | PASS |
+| Clang ASan+LSan, no filter/exclusion | 15/15 × 3, 45/45 exits 0, sandbox-external | PASS |
+| Clang TSan | 15/15, no race/assertion/deadly-signal/timeout | PASS |
+| Directed Clang Debug | CANCEL-2a 50/50; T23 50/50 | PASS |
+| Directed Clang ASan | CANCEL-2a, T23, parity TU, Condition T30+T31: each 50/50 (200 launches total) | PASS |
+| Negative compile | nine macros independently rejected by Clang and GCC | PASS |
+| Release production build | `sluice_core`, `sluice_async`, `sluice_async_internal_testing` | PASS |
+| Formal | Semaphore, AsyncMutex, AsyncCondition, Queue exit 0; E11 and Event exit 1 | 4 PASS; 2 PREEXISTING TOOLCHAIN-SENSITIVE LIMITATIONS WITH BASELINE PARITY |
+
+The acceptance and diagnostic environments are intentionally distinct:
 
 ```text
-[x] Clang Debug  : 14/14 E10/E11/E12 binaries PASS (×1)
-[x] Clang ASan   : 14/14 E10/E11/E12 binaries PASS — NO EXCLUSIONS, ×3 green
-                   (Event T23/CANCEL-2a now deterministic; see §11.4)
-[~] Clang TSan   : 14/14 PASS on a clean run; intermittent on repeats.
-                   The intermittent failures are the KNOWN raw-fiber-asm +
-                   TSan DEADLYSIGNAL tooling limitation documented in
-                   docs/e11-deadline-timer-wait.md:806-816 (TSan cannot
-                   instrument the assembly fiber context-switch and SEGVs
-                   when a fiber is rescheduled across workers). This is
-                   a tooling limitation, NOT a protocol defect, and is
-                   NOT a regression from this closure (the test sources
-                   and production code are unchanged for the affected
-                   cases). A clean single TSan run is green for every
-                   E10/E11/E12 binary; high-worker-count stress under TSan
-                   can still trip the DEADLYSIGNAL.
-[~] Formal verify: safety models + most NEG models PASS. Two LIVENESS
-                   NEG models (E11 NEG-5 DeadlineLostParked, Event
-                   NEG-EVENT-2 WakeOneStrandsWaiter) reach a stutter
-                   state before the expected liveness property violation
-                   under the repo's 2026 development-build jar (TLC 2.19
-                   of 08 August 2024). This is intrinsic to the jar and
-                   identical on master d0cd915 (docs/spec/ is untouched
-                   by this closure). The scripts' safety + remaining NEG
-                   gates are green.
-[x] Production sluice_async / sluice_async_internal_testing / sluice_core
-    build: PASS in release (no production code changed by this closure —
-    verified by git diff; the build is the same artifact as master d0cd915)
-[ ] GCC Debug: not re-run in this Corrective-1 cycle (Clang Debug covers
-    the same test sources; the GCC Debug run from the original closure
-    remains valid for the unchanged test sources).
-[ ] UBSan: not configured in this run; not faked.
+AUTHOR ACCEPTANCE MATRIX:
+unsandboxed ASan+LSan 15/15 ×3 (45/45, failures 0)
+
+ADDITIONAL SANDBOX OBSERVATION:
+address-only 44/45, with one T16 DEADLYSIGNAL;
+baseline parity independently reproduced under the same sandbox setup.
+
+FORMAL EXPECTATION MATRIX:
+4/6 EXPECTED GATES PASS
+2/6 BASELINE-PARITY-PROVEN TOOLCHAIN-SENSITIVE LIMITATIONS
+0 HEAD-ONLY REGRESSIONS
 ```
 
-### 11.4 Event T23 / CANCEL-2a Deterministic Closure (Corrective-1 C1)
+The repository currently configures **15**, not 14, E10/E11/E12 binaries; the
+matrix ran all 15. Before the successful sandbox-external ASan+LSan matrix, a
+sandboxed leak-enabled attempt ran all 15 test bodies but every process exited
+nonzero when LeakSanitizer could not use `ptrace`/`/proc`; this is retained as
+15 failed diagnostic launches. A subsequent sandboxed address-only diagnostic
+(`detect_leaks=0`) produced 44/45: round 3's unfiltered Event binary hit a T16
+wild-jump `AddressSanitizer:DEADLYSIGNAL`. At the baseline commit, the identical
+Event command produced the same T16 failure in one round, the original
+CANCEL-2a registration assertion failure in another, and one pass. The
+corrected HEAD therefore removes the CANCEL-2a failure and does not enlarge the
+baseline T16 failure class, but the earlier HEAD failure is not erased by the
+later 45/45 result.
 
-The original closure disclosed that `tests/e12_event_test.cpp` case
-`e12_cancel2a_wrong_event_same_scheduler_loses_safely` (and the T23 multi-
-waiter stress case) sporadically failed under ASan, and excluded the Event
-target from the ASan matrix. **Corrective-1 (C1) closes this.** The root
-cause was test-harness `std::this_thread::yield()`-based causal
-synchronization — the forbidden pattern per the test file's own §3.4 note.
+For formal verification, both E11 NEG-5 and Event NEG-EVENT-2 reach the
+property antecedent and then stutter with a waiter still registered, so the
+negative models are non-vacuous and do kill their intended mutations. This TLC
+runtime prints only `Temporal properties were violated`, not the checked
+property name, while both scripts intentionally require a named-property
+diagnostic and therefore exit 1. The spec/config and scripts have zero diff
+from baseline, and identical baseline commands reproduce both exit-1 results.
+They are not ordinary formal PASS results and are not invalid negative models.
+
+### 11.4 Event T23 / CANCEL-2a Deterministic Closure (Corrective-2 C1)
+
+Corrective-1 claimed T23 had replaced its pre-wait `suspended` flag and
+`yield()` with `waiting_count() >= 4`, but its actual source still published
+`suspended` before `wait()`, yielded, and used fixed retry counts. It also used
+the absolute deadline `100` in every iteration while repeatedly calling the
+absolute-time `advance_clock(100)`, so from the second iteration W2 expired
+inline instead of completing a registered timed wait.
 
 The corrective changes are confined to `tests/e12_event_test.cpp` only.
 **No Event production semantics were changed** (`include/sluice/async/event.hpp`,
@@ -1244,53 +1320,41 @@ The corrective changes are confined to `tests/e12_event_test.cpp` only.
 `src/async/scheduler.cpp`, `src/async/event.cpp` are unmodified — verified
 by `git diff`). The fixes:
 
-- **CANCEL-2a**: `fset` previously did `spin_wait(registered); yield(); yield();`
-  to "let `fcancel` finish before `A.set()`". Under ASan the yield window
-  widened and `A.set()` occasionally ran BEFORE `fcancel`'s
-  `node.is_registered()` assertion, waking the node mid-check. The closure
-  adds a `cancel_done` atomic published by `fcancel` (release) after its
-  assertion block, and `fset` `spin_wait(cancel_done)` (acquire) before
-  `A.set()`. The release/acquire edge mechanically orders
-  `B.cancel → assertion → A.set`, eliminating the race. CANCEL-2a was run
-  ×20 consecutively under ASan after the fix: 20/20 PASS.
-- **T23**: the original driver's single `yield()` after observing
-  `suspended >= 4` is a COOPERATIVE yield point (lets the worker dispatch
-  other runnable fibers in `sched.run(3)`), NOT causal synchronization.
-  The audit's original disclosure overstated it as causal-sync. The causal
-  ordering of the driver's `advance_clock`/`cancel`/`set` relative to the
-  waiters' registrations is in fact supplied by the bounded retry loops
-  (`for (... !n2.is_terminal() ...) advance_clock; yield` and
-  `for (... !cancelled ...) cancel`): a not-yet-registered waiter simply
-  makes the loop iterate again. C1 clarifies this in the test comments;
-  T23 was not in fact observed to flake (only CANCEL-2a was), and the
-  clarifying comment documents why the existing structure is already
-  deterministic.
+- **T23**: all four waiters now call the Event operation directly. The driver
+  waits for `Scheduler::waiting_count() >= 4`, whose count is incremented under
+  `global_mtx_` only after each node is linked, Registered, and accounted.
+  Each iteration uses a monotonically increasing absolute W2 deadline and
+  advances the test clock to that exact absolute value. Expiry and cancel are
+  single operations after the registration gate; all fixed retry loops and the
+  causal `yield()` assumption are removed.
+- **CANCEL-2a**: `fcancel` now waits for `waiting_count() >= 1` before asserting
+  registration and attempting wrong-Event cancel. Its `cancel_done` release is
+  the sole publisher and occurs after both wrong-cancel and still-registered
+  assertions; `fset` observes it with acquire before `ev_a.set()`. Thus both
+  registration-before-cancel and cancel/assertions-before-set are mechanical.
 
-Per the Corrective-1 verification requirement, the complete Clang ASan
-matrix was run three times with NO Event exclusion after the fix; all
-three runs were green. The Event target is no longer excluded from the
-ASan matrix.
+No production Event or Scheduler implementation was changed. Stress counts and
+sanitizer results are recorded only after the fresh Corrective-2 matrix runs.
 
 ---
 
 ## 12. Residual Risks
 
-> Corrective-1 (C3) reconciliation: R2 and R5 from the original closure are
-> CLOSED — the Condition banner was corrected and its formal script was run
-> (verify-e12-async-condition-formal.sh PASS, see §11.3), and
-> async-runtime-plan.md was updated by this closure. R1 was imprecise (it
-> lumped E12-B and E12-C together); the reconstructed status below records
-> them separately from actual review artifacts.
+> Corrective-2 reconstruction does not accept author status claims as review
+> evidence. R2 is classified from the fresh formal command;
+> R5 is closed by the actual plan text. E12-B, E12-C, and E12-D each remain
+> implementation-review required because no final independent artifact closes
+> the corresponding review.
 
 | Risk | Severity | Description |
 |------|----------|-------------|
-| R1 | Medium | E12-B Semaphore has no independent implementation-review artifact (REVIEW-REQUIRED). The implementation is complete and passes its test suite + formal model, but no independent adversarial review has returned PASS. E12-C AsyncMutex, by contrast, has an independent-review PASS (`reviews/E12-C-REVIEW.md` after correctives 1-4) and is CLOSED; it is no longer a residual risk. |
-| ~~R2~~ | CLOSED | E12-D AsyncCondition banner was corrected (IMPLEMENTATION BLOCKED → IMPLEMENTATION COMPLETE, REVIEW-REQUIRED). The formal model verification gate `verify-e12-async-condition-formal.sh` was run and PASSES (§11.3). The original risk is resolved; what remains is the E12-D independent implementation review (folded into R7 below). |
+| R1 | Medium | E12-B Semaphore has no independent implementation-review artifact (REVIEW-REQUIRED). The historical E12-C artifact preserves both `PASS (corrective applied)` and an instruction to await the final migration data-race micro-review; no separately attributable post-Corrective-4 independent re-review artifact was found. The later closure ledger therefore conservatively records E12-C as REVIEW-REQUIRED without rewriting the historical verdict. |
+| ~~R2~~ | CLOSED | E12-D AsyncCondition formal gate was freshly run with the recorded jar and exits 0: correct model, reachability checks, all ten negative models, wrong-property gate, and seven independent compile probes produced their expected results. This closes only the stale formal-evidence risk; E12-D independent review remains open as R7. |
 | R3 | Low | Queue timer allocation failure (O-4 observation) is not handled. On allocation failure, the wait proceeds without a timer, potentially stranding the waiter. |
 | R4 | Low | O-1 inline-path CAS/hook ordering and O-2 pump-publication counter asymmetry are documented as non-blocking observations from Queue review. |
 | ~~R5~~ | CLOSED | async-runtime-plan.md was updated by this closure (the F1 cross-primitive audit line and E12 primitive statuses now reflect the dependency trunk ordering). |
 | R6 | Medium | E13 Select dependency contract is based on current implementation facts. The actual Select design may discover new requirements that change the contract. Corrective-1 (C2) strengthened the contract to record that primitive cancel is NOT a Select-level loser authority and that E13 requires a parent/group claim ordering group-winner selection relative to irreversible primitive commit. |
-| R7 | Medium | E12-D AsyncCondition implementation has no independent adversarial review (REVIEW-REQUIRED). Preparation is also REVIEW-REQUIRED. The implementation is complete and passes its 34-case suite + formal model, but no independent reviewer has signed off. |
+| R7 | Medium | E12-D AsyncCondition implementation has no independent adversarial review (REVIEW-REQUIRED). Preparation is also REVIEW-REQUIRED. Test/formal evidence does not substitute for that review. |
 
 ---
 
@@ -1343,7 +1407,7 @@ ASan matrix.
 
 ## Appendix B: Document Status After This Closure
 
-> Reconstructed from actual review artifacts by Corrective-1 (C3). "Review
+> Reconstructed from actual review artifacts by Corrective-2 (C3). "Review
 > status" below is the independent adversarial review verdict where one
 > exists; "—" means no independent review artifact exists for that scope.
 
@@ -1353,7 +1417,7 @@ ASan matrix.
 | e11-deadline-timer-wait.md | CLOSED | COMPLETE | PASS (history) | CLOSED (unchanged) |
 | e12-event.md | CLOSED | COMPLETE | PASS (history) | CLOSED (unchanged) |
 | e12-semaphore.md | CLOSED | COMPLETE | **NONE** (REVIEW-REQUIRED) | IMPLEMENTATION REVIEW-REQUIRED (no review artifact) |
-| e12-async-mutex.md | CLOSED | COMPLETE | **PASS** (`reviews/E12-C-REVIEW.md`, after correctives 1-4) → E12-C CLOSED | IMPLEMENTATION-REVIEW PASS; E12-C CLOSED (banner inside the doc still says REVIEW-REQUIRED — stale, see C3) |
+| e12-async-mutex.md | CLOSED | COMPLETE | Historical PASS plus unresolved post-Corrective-4 micro-review requirement | IMPLEMENTATION REVIEW-REQUIRED in later governance ledger; historical verdict preserved |
 | e12-condition.md | REVIEW-REQUIRED | COMPLETE | **NONE** (REVIEW-REQUIRED) | PREPARATION + IMPL REVIEW-REQUIRED (banner corrected from "IMPLEMENTATION BLOCKED") |
 | e12-queue.md | Superseded | — | — | Superseded (unchanged) |
 | e12-queue-state-machine.md | PASS | — | PASS | PASS (unchanged) |
@@ -1364,61 +1428,49 @@ ASan matrix.
 | api-reference.md | v0.1-mvp | — | — | Updated with E10-E12 section |
 | api-reference-zh.md | v0.1-mvp | — | — | Updated with E10-E12 section |
 | changelog.md | unreleased | — | — | Updated with E10-E12 entries |
-| e10-e12-api-semantic-closure.md | NEW | — | REQUESTED | PASS — AUTHOR SELF-ASSESSMENT (Corrective-1 applied) |
+| e10-e12-api-semantic-closure.md | NEW | — | RE-REVIEW REQUIRED | CORRECTIVE-2 AUTHOR SELF-ASSESSMENT; closure denied pending re-review |
 
 C3 reconciliation notes:
-- `e12-condition.md` previously claimed "E12-B Semaphore CLOSED" and "E12-C
-  AsyncMutex IMPLEMENTATION CLOSED" in its authority baseline. The first was
-  an overstatement (E12-B has no independent implementation review; its own
-  banner says IMPLEMENTATION REVIEW-REQUIRED). The second is supported by
-  `reviews/E12-C-REVIEW.md` (PASS after corrective) but the banner inside
-  `e12-async-mutex.md` was never updated to reflect the review PASS. Both are
-  corrected here: `e12-condition.md`'s authority baseline now distinguishes
-  preparation-closed from implementation-review status, and Appendix B records
-  the review artifact as the source of truth.
-- E12-D AsyncCondition is NOT independently reviewed. The closure's prior
-  wording that implied E12-C was "independently reviewed and CLOSED" applied
-  to AsyncMutex (E12-C), not to AsyncCondition (E12-D). E12-D
-  IMPLEMENTATION-REVIEW is REVIEW-REQUIRED.
+- E12-B has no independent implementation-review artifact.
+- `reviews/E12-C-REVIEW.md` retains its historical `PASS (corrective applied)`
+  verdict and also explicitly awaits the final migration data-race
+  micro-review. No separately attributable post-Corrective-4 independent
+  re-review artifact was found. Corrective-2 does not rewrite that history;
+  the later governance ledger conservatively records E12-C as REVIEW-REQUIRED.
+- E12-D has no independent implementation review. All three status entries are
+  now aligned with their actual artifacts.
 
 ---
 
 ## 14. Final Report
 
 ```text
-E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1-CORRECTIVE-1:
+E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-CORRECTIVE-2:
     PASS — AUTHOR SELF-ASSESSMENT;
-    INDEPENDENT REVIEW REQUIRED
+    INDEPENDENT RE-REVIEW REQUIRED
 ```
 
 ### 14.1 Verdict
 
-The E10–E12 async synchronization API and semantic closure is **internally
-consistent**, **faithful to the production code at HEAD `d0cd915`**, and
-**non-breaking**: every modification is confined to `docs/`, the two new
-test TUs, the two augmented test TUs, and `xmake.lua`. No production header
-under `include/sluice/async/` and no production source under `src/async/`
-was modified (verified by `git diff master...audit/e10-e12-api-semantic-closure`).
+Corrective-2 is a test/documentation correction submitted for independent
+re-review. It does not authorize semantic closure. Scope must be verified from
+the baseline-to-final-HEAD diff, including `include`, `src`, and `docs/spec`.
 
-**Corrective-1 (this revision)** applies seven corrections (C1–C7) without
+**Corrective-2 (this revision)** corrects the independently confirmed blockers
+while retaining the valid C1–C7 contract work, without
 touching production code:
 
-- **C1**: Event T23 / CANCEL-2a flake closed by replacing `yield()`-based
-  causal sync with mechanically-gated atomics (CANCEL-2a) and the
-  Scheduler-authoritative `waiting_count()` admission proof (T23). The
-  Event target is NO LONGER EXCLUDED from the ASan matrix; the full Clang
-  ASan matrix was run ×3 with no exclusions and was green each time (§11.3).
+- **C1**: Event T23 and CANCEL-2a now use Scheduler-authoritative
+  `waiting_count()` registration gates. T23 also uses a monotonically
+  increasing absolute deadline and has no fixed retry loop (§11.4).
 - **C2**: E13 cancellation contract corrected — primitive cancel is best-
   effort per-queue cleanup, NOT a Select-level loser authority; E13 needs
   a parent/group claim ordering group-winner selection relative to
   irreversible primitive commit; first-scope Select arms must bind to one
   Scheduler if relying on one `global_mtx_` domain.
-- **C3**: Stale residual risks R2 and R5 CLOSED. E12-B and E12-C
-  independent-review status reconstructed from actual artifacts: E12-B has
-  no review (REVIEW-REQUIRED); E12-C has a review PASS and is CLOSED
-  (`reviews/E12-C-REVIEW.md`); E12-D is REVIEW-REQUIRED. The contradiction
-  between this closure's appendix and `e12-condition.md` (which overstated
-  E12-B as CLOSED) is resolved.
+- **C3**: E12-B, E12-C, and E12-D are all implementation-review required.
+  The E12-C artifact's explicit pending micro-review controls over its earlier
+  intermediate PASS-looking line.
 - **C4**: Every "fresh-per-epoch enforced by the type system" claim
   replaced with the absorbing state machine + Detached-only registration
   precondition wording.
@@ -1457,14 +1509,15 @@ The closure establishes:
 |---|---|
 | Branch | `audit/e10-e12-api-semantic-closure` |
 | Baseline (master) | `d0cd915` (Merge PR #12 — E12-E Queue production impl) |
-| Toolchains | Clang 21.1.8, GCC 15.2.0 |
-| Platform | Linux x86_64 (WSL2, kernel 6.18) |
+| Toolchains | Recorded from the fresh Corrective-2 run |
+| Platform | Recorded from the fresh Corrective-2 run |
 
 ### 14.3 API Inventory summary
 
-Eight public surfaces inventoried: `WaitNode`, `WaitQueue` (sealed),
-`TimerRegistration` (E11), `Event`, `Semaphore`, `AsyncMutex`,
-`AsyncCondition`, `AsyncQueue<T>`. Plus the load-bearing distinction:
+The public inventory includes `WaitNode`, the publicly nameable but sealed
+`WaitQueue`, `TimerRegistration`, `Event`, `Semaphore`, `AsyncMutex`,
+`AsyncCondition`, `AsyncQueue<T>`, both typed Queue result templates, and the
+`detail::QueueTeardownSession` type exposed by Queue signatures. Plus the load-bearing distinction:
 `include/sluice/async/mutex.hpp` is the OS-thread `Mutex` (TSA-annotated
 `std::mutex` wrapper), **not** the Fiber-suspending `AsyncMutex`. The two
 must never be conflated in docs, naming, or audit (recorded in §2 and in the
@@ -1525,14 +1578,22 @@ Six contradictions were identified and resolved:
 - `tests/e12_async_queue_test.cpp` (H1–H4)
 - `xmake.lua` (two new test targets)
 
-**Modified by Corrective-1 (this revision, non-breaking):**
+**Modified/added by Corrective-2 (this revision, non-breaking):**
 - `tests/e12_event_test.cpp` (C1: T23 + CANCEL-2a deterministic closure —
   no Event production semantics changed)
+- `tests/e12_cross_primitive_parity_test.cpp` and `xmake.lua` (truthful D3/D4
+  scope and no dynamic-terminal overclaim)
+- `tests/e12_api_contract_probes.cpp` plus
+  `scripts/verify-e12-api-contract-negative-compile.sh` (nine automated
+  expected-failure compiles)
 - `docs/e10-e12-api-semantic-closure.md` (C2/C3/C4/C5/C6/C7 wording and
   status corrections, §11.3/§11.4/§12/§14 reconciliation)
-- `docs/api-reference.md`, `docs/api-reference-zh.md` (C4/C5/C6 wording)
-- `docs/changelog.md` (C6 `WaitOutcome` classification + substrate wording)
-- `docs/e12-condition.md` (C3 authority-baseline reconciliation)
+- `docs/api-reference.md`, `docs/api-reference-zh.md` (exact public inventory)
+- `docs/e12-condition.md`, `docs/e12-async-mutex.md`,
+  `docs/reviews/E12-C-REVIEW.md`, and the historical-status notice in
+  `docs/reviews/E12-D-CONDITION-PREPARATION-AUDIT-1.md` (C3 authority status)
+- `docs/reviews/E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1-REVIEW-REQUEST.md`
+  (actual Corrective-2 code/evidence request)
 
 **Unchanged (verified):** every file under `include/sluice/async/` and
 `src/async/`; every per-primitive authority probe; the protected untracked
@@ -1542,8 +1603,7 @@ files `tests/test_t3_simple.cpp` and `tla2tools.jar`.
 
 ```text
 BREAKING PUBLIC API CHANGES: 0
-NON-BREAKING DOC/TEST CHANGES: 12 files (original closure)
-                              + 5 files (Corrective-1)
+NON-BREAKING DOC/TEST/VERIFY CHANGES: see §14.7 and baseline-to-final-HEAD diff
 ```
 
 No public symbol was renamed, no signature was changed, no semantic was
@@ -1551,38 +1611,47 @@ altered. The audit is doc + test only.
 
 ### 14.9 Tests
 
-- New compile-time probe: `tests/e12_api_contract_probes.cpp` (D2/D5/D6/D10
-  + 9 negative-compile blocks).
+- New compile-time probe: `tests/e12_api_contract_probes.cpp` (lifecycle,
+  WaitOutcome vocabulary, Queue result constraints + 9 negative-compile
+  blocks); the negative branches are automated by
+  `scripts/verify-e12-api-contract-negative-compile.sh`.
 - New cross-primitive parity test: `tests/e12_cross_primitive_parity_test.cpp`
-  (D3/D7/D8; 7 cases).
+  (D3 and D4 for Event/Semaphore/AsyncMutex; enum distinctness + fresh
+  unresolved only; 7 cases). AsyncCondition/Queue and dynamic terminal
+  publication remain existing per-primitive evidence.
 - New Queue already-due cases: H1–H4 in `tests/e12_async_queue_test.cpp`.
 - New AsyncCondition wrong-object cancel cases: T30/T31 in
   `tests/e12_async_condition_test.cpp`.
-- **Corrective-1 (C1)**: Event T23 + CANCEL-2a deterministic closure in
+- **Corrective-2 (C1)**: Event T23 + CANCEL-2a deterministic closure in
   `tests/e12_event_test.cpp` (replaces `yield()`-based causal sync with
   mechanically-gated atomics + `waiting_count()` admission proof).
 
 ### 14.10 Verification
 
-Reproduced matrix in §11.3. After Corrective-1 (C1), the full Clang ASan
-matrix passes with **no exclusions** ×3. The previously disclosed Event
-flake is closed (§11.4); the Event target is no longer excluded.
+Fresh Corrective-2 evidence is recorded in §11.3 and the review artifact. The
+full sandbox-external Clang ASan+LSan matrix is 45/45 with no exclusions;
+Clang/GCC Debug, TSan, directed stress, negative compile, and production
+Release gates are green. Earlier failed diagnostic launches and the
+baseline-matched T16 ASan observation remain explicitly counted.
 
 ### 14.11 Formal model
 
-Six formal verify scripts PASS: E11, Event, Semaphore, AsyncMutex,
-AsyncCondition, Queue. Run against the repo's `tla2tools.jar` (2026
-development build; TLC runtime 2.19 of 08 August 2024).
+All six formal scripts are reported individually in the review artifact.
+Semaphore, AsyncMutex, AsyncCondition, and Queue exit 0. E11 and Event exit 1:
+their liveness negatives produce non-vacuous stuttering counterexamples, but
+the runtime omits the named property string required by the scripts. Identical
+baseline commands reproduce both results with zero spec/config/script diff;
+they are classified as pre-existing toolchain-sensitive limitations with
+baseline parity, never as ordinary PASS.
 
 ### 14.12 Compatibility
 
-The closure preserves the documented compatibility surface: the four
-special members of every primitive remain deleted (D6), `WaitOutcome`
-remains the four-value enum (D2), the typed Queue result types remain
-move-only and remain move-assignable for non-move-assignable `T` (D5 / PR
-#12 corrective), and the resource-first deadline precedence (D3) and
-queue-identity cancellation (D7) are documented as binding cross-primitive
-contracts backed by the new parity tests.
+The closure preserves the documented compatibility surface: the four special
+members of every primitive remain deleted (D5/D9), `WaitOutcome` remains the
+four-value vocabulary, the typed Queue result types remain move-only and
+move-assignable for non-move-assignable `T` (D1/D9 / PR #12 corrective), and
+resource-first deadline precedence (D3) plus queue-identity cancellation (D4)
+are backed by the precisely scoped evidence in §11.2.
 
 ### 14.13 E13 Select dependency
 
@@ -1596,11 +1665,9 @@ ordering group-winner selection relative to irreversible primitive commit.
 
 ### 14.14 Residual risks
 
-Recorded in §12. Corrective-1 (C3) closes R2 and R5. The medium-severity
-risks now outstanding are R1 (E12-B Semaphore has no independent review),
-R7 (E12-D AsyncCondition has no independent review), and R6 (E13 contract
-discovery). E12-C AsyncMutex is no longer a residual risk — its independent
-review returned PASS (`reviews/E12-C-REVIEW.md`).
+Recorded in §12. E12-B, E12-C, and E12-D all remain implementation-review
+required; E12-C specifically awaits the migration data-race micro-review named
+by its artifact. E13 contract discovery remains non-blocking for this audit.
 
 ### 14.15 Review
 

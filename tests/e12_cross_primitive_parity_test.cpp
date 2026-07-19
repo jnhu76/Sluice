@@ -1,34 +1,33 @@
 // e12_cross_primitive_parity_test
 //
 // Cross-primitive semantic parity tests (E10-E12-ASYNC-SYNC-API-SEMANTIC-
-// CLOSURE-1, decisions D3 / D7 / D8). Verifies that the cross-primitive
-// contract documented in docs/e10-e12-api-semantic-closure.md HOLDS UNIFORMLY
-// across Event / Semaphore / AsyncMutex / AsyncCondition:
+// CLOSURE-1). This TU supplies a deliberately narrow slice of the aggregate
+// cross-primitive evidence. It directly covers Event / Semaphore / AsyncMutex;
+// AsyncCondition and AsyncQueue evidence remains in their per-primitive TUs.
 //
 //   D3 (deadline precedence): at admission, resource readiness is checked
 //       BEFORE the already-due deadline predicate (resource-first). A timed
 //       wait whose deadline is provably already due resolves inline:
 //         - resource admissible  -> Woken / acquired (no suspension)
 //         - resource NOT admis.  -> Expired (no suspension)
-//       This holds uniformly across all primitives that expose a *_until
-//       deadline variant.
+//       This TU proves that rule for Event / Semaphore / AsyncMutex.
 //
-//   D7 (queue-identity cancellation): cancel(WaitNode&) returns true ONLY if
+//   D4 (queue-identity cancellation): cancel(WaitNode&) returns true ONLY if
 //       the node is currently Registered AND linked in THIS primitive's
 //       queue. A node linked in a DIFFERENT primitive (even of the same kind,
 //       on the same Scheduler) fails the membership gate and returns false
 //       WITHOUT mutation. This holds uniformly across Event / Semaphore /
-//       AsyncMutex / AsyncCondition.
+//       AsyncMutex. AsyncCondition is covered by its T31 per-primitive test;
+//       Queue has no public wait-epoch cancellation API (N/A).
 //
-//   D8 (terminal outcome exclusivity): each wait-epoch terminates in EXACTLY
-//       ONE WaitOutcome (woken / cancelled / expired). The four outcomes are
-//       mutually exclusive. The single resolve_ CAS is the authority; no
-//       primitive can publish a second outcome after the first.
+//   WaitOutcome vocabulary: the enum values are pairwise distinct and a fresh
+//       WaitNode is unresolved. This TU does NOT prove dynamic absorbing-state
+//       or exactly-once terminal publication; those require the existing
+//       per-primitive race/terminal tests.
 //
 // These tests do NOT replace the per-primitive test suites (which cover each
 // primitive's full semantic surface). They verify the cross-primitive PARITY
-// contract: the same D3/D7/D8 invariant holds for every primitive that
-// exposes the relevant surface.
+// contract for only the surfaces named above.
 //
 // Gated to x86_64 (fiber_ctx::supported): registration requires a real Fiber.
 #include "harness.hpp"
@@ -178,7 +177,7 @@ SLUICE_TEST_CASE(e12_parity_d3_mutex_free_plus_already_due_woken) {
 }
 
 // ===========================================================================
-// Slice D7 — Cross-primitive queue-identity cancellation
+// Slice D4 — Cross-primitive queue-identity cancellation
 // ===========================================================================
 //
 // cancel(WaitNode&) returns true ONLY if the node is Registered AND linked in
@@ -187,8 +186,8 @@ SLUICE_TEST_CASE(e12_parity_d3_mutex_free_plus_already_due_woken) {
 // the wrong-object case for one primitive kind (intra-kind wrong-object on
 // the same Scheduler).
 
-// ---- D7-EVT: Event cancel against a node in a DIFFERENT Event -> false ----
-SLUICE_TEST_CASE(e12_parity_d7_event_cancel_wrong_event_returns_false) {
+// ---- D4-EVT: Event cancel against a node in a DIFFERENT Event -> false ----
+SLUICE_TEST_CASE(e12_parity_d4_event_cancel_wrong_event_returns_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -225,8 +224,8 @@ SLUICE_TEST_CASE(e12_parity_d7_event_cancel_wrong_event_returns_false) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
 }
 
-// ---- D7-SEM: Semaphore cancel against a node in a DIFFERENT Semaphore ------
-SLUICE_TEST_CASE(e12_parity_d7_semaphore_cancel_wrong_semaphore_returns_false) {
+// ---- D4-SEM: Semaphore cancel against a node in a DIFFERENT Semaphore ------
+SLUICE_TEST_CASE(e12_parity_d4_semaphore_cancel_wrong_semaphore_returns_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -263,8 +262,8 @@ SLUICE_TEST_CASE(e12_parity_d7_semaphore_cancel_wrong_semaphore_returns_false) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
 }
 
-// ---- D7-MTX: AsyncMutex cancel against a node in a DIFFERENT Mutex ---------
-SLUICE_TEST_CASE(e12_parity_d7_mutex_cancel_wrong_mutex_returns_false) {
+// ---- D4-MTX: AsyncMutex cancel against a node in a DIFFERENT Mutex ---------
+SLUICE_TEST_CASE(e12_parity_d4_mutex_cancel_wrong_mutex_returns_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -322,15 +321,14 @@ SLUICE_TEST_CASE(e12_parity_d7_mutex_cancel_wrong_mutex_returns_false) {
 }
 
 // ===========================================================================
-// Slice D8 — Cross-primitive terminal-outcome exclusivity
+// WaitOutcome vocabulary probe (not a dynamic state-machine proof)
 // ===========================================================================
 //
-// Each wait-epoch terminates in EXACTLY ONE outcome. The four outcomes
-// (unresolved / woken / cancelled / expired) are mutually exclusive. This
-// holds uniformly across all primitives. The probe below verifies the
-// WaitOutcome enum invariant at runtime (the value set never overlaps).
+// The probe below proves only pairwise enum-value distinctness and the initial
+// state of a fresh WaitNode. Absorbing terminals and concurrent exactly-once
+// publication are proved by the existing per-primitive tests.
 
-SLUICE_TEST_CASE(e12_parity_d8_waitoutcome_values_are_distinct) {
+SLUICE_TEST_CASE(e12_parity_waitoutcome_values_are_distinct_and_fresh_unresolved) {
     // Sanity: the four binding outcomes are mutually exclusive. The enum is
     // backed by uint8_t; the four values are 0/1/2/3. This is the runtime
     // counterpart to the compile-time assertion in e12_api_contract_probes.

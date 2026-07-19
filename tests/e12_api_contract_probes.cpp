@@ -1,7 +1,7 @@
 // e12_api_contract_probes
 //
 // Cross-primitive compile-time contract probe (E10-E12-ASYNC-SYNC-API-SEMANTIC-
-// CLOSURE-1, decisions D2/D3/D5/D6/D10). A SEPARATE probe TU, mirroring the
+// CLOSURE-1). A SEPARATE probe TU, mirroring the
 // e12_async_mutex_nothrow_authority_probe precedent: verification evidence does
 // not belong in the public installed surface, and the assertions below encode
 // the cross-primitive parity contract that the semantic-closure authority
@@ -9,7 +9,7 @@
 //
 // Scope: PURE compile-time type-structure and access-control. Verifies that
 // every public async synchronization primitive is non-copyable AND non-movable
-// (D6: lifecycle is object identity — address stability is a WaitNode/WaitQueue
+// (D5: lifecycle is object identity — address stability is a WaitNode/WaitQueue
 // invariant), that the typed Queue result types are move-only (D5: result
 // model is consistent and minimal — value recovery is by take_value() and the
 // result is not copyable), and that the result types remain move-assignable
@@ -38,7 +38,7 @@
 #include <utility>
 
 // ---------------------------------------------------------------------------
-// D6: every primitive is non-copyable AND non-movable.
+// D5: every primitive is non-copyable AND non-movable.
 //
 // Address stability is a WaitNode/WaitQueue invariant: the wait-epoch is
 // identified by WaitNode object identity, and a primitive that could be moved
@@ -81,7 +81,7 @@ static_assert(!std::is_move_assignable_v<sluice::async::AsyncCondition>);
 // avoid polluting the static_assert block with template machinery).
 
 // ---------------------------------------------------------------------------
-// D2: the WaitOutcome enum is a value-type vocabulary type — trivially copyable
+// WaitOutcome vocabulary: the enum is a trivially-copyable value type
 // and a plain enum-class with exactly four binding values. The four outcomes
 // are mutually exclusive: each wait-epoch terminates in exactly one.
 // ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ static_assert(kWoken != kExpired);
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// D5 / PR #12 corrective: the typed Queue result types are move-only AND
+// D1/D9 / PR #12 corrective: the typed Queue result types are move-only AND
 // remain move-assignable even when T is NOT move-assignable. The hand-written
 // destroy-and-rebuild operator= (see async_queue.hpp) preserves the documented
 // P8 contract (T is object + nothrow-move-constructible + nothrow-destructible

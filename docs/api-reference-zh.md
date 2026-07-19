@@ -439,9 +439,17 @@ enum class WaitOutcome : std::uint8_t {
 ```cpp
 class WaitNode {
 public:
-    WaitNode() noexcept;
+    WaitNode() noexcept = default;
     explicit WaitNode(Fiber* fiber) noexcept;
     ~WaitNode();  // assert(!is_registered())
+
+    void* user() const noexcept;
+    void set_user(void* p) noexcept;
+
+    WaitNode(const WaitNode&) = delete;
+    WaitNode& operator=(const WaitNode&) = delete;
+    WaitNode(WaitNode&&) = delete;
+    WaitNode& operator=(WaitNode&&) = delete;
 
     bool is_registered() const noexcept;
     bool is_terminal() const noexcept;
@@ -450,6 +458,56 @@ public:
     bool was_cancelled() const noexcept;
     bool was_expired() const noexcept;  // E11
     Fiber* fiber() const noexcept;
+
+    // 安装头文件中公开以供侵入式实现访问；不是受支持的用户修改面。
+    // WaitQueue 在 mtx_ 保护下拥有这些字段。
+    WaitNode* next_{nullptr};
+    WaitNode* prev_{nullptr};
+    WaitQueue* home_{nullptr};
+};
+```
+
+### `sluice::async::WaitQueue` 与 `sluice::async::TimerRegistration`
+
+二者在安装头文件中是可命名的公开类型，但属于 Scheduler 集成的运行时基底，并非独立的
+用户同步原语。`WaitQueue` 没有公开注册/解析方法；结构操作均为 private，唯一 friend 是
+`Scheduler`。
+
+```cpp
+class WaitQueue {
+public:
+    WaitQueue() noexcept = default;
+    ~WaitQueue();  // assert(empty)
+    WaitQueue(const WaitQueue&) = delete;
+    WaitQueue& operator=(const WaitQueue&) = delete;
+    WaitQueue(WaitQueue&&) = delete;
+    WaitQueue& operator=(WaitQueue&&) = delete;
+};
+
+using deadline_tick_t = std::uint64_t;
+
+class TimerRegistration {
+public:
+    using OnResolveFn = void (*)(void* owner_ctx, bool timer_won) noexcept;
+    enum class State : std::uint8_t { active, retired, consumed };
+    TimerRegistration() = default;
+    TimerRegistration(WaitNode*, WaitQueue*, deadline_tick_t) noexcept;
+    TimerRegistration(const TimerRegistration&) = delete;
+    TimerRegistration& operator=(const TimerRegistration&) = delete;
+    TimerRegistration(TimerRegistration&&) = delete;
+    TimerRegistration& operator=(TimerRegistration&&) = delete;
+    bool try_claim_expiry() noexcept;
+    bool retire() noexcept;
+    bool is_active() const noexcept;
+    bool is_retired() const noexcept;
+    bool is_consumed() const noexcept;
+    State state() const noexcept;
+    WaitNode* node() const noexcept;
+    WaitQueue* queue() const noexcept;
+    deadline_tick_t deadline() const noexcept;
+    bool has_on_resolve() const noexcept;
+    void fire_on_resolve_locked(bool timer_won) noexcept;
+    std::size_t heap_index = static_cast<std::size_t>(-1);
 };
 ```
 
@@ -461,7 +519,11 @@ public:
 class Event {
 public:
     explicit Event(Scheduler& scheduler, bool initially_set = false) noexcept;
-    ~Event();
+    ~Event() = default;
+    Event(const Event&) = delete;
+    Event& operator=(const Event&) = delete;
+    Event(Event&&) = delete;
+    Event& operator=(Event&&) = delete;
 
     [[nodiscard]] bool is_set() const noexcept;
     void set();                          // 广播给所有已注册等待者；外部线程安全
@@ -482,7 +544,11 @@ public:
     using permit_count_t = std::uint32_t;
     Semaphore(Scheduler& scheduler, permit_count_t initial_permits,
               permit_count_t max_permits) noexcept;
-    ~Semaphore();
+    ~Semaphore() = default;
+    Semaphore(const Semaphore&) = delete;
+    Semaphore& operator=(const Semaphore&) = delete;
+    Semaphore(Semaphore&&) = delete;
+    Semaphore& operator=(Semaphore&&) = delete;
 
     [[nodiscard]] permit_count_t available() const noexcept;  // 无锁快照
     [[nodiscard]] bool try_acquire();          // 无 barging；任意线程
@@ -503,6 +569,10 @@ class AsyncMutex {
 public:
     explicit AsyncMutex(Scheduler& scheduler) noexcept;
     ~AsyncMutex();  // assert(owner_ == nullptr)
+    AsyncMutex(const AsyncMutex&) = delete;
+    AsyncMutex& operator=(const AsyncMutex&) = delete;
+    AsyncMutex(AsyncMutex&&) = delete;
+    AsyncMutex& operator=(AsyncMutex&&) = delete;
 
     [[nodiscard]] bool try_lock();              // 仅 Fiber；递归→false
     void lock(WaitNode& node);                  // 仅 Fiber
@@ -522,6 +592,10 @@ class AsyncCondition {
 public:
     explicit AsyncCondition(AsyncMutex& mutex) noexcept;
     ~AsyncCondition();  // assert(active_waits_ == 0)
+    AsyncCondition(const AsyncCondition&) = delete;
+    AsyncCondition& operator=(const AsyncCondition&) = delete;
+    AsyncCondition(AsyncCondition&&) = delete;
+    AsyncCondition& operator=(AsyncCondition&&) = delete;
 
     [[nodiscard]] WaitOutcome wait(WaitNode& condition_node);           // 仅 Fiber；必须持有 Mutex
     [[nodiscard]] WaitOutcome wait_until(WaitNode& condition_node,      // 仅 Fiber；必须持有 Mutex
@@ -545,9 +619,18 @@ nothrow 可析构。`T` **不必**可默认构造或可移动赋值。
 ```cpp
 template <class T>
 class AsyncQueue final {
+    static_assert(std::is_object_v<T>);
+    static_assert(std::is_nothrow_move_constructible_v<T>);
+    static_assert(std::is_nothrow_destructible_v<T>);
+
 public:
     explicit AsyncQueue(Scheduler& scheduler, std::size_t capacity);  // capacity == 0 抛异常
-    ~AsyncQueue();
+    ~AsyncQueue() = default;
+
+    AsyncQueue(const AsyncQueue&) = delete;
+    AsyncQueue& operator=(const AsyncQueue&) = delete;
+    AsyncQueue(AsyncQueue&&) = delete;
+    AsyncQueue& operator=(AsyncQueue&&) = delete;
 
     // 快速路径（不挂起）
     [[nodiscard]] QueuePushResult<T> try_push(T value);
@@ -564,18 +647,68 @@ public:
     [[nodiscard]] QueuePopResult<T> pop_until(Scheduler::deadline_t deadline);
 
     // 拆除（不可逆）
-    QueueTeardownSession begin_teardown() noexcept;
-    T release_teardown(QueueTeardownSession& session) noexcept;
+    detail::QueueTeardownSession begin_teardown() noexcept;
+    T release_teardown(detail::QueueTeardownSession& session) noexcept;
 };
 ```
 
-**结果类型：**
-- `QueuePushResult<T>` — `status()` 返回 `committed | closed | expired | would_block`；
-  `take_value()` 在失败时恢复确切的 `T`。
-- `QueuePopResult<T>` — `status()` 返回 `item | closed | expired | would_block`；
-  `take_value()` 恢复弹出的 `T`。
-- 二者均为仅移动、不可拷贝。移动赋值是手写的（destroy-and-rebuild），因此 `T` 不必
-  可移动赋值（PR #12 纠正）。
+拆除类型位于 `sluice::async::detail`，但它出现在 `AsyncQueue<T>` 的公开签名中：
+
+```cpp
+namespace detail {
+class QueueTeardownSession final {
+public:
+    QueueTeardownSession(QueueTeardownSession&&) noexcept;
+    QueueTeardownSession& operator=(QueueTeardownSession&&) = delete;
+    QueueTeardownSession(const QueueTeardownSession&) = delete;
+    QueueTeardownSession& operator=(const QueueTeardownSession&) = delete;
+    ~QueueTeardownSession() noexcept;
+    detail::QueueItemLease take_next() noexcept;
+    bool empty() const noexcept;
+};
+}  // namespace detail
+```
+
+**结果类型（精确公开成员）：**
+
+```cpp
+template <class T>
+class QueuePushResult final {
+public:
+    static QueuePushResult committed() noexcept;
+    static QueuePushResult failed(QueuePushStatus, T&&) noexcept;
+    QueuePushResult(QueuePushResult&&) noexcept = default;
+    QueuePushResult& operator=(QueuePushResult&&) noexcept;
+    QueuePushResult(const QueuePushResult&) = delete;
+    QueuePushResult& operator=(const QueuePushResult&) = delete;
+    ~QueuePushResult() = default;
+    QueuePushStatus status() const noexcept;
+    T take_value() && noexcept;
+};
+
+template <class T>
+class QueuePopResult final {
+public:
+    static QueuePopResult item(T&&) noexcept;
+    static QueuePopResult closed() noexcept;
+    static QueuePopResult expired() noexcept;
+    static QueuePopResult would_block() noexcept;
+    QueuePopResult(QueuePopResult&&) noexcept = default;
+    QueuePopResult& operator=(QueuePopResult&&) noexcept;
+    QueuePopResult(const QueuePopResult&) = delete;
+    QueuePopResult& operator=(const QueuePopResult&) = delete;
+    ~QueuePopResult() = default;
+    QueuePopStatus status() const noexcept;
+    T take_value() && noexcept;
+};
+```
+
+这两个结果模板自身都没有显式 `requires` 子句或 `static_assert`；上面的对象类型、
+nothrow 移动构造和 nothrow 析构约束属于 `AsyncQueue<T>` 本身。结果类型成员仍严格按
+以上签名声明为 `noexcept`。
+
+二者均为仅移动类型；移动赋值采用 destroy-and-rebuild，因此 `T` 不必可移动赋值
+（PR #12 纠正）。
 
 ### 通用词汇
 

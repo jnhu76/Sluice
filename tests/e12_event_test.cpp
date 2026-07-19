@@ -92,6 +92,37 @@ inline void spin_wait_pred(auto&& pred) {
         std::this_thread::yield();
     }
 }
+
+// A bounded failure guard for cross-worker test coordination. A true result is
+// still established only by `pred` (the causal condition); elapsed wall time
+// never makes the protocol succeed. The bound merely converts a broken
+// protocol/Scheduler into a recorded failure instead of an unbounded hang.
+inline bool spin_wait_pred_guarded(auto&& pred) {
+    constexpr auto kFailureBound = std::chrono::seconds(10);
+    const auto deadline = std::chrono::steady_clock::now() + kFailureBound;
+    do {
+        if (pred()) return true;
+        std::this_thread::yield();
+    } while (std::chrono::steady_clock::now() < deadline);
+    return pred();
+}
+
+// Publishes a phase even when a SLUICE_CHECK in the guarded Fiber returns
+// early. The release happens on scope exit, therefore after every check that
+// was actually reached, and prevents the cleanup Fiber from hanging.
+class ReleasePublishGuard {
+public:
+    explicit ReleasePublishGuard(std::atomic<bool>& phase) noexcept
+        : phase_(phase) {}
+    ~ReleasePublishGuard() noexcept {
+        phase_.store(true, std::memory_order_release);
+    }
+    ReleasePublishGuard(const ReleasePublishGuard&) = delete;
+    ReleasePublishGuard& operator=(const ReleasePublishGuard&) = delete;
+
+private:
+    std::atomic<bool>& phase_;
+};
 }  // namespace
 
 SLUICE_MAIN()
@@ -1278,46 +1309,44 @@ SLUICE_TEST_CASE(e12_t23_multi_waiter_mixed_outcome_stress) {
     for (int it = 0; it < ITERS; ++it) {
         Event ev(sched, /*initially_set=*/false);
         WaitNode n1, n2, n3, n4, n5;
-        std::atomic<int> suspended{0};
+        const Scheduler::deadline_t w2_deadline =
+            static_cast<Scheduler::deadline_t>(it + 1) * 100;
         std::atomic<bool> w5_done{false};
+        std::atomic<bool> registration_gate_failed{false};
+        std::atomic<bool> w5_gate_failed{false};
 
         Fiber f1, f2, f3, f4, f5, fdriver;
-        f1.set_entry([&](Fiber&) { suspended.fetch_add(1, std::memory_order_acq_rel); ev.wait(n1); });
-        f2.set_entry([&](Fiber&) { suspended.fetch_add(1, std::memory_order_acq_rel); ev.wait_until(n2, 100); });
-        f3.set_entry([&](Fiber&) { suspended.fetch_add(1, std::memory_order_acq_rel); ev.wait(n3); });
-        f4.set_entry([&](Fiber&) { suspended.fetch_add(1, std::memory_order_acq_rel); ev.wait(n4); });
+        f1.set_entry([&](Fiber&) { ev.wait(n1); });
+        f2.set_entry([&](Fiber&) { ev.wait_until(n2, w2_deadline); });
+        f3.set_entry([&](Fiber&) { ev.wait(n3); });
+        f4.set_entry([&](Fiber&) { ev.wait(n4); });
         f5.set_entry([&](Fiber&) {
             // W5 arrives AFTER set: observes SET, returns Woken without suspension.
-            spin_wait_pred([&] { return ev.is_set(); });
+            if (!spin_wait_pred_guarded([&] { return ev.is_set(); })) {
+                w5_gate_failed.store(true, std::memory_order_release);
+                return;
+            }
             ev.wait(n5);
             w5_done.store(true, std::memory_order_release);
         });
         fdriver.set_entry([&](Fiber&) {
-            spin_wait_pred([&] { return suspended.load(std::memory_order_acquire) >= 4; });
-            // E10-E12-CORRECTIVE-1 (C1): the single yield() here is a
-            // COOPERATIVE yield point (lets this worker pick up other runnable
-            // fibers in the sched.run(3) cooperative dispatch), NOT causal
-            // synchronization. The causal ordering of the driver's
-            // advance_clock/cancel/set relative to the waiters' registrations
-            // is supplied by the bounded retry loops below: each loop retries
-            // until the target node reaches the expected terminal state, so a
-            // not-yet-registered waiter simply makes the loop iterate again.
-            // No yield/sleep_for is used as causal proof (H7).
-            std::this_thread::yield();
-            // Expire W2: retry advance_clock until W2 resolves. W2's deadline
-            // registration commits atomically (under global_mtx_) before W2
-            // yields, but the driver may run before W2 reaches wait_until.
-            // Retry ensures the pump sees W2's deadline once registered.
-            for (int i = 0; i < 200 && !n2.is_terminal(); ++i) {
-                sched.advance_clock(100);
-                std::this_thread::yield();
+            // E10-E12-CORRECTIVE-2 (C1): waiting_count() is incremented under
+            // Scheduler::global_mtx_ only after each Event WaitNode is linked,
+            // registered, and accounted as waiting.  Unlike a flag published
+            // before wait(), this gate therefore proves all four wait epochs
+            // have committed before the driver resolves any of them.
+            if (!spin_wait_pred_guarded([&] { return sched.waiting_count() >= 4; })) {
+                // Failure cleanup only: SET drains any nodes that did register
+                // and lets W5 finish. This does not turn the failed gate into a
+                // successful causal proof; the case remains failed.
+                registration_gate_failed.store(true, std::memory_order_release);
+                ev.set();
+                return;
             }
+            // advance_clock() accepts an absolute logical time, not a delta.
+            sched.advance_clock(w2_deadline);
             SLUICE_CHECK_MSG(n2.was_expired(), "W2 expired");
-            bool cancelled = false;
-            for (int i = 0; i < 100 && !cancelled; ++i) {
-                cancelled = ev.cancel(n3);
-            }
-            SLUICE_CHECK_MSG(cancelled, "W3 cancelled");
+            SLUICE_CHECK_MSG(ev.cancel(n3), "W3 cancelled");
             ev.set();  // W1, W4 -> Woken; W2/W3 already terminal
         });
 
@@ -1340,6 +1369,11 @@ SLUICE_TEST_CASE(e12_t23_multi_waiter_mixed_outcome_stress) {
         // TSan). Stress is supplementary only (H7).
         sched.run(3);
 
+        SLUICE_CHECK_MSG(
+            !registration_gate_failed.load(std::memory_order_acquire),
+            "T23: four registered waits were not observed before the failure bound");
+        SLUICE_CHECK_MSG(!w5_gate_failed.load(std::memory_order_acquire),
+                         "T23: Event never became SET before the failure bound");
         SLUICE_CHECK_MSG(n1.was_woken(), "W1 Woken");
         SLUICE_CHECK_MSG(n2.was_expired(), "W2 Expired");
         SLUICE_CHECK_MSG(n3.was_cancelled(), "W3 Cancelled");
@@ -1556,8 +1590,13 @@ SLUICE_TEST_CASE(e12_cancel1_correct_event_live_node_wins) {
 //   B.cancel(node) -> false  (and node.is_registered() check)
 //   HAPPENS-BEFORE
 //   A.set()  (which wakes the node, leaving it no longer Registered)
-// No yield()/sleep_for inference. The registered flag alone still gates fwait
-// vs fcancel/fset; cancel_done is the additional fcancel-vs-fset gate.
+// No yield()/sleep_for inference.
+//
+// E10-E12-CORRECTIVE-2 closes the remaining registration race: a flag stored
+// immediately before ev_a.wait(node) proves only arrival at the call site.
+// fcancel now waits for Scheduler::waiting_count() >= 1, which becomes true
+// only after the WaitNode is linked, Registered, and included in Scheduler
+// waiting accounting.  cancel_done remains the fcancel-vs-fset gate.
 SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -1567,42 +1606,41 @@ SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
     Event ev_a(sched, /*initially_set=*/false);
     Event ev_b(sched, /*initially_set=*/false);
     WaitNode node;
-    std::atomic<bool> registered{false};
     std::atomic<bool> cancel_done{false};
+    bool cancel_done_observed = false;
 
     Fiber fwait, fcancel, fset;
-    fwait.set_entry([&](Fiber&) {
-        registered.store(true, std::memory_order_release);
-        ev_a.wait(node);  // registered on Event A
-    });
+    fwait.set_entry([&](Fiber&) { ev_a.wait(node); });  // registered on Event A
     // Event B.cancel(node): node is registered on A, NOT on B -> false, no mutation.
     fcancel.set_entry([&](Fiber&) {
-        spin_wait(registered);
-        // Retry until the wrong-Event cancel is observed by a Registered node
-        // (cancel returns false for a Detached/terminal node too). The retry
-        // is a bounded guard, not causal sync — the causal order is supplied
-        // by cancel_done below.
-        bool observed_registered = false;
-        for (int i = 0; i < 1000; ++i) {
-            if (node.is_registered()) { observed_registered = true; break; }
-            std::this_thread::yield();
-        }
-        SLUICE_CHECK_MSG(observed_registered,
-                         "CANCEL-2a: target node reached Registered before wrong-Event cancel");
+        ReleasePublishGuard publish_cancel_done(cancel_done);
+        const bool registration_observed =
+            spin_wait_pred_guarded([&] { return sched.waiting_count() >= 1; });
+        SLUICE_CHECK_MSG(
+            registration_observed,
+            "CANCEL-2a: registered wait was not observed before the failure bound");
+        SLUICE_CHECK_MSG(node.is_registered(),
+                         "CANCEL-2a: target node not Registered before wrong-Event cancel");
         SLUICE_CHECK_MSG(!ev_b.cancel(node),
-                         "CANCEL-2a: wrong-Event (same Scheduler) cancel -> false");
+                         "CANCEL-2a: wrong-Event cancel unexpectedly won");
         // node remains Registered on A; both queues structurally intact. This
         // assertion runs BEFORE cancel_done is published, so it is causally
         // ordered before fset's ev_a.set() (which would wake the node).
-        SLUICE_CHECK_MSG(node.is_registered(), "CANCEL-2a: node still Registered on A");
-        cancel_done.store(true, std::memory_order_release);
+        SLUICE_CHECK_MSG(node.is_registered(),
+                         "CANCEL-2a: node did not remain Registered on A");
+        // publish_cancel_done's destructor performs the sole release store.
     });
     // After the wrong-Event cancel (and its assertion block) completes, Event A
     // can wake the node normally. The spin_wait on cancel_done supplies the
     // release/acquire edge that mechanically orders B.cancel-before-A.set.
     fset.set_entry([&](Fiber&) {
-        spin_wait(registered);
-        spin_wait(cancel_done);
+        cancel_done_observed = spin_wait_pred_guarded(
+            [&] { return cancel_done.load(std::memory_order_acquire); });
+        if (!cancel_done_observed) {
+            // Failure cleanup: SET still drains A; the case remains failed.
+            ev_a.set();
+            return;
+        }
         ev_a.set();  // A.set() wakes the node (Woken) normally
     });
 
@@ -1615,6 +1653,9 @@ SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
     sched.spawn(fset);
     sched.run(3);
 
+    SLUICE_CHECK_MSG(
+        cancel_done_observed,
+        "CANCEL-2a: cancel_done was not published before the failure bound");
     SLUICE_CHECK_MSG(node.was_woken(),
                      "CANCEL-2a: original Event A can still wake the node normally");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "CANCEL-2a: wait count at baseline");

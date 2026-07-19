@@ -445,9 +445,17 @@ they do not by themselves prevent terminal-node reuse.
 ```cpp
 class WaitNode {
 public:
-    WaitNode() noexcept;
+    WaitNode() noexcept = default;
     explicit WaitNode(Fiber* fiber) noexcept;
     ~WaitNode();  // assert(!is_registered())
+
+    void* user() const noexcept;
+    void set_user(void* p) noexcept;
+
+    WaitNode(const WaitNode&) = delete;
+    WaitNode& operator=(const WaitNode&) = delete;
+    WaitNode(WaitNode&&) = delete;
+    WaitNode& operator=(WaitNode&&) = delete;
 
     bool is_registered() const noexcept;
     bool is_terminal() const noexcept;
@@ -456,6 +464,60 @@ public:
     bool was_cancelled() const noexcept;
     bool was_expired() const noexcept;  // E11
     Fiber* fiber() const noexcept;
+
+    // Public in the installed header for intrusive implementation access;
+    // not a supported user-mutation surface. WaitQueue owns these under mtx_.
+    WaitNode* next_{nullptr};
+    WaitNode* prev_{nullptr};
+    WaitQueue* home_{nullptr};
+};
+```
+
+### `sluice::async::WaitQueue` and `sluice::async::TimerRegistration`
+
+These are publicly nameable types in installed headers, but they are
+Scheduler-integrated runtime substrate, not standalone user synchronization
+primitives. `WaitQueue` exposes no public registration or resolution method;
+those structural methods are private and `Scheduler` is the sole friend.
+
+```cpp
+class WaitQueue {
+public:
+    WaitQueue() noexcept = default;
+    ~WaitQueue();  // assert(empty)
+    WaitQueue(const WaitQueue&) = delete;
+    WaitQueue& operator=(const WaitQueue&) = delete;
+    WaitQueue(WaitQueue&&) = delete;
+    WaitQueue& operator=(WaitQueue&&) = delete;
+};
+
+using deadline_tick_t = std::uint64_t;
+
+class TimerRegistration {
+public:
+    using OnResolveFn = void (*)(void* owner_ctx, bool timer_won) noexcept;
+    enum class State : std::uint8_t { active, retired, consumed };
+
+    TimerRegistration() = default;
+    TimerRegistration(WaitNode*, WaitQueue*, deadline_tick_t) noexcept;
+    TimerRegistration(const TimerRegistration&) = delete;
+    TimerRegistration& operator=(const TimerRegistration&) = delete;
+    TimerRegistration(TimerRegistration&&) = delete;
+    TimerRegistration& operator=(TimerRegistration&&) = delete;
+
+    bool try_claim_expiry() noexcept;
+    bool retire() noexcept;
+    bool is_active() const noexcept;
+    bool is_retired() const noexcept;
+    bool is_consumed() const noexcept;
+    State state() const noexcept;
+    WaitNode* node() const noexcept;
+    WaitQueue* queue() const noexcept;
+    deadline_tick_t deadline() const noexcept;
+    bool has_on_resolve() const noexcept;
+    void fire_on_resolve_locked(bool timer_won) noexcept;
+
+    std::size_t heap_index = static_cast<std::size_t>(-1);
 };
 ```
 
@@ -467,7 +529,11 @@ Persistent manual-reset async Event. Non-copyable, non-movable.
 class Event {
 public:
     explicit Event(Scheduler& scheduler, bool initially_set = false) noexcept;
-    ~Event();
+    ~Event() = default;
+    Event(const Event&) = delete;
+    Event& operator=(const Event&) = delete;
+    Event(Event&&) = delete;
+    Event& operator=(Event&&) = delete;
 
     [[nodiscard]] bool is_set() const noexcept;
     void set();                          // broadcast to all registered waiters; ext-thread safe
@@ -488,7 +554,11 @@ public:
     using permit_count_t = std::uint32_t;
     Semaphore(Scheduler& scheduler, permit_count_t initial_permits,
               permit_count_t max_permits) noexcept;
-    ~Semaphore();
+    ~Semaphore() = default;
+    Semaphore(const Semaphore&) = delete;
+    Semaphore& operator=(const Semaphore&) = delete;
+    Semaphore(Semaphore&&) = delete;
+    Semaphore& operator=(Semaphore&&) = delete;
 
     [[nodiscard]] permit_count_t available() const noexcept;  // lock-free snapshot
     [[nodiscard]] bool try_acquire();          // no barging; any thread
@@ -509,6 +579,10 @@ class AsyncMutex {
 public:
     explicit AsyncMutex(Scheduler& scheduler) noexcept;
     ~AsyncMutex();  // assert(owner_ == nullptr)
+    AsyncMutex(const AsyncMutex&) = delete;
+    AsyncMutex& operator=(const AsyncMutex&) = delete;
+    AsyncMutex(AsyncMutex&&) = delete;
+    AsyncMutex& operator=(AsyncMutex&&) = delete;
 
     [[nodiscard]] bool try_lock();              // Fiber-only; recursive→false
     void lock(WaitNode& node);                  // Fiber-only
@@ -528,6 +602,10 @@ class AsyncCondition {
 public:
     explicit AsyncCondition(AsyncMutex& mutex) noexcept;
     ~AsyncCondition();  // assert(active_waits_ == 0)
+    AsyncCondition(const AsyncCondition&) = delete;
+    AsyncCondition& operator=(const AsyncCondition&) = delete;
+    AsyncCondition(AsyncCondition&&) = delete;
+    AsyncCondition& operator=(AsyncCondition&&) = delete;
 
     [[nodiscard]] WaitOutcome wait(WaitNode& condition_node);           // Fiber-only; must own Mutex
     [[nodiscard]] WaitOutcome wait_until(WaitNode& condition_node,      // Fiber-only; must own Mutex
@@ -554,9 +632,18 @@ deferred to a future authority (see
 ```cpp
 template <class T>
 class AsyncQueue final {
+    static_assert(std::is_object_v<T>);
+    static_assert(std::is_nothrow_move_constructible_v<T>);
+    static_assert(std::is_nothrow_destructible_v<T>);
+
 public:
     explicit AsyncQueue(Scheduler& scheduler, std::size_t capacity);  // throws if capacity == 0
-    ~AsyncQueue();
+    ~AsyncQueue() = default;
+
+    AsyncQueue(const AsyncQueue&) = delete;
+    AsyncQueue& operator=(const AsyncQueue&) = delete;
+    AsyncQueue(AsyncQueue&&) = delete;
+    AsyncQueue& operator=(AsyncQueue&&) = delete;
 
     // Fast paths (no suspend)
     [[nodiscard]] QueuePushResult<T> try_push(T value);
@@ -573,18 +660,70 @@ public:
     [[nodiscard]] QueuePopResult<T> pop_until(Scheduler::deadline_t deadline);
 
     // Teardown (irreversible)
-    QueueTeardownSession begin_teardown() noexcept;
-    T release_teardown(QueueTeardownSession& session) noexcept;
+    detail::QueueTeardownSession begin_teardown() noexcept;
+    T release_teardown(detail::QueueTeardownSession& session) noexcept;
 };
 ```
 
-**Result types:**
-- `QueuePushResult<T>` — `status()` returns `committed | closed | expired | would_block`;
-  `take_value()` recovers the exact `T` on failure.
-- `QueuePopResult<T>` — `status()` returns `item | closed | expired | would_block`;
-  `take_value()` recovers the popped `T`.
-- Both are move-only, non-copyable. Move-assignment is hand-written (destroy-and-rebuild)
-  so `T` need not be move-assignable (PR #12 corrective).
+The teardown type lives in `sluice::async::detail`, but it is part of the
+publicly observable signature of `AsyncQueue<T>`:
+
+```cpp
+namespace detail {
+class QueueTeardownSession final {
+public:
+    QueueTeardownSession(QueueTeardownSession&&) noexcept;
+    QueueTeardownSession& operator=(QueueTeardownSession&&) = delete;
+    QueueTeardownSession(const QueueTeardownSession&) = delete;
+    QueueTeardownSession& operator=(const QueueTeardownSession&) = delete;
+    ~QueueTeardownSession() noexcept;
+    detail::QueueItemLease take_next() noexcept;
+    bool empty() const noexcept;
+};
+}  // namespace detail
+```
+
+**Result types (exact public members):**
+
+```cpp
+template <class T>
+class QueuePushResult final {
+public:
+    static QueuePushResult committed() noexcept;
+    static QueuePushResult failed(QueuePushStatus, T&&) noexcept;
+    QueuePushResult(QueuePushResult&&) noexcept = default;
+    QueuePushResult& operator=(QueuePushResult&&) noexcept;
+    QueuePushResult(const QueuePushResult&) = delete;
+    QueuePushResult& operator=(const QueuePushResult&) = delete;
+    ~QueuePushResult() = default;
+    QueuePushStatus status() const noexcept;
+    T take_value() && noexcept;
+};
+
+template <class T>
+class QueuePopResult final {
+public:
+    static QueuePopResult item(T&&) noexcept;
+    static QueuePopResult closed() noexcept;
+    static QueuePopResult expired() noexcept;
+    static QueuePopResult would_block() noexcept;
+    QueuePopResult(QueuePopResult&&) noexcept = default;
+    QueuePopResult& operator=(QueuePopResult&&) noexcept;
+    QueuePopResult(const QueuePopResult&) = delete;
+    QueuePopResult& operator=(const QueuePopResult&) = delete;
+    ~QueuePopResult() = default;
+    QueuePopStatus status() const noexcept;
+    T take_value() && noexcept;
+};
+```
+
+Neither result template declares an explicit `requires` clause or
+`static_assert`; the object/nothrow-move/nothrow-destruction constraints above
+are constraints of `AsyncQueue<T>` itself. The result members remain declared
+`noexcept` exactly as shown.
+
+Both result types are move-only. Move-assignment uses destroy-and-rebuild so
+`T` need not be move-assignable (PR #12 corrective).
 
 ### Common Vocabulary
 

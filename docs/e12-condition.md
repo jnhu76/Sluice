@@ -24,14 +24,12 @@
 >   ([`docs/e12-semaphore.md`](e12-semaphore.md)). No independent
 >   implementation-review artifact exists for E12-B; the previous "E12-B
 >   Semaphore CLOSED" line was an overstatement and is corrected here.
-> - E12-C AsyncMutex: PREPARATION CLOSED; IMPLEMENTATION-REVIEW PASS (after
->   corrective) → E12-C IMPLEMENTATION CLOSED, E12-C CLOSED. Independent
->   review: [`docs/reviews/E12-C-REVIEW.md`](reviews/E12-C-REVIEW.md)
->   (E12-C-IMPLEMENTATION-1-INDEPENDENT-REVIEW: PASS).
->   Note: the status banner inside
->   [`docs/e12-async-mutex.md`](e12-async-mutex.md) still reads
->   `E12-C-IMPLEMENTATION: REVIEW-REQUIRED`; that banner predates the
->   independent-review PASS and is itself stale (see C3 of this closure).
+> - E12-C AsyncMutex: PREPARATION CLOSED; IMPLEMENTATION COMPLETE;
+>   IMPLEMENTATION REVIEW-REQUIRED. The latest section of
+>   [`docs/reviews/E12-C-REVIEW.md`](reviews/E12-C-REVIEW.md) explicitly says
+>   to await the final migration data-race micro-review; no later artifact
+>   supplies that verdict. The `e12-async-mutex.md` REVIEW-REQUIRED banner is
+>   therefore current, and E12-C is not CLOSED.
 >
 > Cross-primitive preparation:
 > [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §7.

@@ -1,5 +1,16 @@
 # E12-C AsyncMutex — Independent Adversarial Review
 
+> **Supersession note — 2026-07-19.** Reviewed PR commit:
+> `a97aca1bb9248a2c5bc05d914ba8670de590ed34`. Authority: PR #13
+> `E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-CORRECTIVE-2` closure/status
+> governance. The historical reviewer text and verdict below are preserved
+> verbatim. This artifact records an author-applied Corrective-4, an updated
+> historical PASS, and a still-pending "final E12-C migration data-race
+> micro-review". No separately attributable independent re-review artifact
+> after Corrective-4 was found. The later closure/status ledger therefore
+> conservatively records E12-C as `REVIEW-REQUIRED`; that governance
+> classification does not rewrite or impersonate the historical reviewer.
+
 **Review range:** `4716ecf..32f46c2` (6 commits)
 **Branch:** `feat/e12-C-async-mutex`
 **Reviewer:** independent adversarial (IAR)
