@@ -1,7 +1,8 @@
 # E12-C AsyncMutex — Independent Adversarial Review
 
-> **Supersession note — 2026-07-19.** Reviewed PR commit:
-> `a97aca1bb9248a2c5bc05d914ba8670de590ed34`. Authority: PR #13
+> **Supersession note — 2026-07-19.** Corrective-4 applied in commit
+> `a97aca1bb9248a2c5bc05d914ba8670de590ed34` (2026-07-19). Reviewed PR
+> commit: `a97aca1bb9248a2c5bc05d914ba8670de590ed34`. Authority: PR #13
 > `E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-CORRECTIVE-2` closure/status
 > governance. The historical reviewer text and verdict below are preserved
 > verbatim. This artifact records an author-applied Corrective-4, an updated

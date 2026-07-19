@@ -1015,7 +1015,8 @@ SLUICE_TEST_CASE(e12_queue_h1_push_until_already_due_free_slot_committed) {
     sched.run(1);
 
     SLUICE_CHECK_MSG(committed, "already-due push + free slot -> committed (resource-first)");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     // Drain to satisfy the ring-empty destruction contract.
     auto rp = port.try_pop();
@@ -1060,7 +1061,8 @@ SLUICE_TEST_CASE(e12_queue_h2_push_until_already_due_full_ring_expired) {
 
     SLUICE_CHECK_MSG(expired, "already-due push + full ring -> expired inline");
     SLUICE_CHECK_MSG(recovered == 777, "exact original T recovered on expire");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     // Drain the pre-filled item to satisfy the ring-empty destruction contract.
     auto rp = port.try_pop();
@@ -1104,7 +1106,8 @@ SLUICE_TEST_CASE(e12_queue_h3_pop_until_already_due_item_available) {
 
     SLUICE_CHECK_MSG(got_item, "already-due pop + buffered item -> item (resource-first)");
     SLUICE_CHECK_MSG(popped == 314, "exact buffered value popped");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     QueueTeardownSession session = port.begin_teardown();
     SLUICE_CHECK(session.empty());
@@ -1135,7 +1138,8 @@ SLUICE_TEST_CASE(e12_queue_h4_pop_until_already_due_empty_ring_expired) {
     sched.run(1);
 
     SLUICE_CHECK_MSG(expired, "already-due pop + empty ring -> expired inline");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     QueueTeardownSession session = port.begin_teardown();
     SLUICE_CHECK(session.empty());

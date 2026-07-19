@@ -1121,7 +1121,7 @@ end
 -- Gated to x86_64 (fiber_ctx::supported).
 do
     local p = "tests/e12_cross_primitive_parity_test.cpp"
-    if os.isfile(p) then
+    if os.isfile(p) and is_arch("x86_64") then
         target("e12_cross_primitive_parity_test")
             set_kind("binary")
             set_default(false)

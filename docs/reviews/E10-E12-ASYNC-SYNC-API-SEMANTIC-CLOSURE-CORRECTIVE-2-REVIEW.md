@@ -29,7 +29,7 @@ INITIAL_REVIEW_HEAD: a97aca1bb9248a2c5bc05d914ba8670de590ed34
 HEAD_BRANCH: audit/e10-e12-api-semantic-closure
 COMMITS_REVIEWED_AT_INITIAL_HEAD: 1
 FILES_CHANGED_AT_INITIAL_HEAD: 14
-FINAL_HEAD: the commit containing this artifact; resolve from final handoff
+FINAL_HEAD: ebd91eb55b7432e381751f14ab7c0bee81139291 (resolve from final handoff)
 PREEXISTING_UNTRACKED: tests/test_t3_simple.cpp, tla2tools.jar
 PRODUCTION_DIFF: EMPTY
 FORMAL_SPEC_DIFF: EMPTY

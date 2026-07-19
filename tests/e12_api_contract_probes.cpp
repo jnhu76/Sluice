@@ -82,9 +82,10 @@ static_assert(!std::is_move_assignable_v<sluice::async::AsyncCondition>);
 
 // ---------------------------------------------------------------------------
 // WaitOutcome vocabulary: the enum is a trivially-copyable value type
-// and a plain enum-class with exactly four binding values. The four outcomes
-// are mutually exclusive: each wait-epoch terminates in exactly one.
+// and a plain enum-class. The four outcomes are mutually exclusive: each
+// wait-epoch terminates in exactly one.
 // ---------------------------------------------------------------------------
+static_assert(std::is_enum_v<sluice::async::WaitOutcome>);
 static_assert(std::is_trivially_copyable_v<sluice::async::WaitOutcome>);
 static_assert(std::is_nothrow_default_constructible_v<sluice::async::WaitOutcome>);
 
@@ -159,6 +160,10 @@ static_assert(!std::is_copy_constructible_v<PR_Move>);
 static_assert(!std::is_copy_constructible_v<PR_NonMove>);
 static_assert(!std::is_copy_constructible_v<RR_Move>);
 static_assert(!std::is_copy_constructible_v<RR_NonMove>);
+static_assert(!std::is_copy_assignable_v<PR_Move>);
+static_assert(!std::is_copy_assignable_v<PR_NonMove>);
+static_assert(!std::is_copy_assignable_v<RR_Move>);
+static_assert(!std::is_copy_assignable_v<RR_NonMove>);
 
 // The decisive PR #12 assertion: move-assign remains well-formed even when T
 // is NOT move-assignable. The hand-written operator= preserves the contract.

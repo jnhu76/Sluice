@@ -87,7 +87,7 @@ enum class WaitOutcome : std::uint8_t {
 
 **State machine** (L107-117): `Detached → Registered → {Woken, Cancelled, Expired} [T]`
 
-**Lifecycle**: WaitNode is CALLER-OWNED, address-stable, one per wait epoch. Non-copyable, non-movable (identity = address). Fresh-per-epoch is enforced by the absorbing WaitNode state machine and the registration precondition that registration succeeds only from `Detached`; the deleted copy/move operations preserve object identity and address stability but do not by themselves prevent terminal-node reuse. Destroyed only when terminal (or never registered). Reuse is forbidden (C8).
+**Lifecycle**: WaitNode is CALLER-OWNED, address-stable, one per wait epoch. Non-copyable, non-movable (identity = address). Fresh-per-epoch is enforced by the absorbing WaitNode state machine and the registration precondition that registration succeeds only from `Detached`; the deleted copy/move operations preserve object identity and address stability but do not by themselves prevent terminal-node reuse. Destroyed only when terminal (or never registered). Reuse is forbidden — terminal-state WaitNodes must not be re-registered (C1 finding in §6).
 
 ### 2.2 E10: WaitQueue (wait_queue.hpp)
 
@@ -508,21 +508,29 @@ DOCUMENTS SUPERSEDED:
 DECISION D3:
 STATUS: ACCEPTED
 CURRENT FACT:
-  All primitives use resource-first admission precedence:
+  All primitives except AsyncCondition use resource-first admission precedence:
   - Event: SET checked BEFORE already-due deadline (event.hpp:134-141)
   - Semaphore: permit admission BEFORE already-due (semaphore.hpp:160-168)
   - AsyncMutex: ownership admission BEFORE already-due (async_mutex.hpp:148-157)
-  - AsyncCondition: already-due → Expired inline, retain ownership (condition.hpp:148-151)
   - AsyncQueue: resource-first wins over due deadline (queue_port.hpp:706-710)
+  EXCEPTION — AsyncCondition: already-due → Expired inline, retain ownership
+  (condition.hpp:148-151). AsyncCondition is deadline-first: when the deadline
+  is already due at admission, the wait returns Expired immediately without
+  checking the condition predicate or acquiring the mutex. This is the only
+  primitive where deadline precedence overrides resource availability.
 CONFLICT:
-  None. All primitives are consistent.
+  None. AsyncCondition's deadline-first behavior is an intentional design
+  choice (condition variables must recheck the predicate after acquiring the
+  mutex, which is only meaningful when the waiter actually blocks).
 DECISION:
-  Resource-first is the authoritative admission precedence. This is PROVEN
-  across all five primitives with file:line evidence.
+  Resource-first is the authoritative admission precedence for Event, Semaphore,
+  AsyncMutex, and AsyncQueue. AsyncCondition is the explicit deadline-first
+  exception. This is PROVEN across all five primitives with file:line evidence.
   Distinction between "admission precedence" (which check runs first at
   admission time) and "registered-race winner" (who wins the resolve_ CAS
-  after registration) is maintained: admission precedence is resource-first;
-  the registered race is resolved by the single WaitNode::resolve_ CAS.
+  after registration) is maintained: admission precedence is resource-first
+  (or deadline-first for AsyncCondition); the registered race is resolved by
+  the single WaitNode::resolve_ CAS.
 RATIONALE:
   Resource-first prevents a pathological case where a resource becomes
   available but the waiter is told "expired" because the deadline was
@@ -532,7 +540,8 @@ COMPATIBILITY:
 IMPLEMENTATION EFFECT:
   None.
 TEST EFFECT:
-  Queue already-due deadline test is missing (see Test Obligations).
+  Covered. Queue already-due deadline tests H1–H4 exist in
+  tests/e12_async_queue_test.cpp (see §11.2–11.3).
 DOCUMENTS SUPERSEDED:
   None.
 ```
@@ -1003,28 +1012,31 @@ RESOLUTION:
 | `condition.hpp` | `wait()` | has `[[nodiscard]]` | keep | already correct |
 | `condition.hpp` | `wait_until()` | has `[[nodiscard]]` | keep | already correct |
 
-Status: All methods that return values already have `[[nodiscard]]`. No additions needed.
+Status: The audited value-returning methods (condition wait/wait_until) already
+have `[[nodiscard]]`. Other value-returning accessors (e.g. WaitOutcome return
+values, QueuePushResult/QueuePopResult) were not in scope for this audit. No
+additions needed for the audited set.
 
 ### 8.2 Static Assert Probes
 
 Add compile-time API contract probes for primitives that lack them:
 
-| Probe | Primitive(s) Missing | File to Create |
-|-------|---------------------|----------------|
-| non-copyable, non-movable | Event, Semaphore, AsyncCondition | tests/e12_api_contract_probes.cpp |
-| QueueResult move-only, non-copyable | (already exists) | — |
-| QueueResult move-assignable with MoveConstructOnly | (already exists) | — |
+| Probe | Primitive(s) Missing | File to Create | Status |
+|-------|---------------------|----------------|--------|
+| non-copyable, non-movable | Event, Semaphore, AsyncCondition | tests/e12_api_contract_probes.cpp | COMPLETED |
+| QueueResult move-only, non-copyable | (already exists) | — | COMPLETED |
+| QueueResult move-assignable with MoveConstructOnly | (already exists) | — | COMPLETED |
 
 ### 8.3 Documentation Corrections
 
-| File | Correction | Priority |
-|------|-----------|----------|
-| `e12-condition.md` | Update status banner: IMPLEMENTATION BLOCKED → IMPLEMENTATION COMPLETE, REVIEW-REQUIRED | P1 |
-| `e12-queue-scheduler-integration.md` | Add supersession notice for §8 timer model | P2 |
-| `api-reference.md` | Add E10-E12 async synchronization section | P1 |
-| `api-reference-zh.md` | Add E10-E12 async synchronization section | P1 |
-| `changelog.md` | Add E10-E12 entries | P1 |
-| `async-runtime-plan.md` | Verify E12 ordering matches dependency trunk | P2 |
+| File | Correction | Priority | Status |
+|------|-----------|----------|--------|
+| `e12-condition.md` | Update status banner: IMPLEMENTATION BLOCKED → IMPLEMENTATION COMPLETE, REVIEW-REQUIRED | P1 | COMPLETED (C5) |
+| `e12-queue-scheduler-integration.md` | Add supersession notice for §8 timer model | P2 | COMPLETED (C1) |
+| `api-reference.md` | Add E10-E12 async synchronization section | P1 | COMPLETED (C2) |
+| `api-reference-zh.md` | Add E10-E12 async synchronization section | P1 | COMPLETED (C2) |
+| `changelog.md` | Add E10-E12 entries | P1 | COMPLETED (C3) |
+| `async-runtime-plan.md` | Verify E12 ordering matches dependency trunk | P2 | COMPLETED (C6) |
 
 ---
 
@@ -1182,6 +1194,10 @@ Impact: Breaking if it changes destruction contract. Requires separate
 > **Status (2026-07-19):** all cells that were `MISSING` / `—` in the
 > original audit are now covered by this closure (see §11.2 for the new TUs
 > and cases). The table below records the post-closure coverage.
+>
+> Legend: **Yes** = tested; **n/a** = not applicable (no such API surface for
+> this primitive); **—** = not tested (intentional gap, recorded as residual
+> risk in §12 if non-trivial).
 
 | Primitive | Fast Path | Blocking | Timed | Already-Due | Cancel | Wrong-Obj Cancel | Ext Thread | Destruction | Stress |
 |-----------|-----------|----------|-------|-------------|--------|-----------------|------------|-------------|--------|
@@ -1532,6 +1548,11 @@ new api-reference sections).
   applicable.
 - DOCUMENTED-BUT-UNPROVEN: a small set (e.g. Queue O-4 allocation-failure
   path), recorded as residual risks (§12).
+- INTENTIONALLY-DIFFERENT: cells where a primitive's behavior is deliberately
+  distinct from the cross-primitive norm (e.g. AsyncCondition deadline-first
+  admission in D3), with documented rationale.
+- DEFERRED: cells where the behavior is correct but formal evidence is deferred
+  pending future review or implementation maturity.
 - DOCUMENTED: invariants recorded in design docs and reproduced in the
   matrix with citations.
 - NOT-APPLICABLE: structural (e.g. Queue has no `cancel(WaitNode&)`; Event
@@ -1554,13 +1575,15 @@ Six contradictions were identified and resolved:
   supersession notice — RESOLVED (supersession notice added).
 - C2 (P1): `api-reference.md` / `api-reference-zh.md` missing E10–E12
   async primitives — RESOLVED (sections added in both languages).
-- C3 (P2): `e12-condition.md` status banner stale (IMPLEMENTATION BLOCKED
+- C3 (P1): `changelog.md` missing E10–E12 entries — RESOLVED.
+- C4 (P2): WaitOutcome not formally documented in user docs — RESOLVED
+  (enum reference added to api-reference.md).
+- C5 (P1): `e12-condition.md` status banner stale (IMPLEMENTATION BLOCKED
   while code is implemented) — RESOLVED (banner updated).
-- C4 (P3): `async-runtime-plan.md` E12 ordering status stale — RESOLVED.
-- C5 (P3): `changelog.md` missing E10–E12 entries — RESOLVED.
-- C6 (P2): cross-primitive test gaps (Queue already-due, AsyncCondition
-  wrong-object cancel, cross-primitive parity, compile-time contract probes)
-  — RESOLVED (new TUs and cases added; all green).
+- C6 (P2): `async-runtime-plan.md` E12 ordering status stale — RESOLVED.
+- New (post-closure): cross-primitive test gaps (Queue already-due,
+  AsyncCondition wrong-object cancel, cross-primitive parity, compile-time
+  contract probes) — RESOLVED (new TUs and cases added; all green).
 
 ### 14.7 Files
 

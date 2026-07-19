@@ -188,11 +188,14 @@ By constraint, neither the original closure nor Corrective-2 may modify:
 - The pre-existing untracked files `tests/test_t3_simple.cpp` and
   `tla2tools.jar` (explicitly protected by the task spec).
 
-The reviewer must confirm via baseline-to-final-HEAD diff (not `git status`)
+The reviewer must confirm via baseline-to-final-HEAD diff AND `git status --short`
 that the diff is confined to `docs/`, the two new test TUs, the augmented test TUs
 (including the C1 Event test-harness fix), and `xmake.lua`. **The reviewer
 MUST verify that no file under `include/sluice/async/`, `src/async/`, or
-`docs/spec/` appears in the diff.**
+`docs/spec/` appears in the diff.** The reviewer MUST also verify via
+`git ls-files --others --exclude-standard` that no untracked files exist under
+protected paths (`include/`, `src/`, `docs/spec/`), explicitly allowing only the
+pre-existing untracked files `tests/test_t3_simple.cpp` and `tla2tools.jar`.
 
 ---
 

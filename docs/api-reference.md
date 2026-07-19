@@ -750,9 +750,11 @@ Both result types are move-only. Move-assignment uses destroy-and-rebuild so
 | Wake/notify | `set`, `release`, `notify_one`, `notify_all` | No | Yes |
 | Cancel | `cancel` (all primitives with cancel) | No | Yes |
 | Observation | `is_set`, `available`, `is_closed`, `capacity`, `size` | No | Yes |
-| Construction/destruction | ctors, dtors | No | Yes |
+| Construction/destruction | ctors, dtors | No | Yes (constructors); destruction requires quiescence (empty WaitQueue, no active condition waits, no mutex owner) |
 
 ---
+
+## Measurement
 
 All stats structs are caller-owned, default-initialized to zero, and attached via nullable pointer (null = no counting).
 
