@@ -729,17 +729,18 @@ For timer-pump resolution (deadline due after Armed):
 
 For loser Timer arm:
     1. group claim CAS fails
-    2. TimerRegistration: ACTIVE -> RETIRED (retire())
-    3. acquire arm queue mutex
-    4. call cancel_locked(node)
+    2. acquire arm queue mutex
+    3. call cancel_locked(node)
            resolve Cancelled
            unlink in the same queue CS
-    5. release arm queue mutex
-    6. decrement waiting_waitq_count_ exactly once
-    7. mark arm state RETIRED
-    8. clear typed WaitNode context
-    9. do NOT make_runnable
-    10. do NOT publish SelectResult
+    4. release arm queue mutex
+    5. TimerRegistration: ACTIVE -> RETIRED (retire())
+    6. decrement active_deadline_count_ exactly once
+    7. decrement waiting_waitq_count_ exactly once
+    8. mark arm state RETIRED
+    9. clear typed WaitNode context
+    10. do NOT make_runnable
+    11. do NOT publish SelectResult
 ```
 
 ### 9.3 Type-safe timer expiry
@@ -1211,9 +1212,9 @@ PRE:
        finalize winner
 
 8. if group claim fails:
+       cancel_locked(node)
        reg.retire() must succeed
        ACTIVE -> RETIRED
-       cancel_locked(node)
        finalize loser
 ```
 
@@ -1255,9 +1256,9 @@ prove retirement cannot complete or destroy the node until the pump releases.
 
 ---
 
-## 17. Correct Lifecycle Documentation
+## 16. Correct Lifecycle Documentation
 
-### 17.1 Common WaitNode law
+### 16.1 Common WaitNode law
 
 ```
 - terminal resolve occurs before unlink
@@ -1266,7 +1267,7 @@ prove retirement cannot complete or destroy the node until the pump releases.
 - publication occurs only after finalization
 ```
 
-### 17.2 Branch-specific sequences
+### 16.2 Branch-specific sequences
 
 ```
 EVENT WINNER:
@@ -1301,7 +1302,7 @@ TIMER LOSER:
     no publication
 ```
 
-### 17.3 Enforcement
+### 16.3 Enforcement
 
 The preparation design (§4), state machine (§5), test plan, and formal model
 (§26) must use the branch-specific sequences. Any document that deviates must
@@ -1813,6 +1814,7 @@ NEG-4: loser remains armed after completion (violates InvNoArmedArmAfterCompleti
 NEG-5: two ready arms both commit (violates InvAtMostOneWinner)
 NEG-6: timer and event both publish (violates InvAtMostOneRunnablePublication)
 NEG-7: partial registration leak (violates InvRegistrationFailureLeavesNoVisibleArm)
+NEG-T1: stale pump dereference (violates InvNoTimerNodeDereferenceWithoutActiveAuthority)
 ```
 
 ### 26.6 Deferred extension obligations

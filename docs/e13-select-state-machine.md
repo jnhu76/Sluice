@@ -390,9 +390,9 @@ PRE:
        finalize winner
 
 8. if group claim fails:
+       cancel_locked(node)
        reg.retire() must succeed
        ACTIVE -> RETIRED
-       cancel_locked(node)
        finalize loser
 ```
 

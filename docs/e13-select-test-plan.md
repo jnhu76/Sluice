@@ -456,7 +456,43 @@ Expected:
 Invariants verified: I14, I15
 ```
 
+### T17: ACTIVE authority lease serialization
+
+```
+Seam:
+    timer_after_active_check_before_node_dereference
+
+Setup:
+    Event E (UNSET), Deadline D (100ms)
+    Clock at 0ms
+
+Sequence:
+    1. Register arm[0] = E.wait -> Armed
+    2. Register arm[1] = D.timer -> Armed
+    3. make_select_waiting -> caller suspends
+    4. Advance clock to 100ms (timer expires)
+    5. Timer pump acquires global_mtx_, checks reg == ACTIVE
+    6. Pause pump before reg.node() dereference
+    7. Another thread fires E.set()
+    8. Prove E.set() blocks on global_mtx_ (pump holds it)
+    9. Release pump
+    10. Pump safely dereferences node, marks CandidateReady, claims group,
+        consumes registration, expire_locked winner, finalizes
+    11. Loser Event arm retired
+    12. No UAF, no double retire, no double publication
+
+Expected:
+    Event winner resolves, Timer winner never created (pump sees CONSUMED)
+    Only one publication
+    No double registration transition
+    No stale dereference
+
+Invariants verified: I7, I8, I10, I29, I30, I31
+```
+
 ---
+
+
 
 ### 3.2 Explicit winner/loser verification checks
 
@@ -539,7 +575,7 @@ All E13 tests require:
     - Debug build (assertions enabled)
 
 Test file naming convention:
-    e13_select_test.cpp         -- core Select tests (T1-T16)
+    e13_select_test.cpp         -- core Select tests (T1-T17)
     e13_select_authority_probe.cpp -- authority/seal verification
     e13_select_stress_test.cpp  -- high-contention stress (T14-T15)
 
@@ -547,7 +583,7 @@ Formal model:
     TLA+ spec for Candidate A protocol (Event + Timer)
     TLC model check with:
         2-4 arms, Event + Timer
-        All negative models (NEG-1 through NEG-7)
+        All negative models (NEG-1 through NEG-7, NEG-T1)
 ```
 
 ---
@@ -574,3 +610,5 @@ Formal model:
 | T13  |    |    |    |    |    |    | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |
 | T14  | X  | X  | X  | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |    |    |    |
 | T15  | X  | X  | X  | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |    |    |    |
+| T16  |    |    |    |    |    |    |    |    |    |    |    |    |    | X  | X  |    |    |    |    |    |
+| T17  |    |    |    |    |    |    | X  | X  |    | X  |    |    |    |    |    |    |    |    |    |    |
