@@ -8,8 +8,9 @@
 ## 1. Overview
 
 This document defines the deterministic test matrix for E13 Select first scope
-(Event + Timer). All tests require the `sluice_async_internal_testing` build
-variant for deterministic seam access.
+(Event + Timer). The test plan contains 16 deterministic tests (T1–T16).
+All tests require the `sluice_async_internal_testing` build variant for
+deterministic seam access.
 
 ---
 
@@ -319,25 +320,61 @@ Expected:
 Invariants verified: I5, I6
 ```
 
-### T12: Partial registration failure rollback
+### T12a: Catchable registration exception rollback
 
 ```
 Setup:
     Event E (SET)
 
+Exception source (modeled, not real C++ exception in production):
+    TimerRegistration allocation failure
+    SelectOperation arm storage allocation failure
+    injected registration exception seam
+
 Sequence:
     1. Register arm[0] = E.wait -> CandidateReady
-    2. Register arm[1] = invalid_primitive -> throws/asserts
-    3. Catch: retire arm[0] via non-publishing retirement
+    2. Register arm[1] = fails with modeled exception
+    3. Catch: retire arm[0] via non-publishing retirement seam
+            resolve Cancelled + unlink
+            clear typed context
+            decrement waiting_waitq_count_
+            mark arm RETIRED
     4. Stack unwinds
 
 Expected:
     arm[0] WaitNode terminal (Cancelled)
+    arm[0] WaitNode !is_registered()
+    arm[0] WaitNode user_kind == None
     ~SelectOperation: no assert (all arms terminal)
     No dangling registrations
     No caller publication
+    No SelectResult
 
 Invariants verified: I5, I6, I7, I13
+```
+
+### T12b: Assertion/death test — misuse detection
+
+```
+Setup:
+    Event E (SET)
+
+Use case:
+    same WaitNode instance reused across arms
+    same arm slot registered twice
+    cross-Scheduler misuse
+
+Sequence:
+    1. Attempt registration with reused WaitNode
+    2. Debug assertion fires
+
+Expected:
+    debug assertion / process termination
+    NOT catchable as a normal C++ exception
+    Death-test harness isolates the process (if used)
+    No cleanup continuation after fatal assertion
+
+Invariants verified: precondition enforcement
 ```
 
 ### T13: Timer stale-entry retirement
@@ -421,6 +458,38 @@ Invariants verified: I14, I15
 
 ---
 
+### 3.2 Explicit winner/loser verification checks
+
+Every test with a winner and loser must verify:
+
+```
+WINNER:
+    WaitNode outcome == Woken (Event winner) or Expired (Timer winner)
+    WaitNode !is_registered()
+    WaitNode user_kind == None (after clear)
+    arm.metadata.state == RETIRED
+
+LOSER:
+    WaitNode outcome == Cancelled
+    WaitNode !is_registered()
+    WaitNode user_kind == None (after clear)
+    arm.metadata.state == RETIRED
+
+QUEUE MEMBERSHIP:
+    Event winner: not present in Event queue after Phase 2
+    Timer winner: not present in timer_waiters_ after expiry
+
+COMPLETED OPERATION:
+    no Registered WaitNode for any arm
+    typed context cleared for every arm
+    waiting_waitq_count_ correctly closed (0 remaining for this group)
+    active_deadline_count_ correctly closed (0 remaining for timer arms)
+```
+
+These checks apply to T1, T2, T2b, T3, T4, T5, T6, T7, T8, T8b, T10, T11, T12a, T13.
+
+---
+
 ## 4. Future Test Obligations (Deferred)
 
 ### Semaphore arms (when Select-aware seams are designed)
@@ -470,7 +539,7 @@ All E13 tests require:
     - Debug build (assertions enabled)
 
 Test file naming convention:
-    e13_select_test.cpp         -- core Select tests (T1-T15)
+    e13_select_test.cpp         -- core Select tests (T1-T16)
     e13_select_authority_probe.cpp -- authority/seal verification
     e13_select_stress_test.cpp  -- high-contention stress (T14-T15)
 
@@ -500,7 +569,8 @@ Formal model:
 | T9   |    |    |    |    |    |    |    |    | X  |    |    |    |    |    |    |    |    |    |    |    |
 | T10  |    |    |    | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |    |    |    |
 | T11  |    |    |    |    | X  | X  |    |    |    |    |    |    |    |    |    |    |    |    |    |    |
-| T12  |    |    |    |    | X  | X  | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |
+| T12a |    |    |    |    | X  | X  | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |
+| T12b |    |    |    |    |    |    |    |    | X  |    |    |    |    |    |    |    |    |    |    |    |
 | T13  |    |    |    |    |    |    | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |
 | T14  | X  | X  | X  | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |    |    |    |
 | T15  | X  | X  | X  | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |    |    |    |

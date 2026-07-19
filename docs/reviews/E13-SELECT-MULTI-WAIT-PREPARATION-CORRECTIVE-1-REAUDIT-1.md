@@ -985,3 +985,69 @@ A	docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REVIEW-REQUEST.md
 ```
 
 Only the review artifact (`docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REAUDIT-1.md`) was created by this review. No other files were modified.
+
+---
+
+## T. Post-PR16 Supersession Notice
+
+### T.1 Supersession
+
+**POST-REAUDIT SUPERSESSION NOTICE:**
+
+The PASS verdict in §A was issued before PR #16 external review identified
+winner unlink omissions, unlink-before-resolve loser ordering, a
+phase-invalid Timer invariant, and an incomplete SelectOperation inline
+state transition.
+
+The PASS verdict is superseded as merge/formal authority pending:
+
+```
+E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-1
+and
+E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-1-DELTA-REAUDIT-1
+
+FORMAL MODEL IMPLEMENTATION:
+DENIED
+
+PRODUCTION IMPLEMENTATION:
+DENIED
+```
+
+### T.2 What remains valid
+
+The following analysis sections remain mechanically sound and are not
+contradicted by PR #16 findings:
+
+- §E: Typed WaitNode context audit (the discriminator design is correct)
+- §F: Registration/R1 audit (the R1 protocol is correct)
+- §G/H: Timer-arm queue and lifetime audit (independent timer arm design is sound)
+- §I: Event broadcast algorithm audit (two-phase scan is correct)
+- §K: Duplicate-arm/error taxonomy audit
+- §L: Lifetime/destruction audit
+- §M: Formal readiness (state variables and most actions)
+
+### T.3 What is superseded
+
+| Section | Finding | Superseded by |
+|---------|---------|---------------|
+| §J: Winner and loser finalization | Winner resolve + unlink ordering not checked; loser retirement unlinks before resolve | PR16 Gemini-1, Gemini-2, CodeRabbit-1, CodeRabbit-2 |
+| §Q: Authorization effect | "PREPARATION: CLOSED"; "FORMAL MODEL IMPLEMENTATION: AUTHORIZED" | PR16 independent re-review — authorization withdrawn |
+| §P: P2 observations | P2-1, P2-2, P2-3, P2-4 noted but non-blocking | Now promoted to CLOSED-via-corrective (see PR16 corrective) |
+
+### T.4 Historical preservation
+
+The PASS verdict text in §A is preserved unchanged as a historical record.
+The supersession does not delete or rewrite any prior finding.
+
+### T.5 Untracked-file provenance
+
+The reaudit's final git status recorded:
+
+```
+?? tests/test_t3_simple.cpp
+?? tla2tools.jar
+```
+
+The two untracked files were pre-existing in the local working tree and
+were not created, modified, staged, or committed by this review task.
+They are not part of PR #16.

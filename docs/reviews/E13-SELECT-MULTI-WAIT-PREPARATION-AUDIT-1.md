@@ -852,3 +852,58 @@ $ git diff --name-status be70fdec...HEAD
 
 Only the review artifact (`docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md`)
 was created by this review. No other files were modified.
+
+---
+
+## U. Post-PR16 Erratum
+
+### U.1 Historical authorization correction
+
+The original audit wrote in §S:
+
+```
+Formal model and implementation authorized for Event + Timer only.
+```
+
+This sentence has been interpreted as authorizing formal-model and/or
+production implementation. This was not the intent at audit time.
+
+**ERRATUM:**
+
+At E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1 time, neither formal-model
+implementation nor production implementation was authorized.
+
+Correct status:
+
+```
+FORMAL MODEL IMPLEMENTATION:
+DENIED PENDING CORRECTIVE AND INDEPENDENT RE-REVIEW
+
+PRODUCTION IMPLEMENTATION:
+DENIED
+```
+
+The sentence `Formal model and implementation authorized for Event + Timer only.`
+must be read as `Formal model and implementation are NOT authorized — the
+corrective must be applied and re-reviewed first.`
+
+The word "authorized" was an error of precision. The correct verb is "denied
+pending."
+
+### U.2 Untracked-file provenance
+
+The audit's final git status recorded:
+
+```
+?? tests/test_t3_simple.cpp
+?? tla2tools.jar
+```
+
+The two untracked files were pre-existing in the local working tree and
+were not created, modified, staged, or committed by this review task.
+They are not part of PR #16.
+
+### U.3 Effect
+
+This erratum does not change any audit finding, verdict, or corrective
+requirement. It clarifies the intended authorization state at the time.

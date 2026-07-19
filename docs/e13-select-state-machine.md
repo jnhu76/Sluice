@@ -168,29 +168,69 @@ WINNER/LOSER -> RETIRED:
 ### 4.1 States
 
 ```
-Building       -- arms being added (register_arm calls)
-Ready          -- all arms registered, operation ready to wait
-Waiting        -- caller suspended on the select
-Completed      -- caller resumed, result available
-Consumed       -- result read by caller
+Building         -- arms being added (register_arm calls)
+Ready            -- all arms registered, operation ready to wait
+Waiting          -- caller suspended on the select
+CompletedInline  -- inline completion (arm ready at admission)
+CompletedSuspended -- suspended completion (post-arming winner)
+Consumed         -- result read by caller
 ```
 
 ### 4.2 Transitions
 
 ```
-    Building ---- register_arm() ----> Building
+    Building --- register_arm() ---> Building
           |
           |  (last arm registered)
           v
        Ready
-          |
-          |  select() / co_await
-          v
-      Waiting ---- group winner published ----> Completed
-                                                   |
-                                                   |  result read
-                                                   v
-                                               Consumed
+          |                       \
+          |  arm ready at          |  no arm ready;
+          |  admission             |  caller suspended
+          v                        v
+  CompletedInline              Waiting
+          |                       |
+          |  result read           |  group winner published
+          |                       v
+          +----------------> CompletedSuspended
+                                  |
+                                  |  result read
+                                  v
+                              Consumed
+```
+
+Or equivalently as a unified model:
+
+```
+Ready -> Completed -> Consumed
+Ready -> Waiting -> Completed -> Consumed
+```
+
+### 4.3 Publication rules
+
+```
+Inline completion:
+    make_runnable = 0
+    route_runnable = 0
+
+Suspended completion:
+    make_runnable = 1
+    route_runnable = 1
+```
+
+### 4.4 Synchronization with SelectGroup
+
+```
+SelectGroup:  Constructing -> Arming -> WinnerClaimed -> Publishing -> Completed
+SelectOp:     Building     -> Ready  -> Completed      -> Consumed
+
+Inline path:
+    SelectGroup: Constructing -> Arming -> WinnerClaimed (fast-path)
+    SelectOp:  Ready -> CompletedInline
+
+Suspended path:
+    SelectGroup: Constructing -> Arming -> Armed -> WinnerClaimed
+    SelectOp:  Ready -> Waiting -> CompletedSuspended
 ```
 
 ---
@@ -205,22 +245,54 @@ Each SelectArm has one WaitNode. The WaitNode lifecycle is:
 1. Construction (stack frame):
    WaitNode node;  // Detached, user_kind = None
 
-2. Registration (under global_mtx_ + target queue mtx):
+2. Typed context installed (under global_mtx_ + target queue mtx):
    node.set_user_context(WaitNodeUserKind::Select, &metadata)
+
+3. Registration (under global_mtx_ + target queue mtx):
    register_wait_locked(queue, node)
    // node: Detached -> Registered
    // Event arm: registered in Event's private waiters_
    // Timer arm: registered in SelectOperation's private timer_waiters_
 
-3. Resolution (by group authority, not by primitive resolver):
-   // Winner: node Registered -> Woken (Event) or Expired (Timer)
-   // Loser:  node Registered -> Cancelled (non-publishing retirement)
-   // After resolution: clear_user_context() (kind = None, pointer = nullptr)
+4. CandidateReady (Select-aware resolver sets metadata.state):
+   // node remains Registered and linked
+   // WaitNode outcome NOT resolved
 
-4. Destruction (stack frame):
-   // node must be terminal (Woken/Cancelled/Expired)
-   // user_kind must be None
-   ~WaitNode();  // assert !is_registered()
+5. Group winner selected:
+   // winner: CAS succeeds
+   // loser:  CAS fails
+
+6a. Winner finalization:
+    // resolve Woken (Event) or Expired (Timer) under queue mutex
+    // unlink in the same queue CS
+
+6b. Loser finalization:
+    // resolve Cancelled under arm queue mutex
+    // unlink in the same queue CS
+
+7. Close accounting:
+    // decrement waiting_waitq_count_ exactly once
+    // decrement active_deadline_count_ exactly once (timer arms)
+
+8. TimerRegistration consumed/retired:
+    // winner: ACTIVE -> CONSUMED
+    // loser:  ACTIVE -> RETIRED
+
+9. Arm marked RETIRED:
+    arm.metadata.state = RETIRED
+
+10. Clear typed context:
+    clear_user_context()  // kind = None, pointer = nullptr
+    // PRE: node is terminal AND unlinked
+
+11. Publish winner result/runnable:
+    // inline: SelectResult only (make_runnable=0)
+    // suspended: make_runnable + route_runnable = 1 each
+
+12. Destruction (stack frame):
+    // node must be terminal (Woken/Cancelled/Expired)
+    // user_kind must be None
+    ~WaitNode();  // assert !is_registered()
 ```
 
 ### 5.2 WaitNode as group winner indicator
@@ -323,4 +395,12 @@ I17. No external resolver observes group during R1 registration
 I18. Event broadcast Phase 2 never holds two queue mutexes simultaneously
 I19. Inline completion: make_runnable=0, route_runnable=0
 I20. Suspended completion: make_runnable=1, route_runnable=1
+I21. Event winner: wake_node_locked resolves Woken + unlinks in one queue CS
+I22. Timer winner: expire_locked resolves Expired + unlinks in one queue CS
+I23. Loser: cancel_locked resolves Cancelled BEFORE unlink
+I24. No context clear while Registered (must be terminal + detached)
+I25. Timer invariants phase-aware: Active allowed before completion
+I26. Completed operation has no Registered WaitNodes
+I27. Winner typed context cleared only after terminal + detach
+I28. Consumed TimerRegistration never dereferences WaitNode
 ```

@@ -119,5 +119,5 @@ P1-10 partial registration:        CLOSED (R1 + external serialization S7.2)
 - [ ] Duplicate-arm policy: permitted patterns listed, forbidden patterns listed
 - [ ] Formal actions updated: InstallTypedUserContext, EventScanMarksCandidates, etc.
 - [ ] New invariants: InvUserKindMatchesDynamicContext, InvNoWrongContextCast, etc.
-- [ ] Test plan: T2 corrected for R1, T2b added, T8/T8b split, T16 authority probe
+- [ ] Test plan: 16 deterministic tests (T1-T16); T2 corrected for R1, T2b added, T8/T8b split, T16 authority probe
 - [ ] No production/test/spec code was modified

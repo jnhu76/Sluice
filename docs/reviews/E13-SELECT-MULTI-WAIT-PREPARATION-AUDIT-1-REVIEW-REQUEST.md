@@ -140,7 +140,7 @@ The reviewer should verify:
 
 ### 5.6 Test plan
 
-- [ ] 15 core tests cover all invariants (see verification matrix)
+- [ ] 15 core tests (original) / 16 core tests (corrective) cover all invariants (see verification matrix)
 - [ ] Edge cases are covered (partial registration, destruction, high contention)
 - [ ] TSan verification is planned
 - [ ] Future test obligations for Queue/Condition are documented
@@ -195,3 +195,14 @@ A       docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1-REVIEW-REQUEST.md
 ```text
 Production/tests/formal spec: zero modifications confirmed.
 ```
+
+---
+
+## 9. Historical Snapshot
+
+This review request is preserved as a HISTORICAL SNAPSHOT reflecting the
+original preparation design that contained 15 core tests. The final
+corrective plan (E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-1) specifies 16
+deterministic tests.
+
+The test count discrepancy is an intentional correction, not a regression.
