@@ -53,6 +53,16 @@
   D1-D10 decision register, E13 Select dependency contract.
   See `docs/e10-e12-api-semantic-closure.md`.
 
+- **E10–E12 implemented async synchronization substrate closure.**
+  Independent reviews for E12-B Semaphore, E12-C AsyncMutex (including
+  the migration/data-race micro-review), E12-D AsyncCondition, and the
+  E12-G cross-primitive semantic closure are complete. E12-B, E12-C,
+  E12-D, and E12-G are closed under their recorded authorities. E12-E
+  remains at Phase I review PASS (WITH OBSERVATIONS). E12-F RwLock
+  remains deferred. E13 Select preparation may begin, but Select design
+  and production implementation are not yet authorized. See
+  `docs/e10-e12-api-semantic-closure.md` §15.
+
 ### Changed
 
 - **`sluice::async::Mutex` acquisition is now `noexcept` / fail-fast.**

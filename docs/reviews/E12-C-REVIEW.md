@@ -390,10 +390,111 @@ E12-C-MIGRATION-EVIDENCE-CORRECTIVE-4: **COMPLETE** — unsynchronized
 `waiting_count()` removed; coordinator gates solely on `a_suspended` +
 `blocker_running`; data race closed.
 
-Await final E12-C migration data-race micro-review (see §N of the corrective spec).
-On PASS:
+### E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1 (COMPLETE — 2026-07-19)
+
+**Scope:** Independent verification that Corrective-4 (commit `a97aca1bb9248a2c5bc05d914ba8670de590ed34`) genuinely closes the T19 coordinator data race, and that all E12-C corrective requirements are met to close E12-C.
+
+**Evidence reviewed:**
+
+1. **Source-code audit (`waiting_count()` data race):**
+   - `scheduler.hpp:782-790`: `waiting_count()` and `waiting_ready_count()` both acquire `global_mtx_` via `LockGuard` — properly synchronized readers.
+   - Corrective-4 removed the coordinator-side call to `sched.waiting_count() > 0` that was reading `waiting_ready_.size()` without `global_mtx_` while worker threads concurrently modified the container. The coordinator now gates solely on atomic checkpoints (`a_suspended` + `blocker_running`), which are `std::atomic<bool>` — no data race possible.
+   - Post-`runner.join()` call to `sched.waiting_count() == 0` (T19 line 1187) is safe because no worker threads are concurrently running.
+
+2. **Source-code audit (`try_steal` ownership transfer):**
+   - `scheduler.cpp:3120-3176`: Entire steal operation (remove from victim, `fiber_owner_[stolen] = thief`, push to thief) serializes on `global_mtx_`. Owner table is `global_mtx_`-guarded. No `IN_TRANSIT` state observable. Correct per E8-0 audit O8.
+
+3. **Source-code audit (worker-loop steal check):**
+   - `scheduler.cpp:535-545`: Worker calls `try_steal` only when it has no local work. On success, loops back to pop stolen ticket. No race between pop and steal because both serialize on the victim's `inbox_mtx` for deque mutation.
+
+4. **Source-code audit (T19 anti-race handshake):**
+   - `tests/e12_async_mutex_test.cpp:1043-1048`: `f_blocker` asserts `current_worker_id()==0` then stores `blocker_running=true` (release). Queued behind `fA` on W0, so it can execute only after `fA` completes `await_ready_flag` (registered + `make_waiting()` + context switch). Therefore `blocker_running==true` provably means `f_blocker` is `ws->current` on W0 — no longer stealable.
+   - Coordinator observes `a_suspended` + `blocker_running` before setting `flag_wake`. By the time W1 becomes free, `f_blocker` is executing on W0.
+
+5. **Stress-gate results (500/500 each, 0 failures, 0 retries):**
+
+   | Gate | Binary | Filter | Result |
+   |---|---|---|---|
+   | T19 ownership migration (release) | e12_async_mutex_test | e12_mtx_t19_real_migration | 500/500 PASS |
+   | T19 ownership migration (TSan) | e12_async_mutex_test | e12_mtx_t19_real_migration | 500/500 PASS, 0 races |
+   | E8 steal regression (release) | e8_steal_test | (full suite) | ALL TESTS PASSED (11 cases) |
+   | E12-C coordination (release) | e12_async_mutex_test | e12_mtx_t20_coordination_500 | PASS (500/500 loop) |
+   | E12 full suite (TSan) | all e12_* | (full) | ALL TESTS PASSED |
+   | E8 steal (TSan) | e8_steal_test | (full) | ALL TESTS PASSED (11 cases) |
+
+6. **Sanitizer results:**
+
+   | Mode | Binary | Result |
+   |---|---|---|
+   | TSan (clang) | e12_async_mutex_test | PASS (0 races) |
+   | ASan (clang) | e12_async_mutex_test | PASS |
+   | UBSan (clang) | e12_async_mutex_test | PASS |
+   | TSan matrix run1 | e12_async_mutex_test | ALL TESTS PASSED |
+   | TSan matrix run2 | e12_async_mutex_test | ALL TESTS PASSED |
+
+7. **Formal verification:**
+   - Safety model: PASS (255,037 states, 19 invariants)
+   - All 11 negative models: CEX on expected named property
+   - Wrong-property gate: PASS (defect specificity proven)
+   - COMPILE-PROBE gate: PASS (authority sealed)
+   - Exit code: 0
+
+8. **Pre-existing unrelated failure:**
+   - `e7_coord_test` SEGV under TSan: confirmed stack-access SEGV (address `0x7ffff51f1ff0`), not a data race. Pre-existing, unrelated to E12-C. No TSan e7 runs in the existing tsan-matrix-logs.
+
+**Causal trajectory (verified by source-level evidence, not sleep/probability):**
 ```
-E12-C-IMPLEMENTATION: CLOSED
-E12-C: CLOSED
-E12-D: PREPARATION-READY
+fA spawn_on(f_blocker, 0)          — f_blocker queued behind fA on W0
+fA await_ready_flag(flag_wake)     — fA registers in waiting_ready_, commits Waiting
+→ W0 pops f_blocker (behind fA)     — can only happen AFTER fA yields
+→ f_blocker: assert wid==0,         — f_blocker executing on W0 (ws->current, not stealable)
+  blocker_running=true (release)
+Coordinator observes a_suspended + blocker_running — fA Waiting + W0 occupied
+Coordinator sets flag_wake          — f_idle completes → W1 idle
+W1 steals fA from W0's queue       — real E8 steal
+fA resumes on W1, unlock_worker=1  — ownership migration proven
+fA unlocks mtx                     — ownership released
+f2 acquires mutex                  — subsequent acquisition proves release
+sched.waiting_count()==0           — post-runner.join(), safe: no concurrent threads
 ```
+
+**Conclusion:** All corrective requirements are met. The causal trajectory is structurally forced by the queue ordering + handshake, not inferred from secondary state. No data race exists in the T19 coordinator or production code. Every sanitizer mode is clean. Formal verification passes all gates.
+
+> **Note on the historical "On PASS" block below.** The original §M next-action
+> block was conditional (`On PASS:`) and additionally recorded an
+> `E12-D: PREPARATION-READY` side-effect. That side-effect was an E12-C
+> reviewer over-reach: E12-C's reviewer did not independently audit E12-D
+> preparation, and must not predetermine E12-D's status. It is therefore
+> removed here, and the conditional next-action block is superseded by the
+> unconditional FINAL STATUS block at the end of this file. The historical
+> reviewer text elsewhere in this artifact remains preserved verbatim.
+
+---
+
+## O. Final Status
+
+```text
+REVIEW_DATE: 2026-07-19
+REVIEWED_COMMIT: e75c0fed3b4866efed02ab74ee8505ee7ddc79de
+REVIEW_AUTHORITY:
+  E12-C-ASYNC-MUTEX-MIGRATION-DATA-RACE-MICRO-REVIEW-1
+
+E12-C-ASYNC-MUTEX-MIGRATION-DATA-RACE-MICRO-REVIEW-1:
+  PASS
+
+E12-C-IMPLEMENTATION-1-INDEPENDENT-REVIEW:
+  PASS
+
+E12-C IMPLEMENTATION:
+  CLOSED
+
+E12-C:
+  CLOSED
+```
+
+The historical review verdicts and Corrective-1 through Corrective-4 records
+above remain preserved. This block records the final governance effect of the
+independently completed migration/data-race micro-review. It does not
+predetermine the status of E12-D, which was closed by its own independent
+review artifact (`docs/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md`).
+

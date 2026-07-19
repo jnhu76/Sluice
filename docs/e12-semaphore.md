@@ -7,14 +7,23 @@
 > E12-B-PREPARATION-REAUDIT: PASS
 > E12-B-PREPARATION: CLOSED
 > E12-B-IMPLEMENTATION-1: COMPLETE
-> E12-B-IMPLEMENTATION: REVIEW-REQUIRED
+> E12-B-IMPLEMENTATION-INDEPENDENT-REVIEW: ACCEPT (WITH OBSERVATIONS)
+> E12-B-CLOSURE-CONDITION: SATISFIED BY E12-G FINAL REVIEW PASS
+> E12-B-IMPLEMENTATION: CLOSED
+> E12-B: CLOSED
 > ```
 >
 > The sections §1–§13 below are the **preparation authority** (CLOSED, preserved
 > verbatim). §14 (As-Built Implementation) records the production implementation
-> produced under E12-B-IMPLEMENTATION-1. An independent adversarial
-> implementation review is still required before E12-B may be declared CLOSED;
-> this document does NOT self-declare `E12-B: CLOSED`.
+> produced under E12-B-IMPLEMENTATION-1. Independent adversarial implementation
+> review completed by
+> [`docs/reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md`](reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md)
+> (2026-07-19), verdict `ACCEPT (WITH OBSERVATIONS)`; three non-blocking
+> observations (O1 stress retry loop, O2 defensive terminal check, O3 E12-G
+> cross-primitive dependency) are recorded in that artifact. The closure
+> condition (E12-G cross-primitive audit PASS) was satisfied by
+> [`docs/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md`](reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md)
+> (2026-07-19). E12-B is CLOSED.
 >
 > Authority baseline: E10 CLOSED
 > ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED

@@ -427,12 +427,12 @@ preparation audit — see [`docs/e12-sync-primitives-plan.md`](e12-sync-primitiv
 
 ```text
 E12-A Event              [CLOSED — E12-A-EVENT-CORRECTIVE-2 + ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1; both independent reviews PASS; formal script exit 1 under current TLC runtime, PREEXISTING TOOLCHAIN-SENSITIVE LIMITATION WITH BASELINE PARITY — docs/e12-event.md; formal: docs/spec/e12_event/]
-E12-B Semaphore          [IMPLEMENTATION COMPLETE — REVIEW-REQUIRED — docs/e12-semaphore.md]
-E12-C AsyncMutex         [IMPLEMENTATION COMPLETE — REVIEW-REQUIRED — docs/e12-async-mutex.md]
-E12-D AsyncCondition     [IMPLEMENTATION COMPLETE — REVIEW-REQUIRED — docs/e12-condition.md]
+E12-B Semaphore          [CLOSED — E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1 ACCEPT (WITH OBSERVATIONS); closure condition satisfied by E12-G final review PASS, 2026-07-19 — docs/e12-semaphore.md]
+E12-C AsyncMutex         [CLOSED — E12-C-ASYNC-MUTEX-MIGRATION-DATA-RACE-MICRO-REVIEW-1 PASS, 2026-07-19 — docs/e12-async-mutex.md]
+E12-D AsyncCondition     [CLOSED — E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW PASS, 2026-07-19 — docs/e12-condition.md]
 E12-E AsyncQueue<T>      [IMPLEMENTATION COMPLETE — Phase I review PASS (WITH OBSERVATIONS) — docs/e12-queue.md]
 E12-F RwLock             [DEFERRED]
-E12-G Cross-Primitive Audit [E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1: AUTHOR SELF-ASSESSMENT; INDEPENDENT REVIEW REQUIRED — docs/e10-e12-api-semantic-closure.md]
+E12-G Cross-Primitive Audit [CLOSED — E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1 AUTHORIZED; E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1 PASS, 2026-07-19 — docs/e10-e12-api-semantic-closure.md]
 ```
 
 This order matches the SYNCHRONIZATION dependency trunk below (§ Summary) and

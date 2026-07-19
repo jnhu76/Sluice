@@ -4,6 +4,17 @@
 
 **Status**: `CORRECTIVE-2 READY — AUTHOR SELF-ASSESSMENT; INDEPENDENT RE-REVIEW REQUIRED`
 
+**Current Status**: `CLOSED — E12-G FINAL INDEPENDENT REVIEW PASS`
+
+> **Final authorization — 2026-07-19.** The Corrective-2 author self-assessment
+> recorded in the `**Status**` line above and in §14 below remains preserved
+> verbatim as the historical stage verdict at PR #13 merge time. Subsequent
+> independent reviews for E12-B Semaphore, E12-C AsyncMutex (migration/data-race
+> micro-review), E12-D AsyncCondition, and the E12-G cross-primitive semantic
+> closure all completed successfully. The final authorization and governance
+> effect are recorded in §15. The `**Status**` line is no longer the controlling
+> current-status authority; `**Current Status**` and §15 are.
+
 **Branch**: `audit/e10-e12-api-semantic-closure`
 
 > **Corrective-2 (current revision).** An independent adversarial review found
@@ -1364,13 +1375,13 @@ sanitizer results are recorded only after the fresh Corrective-2 matrix runs.
 
 | Risk | Severity | Description |
 |------|----------|-------------|
-| R1 | Medium | E12-B Semaphore has no independent implementation-review artifact (REVIEW-REQUIRED). The historical E12-C artifact preserves both `PASS (corrective applied)` and an instruction to await the final migration data-race micro-review; no separately attributable post-Corrective-4 independent re-review artifact was found. The later closure ledger therefore conservatively records E12-C as REVIEW-REQUIRED without rewriting the historical verdict. |
-| ~~R2~~ | CLOSED | E12-D AsyncCondition formal gate was freshly run with the recorded jar and exits 0: correct model, reachability checks, all ten negative models, wrong-property gate, and seven independent compile probes produced their expected results. This closes only the stale formal-evidence risk; E12-D independent review remains open as R7. |
+| ~~R1~~ | CLOSED | E12-B independent implementation review completed with `ACCEPT (WITH OBSERVATIONS)` (`docs/reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md`, 2026-07-19); its closure condition (E12-G cross-primitive audit PASS) was satisfied by `docs/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md`. E12-C migration/data-race micro-review completed with PASS (`docs/reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md`, 2026-07-19). Both E12-B and E12-C are now CLOSED. |
+| ~~R2~~ | CLOSED | E12-D AsyncCondition formal gate was freshly run with the recorded jar and exits 0: correct model, reachability checks, all ten negative models, wrong-property gate, and seven independent compile probes produced their expected results. This closes only the stale formal-evidence risk; E12-D independent review was closed by R7. |
 | R3 | Low | Queue timer allocation failure (O-4 observation) is not handled. On allocation failure, the wait proceeds without a timer, potentially stranding the waiter. |
 | R4 | Low | O-1 inline-path CAS/hook ordering and O-2 pump-publication counter asymmetry are documented as non-blocking observations from Queue review. |
 | ~~R5~~ | CLOSED | async-runtime-plan.md was updated by this closure (the F1 cross-primitive audit line and E12 primitive statuses now reflect the dependency trunk ordering). |
-| R6 | Medium | E13 Select dependency contract is based on current implementation facts. The actual Select design may discover new requirements that change the contract. Corrective-1 (C2) strengthened the contract to record that primitive cancel is NOT a Select-level loser authority and that E13 requires a parent/group claim ordering group-winner selection relative to irreversible primitive commit. |
-| R7 | Medium | E12-D AsyncCondition implementation has no independent adversarial review (REVIEW-REQUIRED). Preparation is also REVIEW-REQUIRED. Test/formal evidence does not substitute for that review. |
+| R6 | Medium | E13 Select dependency contract is based on current implementation facts. The actual Select design may discover new requirements that change the contract. Corrective-1 (C2) strengthened the contract to record that primitive cancel is NOT a Select-level loser authority and that E13 requires a parent/group claim ordering group-winner selection relative to irreversible primitive commit. E13 Select preparation may begin, but Select design and production implementation are not yet authorized. |
+| ~~R7~~ | CLOSED | E12-D AsyncCondition preparation and implementation received an independent adversarial review PASS (`docs/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md`, 2026-07-19). E12-D is CLOSED. |
 
 ---
 
@@ -1432,9 +1443,9 @@ sanitizer results are recorded only after the fresh Corrective-2 matrix runs.
 | e10-waitnode-wait-queue.md | CLOSED | COMPLETE | PASS (history) | CLOSED (unchanged) |
 | e11-deadline-timer-wait.md | CLOSED | COMPLETE | PASS (history) | CLOSED (unchanged) |
 | e12-event.md | CLOSED | COMPLETE | PASS (history) | CLOSED (unchanged) |
-| e12-semaphore.md | CLOSED | COMPLETE | **NONE** (REVIEW-REQUIRED) | IMPLEMENTATION REVIEW-REQUIRED (no review artifact) |
-| e12-async-mutex.md | CLOSED | COMPLETE | Historical PASS plus unresolved post-Corrective-4 micro-review requirement | IMPLEMENTATION REVIEW-REQUIRED in later governance ledger; historical verdict preserved |
-| e12-condition.md | REVIEW-REQUIRED | COMPLETE | **NONE** (REVIEW-REQUIRED) | PREPARATION + IMPL REVIEW-REQUIRED (banner corrected from "IMPLEMENTATION BLOCKED") |
+| e12-semaphore.md | CLOSED | COMPLETE | `ACCEPT (WITH OBSERVATIONS)` (`E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1`, 2026-07-19); closure condition satisfied by E12-G PASS | CLOSED |
+| e12-async-mutex.md | CLOSED | COMPLETE | PASS (`E12-C-ASYNC-MUTEX-MIGRATION-DATA-RACE-MICRO-REVIEW-1`, 2026-07-19) | CLOSED |
+| e12-condition.md | PASS (`E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW` §K, 2026-07-19) | COMPLETE | PASS (same artifact, 2026-07-19) | CLOSED |
 | e12-queue.md | Superseded | — | — | Superseded (unchanged) |
 | e12-queue-state-machine.md | PASS | — | PASS | PASS (unchanged) |
 | e12-queue-scheduler-integration.md | PASS | — | PASS | PASS + supersession notice |
@@ -1443,18 +1454,23 @@ sanitizer results are recorded only after the fresh Corrective-2 matrix runs.
 | e12-sync-primitives-plan.md | READY | — | — | READY (unchanged) |
 | api-reference.md | v0.1-mvp | — | — | Updated with E10-E12 section |
 | api-reference-zh.md | v0.1-mvp | — | — | Updated with E10-E12 section |
-| changelog.md | unreleased | — | — | Updated with E10-E12 entries |
-| e10-e12-api-semantic-closure.md | NEW | — | RE-REVIEW REQUIRED | CORRECTIVE-2 AUTHOR SELF-ASSESSMENT; closure denied pending re-review |
+| changelog.md | unreleased | — | — | Updated with E10-E12 entries + closure |
+| e10-e12-api-semantic-closure.md | NEW | — | PASS (`E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1`, 2026-07-19) | CLOSED — see §15 |
 
 C3 reconciliation notes:
-- E12-B has no independent implementation-review artifact.
+- E12-B independent implementation review was completed after PR #13 merge by
+  `docs/reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md`
+  (2026-07-19), verdict `ACCEPT (WITH OBSERVATIONS)`. Its closure condition
+  (E12-G cross-primitive audit PASS) is satisfied.
 - `reviews/E12-C-REVIEW.md` retains its historical `PASS (corrective applied)`
-  verdict and also explicitly awaits the final migration data-race
-  micro-review. No separately attributable post-Corrective-4 independent
-  re-review artifact was found. Corrective-2 does not rewrite that history;
-  the later governance ledger conservatively records E12-C as REVIEW-REQUIRED.
-- E12-D has no independent implementation review. All three status entries are
-  now aligned with their actual artifacts.
+  verdict and the historical "await the final migration data-race micro-review"
+  text; that micro-review was subsequently completed by
+  `docs/reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md` (2026-07-19),
+  verdict PASS. The `E12-C-REVIEW.md` FINAL STATUS block records the resulting
+  CLOSED governance effect without rewriting the historical reviewer text.
+- E12-D preparation and implementation were reviewed after PR #13 merge by
+  `docs/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md` (2026-07-19),
+  verdict PASS.
 
 ---
 
@@ -1701,3 +1717,111 @@ non-breaking scope (§14.7), and independently verify a sample of matrix
 cells (§3) and decisions (§4). The verdict block at the top of this section
 remains `PASS — AUTHOR SELF-ASSESSMENT; INDEPENDENT REVIEW REQUIRED` until
 the reviewer signs it.
+
+---
+
+## 15. E12-G Final Closure Authorization
+
+> This section was appended after PR #13 merge (2026-07-19) to record the
+> final governance effect of the four independent reviews that closed the
+> review-required statuses disclosed by §12 and Appendix B at PR #13 merge
+> time. The historical Corrective-2 author self-assessment in §14 above is
+> preserved verbatim.
+
+### 15.1 Review baseline
+
+```text
+PR13_MERGE_COMMIT (reviewed by all four reviews): e75c0fed3b4866efed02ab74ee8505ee7ddc79de
+PR13_BASE:                                    d0cd915159a49ee30e88b0fdaec04a7b78260af1
+REVIEW_DATE:                                  2026-07-19
+```
+
+### 15.2 Independent review artifacts
+
+| Scope | Artifact | Authority ID | Verdict |
+|---|---|---|---|
+| E12-B Semaphore production implementation | `docs/reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md` | `E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1` | `ACCEPT (WITH OBSERVATIONS)`; closure condition (E12-G PASS) satisfied |
+| E12-C AsyncMutex migration / data-race micro-review (Corrective-4 closure) | `docs/reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md` | `E12-C-ASYNC-MUTEX-MIGRATION-DATA-RACE-MICRO-REVIEW-1` | `PASS` |
+| E12-D AsyncCondition preparation + implementation | `docs/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md` | `E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW` | `PASS` |
+| E10-E12 cross-primitive semantic closure (this PR #13) | `docs/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md` | `E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1` | `PASS` |
+
+### 15.3 Independence statement
+
+Each of the four reviews above was produced by a separate reviewer (AI-1,
+AI-2, AI-3, and the E12-G reviewer) acting independently. The E12-G
+cross-primitive reviewer reached its PASS verdict on the cross-primitive
+closure scope from PR #13 evidence alone, without reading the three sibling
+per-primitive review artifacts during its own review. The four-way
+governance reconciliation recorded in this section was applied only after
+E12-G reached its verdict.
+
+### 15.4 Final authorization
+
+```text
+E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1:
+ACCEPT (WITH OBSERVATIONS); closure condition satisfied by E12-G PASS
+
+E12-C-ASYNC-MUTEX-MIGRATION-DATA-RACE-MICRO-REVIEW-1:
+PASS
+
+E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW:
+PASS
+
+E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1:
+PASS
+
+E12-B IMPLEMENTATION:
+CLOSED
+
+E12-C IMPLEMENTATION:
+CLOSED
+
+E12-D IMPLEMENTATION:
+CLOSED
+
+E10-E12 CROSS-PRIMITIVE SEMANTIC CLOSURE:
+AUTHORIZED
+
+E12-G:
+CLOSED
+```
+
+### 15.5 Residual risk status after closure
+
+```text
+R1 (E12-B + E12-C review-required): CLOSED
+R2 (stale AsyncCondition formal evidence): CLOSED
+R3 (Queue timer allocation failure O-4): OPEN-NON-BLOCKING
+R4 (Queue O-1/O-2 observations): OPEN-NON-BLOCKING
+R5 (async-runtime-plan.md ordering/status): CLOSED
+R6 (E13 Select dependency contract): OPEN-NON-BLOCKING — preparation may begin, implementation not authorized
+R7 (E12-D preparation + implementation review): CLOSED
+```
+
+### 15.6 Scope of this authorization
+
+This authorization closes the **cross-primitive semantic closure scope** of
+PR #13: the API inventory matrix (§2), the 14-dimension × 5-primitive semantic
+matrix (§3), decisions D1–D10 (§4), the E13 Select dependency contract (§10),
+the contradictions C1–C6 resolutions, and the Corrective-2 finding
+dispositions.
+
+It also records the per-primitive implementation closure of E12-B, E12-C,
+and E12-D by reference to the corresponding sibling review artifacts.
+
+It does **not**:
+- close E12-F RwLock (still `DEFERRED`);
+- change E12-E AsyncQueue\<T\> status (still `Phase I review PASS WITH
+  OBSERVATIONS`);
+- authorize E13 Select production implementation (E13 preparation may begin;
+  Select design and production implementation require their own separate
+  authority);
+- close the E11/Event named-liveness formal gate (still
+  `PREEXISTING-BASELINE-PARITY-PROVEN`, awaiting a future formal/tooling
+  corrective that is out of scope for the async substrate closure).
+
+### 15.7 Compatibility
+
+This authorization is documentation/governance only. No production code, no
+formal spec, no build policy, and no public API was modified by any of the
+four reviews or by the status synchronization that recorded this section.
