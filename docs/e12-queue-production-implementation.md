@@ -362,7 +362,7 @@ no QueuePort state).
 
 ```text
 branch:           e12-e-queue-production-impl
-HEAD:             18db6ee (Phase I re-review PASS WITH OBSERVATIONS)
+HEAD:             051925c (PR #12 review corrective — typed result move-assign)
 working tree:     clean between commits
 untracked files:  tests/test_t3_simple.cpp  (pre-existing, unrelated; untouched)
                   tla2tools.jar             (pre-existing, unrelated; untouched)
