@@ -19,7 +19,7 @@ No production code, test code, formal spec, or build policy was modified.
 |------|-------------|
 | `docs/e13-select-preparation.md` | Corrected preparation design (WaitNode finalization law, event/timer winner, loser, lifecycle, state machine, invariants, timer authority) |
 | `docs/e13-select-state-machine.md` | Corrected state machine (inline SelectOperation path, phase-aware timer invariants, branch-specific lifecycle, timer authority) |
-| `docs/e13-select-test-plan.md` | Corrected test plan (16 deterministic tests, T12a/T12b split, winner/loser checks) |
+| `docs/e13-select-test-plan.md` | Corrected test plan (17 deterministic tests, T12a/T12b split, T17 timer authority lease, winner/loser checks) |
 | `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md` | Historical erratum (authorization, untracked provenance) |
 | `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REAUDIT-1.md` | Supersession notice |
 | `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1-REVIEW-REQUEST.md` | Historical count annotation |
@@ -63,7 +63,7 @@ The delta re-audit must verify only:
 - [ ] 6. SelectOperation has an inline completion path (Ready -> Completed) that bypasses Waiting.
 - [ ] 7. Timer formal invariants allow `Active` during registration/Armed phases, requiring `Retired`/`Consumed` only after completion.
 - [ ] 8. Historical authorization errata in audit and supersession notice in reaudit are accurate.
-- [ ] 9. Test count is consistently 16 across all documents; T12 is split into catchable (T12a) and fatal-assertion (T12b) variants.
+- [ ] 9. Test count is consistently 17 across all documents; T12 is split into catchable (T12a) and fatal-assertion (T12b) variants; T17 covers ACTIVE authority lease serialization.
 - [ ] 10. No production, test, formal-spec, or build-policy files were changed.
 - [ ] 11. Branch-specific TimerRegistration ordering is consistent across all docs (Event winner, Timer winner, Event loser, Timer loser each have distinct sequences).
 - [ ] 12. Timer pump checks ACTIVE authority before dereferencing WaitNode or queue (`select_timer_due_locked` protocol).

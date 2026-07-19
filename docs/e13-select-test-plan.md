@@ -8,7 +8,7 @@
 ## 1. Overview
 
 This document defines the deterministic test matrix for E13 Select first scope
-(Event + Timer). The test plan contains 16 deterministic tests (T1–T16).
+(Event + Timer). The test plan contains 17 deterministic tests (T1–T17).
 All tests require the `sluice_async_internal_testing` build variant for
 deterministic seam access.
 
@@ -482,9 +482,15 @@ Sequence:
     12. No UAF, no double retire, no double publication
 
 Expected:
-    Event winner resolves, Timer winner never created (pump sees CONSUMED)
-    Only one publication
-    No double registration transition
+    Timer arm wins:
+        WaitNode outcome == Expired
+        TimerRegistration == CONSUMED
+    Event arm loses:
+        WaitNode outcome == Cancelled
+        Event arm terminal + detached
+    Exactly one SelectResult publication
+    Exactly one suspended runnable publication
+    No double retire
     No stale dereference
 
 Invariants verified: I7, I8, I10, I29, I30, I31
@@ -522,7 +528,7 @@ COMPLETED OPERATION:
     active_deadline_count_ correctly closed (0 remaining for timer arms)
 ```
 
-These checks apply to T1, T2, T2b, T3, T4, T5, T6, T7, T8, T8b, T10, T11, T12a, T13.
+These checks apply to T1, T2, T2b, T3, T4, T5, T6, T7, T8, T8b, T10, T11, T12a, T13, T17.
 
 ---
 
@@ -531,36 +537,36 @@ These checks apply to T1, T2, T2b, T3, T4, T5, T6, T7, T8, T8b, T10, T11, T12a, 
 ### Semaphore arms (when Select-aware seams are designed)
 
 ```
-T16: Semaphore admission-ready arm vs Event
-T17: Semaphore queued release vs Event
-T18: Semaphore loser -- permit conservation
-T19: Two Semaphore arms on same Semaphore
+T18: Semaphore admission-ready arm vs Event
+T19: Semaphore queued release vs Event
+T20: Semaphore loser -- permit conservation
+T21: Two Semaphore arms on same Semaphore
 ```
 
 ### AsyncMutex arms (when Select-aware seams are designed)
 
 ```
-T20: Mutex admission-ready arm vs Event
-T21: Mutex unlock handoff vs Event
-T22: Mutex loser -- single-owner preservation
-T23: Mutex handoff with mixed Select/ordinary waiters
+T22: Mutex admission-ready arm vs Event
+T23: Mutex unlock handoff vs Event
+T24: Mutex loser -- single-owner preservation
+T25: Mutex handoff with mixed Select/ordinary waiters
 ```
 
 ### Queue arms (when Queue cancel is designed)
 
 ```
-T24: Queue pop arm wins -- payload in SelectResult
-T25: Queue pop arm loses -- payload NOT moved
-T26: Queue push arm wins -- item committed
-T27: Queue push arm loses -- item returned to caller
+T26: Queue pop arm wins -- payload in SelectResult
+T27: Queue pop arm loses -- payload NOT moved
+T28: Queue push arm wins -- item committed
+T29: Queue push arm loses -- item returned to caller
 ```
 
 ### AsyncCondition arms (when Condition Select integration is designed)
 
 ```
-T28: Condition arm wins at wake -- Mutex reacquire in progress
-T29: Condition arm loses before reacquire
-T30: Condition arm loses after reacquire started
+T30: Condition arm wins at wake -- Mutex reacquire in progress
+T31: Condition arm loses before reacquire
+T32: Condition arm loses after reacquire started
 ```
 
 ---
@@ -612,3 +618,14 @@ Formal model:
 | T15  | X  | X  | X  | X  |    |    |    |    |    | X  |    |    |    |    |    |    |    |    |    |    |
 | T16  |    |    |    |    |    |    |    |    |    |    |    |    |    | X  | X  |    |    |    |    |    |
 | T17  |    |    |    |    |    |    | X  | X  |    | X  |    |    |    |    |    |    |    |    |    |    |
+
+### 6.1 Supplemental Timer-authority matrix
+
+The main matrix (§6) covers invariants I1–I20. The Timer pre-dereference
+authority invariants (I29, I30, I31) and the NEG-T1 stale-pump-dereference
+negative model are tracked here to avoid widening the main matrix to 31 columns.
+
+| Test | I29 | I30 | I31 | NEG-T1 |
+|------|:---:|:---:|:---:|:------:|
+| T13  |  X  |     |     |   X    |
+| T17  |  X  |  X  |  X  |   X    |

@@ -1449,12 +1449,12 @@ InvNoContextClearWhileRegistered:
 
 ### 20.1 Test count
 
-The final active test plan must have one consistent count. Tests are T1–T16.
+The final active test plan must have one consistent count. Tests are T1–T17.
 
 All active metadata must say:
 
 ```
-16 deterministic tests
+17 deterministic tests
 ```
 
 For the original pre-hardening review request (`E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1-REVIEW-REQUEST.md`),
@@ -1464,7 +1464,7 @@ the document is annotated as:
 HISTORICAL SNAPSHOT — originally 15 tests
 ```
 
-The final corrective plan contains 16 tests.
+The final corrective plan contains 17 tests.
 
 ### 20.2 T12 registration failure — split into two sub-tests
 
@@ -1907,7 +1907,7 @@ CodeRabbit-4 missing inline SelectOperation transition:
     CLOSED -- inline completion path added (§J)
 
 CodeRabbit-5 test count mismatch:
-    CLOSED -- 16 deterministic tests consistently specified (§L)
+    CLOSED -- 17 deterministic tests consistently specified (§L)
 
 CodeRabbit-6 T12 exception/assertion conflation:
     CLOSED -- T12a (catchable) / T12b (death test) split (§L)
