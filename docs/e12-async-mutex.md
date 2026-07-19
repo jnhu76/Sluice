@@ -19,8 +19,9 @@
 > ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED
 > at `7715808` ([`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md));
 > E12-A Event CLOSED ([`docs/e12-event.md`](e12-event.md)); E12-B Semaphore
-> CLOSED ([`docs/e12-semaphore.md`](e12-semaphore.md)). This document does NOT
-> reopen E10/E11/E12-A/E12-B; it builds on them as authoritative.
+> PREPARATION CLOSED, IMPLEMENTATION COMPLETE / REVIEW-REQUIRED
+> ([`docs/e12-semaphore.md`](e12-semaphore.md)). This document does NOT reopen
+> E10/E11/E12-A/E12-B preparation; it builds on those authorities.
 >
 > Cross-primitive preparation:
 > [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §6 (updated
@@ -1642,4 +1643,3 @@ E12-D Condition, release-and-wait atomic API, notify_one/notify_all, RwLock,
 Queue, Select/multi-wait, recursive Mutex, priority inheritance, deadlock
 detection, owner-abandonment recovery, generic Lockable/AwaitableLock, and
 grant framework remain deferred non-goals (§18). They are not defects.
-

@@ -975,6 +975,175 @@ SLUICE_TEST_CASE(e12_queue_g2_multi_worker_producer_consumer) {
     SLUICE_CHECK(rp.status() == QueueOpaquePopStatus::item);
     (void)release_popped<int>(port, std::move(rp));
 }
-#endif  // x86_64 (Phase G timed + multi-worker)
+
+// ===========================================================================
+// Slice H — Already-due deadline precedence
+// (E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1, decision D3 / finding F4)
+// ===========================================================================
+//
+// D3: resource readiness is checked BEFORE the already-due deadline predicate
+// at admission (resource-first). A push_until/pop_until whose deadline is
+// provably already due at admission resolves INLINE without suspending:
+//   - resource admissible (slot/item available) -> committed/item (Woken)
+//   - resource NOT admissible -> expired (the deadline has already elapsed)
+// In both cases the wait node never parks, no timer is registered, and the
+// operation completes within a single Fiber step.
+
+// ---- H1: push_until with already-due deadline + free slot -> committed -----
+// Resource-first: a free slot is admissible, so the already-due deadline is
+// NOT consulted. The push commits inline; no suspension; no timer registered.
+SLUICE_TEST_CASE(e12_queue_h1_push_until_already_due_free_slot_committed) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11TimerTestHooks::enable_test_clock(sched);
+    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    QueuePort port(sched, 2);
+
+    bool committed = false;
+    Fiber producer;
+    producer.set_entry([&](Fiber&) {
+        auto lease = QueueItemFactory::make<int>(port, 42);
+        // deadline=50 is ALREADY DUE (50 <= now=100), but the ring is empty ->
+        // resource admissible -> committed inline (resource-first precedence).
+        auto r = port.push_until(std::move(lease), /*deadline=*/50);
+        committed = (r.status() == QueueOpaquePushStatus::committed);
+    });
+    FiberStack sp;
+    SLUICE_CHECK(sched.init_fiber(producer, sp.base(), sp.size()));
+    sched.spawn(producer);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(committed, "already-due push + free slot -> committed (resource-first)");
+    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
+                     "no timer registered (inline resolution)");
+    // Drain to satisfy the ring-empty destruction contract.
+    auto rp = port.try_pop();
+    SLUICE_CHECK(rp.status() == QueueOpaquePopStatus::item);
+    (void)release_popped<int>(port, std::move(rp));
+    QueueTeardownSession session = port.begin_teardown();
+    SLUICE_CHECK(session.empty());
+}
+
+// ---- H2: push_until with already-due deadline + full ring -> expired -------
+// Resource NOT admissible (ring full) AND deadline already due -> expired
+// inline (no suspension). The exact original T is recovered. No timer leak.
+SLUICE_TEST_CASE(e12_queue_h2_push_until_already_due_full_ring_expired) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11TimerTestHooks::enable_test_clock(sched);
+    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    QueuePort port(sched, 1);
+
+    // Pre-fill the ring so the producer cannot commit.
+    {
+        auto lease = QueueItemFactory::make<int>(port, 1);
+        (void)port.try_push(std::move(lease));
+    }
+
+    bool expired = false;
+    int recovered = -1;
+    Fiber producer;
+    producer.set_entry([&](Fiber&) {
+        auto lease = QueueItemFactory::make<int>(port, 777);
+        // deadline=50 is ALREADY DUE (50 <= now=100); ring is full; no consumer
+        // will free a slot. Resource NOT admissible -> expired inline.
+        auto r = port.push_until(std::move(lease), /*deadline=*/50);
+        expired = (r.status() == QueueOpaquePushStatus::expired);
+        if (expired) recovered = release_failed<int>(port, std::move(r));
+    });
+    FiberStack sp;
+    SLUICE_CHECK(sched.init_fiber(producer, sp.base(), sp.size()));
+    sched.spawn(producer);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(expired, "already-due push + full ring -> expired inline");
+    SLUICE_CHECK_MSG(recovered == 777, "exact original T recovered on expire");
+    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
+                     "no timer registered (inline resolution)");
+    // Drain the pre-filled item to satisfy the ring-empty destruction contract.
+    auto rp = port.try_pop();
+    SLUICE_CHECK(rp.status() == QueueOpaquePopStatus::item);
+    (void)release_popped<int>(port, std::move(rp));
+    QueueTeardownSession session = port.begin_teardown();
+    SLUICE_CHECK(session.empty());
+}
+
+// ---- H3: pop_until with already-due deadline + available item -> item ------
+// Resource-first: a buffered item is admissible, so the already-due deadline
+// is NOT consulted. The pop returns the item inline; no suspension; no timer.
+SLUICE_TEST_CASE(e12_queue_h3_pop_until_already_due_item_available) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11TimerTestHooks::enable_test_clock(sched);
+    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    QueuePort port(sched, 2);
+
+    // Pre-fill the ring so the consumer can pop immediately.
+    {
+        auto lease = QueueItemFactory::make<int>(port, 314);
+        (void)port.try_push(std::move(lease));
+    }
+
+    bool got_item = false;
+    int popped = -1;
+    Fiber consumer;
+    consumer.set_entry([&](Fiber&) {
+        // deadline=50 is ALREADY DUE (50 <= now=100), but an item is buffered ->
+        // resource admissible -> item inline (resource-first precedence).
+        auto r = port.pop_until(/*deadline=*/50);
+        got_item = (r.status() == QueueOpaquePopStatus::item);
+        if (got_item) popped = release_popped<int>(port, std::move(r));
+    });
+    FiberStack sc;
+    SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    sched.spawn(consumer);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(got_item, "already-due pop + buffered item -> item (resource-first)");
+    SLUICE_CHECK_MSG(popped == 314, "exact buffered value popped");
+    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
+                     "no timer registered (inline resolution)");
+    QueueTeardownSession session = port.begin_teardown();
+    SLUICE_CHECK(session.empty());
+}
+
+// ---- H4: pop_until with already-due deadline + empty open ring -> expired --
+// Resource NOT admissible (ring empty AND open) AND deadline already due ->
+// expired inline (no suspension). No timer leak.
+SLUICE_TEST_CASE(e12_queue_h4_pop_until_already_due_empty_ring_expired) {
+    if (!fiber_ctx::supported) return;
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    E11TimerTestHooks::enable_test_clock(sched);
+    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    QueuePort port(sched, 2);
+
+    bool expired = false;
+    Fiber consumer;
+    consumer.set_entry([&](Fiber&) {
+        // deadline=50 is ALREADY DUE (50 <= now=100); ring is empty and open;
+        // no producer will commit. Resource NOT admissible -> expired inline.
+        auto r = port.pop_until(/*deadline=*/50);
+        expired = (r.status() == QueueOpaquePopStatus::expired);
+    });
+    FiberStack sc;
+    SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    sched.spawn(consumer);
+    sched.run(1);
+
+    SLUICE_CHECK_MSG(expired, "already-due pop + empty ring -> expired inline");
+    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
+                     "no timer registered (inline resolution)");
+    QueueTeardownSession session = port.begin_teardown();
+    SLUICE_CHECK(session.empty());
+}
+#endif  // x86_64 (Phase G timed + multi-worker + already-due precedence)
 
 SLUICE_MAIN();

@@ -1,5 +1,14 @@
 # E12-D AsyncCondition — Preparation Audit 1 (Corrective-1)
 
+> **Historical-status notice (2026-07-19).** This artifact's statements that
+> E12-C implementation was CLOSED record the prerequisite assumption used by
+> this earlier E12-D preparation audit; they are not a current E12-C review
+> verdict. The controlling current-status authority is
+> `docs/e10-e12-api-semantic-closure.md` and its Corrective-2 governance ledger.
+> The historical artifact `docs/reviews/E12-C-REVIEW.md` is retained only as
+> historical provenance. Current status is E12-C IMPLEMENTATION COMPLETE /
+> REVIEW-REQUIRED.
+
 **Audit range:** `721cf48` (master, E12-C merged) — `feat/e12-D-condition-prep` (preparation branch)
 **Auditor:** independent adversarial
 **Date:** 2026-07-14
