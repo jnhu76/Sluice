@@ -2,7 +2,7 @@
 
 > **Decision identity:** `E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1`
 >
-> **Status:** `PASS — PHASE I INDEPENDENT ADVERSARIAL REVIEW PASS (WITH OBSERVATIONS)`
+> **Status:** `PASS — PHASE I INDEPENDENT ADVERSARIAL REVIEW PASS (WITH OBSERVATIONS) + PR #12 REVIEW CORRECTIVE APPLIED`
 >
 > This document records the as-built state of the E12-E Queue production
 > implementation. The implementation is FUNCTIONALLY COMPLETE through P8 +
@@ -11,6 +11,16 @@
 > returned PASS WITH OBSERVATIONS) confirms there is no exploitable defect
 > against the Corrective-2 authority (as superseded by Corrective-3 for
 > the timer substrate), the formal model, and the documented lock order.
+>
+> A subsequent GitHub PR #12 review found one additional defect in the P8
+> public typed wrapper: `QueuePushResult<T>::operator=` /
+> `QueuePopResult<T>::operator=` were `= default`, which silently excluded
+> every T that satisfies the documented contract (object + nothrow-move-
+> constructible + nothrow-destructible) but is not move-assignable. The
+> PR #12 corrective hand-writes a destroy-and-rebuild move-assign (only
+> requires T to be move-constructible + destructible) and adds the
+> compile-time `static_assert` gate + the runtime state-transition
+> matrix + self-move the review enumerated.
 >
 > The 4 non-blocking OBSERVATIONS from the re-review (O-1 inline-path
 > CAS/hook ordering not structurally enforced; O-2 pump-publication
@@ -145,6 +155,14 @@ transition and the linear capability (P1).
   so T need NOT be default-constructible or move-assignable — the runtime
   constraint is nothrow-move-constructible + nothrow-destructible
   (mirrors `QueueItemFactory::make<T>`).
+  **PR #12 review corrective**: `operator=(Result&&)` is HAND-WRITTEN with a
+  destroy-and-rebuild sequence (`value_.reset()` + `value_.emplace(std::move(
+  *other.value_))` + `other.value_.reset()`), NOT `= default`. The default
+  would delegate to `std::optional<T>::operator=(optional&&)` whose SFINAE
+  requires T to be move-assignable, silently excluding every T that satisfies
+  the documented contract but is not move-assignable. The hand-written form
+  preserves the contract (only requires T to be move-constructible +
+  destructible). Compile-time-asserted + runtime state-transition-tested.
 - `AsyncQueue<T>`: thin template over an embedded non-template `QueuePort`.
   `try_push` / `push` / `push_until` mint the typed `Node<T>` OUTSIDE
   locks via `QueueItemFactory::make<T>`, drive the QueuePort seam, and
@@ -162,6 +180,10 @@ Verified: `e12_async_queue_test` — 3 P8 cases PASS (typed FIFO + failure
 recovery with exact-T `would_block` and `closed`, typed teardown via
 `release_teardown`, capacity-0 ctor rejection). Clang Debug + GCC Debug
 + ASan + TSan clean. Production `sluice_async` target compiles clean.
+**PR #12 review corrective** added 2 more cases (22 total): the typed
+result move-assign state-transition matrix + self-move for both
+QueuePushResult and QueuePopResult, with a deliberately move-construct-
+only test type that satisfies the static_assert gate.
 
 ## Transition coverage (as-built)
 

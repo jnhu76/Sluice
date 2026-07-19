@@ -80,10 +80,16 @@ using QueuePopStatus = detail::QueueOpaquePopStatus;
 // Public typed push result. Owns a T payload iff status != committed
 // (committed / closed / expired / would_block; committed carries no payload,
 // the three failure statuses each carry the exact original T). Move-only.
+//
 // Storage is std::optional<T> so T need not be default-constructible or
-// move-assignable: the move-construct + move-assign paths use the optional's
-// own destroy-and-rebuild (the runtime constraint is nothrow-move-construct +
-// nothrow-destructible, matching QueueItemFactory::make<T>).
+// move-assignable: the move-ctor moves the optional whole (one T
+// move-construct), and the move-ASSIGN operator is HAND-WRITTEN with a
+// destroy-and-rebuild sequence (reset + emplace) rather than `= default`.
+// `= default` would delegate to std::optional<T>::operator=(optional&&),
+// whose SFINAE requires T to be move-assignable — that would exclude every
+// T that satisfies the documented P8 contract (object +
+// nothrow-move-constructible + nothrow-destructible) but is not
+// move-assignable. The hand-written form preserves the contract.
 template <class T>
 class QueuePushResult final {
 public:
@@ -101,7 +107,23 @@ public:
     }
 
     QueuePushResult(QueuePushResult&&) noexcept = default;
-    QueuePushResult& operator=(QueuePushResult&&) noexcept = default;
+    // PR #12 review corrective: hand-written destroy-and-rebuild so T need NOT
+    // be move-assignable (only move-constructible + destructible). Steps:
+    //   1. self-move guard;
+    //   2. destroy destination payload (value_.reset());
+    //   3. copy enum status;
+    //   4. if source has payload, emplace(std::move(*src)) into destination,
+    //      then reset source (single T move-construct, single T destruct).
+    QueuePushResult& operator=(QueuePushResult&& other) noexcept {
+        if (this == &other) return *this;
+        value_.reset();
+        status_ = other.status_;
+        if (other.value_.has_value()) {
+            value_.emplace(std::move(*other.value_));
+            other.value_.reset();
+        }
+        return *this;
+    }
     QueuePushResult(const QueuePushResult&) = delete;
     QueuePushResult& operator=(const QueuePushResult&) = delete;
     ~QueuePushResult() = default;
@@ -130,7 +152,7 @@ private:
 
 // Public typed pop result. Owns a T payload iff status == item; closed /
 // expired / would_block carry no payload. Move-only. Same storage rationale
-// as QueuePushResult.
+// and hand-written move-assign as QueuePushResult (PR #12 review corrective).
 template <class T>
 class QueuePopResult final {
 public:
@@ -148,7 +170,18 @@ public:
     }
 
     QueuePopResult(QueuePopResult&&) noexcept = default;
-    QueuePopResult& operator=(QueuePopResult&&) noexcept = default;
+    // PR #12 review corrective: hand-written destroy-and-rebuild (see
+    // QueuePushResult for the rationale — T need NOT be move-assignable).
+    QueuePopResult& operator=(QueuePopResult&& other) noexcept {
+        if (this == &other) return *this;
+        value_.reset();
+        status_ = other.status_;
+        if (other.value_.has_value()) {
+            value_.emplace(std::move(*other.value_));
+            other.value_.reset();
+        }
+        return *this;
+    }
     QueuePopResult(const QueuePopResult&) = delete;
     QueuePopResult& operator=(const QueuePopResult&) = delete;
     ~QueuePopResult() = default;

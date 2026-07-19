@@ -40,6 +40,7 @@
 #include <memory>
 #include <stdexcept>  // std::invalid_argument (P8 capacity-0 rejection)
 #include <string>
+#include <type_traits>  // static_asserts (PR #12 review)
 #include <utility>
 
 using namespace sluice::async;
@@ -598,6 +599,137 @@ SLUICE_TEST_CASE(e12_queue_p8_capacity_zero_rejected) {
         threw = true;
     }
     SLUICE_CHECK(threw);
+}
+
+// ===========================================================================
+// PR #12 review corrective — typed result move-assignment contract.
+// ===========================================================================
+//
+// The PR #12 review found that QueuePushResult<T>::operator=(QueuePushResult&&)
+// and QueuePopResult<T>::operator=(QueuePopResult&&) were `= default`, which
+// delegated to std::optional<T>::operator=(optional&&). The optional move-
+// assign's SFINAE requires T to be move-assignable, excluding every T that
+// satisfies the P8 contract (object + nothrow-move-constructible +
+// nothrow-destructible) but is NOT move-assignable. The fix hand-writes a
+// destroy-and-rebuild sequence (reset + emplace) so T only needs to be
+// move-constructible + destructible.
+//
+// These tests verify BOTH the compile-time contract (via static_asserts on a
+// deliberately move-construct-only T) and the runtime state-transition
+// matrix the review enumerated.
+
+namespace {
+// A type that satisfies the AsyncQueue<T> contract but is NOT move-assignable
+// (move-assign is explicitly deleted). Used by the static_asserts below AND by
+// the runtime tests (its move-ctor writes -1 into the source, so a correct
+// destroy-and-rebuild leaves the source observably empty).
+struct MoveConstructOnly {
+    int value{};
+    explicit MoveConstructOnly(int v) noexcept : value(v) {}
+    MoveConstructOnly(MoveConstructOnly&& other) noexcept
+        : value(std::exchange(other.value, -1)) {}
+    MoveConstructOnly& operator=(MoveConstructOnly&&) = delete;
+    MoveConstructOnly(const MoveConstructOnly&) = delete;
+    MoveConstructOnly& operator=(const MoveConstructOnly&) = delete;
+    ~MoveConstructOnly() noexcept = default;
+};
+
+// PR #12 review mandatory compile-time gate. The hand-written move-assign
+// must keep QueuePushResult<MoveConstructOnly> / QueuePopResult<MoveConstructOnly>
+// nothrow-move-assignable despite MoveConstructOnly NOT being move-assignable.
+static_assert(std::is_nothrow_move_constructible_v<MoveConstructOnly>);
+static_assert(!std::is_move_assignable_v<MoveConstructOnly>);
+static_assert(std::is_nothrow_move_assignable_v<
+              QueuePushResult<MoveConstructOnly>>);
+static_assert(std::is_nothrow_move_assignable_v<
+              QueuePopResult<MoveConstructOnly>>);
+}  // namespace
+
+// ---- PR #12: QueuePushResult<T> move-assignment runtime state transitions --
+//
+// Per the review matrix:
+//   dest=committed  src=failed+payload    => payload rebuilt on dest
+//   dest=failed+P   src=committed         => old dest payload destroyed
+//   dest=failed+P   src=failed+Q          => Q replaces P
+//   self-move                             => object not corrupted
+SLUICE_TEST_CASE(e12_queue_pr12_push_result_move_assign_states) {
+    using R = QueuePushResult<MoveConstructOnly>;
+
+    // dest=committed, src=failed+payload(7) => dest becomes failed+(7).
+    {
+        R dest = R::committed();
+        R src = R::failed(QueuePushStatus::closed, MoveConstructOnly{7});
+        dest = std::move(src);
+        SLUICE_CHECK(dest.status() == QueuePushStatus::closed);
+        SLUICE_CHECK(std::move(dest).take_value().value == 7);
+        // Source payload was reset (moved-out MoveConstructOnly writes -1; an
+        // empty optional reports !has_value()).
+        SLUICE_CHECK(src.status() == QueuePushStatus::closed);  // status preserved
+    }
+    // dest=failed+(99), src=committed => old payload destroyed, dest=committed.
+    {
+        R dest = R::failed(QueuePushStatus::expired, MoveConstructOnly{99});
+        R src = R::committed();
+        dest = std::move(src);
+        SLUICE_CHECK(dest.status() == QueuePushStatus::committed);
+        // dest.take_value() would fail-fast now (no payload); not called.
+    }
+    // dest=failed+(1), src=failed+(2) => Q replaces P (FIFO payload swap).
+    {
+        R dest = R::failed(QueuePushStatus::would_block, MoveConstructOnly{1});
+        R src = R::failed(QueuePushStatus::closed, MoveConstructOnly{2});
+        dest = std::move(src);
+        SLUICE_CHECK(dest.status() == QueuePushStatus::closed);
+        SLUICE_CHECK(std::move(dest).take_value().value == 2);
+    }
+    // self-move: object must not be corrupted.
+    {
+        R r = R::failed(QueuePushStatus::closed, MoveConstructOnly{42});
+        R* p = &r;
+        r = std::move(*p);  // self-move
+        SLUICE_CHECK(r.status() == QueuePushStatus::closed);
+        SLUICE_CHECK(std::move(r).take_value().value == 42);
+    }
+}
+
+// ---- PR #12: QueuePopResult<T> move-assignment runtime state transitions ---
+//
+// Symmetric to the push case. dest/source may be any of item/closed/expired/
+// would_block; only item carries a payload.
+SLUICE_TEST_CASE(e12_queue_pr12_pop_result_move_assign_states) {
+    using R = QueuePopResult<MoveConstructOnly>;
+
+    // dest=closed, src=item+(7) => dest becomes item+(7).
+    {
+        R dest = R::closed();
+        R src = R::item(MoveConstructOnly{7});
+        dest = std::move(src);
+        SLUICE_CHECK(dest.status() == QueuePopStatus::item);
+        SLUICE_CHECK(std::move(dest).take_value().value == 7);
+    }
+    // dest=item+(99), src=expired => old payload destroyed, dest=expired.
+    {
+        R dest = R::item(MoveConstructOnly{99});
+        R src = R::expired();
+        dest = std::move(src);
+        SLUICE_CHECK(dest.status() == QueuePopStatus::expired);
+    }
+    // dest=item+(1), src=item+(2) => Q replaces P.
+    {
+        R dest = R::item(MoveConstructOnly{1});
+        R src = R::item(MoveConstructOnly{2});
+        dest = std::move(src);
+        SLUICE_CHECK(dest.status() == QueuePopStatus::item);
+        SLUICE_CHECK(std::move(dest).take_value().value == 2);
+    }
+    // self-move: object must not be corrupted.
+    {
+        R r = R::item(MoveConstructOnly{42});
+        R* p = &r;
+        r = std::move(*p);  // self-move
+        SLUICE_CHECK(r.status() == QueuePopStatus::item);
+        SLUICE_CHECK(std::move(r).take_value().value == 42);
+    }
 }
 
 // ===========================================================================
