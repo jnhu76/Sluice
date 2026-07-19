@@ -1,8 +1,8 @@
 # E13 Select / Multi-Wait Preparation Design
 
-**Task**: `E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-1`
+**Task**: `E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-2`
 
-**Status**: `PR16 CORRECTIVE — DELTA RE-AUDIT REQUIRED`
+**Status**: `PR16 CORRECTIVE-2 — DELTA RE-AUDIT REQUIRED`
 
 **Pre-Reaudit Hardening**: `E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-PRE-REAUDIT-HARDENING-1`
 
@@ -886,9 +886,10 @@ At registration (all arms under one global_mtx_ CS):
     if any arm is CandidateReady:
         select lowest-index CandidateReady arm
         group claim CAS (Arming -> WinnerClaimed)
-        commit winner result:
-            Event arm: resolve WaitNode Woken
-            Timer arm: ACTIVE->CONSUMED, resolve WaitNode Expired
+        if Event arm wins:
+            FinalizeEventWinner
+        if Timer arm wins:
+            FinalizeTimerWinner
         retire all loser arms (non-publishing)
         CompleteInline:
             populate SelectResult
@@ -913,7 +914,10 @@ Later, external resolver (Event::set or timer pump):
         if group is Armed:
             try group claim (Armed -> WinnerClaimed)
             if claim succeeds:
-                commit winner result
+                if Event arm wins:
+                    FinalizeEventWinner
+                if Timer arm wins:
+                    FinalizeTimerWinner
                 retire losers (non-publishing)
                 PublishSuspendedCaller:
                     make_runnable(caller) -> exactly once
@@ -951,40 +955,51 @@ After release, the caller is Waiting, so make_runnable will succeed.
 
 ## 12. WaitNode Finalization Law
 
-### 12.1 Canonical law
-
-A Select arm WaitNode must become terminal before it is structurally detached
-from its WaitQueue.
-
-Terminal resolution and unlink must occur under the arm queue mutex by using
-the existing WaitQueue authority:
+### 12.1 Common law
 
 ```
-Event winner:
-    wake_node_locked(node)
-        = resolve(Woken) + unlink
-
-Timer winner:
-    expire_locked(node)
-        = resolve(Expired) + unlink
-
-Select loser:
-    cancel_locked(node)
-        = resolve(Cancelled) + unlink
+- terminal resolve occurs before unlink
+- resolve + unlink occur in one queue mutex CS
+- typed context clears only after terminal + detached
+- publication occurs only after finalization
 ```
 
-After the queue-level terminalization succeeds:
+### 12.2 Branch-specific sequences
 
 ```
-1. close waiting counters exactly once
-2. close TimerRegistration authority exactly once
-3. mark SelectArm RETIRED
-4. clear typed WaitNode context
-5. publish SelectResult only for the winner
-6. publish runnable only for a suspended winner
+EVENT WINNER:
+    resolve Woken + unlink
+    close waiting accounting
+    mark Retired
+    clear context
+    publish result/runnable
+
+TIMER WINNER:
+    group claim
+    ACTIVE -> CONSUMED
+    resolve Expired + unlink
+    close active deadline and waiting accounting
+    mark Retired
+    clear context
+    publish result/runnable
+
+EVENT LOSER:
+    resolve Cancelled + unlink
+    close waiting accounting
+    mark Retired
+    clear context
+    no publication
+
+TIMER LOSER:
+    resolve Cancelled + unlink
+    ACTIVE -> RETIRED
+    close active deadline and waiting accounting
+    mark Retired
+    clear context
+    no publication
 ```
 
-### 12.2 Forbidden patterns
+### 12.3 Forbidden patterns
 
 ```
 unlink
@@ -997,7 +1012,7 @@ destroy a terminal node that remains linked
 publish a loser
 ```
 
-### 12.3 Structural law confirmation
+### 12.4 Structural law confirmation
 
 The existing structural law is confirmed and reused:
 
@@ -1156,40 +1171,147 @@ Timer winner:
 
 ---
 
-## 15. Correct Lifecycle Documentation
+## 15. TimerRegistration Pre-Dereference Authority
 
-### 15.1 Unified WaitNode lifecycle
+### 15.1 Problem
 
-All documents must use the same order:
+The timer pump must not dereference `reg.node()` or `reg.queue()` unless the
+registration is ACTIVE and the caller holds the global_mtx_ coordination domain.
+A stale pump callback observing a RETIRED registration must not follow pointers
+to a terminal detached WaitNode or a destroyed queue.
+
+### 15.2 Entry protocol
 
 ```
-1. Detached, no typed context
-2. typed context installed
-3. Registered and linked
-4. CandidateReady while still Registered and linked
-5. group winner selected
-6a. winner:
-        resolve Woken/Expired + unlink
-6b. loser:
-        resolve Cancelled + unlink
-7. close accounting
-8. TimerRegistration consumed/retired
-9. arm Retired
-10. clear typed context
-11. publish winner result/runnable
-12. destruction
+select_timer_due_locked(TimerRegistration& reg):
+
+PRE:
+    global_mtx_ held
+
+1. if reg.state != ACTIVE:
+       return without dereferencing reg.node or reg.queue
+
+2. Because every Select consume/retire transition requires global_mtx_,
+   ACTIVE remains stable for this critical section.
+
+3. WaitNode* node = reg.node()
+4. inspect node.user_kind()
+
+5. if ordinary:
+       use the ordinary expiry protocol
+
+6. if Select:
+       mark arm CandidateReady
+       claim SelectGroup
+
+7. if claim succeeds:
+       reg.try_claim_expiry() must succeed
+       ACTIVE -> CONSUMED
+       expire_locked(node)
+       finalize winner
+
+8. if group claim fails:
+       reg.retire() must succeed
+       ACTIVE -> RETIRED
+       cancel_locked(node)
+       finalize loser
 ```
 
-### 15.2 Enforcement
+### 15.3 Invariants
 
-The preparation design (§4), state machine (§5), test plan, and formal model
-(§24) must all use this order. Any document that deviates must be corrected.
+```
+InvNoTimerNodeDereferenceWithoutActiveAuthority
+    Timer pump dereferences reg.node() only when reg.state == ACTIVE
+
+InvActiveTimerStableUnderGlobalCoordination
+    ACTIVE state remains stable while global_mtx_ is held;
+    no consume/retire transition can interleave
+
+InvGroupClaimedTimerConsumeCannotFail
+    If group claim succeeds for a Timer arm, try_claim_expiry must succeed
+    (PRE: registration is still ACTIVE because claim requires global_mtx_)
+```
+
+### 15.4 Negative model
+
+```
+NEG-T1: Stale pump dereference
+    TimerRegistration is RETIRED (group completed).
+    Timer pump fires without checking ACTIVE.
+    Pump follows reg.node() to a terminal detached WaitNode
+    whose stack frame may already be destroyed.
+    VIOLATION: UAF.
+
+    REJECTED BY: InvNoTimerNodeDereferenceWithoutActiveAuthority
+```
+
+### 15.5 Deterministic test obligation
+
+```
+pause after ACTIVE check while global_mtx_ held;
+attempt loser retirement from another thread;
+prove retirement cannot complete or destroy the node until the pump releases.
+```
 
 ---
 
-## 16. Correct SelectOperation State Machine
+## 17. Correct Lifecycle Documentation
 
-### 16.1 Inline completion support
+### 17.1 Common WaitNode law
+
+```
+- terminal resolve occurs before unlink
+- resolve + unlink occur in one queue mutex CS
+- typed context clears only after terminal + detached
+- publication occurs only after finalization
+```
+
+### 17.2 Branch-specific sequences
+
+```
+EVENT WINNER:
+    resolve Woken + unlink
+    close waiting accounting
+    mark Retired
+    clear context
+    publish result/runnable
+
+TIMER WINNER:
+    group claim
+    ACTIVE -> CONSUMED
+    resolve Expired + unlink
+    close active deadline and waiting accounting
+    mark Retired
+    clear context
+    publish result/runnable
+
+EVENT LOSER:
+    resolve Cancelled + unlink
+    close waiting accounting
+    mark Retired
+    clear context
+    no publication
+
+TIMER LOSER:
+    resolve Cancelled + unlink
+    ACTIVE -> RETIRED
+    close active deadline and waiting accounting
+    mark Retired
+    clear context
+    no publication
+```
+
+### 17.3 Enforcement
+
+The preparation design (§4), state machine (§5), test plan, and formal model
+(§26) must use the branch-specific sequences. Any document that deviates must
+be corrected.
+
+---
+
+## 18. Correct SelectOperation State Machine
+
+### 18.1 Inline completion support
 
 The current SelectOperation state machine must explicitly support inline
 completion without entering Waiting.
@@ -1222,7 +1344,7 @@ Ready -> Completed -> Consumed
 Ready -> Waiting -> Completed -> Consumed
 ```
 
-### 16.2 Publication rules
+### 18.2 Publication rules
 
 ```
 Inline completion:
@@ -1234,7 +1356,7 @@ Suspended completion:
     route_runnable = 1
 ```
 
-### 16.3 Refinement mapping
+### 18.3 Refinement mapping
 
 SelectGroup and SelectOperation state machines must be synchronized:
 
@@ -1251,9 +1373,9 @@ transitions Ready -> Waiting -> CompletedSuspended.
 
 ---
 
-## 17. Correct Timer Invariants
+## 19. Correct Timer Invariants
 
-### 17.1 Problem
+### 19.1 Problem
 
 The current invariant:
 
@@ -1263,7 +1385,7 @@ forall timer: timer_state in {None, Retired, Consumed}
 
 is invalid during registration and Armed phases because `Active` is legitimate.
 
-### 17.2 Phase-aware replacement
+### 19.2 Phase-aware replacement
 
 ```
 InvTimerTerminalAfterCompletion:
@@ -1293,7 +1415,7 @@ InvTimerEventuallyClosedForCompletedGroup:
     no TimerRegistration is Active
 ```
 
-### 17.3 Formal actions
+### 19.3 Formal actions
 
 ```
 ClearTypedContext
@@ -1313,7 +1435,7 @@ CloseWaitAccounting
     decrement active_deadline_count_ exactly once per timer arm
 ```
 
-### 17.4 Additional invariant
+### 19.4 Additional invariant
 
 ```
 InvNoContextClearWhileRegistered:
@@ -1322,9 +1444,9 @@ InvNoContextClearWhileRegistered:
 
 ---
 
-## 18. Correct Tests
+## 20. Correct Tests
 
-### 18.1 Test count
+### 20.1 Test count
 
 The final active test plan must have one consistent count. Tests are T1–T16.
 
@@ -1343,7 +1465,7 @@ HISTORICAL SNAPSHOT — originally 15 tests
 
 The final corrective plan contains 16 tests.
 
-### 18.2 T12 registration failure — split into two sub-tests
+### 20.2 T12 registration failure — split into two sub-tests
 
 #### T12a — Catchable registration exception rollback
 
@@ -1386,7 +1508,7 @@ not catchable as a normal C++ exception
 Cleanup after a fatal assertion is not specified unless the death-test
 harness isolates the process.
 
-### 18.3 Winner/loser checks
+### 20.3 Winner/loser checks
 
 Add explicit checks for:
 
@@ -1401,9 +1523,9 @@ completed SelectOperation has no Registered WaitNode
 
 ---
 
-## 19. Internal-Testing Seam Integration
+## 21. Internal-Testing Seam Integration
 
-### 19.1 Build variant confinement
+### 21.1 Build variant confinement
 
 All proposed E13 causal seams are compiled only into:
 
@@ -1417,7 +1539,7 @@ under:
 SLUICE_ASYNC_INTERNAL_TESTING
 ```
 
-### 19.2 Production exclusion
+### 21.2 Production exclusion
 
 The production runtime must expose:
 
@@ -1427,7 +1549,7 @@ no controller symbol
 no test hook public API
 ```
 
-### 19.3 PhaseTag integration
+### 21.3 PhaseTag integration
 
 New `PhaseTag` values for E13 integrate with the existing internal test
 controller (`AsyncTestController`, `SchedulerTestHooks`) without publishing
@@ -1437,7 +1559,7 @@ This is a design clarification only; seams are not implemented in this task.
 
 ---
 
-## 20. Fairness
+## 22. Fairness
 (Original section 12 — renumbered due to PR16 corrective insertions)
 
 ```
@@ -1460,7 +1582,7 @@ TIMER FAIRNESS:
 
 ---
 
-## 21. Error and Misuse Taxonomy
+## 23. Error and Misuse Taxonomy
 
 | Category                          | Mechanism      | First-scope handling |
 |-----------------------------------|:--------------:|----------------------|
@@ -1502,7 +1624,7 @@ These are NOT supported in first scope:
 
 ---
 
-## 22. Queue-Specific Analysis (Deferred)
+## 24. Queue-Specific Analysis (Deferred)
 
 Queue is deferred from first scope. Reasons:
 - Queue v1 has no public wait-epoch cancel API (D10)
@@ -1516,7 +1638,7 @@ group authority before executing ProducerGrantCommit or ConsumerGrantCommit.
 
 ---
 
-## 23. AsyncCondition-Specific Analysis (Deferred)
+## 25. AsyncCondition-Specific Analysis (Deferred)
 
 AsyncCondition is deferred from first scope. The two-epoch protocol
 (Condition epoch + mandatory Mutex reacquire) is fundamentally incompatible
@@ -1525,9 +1647,9 @@ with the first-scope single-epoch arm model. The mandatory reacquire
 
 ---
 
-## 24. Formal-Model Plan (Future)
+## 26. Formal-Model Plan (Future)
 
-### 24.1 State variables (first scope)
+### 26.1 State variables (first scope)
 
 ```
 VARIABLES:
@@ -1543,7 +1665,7 @@ VARIABLES:
     retirement_count    : Nat
 ```
 
-### 24.2 Safety properties (first scope)
+### 26.2 Safety properties (first scope)
 
 ```
 InvAtMostOneWinner              : winner = none OR exists! i: winner = i
@@ -1580,7 +1702,7 @@ InvEventPersistentStateNotConsumed : Event SET after loser retirement
 InvRegistrationFailureLeavesNoVisibleArm : rollback => forall i: arm_state[i] = Retired
 ```
 
-### 24.3 Actions (first scope)
+### 26.3 Actions (first scope)
 
 ```
 BeginRegistration
@@ -1624,7 +1746,7 @@ CloseWaitAccounting
     -- decrement active_deadline_count_ exactly once per timer arm
 ```
 
-### 24.4 New invariants (corrected)
+### 26.4 New invariants (corrected)
 
 ```
 InvUserKindMatchesDynamicContext
@@ -1681,7 +1803,7 @@ InvRetiredArmHasNoQueueMembership
     arm.state == RETIRED => not arm.node.is_registered()
 ```
 
-### 24.5 Negative models
+### 26.5 Negative models
 
 ```
 NEG-1: winner claim after arm commit (violates InvWinnerChosenBeforeArmCommit)
@@ -1693,7 +1815,7 @@ NEG-6: timer and event both publish (violates InvAtMostOneRunnablePublication)
 NEG-7: partial registration leak (violates InvRegistrationFailureLeavesNoVisibleArm)
 ```
 
-### 24.6 Deferred extension obligations
+### 26.6 Deferred extension obligations
 
 ```
 Future Semaphore integration requires:
@@ -1711,21 +1833,21 @@ Future AsyncMutex integration requires:
 
 ---
 
-## 25. Residual Risks
+## 27. Residual Risks
 
 | ID   | Severity | Description | Mitigation |
 |------|----------|-------------|------------|
 | R-E13-1 | Medium | global_mtx_ contention with many Select arms | First scope acceptable |
-| R-E13-2 | Medium | No formal model yet | Formal model plan defined (§24) |
+| R-E13-2 | Medium | No formal model yet | Formal model plan defined (§26) |
 | R-E13-3 | Low | Fairness is array-index only | Documented limitation |
 | R-E13-4 | Medium | Queue/Condition/Semaphore/Mutex deferred | Deferred by design |
 | R-E13-5 | Low | Debug-assert-only in release | Matches E10-E12 convention |
 
 ---
 
-## 26. Review Finding Disposition
+## 28. Review Finding Disposition
 
-### 26.1 Original audit (E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1)
+### 28.1 Original audit (E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1)
 
 ```
 P0-1 Semaphore release:            ACCEPTED -- removed from first scope
@@ -1744,14 +1866,14 @@ P1-9 Mutex unlock handoff:         DEFERRED
 P1-10 partial registration race:   CLOSED -- R1 protocol (S7)
 ```
 
-### 26.2 Independent re-audit P2 observations (non-blocking, now closed)
+### 28.2 Independent re-audit P2 observations (non-blocking, now closed)
 
 ```
 P2-1 Missing ClearTypedContext formal action:
-    CLOSED -- added to formal model plan (§24.3)
+    CLOSED -- added to formal model plan (§26.3)
 
 P2-2 Missing InvNoContextClearWhileRegistered:
-    CLOSED -- added to formal invariants (§24.4)
+    CLOSED -- added to formal invariants (§26.4)
 
 P2-3 Internal test seam integration:
     CLOSED -- integration clarified (§M)
@@ -1760,7 +1882,7 @@ P2-4 Cancel path disposition wording:
     CLOSED -- wording clarified in erratum (§U.1)
 ```
 
-### 26.3 PR #16 external review findings
+### 28.3 PR #16 external review findings
 
 ```
 Gemini-1 Event winner remains linked:
@@ -1795,10 +1917,10 @@ Independent-1 historical implementation authorization ambiguity:
     CLOSED -- audit erratum (§U.1)
 
 Independent-2 missing ClearTypedContext formal action:
-    CLOSED -- added to formal model plan (§24.3)
+    CLOSED -- added to formal model plan (§26.3)
 
 Independent-3 missing InvNoContextClearWhileRegistered:
-    CLOSED -- added to formal invariants (§24.4)
+    CLOSED -- added to formal invariants (§26.4)
 
 Independent-4 E13 internal test seam integration:
     CLOSED -- integration clarified (§M)
@@ -1806,7 +1928,7 @@ Independent-4 E13 internal test seam integration:
 
 ---
 
-## 27. Files Modified
+## 29. Files Modified
 
 ```
 docs/e13-select-preparation.md          (PR16 corrective — event/timer/loser/state-machine/invariant corrections)
@@ -1823,29 +1945,11 @@ docs/reviews/E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-1-REVIEW-REQUEST.md (new — 
 
 ---
 
-## 28. Final Report
+## 30. Final Report
 
 ```
-E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-1:
+E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-2:
 PASS — AUTHOR SELF-ASSESSMENT
-
-EVENT WINNER FINALIZATION:
-CORRECTED
-
-TIMER WINNER FINALIZATION:
-CORRECTED
-
-LOSER TERMINALIZATION:
-CORRECTED — RESOLVE BEFORE UNLINK
-
-TIMER FORMAL INVARIANTS:
-CORRECTED
-
-INLINE SELECTOPERATION PATH:
-CORRECTED
-
-EXTERNAL REVIEW FINDINGS:
-ADDRESSED
 
 DELTA RE-AUDIT:
 REQUIRED

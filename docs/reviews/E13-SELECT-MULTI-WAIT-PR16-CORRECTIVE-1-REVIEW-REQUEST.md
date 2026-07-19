@@ -1,6 +1,6 @@
 # E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-1 — Review Request
 
-**Task**: `E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-1`
+**Task**: `E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-2`
 **Date**: 2026-07-19
 **Status**: DELTA RE-AUDIT REQUESTED — DOCUMENTATION CORRECTIVE ONLY
 
@@ -9,15 +9,16 @@
 ## 1. Review Scope
 
 This corrective updates the E13 Select documentation to address PR #16 external
-review findings. No production code, test code, formal spec, or build policy
-was modified.
+review findings and closes two remaining gaps: branch-specific Timer
+lifecycle ordering and TimerRegistration pre-dereference authority.
+No production code, test code, formal spec, or build policy was modified.
 
 ### In scope
 
 | File | Description |
 |------|-------------|
-| `docs/e13-select-preparation.md` | Corrected preparation design (WaitNode finalization law, event/timer winner, loser, lifecycle, state machine, invariants) |
-| `docs/e13-select-state-machine.md` | Corrected state machine (inline SelectOperation path, phase-aware timer invariants) |
+| `docs/e13-select-preparation.md` | Corrected preparation design (WaitNode finalization law, event/timer winner, loser, lifecycle, state machine, invariants, timer authority) |
+| `docs/e13-select-state-machine.md` | Corrected state machine (inline SelectOperation path, phase-aware timer invariants, branch-specific lifecycle, timer authority) |
 | `docs/e13-select-test-plan.md` | Corrected test plan (16 deterministic tests, T12a/T12b split, winner/loser checks) |
 | `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md` | Historical erratum (authorization, untracked provenance) |
 | `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REAUDIT-1.md` | Supersession notice |
@@ -44,7 +45,7 @@ REPOSITORY:     jnhu76/Sluice
 BASE_BRANCH:    master
 MERGE_BASE:     be70fde (origin/master HEAD)
 WORKING_BRANCH: feature/E13-preparation
-TASK:           E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-1
+TASK:           E13-SELECT-MULTI-WAIT-PR16-CORRECTIVE-2
 DATE:           2026-07-19
 ```
 
@@ -64,6 +65,8 @@ The delta re-audit must verify only:
 - [ ] 8. Historical authorization errata in audit and supersession notice in reaudit are accurate.
 - [ ] 9. Test count is consistently 16 across all documents; T12 is split into catchable (T12a) and fatal-assertion (T12b) variants.
 - [ ] 10. No production, test, formal-spec, or build-policy files were changed.
+- [ ] 11. Branch-specific TimerRegistration ordering is consistent across all docs (Event winner, Timer winner, Event loser, Timer loser each have distinct sequences).
+- [ ] 12. Timer pump checks ACTIVE authority before dereferencing WaitNode or queue (`select_timer_due_locked` protocol).
 
 ---
 
@@ -179,8 +182,14 @@ InvNoContextClearWhileRegistered
 ## 6. Authorization
 
 ```text
+E13 PREPARATION:
+OPEN — DELTA RE-AUDIT REQUIRED
+
+PR16 CORRECTIVE:
+AUTHOR SELF-ASSESSMENT PASS
+
 FORMAL MODEL IMPLEMENTATION:
-DENIED UNTIL DELTA RE-AUDIT PASSES
+DENIED PENDING DELTA RE-AUDIT
 
 PRODUCTION IMPLEMENTATION:
 DENIED
@@ -192,7 +201,7 @@ DENIED
 
 The delta re-auditor should produce:
 
-1. **Verdict**: PASS / FAIL for each of the 10 checklist items (section 3)
+1. **Verdict**: PASS / FAIL for each of the 12 checklist items (section 3)
 2. **Overall verdict**: PASS / FAIL for the corrective
 3. **Authorization effect**:
    - If PASS: Formal model implementation authorized for Event + Timer only

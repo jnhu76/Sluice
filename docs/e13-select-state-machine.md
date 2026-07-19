@@ -240,59 +240,64 @@ Suspended path:
 ### 5.1 WaitNode lifecycle within Select
 
 ```
-Each SelectArm has one WaitNode. The WaitNode lifecycle is:
+Each SelectArm has one WaitNode. The WaitNode lifecycle follows
+branch-specific sequences, not a single total order.
 
-1. Construction (stack frame):
-   WaitNode node;  // Detached, user_kind = None
+COMMON LAW:
+- terminal resolve before unlink
+- resolve + unlink in one queue mutex CS
+- typed context clears only after terminal + detached
+- publication only after finalization
 
-2. Typed context installed (under global_mtx_ + target queue mtx):
-   node.set_user_context(WaitNodeUserKind::Select, &metadata)
+EVENT WINNER:
+    1. Construction (stack frame): WaitNode node; Detached, user_kind = None
+    2. Typed context installed
+    3. Registered and linked (in Event queue)
+    4. CandidateReady (metadata.state, node remains Registered)
+    5. Group winner selected
+    6. resolve Woken + unlink (wake_node_locked under Event queue mutex)
+    7. Close waiting accounting
+    8. Mark Retired
+    9. Clear typed context
+    10. Publish result/runnable
 
-3. Registration (under global_mtx_ + target queue mtx):
-   register_wait_locked(queue, node)
-   // node: Detached -> Registered
-   // Event arm: registered in Event's private waiters_
-   // Timer arm: registered in SelectOperation's private timer_waiters_
+TIMER WINNER:
+    1. Construction: Detached, user_kind = None
+    2. Typed context installed
+    3. Registered and linked (in timer_waiters_)
+    4. CandidateReady
+    5. Group winner selected
+    6. ACTIVE -> CONSUMED (try_claim_expiry)
+    7. resolve Expired + unlink (expire_locked under timer_waiters_ mutex)
+    8. Close active deadline and waiting accounting
+    9. Mark Retired
+    10. Clear typed context
+    11. Publish result/runnable
 
-4. CandidateReady (Select-aware resolver sets metadata.state):
-   // node remains Registered and linked
-   // WaitNode outcome NOT resolved
+EVENT LOSER:
+    1. Construction: Detached, user_kind = None
+    2. Typed context installed
+    3. Registered and linked (in Event queue)
+    4. CandidateReady
+    5. Group loser selected
+    6. resolve Cancelled + unlink (cancel_locked under Event queue mutex)
+    7. Close waiting accounting
+    8. Mark Retired
+    9. Clear typed context
+    10. No publication
 
-5. Group winner selected:
-   // winner: CAS succeeds
-   // loser:  CAS fails
-
-6a. Winner finalization:
-    // resolve Woken (Event) or Expired (Timer) under queue mutex
-    // unlink in the same queue CS
-
-6b. Loser finalization:
-    // resolve Cancelled under arm queue mutex
-    // unlink in the same queue CS
-
-7. Close accounting:
-    // decrement waiting_waitq_count_ exactly once
-    // decrement active_deadline_count_ exactly once (timer arms)
-
-8. TimerRegistration consumed/retired:
-    // winner: ACTIVE -> CONSUMED
-    // loser:  ACTIVE -> RETIRED
-
-9. Arm marked RETIRED:
-    arm.metadata.state = RETIRED
-
-10. Clear typed context:
-    clear_user_context()  // kind = None, pointer = nullptr
-    // PRE: node is terminal AND unlinked
-
-11. Publish winner result/runnable:
-    // inline: SelectResult only (make_runnable=0)
-    // suspended: make_runnable + route_runnable = 1 each
-
-12. Destruction (stack frame):
-    // node must be terminal (Woken/Cancelled/Expired)
-    // user_kind must be None
-    ~WaitNode();  // assert !is_registered()
+TIMER LOSER:
+    1. Construction: Detached, user_kind = None
+    2. Typed context installed
+    3. Registered and linked (in timer_waiters_)
+    4. CandidateReady
+    5. Group loser selected
+    6. resolve Cancelled + unlink (cancel_locked under timer_waiters_ mutex)
+    7. ACTIVE -> RETIRED (retire)
+    8. Close active deadline and waiting accounting
+    9. Mark Retired
+    10. Clear typed context
+    11. No publication
 ```
 
 ### 5.2 WaitNode as group winner indicator
@@ -354,7 +359,46 @@ If an Event arm wins (and timer arm is loser):
     -> timer pump later erases the block lazily
 ```
 
+### 6.3 TimerRegistration pre-dereference authority
+
+```
+select_timer_due_locked(TimerRegistration& reg):
+
+PRE:
+    global_mtx_ held
+
+1. if reg.state != ACTIVE:
+       return without dereferencing reg.node or reg.queue
+
+2. Because every Select consume/retire transition requires global_mtx_,
+   ACTIVE remains stable for this critical section.
+
+3. WaitNode* node = reg.node()
+4. inspect node.user_kind()
+
+5. if ordinary:
+       use the ordinary expiry protocol
+
+6. if Select:
+       mark arm CandidateReady
+       claim SelectGroup
+
+7. if claim succeeds:
+       reg.try_claim_expiry() must succeed
+       ACTIVE -> CONSUMED
+       expire_locked(node)
+       finalize winner
+
+8. if group claim fails:
+       reg.retire() must succeed
+       ACTIVE -> RETIRED
+       cancel_locked(node)
+       finalize loser
+```
+
 ---
+
+
 
 ## 7. Thread Safety Summary
 
@@ -403,4 +447,7 @@ I25. Timer invariants phase-aware: Active allowed before completion
 I26. Completed operation has no Registered WaitNodes
 I27. Winner typed context cleared only after terminal + detach
 I28. Consumed TimerRegistration never dereferences WaitNode
+I29. TimerRegistration entry: check ACTIVE before dereferencing node/queue
+I30. ACTIVE timer stable while global_mtx_ held (no interleaved consume/retire)
+I31. Group-claimed Timer arm: try_claim_expiry must succeed
 ```
