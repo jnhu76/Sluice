@@ -3,7 +3,7 @@
 > **Current authority:**
 > `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2: PASS`
 >
-> **Status:** `PASS — AUTHOR SELF-ASSESSMENT — INDEPENDENT REVIEW REQUIRED`
+> **Status:** `PASS — INDEPENDENT ADVERSARIAL REVIEW PASS (B2)`
 >
 > **Applied disposition:**
 > `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1:
@@ -18,9 +18,9 @@
 >
 > **Dependent substrate:**
 > `ASYNC-MUTEX-NOTHROW-AUTHORITY-1:
-> DESIGN PASS — IMPLEMENTATION UNAUTHORIZED`
+> DESIGN PASS — PRODUCTION IMPLEMENTED — INDEPENDENT REVIEW PASS (B1)`
 >
-> **Implementation authorization:** `DENIED`
+> **Implementation authorization:** `DENIED — B2/B4 OPEN`
 
 Corrective-2 retains the Queue-v1 semantics but replaces the rejected reusable
 item reference, active-owner steal veto, ordinary quiet drain, broad call
@@ -138,34 +138,59 @@ only.
 
 ### Formal and Condition baseline
 
-Corrective-2 modifies no TLA+ artifact. Formal status is not updated and no
-formal PASS is claimed.
+The Queue formal model is now authored (B4): Model A (bounded MPMC FIFO,
+12 invariants) + Model B (Open/Closed monotonicity, 7 invariants) + 7
+negative models, each producing a real counterexample on its named
+invariant. Gate: `scripts/verify-e12-queue-formal.sh` (exit 0). Independent
+formal review PASS
+(`docs/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`). The
+formal model preserves the one-shot lease/control location and corrected
+steal/teardown semantics; the `tearing_down` lifecycle axis is explicitly
+out of B4 scope and deferred to a future teardown Model C.
 
 ```text
 E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1:
-SEPARATE REQUIRED TASK
+PASS — closed by W1 corrective (db656b5)
 
 Condition build: PASS
-Condition runtime suite: INCOMPLETE
-T25 migration/reacquire: HANG OBSERVED
+Condition runtime suite: PASS (Clang Debug/ASan/TSan full suite green)
+T25 migration/reacquire: PASS (deterministic rewrite)
 ```
 
-The T25 hang neither proves nor disproves active-victim Queue ticket stealing,
-but it must close independently before Queue implementation.
+The T25 hang was root-caused to a test-harness defect (unbounded coordinator
+waits, missing `f_idle`/`bounded_wait`/suspension handshake) and closed by
+mirroring the Mutex T19 determinism discipline; no production code was
+touched. Evidence: `docs/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1.
 
 ### Authorization gates
 
 Before production implementation:
 
-1. the accepted Mutex substrate design still needs separate implementation
-   authorization and realization;
-2. Corrective-2 needs a fresh independent adversarial review;
-3. Condition T25 needs its separate hang audit;
-4. later formal normalization must preserve the one-shot lease and corrected
-   steal/teardown semantics.
+1. ~~the accepted Mutex substrate design still needs separate implementation
+   authorization and realization~~ — **B1 PASS**: production fail-fast Mutex
+   landed (`be07564`) with death tests (`e2cfe61`), independent production
+   implementation review PASS
+   (`docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`,
+   commit `15dc9b4`);
+2. ~~Corrective-2 needs a fresh independent adversarial review~~ — **B2 PASS**:
+   independent adversarial design review PASS
+   (`docs/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`,
+   commit `4f81d6c`; 11/11 topics verified, 33/33 counterexamples
+   dispositioned, 6 compile probes green, 0 blocking findings);
+3. ~~Condition T25 needs its separate hang audit~~ — **B3 PASS** (W1
+   corrective `db656b5`);
+4. ~~later formal normalization must preserve the one-shot lease and corrected
+   steal/teardown semantics~~ — **B4 PASS**: Queue TLA+ formal model authored
+   (Model A bounded MPMC FIFO + Model B Open/Closed + 7 negatives) under
+   `docs/spec/e12_queue/`, gate `scripts/verify-e12-queue-formal.sh`;
+   independent formal review PASS
+   (`docs/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`,
+   commit `6aa2334`; corrective F.1.1 in `f53faf0`).
 
 ```text
-E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+E12-E IMPLEMENTATION AUTHORIZATION: all four prerequisite gates PASS.
+See docs/e12-queue-implementation-authorization.md (AUTHORIZATION-2) for the
+re-authorization verdict.
 ```
 
 ---

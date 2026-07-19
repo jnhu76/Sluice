@@ -60,20 +60,30 @@
 > E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1-REVIEW:
 > REQUEST-CHANGES
 > E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2:
-> PASS — AUTHOR SELF-ASSESSMENT — INDEPENDENT REVIEW REQUIRED
-> E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+> PASS — INDEPENDENT ADVERSARIAL REVIEW PASS (B2)
+> E12-E IMPLEMENTATION AUTHORIZATION: all four prerequisite gates PASS (see AUTHORIZATION-2)
+>
+> Gate status (current):
+>   B1 Mutex no-throw substrate:          PASS  (independent review complete)
+>   B2 Corrective-2 independent review:   PASS  (independent adversarial review complete)
+>   B3 Condition T25 migration/reacquire: PASS  (W1 corrective db656b5)
+>   B4 Queue formal model:                PASS  (independent formal review complete)
 > ```
 > Queue depends on `ASYNC-MUTEX-NOTHROW-AUTHORITY-1`, whose design is accepted
-> but whose substrate implementation remains separately unauthorized.
+> and whose production substrate is now implemented and independently reviewed
+> (B1 PASS — `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`).
 >
 > **Condition baseline isolation:**
 > ```text
 > E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1:
-> SEPARATE REQUIRED TASK
+> PASS — closed by W1 corrective (db656b5)
 > Condition build: PASS
-> Condition runtime suite: INCOMPLETE
-> T25 migration/reacquire: HANG OBSERVED
+> Condition runtime suite: PASS (Clang Debug/ASan/TSan full suite green)
+> T25 migration/reacquire: PASS (deterministic rewrite)
 > ```
+> Evidence: `docs/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1. The
+> T25 hang was root-caused to a test-harness defect (unbounded coordinator
+> waits); no production code was changed.
 >
 > Corrective history: `E12-PREP-CORRECTIVE-1-REVIEW` returned
 > `CORRECTIVE-REQUIRED` with six accepted defects (F-EVENT-1, F-SEM-1,
@@ -1733,8 +1743,8 @@ implemented in this preparation.
 | **E12-A Event** | `CLOSED` (two independent corrective reviews passed) | manual-reset choice; idempotent set; reset; wait-on-set; deadline/cancel composition; set-vs-register race; reset-vs-waiter; **wake cardinality = set releases all registered waits satisfied by SET (F-EVENT-1 closed)** | ~~destruction-with-waiters~~ (resolved: caller contract violation, debug assert); ~~IMPLEMENTATION BOUNDARY: loop wake-one vs narrow wake-many seam~~ (resolved: loop wake_wait_one_locked until drained, atomic under global_mtx_) |
 | **E12-B Semaphore** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant; **production implementation COMPLETE** (public API + private Scheduler seams mirroring E12-A; TSan/ASan/UBSan clean; 31 deterministic tests + NEG compile probe) — see [`docs/e12-semaphore.md`](e12-semaphore.md) §14 As-Built | independent adversarial implementation review still required before E12-B may be declared CLOSED (not self-declared) |
 | **E12-C Mutex** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire; **naming = AsyncMutex** (coexists with sync Mutex); **direct handoff (M-H1)**; **FIFO no-barging (M-H2–M-H4)**; destruction = caller violation; **minimum MUTEX-HANDOFF-ONE seam specified**; **collapsed atomic admission actions**; **formal model complete with 14 invariants + 11 negative models** (§14–§16 of e12-async-mutex.md) | independent implementation review remains required |
-| **E12-D Condition** | `RUNTIME SUITE INCOMPLETE — T25 HANG OBSERVED` | build PASS; release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1: SEPARATE REQUIRED TASK`; do not claim a green runtime baseline |
-| **E12-E Queue** | `CORRECTIVE-2 AUTHOR PASS — IMPLEMENTATION DENIED` | one-shot unforgeable `QueueItemLease`; unique lease ring; exact opaque failed-lease return; no reservation owner; expiry retained; cancellation deferred; concrete PREPARED guard; own-oldest/global-oldest active-victim stealing; stable no-erase owner slot; irreversible teardown session; narrow `active_port_calls_`; author-verified 19/19 canonical and 6/6 publication targets | `ASYNC-MUTEX-NOTHROW` design accepted but implementation unauthorized; Corrective-2 independent review required; Condition T25 separate; `E12-E IMPLEMENTATION AUTHORIZATION: DENIED` |
+| **E12-D Condition** | `RUNTIME SUITE PASS — T25 CLOSED` | build PASS; release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1: PASS` — closed by W1 corrective `db656b5` (test-harness defect; no production change); Clang Debug/ASan/TSan full suite green |
+| **E12-E Queue** | `ALL PREREQUISITE GATES PASS — IMPLEMENTATION AUTHORIZED (AUTHORIZATION-2)` | one-shot unforgeable `QueueItemLease`; unique lease ring; exact opaque failed-lease return; no reservation owner; expiry retained; cancellation deferred; concrete PREPARED guard; own-oldest/global-oldest active-victim stealing; stable no-erase owner slot; irreversible teardown session; narrow `active_port_calls_`; author-verified 19/19 canonical and 6/6 publication targets | `ASYNC-MUTEX-NOTHROW` B1 PASS; Condition T25 B3 PASS; B2 Corrective-2 independent adversarial review PASS; **B4 Queue formal model PASS** (Model A + Model B + 7 negatives, gate exit 0, independent formal review PASS); `E12-E IMPLEMENTATION AUTHORIZATION: all four gates PASS` |
 | **E12-F RwLock** | `HUMAN-DECISION-REQUIRED` | upgrade/downgrade DEFER; recursive read/write FORBID | fairness policy (reader-pref/writer-pref/phase/FIFO); **writer winner-before-publication seam (§14)** |
 | **E12-G Audit** | `DEFERRED` (runs after A–F) | uses the §10 matrix as baseline | — |
 
@@ -1784,6 +1794,9 @@ E12 implementation (any subphase) MUST stop and request human authority when:
 10. Queue implementation starts while the no-throw Mutex substrate remains
     unauthorized, Corrective-2 lacks independent adversarial acceptance, or
     the separate Condition T25 migration/reacquire hang remains unresolved.
+    (Current gate status: B1 PASS, B2 PASS, B3 PASS, B4 PASS — all four
+    prerequisite gates are now closed; this stop condition no longer triggers.
+    Production implementation may proceed per AUTHORIZATION-2.)
 
 ---
 

@@ -4,12 +4,18 @@
 >
 > **Design status:** `PASS — INDEPENDENT REVIEW REQUIRED`
 >
-> **Production status:** `NOT IMPLEMENTED`
+> **Production status:**
+> `IMPLEMENTED — INDEPENDENT IMPLEMENTATION REVIEW PASS (B1)`
 >
-> This document is a substrate design authority only. It does not authorize a
-> production change. E12-E Queue depends on this decision and remains
-> implementation-denied until this decision has passed an independent review
-> and its production realization has been separately authorized.
+> This document is a substrate design authority only. It does not by itself
+> authorize a Queue production change. E12-E Queue remains implementation-
+> denied at the Queue gate level (B2/B4 open), but this substrate's own
+> independent production implementation review has now passed:
+> `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
+> (commit `15dc9b4`). The author's self-assessment that production
+> implementation landed is recorded in
+> `docs/async-mutex-nothrow-implementation.md`; the independent review
+> confirmed it.
 
 ## 1. Current-source fact
 
@@ -156,9 +162,18 @@ The production task must independently prove:
 5. ASan, UBSan, TSan, and existing Scheduler tests remain green;
 6. an independent adversarial review accepts the changed runtime-wide policy.
 
-Until those obligations pass:
+Status of these obligations (current):
 
 ```text
-ASYNC-MUTEX-NOTHROW-AUTHORITY-1 IMPLEMENTATION: UNAUTHORIZED
-E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+ASYNC-MUTEX-NOTHROW-AUTHORITY-1 IMPLEMENTATION:
+PASS — INDEPENDENT PRODUCTION IMPLEMENTATION REVIEW COMPLETE (B1)
+
+  obligations 1-6: all satisfied per
+  docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md
+  (commit 15dc9b4).
+
+E12-E IMPLEMENTATION AUTHORIZATION (Queue-level gate):
+DENIED — B2/B4 OPEN
+  (B1 PASS, B3 PASS; B2 Corrective-2 independent review and B4 Queue formal
+   model remain open. This substrate gate is closed; the Queue gate is not.)
 ```

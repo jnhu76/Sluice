@@ -10,6 +10,7 @@
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/queue_port.hpp>  // detail::QueuePort / QueueRole (E12-E Queue seams)
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/lock_guard.hpp>
@@ -659,6 +660,105 @@ public:
     [[nodiscard]] bool condition_cancel_wait(WaitQueue& cond_waiters,
                                              WaitNode& cond_node);
 
+    // ---- E12-E Queue wait admission + reconciliation (sluice-CORE-E12-E) ----
+    // The Queue blocking/timed substrate. A QueuePort owns a producer and a
+    // consumer WaitQueue (waiters_[2]); the Scheduler is the authoritative
+    // resolution + publication executor, exactly as for E12-A/B/C/D. ALL seams
+    // take global_mtx_ (and the role queue mtx() inside it); the QueuePort
+    // passes its private waiters_[role] BY REFERENCE so the Scheduler can
+    // resolve under the canonical locks without exposing them. No public
+    // wait_queue() accessor exists on QueuePort (sealed authority).
+    //
+    // Lock order: global_mtx_ (G) -> QueuePort::state_mtx_ (S) -> exactly one
+    // of producer/consumer role mtx(). The two role mutexes are NEVER held
+    // together. The reconciler takes one role queue per iteration under G+S
+    // and loops to a fixed point.
+    //
+    // The `role` argument selects producer (0) vs consumer (1) admission. The
+    // untimed admit closures mirror sem_acquire; the timed variants mirror
+    // sem_acquire_until (resource-first admission, then already-due Expired).
+    // A Queue wait resolves when EXACTLY ONE cause wins the resolve_ CAS:
+    //   - the reconciler grants (a producer/consumer arrives)  -> Woken
+    //   - queue_cancel                                          -> Cancelled
+    //   - the deadline elapses (push_until/pop_until only)      -> Expired
+
+    // Blocking push admission (P5). Registers the producer node on the
+    // producer role FIFO under G + S + producer.mtx(); admission recheck
+    // commits the item to the ring inline if space opened with no older
+    // producer; otherwise suspends. On return, `lease` is:
+    //   - empty if committed (the ring slot owns the control now);
+    //   - non-empty (original) if closed/expired/cancelled.
+    // The caller MUST have detached->producer_operation the control BEFORE
+    // calling and pass its lease by reference.
+    void queue_push_admit(detail::QueuePort& port, WaitNode& node,
+                          detail::QueueItemLease& lease);
+    // Blocking pop admission (P5). Symmetric: consumer node on the consumer
+    // role FIFO; admission recheck pops an item inline if one arrived with no
+    // older consumer; otherwise suspends. On return, `out` is:
+    //   - non-empty (the popped item's lease) if an item was granted;
+    //   - empty if closed+empty (the caller returns `closed`).
+    void queue_pop_admit(detail::QueuePort& port, WaitNode& node,
+                         detail::QueueItemLease& out);
+    // Deadline-aware variants (P4-timed). Resource-first admission wins over a
+    // due deadline; an already-due deadline with no admissible resource
+    // resolves Expired inline (E11 I5). On expired, the push caller's `lease`
+    // remains non-empty (original); the pop caller's `out` remains empty.
+    void queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
+                                detail::QueueItemLease& lease,
+                                deadline_t deadline);
+    void queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
+                               detail::QueueItemLease& out, deadline_t deadline);
+
+    // Queue-identity-safe cancellation. Mirrors mutex_cancel. Returns true ONLY
+    // if the node is Registered AND linked in this QueuePort's role FIFO AND the
+    // CANCEL CAS wins. Safe from any OS thread; does not change ring state.
+    [[nodiscard]] bool queue_cancel(detail::QueuePort& port, detail::QueueRole role,
+                                    WaitNode& node);
+
+    // ---- E12-E reconciler grant seams (winner-before-publication) ----
+    // Called by QueuePort fast paths under G + S (caller-held) to grant the
+    // role FIFO head atomically: resolve_(Woken) + per-winner resource commit
+    // (read from won->user()) + retire any bound timer + make_runnable /
+    // route_runnable_locked (publication LAST). These mirror
+    // mutex_handoff_one_locked's ordering: the commit happens BETWEEN resolve
+    // and publication. Each takes the role mtx internally (under G). Returns
+    // the winning WaitNode (nullptr if the role FIFO is empty / head lost the
+    // CAS). The caller (try_push / try_pop / close) decides how many times to
+    // loop (e.g. close drains until nullptr).
+    //
+    // queue_grant_consumer_locked: a producer just committed an item OR close
+    // is draining. Moves the ring FIFO HEAD item into the winner's out-lease.
+    // Precondition: ring non-empty (the caller ensured it). If the ring is
+    // somehow empty (close race), resolves the winner Woken with no commit
+    // (the caller's close path then sees closed+empty).
+    WaitNode* queue_grant_consumer_locked(detail::QueuePort& port);
+    // queue_grant_producer_locked: a consumer just freed a slot OR close is
+    // draining. Moves the winner's lease (ctx->prod_control) into the freed
+    // ring slot. Precondition: ring not full. If the Queue is Closed, resolves
+    // the winner Woken with the lease RETAINED (the producer returns closed).
+    WaitNode* queue_grant_producer_locked(detail::QueuePort& port);
+
+    // E12-E P7 teardown precondition helper. Reports whether BOTH role FIFOs
+    // of `port` are empty (no producer parked, no consumer parked). Called by
+    // QueuePort::begin_teardown under global_mtx_; the QueuePort itself is not
+    // a friend of WaitQueue (only the Scheduler is), so the emptiness query is
+    // the Scheduler's authority. Each role.mtx() is taken sequentially under
+    // global_mtx_ (the canonical lock order G -> exactly one role); the two
+    // role mutexes are NEVER held together. Returns true iff both FIFOs have
+    // no linked WaitNode at the instant of observation.
+    bool queue_role_waiters_empty_locked(detail::QueuePort& port)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // E12-E Queue timer-counter on-resolve thunk (F.1/F.2 corrective). A
+    // Queue-bound TimerRegistration installs this as its on_resolve_ hook +
+    // `&port` as owner_ctx_ at admit time. The Scheduler fires it exactly once
+    // per ACTIVE->terminal timer transition (pump on consume,
+    // retire_timer_for_node_locked on retire) under global_mtx_. It is a STATIC
+    // MEMBER (not a free function) so it can reach QueuePort's private
+    // active_queue_timers_ counter via Scheduler's friend grant. The signature
+    // matches TimerRegistration::OnResolveFn.
+    static void queue_timer_on_resolve(void* owner_ctx, bool timer_won) noexcept;
+
 
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()
@@ -715,6 +815,12 @@ public:
 
 private:
     friend class SchedulerWakeHandle;  // E9: notify() -> notify_external_wake
+    // E12-E: QueuePort reaches global_mtx_, wake_wait_one_locked, and the
+    // queue admit/cancel seams to reconcile the OTHER role on fast-path
+    // success. Mirrors how Scheduler friended nothing for Mutex/Semaphore
+    // (those pass their private waiters_ by reference); the Queue needs
+    //Scheduler-internal wake + global-mtx access for its reconciler.
+    friend class ::sluice::async::detail::QueuePort;
 
     // Wait registration with owner Worker (E7-B will use owner; E7-A stores
     // the Fiber only).

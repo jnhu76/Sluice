@@ -19,6 +19,7 @@
 
 #include "async_test_control_internal.hpp"
 
+#include <sluice/async/detail/mutex_test_seam.hpp>
 #include <sluice/async/scheduler.hpp>
 #include <sluice/async/timer_registration.hpp>
 #include <sluice/async/wait_node.hpp>
@@ -297,6 +298,33 @@ struct E12ConditionSeam {
     static void release_notify(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::release(
             s, PhaseTag::e12_condition_notify_before_drain);
+    }
+};
+
+// ---- ASYNC-MUTEX-NOTHROW acquisition fail-fast seam ----
+// (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1 §E/F)
+//
+// Thin test-facing facade over sluice::async::detail::test_hooks. This struct
+// does NOT own fault state; it only arms/disarms the library-internal seam
+// counters owned by sluice_async_internal_testing. It exists so death tests
+// have a stable test-authority name (MutexFailSeam) that is NOT part of the
+// public API (the underlying detail::test_hooks live only under the macro and
+// are absent in the production target).
+struct MutexFailSeam {
+    // Arm the Nth-lock countdown. n==1 fails the next Mutex::lock;
+    // n==2 fails the 2nd Mutex::lock (used by the condition_variable_any
+    // reacquire death test, where the unique_lock ctor takes the 1st lock).
+    static void arm_lock_countdown(unsigned n) noexcept {
+        sluice::async::detail::test_hooks::arm_lock_countdown(n);
+    }
+    static void arm_next_lock_fail() noexcept {
+        sluice::async::detail::test_hooks::arm_lock_countdown(1u);
+    }
+    static void arm_next_try_lock_fail() noexcept {
+        sluice::async::detail::test_hooks::arm_next_try_lock_fail();
+    }
+    static void disarm() noexcept {
+        sluice::async::detail::test_hooks::disarm();
     }
 };
 

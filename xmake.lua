@@ -36,12 +36,17 @@ target("sluice_async")
     add_includedirs("include", {public = true})
     add_deps("sluice_core")
     add_files("src/async/*.cpp")
-    -- CPP-STATIC-1: Clang TSA gate.  Add TSA flags for this target.
-    -- The flags are Clang-specific; GCC does not recognize -Wthread-safety
-    -- and xmake filters it out of the GCC compile command, so the gate is
-    -- Clang-only and the GCC build is unaffected.
-    add_cxxflags("-Wthread-safety", {force = true})
-    add_cxxflags("-Werror=thread-safety", {force = true})
+    -- CPP-STATIC-1: Clang TSA gate.
+    -- ASYNC-GCC-TSA-FLAG-ROUTING-CORRECTIVE-1 (W3): the flags are scoped to
+    -- the Clang frontends via the `tools` option. {force=true} previously
+    -- bypassed xmake's per-compiler flag filtering, which caused GCC to
+    -- receive the Clang-only -Wthread-safety and fail. Dropping force and
+    -- using {tools={"clang","clang_cl"}} scopes the flags to BOTH Clang
+    -- frontends (the Linux/Mac clang driver AND the Windows clang-cl driver),
+    -- so Windows/clang-cl builds keep TSA coverage; GCC never receives them.
+    -- Verified against the official xmake docs (add_cxxflags {tools=...}).
+    add_cxxflags("-Wthread-safety", "-Werror=thread-safety",
+                 {tools = {"clang", "clang_cl"}})
 
 -- ---------------------------------------------------------------------------
 -- ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: internal-testing runtime variant.
@@ -62,9 +67,11 @@ local async_sources = function()
     return { "src/async/*.cpp" }
 end
 
+-- TSA flags scoped to the Clang frontends only (W3 corrective). See the note
+-- on sluice_async above. Used by sluice_async_internal_testing.
 local async_tsa_flags = function()
-    add_cxxflags("-Wthread-safety", {force = true})
-    add_cxxflags("-Werror=thread-safety", {force = true})
+    add_cxxflags("-Wthread-safety", "-Werror=thread-safety",
+                 {tools = {"clang", "clang_cl"}})
 end
 
 target("sluice_async_internal_testing")
@@ -1004,5 +1011,76 @@ do
             add_includedirs("include", "tests")
             add_files(p)
             add_tests("e12_async_condition_test")
+    end
+end
+
+-- e12_async_queue_test — AsyncQueue (sluice-CORE-E12-E).
+-- P2+P3 scope: QueuePort fast paths (try_push / try_pop / close / snapshot),
+-- capacity/FIFO, failed-payload identity, one-shot lease, close idempotency,
+-- closed+empty terminal. Exercised via the non-template QueuePort authority +
+-- QueueItemFactory (the public AsyncQueue<T> wrapper lands in P8). The
+-- blocking/timed wait-admission paths (P4-P6) and Scheduler reconciliation
+-- land later; this target covers only the no-Scheduler fast paths. Links
+-- sluice_async_internal_testing (the authority lives in the non-template
+-- QueuePort, which is in sluice_async; the internal-testing variant keeps
+-- the option open for the deterministic phase seams added in P5/P6).
+do
+    local p = "tests/e12_async_queue_test.cpp"
+    if os.isfile(p) then
+        target("e12_async_queue_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_async_queue_test")
+    end
+end
+
+-- e12_async_mutex_death_test — verifies the Mutex acquisition fail-fast
+-- boundary (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1 §F) via a POSIX
+-- fork/exec/waitpid child-process harness. Each case (T1 lock / T2 try_lock /
+-- T3 condition_variable_any reacquire / T4 control) re-execs this binary with
+-- --death-child=<case>; the child installs a deterministic terminate handler
+-- and the parent asserts the exact exit code. The unit under test is the real
+-- sluice::async::Mutex entry linked against sluice_async_internal_testing
+-- (whose SLUICE_ASYNC_INTERNAL_TESTING define exposes the injection seam).
+-- POSIX-only (fork/exec/waitpid): gated to linux/macosx. Windows is NOT RUN
+-- in this task (the harness is not implemented there); see
+-- tests/death_test_runner_posix.hpp.
+do
+    local p = "tests/e12_async_mutex_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e12_async_mutex_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_async_mutex_death_test")
+    end
+end
+
+-- e12_async_mutex_nothrow_authority_probe — positive-compile + run probe for
+-- the Mutex noexcept contract (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1
+-- §I1). Holds the static_asserts over noexcept(...) and
+-- std::is_nothrow_invocable_v<...> for lock/try_lock/unlock so a regression of
+-- the noexcept function-type is caught at compile time. NOT a substitute for
+-- the death tests (those verify runtime fail-fast behavior). Depends on the
+-- internal_testing variant so the seam header resolves, though the probe
+-- itself exercises the production Mutex entries.
+do
+    local p = "tests/e12_async_mutex_nothrow_authority_probe.cpp"
+    if os.isfile(p) then
+        target("e12_async_mutex_nothrow_authority_probe")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e12_async_mutex_nothrow_authority_probe")
     end
 end

@@ -3,7 +3,7 @@
 > **Task identity:**
 > `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2`
 >
-> **Status:** `PASS — AUTHOR SELF-ASSESSMENT`
+> **Status:** `PASS — INDEPENDENT ADVERSARIAL REVIEW PASS (B2)`
 >
 > **Applied review disposition:**
 > `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1:
@@ -14,9 +14,10 @@
 > REQUEST-CHANGES`
 >
 > **Dependent substrate:**
-> `ASYNC-MUTEX-NOTHROW-AUTHORITY-1: DESIGN PASS — IMPLEMENTATION UNAUTHORIZED`
+> `ASYNC-MUTEX-NOTHROW-AUTHORITY-1: DESIGN PASS — PRODUCTION IMPLEMENTED —
+> INDEPENDENT REVIEW PASS (B1)`
 >
-> **Review gate:** `INDEPENDENT ADVERSARIAL REVIEW REQUIRED`
+> **Review gate:** `INDEPENDENT ADVERSARIAL REVIEW PASS (B2)`
 
 This is document design only. It does not authorize or modify Queue,
 Scheduler, Mutex, WaitQueue, TimerRegistration, tests, build rules, production
@@ -31,7 +32,14 @@ VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
 19/19 canonical transitions
 6/6 publication transitions
 
-E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+E12-E IMPLEMENTATION AUTHORIZATION: all four prerequisite gates PASS.
+See docs/e12-queue-implementation-authorization.md (AUTHORIZATION-2).
+
+Gate status (current):
+  B1 Mutex no-throw substrate:               PASS  (independent review complete)
+  B2 Corrective-2 independent review:        PASS  (independent adversarial review complete)
+  B3 Condition T25 migration/reacquire:      PASS  (W1 corrective db656b5)
+  B4 Queue formal model:                     PASS  (independent formal review complete)
 ```
 
 ## 1. Disposition and root-cause record

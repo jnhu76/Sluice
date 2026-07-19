@@ -2,7 +2,7 @@
 
 > **Current identity:** `E12-E-QUEUE-STATE-MACHINE-DESIGN-CORRECTIVE-2`
 >
-> **Status:** `PASS — AUTHOR SELF-ASSESSMENT`
+> **Status:** `PASS — INDEPENDENT ADVERSARIAL REVIEW PASS (B2)`
 >
 > **Integration authority:**
 > [`E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2`](e12-queue-scheduler-integration.md)
@@ -14,7 +14,7 @@
 > `E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-1-REVIEW:
 > REQUEST-CHANGES`
 >
-> **Implementation status:** `DENIED`
+> **Implementation status:** `AUTHORIZED — all four prerequisite gates PASS (see AUTHORIZATION-2)`
 
 This document normalizes the abstract Queue machine to the Corrective-2
 one-shot lease, unrestricted active-victim ticket stealing, and irreversible
@@ -29,6 +29,12 @@ TARGET COVERAGE:
 VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
 19/19 canonical transitions
 6/6 publication transitions
+
+Gate status (current):
+  B1 Mutex no-throw substrate:               PASS  (independent review complete)
+  B2 Corrective-2 independent review:        PASS  (independent adversarial review complete)
+  B3 Condition T25 migration/reacquire:      PASS  (W1 corrective db656b5)
+  B4 Queue formal model:                     PASS  (independent formal review complete)
 ```
 
 ## 1. Binding state domains
@@ -420,13 +426,19 @@ conversion performs one T move.
 
 ## 11. Formal-model status
 
-Corrective-2 changes no formal model or TLA+ file. Existing Queue models have
-not been normalized to the one-shot lease/control location, active-victim
-stealing, or teardown lifecycle. Therefore:
+The Queue TLA+ formal model is authored (B4 PASS): Model A (bounded MPMC
+FIFO, 12 invariants) + Model B (Open/Closed, 7 invariants) + 7 negative
+models under `docs/spec/e12_queue/`; gate `scripts/verify-e12-queue-formal.sh`
+(exit 0); independent formal review PASS
+(`docs/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`). The model
+normalizes the abstract machine to the one-shot lease/control location,
+selected-waiter grant, no-barging, winner-before-publication, and close
+monotonicity. The `tearing_down` lifecycle axis and E11 timer/expiry are
+explicitly out of B4 scope (deferred to a future teardown / E11×E12 Model C).
 
 ```text
-FORMAL/TLA CORRECTIVE-2 STATUS: NOT UPDATED
-FORMAL PASS: NOT CLAIMED
+FORMAL/TLA STATUS: PASS — independent formal review complete (B4)
+FORMAL PASS: CLAIMED (safety-only; Model A + Model B + 7 negatives)
 ```
 
 Any model text that treats external cancellation, explicit Permit/reservation,
@@ -467,7 +479,8 @@ VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
 6/6 publication transitions
 
 AUTHOR SELF-ASSESSMENT
-INDEPENDENT ADVERSARIAL REVIEW REQUIRED
+INDEPENDENT ADVERSARIAL REVIEW PASS (B2)
 
-E12-E IMPLEMENTATION AUTHORIZATION: DENIED
+E12-E IMPLEMENTATION AUTHORIZATION:
+all four prerequisite gates PASS — see AUTHORIZATION-2
 ```

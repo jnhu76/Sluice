@@ -362,6 +362,51 @@ uint64_t durable_lsn() const;
 
 ---
 
+## Async synchronization
+
+`sluice::async::Mutex` (header `#include <sluice/async/mutex.hpp>`) is the
+Clang-TSA-annotated exclusive lock used internally by the async Scheduler. It
+is a thin `std::mutex` shim that satisfies `BasicLockable` and `Lockable`, so
+`std::lock_guard<Mutex>`, `std::unique_lock<Mutex>`, `std::condition_variable_any`,
+and `sluice::async::LockGuard` all work against it.
+
+```cpp
+class Mutex {
+public:
+    void lock() noexcept;       // acquires; never throws
+    bool try_lock() noexcept;   // acquires without blocking; never throws
+    void unlock() noexcept;     // releases; never throws
+};
+```
+
+**Failure contract (fail-fast).** `lock()`, `try_lock()`, and `unlock()` are
+`noexcept`. An underlying acquisition failure — the `std::system_error` that
+`std::mutex::lock()`/`try_lock()` may throw on resource exhaustion or other
+platform errors — is **not** propagated as a recoverable exception. Instead
+the `Mutex` boundary converts it to process termination (fail-fast via
+`std::terminate`). The runtime cannot resume user execution after such a
+failure while preserving ownership, queue-membership, and publication
+invariants inside an authoritative Scheduler transition, so a recoverable
+exception edge would be unsound. This contract is recorded in
+`docs/async-mutex-nothrow-authority.md`.
+
+A violated `unlock()` ownership precondition (unlocking a `Mutex` you do not
+own) is a program invariant violation (undefined behavior), not a recoverable
+error; `noexcept` here documents that no recovery path exists.
+
+**Source/ABI note.** `noexcept` is part of the function type. Downstream code
+that takes the address of a member (e.g. `&sluice::async::Mutex::lock`) must
+be recompiled against this header so the function-pointer type matches. **No
+in-repo translation unit takes such an address** (verified: zero occurrences),
+and the `Mutex` surface is entirely inline in the header, so every TU already
+recompiles. Under the Itanium ABI verified for the current toolchains,
+`noexcept` is not part of symbol mangling, so the symbol names are unchanged.
+This is **not** claimed as an absolute ABI guarantee across all toolchains or
+platforms; it is limited to the platforms and compilers actually verified
+(see `docs/async-mutex-nothrow-implementation.md` for the verified set).
+
+---
+
 ## Measurement
 
 All stats structs are caller-owned, default-initialized to zero, and attached via nullable pointer (null = no counting).

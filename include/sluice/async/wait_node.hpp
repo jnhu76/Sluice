@@ -138,6 +138,18 @@ public:
                "WaitNode destroyed while Registered (resolve the wait first)");
     }
 
+    // ---- E12-E Queue per-operation context hook ----
+    // An optional, caller-owned opaque pointer stashed on the node BEFORE
+    // registration, so a reconciler that resolves THIS node (via
+    // wake_one_locked, which returns the winning WaitNode*) can reach the
+    // per-operation context it needs to finalize atomically. Only the E12-E
+    // Queue uses this in production; it is never dereferenced by WaitQueue or
+    // by the generic Scheduler wake path. Null by default; the Queue sets it
+    // to a QueueWaitCtx* on its wait nodes. Kept trivial (no ownership) so the
+    // node remains trivially relocatable in spirit and zero-cost when unused.
+    void* user() const noexcept { return user_; }
+    void set_user(void* p) noexcept { user_ = p; }
+
     WaitNode(const WaitNode&) = delete;
     WaitNode& operator=(const WaitNode&) = delete;
     WaitNode(WaitNode&&) = delete;
@@ -236,6 +248,7 @@ private:
 
     Fiber* fiber_{nullptr};
     std::atomic<State> state_{State::detached};
+    void* user_{nullptr};  // E12-E Queue per-op context (QueueWaitCtx*); else null
 };
 
 }  // namespace sluice::async

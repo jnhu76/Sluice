@@ -1347,11 +1347,57 @@ SLUICE_TEST_CASE(e12_cond_t27_safe_destruction_empty) {
 
 // ---- T25: Condition migration across Worker steal (E8) --------------------
 // DETERMINISTIC proof that a Condition waiter can suspend on W0 and resume
-// (reacquire) on a different Worker after an E8 steal. The owner acquires
-// the Mutex on W0, enters cond.wait(), suspends on the Condition queue. An
-// OS-thread coordinator calls notify_one, making the fiber Runnable on W0's
-// queue. W1 (idle) steals it. Bug: worker-pinned ownership assumption.
-// Evidence: CAUSAL (worker_id checkpoint before wait vs after reacquire).
+// (reacquire) on a different Worker after an E8 steal. The owner acquires the
+// Mutex on W0, enters cond.wait(), suspends on the Condition queue. An
+// OS-thread coordinator calls notify_one, making the fiber Runnable. W1
+// (released by f_idle completing) steals it. Bug: worker-pinned ownership
+// assumption. Evidence: CAUSAL (worker_id checkpoint before wait vs after
+// reacquire).
+//
+// E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1 (W1) corrective.
+//
+// ROOT CAUSE (category A: test-harness defect). The original T25 coordinator
+// used TWO unbounded `while (!flag) yield()` loops (wait blocker_running;
+// wait a_unlocked) with no bounded_wait, no release_for_drain, no f_idle, and
+// no suspension handshake. Crucially it had NO fiber on W1 and no mechanism
+// to keep W1 from racing the steal of f_blocker instead of fA, nor to prove
+// fA was routed onto W0's queue. Under ASan/TSan the slower scheduling widened
+// the routing/steal race into the unbounded coordinator loop -> hang. The
+// production Mutex/Condition/steal mechanics are worker-agnostic on the
+// reacquire admission; the defect was the test ASSUMING the steal trace rather
+// than establishing it.
+//
+// DETERMINISM DISCIPLINE (mirrors e12_mtx_t19_real_migration_lock_own_unlock,
+// the Mutex migration corrective). A steal is deterministic ONLY when the
+// victim (W0) is provably BUSY running a fiber (cannot pop its own queue) and
+// the thief (W1) is IDLE (so it steals) — and only fA (not f_blocker) is
+// stealable when the window opens. Two load-bearing anti-race gates:
+//   (1) f_idle spins on flag_wake on W1 — W1 cannot steal f_blocker while fA
+//       is between "queued f_blocker" and "blocker_running observed". By the
+//       time flag_wake is set, f_blocker is already RUNNING on W0 (observed),
+//       so it is not stealable; only fA will be stealable once notify routes it.
+//   (2) f_blocker spins on W0 — W0 cannot pop fA after fA is routed. Released
+//       only AFTER the coordinator observes unlock_worker==1.
+//
+// SUSPENSION MECHANISM stays cond.wait(cn): this is the Condition reacquire
+// test. flag_wake is ONLY the steal-window opener (releases f_idle); fA is
+// made runnable by cond.notify_one(), not by flag_wake.
+//
+// ORDERED CAUSAL TRACE:
+//   A_LOCKED_ON_W0        fA acquires mutex on W0
+//   A_SUSPENDED_ON_W0     fA entered cond.wait (released mtx, suspended)
+//   BLOCKER_RUNNING_ON_W0 W0 popped f_blocker; it is ws->current on W0
+//   WAKE_RELEASED         coordinator sets flag_wake (three gates passed) ->
+//                         f_idle completes -> W1 becomes idle
+//   NOTIFY_ONE            coordinator calls cond.notify_one() -> fA routed
+//   A_RESUMED_ON_W1       the idle W1 steals fA; fA resumes and reacquires mtx
+//   A_UNLOCKED_ON_W1      fA unlocks on W1 (unlock_worker==1)
+//   BLOCKER_RELEASED      coordinator releases f_blocker (after unlock observed)
+//
+// On ANY coordinator gate failure: release_for_drain() (release_blocker +
+// flag_wake) + notify_one() so the suspended fA can drain, then runner.join()
+// and FAIL with a state dump. The bound is kBoundedWaitIters (200000) — a
+// failure guard, never causal sync. This is the W1.6 / W2.5 discipline.
 SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1359,16 +1405,28 @@ SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
     AsyncMutex mtx(sched);
     AsyncCondition cond(mtx);
 
+    // Steal-window opener. Set by the coordinator ONLY after the three-way
+    // handshake; observed by f_idle on W1. Releasing f_idle makes W1 idle so
+    // it can steal fA. This flag is NOT fA's resume mechanism (that is
+    // cond.notify_one()); it only opens the steal window.
+    std::atomic<bool> flag_wake{false};
+
+    // Ordered causal-checkpoint atomics (see trace above).
+    std::atomic<bool> a_acquired{false};        // A_LOCKED_ON_W0
+    std::atomic<bool> a_suspended{false};       // A_SUSPENDED_ON_W0
+    std::atomic<bool> blocker_running{false};   // BLOCKER_RUNNING_ON_W0
+    std::atomic<bool> a_unlocked{false};        // A_UNLOCKED_ON_W1
     std::atomic<unsigned> acquire_worker{static_cast<unsigned>(-1)};
     std::atomic<unsigned> unlock_worker{static_cast<unsigned>(-1)};
-    std::atomic<bool> a_suspended{false};
-    std::atomic<bool> blocker_running{false};
-    std::atomic<bool> a_unlocked{false};
     std::atomic<bool> release_blocker{false};
     WaitNode nA, cn;
 
-    // f_blocker: queued on W0 by fA. After fA suspends, W0 pops f_blocker.
-    // It keeps W0 busy so fA's runnable fiber can be stolen by W1.
+    // f_blocker: queued on W0 by fA (spawn_on from inside fA, behind fA). After
+    // fA suspends in cond.wait, W0 pops f_blocker. Its FIRST act is to assert
+    // it is on W0 and publish blocker_running=true (release) — the handshake
+    // that proves f_blocker is ws->current on W0 (no longer stealable). It then
+    // spins on release_blocker, keeping W0 busy until the coordinator observes
+    // a_unlocked. blocker_running is the OBSERVED anti-race state.
     Fiber f_blocker;
     f_blocker.set_entry([&](Fiber&) {
         SLUICE_CHECK_MSG(Scheduler::current_worker_id() == 0,
@@ -1377,55 +1435,125 @@ SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
         while (!release_blocker.load(std::memory_order_acquire)) {}
     });
 
-    // fA: acquires mutex on W0, queues f_blocker on W0, waits on condition.
-    // After notify_one + reacquire on (potentially stolen) worker, unlocks.
+    // fA: acquires mutex on W0, queues f_blocker on W0 (behind fA), then
+    // enters cond.wait (which releases the mutex and suspends on the Condition
+    // queue). On resume (after notify_one + steal by W1) it reacquires the
+    // mutex via the mandatory reacquire epoch inside cond.wait, then unlocks.
     Fiber fA;
     fA.set_entry([&](Fiber&) {
         acquire_worker.store(Scheduler::current_worker_id(), std::memory_order_release);
-        mtx.lock(nA);
+        mtx.lock(nA);  // ACQUIRE on W0
+        // Queue f_blocker on THIS worker (W0) while fA is still Running, so
+        // f_blocker sits in W0's local_runnable behind fA. W0 cannot pop it
+        // until fA suspends.
         sched.spawn_on(f_blocker, Scheduler::current_worker_id());
-        a_suspended.store(true, std::memory_order_release);
-        (void)cond.wait(cn);  // releases mtx, suspends; resumes on thief
+        a_acquired.store(true, std::memory_order_release);
+        a_suspended.store(true, std::memory_order_release);  // about to suspend
+        (void)cond.wait(cn);  // releases mtx, suspends; resumes on thief W1
+        // RESUMED on W1 (after W1 stole fA from W0's queue); reacquire done.
         unlock_worker.store(Scheduler::current_worker_id(), std::memory_order_release);
-        mtx.unlock();
+        mtx.unlock();  // UNLOCK on W1
         a_unlocked.store(true, std::memory_order_release);
     });
 
-    FiberStack sa, sb;
+    // f_idle: runs on W1. SPINS until flag_wake is set, keeping W1 BUSY so it
+    // cannot steal f_blocker off W0's queue while fA is between "queued
+    // f_blocker" and "blocker_running observed". Only after the coordinator
+    // sets flag_wake (three gates passed) does f_idle complete, leaving W1
+    // idle to steal — by which point f_blocker is RUNNING on W0 (not stealable)
+    // and the only stealable ticket on W0 will be fA once notify_one routes it.
+    Fiber f_idle;
+    f_idle.set_entry([&](Fiber&) {
+        while (!flag_wake.load(std::memory_order_acquire)) {}
+    });
+
+    FiberStack sa, sb, si;
     SLUICE_CHECK(sched.init_fiber(fA, sa.base(), sa.size()));
+    SLUICE_CHECK(sched.init_fiber(f_idle, si.base(), si.size()));
     SLUICE_CHECK(sched.init_fiber(f_blocker, sb.base(), sb.size()));
-    sched.spawn(fA);  // fA -> W0 (round-robin with 1 worker initially)
-    // f_blocker NOT spawned — fA spawns it on W0 from inside its body.
+    // fA first (-> W0), f_idle second (-> W1). Round-robin from next_spawn=0.
+    sched.spawn(fA);       // W0
+    sched.spawn(f_idle);   // W1
 
-    // run_live(2): two Workers. run_live starts W0 (fA runs first).
-    std::thread run_thread([&] { sched.run_live(2); });
+    // run_live (NOT run/drain): while fA is suspended on the Condition queue
+    // the classifier is MW-S3-unresolved; DRAIN would RETURN STALLED. external
+    // wake is possible (Condition waiter registered), so LIVE keeps W1 resident.
+    std::thread runner([&] { sched.run_live(2); });
 
-    // Wait for f_blocker to confirm it's running on W0 (W0 busy — not idle).
-    while (!blocker_running.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
+    // On any coordinator-side gate failure, release everything so the LIVE run
+    // can drain and runner.join() returns instead of hanging. notify_one()
+    // resolves the suspended fA so it can drain too. These are FAILURE BOUNDS,
+    // not causal synchronisation.
+    auto release_for_drain = [&] {
+        release_blocker.store(true, std::memory_order_release);
+        flag_wake.store(true, std::memory_order_release);
+        cond.notify_one();  // resolve fA if it is still suspended
+    };
+
+    // 1. Three-way handshake. Observe a_acquired, a_suspended, AND
+    //    blocker_running before opening the steal window (setting flag_wake).
+    //    a_suspended is set immediately before cond.wait, so by the time we
+    //    observe it fA is (or is about to be) suspended on the Condition queue
+    //    with the mutex released. blocker_running proves f_blocker was popped
+    //    by W0 and is ws->current on W0 (no longer stealable) — which can only
+    //    happen after fA context-switched out through cond.wait.
+    if (!bounded_wait(a_acquired)) {
+        release_for_drain();
+        runner.join();
+        SLUICE_CHECK_MSG(a_acquired.load(), "A_LOCKED_ON_W0: fA acquired on W0");
+        return;
     }
-    // fA is suspended on the Condition queue; f_blocker spins on W0.
-    // W1 is idle (no fibers assigned to it). External notify_one from
-    // coordinator OS thread resolves fA's condition node (Woken).
-    // fA is made Runnable on W0's queue. W1 steals fA from W0's queue
-    // (W0 is busy running f_blocker). fA reacquires and unlocks on W1.
+    if (!bounded_wait(a_suspended)) {
+        release_for_drain();
+        runner.join();
+        SLUICE_CHECK_MSG(a_suspended.load(),
+                         "A_SUSPENDED_ON_W0: fA entered cond.wait on W0");
+        return;
+    }
+    if (!bounded_wait(blocker_running)) {
+        release_for_drain();
+        runner.join();
+        SLUICE_CHECK_MSG(blocker_running.load(),
+                         "BLOCKER_RUNNING_ON_W0: f_blocker running on W0");
+        return;
+    }
+
+    // 2. WAKE_RELEASED. Open the steal window: set flag_wake. f_idle completes,
+    //    leaving W1 idle. W0 is busy spinning f_blocker; f_blocker is no longer
+    //    stealable (it is ws->current on W0).
+    flag_wake.store(true, std::memory_order_release);
+
+    // 3. NOTIFY_ONE. Resolve fA's condition node (Woken) and route it runnable.
+    //    The now-idle W1 steals fA from W0's queue (W0 is busy). fA resumes on
+    //    W1, reacquires the mutex, and unlocks.
     cond.notify_one();
 
-    // Wait for fA to complete reacquire and unlock.
-    while (!a_unlocked.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
+    // 4. Wait for fA to resume on W1 (the thief) and unlock.
+    if (!bounded_wait(a_unlocked)) {
+        release_for_drain();
+        runner.join();
+        SLUICE_CHECK_MSG(a_unlocked.load(),
+                         "A_UNLOCKED_ON_W1: fA resumed on W1 and unlocked");
+        return;
     }
+
+    // 5. Release f_blocker so the run can terminate cleanly.
     release_blocker.store(true, std::memory_order_release);
-    run_thread.join();
+    runner.join();
 
     unsigned aw = acquire_worker.load(std::memory_order_acquire);
     unsigned uw = unlock_worker.load(std::memory_order_acquire);
+
+    // THE MIGRATION ASSERTIONS (all observed by fA itself).
+    SLUICE_CHECK_MSG(blocker_running.load(),
+                     "f_blocker was executing on W0 (anti-race handshake observed)");
     SLUICE_CHECK_MSG(aw == 0, "acquire_worker == W0");
-    SLUICE_CHECK_MSG(uw == 1,
-                     "unlock on W1 (migration from W0 via E8 steal)");
-    SLUICE_CHECK_MSG(a_unlocked.load(), "fA completed reacquire and unlocked");
+    SLUICE_CHECK_MSG(uw == 1, "unlock_worker == W1 (stolen from W0 via E8)");
+    SLUICE_CHECK_MSG(aw != uw, "worker changed between lock and unlock");
+    SLUICE_CHECK_MSG(a_unlocked.load(), "fA resumed after migration and unlocked");
     SLUICE_CHECK_MSG(cn.was_woken(), "condition node resolved Woken");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+    SLUICE_CHECK_MSG(fA.state() == FiberState::done, "fA completed");
 }
 
 // ===========================================================================

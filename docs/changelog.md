@@ -1,5 +1,23 @@
 # Changelog
 
+## unreleased — async substrate
+
+### Changed
+
+- **`sluice::async::Mutex` acquisition is now `noexcept` / fail-fast.**
+  `lock()`, `try_lock()`, and `unlock()` are declared `noexcept`. An
+  underlying acquisition failure (the `std::system_error` that
+  `std::mutex::lock()`/`try_lock()` may throw) is no longer propagated as a
+  recoverable exception; the `Mutex` boundary converts it to process
+  termination via `std::terminate` (a single named fail-fast entry,
+  `sluice::async::detail::async_mutex_lock_fail_fast`). Rationale and the
+  full contract live in `docs/async-mutex-nothrow-authority.md`; production
+  realization evidence in `docs/async-mutex-nothrow-implementation.md`.
+  `noexcept` is part of the function type: downstream code taking
+  `&sluice::async::Mutex::lock` must be recompiled. No in-repo TU does so,
+  and the `Mutex` surface is inline-only, so this is transparent for
+  in-tree consumers.
+
 ## v0.1-mvp — blocking measurable Zig-inspired I/O core
 
 The first tagged release. A blocking, measurable, Zig-`std.Io`-inspired C++ I/O
