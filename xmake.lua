@@ -1,9 +1,18 @@
 -- xmake build for the sluice C++ core (Zig std.Io inspired).
 -- Zig source under ./zig is design reference only; never built here.
-add_rules("mode.debug", "mode.release", "mode.asan", "mode.tsan", "mode.ubsan", "mode.valgrind")
+add_rules("mode.debug", "mode.release", "mode.valgrind")
 add_rules("plugin.compile_commands.autoupdate")
 
--- Combined ASan + UBSan: no built-in mode, set policies directly.
+-- Sanitizer modes: use set_policy instead of deprecated built-in modes.
+if is_mode("asan") then
+    set_policy("build.sanitizer.address", true)
+end
+if is_mode("tsan") then
+    set_policy("build.sanitizer.thread", true)
+end
+if is_mode("ubsan") then
+    set_policy("build.sanitizer.undefined", true)
+end
 if is_mode("asanubsan") then
     set_policy("build.sanitizer.address", true)
     set_policy("build.sanitizer.undefined", true)
