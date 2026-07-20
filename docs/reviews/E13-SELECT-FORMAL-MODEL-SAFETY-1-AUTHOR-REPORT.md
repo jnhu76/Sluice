@@ -97,6 +97,16 @@ TLC_WORKERS=1 ./tools/formal/verify-e13-select-safety.sh
   `RefinesCentralClaim` PROPERTY is checked only on the 2-arm domain;
   wider adapter refinement PROPERTY blows up past the 5-minute TLC budget.
   The wider adapter domain is covered by `AdapterSafetyInv` in safety3mix.
+- **Canonical 4-arm root slowdown.**  Adding the M (per-arm accounting) and
+  N (step-indexed history) variables widens the canonical 4-arm root state
+  space from ~100k distinct states (PR #17 baseline) to ~7.7M distinct
+  states.  The canonical 4-arm root cfg (`E13Select.cfg`) still PASSES but
+  takes ~10 minutes (vs. PR #17's ~3 seconds).  The 2-arm canonical cfgs
+  still complete in seconds.  `StepT` is narrowed from 0..200 to 0..40 to
+  partially mitigate this; further narrowing would risk excluding legal
+  behaviours on the depth-40 search.  This is a direct, expected consequence
+  of extending the canonical spec with new state variables and does not
+  affect correctness.
 
 ## Request
 

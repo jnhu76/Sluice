@@ -189,6 +189,14 @@ Total: 65 distinct TLC runs, all green.
   3-arm / 4-arm adapter refinement PROPERTY blows up past the 5-minute TLC
   budget.  The wider adapter domain is covered by the `AdapterSafetyInv`
   aggregate in safety3mix, but not by the explicit PROPERTY check.
+- **Canonical 4-arm root slowdown.**  Adding the M (per-arm accounting) and
+  N (step-indexed history) variables widens the canonical 4-arm root
+  (`E13Select.cfg`) state space from ~100k distinct states (PR #17 baseline)
+  to ~7.7M distinct states.  The canonical 4-arm root still PASSES (depth
+  40, 24.7M states generated, 10min 05s on the validated toolchain) but is
+  no longer a sub-second gate.  The 2-arm canonical cfgs still complete in
+  seconds.  This is a direct, expected consequence of extending the
+  canonical spec with new state variables and does not affect correctness.
 
 ## K. Request
 
