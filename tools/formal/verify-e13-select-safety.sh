@@ -169,37 +169,37 @@ echo
 echo "--- Widened-domain refinement (X) ---"
 expect_pass "Central -> Contract refinement (3-arm admission tie)" \
   E13SelectCentralClaim E13SelectCentralClaim.refine3.cfg x_central_refine3 || rc=1
-\* The 2-arm adapter -> Central refinement is already covered by PR #17
-\* (verify-e13-select-core.sh, E13SelectEventTimer.cfg).  Wider adapter
-\* refinement PROPERTY checks (3-mix, 4-mix) blow up past the 5-minute TLC
-\* budget; the 3-arm adapter domain is instead exercised by the AdapterSafetyInv
-\* aggregate in E13SelectEventTimer.safety3mix.cfg.
+# The 2-arm adapter -> Central refinement is already covered by PR #17
+# (verify-e13-select-core.sh, E13SelectEventTimer.cfg).  Wider adapter
+# refinement PROPERTY checks (3-mix, 4-mix) blow up past the 5-minute TLC
+# budget; the 3-arm adapter domain is instead exercised by AdapterSafetyInv
+# in E13SelectEventTimer.safety3mix.cfg.
 echo
 
 echo "--- Contract negative models (R: NEG-C1..C8) ---"
 expect_negative "NEG-C1 commit before linearization" \
   C_InvCommitRequiresWinnerLinearization E13SelectContractNeg.C1.cfg \
   neg_c1 E13SelectContractNeg || rc=1
-expect_negative "NEG-C2 commit without winner" \
+expect_negative "NEG-C2 second committed winner" \
   C_InvAtMostOneCommittedWinner E13SelectContractNeg.C2.cfg \
   neg_c2 E13SelectContractNeg || rc=1
-expect_negative "NEG-C3 second winner commit" \
-  C_InvAtMostOneLinearizedWinner E13SelectContractNeg.C3.cfg \
+expect_negative "NEG-C3 loser publishes result" \
+  C_InvLoserNeverPublishesResult E13SelectContractNeg.C3.cfg \
   neg_c3 E13SelectContractNeg || rc=1
-expect_negative "NEG-C4 loser publishes result" \
-  C_InvLoserNeverPublishesResult E13SelectContractNeg.C4.cfg \
+expect_negative "NEG-C4 complete with open authority" \
+  C_InvCompletionRequiresAllAuthorityClosed E13SelectContractNeg.C4.cfg \
   neg_c4 E13SelectContractNeg || rc=1
-expect_negative "NEG-C5 reservation commit without winner" \
-  C_InvReservationCommitRequiresWinner E13SelectContractNeg.C5.cfg \
+expect_negative "NEG-C5 loser reservation not released" \
+  C_InvLoserReservationReleased E13SelectContractNeg.C5.cfg \
   neg_c5 E13SelectContractNeg || rc=1
-expect_negative "NEG-C6 reservation closes twice" \
-  C_InvReservationClosesExactlyOnce E13SelectContractNeg.C6.cfg \
+expect_negative "NEG-C6 rollback requires Running caller" \
+  C_InvRegistrationRollbackRequiresRunningCaller E13SelectContractNeg.C6.cfg \
   neg_c6 E13SelectContractNeg || rc=1
-expect_negative "NEG-C7 Waiting caller from Aborted" \
+expect_negative "NEG-C7 Aborted caller Waiting" \
   C_InvAbortedCallerNeverWaiting E13SelectContractNeg.C7.cfg \
   neg_c7 E13SelectContractNeg || rc=1
-expect_negative "NEG-C8 Destroyed caller Waiting" \
-  C_InvDestroyedCallerNeverWaiting E13SelectContractNeg.C8.cfg \
+expect_negative "NEG-C8 Destroy without Consumed or valid Abort" \
+  C_InvDestroyRequiresConsumedOrValidAbort E13SelectContractNeg.C8.cfg \
   neg_c8 E13SelectContractNeg || rc=1
 expect_restored "Contract restore (FAULT=None)" \
   E13SelectContractNeg.restore.cfg restore_contract E13SelectContractNeg || rc=1
@@ -209,8 +209,8 @@ echo "--- Central Claim negative models (S: NEG-S1..S6) ---"
 expect_negative "NEG-S1 claim a non-offered arm" \
   S_InvClaimRequiresOfferedArm E13SelectCentralClaimNeg.S1.cfg \
   neg_s1 E13SelectCentralClaimNeg || rc=1
-expect_negative "NEG-S2 snapshot misses winner" \
-  S_InvClaimSnapshotContainsWinner E13SelectCentralClaimNeg.S2.cfg \
+expect_negative "NEG-S2 winner not from snapshot" \
+  S_InvWinnerChosenFromSnapshot E13SelectCentralClaimNeg.S2.cfg \
   neg_s2 E13SelectCentralClaimNeg || rc=1
 expect_negative "NEG-S3 second successful claim" \
   S_InvAtMostOneSuccessfulClaim E13SelectCentralClaimNeg.S3.cfg \
@@ -221,8 +221,8 @@ expect_negative "NEG-S4 commit without winner class" \
 expect_negative "NEG-S5 admission tie not lowest-index" \
   S_InvAdmissionTieUsesLowestIndex E13SelectCentralClaimNeg.S5.cfg \
   neg_s5 E13SelectCentralClaimNeg || rc=1
-expect_negative "NEG-S6 rollback target not in contract domain" \
-  S_InvRollbackDomainRefinesContract E13SelectCentralClaimNeg.S6.cfg \
+expect_negative "NEG-S6 snapshot does not contain winner" \
+  S_InvClaimSnapshotContainsWinner E13SelectCentralClaimNeg.S6.cfg \
   neg_s6 E13SelectCentralClaimNeg || rc=1
 expect_restored "Central restore (FAULT=None)" \
   E13SelectCentralClaimNeg.restore.cfg restore_central E13SelectCentralClaimNeg || rc=1
