@@ -650,4 +650,50 @@ ReachContractReservationSuspended ==
 NotReachContractInline == ~ReachContractInline
 NotReachContractReservationSuspended == ~ReachContractReservationSuspended
 
+\* =========================================================================
+\* PR #18 non-vacuity witnesses (W): reachability of the trigger condition of
+\* each named layered safety law.  A TLC "Invariant <name> is violated" on the
+\* matching NotReach_<X> proves the law's premise is reachable in the model, so
+\* the law is not vacuously TRUE.  Each witness below states a non-trivial
+\* state configuration the corresponding law actually constrains.
+\* =========================================================================
+
+\* C_InvCommitRequiresWinnerLinearization premise: a committed winner exists.
+ReachContractCommittedWinner ==
+    \E i \in Arms : arm_resolution[i] = "WinnerCommitted"
+NotReachContractCommittedWinner == ~ReachContractCommittedWinner
+
+\* C_InvLoserNeverPublishesResult premise: a classified loser exists.
+ReachContractLoserExists ==
+    \E i \in Arms :
+        /\ i # winner
+        /\ winner \in Arms
+        /\ arm_resolution[i] \in {"Aborted", "Released"}
+NotReachContractLoserExists == ~ReachContractLoserExists
+
+\* C_InvOnlyWinnerPublishes premise: at least one arm published.
+ReachContractArmPublished ==
+    \E i \in Arms : arm_publication_count[i] > 0
+NotReachContractArmPublished == ~ReachContractArmPublished
+
+\* C_InvCompletionRequiresWinnerCommitted premise: Completed phase is reached.
+ReachContractCompleted ==
+    contract_phase = "Completed"
+NotReachContractCompleted == ~ReachContractCompleted
+
+\* C_InvDestroyRequiresConsumedOrValidAbort premise: Destroyed phase is reached.
+ReachContractDestroyed ==
+    contract_phase = "Destroyed"
+NotReachContractDestroyed == ~ReachContractDestroyed
+
+\* C_InvAbortedCallerNeverWaiting premise: Aborted phase is reached.
+ReachContractAborted ==
+    contract_phase = "Aborted"
+NotReachContractAborted == ~ReachContractAborted
+
+\* C_InvRegistrationRollbackRequiresRunningCaller premise: rollback executed.
+ReachContractRollback ==
+    contract_phase = "Rollback"
+NotReachContractRollback == ~ReachContractRollback
+
 =============================================================================

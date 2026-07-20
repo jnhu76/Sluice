@@ -1597,4 +1597,45 @@ NotReach_R10 == ~Reach_R10
 NotReach_R11 == ~Reach_R11
 NotReach_R12 == ~Reach_R12
 
+\* =========================================================================
+\* PR #18 non-vacuity witnesses (W) for the new adapter safety laws
+\* (M accounting + N history).  These complement PR #17's R1-R12 witnesses by
+\* proving the new accounting/history laws' premises are reachable, so the
+\* laws are not vacuously TRUE.
+\* =========================================================================
+
+\* A_InvWaitAccountClosesAtMostOnce premise: a wait account was closed.
+ReachAdapterWaitAccountClosed ==
+    \E i \in Arms : wait_account_close_count[i] >= 1
+NotReachAdapterWaitAccountClosed == ~ReachAdapterWaitAccountClosed
+
+\* A_InvTimerAccountClosesAtMostOnce premise: a timer account was closed.
+ReachAdapterTimerAccountClosed ==
+    \E i \in Arms : timer_account_close_count[i] >= 1
+NotReachAdapterTimerAccountClosed == ~ReachAdapterTimerAccountClosed
+
+\* T_InvRetiredRegistrationNeverDereferences premise: a Retired timer exists.
+ReachAdapterRetiredTimerExists ==
+    \E i \in Arms :
+        /\ arm_kind[i] = "TimerArm"
+        /\ timer_state[i] = "Retired"
+NotReachAdapterRetiredTimerExists == ~ReachAdapterRetiredTimerExists
+
+\* T_InvConsumeRequiresWinner premise: a Consumed timer exists.
+ReachAdapterConsumedTimerExists ==
+    \E i \in Arms :
+        /\ arm_kind[i] = "TimerArm"
+        /\ timer_state[i] = "Consumed"
+NotReachAdapterConsumedTimerExists == ~ReachAdapterConsumedTimerExists
+
+\* N_InvCommitFollowsWinnerLinearization premise: a commit_step was recorded.
+ReachAdapterCommitStepRecorded ==
+    \E i \in Arms : commit_step[i] # NoStep
+NotReachAdapterCommitStepRecorded == ~ReachAdapterCommitStepRecorded
+
+\* N_InvPublicationFollowsAuthorityClose premise: a publication_step recorded.
+ReachAdapterPublicationStepRecorded ==
+    publication_step # NoStep
+NotReachAdapterPublicationStepRecorded == ~ReachAdapterPublicationStepRecorded
+
 =============================================================================

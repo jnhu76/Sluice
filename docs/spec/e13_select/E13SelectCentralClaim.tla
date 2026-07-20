@@ -403,4 +403,37 @@ ReachCentralTieBreak ==
 
 NotReachCentralTieBreak == ~ReachCentralTieBreak
 
+\* =========================================================================
+\* PR #18 non-vacuity witnesses (W): reachability of each Central safety law's
+\* trigger condition, so the law is provably non-vacuous in the model.
+\* =========================================================================
+
+\* S_InvClaimRequiresOfferedArm premise: an offer was claimed.
+ReachCentralClaimed ==
+    central_phase \in {"Claimed", "Closing", "Completed", "Consumed"}
+    /\ winner \in Arms
+NotReachCentralClaimed == ~ReachCentralClaimed
+
+\* S_InvClaimSnapshotContainsWinner premise: claim_candidates latched.
+ReachCentralClaimCandidatesLatched ==
+    central_phase \in {"Claimed", "Closing", "Completed", "Consumed"}
+    /\ Cardinality(claim_candidates) >= 1
+    /\ winner \in claim_candidates
+NotReachCentralClaimCandidatesLatched == ~ReachCentralClaimCandidatesLatched
+
+\* S_InvAdmissionTieUsesLowestIndex premise: multi-candidate admission tie.
+ReachCentralAdmissionTie ==
+    /\ claim_mode = "Inline"
+    /\ Cardinality(claim_candidates) >= 2
+    /\ winner \in claim_candidates
+    /\ \A i \in claim_candidates : winner <= i
+NotReachCentralAdmissionTie == ~ReachCentralAdmissionTie
+
+\* S_InvAtMostOneSuccessfulClaim premise: a successful claim happened.
+ReachCentralWinnerClassified ==
+    central_phase \in {"Claimed", "Closing", "Completed", "Consumed"}
+    /\ \E w \in Arms : arm_class[w] = "Winner"
+    /\ \E l \in Arms : arm_class[l] = "Loser"
+NotReachCentralWinnerClassified == ~ReachCentralWinnerClassified
+
 =============================================================================
