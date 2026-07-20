@@ -132,6 +132,31 @@ WinnerAndLosersFinalBeforeCompletion ==
         /\ arm_resolution[winner] = "WinnerCommitted"
         /\ \A i \in Arms \ {winner} : arm_resolution[i] = "Released"
 
+BadTerminalWaiting ==
+    /\ contract_phase \in {"Aborted", "Destroyed"}
+    /\ caller_state = "Waiting"
+
+NoBadTerminalWaiting == ~BadTerminalWaiting
+
+TerminalCallerStateWellFormed ==
+    /\ (contract_phase \in {"Rollback", "Aborted"} =>
+          caller_state = "Running")
+    /\ (contract_phase = "Destroyed" =>
+          \/ /\ completion_mode = "None"
+                /\ caller_state = "Running"
+             \/ /\ completion_mode = "Inline"
+                /\ caller_state = "Running"
+             \/ /\ completion_mode = "Suspended"
+                /\ caller_state = "Resumed")
+
+ContractRollbackEnabledDomain ==
+    /\ contract_phase = "Building"
+    /\ winner = NoArm
+    /\ caller_state = "Running"
+
+ContractRegistrationRollbackDisabledAfterSuspension ==
+    caller_state = "Waiting" => ~ContractRollbackEnabledDomain
+
 ContractInv ==
     /\ ContractTypeOK
     /\ ContractDomainWellFormed
@@ -142,6 +167,9 @@ ContractInv ==
     /\ AllAuthorityClosedBeforeCompletion
     /\ PublicationExactlyBounded
     /\ WinnerAndLosersFinalBeforeCompletion
+    /\ NoBadTerminalWaiting
+    /\ TerminalCallerStateWellFormed
+    /\ ContractRegistrationRollbackDisabledAfterSuspension
 
 ContractInit ==
     /\ contract_phase = "Building"
@@ -337,8 +365,7 @@ ContractDestroyOperation ==
                     reservation_close_count>>
 
 ContractBeginRollback ==
-    /\ contract_phase \in {"Building", "Selecting"}
-    /\ winner = NoArm
+    /\ ContractRollbackEnabledDomain
     /\ contract_phase' = "Rollback"
     /\ UNCHANGED <<arm_registered, readiness_evidence, reservation_state,
                     arm_resolution, authority_open, winner, caller_state,

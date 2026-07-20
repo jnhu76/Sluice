@@ -248,12 +248,24 @@ TimerAuthorityWellFormed ==
               /\ wait_outcome[i] = "Pending"
               /\ wait_linked[i])
 
+EventTimerRollbackEnabledDomain ==
+    /\ registration_count > 0
+    /\ \A i \in Arms : adapter_phase[i] # "Registering"
+    /\ central_phase = "Registering"
+    /\ contract_phase = "Building"
+    /\ caller_state = "Running"
+    /\ winner = NoArm
+
+EventTimerRegistrationRollbackDisabledAfterSuspension ==
+    caller_state = "Waiting" => ~EventTimerRollbackEnabledDomain
+
 EventTimerInv ==
     /\ CentralRefinement!CentralInv
     /\ EventTimerTypeOK
     /\ AdapterLifecycleWellFormed
     /\ CoordinationWellFormed
     /\ TimerAuthorityWellFormed
+    /\ EventTimerRegistrationRollbackDisabledAfterSuspension
 
 EventTimerInit ==
     /\ CentralRefinement!CentralInit
@@ -701,8 +713,7 @@ DestroyOperation ==
     /\ UNCHANGED AdapterVars
 
 BeginRollback ==
-    /\ registration_count > 0
-    /\ \A i \in Arms : adapter_phase[i] # "Registering"
+    /\ EventTimerRollbackEnabledDomain
     /\ CentralRefinement!CentralBeginRollback
     /\ rollback_started' = TRUE
     /\ UNCHANGED <<arm_kind, arm_index, adapter_phase, arm_event,
@@ -946,11 +957,24 @@ Reach_R8 ==
 Reach_R9 ==
     /\ rollback_started
     /\ central_phase \in {"Aborted", "Destroyed"}
+    /\ caller_state = "Running"
     /\ winner = NoArm
-    /\ retired_arm_count >= 1
+    /\ registration_count > 0
+    /\ registration_count < MaxArms
     /\ result_publication_count = 0
     /\ runnable_publication_count = 0
-    /\ \A i \in Arms : adapter_phase[i] \in {"Detached", "Retired"}
+    /\ \A i \in Arms : arm_publication_count[i] = 0
+    /\ \A i \in Arms :
+          \/ /\ arm_registered[i]
+             /\ adapter_phase[i] = "Retired"
+             /\ arm_resolution[i] = "Released"
+             /\ ~authority_open[i]
+             /\ finalization_step[i] = "Rollback"
+          \/ /\ ~arm_registered[i]
+             /\ adapter_phase[i] = "Detached"
+             /\ arm_resolution[i] = "None"
+             /\ ~authority_open[i]
+             /\ finalization_step[i] = "None"
 
 Reach_R10 ==
     /\ winner \in Arms

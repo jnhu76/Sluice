@@ -116,11 +116,21 @@ CentralStateWellFormed ==
 LowestIndexClaimFromSnapshot ==
     winner \in Arms => \A i \in claim_candidates : winner <= i
 
+CentralRollbackEnabledDomain ==
+    /\ central_phase = "Registering"
+    /\ contract_phase = "Building"
+    /\ winner = NoArm
+    /\ caller_state = "Running"
+
+CentralRegistrationRollbackDisabledAfterSuspension ==
+    caller_state = "Waiting" => ~CentralRollbackEnabledDomain
+
 CentralInv ==
     /\ ContractRefinement!ContractInv
     /\ CentralTypeOK
     /\ CentralStateWellFormed
     /\ LowestIndexClaimFromSnapshot
+    /\ CentralRegistrationRollbackDisabledAfterSuspension
 
 CentralInit ==
     /\ ContractRefinement!ContractInit
@@ -220,7 +230,7 @@ CentralDestroyOperation ==
     /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
 
 CentralBeginRollback ==
-    /\ central_phase \in {"Registering", "Admission"}
+    /\ CentralRollbackEnabledDomain
     /\ ContractRefinement!ContractBeginRollback
     /\ central_phase' = "Rollback"
     /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
