@@ -39,10 +39,10 @@ registration rollback, and destroys the operation while the caller remains
 `Waiting` with no runnable publication. This contradicts the controlling
 preparation lifecycle and makes the claimed stable external Contract too weak.
 
-The reviewed candidate also has no auditable PR head: GitHub PR #17 does not
-exist, local `HEAD` still equals `origin/master`, and all candidate files are
-untracked. Authorization therefore remains denied independently of the model
-finding.
+This review is bound to GitHub PR #17 at head
+`e61a0b4971758a819d8ba3b94f3e3147b34c4bc1`. Authorization remains denied
+because of the Contract finding and the formal-helper source-tree deletion
+risk, not because of missing PR identity.
 
 ## B. Baseline
 
@@ -53,7 +53,7 @@ REPOSITORY:
 jnhu76/Sluice
 
 PR:
-#17 — NOT FOUND ON GITHUB
+https://github.com/jnhu76/Sluice/pull/17 — OPEN
 
 REVIEW_TARGET:
 PR17_LAYERED_CORE
@@ -65,34 +65,37 @@ MERGE_BASE:
 246505a1de2ffa2840ab404adc76a2839d4ae069
 
 HEAD:
-246505a1de2ffa2840ab404adc76a2839d4ae069
+e61a0b4971758a819d8ba3b94f3e3147b34c4bc1
 
 EXPECTED_HEAD:
-NOT SUPPLIED / NOT AUDITABLE
+e61a0b4971758a819d8ba3b94f3e3147b34c4bc1
 
 BRANCH:
 feat/e13-select-formal-model-core
 
 COMMITS (origin/master..HEAD):
-NONE
+e61a0b4 docs(e13): add formal specs, verification tools, and design docs for select-formal-model-core
 
 COMMITTED CHANGED FILES (origin/master...HEAD):
-NONE
+30 added files; 3,381 insertions, 0 deletions
 
 WORKTREE STATUS:
-DIRTY — candidate files and pre-existing local files are untracked
+PR HEAD TRACKED FILES CLEAN BEFORE REVIEW;
+pre-existing tests/test_t3_simple.cpp and tla2tools.jar remain untracked
 ```
 
-The required baseline commands were run independently. `git diff --check
-origin/master...HEAD` reports no error only because the committed diff is
-empty; it does not validate the untracked candidate. `gh pr list --state all`
-shows PR #16 as the latest repository PR and `gh pr view 17` cannot resolve a
-pull request.
+The required baseline commands were run independently against the immutable PR
+head. `gh pr view 17` reports base `master`, head branch
+`feat/e13-select-formal-model-core`, one commit, 30 changed files, and a
+mergeable open PR. `git merge-base HEAD origin/master` equals `BASE_COMMIT`.
+`git diff --check origin/master...HEAD` reports seven blank-line-at-EOF
+warnings, recorded as P2-1.
 
-Candidate task files observed in the worktree:
+Committed PR task files:
 
 - `docs/formal/e13-select-formal-core-design.md`
 - `docs/formal/e13-select-formal-core-plan.md`
+- `docs/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md`
 - `docs/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-REVIEW-REQUEST.md`
 - `docs/spec/e13_select/*.tla`
 - `docs/spec/e13_select/*.cfg`
@@ -118,17 +121,16 @@ record it and `tla2tools.jar` as pre-existing untracked files. It is therefore
 not classified as a PR17 `tests/**` change. This conclusion is evidence-based,
 not taken from the author's self-assessment.
 
-The absence of a commit/PR remains a scope-integrity blocker: until the task
-files are committed to a known head, the repository cannot prove that the
-eventual PR excludes the pre-existing test or any other local file.
+The committed PR file list independently confirms that neither pre-existing
+local file is included in PR #17.
 
 Ignored `docs/spec/e13_select/states/**` files are TLC metadir remnants covered
 by the repository's `states/` ignore rule; they are not treated as review
 evidence or proposed PR files.
 
-Candidate whitespace checks (`git diff --no-index --check /dev/null <file>`),
-`bash -n`, and ShellCheck found no whitespace or shell syntax error. ShellCheck
-reported only SC2329 for the cleanup function invoked indirectly by `trap`.
+`bash -n` found no shell syntax error. ShellCheck reported only SC2329 for the
+cleanup function invoked indirectly by `trap`. `git diff --check` found the
+seven P2 blank-line-at-EOF warnings listed below.
 
 ## D. Three-layer architecture
 
@@ -434,19 +436,7 @@ protocol that safely transitions/publishes a suspended caller), then add a
 positive invariant forbidding `Waiting` in aborted/destroyed states and rerun
 all Contract reach/refinement checks.
 
-### P1-1 — BASELINE UNVERIFIABLE: no PR head or committed candidate diff
-
-GitHub PR #17 cannot be resolved. Local `HEAD`, `origin/master`, and merge base
-are identical; there are no commits or committed changed files. Every task file
-is untracked. The supplied review request gives `START_HEAD` but no
-`EXPECTED_HEAD` containing the candidate.
-
-Consequently the reviewer cannot bind results to an immutable PR, verify the
-eventual PR file list, or authorize PR18. Commit only the intended task files,
-publish the PR, provide its exact head SHA, and rerun the baseline and TLC gate
-against that head.
-
-### P1-2 — FORMAL HELPER MAY DELETE SOURCE-TREE TRACE ARTIFACTS
+### P1-1 — FORMAL HELPER MAY DELETE SOURCE-TREE TRACE ARTIFACTS
 
 `tools/formal/verify-e13-select-core.sh:22-30` runs TLC from the source spec
 directory and its `cleanup` executes:
@@ -477,6 +467,10 @@ to the fresh temporary root.
 These do not invalidate the actual predicates/traces, but the comments should
 match the evidence they claim.
 
+`git diff --check origin/master...HEAD` also reports a new blank line at EOF in
+the formal design document and six layer cfg files. These are formatting-only
+warnings but should be removed so the required baseline command is clean.
+
 ## R. Authorization effect
 
 ```text
@@ -499,13 +493,13 @@ ADDITIONAL ARM TYPES:
 NOT IMPLEMENTED / NOT AUTHORIZED
 ```
 
-PR18 may proceed only after P0-1 is corrected, an immutable PR17 head exists,
-the formal helper no longer risks deleting source-tree files, and an independent
-re-review reproduces the corrected Contract and both refinements.
+PR18 may proceed only after P0-1 is corrected, the formal helper no longer
+risks deleting source-tree files, and an independent re-review of the new PR17
+head reproduces the corrected Contract and both refinements.
 
 ## S. Repository status
 
-This reviewer added only:
+This review turn modified only:
 
 ```text
 docs/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md
@@ -516,6 +510,6 @@ or build policy file was modified by the reviewer. Reviewer-only TLA modules
 and configs used for adversarial probes were kept under `/tmp/e13-pr17-review`
 and are outside the repository.
 
-The worktree remains dirty because the author's candidate and the pre-existing
-local test/JAR are untracked. No file was staged, committed, pushed, or added to
-the target branch.
+The worktree now differs from PR head only in this review artifact plus the
+pre-existing untracked test/JAR. No formal model, cfg, helper, production file,
+or public API was modified; nothing was staged, committed, or pushed.

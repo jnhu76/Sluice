@@ -44,6 +44,28 @@ The contract exposes only stable Select semantics:
 Registration rollback is an unsuccessful terminal path with no winner, result,
 or runnable publication.
 
+### Registration rollback domain (corrective boundary)
+
+Rollback is scoped narrowly to **registration rollback**: registration or
+allocation failing *before registration completes, before caller suspension,
+and before winner linearization*. It is enabled only while
+`contract_phase = "Building"`, `winner = NoArm`, and `caller_state = "Running"`
+(Contract `ContractRollbackEnabledDomain`), and this restriction propagates
+through both refinements (Central `central_phase = "Registering"`, adapter
+additionally forbids any arm still mid-registration).
+
+It must be impossible to begin rollback after `FinishRegistration`,
+`SuspendCaller`, a winner claim, or a winner commit. The terminal caller state
+is therefore pinned: `Rollback`/`Aborted` require `caller_state = "Running"`,
+and `Aborted`/`Destroyed` forbid `caller_state = "Waiting"`.
+
+Registration rollback does **not** model cancellation after caller suspension,
+shutdown cancellation, user-requested Select cancellation, or timeout of the
+whole Select operation. Those post-suspension cancellation paths require a real
+wake/publication protocol that PR #17 deliberately does not contain; reusing
+registration rollback to fake them is forbidden. They remain deferred to
+PR #18.
+
 ## Central Claim strategy
 
 Central Claim maps its concrete state to the contract with a top-level TLA+
@@ -83,4 +105,3 @@ root so existing scene configurations can keep their module name.
 This design adds no alternative strategy, additional arm type, negative model,
 liveness/fairness gate, production C++, public API, production test, or build
 policy change. Full E13 concrete safety/negative-model closure remains PR #18.
-

@@ -65,6 +65,45 @@ Reversible reservations are permitted before selection only when loser release
 fully restores primitive state. A strategy or adapter that cannot provide that
 law must use offered evidence and must not claim a reservation.
 
+### Rollback domain
+
+`ContractBeginRollback` is enabled only on the **registration rollback** domain,
+i.e. while the operation is still building registration and has not yet
+suspended the caller or linearized a winner:
+
+```text
+ContractRollbackEnabledDomain ==
+    contract_phase = "Building"
+    /\ winner = NoArm
+    /\ caller_state = "Running"
+```
+
+The same domain restriction propagates through both refinements
+(`CentralRollbackEnabledDomain` requires `central_phase = "Registering"`;
+`EventTimerRollbackEnabledDomain` additionally requires no arm to still be
+mid-registration). Rollback is therefore reachable as a genuine
+partial-registration failure path (R9) and unreachable after
+`ContractSuspendCaller`, after `FinishRegistration`, after winner claim, or
+after winner commit.
+
+This deliberately does **not** model:
+
+- cancellation after caller suspension;
+- shutdown cancellation;
+- user-requested Select cancellation;
+- timeout of the whole Select operation.
+
+Those are post-suspension cancellation paths that require a real wake/publication
+protocol; PR #17 has no such protocol and must not simulate one by reusing
+registration rollback. They remain deferred to PR #18.
+
+The terminal caller state is pinned by two named invariants:
+`TerminalCallerStateWellFormed` requires `caller_state = "Running"` in
+`Rollback`/`Aborted` and a mode-consistent caller state in `Destroyed`;
+`NoBadTerminalWaiting` forbids `caller_state = "Waiting"` in `Aborted`/`Destroyed`.
+A dedicated `ContractRegistrationRollbackDisabledAfterSuspension` invariant plus
+the `E13SelectContract.rollback_regression.cfg` gate exercise this boundary.
+
 ## Layer 2: Central Claim strategy
 
 `E13SelectCentralClaim` adds only Candidate A state:
@@ -152,15 +191,18 @@ the expected verdict and carries the reachable causal trace.
 | R6 | Timer winner consume history + Event loser history |
 | R7 | `Cardinality(claim_candidates) >= 2` and winner is its minimum |
 | R8 | one recorded broadcast Event identity shared by at least two claim candidates |
-| R9 | recorded rollback + retired registered arm + zero publication |
-| R10 | actual `TimerPumpSkip`, Retired timer, and `timer_node_deref = 0` |
+| R9 | registration rollback: strict subset registered (`0 < registration_count < MaxArms`), every registered arm Retired + Released + authority-closed with `finalization_step = "Rollback"`, every unregistered arm Detached + `None`, `winner = NoArm`, caller Running, zero publication |
+| R10 | Event winner + a distinct Timer loser with actual `TimerPumpSkip`, `timer_state = "Retired"`, `timer_skip_observed`, and `timer_node_deref = 0` |
 | R11 | inline result reaches `Consumed` with runnable count zero |
 | R12 | suspended result reaches `Consumed` after caller resume |
 
 R7 can no longer be witnessed by an arbitrary registered loser. R8 can no
 longer be witnessed by independently setting two per-arm pseudo-events. R10 can
 no longer be witnessed by a rollback terminal state in which the timer pump
-never ran.
+never ran. R9 can no longer be witnessed by an all-registered terminal: it
+requires a genuine strict-subset partial registration, and it can no longer be
+reached after `FinishRegistration` or `SuspendCaller` because rollback is
+confined to the pre-suspension registration domain.
 
 ## Reproduction
 
@@ -175,9 +217,14 @@ TLA2TOOLS_JAR=/path/to/tla2tools.jar TLC_WORKERS=1 \
   tools/formal/verify-e13-select-core.sh
 ```
 
-The runner uses a fresh TLC metadir, rejects parse/config failures and
-deadlocks, requires all positive/refinement checks to pass, and requires every
-reachability run to violate its expected named inverse invariant.
+The runner copies the spec tree into a fresh `mktemp` work directory, runs every
+TLC invocation with a private `-metadir` inside that temporary root, and cleans
+up only the temporary root. It never deletes or writes generated-looking files
+into `docs/spec/e13_select/`. A source-preservation sentinel regression
+(`E13SelectUserTTrace.keep`) confirms no source-tree trace/metadir artifact is
+created. The runner rejects parse/config failures and deadlocks, requires all
+positive/refinement checks to pass, and requires every reachability run to
+violate its expected named inverse invariant.
 
 An exhaustive two-arm `-coverage 1` author run also exercised every
 non-stutter adapter action. The explicit stutter branch produced no distinct
@@ -186,19 +233,21 @@ transition, as expected.
 TLC runtime used for the author run:
 `TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)`.
 
-The final single-worker author gate produced:
+The final single-worker author gate produced (corrective-1 run, OpenJDK 25,
+`TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)`):
 
 | Gate | Generated | Distinct | Queue at stop | Depth | Result |
 |------|----------:|---------:|--------------:|------:|--------|
-| Contract semantics | 1,252 | 533 | 0 | 16 | PASS |
-| Central + Contract refinement | 332 | 144 | 0 | 16 | PASS |
-| Event/Timer + Central refinement | 53,617 | 17,472 | 0 | 30 | PASS |
-| constrained 4-arm mixed root | 443,664 | 99,868 | 0 | 40 | PASS |
-| Contract inline reach | 838 | 380 | 71 | 11 | expected witness |
-| Contract reservation/suspended reach | 1,103 | 478 | 38 | 13 | expected witness |
-| Central tie-break reach | 58 | 33 | 11 | 7 | expected witness |
-| 3-arm mixed reach | 205,107 | 69,871 | 22,161 | 16 | expected R5 witness |
-| R1–R12 | 874–674,566 | 380–230,698 | witness stop | 7–20 | all expected named witnesses |
+| Contract semantics | 809 | 346 | 0 | 16 | PASS |
+| Contract registration-rollback regression | 809 | 346 | 0 | 16 | PASS |
+| Central + Contract refinement | 253 | 111 | 0 | 16 | PASS |
+| Event/Timer + Central refinement | 24,761 | 8,432 | 0 | 30 | PASS |
+| constrained 4-arm mixed root | 71,868 | 17,108 | 0 | 40 | PASS |
+| Contract inline reach | 530 | 240 | 43 | 11 | expected witness |
+| Contract reservation/suspended reach | 691 | 299 | 23 | 13 | expected witness |
+| Central tie-break reach | 55 | 31 | 9 | 7 | expected witness |
+| 3-arm mixed reach | 87,437 | 27,074 | 4,130 | 16 | expected R5 witness |
+| R1–R12 | 865–453,829 | 380–134,998 | witness stop | 7–20 | all expected named witnesses |
 
 The complete per-scenario metrics are recorded in the PR #17 review request.
 
