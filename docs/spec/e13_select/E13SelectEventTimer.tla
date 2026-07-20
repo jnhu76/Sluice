@@ -407,9 +407,12 @@ E_InvNoRecursiveEventQueueAuthority ==
            /\ scan_phase \in {"Scanning", "ProcessGroups"}
 
 E_InvEventPersistentSetNotConsumed ==
-    \* Select never consumes a persistent Event Set back to Unset.  Once Set,
-    \* event_state stays Set.  (The model has no action that Unsets it.)
-    TRUE
+    \* Select never consumes a persistent Event Set back to Unset.  Once an
+    \* Event identity has been broadcast (last_broadcast_event recorded), that
+    \* Event's state must still be Set -- Select must not collapse the Set back
+    \* to Unset (a real Event queue reset would race a stale broadcaster).
+    \A e \in Events :
+        e = last_broadcast_event => event_state[e] = "Set"
 
 E_InvWinnerTerminalDetachedBeforeAuthorityClose ==
     \* A Retired adapter arm has a terminal wait_outcome and an unlinked node
