@@ -20,14 +20,20 @@ if ! command -v java >/dev/null 2>&1; then
 fi
 
 outroot="$(mktemp -d -t e13-select-core.XXXXXX)"
+workdir="$outroot/work"
 cleanup() {
-  find "$spec" -maxdepth 1 -name 'E13Select*TTrace*' -delete
-  find "$outroot" -mindepth 1 -delete
-  rmdir "$outroot"
+  [[ -n "$outroot" ]]
+  [[ "$outroot" == /tmp/e13-select-core.* ||
+     "$outroot" == "${TMPDIR:-/tmp}"/e13-select-core.* ]]
+  rm -rf -- "$outroot"
 }
 trap cleanup EXIT
 
-cd "$spec"
+mkdir -p "$workdir"
+cp "$spec"/*.tla "$workdir/"
+cp "$spec"/*.cfg "$workdir/"
+
+cd "$workdir"
 
 run_tlc() {
   local model="$1" cfg="$2" tag="$3"
@@ -117,6 +123,8 @@ rc=0
 echo "=== E13 Select layered formal core (PR #17; workers=$workers) ==="
 
 expect_pass "Contract semantics" E13SelectContract E13SelectContract.cfg contract || rc=1
+expect_pass "Contract registration-rollback regression" E13SelectContract \
+  E13SelectContract.rollback_regression.cfg contract_rollback_regression || rc=1
 expect_pass "Central Claim + Contract refinement" \
   E13SelectCentralClaim E13SelectCentralClaim.cfg central || rc=1
 expect_pass "Event/Timer adapters + Central Claim refinement" \
