@@ -173,8 +173,12 @@ FinalizationStepT ==
 \* occurred yet"; a positive value is the global_step at which it occurred.
 \* All step comparisons must pair steps belonging to the same (group, arm,
 \* epoch) key, never arm 0's step against arm 1's.
+\* The upper bound 40 matches the maximum search depth observed on the
+\* largest canonical cfg (4-arm mixed root, depth 40).  Each step variable
+\* is written at most once along any behaviour, so 0..40 is sufficient and
+\* keeps the per-arm step domain tractable.
 NoStep == 0
-StepT == 0..200
+StepT == 0..40
 GroupIdT == 0..1
 EpochT == 0..4
 
