@@ -157,6 +157,202 @@ ContractRollbackEnabledDomain ==
 ContractRegistrationRollbackDisabledAfterSuspension ==
     caller_state = "Waiting" => ~ContractRollbackEnabledDomain
 
+(* ========================================================================= *)
+(* PR #18 layered safety invariants.                                          *)
+(*                                                                           *)
+(* These named laws are consequences of the corrected PR #17 Contract         *)
+(* transition relation.  They are kept in a separate aggregate               *)
+(* `ContractSafetyInv` so the canonical PR #17 `ContractInv` and its          *)
+(* reproducible metrics remain byte-identical; the expanded suite is checked  *)
+(* by the PR #18 safety verifier in dedicated cfg files.                     *)
+(*                                                                           *)
+(* No law here references WaitNode Cancelled or TimerRegistration Retired as  *)
+(* the definition of a loser.  An abstract loser is a registered non-winner   *)
+(* arm whose resolution has reached Released.                                *)
+(* ========================================================================= *)
+
+LinearizedPhase == contract_phase \in
+    {"WinnerLinearized", "Closing", "Completed", "Consumed"}
+TerminalPhase == contract_phase \in
+    {"Completed", "Consumed", "Aborted", "Destroyed"}
+
+\* -- H1: winner and commit --------------------------------------------------
+
+C_InvAtMostOneLinearizedWinner ==
+    LinearizedPhase => winner \in Arms
+    \* The single `winner` variable structurally bounds the linearized winner
+    \* count to at most one; this law bounds it to at least one past
+    \* linearization.  `winner` is never reassigned once non-NoArm because
+    \* ContractLinearizeWinner guards on winner = NoArm, so winner identity is
+    \* stable after linearization (guard argument, not just a state law).
+
+C_InvAtMostOneCommittedWinner ==
+    \A i, j \in Arms :
+        arm_resolution[i] = "WinnerCommitted"
+            /\ arm_resolution[j] = "WinnerCommitted" => i = j
+
+C_InvCommitRequiresWinnerLinearization ==
+    \* An irreversible winner commit may only occur after a winner has been
+    \* linearized.  In state terms: a committed arm must be the current
+    \* linearized winner.  It must never appear in a pre-linearization phase
+    \* (Building/Selecting/Rollback/Aborted) where winner = NoArm.
+    \A i \in Arms :
+        arm_resolution[i] = "WinnerCommitted" => winner = i
+
+C_InvNoIrreversibleEffectBeforeLinearization ==
+    \A i \in Arms :
+        arm_resolution[i] = "WinnerCommitted" => winner = i
+
+C_InvWinnerIdentityStableAfterLinearization ==
+    \A i \in Arms :
+        arm_resolution[i] = "WinnerCommitted" => winner = i
+
+\* -- H2: losers -------------------------------------------------------------
+
+C_InvLoserNeverPublishesResult ==
+    \A i \in Arms :
+        arm_resolution[i] = "Released" => arm_publication_count[i] = 0
+
+C_InvLoserNeverPublishesRunnable ==
+    runnable_publication_count = 1
+        => /\ winner \in Arms
+           /\ completion_mode = "Suspended"
+
+C_InvLoserNeverCommitsIrreversibleEffect ==
+    \A i \in Arms :
+        arm_registered[i] /\ winner # i
+            => arm_resolution[i] # "WinnerCommitted"
+
+C_InvAllLosersAbortedBeforeCompletion ==
+    contract_phase \in {"Completed", "Consumed"} =>
+        \A i \in Arms \ {winner} :
+            arm_registered[i] => arm_resolution[i] = "Released"
+
+\* -- H3: publication --------------------------------------------------------
+
+C_InvAtMostOneResultPublication == result_publication_count <= 1
+
+C_InvAtMostOneRunnablePublication == runnable_publication_count <= 1
+
+C_InvInlineCompletionPublishesNoRunnable ==
+    completion_mode = "Inline" => runnable_publication_count = 0
+
+C_InvSuspendedCompletionPublishesRunnableExactlyOnce ==
+    completion_mode = "Suspended" => runnable_publication_count = 1
+
+C_InvRunnablePublicationRequiresPriorWaiting ==
+    runnable_publication_count = 1 => completion_mode = "Suspended"
+
+C_InvOnlyWinnerPublishes ==
+    \A i \in Arms : arm_publication_count[i] > 0 => winner = i
+
+\* -- H4: completion and destruction ----------------------------------------
+
+C_InvCompletionRequiresWinnerCommitted ==
+    contract_phase \in {"Completed", "Consumed"} =>
+        /\ winner \in Arms
+        /\ arm_resolution[winner] = "WinnerCommitted"
+
+C_InvCompletionRequiresAllLosersAborted ==
+    contract_phase \in {"Completed", "Consumed"} =>
+        \A i \in Arms \ {winner} :
+            arm_registered[i] => arm_resolution[i] = "Released"
+
+C_InvCompletionRequiresAllAuthorityClosed ==
+    TerminalPhase => \A i \in Arms : ~authority_open[i]
+
+C_InvDestroyRequiresConsumedOrValidAbort ==
+    contract_phase = "Destroyed" =>
+        \/ completion_mode \in {"Inline", "Suspended"}
+        \/ winner = NoArm
+
+C_InvDestroyedHasNoOpenAuthority ==
+    contract_phase = "Destroyed" => \A i \in Arms : ~authority_open[i]
+
+\* -- H5: reservation contract ----------------------------------------------
+
+C_InvReservationCommitRequiresWinner ==
+    \A i \in Arms :
+        reservation_state[i] = "Committed" => winner = i
+
+C_InvLoserReservationReleased ==
+    \* A loser's held reservation may persist transiently after winner
+    \* linearization, but it must close to Released before completion.  At
+    \* terminal success the contract forbids a lingering Held loser reservation.
+    TerminalPhase /\ winner \in Arms =>
+        \A i \in Arms \ {winner} :
+            arm_registered[i] => reservation_state[i] \in {"None", "Released"}
+
+C_InvReservationClosesExactlyOnce ==
+    \A i \in Arms : reservation_close_count[i] <= 1
+
+C_InvHeldReservationIsReversible ==
+    \A i \in Arms :
+        reservation_state[i] = "Held" => arm_resolution[i] = "Open"
+
+C_InvReservationIsNotIrreversibleCommit ==
+    \A i \in Arms :
+        reservation_state[i] = "Held" => arm_resolution[i] # "WinnerCommitted"
+
+\* -- I: PR #17 rollback closure as permanent safety law --------------------
+
+C_InvRegistrationRollbackOnlyBeforeSuspension ==
+    ContractRegistrationRollbackDisabledAfterSuspension
+
+C_InvRegistrationRollbackRequiresNoWinner ==
+    contract_phase = "Rollback" => winner = NoArm
+
+C_InvRegistrationRollbackRequiresRunningCaller ==
+    contract_phase = "Rollback" => caller_state = "Running"
+
+C_InvAbortedCallerNeverWaiting ==
+    contract_phase = "Aborted" => caller_state # "Waiting"
+
+C_InvDestroyedCallerNeverWaiting ==
+    contract_phase = "Destroyed" => caller_state # "Waiting"
+
+C_InvRollbackNeverPublishes ==
+    contract_phase \in {"Rollback", "Aborted"} =>
+        /\ result_publication_count = 0
+        /\ runnable_publication_count = 0
+
+C_InvRollbackClosesEveryRegisteredAuthority ==
+    contract_phase = "Aborted" => \A i \in Arms : ~authority_open[i]
+
+ContractSafetyInv ==
+    /\ C_InvAtMostOneLinearizedWinner
+    /\ C_InvAtMostOneCommittedWinner
+    /\ C_InvCommitRequiresWinnerLinearization
+    /\ C_InvNoIrreversibleEffectBeforeLinearization
+    /\ C_InvWinnerIdentityStableAfterLinearization
+    /\ C_InvLoserNeverPublishesResult
+    /\ C_InvLoserNeverPublishesRunnable
+    /\ C_InvLoserNeverCommitsIrreversibleEffect
+    /\ C_InvAllLosersAbortedBeforeCompletion
+    /\ C_InvAtMostOneResultPublication
+    /\ C_InvAtMostOneRunnablePublication
+    /\ C_InvInlineCompletionPublishesNoRunnable
+    /\ C_InvSuspendedCompletionPublishesRunnableExactlyOnce
+    /\ C_InvRunnablePublicationRequiresPriorWaiting
+    /\ C_InvOnlyWinnerPublishes
+    /\ C_InvCompletionRequiresWinnerCommitted
+    /\ C_InvCompletionRequiresAllLosersAborted
+    /\ C_InvCompletionRequiresAllAuthorityClosed
+    /\ C_InvDestroyRequiresConsumedOrValidAbort
+    /\ C_InvDestroyedHasNoOpenAuthority
+    /\ C_InvReservationCommitRequiresWinner
+    /\ C_InvLoserReservationReleased
+    /\ C_InvReservationClosesExactlyOnce
+    /\ C_InvHeldReservationIsReversible
+    /\ C_InvReservationIsNotIrreversibleCommit
+    /\ C_InvRegistrationRollbackOnlyBeforeSuspension
+    /\ C_InvRegistrationRollbackRequiresNoWinner
+    /\ C_InvRegistrationRollbackRequiresRunningCaller
+    /\ C_InvAbortedCallerNeverWaiting
+    /\ C_InvDestroyedCallerNeverWaiting
+    /\ C_InvRollbackNeverPublishes
+    /\ C_InvRollbackClosesEveryRegisteredAuthority
+
 ContractInv ==
     /\ ContractTypeOK
     /\ ContractDomainWellFormed
