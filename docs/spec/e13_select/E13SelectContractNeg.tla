@@ -29,7 +29,8 @@ VARIABLES
     contract_phase, arm_registered, readiness_evidence, reservation_state,
     arm_resolution, authority_open, winner, caller_state, completion_mode,
     result_publication_count, runnable_publication_count,
-    arm_publication_count, reservation_close_count, fault_used
+    arm_publication_count, reservation_close_count,
+    linearized_winner, linearized_winner_valid, fault_used
 
 Base == INSTANCE E13SelectContract
         WITH Arms <- Arms, MaxArms <- MaxArms,
@@ -45,14 +46,17 @@ Base == INSTANCE E13SelectContract
              result_publication_count <- result_publication_count,
              runnable_publication_count <- runnable_publication_count,
              arm_publication_count <- arm_publication_count,
-             reservation_close_count <- reservation_close_count
+             reservation_close_count <- reservation_close_count,
+             linearized_winner <- linearized_winner,
+             linearized_winner_valid <- linearized_winner_valid
 
 \* All canonical Contract state plus the fault marker.
 CNegVars ==
     <<contract_phase, arm_registered, readiness_evidence, reservation_state,
       arm_resolution, authority_open, winner, caller_state, completion_mode,
       result_publication_count, runnable_publication_count,
-      arm_publication_count, reservation_close_count, fault_used>>
+      arm_publication_count, reservation_close_count,
+      linearized_winner, linearized_winner_valid, fault_used>>
 
 CNegInit ==
     /\ Base!ContractInit
@@ -70,7 +74,8 @@ CNegStateExceptResolution ==
     <<contract_phase, arm_registered, readiness_evidence, reservation_state,
       authority_open, winner, caller_state, completion_mode,
       result_publication_count, runnable_publication_count,
-      arm_publication_count, reservation_close_count>>
+      arm_publication_count, reservation_close_count,
+      linearized_winner, linearized_winner_valid>>
 
 \* ----- NEG-C1: irreversible commit before winner linearization -----------
 Fault_C1 ==
@@ -113,7 +118,8 @@ Fault_C3 ==
     /\ UNCHANGED <<contract_phase, arm_registered, readiness_evidence,
                     reservation_state, arm_resolution, authority_open, winner,
                     caller_state, completion_mode, result_publication_count,
-                    runnable_publication_count, reservation_close_count>>
+                    runnable_publication_count, reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 \* ----- NEG-C4: complete with open arm authority --------------------------
 Fault_C4 ==
@@ -130,7 +136,8 @@ Fault_C4 ==
     /\ UNCHANGED <<arm_registered, readiness_evidence, reservation_state,
                     arm_resolution, authority_open, winner, caller_state,
                     completion_mode, runnable_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 \* ----- NEG-C5: loser reservation remains Held ----------------------------
 \* A loser arm at terminal success keeps reservation_state = Held.
@@ -150,7 +157,8 @@ Fault_C5 ==
                     arm_resolution, authority_open, winner, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 \* ----- NEG-C6: registration rollback begins after caller Waiting ----------
 \* Simulate the PR #17 P0-1 historical fault: BeginRollback from a Waiting
@@ -169,7 +177,8 @@ Fault_C6 ==
                     arm_resolution, authority_open, winner, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 \* ----- NEG-C7: Aborted operation retains Waiting caller ------------------
 \* PR #17 P0-1 regression target.  From a legally-reached Aborted terminal
@@ -186,7 +195,8 @@ Fault_C7 ==
                     reservation_state, arm_resolution, authority_open, winner,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 \* ----- NEG-C8: destroy before consumed or valid abort --------------------
 \* Destroy the operation directly from Completed (a non-terminal-for-destroy
@@ -205,7 +215,8 @@ Fault_C8 ==
     /\ UNCHANGED <<arm_registered, readiness_evidence, reservation_state,
                     arm_resolution, authority_open, winner, caller_state,
                     result_publication_count, runnable_publication_count,
-                    arm_publication_count, reservation_close_count>>
+                    arm_publication_count, reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 FaultNext ==
     \/ Fault_C1

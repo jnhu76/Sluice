@@ -23,8 +23,10 @@ VARIABLES
     arm_resolution, authority_open, winner, caller_state, completion_mode,
     result_publication_count, runnable_publication_count,
     arm_publication_count, reservation_close_count,
+    linearized_winner, linearized_winner_valid,
     \* Central projection
     central_phase, candidate_ready, claim_candidates, arm_class, claim_mode,
+    claim_snapshot_frozen, claim_snapshot_frozen_valid,
     \* Adapter
     arm_kind, arm_index, adapter_phase, arm_event, wait_outcome, wait_linked,
     context_state, timer_state, timer_due, timer_node_deref,
@@ -56,6 +58,10 @@ Base == INSTANCE E13SelectEventTimer
              runnable_publication_count <- runnable_publication_count,
              arm_publication_count <- arm_publication_count,
              reservation_close_count <- reservation_close_count,
+             linearized_winner <- linearized_winner,
+             linearized_winner_valid <- linearized_winner_valid,
+             claim_snapshot_frozen <- claim_snapshot_frozen,
+             claim_snapshot_frozen_valid <- claim_snapshot_frozen_valid,
              central_phase <- central_phase,
              candidate_ready <- candidate_ready,
              claim_candidates <- claim_candidates,
@@ -105,9 +111,11 @@ ETContractProj ==
     <<contract_phase, arm_registered, readiness_evidence, reservation_state,
       arm_resolution, authority_open, winner, caller_state, completion_mode,
       result_publication_count, runnable_publication_count,
-      arm_publication_count, reservation_close_count>>
+      arm_publication_count, reservation_close_count,
+      linearized_winner, linearized_winner_valid>>
 ETCentralProj ==
-    <<central_phase, candidate_ready, claim_candidates, arm_class, claim_mode>>
+    <<central_phase, candidate_ready, claim_candidates, arm_class, claim_mode,
+      claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 ETAdapterVars ==
     <<arm_kind, arm_index, adapter_phase, arm_event, wait_outcome, wait_linked,
       context_state, timer_state, timer_due, timer_node_deref,
@@ -160,7 +168,8 @@ Fault_E1 ==
     /\ fault_used' = TRUE
     /\ UNCHANGED <<ETContractProj, ETAdapterVars, ETAccountingVars,
                     ETHistoryVars, central_phase, claim_candidates,
-                    arm_class, claim_mode>>
+                    arm_class, claim_mode, claim_snapshot_frozen,
+                    claim_snapshot_frozen_valid>>
 
 \* ---- NEG-E2: broadcast scans arm belonging to another Event -------------
 \* During a scan for held_event e, an arm mapped to a DIFFERENT event is
@@ -215,7 +224,8 @@ Fault_E3 ==
                     readiness_evidence, reservation_state, authority_open,
                     caller_state, completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count, ETAdapterVars, ETAccountingVars,
+                    reservation_close_count, linearized_winner,
+                    linearized_winner_valid, ETAdapterVars, ETAccountingVars,
                     ETHistoryVars>>
 
 \* ---- NEG-E4: Select consumes persistent Event SET -----------------------
@@ -264,7 +274,8 @@ Fault_E5 ==
                     readiness_evidence, reservation_state, arm_resolution,
                     authority_open, winner, caller_state, completion_mode,
                     runnable_publication_count, reservation_close_count,
-                    ETAdapterVars, ETAccountingVars, ETHistoryVars>>
+                    linearized_winner, linearized_winner_valid, ETAdapterVars,
+                    ETAccountingVars, ETHistoryVars>>
 
 \* ---- NEG-E6: shared Event cross-group processing publishes wrong group ---
 \* Single-group reduction: an Event broadcast publishes a result for an arm
@@ -284,7 +295,8 @@ Fault_E6 ==
     /\ UNCHANGED <<contract_phase, arm_registered, readiness_evidence,
                     reservation_state, arm_resolution, authority_open, winner,
                     caller_state, completion_mode, runnable_publication_count,
-                    reservation_close_count, ETCentralProj, arm_kind, arm_index,
+                    reservation_close_count, linearized_winner,
+                    linearized_winner_valid, ETCentralProj, arm_kind, arm_index,
                     adapter_phase, arm_event, wait_outcome, wait_linked,
                     context_state, timer_state, timer_due, timer_node_deref,
                     timer_skip_observed, waiting_account_open,
@@ -420,7 +432,8 @@ Fault_T5 ==
                     readiness_evidence, reservation_state, arm_resolution,
                     authority_open, winner, caller_state, completion_mode,
                     result_publication_count, runnable_publication_count,
-                    reservation_close_count, ETAdapterVars, ETAccountingVars,
+                    reservation_close_count, linearized_winner,
+                    linearized_winner_valid, ETAdapterVars, ETAccountingVars,
                     ETHistoryVars>>
 
 \* ---- NEG-A1: waiting accounting closes twice ----------------------------
@@ -466,8 +479,8 @@ Fault_A3 ==
     /\ UNCHANGED <<arm_registered, readiness_evidence, reservation_state,
                     arm_resolution, authority_open, winner, caller_state,
                     runnable_publication_count, reservation_close_count,
-                    ETCentralProj, ETAdapterVars, ETAccountingVars,
-                    ETHistoryVars>>
+                    linearized_winner, linearized_winner_valid, ETCentralProj,
+                    ETAdapterVars, ETAccountingVars, ETHistoryVars>>
 
 \* ---- NEG-A4: accounting counter underflow -------------------------------
 \* An arm with close_count = 0, open_count = 0 gets close_count = 1 (close

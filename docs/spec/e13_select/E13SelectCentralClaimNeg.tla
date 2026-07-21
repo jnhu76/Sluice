@@ -16,7 +16,9 @@ VARIABLES
     arm_resolution, authority_open, winner, caller_state, completion_mode,
     result_publication_count, runnable_publication_count,
     arm_publication_count, reservation_close_count,
+    linearized_winner, linearized_winner_valid,
     central_phase, candidate_ready, claim_candidates, arm_class, claim_mode,
+    claim_snapshot_frozen, claim_snapshot_frozen_valid,
     fault_used
 
 Base == INSTANCE E13SelectCentralClaim
@@ -34,18 +36,24 @@ Base == INSTANCE E13SelectCentralClaim
              runnable_publication_count <- runnable_publication_count,
              arm_publication_count <- arm_publication_count,
              reservation_close_count <- reservation_close_count,
+             linearized_winner <- linearized_winner,
+             linearized_winner_valid <- linearized_winner_valid,
              central_phase <- central_phase,
              candidate_ready <- candidate_ready,
              claim_candidates <- claim_candidates,
              arm_class <- arm_class,
-             claim_mode <- claim_mode
+             claim_mode <- claim_mode,
+             claim_snapshot_frozen <- claim_snapshot_frozen,
+             claim_snapshot_frozen_valid <- claim_snapshot_frozen_valid
 
 SNegVars ==
     <<contract_phase, arm_registered, readiness_evidence, reservation_state,
       arm_resolution, authority_open, winner, caller_state, completion_mode,
       result_publication_count, runnable_publication_count,
-      arm_publication_count, reservation_close_count, central_phase,
-      candidate_ready, claim_candidates, arm_class, claim_mode, fault_used>>
+      arm_publication_count, reservation_close_count,
+      linearized_winner, linearized_winner_valid, central_phase,
+      candidate_ready, claim_candidates, arm_class, claim_mode,
+      claim_snapshot_frozen, claim_snapshot_frozen_valid, fault_used>>
 
 SNegInit ==
     /\ Base!CentralInit
@@ -77,7 +85,9 @@ Fault_S1 ==
                     arm_resolution, authority_open, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count, candidate_ready>>
+                    reservation_close_count, candidate_ready,
+                    linearized_winner, linearized_winner_valid,
+                    claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 \* ----- NEG-S2: mutate claim snapshot after claim -------------------------
 \* After a claim, the snapshot is mutated to REMOVE the winner from
@@ -93,7 +103,9 @@ Fault_S2 ==
                     caller_state, completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
                     reservation_close_count, central_phase, candidate_ready,
-                    arm_class, claim_mode>>
+                    arm_class, claim_mode,
+                    linearized_winner, linearized_winner_valid,
+                    claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 \* ----- NEG-S3: two successful group claims -------------------------------
 \* Two arms are classified Winner.
@@ -111,7 +123,9 @@ Fault_S3 ==
                     caller_state, completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
                     reservation_close_count, central_phase, candidate_ready,
-                    claim_candidates, claim_mode>>
+                    claim_candidates, claim_mode,
+                    linearized_winner, linearized_winner_valid,
+                    claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 \* ----- NEG-S4: adapter commit before group claim -------------------------
 \* An arm is linearized AND committed while central_phase is still Admission/
@@ -135,7 +149,9 @@ Fault_S4 ==
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
                     reservation_close_count, central_phase, candidate_ready,
-                    claim_candidates, arm_class, claim_mode>>
+                    claim_candidates, arm_class, claim_mode,
+                    linearized_winner, linearized_winner_valid,
+                    claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 \* ----- NEG-S5: wrong lowest-index admission winner -----------------------
 \* Admission tie with >=2 candidates; fault picks a non-lowest winner.
@@ -163,7 +179,9 @@ Fault_S5 ==
                     arm_resolution, authority_open, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count, candidate_ready>>
+                    reservation_close_count, candidate_ready,
+                    linearized_winner, linearized_winner_valid,
+                    claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 \* ----- NEG-S6: winner taken from another group ---------------------------
 \* In this single-group Central model "another group" is modelled as a winner
@@ -194,7 +212,9 @@ Fault_S6 ==
                     arm_resolution, authority_open, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count, candidate_ready, claim_candidates>>
+                    reservation_close_count, candidate_ready, claim_candidates,
+                    linearized_winner, linearized_winner_valid,
+                    claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 FaultNext ==
     \/ Fault_S1

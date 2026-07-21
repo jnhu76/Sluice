@@ -30,6 +30,8 @@ VARIABLES
     runnable_publication_count,
     arm_publication_count,
     reservation_close_count,
+    linearized_winner,
+    linearized_winner_valid,
 
     \* Central Claim projection.
     central_phase,
@@ -37,6 +39,8 @@ VARIABLES
     claim_candidates,
     arm_class,
     claim_mode,
+    claim_snapshot_frozen,
+    claim_snapshot_frozen_valid,
 
     \* Event/Timer adapter state.
     arm_kind,
@@ -99,10 +103,12 @@ ContractProjectionVars ==
     <<contract_phase, arm_registered, readiness_evidence, reservation_state,
       arm_resolution, authority_open, winner, caller_state, completion_mode,
       result_publication_count, runnable_publication_count,
-      arm_publication_count, reservation_close_count>>
+      arm_publication_count, reservation_close_count,
+      linearized_winner, linearized_winner_valid>>
 
 CentralOnlyProjectionVars ==
-    <<central_phase, candidate_ready, claim_candidates, arm_class, claim_mode>>
+    <<central_phase, candidate_ready, claim_candidates, arm_class, claim_mode,
+      claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralProjectionVars ==
     <<ContractProjectionVars, CentralOnlyProjectionVars>>
@@ -149,11 +155,15 @@ CentralRefinement == INSTANCE E13SelectCentralClaim WITH
     runnable_publication_count <- runnable_publication_count,
     arm_publication_count <- arm_publication_count,
     reservation_close_count <- reservation_close_count,
+    linearized_winner <- linearized_winner,
+    linearized_winner_valid <- linearized_winner_valid,
     central_phase <- central_phase,
     candidate_ready <- candidate_ready,
     claim_candidates <- claim_candidates,
     arm_class <- arm_class,
-    claim_mode <- claim_mode
+    claim_mode <- claim_mode,
+    claim_snapshot_frozen <- claim_snapshot_frozen,
+    claim_snapshot_frozen_valid <- claim_snapshot_frozen_valid
 
 ArmKindT == {"None", "EventArm", "TimerArm"}
 AdapterPhaseT ==
@@ -181,6 +191,7 @@ NoStep == 0
 StepT == 0..40
 GroupIdT == 0..1
 EpochT == 0..4
+\* PR #18 widened accounting counter domain.  The canonical transitions only
 
 ReadySource(i) ==
     \/ /\ arm_kind[i] = "EventArm"
@@ -1642,4 +1653,6 @@ ReachAdapterPublicationStepRecorded ==
     publication_step # NoStep
 NotReachAdapterPublicationStepRecorded == ~ReachAdapterPublicationStepRecorded
 
+\* PR #18 corrective-1 non-vacuity witness for the widened accounting laws.
+\* Proves the at-most-once laws are non-vacuous after widening the counter
 =============================================================================
