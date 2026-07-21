@@ -262,3 +262,64 @@ broadcast scaling remains outside this bounded PR #17 graph.
 PR #17 does not claim complete E13 concrete safety closure. PR #18 remains
 responsible for the full safety invariant suite and negative models, including
 the stale-pump mutation. Production implementation remains denied.
+
+---
+
+## PR #18 — Formal Safety (in progress)
+
+PR #18 (`feat/e13-select-formal-safety`, task
+`E13-SELECT-FORMAL-MODEL-SAFETY-1`) closes the safety foundation of the
+E13 Select formal core.  It adds, *alongside* the PR #17 canonical
+aggregates (which are preserved unchanged so PR #17 metrics still
+reproduce exactly):
+
+- **Layered safety invariants.**
+  `ContractSafetyInv` (32 laws, H1-H5 + I), `CentralSafetyInv` (14 laws, J),
+  `AdapterSafetyInv` (K + L + M + N, 42 laws).  See `INVARIANTS.md`.
+- **Refinement safety.**  PR #17 INSTANCE-WITH mappings unchanged; widened
+  3-arm refinement check added.  See `REFINEMENT.md`.
+- **Focused negative models.**  29 single-fault mutations (NEG-C1..C8,
+  NEG-S1..S6, NEG-E1..E6 + NEG-T1..T5 + NEG-A1..A4) plus three
+  FAULT="None" restoration configs.  See `NEGATIVE_MODELS.md`.
+- **Non-vacuity evidence.**  20 inverse-reachability witnesses proving each
+  named law's premise is reachable.  See `NON_VACUITY.md`.
+- **Bounded multi-group non-interference.**  `E13SelectMultiGroup.tla`
+  composes two 1-arm SelectGroups sharing a single Event identity space.
+- **Repeatable verification tooling.**
+  `tools/formal/verify-e13-select-safety.sh` runs the full suite in an
+  isolated mktemp workspace.  See `EVIDENCE_SAFETY.md`.
+
+### PR #18 file additions
+
+| File | Purpose |
+|------|---------|
+| `E13SelectContract.tla` | `ContractSafetyInv` (added) |
+| `E13SelectCentralClaim.tla` | `CentralSafetyInv` (added) |
+| `E13SelectEventTimer.tla` | `AdapterSafetyInv` + M accounting + N history (added) |
+| `E13SelectContractNeg.tla` | Contract focused negative models (NEG-C1..C8) |
+| `E13SelectCentralClaimNeg.tla` | Central focused negative models (NEG-S1..S6) |
+| `E13SelectEventTimerNeg.tla` | Adapter focused negative models (NEG-E/T/A) |
+| `E13SelectMultiGroup.tla` | Bounded two-group non-interference model |
+| `E13Select*.safety*.cfg` | Layered safety aggregates (positive) |
+| `E13Select*Neg.*.cfg` | Focused negative models (per-fault) |
+| `E13Select*.nv_*.cfg` / `*.central_*.cfg` / `*.adapter_*.cfg` | Non-vacuity witnesses |
+| `E13SelectCentralClaim.refine3.cfg` | Widened refinement check |
+| `tools/formal/verify-e13-select-safety.sh` | Reproducible PR #18 formal gate |
+| `INVARIANTS.md` / `NEGATIVE_MODELS.md` / `NON_VACUITY.md` / `REFINEMENT.md` / `EVIDENCE_SAFETY.md` | Safety docs |
+
+### PR #18 scope
+
+Formal specification only.  No production C++ under `include/`, `src/`,
+`tests/`, `examples/`, `benchmarks/`.  No public API change.  No production
+build or CI policy change.  Pre-existing untracked files
+`tests/test_t3_simple.cpp` and `tla2tools.jar` are not modified, deleted,
+staged, or committed.
+
+### Reproduce
+
+```bash
+TLC_WORKERS=1 ./tools/formal/verify-e13-select-core.sh     # PR #17 regression
+TLC_WORKERS=1 ./tools/formal/verify-e13-select-safety.sh   # PR #18 safety suite
+```
+
+Both must end with `=== PASS: ... ===`.
