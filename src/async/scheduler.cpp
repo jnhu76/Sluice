@@ -13,7 +13,10 @@
 // (E7-T1/T2) and preserve single-worker regression (E4-E6).
 #include <sluice/async/scheduler.hpp>
 
+#include <sluice/async/select.hpp>
+#include <sluice/async/event.hpp>
 #include <sluice/async/fiber_ctx.hpp>
+#include <sluice/async/detail/select_port.hpp>
 
 #include "queue_detail.hpp"  // QueueWaitCtx (shared with queue_port.cpp; non-installed)
 
@@ -1301,7 +1304,8 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
 // ---- E12-A Event wait admission / broadcast (sluice-CORE-E12-A) ----
 
 std::size_t Scheduler::event_set_broadcast(WaitQueue& waiters,
-                                            std::atomic<bool>& set_flag) {
+                                            std::atomic<bool>& set_flag,
+                                            detail::SelectPort& select_port) {
     // Transition `set_flag` to SET and drain every registered Event wait epoch
     // through the canonical RESOURCE_WAKE path (wake_wait_one_locked). The store
     // + drain are ONE atomic critical section under global_mtx_, serializing
@@ -1316,12 +1320,28 @@ std::size_t Scheduler::event_set_broadcast(WaitQueue& waiters,
     // CAS + unlink + retire-timer + dec-count + make_runnable + route. One
     // runnable publication per winning epoch (E7-T2 exactly-once).
     //
+    // P2: also performs Phase-1 Select scan on `select_port` inside the same
+    // global_mtx_ critical section. Eligible Event Select arms are marked
+    // CandidateReady (readiness-offer only — no claim, no finalization, no
+    // publication). Idempotent: a second set() finds no Registered arms
+    // (already CandidateReady) and marks zero.
+    //
     // Safe to call from an external OS thread: global_mtx_ + the wake source
     // (signal_wake_locked via route_runnable_locked) are the existing external-
     // wake-capable mechanism. No Event-private wake channel.
     std::size_t woken = 0;
     LockGuard lk(global_mtx_);
-    set_flag.store(true, std::memory_order::release);
+    // P2: if the Event is already SET, the store is a no-op. We must not
+    // re-drain the waiters (they are already terminal) and must not re-mark
+    // already CandidateReady arms. The idempotent check is the store itself:
+    // a second SET store is invisible. We skip the drain and scan for
+    // efficiency, but the same correctness holds if we ran them (the queue
+    // would be empty, and Registered arms would already be CandidateReady).
+    bool previous = set_flag.exchange(true, std::memory_order::release);
+    if (previous) {
+        // Already SET — no-op. No drain, no Select scan.
+        return 0;
+    }
     // E12-A-EVENT-CORRECTIVE-1 (Corrective B): deterministic set-store-before-
     // drain phase seam. When armed, pause the set() thread AFTER it has stored
     // SET and while it STILL HOLDS global_mtx_, BEFORE the drain loop. This lets
@@ -1337,6 +1357,23 @@ std::size_t Scheduler::event_set_broadcast(WaitQueue& waiters,
     while (wake_wait_one_locked(waiters) != nullptr) {
         ++woken;
     }
+    // P2: Phase-1 Select scan — offer readiness to eligible Event Select arms
+    // inside the same global_mtx_ critical section. Walks the Event's private
+    // SelectPort, marking Registered -> CandidateReady for arms whose group
+    // phase is Armed. Idempotent: no re-marking of already CandidateReady arms.
+    // No claim, no finalization, no publication.
+    detail::SelectArmSlot* arm = select_port.head_;
+    while (arm != nullptr) {
+        detail::SelectArmSlot* next = arm->next_;
+        if (arm->kind == detail::ArmKind::event &&
+            arm->state == detail::ArmState::registered &&
+            arm->group != nullptr &&
+            arm->group->phase() == detail::GroupPhase::armed &&
+            arm->home_ == &select_port) {
+            arm->state = detail::ArmState::candidate_ready;
+        }
+        arm = next;
+    }
     return woken;
 }
 
@@ -1348,6 +1385,95 @@ void Scheduler::event_reset(std::atomic<bool>& set_flag) {
     // (the set/reset epoch isolation domain).
     LockGuard lk(global_mtx_);
     set_flag.store(false, std::memory_order::release);
+}
+
+// ---- E13 Select registry operations (private Scheduler authority) ----
+
+void Scheduler::select_event_link_locked(Event& event,
+                                         detail::SelectArmSlot& arm) {
+    // Precondition: arm is not already linked.
+    // The caller (future select() admission) is responsible for setting
+    // arm.state to Prepared and arm.group to the owning SelectGroup.
+    assert(arm.home_ == nullptr &&
+           "select_event_link_locked: arm already linked");
+    assert(arm.next_ == nullptr &&
+           "select_event_link_locked: arm.next_ not null");
+    assert(arm.prev_ == nullptr &&
+           "select_event_link_locked: arm.prev_ not null");
+    assert(arm.kind == detail::ArmKind::event &&
+           "select_event_link_locked: arm kind must be event");
+    assert(arm.event.event_ == &event &&
+           "select_event_link_locked: arm.event does not point to this Event");
+    assert((arm.state == detail::ArmState::detached ||
+            arm.state == detail::ArmState::prepared) &&
+           "select_event_link_locked: arm state must be Detached or Prepared");
+    assert(arm.group != nullptr &&
+           "select_event_link_locked: arm.group must be set");
+
+    arm.home_ = &event.select_port_;
+    arm.state = detail::ArmState::registered;
+
+    // Insert at head of the doubly-linked list.
+    detail::SelectPort& port = event.select_port_;
+    arm.next_ = port.head_;
+    if (port.head_ != nullptr) {
+        port.head_->prev_ = &arm;
+    }
+    arm.prev_ = nullptr;
+    port.head_ = &arm;
+}
+
+void Scheduler::select_event_unlink_locked(Event& event,
+                                           detail::SelectArmSlot& arm) {
+    // Validate that the arm belongs to this Event's port.
+    assert(arm.home_ == &event.select_port_ &&
+           "select_event_unlink_locked: arm does not belong to this Event");
+    assert((arm.state == detail::ArmState::registered ||
+            arm.state == detail::ArmState::candidate_ready ||
+            arm.state == detail::ArmState::retired) &&
+           "select_event_unlink_locked: unexpected arm state");
+
+    detail::SelectPort& port = event.select_port_;
+
+    // Repair predecessor link.
+    if (arm.prev_ != nullptr) {
+        arm.prev_->next_ = arm.next_;
+    } else {
+        // Arm is the head.
+        port.head_ = arm.next_;
+    }
+
+    // Repair successor link.
+    if (arm.next_ != nullptr) {
+        arm.next_->prev_ = arm.prev_;
+    }
+
+    // Clear arm linkage.
+    arm.next_ = nullptr;
+    arm.prev_ = nullptr;
+    arm.home_ = nullptr;
+}
+
+std::size_t Scheduler::select_event_scan_locked(Event& event) {
+    // Walk the Event's SelectPort, marking eligible Event Select arms
+    // CandidateReady. P2: readiness-offer only — no claim, no finalization,
+    // no publication, no unlink, no worklist construction.
+    std::size_t marked = 0;
+    detail::SelectArmSlot* arm = event.select_port_.head_;
+    while (arm != nullptr) {
+        detail::SelectArmSlot* next = arm->next_;
+        if (arm->kind == detail::ArmKind::event &&
+            arm->state == detail::ArmState::registered &&
+            arm->group != nullptr &&
+            arm->group->phase() == detail::GroupPhase::armed &&
+            arm->home_ == &event.select_port_ &&
+            arm->event.event_ == &event) {
+            arm->state = detail::ArmState::candidate_ready;
+            ++marked;
+        }
+        arm = next;
+    }
+    return marked;
 }
 
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {

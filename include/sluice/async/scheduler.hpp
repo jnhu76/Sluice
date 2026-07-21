@@ -36,6 +36,13 @@
 
 namespace sluice::async {
 
+class Event;
+
+namespace detail {
+class SelectPort;
+struct SelectArmSlot;
+}  // namespace detail
+
 // ----------------------------------------------------------------------------
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1.
 //
@@ -338,9 +345,12 @@ public:
     // resolved through the canonical path (wake_wait_one_locked: resolve_(Woken)
     // + unlink + retire timer + dec count + make_runnable + route). Idempotent:
     // set() on SET is a no-op (the store is a no-op; the drain finds the queue
-    // in whatever state the registered waiters left it). Returns the number of
-    // waiters resolved by THIS call. Safe to call from an external OS thread.
-    std::size_t event_set_broadcast(WaitQueue& waiters, std::atomic<bool>& set_flag);
+    // in whatever state the registered waiters left it). P2: also performs
+    // Phase-1 Select scan on `select_port` inside the same global_mtx_ CS.
+    // Returns the number of waiters resolved by THIS call.
+    // Safe to call from an external OS thread.
+    std::size_t event_set_broadcast(WaitQueue& waiters, std::atomic<bool>& set_flag,
+                                    detail::SelectPort& select_port);
 
     // Transition `set_flag` to UNSET. Does NOT resolve, cancel, expire, unlink,
     // or publish any WaitNode. A waiter already registered remains governed by
@@ -825,6 +835,29 @@ private:
     // (those pass their private waiters_ by reference); the Queue needs
     //Scheduler-internal wake + global-mtx access for its reconciler.
     friend class ::sluice::async::detail::QueuePort;
+
+    // ---- E13 Select registry operations (private Scheduler authority) ----
+    // All three require global_mtx_ held. Event must belong to this Scheduler.
+    //
+    // Link `arm` into `event`'s private SelectPort. Precondition: arm is
+    // Prepared/Detached, home_ is null, not already linked. Establishes:
+    // arm.home_ == &event.select_port_, arm.state == Registered,
+    // arm.kind == Event, arm.group != nullptr.
+    void select_event_link_locked(Event& event, detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Remove `arm` from `event`'s private SelectPort. Repairs links and
+    // clears arm.next_, arm.prev_, arm.home_. Does NOT claim winner, set
+    // result, publish caller, or retire Timer. Assertion-fails on mismatch.
+    void select_event_unlink_locked(Event& event, detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Walk `event`'s SelectPort, marking eligible Event arms CandidateReady.
+    // Eligible: kind==Event, state==Registered, group!=nullptr, group.phase==Armed.
+    // Returns the number of arms marked. P2: readiness-offer only; no winner
+    // claim, no finalization, no publication.
+    std::size_t select_event_scan_locked(Event& event)
+        SLUICE_REQUIRES(global_mtx_);
 
     // Wait registration with owner Worker (E7-B will use owner; E7-A stores
     // the Fiber only).

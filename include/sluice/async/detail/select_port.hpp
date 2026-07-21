@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <sluice/async/select.hpp>
 #include <sluice/async/scheduler.hpp>
 
 namespace sluice::async {
@@ -165,7 +166,7 @@ public:
     std::uint64_t broadcast_epoch_{0};
 
 private:
-    friend class Scheduler;
+    friend class ::sluice::async::Scheduler;
 
     std::atomic<GroupPhase> phase_{GroupPhase::building};
     std::atomic<std::uint32_t> winner_{kNoWinner};
@@ -186,7 +187,7 @@ public:
     bool empty() const noexcept { return head_ == nullptr; }
 
 private:
-    friend class Scheduler;
+    friend class ::sluice::async::Scheduler;
 
     SelectArmSlot* head_{nullptr};
 };
