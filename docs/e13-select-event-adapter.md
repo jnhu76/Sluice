@@ -188,7 +188,7 @@ Answers (selected):
 | Does the Event registry have its own mutex?        | **No.** `select_port_` is protected by `global_mtx_`. There is no separate registry mutex. |
 | Lock order                                         | `global_mtx_` → (the Event's `waiters_.mtx()` for the ordinary drain, already under G) → the Select registry is under G directly (no extra mutex) |
 | May Phase 2 recursively re-enter another Event?    | **No.** Finalization does not call `set()` or any Event mutator. The winner resolve is on the **already-scanned** Select arm via a *targeted* `wake_arm_locked`, not a queue scan. |
-| How does an external-thread `set()` route the caller Fiber? | Same path as today: `route_runnable_locked(f, g_worker)` with `g_worker == nullptr` on an external thread, falling back to `pending_spawn_` routing (mirrors `event_set_broadcast`'s existing external-thread handling). |
+| How does an external-thread `set()` route the caller Fiber? | Uses `group.caller_owner_` (stored at admission). The external thread's `g_worker` is irrelevant. The group's stored owner is the authoritative routing target. `route_runnable_locked` routes to the owner worker's local queue. |
 | One group with two arms on the same Event: dedup?  | The Phase 1 scan collects the group identity once (dedup by `SelectGroup*`); Phase 2 processes it once, picking the lowest-index ready arm. |
 | Two groups sharing one Event: separate completion? | Yes. Phase 2 iterates the deduplicated set; each group runs its own claim + finalize + publish, independently. |
 
@@ -289,24 +289,27 @@ Key properties:
 
 ## 5. The Select-aware Event broadcast — pseudocode
 
-This is the body of `Scheduler::event_set_broadcast` extended for Select. The
-existing ordinary-drain loop is unchanged; the Select handling is appended
-under the same `global_mtx_` CS. The public `Event::set()` acquires `global_mtx_`,
-sets the persistent SET flag, then calls this `_locked` helper.
+This is the body of `Scheduler::event_set_broadcast(Event&)` extended for
+Select. The method acquires `global_mtx_` internally and performs the full
+broadcast atomically. The existing ordinary-drain loop is unchanged; the Select
+handling is appended under the same `global_mtx_` CS.
 
 ```text
-event_set_broadcast_select_aware_locked(event):
+event_set_broadcast(event):
 
-    PRE: global_mtx_ held by caller
-    PRE: Event::set() has already acquired G and set the persistent SET flag
+    acquire global_mtx_
 
-    if event_select_is_ready_locked(event):          // idempotent
-        return 0
-    // the persistent SET flag was set by Event::set() before this helper runs
+    // atomic exchange: set the persistent flag and test whether it was
+    // already set. If was_set is true, the broadcast is idempotent.
+    was_set = event.set_.exchange(true, release)
+
+    if was_set:
+        release global_mtx_
+        return 0                                       // idempotent
 
     // -- ordinary drain (UNCHANGED from production) --
     while wake_wait_one_locked(event.waiters_) != nullptr:
-        ;                                          // ordinary Event waits
+        ;                                              // ordinary Event waits
 
     // -- Phase 1: scan select_port_ for THIS Event, build intrusive worklist --
     worklist_head = nullptr
@@ -331,9 +334,10 @@ event_set_broadcast_select_aware_locked(event):
         select_process_group_locked(*grp)
         grp = next
 
-    // no g.unlock() — caller (Event::set()) holds G for the full CS
-    // no signal_wake_locked() — caller (Event::set()) handles it
-    return |worklist_head|                            // count not needed; exists for symmetry
+    signal_wake_locked()                              // wake any parked worker
+    release global_mtx_
+    // return value is not meaningful for callers; the function may return
+    // void or the count of affected groups (for instrumentation)
 ```
 
 ### 5.1 Properties preserved
@@ -358,12 +362,12 @@ event_set_broadcast_select_aware_locked(event):
 `Event::set()` is documented as safe from an external OS thread
 (`event.hpp:99-105`). The Select-aware broadcast preserves this. The routing
 path on an external thread uses `group.caller_owner_` (stored at admission),
-not `g_worker`. If the group was admitted from a valid Fiber (required by the
-caller contract, `docs/e13-select-public-api.md` §4.11), `caller_owner_` is
-non-null and `route_runnable_locked` routes to the correct worker. If
-`caller_owner_` is null, it falls back to `pending_spawn_` routing
-(`scheduler.cpp:910+`), exactly as today. The cross-worker routing concern is
-already solved by the existing E7-B/E8 machinery.
+not `g_worker`. The group's stored owner is the authoritative routing target
+regardless of which thread calls `Event::set()`. If the group was admitted from
+a valid Fiber (required by the caller contract, `docs/e13-select-public-api.md`
+§4.11), `caller_owner_` is non-null and `route_runnable_locked` routes to the
+correct worker. The cross-worker routing concern is already solved by the
+existing E7-B/E8 machinery.
 
 ---
 
@@ -379,49 +383,63 @@ already solved by the existing E7-B/E8 machinery.
 
 ---
 
-## 8. Event Scheduler binding access
+## 8. Event private authority — selected design
 
 The Select admission code needs to read the Event's Scheduler binding to
 validate that all cases belong to the same Scheduler. The Event does not
 expose a public `Scheduler&` accessor — its Scheduler binding is a private
 authority, like `waiters_` and `select_port_`.
 
-The access seam is a narrow Scheduler-friended function:
+### 8.1 Selected: Scheduler is a friend of Event
 
 ```cpp
-// in detail/, not installed
-Scheduler& event_select_get_scheduler(const Event& event);
+class Event {
+    friend class Scheduler;
+
+private:
+    Scheduler& scheduler_;
+    std::atomic<bool> set_;
+    WaitQueue waiters_;
+    detail::SelectPort select_port_;
+};
 ```
 
-This is a friend of `Event` (or `Scheduler` is a friend of `Event`), and
-returns the Scheduler reference stored in the Event. It is the **only** way
-Select code reaches the Event's Scheduler binding. No public accessor is added
-to Event. No test friend is granted.
-
-Similarly, the Event's `set_` flag is read through a locked seam:
+All Event Select operations are `Scheduler` private member functions, not
+namespace-level free functions:
 
 ```cpp
-// under global_mtx_; returns the persistent SET flag
+// Scheduler private methods:
+void select_validate_event_locked(const Event& event);
+    // reads event.scheduler_ under G; returns or throws on mismatch
+
 bool event_select_is_ready_locked(const Event& event);
+    // reads event.set_ under G
+
+void event_select_register_arm_locked(Event& event, SelectArmSlot& slot);
+    // links slot into event.select_port_ under G
+
+void event_select_unlink_arm_locked(Event& event, SelectArmSlot& slot);
+    // unlinks slot from event.select_port_ under G
+
+void event_set_broadcast(Event& event);
+    // acquires G, exchanges set_, drains ordinary waiters, scans SelectPort
 ```
 
-This ensures the Select registry (`select_port_`), the SET flag, and the
-Scheduler binding are all accessed through the same sealed-authority pattern:
-only `Scheduler` (via narrow locked seams in `detail/select_event.cpp`) can
-reach them. No new public API on `Event` is introduced.
+`EventSelectCase` stores only `Event*` and does not read the Scheduler binding
+directly. The Scheduler reads the binding during validation via its own private
+method.
 
-The planned seam surface:
+### 8.2 Why not free-function friends
 
-```cpp
-// detail/select_event.cpp, friended to Event:
-Scheduler& event_select_get_scheduler(const Event&);
-bool       event_select_is_ready_locked(const Event&);  // PRE: global_mtx_ held
-void       event_select_register_locked(Event&, SelectArmSlot&);
-void       event_select_unlink_locked(Event&, SelectArmSlot&);
-```
+Free `friend` functions that are declared in an installed header become
+callable by any TU that can name them, creating a forgeable authority surface.
+Making `Scheduler` the sole friend and keeping all Select operations as private
+members of `Scheduler` preserves the sealed-authority discipline:
 
-These replace any direct access to `Event::scheduler_`, `Event::set_`, or
-`Event::select_port_`.
+- No installed header declares a Select-specific accessor on Event.
+- No ADL-visible free function exposes Event internals.
+- The only reach path is `Scheduler::select_validate_event_locked(event)`,
+  which is private and not callable from outside `Scheduler` methods.
 
 ---
 

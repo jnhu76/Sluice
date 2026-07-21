@@ -77,10 +77,12 @@ the variadic expansion; Candidate A pushes that onto the user.
 
 ### 3.1 Why C
 
-1. **Zero extra allocation.** A variadic expansion materialises the cases into
-a fixed-size caller-frame array of `SelectArmSlot` (the variadic expansion
-    materialises the cases into a `std::array<SelectArmSlot, sizeof...(Cases)>`).
-    No builder object, no span indirection, no heap.
+1. **Zero extra allocation for case storage.** A variadic expansion materialises the cases into
+   a fixed-size caller-frame array of `SelectArmSlot` (the variadic expansion
+   materialises the cases into a `std::array<SelectArmSlot, sizeof...(Cases)>`).
+   No builder object, no span indirection, no heap for case storage. (Timer arms
+   additionally allocate one Scheduler-owned stable block each, allocated before
+   the global critical section.)
 2. **Compile-time type safety.** Each case is a typed value. An invalid tag or
    a missing Scheduler binding cannot be expressed; the type system rejects
    wrong case kinds at the call site.
@@ -168,7 +170,8 @@ public:
 // The requires clause rejects empty packs, too-large packs, and non-case
 // types at compile time.
 // SelectCaseType<Case> is a concept matching EventSelectCase and
-// TimerSelectCase (defined in the same header).
+// TimerSelectCase (defined in the same header), applied to the decayed type
+// (std::remove_cvref_t) so that lvalue cases satisfy the constraint.
 template <class... Cases>
     requires (
         sizeof...(Cases) >= 1 &&
@@ -285,14 +288,36 @@ caller contract violation. The implementation validates this before any
 allocation or registration:
 
 ```text
-g_worker == nullptr                          → debug assert + std::logic_error
-g_worker->current == nullptr                 → debug assert + std::logic_error
-g_worker->scheduler != &scheduler            → debug assert + std::logic_error
+Scheduler::validate_select_caller():
+    // 1. verify this thread is a Scheduler worker
+    if g_worker == nullptr:
+        throw std::logic_error("select() called from non-worker thread")
+
+    // 2. verify the worker belongs to this Scheduler
+    //    (WorkerState stores an immutable owner Scheduler pointer)
+    WorkerState* ws = g_worker
+    if ws->owner_scheduler != this:
+        throw std::logic_error("select() called on wrong Scheduler")
+
+    // 3. verify the worker has a current Fiber
+    if ws->current == nullptr:
+        throw std::logic_error("select() called with no current Fiber")
+
+    // capture caller + owner for publication
+    caller_ = ws->current
+    caller_owner_ = ws
 ```
 
+The `WorkerState::owner_scheduler` pointer is set once at worker construction
+and never modified. It is the single authoritative check: if the current
+worker's `owner_scheduler` differs from the `select()` target Scheduler, the
+call is rejected.
+
 These checks run before any `SelectTimerRegistration` allocation, so no
-rollback is needed. The specific error form is a debug assertion followed by
-`std::logic_error` (matching the project's contract-failure convention).
+rollback is needed. The error form is `std::logic_error` (not a debug assert)
+because the caller is a user of the public API, not an internal invariant
+failure. A debug assertion may additionally fire in debug builds, but the
+`std::logic_error` is the load-bearing rejection mechanism.
 
 ---
 

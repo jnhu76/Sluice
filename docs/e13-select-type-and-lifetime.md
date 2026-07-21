@@ -134,7 +134,8 @@ Each type below records the eight fields the brief requires.
 | destruction location      | `select(...)` frame unwind, AFTER all authority closed         |
 | thread-access domain      | the calling Fiber + Scheduler worker(s) executing the broadcast/pump under `global_mtx_` |
 | lock protecting structural state | none — all access is under `Scheduler::global_mtx_`   |
-| atomic fields             | `std::atomic<uint32_t> winner_` (NoWinner sentinel + arm index); `std::atomic<GroupPhase> phase_`; `CompletionMode completion_mode_` (plain enum under G) |
+| atomic fields             | `std::atomic<uint32_t> winner_` (NoWinner sentinel + arm index); `std::atomic<GroupPhase> phase_` |
+| plain fields under G      | `CompletionMode completion_mode_` (Inline/Suspended, plain enum, written once under G before runnable publication); `SelectGroup* broadcast_next_`; `std::uint64_t broadcast_epoch_` |
 | friend authority          | `Scheduler` only                                              |
 | public visibility         | none — `detail`                                               |
 
@@ -329,7 +330,7 @@ reclamation. Everything else is caller-frame.
 | Object                          | Destroyed when                                  | Precondition enforced            |
 |---------------------------------|-------------------------------------------------|----------------------------------|
 | `SelectResult`                  | caller scope exit                               | trivially destructible           |
-| `SelectGroup`                   | `select(...)` frame unwinds                     | phase == Completed or Consumed or Aborted; all arm authority closed |
+| `SelectGroup`                   | `select(...)` frame unwinds                     | phase == Consumed or Aborted; all arm authority closed |
 | `SelectArmSlot`           | `select(...)` frame unwinds                     | arm state == retired; not linked in any registry |
 | (Event arm slot)           | (same as arm)                                   | unlinked from its `SelectPort`   |
 | (Timer arm slot)           | (same as arm)                                   | its `SelectTimerRegistration` is retired/consumed |
@@ -401,8 +402,11 @@ preconditions mirror `ContractRollbackEnabledDomain`:
 ```text
 phase == Building
 winner == NoWinner
-caller_state == Running
 ```
+
+(The phase expresses the caller disposition: `Building`/`Selecting` imply the
+caller is still running; `Armed` implies the caller was suspended. There is no
+separate `caller_state_` field.)
 
 ### 5.2 Rollback sequence
 

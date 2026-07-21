@@ -199,13 +199,35 @@ std::list<SelectTimerRegistration> tmp_pool;
 for each Timer arm:
     tmp_pool.emplace_back(arm, deadline, scheduler);
 
-// under G:
+// under G, before any registration mutation:
+// reserve heap capacity to guarantee push_back does not allocate
+deadline_heap_.reserve(deadline_heap_.size() + timer_arm_count);
+
+// splice is O(1) and allocation-free
 scheduler.select_timer_pool_.splice(end, tmp_pool);
+
+// push DeadlineHeapEntry values — no allocation after reserve
+for each Timer arm:
+    deadline_heap_.push_back(DeadlineHeapEntry{...});
+```
+
+If `reserve` throws `std::bad_alloc`:
+
+```text
+no arm registered
+no list spliced
+no authority opened
+release G
+rethrow
 ```
 
 Key properties:
 
-- **No allocation under G.** `std::list::splice` is O(1) and allocation-free.
+- **No allocation under G after reserve.** `std::list::splice` is O(1) and
+  allocation-free. `push_back` does not allocate if capacity is sufficient.
+- **`reserve` is the only allocation under G.** It happens strictly before
+  any Select registration mutation (no arm linked, no timer registered). If
+  reserve fails, the Scheduler state is untouched.
 - **Pointer stability.** `std::list` nodes are stable after splice; the
   `SelectTimerRegistration*` stored in the heap entry remains valid for the
   lifetime of the registration.

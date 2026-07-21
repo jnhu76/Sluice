@@ -49,7 +49,7 @@ Test). The numbering is stable; reviewers cite these IDs.
 | ST-12 | same Event completes two groups            | one Event, two callers in separate groups| each group completes once; two independent winners                               |
 | ST-13 | stale Timer after Event winner             | Event wins; Timer deadline later elapses | pump observes RETIRED; no dereference (PhaseTag E13PhaseTimerPumpSkip)           |
 | ST-14 | registration rollback                      | inject failure mid-registration (seam)   | already-registered arms unlinked/retired; group Aborted; no publication          |
-| ST-15 | external thread `Event::set`               | setter thread distinct from worker       | caller routed via pending_spawn_; result correct                                 |
+| ST-15 | external thread `Event::set`               | setter thread distinct from worker       | caller routed via `group.caller_owner_` to owner worker; result correct |
 | ST-16 | multi-worker owner routing                 | multi-worker run, victim on worker k     | resume routed to owner worker k; exactly one runnable enqueue                    |
 | ST-17 | exactly one runnable enqueue               | suspended completion under contention    | Fiber::runnable_count delta == 1                                                 |
 | ST-18 | all loser registrations removed before resume | post-suspension winner, several losers| at resume, every SelectPort empty for the group; every Timer reg != active       |
@@ -67,8 +67,8 @@ Every positive test asserts, in addition to its key assertions:
 - the winner arm:   state == Retired (winner); if Event, unlinked from SelectPort
                     if Timer, SelectTimerRegistration in CONSUMED
 - every loser arm:  state == Retired (loser); Event unlinked; Timer RETIRED
-- group.phase_ == Completed at the end (inline) or transitions through
-  Completed → Consumed (suspended, after caller reacquires G)
+- group.phase_ == Consumed at the end (caller consumed result before return)
+  — test seams may observe Completed before the ConsumeResult transition
 - result_publication_count == 1
 - result_publication_count == 1
 - runnable_publication_count == (Inline ? 0 : 1)
@@ -179,14 +179,18 @@ and cannot forge the seam grant. This mirrors the existing
 ## 5. Test file layout (planned, not created by this task)
 
 ```text
-tests/e13_select_inline.cpp          ST-1..ST-8 (inline admission winners)
-tests/e13_select_suspended.cpp       ST-9..ST-13 (post-suspension winners + stale)
-tests/e13_select_event_adapter.cpp   ST-6, ST-11, ST-12 (multi-arm / multi-group Event)
-tests/e13_select_timer_adapter.cpp   ST-2, ST-5, ST-7, ST-8 (Timer arms)
-tests/e13_select_rollback.cpp        ST-14 (registration rollback)
-tests/e13_select_multi_worker.cpp    ST-15, ST-16, ST-17 (external thread + routing)
-tests/e13_select_contract.cpp        ST-18..ST-23 (lifetime + contract violations + caller validation)
-tests/e13_select_negative.cpp        SN-1..SN-12 + SF-1..SF-3 (negative tests + compile-fail)
+tests/e13_select_type.cpp                P1 type construction + SF-1..SF-3
+tests/e13_select_event_registry.cpp      P2 Event registry structural tests
+tests/e13_select_timer_registration.cpp  P3 Timer heap/stale tests
+tests/e13_select_claim.cpp               P4 claim/finalization negative tests
+tests/e13_select_inline.cpp              P5 ST-1..ST-8 (inline admission winners)
+tests/e13_select_suspended.cpp           P6 ST-9..ST-13 (post-suspension winners + stale)
+tests/e13_select_event_adapter.cpp       P8 ST-6, ST-11, ST-12 (multi-arm / multi-group Event)
+tests/e13_select_timer_adapter.cpp       P3+P5 ST-2, ST-5, ST-7, ST-8 (Timer arms)
+tests/e13_select_rollback.cpp            P7 ST-14 (registration rollback)
+tests/e13_select_multi_worker.cpp        P6 ST-15, ST-16, ST-17 (external thread + routing)
+tests/e13_select_contract.cpp            P7 ST-18..ST-23 (lifetime + contract violations + caller validation)
+tests/e13_select_negative.cpp            P9 SN-1..SN-12 (negative tests)
 ```
 
 Each file corresponds to a review stage in §7.
@@ -224,11 +228,13 @@ allowed files:
     include/sluice/async/detail/select_port.hpp
     include/sluice/async/detail/select_registration.hpp
     src/async/select.cpp                (skeleton only)
+    tests/e13_select_type.cpp           (NEW — type construction tests)
 entry assumptions:
     E10–E12 closed; the formal model closed (PR #17/#18)
 exit gates:
     SelectGroup, SelectArmSlot, SelectTimerRegistration, SelectPort
     compile and are unit-tested for construction/destruction only
+    SF-1..SF-3 (compile-fail) pass
 production behavior enabled:
     NONE (no select() entry point yet)
 remaining denied behavior:
@@ -241,6 +247,7 @@ remaining denied behavior:
 allowed files:
     src/async/select_event.cpp          (SelectPort link/unlink + Phase 1 scan)
     include/sluice/async/event.hpp      (add the embedded SelectPort — no public accessor)
+    tests/e13_select_event_registry.cpp (NEW — Event registry structural tests)
 entry assumptions:
     P1 types exist
 exit gates:
@@ -259,6 +266,7 @@ allowed files:
     src/async/select_timer.cpp          (SelectTimerRegistration + pump branch)
     src/async/scheduler.cpp             (deadline_heap_ migrated to DeadlineHeapEntry;
                                          pump learns the Select branch)
+    tests/e13_select_timer_registration.cpp (NEW — Timer heap/stale tests)
 entry assumptions:
     P1 types exist; the deadline heap accepts the new entry kind
 exit gates:
@@ -277,6 +285,7 @@ allowed files:
     src/async/select.cpp                (claim + finalize core)
     src/async/select_event.cpp          (Event winner/loser finalize)
     src/async/select_timer.cpp          (Timer winner/loser finalize)
+    tests/e13_select_claim.cpp          (NEW — claim/finalization negative tests)
 entry assumptions:
     P2 + P3 registries work
 exit gates:
@@ -294,6 +303,7 @@ remaining denied behavior:
 ```text
 allowed files:
     src/async/select.cpp                (select() entry + admission scan)
+    tests/e13_select_inline.cpp         (NEW — inline admission tests ST-1..ST-8)
 entry assumptions:
     P4 finalize core works
 exit gates:
@@ -314,6 +324,7 @@ allowed files:
     src/async/select.cpp                (suspended admission branch;
                                          Completed → Consumed transition)
     src/async/scheduler.cpp             (select_publish_locked with fail-fast)
+    tests/e13_select_suspended.cpp      (NEW — suspension tests ST-9..ST-10)
 entry assumptions:
     P5 inline path works
 exit gates:
@@ -334,6 +345,7 @@ allowed files:
     src/async/select.cpp                (rollback path)
     include/sluice/async/detail/select_port.hpp
     (Consumed precondition for destruction)
+    tests/e13_select_rollback.cpp       (NEW — rollback/destruction tests ST-14, SN-8)
 entry assumptions:
     P6 publication works
 exit gates:
@@ -350,6 +362,7 @@ remaining denied behavior:
 ```text
 allowed files:
     src/async/select_event.cpp          (Phase 2 intrusive worklist dedup + per-group iteration)
+    tests/e13_select_multi_group.cpp    (NEW — multi-group worklist tests ST-11, ST-12)
 entry assumptions:
     P7 rollback works
 exit gates:

@@ -138,8 +138,9 @@ ContractPublishInline
 
 ContractPublishSuspended
     -> Scheduler::select_publish_locked(group) suspended branch
-       commit point: f->make_runnable() returning true (the exactly-once
-       guard), followed by route_runnable_locked under G
+       commit point: group.result_ written + group.phase_ = Completed (under G)
+       then f->make_runnable() must succeed (the exactly-once guard),
+       followed by route_runnable_locked under G
        then (caller, on resume under G): group.phase_ = Consumed
        runnable_publication_count: 1
        result_publication_count: 1
@@ -168,7 +169,7 @@ counterpart is the source order enforced by the mapped functions above:
 | `C_InvAtMostOneRunnablePublication`           | one call site, guarded by `make_runnable` return value      |
 | `C_InvInlineCompletionPublishesNoRunnable`    | inline branch does not call `route_runnable_locked`         |
 | `C_InvCompletionRequiresAllAuthorityClosed`   | `select_publish_locked` asserts every arm authority closed  |
-| `C_InvRegistrationRollbackOnlyBeforeSuspension` | `select_begin_rollback_locked` requires `caller_state_ == Running` |
+| `C_InvRegistrationRollbackOnlyBeforeSuspension` | `select_begin_rollback_locked` requires `group.phase_ == Building && winner_ == kNoWinner` (phase-based, no `caller_state_` field) |
 | `C_InvRollbackNeverPublishes`                 | rollback path never calls `select_publish_locked`           |
 
 Every formal action has a concrete C++ counterpart; every formal invariant is

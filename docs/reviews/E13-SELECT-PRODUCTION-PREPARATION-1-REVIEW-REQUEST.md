@@ -110,10 +110,11 @@ every formal invariant in the closed PR #18 safety suite?**
    linearization point mapping to `ContractLinearizeWinner`.
 
 3. **Two-phase Event broadcast (`docs/e13-select-event-adapter.md` §4–§5).**
-   The Phase 1 scan must snapshot a deduplicated group set *before* Phase 2
-   finalization mutates the registry. The review should confirm the snapshot
-   discipline (caller-local array of unique `SelectGroup*`) prevents the
-   forbidden "finalize mutates the list being scanned" pattern.
+    The Phase 1 scan must snapshot a deduplicated group set *before* Phase 2
+    finalization mutates the registry. The review should confirm the snapshot
+    discipline (intrusive worklist chain using `broadcast_next_`/`broadcast_epoch_`
+    on `SelectGroup`, no fixed-size caller-local array) prevents the forbidden
+    "finalize mutates the list being scanned" pattern.
 
 4. **Timer stale-entry safety (`docs/e13-select-timer-adapter.md` §6).** The
    I4 closure depends on `SelectTimerRegistration::state_` being observed

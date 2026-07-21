@@ -272,7 +272,7 @@ by the claim+finalize protocol.
 | Concern                        | Decision                                                      |
 |--------------------------------|---------------------------------------------------------------|
 | Dynamic allocation             | one optional Scheduler-owned stable block per Timer arm only  |
-| Allocation under locks         | **none.** Timer block is allocated before `global_mtx_` take. |
+| Allocation under locks         | **deadline heap `reserve` only.** `reserve` is called before any registration mutation; if it throws, nothing is registered. No other allocation under G. |
 | Arm count cap                  | compile-time `kSelectMaxArms` (see public-api doc)            |
 | `select(...)` exception spec   | **not noexcept**; may throw on validation/allocation failure  |
 | Case validation failure        | `std::invalid_argument` thrown BEFORE any registration        |
@@ -285,8 +285,10 @@ happens only in the Timer-arm construction step, which is performed *before*
 the global critical section so that a `bad_alloc` cannot leave the Scheduler
 with a partially-registered group under lock. Timer blocks are constructed in a
 temporary `std::list<SelectTimerRegistration>` outside G, then spliced into the
-Scheduler-owned pool via `std::list::splice` under G — no allocation occurs
-inside the lock.
+Scheduler-owned pool via `std::list::splice` under G. Under G, the deadline
+heap `reserve`s capacity for all Timer arms before any registration mutation;
+if `reserve` throws, no arm is registered and no splice has occurred. No other
+allocation occurs inside the lock.
 
 Full detail: `docs/e13-select-public-api.md` §allocation and
 `docs/e13-select-type-and-lifetime.md` §exception-rollback.

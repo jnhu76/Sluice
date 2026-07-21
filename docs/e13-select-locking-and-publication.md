@@ -50,7 +50,6 @@ four reasons the brief requires weighed:
 | Is there an offer path that does NOT hold `global_mtx_`? | **No.** Event scan, timer pump, admission all run under `global_mtx_`. |
 | Order of timer `try_claim_expiry` vs group claim      | Group claim **first** (winner CAS), then `ACTIVE→CONSUMED`. The group claim is the linearization; the consume is a consequence. |
 | External `Event::set` thread                          | Takes `global_mtx_` like every other path; no lock-free bypass. |
-| Future global-lock reduction                          | The CAS is already the linearization authority, so a future design that drops `global_mtx_` from some path does not change the linearization semantics — it only widens the CAS contention domain. |
 | Memory order                                          | `relaxed` on success and failure. The `acq_rel` in the original design was incorrect: arm finalization happens **after** the CAS, so a release CAS cannot publish writes that follow it. The real synchronization authority is `global_mtx_`: every claim, finalize, and publish path runs under the same mutex, which provides acquire/release ordering for all arm-state writes. The CAS only protects the winner identity; the mutex provides the happens-before edges. |
 | Acquire/release needed by losers to observe winner    | Provided by the mutex, not by the CAS. A losing claim reads the winner index under the same `global_mtx_` CS; the mutex's release (unlock) and subsequent acquire (lock) sequence makes the winner write visible. |
 | Mapping to formal linearization point                | The CAS *is* `ContractLinearizeWinner(i)`'s linearization point — one source line, one atomic op. The CAS uses `memory_order::relaxed` because the mutex provides the ordering; the CAS is the linearization point by virtue of being the single atomic write that determines the winner, not by its memory order. |
@@ -456,10 +455,10 @@ exactly as for ordinary external-thread wakes (`scheduler.cpp:910+`).
 
 ### 5.4 Inline vs suspended: the publication branch
 
-The branch is on `group.caller_state_`, which is `Running` if the admission
-scan found a ready arm (no suspension) and `Waiting` if the caller suspended.
-There is no third state. The inline branch publishes no runnable; the
-suspended branch publishes exactly one.
+The branch is on `group.phase_`: if `phase == Armed` the caller was suspended
+(`Suspended` completion); otherwise (`Selecting` or `Building`) the caller
+is still running (`Inline` completion). There is no third state. The inline
+branch publishes no runnable; the suspended branch publishes exactly one.
 
 This maps cleanly to the formal `completion_mode ∈ {None, Inline, Suspended}`:
 
