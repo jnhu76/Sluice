@@ -1228,7 +1228,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         timer_pool_.emplace_back(&node, &q, deadline);
         reg = &timer_pool_.back();
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();  // publish to the park-timeout cache
 
         // I5 admission closure: if the deadline is ALREADY due, resolve Expired
@@ -1588,7 +1588,7 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
         timer_pool_.emplace_back(&node, &q, deadline);
         reg = &timer_pool_.back();
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
 
         // Admission closure — Event SET takes precedence: if the resource is
@@ -1782,7 +1782,7 @@ void Scheduler::sem_acquire_until(WaitQueue& waiters,
         timer_pool_.emplace_back(&node, &waiters, deadline);
         reg = &timer_pool_.back();
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
 
         // Admission precedence 1: permit admission wins over a due deadline. If
@@ -2066,7 +2066,7 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
         timer_pool_.emplace_back(&node, &waiters, deadline);
         reg = &timer_pool_.back();
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
 
         // Admission precedence 1: ownership admission wins over a due deadline.
@@ -2434,7 +2434,7 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         reg->owner_ctx_ = &port;
         ++port.active_queue_timers_;
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
         // Admission precedence 1: resource admissible => commit + resolve.
         if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
@@ -2513,7 +2513,7 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         reg->owner_ctx_ = &port;
         ++port.active_queue_timers_;
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
         if (!port.ring_empty_locked() && node.prev_ == nullptr) {
             const std::size_t head = port.ring_head_;
@@ -2799,7 +2799,7 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
             timer_pool_.emplace_back(&cond_node, &cond_waiters, deadline);
             reg = &timer_pool_.back();
             ++active_deadline_count_;
-            heap_push_locked(reg);
+            heap_push_ordinary_locked(reg);
             recompute_earliest_deadline_locked();
         }
         // Admission precedence 1: E11 I5 — if the deadline is ALREADY due, the
@@ -2918,8 +2918,12 @@ std::size_t Scheduler::pump_deadlines_locked() {
     std::size_t won = 0;
     const deadline_t now = clock_now_unlocked();
     while (!deadline_heap_.empty()) {
-        TimerRegistration* top = deadline_heap_.front();
-        if (top->deadline() > now) break;  // earliest not yet due
+        const detail::DeadlineHeapEntry& front = deadline_heap_.front();
+        if (front.deadline > now) break;  // earliest not yet due
+        // E13 P3: the deadline heap holds tagged entries (Ordinary | Select).
+        // Commit 1 migrates the ordinary branch only; the Select branch is
+        // added in a later P3 commit. For now every entry is Ordinary.
+        TimerRegistration* top = front.target.ordinary;
         // Pop the min regardless (lazy removal: retired/consumed entries leave
         // the heap here without their node ever being dereferenced).
         heap_pop_min_locked();
@@ -3104,30 +3108,33 @@ TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
     timer_pool_.emplace_back(node, q, deadline);
     TimerRegistration* reg = &timer_pool_.back();
     ++active_deadline_count_;
-    heap_push_locked(reg);
+    heap_push_ordinary_locked(reg);
     recompute_earliest_deadline_locked();  // publish to the park-timeout cache
     return reg;
 }
 
 // ---- deadline heap helpers (min-heap on deadline) ----
+// E13 P3: the heap stores unified DeadlineHeapEntry values (Ordinary | Select).
+// The comparator (detail::heap_less_entry) compares cached deadlines only;
+// equal-deadline order is unspecified. sift/pop operate on vector entries and
+// no longer touch any registration's heap_index (the entry's vector position
+// is the sole position authority — Addendum G).
 
-bool Scheduler::heap_less(const TimerRegistration* a, const TimerRegistration* b) noexcept {
-    return a->deadline() < b->deadline();
+void Scheduler::heap_push_entry_locked(const detail::DeadlineHeapEntry& e) {
+    deadline_heap_.push_back(e);
+    heap_sift_up_locked(deadline_heap_.size() - 1);
 }
 
-void Scheduler::heap_push_locked(TimerRegistration* r) {
-    deadline_heap_.push_back(r);
-    r->heap_index = deadline_heap_.size() - 1;
-    heap_sift_up_locked(r->heap_index);
+void Scheduler::heap_push_ordinary_locked(TimerRegistration* r) {
+    heap_push_entry_locked(detail::DeadlineHeapEntry::for_ordinary(*r));
 }
 
 void Scheduler::heap_pop_min_locked() {
     if (deadline_heap_.empty()) return;
-    TimerRegistration* last = deadline_heap_.back();
+    detail::DeadlineHeapEntry last = deadline_heap_.back();
     deadline_heap_.pop_back();
     if (!deadline_heap_.empty()) {
         deadline_heap_[0] = last;
-        last->heap_index = 0;
         heap_sift_down_locked(0);
     }
 }
@@ -3135,10 +3142,8 @@ void Scheduler::heap_pop_min_locked() {
 void Scheduler::heap_sift_up_locked(std::size_t i) {
     while (i > 0) {
         std::size_t parent = (i - 1) / 2;
-        if (!heap_less(deadline_heap_[i], deadline_heap_[parent])) break;
+        if (!detail::heap_less_entry(deadline_heap_[i], deadline_heap_[parent])) break;
         std::swap(deadline_heap_[i], deadline_heap_[parent]);
-        deadline_heap_[i]->heap_index = i;
-        deadline_heap_[parent]->heap_index = parent;
         i = parent;
     }
 }
@@ -3149,12 +3154,10 @@ void Scheduler::heap_sift_down_locked(std::size_t i) {
         std::size_t l = 2 * i + 1;
         std::size_t r = 2 * i + 2;
         std::size_t best = i;
-        if (l < n && heap_less(deadline_heap_[l], deadline_heap_[best])) best = l;
-        if (r < n && heap_less(deadline_heap_[r], deadline_heap_[best])) best = r;
+        if (l < n && detail::heap_less_entry(deadline_heap_[l], deadline_heap_[best])) best = l;
+        if (r < n && detail::heap_less_entry(deadline_heap_[r], deadline_heap_[best])) best = r;
         if (best == i) break;
         std::swap(deadline_heap_[i], deadline_heap_[best]);
-        deadline_heap_[i]->heap_index = i;
-        deadline_heap_[best]->heap_index = best;
         i = best;
     }
 }

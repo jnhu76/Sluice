@@ -11,6 +11,7 @@
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/queue_port.hpp>  // detail::QueuePort / QueueRole (E12-E Queue seams)
+#include <sluice/async/detail/select_registration.hpp>  // detail::DeadlineHeapEntry, SelectTimerRegistration (E13 P3)
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/lock_guard.hpp>
@@ -1071,7 +1072,14 @@ private:
     // the same CS as the resolve CAS). The clock is atomic so a worker can read
     // it outside the lock for the park-timeout computation.
     std::list<TimerRegistration> timer_pool_ SLUICE_GUARDED_BY(global_mtx_){};
-    std::vector<TimerRegistration*> deadline_heap_ SLUICE_GUARDED_BY(global_mtx_){};
+    // E13 P3 (deadline-heap migration): the heap now stores unified tagged
+    // DeadlineHeapEntry values (Ordinary | Select) instead of raw
+    // TimerRegistration*. Both kinds share one min-heap keyed by the cached
+    // deadline; the ordinary branch is byte-for-byte identical in logic (it
+    // reads the same deadline, pops the same min, and processes the same
+    // TimerRegistration* via entry.target.ordinary). Internal-only type; no
+    // public API exposure. See docs/e13-select-timer-adapter.md §4.
+    std::vector<detail::DeadlineHeapEntry> deadline_heap_ SLUICE_GUARDED_BY(global_mtx_){};
 
     // O(1) count of ACTIVE timer registrations. Incremented/decremented
     // alongside every Active ↔ {Retired, Consumed} state transition under
@@ -1131,8 +1139,15 @@ private:
     std::size_t pump_deadlines_locked() SLUICE_REQUIRES(global_mtx_);
 
     // Heap helpers (min-heap on deadline). Called under global_mtx_.
-    static bool heap_less(const TimerRegistration* a, const TimerRegistration* b) noexcept;
-    void heap_push_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
+    // E13 P3: the heap stores unified DeadlineHeapEntry values; the comparator
+    // compares cached deadlines (equal-deadline order is unspecified). sift/pop
+    // no longer touch any registration's heap_index (the entry's vector
+    // position is the sole position authority).
+    void heap_push_entry_locked(const detail::DeadlineHeapEntry& e)
+        SLUICE_REQUIRES(global_mtx_);
+    // Thin wrapper: build an Ordinary entry from a TimerRegistration and push.
+    // Kept so ordinary call sites read as `heap_push_ordinary_locked(reg)`.
+    void heap_push_ordinary_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
     void heap_pop_min_locked() SLUICE_REQUIRES(global_mtx_);
     void heap_sift_up_locked(std::size_t i) SLUICE_REQUIRES(global_mtx_);
     void heap_sift_down_locked(std::size_t i) SLUICE_REQUIRES(global_mtx_);
