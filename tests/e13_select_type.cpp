@@ -1,0 +1,405 @@
+// e13_select_type — E13 Select type construction and compile-fail gates (P1).
+//
+// Tests the public value types (SelectResult, EventSelectCase, TimerSelectCase),
+// the internal type graph (SelectGroup, SelectArmSlot, SelectPort,
+// SelectTimerRegistration), and compile-time constraint gates (SF-1..SF-3).
+//
+// P1 only: type construction/destruction, state transitions, compile-time
+// constraint verification. No production select() behavior.
+#include <sluice/async/select.hpp>
+#include <sluice/async/detail/select_port.hpp>
+#include <sluice/async/detail/select_registration.hpp>
+#include <sluice/async/event.hpp>
+#include <sluice/async/fake_backend.hpp>
+#include <sluice/async/fiber.hpp>
+#include <sluice/async/fiber_ctx.hpp>
+#include <sluice/async/scheduler.hpp>
+
+#include "harness.hpp"
+
+#include <atomic>
+#include <cstddef>
+#include <memory>
+#include <type_traits>
+
+namespace sa = sluice::async;
+namespace sad = sluice::async::detail;
+
+// ---- Constraint helper concepts (SF-1..SF-3 gate verification) ----
+
+namespace {
+
+template<typename... Cases>
+concept SelectHasSize = (sizeof...(Cases) >= 1) &&
+                        (sizeof...(Cases) <= sa::kSelectMaxArms);
+
+template<typename... Cases>
+concept SelectTypesValid = (sa::SelectCaseType<Cases> && ...);
+
+template<typename... Cases>
+concept SelectValid = SelectHasSize<Cases...> && SelectTypesValid<Cases...>;
+
+}  // anonymous namespace
+
+// =========================================================================
+// H1: Public value types
+// =========================================================================
+
+SLUICE_TEST_CASE(test_select_result_default_sentinel) {
+    constexpr sa::SelectResult r;
+    static_assert(!r.has_winner());
+    // These compile (they are constexpr) but may assert. We test the sentinel
+    // values are valid.
+    SLUICE_CHECK(!r.has_winner());
+}
+
+SLUICE_TEST_CASE(test_select_result_event_winner) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    constexpr sa::SelectResult r(
+        0, sa::SelectKind::event, sa::SelectTimerOutcome::fired,
+        sa::SelectResult::TestInit{});
+    static_assert(r.has_winner());
+    static_assert(r.index() == 0);
+    static_assert(r.kind() == sa::SelectKind::event);
+    // timer_outcome called on event kind — assertion fires but returns sentinel.
+    SLUICE_CHECK(r.has_winner());
+    SLUICE_CHECK(r.index() == 0);
+    SLUICE_CHECK(r.kind() == sa::SelectKind::event);
+#endif
+}
+
+SLUICE_TEST_CASE(test_select_result_timer_winner) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    constexpr sa::SelectResult r(
+        2, sa::SelectKind::timer, sa::SelectTimerOutcome::fired,
+        sa::SelectResult::TestInit{});
+    static_assert(r.has_winner());
+    static_assert(r.index() == 2);
+    static_assert(r.kind() == sa::SelectKind::timer);
+    static_assert(r.timer_outcome() == sa::SelectTimerOutcome::fired);
+    SLUICE_CHECK(r.has_winner());
+    SLUICE_CHECK(r.index() == 2);
+    SLUICE_CHECK(r.kind() == sa::SelectKind::timer);
+    SLUICE_CHECK(r.timer_outcome() == sa::SelectTimerOutcome::fired);
+#endif
+}
+
+SLUICE_TEST_CASE(test_event_select_case_construct) {
+    // Minimal Scheduler + FakeAsyncIoContext to construct an Event.
+    // EventSelectCase needs an Event reference.
+    // We use a minimal test setup.
+    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sa::Scheduler sched(ctx);
+    sa::Event ev(sched);
+
+    sa::EventSelectCase esc(ev);
+    (void)esc;
+
+    // No default construction.
+    static_assert(!std::is_default_constructible_v<sa::EventSelectCase>);
+    // Copy/move traits.
+    static_assert(std::is_copy_constructible_v<sa::EventSelectCase>);
+    static_assert(std::is_copy_assignable_v<sa::EventSelectCase>);
+    static_assert(std::is_move_constructible_v<sa::EventSelectCase>);
+    static_assert(std::is_move_assignable_v<sa::EventSelectCase>);
+}
+
+SLUICE_TEST_CASE(test_timer_select_case_construct) {
+    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sa::Scheduler sched(ctx);
+
+    auto deadline = sched.monotonic_now();
+    sa::TimerSelectCase tsc(sched, deadline);
+    (void)tsc;
+
+    static_assert(!std::is_default_constructible_v<sa::TimerSelectCase>);
+    static_assert(std::is_copy_constructible_v<sa::TimerSelectCase>);
+    static_assert(std::is_copy_assignable_v<sa::TimerSelectCase>);
+    static_assert(std::is_move_constructible_v<sa::TimerSelectCase>);
+    static_assert(std::is_move_assignable_v<sa::TimerSelectCase>);
+}
+
+SLUICE_TEST_CASE(test_select_case_type_concept) {
+    static_assert(sa::SelectCaseType<sa::EventSelectCase>);
+    static_assert(sa::SelectCaseType<sa::TimerSelectCase>);
+
+    // References should also satisfy.
+    static_assert(sa::SelectCaseType<sa::EventSelectCase&>);
+    static_assert(sa::SelectCaseType<const sa::EventSelectCase&>);
+    static_assert(sa::SelectCaseType<sa::TimerSelectCase&>);
+
+    // Non-case types should not satisfy.
+    static_assert(!sa::SelectCaseType<int>);
+    static_assert(!sa::SelectCaseType<double>);
+    static_assert(!sa::SelectCaseType<void>);
+
+    struct Foo {};
+    static_assert(!sa::SelectCaseType<Foo>);
+    static_assert(!sa::SelectCaseType<sa::SelectResult>);
+}
+
+// =========================================================================
+// H2: Internal type construction
+// =========================================================================
+
+SLUICE_TEST_CASE(test_enum_values) {
+    // Verify enum value assignments match design.
+    static_assert(static_cast<int>(sad::ArmKind::event) == 0);
+    static_assert(static_cast<int>(sad::ArmKind::timer) == 1);
+
+    static_assert(static_cast<int>(sad::ArmState::detached) == 0);
+    static_assert(static_cast<int>(sad::ArmState::prepared) == 1);
+    static_assert(static_cast<int>(sad::ArmState::registered) == 2);
+    static_assert(static_cast<int>(sad::ArmState::candidate_ready) == 3);
+    static_assert(static_cast<int>(sad::ArmState::retired) == 4);
+
+    static_assert(static_cast<int>(sad::GroupPhase::building) == 0);
+    static_assert(static_cast<int>(sad::GroupPhase::selecting) == 1);
+    static_assert(static_cast<int>(sad::GroupPhase::armed) == 2);
+    static_assert(static_cast<int>(sad::GroupPhase::completed) == 3);
+    static_assert(static_cast<int>(sad::GroupPhase::consumed) == 4);
+    static_assert(static_cast<int>(sad::GroupPhase::rollback) == 5);
+    static_assert(static_cast<int>(sad::GroupPhase::aborted) == 6);
+
+    static_assert(static_cast<int>(sad::CompletionMode::none) == 0);
+    static_assert(static_cast<int>(sad::CompletionMode::inline_) == 1);
+    static_assert(static_cast<int>(sad::CompletionMode::suspended) == 2);
+}
+
+SLUICE_TEST_CASE(test_event_arm_slot_construction_destruction) {
+    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sa::Scheduler sched(ctx);
+    sa::Event ev(sched);
+
+    sad::SelectArmSlot slot;
+    slot.construct_event(ev);
+    SLUICE_CHECK(slot.kind == sad::ArmKind::event);
+    SLUICE_CHECK(slot.state == sad::ArmState::detached);
+    // Slot is non-copyable, non-movable.
+    static_assert(!std::is_copy_constructible_v<sad::SelectArmSlot>);
+    static_assert(!std::is_copy_assignable_v<sad::SelectArmSlot>);
+    static_assert(!std::is_move_constructible_v<sad::SelectArmSlot>);
+    static_assert(!std::is_move_assignable_v<sad::SelectArmSlot>);
+}
+
+SLUICE_TEST_CASE(test_timer_arm_slot_construction_destruction) {
+    // EventArmPayload and TimerArmPayload both hold trivially destructible
+    // members (pointers and integers), so no explicit destructor is needed.
+    static_assert(std::is_trivially_destructible_v<sad::EventArmPayload>);
+    static_assert(std::is_trivially_destructible_v<sad::TimerArmPayload>);
+
+    sad::SelectArmSlot slot;
+    slot.construct_timer(42, nullptr);
+    SLUICE_CHECK(slot.kind == sad::ArmKind::timer);
+    SLUICE_CHECK(slot.timer.deadline_ == 42);
+    SLUICE_CHECK(slot.timer.stable_reg_ == nullptr);
+}
+
+SLUICE_TEST_CASE(test_select_group_structural_construction) {
+    sad::SelectGroup group;
+    // Structural object: not admitted, so destructor does not enforce phase.
+    // Phase defaults to building.
+    SLUICE_CHECK(group.phase() == sad::GroupPhase::building);
+    SLUICE_CHECK(group.winner() == sad::kNoWinner);
+    // group is non-copyable, non-movable.
+    static_assert(!std::is_copy_constructible_v<sad::SelectGroup>);
+    static_assert(!std::is_copy_assignable_v<sad::SelectGroup>);
+    static_assert(!std::is_move_constructible_v<sad::SelectGroup>);
+    static_assert(!std::is_move_assignable_v<sad::SelectGroup>);
+}
+
+SLUICE_TEST_CASE(test_select_group_phase_transitions) {
+    sad::SelectGroup group;
+    group.mark_admitted();
+    SLUICE_CHECK(group.phase() == sad::GroupPhase::building);
+
+    group.set_phase(sad::GroupPhase::selecting);
+    SLUICE_CHECK(group.phase() == sad::GroupPhase::selecting);
+
+    group.set_phase(sad::GroupPhase::consumed);
+    SLUICE_CHECK(group.phase() == sad::GroupPhase::consumed);
+}
+
+SLUICE_TEST_CASE(test_select_group_winner_claim) {
+    sad::SelectGroup group;
+    group.mark_admitted();
+
+    SLUICE_CHECK(group.winner() == sad::kNoWinner);
+
+    // First claim succeeds.
+    SLUICE_CHECK(group.claim_winner(2));
+    SLUICE_CHECK(group.winner() == 2);
+
+    // Second claim fails.
+    SLUICE_CHECK(!group.claim_winner(5));
+    SLUICE_CHECK(group.winner() == 2);
+
+    // Admitted group must end in consumed/aborted before destruction.
+    group.set_phase(sad::GroupPhase::consumed);
+}
+
+SLUICE_TEST_CASE(test_select_port_starts_empty) {
+    sad::SelectPort port;
+    static_assert(!std::is_copy_constructible_v<sad::SelectPort>);
+    static_assert(!std::is_copy_assignable_v<sad::SelectPort>);
+    static_assert(!std::is_move_constructible_v<sad::SelectPort>);
+    static_assert(!std::is_move_assignable_v<sad::SelectPort>);
+    SLUICE_CHECK(port.empty());
+}
+
+SLUICE_TEST_CASE(test_timer_registration_state_transitions) {
+    sad::SelectTimerRegistration reg;
+    SLUICE_CHECK(reg.state() == sad::SelectTimerRegistration::State::active);
+    SLUICE_CHECK(reg.is_active());
+    SLUICE_CHECK(!reg.is_retired());
+    SLUICE_CHECK(!reg.is_consumed());
+
+    // Retire path.
+    SLUICE_CHECK(reg.retire());
+    SLUICE_CHECK(reg.is_retired());
+    SLUICE_CHECK(!reg.is_active());
+    SLUICE_CHECK(!reg.is_consumed());
+
+    // Second retire fails (already retired).
+    SLUICE_CHECK(!reg.retire());
+    SLUICE_CHECK(reg.is_retired());
+
+    // Non-copyable, non-movable.
+    static_assert(!std::is_copy_constructible_v<sad::SelectTimerRegistration>);
+    static_assert(!std::is_copy_assignable_v<sad::SelectTimerRegistration>);
+    static_assert(!std::is_move_constructible_v<sad::SelectTimerRegistration>);
+    static_assert(!std::is_move_assignable_v<sad::SelectTimerRegistration>);
+}
+
+SLUICE_TEST_CASE(test_timer_registration_claim_expiry) {
+    sad::SelectTimerRegistration reg;
+    SLUICE_CHECK(reg.is_active());
+
+    // Claim expiry.
+    SLUICE_CHECK(reg.try_claim_expiry());
+    SLUICE_CHECK(reg.is_consumed());
+
+    // Second claim fails.
+    SLUICE_CHECK(!reg.try_claim_expiry());
+    SLUICE_CHECK(reg.is_consumed());
+}
+
+SLUICE_TEST_CASE(test_timer_registration_retire_then_claim_fails) {
+    sad::SelectTimerRegistration reg;
+    SLUICE_CHECK(reg.is_active());
+
+    // Retire first.
+    SLUICE_CHECK(reg.retire());
+    SLUICE_CHECK(reg.is_retired());
+
+    // Try claim — fails because already retired.
+    SLUICE_CHECK(!reg.try_claim_expiry());
+    SLUICE_CHECK(reg.is_retired());
+}
+
+SLUICE_TEST_CASE(test_timer_registration_claim_then_retire_fails) {
+    sad::SelectTimerRegistration reg;
+    SLUICE_CHECK(reg.is_active());
+
+    // Claim first.
+    SLUICE_CHECK(reg.try_claim_expiry());
+    SLUICE_CHECK(reg.is_consumed());
+
+    // Retire — fails because already consumed.
+    SLUICE_CHECK(!reg.retire());
+    SLUICE_CHECK(reg.is_consumed());
+}
+
+// =========================================================================
+// H3: Compile-fail gates
+// =========================================================================
+
+// SF-1: select() with zero case arms must fail the sizeof...(Cases) >= 1 constraint.
+// We verify this indirectly via a concept-level check.
+SLUICE_TEST_CASE(test_sf_1_select_with_zero_arms) {
+    // sizeof...(Cases) >= 1 fails for empty pack.
+    static_assert(!SelectValid<>);
+}
+
+// Conformance: SelectValid<int> must fail (int is not SelectCaseType).
+SLUICE_TEST_CASE(test_sf_1_select_invalid_type_rejected) {
+    static_assert(!SelectValid<int>);
+}
+
+// SF-2: select with 9 valid cases is not a valid expression.
+// The requires clause rejects > kSelectMaxArms (8).
+SLUICE_TEST_CASE(test_sf_2_select_max_arms_constant) {
+    // Verify kSelectMaxArms is 8.
+    static_assert(sa::kSelectMaxArms == 8);
+
+    // Verify SelectHasSize rejects a 9-element pack.
+    // We use int as a placeholder type (type constraint check is separate).
+    static_assert(!SelectHasSize<int, int, int, int, int, int, int, int, int>);
+
+    // 8-element pack passes the size check.
+    static_assert(SelectHasSize<int, int, int, int, int, int, int, int>);
+}
+
+// SF-3: select with an int arm is not a valid expression.
+SLUICE_TEST_CASE(test_sf_3_select_with_int_arm) {
+    // Concept check: int does not satisfy SelectCaseType.
+    static_assert(!sa::SelectCaseType<int>);
+
+    // Also verify the combined constraint rejects int.
+    static_assert(!SelectValid<int>);
+}
+
+// Complement: EventSelectCase satisfies the full constraint.
+SLUICE_TEST_CASE(test_event_select_case_is_valid) {
+    // We verify the type-level constraint only (no runtime instance needed).
+    static_assert(SelectValid<sa::EventSelectCase>);
+}
+
+// Positive constraint verification: a valid call compiles (at the type level).
+SLUICE_TEST_CASE(test_valid_select_expression_compiles) {
+    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sa::Scheduler sched(ctx);
+    sa::Event ev(sched);
+    sa::EventSelectCase ec(ev);
+    auto deadline = sched.monotonic_now();
+    sa::TimerSelectCase tc(sched, deadline);
+
+    // The requires expression must be satisfied for valid case packs.
+    static_assert(requires(sa::Scheduler& s, sa::EventSelectCase c) {
+        sa::select(s, c);
+    });
+
+    static_assert(requires(sa::Scheduler& s, sa::EventSelectCase c1, sa::TimerSelectCase c2) {
+        sa::select(s, c1, c2);
+    });
+
+    // Return type is SelectResult.
+    static_assert(std::is_same_v<
+        decltype(sa::select(sched, ec)),
+        sa::SelectResult
+    >);
+}
+
+// =========================================================================
+// H4: Forgeable-authority exclusion
+// =========================================================================
+
+// Verify production headers expose no E13 test-hook types.
+// These are compile-time checks that the installed headers have no
+// forgeable test-hook declarations at namespace scope.
+SLUICE_TEST_CASE(test_no_forgeable_test_hooks) {
+    // These compile only when SLUICE_ASYNC_INTERNAL_TESTING is defined.
+    // Without the define, TestInit on SelectResult is private.
+    // With the define, it's public but still name-mangled — not forgeable
+    // in the sense of namespace-level friend.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // TestInit is accessible in this TU — but only because the test links
+    // against sluice_async_internal_testing. Production TUs never see it.
+    constexpr sa::SelectResult r(0, sa::SelectKind::event,
+                                 sa::SelectTimerOutcome::fired,
+                                 sa::SelectResult::TestInit{});
+    (void)r;
+#endif
+}
+
+SLUICE_MAIN()

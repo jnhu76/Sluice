@@ -163,6 +163,10 @@ struct WorkerState {
     enum class ParkDomain : unsigned char { None, Scheduler, Backend };
     ParkDomain park_domain{ParkDomain::None};
 
+    // E13: owner Scheduler identity. Set exactly once when WorkerState is
+    // attached to a Scheduler. Immutable by contract; not used for routing.
+    Scheduler* owner_scheduler{nullptr};
+
     WorkerState() = default;
     WorkerState(const WorkerState&) = delete;
     WorkerState& operator=(const WorkerState&) = delete;
