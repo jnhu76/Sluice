@@ -244,10 +244,10 @@ atomic `state_` is the post-destruction safety boundary (I4): the pump reads
 pointer.
 
 Ownership transfer: nodes are constructed in a temporary `std::list` outside G,
-then spliced into the Scheduler-owned pool via `std::list::splice` under G (no
-allocation inside the lock). The deadline heap stores `DeadlineHeapEntry`
-values, not raw `TimerRegistration*` — see
-`docs/e13-select-timer-adapter.md` §4.
+then each block is spliced individually under G during its arm's registration
+step via `std::list::splice` (O(1), no allocation inside the lock). The
+deadline heap stores `DeadlineHeapEntry` values, not raw `TimerRegistration*`
+— see `docs/e13-select-timer-adapter.md` §4.
 
 #### 2.3.6 `SelectPort` (Scheduler-side per-Event registry head)
 
@@ -428,9 +428,11 @@ throw (the synthetic SelectRegistrationError, or the original exception)
 ```
 
 No runnable publication occurs. No result is written. The caller frame unwinds
-and destroys the group + arms. The `SelectTimerRegistration` stable blocks
-remain in the Scheduler's heap, inert (retired), to be lazily reclaimed by the
-pump.
+and destroys the group + arms. The rollback is safe because each Timer block is
+spliced individually during registration: only already-registered Timer arms
+have their blocks in the Scheduler pool (and are retired by the loop above);
+not-yet-registered Timer blocks remain in the local `tmp_pool` and are
+destroyed with the frame, never having been observable by any other thread.
 
 ### 5.3 No half-registered state observable
 

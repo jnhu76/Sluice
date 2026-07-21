@@ -200,54 +200,53 @@ select_impl(scheduler, case_array):
 // -- under global_mtx_ --
     g.lock()
     4. reserve deadline heap capacity before any registration mutation:
-           deadline_heap_.reserve(deadline_heap_.size() + timer_arm_count)
-           - on std::bad_alloc: unlock and rethrow
-           - no arm registered, no splice occurred, no rollback needed
-    5. splice temporary Timer pool into Scheduler-owned list
-           scheduler.select_timer_pool_.splice(end, tmp_pool)
-    6. group.phase_ = Building
-    7. for each arm in index order:
+            deadline_heap_.reserve(deadline_heap_.size() + timer_arm_count)
+            - on std::bad_alloc: unlock and rethrow
+            - no arm registered, no splice occurred, no rollback needed
+    5. group.phase_ = Building
+    6. for each arm in index order:
          a. register the arm:
                Event arm: link into Event.select_port_  (SelectPort::link_locked)
-               Timer arm: push DeadlineHeapEntry into deadline_heap_
+               Timer arm: splice ONE block from tmp_pool into Scheduler's
+                          select_timer_pool_, then push its DeadlineHeapEntry
          b. preserve rollback ability:
                - arm is linked but group.phase_ == Building, winner_ == kNoWinner
                - no caller suspension yet
                - no result publication yet
          c. on failure (defensive; no natural allocation occurs at this point
             in the first scope):
-               -> rollback (section 4) and rethrow
-    8. FinishRegistration: group.phase_ = Selecting
+                -> rollback (section 4) and rethrow
+     7. FinishRegistration: group.phase_ = Selecting
 
-    7. admission snapshot: walk arms in index order, collect those whose
-         readiness is already observable:
-              Event arm: event_select_is_ready_locked(event) == true
-              Timer arm: deadline <= scheduler.monotonic_now()
-         (these arms get arm.state = CandidateReady)
-8. if snapshot non-empty:
-          a. choose lowest index
-          b. inline claim: group.winner_.CAS(kNoWinner, lowest_index)
-          c. commit winner: arm.state = Retired (winner classification)
-          d. finalize losers: every other arm finalized as a loser
-          e. close all authority (unlink Event arms, retire/consume Timer arms)
-f. select_publish_locked(group)   // writes result_ + sets phase_ = Completed
+     8. admission snapshot: walk arms in index order, collect those whose
+          readiness is already observable:
+               Event arm: event_select_is_ready_locked(event) == true
+               Timer arm: deadline <= scheduler.monotonic_now()
+          (these arms get arm.state = CandidateReady)
+ 9. if snapshot non-empty:
+           a. choose lowest index
+           b. inline claim: group.winner_.CAS(kNoWinner, lowest_index)
+           c. commit winner: arm.state = Retired (winner classification)
+           d. finalize losers: every other arm finalized as a loser
+           e. close all authority (unlink Event arms, retire/consume Timer arms)
+           f. select_publish_locked(group)   // writes result_ + sets phase_ = Completed
            g. copy result to local
            h. group.phase_ = Consumed
            i. g.unlock()
            j. return SelectResult{index, kind, ...}  (no suspension)
-     9. otherwise:
-          a. me->make_waiting()
-          b. group.phase_ = Armed
-          c. g.unlock()
-          d. fiber_ctx::context_switch(...)   // suspend
-          // --- on resume ---
-          e. g.lock()    // reacquire to read the result
-          f. require group.phase_ == Completed
-          g. read SelectResult from group (winner is committed)
-          h. group.phase_ = Consumed            // Completed -> Consumed
-          i. verify all arm authority closed (defensive assert)
-          j. g.unlock()
-          k. return SelectResult
+     10. otherwise:
+           a. me->make_waiting()
+           b. group.phase_ = Armed
+           c. g.unlock()
+           d. fiber_ctx::context_switch(...)   // suspend
+           // --- on resume ---
+           e. g.lock()    // reacquire to read the result
+           f. require group.phase_ == Completed
+           g. read SelectResult from group (winner is committed)
+           h. group.phase_ = Consumed            // Completed -> Consumed
+           i. verify all arm authority closed (defensive assert)
+           j. g.unlock()
+           k. return SelectResult
 ```
 
 ### 3.2 Rollback (registration failure)
@@ -258,6 +257,13 @@ No mid-registration allocation exists. The rollback machinery is therefore
 **defensive and future-proof**: it exists to handle registration failures that
 may arise in future scopes (e.g. dynamic resource limits, adapter registration
 errors).
+
+Because each Timer block is spliced **individually** during its arm's
+registration step, there are no orphan blocks in the Scheduler pool:
+already-registered arms have their blocks spliced + heap entries in place
+(rollback cleans them); not-yet-registered arms have their blocks still in
+`tmp_pool` (they are destroyed on unwind, never observable by any other
+thread).
 
 For testing, the rollback path is exercised through a synthetic injection seam:
 
@@ -272,8 +278,9 @@ release global_mtx_
 throw the original exception (or a synthetic SelectRegistrationError)
 ```
 
-The caller frame unwinds and destroys the group + arms. No runnable
-publication, no result. This refines
+The caller frame unwinds and destroys the group + arms. The remaining local
+`tmp_pool` entries (not-yet-registered Timer blocks) are destroyed with it.
+No runnable publication, no result. This refines
 `ContractBeginRollback`/`ContractRollbackRelease`/`ContractFinishRollback`.
 
 ### 3.3 No half-registered state observable
@@ -282,6 +289,9 @@ Steps 5–6 run under one continuous `global_mtx_` CS. An external Event setter
 or the timer pump cannot acquire `global_mtx_` until step 6 completes; by then
 the group is either `Building` (still inside the CS) or `Selecting`. There is
 no window in which an external resolver sees a partially-registered group.
+Per-arm splice ensures that any `SelectTimerRegistration` in the Scheduler
+pool at a given point is always a fully-registered arm (spliced + heap entry
+pushed + arm state Registered), not an orphan.
 
 ---
 

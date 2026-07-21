@@ -48,7 +48,7 @@ Test). The numbering is stable; reviewers cite these IDs.
 | ST-11 | same Event wakes two arms in one group     | one Event, two arms; Event set           | one group processed once; lowest index wins; other arm loser                     |
 | ST-12 | same Event completes two groups            | one Event, two callers in separate groups| each group completes once; two independent winners                               |
 | ST-13 | stale Timer after Event winner             | Event wins; Timer deadline later elapses | pump observes RETIRED; no dereference (PhaseTag E13PhaseTimerPumpSkip)           |
-| ST-14 | registration rollback                      | inject `SelectRegistrationFailure` after N successful registrations (synthetic seam) | already-registered arms unlinked/retired; group Aborted; no publication |
+| ST-14 | registration rollback                      | inject `SelectRegistrationFailure` after N successful registrations (synthetic seam) | already-registered arms unlinked/retired; group Aborted; no publication; no ACTIVE SelectTimerRegistration remains in Scheduler pool; not-yet-registered blocks still locally owned in tmp_pool |
 | ST-15 | external thread `Event::set`               | setter thread distinct from worker       | caller routed via `group.caller_owner_` to owner worker; result correct |
 | ST-16 | multi-worker owner routing                 | multi-worker run, victim on worker k     | resume routed to owner worker k; exactly one runnable enqueue                    |
 | ST-17 | exactly one runnable enqueue               | suspended completion under contention    | Fiber::runnable_count delta == 1                                                 |
@@ -182,9 +182,9 @@ tests/e13_select_type.cpp                P1 type construction + SF-1..SF-3
 tests/e13_select_event_registry.cpp      P2 Event registry structural tests
 tests/e13_select_timer_registration.cpp  P3 Timer heap/stale tests
 tests/e13_select_claim.cpp               P4 claim/finalization negative tests
-tests/e13_select_inline.cpp              P5 ST-1..ST-8 (inline admission winners)
+tests/e13_select_inline.cpp              P5 ST-1..ST-8 (inline admission winners, plus ST-6 duplicate Event)
 tests/e13_select_suspended.cpp           P6 ST-9..ST-13 (post-suspension winners + stale)
-tests/e13_select_event_adapter.cpp       P8 ST-6, ST-11, ST-12 (multi-arm / multi-group Event)
+tests/e13_select_multi_group.cpp         P8 ST-11, ST-12 (multi-group shared Event)
 tests/e13_select_timer_adapter.cpp       P3+P5 ST-2, ST-5, ST-7, ST-8 (Timer arms)
 tests/e13_select_rollback.cpp            P7 ST-14 (registration rollback)
 tests/e13_select_multi_worker.cpp        P6 ST-15, ST-16, ST-17 (external thread + routing)
@@ -308,7 +308,8 @@ remaining denied behavior:
 ```text
 allowed files:
     src/async/select.cpp                (select() entry + admission scan)
-    tests/e13_select_inline.cpp         (NEW — inline admission tests ST-1..ST-8)
+    tests/e13_select_inline.cpp         (NEW — inline admission tests ST-1..ST-8,
+                                         including ST-6 duplicate Event in one group)
     tests/async_test_control_internal.hpp (E13PhaseAdmissionArmed, E13PhaseAdmissionClaimed,
                                            E13PhaseAdmissionConsumed)
 entry assumptions:
@@ -320,6 +321,7 @@ production behavior enabled:
     Timer already-due inline winner
     admission tie-break (lowest index)
     Event/Timer loser finalization on inline winner
+    duplicate Event in one group (ST-6)
 remaining denied behavior:
     suspended completion (no caller suspension yet)
 ```
@@ -380,9 +382,9 @@ entry assumptions:
 exit gates:
     ST-11, ST-12 pass
 production behavior enabled:
-    same Event shared across groups
-    same Event with multiple arms in one group
+    same Event shared across groups (ST-11, ST-12)
     intrusive worklist chain (no fixed-size array limit)
+    (ST-6 duplicate Event in one group moved to P5)
 remaining denied behavior:
     none within the first scope
 ```

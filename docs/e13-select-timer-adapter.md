@@ -191,7 +191,8 @@ operate on `DeadlineHeapEntry` by deadline, unchanged in logic. The ordinary
 
 `SelectTimerRegistration` nodes are constructed in a temporary
 `std::list<SelectTimerRegistration>` outside G (before any lock acquisition).
-Under G, the list is spliced into the Scheduler-owned pool:
+Under G, each Timer arm's block is spliced **individually** during
+registration:
 
 ```cpp
 // outside G:
@@ -200,22 +201,30 @@ for each Timer arm:
     tmp_pool.emplace_back(arm, deadline, scheduler);
 
 // under G, before any registration mutation:
-// reserve heap capacity to guarantee push_back does not allocate
 deadline_heap_.reserve(deadline_heap_.size() + timer_arm_count);
 
-// splice is O(1) and allocation-free
-scheduler.select_timer_pool_.splice(end, tmp_pool);
-
-// push DeadlineHeapEntry values — no allocation after reserve
-for each Timer arm:
-    deadline_heap_.push_back(DeadlineHeapEntry{...});
+// register arms one by one, splicing Timer blocks individually:
+auto next_timer = tmp_pool.begin();
+for each arm in index order:
+    if arm is Event:
+        link into Event.select_port_
+    else:  // Timer
+        // splice ONLY this arm's block — O(1), allocation-free
+        scheduler.select_timer_pool_.splice(
+            scheduler.select_timer_pool_.end(), tmp_pool, next_timer++);
+        // reg = the block just spliced; pointer stable after splice
+        SelectTimerRegistration& reg = scheduler.select_timer_pool_.back();
+        // heap push does not allocate (capacity reserved)
+        deadline_heap_.push_back(DeadlineHeapEntry{
+            reg.deadline_, DeadlineHeapEntry::Select, &reg
+        });
 ```
 
 If `reserve` throws `std::bad_alloc`:
 
 ```text
 no arm registered
-no list spliced
+no splice occurred
 no authority opened
 release G
 rethrow
@@ -223,14 +232,20 @@ rethrow
 
 Key properties:
 
-- **No allocation under G after reserve.** `std::list::splice` is O(1) and
-  allocation-free. `push_back` does not allocate if capacity is sufficient.
+- **No allocation under G after reserve.** `std::list::splice` (single-node) is
+  O(1) and allocation-free. `push_back` does not allocate if capacity is
+  sufficient.
 - **`reserve` is the only allocation under G.** It happens strictly before
   any Select registration mutation (no arm linked, no timer registered). If
   reserve fails, the Scheduler state is untouched.
 - **Pointer stability.** `std::list` nodes are stable after splice; the
   `SelectTimerRegistration*` stored in the heap entry remains valid for the
   lifetime of the registration.
+- **Per-arm splice eliminates orphan blocks on rollback.** Only
+  already-registered Timer blocks are Scheduler-owned; not-yet-registered
+  blocks remain in local `tmp_pool` and are destroyed during stack unwind.
+  No orphan `ACTIVE` block can exist in the Scheduler pool after a partial
+  registration failure.
 - **Lazy reclamation.** Mirroring `TimerRegistration`, retired/consumed
   `SelectTimerRegistration` blocks are physically removed from the pool when
   the pump pops their deadline entry (lazy-at-deadline). The pool is bounded by
@@ -261,15 +276,18 @@ The earliest-deadline cache `earliest_active_deadline_` continues to be
 maintained by scanning both block kinds; `SelectTimerRegistration::state_ ==
 active` participates exactly like `TimerRegistration::state_ == active`.
 
-### 4.3 Key invariant: no concurrent heap ownership
+### 4.3 Key invariants: no concurrent heap ownership, no orphan blocks
 
-The `std::list::splice` transfer is safe because:
+The per-arm `std::list::splice` transfer is safe because:
 
 1. The temporary `tmp_pool` is local to the `select(...)` call frame.
-2. No other thread can observe the `SelectTimerRegistration` until it is in
+2. No other thread can observe a `SelectTimerRegistration` until it is in
    the Scheduler-owned pool (under G).
 3. The heap entry referencing the `SelectTimerRegistration` is pushed only
-   under G, after the splice.
+   under G, in the same CS as the splice.
+4. Not-yet-spliced blocks remain in `tmp_pool`, are never observed by any
+   other thread, and are destroyed on frame unwind — eliminating the orphan
+   `ACTIVE` block problem of a whole-list splice.
 
 ---
 

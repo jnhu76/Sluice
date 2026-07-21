@@ -223,14 +223,14 @@ frame cannot be destroyed while a callback still references it).
 Only one object is Scheduler-owned and outlives the caller frame: a
 **`SelectTimerRegistration`** per Timer arm, stored in a pointer-stable
 container mirroring `timer_pool_`. Nodes are constructed in a temporary
-`std::list<SelectTimerRegistration>` outside G, then spliced into the
-Scheduler-owned pool via `std::list::splice` under G (no allocation inside the
-lock). The deadline heap is migrated to `DeadlineHeapEntry` to hold both
-`TimerRegistration*` and `SelectTimerRegistration*` (see
-`docs/e13-select-timer-adapter.md` §4). Its atomic
-`active/retired/consumed` state is the post-destruction safety boundary (I4):
-a stale pump entry observes retirement and skips without dereferencing the
-caller-frame arm.
+`std::list<SelectTimerRegistration>` outside G, then **each block is spliced
+individually** under G during its arm's registration step via
+`std::list::splice` (O(1), no allocation inside the lock). The deadline heap
+is migrated to `DeadlineHeapEntry` to hold both `TimerRegistration*` and
+`SelectTimerRegistration*` (see `docs/e13-select-timer-adapter.md` §4). Its
+atomic `active/retired/consumed` state is the post-destruction safety boundary
+(I4): a stale pump entry observes retirement and skips without dereferencing
+the caller-frame arm.
 
 ---
 
@@ -284,11 +284,11 @@ array (`std::array<SelectArmSlot, N>`) before taking `global_mtx_`. Allocation
 happens only in the Timer-arm construction step, which is performed *before*
 the global critical section so that a `bad_alloc` cannot leave the Scheduler
 with a partially-registered group under lock. Timer blocks are constructed in a
-temporary `std::list<SelectTimerRegistration>` outside G, then spliced into the
-Scheduler-owned pool via `std::list::splice` under G. Under G, the deadline
-heap `reserve`s capacity for all Timer arms before any registration mutation;
-if `reserve` throws, no arm is registered and no splice has occurred. No other
-allocation occurs inside the lock.
+temporary `std::list<SelectTimerRegistration>` outside G, then **each block is
+spliced individually** under G during its arm's registration step. Under G, the
+deadline heap `reserve`s capacity for all Timer arms before any registration
+mutation; if `reserve` throws, no arm is registered and no splice has occurred.
+No other allocation occurs inside the lock.
 
 Full detail: `docs/e13-select-public-api.md` §allocation and
 `docs/e13-select-type-and-lifetime.md` §exception-rollback.
@@ -312,7 +312,6 @@ src/async/select_timer.cpp                            (Timer Select registration
 
 tests/e13_select_inline.cpp
 tests/e13_select_suspended.cpp
-tests/e13_select_event_adapter.cpp
 tests/e13_select_timer_adapter.cpp
 tests/e13_select_rollback.cpp
 tests/e13_select_multi_group.cpp
