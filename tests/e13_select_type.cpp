@@ -29,15 +29,15 @@ namespace sad = sluice::async::detail;
 
 namespace {
 
-template<typename... Cases>
-concept SelectHasSize = (sizeof...(Cases) >= 1) &&
-                        (sizeof...(Cases) <= sa::kSelectMaxArms);
-
-template<typename... Cases>
-concept SelectTypesValid = (sa::SelectCaseType<Cases> && ...);
-
-template<typename... Cases>
-concept SelectValid = SelectHasSize<Cases...> && SelectTypesValid<Cases...>;
+// SelectInvocable performs actual overload resolution against the real
+// select() declaration. This is NOT a mirror of the requires clause;
+// substitution failure here means the real select() overload rejected the
+// arguments — which is exactly the gate we want to test.
+template <class... Cases>
+concept SelectInvocable =
+    requires(sa::Scheduler& scheduler, Cases&&... cases) {
+        sa::select(scheduler, std::forward<Cases>(cases)...);
+    };
 
 }  // anonymous namespace
 
@@ -311,48 +311,65 @@ SLUICE_TEST_CASE(test_timer_registration_claim_then_retire_fails) {
 }
 
 // =========================================================================
-// H3: Compile-fail gates
+// H3: Compile-fail gates (SF-1..SF-3 — bound to actual select() overload)
 // =========================================================================
 
 // SF-1: select() with zero case arms must fail the sizeof...(Cases) >= 1 constraint.
-// We verify this indirectly via a concept-level check.
 SLUICE_TEST_CASE(test_sf_1_select_with_zero_arms) {
-    // sizeof...(Cases) >= 1 fails for empty pack.
-    static_assert(!SelectValid<>);
+    static_assert(!SelectInvocable<>);
 }
 
-// Conformance: SelectValid<int> must fail (int is not SelectCaseType).
+// Conformance: SelectInvocable<int> must fail (int is not SelectCaseType).
 SLUICE_TEST_CASE(test_sf_1_select_invalid_type_rejected) {
-    static_assert(!SelectValid<int>);
+    static_assert(!SelectInvocable<int>);
 }
 
-// SF-2: select with 9 valid cases is not a valid expression.
-// The requires clause rejects > kSelectMaxArms (8).
-SLUICE_TEST_CASE(test_sf_2_select_max_arms_constant) {
-    // Verify kSelectMaxArms is 8.
-    static_assert(sa::kSelectMaxArms == 8);
+// 9 EventSelectCase arms must fail (> kSelectMaxArms = 8).
+SLUICE_TEST_CASE(test_sf_2_select_nine_arms_rejected) {
+    // We need Event instances to construct EventSelectCase values.
+    // Use a minimal Scheduler + Event setup.
+    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sa::Scheduler sched(ctx);
+    sa::Event e1(sched), e2(sched), e3(sched), e4(sched), e5(sched),
+             e6(sched), e7(sched), e8(sched), e9(sched);
+    static_assert(!SelectInvocable<
+        sa::EventSelectCase, sa::EventSelectCase, sa::EventSelectCase,
+        sa::EventSelectCase, sa::EventSelectCase, sa::EventSelectCase,
+        sa::EventSelectCase, sa::EventSelectCase, sa::EventSelectCase
+    >);
+    (void)e1; (void)e2; (void)e3; (void)e4; (void)e5;
+    (void)e6; (void)e7; (void)e8; (void)e9;
+}
 
-    // Verify SelectHasSize rejects a 9-element pack.
-    // We use int as a placeholder type (type constraint check is separate).
-    static_assert(!SelectHasSize<int, int, int, int, int, int, int, int, int>);
-
-    // 8-element pack passes the size check.
-    static_assert(SelectHasSize<int, int, int, int, int, int, int, int>);
+// SF-2: 8 EventSelectCase arms should be accepted (at the type level).
+SLUICE_TEST_CASE(test_sf_2_select_eight_arms_accepted) {
+    static_assert(SelectInvocable<sa::EventSelectCase, sa::EventSelectCase,
+                                  sa::EventSelectCase, sa::EventSelectCase,
+                                  sa::EventSelectCase, sa::EventSelectCase,
+                                  sa::EventSelectCase, sa::EventSelectCase>);
 }
 
 // SF-3: select with an int arm is not a valid expression.
 SLUICE_TEST_CASE(test_sf_3_select_with_int_arm) {
-    // Concept check: int does not satisfy SelectCaseType.
-    static_assert(!sa::SelectCaseType<int>);
-
-    // Also verify the combined constraint rejects int.
-    static_assert(!SelectValid<int>);
+    static_assert(!SelectInvocable<int>);
 }
 
-// Complement: EventSelectCase satisfies the full constraint.
+// Positive: EventSelectCase satisfies the full constraint.
 SLUICE_TEST_CASE(test_event_select_case_is_valid) {
-    // We verify the type-level constraint only (no runtime instance needed).
-    static_assert(SelectValid<sa::EventSelectCase>);
+    static_assert(SelectInvocable<sa::EventSelectCase>);
+}
+
+// Positive: TimerSelectCase satisfies the full constraint.
+SLUICE_TEST_CASE(test_timer_select_case_is_valid) {
+    static_assert(SelectInvocable<sa::TimerSelectCase>);
+}
+
+// Positive: mixed Event + Timer pack satisfies the constraint.
+SLUICE_TEST_CASE(test_mixed_select_cases_valid) {
+    static_assert(SelectInvocable<sa::EventSelectCase, sa::TimerSelectCase>);
+    static_assert(SelectInvocable<sa::TimerSelectCase, sa::EventSelectCase>);
+    static_assert(SelectInvocable<sa::EventSelectCase, sa::EventSelectCase,
+                                  sa::TimerSelectCase>);
 }
 
 // Positive constraint verification: a valid call compiles (at the type level).
