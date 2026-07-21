@@ -443,30 +443,37 @@ SLUICE_TEST_CASE(test_live_select_arms_trigger_assertion) {
 }
 
 // =========================================================================
-// J15: Real ordinary waiter + Select coexistence
+// J15: Real ordinary waiter + Select coexistence (causal)
 // =========================================================================
 //
-// A Fiber waits on an UNSET Event. A second Fiber calls set(). The first
-// Fiber resumes with Woken. Simultaneously, a linked Select arm with an
-// Armed group must be marked CandidateReady by the same set() broadcast.
+// Causal multi-thread test: arm the admission-before-final-check phase
+// seam. A waiter Fiber registers its WaitNode and pauses at the seam
+// (holding global_mtx_ + q.mtx()). The setter starts and blocks on
+// global_mtx_. After the seam releases, the waiter submits Waiting and
+// releases the lock. The setter acquires it and, in a single broadcast,
+// drains the ordinary WaitNode and scans the Select registry. Proves the
+// ordinary waiter was causally registered before the set() broadcast, so
+// both the ordinary drain and the Select scan execute in the same broadcast
+// under global_mtx_.
 SLUICE_TEST_CASE(test_real_ordinary_waiter_and_coexistence) {
     if constexpr (!sa::fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);
+
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
-    std::atomic<bool> waiter_suspended{false};
 
-    Fiber fwait, fwake;
+    using E12Hooks = sluice_async_test::E12EventSeam;
+
+    // Arm admission seam: pauses AFTER WaitNode registration, BEFORE final
+    // SET check, WHILE holding global_mtx_ + q.mtx().
+    E12Hooks::arm_admission_before_final_check(sched);
+
+    Fiber fwait;
     fwait.set_entry([&](Fiber&) {
-        waiter_suspended.store(true, std::memory_order_release);
         ev.wait(node);
-    });
-    fwake.set_entry([&](Fiber&) {
-        spin_wait(waiter_suspended);
-        std::this_thread::yield();
-        ev.set();
     });
 
     // Link a Select arm with an Armed group.
@@ -478,16 +485,31 @@ SLUICE_TEST_CASE(test_real_ordinary_waiter_and_coexistence) {
     arm.group = &group;
     AsyncTestAccess::select_event_link(sched, ev, arm);
 
-    FiberStack sw, sk;
+    FiberStack sw;
     SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
-    SLUICE_CHECK(sched.init_fiber(fwake, sk.base(), sk.size()));
     sched.spawn(fwait);
-    sched.spawn(fwake);
-    sched.run(2);
+
+    // Run the scheduler — the waiter fiber enters await_event_wait,
+    // registers the WaitNode, and pauses at the admission seam.
+    std::thread run_thread([&] { sched.run_live(1); });
+
+    // Mechanical observation: WaitNode is registered.
+    E12Hooks::wait_admission_paused(sched);
+
+    // Start setter — it blocks on global_mtx_ (waiter holds it).
+    std::thread set_thread([&] { ev.set(); });
+
+    // Release waiter: submits Waiting and releases global_mtx_.
+    E12Hooks::release_admission(sched);
+
+    set_thread.join();
+    run_thread.join();
 
     SLUICE_CHECK_MSG(node.was_woken(), "ordinary waiter resolved Woken");
     SLUICE_CHECK_MSG(arm.state == sad::ArmState::candidate_ready,
                      "Select arm marked CandidateReady by set() broadcast");
+    SLUICE_CHECK_MSG(group.winner() == sad::kNoWinner,
+                     "no winner claimed by broadcast");
     SLUICE_CHECK_MSG(arm.home_ != nullptr, "Select arm still linked");
     SLUICE_CHECK_MSG(ev.is_set(), "Event is SET after set()");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
