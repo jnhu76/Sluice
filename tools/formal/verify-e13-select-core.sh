@@ -22,10 +22,16 @@ fi
 outroot="$(mktemp -d -t e13-select-core.XXXXXX)"
 workdir="$outroot/work"
 cleanup() {
-  [[ -n "$outroot" ]]
-  [[ "$outroot" == /tmp/e13-select-core.* ||
-     "$outroot" == "${TMPDIR:-/tmp}"/e13-select-core.* ]]
-  rm -rf -- "$outroot"
+  # PR #18 corrective-1 (§I3) portable tmpdir hardening: combine the
+  # non-empty check, the prefix check, AND the rm into a single guarded
+  # command so `set -e` cannot short-circuit between the check and the rm.
+  # The prefix check accepts both /tmp and ${TMPDIR} parents, and the
+  # mktemp template guarantees the e13-select-core.* basename prefix.
+  if [[ -n "$outroot" ]] \
+     && [[ "$outroot" == /tmp/e13-select-core.* \
+           || "$outroot" == "${TMPDIR:-/tmp}"/e13-select-core.* ]]; then
+    rm -rf -- "$outroot"
+  fi
 }
 trap cleanup EXIT
 
@@ -34,6 +40,7 @@ cp "$spec"/*.tla "$workdir/"
 cp "$spec"/*.cfg "$workdir/"
 
 cd "$workdir"
+pwd -P >/dev/null
 
 run_tlc() {
   local model="$1" cfg="$2" tag="$3"

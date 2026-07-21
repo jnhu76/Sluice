@@ -2,12 +2,17 @@
 # Reproducible PR #18 gate for the layered E13 Select formal safety suite.
 # Builds on PR #17 (verify-e13-select-core.sh) by adding:
 #   - the full named layered safety invariants (Contract/Central/Adapter)
-#   - focused negative models (Contract NEG-C1..C8, Central NEG-S1..S6,
-#     Event/Timer/Accounting NEG-E1..E6 + NEG-T1..T5 + NEG-A1..A4) plus the
-#     FAULT="None" restoration checks
-#   - the per-law non-vacuity witness matrix
-#   - the bounded two-group non-interference model + its reach witnesses
+#   - focused negative models (Contract NEG-C1..C9, Central NEG-S1..S7,
+#     Event/Timer/Accounting NEG-E1..E6 + NEG-T1..T5 + NEG-A1..A4,
+#     Multi-group NEG-MG1) plus the FAULT="None" restoration checks
+#   - the per-law non-vacuity witness matrix (including the corrective-1
+#     frozen-winner / frozen-snapshot / widened-accounting witnesses)
+#   - the bounded two-group non-interference model + its three independent
+#     reach witnesses (shared-Event, mixed Event+Timer, rollback-vs-complete)
+#     plus two registration-split rollback reachability witnesses
 #   - widened-domain refinement checks
+#   - widened-accounting A1/A2 no-TypeOK double-check (counter pushed to 2
+#     must trip the at-most-once law WITHOUT tripping EventTimerTypeOK)
 #
 # Source-safe: every TLC run happens in an isolated mktemp workspace with a
 # defensive cleanup trap.  The script never deletes anything outside the
@@ -63,6 +68,15 @@ passed()   { grep -q 'Model checking completed. No error has been found' "$1"; }
 deadlocked() { grep -qiE 'Deadlock reached|is deadlocked' "$1"; }
 named_violation() { grep -Eq "Invariant $2 is violated" "$1"; }
 property_violation() { grep -Eq "Temporal property .* is violated" "$1"; }
+# PR #18 corrective-1: A1/A2 widened-accounting double-check helper.  The
+# target at-most-once invariant must be violated AND the TLC output must NOT
+# report an EventTimerTypeOK violation -- this confirms the focused fault
+# isolates exactly the law it claims to break, not a typing precondition.
+# The TypeOK domain was widened to 0..2 specifically so a fault can push a
+# counter to 2 without tripping TypeOK.
+no_typeok_violation() {
+  ! grep -Eq "Invariant EventTimerTypeOK is violated|EventTimerTypeOK is.*[Vv]iolated" "$1"
+}
 
 metrics() {
   local file="$1"
@@ -137,6 +151,29 @@ expect_restored() {
   echo "RESTORE $label  (FAULT=\"None\" PASS; $(metrics "$out"))"
 }
 
+# expect_negative_no_typeok: like expect_negative, but additionally requires
+# that the TLC output contains NO EventTimerTypeOK violation.  Used for the
+# widened-accounting NEG-A1/A2 gates so a counter pushed to 2 trips exactly
+# the at-most-once law and not a typing precondition.
+expect_negative_no_typeok() {
+  local label="$1" property="$2" cfg="$3" tag="$4"
+  local model="$5"
+  local out="$outroot/$tag.out"
+  run_tlc "$model" "$cfg" "$tag"
+  if ! launched "$out" || deadlocked "$out" || passed "$out" \
+     || ! named_violation "$out" "$property"; then
+    echo "FAIL  $label (expected negative: $property violated by the fault)"
+    tail -25 "$out"
+    return 1
+  fi
+  if ! no_typeok_violation "$out"; then
+    echo "FAIL  $label (target violated but EventTimerTypeOK ALSO violated -- fault does not isolate the law)"
+    tail -25 "$out"
+    return 1
+  fi
+  echo "NEG   $label  ($property violated, TypeOK intact; $(metrics "$out"))"
+}
+
 rc=0
 echo "=== E13 Select layered formal SAFETY (PR #18; workers=$workers) ==="
 echo
@@ -161,9 +198,31 @@ echo
 echo "--- Multi-group bounded non-interference (O) ---"
 expect_pass "Two-group MGSafetyInv (shared Event)" \
   E13SelectMultiGroup E13SelectMultiGroup.cfg p_mg_safety || rc=1
+# PR #18 corrective-1: split the single combined reach witness into three
+# independent cfgs so each arm of the multi-group non-interference property
+# is exercised in isolation (shared-Event, mixed Event+Timer, rollback-vs-
+# complete).  Plus two non-vacuity witnesses for the new registration-split
+# rollback reachability (arm installed but not finished; pre-finish rollback).
 expect_reach "Two-group shared-Event double completion" \
-  NotMG_ReachSharedEventBothGroupsComplete E13SelectMultiGroup.reach.cfg \
-  r_mg_shared_complete E13SelectMultiGroup || rc=1
+  NotMG_ReachSharedEventBothGroupsComplete \
+  E13SelectMultiGroup.reach_shared_event.cfg \
+  r_mg_shared_event E13SelectMultiGroup || rc=1
+expect_reach "Two-group mixed Event+Timer completion" \
+  NotMG_ReachMixedEventTimer \
+  E13SelectMultiGroup.reach_mixed_event_timer.cfg \
+  r_mg_mixed_event_timer E13SelectMultiGroup || rc=1
+expect_reach "Two-group one rollback other complete" \
+  NotMG_ReachOneRollbackOtherComplete \
+  E13SelectMultiGroup.reach_rollback_vs_complete.cfg \
+  r_mg_rollback_vs_complete E13SelectMultiGroup || rc=1
+expect_reach "Multi-group arm installed not finished" \
+  NotMG_ReachArmInstalledNotFinished \
+  E13SelectMultiGroup.nv_installed_not_finished.cfg \
+  nv_mg_installed_not_finished E13SelectMultiGroup || rc=1
+expect_reach "Multi-group pre-finish rollback" \
+  NotMG_ReachPreFinishRollback \
+  E13SelectMultiGroup.nv_pre_finish_rollback.cfg \
+  nv_mg_pre_finish_rollback E13SelectMultiGroup || rc=1
 echo
 
 echo "--- Widened-domain refinement (X) ---"
@@ -176,7 +235,7 @@ expect_pass "Central -> Contract refinement (3-arm admission tie)" \
 # in E13SelectEventTimer.safety3mix.cfg.
 echo
 
-echo "--- Contract negative models (R: NEG-C1..C8) ---"
+echo "--- Contract negative models (R: NEG-C1..C9) ---"
 expect_negative "NEG-C1 commit before linearization" \
   C_InvCommitRequiresWinnerLinearization E13SelectContractNeg.C1.cfg \
   neg_c1 E13SelectContractNeg || rc=1
@@ -201,16 +260,23 @@ expect_negative "NEG-C7 Aborted caller Waiting" \
 expect_negative "NEG-C8 Destroy without Consumed or valid Abort" \
   C_InvDestroyRequiresConsumedOrValidAbort E13SelectContractNeg.C8.cfg \
   neg_c8 E13SelectContractNeg || rc=1
+# PR #18 corrective-1: NEG-C9 isolates the frozen-winner identity stability
+# law.  A legal linearization has stamped linearized_winner = A; the fault
+# flips the live winner to a different registered arm B (no WinnerCommitted)
+# and leaves the frozen history unchanged.
+expect_negative "NEG-C9 winner identity flip after linearization" \
+  C_InvWinnerIdentityStableAfterLinearization E13SelectContractNeg.C9.cfg \
+  neg_c9 E13SelectContractNeg || rc=1
 expect_restored "Contract restore (FAULT=None)" \
   E13SelectContractNeg.restore.cfg restore_contract E13SelectContractNeg || rc=1
 echo
 
-echo "--- Central Claim negative models (S: NEG-S1..S6) ---"
+echo "--- Central Claim negative models (S: NEG-S1..S7) ---"
 expect_negative "NEG-S1 claim a non-offered arm" \
   S_InvClaimRequiresOfferedArm E13SelectCentralClaimNeg.S1.cfg \
   neg_s1 E13SelectCentralClaimNeg || rc=1
-expect_negative "NEG-S2 winner not from snapshot" \
-  S_InvWinnerChosenFromSnapshot E13SelectCentralClaimNeg.S2.cfg \
+expect_negative "NEG-S2 snapshot mutated after claim" \
+  S_InvClaimSnapshotImmutableAfterClaim E13SelectCentralClaimNeg.S2.cfg \
   neg_s2 E13SelectCentralClaimNeg || rc=1
 expect_negative "NEG-S3 second successful claim" \
   S_InvAtMostOneSuccessfulClaim E13SelectCentralClaimNeg.S3.cfg \
@@ -224,11 +290,18 @@ expect_negative "NEG-S5 admission tie not lowest-index" \
 expect_negative "NEG-S6 snapshot does not contain winner" \
   S_InvClaimSnapshotContainsWinner E13SelectCentralClaimNeg.S6.cfg \
   neg_s6 E13SelectCentralClaimNeg || rc=1
+# PR #18 corrective-1: NEG-S7 isolates the strict frozen-snapshot
+# immutability law in its hardest case (addition, not removal).  Requires
+# a 3-arm cfg so a winner + snapshot-internal candidate + snapshot-external
+# registered arm can coexist.
+expect_negative "NEG-S7 snapshot adds member after claim (3-arm)" \
+  S_InvClaimSnapshotImmutableAfterClaim E13SelectCentralClaimNeg.S7.cfg \
+  neg_s7 E13SelectCentralClaimNeg || rc=1
 expect_restored "Central restore (FAULT=None)" \
   E13SelectCentralClaimNeg.restore.cfg restore_central E13SelectCentralClaimNeg || rc=1
 echo
 
-echo "--- Event/Timer/Accounting negative models (T/U/V: NEG-E1..E6, T1..T5, A1..A4) ---"
+echo "--- Event/Timer/Accounting negative models (E/T/A: NEG-E1..E6, T1..T5, A1..A4) ---"
 expect_negative "NEG-E1 candidate bypasses scan path" \
   E_InvNoReadinessBypassesPermittedEventPath E13SelectEventTimerNeg.E1.cfg \
   neg_e1 E13SelectEventTimerNeg || rc=1
@@ -268,6 +341,16 @@ expect_negative "NEG-A1 waiting closes twice" \
 expect_negative "NEG-A2 timer closes twice" \
   A_InvTimerAccountClosesAtMostOnce E13SelectEventTimerNeg.A2.cfg \
   neg_a2 E13SelectEventTimerNeg || rc=1
+# PR #18 corrective-1 double-check: A1/A2 must isolate the at-most-once law
+# without tripping EventTimerTypeOK, since the counter domain was widened to
+# 0..2 precisely so a focused fault can push a counter to 2 without breaking
+# the typing precondition.  Repeat A1/A2 with the no-TypeOK double-check.
+expect_negative_no_typeok "NEG-A1 widowed (no TypeOK violation)" \
+  A_InvWaitAccountClosesAtMostOnce E13SelectEventTimerNeg.A1.cfg \
+  neg_a1_no_typeok E13SelectEventTimerNeg || rc=1
+expect_negative_no_typeok "NEG-A2 widowed (no TypeOK violation)" \
+  A_InvTimerAccountClosesAtMostOnce E13SelectEventTimerNeg.A2.cfg \
+  neg_a2_no_typeok E13SelectEventTimerNeg || rc=1
 expect_negative "NEG-A3 Completed with open accounting" \
   A_InvCompletedHasNoOpenAccounting E13SelectEventTimerNeg.A3.cfg \
   neg_a3 E13SelectEventTimerNeg || rc=1
@@ -276,6 +359,18 @@ expect_negative "NEG-A4 accounting underflow" \
   neg_a4 E13SelectEventTimerNeg || rc=1
 expect_restored "Adapter restore (FAULT=None)" \
   E13SelectEventTimerNeg.restore.cfg restore_adapter E13SelectEventTimerNeg || rc=1
+echo
+
+echo "--- Multi-group negative models (MG: NEG-MG1) ---"
+# PR #18 corrective-1: NEG-MG1 isolates the transition-level cross-group
+# non-interference that the per-action UNCHANGED audit establishes
+# structurally.  Group g0's RollbackArm spuriously mutates group g1's
+# authority_open while group g1 is at a terminal phase.
+expect_negative "NEG-MG1 cross-group authority mutation during rollback" \
+  MG_InvAuthorityClosureDoesNotCrossGroups E13SelectMultiGroupNeg.MG1.cfg \
+  neg_mg1 E13SelectMultiGroupNeg || rc=1
+expect_restored "Multi-group restore (FAULT=None)" \
+  E13SelectMultiGroupNeg.restore.cfg restore_mg E13SelectMultiGroupNeg || rc=1
 echo
 
 echo "--- Per-law non-vacuity witnesses (W) ---"
@@ -300,6 +395,12 @@ expect_reach "Contract Aborted phase" \
 expect_reach "Contract Rollback phase" \
   NotReachContractRollback E13SelectContract.nv_rollback.cfg \
   w_contract_rollback E13SelectContract || rc=1
+# PR #18 corrective-1 (P1-4) non-vacuity witness for the frozen-winner
+# identity stability law: linearized but not yet committed.
+expect_reach "Contract winner linearized not committed" \
+  NotReachContractWinnerLinearizedNotCommitted \
+  E13SelectContract.nv_lin_not_committed.cfg \
+  w_contract_lin_not_committed E13SelectContract || rc=1
 expect_reach "Central claimed offer" \
   NotReachCentralClaimed E13SelectCentralClaim.central_claimed.cfg \
   w_central_claimed E13SelectCentralClaim || rc=1
@@ -312,6 +413,16 @@ expect_reach "Central admission tie" \
 expect_reach "Central Winner+Loser classified" \
   NotReachCentralWinnerClassified E13SelectCentralClaim.central_winner_classified.cfg \
   w_central_winner_classified E13SelectCentralClaim || rc=1
+# PR #18 corrective-1 (P1-3) non-vacuity witnesses for the frozen claim
+# snapshot laws: stamp happened, and the multi-candidate non-trivial case.
+expect_reach "Central frozen snapshot valid" \
+  NotReachCentralFrozenSnapshotValid \
+  E13SelectCentralClaim.nv_frozen_snapshot.cfg \
+  w_central_frozen_snapshot E13SelectCentralClaim || rc=1
+expect_reach "Central multi-candidate frozen snapshot" \
+  NotReachCentralMultiCandidateSnapshot \
+  E13SelectCentralClaim.nv_multi_candidate_snapshot.cfg \
+  w_central_multi_candidate_snapshot E13SelectCentralClaim || rc=1
 expect_reach "Adapter wait account closed" \
   NotReachAdapterWaitAccountClosed E13SelectEventTimer.adapter_wait_closed.cfg \
   w_adapter_wait_closed E13SelectEventTimer || rc=1
@@ -330,6 +441,14 @@ expect_reach "Adapter commit_step recorded" \
 expect_reach "Adapter publication_step recorded" \
   NotReachAdapterPublicationStepRecorded E13SelectEventTimer.adapter_publication_step.cfg \
   w_adapter_publication_step E13SelectEventTimer || rc=1
+# PR #18 corrective-1 non-vacuity witness for the widened accounting at-most-
+# once laws: at least one arm has closed its account (counter == 1, the value
+# the legal transition produces).  After TypeOK widening to 0..2, this
+# confirms the laws bite on the genuinely reachable counter value.
+expect_reach "Adapter account close count == 1 (widened)" \
+  NotReachAdapterAccountCountOne \
+  E13SelectEventTimer.adapter_account_count_one.cfg \
+  w_adapter_account_count_one E13SelectEventTimer || rc=1
 echo
 
 echo "--- PR #17 regression: causal reachability R1-R12 ---"
