@@ -68,6 +68,12 @@ detail::SelectTimerRegistration* Scheduler::select_timer_splice_one_locked(
     // Push the tagged Select entry (cached deadline + Select pointer).
     heap_push_entry_locked(detail::DeadlineHeapEntry::for_select(reg));
 
+    // The block starts ACTIVE; account it so it participates in the MW/park
+    // classification + earliest-deadline cache (docs/e13-select-timer-adapter
+    // §4.2). The matching decrement is in the retire/consume helper.
+    ++active_deadline_count_;
+    recompute_earliest_deadline_locked();
+
     return &reg;
 }
 

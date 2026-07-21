@@ -135,6 +135,20 @@ Scheduler::~Scheduler() {
         wake_control_.reset();
     }
     // Workers are joined in run().
+    //
+    // E13 P3 quiescence check: at destruction the Scheduler must hold NO live
+    // Select timer authority (no Scheduler-owned SelectTimerRegistration blocks
+    // remain, and the shared active-deadline counter is zero). A non-empty
+    // select_timer_pool_ here means a Select group's Timer arms were left
+    // ACTIVE/terminal without being pumped to reclamation — a caller contract
+    // violation (mirrors the ordinary timer_pool_/WaitQueue destruction
+    // invariants). Debug-only assert; absent in release (NDEBUG).
+    assert(select_timer_pool_.empty() &&
+           "~Scheduler: select_timer_pool_ not drained (live Select timer "
+           "authority remains — caller contract violation)");
+    assert(active_deadline_count_ == 0 &&
+           "~Scheduler: active_deadline_count_ != 0 (a timer registration was "
+           "not retired/consumed before teardown)");
 }
 
 // ---- E9 SchedulerWakeHandle::notify + bound ----

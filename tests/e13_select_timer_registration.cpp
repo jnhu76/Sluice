@@ -53,6 +53,18 @@ struct TFixture {
     explicit TFixture() : sched(ctx), ctrl(sched) {
         stest::E11TimerControl::enable_test_clock(sched);
     }
+    ~TFixture() {
+        // Drain any remaining Select timer blocks so the Scheduler destroys
+        // with no live Select timer authority (the ~Scheduler quiescence
+        // contract). Retire any still-ACTIVE block, then advance the clock
+        // far past every deadline so the pump reclaims each block physically.
+        // Tests that already pump their blocks to reclamation leave an empty
+        // pool and this is a no-op.
+        AsyncTestAccess::drain_select_pool(sched);
+    }
+    // No copy/move.
+    TFixture(const TFixture&) = delete;
+    TFixture& operator=(const TFixture&) = delete;
 };
 
 // =========================================================================

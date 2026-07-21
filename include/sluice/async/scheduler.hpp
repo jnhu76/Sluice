@@ -1450,6 +1450,25 @@ public:
         static void reset_select_timer_arm_load_count(Scheduler& s) noexcept {
             s.select_timer_arm_load_count_ = 0;
         }
+
+        // Drain the Select timer pool to empty: retire every still-ACTIVE
+        // block (via the Scheduler accounting helper, so counters stay
+        // consistent), then advance the clock far past every deadline so the
+        // pump physically reclaims each block. Used by test fixtures to honor
+        // the ~Scheduler quiescence contract. Acquires/releases global_mtx_.
+        static void drain_select_pool(Scheduler& s) {
+            // Retire ACTIVE blocks under G (so advancing the clock later hits
+            // the stale-skip path, not the ACTIVE fail-fast).
+            {
+                LockGuard lk(s.global_mtx_);
+                for (auto& reg : s.select_timer_pool_) {
+                    if (reg.is_active()) s.select_timer_retire_locked(reg);
+                }
+            }
+            // Pump every Select entry to physical reclamation. A large deadline
+            // covers all test fixtures' deadlines.
+            s.advance_clock(static_cast<deadline_t>(1) << 62);
+        }
     };
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };
