@@ -2918,15 +2918,25 @@ std::size_t Scheduler::pump_deadlines_locked() {
     std::size_t won = 0;
     const deadline_t now = clock_now_unlocked();
     while (!deadline_heap_.empty()) {
-        const detail::DeadlineHeapEntry& front = deadline_heap_.front();
+        const detail::DeadlineHeapEntry front = deadline_heap_.front();
         if (front.deadline > now) break;  // earliest not yet due
         // E13 P3: the deadline heap holds tagged entries (Ordinary | Select).
-        // Commit 1 migrates the ordinary branch only; the Select branch is
-        // added in a later P3 commit. For now every entry is Ordinary.
-        TimerRegistration* top = front.target.ordinary;
-        // Pop the min regardless (lazy removal: retired/consumed entries leave
-        // the heap here without their node ever being dereferenced).
+        // Pop the min regardless of kind (lazy removal: inert entries leave
+        // the heap here without their target ever being dereferenced for a
+        // non-ACTIVE state). Copy `front` because pop invalidates the ref.
         heap_pop_min_locked();
+        if (front.kind == detail::DeadlineHeapEntry::Kind::select) {
+            // Select timer branch (Addendum D/E). State-before-arm: the branch
+            // body loads state first; non-ACTIVE skips (PumpSkip), ACTIVE
+            // fails fast (a due ACTIVE Select entry is unreachable in valid
+            // P3 — no admission path). Physical reclamation only here: the
+            // retire/consume helper already decremented active_deadline_count_
+            // exactly once; the stale-pop path MUST NOT decrement again.
+            select_timer_pump_entry_locked(*front.target.select);
+            erase_popped_select_registration_locked(front.target.select);
+            continue;
+        }
+        TimerRegistration* top = front.target.ordinary;
         // I4 gate: claim the timer authority BEFORE dereferencing the node. If
         // the registration is RETIRED (non-timer winner closed it) or already
         // CONSUMED (an earlier expiry won), skip — do NOT touch node/queue.
@@ -3326,6 +3336,42 @@ bool Scheduler::AsyncTestAccess::earliest_active_deadline(
     Scheduler& s, deadline_t& out) {
     LockGuard lk(s.global_mtx_);
     return s.earliest_active_deadline_locked(out);
+}
+
+// ---- E13 P3 Select timer test accessors ----
+
+void Scheduler::AsyncTestAccess::advance_clock(Scheduler& s, deadline_t t) {
+    s.advance_clock(t);
+}
+
+std::size_t Scheduler::AsyncTestAccess::select_timer_pool_size(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    return s.select_timer_pool_.size();
+}
+
+std::size_t Scheduler::AsyncTestAccess::select_timer_count_in_state(
+    const Scheduler& s,
+    detail::SelectTimerRegistration::State st) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    std::size_t n = 0;
+    for (const auto& r : s.select_timer_pool_) {
+        if (r.state() == st) ++n;
+    }
+    return n;
+}
+
+std::array<std::size_t, 2>
+Scheduler::AsyncTestAccess::tagged_heap_counts_by_kind(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    std::array<std::size_t, 2> counts{0, 0};
+    for (const auto& e : s.deadline_heap_) {
+        if (e.kind == detail::DeadlineHeapEntry::Kind::ordinary) {
+            ++counts[0];
+        } else {
+            ++counts[1];
+        }
+    }
+    return counts;
 }
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

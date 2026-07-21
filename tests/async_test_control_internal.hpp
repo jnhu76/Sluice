@@ -70,6 +70,17 @@ enum class PhaseTag : unsigned char {
     // fiber's WaitNode is registered in the Mutex waiter queue (T15a/T15b).
     e12_mutex_waiter_registered_before_grant,
 
+    // E13 P3: Select timer pump paused AFTER the ACTIVE check, BEFORE the
+    // arm dereference / fail-fast. A due ACTIVE Select entry is unreachable in
+    // valid P3 (no admission); observing this phase proves the pump reached
+    // an ACTIVE Select entry and is about to fail fast (stage-boundary guard,
+    // NOT supported production behavior).
+    e13_timer_pump_active,
+    // E13 P3: Select timer pump observing a stale (non-ACTIVE) entry being
+    // skipped — the deterministic proof of the I4 closure: the pump observed
+    // RETIRED/CONSUMED and did NOT read arm_ (arm-load delta == 0).
+    e13_timer_pump_skip,
+
     count
 };
 

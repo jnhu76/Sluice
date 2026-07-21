@@ -22,6 +22,7 @@
 #include <sluice/async/wait_queue.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -1222,6 +1223,19 @@ private:
         const detail::SelectTimerRegistration& reg) const noexcept
         SLUICE_REQUIRES(global_mtx_);
 
+    // E13 P3 Select timer pump branch body. PRE: global_mtx_ held; the pump
+    // has ALREADY popped `reg` from the deadline heap and observed
+    // now >= reg.deadline(). State-before-arm rule (Addendum E): load state
+    // first; non-ACTIVE -> PumpSkip seam + return stale (do NOT read arm_).
+    // ACTIVE -> TimerPumpActive seam, instrument the exact production arm
+    // dereference site, then fail fast (a due ACTIVE Select entry is
+    // unreachable in valid P3 — Addendum D). The caller (pump) performs the
+    // physical reclamation via erase_popped_select_registration_locked
+    // regardless of the branch. Returns true if the entry was stale (skipped),
+    // false if it was ACTIVE (the call does not return in the ACTIVE case).
+    bool select_timer_pump_entry_locked(
+        detail::SelectTimerRegistration& reg) SLUICE_REQUIRES(global_mtx_);
+
     // E11-T17 (F2) narrow test hook: register a TimerRegistration for {node,q,
     // deadline} from a NON-worker thread (the test coordinator). Mirrors the
     // full await_wait_deadline admission MINUS the fiber-suspend path: it
@@ -1376,6 +1390,66 @@ public:
         // specific arm states before a scan.
         static void set_arm_state(Scheduler& s, detail::SelectArmSlot& arm,
                                   detail::ArmState st);
+
+        // ---- E13 P3 Select timer test accessors ----
+        // All route through Scheduler authority. No forgeable test hook; the
+        // production target has none of these symbols.
+        //
+        // Synthetic Select timer registration from a non-worker thread (the
+        // test coordinator). Builds a one-node temporary list and splices it
+        // into select_timer_pool_ under G, pushing its tagged heap entry. The
+        // block starts ACTIVE. Returns a stable pointer to the Scheduler-owned
+        // block. `deadline` must be in the future (now < deadline) or the
+        // entry is immediately due — tests keep clocks before deadlines or
+        // transition to terminal before advancing.
+        static detail::SelectTimerRegistration* register_synthetic_select_timer(
+            Scheduler& s, detail::SelectArmSlot* arm, deadline_t deadline) {
+            std::list<detail::SelectTimerRegistration> tmp;
+            tmp.emplace_back(arm, &s, deadline);
+            // Reserve heap capacity BEFORE mutation (the admission protocol's
+            // only allocation-under-G). Synthetic single-entry registration.
+            LockGuard lk(s.global_mtx_);
+            s.deadline_heap_.reserve(s.deadline_heap_.size() + 1);
+            return s.select_timer_splice_one_locked(tmp, tmp.begin());
+        }
+
+        // Transition a registered synthetic ACTIVE block via the Scheduler
+        // accounting helpers (NOT the registration CAS directly — Addendum C).
+        // Acquire global_mtx_ internally. Return the helper's CAS result.
+        static bool retire_synthetic_select_timer(
+            Scheduler& s, detail::SelectTimerRegistration& reg) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_timer_retire_locked(reg);
+        }
+        static bool consume_synthetic_select_timer(
+            Scheduler& s, detail::SelectTimerRegistration& reg) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_timer_consume_locked(reg);
+        }
+
+        // Advance the test clock deterministically (drives the timer pump).
+        static void advance_clock(Scheduler& s, deadline_t t);
+
+        // Observation (diagnostics; defined out-of-line with a TSA suppression).
+        static std::size_t select_timer_pool_size(
+            const Scheduler& s) noexcept;
+        static std::size_t select_timer_count_in_state(
+            const Scheduler& s,
+            detail::SelectTimerRegistration::State st) noexcept;
+        // Tagged heap counts by kind: returns {ordinary_count, select_count}.
+        static std::array<std::size_t, 2> tagged_heap_counts_by_kind(
+            const Scheduler& s) noexcept;
+
+        // arm-load instrumentation (Addendum E): the count of times the
+        // pump branch read reg.arm_ on an ACTIVE entry (the exact production
+        // dereference site). Stale pops observe delta 0.
+        static std::size_t select_timer_arm_load_count(
+            const Scheduler& s) noexcept {
+            return s.select_timer_arm_load_count_;
+        }
+        static void reset_select_timer_arm_load_count(Scheduler& s) noexcept {
+            s.select_timer_arm_load_count_ = 0;
+        }
     };
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };

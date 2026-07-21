@@ -25,6 +25,7 @@
 #include <sluice/async/wait_node.hpp>
 #include <sluice/async/wait_queue.hpp>
 
+#include <array>
 #include <cstddef>
 
 namespace sluice_async_test {
@@ -325,6 +326,74 @@ struct MutexFailSeam {
     }
     static void disarm() noexcept {
         sluice::async::detail::test_hooks::disarm();
+    }
+};
+
+// ---- E13 P3 Select timer seams + access ----
+// Phase seams for the Select timer pump branch (deterministic causal pause),
+// reached through the non-installed controller. Plus thin facades over
+// Scheduler::AsyncTestAccess for synthetic registration, accounting-helper
+// transitions, and pool/heap/counter observation.
+struct E13SelectTimerSeam {
+    // Pump observing a stale (non-ACTIVE) Select entry being skipped (I4).
+    static void arm_pump_skip(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_timer_pump_skip);
+    }
+    static bool pump_skip_reached(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_timer_pump_skip);
+    }
+    static void wait_pump_skip(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_reached(s, PhaseTag::e13_timer_pump_skip);
+    }
+    static void clear_pump_skip(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::disarm(s, PhaseTag::e13_timer_pump_skip);
+        sluice_async_test::clear_reached(s, PhaseTag::e13_timer_pump_skip);
+    }
+
+    // Pump paused AFTER the ACTIVE check, BEFORE the fail-fast. A due ACTIVE
+    // Select entry is unreachable in valid P3 (no admission); this seam lets a
+    // test prove the guard fires. NOT supported production behavior.
+    static void arm_pump_active(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_timer_pump_active);
+    }
+
+    // Synthetic registration / transitions via Scheduler accounting authority.
+    using Scheduler = sluice::async::Scheduler;
+    using SelectTimerReg = sluice::async::detail::SelectTimerRegistration;
+    using ArmSlot = sluice::async::detail::SelectArmSlot;
+
+    static SelectTimerReg* register_synthetic(
+        Scheduler& s, ArmSlot* arm, Scheduler::deadline_t deadline) {
+        return Scheduler::AsyncTestAccess::register_synthetic_select_timer(
+            s, arm, deadline);
+    }
+    static bool retire_synthetic(Scheduler& s, SelectTimerReg& reg) {
+        return Scheduler::AsyncTestAccess::retire_synthetic_select_timer(s, reg);
+    }
+    static bool consume_synthetic(Scheduler& s, SelectTimerReg& reg) {
+        return Scheduler::AsyncTestAccess::consume_synthetic_select_timer(s, reg);
+    }
+    static void advance_clock(Scheduler& s, Scheduler::deadline_t t) {
+        Scheduler::AsyncTestAccess::advance_clock(s, t);
+    }
+
+    // Observation.
+    static std::size_t pool_size(const Scheduler& s) noexcept {
+        return Scheduler::AsyncTestAccess::select_timer_pool_size(s);
+    }
+    static std::size_t count_in_state(
+        const Scheduler& s, SelectTimerReg::State st) noexcept {
+        return Scheduler::AsyncTestAccess::select_timer_count_in_state(s, st);
+    }
+    static std::array<std::size_t, 2> heap_counts_by_kind(
+        const Scheduler& s) noexcept {
+        return Scheduler::AsyncTestAccess::tagged_heap_counts_by_kind(s);
+    }
+    static std::size_t arm_load_count(const Scheduler& s) noexcept {
+        return Scheduler::AsyncTestAccess::select_timer_arm_load_count(s);
+    }
+    static void reset_arm_load_count(Scheduler& s) noexcept {
+        Scheduler::AsyncTestAccess::reset_select_timer_arm_load_count(s);
     }
 };
 

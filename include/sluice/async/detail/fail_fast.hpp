@@ -30,4 +30,21 @@ namespace sluice::async::detail {
 // catch (...) boundaries; never returns.
 [[noreturn]] void async_mutex_lock_fail_fast() noexcept;
 
+// E13 P3 stage-boundary fail-fast (docs/e13-select-timer-adapter.md §5,
+// Mandatory Addendum D). A due ACTIVE SelectTimerRegistration is UNREACHABLE
+// in valid P3 production state: there is no admission path, so no ACTIVE
+// Select heap entry should ever be observed by the pump. If the pump pops an
+// ACTIVE Select entry, that is an invariant violation (either a stale entry
+// was observed before a CAS completed, the registration protocol has a bug,
+// or a test advanced the clock past an ACTIVE synthetic entry). The pump
+// MUST NOT claim a winner, mark CandidateReady, retire/consume, erase, or
+// busy-loop; it fails fast instead. This is NOT supported production Select
+// behavior — P4 (claim/finalize) is denied pending independent P3 review.
+//
+// Same contract as async_mutex_lock_fail_fast: [[noreturn]] noexcept, no
+// allocation / locking / I/O / dynamic string, no state recovery, ultimately
+// std::terminate(). Takes no parameter (the operation is known only to the
+// caller; adding one would invite logging on the pump hot path).
+[[noreturn]] void select_timer_pump_active_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

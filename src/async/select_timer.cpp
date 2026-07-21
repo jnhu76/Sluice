@@ -25,7 +25,16 @@
 #include <cassert>
 #include <list>
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/select_registration.hpp>
+
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls
+// in the non-installed test-control header so the phase call sites below
+// resolve to the controller. In the production build this include is absent
+// and the seam call sites compile to nothing.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+#include "async_test_control_internal.hpp"
+#endif
 
 namespace sluice::async {
 
@@ -60,6 +69,45 @@ detail::SelectTimerRegistration* Scheduler::select_timer_splice_one_locked(
     heap_push_entry_locked(detail::DeadlineHeapEntry::for_select(reg));
 
     return &reg;
+}
+
+// E13 P3 Select timer pump branch body (state-before-arm rule, Addendum E/D).
+bool Scheduler::select_timer_pump_entry_locked(
+    detail::SelectTimerRegistration& reg) {
+    // State-before-arm: load state FIRST. A non-ACTIVE state means the arm
+    // pointer MUST NOT be read (it may belong to a destroyed caller frame).
+    auto state = reg.state();
+
+    if (state != detail::SelectTimerRegistration::State::active) {
+        // Stale entry (RETIRED or CONSUMED). Skip: do not dereference arm_,
+        // do not touch SelectGroup, do not claim, do not publish. The caller
+        // physically reclaims the popped block. This is the I4 closure.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::test_phase(
+            *this, sluice_async_test::PhaseTag::e13_timer_pump_skip);
+#endif
+        return true;  // stale; skipped
+    }
+
+    // ACTIVE: a due ACTIVE Select entry is UNREACHABLE in valid P3 (there is
+    // no admission path). Reach the PumpActive seam, then instrument the
+    // exact production arm dereference site, then fail fast. P3 does NOT
+    // claim/mark/retire/consume/erase an ACTIVE block — that is P4, denied.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(
+        *this, sluice_async_test::PhaseTag::e13_timer_pump_active);
+    // Instrument the exact production dereference site (immediately before
+    // the load), so stale tests can prove arm-load delta == 0.
+    ++select_timer_arm_load_count_;
+    auto* arm [[maybe_unused]] = reg.arm();  // safe under I4: ACTIVE implies live
+    (void)arm;
+#endif
+    // Stage-boundary invariant violation: a due ACTIVE Select entry where no
+    // admission exists. Fail fast rather than silently returning with an
+    // ACTIVE registration's authority still open. (When SLUICE_ASYNC_INTERNAL_
+    // TESTING is undefined, the arm read above is absent — production never
+    // dereferences arm_ here; it goes straight to fail-fast.)
+    detail::select_timer_pump_active_fail_fast();
 }
 
 // Retire a registered Select block (Addendum C accounting authority).

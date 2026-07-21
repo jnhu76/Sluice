@@ -14,4 +14,11 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// E13 P3 stage-boundary fail-fast: a due ACTIVE SelectTimerRegistration is
+// unreachable in valid P3 production state. Terminates the process; never
+// returns. See include/sluice/async/detail/fail_fast.hpp.
+[[noreturn]] void select_timer_pump_active_fail_fast() noexcept {
+    std::terminate();
+}
+
 }  // namespace sluice::async::detail
