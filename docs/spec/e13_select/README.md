@@ -1,5 +1,21 @@
 # E13 Select — Layered Formal Core (PR #17)
 
+## Governance status
+
+```text
+FORMAL CORE:              CLOSED   (PR #17)
+FORMAL SAFETY:            CLOSED   (PR #18)
+PRODUCTION PREPARATION:   UNDER REVIEW (E13-SELECT-PRODUCTION-PREPARATION-1, PR #19)
+PRODUCTION IMPLEMENTATION:DENIED PENDING PREPARATION REVIEW
+```
+
+The production preparation lives in `docs/e13-select-production-*.md` (under
+the repo `docs/` root, not this directory). It maps the closed formal model
+below onto the existing production code. It does not modify any `.tla` file
+in this directory; the formal model is the authority.
+
+---
+
 This directory contains the positive, safety-foundation TLA+ model for the
 first E13 Select scope: Event arms plus independent Timer arms. It establishes
 three semantic layers instead of making Event/Timer details the permanent
@@ -265,11 +281,11 @@ the stale-pump mutation. Production implementation remains denied.
 
 ---
 
-## PR #18 — Formal Safety (in progress)
+## PR #18 — Formal Safety (closed)
 
 PR #18 (`feat/e13-select-formal-safety`, task
 `E13-SELECT-FORMAL-MODEL-SAFETY-1`) closes the safety foundation of the
-E13 Select formal core.  It adds, *alongside* the PR #17 canonical
+E13 Select formal core. It adds, *alongside* the PR #17 canonical
 aggregates (which are preserved unchanged so PR #17 metrics still
 reproduce exactly):
 
@@ -323,3 +339,32 @@ TLC_WORKERS=1 ./tools/formal/verify-e13-select-safety.sh   # PR #18 safety suite
 ```
 
 Both must end with `=== PASS: ... ===`.
+
+---
+
+## Production preparation (PR #19 — under review, corrective-1 in progress)
+
+PR #19 (`feat/e13-select-production-preparation`, task
+`E13-SELECT-PRODUCTION-PREPARATION-1`) maps the closed formal model onto the
+existing production code (E10–E12). It produces architecture documents only;
+**no production C++ is implemented or authorized by PR #19.**
+
+| Production preparation doc | Maps |
+|----------------------------|------|
+| `docs/e13-select-production-architecture.md` | Master architecture + selected decisions |
+| `docs/e13-select-public-api.md` | Public API (Candidate C fixed variadic) |
+| `docs/e13-select-type-and-lifetime.md` | Type graph + destruction contract + WaitNode separation |
+| `docs/e13-select-event-adapter.md` | Option E1 separate Select registry + two-phase broadcast |
+| `docs/e13-select-timer-adapter.md` | Option T1 dedicated SelectTimerRegistration + I4 closure |
+| `docs/e13-select-locking-and-publication.md` | Central claim CAS + lock matrix + single publication |
+| `docs/e13-select-production-test-plan.md` | Positive + negative test matrix, seams, P1–P9 split |
+| `docs/e13-select-formal-production-mapping.md` | Formal action → planned C++ function table |
+| `docs/reviews/E13-SELECT-PRODUCTION-PREPARATION-1-REVIEW-REQUEST.md` | Independent review request |
+
+PR #19 does not modify any file in this directory. The formal model is the
+authority against which the production mapping is checked by inspection.
+
+Production implementation
+(`E13-SELECT-EVENT-TIMER-PRODUCTION-IMPLEMENTATION-1`) is **denied** until PR
+#19 passes an independent review.
+
