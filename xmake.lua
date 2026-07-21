@@ -709,7 +709,24 @@ if has_liburing then
         end
         if has_config("with-uring-registered-files") then
             add_defines("SLUICE_URING_REGISTERED_FILES")
-        end
+    end
+end
+
+-- e13_select_type — E13 Select type construction and compile-fail gates (P1).
+-- Tests public value types, internal type graph, and constraint gates.
+-- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_type.cpp"
+    if os.isfile(p) then
+        target("e13_select_type")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_type")
+    end
 end
 
 -- Experimental uring library. Always defined so the headers/sources exist; the
@@ -1157,5 +1174,41 @@ do
             add_includedirs("include", "tests")
             add_files(p)
             add_tests("e13_select_event_registry")
+    end
+end
+
+-- e13_select_event_registry_death_test — E13 Select registry death tests (P2).
+-- Verifies identity-check assertions fire for duplicate-link, wrong-Event unlink,
+-- cross-Scheduler link/unlink, and live-arm Event destruction. Each case runs in
+-- a forked child that re-execs this binary via death_test_runner_posix.hpp.
+-- POSIX-only: gated to linux/macosx.
+do
+    local p = "tests/e13_select_event_registry_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_event_registry_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_event_registry_death_test")
+    end
+end
+
+-- e13_select_type — E13 Select type construction and compile-fail gates (P1).
+-- Tests public value types, internal type graph, and constraint gates.
+-- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_type.cpp"
+    if os.isfile(p) then
+        target("e13_select_type")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_type")
     end
 end

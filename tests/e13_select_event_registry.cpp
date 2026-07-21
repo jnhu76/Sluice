@@ -9,17 +9,62 @@
 #include <sluice/async/detail/select_port.hpp>
 #include <sluice/async/event.hpp>
 #include <sluice/async/fake_backend.hpp>
+#include <sluice/async/fiber_ctx.hpp>
+#include <sluice/async/fiber.hpp>
+#include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/scheduler.hpp>
 #include <sluice/async/select.hpp>
 
+#include "async_test_control.hpp"
 #include "harness.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
+#include <memory>
+#include <thread>
+#include <vector>
 
 namespace sa = sluice::async;
 namespace sad = sluice::async::detail;
 
 using AsyncTestAccess = sa::Scheduler::AsyncTestAccess;
+using AsyncIoContext = sa::AsyncIoContext;
+using Scheduler = sa::Scheduler;
+using Event = sa::Event;
+using Fiber = sa::Fiber;
+using WaitNode = sa::WaitNode;
+
+// Cooperative backend that never completes I/O.
+class IdleBackend : public sa::AsyncBackend {
+public:
+    sluice::Result<void> submit_read(sa::ReadOp,
+                                     sa::Completion<std::size_t>&) override { return {}; }
+    sluice::Result<void> submit_write(sa::WriteOp,
+                                      sa::Completion<std::size_t>&) override { return {}; }
+    sluice::Result<void> submit_sync_data(sa::SyncDataOp,
+                                          sa::Completion<void>&) override { return {}; }
+    sluice::Result<void> submit_sync_all(sa::SyncAllOp,
+                                         sa::Completion<void>&) override { return {}; }
+    std::size_t poll() override { return 0; }
+    sluice::Result<std::size_t> wait_one() override { return 0; }
+    void cancel(sa::Completion<std::size_t>&) override {}
+    void cancel(sa::Completion<void>&) override {}
+    std::size_t outstanding() const noexcept override { return 0; }
+};
+
+struct FiberStack {
+    static constexpr std::size_t kBytes = 64 * 1024;
+    alignas(16) std::vector<std::byte> bytes{kBytes};
+    std::byte* base() noexcept { return bytes.data(); }
+    std::size_t size() const noexcept { return bytes.size(); }
+};
+
+inline void spin_wait(std::atomic<bool>& flag) {
+    while (!flag.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+}
 
 // =========================================================================
 // J1: Empty registry
@@ -395,6 +440,132 @@ SLUICE_TEST_CASE(test_live_select_arms_trigger_assertion) {
     // Select arms triggers a debug assertion. We test the positive case
     // (empty registry destroys cleanly) in the test above.
     SLUICE_CHECK(true);
+}
+
+// =========================================================================
+// J15: Real ordinary waiter + Select coexistence
+// =========================================================================
+//
+// A Fiber waits on an UNSET Event. A second Fiber calls set(). The first
+// Fiber resumes with Woken. Simultaneously, a linked Select arm with an
+// Armed group must be marked CandidateReady by the same set() broadcast.
+SLUICE_TEST_CASE(test_real_ordinary_waiter_and_coexistence) {
+    if constexpr (!sa::fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    Event ev(sched, /*initially_set=*/false);
+    WaitNode node;
+    std::atomic<bool> waiter_suspended{false};
+
+    Fiber fwait, fwake;
+    fwait.set_entry([&](Fiber&) {
+        waiter_suspended.store(true, std::memory_order_release);
+        ev.wait(node);
+    });
+    fwake.set_entry([&](Fiber&) {
+        spin_wait(waiter_suspended);
+        std::this_thread::yield();
+        ev.set();
+    });
+
+    // Link a Select arm with an Armed group.
+    sad::SelectArmSlot arm;
+    arm.construct_event(ev);
+    arm.state = sad::ArmState::prepared;
+    sad::SelectGroup group;
+    group.set_phase(sad::GroupPhase::armed);
+    arm.group = &group;
+    AsyncTestAccess::select_event_link(sched, ev, arm);
+
+    FiberStack sw, sk;
+    SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(fwake, sk.base(), sk.size()));
+    sched.spawn(fwait);
+    sched.spawn(fwake);
+    sched.run(2);
+
+    SLUICE_CHECK_MSG(node.was_woken(), "ordinary waiter resolved Woken");
+    SLUICE_CHECK_MSG(arm.state == sad::ArmState::candidate_ready,
+                     "Select arm marked CandidateReady by set() broadcast");
+    SLUICE_CHECK_MSG(arm.home_ != nullptr, "Select arm still linked");
+    SLUICE_CHECK_MSG(ev.is_set(), "Event is SET after set()");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+
+    AsyncTestAccess::select_event_unlink(sched, ev, arm);
+}
+
+// =========================================================================
+// J16: Phase-seam reset serialization
+// =========================================================================
+//
+// Causal multi-thread test: arm the set-store-before-drain phase seam. A
+// set() call stores SET then pauses mid-drain under global_mtx_. A concurrent
+// reset() attempt must be blocked (global_mtx_ held by set()). After the seam
+// releases, the drain completes, global_mtx_ is released, and reset() finishes.
+// Proves the set/reset epoch isolation domain is real under the production lock.
+SLUICE_TEST_CASE(test_phase_seam_reset_serialization) {
+    if constexpr (!sa::fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);
+
+    Event ev(sched, /*initially_set=*/false);
+    WaitNode node;
+    std::atomic<bool> waiter_registered{false};
+    std::atomic<bool> reset_attempted{false}, reset_completed{false};
+
+    Fiber fwait;
+    fwait.set_entry([&](Fiber&) {
+        waiter_registered.store(true, std::memory_order_release);
+        ev.wait(node);
+    });
+
+    FiberStack sw;
+    SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
+    sched.spawn(fwait);
+
+    using E12Hooks = sluice_async_test::E12EventSeam;
+
+    // Arm the set-store-before-drain seam.
+    E12Hooks::arm_set_store_before_drain(sched);
+
+    // External set() thread: stores SET, pauses mid-drain holding global_mtx_.
+    std::thread set_thread([&] {
+        spin_wait(waiter_registered);
+        ev.set();
+    });
+
+    // Reset contender: attempts reset() while set() holds global_mtx_.
+    std::thread reset_thread([&] {
+        E12Hooks::wait_set_paused(sched);
+        reset_attempted.store(true, std::memory_order_release);
+        ev.reset();
+        reset_completed.store(true, std::memory_order_release);
+    });
+
+    // Worker coordinator.
+    std::thread run_thread([&] { sched.run_live(1); });
+
+    // Mechanical observation: reset attempted but blocked.
+    spin_wait(reset_attempted);
+    std::this_thread::yield();
+    SLUICE_CHECK_MSG(reset_attempted.load(), "reset attempt recorded while set paused");
+    SLUICE_CHECK_MSG(!reset_completed.load(),
+                     "reset blocked while set holds global_mtx_");
+
+    // Release set: drain completes, global_mtx_ released, reset finishes.
+    E12Hooks::release_set(sched);
+
+    set_thread.join();
+    reset_thread.join();
+    run_thread.join();
+
+    SLUICE_CHECK_MSG(reset_completed.load(), "reset completed after set released");
+    SLUICE_CHECK_MSG(!ev.is_set(), "Event is UNSET after reset");
+    SLUICE_CHECK_MSG(node.was_woken(), "waiter resolved Woken by set drain");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
 }
 
 SLUICE_MAIN()

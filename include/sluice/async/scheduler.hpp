@@ -350,8 +350,7 @@ public:
     // Phase-1 Select scan on `select_port` inside the same global_mtx_ CS.
     // Returns the number of waiters resolved by THIS call.
     // Safe to call from an external OS thread.
-    std::size_t event_set_broadcast(WaitQueue& waiters, std::atomic<bool>& set_flag,
-                                    detail::SelectPort& select_port);
+    std::size_t event_set_broadcast(Event& event);
 
     // Transition `set_flag` to UNSET. Does NOT resolve, cancel, expire, unlink,
     // or publish any WaitNode. A waiter already registered remains governed by

@@ -109,7 +109,7 @@ public:
     // winner is an independent resolve_(Woken) CAS + runnable publication.
     // P2: also performs Phase-1 Select scan inside the same global_mtx_ CS.
     void set() {
-        scheduler_.event_set_broadcast(waiters_, set_, select_port_);
+        scheduler_.event_set_broadcast(*this);
     }
 
     // Transition to UNSET. Does NOT resolve, cancel, expire, unlink, or publish

@@ -1303,77 +1303,21 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
 
 // ---- E12-A Event wait admission / broadcast (sluice-CORE-E12-A) ----
 
-std::size_t Scheduler::event_set_broadcast(WaitQueue& waiters,
-                                            std::atomic<bool>& set_flag,
-                                            detail::SelectPort& select_port) {
-    // Transition `set_flag` to SET and drain every registered Event wait epoch
-    // through the canonical RESOURCE_WAKE path (wake_wait_one_locked). The store
-    // + drain are ONE atomic critical section under global_mtx_, serializing
-    // with reset() and wait admission so OLD_SET_WAKES_POST_RESET_WAITER is
-    // mechanically impossible: a waiter admitted after this drain is not in the
-    // queue during the drain, and reset() cannot interleave mid-drain.
-    //
-    // Idempotent: set() on SET re-stores true (no-op) and drains whatever
-    // waiters remain (typically none, since a prior set already drained them —
-    // but a waiter admitted between the prior set's drain and this call would
-    // be correctly drained here). Each winner is an independent resolve_(Woken)
-    // CAS + unlink + retire-timer + dec-count + make_runnable + route. One
-    // runnable publication per winning epoch (E7-T2 exactly-once).
-    //
-    // P2: also performs Phase-1 Select scan on `select_port` inside the same
-    // global_mtx_ critical section. Eligible Event Select arms are marked
-    // CandidateReady (readiness-offer only — no claim, no finalization, no
-    // publication). Idempotent: a second set() finds no Registered arms
-    // (already CandidateReady) and marks zero.
-    //
-    // Safe to call from an external OS thread: global_mtx_ + the wake source
-    // (signal_wake_locked via route_runnable_locked) are the existing external-
-    // wake-capable mechanism. No Event-private wake channel.
-    std::size_t woken = 0;
+std::size_t Scheduler::event_set_broadcast(Event& event) {
     LockGuard lk(global_mtx_);
-    // P2: if the Event is already SET, the store is a no-op. We must not
-    // re-drain the waiters (they are already terminal) and must not re-mark
-    // already CandidateReady arms. The idempotent check is the store itself:
-    // a second SET store is invisible. We skip the drain and scan for
-    // efficiency, but the same correctness holds if we ran them (the queue
-    // would be empty, and Registered arms would already be CandidateReady).
-    bool previous = set_flag.exchange(true, std::memory_order::release);
+    bool previous = event.set_.exchange(true, std::memory_order::release);
     if (previous) {
-        // Already SET — no-op. No drain, no Select scan.
         return 0;
     }
-    // E12-A-EVENT-CORRECTIVE-1 (Corrective B): deterministic set-store-before-
-    // drain phase seam. When armed, pause the set() thread AFTER it has stored
-    // SET and while it STILL HOLDS global_mtx_, BEFORE the drain loop. This lets
-    // a causal test mechanically prove reset() and a new admission CANNOT
-    // complete while an old-set drain is active (the production lock is held).
-    // The seam blocks on its OWN mtx/cv (global_mtx_ remains held for the
-    // pause), which is precisely the guarantee under test.
-    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
         sluice_async_test::PhaseTag::e12_set_store_before_drain);
 #endif
-    while (wake_wait_one_locked(waiters) != nullptr) {
+    std::size_t woken = 0;
+    while (wake_wait_one_locked(event.waiters_) != nullptr) {
         ++woken;
     }
-    // P2: Phase-1 Select scan — offer readiness to eligible Event Select arms
-    // inside the same global_mtx_ critical section. Walks the Event's private
-    // SelectPort, marking Registered -> CandidateReady for arms whose group
-    // phase is Armed. Idempotent: no re-marking of already CandidateReady arms.
-    // No claim, no finalization, no publication.
-    detail::SelectArmSlot* arm = select_port.head_;
-    while (arm != nullptr) {
-        detail::SelectArmSlot* next = arm->next_;
-        if (arm->kind == detail::ArmKind::event &&
-            arm->state == detail::ArmState::registered &&
-            arm->group != nullptr &&
-            arm->group->phase() == detail::GroupPhase::armed &&
-            arm->home_ == &select_port) {
-            arm->state = detail::ArmState::candidate_ready;
-        }
-        arm = next;
-    }
+    select_event_scan_locked(event);
     return woken;
 }
 
@@ -1391,6 +1335,9 @@ void Scheduler::event_reset(std::atomic<bool>& set_flag) {
 
 void Scheduler::select_event_link_locked(Event& event,
                                          detail::SelectArmSlot& arm) {
+    // Event must belong to this Scheduler.
+    assert(&event.scheduler_ == this &&
+           "select_event_link_locked: Event does not belong to this Scheduler");
     // Precondition: arm is not already linked.
     // The caller (future select() admission) is responsible for setting
     // arm.state to Prepared and arm.group to the owning SelectGroup.
@@ -1425,6 +1372,8 @@ void Scheduler::select_event_link_locked(Event& event,
 
 void Scheduler::select_event_unlink_locked(Event& event,
                                            detail::SelectArmSlot& arm) {
+    assert(&event.scheduler_ == this &&
+           "select_event_unlink_locked: Event does not belong to this Scheduler");
     // Validate that the arm belongs to this Event's port.
     assert(arm.home_ == &event.select_port_ &&
            "select_event_unlink_locked: arm does not belong to this Event");
@@ -1455,6 +1404,8 @@ void Scheduler::select_event_unlink_locked(Event& event,
 }
 
 std::size_t Scheduler::select_event_scan_locked(Event& event) {
+    assert(&event.scheduler_ == this &&
+           "select_event_scan_locked: Event does not belong to this Scheduler");
     // Walk the Event's SelectPort, marking eligible Event Select arms
     // CandidateReady. P2: readiness-offer only — no claim, no finalization,
     // no publication, no unlink, no worklist construction.
