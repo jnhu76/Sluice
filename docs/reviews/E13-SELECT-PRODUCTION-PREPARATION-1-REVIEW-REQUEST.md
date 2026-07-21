@@ -74,7 +74,7 @@ docs/formal/e13-select-formal-*.md  (the closed formal design is untouched)
 
 ```text
 PUBLIC API:              Candidate C — fixed variadic select(Scheduler&, Cases&&...)
-TYPE GRAPH:              SelectGroup caller-frame + embedded arm array
+TYPE GRAPH:              SelectGroup caller-frame + embedded `SelectArmSlot` union array
 EVENT ADAPTER:           Option E1 — separate sealed Select registry per Event
 TIMER ADAPTER:           Option T1 — dedicated SelectTimerRegistration stable block
 WAITNODE RELATION:       SEPARATE — no WaitNode reuse, no user_ channel
@@ -99,7 +99,7 @@ every formal invariant in the closed PR #18 safety suite?**
 1. **WaitNode separation (`docs/e13-select-type-and-lifetime.md` §1).** The
    previous preparation (`docs/e13-select-preparation.md` §4–5) proposed
    reusing `WaitNode::user_` with a kind tag. This task **rejects** that route
-   and introduces a separate `SelectArmRegistration`. The review should
+   and introduces a separate `SelectArmSlot`. The review should
    confirm the separation does not re-invent the winner state machine, timer
    retirement, intrusive membership, or terminal authority (§1.4).
 

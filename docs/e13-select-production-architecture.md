@@ -144,10 +144,10 @@ publication.
 |--------------------------------|--------------------------------------------------------------|-----------------------------------------|
 | Public API                     | **Candidate C** fixed variadic `select(sched, case, case, …)`| `docs/e13-select-public-api.md`         |
 | SelectGroup ownership          | **caller stack frame** (embedded in the select call frame)   | `docs/e13-select-type-and-lifetime.md`  |
-| Arm registration ownership     | **caller stack frame** (one per case slot, fixed array)      | type-and-lifetime                       |
+| Arm registration ownership     | **caller stack frame** (one per case slot, fixed array of `SelectArmSlot`) | type-and-lifetime                       |
 | Event registry strategy        | **E1 — separate private Select registry per Event**          | `docs/e13-select-event-adapter.md`      |
 | Timer registration strategy    | **T1 — dedicated SelectTimerRegistration stable block**      | `docs/e13-select-timer-adapter.md`      |
-| WaitNode relation              | **SEPARATE — new SelectArmRegistration, no WaitNode reuse**  | `docs/e13-select-type-and-lifetime.md`  |
+| WaitNode relation              | **SEPARATE — new `SelectArmSlot`, no WaitNode reuse**  | `docs/e13-select-type-and-lifetime.md`  |
 | Winner authority               | **C1+C2 hybrid — CAS on SelectGroup, under global_mtx_**     | `docs/e13-select-locking-and-publication.md` |
 | Lock order                     | **G → one primitive registry → one SelectGroup (no group m.)**| locking-and-publication                 |
 | Allocation policy              | **stack-anchored, per-Timer-arm stable block, no lock alloc**| section 7 / type-and-lifetime           |
@@ -190,24 +190,24 @@ domain lives in `docs/e13-select-type-and-lifetime.md`. The shape is:
 
 ```text
 public:
-    SelectCase                      (discriminated: Event | Timer)
-    EventSelectCase : SelectCase
-    TimerSelectCase : SelectCase
+    EventSelectCase
+    TimerSelectCase
     SelectResult                    (winning index + kind + timer outcome)
     select(Scheduler&, Case0, Case1, ...)   (variadic, 1..kSelectMaxArms)
 
 detail:
     SelectGroup                     (caller-frame control block)
-    SelectArmRegistration           (one per case; caller-frame)
-    EventSelectRegistration : SelectArmRegistration
-    TimerSelectRegistration : SelectArmRegistration
+    SelectArmSlot                   (one per case; caller-frame, union of Event/Timer payload)
+    EventArmPayload                 (Event-specific arm fields inside SelectArmSlot)
+    TimerArmPayload                 (Timer-specific arm fields inside SelectArmSlot)
     SelectPort                      (Scheduler-side per-Event registry head)
+    SelectTimerRegistration         (Scheduler-owned stable timer block)
 ```
 
 ### 4.1 SelectGroup is caller-frame, not Scheduler-owned
 
 `SelectGroup` lives inside the C++ stack frame of the `select(...)` call. Every
-`SelectArmRegistration` is a fixed-array slot inside the same frame. The
+`SelectArmSlot` is a fixed-array slot inside the same frame. The
 Scheduler never owns these objects; it borrows raw pointers to them for the
 duration of one Select epoch. This is the same caller-owned, address-stable
 discipline as `WaitNode` and `Completion<T>`.
@@ -222,7 +222,12 @@ frame cannot be destroyed while a callback still references it).
 
 Only one object is Scheduler-owned and outlives the caller frame: a
 **`SelectTimerRegistration`** per Timer arm, stored in a pointer-stable
-container mirroring `timer_pool_` (`std::list<TimerRegistration>`). Its atomic
+container mirroring `timer_pool_`. Nodes are constructed in a temporary
+`std::list<SelectTimerRegistration>` outside G, then spliced into the
+Scheduler-owned pool via `std::list::splice` under G (no allocation inside the
+lock). The deadline heap is migrated to `DeadlineHeapEntry` to hold both
+`TimerRegistration*` and `SelectTimerRegistration*` (see
+`docs/e13-select-timer-adapter.md` §4). Its atomic
 `active/retired/consumed` state is the post-destruction safety boundary (I4):
 a stale pump entry observes retirement and skips without dereferencing the
 caller-frame arm.
@@ -275,10 +280,13 @@ by the claim+finalize protocol.
 | Timer block alloc failure      | rollback arms, throw `std::bad_alloc`                         |
 
 The variadic `select(...)` evaluates all cases into a fixed-size caller-frame
-array before taking `global_mtx_`. Allocation happens only in the Timer-arm
-construction step, which is performed *before* the global critical section so
-that a `bad_alloc` cannot leave the Scheduler with a partially-registered
-group under lock.
+array (`std::array<SelectArmSlot, N>`) before taking `global_mtx_`. Allocation
+happens only in the Timer-arm construction step, which is performed *before*
+the global critical section so that a `bad_alloc` cannot leave the Scheduler
+with a partially-registered group under lock. Timer blocks are constructed in a
+temporary `std::list<SelectTimerRegistration>` outside G, then spliced into the
+Scheduler-owned pool via `std::list::splice` under G — no allocation occurs
+inside the lock.
 
 Full detail: `docs/e13-select-public-api.md` §allocation and
 `docs/e13-select-type-and-lifetime.md` §exception-rollback.
@@ -293,8 +301,8 @@ surface:
 
 ```text
 include/sluice/async/select.hpp                       (public: SelectCase, SelectResult, select())
-include/sluice/async/detail/select_port.hpp           (SelectGroup, SelectArmRegistration, SelectPort)
-include/sluice/async/detail/select_registration.hpp   (Event/TimerSelectRegistration, SelectTimerRegistration)
+include/sluice/async/detail/select_port.hpp           (SelectGroup, SelectArmSlot, SelectPort)
+include/sluice/async/detail/select_registration.hpp   (SelectTimerRegistration)
 
 src/async/select.cpp                                  (admission + select() entry)
 src/async/select_event.cpp                            (Event Select registry + Phase 1/2)

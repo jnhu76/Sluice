@@ -78,8 +78,9 @@ the variadic expansion; Candidate A pushes that onto the user.
 ### 3.1 Why C
 
 1. **Zero extra allocation.** A variadic expansion materialises the cases into
-   a fixed-size caller-frame array (`std::array<SelectCase, sizeof...(Cases)>`
-   or equivalent). No builder object, no span indirection, no heap.
+a fixed-size caller-frame array of `SelectArmSlot` (the variadic expansion
+    materialises the cases into a `std::array<SelectArmSlot, sizeof...(Cases)>`).
+    No builder object, no span indirection, no heap.
 2. **Compile-time type safety.** Each case is a typed value. An invalid tag or
    a missing Scheduler binding cannot be expressed; the type system rejects
    wrong case kinds at the call site.
@@ -170,7 +171,8 @@ SelectResult select(Scheduler& scheduler, Cases&&... cases);
 
 The implementation lives in `detail/select_port.hpp` (planned,
 `docs/e13-select-production-architecture.md` §8). The variadic expands into a
-fixed `std::array` of case slots inside the `select` frame; no per-call heap.
+fixed `std::array<SelectArmSlot, N>` of union-based slots inside the `select`
+frame; no per-call heap, no derived-to-base slicing.
 
 ---
 
@@ -185,7 +187,9 @@ argument list (0-based). Ties at admission go to the **lowest index** (formal:
 `CentralClaimWinner` lowest-index tie-break). For a post-suspension winner,
 the index is that of the arm whose claim succeeded. `has_winner()` is false
 only on the default-constructed sentinel; a successful `select()` always has a
-winner.
+winner. Calling `index()` or `kind()` when `has_winner()` is false is a caller
+bug — a debug assertion fires, and the returned value is `0` (defensive
+sentinel, not a valid result).
 
 ### 4.2 Result identifies Event vs Timer
 
@@ -261,6 +265,24 @@ verifies that every case's Scheduler matches the `select(scheduler, ...)`
 first argument. A mismatch throws `std::invalid_argument` BEFORE any
 registration begins.
 
+### 4.11 Caller must be a running Fiber on the target Scheduler
+
+`select()` may only be called by a currently running Fiber owned by the
+Scheduler passed as the first argument. Calling from a plain OS thread, from a
+worker of a different Scheduler, or from a worker with no current Fiber is a
+caller contract violation. The implementation validates this before any
+allocation or registration:
+
+```text
+g_worker == nullptr                          → debug assert + std::logic_error
+g_worker->current == nullptr                 → debug assert + std::logic_error
+g_worker->scheduler != &scheduler            → debug assert + std::logic_error
+```
+
+These checks run before any `SelectTimerRegistration` allocation, so no
+rollback is needed. The specific error form is a debug assertion followed by
+`std::logic_error` (matching the project's contract-failure convention).
+
 ---
 
 ## 5. Allocation policy
@@ -271,7 +293,7 @@ registration begins.
 | EventSelectCase ctor                | no                                  | outside any lock    |
 | TimerSelectCase ctor                | no                                  | outside any lock    |
 | `SelectTimerRegistration` per Timer arm | **yes** — Scheduler-owned stable block | **outside `global_mtx_`** |
-| Event registry node                 | no (intrusive into SelectArmRegistration) | inside `global_mtx_` CS, but no allocation |
+| Event registry node                 | no (intrusive into SelectArmSlot) | inside `global_mtx_` CS, but no allocation |
 
 The Timer stable block is allocated *before* the `global_mtx_` critical section
 begins, so `std::bad_alloc` cannot leave the Scheduler with a partially-
@@ -335,6 +357,7 @@ throw across a `context_switch` boundary.
 | wrong case type                        | type system                | compile    |
 | Event bound to another Scheduler       | `std::invalid_argument`    | admission  |
 | Timer case Scheduler ≠ select() sched  | `std::invalid_argument`    | admission  |
+| caller not a Fiber on target Scheduler | debug assert + `std::logic_error` | admission |
 | Event destroyed mid-select             | caller contract violation  | runtime (UB in release) |
 | Scheduler destroyed mid-select         | caller contract violation  | runtime (UB in release) |
 

@@ -17,20 +17,20 @@ satisfy.
 
 | Formal action              | Planned C++ function / method                                       | Lock domain                | Linearization / commit point                          |
 |----------------------------|---------------------------------------------------------------------|----------------------------|-------------------------------------------------------|
-| `ContractRegisterArm(i)`   | `Scheduler::select_register_arm_locked(SelectGroup&, SelectArmRegistration&)` | `global_mtx_` held         | `arm.state = Registered` (plain write under G); the registry link is the externally visible commit |
+| `ContractRegisterArm(i)`   | `Scheduler::select_register_arm_locked(SelectGroup&, SelectArmSlot&)` | `global_mtx_` held         | `arm.state = Registered` (plain write under G); the registry link is the externally visible commit |
 | `ContractFinishRegistration` | `SelectGroup::finish_registration_locked()`                       | `global_mtx_` held         | `group.phase_ = Selecting` (plain write under G)      |
 | `ContractOfferReadiness(i)` | (Event) `Scheduler::event_scan_marks_candidate_locked` body; (Timer) `Scheduler::select_timer_pump_entry` body | `global_mtx_` held         | `arm.state = CandidateReady` (plain write under G)    |
 | `ContractReserveReadiness(i)` | N/A in the first scope (Event/Timer have no reversible reservation; reservation_state stays `None`) | —                          | —                                                     |
 | `ContractSuspendCaller`    | `Scheduler::select_suspend_caller_locked(SelectGroup&)`             | `global_mtx_` held (release before `context_switch`) | `me->make_waiting()` under G                          |
-| `ContractLinearizeWinner(i)` | `SelectGroup::claim_winner_locked(arm_index)`                      | `global_mtx_` held         | `winner_.compare_exchange_strong(kNoWinner, arm_index, acq_rel, acquire)` — **the single linearization point** |
+| `ContractLinearizeWinner(i)` | `SelectGroup::claim_winner_locked(arm_index)`                      | `global_mtx_` held         | `winner_.compare_exchange_strong(kNoWinner, arm_index, relaxed, relaxed)` — **the single linearization point**; synchronization provided by `global_mtx_` |
 | `ContractCommitWinner(i)`  | `Scheduler::select_commit_winner_locked(SelectGroup&, arm_index)`   | `global_mtx_` held         | `arm.state = Retired (winner)` + (Timer) `SelectTimerRegistration::try_claim_expiry()` CAS |
 | `ContractReleaseLoser(i)`  | `Scheduler::select_finalize_loser_locked(SelectGroup&, arm_index)` | `global_mtx_` held         | `arm.state = Retired (loser)` + (Timer) `SelectTimerRegistration::retire()` CAS |
 | `ContractCloseAuthority(i)` | (Event) `SelectPort::unlink_locked(arm)`; (Timer) the consume/retire CAS in the row above | `global_mtx_` held         | Event: `arm` removed from the intrusive list; Timer: `state_ != active` |
 | `ContractPublishInline`    | `Scheduler::select_publish_locked(group)` inline branch             | `global_mtx_` held         | `group.result_ = SelectResult{...}` + `group.phase_ = Completed` |
 | `ContractPublishSuspended` | `Scheduler::select_publish_locked(group)` suspended branch          | `global_mtx_` held         | `f->make_runnable()` returning true (the exactly-once guard) followed by `group.phase_ = Completed` |
 | `ContractResumeCaller`     | (implicit) the worker loop picks up the now-runnable caller         | `global_mtx_` held at route time | `route_runnable_locked(f, owner)`                     |
-| `ContractConsumeResult`    | `select_impl` reads `group.result_` after resume                     | `global_mtx_` held (reacquire) | the read of `group.result_` under G                    |
-| `ContractDestroyOperation` | `~SelectGroup()` / frame unwind                                      | no lock (precondition: phase ∈ {Consumed, Aborted}) | frame destruction                                    |
+| `ContractConsumeResult`    | `select_impl` reads `group.result_` after resume, then transitions `Completed → Consumed` | `global_mtx_` held (reacquire) | `group.phase_ = Consumed` (plain write under G) |
+| `ContractDestroyOperation` | `~SelectGroup()` / frame unwind                      | no lock (precondition: phase ∈ {Consumed, Aborted}) | frame destruction |
 | `ContractBeginRollback`    | `Scheduler::select_begin_rollback_locked(SelectGroup&)`             | `global_mtx_` held         | `group.phase_ = Rollback` (plain write under G)       |
 | `ContractRollbackRelease(i)` | `Scheduler::select_rollback_arm_locked(SelectGroup&, arm_index)`  | `global_mtx_` held         | Event: `SelectPort::unlink_locked`; Timer: `SelectTimerRegistration::retire()` CAS; `arm.state = Retired` |
 | `ContractFinishRollback`   | `SelectGroup::finish_rollback_locked()`                             | `global_mtx_` held         | `group.phase_ = Aborted` (plain write under G)        |
@@ -102,10 +102,14 @@ them:
 
 ```text
 1. SelectGroup::winner_        std::atomic<uint32_t>
-       CAS kNoWinner -> arm_index, acq_rel/acquire
-       THE single winner linearization point
-       (ContractLinearizeWinner, CentralClaimWinner, ClaimAdmissionWinner,
-        ClaimEventWinner, ClaimTimerWinner)
+        CAS kNoWinner -> arm_index, relaxed/relaxed
+        THE single winner linearization point
+        (ContractLinearizeWinner, CentralClaimWinner, ClaimAdmissionWinner,
+         ClaimEventWinner, ClaimTimerWinner)
+        SYNCHRONIZATION: relaxed order is correct because all claim/finalize/publish
+        paths run under global_mtx_, which provides the acquire/release ordering.
+        The CAS is the linearization point by identity (the single atomic write
+        that determines the winner), not by memory order.
 
 2. SelectTimerRegistration::state_   std::atomic<State>
        CAS active -> consumed  (try_claim_expiry)
@@ -128,6 +132,7 @@ arm" is satisfied: the timer-state CAS is observed before any `arm_` read.
 ContractPublishInline
     -> Scheduler::select_publish_locked(group) inline branch
        commit point: group.phase_ = Completed (under G)
+       then (caller, under G): group.phase_ = Consumed
        runnable_publication_count: 0
        result_publication_count: 1
 
@@ -135,6 +140,7 @@ ContractPublishSuspended
     -> Scheduler::select_publish_locked(group) suspended branch
        commit point: f->make_runnable() returning true (the exactly-once
        guard), followed by route_runnable_locked under G
+       then (caller, on resume under G): group.phase_ = Consumed
        runnable_publication_count: 1
        result_publication_count: 1
 ```

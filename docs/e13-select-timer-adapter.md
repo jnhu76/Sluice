@@ -49,7 +49,7 @@ states (atomic):
 
 fields:
     std::atomic<State> state_
-    SelectArmRegistration* arm_       // the caller-frame Timer arm
+    SelectArmSlot* arm_       // the caller-frame Timer arm slot
     Scheduler* scheduler_             // owning scheduler (for publication)
     select_deadline_t deadline_
     std::size_t heap_index            // heap position back-reference
@@ -156,23 +156,66 @@ consumers are unchanged.
 
 ## 4. Heap integration
 
-`SelectTimerRegistration` joins the existing `deadline_heap_`
-(`scheduler.hpp:1037`). The heap is keyed by deadline; it stores pointers to
-both block types. The cleanest way to keep the existing `TimerRegistration*`
-heap vector unchanged is to introduce a small variant wrapper:
+`SelectTimerRegistration` joins the deadline heap alongside ordinary
+`TimerRegistration`. The existing `deadline_heap_` is a
+`std::vector<TimerRegistration*>`, which cannot hold a second pointer type
+without change. The heap is therefore migrated to a unified entry type:
 
-```text
+```cpp
 // in detail/, not installed
-struct SelectTimerHeapEntry {
+struct DeadlineHeapEntry {
+    deadline_tick_t deadline;   // cached for heap_less
+
     enum Kind : uint8_t { Ordinary, Select };
     Kind kind;
+
     union {
         TimerRegistration* ordinary;
         SelectTimerRegistration* sel;
     };
-    deadline_tick_t deadline;   // cached for heap_less
 };
 ```
+
+The deadline heap becomes:
+
+```cpp
+std::vector<DeadlineHeapEntry> deadline_heap_;
+```
+
+All heap helpers (`heap_less`, `bubble_up`, `bubble_down`, `pop_min`, etc.)
+operate on `DeadlineHeapEntry` by deadline, unchanged in logic. The ordinary
+`TimerRegistration*` vector is replaced; the ordinary pump branch simply reads
+`entry.ordinary` instead of a raw pointer.
+
+### 4.1 Ownership transfer for SelectTimerRegistration
+
+`SelectTimerRegistration` nodes are constructed in a temporary
+`std::list<SelectTimerRegistration>` outside G (before any lock acquisition).
+Under G, the list is spliced into the Scheduler-owned pool:
+
+```cpp
+// outside G:
+std::list<SelectTimerRegistration> tmp_pool;
+for each Timer arm:
+    tmp_pool.emplace_back(arm, deadline, scheduler);
+
+// under G:
+scheduler.select_timer_pool_.splice(end, tmp_pool);
+```
+
+Key properties:
+
+- **No allocation under G.** `std::list::splice` is O(1) and allocation-free.
+- **Pointer stability.** `std::list` nodes are stable after splice; the
+  `SelectTimerRegistration*` stored in the heap entry remains valid for the
+  lifetime of the registration.
+- **Lazy reclamation.** Mirroring `TimerRegistration`, retired/consumed
+  `SelectTimerRegistration` blocks are physically removed from the pool when
+  the pump pops their deadline entry (lazy-at-deadline). The pool is bounded by
+  `(concurrent ACTIVE Select timer arms) + (retired/consumed entries whose
+  deadlines have not been reached)`, matching the bound for ordinary timers.
+
+### 4.2 Pump integration
 
 The pump's per-entry branch is exactly two cases:
 
@@ -182,21 +225,29 @@ pump_deadlines_locked():
     while heap not empty and heap_min.deadline <= now:
         entry = pop_min()
         if entry.kind == Ordinary:
-            ... existing ordinary path (UNCHANGED) ...
+            ... existing ordinary path (entry.ordinary, UNCHANGED in logic) ...
         else:  // Select
             select_timer_pump_entry(*entry.sel)
-            // entry.sel is retained in the pool until its deadline; the pump
-            // erases the pool block here (mirrors erase_popped_registration_locked)
+            // pool block is reclaimed here (mirrors erase_popped_registration_locked)
 ```
 
-This adds **one branch** to the pump's hot loop. It is the minimum cost of
-admitting a new block kind; the alternative (a separate Select deadline heap
-and a separate pump) would duplicate the heap machinery and complicate the
-earliest-deadline park cache (`scheduler.hpp:1069-1071`).
+This adds **one branch** to the pump's hot loop. The ordinary branch is
+logically byte-for-byte identical to the current code (it reads the same
+deadline, pops the same min, and processes the same `TimerRegistration*`).
 
 The earliest-deadline cache `earliest_active_deadline_` continues to be
 maintained by scanning both block kinds; `SelectTimerRegistration::state_ ==
 active` participates exactly like `TimerRegistration::state_ == active`.
+
+### 4.3 Key invariant: no concurrent heap ownership
+
+The `std::list::splice` transfer is safe because:
+
+1. The temporary `tmp_pool` is local to the `select(...)` call frame.
+2. No other thread can observe the `SelectTimerRegistration` until it is in
+   the Scheduler-owned pool (under G).
+3. The heap entry referencing the `SelectTimerRegistration` is pushed only
+   under G, after the splice.
 
 ---
 
@@ -209,16 +260,22 @@ select_timer_pump_entry(SelectTimerRegistration& reg):
     PRE: the pump has popped reg and observed now >= reg.deadline_
 
     1. if reg.state_.load(acquire) != ACTIVE:
-           return                                  // stale; skip (TimerPumpSkip)
-              — does NOT dereference reg.arm_
-              — does NOT increment timer_node_deref (formal action TimerPumpSkip)
+            return                                  // stale; skip (TimerPumpSkip)
+               — does NOT dereference reg.arm_
+               — does NOT increment timer_node_deref (formal action TimerPumpSkip)
 
     2. arm = reg.arm_                              // safe: ACTIVE implies arm live
     3. group = arm->group
 
     4. if group->phase_ != Armed:
-           return                                  // not yet Armed (admission owns it)
-                                                   //   OR already being finalized
+            // INVARIANT: ACTIVE + non-Armed is unreachable in a correct protocol.
+            // Arming cannot interleave with the pump (both run under G).
+            // Completed groups have retired/consumed all registrations.
+            // If this branch fires, either the pump observed a stale entry
+            // before the state_ CAS completed, or the registration protocol
+            // has a bug. Fail fast rather than silently returning with an
+            // ACTIVE registration still in the heap.
+            select_fail_fast("ACTIVE SelectTimerRegistration with non-Armed group")
 
     5. arm->state = CandidateReady                 // offered readiness
     6. select_process_group_locked(group)          // see locking-and-publication doc
@@ -335,7 +392,7 @@ This matches the formal `AdmissionObserveReady` / `ClaimAdmissionWinner` /
 A Timer arm has no `WaitNode` (WaitNode is not reused,
 `docs/e13-select-type-and-lifetime.md` §1) and parks in no `WaitQueue`. The
 `SelectTimerRegistration` is the sole registration object; the caller-frame
-`TimerSelectRegistration` arm is reached only via the stable block's `arm_`
+`TimerArmPayload` arm is reached only via the stable block's `arm_`
 pointer while `active`. There is no queue to unlink from; the only cleanup is
 the `state_` transition.
 

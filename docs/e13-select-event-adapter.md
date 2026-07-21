@@ -205,7 +205,7 @@ only `global_mtx_`.
 ### 4.4 Why no recursive Event re-entry in Phase 2
 
 The Phase 2 winner finalization resolves the winning Select arm via a
-**targeted** resolve on that specific `EventSelectRegistration`, not via a new
+**targeted** resolve on that specific `SelectArmSlot`, not via a new
 scan of any `waiters_` or `select_port_`. It does not call `set()`/`reset()`
 on any Event. Therefore no Event method is re-entered while a broadcast is in
 flight, and the prohibition on recursive re-entry is satisfied.
@@ -220,14 +220,70 @@ The brief forbids:
 The two-phase split exists to enforce exactly this. Phase 1 holds the scan
 authority and produces a deduplicated group list; Phase 2 finalizes groups
 **after** the scan snapshot is taken. Finalize may unlink arms from the
-registry (closing their authority), but the scan has already snapshotted the
+registry (closing their authority), but the scan has already built the
 deduplicated group set, so finalize-driven list mutation cannot affect the
 Phase 2 iteration.
 
-To make this robust, Phase 1 captures the set of unique `SelectGroup*` into a
-small caller-local array before Phase 2 begins. Phase 2 iterates that array,
-not the live intrusive list. A node unlinked during one group's finalize is
-simply not visited again (its group is already in the snapshot).
+### 4.6 Intrusive affected-group worklist (no caller-local array)
+
+A fixed-size caller-local array cannot hold an unbounded number of
+`SelectGroup*` entries (one Event may be shared by any number of
+SelectGroups). Instead, Phase 1 builds an **intrusive worklist chain** using
+temporary fields on `SelectGroup` that are live only under `global_mtx_`:
+
+```cpp
+struct SelectGroup {
+    // ... permanent fields ...
+
+    // temporary fields, used only inside the event_set_broadcast CS
+    // (protected by global_mtx_; no concurrent reuse)
+    SelectGroup* broadcast_next_;             // intrusive worklist next pointer
+    std::uint64_t broadcast_epoch_;           // deduplication generation counter
+};
+```
+
+Phase 1 protocol:
+
+```text
+for arm in event.select_port_:
+    if arm.group.phase != Arming and arm.group.phase != Armed:
+        continue
+    if arm.state != Registered:
+        continue
+    arm.state = CandidateReady
+
+    // deduplicate: if this group's broadcast_epoch_ != current_epoch,
+    // it hasn't been linked yet
+    if arm.group.broadcast_epoch_ != current_broadcast_epoch_:
+        arm.group.broadcast_epoch_ = current_broadcast_epoch_
+        arm.group.broadcast_next_ = worklist_head_
+        worklist_head_ = &arm.group
+```
+
+Phase 2 walks the chain:
+
+```text
+grp = worklist_head_
+while grp != nullptr:
+    next = grp->broadcast_next_     // save before processing
+    select_process_group_locked(*grp)
+    grp = next
+```
+
+This has no capacity limit, no allocation, and no truncation. The entire
+broadcast runs under one `global_mtx_` CS, so the temporary fields are never
+concurrently reused.
+
+Key properties:
+
+- **No allocation.** The intrusive chain uses existing `SelectGroup` storage.
+- **No truncation.** There is no fixed-size array to overflow. Every affected
+  group is linked.
+- **No dedup failure.** The epoch counter prevents duplicate processing.
+- **Phase 2 mutation-safe.** `broadcast_next_` is saved before the group is
+  processed (which may finalize the group and leave its arms). The saved
+  pointer is valid for the remainder of the walk because the chain is
+  built and consumed as a single-linked list under one CS.
 
 ---
 
@@ -251,25 +307,32 @@ event_set_broadcast_select_aware(waiters, set_flag):
     while wake_wait_one_locked(waiters) != nullptr:
         ;                                             // ordinary Event waits
 
-    // -- Phase 1: scan select_port_ for THIS Event --
-    // (event.select_port_ is the intrusive head; iterate under global_mtx_)
-    affected_groups = {}                              // small caller-local array
+    // -- Phase 1: scan select_port_ for THIS Event, build intrusive worklist --
+    worklist_head = nullptr
+    current_epoch = ++global_broadcast_epoch_          // monotonically increasing
     for arm in event.select_port_:
         if arm.group.phase != Arming and arm.group.phase != Armed:
             continue                                  // not live; skip
         if arm.state != Registered:
             continue                                  // already CandidateReady or terminal
         arm.state = CandidateReady                    // offered readiness
-        if arm.group not in affected_groups:
-            affected_groups.append(arm.group)
 
-    // -- Phase 2: process each affected group once --
-    for grp in affected_groups:
-        select_process_group_locked(grp)              // see locking-and-publication doc
+        // deduplicate group using epoch counter (no caller-local array)
+        if arm.group.broadcast_epoch_ != current_epoch:
+            arm.group.broadcast_epoch_ = current_epoch
+            arm.group.broadcast_next_ = worklist_head
+            worklist_head = &arm.group
+
+    // -- Phase 2: process each affected group once via intrusive chain --
+    grp = worklist_head
+    while grp != nullptr:
+        next = grp->broadcast_next_                   // save before processing
+        select_process_group_locked(*grp)
+        grp = next
 
     g.unlock()
     signal_wake_locked()                              // wake any parked worker
-    return |affected_groups|
+    return |worklist_head|                            // count not needed; exists for symmetry
 ```
 
 ### 5.1 Properties preserved
@@ -278,7 +341,7 @@ event_set_broadcast_select_aware(waiters, set_flag):
   Select; `reset()` is unaffected.
 - **Ordinary Event broadcast semantics are unchanged.** The ordinary drain
   runs first, exactly as today.
-- **One group processed once.** Dedup by `SelectGroup*` ensures a group with
+- **One group processed once.** Dedup by epoch counter ensures a group with
   two arms on the same Event completes once.
 - **No infinite loop.** Phase 1 walks a stable intrusive list snapshot; arms
   registered after the scan are not visited (they are linked under
@@ -293,11 +356,13 @@ event_set_broadcast_select_aware(waiters, set_flag):
 
 `Event::set()` is documented as safe from an external OS thread
 (`event.hpp:99-105`). The Select-aware broadcast preserves this. The routing
-path on an external thread is identical to today: `g_worker` is `nullptr`, so
-`route_runnable_locked` falls back to `pending_spawn_` routing
-(`scheduler.cpp:910+`). Select's suspended publication calls
-`route_runnable_locked` exactly the same way; the cross-worker routing concern
-is already solved by the existing E7-B/E8 machinery.
+path on an external thread uses `group.caller_owner_` (stored at admission),
+not `g_worker`. If the group was admitted from a valid Fiber (required by the
+caller contract, `docs/e13-select-public-api.md` §4.11), `caller_owner_` is
+non-null and `route_runnable_locked` routes to the correct worker. If
+`caller_owner_` is null, it falls back to `pending_spawn_` routing
+(`scheduler.cpp:910+`), exactly as today. The cross-worker routing concern is
+already solved by the existing E7-B/E8 machinery.
 
 ---
 
@@ -319,9 +384,10 @@ The deterministic PhaseTag seams (compiled only into
 `sluice_async_internal_testing`, never into the production target) are:
 
 ```text
-E13PhaseEventScanDone       // pause after Phase 1, before Phase 2
+E13PhaseEventScanDone       // pause after Phase 1, before Phase 2 (intrusive worklist built)
 E13PhaseEventGroupClaimed   // pause after one group's claim, before finalize
 E13PhaseEventArmUnlinked    // pause after winner arm unlink, before publish
+E13PhaseEventWorklistWalk   // pause mid-worklist walk (test multi-group chain)
 ```
 
 These mirror the existing internal-testing discipline

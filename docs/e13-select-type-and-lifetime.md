@@ -58,7 +58,7 @@ The closed `e13-select-preparation.md` (sections 4, 5) proposed reusing
 
 Select arms need a *membership* mechanism in the Event Select registry and the
 Scheduler's timer subsystem. That mechanism is a new type
-(`SelectArmRegistration` and its Timer specialization), with its own intrusive
+(`SelectArmSlot` and its Event/Timer payloads), with its own intrusive
 link fields, not borrowed from `WaitNode`. The link fields are private and
 friended to `Scheduler` only — the same sealed-authority pattern as
 `WaitQueue` (`wait_queue.hpp:117-152`).
@@ -74,7 +74,7 @@ inheritance from `WaitNode`**:
 |---------------------------|--------------------------------|-------------------------------------------------------------|
 | winner state machine      | `SelectGroup` atomic claim CAS | A *single* `winner.compare_exchange(NoWinner, arm_index)` on the group — not per-arm |
 | timer retirement          | `TimerRegistration` ACTIVE/RETIRED/CONSUMED | Select introduces a *parallel* `SelectTimerRegistration` with the same atomic state pattern, not a reuse of `TimerRegistration` |
-| intrusive membership      | `WaitQueue`'s intrusive-list pattern | New intrusive fields on `SelectArmRegistration`, separate list head per Event Select registry |
+| intrusive membership      | `WaitQueue`'s intrusive-list pattern | New intrusive fields on `SelectArmSlot`, separate list head per Event Select registry |
 | terminal authority        | The group CAS is the single terminal authority for the *group*; per-arm terminal classification is a plain field guarded by `global_mtx_`, not a CAS |
 
 The split is clean: `WaitNode`/`WaitQueue` continue to handle ordinary waits
@@ -99,15 +99,20 @@ SelectResult select(Scheduler& scheduler, Cases&&... cases);
 }  // namespace sluice::async
 ```
 
+The type graph uses a **fixed-size union slot** representation, not inheritance.
+A single `SelectArmSlot` type holds either an Event or Timer arm payload via a
+plain union, avoiding the slicing problem of `std::array<Base, N>` with derived
+types.
+
 ### 2.2 Detail types (header `detail/select_port.hpp`, `detail/select_registration.hpp`)
 
 ```cpp
 namespace sluice::async::detail {
 
 class SelectGroup;                          // one select() epoch
-class SelectArmRegistration;                // base for one arm
-class EventSelectRegistration;              // Event arm
-class TimerSelectRegistration;              // Timer arm
+struct SelectArmSlot;                       // one arm slot: union of Event/Timer payload
+struct EventArmPayload;                     // Event-specific arm fields
+struct TimerArmPayload;                     // Timer-specific arm fields
 class SelectTimerRegistration;              // Scheduler-owned stable timer block
 class SelectPort;                           // Scheduler-side per-Event registry head
 
@@ -123,7 +128,7 @@ Each type below records the eight fields the brief requires.
 | Property                  | Value                                                          |
 |---------------------------|----------------------------------------------------------------|
 | owner                     | the `select(...)` call frame (caller Fiber)                    |
-| borrowed references       | `Scheduler&` (lifetime), `SelectArmRegistration*[]` (its own array) |
+| borrowed references       | `Scheduler&` (lifetime), `SelectArmSlot[]` (its own array) |
 | address-stability         | required for the entire epoch; stable because stack-anchored   |
 | construction location     | inside `select(...)` before taking `global_mtx_`               |
 | destruction location      | `select(...)` frame unwind, AFTER all authority closed         |
@@ -137,51 +142,93 @@ Each type below records the eight fields the brief requires.
 see `docs/e13-select-locking-and-publication.md`). The CAS is the single
 linearization authority.
 
-#### 2.3.2 `SelectArmRegistration` (base)
+Additional fields for broadcast worklist (see
+`docs/e13-select-event-adapter.md` §4.6):
+```cpp
+SelectGroup* broadcast_next_;             // intrusive worklist chain (under G only)
+std::uint64_t broadcast_epoch_;           // deduplication generation counter
+```
+
+#### 2.3.2 `SelectArmSlot` (the single arm storage type — no inheritance)
 
 | Property                  | Value                                                          |
 |---------------------------|----------------------------------------------------------------|
-| owner                     | the `SelectGroup` (embedded array slot)                        |
-| borrowed references       | `SelectGroup&`, the case's primitive (`Event&` or scheduler for Timer) |
+| owner                     | the `SelectGroup` (embedded in a fixed `std::array<SelectArmSlot, N>`) |
+| borrowed references       | `SelectGroup&`, the case's primitive (`Event&` or `Scheduler&` + deadline) |
 | address-stability         | required for the epoch                                         |
 | construction location     | `select(...)` frame, before `global_mtx_`                      |
 | destruction location      | `select(...)` frame unwind, after authority closed             |
 | thread-access domain      | calling Fiber + Scheduler under `global_mtx_`                  |
-| lock protecting structural state | none (intrusive link fields under the owning registry's lock or `global_mtx_`) |
+| lock protecting structural state | none (intrusive link fields under `global_mtx_`)          |
 | atomic fields             | none — state is a plain `ArmState` field guarded by `global_mtx_` |
 | friend authority          | `Scheduler`, `SelectGroup`                                     |
 | public visibility         | none — `detail`                                               |
 
-Intrusive link fields (private):
 ```cpp
-SelectArmRegistration* next_;
-SelectArmRegistration* prev_;
-SelectPort* home_;   // which Event Select registry, or nullptr for Timer
+struct SelectArmSlot {
+    ArmKind kind;                           // Event or Timer (discriminator for the union)
+
+    // common state
+    ArmState state;                         // Registered, CandidateReady, Retired, etc.
+    SelectGroup* group;                     // back-pointer to owning group
+
+    // intrusive link fields (private, Scheduler-only access)
+    SelectArmSlot* next_;
+    SelectArmSlot* prev_;
+    SelectPort* home_;                      // which Event SelectPort, or nullptr for Timer
+
+    // discriminated payload
+    union {
+        EventArmPayload event;
+        TimerArmPayload timer;
+    };
+};
 ```
 
-These mirror `WaitNode::next_/prev_/home_` but live on a separate type and are
-reached only by `Scheduler` (the sole registration + resolution authority),
-exactly mirroring `WaitQueue`'s sealed pattern.
+This is a **fixed-size, non-slicing, indexable** representation. The variadic
+expansion materialises:
 
-#### 2.3.3 `EventSelectRegistration : SelectArmRegistration`
+```cpp
+std::array<SelectArmSlot, sizeof...(Cases)>
+```
 
-Adds: `Event& event_` (the bound Event). The registry node *is* this object —
-no separate node allocation. Constructed in the `select(...)` frame.
+inside the `select(...)` frame. Each slot is constructed in place; no per-arm
+allocation, no derived-to-base slicing, no virtual dispatch. Arm `i` is
+`slots[i]`, accessed by index.
 
-#### 2.3.4 `TimerSelectRegistration : SelectArmRegistration`
+#### 2.3.3 `EventArmPayload`
 
-Adds: `Scheduler& scheduler_`, `select_deadline_t deadline_`. The Timer arm
-does **not** link into an Event Select registry; it is driven by the
-Scheduler's timer pump through its associated `SelectTimerRegistration` stable
-block.
+| Property                  | Value                                                          |
+|---------------------------|----------------------------------------------------------------|
+| owner                     | `SelectArmSlot` (embedded union member)                        |
+| added fields              | `Event& event_` (the bound Event)                              |
+| construction location     | `select(...)` frame, before `global_mtx_`                      |
+| destruction location      | `select(...)` frame unwind, after authority closed             |
+
+The registry node *is* the `SelectArmSlot` containing the `EventArmPayload` —
+no separate node allocation. The slot's intrusive link fields connect it into
+the Event's `SelectPort`.
+
+#### 2.3.4 `TimerArmPayload`
+
+| Property                  | Value                                                          |
+|---------------------------|----------------------------------------------------------------|
+| owner                     | `SelectArmSlot` (embedded union member)                        |
+| added fields              | `select_deadline_t deadline_`; associated `SelectTimerRegistration*` |
+| construction location     | `select(...)` frame, before `global_mtx_`                      |
+| destruction location      | `select(...)` frame unwind, after authority closed             |
+
+The Timer arm does **not** link into an Event Select registry; it is driven by
+the Scheduler's timer pump through its associated `SelectTimerRegistration`
+stable block.
 
 #### 2.3.5 `SelectTimerRegistration` (Scheduler-owned stable block)
 
 | Property                  | Value                                                          |
 |---------------------------|----------------------------------------------------------------|
 | owner                     | the **Scheduler** (pointer-stable container, mirroring `timer_pool_`) |
-| borrowed references       | `SelectArmRegistration*` (the caller-frame Timer arm), `Scheduler&` |
-| address-stability         | **required and guaranteed**: stored by value in `std::list`    |
+| borrowed references       | `SelectArmSlot*` (the caller-frame Timer arm slot), `Scheduler&` |
+| address-stability         | **required and guaranteed**: stored by value in a temporary `std::list`, spliced into Scheduler pool under G |
 | construction location     | `select(...)` frame, **before** `global_mtx_` is taken         |
 | destruction location      | Scheduler timer subsystem, lazy-at-deadline (mirrors `TimerRegistration`) |
 | thread-access domain      | Scheduler worker running the pump under `global_mtx_`; lifetime observed via atomic |
@@ -195,12 +242,18 @@ atomic `state_` is the post-destruction safety boundary (I4): the pump reads
 `state_` first; if not `active`, it skips without dereferencing the arm
 pointer.
 
+Ownership transfer: nodes are constructed in a temporary `std::list` outside G,
+then spliced into the Scheduler-owned pool via `std::list::splice` under G (no
+allocation inside the lock). The deadline heap stores `DeadlineHeapEntry`
+values, not raw `TimerRegistration*` — see
+`docs/e13-select-timer-adapter.md` §4.
+
 #### 2.3.6 `SelectPort` (Scheduler-side per-Event registry head)
 
 | Property                  | Value                                                          |
 |---------------------------|----------------------------------------------------------------|
 | owner                     | the **Event** (one `SelectPort` embedded per Event)            |
-| borrowed references       | the intrusive list of `EventSelectRegistration*` currently linked |
+| borrowed references       | the intrusive list of `SelectArmSlot*` currently linked        |
 | address-stability         | stable for the Event's lifetime (embedded in Event)            |
 | construction location     | Event construction                                             |
 | destruction location      | Event destruction                                              |
@@ -211,7 +264,7 @@ pointer.
 | public visibility         | none — `detail`, embedded private in Event                     |
 
 `SelectPort` is the head pointer of the Event's Select registry intrusive
-list. Adding an `EventSelectRegistration` to it is `SelectPort::link_locked`,
+list. Adding a `SelectArmSlot` to it is `SelectPort::link_locked`,
 called only by the Scheduler under `global_mtx_`.
 
 ---
@@ -221,15 +274,17 @@ called only by the Scheduler under `global_mtx_`.
 ### 3.1 Is `SelectGroup` in the calling Fiber's stack frame?
 
 **Yes.** It is a stack-local in the `select(...)` function frame. Every
-`SelectArmRegistration` is a fixed slot in the array embedded in the same
+`SelectArmSlot` is a fixed slot in the array embedded in the same
 frame. The Scheduler reaches them via raw pointers that are valid only for the
 epoch.
 
 ### 3.2 Is each arm registration in the same calling frame?
 
 **Yes.** The variadic expansion materialises a fixed-size
-`std::array<SelectArmRegistration, N>` inside the `select(...)` frame. Each
-slot is constructed in place; no per-arm allocation.
+`std::array<SelectArmSlot, N>` inside the `select(...)` frame. Each
+slot is constructed in place; no per-arm allocation. The unified `SelectArmSlot`
+type (with its `EventArmPayload`/`TimerArmPayload` union) avoids the slicing
+problem of a derived-class array.
 
 ### 3.3 How late can an Event/Timer callback reach a Select arm?
 
@@ -250,10 +305,10 @@ observes the non-`active` state and skips.
 After the calling Fiber resumes from a suspended completion:
 
 ```text
-every EventSelectRegistration:    unlinked from its SelectPort (no Event scan reach)
-every TimerSelectRegistration:    state == retired or consumed (pump skips)
-every SelectArmRegistration:      arm state == retired; group phase == Completed
-SelectGroup:                      phase == Completed; winner committed
+every Event arm slot:    unlinked from its SelectPort (no Event scan reach)
+every Timer arm slot:    state == retired or consumed (pump skips)
+every SelectArmSlot:              arm state == retired; group phase == Completed
+SelectGroup:                      phase == Completed → Consumed (after caller consumes result); winner committed
 ```
 
 No callback of any kind can dereference any caller-frame object. The frame may
@@ -274,10 +329,10 @@ reclamation. Everything else is caller-frame.
 | Object                          | Destroyed when                                  | Precondition enforced            |
 |---------------------------------|-------------------------------------------------|----------------------------------|
 | `SelectResult`                  | caller scope exit                               | trivially destructible           |
-| `SelectGroup`                   | `select(...)` frame unwinds                     | phase == Completed or Aborted; all arm authority closed |
-| `SelectArmRegistration`         | `select(...)` frame unwinds                     | arm state == retired; not linked in any registry |
-| `EventSelectRegistration`       | (same as arm)                                   | unlinked from its `SelectPort`   |
-| `TimerSelectRegistration`       | (same as arm)                                   | its `SelectTimerRegistration` is retired/consumed |
+| `SelectGroup`                   | `select(...)` frame unwinds                     | phase == Completed or Consumed or Aborted; all arm authority closed |
+| `SelectArmSlot`           | `select(...)` frame unwinds                     | arm state == retired; not linked in any registry |
+| (Event arm slot)           | (same as arm)                                   | unlinked from its `SelectPort`   |
+| (Timer arm slot)           | (same as arm)                                   | its `SelectTimerRegistration` is retired/consumed |
 | `SelectTimerRegistration`       | Scheduler timer subsystem, lazy-at-deadline     | state != active                  |
 | `SelectPort` (per-Event)        | Event destruction                               | intrusive list empty (caller contract: drain before destroying Event) |
 | caller Fiber frame              | caller unwinds after `select(...)` returns      | all of the above already true    |
@@ -320,7 +375,7 @@ dereferenced. The arm pointer is read **only** after observing `active`, and
 ### 4.4 Event registry cleanup before caller resume
 
 Before `make_runnable` (suspended) or before `select(...)` returns (inline),
-every `EventSelectRegistration` for the group is unlinked from its Event's
+every `SelectArmSlot` with Event payload for the group is unlinked from its Event's
 `SelectPort`. The cleanup is part of the finalize step, under `global_mtx_`,
 in the same critical section that closes the arm's authority. After this, an
 Event scan that runs after resume cannot observe the group's nodes.
@@ -387,7 +442,7 @@ finishes; the pump runs only under `global_mtx_`.
 | Object                       | Address stable for           | Why                                  |
 |------------------------------|------------------------------|--------------------------------------|
 | `SelectGroup`                | the epoch                    | referenced by Event scan + pump      |
-| `SelectArmRegistration`      | the epoch                    | referenced via `SelectTimerRegistration::arm_` and via intrusive links |
+| `SelectArmSlot`      | the epoch                    | referenced via `SelectTimerRegistration::arm_` and via intrusive links |
 | `SelectTimerRegistration`    | until pump reclamation       | referenced by the pump after the frame may be gone |
 | `EventSelectCase`/`TimerSelectCase` | the `select()` call    | trivially stable (stack temps)       |
 
@@ -401,9 +456,9 @@ address is their identity for the intrusive lists), exactly mirroring
 
 ```text
 SelectGroup:                  caller-frame, embedded arm array, no mutex
-SelectArmRegistration:        caller-frame, plain state under global_mtx_
-EventSelectRegistration:      caller-frame + intrusive Event Select registry node
-TimerSelectRegistration:      caller-frame + paired SelectTimerRegistration
+SelectArmSlot:                caller-frame, plain state under global_mtx_, unified union
+EventArmPayload:              Event-specific fields inside SelectArmSlot union
+TimerArmPayload:              Timer-specific fields inside SelectArmSlot union
 SelectTimerRegistration:      Scheduler-owned stable block (the ONLY one)
 SelectPort:                   per-Event, Scheduler-only access
 SelectResult:                 caller-returned, trivially movable

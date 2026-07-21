@@ -38,8 +38,8 @@ SelectGroup::winner_ : std::atomic<uint32_t>
 
 linearization point:
     winner_.compare_exchange_strong(kNoWinner, arm_index,
-                                    std::memory_order::acq_rel,
-                                    std::memory_order::acquire)
+                                    std::memory_order::relaxed,
+                                    std::memory_order::relaxed)
 ```
 
 Every offer/claim path runs under `global_mtx_`. The CAS still happens, for
@@ -51,9 +51,9 @@ four reasons the brief requires weighed:
 | Order of timer `try_claim_expiry` vs group claim      | Group claim **first** (winner CAS), then `ACTIVE→CONSUMED`. The group claim is the linearization; the consume is a consequence. |
 | External `Event::set` thread                          | Takes `global_mtx_` like every other path; no lock-free bypass. |
 | Future global-lock reduction                          | The CAS is already the linearization authority, so a future design that drops `global_mtx_` from some path does not change the linearization semantics — it only widens the CAS contention domain. |
-| Memory order                                          | `acq_rel` on success (publishes winner + arm finalization), `acquire` on failure (loser observes the winner's published state). Matches `WaitNode::resolve_` (`wait_node.hpp:237-247`) and `TimerRegistration::try_claim_expiry`. |
-| Acquire/release needed by losers to observe winner    | Provided by the CAS's `acq_rel`/`acquire`. A losing claim reads the winner index via `winner_.load(acquire)`. |
-| Mapping to formal linearization point                | The CAS *is* `ContractLinearizeWinner(i)`'s linearization point — one source line, one atomic op. |
+| Memory order                                          | `relaxed` on success and failure. The `acq_rel` in the original design was incorrect: arm finalization happens **after** the CAS, so a release CAS cannot publish writes that follow it. The real synchronization authority is `global_mtx_`: every claim, finalize, and publish path runs under the same mutex, which provides acquire/release ordering for all arm-state writes. The CAS only protects the winner identity; the mutex provides the happens-before edges. |
+| Acquire/release needed by losers to observe winner    | Provided by the mutex, not by the CAS. A losing claim reads the winner index under the same `global_mtx_` CS; the mutex's release (unlock) and subsequent acquire (lock) sequence makes the winner write visible. |
+| Mapping to formal linearization point                | The CAS *is* `ContractLinearizeWinner(i)`'s linearization point — one source line, one atomic op. The CAS uses `memory_order::relaxed` because the mutex provides the ordering; the CAS is the linearization point by virtue of being the single atomic write that determines the winner, not by its memory order. |
 
 ### 1.3 Why not C1 alone (plain field)
 
@@ -83,11 +83,12 @@ the linearization while letting `global_mtx_` do the serialization work.
 
 ```text
 winner linearization source line:
-    SelectGroup::winner_.compare_exchange_strong(kNoWinner, arm_index, acq_rel, acquire)
+    SelectGroup::winner_.compare_exchange_strong(kNoWinner, arm_index, relaxed, relaxed)
 
 winner memory ordering:
-    success: acq_rel    (publishes the winner + arm finalization)
-    failure: acquire    (loser observes the winner's published state)
+    relaxed — the CAS only protects the winner identity; all arm-state
+    visibility is guaranteed by global_mtx_ (which serializes every claim,
+    finalize, and publish path)
 
 who may attempt claim:
     the Event scan (Phase 2, per affected group)
@@ -195,7 +196,7 @@ select_impl(scheduler, case_array):
          (cross-Scheduler -> throw std::invalid_argument BEFORE any registration)
     2. allocate SelectTimerRegistration for each Timer arm (outside the lock)
          (std::bad_alloc here propagates directly; nothing to roll back)
-    3. construct the SelectGroup + SelectArmRegistration array in this frame
+    3. construct the SelectGroup + SelectArmSlot array in this frame
 
     // -- under global_mtx_ --
     g.lock()
@@ -217,27 +218,31 @@ select_impl(scheduler, case_array):
               Event arm: event.set_.load(acquire) == true
               Timer arm: deadline <= scheduler.monotonic_now()
          (these arms get arm.state = CandidateReady)
-    8. if snapshot non-empty:
-         a. choose lowest index
-         b. inline claim: group.winner_.CAS(kNoWinner, lowest_index)
-         c. commit winner: arm.state = Retired (winner classification)
-         d. finalize losers: every other arm finalized as a loser
-         e. close all authority (unlink Event arms, retire/consume Timer arms)
-         f. select_publish_locked(group, mode=Inline)
-         g. group.phase_ = Completed
-         h. g.unlock()
-         i. return SelectResult{index, kind, ...}  (no suspension)
-    9. otherwise:
-         a. me->make_waiting()
-         b. group.phase_ = Armed
-         c. g.unlock()
-         d. fiber_ctx::context_switch(...)   // suspend
-         // --- on resume ---
-         e. g.lock()    // reacquire to read the result
-         f. read SelectResult from group (winner is committed)
-         g. verify all arm authority closed (defensive assert)
-         h. g.unlock()
-         i. return SelectResult
+8. if snapshot non-empty:
+          a. choose lowest index
+          b. inline claim: group.winner_.CAS(kNoWinner, lowest_index)
+          c. commit winner: arm.state = Retired (winner classification)
+          d. finalize losers: every other arm finalized as a loser
+          e. close all authority (unlink Event arms, retire/consume Timer arms)
+          f. select_publish_locked(group, mode=Inline)
+          g. group.phase_ = Completed
+          h. copy result to local
+          i. group.phase_ = Consumed
+          j. g.unlock()
+          k. return SelectResult{index, kind, ...}  (no suspension)
+     9. otherwise:
+          a. me->make_waiting()
+          b. group.phase_ = Armed
+          c. g.unlock()
+          d. fiber_ctx::context_switch(...)   // suspend
+          // --- on resume ---
+          e. g.lock()    // reacquire to read the result
+          f. require group.phase_ == Completed
+          g. read SelectResult from group (winner is committed)
+          h. group.phase_ = Consumed            // Completed -> Consumed
+          i. verify all arm authority closed (defensive assert)
+          j. g.unlock()
+          k. return SelectResult
 ```
 
 ### 3.2 Rollback (registration failure)
@@ -313,7 +318,7 @@ No publication. The loser path never calls `make_runnable` /
 ```text
 group winner claim (SelectGroup::winner_ CAS: kNoWinner -> arm_index)
     <
-Event arm resolve (targeted: EventSelectRegistration marked terminal-winner)
+Event arm resolve (targeted: SelectArmSlot marked terminal-winner)
     <
 arm unlink from Event.select_port_ (SelectPort::unlink_locked, under global_mtx_)
     <
@@ -380,8 +385,17 @@ Scheduler::select_publish_locked(SelectGroup& group)
         else:  // group.caller_state_ == Waiting
             // suspended completion
             Fiber* f = group.caller_
-            if f->make_runnable():                 // exactly-once guard
-                route_runnable_locked(f, group.caller_owner_)
+            const bool published = f->make_runnable()
+            if (!published):
+                // INVARIANT: the caller must be Waiting at this point.
+                // The first scope has no post-suspension cancellation,
+                // no second publication path, and no alternative wake
+                // path. Returning false means the caller's state machine
+                // is corrupt (not Waiting), there is a duplicate publication,
+                // or a second wake path exists. None of these are legal.
+                // Fail fast rather than silently returning.
+                select_fail_fast("suspended Select caller was not Waiting")
+            route_runnable_locked(f, group.caller_owner_)
             group.completion_mode_ = Suspended
 
         group.result_ = SelectResult{ winner index, kind, ... }   // written once
@@ -392,6 +406,7 @@ Scheduler::select_publish_locked(SelectGroup& group)
         runnable_publication_count == (Inline ? 0 : 1)
         arm_publication_count[winner] == 1
         arm_publication_count[loser] == 0  for every loser
+        (caller later transitions phase_ = Consumed under G, after reading the result)
 ```
 
 ### 5.2 Why a single function
@@ -421,11 +436,15 @@ group.caller_         : Fiber*          // = g_worker->current at admission
 group.caller_owner_   : WorkerState*    // = g_worker at admission
 ```
 
-An external-thread Event `set()` finds the group via the Event scan; the
-caller Fiber and owner are read from the group, not from `g_worker` (which is
-null on an external thread). `route_runnable_locked` handles the
-`owner == nullptr` case via `pending_spawn_` routing, exactly as for ordinary
-external-thread wakes (`scheduler.cpp:910+`).
+All Select publication uses `group.caller_owner_` for routing. The external
+Event setter's own `g_worker` is irrelevant — the group's stored owner is the
+authoritative routing target. An external-thread Event `set()` finds the group
+via the Event scan; the caller Fiber and owner are read from the group, not
+from `g_worker` (which is null on an external thread).
+`route_runnable_locked` handles the `owner == nullptr` case (only possible if
+the group was admitted with a null owner, which is a caller contract violation
+— see `docs/e13-select-public-api.md` §4.11) via `pending_spawn_` routing,
+exactly as for ordinary external-thread wakes (`scheduler.cpp:910+`).
 
 ### 5.4 Inline vs suspended: the publication branch
 
@@ -445,8 +464,9 @@ This maps cleanly to the formal `completion_mode ∈ {None, Inline, Suspended}`:
 ## 6. Multi-group shared Event
 
 Two SelectGroups sharing one Event are handled by Phase 2's per-group
-iteration. The Event scan collects *all* affected groups (deduplicated by
-`SelectGroup*`); Phase 2 calls `select_process_group_locked` once per group.
+iteration. The Event scan builds an intrusive worklist chain of *all* affected
+groups (deduplicated by broadcast epoch counter on `SelectGroup`); Phase 2
+walks the chain calling `select_process_group_locked` once per group.
 Each call runs its own claim + finalize + publish under the same `global_mtx_`
 CS. The two groups complete independently; one's winner/loser classification
 does not affect the other.
@@ -481,13 +501,15 @@ resolver.
 ## 8. Summary of the locking+publication decisions
 
 ```text
-central claim:     SelectGroup::winner_ CAS, under global_mtx_, acq_rel
+central claim:     SelectGroup::winner_ CAS, under global_mtx_, relaxed
 lock order:        G -> (one registry, no mutex) -> (no group mutex)
 group mutex:       none
 publication:       single Scheduler::select_publish_locked(SelectGroup&)
-inline:            no runnable publication
-suspended:         make_runnable + route_runnable_locked, exactly once, guarded
+inline:            no runnable publication; group.phase_ = Completed → Consumed
+suspended:         make_runnable + route_runnable_locked, exactly once, guarded;
+                   on resume: group.phase_ = Completed → Consumed
 caller routing:    group.caller_ + group.caller_owner_, external-thread safe
+                   (all publication uses group.caller_owner_, never g_worker)
 Event SET:         never cleared by Select
-multi-group:       Phase 2 iterates deduplicated groups; each completes once
+multi-group:       Phase 2 walks intrusive worklist chain; each group completes once
 ```

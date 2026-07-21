@@ -56,6 +56,8 @@ Test). The numbering is stable; reviewers cite these IDs.
 | ST-19 | wrong Scheduler rejected                   | Event bound to other Scheduler           | `std::invalid_argument` thrown before any registration                           |
 | ST-20 | Event destruction contract                 | destroy Event with active Select arm     | debug assert fires (caller contract violation)                                   |
 | ST-21 | Scheduler teardown contract                | destroy Scheduler with live SelectGroup  | debug assert fires (caller contract violation)                                   |
+| ST-22 | external-thread select rejected            | call `select()` from a plain OS thread   | `std::logic_error` thrown before any registration                                |
+| ST-23 | wrong-current-worker Scheduler rejected    | call `select(sched, ...)` from worker of a different Scheduler | `std::logic_error` thrown before any registration |
 
 ### 2.1 Per-test invariant checklist (applies to every ST)
 
@@ -65,7 +67,9 @@ Every positive test asserts, in addition to its key assertions:
 - the winner arm:   state == Retired (winner); if Event, unlinked from SelectPort
                     if Timer, SelectTimerRegistration in CONSUMED
 - every loser arm:  state == Retired (loser); Event unlinked; Timer RETIRED
-- group.phase_ == Completed at the end
+- group.phase_ == Completed at the end (inline) or transitions through
+  Completed → Consumed (suspended, after caller reacquires G)
+- result_publication_count == 1
 - result_publication_count == 1
 - runnable_publication_count == (Inline ? 0 : 1)
 - no SelectPort contains any of the group's arms at the end
@@ -90,14 +94,14 @@ reproduction, and the assertion that fails.
 | SN-1  | double claim (two arms both win)             | PhaseTag at winner CAS; force a second claim attempt | `SelectGroup::winner_` CAS fails; assert that the second claimer returns loser |
 | SN-2  | double publication                           | PhaseTag at `select_publish_locked` entry; re-invoke | assert `group.phase_ != Completed` at entry (guarded) |
 | SN-3  | loser publishes                              | inject a `make_runnable` call on a loser-arm path  | removed by construction; test asserts loser finalize path never reaches `route_runnable_locked` (PhaseTag counters) |
-| SN-4  | Timer dereference after retirement           | PhaseTag `E13PhaseTimerPumpSkip`; force pump onto RETIRED reg | assert pump does NOT read `arm_` (instrumented load counter == 0) |
+| SN-4  | Timer dereference after retirement           | PhaseTag `E13PhaseTimerPumpSkip`; force pump onto RETIRED reg | assert pump does NOT read `arm_` (instrumented load counter == 0); assert `DeadlineHeapEntry` is still in heap |
 | SN-5  | Event registry node survives caller resume   | post-suspension winner; at resume, scan the Event's SelectPort | assert SelectPort is empty for the group's arms |
 | SN-6  | winner changes after linearization           | PhaseTag at post-claim; attempt a second CAS with a different index | CAS fails; `winner_.load() == original`            |
 | SN-7  | snapshot changes after claim                 | PhaseTag at admission snapshot; mutate an arm state after snapshot taken | admission uses an immutable local copy; assert the post-claim state matches the snapshot |
 | SN-8  | rollback after suspension                    | attempt `BeginRollback` after `SuspendCaller`       | assert `ContractRollbackEnabledDomain` precondition fails |
 | SN-9  | Timer loser retired before arm detach        | reorder finalize: retire CAS before arm.state = Retired | fixed source order; PhaseTag asserts the order (retire CAS timestamp > arm-state timestamp) |
 | SN-10 | result published with open authority         | PhaseTag at publish; leave one arm linked           | assert at `select_publish_locked` entry: every arm authority closed |
-| SN-11 | same group processed twice in one broadcast  | Phase 2 dedup bug; visit the group twice            | Phase 2 iterates a deduplicated snapshot; assert each group visited once |
+| SN-11 | same group processed twice in one broadcast   | Phase 2 dedup bug (epoch counter bypass); visit the group twice | Phase 2 walks the intrusive worklist chain; assert each group's epoch counter matches current epoch (no duplicate links) |
 | SN-12 | cross-group authority close                  | group A's finalize unlinks group B's arm            | SelectPort unlink validates `arm.group == &group`; assert rejects cross-group unlink |
 
 ### 3.1 No sleep-based reproduction
@@ -118,9 +122,10 @@ has none of these symbols.
 ### 4.1 Event adapter seams
 
 ```text
-E13PhaseEventScanDone       after Phase 1 scan, before Phase 2 claim
+E13PhaseEventScanDone       after Phase 1 scan, before Phase 2 (intrusive worklist built)
 E13PhaseEventGroupClaimed   after one group's claim, before finalize
 E13PhaseEventArmUnlinked    after winner arm unlink, before publish
+E13PhaseEventWorklistWalk   pause mid-worklist walk (test multi-group chain)
 ```
 
 ### 4.2 Timer adapter seams
@@ -137,6 +142,7 @@ E13PhaseTimerPumpSkip       observe a non-active entry being skipped
 ```text
 E13PhaseAdmissionArmed      after registration, before admission snapshot
 E13PhaseAdmissionClaimed    after inline claim, before finalize
+E13PhaseAdmissionConsumed   after phase_ = Completed, before Consumed (test lifecycle ordering)
 E13PhasePublishEntry        at select_publish_locked entry (precondition check)
 E13PhasePublishDone         after phase_ = Completed
 ```
@@ -168,7 +174,7 @@ tests/e13_select_event_adapter.cpp   ST-6, ST-11, ST-12 (multi-arm / multi-group
 tests/e13_select_timer_adapter.cpp   ST-2, ST-5, ST-7, ST-8 (Timer arms)
 tests/e13_select_rollback.cpp        ST-14 (registration rollback)
 tests/e13_select_multi_worker.cpp    ST-15, ST-16, ST-17 (external thread + routing)
-tests/e13_select_contract.cpp        ST-18..ST-21 (lifetime + contract violations)
+tests/e13_select_contract.cpp        ST-18..ST-23 (lifetime + contract violations + caller validation)
 tests/e13_select_negative.cpp        SN-1..SN-12 (negative tests)
 ```
 
@@ -210,7 +216,7 @@ allowed files:
 entry assumptions:
     E10–E12 closed; the formal model closed (PR #17/#18)
 exit gates:
-    SelectGroup, SelectArmRegistration, SelectTimerRegistration, SelectPort
+    SelectGroup, SelectArmSlot, SelectTimerRegistration, SelectPort
     compile and are unit-tested for construction/destruction only
 production behavior enabled:
     NONE (no select() entry point yet)
@@ -240,7 +246,8 @@ remaining denied behavior:
 ```text
 allowed files:
     src/async/select_timer.cpp          (SelectTimerRegistration + pump branch)
-    src/async/scheduler.cpp             (pump learns the Select branch)
+    src/async/scheduler.cpp             (deadline_heap_ migrated to DeadlineHeapEntry;
+                                         pump learns the Select branch)
 entry assumptions:
     P1 types exist; the deadline heap accepts the new entry kind
 exit gates:
@@ -252,13 +259,32 @@ remaining denied behavior:
     claim, finalize, publish, the select() entry point
 ```
 
-### 7.4 P4 — registration + inline admission
+### 7.4 P4 — Central Claim + winner/loser finalization core
+
+```text
+allowed files:
+    src/async/select.cpp                (claim + finalize core)
+    src/async/select_event.cpp          (Event winner/loser finalize)
+    src/async/select_timer.cpp          (Timer winner/loser finalize)
+entry assumptions:
+    P2 + P3 registries work
+exit gates:
+    select_process_group_locked runs claim + finalize without publication
+    winner/loser source order verified (section O)
+    SN-1, SN-3, SN-9, SN-10 pass
+production behavior enabled:
+    claim + finalize core (no admission yet; test-driven via direct seam calls)
+remaining denied behavior:
+    admission, publication, select() entry point
+```
+
+### 7.5 P5 — registration + inline admission
 
 ```text
 allowed files:
     src/async/select.cpp                (select() entry + admission scan)
 entry assumptions:
-    P2 + P3 registries work
+    P4 finalize core works
 exit gates:
     ST-1..ST-8 pass
 production behavior enabled:
@@ -270,37 +296,22 @@ remaining denied behavior:
     suspended completion (no caller suspension yet)
 ```
 
-### 7.5 P5 — post-suspension claim + publication
+### 7.6 P6 — suspension + result/runnable publication
 
 ```text
 allowed files:
-    src/async/select.cpp                (suspended admission branch)
-    src/async/scheduler.cpp             (select_publish_locked)
+    src/async/select.cpp                (suspended admission branch;
+                                         Completed → Consumed transition)
+    src/async/scheduler.cpp             (select_publish_locked with fail-fast)
 entry assumptions:
-    P4 inline path works
+    P5 inline path works
 exit gates:
     ST-9, ST-10 pass
 production behavior enabled:
     post-suspension Event winner
     post-suspension Timer winner
     exactly-once runnable publication
-remaining denied behavior:
-    multi-group shared Event
-```
-
-### 7.6 P6 — winner/loser finalization
-
-```text
-allowed files:
-    src/async/select.cpp                (finalize order)
-    src/async/select_event.cpp          (Event winner/loser finalize)
-    src/async/select_timer.cpp          (Timer winner/loser finalize)
-entry assumptions:
-    P5 publication works
-exit gates:
-    SN-1, SN-3, SN-9, SN-10 pass
-production behavior enabled:
-    full winner/loser source order (section O)
+    Completed → Consumed lifecycle
 remaining denied behavior:
     multi-group shared Event
 ```
@@ -310,22 +321,24 @@ remaining denied behavior:
 ```text
 allowed files:
     src/async/select.cpp                (rollback path)
+    include/sluice/async/detail/select_port.hpp
+    (Consumed precondition for destruction)
 entry assumptions:
-    P6 finalize works
+    P6 publication works
 exit gates:
     ST-14, SN-8 pass
 production behavior enabled:
     registration-failure rollback
-    destruction contract enforcement
+    destruction contract enforcement (requires Consumed or Aborted)
 remaining denied behavior:
     multi-group shared Event
 ```
 
-### 7.8 P8 — multi-group shared Event
+### 7.8 P8 — multi-group shared Event (intrusive worklist)
 
 ```text
 allowed files:
-    src/async/select_event.cpp          (Phase 2 dedup + per-group iteration)
+    src/async/select_event.cpp          (Phase 2 intrusive worklist dedup + per-group iteration)
 entry assumptions:
     P7 rollback works
 exit gates:
@@ -333,6 +346,7 @@ exit gates:
 production behavior enabled:
     same Event shared across groups
     same Event with multiple arms in one group
+    intrusive worklist chain (no fixed-size array limit)
 remaining denied behavior:
     none within the first scope
 ```
@@ -346,7 +360,7 @@ allowed files:
 entry assumptions:
     P1–P8 complete
 exit gates:
-    ST-1..ST-21, SN-1..SN-12 all pass
+    ST-1..ST-23, SN-1..SN-12 all pass
     production sluice_async target exports no E13 test symbol
 production behavior enabled:
     complete first-scope Select
