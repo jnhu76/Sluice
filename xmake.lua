@@ -1141,3 +1141,21 @@ do
             add_tests("e12_cross_primitive_parity_test")
     end
 end
+
+-- e13_select_event_registry — E13 Event Select private registry (P2).
+-- Sealed per-Event SelectPort: link/unlink/scan operations, Event SET Phase-1
+-- scan, idempotence, serialization, and destruction contract.
+-- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_event_registry.cpp"
+    if os.isfile(p) then
+        target("e13_select_event_registry")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_event_registry")
+    end
+end

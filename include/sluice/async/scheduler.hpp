@@ -41,6 +41,7 @@ class Event;
 namespace detail {
 class SelectPort;
 struct SelectArmSlot;
+enum class ArmState : std::uint8_t;
 }  // namespace detail
 
 // ----------------------------------------------------------------------------
@@ -1265,6 +1266,36 @@ public:
         static std::size_t timer_pool_count_in_state(const Scheduler& s,
                                                      TimerRegistration::State st) noexcept;
         static bool earliest_active_deadline(Scheduler& s, deadline_t& out);
+
+        // ---- E13 Select registry test accessors ----
+        // Link an Event Select arm into the Event's private SelectPort.
+        // Acquires global_mtx_ internally. The arm must be Prepared/Detached
+        // with kind==Event and group set.
+        static void select_event_link(Scheduler& s, Event& event,
+                                      detail::SelectArmSlot& arm) {
+            LockGuard lk(s.global_mtx_);
+            s.select_event_link_locked(event, arm);
+        }
+
+        // Unlink an Event Select arm from the Event's private SelectPort.
+        // Acquires global_mtx_ internally.
+        static void select_event_unlink(Scheduler& s, Event& event,
+                                        detail::SelectArmSlot& arm) {
+            LockGuard lk(s.global_mtx_);
+            s.select_event_unlink_locked(event, arm);
+        }
+
+        // Phase-1 scan: walk the Event's SelectPort and mark eligible arms
+        // CandidateReady. Acquires global_mtx_ internally. Returns marked count.
+        static std::size_t select_event_scan(Scheduler& s, Event& event) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_event_scan_locked(event);
+        }
+
+        // Set an arm's state under global_mtx_. Used by tests to prepare
+        // specific arm states before a scan.
+        static void set_arm_state(Scheduler& s, detail::SelectArmSlot& arm,
+                                  detail::ArmState st);
     };
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };

@@ -1476,6 +1476,15 @@ std::size_t Scheduler::select_event_scan_locked(Event& event) {
     return marked;
 }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+void Scheduler::AsyncTestAccess::set_arm_state(Scheduler& s,
+                                                detail::SelectArmSlot& arm,
+                                                detail::ArmState st) {
+    LockGuard lk(s.global_mtx_);
+    arm.state = st;
+}
+#endif
+
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     // E12-A-EVENT-CORRECTIVE-2: the narrow Event cancellation authority with
     // EXACT queue-membership validation. Event::cancel passes its private
