@@ -1212,3 +1212,44 @@ do
             add_tests("e13_select_type")
     end
 end
+
+-- e13_select_timer_registration — E13 Select Timer stable registration (P3).
+-- Verifies the Select timer substrate: state transitions, address stability
+-- after splice, tagged deadline-heap ordering, ordinary timer regression,
+-- RETIRED/CONSUMED stale-skip, state-before-arm instrumentation, earliest-
+-- active-deadline participation, lazy reclamation, mixed stale+ordinary pump,
+-- Scheduler identity, no-premature-Select. Deterministic (test clock + causal
+-- phase seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_timer_registration.cpp"
+    if os.isfile(p) then
+        target("e13_select_timer_registration")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_timer_registration")
+    end
+end
+
+-- e13_select_timer_pump_death_test — E13 Select timer pump ACTIVE-due
+-- stage-boundary fail-fast (P3). A due ACTIVE SelectTimerRegistration is
+-- unreachable in valid P3 (no admission path); the pump must fail fast rather
+-- than claim/mark/retire/consume. Runs in a forked child that re-execs this
+-- binary via death_test_runner_posix.hpp. POSIX-only; gated to linux/macosx.
+-- This is an invariant GUARD, NOT supported production Select behavior.
+do
+    local p = "tests/e13_select_timer_pump_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_timer_pump_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_timer_pump_death_test")
+    end
+end
