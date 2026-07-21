@@ -28,22 +28,28 @@ VARIABLES
     runnable_publication_count,
     arm_publication_count,
     reservation_close_count,
+    linearized_winner,
+    linearized_winner_valid,
 
     \* Central Claim strategy variables.
     central_phase,
     candidate_ready,
     claim_candidates,
     arm_class,
-    claim_mode
+    claim_mode,
+    claim_snapshot_frozen,
+    claim_snapshot_frozen_valid
 
 ContractProjectionVars ==
     <<contract_phase, arm_registered, readiness_evidence, reservation_state,
       arm_resolution, authority_open, winner, caller_state, completion_mode,
       result_publication_count, runnable_publication_count,
-      arm_publication_count, reservation_close_count>>
+      arm_publication_count, reservation_close_count,
+      linearized_winner, linearized_winner_valid>>
 
 CentralOnlyVars ==
-    <<central_phase, candidate_ready, claim_candidates, arm_class, claim_mode>>
+    <<central_phase, candidate_ready, claim_candidates, arm_class, claim_mode,
+      claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralVars == <<ContractProjectionVars, CentralOnlyVars>>
 
@@ -62,7 +68,9 @@ ContractRefinement == INSTANCE E13SelectContract WITH
     result_publication_count <- result_publication_count,
     runnable_publication_count <- runnable_publication_count,
     arm_publication_count <- arm_publication_count,
-    reservation_close_count <- reservation_close_count
+    reservation_close_count <- reservation_close_count,
+    linearized_winner <- linearized_winner,
+    linearized_winner_valid <- linearized_winner_valid
 
 CentralPhaseT ==
     {"Registering", "Admission", "Armed", "Claimed", "Closing",
@@ -82,6 +90,10 @@ CentralTypeOK ==
     /\ claim_candidates \subseteq Arms
     /\ arm_class \in [Arms -> ArmClassT]
     /\ claim_mode \in ClaimModeT
+    /\ linearized_winner \in Arms \cup {NoArm}
+    /\ linearized_winner_valid \in BOOLEAN
+    /\ claim_snapshot_frozen \subseteq Arms
+    /\ claim_snapshot_frozen_valid \in BOOLEAN
 
 CentralStateWellFormed ==
     /\ \A i \in Arms :
@@ -153,20 +165,29 @@ S_InvClaimRequiresOfferedArm ==
     winner \in Arms => candidate_ready[winner]
 
 S_InvClaimSnapshotContainsWinner ==
+    \* The live claim snapshot always contains the winner once one exists.
+    \* This is the precondition for the frozen-snapshot identity laws below.
     winner \in Arms => winner \in claim_candidates
 
 S_InvClaimSnapshotImmutableAfterClaim ==
-    \* The claim snapshot is assigned only by CentralClaimWinner; afterwards it
-    \* is never reassigned.  As a state consequence: once a winner exists the
-    \* snapshot stays equal to the ready set observed at claim.  We assert the
-    \* weaker, load-bearing state law here: the snapshot never grows past a
-    \* single claim epoch (it stays empty before claim and non-empty superset
-    \* of {winner} after claim).  The strict immutability is also enforced by
-    \* the transition guard (winner = NoArm gate on CentralClaimWinner).
-    winner \in Arms => winner \in claim_candidates
+    \* Once the frozen snapshot has been stamped by a claim, the live
+    \* `claim_candidates` must remain bit-for-bit equal to that frozen value.
+    \* This is the strict immutability law: any post-claim mutation of
+    \* claim_candidates (addition OR removal of a member) violates it.  The
+    \* frozen value is written exactly once, by CentralClaimWinner, and never
+    \* again; this law asserts that the live variable tracks it forever after.
+    \* Single-claim / single-operation model: the frozen snapshot captures the
+    \* one claim epoch; multi-epoch claim identity is deferred.
+    claim_snapshot_frozen_valid => claim_candidates = claim_snapshot_frozen
 
 S_InvWinnerChosenFromSnapshot ==
-    winner \in Arms => winner \in claim_candidates
+    \* The winner remains drawn from the frozen snapshot stamped at claim time.
+    \* Strengthens the live-snapshot membership law by pinning identity to the
+    \* frozen snapshot, which itself is immutable per the law above.  Together
+    \* these prove the winner cannot be retroactively swapped out for an arm
+    \* that was not in the snapshot at claim time.
+    winner \in Arms /\ claim_snapshot_frozen_valid
+        => winner \in claim_snapshot_frozen
 
 S_InvClaimBeforeAdapterCommit ==
     \* A Central winner commit (arm_resolution[winner] = "WinnerCommitted")
@@ -260,6 +281,8 @@ CentralInit ==
     /\ claim_candidates = {}
     /\ arm_class = [i \in Arms |-> "Unclassified"]
     /\ claim_mode = "None"
+    /\ claim_snapshot_frozen = {}
+    /\ claim_snapshot_frozen_valid = FALSE
 
 CentralRegisterArm(i) ==
     /\ central_phase = "Registering"
@@ -270,21 +293,24 @@ CentralFinishRegistration ==
     /\ central_phase = "Registering"
     /\ ContractRefinement!ContractFinishRegistration
     /\ central_phase' = "Admission"
-    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralObserveCandidate(i) ==
     /\ central_phase \in {"Admission", "Armed"}
     /\ ~candidate_ready[i]
     /\ ContractRefinement!ContractOfferReadiness(i)
     /\ candidate_ready' = [candidate_ready EXCEPT ![i] = TRUE]
-    /\ UNCHANGED <<central_phase, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<central_phase, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralSuspendCaller ==
     /\ central_phase = "Admission"
     /\ ReadySet = {}
     /\ ContractRefinement!ContractSuspendCaller
     /\ central_phase' = "Armed"
-    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralClaimWinner(i) ==
     /\ central_phase \in {"Admission", "Armed"}
@@ -299,6 +325,8 @@ CentralClaimWinner(i) ==
     /\ claim_mode' = IF central_phase = "Admission" THEN "Inline"
                     ELSE "Suspended"
     /\ central_phase' = "Claimed"
+    /\ claim_snapshot_frozen' = ReadySet
+    /\ claim_snapshot_frozen_valid' = TRUE
     /\ UNCHANGED candidate_ready
 
 CentralCommitWinner(i) ==
@@ -306,7 +334,8 @@ CentralCommitWinner(i) ==
     /\ arm_class[i] = "Winner"
     /\ ContractRefinement!ContractCommitWinner(i)
     /\ central_phase' = "Closing"
-    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralReleaseLoser(i) ==
     /\ central_phase \in {"Claimed", "Closing"}
@@ -324,14 +353,16 @@ CentralPublishInline ==
     /\ claim_mode = "Inline"
     /\ ContractRefinement!ContractPublishInline
     /\ central_phase' = "Completed"
-    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralPublishSuspended ==
     /\ central_phase = "Closing"
     /\ claim_mode = "Suspended"
     /\ ContractRefinement!ContractPublishSuspended
     /\ central_phase' = "Completed"
-    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralResumeCaller ==
     /\ central_phase = "Completed"
@@ -342,19 +373,22 @@ CentralConsumeResult ==
     /\ central_phase = "Completed"
     /\ ContractRefinement!ContractConsumeResult
     /\ central_phase' = "Consumed"
-    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralDestroyOperation ==
     /\ central_phase \in {"Consumed", "Aborted"}
     /\ ContractRefinement!ContractDestroyOperation
     /\ central_phase' = "Destroyed"
-    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralBeginRollback ==
     /\ CentralRollbackEnabledDomain
     /\ ContractRefinement!ContractBeginRollback
     /\ central_phase' = "Rollback"
-    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralRollbackRelease(i) ==
     /\ central_phase = "Rollback"
@@ -365,7 +399,8 @@ CentralFinishRollback ==
     /\ central_phase = "Rollback"
     /\ ContractRefinement!ContractFinishRollback
     /\ central_phase' = "Aborted"
-    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode>>
+    /\ UNCHANGED <<candidate_ready, claim_candidates, arm_class, claim_mode,
+                  claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
 CentralStutter == UNCHANGED CentralVars
 
@@ -435,5 +470,23 @@ ReachCentralWinnerClassified ==
     /\ \E w \in Arms : arm_class[w] = "Winner"
     /\ \E l \in Arms : arm_class[l] = "Loser"
 NotReachCentralWinnerClassified == ~ReachCentralWinnerClassified
+
+\* PR #18 corrective-1 (P1-3) non-vacuity witnesses for the frozen claim
+\* snapshot laws.  These prove the laws' premises are reachable so the laws
+\* are not vacuously TRUE.
+
+\* S_InvClaimSnapshotImmutableAfterClaim premise: the frozen snapshot has
+\* been stamped (a claim happened and froze the live snapshot).
+ReachCentralFrozenSnapshotValid ==
+    claim_snapshot_frozen_valid
+NotReachCentralFrozenSnapshotValid == ~ReachCentralFrozenSnapshotValid
+
+\* S_InvWinnerChosenFromSnapshot non-trivial premise: the frozen snapshot
+\* contained more than one candidate, so the winner-chosen-from-snapshot law
+\* exercises a real selection (not a single-element trivial case).
+ReachCentralMultiCandidateSnapshot ==
+    /\ claim_snapshot_frozen_valid
+    /\ Cardinality(claim_snapshot_frozen) >= 2
+NotReachCentralMultiCandidateSnapshot == ~ReachCentralMultiCandidateSnapshot
 
 =============================================================================

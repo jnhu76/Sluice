@@ -31,13 +31,23 @@ VARIABLES
     result_publication_count,
     runnable_publication_count,
     arm_publication_count,
-    reservation_close_count
+    reservation_close_count,
+
+    \* PR #18 corrective-1 (G2): frozen winner-identity history.  Pure observer
+    \* state, set atomically by ContractLinearizeWinner and never reassigned.
+    \* Lets the three winner-commit laws express DISTINCT obligations instead
+    \* of all collapsing to "committed arm == current winner".  Carried through
+    \* the refinement chain (Central -> Contract WITH, EventTimer -> Central
+    \* WITH) so the abstract history is bound to concrete state at every layer.
+    linearized_winner,
+    linearized_winner_valid
 
 ContractVars ==
     <<contract_phase, arm_registered, readiness_evidence, reservation_state,
       arm_resolution, authority_open, winner, caller_state, completion_mode,
       result_publication_count, runnable_publication_count,
-      arm_publication_count, reservation_close_count>>
+      arm_publication_count, reservation_close_count,
+      linearized_winner, linearized_winner_valid>>
 
 ContractPhaseT ==
     {"Building", "Selecting", "WinnerLinearized", "Closing", "Completed",
@@ -62,6 +72,8 @@ ContractTypeOK ==
     /\ runnable_publication_count \in 0..1
     /\ arm_publication_count \in [Arms -> 0..1]
     /\ reservation_close_count \in [Arms -> 0..1]
+    /\ linearized_winner \in Arms \cup {NoArm}
+    /\ linearized_winner_valid \in BOOLEAN
 
 ContractDomainWellFormed ==
     /\ Cardinality(Arms) = MaxArms
@@ -192,20 +204,33 @@ C_InvAtMostOneCommittedWinner ==
             /\ arm_resolution[j] = "WinnerCommitted" => i = j
 
 C_InvCommitRequiresWinnerLinearization ==
-    \* An irreversible winner commit may only occur after a winner has been
-    \* linearized.  In state terms: a committed arm must be the current
-    \* linearized winner.  It must never appear in a pre-linearization phase
-    \* (Building/Selecting/Rollback/Aborted) where winner = NoArm.
+    \* PR #18 corrective-1 (G3): an irreversible winner commit may occur only
+    \* after a winner has been linearized AND the committed arm must BE that
+    \* frozen linearized winner (not just any arm whose `winner` variable
+    \* currently points at it).  The frozen history `linearized_winner` is set
+    \* exactly once, by ContractLinearizeWinner; every WinnerCommitted arm
+    \* must correspond to that same identity.
     \A i \in Arms :
-        arm_resolution[i] = "WinnerCommitted" => winner = i
+        arm_resolution[i] = "WinnerCommitted"
+            => /\ linearized_winner_valid
+               /\ linearized_winner = i
 
 C_InvNoIrreversibleEffectBeforeLinearization ==
-    \A i \in Arms :
-        arm_resolution[i] = "WinnerCommitted" => winner = i
+    \* PR #18 corrective-1 (G3): before a winner is linearized (valid = FALSE),
+    \* no arm may carry an irreversible WinnerCommitted effect.  Distinct from
+    \* the commit law above: this law constrains the pre-linearization domain
+    \* using the frozen history flag, not the post-commit identity match.
+    ~linearized_winner_valid
+        => \A i \in Arms : arm_resolution[i] # "WinnerCommitted"
 
 C_InvWinnerIdentityStableAfterLinearization ==
-    \A i \in Arms :
-        arm_resolution[i] = "WinnerCommitted" => winner = i
+    \* PR #18 corrective-1 (G3): once a winner has been linearized, the
+    \* current `winner` variable must equal the frozen linearized identity.
+    \* This is the load-bearing identity-stability law: it forbids flipping
+    \* `winner` to a different arm after linearization but before commit.
+    \* Distinct from the commit law: it constrains the `winner` variable
+    \* itself, not the `arm_resolution` field.
+    linearized_winner_valid => winner = linearized_winner
 
 \* -- H2: losers -------------------------------------------------------------
 
@@ -381,6 +406,8 @@ ContractInit ==
     /\ runnable_publication_count = 0
     /\ arm_publication_count = [i \in Arms |-> 0]
     /\ reservation_close_count = [i \in Arms |-> 0]
+    /\ linearized_winner = NoArm
+    /\ linearized_winner_valid = FALSE
 
 ContractRegisterArm(i) ==
     /\ contract_phase = "Building"
@@ -391,7 +418,8 @@ ContractRegisterArm(i) ==
     /\ UNCHANGED <<contract_phase, readiness_evidence, reservation_state,
                     winner, caller_state, completion_mode,
                     result_publication_count, runnable_publication_count,
-                    arm_publication_count, reservation_close_count>>
+                    arm_publication_count, reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractFinishRegistration ==
     /\ contract_phase = "Building"
@@ -402,7 +430,8 @@ ContractFinishRegistration ==
                     arm_resolution, authority_open, winner, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractOfferReadiness(i) ==
     /\ contract_phase = "Selecting"
@@ -413,7 +442,8 @@ ContractOfferReadiness(i) ==
                     arm_resolution, authority_open, winner, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractReserveReadiness(i) ==
     /\ contract_phase = "Selecting"
@@ -424,7 +454,8 @@ ContractReserveReadiness(i) ==
     /\ UNCHANGED <<contract_phase, arm_registered, arm_resolution,
                     authority_open, winner, caller_state, completion_mode,
                     result_publication_count, runnable_publication_count,
-                    arm_publication_count, reservation_close_count>>
+                    arm_publication_count, reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractSuspendCaller ==
     /\ contract_phase = "Selecting"
@@ -435,13 +466,16 @@ ContractSuspendCaller ==
                     reservation_state, arm_resolution, authority_open, winner,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractLinearizeWinner(i) ==
     /\ contract_phase = "Selecting"
     /\ winner = NoArm
     /\ readiness_evidence[i] \in {"Offered", "Reserved"}
     /\ winner' = i
+    /\ linearized_winner' = i
+    /\ linearized_winner_valid' = TRUE
     /\ contract_phase' = "WinnerLinearized"
     /\ UNCHANGED <<arm_registered, readiness_evidence, reservation_state,
                     arm_resolution, authority_open, caller_state,
@@ -464,7 +498,8 @@ ContractCommitWinner(i) ==
     /\ UNCHANGED <<arm_registered, readiness_evidence, authority_open,
                     winner, caller_state, completion_mode,
                     result_publication_count, runnable_publication_count,
-                    arm_publication_count>>
+                    arm_publication_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractReleaseLoser(i) ==
     /\ contract_phase \in {"WinnerLinearized", "Closing"}
@@ -481,7 +516,8 @@ ContractReleaseLoser(i) ==
     /\ UNCHANGED <<contract_phase, arm_registered, readiness_evidence,
                     authority_open, winner, caller_state, completion_mode,
                     result_publication_count, runnable_publication_count,
-                    arm_publication_count>>
+                    arm_publication_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractCloseAuthority(i) ==
     /\ contract_phase \in {"WinnerLinearized", "Closing", "Rollback"}
@@ -492,7 +528,8 @@ ContractCloseAuthority(i) ==
                     reservation_state, arm_resolution, winner, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 SuccessfulClosureReady ==
     /\ contract_phase = "Closing"
@@ -512,7 +549,8 @@ ContractPublishInline ==
     /\ contract_phase' = "Completed"
     /\ UNCHANGED <<arm_registered, readiness_evidence, reservation_state,
                     arm_resolution, authority_open, winner, caller_state,
-                    runnable_publication_count, reservation_close_count>>
+                    runnable_publication_count, reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractPublishSuspended ==
     /\ SuccessfulClosureReady
@@ -525,7 +563,8 @@ ContractPublishSuspended ==
     /\ contract_phase' = "Completed"
     /\ UNCHANGED <<arm_registered, readiness_evidence, reservation_state,
                     arm_resolution, authority_open, winner,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractResumeCaller ==
     /\ contract_phase = "Completed"
@@ -536,7 +575,8 @@ ContractResumeCaller ==
                     reservation_state, arm_resolution, authority_open, winner,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractConsumeResult ==
     /\ contract_phase = "Completed"
@@ -549,7 +589,8 @@ ContractConsumeResult ==
                     arm_resolution, authority_open, winner, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractDestroyOperation ==
     /\ contract_phase \in {"Consumed", "Aborted"}
@@ -558,7 +599,8 @@ ContractDestroyOperation ==
                     arm_resolution, authority_open, winner, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractBeginRollback ==
     /\ ContractRollbackEnabledDomain
@@ -567,7 +609,8 @@ ContractBeginRollback ==
                     arm_resolution, authority_open, winner, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractRollbackRelease(i) ==
     /\ contract_phase = "Rollback"
@@ -583,7 +626,8 @@ ContractRollbackRelease(i) ==
     /\ UNCHANGED <<contract_phase, arm_registered, readiness_evidence,
                     authority_open, winner, caller_state, completion_mode,
                     result_publication_count, runnable_publication_count,
-                    arm_publication_count>>
+                    arm_publication_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractFinishRollback ==
     /\ contract_phase = "Rollback"
@@ -599,7 +643,8 @@ ContractFinishRollback ==
                     arm_resolution, authority_open, winner, caller_state,
                     completion_mode, result_publication_count,
                     runnable_publication_count, arm_publication_count,
-                    reservation_close_count>>
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
 
 ContractStutter == UNCHANGED ContractVars
 
@@ -664,11 +709,14 @@ ReachContractCommittedWinner ==
 NotReachContractCommittedWinner == ~ReachContractCommittedWinner
 
 \* C_InvLoserNeverPublishesResult premise: a classified loser exists.
+\* The loser arm has been released (ResolutionT member "Released"); the
+\* historical "Aborted" alternative was never a ResolutionT member, so it is
+\* dropped here to align the witness with the type-correct resolution value.
 ReachContractLoserExists ==
     \E i \in Arms :
         /\ i # winner
         /\ winner \in Arms
-        /\ arm_resolution[i] \in {"Aborted", "Released"}
+        /\ arm_resolution[i] = "Released"
 NotReachContractLoserExists == ~ReachContractLoserExists
 
 \* C_InvOnlyWinnerPublishes premise: at least one arm published.
@@ -695,5 +743,19 @@ NotReachContractAborted == ~ReachContractAborted
 ReachContractRollback ==
     contract_phase = "Rollback"
 NotReachContractRollback == ~ReachContractRollback
+
+\* PR #18 corrective-1 (P1-4) non-vacuity witnesses for the frozen-winner
+\* identity laws.  These prove the laws' premises are reachable so the laws
+\* are not vacuously TRUE.
+
+\* C_InvWinnerIdentityStableAfterLinearization premise: a winner has been
+\* linearized (frozen history valid) but NOT yet committed to
+\* WinnerCommitted -- the strict window where the identity-stability law is
+\* load-bearing and not subsumed by the commit law.
+ReachContractWinnerLinearizedNotCommitted ==
+    /\ linearized_winner_valid
+    /\ \A i \in Arms : arm_resolution[i] # "WinnerCommitted"
+NotReachContractWinnerLinearizedNotCommitted
+    == ~ReachContractWinnerLinearizedNotCommitted
 
 =============================================================================
