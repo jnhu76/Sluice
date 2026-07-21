@@ -33,7 +33,9 @@ canonical model cannot be silently masked by an unrelated strengthening.
 |-----|-----------|
 | `C_InvAtMostOneLinearizedWinner` | At most one arm is the linearized winner. |
 | `C_InvAtMostOneCommittedWinner` | At most one arm has `arm_resolution = "WinnerCommitted"`. |
-| `C_InvCommitRequiresWinnerLinearization` | `arm_resolution[i]="WinnerCommitted" => winner = i` (commit may only record the linearized winner, in any terminal phase). |
+| `C_InvCommitRequiresWinnerLinearization` | Corrective-1 G3 (frozen history): `arm_resolution[i]="WinnerCommitted" => linearized_winner_valid /\ linearized_winner = i`.  The committed arm must be the *frozen* linearized identity, not just whatever `winner` currently points at. |
+| `C_InvNoIrreversibleEffectBeforeLinearization` | Corrective-1 G3: `~linearized_winner_valid => \A i: arm_resolution[i] # "WinnerCommitted"`.  No WinnerCommitted arm exists before the first linearization. |
+| `C_InvWinnerIdentityStableAfterLinearization` | Corrective-1 P1-4 (frozen history): `linearized_winner_valid => winner = linearized_winner`.  The live `winner` variable cannot be flipped to a different arm after the frozen linearization; the frozen value is stamped exactly once by `ContractLinearizeWinner`. |
 
 ### H2 — losers never produce irreversible effects
 
@@ -83,7 +85,7 @@ canonical model cannot be silently masked by an unrelated strengthening.
 | `C_InvRollbackNeverPublishes` | Rollback terminal has `result_publication_count = 0 /\ runnable_publication_count = 0`. |
 | `C_InvRollbackClosesEveryRegisteredAuthority` | Aborted has no open authority. |
 
-Negative models covering these laws: `NEG-C1..C8` (see NEGATIVE_MODELS.md).
+Negative models covering these laws: `NEG-C1..C9` (see NEGATIVE_MODELS.md).
 
 ---
 
@@ -95,14 +97,16 @@ Negative models covering these laws: `NEG-C1..C8` (see NEGATIVE_MODELS.md).
 |-----|-----------|
 | `S_InvAtMostOneSuccessfulClaim` | `central_phase` reaches Claimed at most once. |
 | `S_InvClaimRequiresOfferedArm` | A claim requires a candidate-ready offered arm. |
-| `S_InvClaimSnapshotContainsWinner` | `winner \in claim_candidates`. |
+| `S_InvClaimSnapshotContainsWinner` | `winner \in Arms => winner \in claim_candidates` (live snapshot membership). |
+| `S_InvClaimSnapshotImmutableAfterClaim` | Corrective-1 P1-3 (frozen history): `claim_snapshot_frozen_valid => claim_candidates = claim_snapshot_frozen`.  The live snapshot cannot be mutated (added to OR removed from) after the frozen value is stamped by `CentralClaimWinner`.  Single-claim / single-operation model; multi-epoch claim identity is deferred. |
+| `S_InvWinnerChosenFromSnapshot` | Corrective-1 P1-3 (frozen history): `winner \in Arms /\ claim_snapshot_frozen_valid => winner \in claim_snapshot_frozen`.  Strengthens the live-snapshot law by pinning identity to the immutable frozen snapshot. |
 | `S_InvClaimBeforeAdapterCommit` | `winner \in Arms /\ arm_resolution[winner]="WinnerCommitted" => arm_class[winner]="Winner"`. |
 | `S_InvAdmissionTieUsesLowestIndex` | In Inline mode with `Card(claim_candidates) >= 2`, `winner` is the lowest index. |
 | `S_InvRollbackDomainRefinesContract` | Central rollback obeys Contract rollback domain. |
 | `S_InvRollbackDisabledAfterArmed` | `central_phase="Armed" => rollback disabled`. |
 | `S_InvRollbackDisabledAfterClaim` | `central_phase` past Claimed forbids rollback. |
 
-Negative models: `NEG-S1..S6`.
+Negative models: `NEG-S1..S7`.
 
 ---
 
@@ -156,6 +160,13 @@ Negative models: `NEG-S1..S6`.
 | `A_InvNoAccountingUnderflow` | `close_count <= open_count` for every account kind. |
 | `A_InvCompletedHasNoOpenAccounting` | Completed has no open wait/timer account. |
 | `A_InvDestroyedHasNoOpenAccounting` | Destroyed has no open wait/timer account. |
+
+Corrective-1: the TypeOK domain of the four counters was widened from `0..1`
+to `AccountingCountT == 0..2` so the at-most-once laws are now the *only*
+source of the `<= 1` bound.  No legal transition ever produces a 2; the
+focused faults `NEG-A1`/`NEG-A2` push a counter to 2 to isolate the law, and
+the verifier's `expect_negative_no_typeok` double-check confirms the fault
+trips exactly the at-most-once law without piggy-backing on `EventTimerTypeOK`.
 
 ### N — step-indexed operation/arm/epoch-aware history
 

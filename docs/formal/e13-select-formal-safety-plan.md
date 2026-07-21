@@ -47,7 +47,7 @@
 
 - [x] `E13SelectCentralClaimNeg.tla`：NEG-S1..S6（6 faults）+ restore cfg，提交 `ad6040e`。
 
-## 任务 T/U/V：Event/Timer/Accounting negative models
+## 任务 E/T/A：Event/Timer/Accounting negative models
 
 **已完成。**
 

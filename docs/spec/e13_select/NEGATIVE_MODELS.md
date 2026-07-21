@@ -6,19 +6,56 @@ proves a named layered safety law is *load-bearing*: disabling the law
 produces a TLC "Invariant <LawName> is violated" report on a reachable
 counterexample.
 
-The matrix covers 29 faults across the three layers:
+The matrix covers 33 faults across the four layers:
 
 ```text
-Contract (R)  -- NEG-C1..C8   -- 8 faults, E13SelectContractNeg.tla
-Central  (S)  -- NEG-S1..S6   -- 6 faults, E13SelectCentralClaimNeg.tla
-Adapter  (T)  -- NEG-E1..E6   -- 6 Event-broadcast faults
-           (U) -- NEG-T1..T5  -- 5 Timer-registration faults
-           (V) -- NEG-A1..A4  -- 4 accounting faults
+Contract (R)  -- NEG-C1..C9   -- 9 faults, E13SelectContractNeg.tla
+Central  (S)  -- NEG-S1..S7   -- 7 faults, E13SelectCentralClaimNeg.tla
+Adapter  (E)  -- NEG-E1..E6   -- 6 Event-broadcast faults
+           (T) -- NEG-T1..T5  -- 5 Timer-registration faults
+           (A) -- NEG-A1..A4  -- 4 accounting faults
                               -- 15 faults, E13SelectEventTimerNeg.tla
+Multi-group (MG) -- NEG-MG1   -- 1 cross-group rollback fault,
+                                 E13SelectMultiGroupNeg.tla
 ```
 
-Plus three FAULT="None" restoration configs proving the canonical model
+Plus four FAULT="None" restoration configs proving the canonical model
 still passes once each fault family is disabled.
+
+## PR #18 corrective-1 additions
+
+Three new faults were added to cover laws that PR #18's initial submission
+asserted but did not isolate in a focused negative model:
+
+- **`NEG-C9`** isolates `C_InvWinnerIdentityStableAfterLinearization` (the
+  frozen-winner identity law added in corrective-1 P1-4).  A legal
+  linearization has stamped `linearized_winner = A`; the fault flips the
+  live `winner` to a different registered arm B ≠ A while no arm is
+  `WinnerCommitted` and the frozen history is left unchanged.
+- **`NEG-S7`** isolates `S_InvClaimSnapshotImmutableAfterClaim` in its
+  hardest case (addition, not removal).  Requires a 3-arm cfg so a winner,
+  a snapshot-internal candidate, and a snapshot-external registered arm can
+  coexist.  The fault adds the external arm to `claim_candidates` while
+  leaving the frozen snapshot and the winner untouched.
+- **`NEG-MG1`** isolates the transition-level cross-group non-interference
+  that the per-action UNCHANGED audit establishes structurally.  Group g0's
+  `RollbackArm` spuriously mutates group g1's `authority_open` while group
+  g1 is at a terminal phase; the post-fault state is caught by
+  `MG_InvAuthorityClosureDoesNotCrossGroups`.
+
+In addition, **`NEG-S2`** was retargeted to `S_InvClaimSnapshotImmutableAfterClaim`
+(the strict frozen-equality law added in corrective-1 P1-3).  The original
+`S_InvWinnerChosenFromSnapshot` target was strengthened to depend on
+`claim_snapshot_frozen_valid`, which S2 does not set; the live-snapshot
+mutation now isolates the strict immutability law instead.
+
+The adapter accounting faults `NEG-A1`/`NEG-A2` are accompanied by a
+double-check in `verify-e13-select-safety.sh` (`expect_negative_no_typeok`)
+that asserts the focused fault isolates the at-most-once law WITHOUT
+tripping `EventTimerTypeOK`.  This is enabled by the corrective-1 widening
+of the accounting counter TypeOK domain from `0..1` to `0..2`: a fault can
+now push a counter to 2 (the value the law forbids) without first breaking
+the typing precondition.
 
 ---
 
@@ -64,14 +101,15 @@ Rules:
 
 | Cfg | Target invariant | Fault (what the mutation does) |
 |-----|------------------|--------------------------------|
-| `NEG-C1` | `C_InvCommitRequiresWinnerLinearization` | Commits an arm while `winner = NoArm`. |
-| `NEG-C2` | `C_InvAtMostOneCommittedWinner` | Commits a second armin addition to an existing committed winner. |
-| `NEG-C3` | `C_InvAtMostOneLinearizedWinner` | Linearizes a second winner while one is already linearized. |
-| `NEG-C4` | `C_InvLoserNeverPublishesResult` | A non-winner arm publishes a result. |
-| `NEG-C5` | `C_InvReservationCommitRequiresWinner` | Commits a reservation while `winner = NoArm`. |
-| `NEG-C6` | `C_InvReservationClosesExactlyOnce` | Closes a reservation a second time. |
-| `NEG-C7` | `C_InvAbortedCallerNeverWaiting` | Forces the caller to `Waiting` from a legal Aborted state (R9 strict-subset rollback reachability preserved). |
-| `NEG-C8` | `C_InvDestroyedCallerNeverWaiting` | Destroys from Completed+Inline while resetting `completion_mode` to None, then sets caller `Waiting`. |
+| `NEG-C1` | `C_InvCommitRequiresWinnerLinearization` | Commits an arm (`WinnerCommitted`) while `winner = NoArm` (no linearization yet). |
+| `NEG-C2` | `C_InvAtMostOneCommittedWinner` | Commits a second arm `WinnerCommitted` alongside an existing committed winner. |
+| `NEG-C3` | `C_InvLoserNeverPublishesResult` | A Released (loser) arm publishes a result. |
+| `NEG-C4` | `C_InvCompletionRequiresAllAuthorityClosed` | Reaches Completed while an arm's authority is still open. |
+| `NEG-C5` | `C_InvLoserReservationReleased` | A non-winner arm at terminal success keeps `reservation_state = Held`. |
+| `NEG-C6` | `C_InvRegistrationRollbackRequiresRunningCaller` | Begins rollback from a Waiting caller (PR #17 P0-1 regression). |
+| `NEG-C7` | `C_InvAbortedCallerNeverWaiting` | Forces the caller to Waiting from a legal Aborted terminal (PR #17 P0-1). |
+| `NEG-C8` | `C_InvDestroyRequiresConsumedOrValidAbort` | Destroys from Completed+Inline while resetting `completion_mode` to None. |
+| `NEG-C9` | `C_InvWinnerIdentityStableAfterLinearization` | Corrective-1 P1-4: flips live `winner` to B ≠ A while `linearized_winner = A` and no arm is `WinnerCommitted`. |
 
 Restore cfg: `E13SelectContractNeg.restore.cfg` (FAULT="None") asserts
 `ContractSafetyInv`.
@@ -82,12 +120,13 @@ Restore cfg: `E13SelectContractNeg.restore.cfg` (FAULT="None") asserts
 
 | Cfg | Target invariant | Fault |
 |-----|------------------|-------|
-| `NEG-S1` | `S_InvClaimRequiresOfferedArm` | Claims a non-offered (not candidate_ready) arm. |
-| `NEG-S2` | `S_InvClaimSnapshotContainsWinner` | Latches `claim_candidates` without the eventual winner. |
-| `NEG-S3` | `S_InvAtMostOneSuccessfulClaim` | A second successful claim after one is already linearized. |
-| `NEG-S4` | `S_InvClaimBeforeAdapterCommit` | Commits the winner before its arm_class is set to "Winner". |
+| `NEG-S1` | `S_InvClaimRequiresOfferedArm` | Claims a non-offered (not `candidate_ready`) arm. |
+| `NEG-S2` | `S_InvClaimSnapshotImmutableAfterClaim` | Corrective-1 retarget: removes the winner from `claim_candidates` post-claim while leaving `claim_snapshot_frozen` untouched. |
+| `NEG-S3` | `S_InvAtMostOneSuccessfulClaim` | A second arm is classified `Winner` alongside an existing winner. |
+| `NEG-S4` | `S_InvClaimBeforeAdapterCommit` | Commits the winner before its `arm_class` is set to "Winner". |
 | `NEG-S5` | `S_InvAdmissionTieUsesLowestIndex` | In an admission tie, claims a non-lowest-index arm. |
-| `NEG-S6` | `S_InvRollbackDomainRefinesContract` | Begins rollback with a target outside the contract rollback domain. |
+| `NEG-S6` | `S_InvClaimSnapshotContainsWinner` | Linearizes a winner that is not in `claim_candidates` (single-group reduction of cross-group contamination). |
+| `NEG-S7` | `S_InvClaimSnapshotImmutableAfterClaim` | Corrective-1 P1-3 (3-arm cfg): adds a snapshot-external registered arm to `claim_candidates` while leaving the frozen snapshot and the winner untouched. |
 
 Restore cfg: `E13SelectCentralClaimNeg.restore.cfg` (FAULT="None") asserts
 `CentralSafetyInv`.
@@ -121,13 +160,30 @@ Restore cfg: `E13SelectCentralClaimNeg.restore.cfg` (FAULT="None") asserts
 
 | Cfg | Target invariant | Fault |
 |-----|------------------|-------|
-| `NEG-A1` | `A_InvWaitAccountClosesAtMostOnce` | Closes a wait account a second time. |
-| `NEG-A2` | `A_InvTimerAccountClosesAtMostOnce` | Closes a timer account a second time. |
+| `NEG-A1` | `A_InvWaitAccountClosesAtMostOnce` | Pushes `wait_account_close_count[i]` from 1 to 2.  Corrective-1: counter TypeOK domain widened to 0..2 so this isolates the law without tripping `EventTimerTypeOK`. |
+| `NEG-A2` | `A_InvTimerAccountClosesAtMostOnce` | Pushes `timer_account_close_count[i]` from 1 to 2.  Same widened-TypeOK isolation as NEG-A1. |
 | `NEG-A3` | `A_InvCompletedHasNoOpenAccounting` | Reaches Completed with an open account. |
 | `NEG-A4` | `A_InvNoAccountingUnderflow` | Decrements a close count past its open count. |
 
 Restore cfg: `E13SelectEventTimerNeg.restore.cfg` (FAULT="None") asserts
 `AdapterSafetyInv` (full 33-law aggregate).
+
+The verifier additionally runs `NEG-A1`/`NEG-A2` through
+`expect_negative_no_typeok`, which requires the TLC output to contain NO
+`EventTimerTypeOK is violated` line.  This double-check confirms the fault
+isolates exactly the at-most-once law rather than piggy-backing on a typing
+precondition.
+
+---
+
+## Multi-group negative models — `E13SelectMultiGroupNeg.tla`
+
+| Cfg | Target invariant | Fault |
+|-----|------------------|-------|
+| `NEG-MG1` | `MG_InvAuthorityClosureDoesNotCrossGroups` | Corrective-1: group g0's `RollbackArm` spuriously mutates group g1's `authority_open` while group g1 has independently reached a terminal phase with correctly closed authority. |
+
+Restore cfg: `E13SelectMultiGroupNeg.restore.cfg` (FAULT="None") asserts
+`MGSafetyInv`.
 
 ---
 

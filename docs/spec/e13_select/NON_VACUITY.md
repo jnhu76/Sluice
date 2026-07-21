@@ -36,6 +36,7 @@ Each witness is a single named cfg so the result is unambiguous (a single
 | `nv_destroyed` | `NotReachContractDestroyed` | Destroyed phase reached (H4 premise). |
 | `nv_aborted` | `NotReachContractAborted` | Aborted phase reached (R9 premise). |
 | `nv_rollback` | `NotReachContractRollback` | Rollback phase reached (R9 premise). |
+| `nv_lin_not_committed` | `NotReachContractWinnerLinearizedNotCommitted` | Corrective-1 P1-4: a winner is linearized but not yet committed (frozen-winner identity window). |
 
 ### Layer S — Central Claim
 
@@ -46,6 +47,8 @@ Each witness is a single named cfg so the result is unambiguous (a single
 | `central_candidates` | `NotReachCentralClaimCandidatesLatched` | `claim_candidates` latched at claim time. |
 | `central_admission_tie` | `NotReachCentralAdmissionTie` | Multi-candidate Inline admission tie. |
 | `central_winner_classified` | `NotReachCentralWinnerClassified` | Winner and Loser classified. |
+| `nv_frozen_snapshot` | `NotReachCentralFrozenSnapshotValid` | Corrective-1 P1-3: the frozen snapshot was stamped (a claim happened). |
+| `nv_multi_candidate_snapshot` | `NotReachCentralMultiCandidateSnapshot` | Corrective-1 P1-3: the frozen snapshot contained >= 2 candidates (non-trivial selection). |
 
 ### Layer A — Adapter
 
@@ -61,12 +64,24 @@ history laws:
 | `adapter_consumed` | `NotReachAdapterConsumedTimerExists` | A Consumed timer exists (L premise). |
 | `adapter_commit_step` | `NotReachAdapterCommitStepRecorded` | A `commit_step` was recorded (N premise). |
 | `adapter_publication_step` | `NotReachAdapterPublicationStepRecorded` | A `publication_step` was recorded (N premise). |
+| `adapter_account_count_one` | `NotReachAdapterAccountCountOne` | Corrective-1: at least one arm reached the legal counter value 1 (the value the at-most-once laws constrain, post TypeOK widening to 0..2). |
+
+### Layer MG — Multi-group
+
+| Witness cfg | Predicate | Premise proved reachable |
+|-------------|-----------|--------------------------|
+| `reach_shared_event` | `NotMG_ReachSharedEventBothGroupsComplete` | Corrective-1: two groups complete via a single shared Event identity. |
+| `reach_mixed_event_timer` | `NotMG_ReachMixedEventTimer` | Corrective-1: one group completes via an Event arm, another via a Timer arm. |
+| `reach_rollback_vs_complete` | `NotMG_ReachOneRollbackOtherComplete` | Corrective-1: one group reaches Aborted terminal via rollback, the other completes successfully. |
+| `nv_installed_not_finished` | `NotMG_ReachArmInstalledNotFinished` | Corrective-1 P1-1: an arm is installed (kind/identity/wait/authority/account) but `g_phase` is still `Registering` (pre-`FinishRegistration`). |
+| `nv_pre_finish_rollback` | `NotMG_ReachPreFinishRollback` | Corrective-1 P1-1: a registration rollback is reachable from the pre-`FinishRegistration` state. |
 
 ## Verification
 
-All 20 witnesses report `Invariant NotReach_<X> is violated`.  Run
+All 28 witnesses report `Invariant NotReach_<X> is violated`.  Run
 `tools/formal/verify-e13-select-safety.sh` and look for the `REACH <label>`
-lines under the "Per-law non-vacuity witnesses (W)" section.
+lines under the "Per-law non-vacuity witnesses (W)" section (Layer C/S/A)
+and the "Multi-group bounded non-interference (O)" section (Layer MG).
 
 ## Relationship to focused negative models
 

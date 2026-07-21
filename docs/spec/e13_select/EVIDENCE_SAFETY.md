@@ -44,6 +44,12 @@ It inherits the source-safety design of PR #17's `verify-e13-select-core.sh`:
 5. **`set -euo pipefail`.**  Any unexpected shell error stops the run
    immediately rather than producing partial / misleading output.
 
+6. **Corrective-1 portable tmpdir hardening.**  The cleanup guard combines
+   the non-empty check, the prefix check, and the `rm` into a single
+   guarded command so `set -e` cannot short-circuit between the check and
+   the `rm`.  Both `verify-e13-select-core.sh` and
+   `verify-e13-select-safety.sh` use this combined form.
+
 ## Pre-existing untracked files preserved
 
 The repository contains two pre-existing untracked files that predate this
@@ -94,20 +100,26 @@ PR #18 was validated on:
 
 ## Evidence catalogue
 
-The PR #18 evidence set, grouped by category:
+The PR #18 evidence set, grouped by category.  Counts reflect the
+corrective-1 widened gate; the verifier does not hard-code a total (the
+script's success criterion is "no `FAIL` line printed", not a count).
 
 | Category | Count | Source |
 |----------|-------|--------|
 | Layered safety aggregates (P) | 7 | Contract 2/3-arm, Central 2/3/4-arm, Adapter 2/3-mix |
-| Multi-group non-interference (O) | 2 | positive + reach witness |
+| Multi-group non-interference (O) | 1 + 5 | positive + 3 independent reach cfgs + 2 registration-split nv cfgs |
 | Widened refinement (X) | 1 | Central 3-arm |
-| Contract negative models (R) | 8 + 1 restore | NEG-C1..C8 + restore |
-| Central negative models (S) | 6 + 1 restore | NEG-S1..S6 + restore |
-| Adapter negative models (T/U/V) | 15 + 1 restore | NEG-E1..E6 + NEG-T1..T5 + NEG-A1..A4 + restore |
-| Per-law non-vacuity witnesses (W) | 20 | 9 Contract + 5 Central + 6 Adapter |
+| Contract negative models (R) | 9 + 1 restore | NEG-C1..C9 + restore (C9 added in corrective-1) |
+| Central negative models (S) | 7 + 1 restore | NEG-S1..S7 + restore (S7 added, S2 retargeted in corrective-1) |
+| Adapter negative models (E/T/A) | 15 + 2 no-TypeOK + 1 restore | NEG-E1..E6 + NEG-T1..T5 + NEG-A1..A4; A1/A2 each run twice via `expect_negative` and `expect_negative_no_typeok` |
+| Multi-group negative models (MG) | 1 + 1 restore | NEG-MG1 + restore (corrective-1) |
+| Per-law non-vacuity witnesses (W) | 28 | 10 Contract + 7 Central + 7 Adapter + 5 Multi-group (5 new in corrective-1) |
 | PR #17 regression anchors | 5 | R1, R5, R7, R9, R10 reach configs |
 
-Total: 65 distinct TLC runs, all gated by the verifier.
+Total: 78 TLC runs (each gated; one cfg may be exercised under multiple
+check kinds, e.g. NEG-A1 under both `expect_negative` and
+`expect_negative_no_typeok`).  Run the verifier and look for the absence
+of `FAIL` lines as the success criterion.
 
 ## Audit
 
