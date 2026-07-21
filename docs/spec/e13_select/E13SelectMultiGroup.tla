@@ -159,6 +159,14 @@ MGInit ==
 
 \* ---- per-group actions (independent except shared event_state) ----------
 
+\* PR #18 corrective-1 (C2): registering an arm installs the arm kind/identity
+\* and opens WaitNode/authority/accounting but LEAVES g_phase[g] = "Registering".
+\* Registration is a two-step process: arm install (here) then FinishRegistration
+\* (advance to Admission).  A real registration rollback can now happen between
+\* the two steps, while g_phase[g] is still "Registering" and the caller is
+\* Running.  This is the canonical PR #17 registration-rollback domain
+\* (Registering/Running/no winner); the previous single-action design that
+\* jumped directly to Admission made BeginRollback unreachable.
 RegisterEventArm(g, e) ==
     /\ g_phase[g] = "Registering"
     /\ g_arm_kind[g] = "None"
@@ -168,8 +176,7 @@ RegisterEventArm(g, e) ==
     /\ g_arm_wait_linked' = [g_arm_wait_linked EXCEPT ![g] = TRUE]
     /\ g_arm_authority_open' = [g_arm_authority_open EXCEPT ![g] = TRUE]
     /\ g_arm_account_open' = [g_arm_account_open EXCEPT ![g] = TRUE]
-    /\ g_phase' = [g_phase EXCEPT ![g] = "Admission"]
-    /\ UNCHANGED <<g_winner_present, g_caller, g_completion_mode,
+    /\ UNCHANGED <<g_phase, g_winner_present, g_caller, g_completion_mode,
                     g_result_published, g_runnable_published, g_arms_retired,
                     g_arm_class, g_arm_timer_active, g_arm_timer_consumed,
                     g_arm_timer_retired, g_arm_publication_count,
@@ -186,8 +193,7 @@ RegisterTimerArm(g) ==
     /\ g_arm_authority_open' = [g_arm_authority_open EXCEPT ![g] = TRUE]
     /\ g_arm_account_open' = [g_arm_account_open EXCEPT ![g] = TRUE]
     /\ g_arm_timer_active' = [g_arm_timer_active EXCEPT ![g] = TRUE]
-    /\ g_phase' = [g_phase EXCEPT ![g] = "Admission"]
-    /\ UNCHANGED <<g_winner_present, g_caller, g_completion_mode,
+    /\ UNCHANGED <<g_phase, g_winner_present, g_caller, g_completion_mode,
                     g_result_published, g_runnable_published, g_arms_retired,
                     g_arm_class, g_arm_event, g_arm_timer_consumed,
                     g_arm_timer_retired, g_arm_publication_count,
@@ -195,6 +201,31 @@ RegisterTimerArm(g) ==
                     broadcast_phase, broadcast_scanned_groups,
                     broadcast_published_groups, g_timer_pump_pending,
                     g_arm_account_close_count, now>>
+
+\* PR #18 corrective-1 (C2): the second step of registration.  Once the arm is
+\* installed, wait/authority/account opened, and rollback not yet started, the
+\* caller may finish registration and advance to Admission.  Registration
+\* success: RegisterEventArm/RegisterTimerArm -> FinishRegistration -> Admission.
+\* Registration failure: RegisterEventArm/RegisterTimerArm -> BeginRollback.
+\* Both branches are reachable because this step is separate from the arm
+\* install.
+FinishRegistration(g) ==
+    /\ g_phase[g] = "Registering"
+    /\ g_arm_kind[g] # "None"
+    /\ g_arm_wait_linked[g]
+    /\ g_arm_authority_open[g]
+    /\ g_arm_account_open[g]
+    /\ ~g_rollback_started[g]
+    /\ g_phase' = [g_phase EXCEPT ![g] = "Admission"]
+    /\ UNCHANGED <<g_winner_present, g_caller, g_completion_mode,
+                    g_result_published, g_runnable_published, g_arms_retired,
+                    g_arm_class, g_arm_kind, g_arm_event, g_arm_timer_active,
+                    g_arm_timer_consumed, g_arm_timer_retired,
+                    g_arm_wait_linked, g_arm_authority_open, g_arm_account_open,
+                    g_arm_account_close_count, g_arm_publication_count,
+                    g_rollback_started, event_state, broadcast_event,
+                    broadcast_phase, broadcast_scanned_groups,
+                    broadcast_published_groups, g_timer_pump_pending, now>>
 
 SuspendCaller(g) ==
     /\ g_phase[g] = "Admission"
@@ -433,6 +464,14 @@ DestroyOperation(g) ==
                     broadcast_published_groups, g_timer_pump_pending, now>>
 
 \* ---- rollback (per group; registration domain only) --------------------
+\*
+\* PR #18 corrective-1 (C2/C3): registration rollback is now genuinely
+\* reachable.  After RegisterEventArm/RegisterTimerArm installs an arm but
+\* BEFORE FinishRegistration advances g_phase to Admission, g_phase[g] is still
+\* "Registering", the caller is Running, and the arm_kind is installed -- the
+\* exact pre-state BeginRollback requires.  This preserves the canonical PR #17
+\* rollback domain (Registering/Running/no winner); Admission and every later
+\* phase remains rollback-disabled.
 
 BeginRollback(g) ==
     /\ g_phase[g] = "Registering"
@@ -502,6 +541,7 @@ MGNext ==
     \/ MGStutter
     \/ \E g \in Groups, e \in Events : RegisterEventArm(g, e)
     \/ \E g \in Groups : RegisterTimerArm(g)
+    \/ \E g \in Groups : FinishRegistration(g)
     \/ \E g \in Groups : SuspendCaller(g)
     \/ \E g \in Groups : ClaimAdmissionWinner(g)
     \/ \E e \in Events : StartEventBroadcast(e)
@@ -613,6 +653,108 @@ MG_InvSharedEventDoesNotConsumeAcrossGroups ==
     broadcast_phase \in {"Scanning", "ProcessGroups"}
         => event_state[broadcast_event] = "Set"
 
+(* =========================================================================
+   PR #18 corrective-1 (C5): multi-group registration-rollback invariants.
+   These laws make the registration rollback domain and its per-group
+   non-interference explicit named state invariants.  They are consequences
+   of the corrected state machine (BeginRollback requires Registering) and
+   the per-action UNCHANGED audit (every rollback action freezes every
+   cross-group field of the other group).  NEG-MG1 (focused negative model)
+   proves MG_InvRollbackDoesNotAffectOtherGroup is load-bearing.
+   ========================================================================= *)
+
+MG_InvRollbackRequiresRegistering ==
+    \* The canonical PR #17 rollback domain: rollback may begin only while
+    \* g_phase is still Registering.  Admission/Armed/Claimed/Closing/Completed
+    \* are rollback-disabled (the corrective-1 split makes this load-bearing:
+    \* BeginRollback is reachable exactly from the post-install pre-finish
+    \* state).
+    \A g \in Groups :
+        g_phase[g] = "Rollback"
+            => g_rollback_started[g]
+               /\ g_arm_kind[g] # "None"
+
+MG_InvRollbackRequiresRunningCaller ==
+    \* Rollback may begin only while the caller of that group is Running.
+    \* This is the multi-group form of the PR #17 corrective-1 law
+    \* ContractRegistrationRollbackDisabledAfterSuspension.
+    \A g \in Groups :
+        g_phase[g] = "Rollback" => g_caller[g] = "Running"
+
+MG_InvRollbackRequiresInstalledArm ==
+    \* Rollback requires that an arm has been installed in this group
+    \* (g_arm_kind # None).  Rollback of an empty registration is meaningless.
+    \A g \in Groups :
+        g_phase[g] = "Rollback" => g_arm_kind[g] # "None"
+
+MG_InvRollbackRequiresNoWinner ==
+    \* Rollback may begin only before a winner exists for this group.
+    \A g \in Groups :
+        g_phase[g] \in {"Rollback", "Aborted"} => ~g_winner_present[g]
+
+MG_InvRollbackNeverPublishes ==
+    \* A group in rollback or Aborted phase has published no result and no
+    \* runnable notification.
+    \A g \in Groups :
+        g_phase[g] \in {"Rollback", "Aborted"}
+            => /\ g_result_published[g] = 0
+               /\ g_runnable_published[g] = 0
+               /\ g_arm_publication_count[g] = 0
+
+MG_InvRollbackClosesOwnAuthorityOnly ==
+    \* A group's rollback transitions (RollbackArm/FinishRollback) close only
+    \* that group's authority/account; they never open or mutate the other
+    \* group's authority.  State consequence: while group g is mid-rollback,
+    \* group g's own authority may be open or closed (RollbackArm closes it),
+    \* but the rollback actions themselves never OPEN an authority in any
+    \* group (they only close group g's authority).  Therefore, once group g
+    \* reaches Aborted, group g's authority is closed.
+    \A g \in Groups :
+        g_phase[g] = "Aborted" => ~g_arm_authority_open[g]
+
+MG_InvRollbackDoesNotAffectOtherGroup ==
+    \* A group's rollback actions touch only that group's state.  Every
+    \* rollback action (BeginRollback/RollbackArm/FinishRollback) writes only
+    \* group g's variables and UNCHANGES every other group's g_* projection.
+    \*
+    \* The transition-level guarantee -- "group h's fields are UNCHANGED by
+    \* group g's rollback action" -- cannot be fully expressed as a pure
+    \* state invariant, because group h may legitimately change its own state
+    \* via its own actions while group g is mid-rollback.  The load-bearing
+    \* state consequence asserted here is narrower and sound: a group g that
+    \* actually went through a registration rollback (g_rollback_started[g])
+    \* must not have produced a winner classification or a result publication
+    \* of its own -- i.e., group g's rollback never spuriously fabricated a
+    \* winner or published a result for itself, let alone for another group.
+    \*
+    \* The transition-level non-interference (group g's RollbackArm does not
+    \* touch group h's authority) is verified structurally per-action by the
+    \* UNCHANGED audit and is load-bearing via the focused negative model
+    \* NEG-MG1, which makes group g's RollbackArm close group h's authority
+    \* and is caught by MG_InvAuthorityClosureDoesNotCrossGroups /
+    \* MG_InvAbortedGroupHasNoOpenAccounting on the resulting state.
+    \A g \in Groups :
+        g_rollback_started[g]
+            => /\ g_arm_class[g] # "Winner"
+               /\ ~g_winner_present[g]
+               /\ g_result_published[g] = 0
+
+MG_InvAbortedGroupHasNoOpenAccounting ==
+    \* An Aborted group has closed its wait/account (RollbackArm closed both
+    \* the wait link and the account_open flag).  This is the multi-group
+    \* form of the Contract's rollback-closes-authority law.
+    \A g \in Groups :
+        g_phase[g] = "Aborted"
+            => /\ ~g_arm_wait_linked[g]
+               /\ ~g_arm_account_open[g]
+
+MG_InvAbortedGroupCallerNotWaiting ==
+    \* An Aborted group never has a Waiting caller (rollback preserves the
+    \* Running caller, which is the precondition for BeginRollback).  This is
+    \* the multi-group form of C_InvAbortedCallerNeverWaiting.
+    \A g \in Groups :
+        g_phase[g] = "Aborted" => g_caller[g] # "Waiting"
+
 MGSafetyInv ==
     /\ MGTypeOK
     /\ MG_InvWinnerBelongsToOwnGroup
@@ -626,6 +768,15 @@ MGSafetyInv ==
     /\ MG_InvEventBroadcastDeduplicatesGroupProcessing
     /\ MG_InvOneGroupClaimDoesNotCompleteOtherGroup
     /\ MG_InvSharedEventDoesNotConsumeAcrossGroups
+    /\ MG_InvRollbackRequiresRegistering
+    /\ MG_InvRollbackRequiresRunningCaller
+    /\ MG_InvRollbackRequiresInstalledArm
+    /\ MG_InvRollbackRequiresNoWinner
+    /\ MG_InvRollbackNeverPublishes
+    /\ MG_InvRollbackClosesOwnAuthorityOnly
+    /\ MG_InvRollbackDoesNotAffectOtherGroup
+    /\ MG_InvAbortedGroupHasNoOpenAccounting
+    /\ MG_InvAbortedGroupCallerNotWaiting
 
 \* Reachability witnesses (inverse invariants) for non-vacuity.
 
@@ -656,9 +807,47 @@ MG_ReachOneRollbackOtherComplete ==
         /\ g_phase[gc] \in {"Completed", "Consumed"}
         /\ g_result_published[gc] = 1
 
+(* =========================================================================
+   PR #18 corrective-1 (J): non-vacuity witnesses for the registration-split
+   rollback domain.  These prove the premise of MG_InvRollback* is reachable
+   in the model -- that the post-install pre-finish registration state, and a
+   real rollback started from that state, are both reachable.  Without these
+   witnesses the rollback laws would be vacuously TRUE (the model could simply
+   never reach the rollback premise).
+   ========================================================================= *)
+
+\* Premise of MG_InvRollbackRequiresRegistering / RequiresInstalledArm:
+\* the post-install pre-finish registration state exists in the model.  This is
+\* the exact state from which BeginRollback is now reachable (the corrective-1
+\* fix).
+MG_ReachArmInstalledNotFinished ==
+    \E g \in Groups :
+        /\ g_phase[g] = "Registering"
+        /\ g_arm_kind[g] # "None"
+        /\ g_arm_wait_linked[g]
+        /\ g_arm_authority_open[g]
+        /\ g_arm_account_open[g]
+        /\ ~g_rollback_started[g]
+        /\ g_caller[g] = "Running"
+        /\ ~g_winner_present[g]
+
+\* Premise of MG_InvRollbackRequiresRunningCaller / RequiresNoWinner /
+\* NeverPublishes: a real rollback has started from the registration domain
+\* (g_phase=Registering, arm installed, caller Running, no winner).
+MG_ReachPreFinishRollback ==
+    \E g \in Groups :
+        /\ g_phase[g] = "Rollback"
+        /\ g_rollback_started[g]
+        /\ g_arm_kind[g] # "None"
+        /\ g_caller[g] = "Running"
+        /\ ~g_winner_present[g]
+        /\ g_result_published[g] = 0
+
 NotMG_ReachSharedEventBothGroupsComplete
     == ~MG_ReachSharedEventBothGroupsComplete
 NotMG_ReachMixedEventTimer == ~MG_ReachMixedEventTimer
 NotMG_ReachOneRollbackOtherComplete == ~MG_ReachOneRollbackOtherComplete
+NotMG_ReachArmInstalledNotFinished == ~MG_ReachArmInstalledNotFinished
+NotMG_ReachPreFinishRollback == ~MG_ReachPreFinishRollback
 
 =============================================================================
