@@ -27,7 +27,7 @@ satisfy.
 | `ContractReleaseLoser(i)`  | `Scheduler::select_finalize_loser_locked(SelectGroup&, arm_index)` | `global_mtx_` held         | `arm.state = Retired (loser)` + (Timer) `SelectTimerRegistration::retire()` CAS |
 | `ContractCloseAuthority(i)` | (Event) `SelectPort::unlink_locked(arm)`; (Timer) the consume/retire CAS in the row above | `global_mtx_` held         | Event: `arm` removed from the intrusive list; Timer: `state_ != active` |
 | `ContractPublishInline`    | `Scheduler::select_publish_locked(group)` inline branch             | `global_mtx_` held         | `group.result_ = SelectResult{...}` + `group.phase_ = Completed` |
-| `ContractPublishSuspended` | `Scheduler::select_publish_locked(group)` suspended branch          | `global_mtx_` held         | `f->make_runnable()` returning true (the exactly-once guard) followed by `group.phase_ = Completed` |
+| `ContractPublishSuspended` | `Scheduler::select_publish_locked(group)` suspended branch          | `global_mtx_` held         | `group.result_` written + `group.phase_ = Completed`; then `f->make_runnable()` must return true (the exactly-once guard) |
 | `ContractResumeCaller`     | (implicit) the worker loop picks up the now-runnable caller         | `global_mtx_` held at route time | `route_runnable_locked(f, owner)`                     |
 | `ContractConsumeResult`    | `select_impl` reads `group.result_` after resume, then transitions `Completed → Consumed` | `global_mtx_` held (reacquire) | `group.phase_ = Consumed` (plain write under G) |
 | `ContractDestroyOperation` | `~SelectGroup()` / frame unwind                      | no lock (precondition: phase ∈ {Consumed, Aborted}) | frame destruction |
