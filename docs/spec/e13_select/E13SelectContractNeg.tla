@@ -218,6 +218,31 @@ Fault_C8 ==
                     arm_publication_count, reservation_close_count,
                     linearized_winner, linearized_winner_valid>>
 
+\* ----- NEG-C9: winner identity flip after linearization -------------------
+\* A legal ContractLinearizeWinner has stamped linearized_winner = A and
+\* linearized_winner_valid = TRUE.  The fault flips the live `winner` to a
+\* different registered arm B (B # A) while leaving the frozen linearization
+\* history unchanged.  This violates C_InvWinnerIdentityStableAfterLinearization
+\* (linearized_winner_valid => winner = linearized_winner) WITHOUT tripping the
+\* commit or no-irreversible-effect laws (no arm is WinnerCommitted).
+Fault_C9 ==
+    /\ FaultActive("C9")
+    /\ ~fault_used
+    /\ linearized_winner_valid
+    /\ linearized_winner \in Arms
+    /\ \E b \in Arms :
+          /\ b # linearized_winner
+          /\ arm_registered[b]
+          /\ \A i \in Arms : arm_resolution[i] # "WinnerCommitted"
+          /\ winner' = b
+    /\ fault_used' = TRUE
+    /\ UNCHANGED <<contract_phase, arm_registered, readiness_evidence,
+                    reservation_state, arm_resolution, authority_open,
+                    caller_state, completion_mode, result_publication_count,
+                    runnable_publication_count, arm_publication_count,
+                    reservation_close_count,
+                    linearized_winner, linearized_winner_valid>>
+
 FaultNext ==
     \/ Fault_C1
     \/ Fault_C2
@@ -227,6 +252,7 @@ FaultNext ==
     \/ Fault_C6
     \/ Fault_C7
     \/ Fault_C8
+    \/ Fault_C9
 
 CNegStutter == UNCHANGED CNegVars
 
@@ -246,6 +272,7 @@ C_InvAtMostOneLinearizedWinner == Base!C_InvAtMostOneLinearizedWinner
 C_InvAtMostOneCommittedWinner == Base!C_InvAtMostOneCommittedWinner
 C_InvCommitRequiresWinnerLinearization == Base!C_InvCommitRequiresWinnerLinearization
 C_InvNoIrreversibleEffectBeforeLinearization == Base!C_InvNoIrreversibleEffectBeforeLinearization
+C_InvWinnerIdentityStableAfterLinearization == Base!C_InvWinnerIdentityStableAfterLinearization
 C_InvLoserNeverPublishesResult == Base!C_InvLoserNeverPublishesResult
 C_InvCompletionRequiresAllAuthorityClosed == Base!C_InvCompletionRequiresAllAuthorityClosed
 C_InvLoserReservationReleased == Base!C_InvLoserReservationReleased

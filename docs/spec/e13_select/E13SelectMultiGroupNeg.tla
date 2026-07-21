@@ -110,11 +110,40 @@ FaultActive(name) == FAULT = name
 \* This violates the transition-level non-interference guarantee that the
 \* per-action UNCHANGED audit establishes structurally (RollbackArm's
 \* UNCHANGED list freezes every group-h field).  At the state level the
-\* Fault actions are added per-focus in subsequent commits.  This structural
-\* commit defines FaultNext as FALSE so the wrapper reduces to the canonical
-\* MGNext (BaseNextFrozen) plus stutter, exactly matching the canonical
-\* model's behaviour.  A later commit disjoins Fault_MG1 here.
-FaultNext == FALSE
+\* violation surfaces immediately as a broken MG_InvAuthorityClosureDoesNot
+\* CrossGroups: a group at a terminal phase must have its authority closed,
+\* and the fault has just opened group g1's.  The fault does NOT touch any
+\* other field of group g1, so only this law trips.
+Fault_MG1 ==
+    /\ FaultActive("MG1")
+    /\ ~fault_used
+    /\ \E g0, g1 \in Groups :
+          /\ g0 # g1
+          /\ g_phase[g0] = "Rollback"
+          /\ g_arm_authority_open[g0]
+          /\ g_phase[g1] \in {"Completed", "Consumed", "Aborted", "Destroyed"}
+          /\ ~g_arm_authority_open[g1]
+          /\ g_arm_authority_open' =
+                [g_arm_authority_open EXCEPT ![g0] = FALSE, ![g1] = TRUE]
+          /\ g_arm_wait_linked' =
+                [g_arm_wait_linked EXCEPT ![g0] = FALSE]
+          /\ g_arm_account_open' =
+                [g_arm_account_open EXCEPT ![g0] = FALSE]
+          /\ g_arm_account_close_count' =
+                [g_arm_account_close_count EXCEPT ![g0] = @ + 1]
+          /\ g_arms_retired' =
+                [g_arms_retired EXCEPT ![g0] = TRUE]
+    /\ fault_used' = TRUE
+    /\ UNCHANGED <<g_phase, g_winner_present, g_caller, g_completion_mode,
+                    g_result_published, g_runnable_published, g_arm_class,
+                    g_arm_kind, g_arm_event, g_arm_timer_active,
+                    g_arm_timer_consumed, g_arm_timer_retired,
+                    g_arm_publication_count, g_rollback_started, event_state,
+                    broadcast_event, broadcast_phase, broadcast_scanned_groups,
+                    broadcast_published_groups, g_timer_pump_pending, now>>
+
+FaultNext ==
+    \/ Fault_MG1
 
 MGNegStutter == UNCHANGED MGNegVars
 

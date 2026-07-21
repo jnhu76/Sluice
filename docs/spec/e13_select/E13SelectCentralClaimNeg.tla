@@ -216,6 +216,37 @@ Fault_S6 ==
                     linearized_winner, linearized_winner_valid,
                     claim_snapshot_frozen, claim_snapshot_frozen_valid>>
 
+\* ----- NEG-S7: add a member to the claim snapshot after claim -------------
+\* Requires a 3-arm cfg so that a winner + a snapshot-internal candidate + a
+\* snapshot-external registered arm can coexist.  After a legal claim has
+\* stamped claim_snapshot_frozen = claim_candidates (claim_snapshot_frozen_valid
+\* = TRUE), the fault ADDS an extra registered arm j (j \notin the frozen
+\* snapshot) to claim_candidates while preserving the winner.  The live
+\* snapshot now differs from the frozen value, violating
+\* S_InvClaimSnapshotImmutableAfterClaim in its strict form.  The winner is
+\* retained, so the weaker S_InvClaimSnapshotContainsWinner /
+\* S_InvWinnerChosenFromSnapshot laws are NOT tripped -- the fault isolates
+\* exactly the immutability law.
+Fault_S7 ==
+    /\ FaultActive("S7")
+    /\ ~fault_used
+    /\ claim_snapshot_frozen_valid
+    /\ winner \in Arms
+    /\ winner \in claim_snapshot_frozen
+    /\ \E j \in Arms :
+          /\ arm_registered[j]
+          /\ j \notin claim_snapshot_frozen
+          /\ claim_candidates' = claim_candidates \cup {j}
+    /\ fault_used' = TRUE
+    /\ UNCHANGED <<contract_phase, arm_registered, readiness_evidence,
+                    reservation_state, arm_resolution, authority_open, winner,
+                    caller_state, completion_mode, result_publication_count,
+                    runnable_publication_count, arm_publication_count,
+                    reservation_close_count, central_phase, candidate_ready,
+                    arm_class, claim_mode,
+                    linearized_winner, linearized_winner_valid,
+                    claim_snapshot_frozen, claim_snapshot_frozen_valid>>
+
 FaultNext ==
     \/ Fault_S1
     \/ Fault_S2
@@ -223,6 +254,7 @@ FaultNext ==
     \/ Fault_S4
     \/ Fault_S5
     \/ Fault_S6
+    \/ Fault_S7
 
 SNegStutter == UNCHANGED SNegVars
 
