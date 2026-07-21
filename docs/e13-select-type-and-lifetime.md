@@ -410,8 +410,8 @@ separate `caller_state_` field.)
 
 ### 5.2 Rollback sequence
 
-On a registration failure (only `std::bad_alloc` from Timer block allocation
-in the first scope):
+On a registration failure (in the first scope, exercised through a synthetic
+injection seam — no natural allocation failure occurs mid-registration):
 
 ```text
 under global_mtx_ (still held from the registration CS):
@@ -424,7 +424,7 @@ under global_mtx_ (still held from the registration CS):
             a.state = retired
     group.phase = Aborted
 release global_mtx_
-throw std::bad_alloc (or the original exception)
+throw (the synthetic SelectRegistrationError, or the original exception)
 ```
 
 No runnable publication occurs. No result is written. The caller frame unwinds

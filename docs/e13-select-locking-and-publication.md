@@ -197,20 +197,27 @@ select_impl(scheduler, case_array):
          (std::bad_alloc here propagates directly; nothing to roll back)
     3. construct the SelectGroup + SelectArmSlot array in this frame
 
-    // -- under global_mtx_ --
+// -- under global_mtx_ --
     g.lock()
-    4. group.phase_ = Building
-    5. for each arm in index order:
+    4. reserve deadline heap capacity before any registration mutation:
+           deadline_heap_.reserve(deadline_heap_.size() + timer_arm_count)
+           - on std::bad_alloc: unlock and rethrow
+           - no arm registered, no splice occurred, no rollback needed
+    5. splice temporary Timer pool into Scheduler-owned list
+           scheduler.select_timer_pool_.splice(end, tmp_pool)
+    6. group.phase_ = Building
+    7. for each arm in index order:
          a. register the arm:
-              Event arm: link into Event.select_port_  (SelectPort::link_locked)
-              Timer arm: push its SelectTimerRegistration into deadline_heap_
+               Event arm: link into Event.select_port_  (SelectPort::link_locked)
+               Timer arm: push DeadlineHeapEntry into deadline_heap_
          b. preserve rollback ability:
-              - arm is linked but group.phase_ == Building, winner_ == kNoWinner
-              - no caller suspension yet
-              - no result publication yet
-         c. on failure (none expected in first scope; defensive):
-              -> rollback (section 4) and rethrow
-    6. FinishRegistration: group.phase_ = Selecting
+               - arm is linked but group.phase_ == Building, winner_ == kNoWinner
+               - no caller suspension yet
+               - no result publication yet
+         c. on failure (defensive; no natural allocation occurs at this point
+            in the first scope):
+               -> rollback (section 4) and rethrow
+    8. FinishRegistration: group.phase_ = Selecting
 
     7. admission snapshot: walk arms in index order, collect those whose
          readiness is already observable:
@@ -223,12 +230,11 @@ select_impl(scheduler, case_array):
           c. commit winner: arm.state = Retired (winner classification)
           d. finalize losers: every other arm finalized as a loser
           e. close all authority (unlink Event arms, retire/consume Timer arms)
-f. select_publish_locked(group)
-           g. group.phase_ = Completed
-          h. copy result to local
-          i. group.phase_ = Consumed
-          j. g.unlock()
-          k. return SelectResult{index, kind, ...}  (no suspension)
+f. select_publish_locked(group)   // writes result_ + sets phase_ = Completed
+           g. copy result to local
+           h. group.phase_ = Consumed
+           i. g.unlock()
+           j. return SelectResult{index, kind, ...}  (no suspension)
      9. otherwise:
           a. me->make_waiting()
           b. group.phase_ = Armed
@@ -246,18 +252,24 @@ f. select_publish_locked(group)
 
 ### 3.2 Rollback (registration failure)
 
-On any failure between step 5 and step 6 (only `std::bad_alloc` from Timer
-block allocation in the first scope, which is allocated *before* the lock — so
-this path is defensive for future failures):
+In the first scope, all natural allocation failures (Timer stable block
+construction, deadline heap `reserve`) occur before any registration mutation.
+No mid-registration allocation exists. The rollback machinery is therefore
+**defensive and future-proof**: it exists to handle registration failures that
+may arise in future scopes (e.g. dynamic resource limits, adapter registration
+errors).
+
+For testing, the rollback path is exercised through a synthetic injection seam:
 
 ```text
 under global_mtx_ (still held):
+    inject SelectRegistrationFailure after N successful registrations
     for each arm already registered:
         Event arm: SelectPort::unlink_locked(arm); arm.state = Retired
         Timer arm: reg.state_.store(Retired); arm.state = Retired
     group.phase_ = Aborted
 release global_mtx_
-throw the original exception
+throw the original exception (or a synthetic SelectRegistrationError)
 ```
 
 The caller frame unwinds and destroys the group + arms. No runnable

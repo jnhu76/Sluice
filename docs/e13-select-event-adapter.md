@@ -246,7 +246,7 @@ Phase 1 protocol:
 
 ```text
 for arm in event.select_port_:
-    if arm.group.phase != Arming and arm.group.phase != Armed:
+    if arm.group.phase != Armed:
         continue
     if arm.state != Registered:
         continue
@@ -284,6 +284,16 @@ Key properties:
   processed (which may finalize the group and leave its arms). The saved
   pointer is valid for the remainder of the walk because the chain is
   built and consumed as a single-linked list under one CS.
+- **Epoch wraparound.** The `global_broadcast_epoch_` counter is monotonically
+  increasing and will not wrap in the lifetime of any real process (a 64-bit
+  counter incremented once per `Event::set()` call). If wraparound is a
+  concern for a specific deployment, the contract is: a wraparound that causes
+  `broadcast_epoch_ == current_epoch` for a group that was **not** linked in
+  this broadcast would cause a false dedup miss — the group would be skipped.
+  This is architecturally defined as **fail-stop by contract**: the epoch
+  domain is large enough that wraparound cannot occur in any valid execution.
+  A deployment that reaches wraparound must increase the epoch width or add a
+  wraparound-safe protocol.
 
 ---
 
@@ -315,7 +325,7 @@ event_set_broadcast(event):
     worklist_head = nullptr
     current_epoch = ++global_broadcast_epoch_          // monotonically increasing
     for arm in event.select_port_:
-        if arm.group.phase != Arming and arm.group.phase != Armed:
+        if arm.group.phase != Armed:
             continue                                  // not live; skip
         if arm.state != Registered:
             continue                                  // already CandidateReady or terminal

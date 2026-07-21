@@ -75,7 +75,7 @@ These are the concrete adapter-layer actions. Line numbers reference
 | `AdmissionObserveNotReady(i)` (849) | inline scan (no transition)                                      | `global_mtx_` held         | (no state change)                                     |
 | `ClaimAdmissionWinner(i)` (865)  | `SelectGroup::claim_winner_locked` (inline branch)                  | `global_mtx_` held         | `winner_` CAS                                         |
 | `SetEventBeforeRegistration(e)` (883) | Event `set_` observed at admission                              | `global_mtx_` held         | `set_.load(acquire) == true`                          |
-| `StartEventBroadcast(e)` (899)   | `Scheduler::event_set_broadcast` (Select-aware) entry               | `global_mtx_` acquired     | `set_.store(true, release)`                           |
+| `StartEventBroadcast(e)` (899)   | `Scheduler::event_set_broadcast` (Select-aware) entry               | `global_mtx_` acquired     | `set_.exchange(true, release)` — false→true is the broadcast admission; true→true is the idempotent no-op |
 | `ScanEventArm(i)` (921)          | `event_scan_marks_candidate_locked`                                 | `global_mtx_` held         | `arm.state = CandidateReady`                          |
 | `ClaimEventWinner(i)` (955)      | `SelectGroup::claim_winner_locked` (Phase 2)                        | `global_mtx_` held         | `winner_` CAS                                         |
 | `TimerPumpEntry(i)` (984)        | `select_timer_pump_entry`                                           | `global_mtx_` held         | `state_.load(acquire) == active` gate                 |

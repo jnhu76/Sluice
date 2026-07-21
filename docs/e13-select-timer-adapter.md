@@ -291,8 +291,9 @@ select_timer_pump_entry(SelectTimerRegistration& reg):
 
     4. if group->phase_ != Armed:
             // INVARIANT: ACTIVE + non-Armed is unreachable in a correct protocol.
-            // Arming cannot interleave with the pump (both run under G).
-            // Completed groups have retired/consumed all registrations.
+            // Admission (Building/Selecting phases) cannot interleave with the
+            // pump (both run under G). Completed groups have retired/consumed
+            // all registrations.
             // If this branch fires, either the pump observed a stale entry
             // before the state_ CAS completed, or the registration protocol
             // has a bug. Fail fast rather than silently returning with an

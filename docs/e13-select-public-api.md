@@ -176,7 +176,7 @@ template <class... Cases>
     requires (
         sizeof...(Cases) >= 1 &&
         sizeof...(Cases) <= kSelectMaxArms &&
-        (SelectCaseType<Cases> && ...)
+        (SelectCaseType<std::remove_cvref_t<Cases>> && ...)
     )
 SelectResult select(Scheduler& scheduler, Cases&&... cases);
 
@@ -232,7 +232,7 @@ callers to depend on scheduler timing.
 ### 4.5 Empty case list
 
 Compile-time reject. The variadic core requires `sizeof...(Cases) >= 1`
-enforced by a `static_assert`. A defensive `assert(!"select requires >= 1 case")`
+enforced by the `requires` clause. A defensive `assert(!"select requires >= 1 case")`
 is also present for any future non-variadic entry point.
 
 ### 4.6 Duplicate arm behavior
