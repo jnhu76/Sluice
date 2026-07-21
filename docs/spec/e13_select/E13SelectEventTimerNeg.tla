@@ -1,6 +1,6 @@
 ------------------------ MODULE E13SelectEventTimerNeg ------------------------
 (*
-  PR #18 focused Event/Timer/Accounting negative models (T/U/V).
+  PR #18 focused Event/Timer/Accounting negative models (E/T/A).
 
   Wraps the canonical E13SelectEventTimer by INSTANCE-WITH and adds ONE
   focused fault per FAULT selector.  Same architecture as the Contract/Central

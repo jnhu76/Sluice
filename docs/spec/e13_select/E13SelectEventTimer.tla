@@ -192,6 +192,12 @@ StepT == 0..40
 GroupIdT == 0..1
 EpochT == 0..4
 \* PR #18 widened accounting counter domain.  The canonical transitions only
+\* ever move a counter 0 -> 1 (at-most-once is enforced by the A_Inv* laws,
+\* not by TypeOK).  Widening the TypeOK domain to 0..2 lets a focused NEG
+\* fault push a counter to 2 so the at-most-once invariant is violated WITHOUT
+\* a concomitant TypeOK violation -- i.e. the negative model isolates exactly
+\* the law it claims to break.  No legal transition produces a 2.
+AccountingCountT == 0..2
 
 ReadySource(i) ==
     \/ /\ arm_kind[i] = "EventArm"
@@ -231,10 +237,10 @@ EventTimerTypeOK ==
     /\ registered_arm_count \in 0..MaxArms
     /\ retired_arm_count \in 0..MaxArms
     /\ now \in 0..3
-    /\ wait_account_open_count \in [Arms -> 0..1]
-    /\ wait_account_close_count \in [Arms -> 0..1]
-    /\ timer_account_open_count \in [Arms -> 0..1]
-    /\ timer_account_close_count \in [Arms -> 0..1]
+    /\ wait_account_open_count \in [Arms -> AccountingCountT]
+    /\ wait_account_close_count \in [Arms -> AccountingCountT]
+    /\ timer_account_open_count \in [Arms -> AccountingCountT]
+    /\ timer_account_close_count \in [Arms -> AccountingCountT]
     /\ group_id \in GroupIdT
     /\ claim_epoch \in EpochT
     /\ broadcast_epoch \in EpochT
@@ -1655,4 +1661,14 @@ NotReachAdapterPublicationStepRecorded == ~ReachAdapterPublicationStepRecorded
 
 \* PR #18 corrective-1 non-vacuity witness for the widened accounting laws.
 \* Proves the at-most-once laws are non-vacuous after widening the counter
+\* TypeOK domain to 0..2: at least one arm has actually closed its account
+\* (counter == 1, the value the legal transition produces).  The widened
+\* TypeOK permits 2 but no legal transition produces it, so this witness
+\* confirms the laws bite on the genuinely reachable counter value 1.
+ReachAdapterAccountCountOne ==
+    \E i \in Arms :
+        \/ wait_account_close_count[i] = 1
+        \/ timer_account_close_count[i] = 1
+NotReachAdapterAccountCountOne == ~ReachAdapterAccountCountOne
+
 =============================================================================
