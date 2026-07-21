@@ -5,7 +5,7 @@
 ```text
 FORMAL CORE:              CLOSED   (PR #17)
 FORMAL SAFETY:            CLOSED   (PR #18)
-PRODUCTION PREPARATION:   IN PROGRESS   (E13-SELECT-PRODUCTION-PREPARATION-1, PR #19)
+PRODUCTION PREPARATION:   UNDER REVIEW (E13-SELECT-PRODUCTION-PREPARATION-1, PR #19)
 PRODUCTION IMPLEMENTATION:DENIED PENDING PREPARATION REVIEW
 ```
 
@@ -281,11 +281,11 @@ the stale-pump mutation. Production implementation remains denied.
 
 ---
 
-## PR #18 — Formal Safety (in progress)
+## PR #18 — Formal Safety (closed)
 
 PR #18 (`feat/e13-select-formal-safety`, task
 `E13-SELECT-FORMAL-MODEL-SAFETY-1`) closes the safety foundation of the
-E13 Select formal core.  It adds, *alongside* the PR #17 canonical
+E13 Select formal core. It adds, *alongside* the PR #17 canonical
 aggregates (which are preserved unchanged so PR #17 metrics still
 reproduce exactly):
 
@@ -342,7 +342,7 @@ Both must end with `=== PASS: ... ===`.
 
 ---
 
-## Production preparation (PR #19 — in progress)
+## Production preparation (PR #19 — under review, corrective-1 in progress)
 
 PR #19 (`feat/e13-select-production-preparation`, task
 `E13-SELECT-PRODUCTION-PREPARATION-1`) maps the closed formal model onto the

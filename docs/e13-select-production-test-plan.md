@@ -104,7 +104,18 @@ reproduction, and the assertion that fails.
 | SN-11 | same group processed twice in one broadcast   | Phase 2 dedup bug (epoch counter bypass); visit the group twice | Phase 2 walks the intrusive worklist chain; assert each group's epoch counter matches current epoch (no duplicate links) |
 | SN-12 | cross-group authority close                  | group A's finalize unlinks group B's arm            | SelectPort unlink validates `arm.group == &group`; assert rejects cross-group unlink |
 
-### 3.1 No sleep-based reproduction
+### 3.1 Compile-fail tests (new)
+
+These tests verify that the `requires` clause rejects invalid call sites at
+compile time. They are `static_assert`-based or compile-fail harness tests:
+
+| ID    | Scenario                                      | Mechanism                                |
+|-------|-----------------------------------------------|------------------------------------------|
+| SF-1  | zero arms rejected                            | `select(sched)` — empty pack             |
+| SF-2  | too many arms rejected                        | `select(sched, c0, c1, ..., c8)` — 9 cases |
+| SF-3  | wrong case type rejected                      | `select(sched, 42, event_case)` — int as case |
+
+### 3.2 No sleep-based reproduction
 
 Every SN test above uses a PhaseTag seam or an invariant assertion, never a
 timing assumption. The seam pauses one thread at the exact boundary (e.g.
@@ -175,7 +186,7 @@ tests/e13_select_timer_adapter.cpp   ST-2, ST-5, ST-7, ST-8 (Timer arms)
 tests/e13_select_rollback.cpp        ST-14 (registration rollback)
 tests/e13_select_multi_worker.cpp    ST-15, ST-16, ST-17 (external thread + routing)
 tests/e13_select_contract.cpp        ST-18..ST-23 (lifetime + contract violations + caller validation)
-tests/e13_select_negative.cpp        SN-1..SN-12 (negative tests)
+tests/e13_select_negative.cpp        SN-1..SN-12 + SF-1..SF-3 (negative tests + compile-fail)
 ```
 
 Each file corresponds to a review stage in §7.
@@ -360,7 +371,7 @@ allowed files:
 entry assumptions:
     P1–P8 complete
 exit gates:
-    ST-1..ST-23, SN-1..SN-12 all pass
+    ST-1..ST-23, SN-1..SN-12, SF-1..SF-3 all pass
     production sluice_async target exports no E13 test symbol
 production behavior enabled:
     complete first-scope Select

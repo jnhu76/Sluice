@@ -134,7 +134,7 @@ Each type below records the eight fields the brief requires.
 | destruction location      | `select(...)` frame unwind, AFTER all authority closed         |
 | thread-access domain      | the calling Fiber + Scheduler worker(s) executing the broadcast/pump under `global_mtx_` |
 | lock protecting structural state | none — all access is under `Scheduler::global_mtx_`   |
-| atomic fields             | `std::atomic<uint32_t> winner_` (NoWinner sentinel + arm index); `std::atomic<GroupPhase> phase_` |
+| atomic fields             | `std::atomic<uint32_t> winner_` (NoWinner sentinel + arm index); `std::atomic<GroupPhase> phase_`; `CompletionMode completion_mode_` (plain enum under G) |
 | friend authority          | `Scheduler` only                                              |
 | public visibility         | none — `detail`                                               |
 

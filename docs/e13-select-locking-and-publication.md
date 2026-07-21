@@ -215,7 +215,7 @@ select_impl(scheduler, case_array):
 
     7. admission snapshot: walk arms in index order, collect those whose
          readiness is already observable:
-              Event arm: event.set_.load(acquire) == true
+              Event arm: event_select_is_ready_locked(event) == true
               Timer arm: deadline <= scheduler.monotonic_now()
          (these arms get arm.state = CandidateReady)
 8. if snapshot non-empty:
@@ -224,8 +224,8 @@ select_impl(scheduler, case_array):
           c. commit winner: arm.state = Retired (winner classification)
           d. finalize losers: every other arm finalized as a loser
           e. close all authority (unlink Event arms, retire/consume Timer arms)
-          f. select_publish_locked(group, mode=Inline)
-          g. group.phase_ = Completed
+f. select_publish_locked(group)
+           g. group.phase_ = Completed
           h. copy result to local
           i. group.phase_ = Consumed
           j. g.unlock()
@@ -377,13 +377,19 @@ Scheduler::select_publish_locked(SelectGroup& group)
               Timer arms' SelectTimerRegistration in RETIRED or CONSUMED
 
     BODY:
-        if group.caller_state_ == Running:
-            // inline completion
-            //   NO make_runnable
-            //   NO route_runnable_locked
-            group.completion_mode_ = Inline
-        else:  // group.caller_state_ == Waiting
-            // suspended completion
+        // write result BEFORE any runnable publication, so that the resumed
+        // caller observes a complete result
+        group.result_ = SelectResult{ winner index, kind, ... }   // written once
+
+        // determine completion mode from group phase (not from a separate
+        // caller_state_ field — the phase is the single authority):
+        //   phase == Armed  → caller was suspended (Suspended completion)
+        //   phase != Armed  → caller still running (Inline completion)
+        if group.phase_ == Armed:
+            group.completion_mode_ = Suspended
+            group.phase_ = Completed
+            // runnable publication after phase_ transition: another worker
+            // that picks up the Fiber sees Completed + result already written
             Fiber* f = group.caller_
             const bool published = f->make_runnable()
             if (!published):
@@ -396,10 +402,12 @@ Scheduler::select_publish_locked(SelectGroup& group)
                 // Fail fast rather than silently returning.
                 select_fail_fast("suspended Select caller was not Waiting")
             route_runnable_locked(f, group.caller_owner_)
-            group.completion_mode_ = Suspended
-
-        group.result_ = SelectResult{ winner index, kind, ... }   // written once
-        group.phase_ = Completed
+        else:
+            // inline completion
+            //   NO make_runnable
+            //   NO route_runnable_locked
+            group.completion_mode_ = Inline
+            group.phase_ = Completed
 
     POST:
         result_publication_count == 1
@@ -505,8 +513,10 @@ central claim:     SelectGroup::winner_ CAS, under global_mtx_, relaxed
 lock order:        G -> (one registry, no mutex) -> (no group mutex)
 group mutex:       none
 publication:       single Scheduler::select_publish_locked(SelectGroup&)
+                   completion mode determined by group.phase_ (Armed → Suspended)
 inline:            no runnable publication; group.phase_ = Completed → Consumed
 suspended:         make_runnable + route_runnable_locked, exactly once, guarded;
+                   result_ and phase_=Completed written BEFORE runnable publication;
                    on resume: group.phase_ = Completed → Consumed
 caller routing:    group.caller_ + group.caller_owner_, external-thread safe
                    (all publication uses group.caller_owner_, never g_worker)

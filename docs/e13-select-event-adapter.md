@@ -291,21 +291,22 @@ Key properties:
 
 This is the body of `Scheduler::event_set_broadcast` extended for Select. The
 existing ordinary-drain loop is unchanged; the Select handling is appended
-under the same `global_mtx_` CS.
+under the same `global_mtx_` CS. The public `Event::set()` acquires `global_mtx_`,
+sets the persistent SET flag, then calls this `_locked` helper.
 
 ```text
-event_set_broadcast_select_aware(waiters, set_flag):
+event_set_broadcast_select_aware_locked(event):
 
-    PRE: caller will hold global_mtx_ for the whole body
+    PRE: global_mtx_ held by caller
+    PRE: Event::set() has already acquired G and set the persistent SET flag
 
-    g.lock()                                          // global_mtx_
-    if set_flag already SET:
-        g.unlock(); return 0                          // idempotent
-    set_flag.store(true, release)
+    if event_select_is_ready_locked(event):          // idempotent
+        return 0
+    // the persistent SET flag was set by Event::set() before this helper runs
 
     // -- ordinary drain (UNCHANGED from production) --
-    while wake_wait_one_locked(waiters) != nullptr:
-        ;                                             // ordinary Event waits
+    while wake_wait_one_locked(event.waiters_) != nullptr:
+        ;                                          // ordinary Event waits
 
     // -- Phase 1: scan select_port_ for THIS Event, build intrusive worklist --
     worklist_head = nullptr
@@ -330,8 +331,8 @@ event_set_broadcast_select_aware(waiters, set_flag):
         select_process_group_locked(*grp)
         grp = next
 
-    g.unlock()
-    signal_wake_locked()                              // wake any parked worker
+    // no g.unlock() — caller (Event::set()) holds G for the full CS
+    // no signal_wake_locked() — caller (Event::set()) handles it
     return |worklist_head|                            // count not needed; exists for symmetry
 ```
 
@@ -378,7 +379,53 @@ already solved by the existing E7-B/E8 machinery.
 
 ---
 
-## 8. Test seams for the Event adapter
+## 8. Event Scheduler binding access
+
+The Select admission code needs to read the Event's Scheduler binding to
+validate that all cases belong to the same Scheduler. The Event does not
+expose a public `Scheduler&` accessor — its Scheduler binding is a private
+authority, like `waiters_` and `select_port_`.
+
+The access seam is a narrow Scheduler-friended function:
+
+```cpp
+// in detail/, not installed
+Scheduler& event_select_get_scheduler(const Event& event);
+```
+
+This is a friend of `Event` (or `Scheduler` is a friend of `Event`), and
+returns the Scheduler reference stored in the Event. It is the **only** way
+Select code reaches the Event's Scheduler binding. No public accessor is added
+to Event. No test friend is granted.
+
+Similarly, the Event's `set_` flag is read through a locked seam:
+
+```cpp
+// under global_mtx_; returns the persistent SET flag
+bool event_select_is_ready_locked(const Event& event);
+```
+
+This ensures the Select registry (`select_port_`), the SET flag, and the
+Scheduler binding are all accessed through the same sealed-authority pattern:
+only `Scheduler` (via narrow locked seams in `detail/select_event.cpp`) can
+reach them. No new public API on `Event` is introduced.
+
+The planned seam surface:
+
+```cpp
+// detail/select_event.cpp, friended to Event:
+Scheduler& event_select_get_scheduler(const Event&);
+bool       event_select_is_ready_locked(const Event&);  // PRE: global_mtx_ held
+void       event_select_register_locked(Event&, SelectArmSlot&);
+void       event_select_unlink_locked(Event&, SelectArmSlot&);
+```
+
+These replace any direct access to `Event::scheduler_`, `Event::set_`, or
+`Event::select_port_`.
+
+---
+
+## 9. Test seams for the Event adapter
 
 The deterministic PhaseTag seams (compiled only into
 `sluice_async_internal_testing`, never into the production target) are:

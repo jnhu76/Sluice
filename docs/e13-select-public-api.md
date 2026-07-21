@@ -85,9 +85,9 @@ a fixed-size caller-frame array of `SelectArmSlot` (the variadic expansion
    a missing Scheduler binding cannot be expressed; the type system rejects
    wrong case kinds at the call site.
 3. **Compile-time arity gate.** `kSelectMaxArms` is enforced by a
-   `static_assert(sizeof...(Cases) <= kSelectMaxArms)`. The empty-list case is
-   structurally impossible (variadic min-arity is 1). "Too many arms" cannot
-   reach runtime.
+   `requires` clause (`sizeof...(Cases) <= kSelectMaxArms`). The empty-list
+   case is rejected by the same requires clause (`sizeof...(Cases) >= 1`).
+   "Too many arms" and "zero arms" cannot reach runtime.
 4. **Index stability.** Argument order *is* the index the formal model uses
    for the lowest-index tie-break. There is no builder reordering, no span
    reordering; the index is fixed at the call site and visible to the reader.
@@ -150,6 +150,8 @@ private:
 };
 
 // Case constructors. Each is a typed value; no tag field exposed.
+// SelectCaseType<Case> is a concept satisfied by EventSelectCase and
+// TimerSelectCase, used in the select() requires clause.
 class EventSelectCase {
 public:
     EventSelectCase(Event& event) noexcept;
@@ -163,7 +165,16 @@ public:
 };
 
 // The entry point. 1 <= sizeof...(Cases) <= kSelectMaxArms.
+// The requires clause rejects empty packs, too-large packs, and non-case
+// types at compile time.
+// SelectCaseType<Case> is a concept matching EventSelectCase and
+// TimerSelectCase (defined in the same header).
 template <class... Cases>
+    requires (
+        sizeof...(Cases) >= 1 &&
+        sizeof...(Cases) <= kSelectMaxArms &&
+        (SelectCaseType<Cases> && ...)
+    )
 SelectResult select(Scheduler& scheduler, Cases&&... cases);
 
 }  // namespace sluice::async
@@ -352,9 +363,9 @@ throw across a `context_switch` boundary.
 
 | Input                                  | Mechanism                  | Phase      |
 |----------------------------------------|----------------------------|------------|
-| 0 cases                                | `static_assert`            | compile    |
-| > `kSelectMaxArms` cases               | `static_assert`            | compile    |
-| wrong case type                        | type system                | compile    |
+| 0 cases                                | `requires` clause          | compile    |
+| > `kSelectMaxArms` cases               | `requires` clause          | compile    |
+| wrong case type                        | `requires` clause (`SelectCaseType` concept) | compile |
 | Event bound to another Scheduler       | `std::invalid_argument`    | admission  |
 | Timer case Scheduler ≠ select() sched  | `std::invalid_argument`    | admission  |
 | caller not a Fiber on target Scheduler | debug assert + `std::logic_error` | admission |
