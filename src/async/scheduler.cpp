@@ -3037,9 +3037,18 @@ bool Scheduler::earliest_active_deadline_locked(deadline_t& out) const {
     // Return the earliest ACTIVE deadline (min-heap front, skipping inert
     // entries). Used to bound park_on_wake_source (I6). The heap is lazily
     // cleaned by pump_deadlines_locked; here we just scan for the min ACTIVE.
+    // E13 P3: Select ACTIVE deadlines participate exactly like ordinary ones
+    // (docs/e13-select-timer-adapter.md §4.2), so both pools are scanned.
     bool found = false;
     deadline_t best = 0;
     for (const auto& r : timer_pool_) {
+        if (!r.is_active()) continue;
+        if (!found || r.deadline() < best) {
+            best = r.deadline();
+            found = true;
+        }
+    }
+    for (const auto& r : select_timer_pool_) {
         if (!r.is_active()) continue;
         if (!found || r.deadline() < best) {
             best = r.deadline();
@@ -3056,9 +3065,18 @@ void Scheduler::recompute_earliest_deadline_locked() {
     // park_on_wake_source can read it LOCK-FREE (avoiding a wake_mtx_ ->
     // global_mtx_ lock-order inversion). O(pool); the pool holds at most one
     // entry per concurrent deadline wait.
+    // E13 P3: Select ACTIVE deadlines participate exactly like ordinary ones,
+    // so both pools are scanned.
     deadline_t best = kNoDeadline;
     bool found = false;
     for (const auto& r : timer_pool_) {
+        if (!r.is_active()) continue;
+        if (!found || r.deadline() < best) {
+            best = r.deadline();
+            found = true;
+        }
+    }
+    for (const auto& r : select_timer_pool_) {
         if (!r.is_active()) continue;
         if (!found || r.deadline() < best) {
             best = r.deadline();

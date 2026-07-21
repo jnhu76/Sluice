@@ -1081,6 +1081,16 @@ private:
     // public API exposure. See docs/e13-select-timer-adapter.md §4.
     std::vector<detail::DeadlineHeapEntry> deadline_heap_ SLUICE_GUARDED_BY(global_mtx_){};
 
+    // E13 P3: Scheduler-owned stable pool of SelectTimerRegistration blocks,
+    // mirroring timer_pool_. Blocks are constructed in a caller-frame
+    // std::list outside G and spliced in ONE NODE AT A TIME under G during
+    // registration (std::list::splice is O(1), allocation-free). Pointer-
+    // stable; the heap entry references a block by &pool.back() after splice.
+    // Lazy-at-deadline reclamation: a retired/consumed block remains here
+    // until the pump pops its deadline entry (mirrors timer_pool_).
+    std::list<detail::SelectTimerRegistration> select_timer_pool_
+        SLUICE_GUARDED_BY(global_mtx_){};
+
     // O(1) count of ACTIVE timer registrations. Incremented/decremented
     // alongside every Active ↔ {Retired, Consumed} state transition under
     // global_mtx_. Replaces an O(pool) scan in any_active_deadline_locked().
@@ -1162,6 +1172,55 @@ private:
     // live+pending deadline waits with no UAF. Called under global_mtx_.
     // NEVER reads node()/queue() (I4-safe by construction).
     void erase_popped_registration_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
+
+    // ---- E13 P3 Select timer registration (private Scheduler authority) ----
+    // All require global_mtx_ held. These own the registered-state accounting
+    // authority for Select Timer arms (Addendum C): every ACTIVE->terminal
+    // transition of a registered Select block routes through the two helpers
+    // below so active_deadline_count_ is decremented exactly once and the
+    // earliest-deadline cache is recomputed. The stale pump-pop path does
+    // physical reclamation only and does NOT decrement again.
+
+    // Splice ONE SelectTimerRegistration node from a caller-frame temporary
+    // pool into select_timer_pool_, push its DeadlineHeapEntry {Select}, and
+    // return a stable pointer to the now-Scheduler-owned block. O(1),
+    // allocation-free under G (single-node std::list::splice + push within
+    // reserved capacity — reserve is the caller's responsibility). The
+    // returned pointer is valid until the pump reclaims the block.
+    detail::SelectTimerRegistration* select_timer_splice_one_locked(
+        std::list<detail::SelectTimerRegistration>& tmp_pool,
+        std::list<detail::SelectTimerRegistration>::iterator it)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Retire a registered Select block: validate ownership + pool membership,
+    // CAS ACTIVE->RETIRED; on success decrement active_deadline_count_ once
+    // and recompute earliest_active_deadline_. Returns true iff THIS call
+    // retired an active registration. On failed CAS: no counter mutation.
+    bool select_timer_retire_locked(detail::SelectTimerRegistration& reg)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Consume a registered Select block: validate ownership + pool membership,
+    // CAS ACTIVE->CONSUMED; on success decrement active_deadline_count_ once
+    // and recompute earliest_active_deadline_. Returns true iff THIS call
+    // consumed an active registration. On failed CAS: no counter mutation.
+    bool select_timer_consume_locked(detail::SelectTimerRegistration& reg)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // O(1)-by-address erase of a Select pool block, SAFE only because the
+    // caller (pump) has ALREADY popped the block from the deadline heap.
+    // Physical reclamation only: does NOT decrement active_deadline_count_
+    // (the retire/consume helper already did, exactly once). I4-safe: matches
+    // by address, never reads arm_. Mirrors erase_popped_registration_locked.
+    void erase_popped_select_registration_locked(
+        detail::SelectTimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
+
+    // Predicate: does this Scheduler's select_timer_pool_ own `reg` (by
+    // address)? Used by the accounting helpers to validate that a registered
+    // transition is being applied to a Scheduler-owned block (defends against
+    // a stray/detached local object or a cross-Scheduler mistake). O(pool).
+    bool pool_owns_select_block_locked(
+        const detail::SelectTimerRegistration& reg) const noexcept
+        SLUICE_REQUIRES(global_mtx_);
 
     // E11-T17 (F2) narrow test hook: register a TimerRegistration for {node,q,
     // deadline} from a NON-worker thread (the test coordinator). Mirrors the
@@ -1248,6 +1307,13 @@ private:
     // ------------------------------------------------------------------------
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 public:
+    // E13 P3 test-only instrumentation (Addendum E): counts the number of
+    // times the Select timer pump branch reads reg.arm_ on an ACTIVE entry
+    // — i.e. the exact production dereference site, instrumented immediately
+    // before the load. Stale (RETIRED/CONSUMED) pops must observe a delta of
+    // 0. Reachable only via AsyncTestAccess; absent in production.
+    std::size_t select_timer_arm_load_count_{0};
+
     // Internal-testing access surface. Reached only via the non-installed
     // test-support controller; not part of the public API.
     struct AsyncTestAccess {
