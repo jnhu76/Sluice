@@ -12,8 +12,9 @@
 // can forge the friend grant: the template entity is uniquely identified by
 // its template-head + name + signature, and only the single definition in
 // select.hpp matches that entity. A TU that tries to define its own version
-// of the template would produce a distinct template entity (ODR-guarded) that
-// does not match the friend declaration.
+// of the template would violate ODR (the definition would conflict with the
+// select.hpp definition in a well-formed program); this is a type-system
+// guard under the well-formed C++ consumer model, not a security boundary.
 #pragma once
 
 #include <concepts>
