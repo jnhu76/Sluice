@@ -166,4 +166,36 @@ void clear_reached(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
     }
 }
 
+void capture_admission_snapshot(sluice::async::Scheduler& s, PhaseTag tag,
+                                const AdmissionSnapshot& snap) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    PhaseState& p = phase_of(*c, tag);
+    // Write the snapshot under the controller's own mutex so the coordinator
+    // thread can read it without acquiring any production lock. The admission
+    // worker holds global_mtx_ at this point.
+    {
+        std::lock_guard<std::mutex> lk(p.mtx);
+        if (tag == PhaseTag::e13_admission_armed) {
+            c->admission_armed_snapshot = snap;
+        } else if (tag == PhaseTag::e13_admission_consumed) {
+            c->admission_consumed_snapshot = snap;
+        }
+    }
+}
+
+AdmissionSnapshot read_admission_snapshot(sluice::async::Scheduler& s,
+                                           PhaseTag tag) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return AdmissionSnapshot{};
+    PhaseState& p = phase_of(*c, tag);
+    std::lock_guard<std::mutex> lk(p.mtx);
+    if (tag == PhaseTag::e13_admission_armed) {
+        return c->admission_armed_snapshot;
+    } else if (tag == PhaseTag::e13_admission_consumed) {
+        return c->admission_consumed_snapshot;
+    }
+    return AdmissionSnapshot{};
+}
+
 }  // namespace sluice_async_test

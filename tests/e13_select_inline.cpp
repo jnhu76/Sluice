@@ -528,17 +528,18 @@ SLUICE_TEST_CASE(t1_template_link_matrix) {
 // ===========================================================================
 // T2 — all arms registered before snapshot (AdmissionArmed seam)
 // ===========================================================================
-// The AdmissionArmed seam fires AFTER every arm is registered and phase becomes
-// Selecting, BEFORE the readiness snapshot — all under global_mtx_. Because the
-// worker holds global_mtx_ at the seam, a coordinator thread cannot acquire it
-// to observe Scheduler-internal state, so we do NOT block here. Instead we
-// observe (a) the seam is REACHED in-order (Armed before Consumed), and (b) the
-// load-bearing consequence: BOTH arms were registered before the snapshot,
-// proven by the loser arm being finalized. If admission shortcutted
-// registration after the first ready arm, the other arm would never be
-// registered and could not be finalized — yet here arm 1 (Timer) is closed
-// (no ACTIVE remains) and the Event at index 0 won. So both were registered
-// before the snapshot chose index 0.
+// P5 CORRECTIVE: the AdmissionArmed boundary snapshot is captured by the
+// admission worker under global_mtx_ before the readiness snapshot. The test
+// reads the snapshot under the controller's own mutex (no global_mtx_
+// acquisition) and asserts the mechanical boundary state:
+//   - phase == Selecting
+//   - winner == kNoWinner (no winner chosen before snapshot)
+//   - every arm state == Registered (all arms registered)
+//   - Event arm is linked (home_ != nullptr)
+//   - Timer arm registration is ACTIVE
+//
+// Combined with the load-bearing consequence (loser arm finalized = registered
+// + closed), this provides the causal boundary proof the review requires.
 SLUICE_TEST_CASE(t2_all_arms_registered_before_snapshot) {
     if constexpr (!sa::fiber_ctx::supported) return;
     InlineFixture f;
@@ -566,15 +567,50 @@ SLUICE_TEST_CASE(t2_all_arms_registered_before_snapshot) {
     SLUICE_CHECK_MSG(
         stest::E13SelectAdmissionSeam::armed_reached(f.sched),
         "AdmissionArmed seam reached (all arms registered before snapshot)");
+
+    // Read the boundary snapshot captured at the AdmissionArmed seam.
+    const auto armed_snap = stest::E13SelectAdmissionSeam::armed_snapshot(f.sched);
+    SLUICE_CHECK_MSG(
+        armed_snap.phase == sad::GroupPhase::selecting,
+        "AdmissionArmed snapshot: phase == Selecting");
+    SLUICE_CHECK_MSG(
+        armed_snap.winner == static_cast<std::uint32_t>(-1),
+        "AdmissionArmed snapshot: winner == kNoWinner");
+    SLUICE_CHECK_MSG(
+        armed_snap.arm_count == 2,
+        "AdmissionArmed snapshot: 2 arms registered");
+    // Arm 0 (Event): Registered, linked.
+    SLUICE_CHECK_MSG(
+        armed_snap.arm_states[0] == sad::ArmState::registered,
+        "AdmissionArmed snapshot: arm 0 state == Registered");
+    SLUICE_CHECK_MSG(
+        armed_snap.arm_kinds[0] == sad::ArmKind::event,
+        "AdmissionArmed snapshot: arm 0 kind == Event");
+    SLUICE_CHECK_MSG(
+        armed_snap.event_linked[0],
+        "AdmissionArmed snapshot: arm 0 linked to Event port");
+    // Arm 1 (Timer): Registered, ACTIVE.
+    SLUICE_CHECK_MSG(
+        armed_snap.arm_states[1] == sad::ArmState::registered,
+        "AdmissionArmed snapshot: arm 1 state == Registered");
+    SLUICE_CHECK_MSG(
+        armed_snap.arm_kinds[1] == sad::ArmKind::timer,
+        "AdmissionArmed snapshot: arm 1 kind == Timer");
+    SLUICE_CHECK_MSG(
+        armed_snap.timer_states[1] ==
+            sad::SelectTimerRegistration::State::active,
+        "AdmissionArmed snapshot: Timer arm ACTIVE");
+    // All-authority-closed is false (no winner yet).
+    SLUICE_CHECK_MSG(
+        !armed_snap.all_authority_closed,
+        "AdmissionArmed snapshot: authority not yet closed (no winner)");
+
     // Lowest ready index wins (Event at 0), proving the snapshot saw both arms.
     SLUICE_CHECK_MSG(captured.has_winner(), "winner produced");
     SLUICE_CHECK_MSG(captured.index() == 0, "index 0 (Event) wins by lowest index");
     SLUICE_CHECK_MSG(captured.kind() == SelectKind::event, "Event winner");
     // The loser Timer arm (index 1) was registered THEN finalized: no ACTIVE
-    // Select timer remains. This is only possible if arm 1 was registered before
-    // the snapshot (a shortcut would have left it unregistered, hence ACTIVE-less
-    // would be impossible to even assert meaningfully — but its registration was
-    // counted and then closed).
+    // Select timer remains.
     SLUICE_CHECK_MSG(
         stest::E13SelectTimerSeam::count_in_state(
             f.sched, sad::SelectTimerRegistration::State::active) == 0,
@@ -584,11 +620,16 @@ SLUICE_TEST_CASE(t2_all_arms_registered_before_snapshot) {
 // ===========================================================================
 // T3 — inline lifecycle (AdmissionConsumed seam reached, inline completion)
 // ===========================================================================
-// AdmissionConsumed fires AFTER inline phase becomes Completed, BEFORE Consumed.
-// We assert the seam is reached in-order (after Armed) and that the inline
-// completion left: a winner, no ACTIVE timer authority, and runnable delta 0.
-// After return, the admitted group reached Consumed (its destructor's terminal-
-// phase assert would fire otherwise — proven by the test completing cleanly).
+// P5 CORRECTIVE: the AdmissionConsumed boundary snapshot is captured by the
+// admission worker under global_mtx_ before the seam. The test reads the
+// snapshot and asserts the mechanical boundary state:
+//   - phase == Completed
+//   - completion_mode == Inline
+//   - winner set (not kNoWinner)
+//   - every arm Retired
+//   - all authority closed
+// This provides the causal boundary proof the review requires, without
+// requiring the coordinator to acquire global_mtx_ while the worker holds it.
 SLUICE_TEST_CASE(t3_inline_lifecycle) {
     if constexpr (!sa::fiber_ctx::supported) return;
     InlineFixture f;
@@ -617,6 +658,30 @@ SLUICE_TEST_CASE(t3_inline_lifecycle) {
     SLUICE_CHECK_MSG(
         stest::E13SelectAdmissionSeam::consumed_reached(f.sched),
         "AdmissionConsumed seam reached (inline Completed->Consumed lifecycle)");
+
+    // Read the boundary snapshot captured at the AdmissionConsumed seam.
+    const auto consumed_snap =
+        stest::E13SelectAdmissionSeam::consumed_snapshot(f.sched);
+    SLUICE_CHECK_MSG(
+        consumed_snap.phase == sad::GroupPhase::completed,
+        "AdmissionConsumed snapshot: phase == Completed");
+    SLUICE_CHECK_MSG(
+        consumed_snap.completion_mode == sad::CompletionMode::inline_,
+        "AdmissionConsumed snapshot: completion_mode == Inline");
+    SLUICE_CHECK_MSG(
+        consumed_snap.winner != static_cast<std::uint32_t>(-1),
+        "AdmissionConsumed snapshot: winner set (not kNoWinner)");
+    SLUICE_CHECK_MSG(
+        consumed_snap.arm_count == 1,
+        "AdmissionConsumed snapshot: 1 arm");
+    // The single arm is Retired.
+    SLUICE_CHECK_MSG(
+        consumed_snap.arm_states[0] == sad::ArmState::retired,
+        "AdmissionConsumed snapshot: arm state == Retired");
+    SLUICE_CHECK_MSG(
+        consumed_snap.all_authority_closed,
+        "AdmissionConsumed snapshot: all authority closed");
+
     SLUICE_CHECK_MSG(captured.has_winner(), "winner produced");
     SLUICE_CHECK_MSG(captured.index() == 0, "winner index 0");
     // Inline completion publishes zero runnables.

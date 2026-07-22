@@ -65,4 +65,14 @@ namespace sluice::async::detail {
 // not on the hot path.
 [[noreturn]] void select_admission_no_ready_fail_fast() noexcept;
 
+// E13 P5 CORRECTIVE: general-purpose Select invariant fail-fast. Called when
+// the admission core receives a structurally invalid descriptor/count argument
+// (descs==nullptr, count==0, count>kSelectMaxArms) or encounters an unknown
+// descriptor kind in Release builds. Provides defense-in-depth against
+// Release-mode memory safety violations even when a non-friend caller bypasses
+// the public select() template's compile-time requires clause gate.
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void select_invariant_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

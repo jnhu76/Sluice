@@ -313,8 +313,15 @@ bool Scheduler::select_all_authority_closed_locked(
 // ===========================================================================
 SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
                                             std::size_t count) {
+    // Release-mode defense-in-depth: reject structurally invalid arguments that
+    // would cause a fixed-array out-of-bounds access. This protects against a
+    // hypothetical non-friend caller that bypasses the public select() template's
+    // compile-time requires clause gate, or a corrupted descriptor pointer.
     assert(descs != nullptr && count >= 1 && count <= kPreflightMaxArms &&
            "select_admit_inline: descs/count out of range (requires clause gate)");
+    if (descs == nullptr || count == 0 || count > kSelectMaxArms) {
+        detail::select_invariant_fail_fast();
+    }
 
     // -----------------------------------------------------------------------
     // (1) Caller validation — BEFORE any allocation/registration.
@@ -344,21 +351,25 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
     // -----------------------------------------------------------------------
     for (std::size_t i = 0; i < count; ++i) {
         const detail::SelectCaseDescriptor& d = descs[i];
-        if (d.kind == detail::SelectCaseDescriptor::Kind::event) {
-            assert(d.event != nullptr &&
+        switch (d.kind_) {
+        case detail::SelectCaseDescriptor::Kind::event: {
+            assert(d.event_ != nullptr &&
                    "select_admit_inline: Event descriptor event_ is null");
-            // Event binds its Scheduler; read the private field under the friend
-            // grant (EventSelectCase::event_ -> Event& -> Event::scheduler_).
-            if (&d.event->scheduler_ != this) {
+            if (&d.event_->scheduler_ != this) {
                 throw std::invalid_argument(
                     "select(): Event does not belong to this Scheduler");
             }
-        } else {
-            if (d.scheduler != this) {
+            break;
+        }
+        case detail::SelectCaseDescriptor::Kind::timer:
+            if (d.scheduler_ != this) {
                 throw std::invalid_argument(
                     "select(): Timer case Scheduler does not match select() "
                     "Scheduler argument");
             }
+            break;
+        default:
+            detail::select_invariant_fail_fast();
         }
     }
 
@@ -393,16 +404,20 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
         detail::SelectCaseDescriptor& d = descs[i];
         arm.group = &group;
         arm.state = detail::ArmState::prepared;
-        if (d.kind == detail::SelectCaseDescriptor::Kind::event) {
-            arm.construct_event(*d.event);
-        } else {
-            arm.construct_timer(d.deadline);
-            // One ACTIVE stable block per Timer arm, outside the lock.
+        switch (d.kind_) {
+        case detail::SelectCaseDescriptor::Kind::event:
+            arm.construct_event(*d.event_);
+            break;
+        case detail::SelectCaseDescriptor::Kind::timer:
+            arm.construct_timer(d.deadline_);
             timer_tmp_pool.emplace_back(&arm, this,
-                                        static_cast<deadline_tick_t>(d.deadline));
+                                        static_cast<deadline_tick_t>(d.deadline_));
             detail::SelectTimerRegistration& node = timer_tmp_pool.back();
-            arm.timer.stable_reg_ = &node;  // stable across splice
+            arm.timer.stable_reg_ = &node;
             ++timer_arm_count;
+            break;
+        default:
+            detail::select_invariant_fail_fast();
         }
     }
     // NOTE: mark_admitted() is deferred until AFTER the deadline-heap reserve
@@ -448,7 +463,7 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
                 // which sets arm.state = Registered. Distinct duplicate Event
                 // cases receive DISTINCT SelectArmSlot nodes (each is a separate
                 // array slot linked into the same port).
-                select_event_link_locked(*descs[i].event, arm);
+                select_event_link_locked(*descs[i].event_, arm);
             } else {
                 // Timer arm: splice exactly one tmp_pool node into the Scheduler
                 // pool, push its tagged DeadlineHeapEntry, increment
@@ -477,7 +492,27 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
 
         // (8) AdmissionArmed seam: AFTER every arm registered, AFTER phase
         // becomes Selecting, BEFORE the readiness snapshot.
+        // P5 CORRECTIVE: capture the boundary snapshot before the seam so the
+        // test can read the mechanical group/arm state without acquiring G.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        {
+            sluice_async_test::AdmissionSnapshot snap;
+            snap.phase = group.phase();
+            snap.completion_mode = group.completion_mode_;
+            snap.winner = group.winner();
+            snap.arm_count = group.arm_count_;
+            snap.all_authority_closed = false;
+            for (std::size_t si = 0; si < group.arm_count_; ++si) {
+                snap.arm_states[si] = arms[si].state;
+                snap.arm_kinds[si] = arms[si].kind;
+                snap.event_linked[si] = (arms[si].home_ != nullptr);
+                snap.timer_states[si] = arms[si].timer.stable_reg_
+                    ? arms[si].timer.stable_reg_->state()
+                    : detail::SelectTimerRegistration::State::consumed;
+            }
+            sluice_async_test::capture_admission_snapshot(
+                *this, sluice_async_test::PhaseTag::e13_admission_armed, snap);
+        }
         sluice_async_test::test_phase(
             *this, sluice_async_test::PhaseTag::e13_admission_armed);
 #endif
@@ -492,12 +527,15 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
         for (std::size_t i = 0; i < count; ++i) {
             detail::SelectArmSlot& arm = arms[i];
             bool ready = false;
-            if (arm.kind == detail::ArmKind::event) {
-                // Event readiness: set_ == true under global_mtx_.
-                ready = descs[i].event->set_.load(std::memory_order::acquire);
-            } else {
-                // Timer readiness: deadline <= captured_now (single capture).
+            switch (arm.kind) {
+            case detail::ArmKind::event:
+                ready = descs[i].event_->set_.load(std::memory_order::acquire);
+                break;
+            case detail::ArmKind::timer:
                 ready = arm.timer.stable_reg_->deadline() <= captured_now;
+                break;
+            default:
+                detail::select_invariant_fail_fast();
             }
             if (ready) {
                 arm.state = detail::ArmState::candidate_ready;
@@ -559,7 +597,27 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
         group.set_phase(detail::GroupPhase::completed);
 
         // AdmissionConsumed seam: AFTER phase becomes Completed, BEFORE Consumed.
+        // P5 CORRECTIVE: capture the boundary snapshot before the seam so the
+        // test can read the mechanical inline lifecycle state.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        {
+            sluice_async_test::AdmissionSnapshot snap;
+            snap.phase = group.phase();
+            snap.completion_mode = group.completion_mode_;
+            snap.winner = group.winner();
+            snap.arm_count = group.arm_count_;
+            snap.all_authority_closed = select_all_authority_closed_locked(group);
+            for (std::size_t si = 0; si < group.arm_count_; ++si) {
+                snap.arm_states[si] = arms[si].state;
+                snap.arm_kinds[si] = arms[si].kind;
+                snap.event_linked[si] = (arms[si].home_ != nullptr);
+                snap.timer_states[si] = arms[si].timer.stable_reg_
+                    ? arms[si].timer.stable_reg_->state()
+                    : detail::SelectTimerRegistration::State::consumed;
+            }
+            sluice_async_test::capture_admission_snapshot(
+                *this, sluice_async_test::PhaseTag::e13_admission_consumed, snap);
+        }
         sluice_async_test::test_phase(
             *this, sluice_async_test::PhaseTag::e13_admission_consumed);
 #endif

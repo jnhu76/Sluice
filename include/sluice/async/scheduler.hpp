@@ -12,6 +12,7 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/queue_port.hpp>  // detail::QueuePort / QueueRole (E12-E Queue seams)
 #include <sluice/async/detail/select_registration.hpp>  // detail::DeadlineHeapEntry, SelectTimerRegistration (E13 P3)
+#include <sluice/async/select_fwd.hpp>  // E13 P5 CORRECTIVE: select() template declaration + forward decls
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/lock_guard.hpp>
@@ -46,8 +47,7 @@ class SelectGroup;
 class SelectPort;
 struct SelectArmSlot;
 enum class ArmState : std::uint8_t;
-struct SelectCaseDescriptor;  // P5: full definition in select.hpp
-struct SelectBridge;          // P5: concrete friend bridging select() -> select_admit_inline
+class SelectCaseDescriptor;  // P5 CORRECTIVE: full definition in select.hpp (sealed fields)
 }  // namespace detail
 
 // ----------------------------------------------------------------------------
@@ -842,14 +842,22 @@ private:
     //Scheduler-internal wake + global-mtx access for its reconciler.
     friend class ::sluice::async::detail::QueuePort;
 
-    // E13 P5: detail::SelectBridge is the concrete friend that the public
-    // variadic select() template forwards through to reach the private
-    // select_admit_inline admission core. A constrained function-template
-    // friend would not match the public definition (the requires clause makes
-    // them distinct template entities), so select() routes through this
-    // concrete struct instead. select_admit_inline stays private to all other
-    // code; only SelectBridge::admit (a public static method) calls it.
-    friend struct ::sluice::async::detail::SelectBridge;
+    // E13 P5 CORRECTIVE: friend the pre-declared constrained public select()
+    // template (declared in select_fwd.hpp, defined in select.hpp). By
+    // friending a concrete function-template entity (not a concrete struct
+    // name), an ordinary production TU cannot forge the friend grant: the
+    // template is uniquely identified by its template-head + requires clause +
+    // signature, and no other definition can match that entity.
+    //
+    // The template calls select_admit_inline directly (no intermediate
+    // SelectBridge). select_admit_inline stays private to all other code.
+    template <class... Cases>
+        requires (
+            sizeof...(Cases) >= 1 &&
+            sizeof...(Cases) <= kSelectMaxArms &&
+            (SelectCaseType<std::remove_cvref_t<Cases>> && ...)
+        )
+    friend SelectResult select(Scheduler& scheduler, Cases&&... cases);
 
     // ---- E13 Select registry operations (private Scheduler authority) ----
     // All three require global_mtx_ held. Event must belong to this Scheduler.
@@ -1335,17 +1343,18 @@ private:
     //  docs/e13-select-locking-and-publication.md §3,
     //  docs/e13-select-public-api.md §3/§4/§5/§7).
     //
-    // The single non-template admission core, reached ONLY via the friend
-    // detail::SelectBridge::admit, which the public variadic select() template
-    // forwards to. PRIVATE: ordinary code cannot name it (the friend grant is
-    // only to SelectBridge). Owns every centralized admission step: caller +
-    // case-Scheduler validation (BEFORE any allocation), caller-frame group+
-    // arms materialization, Timer stable-block
-    // construction (before global_mtx_), deadline-heap reserve (the only
-    // allocation under the lock), the registration loop, FinishRegistration,
-    // the immutable readiness snapshot, lowest-index tie-break, the single P4
-    // processor call, all-authority-closed verification, and inline result
-    // completion (Completed -> Consumed). NOT a template — compiles once.
+    // The single non-template admission core, reached ONLY via the friended
+    // public variadic select() template (declared in select_fwd.hpp, defined
+    // in select.hpp). PRIVATE: ordinary code cannot name it (the friend grant
+    // is to the exact constrained template entity, not to a forgeable struct
+    // name). Owns every centralized admission step: caller + case-Scheduler
+    // validation (BEFORE any allocation), caller-frame group+ arms
+    // materialization, Timer stable-block construction (before global_mtx_),
+    // deadline-heap reserve (the only allocation under the lock), the
+    // registration loop, FinishRegistration, the immutable readiness snapshot,
+    // lowest-index tie-break, the single P4 processor call, all-authority-
+    // closed verification, and inline result completion (Completed -> Consumed).
+    // NOT a template — compiles once.
     //
     // P5 implements the INLINE-READY case only: a successful admission returns a
     // SelectResult without suspending the caller or publishing a runnable. The

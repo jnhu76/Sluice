@@ -431,8 +431,16 @@ struct E13SelectTimerSeam {
 // global_mtx_; a coordinator thread arms + observes while the worker is paused
 // there, proving registration-before-snapshot, snapshot-before-finalize, and
 // the inline Completed->Consumed lifecycle ordering. No production symbol.
+//
+// P5 CORRECTIVE: admission boundary snapshots are captured by the admission
+// worker under global_mtx_ before each seam, so the test can read the
+// mechanical group/arm state without acquiring global_mtx_ (which would
+// deadlock if the worker holds it). The snapshot accessor functions return
+// the controller-owned copy; they acquire the controller's own mutex, not
+// any production lock.
 struct E13SelectAdmissionSeam {
     using Scheduler = sluice::async::Scheduler;
+    using AdmissionSnapshot = sluice_async_test::AdmissionSnapshot;
 
     // Non-blocking reach observation. The admission seams fire under
     // global_mtx_; a coordinator thread cannot acquire that lock to observe
@@ -492,6 +500,23 @@ struct E13SelectAdmissionSeam {
     }
     static void release_admission_consumed(Scheduler& s) noexcept {
         sluice_async_test::release(s, PhaseTag::e13_admission_consumed);
+    }
+
+    // ---- P5 CORRECTIVE: admission boundary snapshot accessors ----
+    // Read the AdmissionArmed boundary snapshot. The snapshot was captured by
+    // the admission worker under global_mtx_ before the readiness snapshot, so
+    // it reflects the exact group/arm state at the Armed seam. The test reads
+    // it under the controller's own mutex (no global_mtx_ acquisition).
+    static AdmissionSnapshot armed_snapshot(Scheduler& s) noexcept {
+        return sluice_async_test::read_admission_snapshot(
+            s, PhaseTag::e13_admission_armed);
+    }
+
+    // Read the AdmissionConsumed boundary snapshot. Captured after phase==
+    // Completed, before Consumed. Reflects the inline lifecycle state.
+    static AdmissionSnapshot consumed_snapshot(Scheduler& s) noexcept {
+        return sluice_async_test::read_admission_snapshot(
+            s, PhaseTag::e13_admission_consumed);
     }
 };
 

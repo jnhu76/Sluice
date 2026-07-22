@@ -24,10 +24,13 @@
 // through Scheduler::AsyncTestAccess (also guarded by the macro).
 #pragma once
 
+#include <sluice/async/detail/select_port.hpp>
 #include <sluice/async/scheduler.hpp>
 
+#include <array>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <mutex>
 
 namespace sluice_async_test {
@@ -123,10 +126,33 @@ struct PhaseState {
     bool paused = false;   // the phase is blocked waiting for release
 };
 
+// ---- E13 P5 CORRECTIVE: admission boundary snapshot ----
+// Captured by the admission worker under global_mtx_ immediately before each
+// seam, then read by the coordinator thread under the controller's own mutex
+// (no global_mtx_ acquisition). Only the two expected PhaseTag values are
+// valid: e13_admission_armed and e13_admission_consumed.
+struct AdmissionSnapshot {
+    sluice::async::detail::GroupPhase phase;
+    sluice::async::detail::CompletionMode completion_mode;
+    std::uint32_t winner;
+    std::size_t arm_count;
+    std::array<sluice::async::detail::ArmState, 8> arm_states;
+    std::array<sluice::async::detail::ArmKind, 8> arm_kinds;
+    std::array<bool, 8> event_linked;
+    std::array<sluice::async::detail::SelectTimerRegistration::State, 8> timer_states;
+    bool all_authority_closed;
+};
+
 // The controller entry for one Scheduler. Holds one PhaseState per tag. The
 // array is indexed by PhaseTag (cast to size_t). Lookups are O(1).
 struct SchedulerController {
     PhaseState phases[static_cast<std::size_t>(PhaseTag::count)]{};
+    // E13 P5 CORRECTIVE: fixed-size boundary snapshots, populated by the
+    // admission worker under global_mtx_ before each seam, read by the test
+    // coordinator under the controller's own mutex. Only valid when the
+    // corresponding phase has been reached.
+    AdmissionSnapshot admission_armed_snapshot{};
+    AdmissionSnapshot admission_consumed_snapshot{};
 };
 
 // --- Called from scheduler.cpp (under SLUICE_ASYNC_INTERNAL_TESTING) ---
@@ -136,6 +162,21 @@ struct SchedulerController {
 // (the phase was reached but no test is observing — safe for production paths
 // that happen to be compiled into the variant without a test driver).
 void test_phase(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
+
+// E13 P5 CORRECTIVE: capture an admission boundary snapshot into the
+// controller's snapshot storage. Must be called from the admission worker
+// under global_mtx_, immediately before the corresponding test_phase() call.
+// The snapshot is read by the test coordinator under the controller's own
+// mutex (no global_mtx_ acquisition). No-op if `s` has no registered controller.
+void capture_admission_snapshot(sluice::async::Scheduler& s, PhaseTag tag,
+                                const AdmissionSnapshot& snap) noexcept;
+
+// Read the admission boundary snapshot for a given phase tag. The snapshot
+// must have been populated by a prior capture_admission_snapshot call (the
+// caller should verify the phase was reached first). Returns a default-
+// constructed snapshot if no controller is registered for `s`.
+AdmissionSnapshot read_admission_snapshot(sluice::async::Scheduler& s,
+                                           PhaseTag tag) noexcept;
 
 // Release ALL armed phases for `s` (used by run-termination paths so a paused
 // test worker observes termination). No-op if `s` has no controller.
