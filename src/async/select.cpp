@@ -408,7 +408,7 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
         case detail::SelectCaseDescriptor::Kind::event:
             arm.construct_event(*d.event_);
             break;
-        case detail::SelectCaseDescriptor::Kind::timer:
+        case detail::SelectCaseDescriptor::Kind::timer: {
             arm.construct_timer(d.deadline_);
             timer_tmp_pool.emplace_back(&arm, this,
                                         static_cast<deadline_tick_t>(d.deadline_));
@@ -416,6 +416,7 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
             arm.timer.stable_reg_ = &node;
             ++timer_arm_count;
             break;
+        }
         default:
             detail::select_invariant_fail_fast();
         }
@@ -506,9 +507,13 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
                 snap.arm_states[si] = arms[si].state;
                 snap.arm_kinds[si] = arms[si].kind;
                 snap.event_linked[si] = (arms[si].home_ != nullptr);
-                snap.timer_states[si] = arms[si].timer.stable_reg_
-                    ? arms[si].timer.stable_reg_->state()
-                    : detail::SelectTimerRegistration::State::consumed;
+                if (arms[si].kind == detail::ArmKind::timer) {
+                    snap.timer_states[si] = arms[si].timer.stable_reg_
+                        ? arms[si].timer.stable_reg_->state()
+                        : detail::SelectTimerRegistration::State::consumed;
+                } else {
+                    snap.timer_states[si] = detail::SelectTimerRegistration::State::consumed;
+                }
             }
             sluice_async_test::capture_admission_snapshot(
                 *this, sluice_async_test::PhaseTag::e13_admission_armed, snap);
@@ -611,9 +616,13 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
                 snap.arm_states[si] = arms[si].state;
                 snap.arm_kinds[si] = arms[si].kind;
                 snap.event_linked[si] = (arms[si].home_ != nullptr);
-                snap.timer_states[si] = arms[si].timer.stable_reg_
-                    ? arms[si].timer.stable_reg_->state()
-                    : detail::SelectTimerRegistration::State::consumed;
+                if (arms[si].kind == detail::ArmKind::timer) {
+                    snap.timer_states[si] = arms[si].timer.stable_reg_
+                        ? arms[si].timer.stable_reg_->state()
+                        : detail::SelectTimerRegistration::State::consumed;
+                } else {
+                    snap.timer_states[si] = detail::SelectTimerRegistration::State::consumed;
+                }
             }
             sluice_async_test::capture_admission_snapshot(
                 *this, sluice_async_test::PhaseTag::e13_admission_consumed, snap);

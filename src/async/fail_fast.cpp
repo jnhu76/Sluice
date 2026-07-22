@@ -30,4 +30,12 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// E13 P5 CORRECTIVE: general-purpose Select invariant fail-fast. Called when
+// the admission core receives a structurally invalid descriptor/count argument
+// or encounters an unknown descriptor kind. Provides defense-in-depth against
+// Release-mode memory safety violations. Terminates; never returns.
+[[noreturn]] void select_invariant_fail_fast() noexcept {
+    std::terminate();
+}
+
 }  // namespace sluice::async::detail
