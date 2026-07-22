@@ -405,9 +405,13 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
             ++timer_arm_count;
         }
     }
-    // The group is now a real admitted Select operation (enforce terminal-phase
-    // contract in its destructor).
-    group.mark_admitted();
+    // NOTE: mark_admitted() is deferred until AFTER the deadline-heap reserve
+    // succeeds (inside the CS below). Per §9.1 a reserve throw must leave "no
+    // group admission marker"; if we marked admitted here and reserve then threw,
+    // the caller-frame group would unwind in the Building phase and its
+    // destructor would enforce the terminal-phase contract (Consumed/Aborted) —
+    // turning a clean std::bad_alloc into a std::terminate. The admission marker
+    // is only set once the registration transaction is committed (reserve ok).
 
     // -----------------------------------------------------------------------
     // (5)-(10) Registration transaction under ONE global_mtx_ critical section.
@@ -423,9 +427,16 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
                 "select(): deadline heap capacity overflow on reserve");
         }
         deadline_heap_.reserve(deadline_heap_.size() + timer_arm_count);
-        // If reserve threw above: no group admission marker was consumed for the
-        // heap, no arm registered, no splice. The exception propagates; nothing
-        // to roll back (group.arms_/tmp_pool are caller-frame and unwind cleanly).
+        // If reserve threw above: no group admission marker was set, no arm
+        // registered, no splice. The exception propagates; the caller-frame
+        // group is NOT admitted (destructor enforces no terminal-phase contract)
+        // and tmp_pool unwinds cleanly. Nothing to roll back.
+
+        // The registration transaction is now committed (reserve ok). Mark the
+        // group admitted: from here the destructor enforces Consumed/Aborted,
+        // and the path to a terminal phase is noexcept (or fail-fast, which
+        // terminates) — §10: no ordinary throwing operation after reserve.
+        group.mark_admitted();
 
         // (6) Register every arm in index order.
         auto tmp_it = timer_tmp_pool.begin();
