@@ -1501,6 +1501,42 @@ bool Scheduler::AsyncTestAccess::select_all_authority_closed(
     LockGuard lk(s.global_mtx_);
     return s.select_all_authority_closed_locked(group);
 }
+
+// E13 P4 OA corrective: the all-authority-closed invariant as a fail-fast
+// assert — the mechanical precondition a future P6 publication entry will gate
+// on. Acquires global_mtx_ and asserts select_all_authority_closed_locked.
+void Scheduler::AsyncTestAccess::assert_select_all_authority_closed(
+    const Scheduler& s, const detail::SelectGroup& group) {
+    LockGuard lk(s.global_mtx_);
+    assert(s.select_all_authority_closed_locked(group) &&
+           "Select publication requires all arm authority closed");
+}
+
+// E13 P4 EH corrective: forge a stale-but-equality-passing Event home_. PRE:
+// `arm` is unlinked (home_/next_/prev_ null) and NOT present in `event`'s
+// SelectPort intrusive list. Sets arm.home_ = &event.select_port_ so the
+// preflight home_ equality check passes while the arm remains absent from the
+// intrusive list — exactly the shape required for the mechanical membership
+// scan in select_preflight_claim_locked to be load-bearing. Acquires
+// global_mtx_ internally; verifies the preconditions under G.
+void Scheduler::AsyncTestAccess::select_event_forge_stale_home(
+    Scheduler& s, Event& event, detail::SelectArmSlot& arm) {
+    LockGuard lk(s.global_mtx_);
+    assert(&event.scheduler_ == &s &&
+           "select_event_forge_stale_home: Event does not belong to this Scheduler");
+    assert(arm.home_ == nullptr &&
+           "select_event_forge_stale_home: arm must be unlinked (home_ != nullptr)");
+    assert(arm.next_ == nullptr && arm.prev_ == nullptr &&
+           "select_event_forge_stale_home: arm must be fully unlinked");
+    // The arm must NOT be reachable from the port's intrusive list — otherwise
+    // this would be forging a stale home_ for an arm that is genuinely linked.
+    for (detail::SelectArmSlot* p = event.select_port_.head_; p != nullptr;
+         p = p->next_) {
+        assert(p != &arm && "select_event_forge_stale_home: arm is actually "
+               "linked into the port intrusive list; cannot forge stale home_");
+    }
+    arm.home_ = &event.select_port_;
+}
 #endif
 
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {

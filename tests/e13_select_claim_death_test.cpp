@@ -1,16 +1,27 @@
 // e13_select_claim_death_test — E13 P4 Select claim/finalization death tests.
 //
-// Verifies the P4 preflight assertions fire BEFORE the winner CAS (so an
-// invalid group cannot become permanently claimed) for:
+// Verifies the P4 fail-fast assertions terminate the program:
+//
+// Pre-CAS preflight assertions (fire BEFORE the winner CAS, so an invalid group
+// cannot become permanently claimed):
 //   CG  candidate index out of range
 //   CS  group.scheduler_ belongs to another Scheduler
 //   CP  candidate arm is not CandidateReady
 //   CA  candidate arm.group does not match group
-//   EH  Event arm is not linked to the claimed Event port
+//   EH  Event arm not in its Event port's intrusive list (stale-but-equality
+//       home_: passes the home_ equality check, fails the mechanical scan)
 //   TN  Timer arm has null stable registration
 //   TF  Timer registration belongs to another Scheduler
 //   TP  Timer registration is not owned by the Scheduler pool
-//   OA  all-authority-closed assertion invoked while one authority remains open
+//
+// Post-claim publication-precondition assertion:
+//   OA  all-authority-closed assert invoked while one authority remains open
+//
+// Normal-exit control:
+//   CTL valid process completes, exit 0
+//
+// Totals: 9 expected-termination cases (CG/CS/CP/CA/EH/TN/TF/TP/OA) +
+//         1 normal-exit control (CTL).
 //
 // Each case runs in a forked child that re-execs this binary; the child
 // installs handlers so assert (SIGABRT) and std::terminate become a fixed exit
@@ -88,15 +99,17 @@ struct DGroup {
         group.arm_count_ = 1;
     }
     // Add one Timer arm at index 0, CandidateReady, ACTIVE reg.
+    // Mirrors ClaimFixture::add_timer_arm: register the synthetic block FIRST,
+    // then bind it as the arm's stable back-pointer via construct_timer (the
+    // same path the future admission protocol uses).
     void add_timer_candidate(Scheduler::deadline_t deadline) {
-        arms[0].construct_timer(deadline);
-        arms[0].state = ArmState::prepared;
-        arms[0].group = &group;
         SelectTimerReg* reg = sluice_async_test::E13SelectTimerSeam::register_synthetic(
             sched, &arms[0], deadline);
+        arms[0].construct_timer(deadline, reg);
+        arms[0].state = ArmState::prepared;
+        arms[0].group = &group;
         arms[0].state = ArmState::candidate_ready;
         group.arm_count_ = 1;
-        (void)reg;
     }
 };
 
@@ -120,9 +133,10 @@ void child_cs_cross_scheduler_group() {
     g.add_event_candidate();
     sa::AsyncIoContext ctx_b(std::make_unique<sa::FakeAsyncBackend>());
     Scheduler sched_b(ctx_b);
-    // Rebind the group to the OTHER scheduler, then process via the wrong one.
-    // Preflight asserts group.scheduler_ == &sched_b != &this (sched_b calls).
-    g.group.scheduler_ = &g.sched;  // keep arms valid under g.sched
+    // group.scheduler_ stays bound to g.sched (keeping the arms valid under
+    // g.sched). We invoke select_process_group via sched_b, so inside the core
+    // `this == &sched_b` while `group.scheduler_ == &g.sched`, and the preflight
+    // asserts group.scheduler_ == this.
     AsyncTestAccess::select_process_group(sched_b, g.group, /*candidate=*/0);
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
@@ -154,16 +168,21 @@ void child_ca_arm_group_mismatch() {
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
-// EH — Event arm is not linked to the claimed Event port (home_ stale).
+// EH — Event arm is not reachable from its Event port's intrusive list.
+// This is the mechanical-membership-negative case (P1-2): the arm must pass the
+// home_ equality check (arm.home_ == &event.select_port_) but NOT be reachable
+// from the port's intrusive list, so the `found` scan in
+// select_preflight_claim_locked fails. We unlink through the canonical helper
+// (clearing home_/next_/prev_ and removing the arm from the list), then forge a
+// stale-but-equality-passing home_ via the guarded test seam. This proves the
+// intrusive-membership scan is load-bearing: a home_ that merely looks right is
+// rejected when the arm is not actually linked.
 void child_eh_event_arm_not_linked() {
     install_death_handlers();
     DGroup g;
     g.add_event_candidate();
-    // Clear the intrusive membership but leave a stale home_, so the
-    // mechanical membership scan fails. Easiest: unlink through the canonical
-    // helper (clears home_), then set a stale home_ to a foreign pointer.
     AsyncTestAccess::select_event_unlink(g.sched, g.ev, g.arms[0]);
-    g.arms[0].home_ = reinterpret_cast<sad::SelectPort*>(&g.ev);  // stale non-null
+    AsyncTestAccess::select_event_forge_stale_home(g.sched, g.ev, g.arms[0]);
     AsyncTestAccess::select_process_group(g.sched, g.group, /*candidate=*/0);
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
@@ -216,31 +235,33 @@ void child_tp_timer_not_pool_owned() {
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
-// OA — all-authority-closed assertion invoked while one authority remains open.
-// This targets the POST-claim invariant: we synthesize a finalized-but-open
-// state and call the invariant predicate's assertion path. The invariant
-// predicate itself returns bool (no assert); select_process_group_locked ASSERTS
-// it after a successful claim. To make the assert fire we need a successful
-// claim followed by an open authority — but a successful claim closes all
-// authority by construction. So we directly exercise the invariant's contract
-// via a guarded seam: build a winner-set group where one arm's Timer is left
-// ACTIVE (open authority), which the predicate must reject. Because the
-// predicate is bool-returning (not asserting), we instead prove the rejection
-// mechanically here and rely on C10b for the bool check. The OA *death* path is
-// the select_process_group_locked post-claim assert: unreachable in valid P4,
-// so this child exercises it by claiming+finalizing normally then corrupting the
-// invariant before the assert — impossible under one CS. Instead, OA is covered
-// by the bool predicate test (C10b) and this child is a CONTROL that a valid
-// process passes the invariant (exit 0).
-void child_oa_control_valid_invariant() {
+// OA — the post-claim all-authority-closed publication precondition assert.
+// select_process_group_locked asserts select_all_authority_closed_locked(group)
+// after a successful claim; in valid P4 that always holds (claim+finalize
+// closes all authority by construction). To prove the assert is mechanically
+// enforced — not merely a bool predicate that could be ignored — this child
+// claims+finalizes normally, then SYNTHETICALLY RE-OPENS the winner's Event
+// authority (home_ != nullptr), and invokes the guarded
+// assert_select_all_authority_closed seam. The assert MUST fire (SIGABRT -> 86).
+// This is the publication-precondition negative case: a future P6 publication
+// entry will gate on this exact assert, and it must terminate deterministically
+// when an authority is open.
+void child_oa_open_authority_terminates() {
     install_death_handlers();
     DGroup g;
     g.add_event_candidate();
     bool won = AsyncTestAccess::select_process_group(g.sched, g.group, /*candidate=*/0);
     if (!won) std::_Exit(sluice_death_test::kChildTestFailExit);
-    bool closed = AsyncTestAccess::select_all_authority_closed(g.sched, g.group);
-    if (!closed) std::_Exit(sluice_death_test::kChildTestFailExit);
-    std::_Exit(0);
+    // Confirm the invariant holds immediately after a valid process.
+    if (!AsyncTestAccess::select_all_authority_closed(g.sched, g.group))
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    // Synthetically re-open the winner's Event authority. The predicate checks
+    // arm.home_ != nullptr for Event arms; a non-null sentinel (never
+    // dereferenced) flips the invariant to false.
+    g.arms[0].home_ = reinterpret_cast<sad::SelectPort*>(0x1);
+    // This assert must terminate the program (exit 86).
+    AsyncTestAccess::assert_select_all_authority_closed(g.sched, g.group);
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
 // CTL — control. Valid process, exit 0.
@@ -262,7 +283,7 @@ void dispatch_child(const std::string& name) {
     else if (name == "TN") child_tn_timer_null_reg();
     else if (name == "TF") child_tf_timer_other_scheduler();
     else if (name == "TP") child_tp_timer_not_pool_owned();
-    else if (name == "OA") child_oa_control_valid_invariant();
+    else if (name == "OA") child_oa_open_authority_terminates();
     else if (name == "CTL") child_ctl_control();
     std::cerr << "[death] unknown child case: " << name << "\n";
     std::_Exit(sluice_death_test::kChildTestFailExit);
@@ -284,7 +305,7 @@ int run_parent() {
         if (!sluice_death_test::expect_normal_exit_zero(r)) ++failures;
     };
 
-    // Every preflight failure MUST terminate before the winner CAS.
+    // Pre-CAS preflight failures MUST terminate before the winner CAS.
     must_term("CG");  // candidate index out of range
     must_term("CS");  // group.scheduler_ != this
     must_term("CP");  // candidate arm not CandidateReady
@@ -293,19 +314,21 @@ int run_parent() {
     must_term("TN");  // Timer arm null stable_reg_
     must_term("TF");  // Timer registration on another Scheduler
     must_term("TP");  // Timer registration not pool-owned
-    // OA: the post-claim all-authority-closed assert is unreachable in valid
-    // P4 (a successful claim closes all authority by construction). The bool
-    // rejection of an open authority is covered by C10b. This control proves a
-    // valid process satisfies the invariant (exit 0).
-    must_zero("OA");
+    // OA: the post-claim all-authority-closed publication-precondition assert.
+    // A valid claim closes all authority by construction, so this child claims
+    // normally then synthetically re-opens one authority and invokes the
+    // asserting seam — the assert MUST fire.
+    must_term("OA");
+    // CTL: valid process completes, exit 0.
     must_zero("CTL");
 
     if (failures == 0) {
-        std::cout << "ALL DEATH TESTS PASSED (CG candidate-range / CS cross-Sched "
-                     "group / CP candidate-not-ready / CA arm-group-mismatch / EH "
-                     "event-arm-not-linked / TN timer-null-reg / TF timer-other-"
-                     "Sched / TP timer-not-pool-owned / OA invariant-control / "
-                     "CTL control)\n";
+        std::cout << "ALL DEATH TESTS PASSED (9 expected-termination: "
+                     "CG candidate-range / CS cross-Sched group / CP candidate-"
+                     "not-ready / CA arm-group-mismatch / EH event-arm-not-"
+                     "intrusively-linked / TN timer-null-reg / TF timer-other-"
+                     "Sched / TP timer-not-pool-owned / OA open-authority-"
+                     "publication-precondition; 1 control: CTL)\n";
         return 0;
     }
     std::cout << failures << " death-test case(s) FAILED\n";

@@ -1473,6 +1473,19 @@ public:
         static void set_arm_state(Scheduler& s, detail::SelectArmSlot& arm,
                                   detail::ArmState st);
 
+        // P4 EH corrective: forge a stale-but-equality-passing Event home_ for
+        // the event-membership death test. PRE: `arm` is NOT linked in `event`'s
+        // SelectPort intrusive list and its home_/next_/prev_ are null (e.g. it
+        // was unlinked through select_event_unlink). After this call
+        // arm.home_ == &event.select_port_ (so the preflight home_ equality
+        // check passes), but the arm remains ABSENT from the intrusive list
+        // (so the mechanical `found` scan fails and the preflight asserts).
+        // This is the exact shape the EH case must reach: a home_ that looks
+        // right but cannot be mechanically confirmed, proving the intrusive-
+        // membership scan is load-bearing. Acquires global_mtx_ internally.
+        static void select_event_forge_stale_home(Scheduler& s, Event& event,
+                                                  detail::SelectArmSlot& arm);
+
         // ---- E13 P3 Select timer test accessors ----
         // All route through Scheduler authority. No forgeable test hook; the
         // production target has none of these symbols.
@@ -1588,6 +1601,17 @@ public:
         // prove an open authority is rejected (OA death test).
         static bool select_all_authority_closed(const Scheduler& s,
                                                 const detail::SelectGroup& group);
+
+        // P4 OA corrective: invoke the all-authority-closed invariant as a
+        // fail-fast assert (the mechanical precondition a future P6 publication
+        // entry will gate on). Acquires global_mtx_ and asserts
+        // select_all_authority_closed_locked(group). Used by the OA death case:
+        // after a valid process (all authority closed) the test re-opens one
+        // winner authority, then this assert must terminate the program,
+        // proving the publication precondition is mechanically enforced — not
+        // merely a bool predicate that could be ignored.
+        static void assert_select_all_authority_closed(
+            const Scheduler& s, const detail::SelectGroup& group);
 
         // Advance the test clock deterministically (drives the timer pump).
         static void advance_clock(Scheduler& s, deadline_t t);

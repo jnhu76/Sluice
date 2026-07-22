@@ -209,12 +209,16 @@ SLUICE_TEST_CASE(c2_second_claim_loses) {
 }
 
 // ===========================================================================
-// C3 — winner identity stability
+// C3 — registered-processor winner stability / early claim-lost
 // ===========================================================================
-// Attempt another CAS after linearization through a guarded deterministic
-// seam (detached_claim_winner on a fresh detached group would win; on the
-// already-claimed registered group the only path is select_process_group,
-// which honors the existing winner). Assert winner remains the first index.
+// After the first process linearizes the winner via select_process_group, a
+// second process on the SAME registered group does NOT execute a second winner
+// CAS: select_process_group_locked observes winner() != kNoWinner and returns
+// false (claim-lost, no mutation) before reaching the claim preflight or the
+// CAS. So this case proves the registered-processor winner-stability / early
+// claim-lost path, not a second competing CAS. The underlying winner-CAS
+// first-claim-wins / second-claim-loses semantics are covered by the detached
+// group unit test (test_select_group_winner_claim via detached_claim_winner).
 SLUICE_TEST_CASE(c3_winner_identity_stable) {
     ClaimFixture f;
     Event ev(f.sched);
@@ -227,11 +231,12 @@ SLUICE_TEST_CASE(c3_winner_identity_stable) {
     const std::uint32_t first_winner = f.group.winner();
     SLUICE_CHECK(first_winner == w);
 
-    // A second process for the other candidate cannot change the identity.
+    // A second process returns claim-lost (early return on winner() != kNoWinner);
+    // it does not reach the CAS. The identity is unchanged.
     SLUICE_CHECK(!f.process(l));
     SLUICE_CHECK(f.group.winner() == first_winner);
 
-    // And a second process for the SAME index also loses (winner already set).
+    // And a second process for the SAME index also claim-lost (winner set).
     SLUICE_CHECK(!f.process(w));
     SLUICE_CHECK(f.group.winner() == first_winner);
 }

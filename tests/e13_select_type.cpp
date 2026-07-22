@@ -187,8 +187,11 @@ SLUICE_TEST_CASE(test_event_arm_slot_construction_destruction) {
 }
 
 SLUICE_TEST_CASE(test_timer_arm_slot_construction_destruction) {
-    // EventArmPayload and TimerArmPayload both hold trivially destructible
-    // members (pointers and integers), so no explicit destructor is needed.
+    // EventArmPayload and TimerArmPayload are trivially destructible. The
+    // payloads' default member initializers make them non-trivially default
+    // constructible, so SelectArmSlot explicitly manages active-member lifetime
+    // (its constructor activates Event; its destructor destroys the active
+    // member per `kind`).
     static_assert(std::is_trivially_destructible_v<sad::EventArmPayload>);
     static_assert(std::is_trivially_destructible_v<sad::TimerArmPayload>);
 
@@ -196,6 +199,78 @@ SLUICE_TEST_CASE(test_timer_arm_slot_construction_destruction) {
     slot.construct_timer(42, nullptr);
     SLUICE_CHECK(slot.kind == sad::ArmKind::timer);
     SLUICE_CHECK(slot.timer.deadline_ == 42);
+    SLUICE_CHECK(slot.timer.stable_reg_ == nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// U1-U4: SelectArmSlot union active-member lifetime.
+//
+// The payloads carry default member initializers (event_{nullptr}, deadline_{0},
+// stable_reg_{nullptr}) making them NON-trivially default constructible. The
+// implicit union active-member rule therefore does NOT apply, so SelectArmSlot
+// must explicitly establish/switch/destroy the active union member. These cases
+// prove default-activation and every active-member transition is well defined.
+// ---------------------------------------------------------------------------
+
+// U1: default-constructed slot has the Event member active and initialized.
+SLUICE_TEST_CASE(test_select_arm_slot_u1_default_event_active) {
+    sad::SelectArmSlot slot;  // default-activates the Event member
+    SLUICE_CHECK(slot.kind == sad::ArmKind::event);
+    // The default active Event payload is value-initialized (event_ == nullptr).
+    SLUICE_CHECK(slot.event.event_ == nullptr);
+}
+
+// U2: Event -> Timer transition leaves a valid Timer payload.
+SLUICE_TEST_CASE(test_select_arm_slot_u2_event_to_timer) {
+    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sa::Scheduler sched(ctx);
+    sa::Event ev(sched);
+
+    sad::SelectArmSlot slot;
+    slot.construct_event(ev);
+    SLUICE_CHECK(slot.event.event_ == &ev);
+
+    // A never-registered (detached) registration is sufficient for this payload
+    // lifetime test: construct_timer only stores the back-pointer.
+    sad::SelectTimerRegistration reg(&slot, &sched, 7);
+    slot.construct_timer(7, &reg);
+    SLUICE_CHECK(slot.kind == sad::ArmKind::timer);
+    SLUICE_CHECK(slot.timer.deadline_ == 7);
+    SLUICE_CHECK(slot.timer.stable_reg_ == &reg);
+}
+
+// U3: Timer -> Event transition leaves a valid Event payload.
+SLUICE_TEST_CASE(test_select_arm_slot_u3_timer_to_event) {
+    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sa::Scheduler sched(ctx);
+    sa::Event ev(sched);
+
+    sad::SelectArmSlot slot;
+    slot.construct_timer(9, nullptr);
+    SLUICE_CHECK(slot.kind == sad::ArmKind::timer);
+
+    slot.construct_event(ev);
+    SLUICE_CHECK(slot.kind == sad::ArmKind::event);
+    SLUICE_CHECK(slot.event.event_ == &ev);
+}
+
+// U4: repeated active-member switching (Event -> Timer -> Event) stays valid.
+SLUICE_TEST_CASE(test_select_arm_slot_u4_repeated_switching) {
+    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sa::Scheduler sched(ctx);
+    sa::Event ev(sched);
+
+    sad::SelectArmSlot slot;
+    slot.construct_event(ev);
+    slot.construct_timer(11, nullptr);
+    slot.construct_event(ev);  // back to Event
+    SLUICE_CHECK(slot.kind == sad::ArmKind::event);
+    SLUICE_CHECK(slot.event.event_ == &ev);
+
+    // And switch to Timer once more for good measure.
+    slot.construct_timer(13, nullptr);
+    SLUICE_CHECK(slot.kind == sad::ArmKind::timer);
+    SLUICE_CHECK(slot.timer.deadline_ == 13);
     SLUICE_CHECK(slot.timer.stable_reg_ == nullptr);
 }
 
