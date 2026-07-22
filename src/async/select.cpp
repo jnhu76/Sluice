@@ -40,15 +40,25 @@ static_assert(kPreflightMaxArms >= 1, "Select must permit at least one arm");
 
 // ---------------------------------------------------------------------------
 // Preflight: validate the ENTIRE group before the irreversible winner CAS.
-// Every failure here is a debug assertion that fires BEFORE any mutation, so an
-// invalid group cannot become permanently claimed and then fail halfway through
-// finalization (P4 §6). No allocation in this path. A Scheduler member because
-// it reads Event private fields (scheduler_, select_port_) under the friend
-// grant.
+//
+// Two-phase structure (P4 §6, §3):
+//   Phase A (select_preflight_shape_locked): structural + identity asserts that
+//     must ALWAYS hold for any process call on this group (scheduler binding,
+//     arms presence, count bounds, candidate-index range, phase). These assert
+//     for every call — including a claim-lost second attempt.
+//   Then the caller checks winner() != kNoWinner and returns claim-lost WITHOUT
+//     mutation (NOT an assert) before the deeper preflight.
+//   Phase B (select_preflight_claim_locked): candidate-state + every-arm-state +
+//     Event-membership + Timer-ownership asserts that are only meaningful for a
+//     FRESH claim (winner == kNoWinner). These assert only on a real claim
+//     attempt.
+//
+// This split makes a claim-lost second attempt return false cleanly (it is a
+// valid concurrent/racing outcome) while every genuinely malformed group still
+// asserts before the CAS. No allocation in this path.
 // ---------------------------------------------------------------------------
-void Scheduler::select_preflight_group_locked(
+void Scheduler::select_preflight_shape_locked(
     detail::SelectGroup& group, std::uint32_t candidate_index) const {
-    // --- group-level checks ---
     assert(group.scheduler_ == this &&
            "select_process_group_locked: group.scheduler_ != this");
     assert(group.arms_ != nullptr &&
@@ -64,7 +74,10 @@ void Scheduler::select_preflight_group_locked(
     assert((phase == detail::GroupPhase::selecting ||
             phase == detail::GroupPhase::armed) &&
            "select_process_group_locked: group phase must be Selecting or Armed");
+}
 
+void Scheduler::select_preflight_claim_locked(
+    detail::SelectGroup& group, std::uint32_t candidate_index) const {
     // --- candidate arm checks ---
     detail::SelectArmSlot& candidate = group.arms_[candidate_index];
     assert(candidate.group == &group &&
@@ -134,15 +147,23 @@ void Scheduler::select_preflight_group_locked(
 // ---------------------------------------------------------------------------
 bool Scheduler::select_process_group_locked(detail::SelectGroup& group,
                                             std::uint32_t candidate_index) {
-    select_preflight_group_locked(group, candidate_index);
+    // Phase A: structural + identity shape (asserts for every call).
+    select_preflight_shape_locked(group, candidate_index);
 
     // If another invocation already owns the winner, this invocation performs
-    // NO mutation and returns claim-lost. This check happens after preflight
-    // (preflight validates group shape regardless of winner state) but BEFORE
-    // the CAS attempt — and the CAS itself is the linearization authority.
+    // NO mutation and returns claim-lost (P4 §6: "winner == kNoWinner at entry,
+    // or return claim-lost without mutation"). This is a non-asserting return —
+    // a racing/sequential second claim is a valid claim-lost outcome. Checked
+    // AFTER shape validation but BEFORE the deeper per-arm preflight (a
+    // finalized group has Retired arms that are only meaningful to validate on
+    // a fresh claim).
     if (group.winner() != detail::kNoWinner) {
         return false;
     }
+
+    // Phase B: candidate-state + every-arm + Event-membership + Timer-ownership
+    // preflight (asserts, fresh-claim only).
+    select_preflight_claim_locked(group, candidate_index);
 
     // THE single winner linearization point. relaxed/relaxed: synchronization
     // of the surrounding arm-state visibility is provided by global_mtx_, not

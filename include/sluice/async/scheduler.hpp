@@ -1263,14 +1263,17 @@ private:
         SLUICE_REQUIRES(global_mtx_);
 
     // Validate the entire group BEFORE the irreversible winner CAS (P4 §6).
-    // Every check is a debug assertion that fires before any mutation, so an
-    // invalid group cannot become permanently claimed and then fail halfway
-    // through finalization. Group-level, candidate-arm, every-arm, Event-arm
-    // (incl. intrusive-list membership), and Timer-arm (incl. pool ownership +
-    // ACTIVE + arm back-pointer) checks. No allocation. A member (not a free
-    // function) because it reads Event private fields (scheduler_,
-    // select_port_) under the Scheduler friend grant.
-    void select_preflight_group_locked(detail::SelectGroup& group,
+    // Split into shape (asserts for every call) and claim (asserts for a fresh
+    // claim only, after the winner-existence check returns claim-lost). Every
+    // check is a debug assertion that fires before any mutation, so an invalid
+    // group cannot become permanently claimed and then fail halfway through
+    // finalization. No allocation. Members (not free functions) because they
+    // read Event private fields (scheduler_, select_port_) under the friend
+    // grant.
+    void select_preflight_shape_locked(detail::SelectGroup& group,
+                                       std::uint32_t candidate_index) const
+        SLUICE_REQUIRES(global_mtx_);
+    void select_preflight_claim_locked(detail::SelectGroup& group,
                                        std::uint32_t candidate_index) const
         SLUICE_REQUIRES(global_mtx_);
 
