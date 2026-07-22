@@ -15,6 +15,7 @@
 #include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/scheduler.hpp>
 
+#include "async_test_control.hpp"
 #include "harness.hpp"
 
 #include <atomic>
@@ -24,6 +25,7 @@
 
 namespace sa = sluice::async;
 namespace sad = sluice::async::detail;
+namespace stest = sluice_async_test;
 
 // ---- Constraint helper concepts (SF-1..SF-3 gate verification) ----
 
@@ -254,14 +256,16 @@ SLUICE_TEST_CASE(test_timer_registration_state_transitions) {
     SLUICE_CHECK(!reg.is_retired());
     SLUICE_CHECK(!reg.is_consumed());
 
-    // Retire path.
-    SLUICE_CHECK(reg.retire());
+    // Retire path. The CAS methods are private (E13 P3 Corrective closure 3);
+    // reach them via the guarded detached-CAS test entry on this never-registered
+    // stack-local object.
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_retire(reg));
     SLUICE_CHECK(reg.is_retired());
     SLUICE_CHECK(!reg.is_active());
     SLUICE_CHECK(!reg.is_consumed());
 
     // Second retire fails (already retired).
-    SLUICE_CHECK(!reg.retire());
+    SLUICE_CHECK(!stest::E13SelectTimerSeam::detached_retire(reg));
     SLUICE_CHECK(reg.is_retired());
 
     // Non-copyable, non-movable.
@@ -275,12 +279,12 @@ SLUICE_TEST_CASE(test_timer_registration_claim_expiry) {
     sad::SelectTimerRegistration reg;
     SLUICE_CHECK(reg.is_active());
 
-    // Claim expiry.
-    SLUICE_CHECK(reg.try_claim_expiry());
+    // Claim expiry (guarded detached-CAS entry; see test above).
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_try_claim_expiry(reg));
     SLUICE_CHECK(reg.is_consumed());
 
     // Second claim fails.
-    SLUICE_CHECK(!reg.try_claim_expiry());
+    SLUICE_CHECK(!stest::E13SelectTimerSeam::detached_try_claim_expiry(reg));
     SLUICE_CHECK(reg.is_consumed());
 }
 
@@ -289,11 +293,11 @@ SLUICE_TEST_CASE(test_timer_registration_retire_then_claim_fails) {
     SLUICE_CHECK(reg.is_active());
 
     // Retire first.
-    SLUICE_CHECK(reg.retire());
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_retire(reg));
     SLUICE_CHECK(reg.is_retired());
 
     // Try claim — fails because already retired.
-    SLUICE_CHECK(!reg.try_claim_expiry());
+    SLUICE_CHECK(!stest::E13SelectTimerSeam::detached_try_claim_expiry(reg));
     SLUICE_CHECK(reg.is_retired());
 }
 
@@ -302,11 +306,11 @@ SLUICE_TEST_CASE(test_timer_registration_claim_then_retire_fails) {
     SLUICE_CHECK(reg.is_active());
 
     // Claim first.
-    SLUICE_CHECK(reg.try_claim_expiry());
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_try_claim_expiry(reg));
     SLUICE_CHECK(reg.is_consumed());
 
     // Retire — fails because already consumed.
-    SLUICE_CHECK(!reg.retire());
+    SLUICE_CHECK(!stest::E13SelectTimerSeam::detached_retire(reg));
     SLUICE_CHECK(reg.is_consumed());
 }
 

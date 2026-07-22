@@ -68,77 +68,91 @@ struct TFixture {
 };
 
 // =========================================================================
-// T1 — state transitions (direct CAS on detached, never-registered locals)
+// T1 — state transitions (CAS on detached, never-registered locals)
 // =========================================================================
 // Addendum C: direct CAS is permitted ONLY for detached never-registered
-// locals. These exercise the registration's own CAS authority, not the
-// Scheduler accounting path.
+// locals. E13 P3 Corrective closure 3 sealed the CAS methods private, so these
+// reach them via the guarded AsyncTestAccess detached-CAS entry — NOT the
+// Scheduler accounting path. Registered blocks must use retire_synthetic /
+// consume_synthetic (the Scheduler helpers).
 
 SLUICE_TEST_CASE(t1_state_transitions_retire) {
     // new registration == ACTIVE; ACTIVE -> RETIRED succeeds; second RETIRED
-    // fails; RETIRED -> CONSUMED fails.
+    // fails; RETIRED -> CONSUMED fails. The CAS methods are private (E13 P3
+    // Corrective closure 3: registered-state accounting authority is sealed by
+    // the type system); T1 reaches them via the guarded detached-CAS test
+    // entry on a never-registered stack-local object.
     SelectTimerReg reg(nullptr, nullptr, 100);
     SLUICE_CHECK(reg.state() == State::active);
 
-    SLUICE_CHECK(reg.retire() == true);          // ACTIVE -> RETIRED
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_retire(reg) == true);   // ACTIVE -> RETIRED
     SLUICE_CHECK(reg.state() == State::retired);
-    SLUICE_CHECK(reg.retire() == false);         // already RETIRED
-    SLUICE_CHECK(reg.try_claim_expiry() == false);  // RETIRED -> CONSUMED fails
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_retire(reg) == false);  // already RETIRED
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_try_claim_expiry(reg) == false);  // RETIRED -> CONSUMED fails
     SLUICE_CHECK(reg.state() == State::retired);
 }
 
 SLUICE_TEST_CASE(t1_state_transitions_consume) {
     // new registration == ACTIVE; ACTIVE -> CONSUMED succeeds; second CONSUMED
-    // fails; CONSUMED -> RETIRED fails.
+    // fails; CONSUMED -> RETIRED fails. (CASes reached via the guarded entry;
+    // see t1_state_transitions_retire for the authority rationale.)
     SelectTimerReg reg(nullptr, nullptr, 100);
     SLUICE_CHECK(reg.state() == State::active);
 
-    SLUICE_CHECK(reg.try_claim_expiry() == true);  // ACTIVE -> CONSUMED
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_try_claim_expiry(reg) == true);   // ACTIVE -> CONSUMED
     SLUICE_CHECK(reg.state() == State::consumed);
-    SLUICE_CHECK(reg.try_claim_expiry() == false);  // already CONSUMED
-    SLUICE_CHECK(reg.retire() == false);            // CONSUMED -> RETIRED fails
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_try_claim_expiry(reg) == false);  // already CONSUMED
+    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_retire(reg) == false);            // CONSUMED -> RETIRED fails
     SLUICE_CHECK(reg.state() == State::consumed);
 }
 
 // =========================================================================
 // T2 — address stability after single-node splice
 // =========================================================================
+// E13 P3 Corrective closure 4: prove the REAL production splice preserves
+// node address identity. A node built in a caller-frame temporary list is
+// spliced into select_timer_pool_ via select_timer_splice_one_locked (single-
+// node std::list::splice, O(1), allocation-free — it relinks the node, so the
+// node's address does not change). The heap entry references the block by that
+// same address. This test captures the address BEFORE splice and asserts it is
+// unchanged AFTER splice, that the temporary pool gave up the node, and that
+// the heap holds exactly one Select entry whose target is the spliced address.
 
 SLUICE_TEST_CASE(t2_address_stability_after_splice) {
     TFixture f;
-    // Construct a block in a caller-frame temporary list; capture its address.
+    // Build a node in a caller-frame temporary list; capture its address BEFORE
+    // any Scheduler mutation.
     std::list<SelectTimerReg> tmp;
     tmp.emplace_back(nullptr, &f.sched, /*deadline=*/50);
-    const SelectTimerReg* captured = &tmp.front();
+    const SelectTimerReg* before = &tmp.front();
 
-    // Single-node splice into the Scheduler-owned pool.
-    SelectTimerReg* reg = stest::E13SelectTimerSeam::register_synthetic(
-        f.sched, nullptr, /*deadline=*/50);
+    // Splice via the REAL production helper (select_timer_splice_one_locked).
+    SelectTimerReg* after = stest::E13SelectTimerSeam::splice_one(
+        f.sched, tmp, tmp.begin());
 
-    (void)reg;
-    // The captured address was the tmp node; register_synthetic builds its own
-    // tmp node internally, so instead verify the property directly: a freshly
-    // registered block's address is stable and equals the heap entry target.
-    // Re-test with an explicit splice to prove address identity across splice.
+    // Address identity: the spliced node is the SAME object (std::list::splice
+    // relinks; it does not copy/relocate). This is the load-bearing assertion
+    // the heap-entry-by-stable-address contract relies on.
+    SLUICE_CHECK_MSG(after == before,
+        "spliced node address == captured pre-splice address");
+    // The temporary pool gave up the node.
+    SLUICE_CHECK_MSG(tmp.empty(),
+        "temporary pool empty after single-node splice");
+    // The Scheduler-owned block's binding fields are intact.
+    SLUICE_CHECK(after->scheduler() == &f.sched);
+    SLUICE_CHECK(after->deadline() == 50);
 
-    // Explicit splice test (mirrors the production path): build tmp, splice,
-    // confirm the back()'s address did not change and the heap entry points to
-    // it. We use the public splice through a second synthetic registration and
-    // confirm pool membership + non-null + scheduler binding.
-    SelectTimerReg* r2 = stest::E13SelectTimerSeam::register_synthetic(
-        f.sched, nullptr, /*deadline=*/60);
-    SLUICE_CHECK(r2 != nullptr);
-    SLUICE_CHECK(r2->scheduler() == &f.sched);
-    SLUICE_CHECK(r2->deadline() == 60);
+    // The Scheduler pool now owns exactly this one block.
+    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 1);
 
-    // Pool now holds both blocks; address captured before splice remains valid.
-    (void)captured;  // tmp node destroyed with `tmp` scope; address-stability
-                     // of the SCHEDULER-owned block is what we assert below.
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 2);
-
-    // The registered block's address must match a heap entry's Select target.
+    // The heap holds exactly one Select entry, and its target is exactly the
+    // spliced address (the stable address the heap stores by pointer).
     auto counts = stest::E13SelectTimerSeam::heap_counts_by_kind(f.sched);
-    SLUICE_CHECK(counts[1] == 2);  // two Select heap entries
+    SLUICE_CHECK(counts[0] == 0);  // no ordinary entries
+    SLUICE_CHECK(counts[1] == 1);  // one Select entry
+    SLUICE_CHECK_MSG(
+        stest::E13SelectTimerSeam::heap_has_select_target(f.sched, before),
+        "heap entry's Select target == spliced address");
 }
 
 // =========================================================================
@@ -405,14 +419,18 @@ SLUICE_TEST_CASE(t10_mixed_stale_select_and_ordinary) {
 }
 
 // =========================================================================
-// T11 — Scheduler identity (cross-Scheduler transition rejected)
+// T11 — Scheduler identity binding recorded at registration
 // =========================================================================
+// E13 P3 Corrective closure 6: this is a FIELD-INIT test only — it verifies
+// the owning-Scheduler binding is recorded on the block at registration time.
+// It is NOT a cross-Scheduler rejection test. The mechanical rejection proof
+// (a retire/consume through a DIFFERENT Scheduler, or a pool-membership
+// violation) lives in the death binary e13_select_timer_pump_death_test as
+// cases XR / XC / NP, which assert the helpers' `reg.scheduler() == this` and
+// `pool_owns_select_block_locked` guards fire before any state/counter
+// mutation.
 
-SLUICE_TEST_CASE(t11_scheduler_identity_cross_scheduler_rejected) {
-    // A synthetic Select registration is bound to its owning Scheduler. A
-    // retire/consume through a DIFFERENT Scheduler must fail before mutation
-    // (the helper asserts reg.scheduler_ == this). This is exercised as a
-    // death test elsewhere; here we confirm the binding is recorded.
+SLUICE_TEST_CASE(t11_scheduler_identity_binding_recorded) {
     TFixture f;
     SelectTimerReg* r = stest::E13SelectTimerSeam::register_synthetic(
         f.sched, nullptr, /*dl=*/50);

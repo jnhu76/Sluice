@@ -27,6 +27,7 @@
 
 #include <array>
 #include <cstddef>
+#include <list>
 
 namespace sluice_async_test {
 
@@ -373,6 +374,26 @@ struct E13SelectTimerSeam {
     static bool consume_synthetic(Scheduler& s, SelectTimerReg& reg) {
         return Scheduler::AsyncTestAccess::consume_synthetic_select_timer(s, reg);
     }
+
+    // Splice a caller-owned temporary node via the REAL production helper, for
+    // T2 pre/post-splice address-identity proof. `tmp_pool` loses the node;
+    // the returned pointer is the now-Scheduler-owned stable address.
+    static SelectTimerReg* splice_one(
+        Scheduler& s,
+        std::list<SelectTimerReg>& tmp_pool,
+        std::list<SelectTimerReg>::iterator it) {
+        return Scheduler::AsyncTestAccess::splice_one_for_test(s, tmp_pool, it);
+    }
+
+    // Detached-object CAS authority for T1 (reg must NOT be Scheduler-owned).
+    // Routes through the guarded AsyncTestAccess entry; the CAS methods
+    // themselves are private in the production target.
+    static bool detached_try_claim_expiry(SelectTimerReg& reg) noexcept {
+        return Scheduler::AsyncTestAccess::detached_try_claim_expiry(reg);
+    }
+    static bool detached_retire(SelectTimerReg& reg) noexcept {
+        return Scheduler::AsyncTestAccess::detached_retire(reg);
+    }
     static void advance_clock(Scheduler& s, Scheduler::deadline_t t) {
         Scheduler::AsyncTestAccess::advance_clock(s, t);
     }
@@ -388,6 +409,12 @@ struct E13SelectTimerSeam {
     static std::array<std::size_t, 2> heap_counts_by_kind(
         const Scheduler& s) noexcept {
         return Scheduler::AsyncTestAccess::tagged_heap_counts_by_kind(s);
+    }
+    // Does any Select-kind heap entry target `target` (by address)? For T2.
+    static bool heap_has_select_target(
+        const Scheduler& s, const SelectTimerReg* target) noexcept {
+        return Scheduler::AsyncTestAccess::deadline_heap_has_select_target(
+            s, target);
     }
     static std::size_t arm_load_count(const Scheduler& s) noexcept {
         return Scheduler::AsyncTestAccess::select_timer_arm_load_count(s);

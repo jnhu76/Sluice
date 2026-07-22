@@ -1427,6 +1427,43 @@ public:
             return s.select_timer_consume_locked(reg);
         }
 
+        // Splice ONE caller-owned temporary node into select_timer_pool_ via the
+        // REAL production helper (select_timer_splice_one_locked), returning the
+        // stable Scheduler-owned address. For T2's pre/post-splice address-
+        // identity proof only: a test captures &*it before the call, splices,
+        // then asserts the returned pointer equals the captured address, the
+        // temporary pool is empty, and the heap entry's Select target is that
+        // same address. Mirrors the future admission protocol (caller-frame tmp
+        // -> Scheduler pool) exactly. Acquires global_mtx_ internally and
+        // reserves heap capacity before mutation.
+        static detail::SelectTimerRegistration* splice_one_for_test(
+            Scheduler& s,
+            std::list<detail::SelectTimerRegistration>& tmp_pool,
+            std::list<detail::SelectTimerRegistration>::iterator it) {
+            LockGuard lk(s.global_mtx_);
+            s.deadline_heap_.reserve(s.deadline_heap_.size() + 1);
+            return s.select_timer_splice_one_locked(tmp_pool, it);
+        }
+
+        // Detached-object CAS authority for T1 (E13 P3 Corrective closure 3).
+        // PRE: `reg` is NOT Scheduler-owned (never spliced into any pool) — it
+        // is a stack-local SelectTimerRegistration exercising the registration's
+        // own CAS state machine. The CAS methods are private; this guarded
+        // entry is the only non-Scheduler way to reach them, and it exists
+        // solely so T1 can test ACTIVE->{RETIRED,CONSUMED} + failed-CAS
+        // transitions on detached locals without exposing the CASes in the
+        // production target. Registered blocks MUST go through
+        // retire_synthetic_select_timer / consume_synthetic_select_timer (the
+        // Scheduler accounting helpers).
+        static bool detached_try_claim_expiry(
+            detail::SelectTimerRegistration& reg) noexcept {
+            return reg.try_claim_expiry();
+        }
+        static bool detached_retire(
+            detail::SelectTimerRegistration& reg) noexcept {
+            return reg.retire();
+        }
+
         // Advance the test clock deterministically (drives the timer pump).
         static void advance_clock(Scheduler& s, deadline_t t);
 
@@ -1439,6 +1476,15 @@ public:
         // Tagged heap counts by kind: returns {ordinary_count, select_count}.
         static std::array<std::size_t, 2> tagged_heap_counts_by_kind(
             const Scheduler& s) noexcept;
+
+        // Does any Select-kind heap entry target `target` (by address)? For
+        // T2: proves the heap stores exactly the spliced block's address as
+        // its stable Select pointer (the heap-by-stable-address contract).
+        // Reads GUARDED_BY fields from a test coordinator for diagnostics;
+        // not load-bearing for correctness.
+        static bool deadline_heap_has_select_target(
+            const Scheduler& s,
+            const detail::SelectTimerRegistration* target) noexcept;
 
         // arm-load instrumentation (Addendum E): the count of times the
         // pump branch read reg.arm_ on an ACTIVE entry (the exact production

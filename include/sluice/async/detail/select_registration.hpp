@@ -81,11 +81,26 @@ public:
         return state_.load(std::memory_order::acquire) == State::consumed;
     }
 
-    // Single-object CAS with no external side effects. The Scheduler's
-    // accounting helpers (select_timer_retire_locked /
-    // select_timer_consume_locked) own the counter + earliest-deadline
-    // bookkeeping AROUND these CASes. Direct CAS calls are only valid for
-    // detached, never-registered local objects (e.g. T1 state-transition tests).
+    deadline_tick_t deadline() const noexcept { return deadline_; }
+    SelectArmSlot* arm() const noexcept { return arm_; }
+    Scheduler* scheduler() const noexcept { return scheduler_; }
+
+private:
+    friend class ::sluice::async::Scheduler;
+
+    // Single-object CAS with no external side effects. PRIVATE so the
+    // registered-state accounting authority is sealed by the type system
+    // (E13 P3 Corrective closure 3): a registered Select block's ACTIVE->
+    // terminal transition MUST route through the Scheduler helpers
+    // select_timer_retire_locked / select_timer_consume_locked, which own the
+    // active_deadline_count_ decrement + earliest-deadline cache recompute
+    // AROUND the CAS. Reaching the CAS directly on a registered block (e.g.
+    // via a stable SelectTimerRegistration* held by an arm) would flip state
+    // while leaving the counter/cache desynchronized — a structural hole the
+    // type system now closes. Only friend Scheduler (production helpers) and
+    // the macro-gated AsyncTestAccess detached-CAS test entry can reach these.
+    // Detached, never-registered local objects remain a legal direct-CAS
+    // target (T1 state-transition tests go through the guarded test entry).
     bool try_claim_expiry() noexcept {
         State expected = State::active;
         return state_.compare_exchange_strong(expected, State::consumed,
@@ -99,13 +114,6 @@ public:
                                               std::memory_order::acq_rel,
                                               std::memory_order::acquire);
     }
-
-    deadline_tick_t deadline() const noexcept { return deadline_; }
-    SelectArmSlot* arm() const noexcept { return arm_; }
-    Scheduler* scheduler() const noexcept { return scheduler_; }
-
-private:
-    friend class ::sluice::async::Scheduler;
 
     std::atomic<State> state_{State::active};
     SelectArmSlot* arm_{nullptr};

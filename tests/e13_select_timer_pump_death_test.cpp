@@ -1,21 +1,30 @@
-// e13_select_timer_pump_death_test — E13 Select timer pump ACTIVE-due
-// stage-boundary fail-fast (P3).
+// e13_select_timer_pump_death_test — E13 Select timer pump + destruction +
+// authority-seal death tests (P3 + P3 Corrective).
 //
-// Verifies the P3 stage-boundary guard: a due ACTIVE SelectTimerRegistration is
-// unreachable in valid P3 (there is no admission path). If the pump pops an
-// ACTIVE Select entry, it MUST fail fast (select_timer_pump_active_fail_fast)
-// rather than claim a winner, mark CandidateReady, retire/consume, erase, or
-// busy-loop. This is an invariant GUARD, NOT supported production Select
-// behavior — P4 (claim/finalization) is denied pending independent P3 review.
+// Verifies four invariant families:
+//  (1) Pump stage boundary: a due ACTIVE SelectTimerRegistration is unreachable
+//      in valid P3 (no admission path). If the pump pops an ACTIVE Select entry
+//      it MUST fail fast rather than claim/mark/retire/consume/erase.
+//  (2) Destruction contract (Corrective closure 2): the Scheduler destructor
+//      permits terminal (RETIRED/CONSUMED) lazy Select blocks whose deadlines
+//      never elapsed, but MUST assert if an ACTIVE block remains.
+//  (3) Accounting-authority seal (Corrective closure 5): the Scheduler helpers
+//      select_timer_retire_locked / select_timer_consume_locked reject a cross-
+//      Scheduler call and a pool-membership violation BEFORE any state/counter
+//      mutation.
 //
 // Each case runs in a forked child that re-execs this binary; the child
-// installs a deterministic terminate handler so std::terminate (invoked by
-// select_timer_pump_active_fail_fast) becomes a fixed exit code. The parent
-// asserts the exact exit code (see death_test_runner_posix.hpp).
+// installs handlers so assert (SIGABRT) and std::terminate become a fixed exit
+// code. The parent asserts the exact exit code (see death_test_runner_posix.hpp).
 //
 // Cases:
-//  PA  Pump ACTIVE-due — register ACTIVE Select, advance clock to its deadline.
-//  CTL Control — register + retire before advancing; stale skip, exit 0.
+//  PA   Pump ACTIVE-due — register ACTIVE Select, advance clock to its deadline.
+//  CTL  Control — register + retire before advancing; stale skip, exit 0.
+//  SD1  Destruction with terminal lazy block — retire, destroy without pumping.
+//  SD2  Destruction with ACTIVE block — destroy without retiring -> assert.
+//  XR   Cross-Scheduler retire — Sched B retires a Sched-A-owned block -> assert.
+//  XC   Cross-Scheduler consume — Sched B consumes a Sched-A-owned block -> assert.
+//  NP   Non-pool member — retire a detached local via Sched A -> assert.
 #include "death_test_runner_posix.hpp"
 
 #if defined(__unix__)
@@ -88,9 +97,137 @@ void child_ctl_control() {
     std::_Exit(0);
 }
 
+// --------------------------------------------------------------------------
+// Destruction contract (Corrective closure 2)
+// --------------------------------------------------------------------------
+
+// SD1 — destruction with a terminal lazy block. Register ACTIVE, retire via the
+// Scheduler helper, then destroy WITHOUT advancing the clock (the deadline never
+// elapses). A RETIRED block remains inert in the pool; the destructor MUST reap
+// it and exit 0. (Does NOT use a fixture that drains — the destruction semantics
+// are the subject under test.) Proves the destructor permits terminal lazy blocks.
+//
+// NOTE: ~Scheduler must run via a real scope exit. std::_Exit skips destructors,
+// so the Scheduler and its controller are placed in an inner block whose closing
+// brace runs ~Scheduler (and ~ControllerGuard) BEFORE the _Exit.
+void child_sd1_destruction_terminal_lazy() {
+    install_death_handlers();
+    sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
+    {
+        Scheduler sched(ctx);
+        sluice_async_test::ControllerGuard ctrl(sched);
+        sluice_async_test::E11TimerControl::enable_test_clock(sched);
+
+        SelectTimerReg* r = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+            sched, nullptr, /*deadline=*/50);
+        bool ok = sluice_async_test::E13SelectTimerSeam::retire_synthetic(sched, *r);
+        if (!ok) std::_Exit(sluice_death_test::kChildTestFailExit);
+
+        // Do NOT advance the clock: the RETIRED block stays in the pool (lazy).
+        if (sluice_async_test::E13SelectTimerSeam::pool_size(sched) != 1) {
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        }
+        // ~Scheduler runs at the closing brace: must reap the inert block and
+        // return normally (no assert).
+    }
+    std::_Exit(0);
+}
+
+// SD2 — destruction with an ACTIVE block. Register ACTIVE and destroy WITHOUT
+// retiring. The destructor's `!any_active_select` assert MUST fire (live Select
+// timer authority remains — caller contract violation). See SD1 for why the
+// Scheduler lives in an inner block (std::_Exit skips destructors).
+void child_sd2_destruction_active() {
+    install_death_handlers();
+    sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
+    {
+        Scheduler sched(ctx);
+        sluice_async_test::ControllerGuard ctrl(sched);
+        sluice_async_test::E11TimerControl::enable_test_clock(sched);
+
+        sluice_async_test::E13SelectTimerSeam::register_synthetic(
+            sched, nullptr, /*deadline=*/50);
+        // ~Scheduler runs at the closing brace: ACTIVE block remains -> assert
+        // (SIGABRT) -> kExpectedTerminateExit.
+    }
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// --------------------------------------------------------------------------
+// Accounting-authority seal (Corrective closure 5)
+// --------------------------------------------------------------------------
+
+// XR — cross-Scheduler retire. A synthetic block owned by Scheduler A is
+// retired through Scheduler B. select_timer_retire_locked asserts
+// reg.scheduler() == this BEFORE any state/counter mutation -> assert.
+void child_xr_cross_scheduler_retire() {
+    install_death_handlers();
+    sa::AsyncIoContext ctx_a(std::make_unique<sa::FakeAsyncBackend>());
+    sa::AsyncIoContext ctx_b(std::make_unique<sa::FakeAsyncBackend>());
+    Scheduler sched_a(ctx_a);
+    Scheduler sched_b(ctx_b);
+    sluice_async_test::ControllerGuard ctrl_a(sched_a);
+    sluice_async_test::ControllerGuard ctrl_b(sched_b);
+    sluice_async_test::E11TimerControl::enable_test_clock(sched_a);
+
+    SelectTimerReg* r = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+        sched_a, nullptr, /*deadline=*/50);
+
+    // Retire the Sched-A-owned block through Sched B -> MUST assert.
+    sluice_async_test::E13SelectTimerSeam::retire_synthetic(sched_b, *r);
+
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// XC — cross-Scheduler consume. Same shape as XR but via consume.
+void child_xc_cross_scheduler_consume() {
+    install_death_handlers();
+    sa::AsyncIoContext ctx_a(std::make_unique<sa::FakeAsyncBackend>());
+    sa::AsyncIoContext ctx_b(std::make_unique<sa::FakeAsyncBackend>());
+    Scheduler sched_a(ctx_a);
+    Scheduler sched_b(ctx_b);
+    sluice_async_test::ControllerGuard ctrl_a(sched_a);
+    sluice_async_test::ControllerGuard ctrl_b(sched_b);
+    sluice_async_test::E11TimerControl::enable_test_clock(sched_a);
+
+    SelectTimerReg* r = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+        sched_a, nullptr, /*deadline=*/50);
+
+    // Consume the Sched-A-owned block through Sched B -> MUST assert.
+    sluice_async_test::E13SelectTimerSeam::consume_synthetic(sched_b, *r);
+
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// NP — non-pool member. A detached stack-local block is bound to Scheduler A by
+// pointer (scheduler() == &sched_a) but is NOT in A's select_timer_pool_.
+// Retiring it via Sched A's helper trips pool_owns_select_block_locked ->
+// assert. Proves the membership gate, not just the pointer-binding gate.
+void child_np_non_pool_member_retire() {
+    install_death_handlers();
+    sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
+    Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);
+    sluice_async_test::E11TimerControl::enable_test_clock(sched);
+
+    // Detached local: scheduler() == &sched, but NOT spliced into the pool.
+    SelectTimerReg local(nullptr, &sched, /*deadline=*/50);
+
+    // retire_synthetic routes through select_timer_retire_locked, which asserts
+    // pool_owns_select_block_locked(local) -> fails -> assert.
+    sluice_async_test::E13SelectTimerSeam::retire_synthetic(sched, local);
+
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 void dispatch_child(const std::string& name) {
     if (name == "PA") child_pa_pump_active_due();
     else if (name == "CTL") child_ctl_control();
+    else if (name == "SD1") child_sd1_destruction_terminal_lazy();
+    else if (name == "SD2") child_sd2_destruction_active();
+    else if (name == "XR") child_xr_cross_scheduler_retire();
+    else if (name == "XC") child_xc_cross_scheduler_consume();
+    else if (name == "NP") child_np_non_pool_member_retire();
     std::cerr << "[death] unknown child case: " << name << "\n";
     std::_Exit(sluice_death_test::kChildTestFailExit);
 }
@@ -109,10 +246,17 @@ int run_parent() {
 
     must_term("PA");   // ACTIVE-due Select entry -> fail fast
     must_zero("CTL");  // stale skip -> normal exit
+    must_zero("SD1");  // terminal lazy block destructed normally
+    must_term("SD2");  // ACTIVE block at destruction -> assert
+    must_term("XR");   // cross-Scheduler retire -> assert before mutation
+    must_term("XC");   // cross-Scheduler consume -> assert before mutation
+    must_term("NP");   // non-pool member retire -> membership assert
 
     if (failures == 0) {
         std::cout << "ALL DEATH TESTS PASSED (PA pump-active fail-fast / "
-                     "CTL stale-skip control)\n";
+                     "CTL stale-skip control / SD1 terminal-lazy destruct / "
+                     "SD2 active-destruct / XR cross-sched retire / XC "
+                     "cross-sched consume / NP non-pool-member)\n";
         return 0;
     }
     std::cout << failures << " death-test case(s) FAILED\n";

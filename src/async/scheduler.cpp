@@ -136,16 +136,34 @@ Scheduler::~Scheduler() {
     }
     // Workers are joined in run().
     //
-    // E13 P3 quiescence check: at destruction the Scheduler must hold NO live
-    // Select timer authority (no Scheduler-owned SelectTimerRegistration blocks
-    // remain, and the shared active-deadline counter is zero). A non-empty
-    // select_timer_pool_ here means a Select group's Timer arms were left
-    // ACTIVE/terminal without being pumped to reclamation — a caller contract
-    // violation (mirrors the ordinary timer_pool_/WaitQueue destruction
-    // invariants). Debug-only assert; absent in release (NDEBUG).
-    assert(select_timer_pool_.empty() &&
-           "~Scheduler: select_timer_pool_ not drained (live Select timer "
-           "authority remains — caller contract violation)");
+    // E13 P3 Corrective (destruction contract): at destruction the Scheduler
+    // must hold NO live Select timer AUTHORITY — no ACTIVE SelectTimerRegist-
+    // ration may remain, and the shared active-deadline counter must be zero.
+    // Terminal (RETIRED/CONSUMED) lazy blocks whose deadlines never elapsed are
+    // PERMITTED here: lazy-at-deadline reclamation may leave such inert blocks
+    // in the pool, and their callback authority was already closed via the
+    // Scheduler accounting helper (which decremented active_deadline_count_).
+    // The pool/heap members then destruct normally and free the inert blocks.
+    //
+    // This mirrors the ordinary timer_pool_ teardown contract, which imposes
+    // no pool-empty assertion: a non-empty physical pool is legal as long as no
+    // logical authority remains. The previous shape wrongly asserted
+    // select_timer_pool_.empty(), rejecting the legal lazy-teardown state where
+    // a Select with an Event arm + a far-future Timer arm resolved via the
+    // Event, leaving a RETIRED Timer block whose deadline had not elapsed.
+    //
+    // active_deadline_count_ == 0 is the logical-authority count: it is
+    // decremented exactly once per ACTIVE->terminal transition by the
+    // retire/consume helper, so a terminal lazy block contributes 0 and the
+    // assertion is consistent with permitting lazy blocks. Debug-only asserts;
+    // absent in release (NDEBUG).
+    bool any_active_select = false;
+    for (auto& r : select_timer_pool_) {
+        if (r.is_active()) { any_active_select = true; break; }
+    }
+    assert(!any_active_select &&
+           "~Scheduler: an ACTIVE SelectTimerRegistration remains (live Select "
+           "timer authority not closed — caller contract violation)");
     assert(active_deadline_count_ == 0 &&
            "~Scheduler: active_deadline_count_ != 0 (a timer registration was "
            "not retired/consumed before teardown)");
@@ -3386,6 +3404,22 @@ Scheduler::AsyncTestAccess::tagged_heap_counts_by_kind(
         }
     }
     return counts;
+}
+
+// E13 P3 Corrective (closure 4): prove the heap stores the spliced block's
+// address as its stable Select target. Diagnostic only (reads GUARDED_BY
+// fields from the test coordinator).
+bool Scheduler::AsyncTestAccess::deadline_heap_has_select_target(
+    const Scheduler& s,
+    const detail::SelectTimerRegistration* target) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    for (const auto& e : s.deadline_heap_) {
+        if (e.kind == detail::DeadlineHeapEntry::Kind::select &&
+            e.target.select == target) {
+            return true;
+        }
+    }
+    return false;
 }
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
