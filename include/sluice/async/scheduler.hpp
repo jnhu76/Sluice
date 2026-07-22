@@ -1457,10 +1457,14 @@ public:
         // Scheduler accounting helpers).
         static bool detached_try_claim_expiry(
             detail::SelectTimerRegistration& reg) noexcept {
+            assert(reg.scheduler() == nullptr &&
+                   "detached CAS accessor requires a never-registered registration");
             return reg.try_claim_expiry();
         }
         static bool detached_retire(
             detail::SelectTimerRegistration& reg) noexcept {
+            assert(reg.scheduler() == nullptr &&
+                   "detached CAS accessor requires a never-registered registration");
             return reg.retire();
         }
 

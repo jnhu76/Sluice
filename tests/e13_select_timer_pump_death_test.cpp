@@ -199,6 +199,27 @@ void child_xc_cross_scheduler_consume() {
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
+// DG — detached-CAS guard. A Scheduler-owned (registered) block is passed to
+// detached_retire (the test-only CAS accessor). The assert inside
+// detached_retire fires because reg.scheduler() != nullptr, catching the
+// misuse BEFORE any state/counter mutation. Proves the detached-only access
+// guard rejects Scheduler-owned registrations.
+void child_dg_detached_cas_guard() {
+    install_death_handlers();
+    sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
+    Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);
+    sluice_async_test::E11TimerControl::enable_test_clock(sched);
+
+    SelectTimerReg* r = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+        sched, nullptr, /*deadline=*/50);
+
+    // detached_retire on a Scheduler-owned block -> assert(scheduler==nullptr).
+    sluice_async_test::E13SelectTimerSeam::detached_retire(*r);
+
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 // NP — non-pool member. A detached stack-local block is bound to Scheduler A by
 // pointer (scheduler() == &sched_a) but is NOT in A's select_timer_pool_.
 // Retiring it via Sched A's helper trips pool_owns_select_block_locked ->
@@ -228,6 +249,7 @@ void dispatch_child(const std::string& name) {
     else if (name == "XR") child_xr_cross_scheduler_retire();
     else if (name == "XC") child_xc_cross_scheduler_consume();
     else if (name == "NP") child_np_non_pool_member_retire();
+    else if (name == "DG") child_dg_detached_cas_guard();
     std::cerr << "[death] unknown child case: " << name << "\n";
     std::_Exit(sluice_death_test::kChildTestFailExit);
 }
@@ -251,12 +273,14 @@ int run_parent() {
     must_term("XR");   // cross-Scheduler retire -> assert before mutation
     must_term("XC");   // cross-Scheduler consume -> assert before mutation
     must_term("NP");   // non-pool member retire -> membership assert
+    must_term("DG");   // detached-CAS guard -> assert(scheduler==nullptr)
 
     if (failures == 0) {
         std::cout << "ALL DEATH TESTS PASSED (PA pump-active fail-fast / "
                      "CTL stale-skip control / SD1 terminal-lazy destruct / "
                      "SD2 active-destruct / XR cross-sched retire / XC "
-                     "cross-sched consume / NP non-pool-member)\n";
+                     "cross-sched consume / NP non-pool-member / "
+                     "DG detached-CAS-guard)\n";
         return 0;
     }
     std::cout << failures << " death-test case(s) FAILED\n";
