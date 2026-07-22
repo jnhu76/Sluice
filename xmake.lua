@@ -1253,3 +1253,46 @@ do
             add_tests("e13_select_timer_pump_death_test")
     end
 end
+
+-- e13_select_claim — E13 P4 Select central claim + winner/loser finalization
+-- tests. Drives select_process_group_locked + select_all_authority_closed_locked
+-- via guarded internal-testing seams. Covers C1-C12 (first-claim-wins, second-
+-- claim-loses, winner stability, Event/Timer winner+loser, mixed, same-Event-
+-- twice, claim-lost no-mutation, authority-closed invariant, no-publication,
+-- Timer loser ordering SN-9). Deterministic (test clock + causal phase seams);
+-- NO sleep_for. Gated to x86_64 (fiber_ctx::supported) for parity with E13.
+do
+    local p = "tests/e13_select_claim.cpp"
+    if os.isfile(p) then
+        target("e13_select_claim")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_claim")
+    end
+end
+
+-- e13_select_claim_death_test — E13 P4 Select claim/finalization death tests.
+-- Verifies preflight assertions fire BEFORE the winner CAS for: candidate index
+-- out of range (CG), cross-Scheduler group (CS), candidate not CandidateReady
+-- (CP), arm.group mismatch (CA), Event arm not linked to its port (EH), Timer
+-- null stable_reg (TN), Timer registration on another Scheduler (TF), Timer
+-- registration not pool-owned (TP), and the post-claim all-authority-closed
+-- assertion rejecting an open authority (OA). Runs in a forked child that
+-- re-execs this binary via death_test_runner_posix.hpp. POSIX-only.
+do
+    local p = "tests/e13_select_claim_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_claim_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_claim_death_test")
+    end
+end
