@@ -132,15 +132,16 @@ struct PhaseState {
 // (no global_mtx_ acquisition). Only the two expected PhaseTag values are
 // valid: e13_admission_armed and e13_admission_consumed.
 struct AdmissionSnapshot {
-    sluice::async::detail::GroupPhase phase;
-    sluice::async::detail::CompletionMode completion_mode;
-    std::uint32_t winner;
-    std::size_t arm_count;
-    std::array<sluice::async::detail::ArmState, 8> arm_states;
-    std::array<sluice::async::detail::ArmKind, 8> arm_kinds;
-    std::array<bool, 8> event_linked;
-    std::array<sluice::async::detail::SelectTimerRegistration::State, 8> timer_states;
-    bool all_authority_closed;
+    sluice::async::detail::GroupPhase phase{sluice::async::detail::GroupPhase::building};
+    sluice::async::detail::CompletionMode completion_mode{sluice::async::detail::CompletionMode::none};
+    std::uint32_t winner{sluice::async::detail::kNoWinner};
+    std::size_t arm_count{0};
+    std::array<sluice::async::detail::ArmState, sluice::async::kSelectMaxArms> arm_states{};
+    std::array<sluice::async::detail::ArmKind, sluice::async::kSelectMaxArms> arm_kinds{};
+    std::array<bool, sluice::async::kSelectMaxArms> event_linked{};
+    std::array<sluice::async::detail::SelectTimerRegistration::State,
+               sluice::async::kSelectMaxArms> timer_states{};
+    bool all_authority_closed{false};
 };
 
 // The controller entry for one Scheduler. Holds one PhaseState per tag. The

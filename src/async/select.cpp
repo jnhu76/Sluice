@@ -497,7 +497,7 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
         // test can read the mechanical group/arm state without acquiring G.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         {
-            sluice_async_test::AdmissionSnapshot snap;
+            sluice_async_test::AdmissionSnapshot snap{};
             snap.phase = group.phase();
             snap.completion_mode = group.completion_mode_;
             snap.winner = group.winner();
@@ -606,7 +606,7 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
         // test can read the mechanical inline lifecycle state.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         {
-            sluice_async_test::AdmissionSnapshot snap;
+            sluice_async_test::AdmissionSnapshot snap{};
             snap.phase = group.phase();
             snap.completion_mode = group.completion_mode_;
             snap.winner = group.winner();
