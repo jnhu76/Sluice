@@ -41,6 +41,7 @@ namespace sluice::async {
 class Event;
 
 namespace detail {
+class SelectGroup;
 class SelectPort;
 struct SelectArmSlot;
 enum class ArmState : std::uint8_t;
@@ -1467,6 +1468,23 @@ public:
                    "detached CAS accessor requires a never-registered registration");
             return reg.retire();
         }
+
+        // E13 P4 detached-group winner-CAS test entry. PRE: `group` is a
+        // structural object that was never admitted/registered with any
+        // Scheduler (scheduler_ == nullptr, arms_ == nullptr, arm_count_ == 0).
+        // The winner CAS (SelectGroup::claim_winner_locked) is PRIVATE so a
+        // registered group cannot bypass Scheduler::select_process_group_locked;
+        // this guarded entry is the only non-Scheduler way to reach the CAS,
+        // and it exists solely so P1 structural tests can prove first-claim-
+        // wins / second-claim-loses on detached objects. The mechanical
+        // detached precondition is ENFORCED here (not merely documented): a
+        // group carrying arms or a scheduler binding is rejected before the CAS
+        // (P4 §5.1: "Do not repeat the P3 mistake of documenting a test-only
+        // precondition without enforcing it"). Defined out-of-line: the body
+        // touches SelectGroup's complete definition (select_port.hpp), which is
+        // NOT included by this installed header.
+        static bool detached_claim_winner(detail::SelectGroup& group,
+                                         std::uint32_t arm_index) noexcept;
 
         // Advance the test clock deterministically (drives the timer pump).
         static void advance_clock(Scheduler& s, deadline_t t);

@@ -1466,6 +1466,22 @@ void Scheduler::AsyncTestAccess::set_arm_state(Scheduler& s,
     LockGuard lk(s.global_mtx_);
     arm.state = st;
 }
+
+// E13 P4 detached-group winner-CAS test entry (out-of-line: needs SelectGroup's
+// complete definition from select_port.hpp). Enforces the mechanical detached
+// precondition (scheduler_ == nullptr, arms_ == nullptr, arm_count_ == 0)
+// BEFORE the CAS, then reaches the private claim_winner_locked. A registered
+// group cannot reach this path: it would fail the precondition assertions.
+bool Scheduler::AsyncTestAccess::detached_claim_winner(
+    detail::SelectGroup& group, std::uint32_t arm_index) noexcept {
+    assert(group.scheduler_ == nullptr &&
+           "detached winner-CAS accessor requires scheduler_ == nullptr");
+    assert(group.arms_ == nullptr &&
+           "detached winner-CAS accessor requires arms_ == nullptr");
+    assert(group.arm_count_ == 0 &&
+           "detached winner-CAS accessor requires arm_count_ == 0");
+    return group.claim_winner_locked(arm_index);
+}
 #endif
 
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {

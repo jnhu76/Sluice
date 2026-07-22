@@ -144,13 +144,6 @@ public:
         return winner_.load(std::memory_order::relaxed);
     }
 
-    bool claim_winner(std::uint32_t arm_index) noexcept {
-        std::uint32_t expected = kNoWinner;
-        return winner_.compare_exchange_strong(expected, arm_index,
-                                                std::memory_order::relaxed,
-                                                std::memory_order::relaxed);
-    }
-
     // Group fields — set during admission.
     Scheduler* scheduler_{nullptr};
     SelectArmSlot* arms_{nullptr};
@@ -167,6 +160,28 @@ public:
 
 private:
     friend class ::sluice::async::Scheduler;
+
+    // THE single winner linearization point (docs/e13-select-locking-and-
+    // publication.md §1.5, docs/e13-select-formal-production-mapping.md §4).
+    // CAS winner_ kNoWinner -> arm_index, relaxed/relaxed. Synchronization of
+    // the surrounding arm-state visibility is provided by global_mtx_, NOT by
+    // the CAS memory order (arm finalization happens AFTER the CAS, so a release
+    // CAS could not publish those writes anyway).
+    //
+    // PRIVATE (Scheduler authority): a registered group's winner CAS MUST route
+    // through Scheduler::select_process_group_locked, which validates the whole
+    // group and finalizes every loser in the SAME critical section. Reaching the
+    // CAS directly on a registered group would claim the winner without
+    // finalizing losers — a structural hole the type system now closes. Only
+    // friend Scheduler and the macro-gated detached-group test entry (a never-
+    // registered, arms-less object) may call this. A registered group cannot
+    // bypass select_process_group_locked.
+    bool claim_winner_locked(std::uint32_t arm_index) noexcept {
+        std::uint32_t expected = kNoWinner;
+        return winner_.compare_exchange_strong(expected, arm_index,
+                                                std::memory_order::relaxed,
+                                                std::memory_order::relaxed);
+    }
 
     std::atomic<GroupPhase> phase_{GroupPhase::building};
     std::atomic<std::uint32_t> winner_{kNoWinner};

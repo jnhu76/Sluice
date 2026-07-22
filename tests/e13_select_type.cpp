@@ -27,6 +27,8 @@ namespace sa = sluice::async;
 namespace sad = sluice::async::detail;
 namespace stest = sluice_async_test;
 
+using AsyncTestAccess = sa::Scheduler::AsyncTestAccess;
+
 // ---- Constraint helper concepts (SF-1..SF-3 gate verification) ----
 
 namespace {
@@ -225,15 +227,19 @@ SLUICE_TEST_CASE(test_select_group_phase_transitions) {
 SLUICE_TEST_CASE(test_select_group_winner_claim) {
     sad::SelectGroup group;
     group.mark_admitted();
-
+    // This is a structural (never-registered) object: scheduler_ == nullptr,
+    // arms_ == nullptr, arm_count_ == 0 — exactly the detached precondition the
+    // guarded test entry enforces. The winner CAS is PRIVATE (E13 P4 §5.1: a
+    // registered group cannot bypass Scheduler::select_process_group_locked);
+    // reach it via the detached-group test entry.
     SLUICE_CHECK(group.winner() == sad::kNoWinner);
 
     // First claim succeeds.
-    SLUICE_CHECK(group.claim_winner(2));
+    SLUICE_CHECK(AsyncTestAccess::detached_claim_winner(group, 2));
     SLUICE_CHECK(group.winner() == 2);
 
     // Second claim fails.
-    SLUICE_CHECK(!group.claim_winner(5));
+    SLUICE_CHECK(!AsyncTestAccess::detached_claim_winner(group, 5));
     SLUICE_CHECK(group.winner() == 2);
 
     // Admitted group must end in consumed/aborted before destruction.
