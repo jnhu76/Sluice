@@ -25,10 +25,21 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <list>
+#include <stdexcept>
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/select_port.hpp>
 #include <sluice/async/event.hpp>
 #include <sluice/async/select.hpp>  // kSelectMaxArms (for the drift static_assert below only)
+
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
+// the non-installed test-control header so the admission phase call sites below
+// resolve to the controller. In the production build this include is absent and
+// the seam call sites compile to nothing.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+#include "async_test_control_internal.hpp"
+#endif
 
 namespace sluice::async {
 
@@ -181,6 +192,16 @@ bool Scheduler::select_process_group_locked(detail::SelectGroup& group,
     }
 
     // Won the claim. Commit the winner, finalize every loser, in this CS.
+    // E13 P5 AdmissionClaimed seam: AFTER the winner CAS succeeds (fresh
+    // claim), BEFORE winner/loser finalization. Fires only on a real won claim.
+    // Pure test-only observation (no allocation, no callback, no production
+    // effect): it marks the phase reached and blocks ONLY if a controller is
+    // registered AND armed; in the production target (and in any test that does
+    // not arm it) it is absent entirely. Does not change P4 finalization order.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(
+        *this, sluice_async_test::PhaseTag::e13_admission_claimed);
+#endif
     select_commit_winner_locked(group, candidate_index);
     for (std::uint32_t i = 0; i < group.arm_count_; ++i) {
         if (i == candidate_index) continue;
@@ -259,6 +280,287 @@ bool Scheduler::select_all_authority_closed_locked(
         }
     }
     return true;
+}
+// ===========================================================================
+// E13 P5 — registration + inline admission.
+//
+// select_admit_inline is the single non-template admission core reached ONLY by
+// the public variadic select() bridge (include/sluice/async/select.hpp). It owns
+// every centralized admission step. The inline-ready case only:
+//   - validate caller + every case Scheduler identity BEFORE any allocation
+//   - materialize fixed caller-frame group + arms (no heap)
+//   - allocate every Timer stable block BEFORE global_mtx_
+//   - reserve deadline-heap capacity BEFORE the first registration mutation
+//   - register every arm under ONE continuous global_mtx_ critical section
+//   - FinishRegistration (phase = Selecting)
+//   - take ONE immutable readiness snapshot (single captured monotonic_now)
+//   - select the lowest ready index (only admission tie-break)
+//   - call the P4 central claim/finalization core exactly once
+//   - close every Event/Timer authority
+//   - construct exactly ONE SelectResult, Inline completion (Completed->Consumed)
+//   - return WITHOUT suspending or publishing a runnable
+//
+// The no-ready branch fails fast (suspended completion is P6, denied).
+//
+// Locking: exactly one global_mtx_ acquisition spans reserve..inline-completion,
+// so no external Event::set / timer pump / other Select path may observe a
+// partially-registered group (docs/e13-select-locking-and-publication.md §3.3).
+//
+// Caller-frame storage: SelectGroup + the SelectArmSlot array live in THIS
+// function's frame. arm.home_/next_/prev_ point into them; every Event/Timer
+// authority is closed before this frame returns, so no dangling reference
+// survives the call (docs/e13-select-production-architecture.md §4.1).
+// ===========================================================================
+SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
+                                            std::size_t count) {
+    assert(descs != nullptr && count >= 1 && count <= kPreflightMaxArms &&
+           "select_admit_inline: descs/count out of range (requires clause gate)");
+
+    // -----------------------------------------------------------------------
+    // (1) Caller validation — BEFORE any allocation/registration.
+    // docs/e13-select-public-api.md §4.11.
+    // -----------------------------------------------------------------------
+    WorkerState* ws = current_worker();          // == g_worker
+    if (ws == nullptr) {
+        throw std::logic_error(
+            "select() called from a plain OS thread, not a Scheduler worker");
+    }
+    if (ws->owner_scheduler != this) {
+        throw std::logic_error(
+            "select() called on a Scheduler that does not own this worker");
+    }
+    if (ws->current == nullptr) {
+        throw std::logic_error("select() called with no current Fiber");
+    }
+    // Capture caller + owner for the (future P6) publication path. Stored on the
+    // group; unused by the inline path but recorded for correctness/audit.
+    Fiber* const caller = ws->current;
+    WorkerState* const caller_owner = ws;
+
+    // -----------------------------------------------------------------------
+    // (2) Case Scheduler validation — BEFORE any allocation.
+    // Cross-Scheduler Event / mismatched Timer case -> std::invalid_argument,
+    // thrown before Timer stable-block allocation, heap reserve, or link/splice.
+    // -----------------------------------------------------------------------
+    for (std::size_t i = 0; i < count; ++i) {
+        const detail::SelectCaseDescriptor& d = descs[i];
+        if (d.kind == detail::SelectCaseDescriptor::Kind::event) {
+            assert(d.event != nullptr &&
+                   "select_admit_inline: Event descriptor event_ is null");
+            // Event binds its Scheduler; read the private field under the friend
+            // grant (EventSelectCase::event_ -> Event& -> Event::scheduler_).
+            if (&d.event->scheduler_ != this) {
+                throw std::invalid_argument(
+                    "select(): Event does not belong to this Scheduler");
+            }
+        } else {
+            if (d.scheduler != this) {
+                throw std::invalid_argument(
+                    "select(): Timer case Scheduler does not match select() "
+                    "Scheduler argument");
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // (3) Materialize fixed caller-frame group + arms. No dynamic allocation.
+    // The arms array is sized by count (1..kSelectMaxArms); it lives in this
+    // frame and is destroyed when the frame returns (after authority closure).
+    // -----------------------------------------------------------------------
+    detail::SelectGroup group;                    // caller-frame control block
+    group.scheduler_ = this;
+    group.caller_ = caller;
+    group.caller_owner_ = caller_owner;
+    group.completion_mode_ = detail::CompletionMode::none;
+    group.set_phase(detail::GroupPhase::building);
+    // group.winner_ defaults to kNoWinner (SelectGroup's default init); the
+    // single winner CAS happens later via select_process_group_locked.
+
+    std::array<detail::SelectArmSlot, kPreflightMaxArms> arms;
+    group.arms_ = arms.data();
+    group.arm_count_ = count;
+
+    // (4) Build the Timer tmp_pool (caller-frame temporary) with one ACTIVE node
+    // per Timer arm, BEFORE global_mtx_. std::list nodes are pointer-stable;
+    // std::list::splice preserves their address after transfer to the Scheduler
+    // pool (C++ [list.ops]). Bind arm.timer.stable_reg_ here so the registration
+    // loop only splices (no allocation under the lock).
+    std::list<detail::SelectTimerRegistration> timer_tmp_pool;
+    std::size_t timer_arm_count = 0;
+
+    for (std::size_t i = 0; i < count; ++i) {
+        detail::SelectArmSlot& arm = arms[i];
+        detail::SelectCaseDescriptor& d = descs[i];
+        arm.group = &group;
+        arm.state = detail::ArmState::prepared;
+        if (d.kind == detail::SelectCaseDescriptor::Kind::event) {
+            arm.construct_event(*d.event);
+        } else {
+            arm.construct_timer(d.deadline);
+            // One ACTIVE stable block per Timer arm, outside the lock.
+            timer_tmp_pool.emplace_back(&arm, this,
+                                        static_cast<deadline_tick_t>(d.deadline));
+            detail::SelectTimerRegistration& node = timer_tmp_pool.back();
+            arm.timer.stable_reg_ = &node;  // stable across splice
+            ++timer_arm_count;
+        }
+    }
+    // The group is now a real admitted Select operation (enforce terminal-phase
+    // contract in its destructor).
+    group.mark_admitted();
+
+    // -----------------------------------------------------------------------
+    // (5)-(10) Registration transaction under ONE global_mtx_ critical section.
+    // -----------------------------------------------------------------------
+    {
+        LockGuard lk(global_mtx_);
+
+        // (5) Reserve deadline-heap capacity for ALL Timer arms BEFORE any
+        // registration mutation (docs/e13-select-public-api.md §5). This is the
+        // ONLY allocation permitted under the lock. Checked overflow guard.
+        if (timer_arm_count > deadline_heap_.max_size() - deadline_heap_.size()) {
+            throw std::length_error(
+                "select(): deadline heap capacity overflow on reserve");
+        }
+        deadline_heap_.reserve(deadline_heap_.size() + timer_arm_count);
+        // If reserve threw above: no group admission marker was consumed for the
+        // heap, no arm registered, no splice. The exception propagates; nothing
+        // to roll back (group.arms_/tmp_pool are caller-frame and unwind cleanly).
+
+        // (6) Register every arm in index order.
+        auto tmp_it = timer_tmp_pool.begin();
+        for (std::size_t i = 0; i < count; ++i) {
+            detail::SelectArmSlot& arm = arms[i];
+            if (arm.kind == detail::ArmKind::event) {
+                // Event arm: link into the Event's private SelectPort. This is
+                // the canonical registry mutation (select_event_link_locked),
+                // which sets arm.state = Registered. Distinct duplicate Event
+                // cases receive DISTINCT SelectArmSlot nodes (each is a separate
+                // array slot linked into the same port).
+                select_event_link_locked(*descs[i].event, arm);
+            } else {
+                // Timer arm: splice exactly one tmp_pool node into the Scheduler
+                // pool, push its tagged DeadlineHeapEntry, increment
+                // active_deadline_count_ exactly once. splice preserves the
+                // stable address bound at arm.timer.stable_reg_ above.
+                // Capture the next tmp_pool iterator BEFORE splicing: splice
+                // transfers tmp_it's node out of tmp_pool into select_timer_
+                // pool_, so incrementing tmp_it afterwards would iterate the
+                // destination list, not tmp_pool.
+                auto next_tmp = std::next(tmp_it);
+                detail::SelectTimerRegistration* spliced =
+                    select_timer_splice_one_locked(timer_tmp_pool, tmp_it);
+                tmp_it = next_tmp;
+                // The arm's stable_reg_ already points at `spliced` (same
+                // address); no rebinding needed.
+                (void)spliced;
+                arm.state = detail::ArmState::registered;
+            }
+        }
+
+        // After registration, tmp_pool is empty; every Timer arm's stable_reg_
+        // points into select_timer_pool_; every Event arm is linked.
+
+        // (7) FinishRegistration.
+        group.set_phase(detail::GroupPhase::selecting);
+
+        // (8) AdmissionArmed seam: AFTER every arm registered, AFTER phase
+        // becomes Selecting, BEFORE the readiness snapshot.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::test_phase(
+            *this, sluice_async_test::PhaseTag::e13_admission_armed);
+#endif
+
+        // (9) Immutable readiness snapshot. Capture monotonic_now() ONCE and
+        // walk EVERY arm in index order — do NOT stop at the first ready arm,
+        // do NOT let heap order or Event/Timer kind choose the winner. Mark
+        // every ready arm CandidateReady; choose the LOWEST ready index.
+        const deadline_t captured_now = monotonic_now();
+        std::uint32_t lowest_ready = static_cast<std::uint32_t>(-1);
+        bool any_ready = false;
+        for (std::size_t i = 0; i < count; ++i) {
+            detail::SelectArmSlot& arm = arms[i];
+            bool ready = false;
+            if (arm.kind == detail::ArmKind::event) {
+                // Event readiness: set_ == true under global_mtx_.
+                ready = descs[i].event->set_.load(std::memory_order::acquire);
+            } else {
+                // Timer readiness: deadline <= captured_now (single capture).
+                ready = arm.timer.stable_reg_->deadline() <= captured_now;
+            }
+            if (ready) {
+                arm.state = detail::ArmState::candidate_ready;
+                if (!any_ready) {
+                    lowest_ready = static_cast<std::uint32_t>(i);
+                    any_ready = true;
+                }
+            }
+        }
+
+        // (10) No-ready stage guard. P5 implements inline-ready only; suspended
+        // completion is P6 (denied). Fail fast in this CS — do NOT return a
+        // no-winner result, do NOT unwind with live authority, do NOT suspend.
+        if (!any_ready) {
+            // P5 inline-only Select reached no-ready admission; suspended
+            // completion is P6.
+            detail::select_admission_no_ready_fail_fast();
+        }
+
+        // (11)-(12) P4 integration: claim + finalize the whole group for the
+        // lowest ready index, EXACTLY ONCE. Because admission and processing
+        // occur under the SAME global_mtx_ critical section, an inline admission
+        // claim cannot legitimately lose; a false return is an invariant
+        // violation. select_process_group_locked finalizes winner + losers and
+        // asserts all-authority-closed before returning true.
+        const bool won =
+            select_process_group_locked(group, lowest_ready);
+        if (!won) {
+            // Unreachable: under one continuous CS, the winner CAS cannot lose
+            // (no concurrent claimer holds the lock). A false return means the
+            // group was already claimed — an invariant violation.
+            detail::select_admission_no_ready_fail_fast();
+        }
+
+        // (13) Inline completion lifecycle (docs/e13-select-locking-and-
+        // publication.md §5.4 inline branch; task §13).
+        //   1. assert all authority closed  (select_process_group_locked did)
+        //   2. construct the one local SelectResult from group.winner()
+        //   3. completion_mode_ = Inline
+        //   4. phase = Completed
+        //   5. AdmissionConsumed seam (Completed before Consumed)
+        //   6. copy result to local return value
+        //   7. phase = Consumed
+        assert(select_all_authority_closed_locked(group) &&
+               "select_admit_inline: authority not closed after P4 processing");
+
+        const std::uint32_t winner_index = group.winner();
+        const detail::SelectArmSlot& winner_arm = arms[winner_index];
+        SelectResult result;
+        if (winner_arm.kind == detail::ArmKind::event) {
+            result = SelectResult(winner_index, SelectKind::event,
+                                  SelectTimerOutcome::fired);
+        } else {
+            result = SelectResult(winner_index, SelectKind::timer,
+                                  SelectTimerOutcome::fired);
+        }
+
+        group.completion_mode_ = detail::CompletionMode::inline_;
+        group.set_phase(detail::GroupPhase::completed);
+
+        // AdmissionConsumed seam: AFTER phase becomes Completed, BEFORE Consumed.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::test_phase(
+            *this, sluice_async_test::PhaseTag::e13_admission_consumed);
+#endif
+
+        SelectResult return_value = result;  // copy to local return value
+        group.set_phase(detail::GroupPhase::consumed);
+
+        // (14) Unlock (LockGuard destructor) and return. NO make_runnable /
+        // route_runnable_locked / make_waiting / context_switch — suspended
+        // publication is P6, denied.
+        return return_value;
+    }
 }
 
 }  // namespace sluice::async
