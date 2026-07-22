@@ -1482,6 +1482,25 @@ bool Scheduler::AsyncTestAccess::detached_claim_winner(
            "detached winner-CAS accessor requires arm_count_ == 0");
     return group.claim_winner_locked(arm_index);
 }
+
+// E13 P4 central claim + finalization test driver. Acquires global_mtx_ and
+// dispatches to the Scheduler-locked core (select_process_group_locked). The
+// test harness sets up the registered group exactly as a future admission
+// would: group.scheduler_ = &s, arms_/arm_count_ set, Event arms linked via
+// select_event_link, Timer arms registered via register_synthetic_select_timer.
+bool Scheduler::AsyncTestAccess::select_process_group(
+    Scheduler& s, detail::SelectGroup& group, std::uint32_t candidate_index) {
+    LockGuard lk(s.global_mtx_);
+    return s.select_process_group_locked(group, candidate_index);
+}
+
+// E13 P4 all-authority-closed invariant predicate (SN-10). Acquires global_mtx_
+// and dispatches to the const locked predicate. Pure read; no mutation.
+bool Scheduler::AsyncTestAccess::select_all_authority_closed(
+    const Scheduler& s, const detail::SelectGroup& group) {
+    LockGuard lk(s.global_mtx_);
+    return s.select_all_authority_closed_locked(group);
+}
 #endif
 
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {

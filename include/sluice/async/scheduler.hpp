@@ -1237,6 +1237,84 @@ private:
     bool select_timer_pump_entry_locked(
         detail::SelectTimerRegistration& reg) SLUICE_REQUIRES(global_mtx_);
 
+    // ---- E13 P4 Select central claim + winner/loser finalization core ----
+    // All require global_mtx_ held continuously. This is the single loser
+    // processor and the single claim+finalize orchestrator
+    // (docs/e13-select-locking-and-publication.md §1.5,
+    //  docs/e13-select-formal-production-mapping.md §2). P4 does NOT publish a
+    // result, route a runnable, transition the group to Completed/Consumed, or
+    // choose a candidate from a readiness snapshot (the caller supplies the
+    // candidate index). After a successful process the group is "claimed and
+    // finalized but unpublished" — an internal transient state under
+    // global_mtx_ that a later stage will follow with publication before the
+    // lock is released.
+
+    // Receive one CandidateReady arm and claim+finalize the whole group. PRE:
+    // global_mtx_ held. Validates the entire group BEFORE the irreversible
+    // winner CAS, then attempts the single group winner CAS
+    // (SelectGroup::claim_winner_locked). On win: commits the winner, finalizes
+    // every loser, closes every Event/Timer authority, asserts all-authority-
+    // closed, returns true. On loss (another invocation already owns the
+    // winner): performs no arm/adapter/accounting/phase mutation, returns
+    // false. No allocation in this path. Returns whether THIS invocation won
+    // the claim.
+    bool select_process_group_locked(detail::SelectGroup& group,
+                                     std::uint32_t candidate_index)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Validate the entire group BEFORE the irreversible winner CAS (P4 §6).
+    // Every check is a debug assertion that fires before any mutation, so an
+    // invalid group cannot become permanently claimed and then fail halfway
+    // through finalization. Group-level, candidate-arm, every-arm, Event-arm
+    // (incl. intrusive-list membership), and Timer-arm (incl. pool ownership +
+    // ACTIVE + arm back-pointer) checks. No allocation. A member (not a free
+    // function) because it reads Event private fields (scheduler_,
+    // select_port_) under the Scheduler friend grant.
+    void select_preflight_group_locked(detail::SelectGroup& group,
+                                       std::uint32_t candidate_index) const
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Commit the winner arm (post-CAS). Timer winner: ACTIVE->CONSUMED via
+    // select_timer_consume_locked (CAS after group claim), then arm.state=
+    // Retired. Event winner: targeted handling, unlink from Event SelectPort,
+    // then arm.state = Retired. Event::set_ is NEVER mutated. No publication.
+    void select_commit_winner_locked(detail::SelectGroup& group,
+                                     std::uint32_t winner_index)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Finalize one loser arm. Timer loser: arm.state = Retired FIRST, then
+    // ACTIVE->RETIRED via select_timer_retire_locked (SN-9: arm classification
+    // precedes the registration retirement CAS). Event loser: arm.state =
+    // Retired, then unlink. No publication; never writes result/runnable.
+    void select_finalize_loser_locked(detail::SelectGroup& group,
+                                      std::uint32_t loser_index)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Per-kind finalizer halves (called by the two drivers above under G).
+    void select_finalize_event_winner_locked(detail::SelectGroup& group,
+                                             detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+    void select_finalize_event_loser_locked(detail::SelectGroup& group,
+                                            detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+    void select_finalize_timer_winner_locked(detail::SelectGroup& group,
+                                             detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+    void select_finalize_timer_loser_locked(detail::SelectGroup& group,
+                                            detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // The reusable all-authority-closed invariant predicate (SN-10). Returns
+    // true iff: winner != kNoWinner, winner < arm_count, AND for every arm
+    //   - Event: state == Retired, home_ == nullptr, next_/prev_ == nullptr
+    //   - Timer: state == Retired, stable_reg_ terminal (CONSUMED for the
+    //            winner, RETIRED for losers)
+    // select_process_group_locked asserts this before returning true on a win.
+    // A future select_publish_locked must call this at its entry as its
+    // publication precondition. Pure read; no mutation.
+    bool select_all_authority_closed_locked(const detail::SelectGroup& group) const
+        SLUICE_REQUIRES(global_mtx_);
+
     // E11-T17 (F2) narrow test hook: register a TimerRegistration for {node,q,
     // deadline} from a NON-worker thread (the test coordinator). Mirrors the
     // full await_wait_deadline admission MINUS the fiber-suspend path: it
@@ -1485,6 +1563,28 @@ public:
         // NOT included by this installed header.
         static bool detached_claim_winner(detail::SelectGroup& group,
                                          std::uint32_t arm_index) noexcept;
+
+        // ---- E13 P4 Select central claim + finalization test accessors ----
+        // The P4 core is test-driven via direct seam calls (production-test-
+        // plan.md §4 / §7.4). These acquire global_mtx_ internally and dispatch
+        // to the Scheduler-locked core. No forgeable test authority; absent in
+        // the production target.
+
+        // Drive select_process_group_locked: validate + claim + finalize the
+        // whole group for `candidate_index` without publication. Returns
+        // whether THIS call won the claim. `group` must be a registered group
+        // (scheduler_ == &s, arms_/arm_count_ set, arms linked/registered by
+        // the test harness exactly as a future admission would).
+        static bool select_process_group(Scheduler& s,
+                                         detail::SelectGroup& group,
+                                         std::uint32_t candidate_index);
+
+        // Read the all-authority-closed invariant predicate (SN-10). False
+        // before processing (no winner / open authority); true after a
+        // successful process. A guarded test may also invoke it directly to
+        // prove an open authority is rejected (OA death test).
+        static bool select_all_authority_closed(const Scheduler& s,
+                                                const detail::SelectGroup& group);
 
         // Advance the test clock deterministically (drives the timer pump).
         static void advance_clock(Scheduler& s, deadline_t t);

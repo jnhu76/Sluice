@@ -26,6 +26,7 @@
 #include <list>
 
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/detail/select_port.hpp>  // complete SelectArmSlot (P4 finalizers)
 #include <sluice/async/detail/select_registration.hpp>
 
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls
@@ -179,6 +180,135 @@ bool Scheduler::pool_owns_select_block_locked(
         if (&b == &reg) return true;
     }
     return false;
+}
+
+// ===========================================================================
+// E13 P4 Select Timer winner/loser finalizers.
+//
+// Per-kind finalizer halves for Timer arms, called by the single group
+// processor (select_process_group_locked via select_commit_winner_locked /
+// select_finalize_loser_locked) under global_mtx_.
+//
+// Source order (docs/e13-select-locking-and-publication.md §4.1 / §4.2):
+//
+//   Timer winner (§8.1 / §4.1):
+//     1. group winner CAS already succeeded (the driver's caller did it)
+//     2. SelectTimerRegistration ACTIVE -> CONSUMED via
+//        select_timer_consume_locked (the Timer registration CAS MUST NOT
+//        precede the group winner CAS)
+//     3. arm.state = Retired
+//     4. accounting closed exactly once (select_timer_consume_locked did it)
+//     5. NO publication
+//
+//   Timer loser (§8.2 / §4.2):
+//     1. arm.state = Retired  (classification FIRST — SN-9)
+//     2. SelectTimerRegistration ACTIVE -> RETIRED via
+//        select_timer_retire_locked (the retire CAS comes AFTER arm
+//        classification, not before)
+//     3. accounting closed exactly once
+//     4. NO publication (never writes result/runnable)
+//
+// The accounting helpers (select_timer_consume_locked /
+// select_timer_retire_locked) own the single ACTIVE->terminal accounting
+// authority (Addendum C): they CAS + decrement active_deadline_count_ +
+// recompute the earliest-deadline cache exactly once on success. A failed CAS
+// mutates no counter. After a successful group claim, a Timer winner consume
+// MUST succeed (preflight guarantees the registration is ACTIVE), so a false
+// return is an invariant violation that fails fast.
+// ===========================================================================
+
+// Timer winner finalize (§8.1). The registration CAS (ACTIVE->CONSUMED) happens
+// AFTER the group winner CAS (the driver's caller) and BEFORE arm.state =
+// Retired. select_timer_consume_locked closes accounting exactly once.
+void Scheduler::select_finalize_timer_winner_locked(
+    detail::SelectGroup& group, detail::SelectArmSlot& arm) {
+    assert(arm.kind == detail::ArmKind::timer &&
+           "select_finalize_timer_winner_locked: arm is not a Timer arm");
+    detail::SelectTimerRegistration* reg = arm.timer.stable_reg_;
+    assert(reg != nullptr &&
+           "select_finalize_timer_winner_locked: stable_reg_ is null");
+    assert(reg->scheduler() == this &&
+           "select_finalize_timer_winner_locked: registration belongs to "
+           "another Scheduler");
+    assert(pool_owns_select_block_locked(*reg) &&
+           "select_finalize_timer_winner_locked: pool does not own the "
+           "registration");
+    assert(reg->is_active() &&
+           "select_finalize_timer_winner_locked: registration not ACTIVE at "
+           "winner finalize (group was claimed but registration already "
+           "terminal — invariant violation)");
+    assert(reg->arm() == &arm &&
+           "select_finalize_timer_winner_locked: registration.arm() != &arm");
+
+    // 2. ACTIVE -> CONSUMED via the accounting helper (CAS + decrement +
+    //    recompute, exactly once). After a successful group claim with an
+    //    ACTIVE registration (preflight-checked), this MUST succeed.
+    const bool consumed = select_timer_consume_locked(*reg);
+    if (!consumed) {
+        // Unreachable after preflight + a successful group claim under the
+        // same held global_mtx_. A false return means the registration was
+        // not ACTIVE (it raced to terminal), which contradicts the single
+        // global_mtx_ CS — an invariant violation. Fail fast.
+        detail::select_timer_pump_active_fail_fast();
+    }
+    // 3. arm terminal classification.
+    arm.state = detail::ArmState::retired;
+    // 4. accounting closed by select_timer_consume_locked above.
+    // 5. NO publication.
+    (void)group;
+}
+
+// Timer loser finalize (§8.2). SN-9: arm.state = Retired is classified FIRST
+// (while the registration is still ACTIVE), THEN the registration is retired.
+// An internal-testing phase seam at the classification point lets a test prove
+// the registration is still ACTIVE at that instant (the load-bearing SN-9
+// ordering). select_timer_retire_locked closes accounting exactly once.
+void Scheduler::select_finalize_timer_loser_locked(
+    detail::SelectGroup& group, detail::SelectArmSlot& arm) {
+    assert(arm.kind == detail::ArmKind::timer &&
+           "select_finalize_timer_loser_locked: arm is not a Timer arm");
+    detail::SelectTimerRegistration* reg = arm.timer.stable_reg_;
+    assert(reg != nullptr &&
+           "select_finalize_timer_loser_locked: stable_reg_ is null");
+    assert(reg->scheduler() == this &&
+           "select_finalize_timer_loser_locked: registration belongs to "
+           "another Scheduler");
+    assert(pool_owns_select_block_locked(*reg) &&
+           "select_finalize_timer_loser_locked: pool does not own the "
+           "registration");
+    assert(reg->arm() == &arm &&
+           "select_finalize_timer_loser_locked: registration.arm() != &arm");
+
+    // 1. arm loser classification FIRST (SN-9). The registration is still
+    //    ACTIVE at this point.
+    arm.state = detail::ArmState::retired;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic SN-9 observation: at the classification point, the
+    // registration MUST still be ACTIVE. The phase seam lets a test pause
+    // here and assert reg->is_active() (arm Retired while reg ACTIVE), then
+    // the retire CAS below flips it to RETIRED.
+    sluice_async_test::test_phase(
+        *this, sluice_async_test::PhaseTag::e13_timer_loser_arm_classified);
+#endif
+
+    // 2. ACTIVE -> RETIRED via the accounting helper, AFTER arm
+    //    classification. Preflight guarantees the registration is ACTIVE for
+    //    every arm at process entry, and this CS is held continuously, so the
+    //    CAS must succeed. A false return is an invariant violation.
+    assert(reg->is_active() &&
+           "select_finalize_timer_loser_locked: registration not ACTIVE at "
+           "retire (arm classified but registration already terminal — "
+           "invariant violation)");
+    const bool retired = select_timer_retire_locked(*reg);
+    if (!retired) {
+        // Unreachable: preflight checked ACTIVE, this CS is held, no other
+        // path retires a Select registration under this lock.
+        detail::select_timer_pump_active_fail_fast();
+    }
+    // 3. accounting closed by select_timer_retire_locked above.
+    // 4. NO publication: this path never writes group.result_ and never calls
+    //    make_runnable / route_runnable_locked.
+    (void)group;
 }
 
 }  // namespace sluice::async

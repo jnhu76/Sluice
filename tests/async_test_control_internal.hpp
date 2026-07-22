@@ -78,8 +78,15 @@ enum class PhaseTag : unsigned char {
     e13_timer_pump_active,
     // E13 P3: Select timer pump observing a stale (non-ACTIVE) entry being
     // skipped — the deterministic proof of the I4 closure: the pump observed
-    // RETIRED/CONSUMED and did NOT read arm_ (arm-load delta == 0).
+    //    RETIRED/CONSUMED and did NOT read arm_ (arm-load delta == 0).
     e13_timer_pump_skip,
+
+    // E13 P4: Timer loser arm classified Retired, with the registration STILL
+    // ACTIVE, immediately BEFORE the ACTIVE->RETIRED retire CAS. The load-
+    // bearing SN-9 ordering: a test observing this phase proves arm.state
+    // became Retired WHILE the registration was still ACTIVE, then the retire
+    // CAS (below this seam) flipped it to RETIRED. No wall-clock timing.
+    e13_timer_loser_arm_classified,
 
     count
 };
