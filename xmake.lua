@@ -1296,3 +1296,45 @@ do
             add_tests("e13_select_claim_death_test")
     end
 end
+
+-- e13_select_inline — E13 P5 inline Select admission tests (ST-1..ST-8 + T1/T2/T3).
+-- Drives the PUBLIC variadic select() entry from a real running Fiber on the
+-- target Scheduler: Event already-set, Timer already-due, Event/Timer tie
+-- (lowest-index), duplicate Event, Event winner + Timer loser (stale pump skip),
+-- Timer winner + Event loser; plus the template/link matrix (T1), all-arms-
+-- registered-before-snapshot (T2), and the inline Completed->Consumed lifecycle
+-- (T3). Deterministic (test clock + AdmissionArmed/Consumed causal phase seams);
+-- NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_inline.cpp"
+    if os.isfile(p) then
+        target("e13_select_inline")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_inline")
+    end
+end
+
+-- e13_select_inline_death_test — E13 P5 no-ready stage guard (NI). After
+-- registration completes and the readiness snapshot is empty, the inline-only
+-- admission must fail fast (suspended completion is P6, denied) rather than
+-- return a no-winner result, unwind live authority, or suspend. Runs in a forked
+-- child that re-execs this binary via death_test_runner_posix.hpp. POSIX-only;
+-- gated to linux/macosx. Temporary stage guard on a Draft PR, NOT final API.
+do
+    local p = "tests/e13_select_inline_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_inline_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_inline_death_test")
+    end
+end
