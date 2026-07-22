@@ -507,6 +507,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         // Single-worker fast path: run inline (no thread spawn). This preserves
         // the E4-E6 behavior exactly — run_until_idle on the caller's thread.
         g_worker = workers_[0].get();
+        workers_[0]->owner_scheduler = this;  // E13 P5 caller-validation identity
         workers_[0]->active.store(true, std::memory_order_release);
         worker_loop(workers_[0].get());
         workers_[0]->active.store(false, std::memory_order_release);
@@ -518,6 +519,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         for (unsigned i = 0; i < worker_count; ++i) {
             threads.emplace_back([this, i] {
                 g_worker = workers_[i].get();
+                workers_[i]->owner_scheduler = this;  // E13 P5 caller-validation identity
                 workers_[i]->active.store(true, std::memory_order_release);
                 worker_loop(workers_[i].get());
                 workers_[i]->active.store(false, std::memory_order_release);

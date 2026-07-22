@@ -39,12 +39,15 @@
 namespace sluice::async {
 
 class Event;
+class SelectResult;  // P5: full definition lives in select.hpp (included by select.cpp)
 
 namespace detail {
 class SelectGroup;
 class SelectPort;
 struct SelectArmSlot;
 enum class ArmState : std::uint8_t;
+struct SelectCaseDescriptor;  // P5: full definition in select.hpp
+struct SelectBridge;          // P5: concrete friend bridging select() -> select_admit_inline
 }  // namespace detail
 
 // ----------------------------------------------------------------------------
@@ -839,6 +842,15 @@ private:
     //Scheduler-internal wake + global-mtx access for its reconciler.
     friend class ::sluice::async::detail::QueuePort;
 
+    // E13 P5: detail::SelectBridge is the concrete friend that the public
+    // variadic select() template forwards through to reach the private
+    // select_admit_inline admission core. A constrained function-template
+    // friend would not match the public definition (the requires clause makes
+    // them distinct template entities), so select() routes through this
+    // concrete struct instead. select_admit_inline stays private to all other
+    // code; only SelectBridge::admit (a public static method) calls it.
+    friend struct ::sluice::async::detail::SelectBridge;
+
     // ---- E13 Select registry operations (private Scheduler authority) ----
     // All three require global_mtx_ held. Event must belong to this Scheduler.
     //
@@ -1317,6 +1329,37 @@ private:
     // publication precondition. Pure read; no mutation.
     bool select_all_authority_closed_locked(const detail::SelectGroup& group) const
         SLUICE_REQUIRES(global_mtx_);
+
+    // ---- E13 P5 Select registration + inline admission ----
+    // (docs/e13-select-production-test-plan.md §7.5,
+    //  docs/e13-select-locking-and-publication.md §3,
+    //  docs/e13-select-public-api.md §3/§4/§5/§7).
+    //
+    // The single non-template admission core, reached ONLY via the friend
+    // detail::SelectBridge::admit, which the public variadic select() template
+    // forwards to. PRIVATE: ordinary code cannot name it (the friend grant is
+    // only to SelectBridge). Owns every centralized admission step: caller +
+    // case-Scheduler validation (BEFORE any allocation), caller-frame group+
+    // arms materialization, Timer stable-block
+    // construction (before global_mtx_), deadline-heap reserve (the only
+    // allocation under the lock), the registration loop, FinishRegistration,
+    // the immutable readiness snapshot, lowest-index tie-break, the single P4
+    // processor call, all-authority-closed verification, and inline result
+    // completion (Completed -> Consumed). NOT a template — compiles once.
+    //
+    // P5 implements the INLINE-READY case only: a successful admission returns a
+    // SelectResult without suspending the caller or publishing a runnable. The
+    // no-ready branch fails fast (suspended completion is P6, denied here).
+    // `descs` points at `count` SelectCaseDescriptor values (caller-frame array);
+    // the function does not retain the pointer past the call.
+    //
+    // Not noexcept: may throw std::logic_error (caller validation) or
+    // std::invalid_argument (case Scheduler mismatch) BEFORE any allocation, or
+    // std::bad_alloc (Timer block / heap reserve) before the first registration
+    // mutation. After the heap reserve, the registration loop contains no
+    // ordinary throwing operation.
+    SelectResult select_admit_inline(detail::SelectCaseDescriptor* descs,
+                                     std::size_t count);
 
     // E11-T17 (F2) narrow test hook: register a TimerRegistration for {node,q,
     // deadline} from a NON-worker thread (the test coordinator). Mirrors the

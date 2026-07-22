@@ -88,6 +88,27 @@ enum class PhaseTag : unsigned char {
     // CAS (below this seam) flipped it to RETIRED. No wall-clock timing.
     e13_timer_loser_arm_classified,
 
+    // E13 P5: admission armed — AFTER every arm is registered AND group phase
+    // becomes Selecting, BEFORE the readiness snapshot. A test observing this
+    // phase proves all arms were registered before the snapshot was taken (no
+    // early-registration shortcut) and that no winner/result/runnable exists
+    // yet. The seam blocks the admission worker under global_mtx_, so a
+    // coordinator thread can inspect the registered group deterministically.
+    e13_admission_armed,
+    // E13 P5: admission claimed — AFTER the winner CAS succeeds (fresh claim),
+    // BEFORE winner/loser finalization. Fires only on a real claim attempt that
+    // won (not on claim-lost). A test observing this phase proves the snapshot's
+    // chosen candidate index was committed to the group before any arm was
+    // finalized. Reached inside select_process_group_locked; does NOT change P4
+    // production semantics (it is a pure observation with no blocking unless
+    // armed by a registered controller).
+    e13_admission_claimed,
+    // E13 P5: admission consumed — AFTER inline phase becomes Completed,
+    // BEFORE phase becomes Consumed. A test observing this phase proves the
+    // inline result is committed, every authority is closed, completion_mode is
+    // Inline, and runnable delta is 0 — the inline lifecycle ordering.
+    e13_admission_consumed,
+
     count
 };
 

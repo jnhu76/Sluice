@@ -424,4 +424,75 @@ struct E13SelectTimerSeam {
     }
 };
 
+// ---- E13 P5 Select admission seams ----
+// Phase seams for the inline admission path (deterministic causal pause),
+// reached through the non-installed controller. The admission worker calls
+// test_phase at AdmissionArmed / AdmissionClaimed / AdmissionConsumed under
+// global_mtx_; a coordinator thread arms + observes while the worker is paused
+// there, proving registration-before-snapshot, snapshot-before-finalize, and
+// the inline Completed->Consumed lifecycle ordering. No production symbol.
+struct E13SelectAdmissionSeam {
+    using Scheduler = sluice::async::Scheduler;
+
+    // Non-blocking reach observation. The admission seams fire under
+    // global_mtx_; a coordinator thread cannot acquire that lock to observe
+    // Scheduler-internal state while the worker is paused at the seam, so the
+    // lifecycle tests observe whether each seam was REACHED (in-order) rather
+    // than block-and-inspect. `is_reached` reads the controller state under its
+    // own mutex (no global_mtx_ acquisition). The blocking arm/wait/release
+    // accessors below remain available for seams that do NOT hold global_mtx_.
+    static bool armed_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_admission_armed);
+    }
+    static bool claimed_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_admission_claimed);
+    }
+    static bool consumed_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_admission_consumed);
+    }
+
+    // AdmissionArmed: AFTER every arm registered + phase==Selecting, BEFORE the
+    // readiness snapshot. Proves all arms registered before the snapshot.
+    static void arm_admission_armed(Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_admission_armed);
+    }
+    static void wait_admission_armed_paused(Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::e13_admission_armed);
+    }
+    static bool is_admission_armed_paused(Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::e13_admission_armed);
+    }
+    static void release_admission_armed(Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::e13_admission_armed);
+    }
+
+    // AdmissionClaimed: AFTER the winner CAS, BEFORE finalization.
+    static void arm_admission_claimed(Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_admission_claimed);
+    }
+    static void wait_admission_claimed_paused(Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::e13_admission_claimed);
+    }
+    static bool is_admission_claimed_paused(Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::e13_admission_claimed);
+    }
+    static void release_admission_claimed(Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::e13_admission_claimed);
+    }
+
+    // AdmissionConsumed: AFTER phase==Completed, BEFORE Consumed.
+    static void arm_admission_consumed(Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_admission_consumed);
+    }
+    static void wait_admission_consumed_paused(Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::e13_admission_consumed);
+    }
+    static bool is_admission_consumed_paused(Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::e13_admission_consumed);
+    }
+    static void release_admission_consumed(Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::e13_admission_consumed);
+    }
+};
+
 }  // namespace sluice_async_test
