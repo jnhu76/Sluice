@@ -28,14 +28,19 @@
 
 #include <sluice/async/detail/select_port.hpp>
 #include <sluice/async/event.hpp>
+#include <sluice/async/select.hpp>  // kSelectMaxArms (for the drift static_assert below only)
 
 namespace sluice::async {
 
 namespace {
 // Upper bound on Select arms (mirrors the public kSelectMaxArms gate).
-// Defined locally so this TU's preflight does not depend on select.hpp.
+// Defined locally so this TU's preflight does not depend on select.hpp for its
+// value. The static_assert below ties the mirror to the authoritative constant
+// so the two cannot silently drift.
 constexpr std::size_t kPreflightMaxArms = 8;
 static_assert(kPreflightMaxArms >= 1, "Select must permit at least one arm");
+static_assert(kPreflightMaxArms == kSelectMaxArms,
+              "kPreflightMaxArms must match the public kSelectMaxArms gate");
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -219,6 +224,14 @@ void Scheduler::select_finalize_loser_locked(detail::SelectGroup& group,
 
 // ---------------------------------------------------------------------------
 // Reusable all-authority-closed invariant predicate (P4 §10, SN-10).
+//
+// In P4 this is called in the same critical section immediately AFTER a
+// successful preflight+claim+finalize, so it can assume group.arms_ is valid,
+// kind is Event/Timer, and Timer regs have passed scheduler/pool/backpointer
+// preflight. A future P6 publication entry guard that calls this predicate on
+// a NOT-just-preflighted group should additionally validate basic group shape
+// (scheduler binding, arms_/arm_count_ bounds, winner < arm_count) here, so the
+// validator does not dereference fields on a corrupted group.
 // ---------------------------------------------------------------------------
 bool Scheduler::select_all_authority_closed_locked(
     const detail::SelectGroup& group) const {

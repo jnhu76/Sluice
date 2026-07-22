@@ -12,6 +12,9 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <type_traits>
+#include <utility>
 
 #include <sluice/async/select.hpp>
 #include <sluice/async/scheduler.hpp>
@@ -60,6 +63,15 @@ enum class CompletionMode : std::uint8_t {
 };
 
 // ---- Payload types ----
+//
+// NOTE: the default member initializers below (e.g. `event_{nullptr}`) make
+// each payload's default constructor NON-trivial ([class.ctor]/5). That matters
+// because of the implicit active-member rule for unions: the rule that lets a
+// union member begin its lifetime simply by being written only applies when
+// that member has a trivial, non-deleted default constructor. Because these
+// payloads do not, SelectArmSlot must explicitly construct/destroy its union
+// members — it cannot rely on the empty default constructor to establish an
+// active member, nor on a plain field write to switch members.
 
 struct EventArmPayload {
     Event* event_{nullptr};
@@ -69,6 +81,11 @@ struct TimerArmPayload {
     select_deadline_t deadline_{0};
     SelectTimerRegistration* stable_reg_{nullptr};
 };
+
+static_assert(std::is_trivially_destructible_v<EventArmPayload>,
+              "EventArmPayload must be trivially destructible");
+static_assert(std::is_trivially_destructible_v<TimerArmPayload>,
+              "TimerArmPayload must be trivially destructible");
 
 // ---- SelectArmSlot ----
 
@@ -87,19 +104,43 @@ struct SelectArmSlot {
         TimerArmPayload timer;
     };
 
+    // Activate the Event member (the default active member).
     void construct_event(Event& e) noexcept {
+        if (kind == ArmKind::timer) {
+            std::destroy_at(std::addressof(timer));
+            std::construct_at(std::addressof(event), EventArmPayload{&e});
+        } else {
+            event = EventArmPayload{&e};
+        }
         kind = ArmKind::event;
-        event.event_ = &e;
     }
 
     void construct_timer(select_deadline_t deadline,
                          SelectTimerRegistration* reg = nullptr) noexcept {
+        if (kind == ArmKind::event) {
+            std::destroy_at(std::addressof(event));
+            std::construct_at(std::addressof(timer),
+                              TimerArmPayload{deadline, reg});
+        } else {
+            timer = TimerArmPayload{deadline, reg};
+        }
         kind = ArmKind::timer;
-        timer.deadline_ = deadline;
-        timer.stable_reg_ = reg;
     }
 
-    SelectArmSlot() noexcept {}
+    // Default construction activates the Event member, matching the default
+    // value of `kind`. This is REQUIRED: an empty union body would leave no
+    // active member, and subsequent field writes would not establish one
+    // (payloads are non-trivially default constructible — see note above).
+    SelectArmSlot() noexcept : event{} {}
+
+    ~SelectArmSlot() noexcept {
+        if (kind == ArmKind::event) {
+            std::destroy_at(std::addressof(event));
+        } else {
+            std::destroy_at(std::addressof(timer));
+        }
+    }
+
     SelectArmSlot(const SelectArmSlot&) = delete;
     SelectArmSlot& operator=(const SelectArmSlot&) = delete;
     SelectArmSlot(SelectArmSlot&&) = delete;
