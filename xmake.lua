@@ -1319,22 +1319,63 @@ do
     end
 end
 
--- e13_select_inline_death_test — E13 P5 no-ready stage guard (NI). After
--- registration completes and the readiness snapshot is empty, the inline-only
--- admission must fail fast (suspended completion is P6, denied) rather than
--- return a no-winner result, unwind live authority, or suspend. Runs in a forked
--- child that re-execs this binary via death_test_runner_posix.hpp. POSIX-only;
--- gated to linux/macosx. Temporary stage guard on a Draft PR, NOT final API.
+-- e13_select_suspended — E13 P6 suspended Select publication tests (ST-9, ST-10,
+-- ST-13 + P6-D1 same-Event-twice + PUB boundary snapshots + P6-LW1/LW2 wake-
+-- before-physical-switch). Drives the PUBLIC variadic select() entry from a
+-- real Fiber on the target Scheduler for the no-ready branch. Deterministic
+-- (test clock + e13_select_suspend_before_switch / e13_publish_* /
+-- e13_suspended_before_consume causal phase seams); NO sleep_for. Gated to
+-- x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_inline_death_test.cpp"
-    if os.isfile(p) and is_plat("linux", "macosx") then
-        target("e13_select_inline_death_test")
+    local p = "tests/e13_select_suspended.cpp"
+    if os.isfile(p) then
+        target("e13_select_suspended")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_inline_death_test")
+            add_tests("e13_select_suspended")
+    end
+end
+
+-- e13_select_multi_worker — E13 P6 multi-worker owner routing + external-thread
+-- Event set + exactly-one-runnable tests (ST-15, ST-16, ST-17 + PUB-1..4
+-- publication boundary snapshots). Drives the PUBLIC variadic select() entry
+-- from a real Fiber; resolves from an external OS thread and across workers.
+-- Deterministic (test clock + waiting_select_count liveness + PhaseTag causal
+-- seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_multi_worker.cpp"
+    if os.isfile(p) then
+        target("e13_select_multi_worker")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_multi_worker")
+    end
+end
+
+-- e13_select_publication_death_test — E13 P6 publication invariant death tests
+-- (SN-2 duplicate-publish / SN-10 open-authority / FP caller-not-waiting / MG
+-- multi-group-Event P8 stage-boundary / CTL valid-publication control). Drives
+-- the real production publication entry + Event resolver through guarded
+-- internal-testing drivers. Runs in forked children that re-exec this binary
+-- via death_test_runner_posix.hpp. POSIX-only; gated to linux/macosx.
+do
+    local p = "tests/e13_select_publication_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_publication_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_publication_death_test")
     end
 end
