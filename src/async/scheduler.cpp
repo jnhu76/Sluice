@@ -157,7 +157,7 @@ Scheduler::~Scheduler() {
     // retire/consume helper, so a terminal lazy block contributes 0 and the
     // assertion is consistent with permitting lazy blocks. Debug-only asserts;
     // absent in release (NDEBUG).
-    bool any_active_select = false;
+    [[maybe_unused]] bool any_active_select = false;
     for (auto& r : select_timer_pool_) {
         if (r.is_active()) { any_active_select = true; break; }
     }

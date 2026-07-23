@@ -95,7 +95,7 @@ void Scheduler::select_preflight_shape_locked(
     assert(candidate_index < group.arm_count_ &&
            "select_process_group_locked: candidate_index out of range");
 
-    const auto phase = group.phase();
+    [[maybe_unused]] const auto phase = group.phase();
     assert((phase == detail::GroupPhase::selecting ||
             phase == detail::GroupPhase::armed) &&
            "select_process_group_locked: group phase must be Selecting or Armed");
@@ -104,7 +104,8 @@ void Scheduler::select_preflight_shape_locked(
 void Scheduler::select_preflight_claim_locked(
     detail::SelectGroup& group, std::uint32_t candidate_index) const {
     // --- candidate arm checks ---
-    detail::SelectArmSlot& candidate = group.arms_[candidate_index];
+    [[maybe_unused]] detail::SelectArmSlot& candidate =
+        group.arms_[candidate_index];
     assert(candidate.group == &group &&
            "select_process_group_locked: candidate arm.group != &group");
     assert(candidate.state == detail::ArmState::candidate_ready &&
@@ -112,7 +113,7 @@ void Scheduler::select_preflight_claim_locked(
 
     // --- every arm checks ---
     for (std::size_t i = 0; i < group.arm_count_; ++i) {
-        detail::SelectArmSlot& arm = group.arms_[i];
+        [[maybe_unused]] detail::SelectArmSlot& arm = group.arms_[i];
         assert(arm.group == &group &&
                "select_process_group_locked: arm.group != &group");
         assert((arm.kind == detail::ArmKind::event ||
@@ -151,7 +152,8 @@ void Scheduler::select_preflight_claim_locked(
     for (std::size_t i = 0; i < group.arm_count_; ++i) {
         detail::SelectArmSlot& arm = group.arms_[i];
         if (arm.kind != detail::ArmKind::timer) continue;
-        detail::SelectTimerRegistration* reg = arm.timer.stable_reg_;
+        [[maybe_unused]] detail::SelectTimerRegistration* reg =
+            arm.timer.stable_reg_;
         assert(reg != nullptr &&
                "select_process_group_locked: Timer arm stable_reg_ is null");
         assert(reg->scheduler() == this &&

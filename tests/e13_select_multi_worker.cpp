@@ -388,8 +388,14 @@ SLUICE_TEST_CASE(p6_lw_mw_steal_before_switch_excluded) {
                      "fiber body entered exactly once (no double-entry via steal)");
     SLUICE_CHECK_MSG(resume_count.load() == 1,
                      "fiber resumed exactly once (no duplicate resume)");
-    SLUICE_CHECK_MSG(entry_worker.load() == 0,
-                     "fiber first entered on its owner worker 0");
+    // NOTE: entry_worker is intentionally NOT asserted to == 0. A fiber spawned
+    // on worker 0 may be stolen by worker 1 BEFORE it first reaches select()
+    // (legitimate E8 work-stealing; the steal-exclusion here guards the
+    // suspend window, not the pre-suspend spawn placement). The load-bearing
+    // P1-1 proofs are entry/resume == 1 above (a missing guard would allow a
+    // thief to re-enter the stale ctx mid-suspend, surfacing as entry/resume
+    // > 1). Recording entry_worker for diagnostics only.
+    (void)entry_worker;
     SLUICE_CHECK_MSG(captured.has_winner(), "winner produced");
     SLUICE_CHECK_MSG(captured.kind() == SelectKind::event, "Event winner");
     SLUICE_CHECK_MSG(
