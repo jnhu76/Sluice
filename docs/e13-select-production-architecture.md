@@ -312,10 +312,10 @@ src/async/select_timer.cpp                            (Timer Select registration
 
 tests/select_inline_test.cpp
 tests/select_suspended_test.cpp
-tests/e13_select_timer_adapter.cpp
+tests/select_timer_adapter_test.cpp
 tests/select_registration_rollback_test.cpp
-tests/e13_select_multi_group.cpp
-tests/e13_select_negative.cpp
+tests/select_multi_group_test.cpp
+tests/select_negative_test.cpp
 ```
 
 Each `.cpp` corresponds to one review stage in

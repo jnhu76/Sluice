@@ -363,6 +363,6 @@ No speculative fields for these phases exist in WaitNode.
 
 ## 11. Test counterexamples
 
-See `tests/e10_wait_queue_test.cpp` (C1-C9, C12 — pure protocol) and
-`tests/e10_scheduler_wait_test.cpp` (C10, C11 — scheduler integration). Each
+See `tests/wait_queue_test.cpp` (C1-C9, C12 — pure protocol) and
+`tests/scheduler_wait_test.cpp` (C10, C11 — scheduler integration). Each
 test documents the production property it protects.

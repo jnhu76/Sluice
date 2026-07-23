@@ -1089,8 +1089,8 @@ selector.
 See the E8 spec §13. The load-bearing gates are E8-T3 (steal→wait→wake→
 new owner) and E8-T4 (deterministic steal-vs-pop), each 1000/1000, and
 E8-T11 (exactly-once stress) 2000/2000 debug / 1000/1000 release. E7
-regression suites (`e7_dup_publication_test`, `e7_worker_test`,
-`e7_coord_test`) must remain GREEN at their specified repetition counts.
+regression suites (`runnable_dup_publication_test`, `multi_worker_test`,
+`multi_worker_coord_test`) must remain GREEN at their specified repetition counts.
 
 ### 9.3.10 Scope boundaries
 

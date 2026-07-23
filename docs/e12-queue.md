@@ -634,7 +634,7 @@ producer|consumer|push|pop|enqueue|dequeue|send|recv` across `include/`,
 | `include/sluice/buffer.hpp` | `BufferedReader`/`BufferedWriter` | sync I/O | Caller-owned byte buffer for Reader/Writer | Byte buffer, not a channel | Public | No | PROVEN not queue-like |
 | `include/sluice/buffered_readable.hpp:21` | `class BufferedReadable` | sync I/O capability | Expose buffered unread bytes (`peek_buffered`/`consume_buffered`) | Byte buffer capability interface | Public | No | PROVEN not queue-like |
 | `include/sluice/blocking_io_pool.hpp` | `BlockingIoPoolOptions{.max_queue_depth=64}`, `shutdown()` | sync OS-thread pool | Bounded OS-thread task queue with backpressure + `shutdown()` lifecycle | **Closest analog in the repo** (bounded depth + shutdown), but lives in the **blocking-IO threadpool, NOT the async/fiber runtime** | Public (sync pool) | Naming precedent only (`shutdown`/bounded depth); **not an async primitive** | PROVEN — distinct runtime layer |
-| `tests/e10_wait_queue_test.cpp` | — | test | Tests the `WaitNode`/`WaitQueue` protocol via public `Scheduler` seams (no test friend) | Test fixture for the internal wait-substrate | Test-only | (Reference for test conventions) | PROVEN test-only |
+| `tests/wait_queue_test.cpp` | — | test | Tests the `WaitNode`/`WaitQueue` protocol via public `Scheduler` seams (no test friend) | Test fixture for the internal wait-substrate | Test-only | (Reference for test conventions) | PROVEN test-only |
 | `tests/test_t3_simple.cpp` (untracked) | `t3_simple_live` | test | `AsyncCondition` cond.wait + notify_one smoke test | **No queue content.** Uses `AsyncMutex`, `AsyncCondition`, `WaitNode` | Test-only (uncommitted) | None — unrelated to queue | PROVEN unrelated |
 | `scripts/run-e12-tlc-all.sh` (untracked) | — | tooling | Runs 13 TLA+ TLC checks for E12-D `AsyncCondition` | **No queue content.** | Tooling (uncommitted) | None | PROVEN unrelated |
 | `docs/e12-sync-primitives-plan.md` §8 (lines 1281-1413) | "E12-E Queue" | doc/planning | Future primitive design: bounded/unbounded buffer, `send`/`push`, `recv`/`pop`, `close`, not-full/not-empty waiters, item/slot reservation | **Promises a future Queue API but NOT implemented.** Bounded-vs-unbounded is `HUMAN DECISION REQUIRED` (§8.2); capacity-zero (rendezvous) `DEFERRED` | Doc only — no code, no header | (The authority this audit deepens) | PROVEN future-design doc, not a shipped API |
@@ -656,7 +656,7 @@ producer|consumer|push|pop|enqueue|dequeue|send|recv` across `include/`,
    there is **no two-sided buffered producer/consumer transfer** anywhere.
 4. **Channel/mailbox equivalent?** **NONE.** `inbox` (`scheduler.hpp:150`) is
    cross-worker Fiber routing plumbing, not a data mailbox.
-5. **Queue-like test fixtures?** **YES — one:** `tests/e10_wait_queue_test.cpp`
+5. **Queue-like test fixtures?** **YES — one:** `tests/wait_queue_test.cpp`
    exercises the internal `WaitQueue` substrate via public Scheduler seams. No
    `tests/test_*queue*` or `tests/test_*channel*` for any data queue exists.
 6. **Abandoned/stale queue designs in docs?** **YES** — `docs/e12-sync-
@@ -1564,12 +1564,12 @@ The new Queue seams must follow this **exactly**.
 
 * **E11 logical clock** (`AsyncTestAccess::enable_test_clock`/`set_clock`/
   `advance_clock`, `scheduler.hpp:1091-1126`) — for timeout races.
-* **Retry-loop + barrier pattern** (e.g. `e12_event_test.cpp:713-752`) — for
+* **Retry-loop + barrier pattern** (e.g. `event_primitive_test.cpp:713-752`) — for
   CAS races (cancel-vs-wake).
 * **External-thread + `run_live(1)` pattern** (e.g. `e12_t27`,
-  `e12_event_test.cpp:1858-1930`) — for causal proofs that pause a worker
+  `event_primitive_test.cpp:1858-1930`) — for causal proofs that pause a worker
   holding `global_mtx_`.
-* **Authority NEG compile probes** (one per primitive, `tests/e12_*_authority_
+* **Authority NEG compile probes** (one per primitive, `tests/*_authority_
   probe.cpp`) — to prove the Queue's `wait_queue()` / reservation internals are
   inaccessible from production code.
 
@@ -1906,9 +1906,9 @@ requires docs 4,5,8–12 and the closed decision cluster.
 - `include/sluice/async/scheduler.hpp:38-57` —
   `ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1`.
 - `xmake.lua:46-86` — production vs `sluice_async_internal_testing` targets.
-- `tests/e12_*_authority_probe.cpp` — NEG compile probes (not xmake targets;
+- `tests/*_authority_probe.cpp` — NEG compile probes (not xmake targets;
   driven by verify scripts).
-- `tests/e12_event_test.cpp:713-752,611-651,1858-1930` — race test patterns.
+- `tests/event_primitive_test.cpp:713-752,611-651,1858-1930` — race test patterns.
 
 **Formal models:**
 - `docs/spec/e12_semaphore/E12Semaphore.tla` (12 invariants, 7 negatives);

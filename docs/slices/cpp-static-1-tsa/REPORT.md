@@ -111,23 +111,23 @@ All three correctly rejected. Positive probes S1–S5 correctly accepted.
 ### Regression — E7–E10 test suite (GCC release)
 All 11 targets passed:
 ```
-e7_coord_test            : ALL TESTS PASSED
-e7_dup_publication_test  : ALL TESTS PASSED
-e7_worker_test           : ALL TESTS PASSED
-e8_steal_test            : ALL TESTS PASSED
-e9_external_wake_test    : ALL TESTS PASSED
-e9_wake_handle_lifetime_test : ALL TESTS PASSED
-e10_wait_queue_test      : ALL TESTS PASSED
-e10_scheduler_wait_test  : ALL TESTS PASSED
-e10_corrective_c1_test   : ALL TESTS PASSED
-e10_corrective_c2_c3_test: ALL TESTS PASSED
-e10_corrective_c5_test   : ALL TESTS PASSED
+multi_worker_coord_test            : ALL TESTS PASSED
+runnable_dup_publication_test  : ALL TESTS PASSED
+multi_worker_test           : ALL TESTS PASSED
+runnable_steal_test            : ALL TESTS PASSED
+external_wake_test    : ALL TESTS PASSED
+wake_handle_lifetime_test : ALL TESTS PASSED
+wait_queue_test      : ALL TESTS PASSED
+scheduler_wait_test  : ALL TESTS PASSED
+wait_queue_external_wake_test   : ALL TESTS PASSED
+wait_queue_resolution_authority_test: ALL TESTS PASSED
+wait_queue_unlink_topology_test   : ALL TESTS PASSED
 ```
 
 ### Sanitizers
 - **ASan + UBSan** (`-m asanubsan`, GCC): all 5 E10 targets passed, no leaks,
   no UB.
-- **TSan** (`-m tsan`, GCC): `e10_wait_queue_test` passed, no data races.
+- **TSan** (`-m tsan`, GCC): `wait_queue_test` passed, no data races.
 
 ### Toolchain compatibility
 - Clang 21.1.8: zero-warning TSA build.

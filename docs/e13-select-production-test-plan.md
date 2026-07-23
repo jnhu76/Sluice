@@ -178,18 +178,18 @@ and cannot forge the seam grant. This mirrors the existing
 ## 5. Test file layout (planned, not created by this task)
 
 ```text
-tests/e13_select_type.cpp                P1 type construction + SF-1..SF-3
-tests/e13_select_event_registry.cpp      P2 Event registry structural tests
-tests/e13_select_timer_registration.cpp  P3 Timer heap/stale tests
-tests/e13_select_claim.cpp               P4 claim/finalization negative tests
+tests/select_type_test.cpp                P1 type construction + SF-1..SF-3
+tests/select_event_registry_test.cpp      P2 Event registry structural tests
+tests/select_timer_registration_test.cpp  P3 Timer heap/stale tests
+tests/select_claim_test.cpp               P4 claim/finalization negative tests
 tests/select_inline_test.cpp            P5 ST-1..ST-8 (inline admission winners, plus ST-6 duplicate Event)
 tests/select_suspended_test.cpp         P6 ST-9..ST-13 (post-suspension winners + stale)
-tests/e13_select_multi_group.cpp         P8 ST-11, ST-12 (multi-group shared Event)
-tests/e13_select_timer_adapter.cpp       P3+P5 ST-2, ST-5, ST-7, ST-8 (Timer arms)
+tests/select_multi_group_test.cpp         P8 ST-11, ST-12 (multi-group shared Event)
+tests/select_timer_adapter_test.cpp       P3+P5 ST-2, ST-5, ST-7, ST-8 (Timer arms)
 tests/select_registration_rollback_test.cpp  P7 ST-14 (registration rollback)
 tests/select_multi_worker_test.cpp      P6 ST-15, ST-16, ST-17 (external thread + routing)
 tests/select_call_context_contract_test.cpp  P7 ST-18..ST-23 (lifetime + contract violations + caller validation)
-tests/e13_select_negative.cpp            P9 SN-1..SN-12 (negative tests)
+tests/select_negative_test.cpp            P9 SN-1..SN-12 (negative tests)
 ```
 
 Each file corresponds to a review stage in §7.
@@ -228,7 +228,7 @@ allowed files:
     include/sluice/async/detail/select_registration.hpp
     include/sluice/async/scheduler.hpp          (add WorkerState::owner_scheduler)
     src/async/select.cpp                (skeleton only)
-    tests/e13_select_type.cpp           (NEW — type construction tests)
+    tests/select_type_test.cpp           (NEW — type construction tests)
     tests/async_test_control_internal.hpp (SF-1..SF-3 compile-fail tests)
 entry assumptions:
     E10–E12 closed; the formal model closed (PR #17/#18)
@@ -248,7 +248,7 @@ remaining denied behavior:
 allowed files:
     src/async/select_event.cpp          (SelectPort link/unlink + Phase 1 scan)
     include/sluice/async/event.hpp      (add the embedded SelectPort — no public accessor)
-    tests/e13_select_event_registry.cpp (NEW — Event registry structural tests)
+    tests/select_event_registry_test.cpp (NEW — Event registry structural tests)
 entry assumptions:
     P1 types exist
 exit gates:
@@ -269,7 +269,7 @@ allowed files:
                                          pool/heap helper signatures)
     src/async/scheduler.cpp             (deadline_heap_ migrated to DeadlineHeapEntry;
                                          pump learns the Select branch)
-    tests/e13_select_timer_registration.cpp (NEW — Timer heap/stale tests)
+    tests/select_timer_registration_test.cpp (NEW — Timer heap/stale tests)
     tests/async_test_control_internal.hpp (E13PhaseTimerPumpActive, E13PhaseTimerPumpSkip)
 entry assumptions:
     P1 types exist; the deadline heap accepts the new entry kind
@@ -289,7 +289,7 @@ allowed files:
     src/async/select.cpp                (claim + finalize core)
     src/async/select_event.cpp          (Event winner/loser finalize)
     src/async/select_timer.cpp          (Timer winner/loser finalize)
-    tests/e13_select_claim.cpp          (NEW — claim/finalization negative tests)
+    tests/select_claim_test.cpp          (NEW — claim/finalization negative tests)
     tests/async_test_control_internal.hpp (E13PhaseEventGroupClaimed, E13PhaseAdmissionClaimed)
 entry assumptions:
     P2 + P3 registries work
@@ -375,7 +375,7 @@ remaining denied behavior:
 ```text
 allowed files:
     src/async/select_event.cpp          (Phase 2 intrusive worklist dedup + per-group iteration)
-    tests/e13_select_multi_group.cpp    (NEW — multi-group worklist tests ST-11, ST-12)
+    tests/select_multi_group_test.cpp    (NEW — multi-group worklist tests ST-11, ST-12)
     tests/async_test_control_internal.hpp (E13PhaseEventScanDone, E13PhaseEventWorklistWalk)
 entry assumptions:
     P7 rollback works
@@ -393,7 +393,7 @@ remaining denied behavior:
 
 ```text
 allowed files:
-    tests/e13_select_*.cpp              (all test files)
+    tests/select_*.cpp              (all test files)
     tests/async_test_control_internal.hpp (E13 PhaseTags, internal-testing variant only)
 entry assumptions:
     P1–P8 complete
