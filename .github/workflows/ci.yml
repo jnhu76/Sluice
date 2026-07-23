@@ -1,0 +1,74 @@
+# Repository-level CI gate.
+#
+# Generic by design: it knows nothing about E13, P7, Select or any specific
+# test name. It drives the project's unified build/test entry points
+# (xmake.lua test group) so adding a future Queue/Channel/Socket test only
+# touches xmake.lua, never this workflow.
+#
+# Scope of the first version: a single required job — Linux Clang Debug.
+# No OS/compiler matrix, no sanitizers, no long stability loops, no TLA+.
+# Sanitizer/stability evidence stays in local/nightly runs; this is the PR
+# merge gate.
+#
+# Trigger policy (per project decision): runs on pull_request only, plus
+# manual workflow_dispatch. It does NOT run on pushes to master. The
+# required status check that guards a merge is therefore the pull_request
+# run on the PR head.
+#
+# Decisions verified against Context7 (GitHub Actions + xmake-docs) and the
+# setup-xmake action README; see PR description for the doc citations.
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same PR/ref so an older CI run does not
+# block or waste runners when a new commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Minimal permissions: the gate only needs to read the repo contents.
+permissions:
+  contents: read
+
+jobs:
+  linux-clang-debug:
+    name: Linux Clang Debug
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          # Pin to a known-good release line. 'latest' resolves to the newest
+          # stable xmake at run time; the build is not sensitive to a patch
+          # version, and pinning avoids drift without freezing on one build.
+          xmake-version: latest
+
+      - name: Configure (Clang, debug)
+        # -y answers config prompts non-interactively in CI.
+        run: xmake f -m debug --toolchain=clang -y
+
+      - name: Build production libraries
+        # Build the real production targets explicitly. Some tests link the
+        # internal-testing variant; building the production libs alone does
+        # not prove the production surface (warning-as-error, Clang
+        # thread-safety analysis, normal linking) still compiles.
+        run: |
+          xmake build sluice_core
+          xmake build sluice_async
+
+      - name: Build test targets
+        # Builds every target in the unified 'test' group (xmake.lua).
+        run: xmake build -g test
+
+      - name: Run tests
+        # xmake test returns non-zero if any test fails (suitable for CI).
+        # -v keeps the per-test output visible in the Actions log.
+        run: xmake test -v
