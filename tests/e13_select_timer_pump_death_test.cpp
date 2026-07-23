@@ -56,9 +56,13 @@ void install_death_handlers() noexcept {
     });
 }
 
-// PA — pump ACTIVE-due. Register an ACTIVE synthetic Select entry, then advance
-// the clock to its deadline. The pump pops the ACTIVE entry and must fail fast
-// (a due ACTIVE Select entry is unreachable in valid P3).
+// PA — pump ACTIVE-due. Register an ACTIVE synthetic Select entry (arm ==
+// nullptr, no real group), then advance the clock to its deadline. Under P6 the
+// pump's ACTIVE path drives select_resolve_timer_locked, which validates the
+// block and fail-fasts (select_invariant_fail_fast) because arm == nullptr (a
+// synthetic entry has no real caller-frame arm). This still proves the pump
+// reached the ACTIVE branch (the real resolver runs), now via the production
+// ACTIVE-validation entry rather than the retired P3 stage guard.
 void child_pa_pump_active_due() {
     install_death_handlers();
     sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
@@ -66,12 +70,12 @@ void child_pa_pump_active_due() {
     sluice_async_test::ControllerGuard ctrl(sched);
     sluice_async_test::E11TimerControl::enable_test_clock(sched);
 
-    // Register an ACTIVE Select entry with a future deadline.
+    // Register an ACTIVE Select entry with a future deadline (no real arm).
     sluice_async_test::E13SelectTimerSeam::register_synthetic(
         sched, nullptr, /*deadline=*/50);
 
     // Advance the clock to the deadline: the pump pops the ACTIVE entry and
-    // invokes select_timer_pump_active_fail_fast() -> std::terminate().
+    // invokes select_resolve_timer_locked, which fail-fasts on arm == nullptr.
     sluice_async_test::E13SelectTimerSeam::advance_clock(sched, 50);
 
     // If control reaches here the fail-fast did NOT fire — invariant broken.

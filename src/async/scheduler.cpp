@@ -996,7 +996,7 @@ Scheduler::MwState Scheduler::classify_locked() const {
 
     const bool any_wait =
         !waiting_size_.empty() || !waiting_void_.empty() || !waiting_ready_.empty() ||
-        waiting_waitq_count_ > 0;
+        waiting_waitq_count_ > 0 || waiting_select_count_ > 0;
     if (any_wait) return MwState::mw_s3_unresolved;
 
     return MwState::quiescent;
@@ -1351,7 +1351,14 @@ std::size_t Scheduler::event_set_broadcast(Event& event) {
     while (wake_wait_one_locked(event.waiters_) != nullptr) {
         ++woken;
     }
-    select_event_scan_locked(event);
+    // P6: the suspended-Event resolver. Replaces the P2 readiness-offer-only
+    // select_event_scan_locked. select_resolve_event_locked walks this Event's
+    // SelectPort, applies the single-group P6 gate (P8 multi-group DENIED ->
+    // fail-fast before any CAS), marks eligible arms CandidateReady, chooses
+    // the lowest INDEX ready arm, drives the P4 group processor exactly once,
+    // and publishes exactly once. A zero-eligible return is a clean no-op (no
+    // suspended Select arms on this Event).
+    (void)select_resolve_event_locked(event);
     return woken;
 }
 

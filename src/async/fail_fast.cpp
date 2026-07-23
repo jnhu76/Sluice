@@ -21,12 +21,12 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
-// E13 P5 stage-boundary fail-fast: an inline-only Select admission reached the
-// no-ready snapshot. Suspended completion is P6 (denied at this boundary), so
-// the inline path fails fast rather than returning a no-winner result or
-// unwinding a frame with live Event/Timer authority. Terminates; never returns.
-// See include/sluice/async/detail/fail_fast.hpp.
-[[noreturn]] void select_admission_no_ready_fail_fast() noexcept {
+// E13 P6 stage-boundary fail-fast: a single Event::set() broadcast observed
+// arms belonging to more than one distinct eligible SelectGroup. Multi-group
+// shared Event (P8) is DENIED at the P6 boundary; fail fast before any group
+// winner CAS. Terminates; never returns. See include/sluice/async/detail/
+// fail_fast.hpp.
+[[noreturn]] void select_multi_group_event_stage_fail_fast() noexcept {
     std::terminate();
 }
 

@@ -78,7 +78,11 @@ detail::SelectTimerRegistration* Scheduler::select_timer_splice_one_locked(
     return &reg;
 }
 
-// E13 P3 Select timer pump branch body (state-before-arm rule, Addendum E/D).
+// E13 P3/P6 Select timer pump branch body (state-before-arm rule, Addendum
+// E/D + task §12). The stale path (non-ACTIVE) is unchanged from P3: load
+// state first; a RETIRED/CONSUMED block skips WITHOUT reading arm_ (the I4
+// closure). The ACTIVE path is the real P6 resolver (select_resolve_timer_
+// locked), which replaces the P3 due-ACTIVE stage fail-fast.
 bool Scheduler::select_timer_pump_entry_locked(
     detail::SelectTimerRegistration& reg) {
     // State-before-arm: load state FIRST. A non-ACTIVE state means the arm
@@ -96,25 +100,25 @@ bool Scheduler::select_timer_pump_entry_locked(
         return true;  // stale; skipped
     }
 
-    // ACTIVE: a due ACTIVE Select entry is UNREACHABLE in valid P3 (there is
-    // no admission path). Reach the PumpActive seam, then instrument the
-    // exact production arm dereference site, then fail fast. P3 does NOT
-    // claim/mark/retire/consume/erase an ACTIVE block — that is P4, denied.
+    // ACTIVE: the due-ACTIVE Select entry is the post-suspension Timer winner
+    // path (P6 §12). select_resolve_timer_locked validates the block, finds the
+    // arm index by address scan, drives the P4 group processor exactly once,
+    // and publishes exactly once. The Timer registration is NOT consumed
+    // before the group winner CAS (P4 owns the winner/loser finalizer).
+    // ST-13: if an Event already won this group, P4 retired this Timer
+    // registration; the pump observes non-ACTIVE on a later pop and takes the
+    // stale-skip branch above — it never reads the dead arm.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // PumpActive seam: prove the pump reached an ACTIVE Select entry (the real
+    // resolver runs below). Also instrument the exact production dereference
+    // site (immediately before select_resolve_timer_locked reads arm_) so
+    // stale tests can prove arm-load delta == 0 for RETIRED/CONSUMED pops.
     sluice_async_test::test_phase(
         *this, sluice_async_test::PhaseTag::e13_timer_pump_active);
-    // Instrument the exact production dereference site (immediately before
-    // the load), so stale tests can prove arm-load delta == 0.
     ++select_timer_arm_load_count_;
-    auto* arm [[maybe_unused]] = reg.arm();  // safe under I4: ACTIVE implies live
-    (void)arm;
 #endif
-    // Stage-boundary invariant violation: a due ACTIVE Select entry where no
-    // admission exists. Fail fast rather than silently returning with an
-    // ACTIVE registration's authority still open. (When SLUICE_ASYNC_INTERNAL_
-    // TESTING is undefined, the arm read above is absent — production never
-    // dereferences arm_ here; it goes straight to fail-fast.)
-    detail::select_timer_pump_active_fail_fast();
+    (void)select_resolve_timer_locked(reg);
+    return false;  // handled (ACTIVE path ran); caller physically reclaims
 }
 
 // Retire a registered Select block (Addendum C accounting authority).
@@ -249,7 +253,7 @@ void Scheduler::select_finalize_timer_winner_locked(
         // same held global_mtx_. A false return means the registration was
         // not ACTIVE (it raced to terminal), which contradicts the single
         // global_mtx_ CS — an invariant violation. Fail fast.
-        detail::select_timer_pump_active_fail_fast();
+        detail::select_invariant_fail_fast();
     }
     // 3. arm terminal classification.
     arm.state = detail::ArmState::retired;
@@ -303,7 +307,7 @@ void Scheduler::select_finalize_timer_loser_locked(
     if (!retired) {
         // Unreachable: preflight checked ACTIVE, this CS is held, no other
         // path retires a Select registration under this lock.
-        detail::select_timer_pump_active_fail_fast();
+        detail::select_invariant_fail_fast();
     }
     // 3. accounting closed by select_timer_retire_locked above.
     // 4. NO publication: this path never writes group.result_ and never calls

@@ -202,6 +202,14 @@ public:
 private:
     friend class ::sluice::async::Scheduler;
 
+    // P6: the group-owned result slot (docs/e13-select-locking-and-publication.md
+    // §6 / task §6). The group lives on the suspended caller Fiber's stack, so
+    // the result remains valid while the Fiber is waiting. Default: no winner
+    // (SelectResult's default ctor). Written EXACTLY ONCE by
+    // Scheduler::select_publish_locked under global_mtx_; losers never write it.
+    // Read by the resumed caller under global_mtx_ before phase -> Consumed.
+    SelectResult result_{};
+
     // THE single winner linearization point (docs/e13-select-locking-and-
     // publication.md §1.5, docs/e13-select-formal-production-mapping.md §4).
     // CAS winner_ kNoWinner -> arm_index, relaxed/relaxed. Synchronization of

@@ -47,23 +47,21 @@ namespace sluice::async::detail {
 // caller; adding one would invite logging on the pump hot path).
 [[noreturn]] void select_timer_pump_active_fail_fast() noexcept;
 
-// E13 P5 stage-boundary fail-fast (task §14). After the registration
-// transaction completes and a final readiness snapshot is taken, if NO arm is
-// ready, P5 has no inline winner. Suspended completion (caller suspension +
-// later publication) is P6, DENIED at the P5 boundary. The inline-only
-// admission MUST NOT: return a no-winner result, unwind while Event arms
-// remain linked / Timer regs remain ACTIVE, fake-cancel every arm, perform a
-// P7 rollback after FinishRegistration, or suspend the caller. It fails fast
-// instead, in the SAME global_mtx_ critical section, without unwinding the
-// caller frame. This is a temporary stage guard on a Draft PR, NOT final public
-// API behavior.
+// E13 P6 stage-boundary fail-fast: multi-group shared Event (P8, DENIED).
+// docs/e13-select-locking-and-publication.md §6 / production-test-plan.md §7.8.
+// One Event::set() broadcast may observe arms belonging to MORE THAN ONE
+// distinct eligible SelectGroup (phase==Armed). P8 (multi-group Event
+// intrusive worklist + per-group iteration) is not implemented at the P6
+// boundary. P6 must therefore detect >1 distinct eligible group BEFORE any
+// group winner CAS / candidate mutation / authority close and fail fast,
+// rather than silently resolving only one group (a lost resolution) or
+// attempting an unsupported multi-group publish. The same Event appearing
+// twice in ONE group is NOT this case and is supported (P6-D1).
 //
 // Same contract as the other fail-fast entries: [[noreturn]] noexcept, no
 // allocation / locking / I/O / dynamic string, no state recovery, ultimately
-// std::terminate(). The explanatory text ("P5 inline-only Select reached
-// no-ready admission; suspended completion is P6") lives only in this comment,
-// not on the hot path.
-[[noreturn]] void select_admission_no_ready_fail_fast() noexcept;
+// std::terminate(). No parameter (the operation is known only to the caller).
+[[noreturn]] void select_multi_group_event_stage_fail_fast() noexcept;
 
 // E13 P5 CORRECTIVE: general-purpose Select invariant fail-fast. Called when
 // the admission core receives a structurally invalid descriptor/count argument

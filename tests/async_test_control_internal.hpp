@@ -112,6 +112,31 @@ enum class PhaseTag : unsigned char {
     // Inline, and runnable delta is 0 — the inline lifecycle ordering.
     e13_admission_consumed,
 
+    // E13 P6: caller Fiber paused AFTER the no-ready suspension commit
+    // (make_waiting + phase Armed + waiting_select_count_++), AFTER global_mtx_
+    // is released, BEFORE the physical context_switch. A coordinator thread can
+    // deterministically resolve the group (Event::set / clock advance) and
+    // prove the wake-before-physical-switch window is closed (the caller is
+    // queued exactly once even if it has not yet switched away). The seam runs
+    // OUTSIDE global_mtx_ (the caller has released it).
+    e13_select_suspend_before_switch,
+    // E13 P6: select_publish_locked entry, BEFORE any result mutation. A test
+    // observing this phase proves publication-entry preconditions hold (winner
+    // exists, all authority closed, result not yet written, completion_mode
+    // none, phase Selecting/Armed). Holds global_mtx_ (use a snapshot).
+    e13_publish_entry,
+    // E13 P6: AFTER phase becomes Completed and, for suspended mode, AFTER
+    // successful make_runnable + route_runnable_locked. A test observing this
+    // phase proves the suspended publication committed result + runnable once
+    // (or inline published result once with no runnable). Holds global_mtx_.
+    e13_publish_done,
+    // E13 P6: AFTER the resumed caller reacquires global_mtx_ and validates the
+    // result, BEFORE phase becomes Consumed. A test observing this phase proves
+    // phase==Completed, mode==Suspended, result present, winner stable, all
+    // authority closed, caller Running, runnable publication count==1.
+    // Holds global_mtx_.
+    e13_suspended_before_consume,
+
     count
 };
 
@@ -144,6 +169,35 @@ struct AdmissionSnapshot {
     bool all_authority_closed{false};
 };
 
+// ---- E13 P6: publication boundary snapshot ----
+// Captured by the publication / resume paths under global_mtx_ immediately
+// before each P6 seam, then read by the coordinator under the controller's own
+// mutex. Value-initialized (every field has a default member initializer) so an
+// unused union payload slot is never read (task §13: "Do not read an inactive
+// union member when capturing diagnostics"). Result kind is captured as a
+// plain enum (no payload union) so the snapshot never dereferences a SelectArm
+// union member — only the publication path reads the active member.
+struct PublicationSnapshot {
+    sluice::async::detail::GroupPhase phase{sluice::async::detail::GroupPhase::building};
+    sluice::async::detail::CompletionMode completion_mode{sluice::async::detail::CompletionMode::none};
+
+    std::uint32_t winner{sluice::async::detail::kNoWinner};
+    std::size_t arm_count{0};
+
+    bool result_has_winner{false};
+    std::size_t result_index{0};
+    sluice::async::SelectKind result_kind{sluice::async::SelectKind::event};
+
+    bool all_authority_closed{false};
+
+    sluice::async::FiberState caller_state{sluice::async::FiberState::created};
+    unsigned caller_owner_id{0};
+
+    std::size_t waiting_select_count{0};
+    std::size_t result_publication_count{0};
+    std::size_t runnable_publication_count{0};
+};
+
 // The controller entry for one Scheduler. Holds one PhaseState per tag. The
 // array is indexed by PhaseTag (cast to size_t). Lookups are O(1).
 struct SchedulerController {
@@ -154,6 +208,18 @@ struct SchedulerController {
     // corresponding phase has been reached.
     AdmissionSnapshot admission_armed_snapshot{};
     AdmissionSnapshot admission_consumed_snapshot{};
+
+    // E13 P6: publication boundary snapshots, populated by the publication /
+    // resume paths under global_mtx_ before each P6 seam, read by the test
+    // coordinator under the controller's own mutex. Plus the two required
+    // controller counters (task §13): result + runnable publication counts,
+    // incremented once per publication inside select_publish_locked (under
+    // global_mtx_; read here under the controller's own mutex).
+    PublicationSnapshot publish_entry_snapshot{};
+    PublicationSnapshot publish_done_snapshot{};
+    PublicationSnapshot suspended_before_consume_snapshot{};
+    std::size_t result_publication_count{0};
+    std::size_t runnable_publication_count{0};
 };
 
 // --- Called from scheduler.cpp (under SLUICE_ASYNC_INTERNAL_TESTING) ---
@@ -178,6 +244,33 @@ void capture_admission_snapshot(sluice::async::Scheduler& s, PhaseTag tag,
 // constructed snapshot if no controller is registered for `s`.
 AdmissionSnapshot read_admission_snapshot(sluice::async::Scheduler& s,
                                            PhaseTag tag) noexcept;
+
+// E13 P6: capture a publication boundary snapshot (same discipline as the
+// admission snapshot: captured under global_mtx_ before the P6 seam, read by
+// the coordinator under the controller's own mutex). Valid tag values:
+// e13_publish_entry, e13_publish_done, e13_suspended_before_consume. No-op if
+// `s` has no registered controller.
+void capture_publication_snapshot(sluice::async::Scheduler& s, PhaseTag tag,
+                                  const PublicationSnapshot& snap) noexcept;
+
+// Read a publication boundary snapshot. Returns a default-constructed snapshot
+// if no controller is registered for `s` or the phase has not been reached.
+PublicationSnapshot read_publication_snapshot(sluice::async::Scheduler& s,
+                                              PhaseTag tag) noexcept;
+
+// E13 P6: increment the result / runnable publication counters (task §13).
+// Called once per publication inside select_publish_locked (under global_mtx_).
+// No-op if `s` has no registered controller.
+void increment_result_publication(sluice::async::Scheduler& s) noexcept;
+void increment_runnable_publication(sluice::async::Scheduler& s) noexcept;
+
+// Read the result / runnable publication counters. Returns 0 if `s` has no
+// registered controller.
+std::size_t result_publication_count(sluice::async::Scheduler& s) noexcept;
+std::size_t runnable_publication_count(sluice::async::Scheduler& s) noexcept;
+
+// Reset the result / runnable publication counters (for delta-based tests).
+void reset_publication_counts(sluice::async::Scheduler& s) noexcept;
 
 // Release ALL armed phases for `s` (used by run-termination paths so a paused
 // test worker observes termination). No-op if `s` has no controller.

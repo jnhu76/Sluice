@@ -1,25 +1,33 @@
-// sluice::async::Scheduler — E13 P4 Select central claim + winner/loser
-// finalization core.
+// sluice::async::Scheduler — E13 P4/P5/P6 Select central claim, finalization,
+// unified publication authority, and admission core (inline + suspended).
 //
-// This translation unit owns the SINGLE group processor
-// (select_process_group_locked), the preflight validator, the winner-commit
-// and loser-finalize drivers, and the reusable all-authority-closed invariant
-// predicate. The per-kind finalizer halves live in select_event.cpp (Event
-// winner/loser) and select_timer.cpp (Timer winner/loser); the single group
-// processor calls into them and owns the iteration over winner and losers.
+// This translation unit owns:
+//   - the SINGLE group processor (select_process_group_locked), the preflight
+//     validator, the winner-commit and loser-finalize drivers, and the reusable
+//     all-authority-closed invariant predicate (P4);
+//   - the SINGLE unified publication authority (select_publish_locked, P6),
+//     which writes result_ exactly once and publishes exactly one runnable on
+//     the suspended branch;
+//   - the single non-template admission core (select_admit, P5 inline + P6
+//     suspended), reached ONLY via the public variadic select() template.
 //
-// P4 scope (docs/e13-select-production-test-plan.md §7.4,
-//           docs/e13-select-locking-and-publication.md §1, §4, §5):
+// P6 scope (docs/e13-select-production-test-plan.md §7.6,
+//           docs/e13-select-locking-and-publication.md §3/§5,
+//           docs/e13-select-formal-production-mapping.md §5):
 //   - exactly one winner linearization point (SelectGroup::claim_winner_locked)
-//   - full-group preflight validation BEFORE the irreversible winner CAS
-//   - winner commit + loser finalization in the SAME global_mtx_ CS
-//   - all-authority-closed validation before returning true
-//   - NO publication, NO admission, NO phase transition to Completed/Consumed,
-//     NO Fiber suspension/runnable, NO SelectResult construction
+//   - exactly one result-publication function (select_publish_locked) that
+//     writes result_ exactly once and (suspended branch) publishes exactly one
+//     runnable via the single make_runnable + route_runnable_locked call site
+//   - the no-ready admission branch commits the caller to Waiting + phase Armed
+//     and suspends; on resume it consumes the published result (Completed ->
+//     Consumed) under global_mtx_
+//   - waiting_select_count_ accounting for Event-only suspended Select
+//     liveness (classify_locked + external_wake_possible_locked)
 //
-// The "claimed and finalized but unpublished" state is an internal transient
-// state under global_mtx_; a later stage will publish before the lock is
-// released. In P4 it is observable only through guarded internal-testing seams.
+// The per-kind finalizer halves live in select_event.cpp (Event winner/loser)
+// and select_timer.cpp (Timer winner/loser); the single group processor calls
+// into them and owns the iteration over winner and losers. The single
+// publication function calls NEITHER a finalizer NOR wake_wait_one_locked.
 #include <sluice/async/scheduler.hpp>
 
 #include <cassert>
@@ -31,6 +39,7 @@
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/select_port.hpp>
 #include <sluice/async/event.hpp>
+#include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/select.hpp>  // kSelectMaxArms (for the drift static_assert below only)
 
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
@@ -249,10 +258,8 @@ void Scheduler::select_finalize_loser_locked(detail::SelectGroup& group,
 // In P4 this is called in the same critical section immediately AFTER a
 // successful preflight+claim+finalize, so it can assume group.arms_ is valid,
 // kind is Event/Timer, and Timer regs have passed scheduler/pool/backpointer
-// preflight. A future P6 publication entry guard that calls this predicate on
-// a NOT-just-preflighted group should additionally validate basic group shape
-// (scheduler binding, arms_/arm_count_ bounds, winner < arm_count) here, so the
-// validator does not dereference fields on a corrupted group.
+// preflight. select_publish_locked also calls this at its entry (P6 §8.1), and
+// for that path the publication preflight validates basic group shape first.
 // ---------------------------------------------------------------------------
 bool Scheduler::select_all_authority_closed_locked(
     const detail::SelectGroup& group) const {
@@ -282,11 +289,430 @@ bool Scheduler::select_all_authority_closed_locked(
     return true;
 }
 // ===========================================================================
-// E13 P5 — registration + inline admission.
+// E13 P6 — unified Select publication authority.
 //
-// select_admit_inline is the single non-template admission core reached ONLY by
-// the public variadic select() bridge (include/sluice/async/select.hpp). It owns
-// every centralized admission step. The inline-ready case only:
+// select_publish_locked is THE single result/runnable publication function
+// (docs/e13-select-locking-and-publication.md §5, task §8). It is called after
+// a successful select_process_group_locked (winner claimed + every winner/loser
+// finalized + every adapter authority closed) in the SAME global_mtx_ critical
+// section. There is exactly ONE call site each for Fiber::make_runnable and
+// Scheduler::route_runnable_locked inside Select, both here, both only on the
+// suspended branch. No Event/Timer finalizer/scan/pump reaches them.
+// ===========================================================================
+void Scheduler::select_publish_locked(detail::SelectGroup& group) {
+    // -------------------------------------------------------------------
+    // P6 §8.1 Release-active publication preflight. Do not rely only on
+    // assert: mechanically validate the publication-entry shape and fail fast
+    // on any violation. This closes the P4-deferred publication-entry shape
+    // validation.
+    // -------------------------------------------------------------------
+    // scheduler identity / arm array / arm count
+    if (group.scheduler_ != this ||
+        group.arms_ == nullptr ||
+        group.arm_count_ < 1 ||
+        group.arm_count_ > kPreflightMaxArms) {
+        detail::select_invariant_fail_fast();
+    }
+    // winner exists and is in range
+    const std::uint32_t winner_index = group.winner();
+    if (winner_index == detail::kNoWinner || winner_index >= group.arm_count_) {
+        detail::select_invariant_fail_fast();
+    }
+    const detail::GroupPhase phase = group.phase();
+    // phase must be Selecting (inline) or Armed (suspended) — NOT
+    // Completed/Consumed (duplicate publication).
+    if (phase != detail::GroupPhase::selecting &&
+        phase != detail::GroupPhase::armed) {
+        detail::select_invariant_fail_fast();
+    }
+    // completion mode must be None at entry (publication sets it exactly once).
+    if (group.completion_mode_ != detail::CompletionMode::none) {
+        detail::select_invariant_fail_fast();
+    }
+    // result sentinel: result_ must not yet have a winner (written exactly
+    // once — a duplicate publication with an existing winner fails here BEFORE
+    // any rewrite / count decrement / make_runnable / route, satisfying SN-2).
+    if (group.result_.has_winner()) {
+        detail::select_invariant_fail_fast();
+    }
+    // every arm kind valid; winner kind valid.
+    for (std::size_t i = 0; i < group.arm_count_; ++i) {
+        const detail::SelectArmSlot& arm = group.arms_[i];
+        if (arm.kind != detail::ArmKind::event &&
+            arm.kind != detail::ArmKind::timer) {
+            detail::select_invariant_fail_fast();
+        }
+    }
+    const detail::SelectArmSlot& winner_arm = group.arms_[winner_index];
+    if (winner_arm.kind != detail::ArmKind::event &&
+        winner_arm.kind != detail::ArmKind::timer) {
+        detail::select_invariant_fail_fast();
+    }
+    // authority-closed predicate (SN-10: an open authority fails fast BEFORE
+    // the result write). This also re-derives that every arm is Retired, the
+    // winner's Timer registration is CONSUMED, loser Timer regs are RETIRED,
+    // and every Event arm is unlinked.
+    if (!select_all_authority_closed_locked(group)) {
+        detail::select_invariant_fail_fast();
+    }
+
+    // For suspended publication the caller + caller_owner must be set and the
+    // caller Fiber must be Waiting at this instant (it committed Waiting under
+    // G before releasing G to context_switch; the only legal transition out of
+    // Waiting for a suspended Select is make_runnable below).
+    const bool suspended = (phase == detail::GroupPhase::armed);
+    if (suspended) {
+        if (group.caller_ == nullptr || group.caller_owner_ == nullptr) {
+            detail::select_invariant_fail_fast();
+        }
+        if (group.caller_->state() != FiberState::waiting) {
+            // FP: suspended caller not Waiting (Running/Runnable/done) — a
+            // corrupt state machine / duplicate publication / second wake path.
+            // Fail fast BEFORE routing.
+            detail::select_invariant_fail_fast();
+        }
+    }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // P6 §14 e13_publish_entry seam: at select_publish_locked entry, before
+    // result mutation. Capture the publication-entry snapshot under global_mtx_
+    // so the test reads publication preconditions without acquiring G.
+    {
+        sluice_async_test::PublicationSnapshot snap{};
+        snap.phase = group.phase();
+        snap.completion_mode = group.completion_mode_;
+        snap.winner = group.winner();
+        snap.arm_count = group.arm_count_;
+        snap.result_has_winner = group.result_.has_winner();
+        snap.result_index = group.result_.has_winner() ? group.result_.index() : 0;
+        snap.result_kind =
+            group.result_.has_winner() ? group.result_.kind() : SelectKind::event;
+        snap.all_authority_closed = select_all_authority_closed_locked(group);
+        snap.caller_state = group.caller_ ? group.caller_->state() : FiberState::created;
+        snap.caller_owner_id = group.caller_owner_ ? group.caller_owner_->id : 0;
+        snap.waiting_select_count = waiting_select_count_;
+        snap.result_publication_count =
+            sluice_async_test::result_publication_count(*this);
+        snap.runnable_publication_count =
+            sluice_async_test::runnable_publication_count(*this);
+        sluice_async_test::capture_publication_snapshot(
+            *this, sluice_async_test::PhaseTag::e13_publish_entry, snap);
+    }
+    sluice_async_test::test_phase(
+        *this, sluice_async_test::PhaseTag::e13_publish_entry);
+#endif
+
+    // -------------------------------------------------------------------
+    // P6 §8.2 Result construction from the winner arm. Required source order:
+    //   all authority closed
+    //   < group.result_ write
+    //   < completion mode
+    //   < phase Completed
+    //   < runnable publication
+    // (all authority closed was validated above.)
+    // -------------------------------------------------------------------
+    SelectResult result;
+    if (winner_arm.kind == detail::ArmKind::event) {
+        result = SelectResult(winner_index, SelectKind::event,
+                              SelectTimerOutcome::fired);
+    } else {
+        result = SelectResult(winner_index, SelectKind::timer,
+                              SelectTimerOutcome::fired);
+    }
+    group.result_ = result;  // written EXACTLY once (the has_winner check above
+                             // guards against a rewrite).
+
+    if (suspended) {
+        // ----- Suspended branch (P6 §8.4) -----
+        group.completion_mode_ = detail::CompletionMode::suspended;
+        group.set_phase(detail::GroupPhase::completed);
+
+        // Decrement waiting_select_count_ exactly once. A duplicate
+        // publication cannot reach here (the has_winner / completion_mode
+        // checks above fail fast first). Guard against underflow.
+        if (waiting_select_count_ == 0) {
+            detail::select_invariant_fail_fast();
+        }
+        --waiting_select_count_;
+
+        // make_runnable is the exactly-once runnable publication guard. On the
+        // suspended branch a false return means the caller's state machine is
+        // corrupt (not Waiting — already validated above as a precondition, so
+        // a false return is unreachable after the FP check, but the CAS is the
+        // authority), there is a duplicate publication, or a second wake path
+        // exists. Fail fast rather than silently returning.
+        const bool published = group.caller_->make_runnable();
+        if (!published) {
+            detail::select_invariant_fail_fast();
+        }
+        // The single Select route_runnable_locked call site. ALWAYS route via
+        // the stored group.caller_owner_ — NEVER the resolver-thread g_worker
+        // (which is null on an external thread).
+        route_runnable_locked(group.caller_, group.caller_owner_);
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::increment_result_publication(*this);
+        sluice_async_test::increment_runnable_publication(*this);
+        // P6 §14 e13_publish_done seam: after phase Completed and, for
+        // suspended mode, after successful make_runnable + route.
+        {
+            sluice_async_test::PublicationSnapshot snap{};
+            snap.phase = group.phase();
+            snap.completion_mode = group.completion_mode_;
+            snap.winner = group.winner();
+            snap.arm_count = group.arm_count_;
+            snap.result_has_winner = group.result_.has_winner();
+            snap.result_index = group.result_.has_winner() ? group.result_.index() : 0;
+            snap.result_kind =
+                group.result_.has_winner() ? group.result_.kind() : SelectKind::event;
+            snap.all_authority_closed = select_all_authority_closed_locked(group);
+            snap.caller_state = group.caller_->state();
+            snap.caller_owner_id = group.caller_owner_->id;
+            snap.waiting_select_count = waiting_select_count_;
+            snap.result_publication_count =
+                sluice_async_test::result_publication_count(*this);
+            snap.runnable_publication_count =
+                sluice_async_test::runnable_publication_count(*this);
+            sluice_async_test::capture_publication_snapshot(
+                *this, sluice_async_test::PhaseTag::e13_publish_done, snap);
+        }
+        sluice_async_test::test_phase(
+            *this, sluice_async_test::PhaseTag::e13_publish_done);
+#endif
+    } else {
+        // ----- Inline branch (P6 §8.3) -----
+        // NO make_runnable, NO route_runnable_locked, NO waiting_select_count
+        // mutation. The admission caller copies result_, sets Consumed, returns.
+        group.completion_mode_ = detail::CompletionMode::inline_;
+        group.set_phase(detail::GroupPhase::completed);
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::increment_result_publication(*this);
+        // (runnable_publication_count unchanged on the inline branch.)
+        {
+            sluice_async_test::PublicationSnapshot snap{};
+            snap.phase = group.phase();
+            snap.completion_mode = group.completion_mode_;
+            snap.winner = group.winner();
+            snap.arm_count = group.arm_count_;
+            snap.result_has_winner = group.result_.has_winner();
+            snap.result_index = group.result_.has_winner() ? group.result_.index() : 0;
+            snap.result_kind =
+                group.result_.has_winner() ? group.result_.kind() : SelectKind::event;
+            snap.all_authority_closed = select_all_authority_closed_locked(group);
+            snap.caller_state = group.caller_ ? group.caller_->state() : FiberState::running;
+            snap.caller_owner_id = group.caller_owner_ ? group.caller_owner_->id : 0;
+            snap.waiting_select_count = waiting_select_count_;
+            snap.result_publication_count =
+                sluice_async_test::result_publication_count(*this);
+            snap.runnable_publication_count =
+                sluice_async_test::runnable_publication_count(*this);
+            sluice_async_test::capture_publication_snapshot(
+                *this, sluice_async_test::PhaseTag::e13_publish_done, snap);
+        }
+        sluice_async_test::test_phase(
+            *this, sluice_async_test::PhaseTag::e13_publish_done);
+#endif
+    }
+}
+
+// ===========================================================================
+// E13 P6 — suspended Event / Timer resolution.
+//
+// select_resolve_event_locked / select_resolve_timer_locked are the
+// post-suspension resolvers, reached ONLY under global_mtx_ from
+// event_set_broadcast (Event) and the timer pump (Timer). Each performs the
+// single-group P8 gate (Event) or ACTIVE validation (Timer), offers
+// CandidateReady to the relevant arm(s), drives the single P4 group processor
+// exactly once, then select_publish_locked exactly once. No arm finalizer
+// calls make_runnable / route_runnable_locked.
+// ===========================================================================
+
+// Suspended Event resolver (task §11). Walks this Event's SelectPort for
+// eligible arms, applies the single-group P6 gate, marks every eligible arm
+// CandidateReady, chooses the lowest INDEX ready arm, processes + publishes
+// the group once. Returns true iff a group was published.
+bool Scheduler::select_resolve_event_locked(Event& event) {
+    assert(&event.scheduler_ == this &&
+           "select_resolve_event_locked: Event does not belong to this Scheduler");
+
+    // ---- P6 §11.1 single-group gate: collect eligible arms + distinct groups
+    // for THIS Event only. ----
+    detail::SelectArmSlot* arms_buf[kPreflightMaxArms] = {};
+    std::size_t eligible_count = 0;
+    detail::SelectGroup* distinct_groups[kPreflightMaxArms] = {};
+    std::size_t distinct_group_count = 0;
+
+    for (detail::SelectArmSlot* arm = event.select_port_.head_;
+         arm != nullptr; arm = arm->next_) {
+        // Eligible: kind==Event, state==Registered, group!=nullptr,
+        // group.phase==Armed, home points to this Event's port,
+        // arm Event pointer == this Event.
+        if (arm->kind != detail::ArmKind::event) continue;
+        if (arm->state != detail::ArmState::registered) continue;
+        if (arm->group == nullptr) continue;
+        if (arm->group->phase() != detail::GroupPhase::armed) continue;
+        if (arm->home_ != &event.select_port_) continue;
+        if (arm->event.event_ != &event) continue;
+
+        if (eligible_count < kPreflightMaxArms) {
+            arms_buf[eligible_count++] = arm;
+        }
+        // distinct-group accounting for the P8 gate (one Event may legitimately
+        // reach arms in multiple groups — P8 is DENIED at the P6 boundary).
+        bool known = false;
+        for (std::size_t g = 0; g < distinct_group_count; ++g) {
+            if (distinct_groups[g] == arm->group) { known = true; break; }
+        }
+        if (!known && distinct_group_count < kPreflightMaxArms) {
+            distinct_groups[distinct_group_count++] = arm->group;
+        }
+    }
+
+    if (eligible_count == 0) {
+        return false;  // nothing eligible for this Event
+    }
+
+    // P8 stage-boundary gate: more than one distinct eligible group sharing one
+    // Event is DENIED at P6. Fail fast BEFORE any candidate mutation or winner
+    // CAS. (One group with several arms on the same Event is NOT this case and
+    // proceeds — the same-Event-twice support.)
+    if (distinct_group_count > 1) {
+        detail::select_multi_group_event_stage_fail_fast();
+    }
+
+    detail::SelectGroup* const group = distinct_groups[0];
+
+    // Mark every eligible arm CandidateReady. (For same-Event-twice-in-one-
+    // group this marks both arms; the lowest-index scan below chooses one.)
+    for (std::size_t i = 0; i < eligible_count; ++i) {
+        arms_buf[i]->state = detail::ArmState::candidate_ready;
+    }
+
+    // Choose the candidate by scanning group.arms_[0..arm_count) in INDEX ORDER
+    // and choosing the first CandidateReady arm belonging to this Event. Do NOT
+    // use intrusive-list order as the tie-break (task §11.2).
+    std::uint32_t candidate_index = static_cast<std::uint32_t>(-1);
+    for (std::size_t i = 0; i < group->arm_count_; ++i) {
+        detail::SelectArmSlot& arm = group->arms_[i];
+        if (arm.state != detail::ArmState::candidate_ready) continue;
+        if (arm.kind != detail::ArmKind::event) continue;
+        if (arm.event.event_ != &event) continue;
+        candidate_index = static_cast<std::uint32_t>(i);
+        break;
+    }
+    // A candidate must exist: at least one eligible Event arm was made
+    // CandidateReady in this group.
+    if (candidate_index >= group->arm_count_) {
+        detail::select_invariant_fail_fast();
+    }
+
+    // Process the group exactly once (P4 claim + finalize winner + losers +
+    // close every authority), then publish exactly once. select_process_group_
+    // locked returns claim-lost (false) only if another invocation already won
+    // — unreachable under one held global_mtx_ unless a racing Timer/Event
+    // already resolved this group; in that case the group is already published
+    // (or being published in this same CS), so do NOT publish a second time.
+    const bool won = select_process_group_locked(*group, candidate_index);
+    if (!won) {
+        // Already claimed (a concurrent resolver in this same CS won). The
+        // winner's publication is responsible; this call publishes nothing.
+        return false;
+    }
+    select_publish_locked(*group);
+    return true;
+}
+
+// Suspended Timer resolver (task §12). Replaces the P3 due-ACTIVE stage
+// fail-fast with the real P6 resolver. PRE: `reg` is ACTIVE and the pump has
+// popped it (the caller validates ACTIVE; a non-ACTIVE block takes the stale
+// skip path in select_timer_pump_entry_locked, which never reaches here).
+bool Scheduler::select_resolve_timer_locked(
+    detail::SelectTimerRegistration& reg) {
+    // ACTIVE validation per task §12.1.
+    if (reg.scheduler() != this) {
+        detail::select_invariant_fail_fast();
+    }
+    if (!reg.is_active()) {
+        // Not ACTIVE: stale. The pump's state-before-arm rule already handles
+        // the stale skip without reading arm_; reaching here non-ACTIVE is an
+        // invariant violation by the caller.
+        detail::select_invariant_fail_fast();
+    }
+    detail::SelectArmSlot* const arm = reg.arm();
+    if (arm == nullptr) {
+        detail::select_invariant_fail_fast();
+    }
+    if (arm->kind != detail::ArmKind::timer) {
+        detail::select_invariant_fail_fast();
+    }
+    if (arm->state != detail::ArmState::registered) {
+        detail::select_invariant_fail_fast();
+    }
+    detail::SelectGroup* const group = arm->group;
+    if (group == nullptr) {
+        detail::select_invariant_fail_fast();
+    }
+    if (group->scheduler_ != this) {
+        detail::select_invariant_fail_fast();
+    }
+    if (group->phase() != detail::GroupPhase::armed) {
+        detail::select_invariant_fail_fast();
+    }
+    if (reg.arm() != arm) {
+        detail::select_invariant_fail_fast();
+    }
+    if (!pool_owns_select_block_locked(reg)) {
+        detail::select_invariant_fail_fast();
+    }
+
+    // Find the exact arm index by scanning group.arms_ for ADDRESS EQUALITY.
+    // Do not perform pointer subtraction unless same-array provenance is
+    // mechanically established (task §12.1).
+    std::uint32_t candidate_index = static_cast<std::uint32_t>(-1);
+    for (std::size_t i = 0; i < group->arm_count_; ++i) {
+        if (&group->arms_[i] == arm) {
+            candidate_index = static_cast<std::uint32_t>(i);
+            break;
+        }
+    }
+    if (candidate_index >= group->arm_count_) {
+        detail::select_invariant_fail_fast();
+    }
+
+    // The Timer registration is NOT consumed before the group winner CAS. P4
+    // (select_process_group_locked -> select_finalize_timer_winner_locked)
+    // owns the winner/loser finalizer, which CONSUMES the winner registration
+    // and RETIRES every loser registration.
+    arm->state = detail::ArmState::candidate_ready;
+
+    const bool won = select_process_group_locked(*group, candidate_index);
+    if (!won) {
+        // Already claimed (e.g. an Event won in a prior resolver call in this
+        // same CS, retiring this Timer registration). The winner's publication
+        // is responsible; this call publishes nothing.
+        return false;
+    }
+    select_publish_locked(*group);
+    return true;
+}
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// Read a SelectGroup's stored result_ (the post-publication winner). Defined
+// out-of-line in the internal-testing variant only (it is a guarded test
+// accessor; absent in the production target).
+SelectResult Scheduler::AsyncTestAccess::group_result(
+    const Scheduler& /*s*/, const detail::SelectGroup& group) {
+    return group.result_;
+}
+#endif
+
+// ===========================================================================
+// E13 P5/P6 — registration + admission core (inline + suspended).
+//
+// select_admit is the single non-template admission core reached ONLY by the
+// public variadic select() bridge (include/sluice/async/select.hpp). It owns
+// every centralized admission step. Both outcomes route through this one core:
 //   - validate caller + every case Scheduler identity BEFORE any allocation
 //   - materialize fixed caller-frame group + arms (no heap)
 //   - allocate every Timer stable block BEFORE global_mtx_
@@ -295,30 +721,40 @@ bool Scheduler::select_all_authority_closed_locked(
 //   - FinishRegistration (phase = Selecting)
 //   - take ONE immutable readiness snapshot (single captured monotonic_now)
 //   - select the lowest ready index (only admission tie-break)
-//   - call the P4 central claim/finalization core exactly once
-//   - close every Event/Timer authority
-//   - construct exactly ONE SelectResult, Inline completion (Completed->Consumed)
-//   - return WITHOUT suspending or publishing a runnable
 //
-// The no-ready branch fails fast (suspended completion is P6, denied).
+//   Inline-ready branch:
+//     - call the P4 central claim/finalization core exactly once
+//     - call the unified publication authority (Inline completion)
+//     - copy result_, set phase Consumed, return WITHOUT suspending or
+//       publishing a runnable
 //
-// Locking: exactly one global_mtx_ acquisition spans reserve..inline-completion,
-// so no external Event::set / timer pump / other Select path may observe a
-// partially-registered group (docs/e13-select-locking-and-publication.md §3.3).
+//   No-ready branch (P6):
+//     - commit the caller Fiber to Waiting + phase Armed +
+//       waiting_select_count_++ (atomic-under-G lost-wake closure)
+//     - release G, context_switch to the owner scheduler context
+//     - on resume: reacquire G, validate Completed/Suspended/result, copy
+//       result_, set phase Consumed, return
+//
+// Locking: exactly one global_mtx_ acquisition spans reserve..inline-completion
+// (inline branch) or reserve..suspension-commit (suspended branch, then G is
+// released before context_switch). No external Event::set / timer pump / other
+// Select path may observe a partially-registered group (docs/e13-select-
+// locking-and-publication.md §3.3).
 //
 // Caller-frame storage: SelectGroup + the SelectArmSlot array live in THIS
 // function's frame. arm.home_/next_/prev_ point into them; every Event/Timer
-// authority is closed before this frame returns, so no dangling reference
-// survives the call (docs/e13-select-production-architecture.md §4.1).
+// authority is closed before the caller is resumed (suspended) or before this
+// frame returns (inline), so no dangling reference survives the call
+// (docs/e13-select-production-architecture.md §4.1).
 // ===========================================================================
-SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
-                                            std::size_t count) {
+SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
+                                     std::size_t count) {
     // Release-mode defense-in-depth: reject structurally invalid arguments that
     // would cause a fixed-array out-of-bounds access. This protects against a
     // hypothetical non-friend caller that bypasses the public select() template's
     // compile-time requires clause gate, or a corrupted descriptor pointer.
     assert(descs != nullptr && count >= 1 && count <= kPreflightMaxArms &&
-           "select_admit_inline: descs/count out of range (requires clause gate)");
+           "select_admit: descs/count out of range (requires clause gate)");
     if (descs == nullptr || count == 0 || count > kSelectMaxArms) {
         detail::select_invariant_fail_fast();
     }
@@ -339,8 +775,9 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
     if (ws->current == nullptr) {
         throw std::logic_error("select() called with no current Fiber");
     }
-    // Capture caller + owner for the (future P6) publication path. Stored on the
-    // group; unused by the inline path but recorded for correctness/audit.
+    // Capture caller + owner for the publication path (inline + suspended).
+    // Stored on the group; the suspended branch routes the resumed caller via
+    // caller_owner_ (NEVER the resolver-thread g_worker).
     Fiber* const caller = ws->current;
     WorkerState* const caller_owner = ws;
 
@@ -354,7 +791,7 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
         switch (d.kind_) {
         case detail::SelectCaseDescriptor::Kind::event: {
             assert(d.event_ != nullptr &&
-                   "select_admit_inline: Event descriptor event_ is null");
+                   "select_admit: Event descriptor event_ is null");
             if (&d.event_->scheduler_ != this) {
                 throw std::invalid_argument(
                     "select(): Event does not belong to this Scheduler");
@@ -551,92 +988,166 @@ SelectResult Scheduler::select_admit_inline(detail::SelectCaseDescriptor* descs,
             }
         }
 
-        // (10) No-ready stage guard. P5 implements inline-ready only; suspended
-        // completion is P6 (denied). Fail fast in this CS — do NOT return a
-        // no-winner result, do NOT unwind with live authority, do NOT suspend.
-        if (!any_ready) {
-            // P5 inline-only Select reached no-ready admission; suspended
-            // completion is P6.
-            detail::select_admission_no_ready_fail_fast();
+        if (any_ready) {
+            // ----- Inline-ready branch (P5) -----
+            // (11)-(12) P4 integration: claim + finalize the whole group for the
+            // lowest ready index, EXACTLY ONCE. Because admission and processing
+            // occur under the SAME global_mtx_ critical section, an inline
+            // admission claim cannot legitimately lose; a false return is an
+            // invariant violation.
+            const bool won =
+                select_process_group_locked(group, lowest_ready);
+            if (!won) {
+                // Unreachable: under one continuous CS, the winner CAS cannot
+                // lose. A false return is an invariant violation.
+                detail::select_invariant_fail_fast();
+            }
+
+            // (13) Inline completion via the unified publication authority
+            // (PUB-3: inline publication regression). select_publish_locked
+            // writes result_ + sets completion_mode_=Inline + phase=Completed.
+            select_publish_locked(group);
+
+            // Copy result_ to the local return value, then set phase Consumed.
+            // AdmissionConsumed seam: AFTER phase becomes Completed, BEFORE
+            // Consumed (the inline Completed->Consumed lifecycle).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            {
+                sluice_async_test::AdmissionSnapshot snap{};
+                snap.phase = group.phase();
+                snap.completion_mode = group.completion_mode_;
+                snap.winner = group.winner();
+                snap.arm_count = group.arm_count_;
+                snap.all_authority_closed = select_all_authority_closed_locked(group);
+                for (std::size_t si = 0; si < group.arm_count_; ++si) {
+                    snap.arm_states[si] = arms[si].state;
+                    snap.arm_kinds[si] = arms[si].kind;
+                    snap.event_linked[si] = (arms[si].home_ != nullptr);
+                    if (arms[si].kind == detail::ArmKind::timer) {
+                        snap.timer_states[si] = arms[si].timer.stable_reg_
+                            ? arms[si].timer.stable_reg_->state()
+                            : detail::SelectTimerRegistration::State::consumed;
+                    } else {
+                        snap.timer_states[si] = detail::SelectTimerRegistration::State::consumed;
+                    }
+                }
+                sluice_async_test::capture_admission_snapshot(
+                    *this, sluice_async_test::PhaseTag::e13_admission_consumed, snap);
+            }
+            sluice_async_test::test_phase(
+                *this, sluice_async_test::PhaseTag::e13_admission_consumed);
+#endif
+
+            SelectResult return_value = group.result_;
+            group.set_phase(detail::GroupPhase::consumed);
+
+            // (14) Unlock (LockGuard destructor) and return. NO make_runnable /
+            // route_runnable_locked / make_waiting / context_switch on the
+            // inline branch.
+            return return_value;
         }
 
-        // (11)-(12) P4 integration: claim + finalize the whole group for the
-        // lowest ready index, EXACTLY ONCE. Because admission and processing
-        // occur under the SAME global_mtx_ critical section, an inline admission
-        // claim cannot legitimately lose; a false return is an invariant
-        // violation. select_process_group_locked finalizes winner + losers and
-        // asserts all-authority-closed before returning true.
-        const bool won =
-            select_process_group_locked(group, lowest_ready);
-        if (!won) {
-            // Unreachable: under one continuous CS, the winner CAS cannot lose
-            // (no concurrent claimer holds the lock). A false return means the
-            // group was already claimed — an invariant violation.
-            detail::select_admission_no_ready_fail_fast();
+        // ----- No-ready branch (P6 §9): commit suspension -----
+        // Preconditions (task §9): phase==Selecting, winner==kNoWinner, every
+        // arm Registered, caller==current Fiber, caller_owner==g_worker. All
+        // established by the registration transaction above (phase Selecting,
+        // no winner, every arm Registered, caller captured at admission). The
+        // lost-wake closure (task §9.1): make_waiting + phase Armed +
+        // waiting_select_count_++ all under the SAME G critical section, so a
+        // resolver that wins after G unlock but before context_switch sees the
+        // committed Waiting state and queues the caller exactly once.
+        caller->make_waiting();
+        group.set_phase(detail::GroupPhase::armed);
+        ++waiting_select_count_;
+    }  // ---- global_mtx_ released here ----
+
+    // (P6 §9) e13_select_suspend_before_switch seam: AFTER G is released,
+    // BEFORE the physical context_switch. A coordinator thread can resolve the
+    // group (Event::set / clock advance) here and prove the wake-before-
+    // physical-switch window is closed: the caller is committed Waiting +
+    // Armed + accounted under G, so a resolver's make_runnable sees Waiting and
+    // queues the caller exactly once even before this thread switches away.
+    // No wall-clock sleeps.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(
+        *this, sluice_async_test::PhaseTag::e13_select_suspend_before_switch);
+#endif
+
+    fiber_ctx::Switch s;
+    s.old = &caller->ctx;
+    s.new_ = &caller_owner->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+    // ---- Control resumes here when a resolver publishes + routes the caller ----
+
+    // (P6 §10) Resume + ConsumeResult path. Reacquire global_mtx_ and validate
+    // the published result before reading it.
+    {
+        LockGuard lk(global_mtx_);
+
+        // Require the publication committed the suspended lifecycle. NOTE: the
+        // resumed caller does NOT re-derive select_all_authority_closed_locked
+        // here: that predicate dereferences Scheduler-owned Timer registrations
+        // (arm.timer.stable_reg_), which the timer pump may LAZILY RECLAIM
+        // (pop+erase) between publication and resume once their deadline has
+        // elapsed (docs/e13-select-timer-adapter.md §6.1 lazy-at-deadline
+        // reclamation). The publication authority already closed all authority
+        // BEFORE make_runnable (docs/e13-select-type-and-lifetime.md §4.2); the
+        // caller trusts that. The caller validates only caller-owned state
+        // (phase, completion mode, result, winner, caller Fiber state).
+        if (group.phase() != detail::GroupPhase::completed ||
+            group.completion_mode_ != detail::CompletionMode::suspended ||
+            !group.result_.has_winner() ||
+            group.result_.index() != group.winner() ||
+            caller->state() != FiberState::running) {
+            detail::select_invariant_fail_fast();
         }
+        // waiting_select_count_ no longer includes this group (the suspended
+        // branch decremented it exactly once at publication).
+        // (Defensive: a correct publication guarantees this; we do not assert
+        // an exact global value since other Selects may be in flight.)
 
-        // (13) Inline completion lifecycle (docs/e13-select-locking-and-
-        // publication.md §5.4 inline branch; task §13).
-        //   1. assert all authority closed  (select_process_group_locked did)
-        //   2. construct the one local SelectResult from group.winner()
-        //   3. completion_mode_ = Inline
-        //   4. phase = Completed
-        //   5. AdmissionConsumed seam (Completed before Consumed)
-        //   6. copy result to local return value
-        //   7. phase = Consumed
-        assert(select_all_authority_closed_locked(group) &&
-               "select_admit_inline: authority not closed after P4 processing");
-
-        const std::uint32_t winner_index = group.winner();
-        const detail::SelectArmSlot& winner_arm = arms[winner_index];
-        SelectResult result;
-        if (winner_arm.kind == detail::ArmKind::event) {
-            result = SelectResult(winner_index, SelectKind::event,
-                                  SelectTimerOutcome::fired);
-        } else {
-            result = SelectResult(winner_index, SelectKind::timer,
-                                  SelectTimerOutcome::fired);
-        }
-
-        group.completion_mode_ = detail::CompletionMode::inline_;
-        group.set_phase(detail::GroupPhase::completed);
-
-        // AdmissionConsumed seam: AFTER phase becomes Completed, BEFORE Consumed.
-        // P5 CORRECTIVE: capture the boundary snapshot before the seam so the
-        // test can read the mechanical inline lifecycle state.
+        // e13_suspended_before_consume seam: AFTER the resumed caller
+        // reacquires G and validates the result, BEFORE phase Consumed. Its
+        // snapshot proves phase==Completed, mode==Suspended, result present,
+        // winner stable, caller resumed, runnable publication count == 1.
+        // NOTE: all_authority_closed is NOT re-derived here (left false): the
+        // timer pump may have lazily reclaimed the consumed Timer registration
+        // between publication and resume, so re-deriving would dereference a
+        // freed block. The publish_done snapshot (captured BEFORE reclamation,
+        // inside the publication CS) is the authoritative all-authority-closed
+        // observation; PUB-4 asserts that snapshot instead.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         {
-            sluice_async_test::AdmissionSnapshot snap{};
+            sluice_async_test::PublicationSnapshot snap{};
             snap.phase = group.phase();
             snap.completion_mode = group.completion_mode_;
             snap.winner = group.winner();
             snap.arm_count = group.arm_count_;
-            snap.all_authority_closed = select_all_authority_closed_locked(group);
-            for (std::size_t si = 0; si < group.arm_count_; ++si) {
-                snap.arm_states[si] = arms[si].state;
-                snap.arm_kinds[si] = arms[si].kind;
-                snap.event_linked[si] = (arms[si].home_ != nullptr);
-                if (arms[si].kind == detail::ArmKind::timer) {
-                    snap.timer_states[si] = arms[si].timer.stable_reg_
-                        ? arms[si].timer.stable_reg_->state()
-                        : detail::SelectTimerRegistration::State::consumed;
-                } else {
-                    snap.timer_states[si] = detail::SelectTimerRegistration::State::consumed;
-                }
-            }
-            sluice_async_test::capture_admission_snapshot(
-                *this, sluice_async_test::PhaseTag::e13_admission_consumed, snap);
+            snap.result_has_winner = group.result_.has_winner();
+            snap.result_index = group.result_.has_winner() ? group.result_.index() : 0;
+            snap.result_kind =
+                group.result_.has_winner() ? group.result_.kind() : SelectKind::event;
+            snap.all_authority_closed = false;  // not re-derived (lazy reclamation)
+            snap.caller_state = caller->state();
+            snap.caller_owner_id = caller_owner->id;
+            snap.waiting_select_count = waiting_select_count_;
+            snap.result_publication_count =
+                sluice_async_test::result_publication_count(*this);
+            snap.runnable_publication_count =
+                sluice_async_test::runnable_publication_count(*this);
+            sluice_async_test::capture_publication_snapshot(
+                *this, sluice_async_test::PhaseTag::e13_suspended_before_consume, snap);
         }
         sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::e13_admission_consumed);
+            *this, sluice_async_test::PhaseTag::e13_suspended_before_consume);
 #endif
 
-        SelectResult return_value = result;  // copy to local return value
+        // Only the resumed caller sets Consumed (the resolver/publication thread
+        // leaves the group at Completed). Copy result_ to the local return value
+        // and transition Completed -> Consumed. After return, group destruction
+        // passes naturally (destructor enforces Consumed/Aborted).
+        SelectResult return_value = group.result_;
         group.set_phase(detail::GroupPhase::consumed);
-
-        // (14) Unlock (LockGuard destructor) and return. NO make_runnable /
-        // route_runnable_locked / make_waiting / context_switch — suspended
-        // publication is P6, denied.
         return return_value;
     }
 }

@@ -236,9 +236,15 @@ SLUICE_TEST_CASE(test_event_set_marks_readiness) {
 
     AsyncTestAccess::select_event_link(sched, ev, arm);
 
-    ev.set();
+    // P6 CORRECTIVE: the production Event::set() path now drives the full
+    // suspended-Select resolver (claim + finalize + publish), not a pure
+    // readiness offer. This P2 registry test verifies the Phase-1 readiness-
+    // offer SCAN in isolation, which remains reachable as a guarded test
+    // accessor (AsyncTestAccess::select_event_scan). It marks eligible armed
+    // registered arms CandidateReady without claiming/finalizing/publishing.
+    std::size_t marked = AsyncTestAccess::select_event_scan(sched, ev);
 
-    SLUICE_CHECK(ev.is_set());
+    SLUICE_CHECK(marked == 1);
     SLUICE_CHECK(arm.state == sad::ArmState::candidate_ready);
     SLUICE_CHECK(group.winner() == sad::kNoWinner);
     SLUICE_CHECK(arm.home_ != nullptr);
@@ -319,7 +325,7 @@ SLUICE_TEST_CASE(test_non_registered_arm_skipped) {
 // =========================================================================
 
 SLUICE_TEST_CASE(test_idempotent_set) {
-    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sluice::async::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
     sa::Scheduler sched(ctx);
     sa::Event ev(sched);
 
@@ -332,11 +338,20 @@ SLUICE_TEST_CASE(test_idempotent_set) {
 
     AsyncTestAccess::select_event_link(sched, ev, arm);
 
-    ev.set();
+    // P6 CORRECTIVE: ev.set() now drives the full suspended-Select resolver on
+    // an armed group. This registry test verifies (a) the readiness-offer scan
+    // marks an armed registered arm exactly once and (b) a repeated scan is
+    // idempotent (a CandidateReady arm is not re-touched). The production
+    // set()-idempotence law (a second set() is a no-op via the exchange) is
+    // covered by test_ordinary_wait_regression below. Use the guarded test
+    // accessor for the scan so this stays an isolated Phase-1 test.
+    std::size_t marked1 = AsyncTestAccess::select_event_scan(sched, ev);
+    SLUICE_CHECK(marked1 == 1);
     SLUICE_CHECK(arm.state == sad::ArmState::candidate_ready);
 
-    // Second set() must not re-mark.
-    ev.set();
+    // Second scan must not re-mark (CandidateReady != Registered).
+    std::size_t marked2 = AsyncTestAccess::select_event_scan(sched, ev);
+    SLUICE_CHECK(marked2 == 0);
     SLUICE_CHECK(arm.state == sad::ArmState::candidate_ready);
     SLUICE_CHECK(group.winner() == sad::kNoWinner);
 
@@ -366,7 +381,7 @@ SLUICE_TEST_CASE(test_ordinary_wait_regression) {
 // =========================================================================
 
 SLUICE_TEST_CASE(test_ordinary_and_select_coexistence) {
-    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sluice::async::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
     sa::Scheduler sched(ctx);
     sa::Event ev(sched);
 
@@ -374,14 +389,26 @@ SLUICE_TEST_CASE(test_ordinary_and_select_coexistence) {
     arm.construct_event(ev);
     arm.state = sad::ArmState::prepared;
     sad::SelectGroup group;
-    group.set_phase(sad::GroupPhase::armed);
+    // P6 CORRECTIVE: ev.set() drives the full suspended-Select resolver on an
+    // Armed group. Use Selecting here so set() resolves nothing (the arm is
+    // not eligible) and the arm remains Registered; then arm it and run the
+    // Phase-1 scan accessor to prove the Select arm is observable. This keeps
+    // the coexistence test isolated from the production resolver.
+    group.set_phase(sad::GroupPhase::selecting);
     arm.group = &group;
 
     AsyncTestAccess::select_event_link(sched, ev, arm);
 
     ev.set();
-
     SLUICE_CHECK(ev.is_set());
+    // set() on a Selecting (non-Armed) group resolves no Select arm.
+    SLUICE_CHECK(arm.state == sad::ArmState::registered);
+    SLUICE_CHECK(group.winner() == sad::kNoWinner);
+
+    // Arm the group; the Phase-1 scan accessor now marks the eligible arm.
+    group.set_phase(sad::GroupPhase::armed);
+    std::size_t marked = AsyncTestAccess::select_event_scan(sched, ev);
+    SLUICE_CHECK(marked == 1);
     SLUICE_CHECK(arm.state == sad::ArmState::candidate_ready);
 
     // Clean up before Event destruction.
@@ -394,7 +421,7 @@ SLUICE_TEST_CASE(test_ordinary_and_select_coexistence) {
 // =========================================================================
 
 SLUICE_TEST_CASE(test_reset_serialization) {
-    sluice::async::AsyncIoContext ctx(std::make_unique<sluice::async::FakeAsyncBackend>());
+    sluice::async::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
     sa::Scheduler sched(ctx);
     sa::Event ev(sched);
 
@@ -402,19 +429,23 @@ SLUICE_TEST_CASE(test_reset_serialization) {
     arm.construct_event(ev);
     arm.state = sad::ArmState::prepared;
     sad::SelectGroup group;
-    group.set_phase(sad::GroupPhase::armed);
+    // P6 CORRECTIVE: ev.set() on an Armed group drives the full resolver. Keep
+    // the group Selecting during set()/reset() (set resolves nothing), then arm
+    // and run the Phase-1 scan accessor to prove the arm is observable; verify
+    // set/reset do NOT touch the Select arm's registry membership.
+    group.set_phase(sad::GroupPhase::selecting);
     arm.group = &group;
 
     AsyncTestAccess::select_event_link(sched, ev, arm);
 
     ev.set();
     SLUICE_CHECK(ev.is_set());
-    SLUICE_CHECK(arm.state == sad::ArmState::candidate_ready);
+    SLUICE_CHECK(arm.state == sad::ArmState::registered);
 
     // After reset, Event is UNSET. Select arms are not unlinked or reverted.
     ev.reset();
     SLUICE_CHECK(!ev.is_set());
-    SLUICE_CHECK(arm.state == sad::ArmState::candidate_ready);
+    SLUICE_CHECK(arm.state == sad::ArmState::registered);
     SLUICE_CHECK(arm.home_ != nullptr);
 
     // Clean up before Event destruction.
@@ -476,12 +507,19 @@ SLUICE_TEST_CASE(test_real_ordinary_waiter_and_coexistence) {
         ev.wait(node);
     });
 
-    // Link a Select arm with an Armed group.
+    // Link a Select arm. P6 CORRECTIVE: ev.set() on an Armed group now drives
+    // the full suspended-Select resolver (claim+finalize+publish); a synthetic
+    // group has no caller fiber. Use a Selecting (non-Armed) group so the
+    // production set() broadcast resolves the ordinary waiter but SKIPS the
+    // Select arm (not eligible); this preserves the J15 goal (ordinary wait/set
+    // coexists with a registered Select registry membership under one broadcast)
+    // without entering the resolver on a synthetic group. The Phase-1 readiness
+    // offer is still observable via the scan accessor.
     sad::SelectArmSlot arm;
     arm.construct_event(ev);
     arm.state = sad::ArmState::prepared;
     sad::SelectGroup group;
-    group.set_phase(sad::GroupPhase::armed);
+    group.set_phase(sad::GroupPhase::selecting);
     arm.group = &group;
     AsyncTestAccess::select_event_link(sched, ev, arm);
 
@@ -506,8 +544,10 @@ SLUICE_TEST_CASE(test_real_ordinary_waiter_and_coexistence) {
     run_thread.join();
 
     SLUICE_CHECK_MSG(node.was_woken(), "ordinary waiter resolved Woken");
-    SLUICE_CHECK_MSG(arm.state == sad::ArmState::candidate_ready,
-                     "Select arm marked CandidateReady by set() broadcast");
+    // Select arm is NOT eligible (Selecting group) so the resolver skipped it:
+    // still Registered, untouched by the broadcast.
+    SLUICE_CHECK_MSG(arm.state == sad::ArmState::registered,
+                     "Select arm untouched by set() broadcast (non-Armed group)");
     SLUICE_CHECK_MSG(group.winner() == sad::kNoWinner,
                      "no winner claimed by broadcast");
     SLUICE_CHECK_MSG(arm.home_ != nullptr, "Select arm still linked");

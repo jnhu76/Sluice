@@ -4,15 +4,16 @@
 // typed Event/Timer case values, SelectResult, the SelectCaseType concept,
 // and the variadic select() entry point.
 //
-// P5: the public variadic select() template is DEFINED here (a thin bridge). A
-// general function-template definition must be visible to arbitrary user TUs,
+// P5/P6: the public variadic select() template is DEFINED here (a thin bridge).
+// A general function-template definition must be visible to arbitrary user TUs,
 // so it cannot live only in src/async/select.cpp. The template materializes a
 // fixed caller-frame std::array of SelectCaseDescriptor (preserving argument
 // order as the arm index) and forwards to ONE non-template Scheduler admission
-// function (Scheduler::select_admit_inline) that owns all centralized admission
-// logic. No explicit-instantiation combinatorial explosion; the admission core
-// compiles once. See docs/e13-select-public-api.md §3 and
-// docs/e13-select-production-architecture.md §8.
+// function (Scheduler::select_admit) that owns all centralized admission logic
+// for BOTH the inline-ready and the no-ready suspended paths. No explicit-
+// instantiation combinatorial explosion; the admission core compiles once. See
+// docs/e13-select-public-api.md §3 and docs/e13-select-production-architecture.md
+// §8.
 //
 // See docs/e13-select-public-api.md for the frozen API surface.
 #pragma once
@@ -187,9 +188,9 @@ private:
 // expands into a fixed caller-frame array — no per-call heap for case storage.
 //
 // This template is deliberately THIN: it only materializes the case descriptor
-// array and calls Scheduler::select_admit_inline directly (no intermediate
-// bridge struct). Scheduler friends this exact constrained template entity,
-// so the admission core remains private. No concrete bridge type is published.
+// array and calls Scheduler::select_admit directly (no intermediate bridge
+// struct). Scheduler friends this exact constrained template entity, so the
+// admission core remains private. No concrete bridge type is published.
 //
 // The admission logic compiles exactly once and is not duplicated per
 // Event/Timer permutation.
@@ -203,7 +204,7 @@ template <class... Cases>
 SelectResult select(Scheduler& scheduler, Cases&&... cases) {
     std::array<detail::SelectCaseDescriptor, sizeof...(Cases)> descs{
         detail::SelectCaseDescriptor{std::forward<Cases>(cases)}...};
-    return scheduler.select_admit_inline(descs.data(), sizeof...(Cases));
+    return scheduler.select_admit(descs.data(), sizeof...(Cases));
 }
 
 }  // namespace sluice::async

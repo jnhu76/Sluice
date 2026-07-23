@@ -350,7 +350,12 @@ SLUICE_TEST_CASE(c7_timer_winner_event_loser) {
     // Event loser unlinked; SET unchanged.
     SLUICE_CHECK(f.arms[l].state == ArmState::retired);
     SLUICE_CHECK(f.arms[l].home_ == nullptr);
-    // Force the Event SET to prove it is NOT cleared/consumed by Select.
+    // P6 CORRECTIVE: ev.set() now drives the full suspended-Select resolver
+    // (claim+finalize+publish) and would re-enter this already-finalized
+    // synthetic armed group. The Event-persistence law (Select never clears
+    // set_) is now proven directly via a pre-set Event whose SET survives the
+    // Select finalize path (see c7b). Force the SET bit directly and confirm
+    // it is observable — the loser finalize never touched set_.
     ev.set();
     SLUICE_CHECK(ev.is_set());
     SLUICE_CHECK(f.all_closed());
@@ -359,12 +364,16 @@ SLUICE_TEST_CASE(c7_timer_winner_event_loser) {
 // Variant: Event is already SET before processing; Select must not clear it.
 SLUICE_TEST_CASE(c7b_timer_winner_event_loser_set_persists) {
     ClaimFixture f;
-    Event ev(f.sched);
+    // Construct the Event already-SET. A pre-SET Event proves the persistence
+    // law (InvEventPersistentStateNotConsumed) WITHOUT driving the production
+    // ev.set() broadcast path, which under P6 would attempt to resolve the
+    // synthetic armed group (no real caller fiber). Select finalizing the Event
+    // loser arm must NOT clear set_.
+    Event ev(f.sched, /*initially_set=*/true);
     std::uint32_t w = f.add_timer_arm(/*deadline=*/100);
     std::uint32_t l = f.add_event_arm(ev);
     f.mark_candidate(w);
 
-    ev.set();  // SET before processing
     SLUICE_CHECK(ev.is_set());
     SLUICE_CHECK(f.process(w));
     SLUICE_CHECK(ev.is_set());  // still SET — Event persistent state preserved

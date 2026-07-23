@@ -842,15 +842,15 @@ private:
     //Scheduler-internal wake + global-mtx access for its reconciler.
     friend class ::sluice::async::detail::QueuePort;
 
-    // E13 P5 CORRECTIVE: friend the pre-declared constrained public select()
+    // E13 P5/P6 CORRECTIVE: friend the pre-declared constrained public select()
     // template (declared in select_fwd.hpp, defined in select.hpp). By
     // friending a concrete function-template entity (not a concrete struct
     // name), an ordinary production TU cannot forge the friend grant: the
     // template is uniquely identified by its template-head + requires clause +
     // signature, and no other definition can match that entity.
     //
-    // The template calls select_admit_inline directly (no intermediate
-    // SelectBridge). select_admit_inline stays private to all other code.
+    // The template calls select_admit directly (no intermediate SelectBridge).
+    // select_admit stays private to all other code.
     template <class... Cases>
         requires (
             sizeof...(Cases) >= 1 &&
@@ -978,6 +978,18 @@ private:
     // unresolved for MW classification, and the per-node fiber is recovered
     // from the winning node at resolution time.
     std::size_t waiting_waitq_count_ SLUICE_GUARDED_BY(global_mtx_){0};
+
+    // E13 P6: count of SelectGroups whose callers have committed Waiting and
+    // whose phase is Armed, but which are not yet Completed (docs/e13-select-
+    // production-test-plan.md §7.1, task §7). Counted BY GROUP (not by arm),
+    // protected by global_mtx_. Incremented once at the no-ready suspension
+    // commit; decremented once at suspended publication. An Event-only
+    // suspended Select has no active Timer, no ordinary WaitQueue, and no
+    // backend op, yet an external Event::set can still resolve the Fiber — so
+    // this count participates in MW classification + park liveness exactly
+    // like waiting_waitq_count_ (a Worker in run_live must NOT park/terminate
+    // as if quiescent while an Armed Select can still be resolved externally).
+    std::size_t waiting_select_count_ SLUICE_GUARDED_BY(global_mtx_){0};
 
 
     // E8: the RUNNABLE ownership / steal-consistency record for each Fiber
@@ -1338,8 +1350,8 @@ private:
     bool select_all_authority_closed_locked(const detail::SelectGroup& group) const
         SLUICE_REQUIRES(global_mtx_);
 
-    // ---- E13 P5 Select registration + inline admission ----
-    // (docs/e13-select-production-test-plan.md §7.5,
+    // ---- E13 Select registration + admission core (inline + suspended) ----
+    // (docs/e13-select-production-test-plan.md §7.5/§7.6,
     //  docs/e13-select-locking-and-publication.md §3,
     //  docs/e13-select-public-api.md §3/§4/§5/§7).
     //
@@ -1353,22 +1365,82 @@ private:
     // deadline-heap reserve (the only allocation under the lock), the
     // registration loop, FinishRegistration, the immutable readiness snapshot,
     // lowest-index tie-break, the single P4 processor call, all-authority-
-    // closed verification, and inline result completion (Completed -> Consumed).
-    // NOT a template — compiles once.
+    // closed verification, and result completion. NOT a template — compiles
+    // once.
     //
-    // P5 implements the INLINE-READY case only: a successful admission returns a
-    // SelectResult without suspending the caller or publishing a runnable. The
-    // no-ready branch fails fast (suspended completion is P6, denied here).
-    // `descs` points at `count` SelectCaseDescriptor values (caller-frame array);
-    // the function does not retain the pointer past the call.
+    // The admission name is NEUTRAL (select_admit, formerly select_admit_inline)
+    // because P6 routes BOTH outcomes through this one core: an inline-ready
+    // admission returns a SelectResult without suspending; a no-ready admission
+    // commits the caller Fiber to Waiting + phase Armed, suspends, and is later
+    // resumed to consume the published result (Completed -> Consumed). There is
+    // exactly ONE admission core for both paths (task §5). `descs` points at
+    // `count` SelectCaseDescriptor values (caller-frame array); the function
+    // does not retain the pointer past the call.
     //
     // Not noexcept: may throw std::logic_error (caller validation) or
     // std::invalid_argument (case Scheduler mismatch) BEFORE any allocation, or
     // std::bad_alloc (Timer block / heap reserve) before the first registration
     // mutation. After the heap reserve, the registration loop contains no
-    // ordinary throwing operation.
-    SelectResult select_admit_inline(detail::SelectCaseDescriptor* descs,
-                                     std::size_t count);
+    // ordinary throwing operation; the no-ready suspension + resume paths are
+    // noexcept (or fail-fast, which terminates).
+    SelectResult select_admit(detail::SelectCaseDescriptor* descs,
+                              std::size_t count);
+
+    // ---- E13 P6 Select unified publication authority ----
+    // (docs/e13-select-locking-and-publication.md §5,
+    //  docs/e13-select-formal-production-mapping.md §5,
+    //  task §8). THE single result/runnable publication function. PRE:
+    // global_mtx_ held continuously; the winner has already been claimed and
+    // every winner+loser arm finalized (authority closed) in the SAME critical
+    // section that calls this. select_publish_locked:
+    //   - mechanically validates the publication-entry shape (task §8.1),
+    //     fail-fasting on any violation (closes the P4-deferred publication-
+    //     entry shape validation),
+    //   - constructs exactly ONE SelectResult from the winner arm and writes it
+    //     to group.result_ (written exactly once),
+    //   - branches on entry phase:
+    //       * Selecting (inline): completion_mode_=Inline, phase=Completed.
+    //         NO make_runnable, NO route_runnable_locked, NO counter mutation.
+    //       * Armed (suspended): completion_mode_=Suspended, phase=Completed,
+    //         decrement waiting_select_count_ (underflow -> fail-fast),
+    //         make_runnable (false -> fail-fast), route_runnable_locked via
+    //         group.caller_owner_ (NEVER the resolver-thread g_worker).
+    //
+    // Required source order (task §8.2): all authority closed < group.result_
+    // write < completion mode < phase Completed < runnable publication. There
+    // is exactly ONE call site each for Fiber::make_runnable and
+    // Scheduler::route_runnable_locked inside Select, both here, both only on
+    // the suspended branch. No Event/Timer finalizer/scan/pump reaches them.
+    void select_publish_locked(detail::SelectGroup& group)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // ---- E13 P6 suspended Event/Timer resolution ----
+    // (task §11/§12). The post-suspension resolvers, reached ONLY under
+    // global_mtx_ from event_set_broadcast (Event) and the timer pump (Timer).
+    // Each performs the single-group P8 gate (Event) or ACTIVE validation
+    // (Timer), offers CandidateReady to the relevant arm(s), then drives the
+    // single P4 group processor exactly once followed by select_publish_locked
+    // exactly once. No arm finalizer calls make_runnable / route_runnable.
+    //
+    // select_resolve_event_locked: walks `event`'s SelectPort for THIS Event's
+    // eligible (kind==Event, state==Registered, group.phase==Armed, home points
+    // here) arms; applies the single-group P6 gate (P8 multi-group DENIED ->
+    // fail-fast before any CAS); marks every eligible arm CandidateReady;
+    // chooses the lowest INDEX (NOT intrusive-list order) ready arm; processes
+    // + publishes the group once. Returns true iff a group was published.
+    bool select_resolve_event_locked(Event& event)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // select_resolve_timer_locked: the ACTIVE path replacement for the P3 due-
+    // ACTIVE stage fail-fast in select_timer_pump_entry_locked. Validates the
+    // ACTIVE block (arm kind/state/group/scheduler/phase/pool/reg back-pointer)
+    // under the state-before-arm rule, finds the exact arm index by address
+    // scan of group.arms_, marks it CandidateReady, processes + publishes the
+    // group once. PRE: `reg` is ACTIVE and the pump has popped it. The Timer
+    // registration is NOT consumed before the group winner CAS (P4 owns the
+    // winner/loser finalizer). Returns true iff a group was published.
+    bool select_resolve_timer_locked(detail::SelectTimerRegistration& reg)
+        SLUICE_REQUIRES(global_mtx_);
 
     // E11-T17 (F2) narrow test hook: register a TimerRegistration for {node,q,
     // deadline} from a NON-worker thread (the test coordinator). Mirrors the
@@ -1431,7 +1503,7 @@ private:
     // for the same reason as the WaitQueue wait.
     bool external_wake_possible_locked() const SLUICE_REQUIRES(global_mtx_) {
         return !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
-               any_active_deadline_locked();
+               any_active_deadline_locked() || waiting_select_count_ > 0;
     }
 
     // ------------------------------------------------------------------------
@@ -1696,6 +1768,60 @@ public:
         }
         static void reset_select_timer_arm_load_count(Scheduler& s) noexcept {
             s.select_timer_arm_load_count_ = 0;
+        }
+
+        // ---- E13 P6 Select publication / suspended-resolution test accessors ----
+        // Read the suspended-Select liveness count (task §7). Reads a
+        // GUARDED_BY field under global_mtx_.
+        static std::size_t waiting_select_count(const Scheduler& s) noexcept {
+            LockGuard lk(s.global_mtx_);
+            return s.waiting_select_count_;
+        }
+
+        // Test-only: bump the suspended-Select liveness count under global_mtx_.
+        // Used by publication death tests that assemble a finalized group via the
+        // real P4 processor (which does NOT run the admission suspension commit)
+        // and then drive select_publish_locked on the suspended branch, which
+        // expects waiting_select_count_ to reflect one Armed group. Mirrors the
+        // admission suspension commit (task §7.2). Absent in production.
+        static void inc_waiting_select_for_test(Scheduler& s) noexcept {
+            LockGuard lk(s.global_mtx_);
+            ++s.waiting_select_count_;
+        }
+
+        // Read a SelectGroup's stored result_ (the post-publication winner).
+        // Returns the default no-winner SelectResult if the group has not been
+        // published. Defined out-of-line (touches SelectGroup's complete type).
+        static SelectResult group_result(const Scheduler& s,
+                                         const detail::SelectGroup& group);
+
+        // Direct publication driver: call select_publish_locked under
+        // global_mtx_. For SN-2 (duplicate publication) / SN-10 (open authority)
+        // / FP (caller not Waiting) death tests that must reach the production
+        // entry on a synthetic-but-finalized group. `group` must already be
+        // claimed + finalized + authority-closed by the test harness (the
+        // production publication entry validates this mechanically and fails
+        // fast otherwise).
+        static void select_publish(Scheduler& s, detail::SelectGroup& group) {
+            LockGuard lk(s.global_mtx_);
+            s.select_publish_locked(group);
+        }
+
+        // Direct suspended-Event resolver driver: call select_resolve_event_locked
+        // under global_mtx_. Reaches the real production P8-gate + claim +
+        // finalize + publish path from a test.
+        static bool select_resolve_event(Scheduler& s, Event& event) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_resolve_event_locked(event);
+        }
+
+        // Direct suspended-Timer resolver driver: call select_resolve_timer_locked
+        // under global_mtx_. Reaches the real production ACTIVE-path resolver
+        // from a test.
+        static bool select_resolve_timer(Scheduler& s,
+                                         detail::SelectTimerRegistration& reg) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_resolve_timer_locked(reg);
         }
 
         // Drain the Select timer pool to empty: retire every still-ACTIVE

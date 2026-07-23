@@ -520,4 +520,85 @@ struct E13SelectAdmissionSeam {
     }
 };
 
+// ---- E13 P6 Select publication / suspended-resolution seams ----
+// Phase seams + snapshot accessors for the unified publication authority
+// (select_publish_locked) and the suspended admission lifecycle (suspend-before-
+// switch, suspended-before-consume). Plus the required controller counters
+// (task §13): result + runnable publication counts, and the waiting_select_count
+// liveness observation. All reached through the non-installed controller; no
+// production symbol.
+struct E13SelectPublicationSeam {
+    using Scheduler = sluice::async::Scheduler;
+    using PublicationSnapshot = sluice_async_test::PublicationSnapshot;
+    using SelectTimerReg = sluice::async::detail::SelectTimerRegistration;
+    using Event = sluice::async::Event;
+    using SelectGroup = sluice::async::detail::SelectGroup;
+
+    // ---- suspend-before-switch (caller side, runs OUTSIDE global_mtx_) ----
+    static void arm_suspend_before_switch(Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_select_suspend_before_switch);
+    }
+    static void wait_suspend_before_switch_paused(Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::e13_select_suspend_before_switch);
+    }
+    static bool is_suspend_before_switch_paused(Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::e13_select_suspend_before_switch);
+    }
+    static void release_suspend_before_switch(Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::e13_select_suspend_before_switch);
+    }
+
+    // ---- publish entry / done / suspended-before-consume (hold global_mtx_) ----
+    // Non-blocking reach observation (the publication seams fire under
+    // global_mtx_; a coordinator thread cannot acquire that lock).
+    static bool publish_entry_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_publish_entry);
+    }
+    static bool publish_done_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_publish_done);
+    }
+    static bool suspended_before_consume_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_suspended_before_consume);
+    }
+
+    static PublicationSnapshot publish_entry_snapshot(Scheduler& s) noexcept {
+        return sluice_async_test::read_publication_snapshot(
+            s, PhaseTag::e13_publish_entry);
+    }
+    static PublicationSnapshot publish_done_snapshot(Scheduler& s) noexcept {
+        return sluice_async_test::read_publication_snapshot(
+            s, PhaseTag::e13_publish_done);
+    }
+    static PublicationSnapshot suspended_before_consume_snapshot(
+        Scheduler& s) noexcept {
+        return sluice_async_test::read_publication_snapshot(
+            s, PhaseTag::e13_suspended_before_consume);
+    }
+
+    // ---- required controller counters (task §13) ----
+    static std::size_t result_publication_count(Scheduler& s) noexcept {
+        return sluice_async_test::result_publication_count(s);
+    }
+    static std::size_t runnable_publication_count(Scheduler& s) noexcept {
+        return sluice_async_test::runnable_publication_count(s);
+    }
+    static void reset_publication_counts(Scheduler& s) noexcept {
+        sluice_async_test::reset_publication_counts(s);
+    }
+
+    // ---- waiting_select_count liveness observation ----
+    static std::size_t waiting_select_count(const Scheduler& s) noexcept {
+        return Scheduler::AsyncTestAccess::waiting_select_count(s);
+    }
+
+    // ---- Select timer pool observation (mirror of E13SelectTimerSeam) ----
+    static std::size_t select_timer_count_in_state(
+        const Scheduler& s, SelectTimerReg::State st) noexcept {
+        return Scheduler::AsyncTestAccess::select_timer_count_in_state(s, st);
+    }
+};
+
+// Short alias used by the P6 tests.
+using AsyncTestAccess = sluice::async::Scheduler::AsyncTestAccess;
+
 }  // namespace sluice_async_test
