@@ -184,20 +184,16 @@ SLUICE_TEST_CASE(st10_post_suspension_timer_winner) {
 
     // Coordinator: deterministically wait until the caller has committed
     // Waiting + Armed (observed via waiting_select_count_), then advance the
-    // deterministic clock past the deadline. advance_clock drives the timer
-    // pump SYNCHRONOUSLY under global_mtx_ (it acquires G, sets the clock, and
-    // pumps due timers), which resolves the group + publishes + routes the
-    // caller directly from this coordinator thread (owner routing via the
-    // stored caller_owner_, NOT this thread's g_worker which is null). The
-    // parked worker observes the wake and runs the resumed caller.
+    // deterministic clock past the deadline SYNCHRONOUSLY. advance_clock acquires
+    // global_mtx_, sets the logical clock, pumps due timers (resolving the group
+    // + publishing + routing the caller via the stored caller_owner_), and
+    // signals the wake source — all in this one call. The parked worker observes
+    // the wake and runs the resumed caller. No wall-clock polling dependency
+    // (contrast set_clock, which only bumps the atomic and leaves expiry to the
+    // worker's 1ms park-poll re-drain).
     std::thread clock_advancer([&] {
         spin_until_waiting_select(f.sched, 1);
-        stest::E11TimerControl::set_clock(f.sched, deadline + 1);
-        // set_clock updates the atomic; the worker loop's pump observes it on
-        // its next drain. To make this deterministic without sleep_for, nudge
-        // the wake source via a wake handle so the parked worker re-drains
-        // promptly. (The bounded park timeout also re-drains; the wake handle
-        // removes the timing dependency.)
+        stest::E13SelectTimerSeam::advance_clock(f.sched, deadline + 1);
     });
 
     f.sched.run_live(1);

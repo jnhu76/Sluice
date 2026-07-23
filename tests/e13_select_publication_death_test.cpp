@@ -261,12 +261,39 @@ void child_ctl_valid_publication() {
     std::_Exit(0);
 }
 
+// SD-SELECT — suspended-Select teardown leak. A Scheduler with a non-zero
+// waiting_select_count_ (a suspended SelectGroup committed Waiting + Armed but
+// never resolved) is destroyed. The ~Scheduler quiescence invariant must fire:
+// waiting_select_count_ != 0 fails the teardown assertion (P1-2 corrective).
+// PreparedGroup's constructor runs the real P4 claim+finalize (which does NOT
+// touch waiting_select_count_) AND mirrors the admission suspension commit via
+// inc_waiting_select_for_test, leaving the count at 1. By NOT calling
+// select_publish (which would decrement it back to 0), we leave the Scheduler
+// in the Event-only suspended-Select shape that escapes BOTH the ACTIVE-timer
+// and active_deadline_count_ teardown checks (it has no live Timer). Only the
+// waiting_select_count_ invariant catches it. As PreparedGroup g goes out of
+// scope, ~Scheduler asserts and terminates -> exit 86.
+void child_sd_select_suspended_leak() {
+    install_death_handlers();
+    {
+        PreparedGroup g;
+        // PreparedGroup left waiting_select_count_ == 1 (claim+finalize do not
+        // decrement it; only select_publish_locked does, which we omit). Do NOT
+        // publish — emulate an abandoned suspended Select. Destruction of g
+        // (end of scope) destroys the Scheduler and trips the teardown assert.
+        (void)g;
+    }
+    // Unreachable: ~Scheduler terminated during the scope exit above.
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 void dispatch_child(const std::string& name) {
     if      (name == "SN-2")  child_sn2_duplicate_publication();
     else if (name == "SN-10") child_sn10_open_authority_at_publication();
     else if (name == "FP")    child_fp_suspended_caller_not_waiting();
     else if (name == "MG")    child_mg_multi_group_event();
     else if (name == "CTL")   child_ctl_valid_publication();
+    else if (name == "SD-SELECT") child_sd_select_suspended_leak();
     std::cerr << "[death] unknown child case: " << name << "\n";
     std::_Exit(sluice_death_test::kChildTestFailExit);
 }
@@ -288,11 +315,13 @@ int run_parent() {
     must_term("FP");     // caller not Waiting -> fail fast before routing
     must_term("MG");     // multi-group Event -> P8 stage fail-fast before CAS
     must_zero("CTL");    // valid publication -> normal exit 0
+    must_term("SD-SELECT");  // suspended-Select teardown leak -> ~Scheduler assert
 
     if (failures == 0) {
         std::cout << "ALL DEATH TESTS PASSED (SN-2 duplicate-publish / "
                      "SN-10 open-authority / FP caller-not-waiting / "
-                     "MG multi-group-event-stage / CTL valid-publication)\n";
+                     "MG multi-group-event-stage / CTL valid-publication / "
+                     "SD-SELECT suspended-teardown-leak)\n";
         return 0;
     }
     std::cout << failures << " death-test case(s) FAILED\n";

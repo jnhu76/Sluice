@@ -198,18 +198,19 @@ SLUICE_TEST_CASE(st16_multi_worker_owner_routing) {
 }
 
 // ===========================================================================
-// ST-17 — exactly one runnable publication (Event + Timer contention)
+// ST-17 — exactly one runnable publication under TRUE two-resolver contention
 //
-//   One suspended group with Event + Timer arms. Deterministic contention:
-//   first resolver reaches the publication path while holding G; a second
-//   resolver attempt observes the retired/unlinked authority and cannot
-//   publish. Assert: winner stable, result publication delta == 1, runnable
-//   publication delta == 1, caller resumes once.
+//   One suspended group with Event + Timer arms. Two resolver OS threads
+//   contend on global_mtx_: the Event resolver wins the group CAS and is parked
+//   by the e13_admission_claimed seam AFTER its CAS, BEFORE finalization, WHILE
+//   HOLDING G. The Timer resolver (advance_clock) is a separate thread that
+//   BLOCKS on global_mtx_ — genuine lock contention, not sequential
+//   serialization. Releasing the seam lets the Event resolver finalize +
+//   publish; the Timer resolver then acquires G, observes the Completed group,
+//   and returns claim-lost without a second publish.
 //
-//   Deterministic race: drive BOTH Event::set() and a due-Timer advance from
-//   the same coordinator after arm-commit. Because both run under global_mtx_,
-//   they serialize: whichever acquires G first wins, the second sees the
-//   finalized group and the resolver returns claim-lost (no second publish).
+//   Mechanical proof: winner stable, result publication delta == 1, runnable
+//   publication delta == 1, caller resumes exactly once.
 // ===========================================================================
 SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
     if constexpr (!sa::fiber_ctx::supported) return;
@@ -220,6 +221,7 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
     SelectResult captured;
     std::atomic<bool> resumed{false};
     std::atomic<unsigned> resume_count{0};
+    std::atomic<bool> timer_resolver_acquired_g{false};
 
     Fiber fb;
     fb.set_entry([&](Fiber&) {
@@ -234,20 +236,59 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
     f.sched.spawn(fb);
 
     stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    // Park the Event resolver AFTER the winner CAS succeeds, BEFORE
+    // finalization, WHILE HOLDING global_mtx_ (the seam fires inside
+    // select_process_group_locked, which runs under G).
+    stest::E13SelectAdmissionSeam::arm_admission_claimed(f.sched);
 
-    std::thread contender([&] {
+    // The caller Fiber only reaches the select() suspension once a worker runs
+    // it (under run_live below). So the resolver + coordinator threads must run
+    // CONCURRENTLY with run_live (which blocks the main thread until the run is
+    // quiescent). A dedicated coordinator thread orchestrates the contention
+    // sequence; the main thread drives run_live.
+    std::thread event_resolver([&] {
         spin_until_waiting_select(f.sched, 1);
-        // Drive BOTH resolvers. They serialize under global_mtx_: the first to
-        // acquire G wins + publishes; the second observes the Completed group
-        // (Event arm unlinked / Timer reg retired) and the resolver returns
-        // claim-lost without a second publish.
-        ev.set();
-        stest::E13SelectTimerSeam::advance_clock(f.sched, deadline + 1);
+        ev.set();  // acquires G -> resolve_event -> process_group -> CAS wins ->
+                   // parked at e13_admission_claimed HOLDING G.
     });
 
-    f.sched.run_live(1);
-    contender.join();
+    std::thread timer_resolver;
+    std::thread coordinator([&] {
+        // (1) Wait until the Event resolver is genuinely paused mid-finalize
+        // holding G. Observed on the seam's own mutex (no G acquisition), so
+        // this thread does not deadlock against the parked Event resolver.
+        stest::E13SelectAdmissionSeam::wait_admission_claimed_paused(f.sched);
+        // (2) NOW start the Timer resolver: with the Event resolver parked
+        // holding G, the Timer resolver's advance_clock BLOCKS on global_mtx_.
+        // This is the load-bearing contention window: two resolvers, one
+        // holding G mid-finalize, one blocked on it.
+        timer_resolver = std::thread([&] {
+            stest::E13SelectTimerSeam::advance_clock(f.sched, deadline + 1);
+            // Returned: it acquired G (after the Event resolver released it).
+            // The Timer registration was RETIRED by the Event winner's
+            // finalizer, so the pump's state-before-arm rule pops it and SKIPS
+            // without reading arm_ or publishing (the I4 closure, proven by
+            // ST-13). No second result/runnable publication occurs.
+            timer_resolver_acquired_g.store(true, std::memory_order_release);
+        });
+        // (3) Release the Event resolver: it finalizes the winner + losers +
+        // publishes + routes the caller, then releases G. The Timer resolver
+        // then acquires G and pops the RETIRED block (stale-skip, no publish).
+        stest::E13SelectAdmissionSeam::release_admission_claimed(f.sched);
+    });
 
+    // Drive the run: the worker runs the caller to select() suspension, the
+    // Event resolver wins + parks holding G, the Timer resolver blocks on G,
+    // and the coordinator releases the seam so the Event resolver publishes.
+    // run_live returns once the caller resumes + completes and the run is
+    // quiescent.
+    f.sched.run_live(1);
+    event_resolver.join();
+    coordinator.join();
+    if (timer_resolver.joinable()) timer_resolver.join();
+
+    SLUICE_CHECK_MSG(timer_resolver_acquired_g.load(),
+                     "Timer resolver eventually acquired G and returned");
     SLUICE_CHECK_MSG(resumed.load(), "caller resumed exactly once");
     SLUICE_CHECK_MSG(resume_count.load() == 1, "caller resume count == 1");
     SLUICE_CHECK_MSG(captured.has_winner(), "winner produced");
@@ -259,6 +300,104 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
         "exactly one runnable publication under contention");
     SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(f.sched) == 0,
                      "waiting_select_count returned to zero");
+}
+
+// ===========================================================================
+// P6-LW-MW — wake-before-switch + multi-worker steal exclusion
+//
+//   Causal proof (P1-1 corrective) that the suspend_switch_pending authority
+//   prevents a thief worker from executing a Fiber whose owner has committed
+//   Waiting+Armed+routed but has NOT yet completed its physical suspend
+//   context_switch.
+//
+//   1. Caller F pinned to worker 0; F suspends at e13_select_suspend_before_switch
+//      (after G release, with suspend_switch_pending RAISED).
+//   2. Coordinator resolves the Event: routes F Runnable onto worker 0's
+//      local_runnable — while worker 0 is still parked at the seam.
+//   3. Worker 1 is driven by run_live(2); its steal attempts observe
+//      worker0.suspend_switch_pending==true and MUST refuse F's ticket until
+//      worker 0 completes its context_switch.
+//   4. Release the seam: worker 0 completes the switch (clears the flag), then
+//      runs the resumed caller exactly once.
+//
+//   Mechanical proof: fiber body entry count == 1, resume count == 1, exactly
+//   one runnable publication. NOT "did not crash": the corruption a missing
+//   guard would cause (double entry / stale ctx) is caught by the counts.
+// ===========================================================================
+SLUICE_TEST_CASE(p6_lw_mw_steal_before_switch_excluded) {
+    if constexpr (!sa::fiber_ctx::supported) return;
+    MWFixture f;
+    Event ev(f.sched, /*initially_set=*/false);
+
+    SelectResult captured;
+    // Mechanical identity/counters: record entry/resume counts and the worker
+    // each ran on. A double-entry (the race P1-1 closes) would make
+    // entry_count > 1 or resume_count > 1.
+    std::atomic<unsigned> entry_count{0};
+    std::atomic<unsigned> entry_worker{static_cast<unsigned>(-1)};
+    std::atomic<unsigned> resume_count{0};
+    std::atomic<unsigned> resume_worker{static_cast<unsigned>(-1)};
+
+    Fiber fb;
+    fb.set_entry([&](Fiber&) {
+        entry_count.fetch_add(1, std::memory_order_acq_rel);
+        entry_worker.store(Scheduler::current_worker_id(),
+                           std::memory_order_release);
+        captured = sa::select(f.sched, EventSelectCase{ev});
+        resume_count.fetch_add(1, std::memory_order_acq_rel);
+        resume_worker.store(Scheduler::current_worker_id(),
+                            std::memory_order_release);
+    });
+    FiberStack sw;
+    SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
+    // Deterministic owner placement on worker 0.
+    f.sched.spawn_on(fb, /*worker_id=*/0);
+
+    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    // Park the caller at the suspend seam (after G release, before the
+    // physical context_switch), with suspend_switch_pending RAISED.
+    stest::E13SelectPublicationSeam::arm_suspend_before_switch(f.sched);
+
+    std::thread resolver([&] {
+        // Wait until the caller has committed Waiting + Armed + the suspend
+        // authority (observed via the seam pause, which fires AFTER the flag is
+        // raised). Then resolve: this routes F Runnable onto worker 0's
+        // local_runnable while worker 0 is still parked at the seam. Worker 1
+        // (looping under run_live) observes worker0.suspend_switch_pending==
+        // true on its steal attempts and MUST skip the routed ticket.
+        stest::E13SelectPublicationSeam::wait_suspend_before_switch_paused(f.sched);
+        ev.set();
+        // Give worker 1 a bounded window to attempt (and be refused) a steal of
+        // the routed ticket while the flag is still raised. NOT a correctness
+        // dependency — the mechanical counts below catch a double-entry — but
+        // it widens the window in which the exclusion is exercised.
+        for (int i = 0; i < 64; ++i) std::this_thread::yield();
+        // Release the seam: worker 0 completes its context_switch, clears the
+        // authority, then runs the resumed caller exactly once.
+        stest::E13SelectPublicationSeam::release_suspend_before_switch(f.sched);
+    });
+
+    // 2 workers. Worker 0 parks at the seam (suspend authority raised). Worker 1
+    // loops and attempts try_steal; while the flag is raised it refuses worker
+    // 0's routed ticket. run_live joins both workers, so it returns only after
+    // the resolver releases the seam and worker 0 finishes the caller.
+    f.sched.run_live(2);
+    resolver.join();
+
+    SLUICE_CHECK_MSG(entry_count.load() == 1,
+                     "fiber body entered exactly once (no double-entry via steal)");
+    SLUICE_CHECK_MSG(resume_count.load() == 1,
+                     "fiber resumed exactly once (no duplicate resume)");
+    SLUICE_CHECK_MSG(entry_worker.load() == 0,
+                     "fiber first entered on its owner worker 0");
+    SLUICE_CHECK_MSG(captured.has_winner(), "winner produced");
+    SLUICE_CHECK_MSG(captured.kind() == SelectKind::event, "Event winner");
+    SLUICE_CHECK_MSG(
+        stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
+        "exactly one runnable publication (enqueue)");
+    SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(f.sched) == 0,
+                     "waiting_select_count returned to zero");
+    SLUICE_CHECK_MSG(fb.state() == FiberState::done, "caller fiber reached done");
 }
 
 // ===========================================================================

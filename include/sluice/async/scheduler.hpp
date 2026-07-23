@@ -166,6 +166,22 @@ struct WorkerState {
     std::condition_variable inbox_cv;
     std::atomic<bool> active{false};  // this worker is part of a coordinated run
 
+    // E13 P6-C1 (P1-1 corrective): suspend-switch execution authority that
+    // closes the wake-before-physical-context-switch window. Raised by the
+    // suspending Fiber's owner AFTER global_mtx_ is released but BEFORE the
+    // physical context_switch (so a resolver may have already routed the
+    // caller Runnable ticket onto this worker's local_runnable), and cleared
+    // AFTER the context_switch returns control to the scheduler continuation
+    // (the CPU context is then saved). try_steal reads this under global_mtx_
+    // and refuses to steal a ticket from a victim that is mid-suspension:
+    // resuming such a ticket on a thief would re-enter a Fiber context whose
+    // rsp/rbp/rip have NOT yet been saved by the in-flight switch. Atomic
+    // (NOT guarded_by global_mtx_): the owner sets/clears it OUTSIDE any lock
+    // around context_switch; a thief observes it under global_mtx_, and the
+    // release/acquire pair on the atomic establishes happens-before between
+    // the clear-store and the thief's subsequent load.
+    std::atomic<bool> suspend_switch_pending{false};
+
     // E9 park-admission per-worker state (ADR §9.4.2 / §9.4.5).
     // observed_epoch is the wake_epoch_ value observed at the instant this
     // worker COMMITTED to park (recorded under wake_mtx_). The cv.wait

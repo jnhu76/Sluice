@@ -167,6 +167,21 @@ Scheduler::~Scheduler() {
     assert(active_deadline_count_ == 0 &&
            "~Scheduler: active_deadline_count_ != 0 (a timer registration was "
            "not retired/consumed before teardown)");
+    // E13 P6-C1 (P1-2 corrective): the suspended-Select quiescence invariant.
+    // An Event-only suspended Select (no active Timer, no ordinary WaitQueue,
+    // no backend op) escapes BOTH checks above — active_deadline_count_==0 and
+    // no ACTIVE SelectTimerRegistration — yet it leaves a live SelectGroup
+    // Armed, an intrusive SelectArmSlot in the Event's SelectPort, and an
+    // unfulfilled runnable obligation. waiting_select_count_ is the minimal
+    // accounting that closes this gap: it was incremented at the no-ready
+    // suspension commit and decremented exactly once at suspended publication,
+    // so a non-zero value at teardown means a suspended caller was abandoned.
+    // Read without global_mtx_ (single-threaded post-run-join, matching the
+    // two asserts above). Debug-only; absent in release (NDEBUG).
+    assert(waiting_select_count_ == 0 &&
+           "~Scheduler: waiting_select_count_ != 0 (a suspended SelectGroup "
+           "remains Armed — an Event-only Select with no active Timer escapes "
+           "the timer teardown checks; caller contract violation)");
 }
 
 // ---- E9 SchedulerWakeHandle::notify + bound ----
@@ -3368,6 +3383,17 @@ bool Scheduler::try_steal(WorkerState* thief) {
     for (unsigned k = 1; k < n; ++k) {
         unsigned vidx = (thief->id + k) % n;
         WorkerState* victim = workers_[vidx].get();
+        // P1-1 corrective (P6-C1 §9.2): refuse to steal ANY ticket from a victim
+        // that is mid-suspend-context-switch. A resolver may have routed a
+        // Runnable ticket onto this victim's local_runnable AFTER the victim
+        // released global_mtx_ but BEFORE its physical context_switch saved the
+        // fiber's CPU context. Resuming that ticket here would re-enter a stale
+        // ctx. Skip the whole victim; the next suspend cycle re-arms the flag
+        // only around its own switch. acquire load pairs with the release
+        // stores in select.cpp's suspend path.
+        if (victim->suspend_switch_pending.load(std::memory_order_acquire)) {
+            continue;
+        }
         Fiber* stolen = nullptr;
         {
             std::lock_guard<std::mutex> vlk(victim->inbox_mtx);
