@@ -1,4 +1,4 @@
-// e12_async_condition_test — Fiber-suspending async condition variable
+// async_condition_primitive_test — Fiber-suspending async condition variable
 // (sluice-CORE-E12-D).
 //
 // Deterministic production tests for the AsyncCondition built on the closed

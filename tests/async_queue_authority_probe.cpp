@@ -1,4 +1,4 @@
-// e12_async_queue_authority_probe
+// async_queue_authority_probe
 //
 // Compile-time + run-time probe for the E12-E Queue LINEAR-CAPABILITY
 // foundation (E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2 §4):

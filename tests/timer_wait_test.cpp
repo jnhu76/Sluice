@@ -1,4 +1,4 @@
-// e11_timer_wait_test — Deadline / Timer Wait Integration (sluice-CORE-E11).
+// timer_wait_test — Deadline / Timer Wait Integration (sluice-CORE-E11).
 //
 // Deterministic production tests for the E11 deadline/timer wait integration.
 // Observed ONLY through the Scheduler integration seams + the public lock-free

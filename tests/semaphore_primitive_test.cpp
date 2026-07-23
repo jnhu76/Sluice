@@ -1,4 +1,4 @@
-// e12_semaphore_test — Async counting Semaphore (sluice-CORE-E12-B).
+// semaphore_primitive_test — Async counting Semaphore (sluice-CORE-E12-B).
 //
 // Deterministic production tests for the async counting Semaphore built on the
 // closed E10/E11/E12-A wait substrate. Observed ONLY through the SEALED

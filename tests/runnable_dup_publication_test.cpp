@@ -1,4 +1,4 @@
-// e7_dup_publication_test — focused regression for the E7-T2 root cause.
+// runnable_dup_publication_test — focused regression for the E7-T2 root cause.
 //
 // ROOT CAUSE PROVEN (see investigation): a Fiber was published into a runnable
 // queue MORE THAN ONCE during one runnable epoch. The producer of the second

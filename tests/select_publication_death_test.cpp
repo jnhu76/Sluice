@@ -1,4 +1,4 @@
-// e13_select_publication_death_test — E13 P6 publication invariant death
+// select_publication_death_test — E13 P6 publication invariant death
 // tests (production-test-plan.md §3 SN-2, SN-10 + FP suspended-caller-state +
 // MG multi-group-P8-stage-boundary + CTL valid-publication control).
 //
@@ -344,7 +344,7 @@ int main(int argc, char** argv) {
 #include <iostream>
 
 int main() {
-    std::cout << "NOT RUN: e13_select_publication_death_test is POSIX-only "
+    std::cout << "NOT RUN: select_publication_death_test is POSIX-only "
                  "(fork/re-exec death-test runner).\n";
     return 0;
 }

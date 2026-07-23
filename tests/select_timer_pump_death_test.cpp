@@ -1,4 +1,4 @@
-// e13_select_timer_pump_death_test — E13 Select timer pump + destruction +
+// select_timer_pump_death_test — E13 Select timer pump + destruction +
 // authority-seal death tests (P3 + P3 Corrective).
 //
 // Verifies four invariant families:
@@ -307,7 +307,7 @@ int main(int argc, char** argv) {
 #include <iostream>
 
 int main() {
-    std::cout << "e13_select_timer_pump_death_test: NOT RUN on this platform "
+    std::cout << "select_timer_pump_death_test: NOT RUN on this platform "
                  "(POSIX fork/exec harness only; see death_test_runner_posix.hpp)\n";
     return 0;
 }

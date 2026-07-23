@@ -1,4 +1,4 @@
-// e12_async_queue_test — sluice::async::AsyncQueue (sluice-CORE-E12-E).
+// async_queue_primitive_test — sluice::async::AsyncQueue (sluice-CORE-E12-E).
 //
 // Exercises the E12-E Queue through the non-template QueuePort authority +
 // QueueItemFactory (the public AsyncQueue<T> wrapper is P8; until then we
@@ -751,7 +751,7 @@ SLUICE_TEST_CASE(e12_queue_pr12_pop_result_move_assign_states) {
 //       across worker boundaries. The test uses run_live(2) so the run stays
 //       resident while the producer is parked (mirrors e12_mtx T19).
 //
-//   G3. Transition coverage summary — the e12_async_queue_test suite as a
+//   G3. Transition coverage summary — the async_queue_primitive_test suite as a
 //       whole exercises 18/19 canonical transitions (every state-machine path
 //       except P8 ProducerTimedReturn, a typed-wrapper-only concern that adds
 //       no QueuePort state) and 6/6 publication paths. See the table in

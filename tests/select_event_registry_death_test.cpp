@@ -1,4 +1,4 @@
-// e13_select_event_registry_death_test — E13 Select registry death tests (P2).
+// select_event_registry_death_test — E13 Select registry death tests (P2).
 //
 // Verifies the E13 registry contract violations must terminate via assert() or
 // ~Event destructor assertion. Each case runs in a forked child that re-execs
@@ -229,7 +229,7 @@ int main(int argc, char** argv) {
 #include <iostream>
 
 int main() {
-    std::cout << "e13_select_event_registry_death_test: NOT RUN on this platform "
+    std::cout << "select_event_registry_death_test: NOT RUN on this platform "
                  "(POSIX fork/exec harness only; see death_test_runner_posix.hpp)\n";
     return 0;
 }

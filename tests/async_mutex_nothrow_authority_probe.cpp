@@ -1,4 +1,4 @@
-// e12_async_mutex_nothrow_authority_probe
+// async_mutex_nothrow_authority_probe
 //
 // Compile-time + run-time probe for the ASYNC-MUTEX-NOTHROW contract
 // (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1 §I1).

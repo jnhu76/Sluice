@@ -1,4 +1,4 @@
-// e13_select_claim_death_test — E13 P4 Select claim/finalization death tests.
+// select_claim_death_test — E13 P4 Select claim/finalization death tests.
 //
 // Verifies the P4 fail-fast assertions terminate the program:
 //
@@ -351,7 +351,7 @@ int main(int argc, char** argv) {
 #include <iostream>
 
 int main() {
-    std::cout << "e13_select_claim_death_test: NOT RUN on this platform "
+    std::cout << "select_claim_death_test: NOT RUN on this platform "
                  "(POSIX fork/exec harness only; see death_test_runner_posix.hpp)\n";
     return 0;
 }

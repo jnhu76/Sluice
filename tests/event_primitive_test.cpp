@@ -1,4 +1,4 @@
-// e12_event_test — Async Event synchronization primitive (sluice-CORE-E12-A).
+// event_primitive_test — Async Event synchronization primitive (sluice-CORE-E12-A).
 //
 // Deterministic production tests for the persistent manual-reset Event built on
 // the closed E10/E11 wait substrate. Observed ONLY through the SEALED Event

@@ -1,4 +1,4 @@
-// e12_cross_primitive_parity_test
+// async_sync_cross_primitive_parity_test
 //
 // Cross-primitive semantic parity tests (E10-E12-ASYNC-SYNC-API-SEMANTIC-
 // CLOSURE-1). This TU supplies a deliberately narrow slice of the aggregate

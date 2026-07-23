@@ -1,4 +1,4 @@
-// e13_select_type — E13 Select type construction and compile-fail gates (P1).
+// select_type_test — E13 Select type construction and compile-fail gates (P1).
 //
 // Tests the public value types (SelectResult, EventSelectCase, TimerSelectCase),
 // the internal type graph (SelectGroup, SelectArmSlot, SelectPort,

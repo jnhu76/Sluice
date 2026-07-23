@@ -1,4 +1,4 @@
-// e12_semaphore_authority_probe — NEGATIVE compile probe (E12-B, F-SEM-SEAM-1).
+// semaphore_authority_probe — NEGATIVE compile probe (E12-B, F-SEM-SEAM-1).
 //
 // This file MUST NOT COMPILE. It is the mechanical gate that proves ordinary
 // production code CANNOT obtain a Semaphore's underlying WaitQueue and therefore

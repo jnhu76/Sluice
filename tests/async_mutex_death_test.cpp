@@ -1,4 +1,4 @@
-// e12_async_mutex_death_test
+// async_mutex_death_test
 //
 // Verifies the ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1 §F death-test
 // obligations: an underlying Mutex acquisition failure must terminate the
@@ -176,7 +176,7 @@ int main(int argc, char** argv) {
 #include <iostream>
 
 int main() {
-    std::cout << "e12_async_mutex_death_test: NOT RUN on this platform "
+    std::cout << "async_mutex_death_test: NOT RUN on this platform "
                  "(POSIX fork/exec harness only; see death_test_runner_posix.hpp)\n";
     return 0;
 }

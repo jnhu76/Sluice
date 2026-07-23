@@ -1,4 +1,4 @@
-// e12_async_mutex_test — Fiber-suspending Async Mutex (sluice-CORE-E12-C).
+// async_mutex_primitive_test — Fiber-suspending Async Mutex (sluice-CORE-E12-C).
 //
 // Deterministic production tests for the Fiber-suspending Async Mutex built on
 // the closed E10/E11/E12-A/E12-B wait substrate. Observed ONLY through the

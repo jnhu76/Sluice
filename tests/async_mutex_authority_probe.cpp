@@ -1,4 +1,4 @@
-// e12_async_mutex_authority_probe — NEGATIVE compile probe (E12-C, F-MTX-SEAM-1).
+// async_mutex_authority_probe — NEGATIVE compile probe (E12-C, F-MTX-SEAM-1).
 //
 // This file MUST NOT COMPILE. It is the mechanical gate that proves ordinary
 // production code CANNOT obtain an AsyncMutex's underlying WaitQueue or owner

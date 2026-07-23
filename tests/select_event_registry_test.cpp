@@ -1,4 +1,4 @@
-// e13_select_event_registry — E13 Event Select private registry tests (P2).
+// select_event_registry_test — E13 Event Select private registry tests (P2).
 //
 // Tests the sealed per-Event SelectPort: link/unlink/scan operations,
 // Event SET Phase-1 scan integration, idempotence, serialization, and

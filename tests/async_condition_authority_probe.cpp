@@ -1,4 +1,4 @@
-// e12_async_condition_authority_probe — NEGATIVE compile probe (E12-D, §1.4).
+// async_condition_authority_probe — NEGATIVE compile probe (E12-D, §1.4).
 //
 // This file MUST NOT COMPILE under each PROBE_CASE. It is the mechanical gate
 // that proves ordinary production code CANNOT:

@@ -1,4 +1,4 @@
-// e10_corrective_c5_test — E10-CORRECTIVE-2 C5 Scheduler-integrated middle-node
+// wait_queue_unlink_topology_test — E10-CORRECTIVE-2 C5 Scheduler-integrated middle-node
 // concurrent-unlink topology stress (sluice-CORE-E10).
 //
 // E10-CORRECTIVE-2 (this file): the old C5 used privileged test access

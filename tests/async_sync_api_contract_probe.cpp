@@ -1,4 +1,4 @@
-// e12_api_contract_probes
+// async_sync_api_contract_probe
 //
 // Cross-primitive compile-time contract probe (E10-E12-ASYNC-SYNC-API-SEMANTIC-
 // CLOSURE-1). A SEPARATE probe TU, mirroring the

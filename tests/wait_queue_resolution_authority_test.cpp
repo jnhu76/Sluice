@@ -1,4 +1,4 @@
-// e10_corrective_c2_c3_test — E10-CORRECTIVE C2 resolution-authority + C3
+// wait_queue_resolution_authority_test — E10-CORRECTIVE C2 resolution-authority + C3
 // cancel_all surface (sluice-CORE-E10). E10-CORRECTIVE-2 retains this test
 // unchanged in substance: the resolution-authority + cancel_all closures from
 // the first corrective remain in force. The static_asserts (T2/T6) still guard

@@ -1,4 +1,4 @@
-// e10_corrective_c1_test — E10-CORRECTIVE C1 external wake-domain classification
+// wait_queue_external_wake_test — E10-CORRECTIVE C1 external wake-domain classification
 // regression (sluice-CORE-E10).
 //
 // C1 (accepted defect): Scheduler::await_wait increments/owns waiting_waitq_count_,

@@ -1,4 +1,4 @@
-// e10_scheduler_wait_test — Scheduler integration of WaitNode/WaitQueue
+// scheduler_wait_test — Scheduler integration of WaitNode/WaitQueue
 // (sluice-CORE-E10). Integration tests with REAL fibers driving the canonical
 // scheduler wake seam. See docs/e10-waitnode-wait-queue.md and the E10 brief
 // §11 (C10, C11).

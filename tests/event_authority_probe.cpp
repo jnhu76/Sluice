@@ -1,4 +1,4 @@
-// e12_event_authority_probe — NEGATIVE compile probe (E12-A-EVENT-CORRECTIVE-1,
+// event_authority_probe — NEGATIVE compile probe (E12-A-EVENT-CORRECTIVE-1,
 // Corrective A1 / T24).
 //
 // This file MUST NOT COMPILE. It is the mechanical gate that proves ordinary

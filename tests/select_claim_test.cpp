@@ -1,4 +1,4 @@
-// e13_select_claim — E13 P4 Select central claim + winner/loser finalization
+// select_claim_test — E13 P4 Select central claim + winner/loser finalization
 // tests.
 //
 // Drives the P4 core (Scheduler::select_process_group_locked) and the

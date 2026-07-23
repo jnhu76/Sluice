@@ -1,4 +1,4 @@
-// e13_select_timer_registration — E13 Select Timer registration tests (P3).
+// select_timer_registration_test — E13 Select Timer registration tests (P3).
 //
 // Verifies the stable Select timer substrate: state transitions, address
 // stability after single-node splice, tagged deadline-heap ordering, ordinary

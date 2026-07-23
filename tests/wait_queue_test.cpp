@@ -1,4 +1,4 @@
-// e10_wait_queue_test — WaitNode / WaitQueue cancellation-safe protocol
+// wait_queue_test — WaitNode / WaitQueue cancellation-safe protocol
 // (sluice-CORE-E10). E10-CORRECTIVE-2: rewritten through the PRODUCTION
 // Scheduler integration authority. The protocol is observed ONLY through:
 //
