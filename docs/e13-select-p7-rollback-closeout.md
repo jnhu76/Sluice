@@ -208,3 +208,85 @@ with their stable blocks Scheduler-owned-but-RETIRED (the pump will lazily
 reclaim them; the caller-frame `arm.timer.stable_reg_` becomes a dangling pointer
 that is never dereferenced again — the pump's state-before-arm rule, §12). This is
 the same lazy-reclamation boundary already proven by P3/P6.
+
+---
+
+## Results (P7 final)
+
+### §32 Production symbol audit (release `sluice_async.a`)
+
+```text
+injection symbols (SelectRegistrationFailure / rollback_should_inject /
+                   configure_rollback_fail):   0   (absent — correct)
+real private rollback helpers (select_rollback_registration_locked /
+                               select_begin_rollback_locked): 2   (present — intended)
+```
+
+The production `sluice_async` carries the real private rollback helpers and
+NONE of the controller-only injection surface.
+
+### §29 Static source gates (rollback code region)
+
+```text
+select_publish_locked / make_runnable / route_runnable_locked /
+context_switch / select_process_group / claim_winner calls in rollback: 0
+canonical Event unlink path (select_event_unlink_locked):              1 call (+1 comment)
+canonical Timer retirement authority (select_timer_retire_locked):      1 call
+direct active_deadline_count_ decrement in rollback:                    0 (comment only)
+direct Timer state store in rollback:                                   0
+P8 broadcast worklist in rollback:                                      0
+public SelectRegistrationFailure symbol:                                0
+```
+
+### §30 Stability (reproducible via scripts/verify-e13-p7-stability.sh)
+
+```text
+P7-T1  failure before first registration:  1000/1000 debug, 1000/1000 release
+P7-T2  Event prefix matrix:                2000/2000 debug, 1000/1000 release
+P7-T3  Timer prefix matrix:                2000/2000 debug, 1000/1000 release
+P7-T4  mixed prefix matrix:                2000/2000 debug, 1000/1000 release
+P7-T5  all-registered-before-Finish:       1000/1000 debug, 1000/1000 release
+P7-T8  stale Timer after unwind:           2000/2000 ASan
+P7-T9  rollback isolation:                 500/500 TSan (full binary)
+P7-T10 repeated rollback:                  100 process runs x 1000 ops (release)
+P7-T11 success after rollback:             1000/1000 debug
+P6 suspended:                              1000/1000 release
+P6 multi_worker:                           500/500 release
+```
+
+### §31 Sanitizers
+
+```text
+ASan:  P7-T8 2000/2000 + full rollback binary 100/100   PASS (no UAF, no leak)
+UBSan: rollback 200/200 + type 200/200                  PASS (no union/overflow/enum UB)
+TSan:  full rollback binary 500/500                     PASS (0 races, 0 deadlocks)
+```
+
+Death-test sanitizer limitation (reported honestly, §31): the assert-based
+death tests (all E13 death-test targets, P6 + P7) compile their `assert()`
+checks away under release `NDEBUG`. They are GREEN in debug (asserts enabled)
+and NOT-RUN-by-convention in release; this is a pre-existing repository
+limitation identical on the P7-A baseline, not a P7 regression.
+
+### §X Pre-existing E7 sanitizer debt — signature UNCHANGED
+
+The ASan signature on `e7_coord_test` is byte/stack-equivalent at the P7 head
+and the P7-A baseline:
+
+```text
+SUMMARY: AddressSanitizer: SEGV src/async/scheduler.cpp:1020
+         in Scheduler::await_completion_size
+reached via fiber_entry_bridge (scheduler.cpp:47)
+test case: e7_t4_no_wait_one_under_mw_s1
+```
+
+No Select (`select_*`) frame appears in the trace. Classified: PRE-EXISTING E7
+DEBT. P7 neither fixed it nor introduced a regression.
+
+### Full-suite gate
+
+```text
+all 14 E13 debug Select targets (P1-P7):  GREEN
+production sluice_async (release):         warning-clean
+git diff --check:                          clean
+```
