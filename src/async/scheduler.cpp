@@ -1561,6 +1561,21 @@ void Scheduler::AsyncTestAccess::select_event_forge_stale_home(
     }
     arm.home_ = &event.select_port_;
 }
+
+void Scheduler::AsyncTestAccess::select_event_forge_wrong_home(
+    Scheduler& s, Event& event_a, Event& event_b,
+    detail::SelectArmSlot& arm) {
+    LockGuard lk(s.global_mtx_);
+    assert(&event_a.scheduler_ == &s && &event_b.scheduler_ == &s &&
+           "select_event_forge_wrong_home: Events must belong to this Scheduler");
+    assert(arm.kind == detail::ArmKind::event &&
+           arm.event.event_ == &event_a &&
+           "select_event_forge_wrong_home: arm must be an Event arm bound to event_a");
+    // Point home_ at event_b's port (the wrong Event). The rollback membership
+    // check compares home_ against arm.event.event_->select_port_ (event_a's),
+    // so it fails -> fail fast before any unlink.
+    arm.home_ = &event_b.select_port_;
+}
 #endif
 
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {

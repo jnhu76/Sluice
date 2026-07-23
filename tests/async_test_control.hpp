@@ -598,6 +598,53 @@ struct E13SelectPublicationSeam {
     }
 };
 
+// ---- E13 P7 Select registration-rollback seam + observability (task §18/§19)
+// Thin test-facing facade over the non-installed controller. The production
+// library exposes NONE of this: the synthetic SelectRegistrationFailure type,
+// the failure controller, and the rollback observation are controller-only and
+// absent from production symbols (the production select_admit has no injection
+// branch; this header is never seen by a production TU).
+//
+// fail_after semantics: N = "throw the synthetic exception immediately AFTER
+// exactly N successful arm registrations, before the next one / before
+// FinishRegistration". 0 = before the first registration; arm_count = all arms
+// registered then fail before FinishRegistration (P7-T5, load-bearing).
+struct E13SelectRollbackSeam {
+    using Scheduler = sluice::async::Scheduler;
+    using Observation = sluice_async_test::RollbackObservation;
+    using ArmKind = sluice::async::detail::ArmKind;
+
+    // Configure the synthetic failure boundary for the next select() admission.
+    static void configure_fail_after(Scheduler& s, std::size_t n) noexcept {
+        sluice_async_test::configure_rollback_fail_after(s, n);
+    }
+    // Disable injection.
+    static void disable(Scheduler& s) noexcept {
+        sluice_async_test::reset_rollback_injection(s);
+    }
+    static std::size_t configured_fail_after(Scheduler& s) noexcept {
+        return sluice_async_test::rollback_fail_after(s);
+    }
+    static constexpr std::size_t disabled =
+        sluice_async_test::kRollbackFailAfterDisabled;
+
+    // Read the rollback observation captured by the last failing admission.
+    static Observation observation(Scheduler& s) noexcept {
+        return sluice_async_test::read_rollback_observation(s);
+    }
+
+    // Decode helpers for the raw arm-kind stored in the observation.
+    static bool kind_is_event(std::uint8_t raw) noexcept {
+        return raw == static_cast<std::uint8_t>(ArmKind::event);
+    }
+    static bool kind_is_timer(std::uint8_t raw) noexcept {
+        return raw == static_cast<std::uint8_t>(ArmKind::timer);
+    }
+
+    // The synthetic exception type (rethrown to the test by select_admit's catch).
+    using FailureException = sluice_async_test::SelectRegistrationFailure;
+};
+
 // Short alias used by the P6 tests.
 using AsyncTestAccess = sluice::async::Scheduler::AsyncTestAccess;
 

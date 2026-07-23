@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <stdexcept>
 
 namespace sluice_async_test {
 
@@ -137,6 +138,13 @@ enum class PhaseTag : unsigned char {
     // Holds global_mtx_.
     e13_suspended_before_consume,
 
+    // E13 P7: fired inside select_admit's catch block, AFTER
+    // select_rollback_registration_locked reached Aborted, BEFORE the original
+    // exception is rethrown. A test observing this phase proves the rollback
+    // completed (phase==Aborted) while global_mtx_ is still held. Reached only
+    // via the synthetic failure-injection seam; absent in production.
+    e13_rollback_aborted,
+
     count
 };
 
@@ -200,6 +208,13 @@ struct PublicationSnapshot {
 
 // The controller entry for one Scheduler. Holds one PhaseState per tag. The
 // array is indexed by PhaseTag (cast to size_t). Lookups are O(1).
+//
+// kRollbackFailAfterDisabled is declared here (forward) so the P7 observation
+// fields below can value-initialize it; the full definition with semantics is
+// further down in the §18 fault-injection section.
+inline constexpr std::size_t kRollbackFailAfterDisabled =
+    static_cast<std::size_t>(-1);
+
 struct SchedulerController {
     PhaseState phases[static_cast<std::size_t>(PhaseTag::count)]{};
     // E13 P5 CORRECTIVE: fixed-size boundary snapshots, populated by the
@@ -220,6 +235,23 @@ struct SchedulerController {
     PublicationSnapshot suspended_before_consume_snapshot{};
     std::size_t result_publication_count{0};
     std::size_t runnable_publication_count{0};
+
+    // E13 P7 rollback observability (task §19). Populated by the rollback path
+    // (select_admit catch + the per-arm/orchestrator helpers) under global_mtx_,
+    // read by the test under the controller's own mutex. Fixed-size: the
+    // rollback observation is reset per failing select() call. All fields are
+    // diagnostic-only; none determines production policy.
+    std::size_t rollback_configured_fail_after{kRollbackFailAfterDisabled};
+    std::size_t rollback_successful_registrations{0};
+    std::size_t rollback_begin_count{0};
+    std::size_t rollback_finish_count{0};
+    std::size_t rollback_arm_order_len{0};
+    std::array<std::uint32_t, sluice::async::kSelectMaxArms>
+        rollback_arm_order_indices{};
+    std::array<std::uint8_t, sluice::async::kSelectMaxArms>
+        rollback_arm_order_kinds{};  // ArmKind as raw (0=event,1=timer)
+    std::array<bool, sluice::async::kSelectMaxArms>
+        rollback_event_linked_before{};
 };
 
 // --- Called from scheduler.cpp (under SLUICE_ASYNC_INTERNAL_TESTING) ---
@@ -293,5 +325,97 @@ bool is_paused(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 void release(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 void disarm(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
 void clear_reached(sluice::async::Scheduler& s, PhaseTag tag) noexcept;
+
+// ---- E13 P7: synthetic registration-failure injection (task §18) ----
+//
+// The production library MUST NOT expose SelectRegistrationFailure, failure
+// counters, or any injection symbol (task §32). The seam is therefore owned by
+// the non-installed controller: select_admit (compiled in the variant) queries
+// the controller's configured fail_after on each successful registration under
+// global_mtx_, and throws a non-installed SelectRegistrationFailure when the
+// boundary is reached. The exception type and the controller fields live ONLY
+// under SLUICE_ASYNC_INTERNAL_TESTING and are absent from production symbols.
+//
+// kRollbackFailAfterDisabled means "no injection": the configured value is the
+// whole-machine "fail immediately AFTER this many successful registrations".
+// 0 = fail before the first registration; N = arm_count = fail immediately
+// before FinishRegistration (all arms fully registered). This is load-bearing
+// (P7-T5): a fully-registered but still-Building group must roll back.
+// (Declared above SchedulerController so the observation fields can use it.)
+
+// E13 P7 (task §18): the non-installed synthetic registration-failure
+// exception. select_admit (compiled ONLY in the variant) throws this when the
+// configured fail_after boundary is reached, under global_mtx_. It is caught
+// ONLY by select_admit's own catch, which runs rollback and rethrows it to the
+// test. This type is absent from production symbols (the production select_admit
+// has no injection branch, and this header is never seen by a production TU).
+//
+// The integer payload is an identifying code the test compares for P7-T6
+// (original-exception-preservation). A distinct sentinel avoids any collision
+// with a natural std::exception subtype.
+class SelectRegistrationFailure : public std::runtime_error {
+public:
+    static constexpr int kIdentifyingCode = 0xE137;
+    SelectRegistrationFailure()
+        : std::runtime_error("sluice::async synthetic Select registration "
+                             "failure (test seam)") {}
+    int code() const noexcept { return kIdentifyingCode; }
+};
+
+// Configure the synthetic failure boundary for the NEXT select() admission on
+// `s`. Records the configured N and resets the per-call rollback observation.
+// The value persists until reset_rollback_injection is called (so repeated
+// failing calls on the same Scheduler all inject at N). No-op if no controller.
+void configure_rollback_fail_after(sluice::async::Scheduler& s,
+                                   std::size_t fail_after) noexcept;
+
+// Clear the synthetic failure boundary (next select() does not inject). Also
+// resets the per-call rollback observation. No-op if no controller.
+void reset_rollback_injection(sluice::async::Scheduler& s) noexcept;
+
+// Read the configured fail_after boundary (kRollbackFailAfterDisabled if none).
+std::size_t rollback_fail_after(sluice::async::Scheduler& s) noexcept;
+
+// ---- E13 P7: rollback observability (task §19) ----
+//
+// The rollback observation is a fixed-size snapshot captured by the rollback
+// path under global_mtx_ and read by the test under the controller's own mutex.
+// All fields are diagnostic-only evidence; none determines production policy.
+// Indices are recorded in the actual reverse registration order processed.
+struct RollbackObservation {
+    std::size_t configured_fail_after{kRollbackFailAfterDisabled};
+    std::size_t successful_registrations{0};
+    std::size_t begin_count{0};
+    std::size_t finish_count{0};
+    std::size_t arm_order_len{0};
+    std::array<std::uint32_t, sluice::async::kSelectMaxArms>
+        arm_order_indices{};
+    std::array<std::uint8_t, sluice::async::kSelectMaxArms>
+        arm_order_kinds{};  // ArmKind raw: 0=event, 1=timer
+    std::array<bool, sluice::async::kSelectMaxArms>
+        event_linked_before{};
+};
+
+// Internal hook called by select_admit's registration loop (under global_mtx_)
+// after exactly `successful` arm registrations. Returns true iff the configured
+// boundary has been reached, so select_admit throws SelectRegistrationFailure.
+// The throw itself happens in select_admit (the controller never throws).
+bool rollback_should_inject_after(sluice::async::Scheduler& s,
+                                  std::size_t successful) noexcept;
+
+// Internal hooks called by the production rollback path (under global_mtx_) to
+// record the observation. All are no-ops without a registered controller.
+void rollback_record_begin(sluice::async::Scheduler& s,
+                           std::size_t successful_registrations) noexcept;
+void rollback_record_arm(sluice::async::Scheduler& s,
+                         std::uint32_t arm_index,
+                         std::uint8_t arm_kind_raw,
+                         bool event_linked_before) noexcept;
+void rollback_record_finish(sluice::async::Scheduler& s) noexcept;
+
+// Read the current rollback observation. Returns a default-constructed
+// observation if no controller is registered for `s`.
+RollbackObservation read_rollback_observation(
+    sluice::async::Scheduler& s) noexcept;
 
 }  // namespace sluice_async_test
