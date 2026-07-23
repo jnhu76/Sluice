@@ -79,11 +79,6 @@ struct SuspendedFixture {
 // caller fiber has committed Waiting inside the admission CS (published via an
 // atomic by the fiber body just before select()). This is causal coordination,
 // not wall-clock timing.
-inline void spin_until(std::atomic<bool>& flag) {
-    while (!flag.load(std::memory_order::acquire)) {
-        std::this_thread::yield();
-    }
-}
 // Spin-yield (NOT sleep_for) until the suspended-Select liveness count
 // reaches `n` — i.e. the caller has committed Waiting + Armed + accounting
 // under global_mtx_. This is the deterministic causal synchronization point

@@ -61,10 +61,6 @@ struct FiberStack {
     std::size_t size() const noexcept { return bytes.size(); }
 };
 
-inline void spin_until_paused(Scheduler& s, stest::PhaseTag tag) {
-    stest::wait_paused(s, tag);
-}
-
 // A minimal context + scheduler + controller fixture with the deterministic
 // clock enabled. select() runs ON a real fiber; the fixture owns the backend.
 struct InlineFixture {

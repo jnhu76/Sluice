@@ -35,6 +35,18 @@ satisfy.
 | `ContractRollbackRelease(i)` | `Scheduler::select_rollback_arm_locked(SelectGroup&, arm_index)`  | `global_mtx_` held         | Event: `SelectPort::unlink_locked`; Timer: `SelectTimerRegistration::retire()` CAS; `arm.state = Retired` |
 | `ContractFinishRollback`   | `SelectGroup::finish_rollback_locked()`                             | `global_mtx_` held         | `group.phase_ = Aborted` (plain write under G)        |
 
+> **P7 note (as-built refinement):** rows 34–36 above are the coarse
+> contract-layer summary. The authoritative Timer-rollback order is **classify
+> the arm Retired FIRST, then retire the registration**
+> (`RollbackCancelTimer(i)` then `RollbackRetireTimer(i)`, §3 below), matching
+> the Timer-loser discipline (SN-9). The as-built P7 authorities are private
+> `Scheduler` members `select_begin_rollback_locked` /
+> `select_rollback_arm_locked` / `select_finish_rollback_locked` /
+> `select_rollback_registration_locked`; the orchestrator processes the
+> registered prefix in reverse order and normalizes the never-registered suffix
+> to Detached before `Aborted`. See `docs/e13-select-p7-rollback-closeout.md`
+> §25 for the full refinement map with preconditions and exception behavior.
+
 ### 1.1 ContractReservation reservation_state
 
 The first scope leaves `reservation_state[i] == None` for every arm (Event and

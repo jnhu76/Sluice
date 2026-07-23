@@ -1402,6 +1402,64 @@ private:
     SelectResult select_admit(detail::SelectCaseDescriptor* descs,
                               std::size_t count);
 
+    // ---- E13 P7 Select registration-rollback authority (private) ----
+    // (docs/e13-select-p7-rollback-closeout.md §25,
+    //  docs/e13-select-type-and-lifetime.md §5.2). Refines the formal actions
+    // ContractBeginRollback / ContractRollbackRelease(i) /
+    // ContractCloseAuthority(i) / ContractFinishRollback of the closed
+    // E13SelectContract.tla model. Rollback is permitted ONLY in the Building
+    // domain (phase==Building, winner==kNoWinner, completion_mode==None, caller
+    // still Running, FinishRegistration NOT yet occurred). All helpers are
+    // noexcept: rollback must never throw and replace the original admission
+    // exception (P7-ABORT-9/10). They may assert/fail-fast on impossible
+    // corruption. PRE: global_mtx_ held continuously across the whole rollback.
+    //
+    // registered_count is the authoritative size of the fully committed
+    // registered prefix [0, registered_count); the catch transaction passes it.
+    // The orchestrator processes the registered prefix in reverse registration
+    // order (registered_count-1 .. 0), normalizes the never-registered suffix
+    // [registered_count, arm_count) to Detached, then finishes to Aborted.
+
+    // Preflight: validate the rollback domain mechanically and set
+    // group.phase = Rollback. Rejects Selecting/Armed/Completed/Consumed/
+    // Aborted/Rollback re-entry (fail-fast). No arm authority is closed here.
+    void select_begin_rollback_locked(detail::SelectGroup& group) noexcept
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Roll back ONE fully-registered arm. Order (normative, matches
+    // E13SelectEventTimer.tla RollbackCancelTimer then RollbackRetireTimer and
+    // the Timer-loser discipline SN-9): classify the arm Retired FIRST, then
+    // close its external callback authority.
+    //   Event: arm.state = Retired; then select_event_unlink_locked (the single
+    //          canonical Event unlink path); Event::set_ is never mutated.
+    //   Timer: arm.state = Retired; then select_timer_retire_locked (the single
+    //          canonical Timer retirement authority — ACTIVE->RETIRED CAS +
+    //          --active_deadline_count_ + recompute, exactly once). A false
+    //          return from retire is an invariant violation -> fail-fast.
+    // arm_count/registered_count validate the index is a registered arm.
+    void select_rollback_arm_locked(detail::SelectGroup& group,
+                                    detail::SelectArmSlot& arm) noexcept
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Prove every registered authority is closed + every never-registered arm
+    // is Detached, then set group.phase = Aborted. Does NOT clear admitted_
+    // (admitted_ && phase==Aborted is the intended destruction proof). Does NOT
+    // publish (no result/runnable). Sets phase ONLY after the postconditions
+    // hold; an open authority (P7-N8) fails fast.
+    void select_finish_rollback_locked(detail::SelectGroup& group,
+                                       detail::SelectArmSlot* arms,
+                                       std::size_t arm_count,
+                                       std::size_t registered_count) noexcept
+        SLUICE_REQUIRES(global_mtx_);
+
+    // The rollback orchestrator called by select_admit's catch. Calls
+    // begin -> reverse per-arm rollback over [0, registered_count) -> suffix
+    // normalization -> finish. noexcept.
+    void select_rollback_registration_locked(
+        detail::SelectGroup& group, detail::SelectArmSlot* arms,
+        std::size_t arm_count, std::size_t registered_count) noexcept
+        SLUICE_REQUIRES(global_mtx_);
+
     // ---- E13 P6 Select unified publication authority ----
     // (docs/e13-select-locking-and-publication.md §5,
     //  docs/e13-select-formal-production-mapping.md §5,
@@ -1626,6 +1684,15 @@ public:
         static void select_event_forge_stale_home(Scheduler& s, Event& event,
                                                   detail::SelectArmSlot& arm);
 
+        // E13 P7 N5: forge an Event arm whose home_ points at the WRONG Event's
+        // SelectPort (arm.event.event_ is event_a, home_ is event_b's port). The
+        // per-arm rollback membership check (arm.home_ == &arm.event.event_->
+        // select_port_) fails -> fail fast BEFORE any unlink mutation, proving
+        // rollback cannot unlink another Event's registry. Acquires global_mtx_.
+        static void select_event_forge_wrong_home(Scheduler& s, Event& event_a,
+                                                  Event& event_b,
+                                                  detail::SelectArmSlot& arm);
+
         // ---- E13 P3 Select timer test accessors ----
         // All route through Scheduler authority. No forgeable test hook; the
         // production target has none of these symbols.
@@ -1821,6 +1888,39 @@ public:
         static void select_publish(Scheduler& s, detail::SelectGroup& group) {
             LockGuard lk(s.global_mtx_);
             s.select_publish_locked(group);
+        }
+
+        // ---- E13 P7 rollback-domain negative drivers (task §21) ----
+        // Call the private production rollback authorities under global_mtx_ on
+        // a test-assembled group, to prove the fail-fast preconditions fire on
+        // every forbidden domain / corrupted membership. Used ONLY by the
+        // rollback death tests; absent in production.
+        static void select_begin_rollback(Scheduler& s,
+                                          detail::SelectGroup& group) {
+            LockGuard lk(s.global_mtx_);
+            s.select_begin_rollback_locked(group);
+        }
+        static void select_rollback_arm(Scheduler& s, detail::SelectGroup& group,
+                                        detail::SelectArmSlot& arm) {
+            LockGuard lk(s.global_mtx_);
+            s.select_rollback_arm_locked(group, arm);
+        }
+        static void select_finish_rollback(Scheduler& s,
+                                           detail::SelectGroup& group,
+                                           detail::SelectArmSlot* arms,
+                                           std::size_t arm_count,
+                                           std::size_t registered_count) {
+            LockGuard lk(s.global_mtx_);
+            s.select_finish_rollback_locked(group, arms, arm_count,
+                                            registered_count);
+        }
+        static void select_rollback_registration(
+            Scheduler& s, detail::SelectGroup& group,
+            detail::SelectArmSlot* arms, std::size_t arm_count,
+            std::size_t registered_count) {
+            LockGuard lk(s.global_mtx_);
+            s.select_rollback_registration_locked(group, arms, arm_count,
+                                                  registered_count);
         }
 
         // Direct suspended-Event resolver driver: call select_resolve_event_locked

@@ -34,7 +34,7 @@ class Scheduler;  // owning scheduler — stored by pointer, forward-declared
 
 namespace detail {
 
-class SelectArmSlot;
+struct SelectArmSlot;  // matches the definition in detail/select_port.hpp (ODR tag)
 
 // One Select Timer registration control block. Non-copyable, non-movable
 // (its address is its identity for the Scheduler-owned stable pool and for

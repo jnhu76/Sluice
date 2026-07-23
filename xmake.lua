@@ -1379,3 +1379,62 @@ do
             add_tests("e13_select_publication_death_test")
     end
 end
+
+-- e13_select_rollback — E13 P7 registration-failure rollback tests (ST-14 +
+-- P7-T1..T11). Drives the PUBLIC variadic select() entry from a real running
+-- Fiber; the controller-only synthetic registration-failure seam
+-- (E13SelectRollbackSeam, absent from production) injects a
+-- SelectRegistrationFailure after N successful registrations. select_admit's
+-- catch runs the rollback transaction and rethrows. Deterministic (test clock +
+-- rollback observation); NO sleep_for. ASan is load-bearing for P7-T8 (stale
+-- Timer after caller-frame unwind). Gated to platforms where the test file is
+-- present; fiber work is gated at runtime via fiber_ctx::supported.
+do
+    local p = "tests/e13_select_rollback.cpp"
+    if os.isfile(p) then
+        target("e13_select_rollback")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_rollback")
+    end
+end
+
+-- e13_select_rollback_death_test — E13 P7 rollback-domain negative tests
+-- (SN-8 rollback after suspension + P7-N1..N9). Exercises the guarded internal
+-- rollback authorities on invalid domains / corrupted membership, proving
+-- fail-fast. Runs in forked children via death_test_runner_posix.hpp.
+-- POSIX-only; gated to linux/macosx.
+do
+    local p = "tests/e13_select_rollback_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_rollback_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_rollback_death_test")
+    end
+end
+
+-- e13_select_contract — E13 P7 Select contract coverage (ST-18..ST-23) for the
+-- genuinely-missing positive contract cases. Reuses existing tests where they
+-- already prove the exact contract; this target adds only missing coverage.
+do
+    local p = "tests/e13_select_contract.cpp"
+    if os.isfile(p) then
+        target("e13_select_contract")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_contract")
+    end
+end

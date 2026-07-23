@@ -893,42 +893,114 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
         // terminates) — §10: no ordinary throwing operation after reserve.
         group.mark_admitted();
 
-        // (6) Register every arm in index order.
+        // (6) Register every arm in index order, wrapped in the P7 registration
+        // rollback transaction. registered_count is the authoritative size of the
+        // fully committed registered prefix [0, registered_count): it is
+        // incremented only AFTER one arm has completed ALL registration effects
+        // (Event: linked + Registered; Timer: spliced into the Scheduler pool +
+        // heap entry pushed + active_deadline_count_ incremented + Registered).
+        // The synthetic failure checkpoint may run only between fully committed
+        // arm registrations — never halfway through one arm's commit.
+        //
+        // Per §17, no ordinary throwing operation exists in this loop after the
+        // reserve (select_event_link_locked, select_timer_splice_one_locked, the
+        // heap push within reserved capacity, and active_deadline_count_ ++ are
+        // all allocation-free). The catch is nevertheless REAL and future-safe:
+        // any exception escaping the prefix is rolled back so no Scheduler-
+        // visible registration authority outlives the Building group. It is also
+        // the path exercised by the test-only synthetic failure seam (§18).
+        std::size_t registered_count = 0;
         auto tmp_it = timer_tmp_pool.begin();
-        for (std::size_t i = 0; i < count; ++i) {
-            detail::SelectArmSlot& arm = arms[i];
-            if (arm.kind == detail::ArmKind::event) {
-                // Event arm: link into the Event's private SelectPort. This is
-                // the canonical registry mutation (select_event_link_locked),
-                // which sets arm.state = Registered. Distinct duplicate Event
-                // cases receive DISTINCT SelectArmSlot nodes (each is a separate
-                // array slot linked into the same port).
-                select_event_link_locked(*descs[i].event_, arm);
-            } else {
-                // Timer arm: splice exactly one tmp_pool node into the Scheduler
-                // pool, push its tagged DeadlineHeapEntry, increment
-                // active_deadline_count_ exactly once. splice preserves the
-                // stable address bound at arm.timer.stable_reg_ above.
-                // Capture the next tmp_pool iterator BEFORE splicing: splice
-                // transfers tmp_it's node out of tmp_pool into select_timer_
-                // pool_, so incrementing tmp_it afterwards would iterate the
-                // destination list, not tmp_pool.
-                auto next_tmp = std::next(tmp_it);
-                detail::SelectTimerRegistration* spliced =
-                    select_timer_splice_one_locked(timer_tmp_pool, tmp_it);
-                tmp_it = next_tmp;
-                // The arm's stable_reg_ already points at `spliced` (same
-                // address); no rebinding needed.
-                (void)spliced;
-                arm.state = detail::ArmState::registered;
+        try {
+            for (std::size_t i = 0; i < count; ++i) {
+                detail::SelectArmSlot& arm = arms[i];
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                // P7 §18: synthetic failure-injection seam, checked at the START
+                // of each iteration (BEFORE this arm's commit). The boundary
+                // fail_after means "inject after exactly fail_after successful
+                // registrations, before the next one". fail_after==0 injects
+                // before the FIRST registration (no arm committed); fail_after==
+                // arm_count injects AFTER the loop, before FinishRegistration.
+                // The throw happens UNDER G, between fully committed arm
+                // registrations — never mid-commit. Absent entirely in the
+                // production target (no controller, no injection branch, no
+                // SelectRegistrationFailure symbol).
+                if (sluice_async_test::rollback_should_inject_after(
+                        *this, registered_count)) {
+                    throw sluice_async_test::SelectRegistrationFailure{};
+                }
+#endif
+                if (arm.kind == detail::ArmKind::event) {
+                    // Event arm: link into the Event's private SelectPort. This is
+                    // the canonical registry mutation (select_event_link_locked),
+                    // which sets arm.state = Registered. Distinct duplicate Event
+                    // cases receive DISTINCT SelectArmSlot nodes (each is a
+                    // separate array slot linked into the same port).
+                    select_event_link_locked(*descs[i].event_, arm);
+                } else {
+                    // Timer arm: splice exactly one tmp_pool node into the
+                    // Scheduler pool, push its tagged DeadlineHeapEntry,
+                    // increment active_deadline_count_ exactly once. splice
+                    // preserves the stable address bound at arm.timer.stable_reg_
+                    // above. Capture the next tmp_pool iterator BEFORE splicing:
+                    // splice transfers tmp_it's node out of tmp_pool into
+                    // select_timer_pool_, so incrementing tmp_it afterwards
+                    // would iterate the destination list, not tmp_pool.
+                    auto next_tmp = std::next(tmp_it);
+                    detail::SelectTimerRegistration* spliced =
+                        select_timer_splice_one_locked(timer_tmp_pool, tmp_it);
+                    tmp_it = next_tmp;
+                    // The arm's stable_reg_ already points at `spliced` (same
+                    // address); no rebinding needed.
+                    (void)spliced;
+                    arm.state = detail::ArmState::registered;
+                }
+
+                // This arm's full registration commit is complete. The prefix
+                // [0, registered_count+1) is now committed.
+                ++registered_count;
             }
+
+            // After registration, tmp_pool is empty; every Timer arm's
+            // stable_reg_ points into select_timer_pool_; every Event arm is
+            // linked.
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // P7 §18: the fail_after == arm_count boundary — inject AFTER all
+            // arms are fully registered, immediately BEFORE FinishRegistration
+            // (P7-T5: a fully-registered but still-Building group must roll
+            // back). Absent in production.
+            if (sluice_async_test::rollback_should_inject_after(
+                    *this, registered_count)) {
+                throw sluice_async_test::SelectRegistrationFailure{};
+            }
+#endif
+
+            // (7) FinishRegistration.
+            group.set_phase(detail::GroupPhase::selecting);
+        } catch (...) {
+            // P7 rollback transaction (§6.2). The catch executes while the
+            // ORIGINAL global_mtx_ critical section is still held (this block
+            // opened the LockGuard). registered_count is the exact committed
+            // prefix size; the orchestrator rolls back [0, registered_count) in
+            // reverse order, normalizes the suffix, and finishes to Aborted.
+            // The orchestrator is noexcept (it never throws); it fail-fasts on
+            // impossible corruption. The original exception is rethrown
+            // UNCHANGED — no translation, no swallow (P7-ABORT-9/10).
+            select_rollback_registration_locked(group, arms.data(), count,
+                                                registered_count);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // e13_rollback_aborted seam: AFTER Aborted reached, BEFORE rethrow.
+            // Proves rollback completed while G is held. Holds global_mtx_.
+            sluice_async_test::test_phase(
+                *this, sluice_async_test::PhaseTag::e13_rollback_aborted);
+#endif
+            throw;
         }
 
-        // After registration, tmp_pool is empty; every Timer arm's stable_reg_
-        // points into select_timer_pool_; every Event arm is linked.
-
-        // (7) FinishRegistration.
-        group.set_phase(detail::GroupPhase::selecting);
+        // FinishRegistration succeeded (no exception): the group is now
+        // Selecting. registered_count == count (all arms committed).
 
         // (8) AdmissionArmed seam: AFTER every arm registered, AFTER phase
         // becomes Selecting, BEFORE the readiness snapshot.
@@ -1172,6 +1244,254 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
         group.set_phase(detail::GroupPhase::consumed);
         return return_value;
     }
+}
+
+// ===========================================================================
+// E13 P7 — Select registration-rollback authority (private Scheduler members).
+// (docs/e13-select-p7-rollback-closeout.md §25, docs/e13-select-type-and-
+// lifetime.md §5.2). Refines the closed E13SelectContract.tla actions
+// ContractBeginRollback / ContractRollbackRelease(i) / ContractCloseAuthority(i)
+// / ContractFinishRollback. All helpers are noexcept and run under one
+// continuous global_mtx_ critical section; rollback never publishes and never
+// throws (P7-ABORT-9/10). They may assert / fail-fast on impossible corruption.
+// ===========================================================================
+
+// BeginRollback preflight (§8): mechanically validate the rollback domain and
+// set group.phase = Rollback. Rejects every forbidden domain (Selecting, Armed,
+// Completed, Consumed, Aborted, Rollback re-entry). No arm authority is closed.
+void Scheduler::select_begin_rollback_locked(detail::SelectGroup& group) noexcept {
+    // Mechanical preconditions (debug asserts + release fail-fast).
+    assert(group.scheduler_ == this &&
+           "select_begin_rollback_locked: group.scheduler_ != this");
+    assert(group.arms_ != nullptr &&
+           "select_begin_rollback_locked: group.arms_ is null");
+    assert(group.arm_count_ >= 1 &&
+           "select_begin_rollback_locked: group.arm_count_ < 1");
+    assert(group.arm_count_ <= kPreflightMaxArms &&
+           "select_begin_rollback_locked: arm_count_ exceeds kSelectMaxArms");
+    // Release defense-in-depth: wrong-home group, null arms, or an arm_count_
+    // outside the valid registration range is a structural invariant violation
+    // that must fail fast before phase/winner inspection (no recovery).
+    if (group.scheduler_ != this || group.arms_ == nullptr ||
+        group.arm_count_ < 1 || group.arm_count_ > kPreflightMaxArms) {
+        detail::select_invariant_fail_fast();
+    }
+
+    const detail::GroupPhase phase = group.phase();
+    // Release-mode defense-in-depth: only Building is the legal rollback domain.
+    if (phase != detail::GroupPhase::building) {
+        detail::select_invariant_fail_fast();
+    }
+    // winner must be kNoWinner throughout rollback (the group was never claimed).
+    if (group.winner() != detail::kNoWinner) {
+        detail::select_invariant_fail_fast();
+    }
+    // completion_mode must be None (no publication occurred).
+    if (group.completion_mode_ != detail::CompletionMode::none) {
+        detail::select_invariant_fail_fast();
+    }
+    // result_ must have no winner (publication is the only writer; rollback is
+    // forbidden after any publication). Access the private field via friend.
+    if (group.result_.has_winner()) {
+        detail::select_invariant_fail_fast();
+    }
+    // caller must be set and still Running (P7 is pre-suspension rollback).
+    if (group.caller_ == nullptr || group.caller_owner_ == nullptr) {
+        detail::select_invariant_fail_fast();
+    }
+    if (group.caller_->state() != FiberState::running) {
+        detail::select_invariant_fail_fast();
+    }
+
+    group.set_phase(detail::GroupPhase::rollback);
+}
+
+// Per-arm rollback (§9): classify the registered arm Retired FIRST, then close
+// its external callback authority.
+//   Event: state=Retired; then the single canonical unlink path.
+//   Timer: state=Retired; then the single canonical retire CAS authority.
+void Scheduler::select_rollback_arm_locked(
+    detail::SelectGroup& group, detail::SelectArmSlot& arm) noexcept {
+    // The arm is a fully-registered arm of this group.
+    assert(arm.group == &group &&
+           "select_rollback_arm_locked: arm.group != &group");
+    if (arm.group != &group) {
+        detail::select_invariant_fail_fast();
+    }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Record the arm BEFORE classification (its kind + whether its Event
+    // authority was linked), for the reverse-order observation (§19).
+    const bool ev_linked_before =
+        (arm.kind == detail::ArmKind::event) && (arm.home_ != nullptr);
+    sluice_async_test::rollback_record_arm(
+        *this, static_cast<std::uint32_t>(
+                   static_cast<std::size_t>(&arm - group.arms_)),
+        static_cast<std::uint8_t>(arm.kind), ev_linked_before);
+#endif
+
+    if (arm.kind == detail::ArmKind::event) {
+        // (§9.1) Required preconditions for an Event arm.
+        assert(arm.state == detail::ArmState::registered &&
+               "select_rollback_arm_locked: Event arm not Registered");
+        assert(arm.event.event_ != nullptr &&
+               "select_rollback_arm_locked: Event arm event_ is null");
+        // Release fail-fast BEFORE any unlink/retire/state mutation: a
+        // non-Registered Event arm must not be classified/closed here.
+        if (arm.state != detail::ArmState::registered) {
+            detail::select_invariant_fail_fast();
+        }
+        // Mechanical membership: home_ must point at this Event's port (P7-N5
+        // wrong-Event membership fails here BEFORE any unlink mutation).
+        Event& ev = *arm.event.event_;
+        if (arm.home_ != &ev.select_port_) {
+            detail::select_invariant_fail_fast();
+        }
+        // 1. classify Retired FIRST (matches RollbackEventArm / Event-loser
+        //    discipline).
+        arm.state = detail::ArmState::retired;
+        // 2. close authority via the single canonical unlink path.
+        select_event_unlink_locked(ev, arm);
+        // Terminal state (§9.1): state==Retired, home_/next_/prev_==nullptr
+        // (select_event_unlink_locked cleared the linkage). Event::set_ is
+        // never mutated.
+    } else {
+        // (§9.2) Required preconditions for a Timer arm.
+        assert(arm.state == detail::ArmState::registered &&
+               "select_rollback_arm_locked: Timer arm not Registered");
+        // Release fail fast BEFORE the reg validity checks / retire: a
+        // non-Registered Timer arm must not be classified/closed here.
+        if (arm.state != detail::ArmState::registered) {
+            detail::select_invariant_fail_fast();
+        }
+        detail::SelectTimerRegistration* reg = arm.timer.stable_reg_;
+        if (reg == nullptr ||
+            reg->scheduler() != this ||
+            !pool_owns_select_block_locked(*reg) ||
+            reg->arm() != &arm) {
+            // P7-N6: Timer block not Scheduler-owned / wrong back-pointer.
+            // Fail fast BEFORE any state/accounting mutation.
+            detail::select_invariant_fail_fast();
+        }
+        // The registration must still be ACTIVE (P7-N7: an already-terminal
+        // registration is an invariant violation, NOT an idempotent success).
+        if (!reg->is_active()) {
+            detail::select_invariant_fail_fast();
+        }
+        // 1. classify Retired FIRST — refines RollbackCancelTimer(i)
+        //    (arm Registered -> TimerCancelled, timer_state still Active).
+        arm.state = detail::ArmState::retired;
+        // 2. close authority via the single canonical retire CAS — refines
+        //    RollbackRetireTimer(i) (timer_state Active -> Retired). The helper
+        //    owns ACTIVE->RETIRED + --active_deadline_count_ + recompute exactly
+        //    once. A false return is an invariant violation -> fail fast.
+        if (!select_timer_retire_locked(*reg)) {
+            detail::select_invariant_fail_fast();
+        }
+    }
+}
+
+// FinishRollback postconditions (§13): prove every registered authority closed
+// + every never-registered arm Detached, then set phase = Aborted.
+void Scheduler::select_finish_rollback_locked(
+    detail::SelectGroup& group, detail::SelectArmSlot* arms,
+    std::size_t arm_count, std::size_t registered_count) noexcept {
+    // Every registered arm must be Retired and fully unlinked/retired.
+    for (std::size_t i = 0; i < registered_count; ++i) {
+        const detail::SelectArmSlot& arm = arms[i];
+        if (arm.state != detail::ArmState::retired) {
+            // P7-N8: a registered authority remains open before Aborted.
+            detail::select_invariant_fail_fast();
+        }
+        if (arm.kind == detail::ArmKind::event) {
+            // Event: fully unlinked.
+            if (arm.home_ != nullptr || arm.next_ != nullptr ||
+                arm.prev_ != nullptr) {
+                detail::select_invariant_fail_fast();
+            }
+        }
+        // Timer: the registration is non-ACTIVE (retired). We do NOT dereference
+        // stable_reg_ here for a state check that could race lazy pump
+        // reclamation — select_rollback_arm_locked already proved the retire CAS
+        // succeeded under the SAME held G. Caller-frame state only (§22).
+    }
+    // Every never-registered suffix arm must be Detached (normalized by the
+    // orchestrator before this call; verify here too).
+    for (std::size_t i = registered_count; i < arm_count; ++i) {
+        const detail::SelectArmSlot& arm = arms[i];
+        if (arm.state != detail::ArmState::detached) {
+            detail::select_invariant_fail_fast();
+        }
+        if (arm.kind == detail::ArmKind::event) {
+            if (arm.home_ != nullptr || arm.next_ != nullptr ||
+                arm.prev_ != nullptr) {
+                detail::select_invariant_fail_fast();
+            }
+        }
+    }
+    // winner / completion_mode / result_ still clean (unchanged since Begin).
+    if (group.winner() != detail::kNoWinner ||
+        group.completion_mode_ != detail::CompletionMode::none ||
+        group.result_.has_winner()) {
+        detail::select_invariant_fail_fast();
+    }
+    // caller still Running (no liveness mutation happened during rollback).
+    if (group.caller_ == nullptr ||
+        group.caller_->state() != FiberState::running) {
+        detail::select_invariant_fail_fast();
+    }
+
+    // Only now set Aborted. admitted_ is intentionally NOT cleared:
+    // admitted_ && phase==Aborted is the intended destruction proof.
+    group.set_phase(detail::GroupPhase::aborted);
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::rollback_record_finish(*this);
+#endif
+}
+
+// The rollback orchestrator (§10/§11): begin -> reverse per-arm rollback over
+// the registered prefix -> suffix normalization -> finish. noexcept.
+void Scheduler::select_rollback_registration_locked(
+    detail::SelectGroup& group, detail::SelectArmSlot* arms,
+    std::size_t arm_count, std::size_t registered_count) noexcept {
+    assert(arms != nullptr &&
+           "select_rollback_registration_locked: arms is null");
+    assert(registered_count <= arm_count &&
+           "select_rollback_registration_locked: registered_count > arm_count");
+    // Release fail fast BEFORE indexing/traversing: a null arms array or an
+    // out-of-range registered_count would walk arms[idx-1] out of bounds.
+    if (arms == nullptr || registered_count > arm_count) {
+        detail::select_invariant_fail_fast();
+    }
+
+    select_begin_rollback_locked(group);
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::rollback_record_begin(*this, registered_count);
+#endif
+
+    // (§10) Roll back the fully registered prefix in REVERSE registration order
+    // (registered_count-1 .. 0). Registration is index-order acquisition;
+    // rollback is reverse-order release.
+    for (std::size_t idx = registered_count; idx > 0; --idx) {
+        select_rollback_arm_locked(group, arms[idx - 1]);
+    }
+
+    // (§11) Normalize the never-registered suffix [registered_count, arm_count)
+    // to Detached. No Scheduler-visible registration authority was committed for
+    // these arms: Event suffix arms have home_/next_/prev_ == nullptr; Timer
+    // suffix blocks remain in the caller-frame timer_tmp_pool (never Scheduler-
+    // owned, never retired through Scheduler authority). They are destroyed by
+    // the frame unwind after the exception escapes.
+    for (std::size_t i = registered_count; i < arm_count; ++i) {
+        detail::SelectArmSlot& arm = arms[i];
+        if (arm.state == detail::ArmState::prepared) {
+            arm.state = detail::ArmState::detached;
+        }
+    }
+
+    select_finish_rollback_locked(group, arms, arm_count, registered_count);
 }
 
 }  // namespace sluice::async
