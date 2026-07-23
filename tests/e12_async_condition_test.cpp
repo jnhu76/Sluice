@@ -320,7 +320,7 @@ SLUICE_TEST_CASE(e12_cond_t16_wait_returns_owning_reacquire) {
 // ===========================================================================
 
 // ---- T3: wait register-before-release closure (deterministic phase seam) ---
-// Arm e12_condition_register_before_handoff. Owner enters wait(cn); the seam
+// Arm condition_register_before_handoff. Owner enters wait(cn); the seam
 // pauses AFTER the Condition node is registered but BEFORE the Mutex is
 // released. A coordinator (OS thread) observes: Condition node is Registered
 // (waiting_count >= 1) AND the Mutex is STILL owned (the seam is reached BEFORE
@@ -391,7 +391,7 @@ SLUICE_TEST_CASE(e12_cond_t3_register_before_release_closure) {
 // Pre-queue an ordinary Mutex waiter (W1) on mtx.waiters_. Owner enters
 // cond.wait(cn); the CONDITION-WAIT-PREPARE handoff step must hand the Mutex to
 // W1 (the FIFO head), NOT to the condition waiter. Arm
-// e12_mutex_handoff_before_publication; an OS-thread coordinator observes W1 is
+// mutex_handoff_before_publication; an OS-thread coordinator observes W1 is
 // the handoff winner (owner committed to W1 before publication) and the
 // condition waiter is still suspended, then releases + notifies.
 // Bug prevented: handoff diverted to the condition waiter. Evidence: CAUSAL.
@@ -1150,7 +1150,7 @@ SLUICE_TEST_CASE(e12_cond_t13b_notify_all_wins_over_expire) {
 // queues BEHIND B. H unlocks → handoff to B (FIFO head) → B gets mtx first.
 // B unlocks → handoff to O's reacquire → O gets mtx second.
 // Grant order proves: Ordinary before Reacquire in the same Mutex queue.
-// Evidence: CAUSAL (the e12_mutex_waiter_registered_before_grant seam fires
+// Evidence: CAUSAL (the mutex_waiter_registered_before_grant seam fires
 // for each queued fiber; b_done set before o_done proves FIFO handoff order).
 SLUICE_TEST_CASE(e12_cond_t15a_ordinary_then_reacquire) {
     if constexpr (!fiber_ctx::supported) return;
@@ -1239,7 +1239,7 @@ SLUICE_TEST_CASE(e12_cond_t15a_ordinary_then_reacquire) {
 // reacquire (FIFO head) → O gets mtx first. O's wait() returns, O unlocks
 // → handoff to B → B gets mtx second.
 // Grant order proves: Reacquire before Ordinary in the same Mutex queue.
-// Evidence: CAUSAL (the e12_mutex_waiter_registered_before_grant seam fires
+// Evidence: CAUSAL (the mutex_waiter_registered_before_grant seam fires
 // for each queued fiber; o_done set before b_done proves FIFO handoff order).
 SLUICE_TEST_CASE(e12_cond_t15b_reacquire_then_ordinary) {
     if constexpr (!fiber_ctx::supported) return;
@@ -1648,7 +1648,7 @@ SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
 // 50 iterations: every iteration forces the notification into the critical
 // vulnerable interval — AFTER Condition-node registration onto the queue,
 // BEFORE the Mutex handoff (write-to-read visibility window). The waiter
-// pauses at the `e12_condition_register_before_handoff` seam, at which point
+// pauses at the `condition_register_before_handoff` seam, at which point
 // the node IS Registered on the Condition queue but the calling Fiber still
 // holds the bound Mutex. An OS-thread coordinator calls notify_one() while
 // the seam is paused. This proves the notification is caught (not lost)
@@ -1783,7 +1783,7 @@ SLUICE_TEST_CASE(e12_cond_t31_notify_cancel_expire_500) {
 }
 
 // ---- T32: notify_before_drain seam (50/50) -------------------------------
-// 50 iterations: arms the `e12_condition_notify_before_drain` seam inside
+// 50 iterations: arms the `condition_notify_before_drain` seam inside
 // condition_notify_all (scheduler.cpp:2327), proving the seam fires at the
 // correct point: global_mtx_ has been acquired, the drain loop has NOT yet
 // started. While paused, an OS-thread coordinator observes that NO waiter

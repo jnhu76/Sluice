@@ -50,41 +50,41 @@ private:
 // Arm: the worker that reaches MW-S2 Phase-B commit pauses until released.
 struct E7AdmissionSeam {
     static void arm(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e7_admission_phase_b);
+        sluice_async_test::arm(s, PhaseTag::mw_admission_phase_b);
     }
     static void wait_paused(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::wait_paused(s, PhaseTag::e7_admission_phase_b);
+        sluice_async_test::wait_paused(s, PhaseTag::mw_admission_phase_b);
     }
     static void release(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::release(s, PhaseTag::e7_admission_phase_b);
+        sluice_async_test::release(s, PhaseTag::mw_admission_phase_b);
     }
 };
 
 // ---- E9 park seams (was E9ParkSeamHooks) ----
 struct E9ParkSeam {
     static void arm_candidate(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e9_park_candidate);
+        sluice_async_test::arm(s, PhaseTag::scheduler_park_candidate);
     }
     static void arm_commit(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e9_park_commit);
+        sluice_async_test::arm(s, PhaseTag::scheduler_park_commit);
     }
     static void wait_candidate_paused(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::wait_paused(s, PhaseTag::e9_park_candidate);
+        sluice_async_test::wait_paused(s, PhaseTag::scheduler_park_candidate);
     }
     static void wait_commit_paused(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::wait_paused(s, PhaseTag::e9_park_commit);
+        sluice_async_test::wait_paused(s, PhaseTag::scheduler_park_commit);
     }
     static bool is_candidate_paused(sluice::async::Scheduler& s) noexcept {
-        return sluice_async_test::is_paused(s, PhaseTag::e9_park_candidate);
+        return sluice_async_test::is_paused(s, PhaseTag::scheduler_park_candidate);
     }
     static bool is_commit_paused(sluice::async::Scheduler& s) noexcept {
-        return sluice_async_test::is_paused(s, PhaseTag::e9_park_commit);
+        return sluice_async_test::is_paused(s, PhaseTag::scheduler_park_commit);
     }
     static void release_candidate(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::release(s, PhaseTag::e9_park_candidate);
+        sluice_async_test::release(s, PhaseTag::scheduler_park_candidate);
     }
     static void release_commit(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::release(s, PhaseTag::e9_park_commit);
+        sluice_async_test::release(s, PhaseTag::scheduler_park_commit);
     }
 };
 
@@ -151,30 +151,30 @@ struct E11TimerControl {
 // ---- E12 event phase seams (was E12EventTestHooks) ----
 struct E12EventSeam {
     static void arm_set_store_before_drain(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e12_set_store_before_drain);
+        sluice_async_test::arm(s, PhaseTag::event_set_store_before_drain);
     }
     static void wait_set_paused(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::wait_paused(s, PhaseTag::e12_set_store_before_drain);
+        sluice_async_test::wait_paused(s, PhaseTag::event_set_store_before_drain);
     }
     static bool is_set_paused(sluice::async::Scheduler& s) noexcept {
-        return sluice_async_test::is_paused(s, PhaseTag::e12_set_store_before_drain);
+        return sluice_async_test::is_paused(s, PhaseTag::event_set_store_before_drain);
     }
     static void release_set(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::release(s, PhaseTag::e12_set_store_before_drain);
+        sluice_async_test::release(s, PhaseTag::event_set_store_before_drain);
     }
 
     static void arm_admission_before_final_check(
         sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e12_admission_before_final_check);
+        sluice_async_test::arm(s, PhaseTag::event_admission_before_final_check);
     }
     static void wait_admission_paused(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::wait_paused(s, PhaseTag::e12_admission_before_final_check);
+        sluice_async_test::wait_paused(s, PhaseTag::event_admission_before_final_check);
     }
     static bool is_admission_paused(sluice::async::Scheduler& s) noexcept {
-        return sluice_async_test::is_paused(s, PhaseTag::e12_admission_before_final_check);
+        return sluice_async_test::is_paused(s, PhaseTag::event_admission_before_final_check);
     }
     static void release_admission(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::release(s, PhaseTag::e12_admission_before_final_check);
+        sluice_async_test::release(s, PhaseTag::event_admission_before_final_check);
     }
 
     // E12-A-EVENT-CORRECTIVE-2 (T31): the pre-global-lock admission attempt
@@ -183,14 +183,14 @@ struct E12EventSeam {
     static bool admission_attempt_reached(
         sluice::async::Scheduler& s) noexcept {
         return sluice_async_test::is_reached(
-            s, PhaseTag::e12_admission_attempt_before_global_lock);
+            s, PhaseTag::event_admission_attempt_before_global_lock);
     }
     static void reset_admission_attempt(sluice::async::Scheduler& s) noexcept {
         // Disarm + clear reached so the next wait() re-marks it.
         sluice_async_test::disarm(
-            s, PhaseTag::e12_admission_attempt_before_global_lock);
+            s, PhaseTag::event_admission_attempt_before_global_lock);
         sluice_async_test::clear_reached(
-            s, PhaseTag::e12_admission_attempt_before_global_lock);
+            s, PhaseTag::event_admission_attempt_before_global_lock);
     }
 
     // Park-commit seam delegation (E12 reuses the E9 park-commit seam for T32).
@@ -214,19 +214,19 @@ struct E12MutexSeam {
     static void arm_handoff_before_publication(
         sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(
-            s, PhaseTag::e12_mutex_handoff_before_publication);
+            s, PhaseTag::mutex_handoff_before_publication);
     }
     static void wait_handoff_paused(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::wait_paused(
-            s, PhaseTag::e12_mutex_handoff_before_publication);
+            s, PhaseTag::mutex_handoff_before_publication);
     }
     static bool is_handoff_paused(sluice::async::Scheduler& s) noexcept {
         return sluice_async_test::is_paused(
-            s, PhaseTag::e12_mutex_handoff_before_publication);
+            s, PhaseTag::mutex_handoff_before_publication);
     }
     static void release_handoff(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::release(
-            s, PhaseTag::e12_mutex_handoff_before_publication);
+            s, PhaseTag::mutex_handoff_before_publication);
     }
 };
 
@@ -238,23 +238,23 @@ struct E12MutexSeam {
 struct E12MutexWaiterSeam {
     static void arm_waiter_registered(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(
-            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+            s, PhaseTag::mutex_waiter_registered_before_grant);
     }
     static void wait_waiter_paused(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::wait_paused(
-            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+            s, PhaseTag::mutex_waiter_registered_before_grant);
     }
     static bool is_waiter_paused(sluice::async::Scheduler& s) noexcept {
         return sluice_async_test::is_paused(
-            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+            s, PhaseTag::mutex_waiter_registered_before_grant);
     }
     static bool is_waiter_registered_reached(sluice::async::Scheduler& s) noexcept {
         return sluice_async_test::is_reached(
-            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+            s, PhaseTag::mutex_waiter_registered_before_grant);
     }
     static void release_waiter(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::release(
-            s, PhaseTag::e12_mutex_waiter_registered_before_grant);
+            s, PhaseTag::mutex_waiter_registered_before_grant);
     }
 };
 
@@ -270,36 +270,36 @@ struct E12ConditionSeam {
     static void arm_register_before_handoff(
         sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(
-            s, PhaseTag::e12_condition_register_before_handoff);
+            s, PhaseTag::condition_register_before_handoff);
     }
     static void wait_register_paused(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::wait_paused(
-            s, PhaseTag::e12_condition_register_before_handoff);
+            s, PhaseTag::condition_register_before_handoff);
     }
     static bool is_register_paused(sluice::async::Scheduler& s) noexcept {
         return sluice_async_test::is_paused(
-            s, PhaseTag::e12_condition_register_before_handoff);
+            s, PhaseTag::condition_register_before_handoff);
     }
     static void release_register(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::release(
-            s, PhaseTag::e12_condition_register_before_handoff);
+            s, PhaseTag::condition_register_before_handoff);
     }
 
     static void arm_notify_before_drain(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(
-            s, PhaseTag::e12_condition_notify_before_drain);
+            s, PhaseTag::condition_notify_before_drain);
     }
     static void wait_notify_paused(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::wait_paused(
-            s, PhaseTag::e12_condition_notify_before_drain);
+            s, PhaseTag::condition_notify_before_drain);
     }
     static bool is_notify_paused(sluice::async::Scheduler& s) noexcept {
         return sluice_async_test::is_paused(
-            s, PhaseTag::e12_condition_notify_before_drain);
+            s, PhaseTag::condition_notify_before_drain);
     }
     static void release_notify(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::release(
-            s, PhaseTag::e12_condition_notify_before_drain);
+            s, PhaseTag::condition_notify_before_drain);
     }
 };
 
@@ -338,24 +338,24 @@ struct MutexFailSeam {
 struct E13SelectTimerSeam {
     // Pump observing a stale (non-ACTIVE) Select entry being skipped (I4).
     static void arm_pump_skip(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e13_timer_pump_skip);
+        sluice_async_test::arm(s, PhaseTag::select_timer_pump_skip);
     }
     static bool pump_skip_reached(sluice::async::Scheduler& s) noexcept {
-        return sluice_async_test::is_reached(s, PhaseTag::e13_timer_pump_skip);
+        return sluice_async_test::is_reached(s, PhaseTag::select_timer_pump_skip);
     }
     static void wait_pump_skip(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::wait_reached(s, PhaseTag::e13_timer_pump_skip);
+        sluice_async_test::wait_reached(s, PhaseTag::select_timer_pump_skip);
     }
     static void clear_pump_skip(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::disarm(s, PhaseTag::e13_timer_pump_skip);
-        sluice_async_test::clear_reached(s, PhaseTag::e13_timer_pump_skip);
+        sluice_async_test::disarm(s, PhaseTag::select_timer_pump_skip);
+        sluice_async_test::clear_reached(s, PhaseTag::select_timer_pump_skip);
     }
 
     // Pump paused AFTER the ACTIVE check, BEFORE the fail-fast. A due ACTIVE
     // Select entry is unreachable in valid P3 (no admission); this seam lets a
     // test prove the guard fires. NOT supported production behavior.
     static void arm_pump_active(sluice::async::Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e13_timer_pump_active);
+        sluice_async_test::arm(s, PhaseTag::select_timer_pump_active);
     }
 
     // Synthetic registration / transitions via Scheduler accounting authority.
@@ -450,56 +450,56 @@ struct E13SelectAdmissionSeam {
     // own mutex (no global_mtx_ acquisition). The blocking arm/wait/release
     // accessors below remain available for seams that do NOT hold global_mtx_.
     static bool armed_reached(Scheduler& s) noexcept {
-        return sluice_async_test::is_reached(s, PhaseTag::e13_admission_armed);
+        return sluice_async_test::is_reached(s, PhaseTag::select_admission_armed);
     }
     static bool claimed_reached(Scheduler& s) noexcept {
-        return sluice_async_test::is_reached(s, PhaseTag::e13_admission_claimed);
+        return sluice_async_test::is_reached(s, PhaseTag::select_admission_claimed);
     }
     static bool consumed_reached(Scheduler& s) noexcept {
-        return sluice_async_test::is_reached(s, PhaseTag::e13_admission_consumed);
+        return sluice_async_test::is_reached(s, PhaseTag::select_admission_consumed);
     }
 
     // AdmissionArmed: AFTER every arm registered + phase==Selecting, BEFORE the
     // readiness snapshot. Proves all arms registered before the snapshot.
     static void arm_admission_armed(Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e13_admission_armed);
+        sluice_async_test::arm(s, PhaseTag::select_admission_armed);
     }
     static void wait_admission_armed_paused(Scheduler& s) noexcept {
-        sluice_async_test::wait_paused(s, PhaseTag::e13_admission_armed);
+        sluice_async_test::wait_paused(s, PhaseTag::select_admission_armed);
     }
     static bool is_admission_armed_paused(Scheduler& s) noexcept {
-        return sluice_async_test::is_paused(s, PhaseTag::e13_admission_armed);
+        return sluice_async_test::is_paused(s, PhaseTag::select_admission_armed);
     }
     static void release_admission_armed(Scheduler& s) noexcept {
-        sluice_async_test::release(s, PhaseTag::e13_admission_armed);
+        sluice_async_test::release(s, PhaseTag::select_admission_armed);
     }
 
     // AdmissionClaimed: AFTER the winner CAS, BEFORE finalization.
     static void arm_admission_claimed(Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e13_admission_claimed);
+        sluice_async_test::arm(s, PhaseTag::select_admission_claimed);
     }
     static void wait_admission_claimed_paused(Scheduler& s) noexcept {
-        sluice_async_test::wait_paused(s, PhaseTag::e13_admission_claimed);
+        sluice_async_test::wait_paused(s, PhaseTag::select_admission_claimed);
     }
     static bool is_admission_claimed_paused(Scheduler& s) noexcept {
-        return sluice_async_test::is_paused(s, PhaseTag::e13_admission_claimed);
+        return sluice_async_test::is_paused(s, PhaseTag::select_admission_claimed);
     }
     static void release_admission_claimed(Scheduler& s) noexcept {
-        sluice_async_test::release(s, PhaseTag::e13_admission_claimed);
+        sluice_async_test::release(s, PhaseTag::select_admission_claimed);
     }
 
     // AdmissionConsumed: AFTER phase==Completed, BEFORE Consumed.
     static void arm_admission_consumed(Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e13_admission_consumed);
+        sluice_async_test::arm(s, PhaseTag::select_admission_consumed);
     }
     static void wait_admission_consumed_paused(Scheduler& s) noexcept {
-        sluice_async_test::wait_paused(s, PhaseTag::e13_admission_consumed);
+        sluice_async_test::wait_paused(s, PhaseTag::select_admission_consumed);
     }
     static bool is_admission_consumed_paused(Scheduler& s) noexcept {
-        return sluice_async_test::is_paused(s, PhaseTag::e13_admission_consumed);
+        return sluice_async_test::is_paused(s, PhaseTag::select_admission_consumed);
     }
     static void release_admission_consumed(Scheduler& s) noexcept {
-        sluice_async_test::release(s, PhaseTag::e13_admission_consumed);
+        sluice_async_test::release(s, PhaseTag::select_admission_consumed);
     }
 
     // ---- P5 CORRECTIVE: admission boundary snapshot accessors ----
@@ -509,14 +509,14 @@ struct E13SelectAdmissionSeam {
     // it under the controller's own mutex (no global_mtx_ acquisition).
     static AdmissionSnapshot armed_snapshot(Scheduler& s) noexcept {
         return sluice_async_test::read_admission_snapshot(
-            s, PhaseTag::e13_admission_armed);
+            s, PhaseTag::select_admission_armed);
     }
 
     // Read the AdmissionConsumed boundary snapshot. Captured after phase==
     // Completed, before Consumed. Reflects the inline lifecycle state.
     static AdmissionSnapshot consumed_snapshot(Scheduler& s) noexcept {
         return sluice_async_test::read_admission_snapshot(
-            s, PhaseTag::e13_admission_consumed);
+            s, PhaseTag::select_admission_consumed);
     }
 };
 
@@ -536,43 +536,43 @@ struct E13SelectPublicationSeam {
 
     // ---- suspend-before-switch (caller side, runs OUTSIDE global_mtx_) ----
     static void arm_suspend_before_switch(Scheduler& s) noexcept {
-        sluice_async_test::arm(s, PhaseTag::e13_select_suspend_before_switch);
+        sluice_async_test::arm(s, PhaseTag::select_suspend_before_switch);
     }
     static void wait_suspend_before_switch_paused(Scheduler& s) noexcept {
-        sluice_async_test::wait_paused(s, PhaseTag::e13_select_suspend_before_switch);
+        sluice_async_test::wait_paused(s, PhaseTag::select_suspend_before_switch);
     }
     static bool is_suspend_before_switch_paused(Scheduler& s) noexcept {
-        return sluice_async_test::is_paused(s, PhaseTag::e13_select_suspend_before_switch);
+        return sluice_async_test::is_paused(s, PhaseTag::select_suspend_before_switch);
     }
     static void release_suspend_before_switch(Scheduler& s) noexcept {
-        sluice_async_test::release(s, PhaseTag::e13_select_suspend_before_switch);
+        sluice_async_test::release(s, PhaseTag::select_suspend_before_switch);
     }
 
     // ---- publish entry / done / suspended-before-consume (hold global_mtx_) ----
     // Non-blocking reach observation (the publication seams fire under
     // global_mtx_; a coordinator thread cannot acquire that lock).
     static bool publish_entry_reached(Scheduler& s) noexcept {
-        return sluice_async_test::is_reached(s, PhaseTag::e13_publish_entry);
+        return sluice_async_test::is_reached(s, PhaseTag::select_publish_entry);
     }
     static bool publish_done_reached(Scheduler& s) noexcept {
-        return sluice_async_test::is_reached(s, PhaseTag::e13_publish_done);
+        return sluice_async_test::is_reached(s, PhaseTag::select_publish_done);
     }
     static bool suspended_before_consume_reached(Scheduler& s) noexcept {
-        return sluice_async_test::is_reached(s, PhaseTag::e13_suspended_before_consume);
+        return sluice_async_test::is_reached(s, PhaseTag::select_suspended_before_consume);
     }
 
     static PublicationSnapshot publish_entry_snapshot(Scheduler& s) noexcept {
         return sluice_async_test::read_publication_snapshot(
-            s, PhaseTag::e13_publish_entry);
+            s, PhaseTag::select_publish_entry);
     }
     static PublicationSnapshot publish_done_snapshot(Scheduler& s) noexcept {
         return sluice_async_test::read_publication_snapshot(
-            s, PhaseTag::e13_publish_done);
+            s, PhaseTag::select_publish_done);
     }
     static PublicationSnapshot suspended_before_consume_snapshot(
         Scheduler& s) noexcept {
         return sluice_async_test::read_publication_snapshot(
-            s, PhaseTag::e13_suspended_before_consume);
+            s, PhaseTag::select_suspended_before_consume);
     }
 
     // ---- required controller counters (task §13) ----

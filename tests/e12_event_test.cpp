@@ -2286,7 +2286,7 @@ SLUICE_TEST_CASE(e12_t31_causal_set_first_ordering) {
     // Arm BOTH the pre-lock phase (blocks fwait before the lock) AND the
     // set-store-before-drain phase (blocks the setter mid-drain).
     E12EventTestHooks::reset_admission_attempt(sched);
-    sluice_async_test::arm(sched, sluice_async_test::PhaseTag::e12_admission_attempt_before_global_lock);
+    sluice_async_test::arm(sched, sluice_async_test::PhaseTag::event_admission_attempt_before_global_lock);
     E12EventTestHooks::arm_set_store_before_drain(sched);
 
     // Start the Live run: the Worker distributes + runs fwait, which blocks at
@@ -2307,7 +2307,7 @@ SLUICE_TEST_CASE(e12_t31_causal_set_first_ordering) {
     // Release the pre-lock phase: fwait proceeds and attempts LockGuard(global_mtx_).
     // The setter HOLDS global_mtx_ (paused mid-drain), so fwait blocks on the
     // acquire. Give it a bounded moment to record the block.
-    sluice_async_test::release(sched, sluice_async_test::PhaseTag::e12_admission_attempt_before_global_lock);
+    sluice_async_test::release(sched, sluice_async_test::PhaseTag::event_admission_attempt_before_global_lock);
     std::this_thread::yield();
     std::this_thread::yield();
 

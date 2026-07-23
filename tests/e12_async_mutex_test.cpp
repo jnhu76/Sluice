@@ -316,7 +316,7 @@ SLUICE_TEST_CASE(e12_mtx_t4_no_barging_newcomer_trylock_fails) {
 
 // ---- T5: owner-before-publication (deterministic phase seam) ---------------
 //
-// Arm e12_mutex_handoff_before_publication. G0 unlocks; MUTEX-HANDOFF-ONE
+// Arm mutex_handoff_before_publication. G0 unlocks; MUTEX-HANDOFF-ONE
 // commits owner_ = winner and PAUSES before publication. At that paused point
 // the winner is not yet published runnable. Then release; W1 resumes owning.
 SLUICE_TEST_CASE(e12_mtx_t5_owner_before_publication_phase) {

@@ -7,8 +7,8 @@
 //
 // Determinism policy (production-test-plan.md §1): NO sleep_for, NO wall-clock
 // timing. The deterministic logical clock (E11TimerControl) drives Timer
-// winners; PhaseTag causal seams (e13_select_suspend_before_switch /
-// e13_publish_entry / e13_publish_done / e13_suspended_before_consume) gate the
+// winners; PhaseTag causal seams (select_suspend_before_switch /
+// select_publish_entry / select_publish_done / select_suspended_before_consume) gate the
 // wake-before-physical-switch proofs and the publication boundary snapshots.
 //
 // Gated to x86_64 (fiber_ctx::supported) for parity with the rest of E13.
@@ -339,7 +339,7 @@ SLUICE_TEST_CASE(p6_d1_same_event_twice_one_group) {
 // ===========================================================================
 // P6-LW1 — Event resolves before physical context switch
 //
-//   Pause caller at e13_select_suspend_before_switch (after G release, before
+//   Pause caller at select_suspend_before_switch (after G release, before
 //   context_switch). While paused: Event.set(); publication completes; Fiber
 //   becomes Runnable. Release caller so it executes context switch. Verify it
 //   later resumes and returns. (Lost-wake closure proof.)
@@ -363,11 +363,11 @@ SLUICE_TEST_CASE(p6_lw1_event_resolves_before_physical_switch) {
 
     // Arm the suspend-before-switch seam. The caller pauses there (outside G),
     // having committed Waiting + Armed + waiting_select_count_++ under G.
-    stest::arm(f.sched, stest::PhaseTag::e13_select_suspend_before_switch);
+    stest::arm(f.sched, stest::PhaseTag::select_suspend_before_switch);
 
     std::thread setter([&] {
         // Wait until the caller is paused at the seam (armed + reached).
-        stest::wait_paused(f.sched, stest::PhaseTag::e13_select_suspend_before_switch);
+        stest::wait_paused(f.sched, stest::PhaseTag::select_suspend_before_switch);
         // Resolve while the caller has NOT yet context-switched away. The
         // resolver acquires G, sees the committed Waiting state, queues the
         // caller exactly once via make_runnable + route.
@@ -375,7 +375,7 @@ SLUICE_TEST_CASE(p6_lw1_event_resolves_before_physical_switch) {
         // Give the publication a moment to complete (it runs under G on this
         // thread), then release the seam so the caller executes context_switch.
         for (int i = 0; i < 4; ++i) std::this_thread::yield();
-        stest::release(f.sched, stest::PhaseTag::e13_select_suspend_before_switch);
+        stest::release(f.sched, stest::PhaseTag::select_suspend_before_switch);
     });
 
     f.sched.run_live(1);
@@ -415,16 +415,16 @@ SLUICE_TEST_CASE(p6_lw2_timer_resolves_before_physical_switch) {
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
     f.sched.spawn(fb);
 
-    stest::arm(f.sched, stest::PhaseTag::e13_select_suspend_before_switch);
+    stest::arm(f.sched, stest::PhaseTag::select_suspend_before_switch);
 
     std::thread clock_advancer([&] {
-        stest::wait_paused(f.sched, stest::PhaseTag::e13_select_suspend_before_switch);
+        stest::wait_paused(f.sched, stest::PhaseTag::select_suspend_before_switch);
         // Advance the clock past the deadline; the worker (parked or about to
         // park in run_live) observes the due Timer and resolves the group while
         // the caller has not yet context-switched away.
         stest::E11TimerControl::set_clock(f.sched, deadline + 1);
         for (int i = 0; i < 4; ++i) std::this_thread::yield();
-        stest::release(f.sched, stest::PhaseTag::e13_select_suspend_before_switch);
+        stest::release(f.sched, stest::PhaseTag::select_suspend_before_switch);
     });
 
     f.sched.run_live(1);

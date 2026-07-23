@@ -220,7 +220,7 @@ SLUICE_TEST_CASE(st16_multi_worker_owner_routing) {
 //
 //   One suspended group with Event + Timer arms. Two resolver OS threads
 //   contend on global_mtx_: the Event resolver wins the group CAS and is parked
-//   by the e13_admission_claimed seam AFTER its CAS, BEFORE finalization, WHILE
+//   by the select_admission_claimed seam AFTER its CAS, BEFORE finalization, WHILE
 //   HOLDING G. The Timer resolver (advance_clock) is a separate thread that
 //   BLOCKS on global_mtx_ — genuine lock contention, not sequential
 //   serialization. Releasing the seam lets the Event resolver finalize +
@@ -267,7 +267,7 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
     std::thread event_resolver([&] {
         spin_until_waiting_select(f.sched, 1);
         ev.set();  // acquires G -> resolve_event -> process_group -> CAS wins ->
-                   // parked at e13_admission_claimed HOLDING G.
+                   // parked at select_admission_claimed HOLDING G.
     });
 
     std::thread timer_resolver;
@@ -328,7 +328,7 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
 //   Waiting+Armed+routed but has NOT yet completed its physical suspend
 //   context_switch.
 //
-//   1. Caller F pinned to worker 0; F suspends at e13_select_suspend_before_switch
+//   1. Caller F pinned to worker 0; F suspends at select_suspend_before_switch
 //      (after G release, with suspend_switch_pending RAISED).
 //   2. Coordinator resolves the Event: routes F Runnable onto worker 0's
 //      local_runnable — while worker 0 is still parked at the seam.
@@ -427,7 +427,7 @@ SLUICE_TEST_CASE(p6_lw_mw_steal_before_switch_excluded) {
 // ===========================================================================
 // PUB-1 — publication entry preconditions (snapshot)
 //
-//   At e13_publish_entry: winner exists, all arms Retired, all authority
+//   At select_publish_entry: winner exists, all arms Retired, all authority
 //   closed, result not yet written, completion_mode == None, phase == Selecting
 //   or Armed, runnable count unchanged. Observed via the publish_entry snapshot
 //   (captured under global_mtx_, read by the coordinator).
@@ -479,7 +479,7 @@ SLUICE_TEST_CASE(pub1_publication_entry_preconditions) {
 // ===========================================================================
 // PUB-2 — suspended publication done (snapshot)
 //
-//   At e13_publish_done: phase Completed, completion_mode Suspended, result
+//   At select_publish_done: phase Completed, completion_mode Suspended, result
 //   exists and matches winner, all authority closed, caller Fiber Runnable,
 //   result publication delta == 1, runnable publication delta == 1,
 //   waiting_select_count no longer includes group.
@@ -579,7 +579,7 @@ SLUICE_TEST_CASE(pub3_inline_publication_regression) {
 // ===========================================================================
 // PUB-4 — resumed ConsumeResult (snapshot)
 //
-//   At e13_suspended_before_consume: phase Completed, mode Suspended, result
+//   At select_suspended_before_consume: phase Completed, mode Suspended, result
 //   exists, winner stable, all authority closed, caller Running. After return:
 //   group reached Consumed, group destructor succeeds.
 // ===========================================================================

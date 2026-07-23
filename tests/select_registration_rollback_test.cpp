@@ -546,7 +546,7 @@ SLUICE_TEST_CASE(p7_t8_stale_timer_after_frame_unwind) {
 // must see only the clean post-rollback (Aborted) group.
 //
 // Determinism (no sleep_for as a correctness condition):
-//   1. arm e13_rollback_aborted so the worker PAUSES at the end of the
+//   1. arm select_rollback_aborted so the worker PAUSES at the end of the
 //      rollback transaction while STILL HOLDING global_mtx_;
 //   2. wait_reached -> the rollback transaction is now in flight, G held;
 //   3. start the contender thread; it calls ev.set() which blocks on G;
@@ -596,7 +596,7 @@ SLUICE_TEST_CASE(p7_t9_rollback_isolation_under_g) {
     f.sched.spawn(fb);
 
     // Arm the in-transaction pause so the worker holds G at rollback end.
-    stest::arm(f.sched, stest::PhaseTag::e13_rollback_aborted);
+    stest::arm(f.sched, stest::PhaseTag::select_rollback_aborted);
 
     std::atomic<bool> contender_done{false};
     std::atomic<bool> contender_blocked_observed{false};
@@ -605,8 +605,8 @@ SLUICE_TEST_CASE(p7_t9_rollback_isolation_under_g) {
         // (1) The caller Fiber only reaches select() under run_live below, so
         // this coordinator runs CONCURRENTLY with the live worker. Wait until
         // the rollback transaction is genuinely in flight: paused at
-        // e13_rollback_aborted, HOLDING global_mtx_.
-        stest::wait_reached(f.sched, stest::PhaseTag::e13_rollback_aborted);
+        // select_rollback_aborted, HOLDING global_mtx_.
+        stest::wait_reached(f.sched, stest::PhaseTag::select_rollback_aborted);
 
         // (2) NOW start the contender: an external OS thread sets the Event.
         // Event::set acquires global_mtx_ for its Phase-1 Select scan; since
@@ -633,7 +633,7 @@ SLUICE_TEST_CASE(p7_t9_rollback_isolation_under_g) {
 
         // (4) Release the in-transaction pause: the worker completes the
         // rollback, rethrows the synthetic failure, and drops global_mtx_.
-        stest::release(f.sched, stest::PhaseTag::e13_rollback_aborted);
+        stest::release(f.sched, stest::PhaseTag::select_rollback_aborted);
     });
 
     // Drive the run on the main thread. The worker runs the caller Fiber into

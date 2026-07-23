@@ -555,7 +555,7 @@ SLUICE_TEST_CASE(c11_no_publication) {
 // ===========================================================================
 // Mechanically prove: arm.state became Retired WHILE the stable registration
 // was still ACTIVE, THEN the registration became RETIRED. Use the
-// e13_timer_loser_arm_classified phase seam: arm it, run a process with a
+// select_timer_loser_arm_classified phase seam: arm it, run a process with a
 // Timer winner + Timer loser. At the seam the controller observes the loser
 // arm is Retired and its registration is still ACTIVE. After release, the
 // retire CAS flips it to RETIRED. No wall-clock timing.
@@ -569,7 +569,7 @@ SLUICE_TEST_CASE(c12_timer_loser_ordering) {
     // thread that runs the process while the main thread observes the seam.
     // Because the seam BLOCKS the process thread at the classification point,
     // we run process on a worker thread and assert from the main thread.
-    sluice_async_test::arm(f.sched, stest::PhaseTag::e13_timer_loser_arm_classified);
+    sluice_async_test::arm(f.sched, stest::PhaseTag::select_timer_loser_arm_classified);
 
     std::atomic<bool> done{false};
     std::thread worker([&] {
@@ -581,7 +581,7 @@ SLUICE_TEST_CASE(c12_timer_loser_ordering) {
 
     // Wait until the process thread is paused at the classification seam.
     sluice_async_test::wait_paused(f.sched,
-                                   stest::PhaseTag::e13_timer_loser_arm_classified);
+                                   stest::PhaseTag::select_timer_loser_arm_classified);
 
     // SN-9 mechanical observation: at the seam, the loser arm is Retired AND
     // its registration is STILL ACTIVE. (read under the controller's mtx via a
@@ -594,7 +594,7 @@ SLUICE_TEST_CASE(c12_timer_loser_ordering) {
 
     // Release: the retire CAS proceeds, flipping ACTIVE -> RETIRED.
     sluice_async_test::release(f.sched,
-                               stest::PhaseTag::e13_timer_loser_arm_classified);
+                               stest::PhaseTag::select_timer_loser_arm_classified);
     worker.join();
     SLUICE_CHECK(done.load());
 
