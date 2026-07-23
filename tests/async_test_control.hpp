@@ -25,7 +25,9 @@
 #include <sluice/async/wait_node.hpp>
 #include <sluice/async/wait_queue.hpp>
 
+#include <array>
 #include <cstddef>
+#include <list>
 
 namespace sluice_async_test {
 
@@ -327,5 +329,276 @@ struct MutexFailSeam {
         sluice::async::detail::test_hooks::disarm();
     }
 };
+
+// ---- E13 P3 Select timer seams + access ----
+// Phase seams for the Select timer pump branch (deterministic causal pause),
+// reached through the non-installed controller. Plus thin facades over
+// Scheduler::AsyncTestAccess for synthetic registration, accounting-helper
+// transitions, and pool/heap/counter observation.
+struct E13SelectTimerSeam {
+    // Pump observing a stale (non-ACTIVE) Select entry being skipped (I4).
+    static void arm_pump_skip(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_timer_pump_skip);
+    }
+    static bool pump_skip_reached(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_timer_pump_skip);
+    }
+    static void wait_pump_skip(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_reached(s, PhaseTag::e13_timer_pump_skip);
+    }
+    static void clear_pump_skip(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::disarm(s, PhaseTag::e13_timer_pump_skip);
+        sluice_async_test::clear_reached(s, PhaseTag::e13_timer_pump_skip);
+    }
+
+    // Pump paused AFTER the ACTIVE check, BEFORE the fail-fast. A due ACTIVE
+    // Select entry is unreachable in valid P3 (no admission); this seam lets a
+    // test prove the guard fires. NOT supported production behavior.
+    static void arm_pump_active(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_timer_pump_active);
+    }
+
+    // Synthetic registration / transitions via Scheduler accounting authority.
+    using Scheduler = sluice::async::Scheduler;
+    using SelectTimerReg = sluice::async::detail::SelectTimerRegistration;
+    using ArmSlot = sluice::async::detail::SelectArmSlot;
+
+    static SelectTimerReg* register_synthetic(
+        Scheduler& s, ArmSlot* arm, Scheduler::deadline_t deadline) {
+        return Scheduler::AsyncTestAccess::register_synthetic_select_timer(
+            s, arm, deadline);
+    }
+    static bool retire_synthetic(Scheduler& s, SelectTimerReg& reg) {
+        return Scheduler::AsyncTestAccess::retire_synthetic_select_timer(s, reg);
+    }
+    static bool consume_synthetic(Scheduler& s, SelectTimerReg& reg) {
+        return Scheduler::AsyncTestAccess::consume_synthetic_select_timer(s, reg);
+    }
+
+    // Splice a caller-owned temporary node via the REAL production helper, for
+    // T2 pre/post-splice address-identity proof. `tmp_pool` loses the node;
+    // the returned pointer is the now-Scheduler-owned stable address.
+    static SelectTimerReg* splice_one(
+        Scheduler& s,
+        std::list<SelectTimerReg>& tmp_pool,
+        std::list<SelectTimerReg>::iterator it) {
+        return Scheduler::AsyncTestAccess::splice_one_for_test(s, tmp_pool, it);
+    }
+
+    // Detached-object CAS authority for T1 (reg must NOT be Scheduler-owned).
+    // Routes through the guarded AsyncTestAccess entry; the CAS methods
+    // themselves are private in the production target.
+    static bool detached_try_claim_expiry(SelectTimerReg& reg) noexcept {
+        return Scheduler::AsyncTestAccess::detached_try_claim_expiry(reg);
+    }
+    static bool detached_retire(SelectTimerReg& reg) noexcept {
+        return Scheduler::AsyncTestAccess::detached_retire(reg);
+    }
+    static void advance_clock(Scheduler& s, Scheduler::deadline_t t) {
+        Scheduler::AsyncTestAccess::advance_clock(s, t);
+    }
+
+    // Observation.
+    static std::size_t pool_size(const Scheduler& s) noexcept {
+        return Scheduler::AsyncTestAccess::select_timer_pool_size(s);
+    }
+    static std::size_t count_in_state(
+        const Scheduler& s, SelectTimerReg::State st) noexcept {
+        return Scheduler::AsyncTestAccess::select_timer_count_in_state(s, st);
+    }
+    static std::array<std::size_t, 2> heap_counts_by_kind(
+        const Scheduler& s) noexcept {
+        return Scheduler::AsyncTestAccess::tagged_heap_counts_by_kind(s);
+    }
+    // Does any Select-kind heap entry target `target` (by address)? For T2.
+    static bool heap_has_select_target(
+        const Scheduler& s, const SelectTimerReg* target) noexcept {
+        return Scheduler::AsyncTestAccess::deadline_heap_has_select_target(
+            s, target);
+    }
+    static std::size_t arm_load_count(const Scheduler& s) noexcept {
+        return Scheduler::AsyncTestAccess::select_timer_arm_load_count(s);
+    }
+    static void reset_arm_load_count(Scheduler& s) noexcept {
+        Scheduler::AsyncTestAccess::reset_select_timer_arm_load_count(s);
+    }
+};
+
+// ---- E13 P5 Select admission seams ----
+// Phase seams for the inline admission path (deterministic causal pause),
+// reached through the non-installed controller. The admission worker calls
+// test_phase at AdmissionArmed / AdmissionClaimed / AdmissionConsumed under
+// global_mtx_; a coordinator thread arms + observes while the worker is paused
+// there, proving registration-before-snapshot, snapshot-before-finalize, and
+// the inline Completed->Consumed lifecycle ordering. No production symbol.
+//
+// P5 CORRECTIVE: admission boundary snapshots are captured by the admission
+// worker under global_mtx_ before each seam, so the test can read the
+// mechanical group/arm state without acquiring global_mtx_ (which would
+// deadlock if the worker holds it). The snapshot accessor functions return
+// the controller-owned copy; they acquire the controller's own mutex, not
+// any production lock.
+struct E13SelectAdmissionSeam {
+    using Scheduler = sluice::async::Scheduler;
+    using AdmissionSnapshot = sluice_async_test::AdmissionSnapshot;
+
+    // Non-blocking reach observation. The admission seams fire under
+    // global_mtx_; a coordinator thread cannot acquire that lock to observe
+    // Scheduler-internal state while the worker is paused at the seam, so the
+    // lifecycle tests observe whether each seam was REACHED (in-order) rather
+    // than block-and-inspect. `is_reached` reads the controller state under its
+    // own mutex (no global_mtx_ acquisition). The blocking arm/wait/release
+    // accessors below remain available for seams that do NOT hold global_mtx_.
+    static bool armed_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_admission_armed);
+    }
+    static bool claimed_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_admission_claimed);
+    }
+    static bool consumed_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_admission_consumed);
+    }
+
+    // AdmissionArmed: AFTER every arm registered + phase==Selecting, BEFORE the
+    // readiness snapshot. Proves all arms registered before the snapshot.
+    static void arm_admission_armed(Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_admission_armed);
+    }
+    static void wait_admission_armed_paused(Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::e13_admission_armed);
+    }
+    static bool is_admission_armed_paused(Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::e13_admission_armed);
+    }
+    static void release_admission_armed(Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::e13_admission_armed);
+    }
+
+    // AdmissionClaimed: AFTER the winner CAS, BEFORE finalization.
+    static void arm_admission_claimed(Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_admission_claimed);
+    }
+    static void wait_admission_claimed_paused(Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::e13_admission_claimed);
+    }
+    static bool is_admission_claimed_paused(Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::e13_admission_claimed);
+    }
+    static void release_admission_claimed(Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::e13_admission_claimed);
+    }
+
+    // AdmissionConsumed: AFTER phase==Completed, BEFORE Consumed.
+    static void arm_admission_consumed(Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_admission_consumed);
+    }
+    static void wait_admission_consumed_paused(Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::e13_admission_consumed);
+    }
+    static bool is_admission_consumed_paused(Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::e13_admission_consumed);
+    }
+    static void release_admission_consumed(Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::e13_admission_consumed);
+    }
+
+    // ---- P5 CORRECTIVE: admission boundary snapshot accessors ----
+    // Read the AdmissionArmed boundary snapshot. The snapshot was captured by
+    // the admission worker under global_mtx_ before the readiness snapshot, so
+    // it reflects the exact group/arm state at the Armed seam. The test reads
+    // it under the controller's own mutex (no global_mtx_ acquisition).
+    static AdmissionSnapshot armed_snapshot(Scheduler& s) noexcept {
+        return sluice_async_test::read_admission_snapshot(
+            s, PhaseTag::e13_admission_armed);
+    }
+
+    // Read the AdmissionConsumed boundary snapshot. Captured after phase==
+    // Completed, before Consumed. Reflects the inline lifecycle state.
+    static AdmissionSnapshot consumed_snapshot(Scheduler& s) noexcept {
+        return sluice_async_test::read_admission_snapshot(
+            s, PhaseTag::e13_admission_consumed);
+    }
+};
+
+// ---- E13 P6 Select publication / suspended-resolution seams ----
+// Phase seams + snapshot accessors for the unified publication authority
+// (select_publish_locked) and the suspended admission lifecycle (suspend-before-
+// switch, suspended-before-consume). Plus the required controller counters
+// (task §13): result + runnable publication counts, and the waiting_select_count
+// liveness observation. All reached through the non-installed controller; no
+// production symbol.
+struct E13SelectPublicationSeam {
+    using Scheduler = sluice::async::Scheduler;
+    using PublicationSnapshot = sluice_async_test::PublicationSnapshot;
+    using SelectTimerReg = sluice::async::detail::SelectTimerRegistration;
+    using Event = sluice::async::Event;
+    using SelectGroup = sluice::async::detail::SelectGroup;
+
+    // ---- suspend-before-switch (caller side, runs OUTSIDE global_mtx_) ----
+    static void arm_suspend_before_switch(Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::e13_select_suspend_before_switch);
+    }
+    static void wait_suspend_before_switch_paused(Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::e13_select_suspend_before_switch);
+    }
+    static bool is_suspend_before_switch_paused(Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::e13_select_suspend_before_switch);
+    }
+    static void release_suspend_before_switch(Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::e13_select_suspend_before_switch);
+    }
+
+    // ---- publish entry / done / suspended-before-consume (hold global_mtx_) ----
+    // Non-blocking reach observation (the publication seams fire under
+    // global_mtx_; a coordinator thread cannot acquire that lock).
+    static bool publish_entry_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_publish_entry);
+    }
+    static bool publish_done_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_publish_done);
+    }
+    static bool suspended_before_consume_reached(Scheduler& s) noexcept {
+        return sluice_async_test::is_reached(s, PhaseTag::e13_suspended_before_consume);
+    }
+
+    static PublicationSnapshot publish_entry_snapshot(Scheduler& s) noexcept {
+        return sluice_async_test::read_publication_snapshot(
+            s, PhaseTag::e13_publish_entry);
+    }
+    static PublicationSnapshot publish_done_snapshot(Scheduler& s) noexcept {
+        return sluice_async_test::read_publication_snapshot(
+            s, PhaseTag::e13_publish_done);
+    }
+    static PublicationSnapshot suspended_before_consume_snapshot(
+        Scheduler& s) noexcept {
+        return sluice_async_test::read_publication_snapshot(
+            s, PhaseTag::e13_suspended_before_consume);
+    }
+
+    // ---- required controller counters (task §13) ----
+    static std::size_t result_publication_count(Scheduler& s) noexcept {
+        return sluice_async_test::result_publication_count(s);
+    }
+    static std::size_t runnable_publication_count(Scheduler& s) noexcept {
+        return sluice_async_test::runnable_publication_count(s);
+    }
+    static void reset_publication_counts(Scheduler& s) noexcept {
+        sluice_async_test::reset_publication_counts(s);
+    }
+
+    // ---- waiting_select_count liveness observation ----
+    static std::size_t waiting_select_count(const Scheduler& s) noexcept {
+        return Scheduler::AsyncTestAccess::waiting_select_count(s);
+    }
+
+    // ---- Select timer pool observation (mirror of E13SelectTimerSeam) ----
+    static std::size_t select_timer_count_in_state(
+        const Scheduler& s, SelectTimerReg::State st) noexcept {
+        return Scheduler::AsyncTestAccess::select_timer_count_in_state(s, st);
+    }
+};
+
+// Short alias used by the P6 tests.
+using AsyncTestAccess = sluice::async::Scheduler::AsyncTestAccess;
 
 }  // namespace sluice_async_test

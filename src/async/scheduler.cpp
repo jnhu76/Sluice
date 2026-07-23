@@ -13,7 +13,10 @@
 // (E7-T1/T2) and preserve single-worker regression (E4-E6).
 #include <sluice/async/scheduler.hpp>
 
+#include <sluice/async/select.hpp>
+#include <sluice/async/event.hpp>
 #include <sluice/async/fiber_ctx.hpp>
+#include <sluice/async/detail/select_port.hpp>
 
 #include "queue_detail.hpp"  // QueueWaitCtx (shared with queue_port.cpp; non-installed)
 
@@ -132,6 +135,53 @@ Scheduler::~Scheduler() {
         wake_control_.reset();
     }
     // Workers are joined in run().
+    //
+    // E13 P3 Corrective (destruction contract): at destruction the Scheduler
+    // must hold NO live Select timer AUTHORITY — no ACTIVE SelectTimerRegist-
+    // ration may remain, and the shared active-deadline counter must be zero.
+    // Terminal (RETIRED/CONSUMED) lazy blocks whose deadlines never elapsed are
+    // PERMITTED here: lazy-at-deadline reclamation may leave such inert blocks
+    // in the pool, and their callback authority was already closed via the
+    // Scheduler accounting helper (which decremented active_deadline_count_).
+    // The pool/heap members then destruct normally and free the inert blocks.
+    //
+    // This mirrors the ordinary timer_pool_ teardown contract, which imposes
+    // no pool-empty assertion: a non-empty physical pool is legal as long as no
+    // logical authority remains. The previous shape wrongly asserted
+    // select_timer_pool_.empty(), rejecting the legal lazy-teardown state where
+    // a Select with an Event arm + a far-future Timer arm resolved via the
+    // Event, leaving a RETIRED Timer block whose deadline had not elapsed.
+    //
+    // active_deadline_count_ == 0 is the logical-authority count: it is
+    // decremented exactly once per ACTIVE->terminal transition by the
+    // retire/consume helper, so a terminal lazy block contributes 0 and the
+    // assertion is consistent with permitting lazy blocks. Debug-only asserts;
+    // absent in release (NDEBUG).
+    [[maybe_unused]] bool any_active_select = false;
+    for (auto& r : select_timer_pool_) {
+        if (r.is_active()) { any_active_select = true; break; }
+    }
+    assert(!any_active_select &&
+           "~Scheduler: an ACTIVE SelectTimerRegistration remains (live Select "
+           "timer authority not closed — caller contract violation)");
+    assert(active_deadline_count_ == 0 &&
+           "~Scheduler: active_deadline_count_ != 0 (a timer registration was "
+           "not retired/consumed before teardown)");
+    // E13 P6-C1 (P1-2 corrective): the suspended-Select quiescence invariant.
+    // An Event-only suspended Select (no active Timer, no ordinary WaitQueue,
+    // no backend op) escapes BOTH checks above — active_deadline_count_==0 and
+    // no ACTIVE SelectTimerRegistration — yet it leaves a live SelectGroup
+    // Armed, an intrusive SelectArmSlot in the Event's SelectPort, and an
+    // unfulfilled runnable obligation. waiting_select_count_ is the minimal
+    // accounting that closes this gap: it was incremented at the no-ready
+    // suspension commit and decremented exactly once at suspended publication,
+    // so a non-zero value at teardown means a suspended caller was abandoned.
+    // Read without global_mtx_ (single-threaded post-run-join, matching the
+    // two asserts above). Debug-only; absent in release (NDEBUG).
+    assert(waiting_select_count_ == 0 &&
+           "~Scheduler: waiting_select_count_ != 0 (a suspended SelectGroup "
+           "remains Armed — an Event-only Select with no active Timer escapes "
+           "the timer teardown checks; caller contract violation)");
 }
 
 // ---- E9 SchedulerWakeHandle::notify + bound ----
@@ -472,6 +522,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         // Single-worker fast path: run inline (no thread spawn). This preserves
         // the E4-E6 behavior exactly — run_until_idle on the caller's thread.
         g_worker = workers_[0].get();
+        workers_[0]->owner_scheduler = this;  // E13 P5 caller-validation identity
         workers_[0]->active.store(true, std::memory_order_release);
         worker_loop(workers_[0].get());
         workers_[0]->active.store(false, std::memory_order_release);
@@ -483,6 +534,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
         for (unsigned i = 0; i < worker_count; ++i) {
             threads.emplace_back([this, i] {
                 g_worker = workers_[i].get();
+                workers_[i]->owner_scheduler = this;  // E13 P5 caller-validation identity
                 workers_[i]->active.store(true, std::memory_order_release);
                 worker_loop(workers_[i].get());
                 workers_[i]->active.store(false, std::memory_order_release);
@@ -959,7 +1011,7 @@ Scheduler::MwState Scheduler::classify_locked() const {
 
     const bool any_wait =
         !waiting_size_.empty() || !waiting_void_.empty() || !waiting_ready_.empty() ||
-        waiting_waitq_count_ > 0;
+        waiting_waitq_count_ > 0 || waiting_select_count_ > 0;
     if (any_wait) return MwState::mw_s3_unresolved;
 
     return MwState::quiescent;
@@ -1225,7 +1277,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
         timer_pool_.emplace_back(&node, &q, deadline);
         reg = &timer_pool_.back();
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();  // publish to the park-timeout cache
 
         // I5 admission closure: if the deadline is ALREADY due, resolve Expired
@@ -1300,43 +1352,28 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
 
 // ---- E12-A Event wait admission / broadcast (sluice-CORE-E12-A) ----
 
-std::size_t Scheduler::event_set_broadcast(WaitQueue& waiters,
-                                            std::atomic<bool>& set_flag) {
-    // Transition `set_flag` to SET and drain every registered Event wait epoch
-    // through the canonical RESOURCE_WAKE path (wake_wait_one_locked). The store
-    // + drain are ONE atomic critical section under global_mtx_, serializing
-    // with reset() and wait admission so OLD_SET_WAKES_POST_RESET_WAITER is
-    // mechanically impossible: a waiter admitted after this drain is not in the
-    // queue during the drain, and reset() cannot interleave mid-drain.
-    //
-    // Idempotent: set() on SET re-stores true (no-op) and drains whatever
-    // waiters remain (typically none, since a prior set already drained them —
-    // but a waiter admitted between the prior set's drain and this call would
-    // be correctly drained here). Each winner is an independent resolve_(Woken)
-    // CAS + unlink + retire-timer + dec-count + make_runnable + route. One
-    // runnable publication per winning epoch (E7-T2 exactly-once).
-    //
-    // Safe to call from an external OS thread: global_mtx_ + the wake source
-    // (signal_wake_locked via route_runnable_locked) are the existing external-
-    // wake-capable mechanism. No Event-private wake channel.
-    std::size_t woken = 0;
+std::size_t Scheduler::event_set_broadcast(Event& event) {
     LockGuard lk(global_mtx_);
-    set_flag.store(true, std::memory_order::release);
-    // E12-A-EVENT-CORRECTIVE-1 (Corrective B): deterministic set-store-before-
-    // drain phase seam. When armed, pause the set() thread AFTER it has stored
-    // SET and while it STILL HOLDS global_mtx_, BEFORE the drain loop. This lets
-    // a causal test mechanically prove reset() and a new admission CANNOT
-    // complete while an old-set drain is active (the production lock is held).
-    // The seam blocks on its OWN mtx/cv (global_mtx_ remains held for the
-    // pause), which is precisely the guarantee under test.
-    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
+    bool previous = event.set_.exchange(true, std::memory_order::release);
+    if (previous) {
+        return 0;
+    }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
         sluice_async_test::PhaseTag::e12_set_store_before_drain);
 #endif
-    while (wake_wait_one_locked(waiters) != nullptr) {
+    std::size_t woken = 0;
+    while (wake_wait_one_locked(event.waiters_) != nullptr) {
         ++woken;
     }
+    // P6: the suspended-Event resolver. Replaces the P2 readiness-offer-only
+    // select_event_scan_locked. select_resolve_event_locked walks this Event's
+    // SelectPort, applies the single-group P6 gate (P8 multi-group DENIED ->
+    // fail-fast before any CAS), marks eligible arms CandidateReady, chooses
+    // the lowest INDEX ready arm, drives the P4 group processor exactly once,
+    // and publishes exactly once. A zero-eligible return is a clean no-op (no
+    // suspended Select arms on this Event).
+    (void)select_resolve_event_locked(event);
     return woken;
 }
 
@@ -1349,6 +1386,182 @@ void Scheduler::event_reset(std::atomic<bool>& set_flag) {
     LockGuard lk(global_mtx_);
     set_flag.store(false, std::memory_order::release);
 }
+
+// ---- E13 Select registry operations (private Scheduler authority) ----
+
+void Scheduler::select_event_link_locked(Event& event,
+                                         detail::SelectArmSlot& arm) {
+    // Event must belong to this Scheduler.
+    assert(&event.scheduler_ == this &&
+           "select_event_link_locked: Event does not belong to this Scheduler");
+    // Precondition: arm is not already linked.
+    // The caller (future select() admission) is responsible for setting
+    // arm.state to Prepared and arm.group to the owning SelectGroup.
+    assert(arm.home_ == nullptr &&
+           "select_event_link_locked: arm already linked");
+    assert(arm.next_ == nullptr &&
+           "select_event_link_locked: arm.next_ not null");
+    assert(arm.prev_ == nullptr &&
+           "select_event_link_locked: arm.prev_ not null");
+    assert(arm.kind == detail::ArmKind::event &&
+           "select_event_link_locked: arm kind must be event");
+    assert(arm.event.event_ == &event &&
+           "select_event_link_locked: arm.event does not point to this Event");
+    assert((arm.state == detail::ArmState::detached ||
+            arm.state == detail::ArmState::prepared) &&
+           "select_event_link_locked: arm state must be Detached or Prepared");
+    assert(arm.group != nullptr &&
+           "select_event_link_locked: arm.group must be set");
+
+    arm.home_ = &event.select_port_;
+    arm.state = detail::ArmState::registered;
+
+    // Insert at head of the doubly-linked list.
+    detail::SelectPort& port = event.select_port_;
+    arm.next_ = port.head_;
+    if (port.head_ != nullptr) {
+        port.head_->prev_ = &arm;
+    }
+    arm.prev_ = nullptr;
+    port.head_ = &arm;
+}
+
+void Scheduler::select_event_unlink_locked(Event& event,
+                                           detail::SelectArmSlot& arm) {
+    assert(&event.scheduler_ == this &&
+           "select_event_unlink_locked: Event does not belong to this Scheduler");
+    // Validate that the arm belongs to this Event's port.
+    assert(arm.home_ == &event.select_port_ &&
+           "select_event_unlink_locked: arm does not belong to this Event");
+    assert((arm.state == detail::ArmState::registered ||
+            arm.state == detail::ArmState::candidate_ready ||
+            arm.state == detail::ArmState::retired) &&
+           "select_event_unlink_locked: unexpected arm state");
+
+    detail::SelectPort& port = event.select_port_;
+
+    // Repair predecessor link.
+    if (arm.prev_ != nullptr) {
+        arm.prev_->next_ = arm.next_;
+    } else {
+        // Arm is the head.
+        port.head_ = arm.next_;
+    }
+
+    // Repair successor link.
+    if (arm.next_ != nullptr) {
+        arm.next_->prev_ = arm.prev_;
+    }
+
+    // Clear arm linkage.
+    arm.next_ = nullptr;
+    arm.prev_ = nullptr;
+    arm.home_ = nullptr;
+}
+
+std::size_t Scheduler::select_event_scan_locked(Event& event) {
+    assert(&event.scheduler_ == this &&
+           "select_event_scan_locked: Event does not belong to this Scheduler");
+    // Walk the Event's SelectPort, marking eligible Event Select arms
+    // CandidateReady. P2: readiness-offer only — no claim, no finalization,
+    // no publication, no unlink, no worklist construction.
+    std::size_t marked = 0;
+    detail::SelectArmSlot* arm = event.select_port_.head_;
+    while (arm != nullptr) {
+        detail::SelectArmSlot* next = arm->next_;
+        if (arm->kind == detail::ArmKind::event &&
+            arm->state == detail::ArmState::registered &&
+            arm->group != nullptr &&
+            arm->group->phase() == detail::GroupPhase::armed &&
+            arm->home_ == &event.select_port_ &&
+            arm->event.event_ == &event) {
+            arm->state = detail::ArmState::candidate_ready;
+            ++marked;
+        }
+        arm = next;
+    }
+    return marked;
+}
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+void Scheduler::AsyncTestAccess::set_arm_state(Scheduler& s,
+                                                detail::SelectArmSlot& arm,
+                                                detail::ArmState st) {
+    LockGuard lk(s.global_mtx_);
+    arm.state = st;
+}
+
+// E13 P4 detached-group winner-CAS test entry (out-of-line: needs SelectGroup's
+// complete definition from select_port.hpp). Enforces the mechanical detached
+// precondition (scheduler_ == nullptr, arms_ == nullptr, arm_count_ == 0)
+// BEFORE the CAS, then reaches the private claim_winner_locked. A registered
+// group cannot reach this path: it would fail the precondition assertions.
+bool Scheduler::AsyncTestAccess::detached_claim_winner(
+    detail::SelectGroup& group, std::uint32_t arm_index) noexcept {
+    assert(group.scheduler_ == nullptr &&
+           "detached winner-CAS accessor requires scheduler_ == nullptr");
+    assert(group.arms_ == nullptr &&
+           "detached winner-CAS accessor requires arms_ == nullptr");
+    assert(group.arm_count_ == 0 &&
+           "detached winner-CAS accessor requires arm_count_ == 0");
+    return group.claim_winner_locked(arm_index);
+}
+
+// E13 P4 central claim + finalization test driver. Acquires global_mtx_ and
+// dispatches to the Scheduler-locked core (select_process_group_locked). The
+// test harness sets up the registered group exactly as a future admission
+// would: group.scheduler_ = &s, arms_/arm_count_ set, Event arms linked via
+// select_event_link, Timer arms registered via register_synthetic_select_timer.
+bool Scheduler::AsyncTestAccess::select_process_group(
+    Scheduler& s, detail::SelectGroup& group, std::uint32_t candidate_index) {
+    LockGuard lk(s.global_mtx_);
+    return s.select_process_group_locked(group, candidate_index);
+}
+
+// E13 P4 all-authority-closed invariant predicate (SN-10). Acquires global_mtx_
+// and dispatches to the const locked predicate. Pure read; no mutation.
+bool Scheduler::AsyncTestAccess::select_all_authority_closed(
+    const Scheduler& s, const detail::SelectGroup& group) {
+    LockGuard lk(s.global_mtx_);
+    return s.select_all_authority_closed_locked(group);
+}
+
+// E13 P4 OA corrective: the all-authority-closed invariant as a fail-fast
+// assert — the mechanical precondition a future P6 publication entry will gate
+// on. Acquires global_mtx_ and asserts select_all_authority_closed_locked.
+void Scheduler::AsyncTestAccess::assert_select_all_authority_closed(
+    const Scheduler& s, const detail::SelectGroup& group) {
+    LockGuard lk(s.global_mtx_);
+    assert(s.select_all_authority_closed_locked(group) &&
+           "Select publication requires all arm authority closed");
+}
+
+// E13 P4 EH corrective: forge a stale-but-equality-passing Event home_. PRE:
+// `arm` is unlinked (home_/next_/prev_ null) and NOT present in `event`'s
+// SelectPort intrusive list. Sets arm.home_ = &event.select_port_ so the
+// preflight home_ equality check passes while the arm remains absent from the
+// intrusive list — exactly the shape required for the mechanical membership
+// scan in select_preflight_claim_locked to be load-bearing. Acquires
+// global_mtx_ internally; verifies the preconditions under G.
+void Scheduler::AsyncTestAccess::select_event_forge_stale_home(
+    Scheduler& s, Event& event, detail::SelectArmSlot& arm) {
+    LockGuard lk(s.global_mtx_);
+    assert(&event.scheduler_ == &s &&
+           "select_event_forge_stale_home: Event does not belong to this Scheduler");
+    assert(arm.home_ == nullptr &&
+           "select_event_forge_stale_home: arm must be unlinked (home_ != nullptr)");
+    assert(arm.next_ == nullptr && arm.prev_ == nullptr &&
+           "select_event_forge_stale_home: arm must be fully unlinked");
+    // The arm must NOT be reachable from the port's intrusive list — otherwise
+    // this would be forging a stale home_ for an arm that is genuinely linked.
+    for (detail::SelectArmSlot* p = event.select_port_.head_; p != nullptr;
+         p = p->next_) {
+        assert(p != &arm && "select_event_forge_stale_home: arm is actually "
+               "linked into the port intrusive list; cannot forge stale home_");
+    }
+    arm.home_ = &event.select_port_;
+}
+#endif
 
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     // E12-A-EVENT-CORRECTIVE-2: the narrow Event cancellation authority with
@@ -1502,7 +1715,7 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
         timer_pool_.emplace_back(&node, &q, deadline);
         reg = &timer_pool_.back();
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
 
         // Admission closure — Event SET takes precedence: if the resource is
@@ -1696,7 +1909,7 @@ void Scheduler::sem_acquire_until(WaitQueue& waiters,
         timer_pool_.emplace_back(&node, &waiters, deadline);
         reg = &timer_pool_.back();
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
 
         // Admission precedence 1: permit admission wins over a due deadline. If
@@ -1980,7 +2193,7 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
         timer_pool_.emplace_back(&node, &waiters, deadline);
         reg = &timer_pool_.back();
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
 
         // Admission precedence 1: ownership admission wins over a due deadline.
@@ -2348,7 +2561,7 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
         reg->owner_ctx_ = &port;
         ++port.active_queue_timers_;
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
         // Admission precedence 1: resource admissible => commit + resolve.
         if (!port.closed_ && !port.ring_full_locked() && node.prev_ == nullptr) {
@@ -2427,7 +2640,7 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
         reg->owner_ctx_ = &port;
         ++port.active_queue_timers_;
         ++active_deadline_count_;
-        heap_push_locked(reg);
+        heap_push_ordinary_locked(reg);
         recompute_earliest_deadline_locked();
         if (!port.ring_empty_locked() && node.prev_ == nullptr) {
             const std::size_t head = port.ring_head_;
@@ -2713,7 +2926,7 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
             timer_pool_.emplace_back(&cond_node, &cond_waiters, deadline);
             reg = &timer_pool_.back();
             ++active_deadline_count_;
-            heap_push_locked(reg);
+            heap_push_ordinary_locked(reg);
             recompute_earliest_deadline_locked();
         }
         // Admission precedence 1: E11 I5 — if the deadline is ALREADY due, the
@@ -2832,11 +3045,25 @@ std::size_t Scheduler::pump_deadlines_locked() {
     std::size_t won = 0;
     const deadline_t now = clock_now_unlocked();
     while (!deadline_heap_.empty()) {
-        TimerRegistration* top = deadline_heap_.front();
-        if (top->deadline() > now) break;  // earliest not yet due
-        // Pop the min regardless (lazy removal: retired/consumed entries leave
-        // the heap here without their node ever being dereferenced).
+        const detail::DeadlineHeapEntry front = deadline_heap_.front();
+        if (front.deadline > now) break;  // earliest not yet due
+        // E13 P3: the deadline heap holds tagged entries (Ordinary | Select).
+        // Pop the min regardless of kind (lazy removal: inert entries leave
+        // the heap here without their target ever being dereferenced for a
+        // non-ACTIVE state). Copy `front` because pop invalidates the ref.
         heap_pop_min_locked();
+        if (front.kind == detail::DeadlineHeapEntry::Kind::select) {
+            // Select timer branch (Addendum D/E). State-before-arm: the branch
+            // body loads state first; non-ACTIVE skips (PumpSkip), ACTIVE
+            // fails fast (a due ACTIVE Select entry is unreachable in valid
+            // P3 — no admission path). Physical reclamation only here: the
+            // retire/consume helper already decremented active_deadline_count_
+            // exactly once; the stale-pop path MUST NOT decrement again.
+            select_timer_pump_entry_locked(*front.target.select);
+            erase_popped_select_registration_locked(front.target.select);
+            continue;
+        }
+        TimerRegistration* top = front.target.ordinary;
         // I4 gate: claim the timer authority BEFORE dereferencing the node. If
         // the registration is RETIRED (non-timer winner closed it) or already
         // CONSUMED (an earlier expiry won), skip — do NOT touch node/queue.
@@ -2947,9 +3174,18 @@ bool Scheduler::earliest_active_deadline_locked(deadline_t& out) const {
     // Return the earliest ACTIVE deadline (min-heap front, skipping inert
     // entries). Used to bound park_on_wake_source (I6). The heap is lazily
     // cleaned by pump_deadlines_locked; here we just scan for the min ACTIVE.
+    // E13 P3: Select ACTIVE deadlines participate exactly like ordinary ones
+    // (docs/e13-select-timer-adapter.md §4.2), so both pools are scanned.
     bool found = false;
     deadline_t best = 0;
     for (const auto& r : timer_pool_) {
+        if (!r.is_active()) continue;
+        if (!found || r.deadline() < best) {
+            best = r.deadline();
+            found = true;
+        }
+    }
+    for (const auto& r : select_timer_pool_) {
         if (!r.is_active()) continue;
         if (!found || r.deadline() < best) {
             best = r.deadline();
@@ -2966,9 +3202,18 @@ void Scheduler::recompute_earliest_deadline_locked() {
     // park_on_wake_source can read it LOCK-FREE (avoiding a wake_mtx_ ->
     // global_mtx_ lock-order inversion). O(pool); the pool holds at most one
     // entry per concurrent deadline wait.
+    // E13 P3: Select ACTIVE deadlines participate exactly like ordinary ones,
+    // so both pools are scanned.
     deadline_t best = kNoDeadline;
     bool found = false;
     for (const auto& r : timer_pool_) {
+        if (!r.is_active()) continue;
+        if (!found || r.deadline() < best) {
+            best = r.deadline();
+            found = true;
+        }
+    }
+    for (const auto& r : select_timer_pool_) {
         if (!r.is_active()) continue;
         if (!found || r.deadline() < best) {
             best = r.deadline();
@@ -3018,30 +3263,33 @@ TimerRegistration* Scheduler::register_test_deadline_locked(WaitNode* node,
     timer_pool_.emplace_back(node, q, deadline);
     TimerRegistration* reg = &timer_pool_.back();
     ++active_deadline_count_;
-    heap_push_locked(reg);
+    heap_push_ordinary_locked(reg);
     recompute_earliest_deadline_locked();  // publish to the park-timeout cache
     return reg;
 }
 
 // ---- deadline heap helpers (min-heap on deadline) ----
+// E13 P3: the heap stores unified DeadlineHeapEntry values (Ordinary | Select).
+// The comparator (detail::heap_less_entry) compares cached deadlines only;
+// equal-deadline order is unspecified. sift/pop operate on vector entries and
+// no longer touch any registration's heap_index (the entry's vector position
+// is the sole position authority — Addendum G).
 
-bool Scheduler::heap_less(const TimerRegistration* a, const TimerRegistration* b) noexcept {
-    return a->deadline() < b->deadline();
+void Scheduler::heap_push_entry_locked(const detail::DeadlineHeapEntry& e) {
+    deadline_heap_.push_back(e);
+    heap_sift_up_locked(deadline_heap_.size() - 1);
 }
 
-void Scheduler::heap_push_locked(TimerRegistration* r) {
-    deadline_heap_.push_back(r);
-    r->heap_index = deadline_heap_.size() - 1;
-    heap_sift_up_locked(r->heap_index);
+void Scheduler::heap_push_ordinary_locked(TimerRegistration* r) {
+    heap_push_entry_locked(detail::DeadlineHeapEntry::for_ordinary(*r));
 }
 
 void Scheduler::heap_pop_min_locked() {
     if (deadline_heap_.empty()) return;
-    TimerRegistration* last = deadline_heap_.back();
+    detail::DeadlineHeapEntry last = deadline_heap_.back();
     deadline_heap_.pop_back();
     if (!deadline_heap_.empty()) {
         deadline_heap_[0] = last;
-        last->heap_index = 0;
         heap_sift_down_locked(0);
     }
 }
@@ -3049,10 +3297,8 @@ void Scheduler::heap_pop_min_locked() {
 void Scheduler::heap_sift_up_locked(std::size_t i) {
     while (i > 0) {
         std::size_t parent = (i - 1) / 2;
-        if (!heap_less(deadline_heap_[i], deadline_heap_[parent])) break;
+        if (!detail::heap_less_entry(deadline_heap_[i], deadline_heap_[parent])) break;
         std::swap(deadline_heap_[i], deadline_heap_[parent]);
-        deadline_heap_[i]->heap_index = i;
-        deadline_heap_[parent]->heap_index = parent;
         i = parent;
     }
 }
@@ -3063,12 +3309,10 @@ void Scheduler::heap_sift_down_locked(std::size_t i) {
         std::size_t l = 2 * i + 1;
         std::size_t r = 2 * i + 2;
         std::size_t best = i;
-        if (l < n && heap_less(deadline_heap_[l], deadline_heap_[best])) best = l;
-        if (r < n && heap_less(deadline_heap_[r], deadline_heap_[best])) best = r;
+        if (l < n && detail::heap_less_entry(deadline_heap_[l], deadline_heap_[best])) best = l;
+        if (r < n && detail::heap_less_entry(deadline_heap_[r], deadline_heap_[best])) best = r;
         if (best == i) break;
         std::swap(deadline_heap_[i], deadline_heap_[best]);
-        deadline_heap_[i]->heap_index = i;
-        deadline_heap_[best]->heap_index = best;
         i = best;
     }
 }
@@ -3139,6 +3383,17 @@ bool Scheduler::try_steal(WorkerState* thief) {
     for (unsigned k = 1; k < n; ++k) {
         unsigned vidx = (thief->id + k) % n;
         WorkerState* victim = workers_[vidx].get();
+        // P1-1 corrective (P6-C1 §9.2): refuse to steal ANY ticket from a victim
+        // that is mid-suspend-context-switch. A resolver may have routed a
+        // Runnable ticket onto this victim's local_runnable AFTER the victim
+        // released global_mtx_ but BEFORE its physical context_switch saved the
+        // fiber's CPU context. Resuming that ticket here would re-enter a stale
+        // ctx. Skip the whole victim; the next suspend cycle re-arms the flag
+        // only around its own switch. acquire load pairs with the release
+        // stores in select.cpp's suspend path.
+        if (victim->suspend_switch_pending.load(std::memory_order_acquire)) {
+            continue;
+        }
         Fiber* stolen = nullptr;
         {
             std::lock_guard<std::mutex> vlk(victim->inbox_mtx);
@@ -3219,6 +3474,58 @@ bool Scheduler::AsyncTestAccess::earliest_active_deadline(
     Scheduler& s, deadline_t& out) {
     LockGuard lk(s.global_mtx_);
     return s.earliest_active_deadline_locked(out);
+}
+
+// ---- E13 P3 Select timer test accessors ----
+
+void Scheduler::AsyncTestAccess::advance_clock(Scheduler& s, deadline_t t) {
+    s.advance_clock(t);
+}
+
+std::size_t Scheduler::AsyncTestAccess::select_timer_pool_size(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    return s.select_timer_pool_.size();
+}
+
+std::size_t Scheduler::AsyncTestAccess::select_timer_count_in_state(
+    const Scheduler& s,
+    detail::SelectTimerRegistration::State st) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    std::size_t n = 0;
+    for (const auto& r : s.select_timer_pool_) {
+        if (r.state() == st) ++n;
+    }
+    return n;
+}
+
+std::array<std::size_t, 2>
+Scheduler::AsyncTestAccess::tagged_heap_counts_by_kind(
+    const Scheduler& s) noexcept SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    std::array<std::size_t, 2> counts{0, 0};
+    for (const auto& e : s.deadline_heap_) {
+        if (e.kind == detail::DeadlineHeapEntry::Kind::ordinary) {
+            ++counts[0];
+        } else {
+            ++counts[1];
+        }
+    }
+    return counts;
+}
+
+// E13 P3 Corrective (closure 4): prove the heap stores the spliced block's
+// address as its stable Select target. Diagnostic only (reads GUARDED_BY
+// fields from the test coordinator).
+bool Scheduler::AsyncTestAccess::deadline_heap_has_select_target(
+    const Scheduler& s,
+    const detail::SelectTimerRegistration* target) noexcept
+    SLUICE_NO_THREAD_SAFETY_ANALYSIS {
+    for (const auto& e : s.deadline_heap_) {
+        if (e.kind == detail::DeadlineHeapEntry::Kind::select &&
+            e.target.select == target) {
+            return true;
+        }
+    }
+    return false;
 }
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

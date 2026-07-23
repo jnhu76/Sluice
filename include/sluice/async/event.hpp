@@ -59,6 +59,7 @@
 #include <atomic>
 #include <cassert>
 
+#include <sluice/async/detail/select_port.hpp>
 #include <sluice/async/scheduler.hpp>
 #include <sluice/async/wait_node.hpp>
 #include <sluice/async/wait_queue.hpp>
@@ -79,11 +80,17 @@ public:
         : scheduler_(scheduler), set_(initially_set) {}
 
     // Destruction contract: all Event waits must be terminal / unregistered
-    // before the Event is destroyed. The destructor does NOT cancel waiters,
-    // does NOT wake waiters, and does NOT synthesize RESOURCE_WAKE. The
+    // AND the Select registry must be empty before the Event is destroyed.
+    // The destructor does NOT cancel waiters, does NOT wake waiters, does NOT
+    // unlink Select arms, and does NOT synthesize RESOURCE_WAKE. The
     // underlying ~WaitQueue asserts empty in debug (caller must drain first).
-    // In release builds, no recovery/cancel-all protocol is required.
-    ~Event() = default;
+    // The SelectPort assertion fires if Select arms remain registered (caller
+    // contract violation). In release builds, no recovery/cancel-all protocol
+    // is required.
+    ~Event() {
+        assert(select_port_.empty() &&
+               "Event destroyed with live Select arms — caller contract violation");
+    }
 
     Event(const Event&) = delete;
     Event& operator=(const Event&) = delete;
@@ -100,8 +107,9 @@ public:
     // currently registered Event wait epoch. Idempotent: set() on SET is a
     // no-op (no extra wake). Safe to call from an external OS thread. Each
     // winner is an independent resolve_(Woken) CAS + runnable publication.
+    // P2: also performs Phase-1 Select scan inside the same global_mtx_ CS.
     void set() {
-        scheduler_.event_set_broadcast(waiters_, set_);
+        scheduler_.event_set_broadcast(*this);
     }
 
     // Transition to UNSET. Does NOT resolve, cancel, expire, unlink, or publish
@@ -172,9 +180,12 @@ public:
     }
 
 private:
+    friend class Scheduler;
+
     Scheduler& scheduler_;
     std::atomic<bool> set_;
     WaitQueue waiters_;
+    detail::SelectPort select_port_;
 };
 
 }  // namespace sluice::async

@@ -166,4 +166,118 @@ void clear_reached(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
     }
 }
 
+void capture_admission_snapshot(sluice::async::Scheduler& s, PhaseTag tag,
+                                const AdmissionSnapshot& snap) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    PhaseState& p = phase_of(*c, tag);
+    // Write the snapshot under the controller's own mutex so the coordinator
+    // thread can read it without acquiring any production lock. The admission
+    // worker holds global_mtx_ at this point.
+    {
+        std::lock_guard<std::mutex> lk(p.mtx);
+        if (tag == PhaseTag::e13_admission_armed) {
+            c->admission_armed_snapshot = snap;
+        } else if (tag == PhaseTag::e13_admission_consumed) {
+            c->admission_consumed_snapshot = snap;
+        }
+    }
+}
+
+AdmissionSnapshot read_admission_snapshot(sluice::async::Scheduler& s,
+                                           PhaseTag tag) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return AdmissionSnapshot{};
+    PhaseState& p = phase_of(*c, tag);
+    std::lock_guard<std::mutex> lk(p.mtx);
+    if (tag == PhaseTag::e13_admission_armed) {
+        return c->admission_armed_snapshot;
+    } else if (tag == PhaseTag::e13_admission_consumed) {
+        return c->admission_consumed_snapshot;
+    }
+    return AdmissionSnapshot{};
+}
+
+// ---- E13 P6 publication snapshots + counters ----
+void capture_publication_snapshot(sluice::async::Scheduler& s, PhaseTag tag,
+                                  const PublicationSnapshot& snap) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    PhaseState& p = phase_of(*c, tag);
+    // Write the snapshot under the controller's own mutex so the coordinator
+    // thread can read it without acquiring any production lock. The publication
+    // / resume path holds global_mtx_ at this point.
+    {
+        std::lock_guard<std::mutex> lk(p.mtx);
+        if (tag == PhaseTag::e13_publish_entry) {
+            c->publish_entry_snapshot = snap;
+        } else if (tag == PhaseTag::e13_publish_done) {
+            c->publish_done_snapshot = snap;
+        } else if (tag == PhaseTag::e13_suspended_before_consume) {
+            c->suspended_before_consume_snapshot = snap;
+        }
+    }
+}
+
+PublicationSnapshot read_publication_snapshot(sluice::async::Scheduler& s,
+                                              PhaseTag tag) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return PublicationSnapshot{};
+    PhaseState& p = phase_of(*c, tag);
+    std::lock_guard<std::mutex> lk(p.mtx);
+    if (tag == PhaseTag::e13_publish_entry) {
+        return c->publish_entry_snapshot;
+    } else if (tag == PhaseTag::e13_publish_done) {
+        return c->publish_done_snapshot;
+    } else if (tag == PhaseTag::e13_suspended_before_consume) {
+        return c->suspended_before_consume_snapshot;
+    }
+    return PublicationSnapshot{};
+}
+
+void increment_result_publication(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    // The counters are read/written by the controller's own coordination mutex
+    // (the same mutex the snapshots use) so a coordinator thread observes them
+    // without acquiring global_mtx_. Incremented under global_mtx_ by the
+    // publication path.
+    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    std::lock_guard<std::mutex> lk(p.mtx);
+    ++c->result_publication_count;
+}
+
+void increment_runnable_publication(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    std::lock_guard<std::mutex> lk(p.mtx);
+    ++c->runnable_publication_count;
+}
+
+std::size_t result_publication_count(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return 0;
+    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    std::lock_guard<std::mutex> lk(p.mtx);
+    return c->result_publication_count;
+}
+
+std::size_t runnable_publication_count(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return 0;
+    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    std::lock_guard<std::mutex> lk(p.mtx);
+    return c->runnable_publication_count;
+}
+
+void reset_publication_counts(sluice::async::Scheduler& s) noexcept {
+    SchedulerController* c = find_controller(s);
+    if (c == nullptr) return;
+    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    std::lock_guard<std::mutex> lk(p.mtx);
+    c->result_publication_count = 0;
+    c->runnable_publication_count = 0;
+}
+
 }  // namespace sluice_async_test

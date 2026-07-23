@@ -14,4 +14,28 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// E13 P3 stage-boundary fail-fast: a due ACTIVE SelectTimerRegistration is
+// unreachable in valid P3 production state. Terminates the process; never
+// returns. See include/sluice/async/detail/fail_fast.hpp.
+[[noreturn]] void select_timer_pump_active_fail_fast() noexcept {
+    std::terminate();
+}
+
+// E13 P6 stage-boundary fail-fast: a single Event::set() broadcast observed
+// arms belonging to more than one distinct eligible SelectGroup. Multi-group
+// shared Event (P8) is DENIED at the P6 boundary; fail fast before any group
+// winner CAS. Terminates; never returns. See include/sluice/async/detail/
+// fail_fast.hpp.
+[[noreturn]] void select_multi_group_event_stage_fail_fast() noexcept {
+    std::terminate();
+}
+
+// E13 P5 CORRECTIVE: general-purpose Select invariant fail-fast. Called when
+// the admission core receives a structurally invalid descriptor/count argument
+// or encounters an unknown descriptor kind. Provides defense-in-depth against
+// Release-mode memory safety violations. Terminates; never returns.
+[[noreturn]] void select_invariant_fail_fast() noexcept {
+    std::terminate();
+}
+
 }  // namespace sluice::async::detail

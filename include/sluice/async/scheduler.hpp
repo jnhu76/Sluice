@@ -11,6 +11,8 @@
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/queue_port.hpp>  // detail::QueuePort / QueueRole (E12-E Queue seams)
+#include <sluice/async/detail/select_registration.hpp>  // detail::DeadlineHeapEntry, SelectTimerRegistration (E13 P3)
+#include <sluice/async/select_fwd.hpp>  // E13 P5 CORRECTIVE: select() template declaration + forward decls
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/lock_guard.hpp>
@@ -21,6 +23,7 @@
 #include <sluice/async/wait_queue.hpp>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -35,6 +38,17 @@
 #include <vector>
 
 namespace sluice::async {
+
+class Event;
+class SelectResult;  // P5: full definition lives in select.hpp (included by select.cpp)
+
+namespace detail {
+class SelectGroup;
+class SelectPort;
+struct SelectArmSlot;
+enum class ArmState : std::uint8_t;
+class SelectCaseDescriptor;  // P5 CORRECTIVE: full definition in select.hpp (sealed fields)
+}  // namespace detail
 
 // ----------------------------------------------------------------------------
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1.
@@ -152,6 +166,22 @@ struct WorkerState {
     std::condition_variable inbox_cv;
     std::atomic<bool> active{false};  // this worker is part of a coordinated run
 
+    // E13 P6-C1 (P1-1 corrective): suspend-switch execution authority that
+    // closes the wake-before-physical-context-switch window. Raised by the
+    // suspending Fiber's owner AFTER global_mtx_ is released but BEFORE the
+    // physical context_switch (so a resolver may have already routed the
+    // caller Runnable ticket onto this worker's local_runnable), and cleared
+    // AFTER the context_switch returns control to the scheduler continuation
+    // (the CPU context is then saved). try_steal reads this under global_mtx_
+    // and refuses to steal a ticket from a victim that is mid-suspension:
+    // resuming such a ticket on a thief would re-enter a Fiber context whose
+    // rsp/rbp/rip have NOT yet been saved by the in-flight switch. Atomic
+    // (NOT guarded_by global_mtx_): the owner sets/clears it OUTSIDE any lock
+    // around context_switch; a thief observes it under global_mtx_, and the
+    // release/acquire pair on the atomic establishes happens-before between
+    // the clear-store and the thief's subsequent load.
+    std::atomic<bool> suspend_switch_pending{false};
+
     // E9 park-admission per-worker state (ADR §9.4.2 / §9.4.5).
     // observed_epoch is the wake_epoch_ value observed at the instant this
     // worker COMMITTED to park (recorded under wake_mtx_). The cv.wait
@@ -162,6 +192,10 @@ struct WorkerState {
     std::uint64_t observed_epoch{0};
     enum class ParkDomain : unsigned char { None, Scheduler, Backend };
     ParkDomain park_domain{ParkDomain::None};
+
+    // E13: owner Scheduler identity. Set exactly once when WorkerState is
+    // attached to a Scheduler. Immutable by contract; not used for routing.
+    Scheduler* owner_scheduler{nullptr};
 
     WorkerState() = default;
     WorkerState(const WorkerState&) = delete;
@@ -334,9 +368,11 @@ public:
     // resolved through the canonical path (wake_wait_one_locked: resolve_(Woken)
     // + unlink + retire timer + dec count + make_runnable + route). Idempotent:
     // set() on SET is a no-op (the store is a no-op; the drain finds the queue
-    // in whatever state the registered waiters left it). Returns the number of
-    // waiters resolved by THIS call. Safe to call from an external OS thread.
-    std::size_t event_set_broadcast(WaitQueue& waiters, std::atomic<bool>& set_flag);
+    // in whatever state the registered waiters left it). P2: also performs
+    // Phase-1 Select scan on `select_port` inside the same global_mtx_ CS.
+    // Returns the number of waiters resolved by THIS call.
+    // Safe to call from an external OS thread.
+    std::size_t event_set_broadcast(Event& event);
 
     // Transition `set_flag` to UNSET. Does NOT resolve, cancel, expire, unlink,
     // or publish any WaitNode. A waiter already registered remains governed by
@@ -822,6 +858,46 @@ private:
     //Scheduler-internal wake + global-mtx access for its reconciler.
     friend class ::sluice::async::detail::QueuePort;
 
+    // E13 P5/P6 CORRECTIVE: friend the pre-declared constrained public select()
+    // template (declared in select_fwd.hpp, defined in select.hpp). By
+    // friending a concrete function-template entity (not a concrete struct
+    // name), an ordinary production TU cannot forge the friend grant: the
+    // template is uniquely identified by its template-head + requires clause +
+    // signature, and no other definition can match that entity.
+    //
+    // The template calls select_admit directly (no intermediate SelectBridge).
+    // select_admit stays private to all other code.
+    template <class... Cases>
+        requires (
+            sizeof...(Cases) >= 1 &&
+            sizeof...(Cases) <= kSelectMaxArms &&
+            (SelectCaseType<std::remove_cvref_t<Cases>> && ...)
+        )
+    friend SelectResult select(Scheduler& scheduler, Cases&&... cases);
+
+    // ---- E13 Select registry operations (private Scheduler authority) ----
+    // All three require global_mtx_ held. Event must belong to this Scheduler.
+    //
+    // Link `arm` into `event`'s private SelectPort. Precondition: arm is
+    // Prepared/Detached, home_ is null, not already linked. Establishes:
+    // arm.home_ == &event.select_port_, arm.state == Registered,
+    // arm.kind == Event, arm.group != nullptr.
+    void select_event_link_locked(Event& event, detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Remove `arm` from `event`'s private SelectPort. Repairs links and
+    // clears arm.next_, arm.prev_, arm.home_. Does NOT claim winner, set
+    // result, publish caller, or retire Timer. Assertion-fails on mismatch.
+    void select_event_unlink_locked(Event& event, detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Walk `event`'s SelectPort, marking eligible Event arms CandidateReady.
+    // Eligible: kind==Event, state==Registered, group!=nullptr, group.phase==Armed.
+    // Returns the number of arms marked. P2: readiness-offer only; no winner
+    // claim, no finalization, no publication.
+    std::size_t select_event_scan_locked(Event& event)
+        SLUICE_REQUIRES(global_mtx_);
+
     // Wait registration with owner Worker (E7-B will use owner; E7-A stores
     // the Fiber only).
     struct WaitReg {
@@ -918,6 +994,18 @@ private:
     // unresolved for MW classification, and the per-node fiber is recovered
     // from the winning node at resolution time.
     std::size_t waiting_waitq_count_ SLUICE_GUARDED_BY(global_mtx_){0};
+
+    // E13 P6: count of SelectGroups whose callers have committed Waiting and
+    // whose phase is Armed, but which are not yet Completed (docs/e13-select-
+    // production-test-plan.md §7.1, task §7). Counted BY GROUP (not by arm),
+    // protected by global_mtx_. Incremented once at the no-ready suspension
+    // commit; decremented once at suspended publication. An Event-only
+    // suspended Select has no active Timer, no ordinary WaitQueue, and no
+    // backend op, yet an external Event::set can still resolve the Fiber — so
+    // this count participates in MW classification + park liveness exactly
+    // like waiting_waitq_count_ (a Worker in run_live must NOT park/terminate
+    // as if quiescent while an Armed Select can still be resolved externally).
+    std::size_t waiting_select_count_ SLUICE_GUARDED_BY(global_mtx_){0};
 
 
     // E8: the RUNNABLE ownership / steal-consistency record for each Fiber
@@ -1034,7 +1122,24 @@ private:
     // the same CS as the resolve CAS). The clock is atomic so a worker can read
     // it outside the lock for the park-timeout computation.
     std::list<TimerRegistration> timer_pool_ SLUICE_GUARDED_BY(global_mtx_){};
-    std::vector<TimerRegistration*> deadline_heap_ SLUICE_GUARDED_BY(global_mtx_){};
+    // E13 P3 (deadline-heap migration): the heap now stores unified tagged
+    // DeadlineHeapEntry values (Ordinary | Select) instead of raw
+    // TimerRegistration*. Both kinds share one min-heap keyed by the cached
+    // deadline; the ordinary branch is byte-for-byte identical in logic (it
+    // reads the same deadline, pops the same min, and processes the same
+    // TimerRegistration* via entry.target.ordinary). Internal-only type; no
+    // public API exposure. See docs/e13-select-timer-adapter.md §4.
+    std::vector<detail::DeadlineHeapEntry> deadline_heap_ SLUICE_GUARDED_BY(global_mtx_){};
+
+    // E13 P3: Scheduler-owned stable pool of SelectTimerRegistration blocks,
+    // mirroring timer_pool_. Blocks are constructed in a caller-frame
+    // std::list outside G and spliced in ONE NODE AT A TIME under G during
+    // registration (std::list::splice is O(1), allocation-free). Pointer-
+    // stable; the heap entry references a block by &pool.back() after splice.
+    // Lazy-at-deadline reclamation: a retired/consumed block remains here
+    // until the pump pops its deadline entry (mirrors timer_pool_).
+    std::list<detail::SelectTimerRegistration> select_timer_pool_
+        SLUICE_GUARDED_BY(global_mtx_){};
 
     // O(1) count of ACTIVE timer registrations. Incremented/decremented
     // alongside every Active ↔ {Retired, Consumed} state transition under
@@ -1094,8 +1199,15 @@ private:
     std::size_t pump_deadlines_locked() SLUICE_REQUIRES(global_mtx_);
 
     // Heap helpers (min-heap on deadline). Called under global_mtx_.
-    static bool heap_less(const TimerRegistration* a, const TimerRegistration* b) noexcept;
-    void heap_push_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
+    // E13 P3: the heap stores unified DeadlineHeapEntry values; the comparator
+    // compares cached deadlines (equal-deadline order is unspecified). sift/pop
+    // no longer touch any registration's heap_index (the entry's vector
+    // position is the sole position authority).
+    void heap_push_entry_locked(const detail::DeadlineHeapEntry& e)
+        SLUICE_REQUIRES(global_mtx_);
+    // Thin wrapper: build an Ordinary entry from a TimerRegistration and push.
+    // Kept so ordinary call sites read as `heap_push_ordinary_locked(reg)`.
+    void heap_push_ordinary_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
     void heap_pop_min_locked() SLUICE_REQUIRES(global_mtx_);
     void heap_sift_up_locked(std::size_t i) SLUICE_REQUIRES(global_mtx_);
     void heap_sift_down_locked(std::size_t i) SLUICE_REQUIRES(global_mtx_);
@@ -1110,6 +1222,241 @@ private:
     // live+pending deadline waits with no UAF. Called under global_mtx_.
     // NEVER reads node()/queue() (I4-safe by construction).
     void erase_popped_registration_locked(TimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
+
+    // ---- E13 P3 Select timer registration (private Scheduler authority) ----
+    // All require global_mtx_ held. These own the registered-state accounting
+    // authority for Select Timer arms (Addendum C): every ACTIVE->terminal
+    // transition of a registered Select block routes through the two helpers
+    // below so active_deadline_count_ is decremented exactly once and the
+    // earliest-deadline cache is recomputed. The stale pump-pop path does
+    // physical reclamation only and does NOT decrement again.
+
+    // Splice ONE SelectTimerRegistration node from a caller-frame temporary
+    // pool into select_timer_pool_, push its DeadlineHeapEntry {Select}, and
+    // return a stable pointer to the now-Scheduler-owned block. O(1),
+    // allocation-free under G (single-node std::list::splice + push within
+    // reserved capacity — reserve is the caller's responsibility). The
+    // returned pointer is valid until the pump reclaims the block.
+    detail::SelectTimerRegistration* select_timer_splice_one_locked(
+        std::list<detail::SelectTimerRegistration>& tmp_pool,
+        std::list<detail::SelectTimerRegistration>::iterator it)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Retire a registered Select block: validate ownership + pool membership,
+    // CAS ACTIVE->RETIRED; on success decrement active_deadline_count_ once
+    // and recompute earliest_active_deadline_. Returns true iff THIS call
+    // retired an active registration. On failed CAS: no counter mutation.
+    bool select_timer_retire_locked(detail::SelectTimerRegistration& reg)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Consume a registered Select block: validate ownership + pool membership,
+    // CAS ACTIVE->CONSUMED; on success decrement active_deadline_count_ once
+    // and recompute earliest_active_deadline_. Returns true iff THIS call
+    // consumed an active registration. On failed CAS: no counter mutation.
+    bool select_timer_consume_locked(detail::SelectTimerRegistration& reg)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // O(1)-by-address erase of a Select pool block, SAFE only because the
+    // caller (pump) has ALREADY popped the block from the deadline heap.
+    // Physical reclamation only: does NOT decrement active_deadline_count_
+    // (the retire/consume helper already did, exactly once). I4-safe: matches
+    // by address, never reads arm_. Mirrors erase_popped_registration_locked.
+    void erase_popped_select_registration_locked(
+        detail::SelectTimerRegistration* r) SLUICE_REQUIRES(global_mtx_);
+
+    // Predicate: does this Scheduler's select_timer_pool_ own `reg` (by
+    // address)? Used by the accounting helpers to validate that a registered
+    // transition is being applied to a Scheduler-owned block (defends against
+    // a stray/detached local object or a cross-Scheduler mistake). O(pool).
+    bool pool_owns_select_block_locked(
+        const detail::SelectTimerRegistration& reg) const noexcept
+        SLUICE_REQUIRES(global_mtx_);
+
+    // E13 P3 Select timer pump branch body. PRE: global_mtx_ held; the pump
+    // has ALREADY popped `reg` from the deadline heap and observed
+    // now >= reg.deadline(). State-before-arm rule (Addendum E): load state
+    // first; non-ACTIVE -> PumpSkip seam + return stale (do NOT read arm_).
+    // ACTIVE -> TimerPumpActive seam, instrument the exact production arm
+    // dereference site, then fail fast (a due ACTIVE Select entry is
+    // unreachable in valid P3 — Addendum D). The caller (pump) performs the
+    // physical reclamation via erase_popped_select_registration_locked
+    // regardless of the branch. Returns true if the entry was stale (skipped),
+    // false if it was ACTIVE (the call does not return in the ACTIVE case).
+    bool select_timer_pump_entry_locked(
+        detail::SelectTimerRegistration& reg) SLUICE_REQUIRES(global_mtx_);
+
+    // ---- E13 P4 Select central claim + winner/loser finalization core ----
+    // All require global_mtx_ held continuously. This is the single loser
+    // processor and the single claim+finalize orchestrator
+    // (docs/e13-select-locking-and-publication.md §1.5,
+    //  docs/e13-select-formal-production-mapping.md §2). P4 does NOT publish a
+    // result, route a runnable, transition the group to Completed/Consumed, or
+    // choose a candidate from a readiness snapshot (the caller supplies the
+    // candidate index). After a successful process the group is "claimed and
+    // finalized but unpublished" — an internal transient state under
+    // global_mtx_ that a later stage will follow with publication before the
+    // lock is released.
+
+    // Receive one CandidateReady arm and claim+finalize the whole group. PRE:
+    // global_mtx_ held. Validates the entire group BEFORE the irreversible
+    // winner CAS, then attempts the single group winner CAS
+    // (SelectGroup::claim_winner_locked). On win: commits the winner, finalizes
+    // every loser, closes every Event/Timer authority, asserts all-authority-
+    // closed, returns true. On loss (another invocation already owns the
+    // winner): performs no arm/adapter/accounting/phase mutation, returns
+    // false. No allocation in this path. Returns whether THIS invocation won
+    // the claim.
+    bool select_process_group_locked(detail::SelectGroup& group,
+                                     std::uint32_t candidate_index)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Validate the entire group BEFORE the irreversible winner CAS (P4 §6).
+    // Split into shape (asserts for every call) and claim (asserts for a fresh
+    // claim only, after the winner-existence check returns claim-lost). Every
+    // check is a debug assertion that fires before any mutation, so an invalid
+    // group cannot become permanently claimed and then fail halfway through
+    // finalization. No allocation. Members (not free functions) because they
+    // read Event private fields (scheduler_, select_port_) under the friend
+    // grant.
+    void select_preflight_shape_locked(detail::SelectGroup& group,
+                                       std::uint32_t candidate_index) const
+        SLUICE_REQUIRES(global_mtx_);
+    void select_preflight_claim_locked(detail::SelectGroup& group,
+                                       std::uint32_t candidate_index) const
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Commit the winner arm (post-CAS). Timer winner: ACTIVE->CONSUMED via
+    // select_timer_consume_locked (CAS after group claim), then arm.state=
+    // Retired. Event winner: targeted handling, unlink from Event SelectPort,
+    // then arm.state = Retired. Event::set_ is NEVER mutated. No publication.
+    void select_commit_winner_locked(detail::SelectGroup& group,
+                                     std::uint32_t winner_index)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Finalize one loser arm. Timer loser: arm.state = Retired FIRST, then
+    // ACTIVE->RETIRED via select_timer_retire_locked (SN-9: arm classification
+    // precedes the registration retirement CAS). Event loser: arm.state =
+    // Retired, then unlink. No publication; never writes result/runnable.
+    void select_finalize_loser_locked(detail::SelectGroup& group,
+                                      std::uint32_t loser_index)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // Per-kind finalizer halves (called by the two drivers above under G).
+    void select_finalize_event_winner_locked(detail::SelectGroup& group,
+                                             detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+    void select_finalize_event_loser_locked(detail::SelectGroup& group,
+                                            detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+    void select_finalize_timer_winner_locked(detail::SelectGroup& group,
+                                             detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+    void select_finalize_timer_loser_locked(detail::SelectGroup& group,
+                                            detail::SelectArmSlot& arm)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // The reusable all-authority-closed invariant predicate (SN-10). Returns
+    // true iff: winner != kNoWinner, winner < arm_count, AND for every arm
+    //   - Event: state == Retired, home_ == nullptr, next_/prev_ == nullptr
+    //   - Timer: state == Retired, stable_reg_ terminal (CONSUMED for the
+    //            winner, RETIRED for losers)
+    // select_process_group_locked asserts this before returning true on a win.
+    // A future select_publish_locked must call this at its entry as its
+    // publication precondition. Pure read; no mutation.
+    bool select_all_authority_closed_locked(const detail::SelectGroup& group) const
+        SLUICE_REQUIRES(global_mtx_);
+
+    // ---- E13 Select registration + admission core (inline + suspended) ----
+    // (docs/e13-select-production-test-plan.md §7.5/§7.6,
+    //  docs/e13-select-locking-and-publication.md §3,
+    //  docs/e13-select-public-api.md §3/§4/§5/§7).
+    //
+    // The single non-template admission core, reached ONLY via the friended
+    // public variadic select() template (declared in select_fwd.hpp, defined
+    // in select.hpp). PRIVATE: ordinary code cannot name it (the friend grant
+    // is to the exact constrained template entity, not to a forgeable struct
+    // name). Owns every centralized admission step: caller + case-Scheduler
+    // validation (BEFORE any allocation), caller-frame group+ arms
+    // materialization, Timer stable-block construction (before global_mtx_),
+    // deadline-heap reserve (the only allocation under the lock), the
+    // registration loop, FinishRegistration, the immutable readiness snapshot,
+    // lowest-index tie-break, the single P4 processor call, all-authority-
+    // closed verification, and result completion. NOT a template — compiles
+    // once.
+    //
+    // The admission name is NEUTRAL (select_admit, formerly select_admit_inline)
+    // because P6 routes BOTH outcomes through this one core: an inline-ready
+    // admission returns a SelectResult without suspending; a no-ready admission
+    // commits the caller Fiber to Waiting + phase Armed, suspends, and is later
+    // resumed to consume the published result (Completed -> Consumed). There is
+    // exactly ONE admission core for both paths (task §5). `descs` points at
+    // `count` SelectCaseDescriptor values (caller-frame array); the function
+    // does not retain the pointer past the call.
+    //
+    // Not noexcept: may throw std::logic_error (caller validation) or
+    // std::invalid_argument (case Scheduler mismatch) BEFORE any allocation, or
+    // std::bad_alloc (Timer block / heap reserve) before the first registration
+    // mutation. After the heap reserve, the registration loop contains no
+    // ordinary throwing operation; the no-ready suspension + resume paths are
+    // noexcept (or fail-fast, which terminates).
+    SelectResult select_admit(detail::SelectCaseDescriptor* descs,
+                              std::size_t count);
+
+    // ---- E13 P6 Select unified publication authority ----
+    // (docs/e13-select-locking-and-publication.md §5,
+    //  docs/e13-select-formal-production-mapping.md §5,
+    //  task §8). THE single result/runnable publication function. PRE:
+    // global_mtx_ held continuously; the winner has already been claimed and
+    // every winner+loser arm finalized (authority closed) in the SAME critical
+    // section that calls this. select_publish_locked:
+    //   - mechanically validates the publication-entry shape (task §8.1),
+    //     fail-fasting on any violation (closes the P4-deferred publication-
+    //     entry shape validation),
+    //   - constructs exactly ONE SelectResult from the winner arm and writes it
+    //     to group.result_ (written exactly once),
+    //   - branches on entry phase:
+    //       * Selecting (inline): completion_mode_=Inline, phase=Completed.
+    //         NO make_runnable, NO route_runnable_locked, NO counter mutation.
+    //       * Armed (suspended): completion_mode_=Suspended, phase=Completed,
+    //         decrement waiting_select_count_ (underflow -> fail-fast),
+    //         make_runnable (false -> fail-fast), route_runnable_locked via
+    //         group.caller_owner_ (NEVER the resolver-thread g_worker).
+    //
+    // Required source order (task §8.2): all authority closed < group.result_
+    // write < completion mode < phase Completed < runnable publication. There
+    // is exactly ONE call site each for Fiber::make_runnable and
+    // Scheduler::route_runnable_locked inside Select, both here, both only on
+    // the suspended branch. No Event/Timer finalizer/scan/pump reaches them.
+    void select_publish_locked(detail::SelectGroup& group)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // ---- E13 P6 suspended Event/Timer resolution ----
+    // (task §11/§12). The post-suspension resolvers, reached ONLY under
+    // global_mtx_ from event_set_broadcast (Event) and the timer pump (Timer).
+    // Each performs the single-group P8 gate (Event) or ACTIVE validation
+    // (Timer), offers CandidateReady to the relevant arm(s), then drives the
+    // single P4 group processor exactly once followed by select_publish_locked
+    // exactly once. No arm finalizer calls make_runnable / route_runnable.
+    //
+    // select_resolve_event_locked: walks `event`'s SelectPort for THIS Event's
+    // eligible (kind==Event, state==Registered, group.phase==Armed, home points
+    // here) arms; applies the single-group P6 gate (P8 multi-group DENIED ->
+    // fail-fast before any CAS); marks every eligible arm CandidateReady;
+    // chooses the lowest INDEX (NOT intrusive-list order) ready arm; processes
+    // + publishes the group once. Returns true iff a group was published.
+    bool select_resolve_event_locked(Event& event)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // select_resolve_timer_locked: the ACTIVE path replacement for the P3 due-
+    // ACTIVE stage fail-fast in select_timer_pump_entry_locked. Validates the
+    // ACTIVE block (arm kind/state/group/scheduler/phase/pool/reg back-pointer)
+    // under the state-before-arm rule, finds the exact arm index by address
+    // scan of group.arms_, marks it CandidateReady, processes + publishes the
+    // group once. PRE: `reg` is ACTIVE and the pump has popped it. The Timer
+    // registration is NOT consumed before the group winner CAS (P4 owns the
+    // winner/loser finalizer). Returns true iff a group was published.
+    bool select_resolve_timer_locked(detail::SelectTimerRegistration& reg)
+        SLUICE_REQUIRES(global_mtx_);
 
     // E11-T17 (F2) narrow test hook: register a TimerRegistration for {node,q,
     // deadline} from a NON-worker thread (the test coordinator). Mirrors the
@@ -1172,7 +1519,7 @@ private:
     // for the same reason as the WaitQueue wait.
     bool external_wake_possible_locked() const SLUICE_REQUIRES(global_mtx_) {
         return !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
-               any_active_deadline_locked();
+               any_active_deadline_locked() || waiting_select_count_ > 0;
     }
 
     // ------------------------------------------------------------------------
@@ -1196,6 +1543,13 @@ private:
     // ------------------------------------------------------------------------
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 public:
+    // E13 P3 test-only instrumentation (Addendum E): counts the number of
+    // times the Select timer pump branch reads reg.arm_ on an ACTIVE entry
+    // — i.e. the exact production dereference site, instrumented immediately
+    // before the load. Stale (RETIRED/CONSUMED) pops must observe a delta of
+    // 0. Reachable only via AsyncTestAccess; absent in production.
+    std::size_t select_timer_arm_load_count_{0};
+
     // Internal-testing access surface. Reached only via the non-installed
     // test-support controller; not part of the public API.
     struct AsyncTestAccess {
@@ -1228,6 +1582,282 @@ public:
         static std::size_t timer_pool_count_in_state(const Scheduler& s,
                                                      TimerRegistration::State st) noexcept;
         static bool earliest_active_deadline(Scheduler& s, deadline_t& out);
+
+        // ---- E13 Select registry test accessors ----
+        // Link an Event Select arm into the Event's private SelectPort.
+        // Acquires global_mtx_ internally. The arm must be Prepared/Detached
+        // with kind==Event and group set.
+        static void select_event_link(Scheduler& s, Event& event,
+                                      detail::SelectArmSlot& arm) {
+            LockGuard lk(s.global_mtx_);
+            s.select_event_link_locked(event, arm);
+        }
+
+        // Unlink an Event Select arm from the Event's private SelectPort.
+        // Acquires global_mtx_ internally.
+        static void select_event_unlink(Scheduler& s, Event& event,
+                                        detail::SelectArmSlot& arm) {
+            LockGuard lk(s.global_mtx_);
+            s.select_event_unlink_locked(event, arm);
+        }
+
+        // Phase-1 scan: walk the Event's SelectPort and mark eligible arms
+        // CandidateReady. Acquires global_mtx_ internally. Returns marked count.
+        static std::size_t select_event_scan(Scheduler& s, Event& event) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_event_scan_locked(event);
+        }
+
+        // Set an arm's state under global_mtx_. Used by tests to prepare
+        // specific arm states before a scan.
+        static void set_arm_state(Scheduler& s, detail::SelectArmSlot& arm,
+                                  detail::ArmState st);
+
+        // P4 EH corrective: forge a stale-but-equality-passing Event home_ for
+        // the event-membership death test. PRE: `arm` is NOT linked in `event`'s
+        // SelectPort intrusive list and its home_/next_/prev_ are null (e.g. it
+        // was unlinked through select_event_unlink). After this call
+        // arm.home_ == &event.select_port_ (so the preflight home_ equality
+        // check passes), but the arm remains ABSENT from the intrusive list
+        // (so the mechanical `found` scan fails and the preflight asserts).
+        // This is the exact shape the EH case must reach: a home_ that looks
+        // right but cannot be mechanically confirmed, proving the intrusive-
+        // membership scan is load-bearing. Acquires global_mtx_ internally.
+        static void select_event_forge_stale_home(Scheduler& s, Event& event,
+                                                  detail::SelectArmSlot& arm);
+
+        // ---- E13 P3 Select timer test accessors ----
+        // All route through Scheduler authority. No forgeable test hook; the
+        // production target has none of these symbols.
+        //
+        // Synthetic Select timer registration from a non-worker thread (the
+        // test coordinator). Builds a one-node temporary list and splices it
+        // into select_timer_pool_ under G, pushing its tagged heap entry. The
+        // block starts ACTIVE. Returns a stable pointer to the Scheduler-owned
+        // block. `deadline` must be in the future (now < deadline) or the
+        // entry is immediately due — tests keep clocks before deadlines or
+        // transition to terminal before advancing.
+        static detail::SelectTimerRegistration* register_synthetic_select_timer(
+            Scheduler& s, detail::SelectArmSlot* arm, deadline_t deadline) {
+            std::list<detail::SelectTimerRegistration> tmp;
+            tmp.emplace_back(arm, &s, deadline);
+            // Reserve heap capacity BEFORE mutation (the admission protocol's
+            // only allocation-under-G). Synthetic single-entry registration.
+            LockGuard lk(s.global_mtx_);
+            s.deadline_heap_.reserve(s.deadline_heap_.size() + 1);
+            return s.select_timer_splice_one_locked(tmp, tmp.begin());
+        }
+
+        // Transition a registered synthetic ACTIVE block via the Scheduler
+        // accounting helpers (NOT the registration CAS directly — Addendum C).
+        // Acquire global_mtx_ internally. Return the helper's CAS result.
+        static bool retire_synthetic_select_timer(
+            Scheduler& s, detail::SelectTimerRegistration& reg) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_timer_retire_locked(reg);
+        }
+        static bool consume_synthetic_select_timer(
+            Scheduler& s, detail::SelectTimerRegistration& reg) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_timer_consume_locked(reg);
+        }
+
+        // Splice ONE caller-owned temporary node into select_timer_pool_ via the
+        // REAL production helper (select_timer_splice_one_locked), returning the
+        // stable Scheduler-owned address. For T2's pre/post-splice address-
+        // identity proof only: a test captures &*it before the call, splices,
+        // then asserts the returned pointer equals the captured address, the
+        // temporary pool is empty, and the heap entry's Select target is that
+        // same address. Mirrors the future admission protocol (caller-frame tmp
+        // -> Scheduler pool) exactly. Acquires global_mtx_ internally and
+        // reserves heap capacity before mutation.
+        static detail::SelectTimerRegistration* splice_one_for_test(
+            Scheduler& s,
+            std::list<detail::SelectTimerRegistration>& tmp_pool,
+            std::list<detail::SelectTimerRegistration>::iterator it) {
+            LockGuard lk(s.global_mtx_);
+            s.deadline_heap_.reserve(s.deadline_heap_.size() + 1);
+            return s.select_timer_splice_one_locked(tmp_pool, it);
+        }
+
+        // Detached-object CAS authority for T1 (E13 P3 Corrective closure 3).
+        // PRE: `reg` is NOT Scheduler-owned (never spliced into any pool) — it
+        // is a stack-local SelectTimerRegistration exercising the registration's
+        // own CAS state machine. The CAS methods are private; this guarded
+        // entry is the only non-Scheduler way to reach them, and it exists
+        // solely so T1 can test ACTIVE->{RETIRED,CONSUMED} + failed-CAS
+        // transitions on detached locals without exposing the CASes in the
+        // production target. Registered blocks MUST go through
+        // retire_synthetic_select_timer / consume_synthetic_select_timer (the
+        // Scheduler accounting helpers).
+        static bool detached_try_claim_expiry(
+            detail::SelectTimerRegistration& reg) noexcept {
+            assert(reg.scheduler() == nullptr &&
+                   "detached CAS accessor requires a never-registered registration");
+            return reg.try_claim_expiry();
+        }
+        static bool detached_retire(
+            detail::SelectTimerRegistration& reg) noexcept {
+            assert(reg.scheduler() == nullptr &&
+                   "detached CAS accessor requires a never-registered registration");
+            return reg.retire();
+        }
+
+        // E13 P4 detached-group winner-CAS test entry. PRE: `group` is a
+        // structural object that was never admitted/registered with any
+        // Scheduler (scheduler_ == nullptr, arms_ == nullptr, arm_count_ == 0).
+        // The winner CAS (SelectGroup::claim_winner_locked) is PRIVATE so a
+        // registered group cannot bypass Scheduler::select_process_group_locked;
+        // this guarded entry is the only non-Scheduler way to reach the CAS,
+        // and it exists solely so P1 structural tests can prove first-claim-
+        // wins / second-claim-loses on detached objects. The mechanical
+        // detached precondition is ENFORCED here (not merely documented): a
+        // group carrying arms or a scheduler binding is rejected before the CAS
+        // (P4 §5.1: "Do not repeat the P3 mistake of documenting a test-only
+        // precondition without enforcing it"). Defined out-of-line: the body
+        // touches SelectGroup's complete definition (select_port.hpp), which is
+        // NOT included by this installed header.
+        static bool detached_claim_winner(detail::SelectGroup& group,
+                                         std::uint32_t arm_index) noexcept;
+
+        // ---- E13 P4 Select central claim + finalization test accessors ----
+        // The P4 core is test-driven via direct seam calls (production-test-
+        // plan.md §4 / §7.4). These acquire global_mtx_ internally and dispatch
+        // to the Scheduler-locked core. No forgeable test authority; absent in
+        // the production target.
+
+        // Drive select_process_group_locked: validate + claim + finalize the
+        // whole group for `candidate_index` without publication. Returns
+        // whether THIS call won the claim. `group` must be a registered group
+        // (scheduler_ == &s, arms_/arm_count_ set, arms linked/registered by
+        // the test harness exactly as a future admission would).
+        static bool select_process_group(Scheduler& s,
+                                         detail::SelectGroup& group,
+                                         std::uint32_t candidate_index);
+
+        // Read the all-authority-closed invariant predicate (SN-10). False
+        // before processing (no winner / open authority); true after a
+        // successful process. A guarded test may also invoke it directly to
+        // prove an open authority is rejected (OA death test).
+        static bool select_all_authority_closed(const Scheduler& s,
+                                                const detail::SelectGroup& group);
+
+        // P4 OA corrective: invoke the all-authority-closed invariant as a
+        // fail-fast assert (the mechanical precondition a future P6 publication
+        // entry will gate on). Acquires global_mtx_ and asserts
+        // select_all_authority_closed_locked(group). Used by the OA death case:
+        // after a valid process (all authority closed) the test re-opens one
+        // winner authority, then this assert must terminate the program,
+        // proving the publication precondition is mechanically enforced — not
+        // merely a bool predicate that could be ignored.
+        static void assert_select_all_authority_closed(
+            const Scheduler& s, const detail::SelectGroup& group);
+
+        // Advance the test clock deterministically (drives the timer pump).
+        static void advance_clock(Scheduler& s, deadline_t t);
+
+        // Observation (diagnostics; defined out-of-line with a TSA suppression).
+        static std::size_t select_timer_pool_size(
+            const Scheduler& s) noexcept;
+        static std::size_t select_timer_count_in_state(
+            const Scheduler& s,
+            detail::SelectTimerRegistration::State st) noexcept;
+        // Tagged heap counts by kind: returns {ordinary_count, select_count}.
+        static std::array<std::size_t, 2> tagged_heap_counts_by_kind(
+            const Scheduler& s) noexcept;
+
+        // Does any Select-kind heap entry target `target` (by address)? For
+        // T2: proves the heap stores exactly the spliced block's address as
+        // its stable Select pointer (the heap-by-stable-address contract).
+        // Reads GUARDED_BY fields from a test coordinator for diagnostics;
+        // not load-bearing for correctness.
+        static bool deadline_heap_has_select_target(
+            const Scheduler& s,
+            const detail::SelectTimerRegistration* target) noexcept;
+
+        // arm-load instrumentation (Addendum E): the count of times the
+        // pump branch read reg.arm_ on an ACTIVE entry (the exact production
+        // dereference site). Stale pops observe delta 0.
+        static std::size_t select_timer_arm_load_count(
+            const Scheduler& s) noexcept {
+            return s.select_timer_arm_load_count_;
+        }
+        static void reset_select_timer_arm_load_count(Scheduler& s) noexcept {
+            s.select_timer_arm_load_count_ = 0;
+        }
+
+        // ---- E13 P6 Select publication / suspended-resolution test accessors ----
+        // Read the suspended-Select liveness count (task §7). Reads a
+        // GUARDED_BY field under global_mtx_.
+        static std::size_t waiting_select_count(const Scheduler& s) noexcept {
+            LockGuard lk(s.global_mtx_);
+            return s.waiting_select_count_;
+        }
+
+        // Test-only: bump the suspended-Select liveness count under global_mtx_.
+        // Used by publication death tests that assemble a finalized group via the
+        // real P4 processor (which does NOT run the admission suspension commit)
+        // and then drive select_publish_locked on the suspended branch, which
+        // expects waiting_select_count_ to reflect one Armed group. Mirrors the
+        // admission suspension commit (task §7.2). Absent in production.
+        static void inc_waiting_select_for_test(Scheduler& s) noexcept {
+            LockGuard lk(s.global_mtx_);
+            ++s.waiting_select_count_;
+        }
+
+        // Read a SelectGroup's stored result_ (the post-publication winner).
+        // Returns the default no-winner SelectResult if the group has not been
+        // published. Defined out-of-line (touches SelectGroup's complete type).
+        static SelectResult group_result(const Scheduler& s,
+                                         const detail::SelectGroup& group);
+
+        // Direct publication driver: call select_publish_locked under
+        // global_mtx_. For SN-2 (duplicate publication) / SN-10 (open authority)
+        // / FP (caller not Waiting) death tests that must reach the production
+        // entry on a synthetic-but-finalized group. `group` must already be
+        // claimed + finalized + authority-closed by the test harness (the
+        // production publication entry validates this mechanically and fails
+        // fast otherwise).
+        static void select_publish(Scheduler& s, detail::SelectGroup& group) {
+            LockGuard lk(s.global_mtx_);
+            s.select_publish_locked(group);
+        }
+
+        // Direct suspended-Event resolver driver: call select_resolve_event_locked
+        // under global_mtx_. Reaches the real production P8-gate + claim +
+        // finalize + publish path from a test.
+        static bool select_resolve_event(Scheduler& s, Event& event) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_resolve_event_locked(event);
+        }
+
+        // Direct suspended-Timer resolver driver: call select_resolve_timer_locked
+        // under global_mtx_. Reaches the real production ACTIVE-path resolver
+        // from a test.
+        static bool select_resolve_timer(Scheduler& s,
+                                         detail::SelectTimerRegistration& reg) {
+            LockGuard lk(s.global_mtx_);
+            return s.select_resolve_timer_locked(reg);
+        }
+
+        // Drain the Select timer pool to empty: retire every still-ACTIVE
+        // block (via the Scheduler accounting helper, so counters stay
+        // consistent), then advance the clock far past every deadline so the
+        // pump physically reclaims each block. Used by test fixtures to honor
+        // the ~Scheduler quiescence contract. Acquires/releases global_mtx_.
+        static void drain_select_pool(Scheduler& s) {
+            // Retire ACTIVE blocks under G (so advancing the clock later hits
+            // the stale-skip path, not the ACTIVE fail-fast).
+            {
+                LockGuard lk(s.global_mtx_);
+                for (auto& reg : s.select_timer_pool_) {
+                    if (reg.is_active()) s.select_timer_retire_locked(reg);
+                }
+            }
+            // Pump every Select entry to physical reclamation. A large deadline
+            // covers all test fixtures' deadlines.
+            s.advance_clock(static_cast<deadline_t>(1) << 62);
+        }
     };
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };

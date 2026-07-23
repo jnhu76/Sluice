@@ -30,4 +30,47 @@ namespace sluice::async::detail {
 // catch (...) boundaries; never returns.
 [[noreturn]] void async_mutex_lock_fail_fast() noexcept;
 
+// E13 P3 stage-boundary fail-fast (docs/e13-select-timer-adapter.md §5,
+// Mandatory Addendum D). A due ACTIVE SelectTimerRegistration is UNREACHABLE
+// in valid P3 production state: there is no admission path, so no ACTIVE
+// Select heap entry should ever be observed by the pump. If the pump pops an
+// ACTIVE Select entry, that is an invariant violation (either a stale entry
+// was observed before a CAS completed, the registration protocol has a bug,
+// or a test advanced the clock past an ACTIVE synthetic entry). The pump
+// MUST NOT claim a winner, mark CandidateReady, retire/consume, erase, or
+// busy-loop; it fails fast instead. This is NOT supported production Select
+// behavior — P4 (claim/finalize) is denied pending independent P3 review.
+//
+// Same contract as async_mutex_lock_fail_fast: [[noreturn]] noexcept, no
+// allocation / locking / I/O / dynamic string, no state recovery, ultimately
+// std::terminate(). Takes no parameter (the operation is known only to the
+// caller; adding one would invite logging on the pump hot path).
+[[noreturn]] void select_timer_pump_active_fail_fast() noexcept;
+
+// E13 P6 stage-boundary fail-fast: multi-group shared Event (P8, DENIED).
+// docs/e13-select-locking-and-publication.md §6 / production-test-plan.md §7.8.
+// One Event::set() broadcast may observe arms belonging to MORE THAN ONE
+// distinct eligible SelectGroup (phase==Armed). P8 (multi-group Event
+// intrusive worklist + per-group iteration) is not implemented at the P6
+// boundary. P6 must therefore detect >1 distinct eligible group BEFORE any
+// group winner CAS / candidate mutation / authority close and fail fast,
+// rather than silently resolving only one group (a lost resolution) or
+// attempting an unsupported multi-group publish. The same Event appearing
+// twice in ONE group is NOT this case and is supported (P6-D1).
+//
+// Same contract as the other fail-fast entries: [[noreturn]] noexcept, no
+// allocation / locking / I/O / dynamic string, no state recovery, ultimately
+// std::terminate(). No parameter (the operation is known only to the caller).
+[[noreturn]] void select_multi_group_event_stage_fail_fast() noexcept;
+
+// E13 P5 CORRECTIVE: general-purpose Select invariant fail-fast. Called when
+// the admission core receives a structurally invalid descriptor/count argument
+// (descs==nullptr, count==0, count>kSelectMaxArms) or encounters an unknown
+// descriptor kind in Release builds. Provides defense-in-depth against
+// Release-mode memory safety violations even when a non-friend caller bypasses
+// the public select() template's compile-time requires clause gate.
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void select_invariant_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

@@ -709,7 +709,24 @@ if has_liburing then
         end
         if has_config("with-uring-registered-files") then
             add_defines("SLUICE_URING_REGISTERED_FILES")
-        end
+    end
+end
+
+-- e13_select_type — E13 Select type construction and compile-fail gates (P1).
+-- Tests public value types, internal type graph, and constraint gates.
+-- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_type.cpp"
+    if os.isfile(p) then
+        target("e13_select_type")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_type")
+    end
 end
 
 -- Experimental uring library. Always defined so the headers/sources exist; the
@@ -1139,5 +1156,226 @@ do
             add_includedirs("include", "tests")
             add_files(p)
             add_tests("e12_cross_primitive_parity_test")
+    end
+end
+
+-- e13_select_event_registry — E13 Event Select private registry (P2).
+-- Sealed per-Event SelectPort: link/unlink/scan operations, Event SET Phase-1
+-- scan, idempotence, serialization, and destruction contract.
+-- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_event_registry.cpp"
+    if os.isfile(p) then
+        target("e13_select_event_registry")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_event_registry")
+    end
+end
+
+-- e13_select_event_registry_death_test — E13 Select registry death tests (P2).
+-- Verifies identity-check assertions fire for duplicate-link, wrong-Event unlink,
+-- cross-Scheduler link/unlink, and live-arm Event destruction. Each case runs in
+-- a forked child that re-execs this binary via death_test_runner_posix.hpp.
+-- POSIX-only: gated to linux/macosx.
+do
+    local p = "tests/e13_select_event_registry_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_event_registry_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_event_registry_death_test")
+    end
+end
+
+-- e13_select_type — E13 Select type construction and compile-fail gates (P1).
+-- Tests public value types, internal type graph, and constraint gates.
+-- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_type.cpp"
+    if os.isfile(p) then
+        target("e13_select_type")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_type")
+    end
+end
+
+-- e13_select_timer_registration — E13 Select Timer stable registration (P3).
+-- Verifies the Select timer substrate: state transitions, address stability
+-- after splice, tagged deadline-heap ordering, ordinary timer regression,
+-- RETIRED/CONSUMED stale-skip, state-before-arm instrumentation, earliest-
+-- active-deadline participation, lazy reclamation, mixed stale+ordinary pump,
+-- Scheduler identity, no-premature-Select. Deterministic (test clock + causal
+-- phase seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_timer_registration.cpp"
+    if os.isfile(p) then
+        target("e13_select_timer_registration")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_timer_registration")
+    end
+end
+
+-- e13_select_timer_pump_death_test — E13 Select timer pump ACTIVE-due
+-- stage-boundary fail-fast (P3). A due ACTIVE SelectTimerRegistration is
+-- unreachable in valid P3 (no admission path); the pump must fail fast rather
+-- than claim/mark/retire/consume. Runs in a forked child that re-execs this
+-- binary via death_test_runner_posix.hpp. POSIX-only; gated to linux/macosx.
+-- This is an invariant GUARD, NOT supported production Select behavior.
+do
+    local p = "tests/e13_select_timer_pump_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_timer_pump_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_timer_pump_death_test")
+    end
+end
+
+-- e13_select_claim — E13 P4 Select central claim + winner/loser finalization
+-- tests. Drives select_process_group_locked + select_all_authority_closed_locked
+-- via guarded internal-testing seams. Covers C1-C12 (first-claim-wins, second-
+-- claim-loses, winner stability, Event/Timer winner+loser, mixed, same-Event-
+-- twice, claim-lost no-mutation, authority-closed invariant, no-publication,
+-- Timer loser ordering SN-9). Deterministic (test clock + causal phase seams);
+-- NO sleep_for. Gated to x86_64 (fiber_ctx::supported) for parity with E13.
+do
+    local p = "tests/e13_select_claim.cpp"
+    if os.isfile(p) then
+        target("e13_select_claim")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_claim")
+    end
+end
+
+-- e13_select_claim_death_test — E13 P4 Select claim/finalization death tests.
+-- Verifies preflight assertions fire BEFORE the winner CAS for: candidate index
+-- out of range (CG), cross-Scheduler group (CS), candidate not CandidateReady
+-- (CP), arm.group mismatch (CA), Event arm not linked to its port (EH), Timer
+-- null stable_reg (TN), Timer registration on another Scheduler (TF), Timer
+-- registration not pool-owned (TP), and the post-claim all-authority-closed
+-- assertion rejecting an open authority (OA). Runs in a forked child that
+-- re-execs this binary via death_test_runner_posix.hpp. POSIX-only.
+do
+    local p = "tests/e13_select_claim_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_claim_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_claim_death_test")
+    end
+end
+
+-- e13_select_inline — E13 P5 inline Select admission tests (ST-1..ST-8 + T1/T2/T3).
+-- Drives the PUBLIC variadic select() entry from a real running Fiber on the
+-- target Scheduler: Event already-set, Timer already-due, Event/Timer tie
+-- (lowest-index), duplicate Event, Event winner + Timer loser (stale pump skip),
+-- Timer winner + Event loser; plus the template/link matrix (T1), all-arms-
+-- registered-before-snapshot (T2), and the inline Completed->Consumed lifecycle
+-- (T3). Deterministic (test clock + AdmissionArmed/Consumed causal phase seams);
+-- NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_inline.cpp"
+    if os.isfile(p) then
+        target("e13_select_inline")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_inline")
+    end
+end
+
+-- e13_select_suspended — E13 P6 suspended Select publication tests (ST-9, ST-10,
+-- ST-13 + P6-D1 same-Event-twice + PUB boundary snapshots + P6-LW1/LW2 wake-
+-- before-physical-switch). Drives the PUBLIC variadic select() entry from a
+-- real Fiber on the target Scheduler for the no-ready branch. Deterministic
+-- (test clock + e13_select_suspend_before_switch / e13_publish_* /
+-- e13_suspended_before_consume causal phase seams); NO sleep_for. Gated to
+-- x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_suspended.cpp"
+    if os.isfile(p) then
+        target("e13_select_suspended")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_suspended")
+    end
+end
+
+-- e13_select_multi_worker — E13 P6 multi-worker owner routing + external-thread
+-- Event set + exactly-one-runnable tests (ST-15, ST-16, ST-17 + PUB-1..4
+-- publication boundary snapshots). Drives the PUBLIC variadic select() entry
+-- from a real Fiber; resolves from an external OS thread and across workers.
+-- Deterministic (test clock + waiting_select_count liveness + PhaseTag causal
+-- seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
+do
+    local p = "tests/e13_select_multi_worker.cpp"
+    if os.isfile(p) then
+        target("e13_select_multi_worker")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_multi_worker")
+    end
+end
+
+-- e13_select_publication_death_test — E13 P6 publication invariant death tests
+-- (SN-2 duplicate-publish / SN-10 open-authority / FP caller-not-waiting / MG
+-- multi-group-Event P8 stage-boundary / CTL valid-publication control). Drives
+-- the real production publication entry + Event resolver through guarded
+-- internal-testing drivers. Runs in forked children that re-exec this binary
+-- via death_test_runner_posix.hpp. POSIX-only; gated to linux/macosx.
+do
+    local p = "tests/e13_select_publication_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e13_select_publication_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e13_select_publication_death_test")
     end
 end
