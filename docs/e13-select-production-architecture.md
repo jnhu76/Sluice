@@ -310,10 +310,10 @@ src/async/select.cpp                                  (admission + select() entr
 src/async/select_event.cpp                            (Event Select registry + Phase 1/2)
 src/async/select_timer.cpp                            (Timer Select registration + pump branch)
 
-tests/e13_select_inline.cpp
-tests/e13_select_suspended.cpp
+tests/select_inline_test.cpp
+tests/select_suspended_test.cpp
 tests/e13_select_timer_adapter.cpp
-tests/e13_select_rollback.cpp
+tests/select_registration_rollback_test.cpp
 tests/e13_select_multi_group.cpp
 tests/e13_select_negative.cpp
 ```

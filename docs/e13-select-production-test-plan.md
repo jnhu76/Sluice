@@ -182,13 +182,13 @@ tests/e13_select_type.cpp                P1 type construction + SF-1..SF-3
 tests/e13_select_event_registry.cpp      P2 Event registry structural tests
 tests/e13_select_timer_registration.cpp  P3 Timer heap/stale tests
 tests/e13_select_claim.cpp               P4 claim/finalization negative tests
-tests/e13_select_inline.cpp              P5 ST-1..ST-8 (inline admission winners, plus ST-6 duplicate Event)
-tests/e13_select_suspended.cpp           P6 ST-9..ST-13 (post-suspension winners + stale)
+tests/select_inline_test.cpp            P5 ST-1..ST-8 (inline admission winners, plus ST-6 duplicate Event)
+tests/select_suspended_test.cpp         P6 ST-9..ST-13 (post-suspension winners + stale)
 tests/e13_select_multi_group.cpp         P8 ST-11, ST-12 (multi-group shared Event)
 tests/e13_select_timer_adapter.cpp       P3+P5 ST-2, ST-5, ST-7, ST-8 (Timer arms)
-tests/e13_select_rollback.cpp            P7 ST-14 (registration rollback)
-tests/e13_select_multi_worker.cpp        P6 ST-15, ST-16, ST-17 (external thread + routing)
-tests/e13_select_contract.cpp            P7 ST-18..ST-23 (lifetime + contract violations + caller validation)
+tests/select_registration_rollback_test.cpp  P7 ST-14 (registration rollback)
+tests/select_multi_worker_test.cpp      P6 ST-15, ST-16, ST-17 (external thread + routing)
+tests/select_call_context_contract_test.cpp  P7 ST-18..ST-23 (lifetime + contract violations + caller validation)
 tests/e13_select_negative.cpp            P9 SN-1..SN-12 (negative tests)
 ```
 
@@ -308,7 +308,7 @@ remaining denied behavior:
 ```text
 allowed files:
     src/async/select.cpp                (select() entry + admission scan)
-    tests/e13_select_inline.cpp         (NEW — inline admission tests ST-1..ST-8,
+    tests/select_inline_test.cpp       (NEW — inline admission tests ST-1..ST-8,
                                          including ST-6 duplicate Event in one group)
     tests/async_test_control_internal.hpp (E13PhaseAdmissionArmed, E13PhaseAdmissionClaimed,
                                            E13PhaseAdmissionConsumed)
@@ -333,8 +333,8 @@ allowed files:
     src/async/select.cpp                (suspended admission branch;
                                          Completed → Consumed transition)
     src/async/scheduler.cpp             (select_publish_locked with fail-fast)
-    tests/e13_select_suspended.cpp      (NEW — suspension tests ST-9..ST-10)
-    tests/e13_select_multi_worker.cpp   (NEW — external thread + routing ST-15..ST-17)
+    tests/select_suspended_test.cpp    (NEW — suspension tests ST-9..ST-10)
+    tests/select_multi_worker_test.cpp (NEW — external thread + routing ST-15..ST-17)
     tests/async_test_control_internal.hpp (E13PhasePublishEntry, E13PhasePublishDone)
 entry assumptions:
     P5 inline path works
@@ -356,8 +356,8 @@ allowed files:
     src/async/select.cpp                (rollback path)
     include/sluice/async/detail/select_port.hpp
     (Consumed precondition for destruction)
-    tests/e13_select_rollback.cpp       (NEW — rollback/destruction tests ST-14, SN-8)
-    tests/e13_select_contract.cpp       (NEW — contract tests ST-18..ST-23)
+    tests/select_registration_rollback_test.cpp  (NEW — rollback/destruction tests ST-14, SN-8)
+    tests/select_call_context_contract_test.cpp  (NEW — contract tests ST-18..ST-23)
     tests/async_test_control_internal.hpp (E13PhaseRollbackMid)
 entry assumptions:
     P6 publication works

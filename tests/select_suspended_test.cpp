@@ -1,4 +1,4 @@
-// e13_select_suspended — E13 P6 suspended Select publication tests.
+// select_suspended_test — E13 P6 suspended Select publication tests.
 //
 // Drives the PUBLIC variadic select() entry from a REAL running Fiber on the
 // target Scheduler for the no-ready (suspended) branch (production-test-plan.md
@@ -50,7 +50,7 @@ using GroupPhase = sad::GroupPhase;
 using CompletionMode = sad::CompletionMode;
 
 // ===========================================================================
-// Harness boilerplate (mirrors e13_select_inline.cpp / e11_timer_wait_test.cpp).
+// Harness boilerplate (mirrors select_inline_test.cpp / e11_timer_wait_test.cpp).
 // ===========================================================================
 namespace {
 

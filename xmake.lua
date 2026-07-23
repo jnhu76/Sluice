@@ -1297,7 +1297,7 @@ do
     end
 end
 
--- e13_select_inline — E13 P5 inline Select admission tests (ST-1..ST-8 + T1/T2/T3).
+-- select_inline — E13 P5 inline Select admission tests (ST-1..ST-8 + T1/T2/T3).
 -- Drives the PUBLIC variadic select() entry from a real running Fiber on the
 -- target Scheduler: Event already-set, Timer already-due, Event/Timer tie
 -- (lowest-index), duplicate Event, Event winner + Timer loser (stale pump skip),
@@ -1306,20 +1306,20 @@ end
 -- (T3). Deterministic (test clock + AdmissionArmed/Consumed causal phase seams);
 -- NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_inline.cpp"
+    local p = "tests/select_inline_test.cpp"
     if os.isfile(p) then
-        target("e13_select_inline")
+        target("select_inline_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_inline")
+            add_tests("select_inline_test")
     end
 end
 
--- e13_select_suspended — E13 P6 suspended Select publication tests (ST-9, ST-10,
+-- select_suspended — E13 P6 suspended Select publication tests (ST-9, ST-10,
 -- ST-13 + P6-D1 same-Event-twice + PUB boundary snapshots + P6-LW1/LW2 wake-
 -- before-physical-switch). Drives the PUBLIC variadic select() entry from a
 -- real Fiber on the target Scheduler for the no-ready branch. Deterministic
@@ -1327,36 +1327,36 @@ end
 -- e13_suspended_before_consume causal phase seams); NO sleep_for. Gated to
 -- x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_suspended.cpp"
+    local p = "tests/select_suspended_test.cpp"
     if os.isfile(p) then
-        target("e13_select_suspended")
+        target("select_suspended_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_suspended")
+            add_tests("select_suspended_test")
     end
 end
 
--- e13_select_multi_worker — E13 P6 multi-worker owner routing + external-thread
+-- select_multi_worker — E13 P6 multi-worker owner routing + external-thread
 -- Event set + exactly-one-runnable tests (ST-15, ST-16, ST-17 + PUB-1..4
 -- publication boundary snapshots). Drives the PUBLIC variadic select() entry
 -- from a real Fiber; resolves from an external OS thread and across workers.
 -- Deterministic (test clock + waiting_select_count liveness + PhaseTag causal
 -- seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_multi_worker.cpp"
+    local p = "tests/select_multi_worker_test.cpp"
     if os.isfile(p) then
-        target("e13_select_multi_worker")
+        target("select_multi_worker_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_multi_worker")
+            add_tests("select_multi_worker_test")
     end
 end
 
@@ -1380,9 +1380,9 @@ do
     end
 end
 
--- e13_select_rollback — E13 P7 registration-failure rollback tests (ST-14 +
--- P7-T1..T11). Drives the PUBLIC variadic select() entry from a real running
--- Fiber; the controller-only synthetic registration-failure seam
+-- select_registration_rollback_test — E13 P7 registration-failure rollback
+-- tests (ST-14 + P7-T1..T11). Drives the PUBLIC variadic select() entry from a
+-- real running Fiber; the controller-only synthetic registration-failure seam
 -- (E13SelectRollbackSeam, absent from production) injects a
 -- SelectRegistrationFailure after N successful registrations. select_admit's
 -- catch runs the rollback transaction and rethrows. Deterministic (test clock +
@@ -1390,51 +1390,52 @@ end
 -- Timer after caller-frame unwind). Gated to platforms where the test file is
 -- present; fiber work is gated at runtime via fiber_ctx::supported.
 do
-    local p = "tests/e13_select_rollback.cpp"
+    local p = "tests/select_registration_rollback_test.cpp"
     if os.isfile(p) then
-        target("e13_select_rollback")
+        target("select_registration_rollback_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_rollback")
+            add_tests("select_registration_rollback_test")
     end
 end
 
--- e13_select_rollback_death_test — E13 P7 rollback-domain negative tests
+-- select_rollback_invariant_death_test — E13 P7 rollback-domain negative tests
 -- (SN-8 rollback after suspension + P7-N1..N9). Exercises the guarded internal
 -- rollback authorities on invalid domains / corrupted membership, proving
 -- fail-fast. Runs in forked children via death_test_runner_posix.hpp.
 -- POSIX-only; gated to linux/macosx.
 do
-    local p = "tests/e13_select_rollback_death_test.cpp"
+    local p = "tests/select_rollback_invariant_death_test.cpp"
     if os.isfile(p) and is_plat("linux", "macosx") then
-        target("e13_select_rollback_death_test")
+        target("select_rollback_invariant_death_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_rollback_death_test")
+            add_tests("select_rollback_invariant_death_test")
     end
 end
 
--- e13_select_contract — E13 P7 Select contract coverage (ST-18..ST-23) for the
--- genuinely-missing positive contract cases. Reuses existing tests where they
--- already prove the exact contract; this target adds only missing coverage.
+-- select_call_context_contract_test — E13 P7 Select contract coverage
+-- (ST-18..ST-23) for the genuinely-missing positive contract cases. Reuses
+-- existing tests where they already prove the exact contract; this target adds
+-- only missing coverage.
 do
-    local p = "tests/e13_select_contract.cpp"
+    local p = "tests/select_call_context_contract_test.cpp"
     if os.isfile(p) then
-        target("e13_select_contract")
+        target("select_call_context_contract_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_contract")
+            add_tests("select_call_context_contract_test")
     end
 end

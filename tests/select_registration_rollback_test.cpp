@@ -1,4 +1,4 @@
-// e13_select_rollback — E13 P7 registration-failure rollback tests.
+// select_registration_rollback_test — E13 P7 registration-failure rollback tests.
 //
 // Drives the PUBLIC variadic select() entry from a REAL running Fiber on the
 // target Scheduler (production-test-plan.md §7.7 ST-14, plus P7-T1..T11 / the

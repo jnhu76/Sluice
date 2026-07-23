@@ -1,4 +1,4 @@
-// e13_select_multi_worker — E13 P6 multi-worker owner routing + external-thread
+// select_multi_worker_test — E13 P6 multi-worker owner routing + external-thread
 // Event set + exactly-one-runnable tests (production-test-plan.md §7.6
 // ST-15, ST-16, ST-17 + PUB-1..4 publication boundary snapshots).
 //

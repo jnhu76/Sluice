@@ -1,13 +1,13 @@
-// e13_select_contract — E13 P7 Select contract coverage for the genuinely-
+// select_call_context_contract_test — E13 P7 Select contract coverage for the genuinely-
 // MISSING positive/negative contract cases (production-test-plan.md §7.7
 // ST-18..ST-23).
 //
 // Coverage audit (task §23) — do NOT clone already-covered contracts:
 //   ST-18 all loser registrations removed before resume
-//        -> ALREADY COVERED by e13_select_suspended (P6 publication + owner
+//        -> ALREADY COVERED by select_suspended_test (P6 publication + owner
 //           routing; every SelectPort empty for the group at resume).
 //   ST-19 wrong Scheduler rejected
-//        -> ALREADY COVERED by e13_select_inline (std::invalid_argument before
+//        -> ALREADY COVERED by select_inline_test (std::invalid_argument before
 //           any registration). NOT cloned here.
 //   ST-20 Event destruction with active Select arm
 //        -> ALREADY COVERED by e13_select_event_registry_death_test (DC case).

@@ -1,4 +1,4 @@
-// e13_select_rollback_death_test — E13 P7 rollback-domain negative tests.
+// select_rollback_invariant_death_test — E13 P7 rollback-domain negative tests.
 //
 // Verifies the P7 fail-fast preconditions terminate the program:
 //
@@ -338,7 +338,7 @@ int main(int argc, char** argv) {
 #include <iostream>
 
 int main() {
-    std::cout << "NOT RUN: e13_select_rollback_death_test is POSIX-only "
+    std::cout << "NOT RUN: select_rollback_invariant_death_test is POSIX-only "
                  "(forked-child death-test runner)\n";
     return 0;
 }

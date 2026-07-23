@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# verify-e13-p7-stability.sh — reproducible E13 P7 rollback stability gate.
+# verify-select-rollback-stability.sh — reproducible Select rollback stability gate.
 #
 # Reuses the generic stability-loop discipline (see verify-e8-stability.sh):
 # run ONE test binary N times, stop on the first failure, print one result per
 # iteration + a summary. A test case may be selected via $SLUICE_TEST_FILTER
-# (substring; see tests/harness.hpp). This makes the P7 stability gates
+# (substring; see tests/harness.hpp). This makes the rollback stability gates
 # reproducible from committed artifacts without ad hoc shell loops.
 #
 # Usage:
-#   scripts/verify-e13-p7-stability.sh MODE BINARY [FILTER] [COUNT]
-#   scripts/verify-e13-p7-stability.sh debug   e13_select_rollback p7_t1 1000
-#   scripts/verify-e13-p7-stability.sh release e13_select_rollback p7_t2 1000
-#   scripts/verify-e13-p7-stability.sh asan    e13_select_rollback p7_t8 2000
+#   scripts/verify-select-rollback-stability.sh MODE BINARY [FILTER] [COUNT]
+#   scripts/verify-select-rollback-stability.sh debug   select_registration_rollback_test p7_t1 1000
+#   scripts/verify-select-rollback-stability.sh release select_registration_rollback_test p7_t2 1000
+#   scripts/verify-select-rollback-stability.sh asan    select_registration_rollback_test p7_t8 2000
 #
 # Arguments:
 #   MODE    build mode: release | debug | tsan | asan | ubsan | asanubsan
-#   BINARY  test binary name (e.g. e13_select_rollback). Must be an xmake target.
+#   BINARY  test binary name (e.g. select_registration_rollback_test). Must be an xmake target.
 #   FILTER  optional SLUICE_TEST_FILTER token (substring). Empty = whole binary.
 #   COUNT   iterations (default 1000). Stop on first failure.
 #
@@ -24,7 +24,7 @@ set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
   echo "usage: $0 MODE BINARY [FILTER] [COUNT]" >&2
-  echo "  e.g. $0 debug e13_select_rollback p7_t1 1000" >&2
+  echo "  e.g. $0 debug select_registration_rollback_test p7_t1 1000" >&2
   exit 2
 fi
 
@@ -43,7 +43,7 @@ fi
 
 export SLUICE_TEST_FILTER="$FILTER"
 
-echo "# verify-e13-p7-stability" >&2
+echo "# verify-select-rollback-stability" >&2
 echo "# binary:   $BIN_PATH" >&2
 echo "# filter:   '${FILTER:-<none>}'  (SLUICE_TEST_FILTER substring; empty = whole binary)" >&2
 echo "# count:    $COUNT  (stop on first failure)" >&2

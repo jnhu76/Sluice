@@ -1,4 +1,4 @@
-// e13_select_inline — E13 P5 inline Select admission tests.
+// select_inline_test — E13 P5 inline Select admission tests.
 //
 // Drives the PUBLIC variadic select() entry from a REAL running Fiber on the
 // target Scheduler (production-test-plan.md §7.5 ST-1..ST-8, plus T1/T2/T3).
