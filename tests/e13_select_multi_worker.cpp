@@ -128,9 +128,20 @@ SLUICE_TEST_CASE(st15_external_thread_event_set) {
 // ===========================================================================
 // ST-16 — multi-worker owner routing
 //
-//   run_live with >= 2 workers; spawn caller deterministically on worker k;
-//   record worker identity before select; resolve from external thread; resume
-//   on the original owner worker k; result correct; exactly one enqueue.
+//   run_live with >= 2 workers; spawn caller on worker 0; resolve from an
+//   external thread; verify the publication routes the resumed caller via
+//   group.caller_owner_ (the owner worker captured AT ADMISSION), NOT via the
+//   resolver-thread g_worker.
+//
+//   IMPORTANT (pre-admission steal correctness): spawn_on(F, 0) initially
+//   publishes the runnable ticket to worker 0, but E8 permits an idle worker
+//   to steal that ticket BEFORE the Fiber begins executing. So the admission-
+//   time caller owner is NOT necessarily worker 0 — it is whichever worker
+//   actually ran the Fiber into select(). This is a legal E8 interleaving,
+//   not a routing failure. The test therefore CAPTURES the actual admission
+//   owner (approach B) and verifies publication routes to THAT captured owner,
+//   rather than assuming a hard-coded worker 0. The final execution worker
+//   may again differ (post-publication E8 stealing) and is not asserted.
 // ===========================================================================
 SLUICE_TEST_CASE(st16_multi_worker_owner_routing) {
     if constexpr (!sa::fiber_ctx::supported) return;
@@ -139,13 +150,18 @@ SLUICE_TEST_CASE(st16_multi_worker_owner_routing) {
 
     SelectResult captured;
     std::atomic<bool> resumed{false};
-    std::atomic<unsigned> pre_select_worker{static_cast<unsigned>(-1)};
+    // The admission-time caller owner: the worker that actually runs the Fiber
+    // into select(). select.cpp captures this same identity into
+    // group.caller_owner_ at admission (= current_worker() at that instant).
+    // Recorded at the Fiber's first instruction so it is observable from the
+    // coordinator regardless of which worker stole the pre-admission ticket.
+    std::atomic<unsigned> admission_worker{static_cast<unsigned>(-1)};
     std::atomic<unsigned> post_resume_worker{static_cast<unsigned>(-1)};
 
     Fiber fb;
     fb.set_entry([&](Fiber&) {
-        pre_select_worker.store(Scheduler::current_worker_id(),
-                                std::memory_order::release);
+        admission_worker.store(Scheduler::current_worker_id(),
+                               std::memory_order::release);
         captured = sa::select(f.sched, EventSelectCase{ev});
         post_resume_worker.store(Scheduler::current_worker_id(),
                                  std::memory_order::release);
@@ -153,7 +169,7 @@ SLUICE_TEST_CASE(st16_multi_worker_owner_routing) {
     });
     FiberStack sw;
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
-    // Deterministic owner placement on worker 0.
+    // Initial placement on worker 0; E8 may legally steal it before entry.
     f.sched.spawn_on(fb, /*worker_id=*/0);
 
     const std::size_t runnable_before = f.sched.runnable_count();
@@ -164,26 +180,28 @@ SLUICE_TEST_CASE(st16_multi_worker_owner_routing) {
         ev.set();
     });
 
-    f.sched.run_live(2);  // 2 workers; caller pinned to worker 0 via spawn_on.
+    f.sched.run_live(2);  // 2 workers; initial spawn on worker 0.
     setter.join();
 
     SLUICE_CHECK_MSG(resumed.load(), "caller resumed");
     SLUICE_CHECK_MSG(captured.has_winner(), "winner produced");
     SLUICE_CHECK_MSG(captured.kind() == SelectKind::event, "Event winner");
-    SLUICE_CHECK_MSG(pre_select_worker.load() == 0,
-                     "caller ran on owner worker 0 before select");
-    // ST-16 owner-routing contract: the publication routes the resumed caller
-    // via group.caller_owner_ (the owner worker captured at admission), NOT via
-    // the resolver-thread g_worker. The load-bearing proof is the exactly-one
-    // runnable publication below + correct result. The FINAL execution worker
-    // may differ from the owner under E8 work-stealing (a routed-to-owner
-    // ticket can be stolen by another worker); the owner-routing authority is
-    // the publication target, recorded as caller_owner_id in the publish_done
-    // snapshot.
+    // ST-16 owner-routing contract (approach B): the publication must route the
+    // resumed caller to the SAME worker that ran the Fiber into select() at
+    // admission — i.e. publish_done.caller_owner_id == the recorded admission
+    // owner. This proves route_runnable_locked uses group.caller_owner_ (the
+    // admission capture), NOT the resolver-thread g_worker (which is null on
+    // the external setter thread). The owner may be worker 0 OR worker 1
+    // (whichever stole the pre-admission ticket); both are valid. The final
+    // execution worker (post_resume_worker) may differ again under
+    // post-publication E8 stealing and is intentionally not asserted.
+    const unsigned admission = admission_worker.load(std::memory_order_acquire);
+    SLUICE_CHECK_MSG(admission != static_cast<unsigned>(-1),
+                     "admission owner recorded");
     const auto pub_snap =
         stest::E13SelectPublicationSeam::publish_done_snapshot(f.sched);
-    SLUICE_CHECK_MSG(pub_snap.caller_owner_id == 0,
-                     "publication routed to the caller's owner worker 0");
+    SLUICE_CHECK_MSG(pub_snap.caller_owner_id == admission,
+                     "publication routed to the recorded admission owner");
     (void)post_resume_worker;
     SLUICE_CHECK_MSG(
         stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
