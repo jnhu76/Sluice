@@ -871,7 +871,7 @@ private:
         requires (
             sizeof...(Cases) >= 1 &&
             sizeof...(Cases) <= kSelectMaxArms &&
-            (SelectCaseType<std::remove_cvref_t<Cases>> && ...)
+            (SelectCaseType<Cases> && ...)
         )
     friend SelectResult select(Scheduler& scheduler, Cases&&... cases);
 
