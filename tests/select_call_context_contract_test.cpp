@@ -59,7 +59,7 @@ struct ContractFixture {
     Scheduler sched;
     stest::ControllerGuard ctrl;
     ContractFixture() : sched(ctx), ctrl(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
     }
 };
 
@@ -86,7 +86,7 @@ SLUICE_TEST_CASE(st22_select_from_external_thread_rejected) {
     // A pre-admission rejection must not touch any of them (no Event arm
     // linked, no Timer committed, no pending Select, no runnable publication).
     const std::size_t adc_before =
-        stest::E11TimerControl::active_deadline_count(f.sched);
+        stest::TimerTestControl::active_deadline_count(f.sched);
     const std::size_t wsc_before =
         AsyncTestAccess::waiting_select_count(f.sched);
     const std::size_t runnable_before = f.sched.runnable_count();
@@ -108,7 +108,7 @@ SLUICE_TEST_CASE(st22_select_from_external_thread_rejected) {
     // Real no-side-effect observation (not a tautology): every Scheduler
     // observable is unchanged — the rejection happened before any registration.
     SLUICE_CHECK_MSG(
-        stest::E11TimerControl::active_deadline_count(f.sched) == adc_before,
+        stest::TimerTestControl::active_deadline_count(f.sched) == adc_before,
         "no Timer committed (rejection is pre-admission)");
     SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(f.sched) == wsc_before,
                      "no pending Select registered (rejection is pre-admission)");
@@ -129,7 +129,7 @@ SLUICE_TEST_CASE(st23_wrong_current_worker_scheduler_rejected) {
     // Snapshot sched_b BEFORE: a wrong-Scheduler rejection must not register
     // anything on the target Scheduler either.
     const std::size_t adc_b_before =
-        stest::E11TimerControl::active_deadline_count(sched_b);
+        stest::TimerTestControl::active_deadline_count(sched_b);
     const std::size_t wsc_b_before =
         AsyncTestAccess::waiting_select_count(sched_b);
 
@@ -151,7 +151,7 @@ SLUICE_TEST_CASE(st23_wrong_current_worker_scheduler_rejected) {
         "select() on a Scheduler that does not own this worker throws std::logic_error");
     // Real no-side-effect observation: sched_b is untouched by the rejection.
     SLUICE_CHECK_MSG(
-        stest::E11TimerControl::active_deadline_count(sched_b) == adc_b_before,
+        stest::TimerTestControl::active_deadline_count(sched_b) == adc_b_before,
         "no Timer committed on sched_b (rejection is pre-admission)");
     SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(sched_b) == wsc_b_before,
                      "no pending Select on sched_b (rejection is pre-admission)");
@@ -166,8 +166,8 @@ SLUICE_TEST_CASE(p7_destruction_closure_aborted_group) {
     if constexpr (!sa::fiber_ctx::supported) return;
     ContractFixture f;
     Event ev(f.sched);
-    stest::E11TimerControl::set_clock(f.sched, 0);
-    stest::E13SelectRollbackSeam::configure_fail_after(f.sched, 1);
+    stest::TimerTestControl::set_clock(f.sched, 0);
+    stest::SelectRollbackSeam::configure_fail_after(f.sched, 1);
 
     bool caught = false;
     {
@@ -179,7 +179,7 @@ SLUICE_TEST_CASE(p7_destruction_closure_aborted_group) {
                 (void)sa::select(f.sched, sa::EventSelectCase{ev},
                                  sa::TimerSelectCase{f.sched,
                                                      Scheduler::deadline_t{1000}});
-            } catch (const stest::E13SelectRollbackSeam::FailureException&) {
+            } catch (const stest::SelectRollbackSeam::FailureException&) {
                 caught = true;
             }
         });
@@ -190,7 +190,7 @@ SLUICE_TEST_CASE(p7_destruction_closure_aborted_group) {
     SLUICE_CHECK_MSG(
         true,
         "Aborted group destroyed cleanly (destructor accepts Aborted; no assert)");
-    stest::E13SelectRollbackSeam::disable(f.sched);
+    stest::SelectRollbackSeam::disable(f.sched);
 }
 
 SLUICE_MAIN()

@@ -496,7 +496,7 @@ SLUICE_TEST_CASE(test_real_ordinary_waiter_and_coexistence) {
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
 
-    using E12Hooks = sluice_async_test::E12EventSeam;
+    using E12Hooks = sluice_async_test::EventSeam;
 
     // Arm admission seam: pauses AFTER WaitNode registration, BEFORE final
     // SET check, WHILE holding global_mtx_ + q.mtx().
@@ -588,7 +588,7 @@ SLUICE_TEST_CASE(test_phase_seam_reset_serialization) {
     SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
     sched.spawn(fwait);
 
-    using E12Hooks = sluice_async_test::E12EventSeam;
+    using E12Hooks = sluice_async_test::EventSeam;
 
     // Arm the set-store-before-drain seam.
     E12Hooks::arm_set_store_before_drain(sched);

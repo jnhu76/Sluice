@@ -758,12 +758,12 @@ SLUICE_TEST_CASE(e12_queue_pr12_pop_result_move_assign_states) {
 //       docs/e12-queue-production-implementation.md.
 
 #if defined(__x86_64__) || defined(_M_X64)
-#include "async_test_control.hpp"  // E11TimerControl (test clock)
+#include "async_test_control.hpp"  // TimerTestControl (test clock)
 #include <atomic>
 #include <thread>
 
 namespace {
-using E11TimerTestHooks = sluice_async_test::E11TimerControl;
+using E11TimerTestHooks = sluice_async_test::TimerTestControl;
 
 constexpr unsigned kBoundedWaitIters = 200000;
 inline bool bounded_wait(std::atomic<bool>& flag,

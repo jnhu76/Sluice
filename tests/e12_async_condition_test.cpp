@@ -7,7 +7,7 @@
 //
 //   - AsyncCondition::wait / wait_until / cancel / notify_one / notify_all
 //   - AsyncMutex::try_lock / lock / lock_until / cancel / unlock
-//   - E11TimerControl / E9ParkSeam / E12MutexSeam / E12ConditionSeam
+//   - TimerTestControl / SchedulerParkSeam / AsyncMutexSeam / AsyncConditionSeam
 //     (deterministic clock/timer + park + owner-before-publication +
 //     register-before-release + notify-before-drain seams)
 //   - WaitNode public lock-free state queries (was_woken/was_cancelled/
@@ -53,11 +53,11 @@ using namespace sluice::async;
 using sluice::Result;
 
 namespace {
-using E11Timer = sluice_async_test::E11TimerControl;
-using E9ParkSeam = sluice_async_test::E9ParkSeam;
-using E12MutexSeam = sluice_async_test::E12MutexSeam;
-using E12CondSeam = sluice_async_test::E12ConditionSeam;
-using E12MutexWaiterSeam = sluice_async_test::E12MutexWaiterSeam;
+using E11Timer = sluice_async_test::TimerTestControl;
+using SchedulerParkSeam = sluice_async_test::SchedulerParkSeam;
+using AsyncMutexSeam = sluice_async_test::AsyncMutexSeam;
+using E12CondSeam = sluice_async_test::AsyncConditionSeam;
+using AsyncMutexWaiterSeam = sluice_async_test::AsyncMutexWaiterSeam;
 using sluice_async_test::ControllerGuard;
 
 struct FiberStack {
@@ -429,18 +429,18 @@ SLUICE_TEST_CASE(e12_cond_t5_mutex_handoff_to_fifo_head_during_admission) {
     sched.spawn(w1);     // w1 queues on mutex while owner owns it
 
     // Arm the seam and run in a background thread so THIS thread coordinates.
-    E12MutexSeam::arm_handoff_before_publication(sched);
+    AsyncMutexSeam::arm_handoff_before_publication(sched);
     std::thread run_thread([&] { sched.run_live(1); });
 
     // Block until the handoff pauses (owner committed to W1 before publication).
-    E12MutexSeam::wait_handoff_paused(sched);
-    if (E12MutexSeam::is_handoff_paused(sched)) {
+    AsyncMutexSeam::wait_handoff_paused(sched);
+    if (AsyncMutexSeam::is_handoff_paused(sched)) {
         handoff_paused_for_w1.store(true, std::memory_order::release);
         // W1 has NOT yet resumed (publication is paused). Proves the handoff
         // winner is W1 (the ordinary Mutex waiter), committed before publication.
         w1_was_winner_before_notify.store(!w1_resumed.load(std::memory_order_acquire),
                                           std::memory_order::release);
-        E12MutexSeam::release_handoff(sched);   // publish W1 runnable
+        AsyncMutexSeam::release_handoff(sched);   // publish W1 runnable
         cond.notify_one();                       // resolve the condition waiter
     }
 

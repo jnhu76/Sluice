@@ -48,7 +48,7 @@ private:
 
 // ---- E7 admission seam (was SchedulerTestHooks) ----
 // Arm: the worker that reaches MW-S2 Phase-B commit pauses until released.
-struct E7AdmissionSeam {
+struct MwAdmissionSeam {
     static void arm(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(s, PhaseTag::mw_admission_phase_b);
     }
@@ -61,7 +61,7 @@ struct E7AdmissionSeam {
 };
 
 // ---- E9 park seams (was E9ParkSeamHooks) ----
-struct E9ParkSeam {
+struct SchedulerParkSeam {
     static void arm_candidate(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(s, PhaseTag::scheduler_park_candidate);
     }
@@ -92,7 +92,7 @@ struct E9ParkSeam {
 // Routes through Scheduler::AsyncTestAccess (guarded accessor). The clock/
 // timer fields are dual-use production state; only the WRITE/observation
 // accessors are test-variant-only.
-struct E11TimerControl {
+struct TimerTestControl {
     static void enable_test_clock(sluice::async::Scheduler& s) noexcept {
         sluice::async::Scheduler::AsyncTestAccess::enable_test_clock(s);
     }
@@ -138,18 +138,18 @@ struct E11TimerControl {
     }
     // Park-commit seam delegation (E11 reuses the E9 park-commit seam).
     static void arm_park_commit(sluice::async::Scheduler& s) noexcept {
-        E9ParkSeam::arm_commit(s);
+        SchedulerParkSeam::arm_commit(s);
     }
     static void wait_park_commit_paused(sluice::async::Scheduler& s) noexcept {
-        E9ParkSeam::wait_commit_paused(s);
+        SchedulerParkSeam::wait_commit_paused(s);
     }
     static void release_park_commit(sluice::async::Scheduler& s) noexcept {
-        E9ParkSeam::release_commit(s);
+        SchedulerParkSeam::release_commit(s);
     }
 };
 
 // ---- E12 event phase seams (was E12EventTestHooks) ----
-struct E12EventSeam {
+struct EventSeam {
     static void arm_set_store_before_drain(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(s, PhaseTag::event_set_store_before_drain);
     }
@@ -195,13 +195,13 @@ struct E12EventSeam {
 
     // Park-commit seam delegation (E12 reuses the E9 park-commit seam for T32).
     static void arm_park_commit(sluice::async::Scheduler& s) noexcept {
-        E9ParkSeam::arm_commit(s);
+        SchedulerParkSeam::arm_commit(s);
     }
     static void wait_park_commit_paused(sluice::async::Scheduler& s) noexcept {
-        E9ParkSeam::wait_commit_paused(s);
+        SchedulerParkSeam::wait_commit_paused(s);
     }
     static void release_park_commit(sluice::async::Scheduler& s) noexcept {
-        E9ParkSeam::release_commit(s);
+        SchedulerParkSeam::release_commit(s);
     }
 };
 
@@ -210,7 +210,7 @@ struct E12EventSeam {
 // make_runnable / route_runnable_locked publication. A test observing this phase
 // proves owner == winner Fiber, winner not yet published runnable, old owner
 // cannot reacquire, and a newcomer try_lock cannot barge.
-struct E12MutexSeam {
+struct AsyncMutexSeam {
     static void arm_handoff_before_publication(
         sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(
@@ -235,7 +235,7 @@ struct E12MutexSeam {
 // WaitNode has been successfully registered in the Mutex waiter queue AND the
 // fiber will suspend (no immediate ownership). A test observing this phase
 // proves the node entered the Mutex queue (not immediately granted).
-struct E12MutexWaiterSeam {
+struct AsyncMutexWaiterSeam {
     static void arm_waiter_registered(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(
             s, PhaseTag::mutex_waiter_registered_before_grant);
@@ -266,7 +266,7 @@ struct E12MutexWaiterSeam {
 // notify_all phase: paused AFTER acquiring global_mtx_ authority, BEFORE the
 // drain loop begins. Proves late registration/cancel/expiry serialize AFTER the
 // snapshot (C-H10).
-struct E12ConditionSeam {
+struct AsyncConditionSeam {
     static void arm_register_before_handoff(
         sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(
@@ -335,7 +335,7 @@ struct MutexFailSeam {
 // reached through the non-installed controller. Plus thin facades over
 // Scheduler::AsyncTestAccess for synthetic registration, accounting-helper
 // transitions, and pool/heap/counter observation.
-struct E13SelectTimerSeam {
+struct SelectTimerSeam {
     // Pump observing a stale (non-ACTIVE) Select entry being skipped (I4).
     static void arm_pump_skip(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(s, PhaseTag::select_timer_pump_skip);
@@ -438,7 +438,7 @@ struct E13SelectTimerSeam {
 // deadlock if the worker holds it). The snapshot accessor functions return
 // the controller-owned copy; they acquire the controller's own mutex, not
 // any production lock.
-struct E13SelectAdmissionSeam {
+struct SelectAdmissionSeam {
     using Scheduler = sluice::async::Scheduler;
     using AdmissionSnapshot = sluice_async_test::AdmissionSnapshot;
 
@@ -527,7 +527,7 @@ struct E13SelectAdmissionSeam {
 // (task §13): result + runnable publication counts, and the waiting_select_count
 // liveness observation. All reached through the non-installed controller; no
 // production symbol.
-struct E13SelectPublicationSeam {
+struct SelectPublicationSeam {
     using Scheduler = sluice::async::Scheduler;
     using PublicationSnapshot = sluice_async_test::PublicationSnapshot;
     using SelectTimerReg = sluice::async::detail::SelectTimerRegistration;
@@ -591,7 +591,7 @@ struct E13SelectPublicationSeam {
         return Scheduler::AsyncTestAccess::waiting_select_count(s);
     }
 
-    // ---- Select timer pool observation (mirror of E13SelectTimerSeam) ----
+    // ---- Select timer pool observation (mirror of SelectTimerSeam) ----
     static std::size_t select_timer_count_in_state(
         const Scheduler& s, SelectTimerReg::State st) noexcept {
         return Scheduler::AsyncTestAccess::select_timer_count_in_state(s, st);
@@ -609,7 +609,7 @@ struct E13SelectPublicationSeam {
 // exactly N successful arm registrations, before the next one / before
 // FinishRegistration". 0 = before the first registration; arm_count = all arms
 // registered then fail before FinishRegistration (P7-T5, load-bearing).
-struct E13SelectRollbackSeam {
+struct SelectRollbackSeam {
     using Scheduler = sluice::async::Scheduler;
     using Observation = sluice_async_test::RollbackObservation;
     using ArmKind = sluice::async::detail::ArmKind;

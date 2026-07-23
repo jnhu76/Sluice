@@ -52,7 +52,7 @@ using namespace sluice::async;
 using sluice::Result;
 
 namespace {
-using E11TimerTestHooks = sluice_async_test::E11TimerControl;
+using E11TimerTestHooks = sluice_async_test::TimerTestControl;
 
 struct FiberStack {
     static constexpr std::size_t kBytes = 64 * 1024;

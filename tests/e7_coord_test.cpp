@@ -573,7 +573,7 @@ SLUICE_TEST_CASE(e7_t10b_completion_readiness_not_gated_by_reap) {
 // the candidate so Phase-B reclassify cannot see MW-S2.
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable SchedulerTestHooks
 // friend is removed; the seam is driven by the internal-testing controller
-// facade E7AdmissionSeam (tests/async_test_control.hpp), which routes through
+// facade MwAdmissionSeam (tests/async_test_control.hpp), which routes through
 // a per-Scheduler* controller registry compiled only into the variant lib.
 
 SLUICE_TEST_CASE(e7_t11_coordinated_mw_s2_admission_race) {
@@ -626,16 +626,16 @@ SLUICE_TEST_CASE(e7_t11_coordinated_mw_s2_admission_race) {
     sched.spawn(fa);   // single worker; A runs on worker 0
 
     // Arm the seam BEFORE run() so W0 pauses at its first MW-S2 candidate.
-    sluice_async_test::E7AdmissionSeam::arm(sched);
+    sluice_async_test::MwAdmissionSeam::arm(sched);
 
     // Coordination thread: route-then-stage-then-release while W0 is paused.
     std::atomic<bool> seam_released{false};
     std::thread coord([&] {
-        sluice_async_test::E7AdmissionSeam::wait_paused(sched);  // W0 paused at candidate
+        sluice_async_test::MwAdmissionSeam::wait_paused(sched);  // W0 paused at candidate
         a_flag.store(true, std::memory_order_release);  // route A → MW-S1
         // Stage a_c so when A resumes and awaits it, the next poll reaps it.
         probe_ptr->inner().complete_oldest_with_bytes(4);
-        sluice_async_test::E7AdmissionSeam::release(sched);  // W0 does Phase-B
+        sluice_async_test::MwAdmissionSeam::release(sched);  // W0 does Phase-B
         seam_released.store(true, std::memory_order_release);
     });
 

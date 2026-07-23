@@ -3,12 +3,12 @@
 // Drives the PUBLIC variadic select() entry from a REAL running Fiber on the
 // target Scheduler (production-test-plan.md §7.7 ST-14, plus P7-T1..T11 / the
 // rollback-half of SN-8). The synthetic registration-failure seam
-// (E13SelectRollbackSeam, controller-only, absent from production) injects a
+// (SelectRollbackSeam, controller-only, absent from production) injects a
 // SelectRegistrationFailure after exactly N successful registrations under
 // global_mtx_; select_admit's catch runs the rollback transaction and rethrows.
 //
-// Determinism policy: the deterministic logical clock (E11TimerControl) makes
-// Timer arms schedulable; the rollback observation (E13SelectRollbackSeam::
+// Determinism policy: the deterministic logical clock (TimerTestControl) makes
+// Timer arms schedulable; the rollback observation (SelectRollbackSeam::
 // observation) records the exact reverse-order per-arm rollback. No sleep_for,
 // no wall-clock timing. ASan is load-bearing for the stale-Timer-after-unwind
 // proof (P7-T8).
@@ -50,7 +50,7 @@ using SelectArmSlot = sad::SelectArmSlot;
 using SelectTimerReg = sad::SelectTimerRegistration;
 using GroupPhase = sad::GroupPhase;
 using ArmKind = sad::ArmKind;
-using RollbackSeam = stest::E13SelectRollbackSeam;
+using RollbackSeam = stest::SelectRollbackSeam;
 
 namespace {
 
@@ -68,7 +68,7 @@ struct RollbackFixture {
     Scheduler sched;
     stest::ControllerGuard ctrl;
     RollbackFixture() : sched(ctx), ctrl(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
     }
 };
 
@@ -99,13 +99,13 @@ SLUICE_TEST_CASE(p7_t1_failure_before_first_registration) {
     RollbackFixture f;
     Event ev0(f.sched), ev1(f.sched);
     // Make the Timer deadline NOT due so it stays a pure registration case.
-    stest::E11TimerControl::set_clock(f.sched, 0);
+    stest::TimerTestControl::set_clock(f.sched, 0);
 
     RollbackSeam::configure_fail_after(f.sched, 0);
     const std::size_t adc_before =
-        stest::E11TimerControl::active_deadline_count(f.sched);
+        stest::TimerTestControl::active_deadline_count(f.sched);
     const std::size_t wsc_before =
-        stest::E13SelectPublicationSeam::waiting_select_count(f.sched);
+        stest::SelectPublicationSeam::waiting_select_count(f.sched);
 
     bool caught = false;
     int caught_code = 0;
@@ -134,18 +134,18 @@ SLUICE_TEST_CASE(p7_t1_failure_before_first_registration) {
     SLUICE_CHECK_MSG(active_select_timers(f.sched) == 0,
                      "no ACTIVE Select Timer in Scheduler pool");
     SLUICE_CHECK_MSG(
-        stest::E11TimerControl::active_deadline_count(f.sched) == adc_before,
+        stest::TimerTestControl::active_deadline_count(f.sched) == adc_before,
         "active_deadline_count unchanged");
     // No publication.
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::result_publication_count(f.sched) == 0,
+        stest::SelectPublicationSeam::result_publication_count(f.sched) == 0,
         "no result publication");
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 0,
+        stest::SelectPublicationSeam::runnable_publication_count(f.sched) == 0,
         "no runnable publication");
     // No liveness mutation.
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::waiting_select_count(f.sched) ==
+        stest::SelectPublicationSeam::waiting_select_count(f.sched) ==
             wsc_before,
         "waiting_select_count unchanged");
     // Event port clean.
@@ -166,7 +166,7 @@ SLUICE_TEST_CASE(p7_t2_event_only_prefix_matrix) {
         RollbackFixture f;
         std::array<Event, kArms> evs{
             Event{f.sched}, Event{f.sched}, Event{f.sched}, Event{f.sched}};
-        stest::E11TimerControl::set_clock(f.sched, 0);
+        stest::TimerTestControl::set_clock(f.sched, 0);
         RollbackSeam::configure_fail_after(f.sched, n);
 
         bool caught = false;
@@ -219,11 +219,11 @@ SLUICE_TEST_CASE(p7_t3_timer_only_prefix_matrix) {
     constexpr unsigned kArms = 4;
     for (unsigned n = 0; n <= kArms; ++n) {
         RollbackFixture f;
-        stest::E11TimerControl::set_clock(f.sched, 0);
+        stest::TimerTestControl::set_clock(f.sched, 0);
         const std::size_t adc_before =
-            stest::E11TimerControl::active_deadline_count(f.sched);
+            stest::TimerTestControl::active_deadline_count(f.sched);
         const std::size_t pool_before =
-            stest::E13SelectTimerSeam::pool_size(f.sched);
+            stest::SelectTimerSeam::pool_size(f.sched);
         RollbackSeam::configure_fail_after(f.sched, n);
 
         bool caught = false;
@@ -258,7 +258,7 @@ SLUICE_TEST_CASE(p7_t3_timer_only_prefix_matrix) {
                          "no ACTIVE Select Timer after rollback");
         // active_deadline_count back to baseline.
         SLUICE_CHECK_MSG(
-            stest::E11TimerControl::active_deadline_count(f.sched) == adc_before,
+            stest::TimerTestControl::active_deadline_count(f.sched) == adc_before,
             "active_deadline_count returned to baseline");
         // The registered prefix blocks are now RETIRED (still Scheduler-owned
         // until lazy pump reclamation). The never-registered suffix blocks
@@ -269,11 +269,11 @@ SLUICE_TEST_CASE(p7_t3_timer_only_prefix_matrix) {
         SLUICE_CHECK_MSG(retired == n,
                          "exactly N retired Select Timer blocks (registered prefix)");
         SLUICE_CHECK_MSG(
-            stest::E13SelectTimerSeam::pool_size(f.sched) == pool_before + n,
+            stest::SelectTimerSeam::pool_size(f.sched) == pool_before + n,
             "Scheduler pool grew by exactly the registered prefix");
         // Heap retains stale entries for the registered prefix (lazy policy).
         SLUICE_CHECK_MSG(
-            stest::E13SelectTimerSeam::heap_counts_by_kind(f.sched)[1] == n,
+            stest::SelectTimerSeam::heap_counts_by_kind(f.sched)[1] == n,
             "deadline heap retains N stale Select entries (lazy reclamation)");
         RollbackSeam::disable(f.sched);
     }
@@ -291,9 +291,9 @@ SLUICE_TEST_CASE(p7_t4_mixed_event_timer_matrix) {
     auto run_case = [&](bool timer_first, unsigned n) {
         RollbackFixture f;
         std::array<Event, 2> evs{Event{f.sched}, Event{f.sched}};
-        stest::E11TimerControl::set_clock(f.sched, 0);
+        stest::TimerTestControl::set_clock(f.sched, 0);
         const std::size_t adc_before =
-            stest::E11TimerControl::active_deadline_count(f.sched);
+            stest::TimerTestControl::active_deadline_count(f.sched);
         RollbackSeam::configure_fail_after(f.sched, n);
 
         bool caught = false;
@@ -329,7 +329,7 @@ SLUICE_TEST_CASE(p7_t4_mixed_event_timer_matrix) {
         SLUICE_CHECK_MSG(active_select_timers(f.sched) == 0,
                          "no ACTIVE Select Timer after rollback");
         SLUICE_CHECK_MSG(
-            stest::E11TimerControl::active_deadline_count(f.sched) ==
+            stest::TimerTestControl::active_deadline_count(f.sched) ==
                 adc_before,
             "active_deadline_count at baseline");
         RollbackSeam::disable(f.sched);
@@ -350,7 +350,7 @@ SLUICE_TEST_CASE(p7_t5_failure_after_all_arms_before_finish) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);
-    stest::E11TimerControl::set_clock(f.sched, 0);
+    stest::TimerTestControl::set_clock(f.sched, 0);
     RollbackSeam::configure_fail_after(f.sched, 2);  // 2 arms
 
     bool caught = false;
@@ -374,10 +374,10 @@ SLUICE_TEST_CASE(p7_t5_failure_after_all_arms_before_finish) {
                      "no ACTIVE Select Timer");
     // No publication whatsoever.
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::result_publication_count(f.sched) == 0,
+        stest::SelectPublicationSeam::result_publication_count(f.sched) == 0,
         "no result publication");
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 0,
+        stest::SelectPublicationSeam::runnable_publication_count(f.sched) == 0,
         "no runnable publication");
     RollbackSeam::disable(f.sched);
 }
@@ -389,7 +389,7 @@ SLUICE_TEST_CASE(p7_t6_original_exception_preserved) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);
-    stest::E11TimerControl::set_clock(f.sched, 0);
+    stest::TimerTestControl::set_clock(f.sched, 0);
     RollbackSeam::configure_fail_after(f.sched, 1);
 
     bool caught_exact_type = false;
@@ -421,11 +421,11 @@ SLUICE_TEST_CASE(p7_t7_no_liveness_side_effects) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);
-    stest::E11TimerControl::set_clock(f.sched, 0);
+    stest::TimerTestControl::set_clock(f.sched, 0);
     const std::size_t wsc_before =
-        stest::E13SelectPublicationSeam::waiting_select_count(f.sched);
+        stest::SelectPublicationSeam::waiting_select_count(f.sched);
     const std::size_t rc_before = f.sched.runnable_count();
-    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    stest::SelectPublicationSeam::reset_publication_counts(f.sched);
     RollbackSeam::configure_fail_after(f.sched, 1);
 
     bool caught = false;
@@ -441,16 +441,16 @@ SLUICE_TEST_CASE(p7_t7_no_liveness_side_effects) {
     SLUICE_CHECK_MSG(caught, "synthetic exception propagated");
     // Exact equality on liveness counters.
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::waiting_select_count(f.sched) ==
+        stest::SelectPublicationSeam::waiting_select_count(f.sched) ==
             wsc_before,
         "waiting_select_count unchanged");
     SLUICE_CHECK_MSG(f.sched.runnable_count() == rc_before,
                      "runnable_count unchanged");
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::result_publication_count(f.sched) == 0,
+        stest::SelectPublicationSeam::result_publication_count(f.sched) == 0,
         "result publication count == 0");
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 0,
+        stest::SelectPublicationSeam::runnable_publication_count(f.sched) == 0,
         "runnable publication count == 0");
     RollbackSeam::disable(f.sched);
 }
@@ -465,9 +465,9 @@ SLUICE_TEST_CASE(p7_t7_no_liveness_side_effects) {
 SLUICE_TEST_CASE(p7_t8_stale_timer_after_frame_unwind) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
-    stest::E11TimerControl::set_clock(f.sched, 0);
+    stest::TimerTestControl::set_clock(f.sched, 0);
     const std::size_t adc_before =
-        stest::E11TimerControl::active_deadline_count(f.sched);
+        stest::TimerTestControl::active_deadline_count(f.sched);
     RollbackSeam::configure_fail_after(f.sched, 1);
 
     bool caught = false;
@@ -489,7 +489,7 @@ SLUICE_TEST_CASE(p7_t8_stale_timer_after_frame_unwind) {
 
     // The pump arm-load counter must be reset; we expect ZERO arm reads when
     // the stale block is popped (state-before-arm rule).
-    stest::E13SelectTimerSeam::reset_arm_load_count(f.sched);
+    stest::SelectTimerSeam::reset_arm_load_count(f.sched);
 
     // Advance the clock past the deadline and pump via a no-op timer wait so
     // the worker loop's timer pump runs. The simplest deterministic pump drive:
@@ -499,9 +499,9 @@ SLUICE_TEST_CASE(p7_t8_stale_timer_after_frame_unwind) {
     // active_deadline_count is already back to baseline (retire decremented it);
     // it must remain unchanged through the physical erase.
     SLUICE_CHECK_MSG(
-        stest::E11TimerControl::active_deadline_count(f.sched) == adc_before,
+        stest::TimerTestControl::active_deadline_count(f.sched) == adc_before,
         "active_deadline_count at baseline before pump");
-    stest::E11TimerControl::set_clock(f.sched, 5000);
+    stest::TimerTestControl::set_clock(f.sched, 5000);
 
     // The retired block is still physically in the Scheduler pool + heap. Drive
     // the pump by running the worker once with no runnable work; the pump
@@ -527,11 +527,11 @@ SLUICE_TEST_CASE(p7_t8_stale_timer_after_frame_unwind) {
     }
 
     // No UAF survived to here under ASan. The arm-load delta is zero.
-    SLUICE_CHECK_MSG(stest::E13SelectTimerSeam::arm_load_count(f.sched) == 0,
+    SLUICE_CHECK_MSG(stest::SelectTimerSeam::arm_load_count(f.sched) == 0,
                      "pump did NOT dereference the retired arm (arm-load delta == 0)");
     // active_deadline_count unchanged through physical erase.
     SLUICE_CHECK_MSG(
-        stest::E11TimerControl::active_deadline_count(f.sched) == adc_before,
+        stest::TimerTestControl::active_deadline_count(f.sched) == adc_before,
         "active_deadline_count unchanged through physical erase");
     RollbackSeam::disable(f.sched);
 }
@@ -569,14 +569,14 @@ SLUICE_TEST_CASE(p7_t9_rollback_isolation_under_g) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched, /*initially_set=*/false);
-    stest::E11TimerControl::set_clock(f.sched, 0);
+    stest::TimerTestControl::set_clock(f.sched, 0);
 
     // Inject failure after the FIRST arm registers (Event arm commits, the
     // Timer arm's registration then throws -> rollback of the Event prefix).
     RollbackSeam::configure_fail_after(f.sched, 1);
 
     const std::size_t adc_before =
-        stest::E11TimerControl::active_deadline_count(f.sched);
+        stest::TimerTestControl::active_deadline_count(f.sched);
     const std::size_t ast_before = active_select_timers(f.sched);
 
     std::atomic<bool> caught{false};
@@ -662,7 +662,7 @@ SLUICE_TEST_CASE(p7_t9_rollback_isolation_under_g) {
     // registration threw before it committed, so it was never Scheduler-owned;
     // asserted for completeness).
     SLUICE_CHECK_MSG(
-        stest::E11TimerControl::active_deadline_count(f.sched) == adc_before,
+        stest::TimerTestControl::active_deadline_count(f.sched) == adc_before,
         "active_deadline_count at baseline (Timer arm never committed)");
     SLUICE_CHECK_MSG(active_select_timers(f.sched) == ast_before,
                      "no ACTIVE Select Timer blocks leaked");
@@ -694,9 +694,9 @@ SLUICE_TEST_CASE(p7_t10_repeated_rollback) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);
-    stest::E11TimerControl::set_clock(f.sched, 0);
+    stest::TimerTestControl::set_clock(f.sched, 0);
     const std::size_t adc_base =
-        stest::E11TimerControl::active_deadline_count(f.sched);
+        stest::TimerTestControl::active_deadline_count(f.sched);
 
     for (int i = 0; i < 200; ++i) {
         RollbackSeam::configure_fail_after(f.sched, 1);
@@ -714,12 +714,12 @@ SLUICE_TEST_CASE(p7_t10_repeated_rollback) {
         SLUICE_CHECK_MSG(active_select_timers(f.sched) == 0,
                          "no ACTIVE Select Timer accumulates");
         SLUICE_CHECK_MSG(
-            stest::E11TimerControl::active_deadline_count(f.sched) == adc_base,
+            stest::TimerTestControl::active_deadline_count(f.sched) == adc_base,
             "active_deadline_count baseline restored each iteration");
         RollbackSeam::disable(f.sched);
     }
     // Reclaim stale heap entries by pumping past the deadline.
-    stest::E11TimerControl::set_clock(f.sched, 100000);
+    stest::TimerTestControl::set_clock(f.sched, 100000);
     {
         Fiber drain;
         drain.set_entry([&](Fiber&) { (void)0; });
@@ -729,7 +729,7 @@ SLUICE_TEST_CASE(p7_t10_repeated_rollback) {
         f.sched.run(1);
     }
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::heap_counts_by_kind(f.sched)[1] == 0,
+        stest::SelectTimerSeam::heap_counts_by_kind(f.sched)[1] == 0,
         "stale heap entries reclaimed after pump");
 
     // A normal inline Select still works after rollback.
@@ -758,7 +758,7 @@ SLUICE_TEST_CASE(p7_t11_success_after_rollback) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);
-    stest::E11TimerControl::set_clock(f.sched, 0);
+    stest::TimerTestControl::set_clock(f.sched, 0);
 
     // One failing admission.
     RollbackSeam::configure_fail_after(f.sched, 0);
@@ -777,7 +777,7 @@ SLUICE_TEST_CASE(p7_t11_success_after_rollback) {
     }
     // Disable injection; a normal inline Select (Timer already due) succeeds.
     RollbackSeam::disable(f.sched);
-    stest::E11TimerControl::set_clock(f.sched, 100);  // deadline 10 now due
+    stest::TimerTestControl::set_clock(f.sched, 100);  // deadline 10 now due
     SelectResult captured;
     bool ok = false;
     {

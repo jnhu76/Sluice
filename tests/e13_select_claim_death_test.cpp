@@ -80,7 +80,7 @@ struct DGroup {
     Event ev;
 
     DGroup() : sched(ctx), ctrl(sched), ev(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
         group.scheduler_ = &sched;
         group.arms_ = arms;
         group.set_phase(GroupPhase::armed);
@@ -103,7 +103,7 @@ struct DGroup {
     // then bind it as the arm's stable back-pointer via construct_timer (the
     // same path the future admission protocol uses).
     void add_timer_candidate(Scheduler::deadline_t deadline) {
-        SelectTimerReg* reg = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+        SelectTimerReg* reg = sluice_async_test::SelectTimerSeam::register_synthetic(
             sched, &arms[0], deadline);
         arms[0].construct_timer(deadline, reg);
         arms[0].state = ArmState::prepared;
@@ -209,8 +209,8 @@ void child_tf_timer_other_scheduler() {
     sa::AsyncIoContext ctx_b(std::make_unique<sa::FakeAsyncBackend>());
     Scheduler sched_b(ctx_b);
     sluice_async_test::ControllerGuard ctrl_b(sched_b);
-    stest::E11TimerControl::enable_test_clock(sched_b);
-    SelectTimerReg* reg_b = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+    stest::TimerTestControl::enable_test_clock(sched_b);
+    SelectTimerReg* reg_b = sluice_async_test::SelectTimerSeam::register_synthetic(
         sched_b, &g.arms[0], /*deadline=*/100);
     g.arms[0].construct_timer(100, reg_b);
     g.arms[0].state = ArmState::candidate_ready;

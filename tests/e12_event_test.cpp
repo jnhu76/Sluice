@@ -43,15 +43,15 @@ using sluice::Result;
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable E11TimerTestHooks +
 // E12EventTestHooks friends are removed. The clock/timer + Event phase seams +
 // the E9 park-commit seam (reused by T32) are driven by the internal-testing
-// controller facades E11TimerControl / E12EventSeam / E9ParkSeam
+// controller facades TimerTestControl / EventSeam / SchedulerParkSeam
 // (tests/async_test_control.hpp), which route through Scheduler::AsyncTestAccess
 // (guarded) + the per-Scheduler* phase registry. The dead event_wait_queue
 // helper (C10) is dropped — no test needs raw WaitQueue access now that
 // Event::cancel is the authority. Call sites keep the historical names via
 // local aliases so the test cases read unchanged.
 namespace {
-using E11TimerTestHooks = sluice_async_test::E11TimerControl;
-using E12EventTestHooks = sluice_async_test::E12EventSeam;
+using E11TimerTestHooks = sluice_async_test::TimerTestControl;
+using E12EventTestHooks = sluice_async_test::EventSeam;
 }  // namespace
 
 namespace {

@@ -6,7 +6,7 @@
 //
 //   - Semaphore::available / try_acquire / acquire / acquire_until / cancel /
 //     release
-//   - E11TimerControl / E9ParkSeam  (deterministic clock/timer + park seams)
+//   - TimerTestControl / SchedulerParkSeam  (deterministic clock/timer + park seams)
 //   - WaitNode public lock-free state queries (was_woken/was_cancelled/
 //     was_expired/is_terminal/outcome)
 //   - Scheduler::advance_clock / waiting_count()  (deterministic timer +
@@ -40,8 +40,8 @@ using sluice::Result;
 // Aliases matching the historical controller names used across the async test
 // family (ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1).
 namespace {
-using E11TimerTestHooks = sluice_async_test::E11TimerControl;
-using E9ParkSeam = sluice_async_test::E9ParkSeam;
+using E11TimerTestHooks = sluice_async_test::TimerTestControl;
+using SchedulerParkSeam = sluice_async_test::SchedulerParkSeam;
 }  // namespace
 
 namespace {

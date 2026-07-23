@@ -101,13 +101,13 @@ constexpr unsigned kSpinWaitBoundedIters = 200000;
 
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable E11TimerTestHooks
 // friend is removed. The clock/timer/park-commit controls are driven by the
-// internal-testing controller facade E11TimerControl (tests/async_test_control.hpp),
+// internal-testing controller facade TimerTestControl (tests/async_test_control.hpp),
 // which routes through Scheduler::AsyncTestAccess (a guarded nested struct
 // compiled only into the variant lib) + the per-Scheduler* phase registry.
 // The call sites below keep the historical name via a local alias so the
 // 15 test cases read unchanged; the actual authority is the new controller.
 namespace {
-using E11TimerTestHooks = sluice_async_test::E11TimerControl;
+using E11TimerTestHooks = sluice_async_test::TimerTestControl;
 }  // namespace
 
 // =============================================================================

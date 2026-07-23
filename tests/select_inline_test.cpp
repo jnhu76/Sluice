@@ -6,7 +6,7 @@
 // end-to-end through the public template.
 //
 // Determinism policy (production-test-plan.md §1): the deterministic logical
-// clock (E11TimerControl) makes Timer deadlines due BEFORE run, and PhaseTag
+// clock (TimerTestControl) makes Timer deadlines due BEFORE run, and PhaseTag
 // causal seams (sluice_async_internal_testing variant only) prove registration-
 // before-snapshot (T2) and the inline Completed->Consumed lifecycle (T3). No
 // sleep_for, no wall-clock timing.
@@ -68,7 +68,7 @@ struct InlineFixture {
     Scheduler sched;
     stest::ControllerGuard ctrl;
     InlineFixture() : sched(ctx), ctrl(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
     }
 };
 
@@ -112,7 +112,7 @@ SLUICE_TEST_CASE(st2_timer_already_due) {
     InlineFixture f;
     // Make the deadline already-due by advancing the logical clock past it
     // BEFORE the worker runs the fiber. Deadline=10; set clock to 100.
-    stest::E11TimerControl::set_clock(f.sched, 100);
+    stest::TimerTestControl::set_clock(f.sched, 100);
     const Scheduler::deadline_t deadline = 10;
 
     SelectResult captured;
@@ -125,7 +125,7 @@ SLUICE_TEST_CASE(st2_timer_already_due) {
     FiberStack sw;
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
     const auto runnable_before = f.sched.runnable_count();
-    const auto adc_before = stest::E11TimerControl::active_deadline_count(f.sched);
+    const auto adc_before = stest::TimerTestControl::active_deadline_count(f.sched);
     f.sched.spawn(fb);
     f.sched.run(1);
 
@@ -142,11 +142,11 @@ SLUICE_TEST_CASE(st2_timer_already_due) {
     // CONSUMED block may be lazily reclaimed by the pump during run(), so we
     // assert the load-bearing authority-closure invariants, not a lingering
     // terminal-state count.)
-    SLUICE_CHECK_MSG(stest::E11TimerControl::active_deadline_count(f.sched) ==
+    SLUICE_CHECK_MSG(stest::TimerTestControl::active_deadline_count(f.sched) ==
                          adc_before,
                      "active_deadline_count closed for the consumed Timer");
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::count_in_state(
+        stest::SelectTimerSeam::count_in_state(
             f.sched, sad::SelectTimerRegistration::State::active) == 0,
         "no ACTIVE Select timer authority remains");
 }
@@ -157,7 +157,7 @@ SLUICE_TEST_CASE(st2_timer_already_due) {
 SLUICE_TEST_CASE(st3a_event_then_timer_event_wins) {
     if constexpr (!sa::fiber_ctx::supported) return;
     InlineFixture f;
-    stest::E11TimerControl::set_clock(f.sched, 100);
+    stest::TimerTestControl::set_clock(f.sched, 100);
     Event ev(f.sched, /*initially_set=*/true);
 
     SelectResult captured;
@@ -182,7 +182,7 @@ SLUICE_TEST_CASE(st3a_event_then_timer_event_wins) {
     // Loser Timer authority closed: no ACTIVE Select timer remains. (The RETIRED
     // block may be lazily reclaimed by the pump during run().)
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::count_in_state(
+        stest::SelectTimerSeam::count_in_state(
             f.sched, sad::SelectTimerRegistration::State::active) == 0,
         "loser Timer authority closed (no ACTIVE Select timer remains)");
 }
@@ -193,7 +193,7 @@ SLUICE_TEST_CASE(st3a_event_then_timer_event_wins) {
 SLUICE_TEST_CASE(st3b_timer_then_event_timer_wins) {
     if constexpr (!sa::fiber_ctx::supported) return;
     InlineFixture f;
-    stest::E11TimerControl::set_clock(f.sched, 100);
+    stest::TimerTestControl::set_clock(f.sched, 100);
     Event ev(f.sched, /*initially_set=*/true);
 
     SelectResult captured;
@@ -268,7 +268,7 @@ SLUICE_TEST_CASE(st4_two_events_set) {
 SLUICE_TEST_CASE(st5_two_timers_due) {
     if constexpr (!sa::fiber_ctx::supported) return;
     InlineFixture f;
-    stest::E11TimerControl::set_clock(f.sched, 100);
+    stest::TimerTestControl::set_clock(f.sched, 100);
 
     SelectResult captured;
     std::atomic<bool> ran_after{false};
@@ -281,7 +281,7 @@ SLUICE_TEST_CASE(st5_two_timers_due) {
     });
     FiberStack sw;
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
-    const auto adc_before = stest::E11TimerControl::active_deadline_count(f.sched);
+    const auto adc_before = stest::TimerTestControl::active_deadline_count(f.sched);
     f.sched.spawn(fb);
     f.sched.run(1);
 
@@ -293,11 +293,11 @@ SLUICE_TEST_CASE(st5_two_timers_due) {
                      "timer fired");
     // Both arms' authority closed: active_deadline_count dropped for both the
     // consumed winner and the retired loser.
-    SLUICE_CHECK_MSG(stest::E11TimerControl::active_deadline_count(f.sched) ==
+    SLUICE_CHECK_MSG(stest::TimerTestControl::active_deadline_count(f.sched) ==
                          adc_before,
                      "active_deadline_count closed for both Timers");
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::count_in_state(
+        stest::SelectTimerSeam::count_in_state(
             f.sched, sad::SelectTimerRegistration::State::active) == 0,
         "no ACTIVE Select timer authority remains");
 }
@@ -363,11 +363,11 @@ SLUICE_TEST_CASE(st7_event_winner_future_timer_loser) {
     SLUICE_CHECK_MSG(captured.kind() == SelectKind::event, "Event winner");
     // The loser Timer registration was RETIRED inline (authority closed).
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::count_in_state(
+        stest::SelectTimerSeam::count_in_state(
             f.sched, sad::SelectTimerRegistration::State::retired) == 1,
         "future Timer loser RETIRED");
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::count_in_state(
+        stest::SelectTimerSeam::count_in_state(
             f.sched, sad::SelectTimerRegistration::State::active) == 0,
         "no ACTIVE Select timer remains");
 
@@ -375,10 +375,10 @@ SLUICE_TEST_CASE(st7_event_winner_future_timer_loser) {
     // pump. The pump must observe the STALE RETIRED registration and skip it
     // WITHOUT dereferencing the (now-destroyed) arm. This reaches the real P3
     // stale-skip production path (arm-load delta == 0).
-    stest::E13SelectTimerSeam::reset_arm_load_count(f.sched);
+    stest::SelectTimerSeam::reset_arm_load_count(f.sched);
     AsyncTestAccess::advance_clock(f.sched, timer_deadline + 1);
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::arm_load_count(f.sched) == 0,
+        stest::SelectTimerSeam::arm_load_count(f.sched) == 0,
         "pump did NOT dereference the stale RETIRED registration's arm");
 }
 
@@ -388,7 +388,7 @@ SLUICE_TEST_CASE(st7_event_winner_future_timer_loser) {
 SLUICE_TEST_CASE(st8_timer_winner_event_loser) {
     if constexpr (!sa::fiber_ctx::supported) return;
     InlineFixture f;
-    stest::E11TimerControl::set_clock(f.sched, 100);
+    stest::TimerTestControl::set_clock(f.sched, 100);
     Event ev(f.sched, /*initially_set=*/false);  // unset (loser)
 
     SelectResult captured;
@@ -442,7 +442,7 @@ static_assert(SelectInvocable<sa::EventSelectCase>);
 SLUICE_TEST_CASE(t1_template_link_matrix) {
     if constexpr (!sa::fiber_ctx::supported) return;
     InlineFixture f;
-    stest::E11TimerControl::set_clock(f.sched, 100);
+    stest::TimerTestControl::set_clock(f.sched, 100);
     Event ea(f.sched, true), eb(f.sched, true), ec(f.sched, true), ed(f.sched, true);
 
     // Each combination constructs and links; Event winners resolve inline. The
@@ -539,7 +539,7 @@ SLUICE_TEST_CASE(t1_template_link_matrix) {
 SLUICE_TEST_CASE(t2_all_arms_registered_before_snapshot) {
     if constexpr (!sa::fiber_ctx::supported) return;
     InlineFixture f;
-    stest::E11TimerControl::set_clock(f.sched, 100);
+    stest::TimerTestControl::set_clock(f.sched, 100);
     Event ev(f.sched, true);  // index 0: ready (winner)
     // index 1: Timer also due (ready). Both ready -> lowest index wins.
     const Scheduler::deadline_t td = 10;
@@ -561,11 +561,11 @@ SLUICE_TEST_CASE(t2_all_arms_registered_before_snapshot) {
     SLUICE_CHECK_MSG(ran_after.load(), "fiber resumed");
     // AdmissionArmed seam fired (registration complete before the snapshot).
     SLUICE_CHECK_MSG(
-        stest::E13SelectAdmissionSeam::armed_reached(f.sched),
+        stest::SelectAdmissionSeam::armed_reached(f.sched),
         "AdmissionArmed seam reached (all arms registered before snapshot)");
 
     // Read the boundary snapshot captured at the AdmissionArmed seam.
-    const auto armed_snap = stest::E13SelectAdmissionSeam::armed_snapshot(f.sched);
+    const auto armed_snap = stest::SelectAdmissionSeam::armed_snapshot(f.sched);
     SLUICE_CHECK_MSG(
         armed_snap.phase == sad::GroupPhase::selecting,
         "AdmissionArmed snapshot: phase == Selecting");
@@ -608,7 +608,7 @@ SLUICE_TEST_CASE(t2_all_arms_registered_before_snapshot) {
     // The loser Timer arm (index 1) was registered THEN finalized: no ACTIVE
     // Select timer remains.
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::count_in_state(
+        stest::SelectTimerSeam::count_in_state(
             f.sched, sad::SelectTimerRegistration::State::active) == 0,
         "loser Timer arm registered then finalized (no ACTIVE remains)");
 }
@@ -629,7 +629,7 @@ SLUICE_TEST_CASE(t2_all_arms_registered_before_snapshot) {
 SLUICE_TEST_CASE(t3_inline_lifecycle) {
     if constexpr (!sa::fiber_ctx::supported) return;
     InlineFixture f;
-    stest::E11TimerControl::set_clock(f.sched, 100);
+    stest::TimerTestControl::set_clock(f.sched, 100);
     Event ev(f.sched, true);
 
     SelectResult captured;
@@ -649,15 +649,15 @@ SLUICE_TEST_CASE(t3_inline_lifecycle) {
     // Lifecycle seams reached in order: Armed (registration done) then Consumed
     // (inline completion committed).
     SLUICE_CHECK_MSG(
-        stest::E13SelectAdmissionSeam::armed_reached(f.sched),
+        stest::SelectAdmissionSeam::armed_reached(f.sched),
         "AdmissionArmed seam reached");
     SLUICE_CHECK_MSG(
-        stest::E13SelectAdmissionSeam::consumed_reached(f.sched),
+        stest::SelectAdmissionSeam::consumed_reached(f.sched),
         "AdmissionConsumed seam reached (inline Completed->Consumed lifecycle)");
 
     // Read the boundary snapshot captured at the AdmissionConsumed seam.
     const auto consumed_snap =
-        stest::E13SelectAdmissionSeam::consumed_snapshot(f.sched);
+        stest::SelectAdmissionSeam::consumed_snapshot(f.sched);
     SLUICE_CHECK_MSG(
         consumed_snap.phase == sad::GroupPhase::completed,
         "AdmissionConsumed snapshot: phase == Completed");

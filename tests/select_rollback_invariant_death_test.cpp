@@ -85,7 +85,7 @@ struct RGroup {
     Event ev1;
 
     RGroup() : sched(ctx), ctrl(sched), ev0(sched), ev1(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
         group.scheduler_ = &sched;
         group.arms_ = arms;
         group.set_phase(GroupPhase::building);
@@ -103,7 +103,7 @@ struct RGroup {
     // Register one Timer arm at index `idx`, ACTIVE reg, Scheduler-pool-owned.
     void add_timer_arm(std::size_t idx, Scheduler::deadline_t deadline) {
         SelectTimerReg* reg =
-            stest::E13SelectTimerSeam::register_synthetic(sched, &arms[idx],
+            stest::SelectTimerSeam::register_synthetic(sched, &arms[idx],
                                                            deadline);
         arms[idx].construct_timer(deadline, reg);
         arms[idx].state = ArmState::prepared;
@@ -218,7 +218,7 @@ void child_n7_already_terminal_timer() {
     RGroup g;
     g.add_timer_arm(0, Scheduler::deadline_t{1000});
     // Retire the registration first (ACTIVE -> RETIRED).
-    (void)stest::E13SelectTimerSeam::retire_synthetic(g.sched,
+    (void)stest::SelectTimerSeam::retire_synthetic(g.sched,
                                                        *g.arms[0].timer.stable_reg_);
     // arm[0] is still Registered but its reg is now RETIRED. Rollback must
     // reject it (not silently succeed).
@@ -252,10 +252,10 @@ void child_ctl_valid_rollback() {
     sa::AsyncIoContext ctx{std::make_unique<sa::FakeAsyncBackend>()};
     Scheduler sched(ctx);
     stest::ControllerGuard ctrl(sched);
-    stest::E11TimerControl::enable_test_clock(sched);
-    stest::E11TimerControl::set_clock(sched, 0);
+    stest::TimerTestControl::enable_test_clock(sched);
+    stest::TimerTestControl::set_clock(sched, 0);
     Event ev(sched);
-    stest::E13SelectRollbackSeam::configure_fail_after(sched, 1);
+    stest::SelectRollbackSeam::configure_fail_after(sched, 1);
 
     sa::Fiber fb;
     fb.set_entry([&](sa::Fiber&) {
@@ -264,7 +264,7 @@ void child_ctl_valid_rollback() {
                              sa::TimerSelectCase{sched, Scheduler::deadline_t{1000}});
             // Should not reach here.
             std::_Exit(sluice_death_test::kUnexpectedReturnExit);
-        } catch (const stest::E13SelectRollbackSeam::FailureException&) {
+        } catch (const stest::SelectRollbackSeam::FailureException&) {
             // The rollback completed (group Aborted) and rethrew. Exit 0.
         }
     });

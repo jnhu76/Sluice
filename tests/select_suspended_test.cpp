@@ -6,7 +6,7 @@
 // wake-before-physical-switch proofs P6-LW1/LW2).
 //
 // Determinism policy (production-test-plan.md §1): NO sleep_for, NO wall-clock
-// timing. The deterministic logical clock (E11TimerControl) drives Timer
+// timing. The deterministic logical clock (TimerTestControl) drives Timer
 // winners; PhaseTag causal seams (select_suspend_before_switch /
 // select_publish_entry / select_publish_done / select_suspended_before_consume) gate the
 // wake-before-physical-switch proofs and the publication boundary snapshots.
@@ -71,7 +71,7 @@ struct SuspendedFixture {
     Scheduler sched;
     stest::ControllerGuard ctrl;
     SuspendedFixture() : sched(ctx), ctrl(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
     }
 };
 
@@ -188,7 +188,7 @@ SLUICE_TEST_CASE(st10_post_suspension_timer_winner) {
     // worker's 1ms park-poll re-drain).
     std::thread clock_advancer([&] {
         spin_until_waiting_select(f.sched, 1);
-        stest::E13SelectTimerSeam::advance_clock(f.sched, deadline + 1);
+        stest::SelectTimerSeam::advance_clock(f.sched, deadline + 1);
     });
 
     f.sched.run_live(1);
@@ -257,8 +257,8 @@ SLUICE_TEST_CASE(st13_stale_timer_after_event_winner) {
     // skips the RETIRED block WITHOUT reading its arm (I4 closure). The arm
     // belongs to the now-destroyed caller frame (select() returned), so a
     // dereference would be use-after-free.
-    stest::E13SelectTimerSeam::reset_arm_load_count(f.sched);
-    stest::E13SelectTimerSeam::clear_pump_skip(f.sched);  // ensure not armed (arming blocks)
+    stest::SelectTimerSeam::reset_arm_load_count(f.sched);
+    stest::SelectTimerSeam::clear_pump_skip(f.sched);  // ensure not armed (arming blocks)
     // advance_clock drives the timer pump SYNCHRONOUSLY under global_mtx_
     // (production-test-plan.md §1 determinism policy). Setting the clock past
     // the loser Timer's deadline pops the RETIRED block, which the pump
@@ -266,16 +266,16 @@ SLUICE_TEST_CASE(st13_stale_timer_after_event_winner) {
     // arm the pump_skip seam here: arming makes test_phase BLOCK the caller,
     // and advance_clock runs the pump on THIS (coordinator) thread under G, so
     // arming would self-deadlock. Use the non-blocking reach observation below.
-    stest::E13SelectTimerSeam::advance_clock(f.sched, timer_deadline + 1);
+    stest::SelectTimerSeam::advance_clock(f.sched, timer_deadline + 1);
 
     // The pump-skip seam was reached iff the stale block was popped during the
     // advance_clock pump. Non-blocking reach observation (the seam fires under
     // global_mtx_; no arming => no blocking).
     const bool pump_skip_observed =
-        stest::E13SelectTimerSeam::pump_skip_reached(f.sched);
+        stest::SelectTimerSeam::pump_skip_reached(f.sched);
     SLUICE_CHECK_MSG(pump_skip_observed,
                      "stale RETIRED Timer pump observed the skip seam");
-    SLUICE_CHECK_MSG(stest::E13SelectTimerSeam::arm_load_count(f.sched) == 0,
+    SLUICE_CHECK_MSG(stest::SelectTimerSeam::arm_load_count(f.sched) == 0,
                      "stale RETIRED Timer pump did NOT read arm_ (I4 closure)");
     SLUICE_CHECK_MSG(
         AsyncTestAccess::select_timer_count_in_state(
@@ -312,7 +312,7 @@ SLUICE_TEST_CASE(p6_d1_same_event_twice_one_group) {
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
     f.sched.spawn(fb);
 
-    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    stest::SelectPublicationSeam::reset_publication_counts(f.sched);
     std::thread setter([&] {
         spin_until_waiting_select(f.sched, 1);
         ev.set();
@@ -327,10 +327,10 @@ SLUICE_TEST_CASE(p6_d1_same_event_twice_one_group) {
     SLUICE_CHECK_MSG(captured.kind() == SelectKind::event, "Event winner");
     SLUICE_CHECK_MSG(ev.is_set(), "Event SET preserved");
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::result_publication_count(f.sched) == 1,
+        stest::SelectPublicationSeam::result_publication_count(f.sched) == 1,
         "exactly one result publication");
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
+        stest::SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
         "exactly one runnable publication");
     SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(f.sched) == 0,
                      "waiting_select_count returned to zero");
@@ -391,7 +391,7 @@ SLUICE_TEST_CASE(p6_lw1_event_resolves_before_physical_switch) {
     // Exactly one runnable publication (the wake-before-switch path did not
     // double-publish: make_runnable returned true exactly once).
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
+        stest::SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
         "exactly one runnable publication (no double-wake)");
 }
 
@@ -422,7 +422,7 @@ SLUICE_TEST_CASE(p6_lw2_timer_resolves_before_physical_switch) {
         // Advance the clock past the deadline; the worker (parked or about to
         // park in run_live) observes the due Timer and resolves the group while
         // the caller has not yet context-switched away.
-        stest::E11TimerControl::set_clock(f.sched, deadline + 1);
+        stest::TimerTestControl::set_clock(f.sched, deadline + 1);
         for (int i = 0; i < 4; ++i) std::this_thread::yield();
         stest::release(f.sched, stest::PhaseTag::select_suspend_before_switch);
     });

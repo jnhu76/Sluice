@@ -66,7 +66,7 @@ struct MWFixture {
     Scheduler sched;
     stest::ControllerGuard ctrl;
     MWFixture() : sched(ctx), ctrl(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
     }
 };
 
@@ -173,7 +173,7 @@ SLUICE_TEST_CASE(st16_multi_worker_owner_routing) {
     f.sched.spawn_on(fb, /*worker_id=*/0);
 
     const std::size_t runnable_before = f.sched.runnable_count();
-    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    stest::SelectPublicationSeam::reset_publication_counts(f.sched);
 
     std::thread setter([&] {
         spin_until_waiting_select(f.sched, 1);
@@ -199,12 +199,12 @@ SLUICE_TEST_CASE(st16_multi_worker_owner_routing) {
     SLUICE_CHECK_MSG(admission != static_cast<unsigned>(-1),
                      "admission owner recorded");
     const auto pub_snap =
-        stest::E13SelectPublicationSeam::publish_done_snapshot(f.sched);
+        stest::SelectPublicationSeam::publish_done_snapshot(f.sched);
     SLUICE_CHECK_MSG(pub_snap.caller_owner_id == admission,
                      "publication routed to the recorded admission owner");
     (void)post_resume_worker;
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
+        stest::SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
         "exactly one runnable publication (enqueue)");
     SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(f.sched) == 0,
                      "waiting_select_count returned to zero");
@@ -253,11 +253,11 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
     f.sched.spawn(fb);
 
-    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    stest::SelectPublicationSeam::reset_publication_counts(f.sched);
     // Park the Event resolver AFTER the winner CAS succeeds, BEFORE
     // finalization, WHILE HOLDING global_mtx_ (the seam fires inside
     // select_process_group_locked, which runs under G).
-    stest::E13SelectAdmissionSeam::arm_admission_claimed(f.sched);
+    stest::SelectAdmissionSeam::arm_admission_claimed(f.sched);
 
     // The caller Fiber only reaches the select() suspension once a worker runs
     // it (under run_live below). So the resolver + coordinator threads must run
@@ -275,13 +275,13 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
         // (1) Wait until the Event resolver is genuinely paused mid-finalize
         // holding G. Observed on the seam's own mutex (no G acquisition), so
         // this thread does not deadlock against the parked Event resolver.
-        stest::E13SelectAdmissionSeam::wait_admission_claimed_paused(f.sched);
+        stest::SelectAdmissionSeam::wait_admission_claimed_paused(f.sched);
         // (2) NOW start the Timer resolver: with the Event resolver parked
         // holding G, the Timer resolver's advance_clock BLOCKS on global_mtx_.
         // This is the load-bearing contention window: two resolvers, one
         // holding G mid-finalize, one blocked on it.
         timer_resolver = std::thread([&] {
-            stest::E13SelectTimerSeam::advance_clock(f.sched, deadline + 1);
+            stest::SelectTimerSeam::advance_clock(f.sched, deadline + 1);
             // Returned: it acquired G (after the Event resolver released it).
             // The Timer registration was RETIRED by the Event winner's
             // finalizer, so the pump's state-before-arm rule pops it and SKIPS
@@ -292,7 +292,7 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
         // (3) Release the Event resolver: it finalizes the winner + losers +
         // publishes + routes the caller, then releases G. The Timer resolver
         // then acquires G and pops the RETIRED block (stale-skip, no publish).
-        stest::E13SelectAdmissionSeam::release_admission_claimed(f.sched);
+        stest::SelectAdmissionSeam::release_admission_claimed(f.sched);
     });
 
     // Drive the run: the worker runs the caller to select() suspension, the
@@ -311,10 +311,10 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
     SLUICE_CHECK_MSG(resume_count.load() == 1, "caller resume count == 1");
     SLUICE_CHECK_MSG(captured.has_winner(), "winner produced");
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::result_publication_count(f.sched) == 1,
+        stest::SelectPublicationSeam::result_publication_count(f.sched) == 1,
         "exactly one result publication under contention");
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
+        stest::SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
         "exactly one runnable publication under contention");
     SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(f.sched) == 0,
                      "waiting_select_count returned to zero");
@@ -371,10 +371,10 @@ SLUICE_TEST_CASE(p6_lw_mw_steal_before_switch_excluded) {
     // Deterministic owner placement on worker 0.
     f.sched.spawn_on(fb, /*worker_id=*/0);
 
-    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    stest::SelectPublicationSeam::reset_publication_counts(f.sched);
     // Park the caller at the suspend seam (after G release, before the
     // physical context_switch), with suspend_switch_pending RAISED.
-    stest::E13SelectPublicationSeam::arm_suspend_before_switch(f.sched);
+    stest::SelectPublicationSeam::arm_suspend_before_switch(f.sched);
 
     std::thread resolver([&] {
         // Wait until the caller has committed Waiting + Armed + the suspend
@@ -383,7 +383,7 @@ SLUICE_TEST_CASE(p6_lw_mw_steal_before_switch_excluded) {
         // local_runnable while worker 0 is still parked at the seam. Worker 1
         // (looping under run_live) observes worker0.suspend_switch_pending==
         // true on its steal attempts and MUST skip the routed ticket.
-        stest::E13SelectPublicationSeam::wait_suspend_before_switch_paused(f.sched);
+        stest::SelectPublicationSeam::wait_suspend_before_switch_paused(f.sched);
         ev.set();
         // Give worker 1 a bounded window to attempt (and be refused) a steal of
         // the routed ticket while the flag is still raised. NOT a correctness
@@ -392,7 +392,7 @@ SLUICE_TEST_CASE(p6_lw_mw_steal_before_switch_excluded) {
         for (int i = 0; i < 64; ++i) std::this_thread::yield();
         // Release the seam: worker 0 completes its context_switch, clears the
         // authority, then runs the resumed caller exactly once.
-        stest::E13SelectPublicationSeam::release_suspend_before_switch(f.sched);
+        stest::SelectPublicationSeam::release_suspend_before_switch(f.sched);
     });
 
     // 2 workers. Worker 0 parks at the seam (suspend authority raised). Worker 1
@@ -417,7 +417,7 @@ SLUICE_TEST_CASE(p6_lw_mw_steal_before_switch_excluded) {
     SLUICE_CHECK_MSG(captured.has_winner(), "winner produced");
     SLUICE_CHECK_MSG(captured.kind() == SelectKind::event, "Event winner");
     SLUICE_CHECK_MSG(
-        stest::E13SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
+        stest::SelectPublicationSeam::runnable_publication_count(f.sched) == 1,
         "exactly one runnable publication (enqueue)");
     SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(f.sched) == 0,
                      "waiting_select_count returned to zero");
@@ -449,7 +449,7 @@ SLUICE_TEST_CASE(pub1_publication_entry_preconditions) {
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
     f.sched.spawn(fb);
 
-    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    stest::SelectPublicationSeam::reset_publication_counts(f.sched);
     std::thread setter([&] {
         spin_until_waiting_select(f.sched, 1);
         ev.set();
@@ -461,7 +461,7 @@ SLUICE_TEST_CASE(pub1_publication_entry_preconditions) {
 
     // The publish_entry snapshot was captured at select_publish_locked entry.
     const auto snap =
-        stest::E13SelectPublicationSeam::publish_entry_snapshot(f.sched);
+        stest::SelectPublicationSeam::publish_entry_snapshot(f.sched);
     SLUICE_CHECK_MSG(snap.winner != sad::kNoWinner, "winner exists at publish entry");
     SLUICE_CHECK_MSG(snap.all_authority_closed,
                      "all authority closed at publish entry");
@@ -501,7 +501,7 @@ SLUICE_TEST_CASE(pub2_suspended_publication_done) {
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
     f.sched.spawn(fb);
 
-    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    stest::SelectPublicationSeam::reset_publication_counts(f.sched);
     std::thread setter([&] {
         spin_until_waiting_select(f.sched, 1);
         ev.set();
@@ -512,7 +512,7 @@ SLUICE_TEST_CASE(pub2_suspended_publication_done) {
     SLUICE_CHECK_MSG(resumed.load(), "caller resumed");
 
     const auto snap =
-        stest::E13SelectPublicationSeam::publish_done_snapshot(f.sched);
+        stest::SelectPublicationSeam::publish_done_snapshot(f.sched);
     SLUICE_CHECK_MSG(snap.phase == sad::GroupPhase::completed,
                      "phase Completed at publish done");
     SLUICE_CHECK_MSG(snap.completion_mode == sad::CompletionMode::suspended,
@@ -557,7 +557,7 @@ SLUICE_TEST_CASE(pub3_inline_publication_regression) {
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
     f.sched.spawn(fb);
 
-    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    stest::SelectPublicationSeam::reset_publication_counts(f.sched);
     f.sched.run(1);  // Drain: inline winner, no suspension.
 
     SLUICE_CHECK_MSG(ran.load(), "fiber ran (inline, no suspension)");
@@ -565,7 +565,7 @@ SLUICE_TEST_CASE(pub3_inline_publication_regression) {
     SLUICE_CHECK_MSG(captured.kind() == SelectKind::event, "Event inline winner");
 
     const auto snap =
-        stest::E13SelectPublicationSeam::publish_done_snapshot(f.sched);
+        stest::SelectPublicationSeam::publish_done_snapshot(f.sched);
     SLUICE_CHECK_MSG(snap.phase == sad::GroupPhase::completed,
                      "phase Completed at inline publish done");
     SLUICE_CHECK_MSG(snap.completion_mode == sad::CompletionMode::inline_,
@@ -600,7 +600,7 @@ SLUICE_TEST_CASE(pub4_resumed_consume_result) {
     SLUICE_CHECK(f.sched.init_fiber(fb, sw.base(), sw.size()));
     f.sched.spawn(fb);
 
-    stest::E13SelectPublicationSeam::reset_publication_counts(f.sched);
+    stest::SelectPublicationSeam::reset_publication_counts(f.sched);
     std::thread setter([&] {
         spin_until_waiting_select(f.sched, 1);
         ev.set();
@@ -611,7 +611,7 @@ SLUICE_TEST_CASE(pub4_resumed_consume_result) {
     SLUICE_CHECK_MSG(resumed.load(), "caller resumed");
 
     const auto snap =
-        stest::E13SelectPublicationSeam::suspended_before_consume_snapshot(f.sched);
+        stest::SelectPublicationSeam::suspended_before_consume_snapshot(f.sched);
     SLUICE_CHECK_MSG(snap.phase == sad::GroupPhase::completed,
                      "phase Completed before consume");
     SLUICE_CHECK_MSG(snap.completion_mode == sad::CompletionMode::suspended,
@@ -626,7 +626,7 @@ SLUICE_TEST_CASE(pub4_resumed_consume_result) {
     // snapshot (captured inside the publication CS before reclamation); assert
     // it there.
     const auto pub_snap =
-        stest::E13SelectPublicationSeam::publish_done_snapshot(f.sched);
+        stest::SelectPublicationSeam::publish_done_snapshot(f.sched);
     SLUICE_CHECK_MSG(pub_snap.all_authority_closed,
                      "all authority closed (observed at publish_done)");
     SLUICE_CHECK_MSG(snap.caller_state == FiberState::running,

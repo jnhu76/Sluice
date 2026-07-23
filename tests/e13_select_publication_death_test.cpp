@@ -118,7 +118,7 @@ struct PreparedGroup {
     WorkerState caller_owner;
 
     PreparedGroup() : sched(ctx), ctrl(sched), ev(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
         group.scheduler_ = &sched;
         group.arms_ = arms;
         group.arm_count_ = 2;
@@ -136,7 +136,7 @@ struct PreparedGroup {
         arms[1].construct_timer(/*deadline=*/100);
         arms[1].state = ArmState::prepared;
         arms[1].group = &group;
-        timer_reg = stest::E13SelectTimerSeam::register_synthetic(
+        timer_reg = stest::SelectTimerSeam::register_synthetic(
             sched, &arms[1], /*deadline=*/100);
         arms[1].timer.stable_reg_ = timer_reg;
         arms[1].state = ArmState::registered;
@@ -217,7 +217,7 @@ void child_mg_multi_group_event() {
     sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
     Scheduler sched(ctx);
     stest::ControllerGuard ctrl(sched);
-    stest::E11TimerControl::enable_test_clock(sched);
+    stest::TimerTestControl::enable_test_clock(sched);
     Event ev(sched);
 
     SelectGroup ga, gb;

@@ -8,7 +8,7 @@
 // and no-premature-Select invariants.
 //
 // All operations route through Scheduler authority (Scheduler::AsyncTestAccess /
-// the E13SelectTimerSeam facade in the internal-testing variant). Deterministic:
+// the SelectTimerSeam facade in the internal-testing variant). Deterministic:
 // uses the logical test clock + causal phase seams; NO sleep_for.
 //
 // Addendum F constraints honored:
@@ -51,7 +51,7 @@ struct TFixture {
     Scheduler sched;
     stest::ControllerGuard ctrl;
     explicit TFixture() : sched(ctx), ctrl(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
     }
     ~TFixture() {
         // Drain any remaining Select timer blocks so the Scheduler destroys
@@ -85,10 +85,10 @@ SLUICE_TEST_CASE(t1_state_transitions_retire) {
     SelectTimerReg reg(nullptr, nullptr, 100);
     SLUICE_CHECK(reg.state() == State::active);
 
-    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_retire(reg) == true);   // ACTIVE -> RETIRED
+    SLUICE_CHECK(stest::SelectTimerSeam::detached_retire(reg) == true);   // ACTIVE -> RETIRED
     SLUICE_CHECK(reg.state() == State::retired);
-    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_retire(reg) == false);  // already RETIRED
-    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_try_claim_expiry(reg) == false);  // RETIRED -> CONSUMED fails
+    SLUICE_CHECK(stest::SelectTimerSeam::detached_retire(reg) == false);  // already RETIRED
+    SLUICE_CHECK(stest::SelectTimerSeam::detached_try_claim_expiry(reg) == false);  // RETIRED -> CONSUMED fails
     SLUICE_CHECK(reg.state() == State::retired);
 }
 
@@ -99,10 +99,10 @@ SLUICE_TEST_CASE(t1_state_transitions_consume) {
     SelectTimerReg reg(nullptr, nullptr, 100);
     SLUICE_CHECK(reg.state() == State::active);
 
-    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_try_claim_expiry(reg) == true);   // ACTIVE -> CONSUMED
+    SLUICE_CHECK(stest::SelectTimerSeam::detached_try_claim_expiry(reg) == true);   // ACTIVE -> CONSUMED
     SLUICE_CHECK(reg.state() == State::consumed);
-    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_try_claim_expiry(reg) == false);  // already CONSUMED
-    SLUICE_CHECK(stest::E13SelectTimerSeam::detached_retire(reg) == false);            // CONSUMED -> RETIRED fails
+    SLUICE_CHECK(stest::SelectTimerSeam::detached_try_claim_expiry(reg) == false);  // already CONSUMED
+    SLUICE_CHECK(stest::SelectTimerSeam::detached_retire(reg) == false);            // CONSUMED -> RETIRED fails
     SLUICE_CHECK(reg.state() == State::consumed);
 }
 
@@ -127,7 +127,7 @@ SLUICE_TEST_CASE(t2_address_stability_after_splice) {
     const SelectTimerReg* before = &tmp.front();
 
     // Splice via the REAL production helper (select_timer_splice_one_locked).
-    SelectTimerReg* after = stest::E13SelectTimerSeam::splice_one(
+    SelectTimerReg* after = stest::SelectTimerSeam::splice_one(
         f.sched, tmp, tmp.begin());
 
     // Address identity: the spliced node is the SAME object (std::list::splice
@@ -143,15 +143,15 @@ SLUICE_TEST_CASE(t2_address_stability_after_splice) {
     SLUICE_CHECK(after->deadline() == 50);
 
     // The Scheduler pool now owns exactly this one block.
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 1);
+    SLUICE_CHECK(stest::SelectTimerSeam::pool_size(f.sched) == 1);
 
     // The heap holds exactly one Select entry, and its target is exactly the
     // spliced address (the stable address the heap stores by pointer).
-    auto counts = stest::E13SelectTimerSeam::heap_counts_by_kind(f.sched);
+    auto counts = stest::SelectTimerSeam::heap_counts_by_kind(f.sched);
     SLUICE_CHECK(counts[0] == 0);  // no ordinary entries
     SLUICE_CHECK(counts[1] == 1);  // one Select entry
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::heap_has_select_target(f.sched, before),
+        stest::SelectTimerSeam::heap_has_select_target(f.sched, before),
         "heap entry's Select target == spliced address");
 }
 
@@ -177,35 +177,35 @@ SLUICE_TEST_CASE(t3_tagged_heap_ordering) {
     AsyncTestAccess::register_test_deadline(f.sched, &on_lo, &oq_lo, /*dl=*/10);
     AsyncTestAccess::register_test_deadline(f.sched, &on_hi, &oq_hi, /*dl=*/100);
 
-    SelectTimerReg* s30 = stest::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* s30 = stest::SelectTimerSeam::register_synthetic(
         f.sched, nullptr, /*dl=*/30);
-    SelectTimerReg* s200 = stest::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* s200 = stest::SelectTimerSeam::register_synthetic(
         f.sched, nullptr, /*dl=*/200);
 
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 4);
 
     // (a) Pop ordinary@10: advance to 10. Earliest active was 10.
-    stest::E13SelectTimerSeam::advance_clock(f.sched, 10);
+    stest::SelectTimerSeam::advance_clock(f.sched, 10);
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 3);
     SLUICE_CHECK(on_lo.was_expired());  // ordinary timer won (Expired outcome)
 
     // (b) Next earliest is select@30 (still ACTIVE). Retire it (helper),
     //     then advance to 30: pump pops the stale Select entry.
-    SLUICE_CHECK(stest::E13SelectTimerSeam::retire_synthetic(f.sched, *s30));
-    stest::E13SelectTimerSeam::advance_clock(f.sched, 30);
+    SLUICE_CHECK(stest::SelectTimerSeam::retire_synthetic(f.sched, *s30));
+    stest::SelectTimerSeam::advance_clock(f.sched, 30);
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 2);
 
     // (c) Next earliest is ordinary@100. Advance to 100: pump consumes it.
-    stest::E13SelectTimerSeam::advance_clock(f.sched, 100);
+    stest::SelectTimerSeam::advance_clock(f.sched, 100);
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 1);
     SLUICE_CHECK(on_hi.was_expired());
 
     // (d) Last is select@200. Retire then advance: stale pop reclaims it.
-    SLUICE_CHECK(stest::E13SelectTimerSeam::retire_synthetic(f.sched, *s200));
-    stest::E13SelectTimerSeam::advance_clock(f.sched, 200);
+    SLUICE_CHECK(stest::SelectTimerSeam::retire_synthetic(f.sched, *s200));
+    stest::SelectTimerSeam::advance_clock(f.sched, 200);
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 0);
 
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 0);
+    SLUICE_CHECK(stest::SelectTimerSeam::pool_size(f.sched) == 0);
 }
 
 // =========================================================================
@@ -226,7 +226,7 @@ SLUICE_TEST_CASE(t4_ordinary_timer_regression) {
     SLUICE_CHECK(reg != nullptr);
     SLUICE_CHECK(reg->is_active());
 
-    auto counts = stest::E13SelectTimerSeam::heap_counts_by_kind(f.sched);
+    auto counts = stest::SelectTimerSeam::heap_counts_by_kind(f.sched);
     SLUICE_CHECK(counts[0] == 1);  // one ordinary heap entry
     SLUICE_CHECK(counts[1] == 0);  // no select entries
     SLUICE_CHECK(AsyncTestAccess::active_deadline_count(f.sched) == 1);
@@ -238,7 +238,7 @@ SLUICE_TEST_CASE(t4_ordinary_timer_regression) {
 
     // Resolve through the pump: advance to the deadline -> Expired outcome,
     // counter decremented, heap entry reclaimed, node unlinked (clean queue).
-    stest::E13SelectTimerSeam::advance_clock(f.sched, 100);
+    stest::SelectTimerSeam::advance_clock(f.sched, 100);
     SLUICE_CHECK(node.was_expired());
     SLUICE_CHECK(AsyncTestAccess::active_deadline_count(f.sched) == 0);
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 0);
@@ -263,7 +263,7 @@ static void run_stale_skip(State terminal) {
 
     // (1) register an ACTIVE synthetic Select entry with a future deadline.
     const sa::Scheduler::deadline_t dl = 50;
-    SelectTimerReg* reg = stest::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* reg = stest::SelectTimerSeam::register_synthetic(
         f.sched, nullptr, dl);
     SLUICE_CHECK(reg != nullptr);
     SLUICE_CHECK(reg->is_active());
@@ -272,9 +272,9 @@ static void run_stale_skip(State terminal) {
     // (2) transition ACTIVE -> terminal via the Scheduler accounting helper.
     bool transitioned;
     if (terminal == State::retired) {
-        transitioned = stest::E13SelectTimerSeam::retire_synthetic(f.sched, *reg);
+        transitioned = stest::SelectTimerSeam::retire_synthetic(f.sched, *reg);
     } else {
-        transitioned = stest::E13SelectTimerSeam::consume_synthetic(f.sched, *reg);
+        transitioned = stest::SelectTimerSeam::consume_synthetic(f.sched, *reg);
     }
     SLUICE_CHECK(transitioned);
     SLUICE_CHECK(reg->state() == terminal);
@@ -283,30 +283,30 @@ static void run_stale_skip(State terminal) {
     SLUICE_CHECK(AsyncTestAccess::active_deadline_count(f.sched) == 0);
 
     // (4) block + heap entry still physically present (lazy, before deadline).
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 1);
+    SLUICE_CHECK(stest::SelectTimerSeam::pool_size(f.sched) == 1);
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 1);
 
     // (5) The pump runs on THIS thread (advance_clock drives it synchronously),
     // so the PumpSkip seam must NOT be armed (arming would self-deadlock the
     // pump). We only observe that it was REACHED. Clear the reached flag first.
-    stest::E13SelectTimerSeam::clear_pump_skip(f.sched);
-    stest::E13SelectTimerSeam::reset_arm_load_count(f.sched);
+    stest::SelectTimerSeam::clear_pump_skip(f.sched);
+    stest::SelectTimerSeam::reset_arm_load_count(f.sched);
 
     // (6) advance_clock drives the pump under global_mtx_. The stale Select
     // entry must be skipped (PumpSkip reached) and physically reclaimed.
-    stest::E13SelectTimerSeam::advance_clock(f.sched, dl);
+    stest::SelectTimerSeam::advance_clock(f.sched, dl);
 
     // (7) PumpSkip seam reached; arm-load delta == 0 (never read arm_).
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::pump_skip_reached(f.sched),
+        stest::SelectTimerSeam::pump_skip_reached(f.sched),
         "PumpSkip seam reached for stale entry");
     SLUICE_CHECK_MSG(
-        stest::E13SelectTimerSeam::arm_load_count(f.sched) == 0,
+        stest::SelectTimerSeam::arm_load_count(f.sched) == 0,
         "arm_ never read on stale pop");
 
     // (8) heap entry + pool block reclaimed; counter did not decrement again.
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 0);
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 0);
+    SLUICE_CHECK(stest::SelectTimerSeam::pool_size(f.sched) == 0);
     SLUICE_CHECK(AsyncTestAccess::active_deadline_count(f.sched) == 0);
 }
 
@@ -341,7 +341,7 @@ SLUICE_TEST_CASE(t7_state_before_arm_consumed_zero) {
 SLUICE_TEST_CASE(t8_earliest_active_deadline_includes_select) {
     TFixture f;
     // ACTIVE Select entry participates while its deadline is in the future.
-    SelectTimerReg* r = stest::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* r = stest::SelectTimerSeam::register_synthetic(
         f.sched, nullptr, /*dl=*/40);
     SLUICE_CHECK(r->is_active());
 
@@ -350,7 +350,7 @@ SLUICE_TEST_CASE(t8_earliest_active_deadline_includes_select) {
     SLUICE_CHECK(out == 40);
 
     // Retire it via the helper; earliest must recompute (no active left).
-    SLUICE_CHECK(stest::E13SelectTimerSeam::retire_synthetic(f.sched, *r));
+    SLUICE_CHECK(stest::SelectTimerSeam::retire_synthetic(f.sched, *r));
     bool has = AsyncTestAccess::earliest_active_deadline(f.sched, out);
     SLUICE_CHECK(!has);  // no active deadline remains
     SLUICE_CHECK(AsyncTestAccess::active_deadline_count(f.sched) == 0);
@@ -366,20 +366,20 @@ SLUICE_TEST_CASE(t9_lazy_reclamation) {
     // (Same 8-step sequence as run_stale_skip; here we emphasize the physical
     // presence/absence transitions explicitly.)
     TFixture f;
-    SelectTimerReg* r = stest::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* r = stest::SelectTimerSeam::register_synthetic(
         f.sched, nullptr, /*dl=*/70);
-    SLUICE_CHECK(stest::E13SelectTimerSeam::retire_synthetic(f.sched, *r));
+    SLUICE_CHECK(stest::SelectTimerSeam::retire_synthetic(f.sched, *r));
 
     // Before deadline: still physically present (inert).
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 1);
+    SLUICE_CHECK(stest::SelectTimerSeam::pool_size(f.sched) == 1);
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 1);
 
     // Advance past the deadline (no need to arm the seam; reclaim happens
     // unconditionally on a stale pop).
-    stest::E13SelectTimerSeam::advance_clock(f.sched, 70);
+    stest::SelectTimerSeam::advance_clock(f.sched, 70);
 
     // After pop: heap entry + pool block absent.
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 0);
+    SLUICE_CHECK(stest::SelectTimerSeam::pool_size(f.sched) == 0);
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 0);
 }
 
@@ -394,10 +394,10 @@ SLUICE_TEST_CASE(t10_mixed_stale_select_and_ordinary) {
     const sa::Scheduler::deadline_t d1 = 20;  // stale select
     const sa::Scheduler::deadline_t d2 = 30;  // ordinary active
 
-    SelectTimerReg* sel = stest::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* sel = stest::SelectTimerSeam::register_synthetic(
         f.sched, nullptr, d1);
     // Retire the Select entry (terminal) while its deadline is still future.
-    SLUICE_CHECK(stest::E13SelectTimerSeam::retire_synthetic(f.sched, *sel));
+    SLUICE_CHECK(stest::SelectTimerSeam::retire_synthetic(f.sched, *sel));
 
     // Ordinary ACTIVE entry at d2.
     sa::WaitNode onode;
@@ -409,11 +409,11 @@ SLUICE_TEST_CASE(t10_mixed_stale_select_and_ordinary) {
 
     // Advance past both deadlines in one step. The pump pops the Select stale
     // entry (skip + reclaim) then the ordinary ACTIVE entry (consume + resolve).
-    stest::E13SelectTimerSeam::advance_clock(f.sched, d2);
+    stest::SelectTimerSeam::advance_clock(f.sched, d2);
 
     // Both entries reclaimed from the heap.
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 0);
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 0);
+    SLUICE_CHECK(stest::SelectTimerSeam::pool_size(f.sched) == 0);
     // The ordinary timer won its resolve (Expired outcome).
     SLUICE_CHECK(onode.was_expired());
 }
@@ -432,7 +432,7 @@ SLUICE_TEST_CASE(t10_mixed_stale_select_and_ordinary) {
 
 SLUICE_TEST_CASE(t11_scheduler_identity_binding_recorded) {
     TFixture f;
-    SelectTimerReg* r = stest::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* r = stest::SelectTimerSeam::register_synthetic(
         f.sched, nullptr, /*dl=*/50);
     SLUICE_CHECK(r->scheduler() == &f.sched);
     SLUICE_CHECK(r->is_active());
@@ -446,10 +446,10 @@ SLUICE_TEST_CASE(t12_no_premature_select_behavior) {
     // After P3 operations: no winner claimed, no result, no suspension/
     // runnable, no Event SelectPort mutation. P3 provides only the substrate.
     TFixture f;
-    SelectTimerReg* r = stest::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* r = stest::SelectTimerSeam::register_synthetic(
         f.sched, nullptr, /*dl=*/50);
-    SLUICE_CHECK(stest::E13SelectTimerSeam::retire_synthetic(f.sched, *r));
-    stest::E13SelectTimerSeam::advance_clock(f.sched, 50);
+    SLUICE_CHECK(stest::SelectTimerSeam::retire_synthetic(f.sched, *r));
+    stest::SelectTimerSeam::advance_clock(f.sched, 50);
 
     // No SelectGroup was ever admitted, so winner remains kNoWinner sentinel
     // (no group object exists to check). The substrate touched no SelectPort,
@@ -457,7 +457,7 @@ SLUICE_TEST_CASE(t12_no_premature_select_behavior) {
     // is that the Scheduler returned to a clean (no active, no leaked blocks)
     // state with no Select authority opened.
     SLUICE_CHECK(AsyncTestAccess::active_deadline_count(f.sched) == 0);
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 0);
+    SLUICE_CHECK(stest::SelectTimerSeam::pool_size(f.sched) == 0);
     SLUICE_CHECK(AsyncTestAccess::deadline_heap_size(f.sched) == 0);
     SLUICE_CHECK(f.sched.waiting_count() == 0);
 }

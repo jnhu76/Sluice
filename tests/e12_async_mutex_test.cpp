@@ -5,7 +5,7 @@
 // SEALED AsyncMutex public API + the mechanically gated test hooks:
 //
 //   - AsyncMutex::try_lock / lock / lock_until / cancel / unlock
-//   - E11TimerControl / E9ParkSeam / E12MutexSeam (deterministic clock/timer +
+//   - TimerTestControl / SchedulerParkSeam / AsyncMutexSeam (deterministic clock/timer +
 //     park + owner-before-publication seams)
 //   - WaitNode public lock-free state queries (was_woken/was_cancelled/
 //     was_expired/is_terminal/outcome)
@@ -45,9 +45,9 @@ using namespace sluice::async;
 using sluice::Result;
 
 namespace {
-using E11TimerTestHooks = sluice_async_test::E11TimerControl;
-using E9ParkSeam = sluice_async_test::E9ParkSeam;
-using E12MutexSeam = sluice_async_test::E12MutexSeam;
+using E11TimerTestHooks = sluice_async_test::TimerTestControl;
+using SchedulerParkSeam = sluice_async_test::SchedulerParkSeam;
+using AsyncMutexSeam = sluice_async_test::AsyncMutexSeam;
 using sluice_async_test::ControllerGuard;
 
 struct FiberStack {
@@ -332,7 +332,7 @@ SLUICE_TEST_CASE(e12_mtx_t5_owner_before_publication_phase) {
     Fiber g0;
     g0.set_entry([&](Fiber&) {
         mtx.lock(n0);
-        E12MutexSeam::arm_handoff_before_publication(sched);
+        AsyncMutexSeam::arm_handoff_before_publication(sched);
         sched.await_ready_flag(release_g0.v);  // yield until W1 queued
         mtx.unlock();  // MUTEX-HANDOFF-ONE pauses after owner commit
     });
@@ -357,14 +357,14 @@ SLUICE_TEST_CASE(e12_mtx_t5_owner_before_publication_phase) {
         }
         release_g0.set();   // G0 unlocks -> handoff pauses
         for (int i = 0; i < 10000; ++i) {
-            if (E12MutexSeam::is_handoff_paused(sched)) break;
+            if (AsyncMutexSeam::is_handoff_paused(sched)) break;
             std::this_thread::yield();
         }
-        SLUICE_CHECK_MSG(E12MutexSeam::is_handoff_paused(sched),
+        SLUICE_CHECK_MSG(AsyncMutexSeam::is_handoff_paused(sched),
                          "handoff paused after owner commit, before publication");
         SLUICE_CHECK_MSG(!w1_resumed.load(std::memory_order_acquire),
                          "winner not yet published runnable (pre-publication)");
-        E12MutexSeam::release_handoff(sched);
+        AsyncMutexSeam::release_handoff(sched);
     });
     sched.run_live(1);
     coord.join();

@@ -68,15 +68,15 @@ void child_pa_pump_active_due() {
     sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
     Scheduler sched(ctx);
     sluice_async_test::ControllerGuard ctrl(sched);
-    sluice_async_test::E11TimerControl::enable_test_clock(sched);
+    sluice_async_test::TimerTestControl::enable_test_clock(sched);
 
     // Register an ACTIVE Select entry with a future deadline (no real arm).
-    sluice_async_test::E13SelectTimerSeam::register_synthetic(
+    sluice_async_test::SelectTimerSeam::register_synthetic(
         sched, nullptr, /*deadline=*/50);
 
     // Advance the clock to the deadline: the pump pops the ACTIVE entry and
     // invokes select_resolve_timer_locked, which fail-fasts on arm == nullptr.
-    sluice_async_test::E13SelectTimerSeam::advance_clock(sched, 50);
+    sluice_async_test::SelectTimerSeam::advance_clock(sched, 50);
 
     // If control reaches here the fail-fast did NOT fire — invariant broken.
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
@@ -90,14 +90,14 @@ void child_ctl_control() {
     sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
     Scheduler sched(ctx);
     sluice_async_test::ControllerGuard ctrl(sched);
-    sluice_async_test::E11TimerControl::enable_test_clock(sched);
+    sluice_async_test::TimerTestControl::enable_test_clock(sched);
 
-    SelectTimerReg* r = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* r = sluice_async_test::SelectTimerSeam::register_synthetic(
         sched, nullptr, /*deadline=*/50);
-    bool ok = sluice_async_test::E13SelectTimerSeam::retire_synthetic(sched, *r);
+    bool ok = sluice_async_test::SelectTimerSeam::retire_synthetic(sched, *r);
     if (!ok) std::_Exit(sluice_death_test::kChildTestFailExit);
 
-    sluice_async_test::E13SelectTimerSeam::advance_clock(sched, 50);
+    sluice_async_test::SelectTimerSeam::advance_clock(sched, 50);
     std::_Exit(0);
 }
 
@@ -120,15 +120,15 @@ void child_sd1_destruction_terminal_lazy() {
     {
         Scheduler sched(ctx);
         sluice_async_test::ControllerGuard ctrl(sched);
-        sluice_async_test::E11TimerControl::enable_test_clock(sched);
+        sluice_async_test::TimerTestControl::enable_test_clock(sched);
 
-        SelectTimerReg* r = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+        SelectTimerReg* r = sluice_async_test::SelectTimerSeam::register_synthetic(
             sched, nullptr, /*deadline=*/50);
-        bool ok = sluice_async_test::E13SelectTimerSeam::retire_synthetic(sched, *r);
+        bool ok = sluice_async_test::SelectTimerSeam::retire_synthetic(sched, *r);
         if (!ok) std::_Exit(sluice_death_test::kChildTestFailExit);
 
         // Do NOT advance the clock: the RETIRED block stays in the pool (lazy).
-        if (sluice_async_test::E13SelectTimerSeam::pool_size(sched) != 1) {
+        if (sluice_async_test::SelectTimerSeam::pool_size(sched) != 1) {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
         // ~Scheduler runs at the closing brace: must reap the inert block and
@@ -147,9 +147,9 @@ void child_sd2_destruction_active() {
     {
         Scheduler sched(ctx);
         sluice_async_test::ControllerGuard ctrl(sched);
-        sluice_async_test::E11TimerControl::enable_test_clock(sched);
+        sluice_async_test::TimerTestControl::enable_test_clock(sched);
 
-        sluice_async_test::E13SelectTimerSeam::register_synthetic(
+        sluice_async_test::SelectTimerSeam::register_synthetic(
             sched, nullptr, /*deadline=*/50);
         // ~Scheduler runs at the closing brace: ACTIVE block remains -> assert
         // (SIGABRT) -> kExpectedTerminateExit.
@@ -172,13 +172,13 @@ void child_xr_cross_scheduler_retire() {
     Scheduler sched_b(ctx_b);
     sluice_async_test::ControllerGuard ctrl_a(sched_a);
     sluice_async_test::ControllerGuard ctrl_b(sched_b);
-    sluice_async_test::E11TimerControl::enable_test_clock(sched_a);
+    sluice_async_test::TimerTestControl::enable_test_clock(sched_a);
 
-    SelectTimerReg* r = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* r = sluice_async_test::SelectTimerSeam::register_synthetic(
         sched_a, nullptr, /*deadline=*/50);
 
     // Retire the Sched-A-owned block through Sched B -> MUST assert.
-    sluice_async_test::E13SelectTimerSeam::retire_synthetic(sched_b, *r);
+    sluice_async_test::SelectTimerSeam::retire_synthetic(sched_b, *r);
 
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
@@ -192,13 +192,13 @@ void child_xc_cross_scheduler_consume() {
     Scheduler sched_b(ctx_b);
     sluice_async_test::ControllerGuard ctrl_a(sched_a);
     sluice_async_test::ControllerGuard ctrl_b(sched_b);
-    sluice_async_test::E11TimerControl::enable_test_clock(sched_a);
+    sluice_async_test::TimerTestControl::enable_test_clock(sched_a);
 
-    SelectTimerReg* r = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* r = sluice_async_test::SelectTimerSeam::register_synthetic(
         sched_a, nullptr, /*deadline=*/50);
 
     // Consume the Sched-A-owned block through Sched B -> MUST assert.
-    sluice_async_test::E13SelectTimerSeam::consume_synthetic(sched_b, *r);
+    sluice_async_test::SelectTimerSeam::consume_synthetic(sched_b, *r);
 
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
@@ -213,13 +213,13 @@ void child_dg_detached_cas_guard() {
     sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
     Scheduler sched(ctx);
     sluice_async_test::ControllerGuard ctrl(sched);
-    sluice_async_test::E11TimerControl::enable_test_clock(sched);
+    sluice_async_test::TimerTestControl::enable_test_clock(sched);
 
-    SelectTimerReg* r = sluice_async_test::E13SelectTimerSeam::register_synthetic(
+    SelectTimerReg* r = sluice_async_test::SelectTimerSeam::register_synthetic(
         sched, nullptr, /*deadline=*/50);
 
     // detached_retire on a Scheduler-owned block -> assert(scheduler==nullptr).
-    sluice_async_test::E13SelectTimerSeam::detached_retire(*r);
+    sluice_async_test::SelectTimerSeam::detached_retire(*r);
 
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
@@ -233,14 +233,14 @@ void child_np_non_pool_member_retire() {
     sa::AsyncIoContext ctx(std::make_unique<sa::FakeAsyncBackend>());
     Scheduler sched(ctx);
     sluice_async_test::ControllerGuard ctrl(sched);
-    sluice_async_test::E11TimerControl::enable_test_clock(sched);
+    sluice_async_test::TimerTestControl::enable_test_clock(sched);
 
     // Detached local: scheduler() == &sched, but NOT spliced into the pool.
     SelectTimerReg local(nullptr, &sched, /*deadline=*/50);
 
     // retire_synthetic routes through select_timer_retire_locked, which asserts
     // pool_owns_select_block_locked(local) -> fails -> assert.
-    sluice_async_test::E13SelectTimerSeam::retire_synthetic(sched, local);
+    sluice_async_test::SelectTimerSeam::retire_synthetic(sched, local);
 
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }

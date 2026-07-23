@@ -80,7 +80,7 @@ public:
     std::size_t arm_count{0};
 
     ClaimFixture() : sched(ctx), ctrl(sched) {
-        stest::E11TimerControl::enable_test_clock(sched);
+        stest::TimerTestControl::enable_test_clock(sched);
         group.scheduler_ = &sched;
         group.arms_ = arms.data();
         group.set_phase(GroupPhase::armed);
@@ -97,7 +97,7 @@ public:
                 AsyncTestAccess::select_event_unlink(sched, *evt_for_arm[i], arm);
             }
             if (reg_for_arm[i] != nullptr && reg_for_arm[i]->is_active()) {
-                stest::E13SelectTimerSeam::retire_synthetic(sched, *reg_for_arm[i]);
+                stest::SelectTimerSeam::retire_synthetic(sched, *reg_for_arm[i]);
             }
         }
         // Drain the Select timer pool (retire leftover + pump to reclamation).
@@ -128,7 +128,7 @@ public:
         arm.construct_timer(deadline);
         arm.state = ArmState::prepared;
         arm.group = &group;
-        SelectTimerReg* reg = stest::E13SelectTimerSeam::register_synthetic(
+        SelectTimerReg* reg = stest::SelectTimerSeam::register_synthetic(
             sched, &arm, deadline);
         // Admission-equivalent binding: the arm's stable_reg_ back-pointer is
         // set after registration (mirrors the future admission protocol).
@@ -157,9 +157,9 @@ public:
         return AsyncTestAccess::select_all_authority_closed(sched, group);
     }
 
-    // active_deadline_count_ read (E11TimerControl facade).
+    // active_deadline_count_ read (TimerTestControl facade).
     std::size_t active_deadline_count() const {
-        return stest::E11TimerControl::active_deadline_count(sched);
+        return stest::TimerTestControl::active_deadline_count(sched);
     }
 };
 
@@ -303,7 +303,7 @@ SLUICE_TEST_CASE(c5_timer_winner_and_loser) {
     SLUICE_CHECK(f.active_deadline_count() == adc_before - 2);
 
     // Heap entries remain for lazy physical reclamation (lazy-at-deadline).
-    SLUICE_CHECK(stest::E13SelectTimerSeam::pool_size(f.sched) == 2);
+    SLUICE_CHECK(stest::SelectTimerSeam::pool_size(f.sched) == 2);
 
     SLUICE_CHECK(f.all_closed());
 }
