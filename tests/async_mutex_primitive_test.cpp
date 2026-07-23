@@ -118,7 +118,7 @@ SLUICE_MAIN()
 // ===========================================================================
 
 // ---- T0: construction outside a Fiber; destructor on unlocked+empty -------
-SLUICE_TEST_CASE(e12_mtx_t0_construction_and_destruction) {
+SLUICE_TEST_CASE(mtx_t0_construction_and_destruction) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -126,7 +126,7 @@ SLUICE_TEST_CASE(e12_mtx_t0_construction_and_destruction) {
 }
 
 // ---- T1: try_lock immediate success + recursive-fails + reacquire --------
-SLUICE_TEST_CASE(e12_mtx_t1_try_lock_immediate_recursive_owned) {
+SLUICE_TEST_CASE(mtx_t1_try_lock_immediate_recursive_owned) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -164,7 +164,7 @@ SLUICE_TEST_CASE(e12_mtx_t1_try_lock_immediate_recursive_owned) {
 }
 
 // ---- T2: immediate lock resolves Woken without suspending; owns + unlocks -
-SLUICE_TEST_CASE(e12_mtx_t2_immediate_lock_woken_then_unlock_no_waiter) {
+SLUICE_TEST_CASE(mtx_t2_immediate_lock_woken_then_unlock_no_waiter) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -194,7 +194,7 @@ SLUICE_TEST_CASE(e12_mtx_t2_immediate_lock_woken_then_unlock_no_waiter) {
 // head G1 is handed ownership (Woken), resumes owning, and unlocks to hand off
 // to G2. The owner yields the worker via await_ready_flag so G1/G2 can register
 // and suspend before G0 unlocks.
-SLUICE_TEST_CASE(e12_mtx_t3_basic_fifo_handoff_two_waiters) {
+SLUICE_TEST_CASE(mtx_t3_basic_fifo_handoff_two_waiters) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -265,7 +265,7 @@ SLUICE_TEST_CASE(e12_mtx_t3_basic_fifo_handoff_two_waiters) {
 //
 // owner G0 holds the lock and yields; W1 queues (suspends); a newcomer's
 // try_lock MUST fail (W1 has FIFO priority). Then G0 unlocks -> W1 owns.
-SLUICE_TEST_CASE(e12_mtx_t4_no_barging_newcomer_trylock_fails) {
+SLUICE_TEST_CASE(mtx_t4_no_barging_newcomer_trylock_fails) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -319,7 +319,7 @@ SLUICE_TEST_CASE(e12_mtx_t4_no_barging_newcomer_trylock_fails) {
 // Arm mutex_handoff_before_publication. G0 unlocks; MUTEX-HANDOFF-ONE
 // commits owner_ = winner and PAUSES before publication. At that paused point
 // the winner is not yet published runnable. Then release; W1 resumes owning.
-SLUICE_TEST_CASE(e12_mtx_t5_owner_before_publication_phase) {
+SLUICE_TEST_CASE(mtx_t5_owner_before_publication_phase) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -383,7 +383,7 @@ SLUICE_TEST_CASE(e12_mtx_t5_owner_before_publication_phase) {
 // W1 enters admission; owner G0 unlocks during W1's register/recheck critical
 // section. The closure must NOT strand W1: it acquires inline or G0's unlock
 // hands off to W1. Either way W1 owns after, no lost wake.
-SLUICE_TEST_CASE(e12_mtx_t6_admission_closure_no_strand) {
+SLUICE_TEST_CASE(mtx_t6_admission_closure_no_strand) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -418,7 +418,7 @@ SLUICE_TEST_CASE(e12_mtx_t6_admission_closure_no_strand) {
 }
 
 // ---- T7: cancel a suspended waiter; repeated cancel false ------------------
-SLUICE_TEST_CASE(e12_mtx_t7_cancel_suspended_then_repeated_false) {
+SLUICE_TEST_CASE(mtx_t7_cancel_suspended_then_repeated_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -458,7 +458,7 @@ SLUICE_TEST_CASE(e12_mtx_t7_cancel_suspended_then_repeated_false) {
 }
 
 // ---- T8: cancel after handoff false; wrong-mutex (same Scheduler) false ----
-SLUICE_TEST_CASE(e12_mtx_t8_cancel_after_handoff_and_wrong_mutex_false) {
+SLUICE_TEST_CASE(mtx_t8_cancel_after_handoff_and_wrong_mutex_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -515,7 +515,7 @@ SLUICE_TEST_CASE(e12_mtx_t8_cancel_after_handoff_and_wrong_mutex_false) {
 }
 
 // ---- T9: wrong-mutex DIFFERENT Scheduler cancel returns false --------------
-SLUICE_TEST_CASE(e12_mtx_t9_wrong_mutex_different_scheduler_false) {
+SLUICE_TEST_CASE(mtx_t9_wrong_mutex_different_scheduler_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx_a(std::make_unique<IdleBackend>()), ctx_b(std::make_unique<IdleBackend>());
     Scheduler sched_a(ctx_a), sched_b(ctx_b);
@@ -553,7 +553,7 @@ SLUICE_TEST_CASE(e12_mtx_t9_wrong_mutex_different_scheduler_false) {
 }
 
 // ---- T10: external OS-thread cancel succeeds safely ------------------------
-SLUICE_TEST_CASE(e12_mtx_t10_external_thread_cancel_succeeds) {
+SLUICE_TEST_CASE(mtx_t10_external_thread_cancel_succeeds) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -608,7 +608,7 @@ SLUICE_TEST_CASE(e12_mtx_t10_external_thread_cancel_succeeds) {
 // ===========================================================================
 
 // ---- T11: lock_until free + already-due -> Woken (resource-first) ---------
-SLUICE_TEST_CASE(e12_mtx_t11_lock_until_free_due_is_woken) {
+SLUICE_TEST_CASE(mtx_t11_lock_until_free_due_is_woken) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -638,7 +638,7 @@ SLUICE_TEST_CASE(e12_mtx_t11_lock_until_free_due_is_woken) {
 }
 
 // ---- T12: lock_until owned + already-due -> Expired (does not own) ---------
-SLUICE_TEST_CASE(e12_mtx_t12_lock_until_owned_due_is_expired) {
+SLUICE_TEST_CASE(mtx_t12_lock_until_owned_due_is_expired) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -678,7 +678,7 @@ SLUICE_TEST_CASE(e12_mtx_t12_lock_until_owned_due_is_expired) {
 }
 
 // ---- T13: unlock wins before timer (handoff; timer loses) ------------------
-SLUICE_TEST_CASE(e12_mtx_t13_unlock_wins_before_timer) {
+SLUICE_TEST_CASE(mtx_t13_unlock_wins_before_timer) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -729,7 +729,7 @@ SLUICE_TEST_CASE(e12_mtx_t13_unlock_wins_before_timer) {
 }
 
 // ---- T14: timer wins before unlock (Expired; unlock frees) ----------------
-SLUICE_TEST_CASE(e12_mtx_t14_timer_wins_before_unlock) {
+SLUICE_TEST_CASE(mtx_t14_timer_wins_before_unlock) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -787,7 +787,7 @@ SLUICE_TEST_CASE(e12_mtx_t14_timer_wins_before_unlock) {
 // ===========================================================================
 
 // ---- T15: cancel wins before unlock (Cancelled; unlock skips it) -----------
-SLUICE_TEST_CASE(e12_mtx_t15_cancel_wins_before_unlock) {
+SLUICE_TEST_CASE(mtx_t15_cancel_wins_before_unlock) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -835,7 +835,7 @@ SLUICE_TEST_CASE(e12_mtx_t15_cancel_wins_before_unlock) {
 }
 
 // ---- T16: handoff wins before cancel (Woken; cancel false; no republish) ---
-SLUICE_TEST_CASE(e12_mtx_t16_handoff_wins_before_cancel) {
+SLUICE_TEST_CASE(mtx_t16_handoff_wins_before_cancel) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -881,7 +881,7 @@ SLUICE_TEST_CASE(e12_mtx_t16_handoff_wins_before_cancel) {
 }
 
 // ---- T17: exactly-once — one resolve, one publication, one resume ---------
-SLUICE_TEST_CASE(e12_mtx_t17_exactly_once_handoff) {
+SLUICE_TEST_CASE(mtx_t17_exactly_once_handoff) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -923,7 +923,7 @@ SLUICE_TEST_CASE(e12_mtx_t17_exactly_once_handoff) {
 }
 
 // ---- T18: destruction — safe unlocked/empty -------------------------------
-SLUICE_TEST_CASE(e12_mtx_t18_destruction_safe_unlocked_empty) {
+SLUICE_TEST_CASE(mtx_t18_destruction_safe_unlocked_empty) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -983,7 +983,7 @@ SLUICE_TEST_CASE(e12_mtx_t18_destruction_safe_unlocked_empty) {
 // coordinator acquire-loads it. This is state OBSERVATION, never
 // sleep_for-based causal sync.
 //
-// Determinism discipline (mirrors e8_t3): a steal is deterministic ONLY when
+// Determinism discipline (mirrors steal_t3): a steal is deterministic ONLY when
 // the victim (W0) is provably BUSY running a fiber (cannot pop its own queue)
 // and the thief (W1) is IDLE (so it steals). Two load-bearing anti-race gates:
 //   (1) f_idle spins on flag_wake on W1 — W1 cannot steal f_blocker while fA
@@ -1009,7 +1009,7 @@ SLUICE_TEST_CASE(e12_mtx_t18_destruction_safe_unlocked_empty) {
 // Suspension mechanism: await_ready_flag / wake_ready_flags_locked. The ready
 // flag is an INDEPENDENT test mechanism (a plain atomic); it does NOT touch the
 // AsyncMutex owner or WaitNode. fA retains AsyncMutex ownership throughout.
-SLUICE_TEST_CASE(e12_mtx_t19_real_migration_lock_own_unlock) {
+SLUICE_TEST_CASE(mtx_t19_real_migration_lock_own_unlock) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1200,7 +1200,7 @@ SLUICE_TEST_CASE(e12_mtx_t19_real_migration_lock_own_unlock) {
 // waiters with no queue leak. Per repo convention (e12_semaphore_test T30 /
 // e12_event_test), the gate is assertion-only: total_resolved == ITERS * K
 // proves 500/500.
-SLUICE_TEST_CASE(e12_mtx_t20_coordination_500) {
+SLUICE_TEST_CASE(mtx_t20_coordination_500) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 500;
     constexpr int K = 2;
@@ -1283,7 +1283,7 @@ SLUICE_TEST_CASE(e12_mtx_t20_coordination_500) {
 //   InvNoOwnerlessQueuedDemand + InvImmediateAcquireRequiresEmptyEligiblePreQueue
 //   + InvFIFOGrant + InvGrantOwnerCommit imply an arriving Fiber cannot bypass
 //   an older eligible queued waiter.
-SLUICE_TEST_CASE(e12_mtx_t21_three_party_no_barging) {
+SLUICE_TEST_CASE(mtx_t21_three_party_no_barging) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1348,7 +1348,7 @@ SLUICE_TEST_CASE(e12_mtx_t21_three_party_no_barging) {
 // F0 owns. W1 queues. W2 queues. W1 cancellation wins.
 // Newcomer attempts try_lock before F0 unlocks -> false (W2 still queued).
 // F0 unlocks -> W2 receives ownership.
-SLUICE_TEST_CASE(e12_mtx_t22_cancelled_head_then_handoff) {
+SLUICE_TEST_CASE(mtx_t22_cancelled_head_then_handoff) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);

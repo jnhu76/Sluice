@@ -108,7 +108,7 @@ private:
 //
 // Uses FakeAsyncBackend in auto_bytes mode so Completions complete on poll,
 // exercising concurrent submit/poll paths with real Fibers cycling through.
-SLUICE_TEST_CASE(e7_t6_serialized_backend_access) {
+SLUICE_TEST_CASE(mwcoord_serialized_backend_access) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto fake = std::make_unique<FakeAsyncBackend>();
@@ -143,7 +143,7 @@ SLUICE_TEST_CASE(e7_t6_serialized_backend_access) {
 // ---- E7-T8: true global quiescence ---------------------------------------
 // Run a completed workload. Assert: no running/runnable Fiber, no outstanding
 // Completion, no wait registration remains. The run returns cleanly.
-SLUICE_TEST_CASE(e7_t8_global_quiescence) {
+SLUICE_TEST_CASE(mwcoord_global_quiescence) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -169,7 +169,7 @@ SLUICE_TEST_CASE(e7_t8_global_quiescence) {
 // backend Completion outstanding. The run returns (MW-S3), but the wait
 // registration REMAINS and the Fiber is still waiting. Assert: registration
 // not erased; state is waiting; not treated as completion.
-SLUICE_TEST_CASE(e7_t9_unresolved_wait_not_quiescence) {
+SLUICE_TEST_CASE(mwcoord_unresolved_wait_not_quiescence) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -251,7 +251,7 @@ private:
     std::atomic<bool> window_open_{false};
 };
 
-SLUICE_TEST_CASE(e7_t4_no_wait_one_under_mw_s1) {
+SLUICE_TEST_CASE(mwcoord_no_wait_one_under_mw_s1) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto fake = std::make_unique<FakeAsyncBackend>();
@@ -389,7 +389,7 @@ private:
     std::atomic<unsigned> max_concurrent_{0};
 };
 
-SLUICE_TEST_CASE(e7_t5_wait_one_under_mw_s2) {
+SLUICE_TEST_CASE(mwcoord_wait_one_under_mw_s2) {
     if constexpr (!fiber_ctx::supported) return;
 
     // Deterministic MW-S2 via a blocking-gate backend. Fiber A submits a read
@@ -510,7 +510,7 @@ private:
     std::atomic<bool> saw_zero_after_ready_{false};
 };
 
-SLUICE_TEST_CASE(e7_t10b_completion_readiness_not_gated_by_reap) {
+SLUICE_TEST_CASE(mwcoord_completion_readiness_not_gated_by_reap) {
     if constexpr (!fiber_ctx::supported) return;
 
     // Causal chain (the E6 regression): a backend reap makes C1 ready; after
@@ -576,7 +576,7 @@ SLUICE_TEST_CASE(e7_t10b_completion_readiness_not_gated_by_reap) {
 // facade MwAdmissionSeam (tests/async_test_control.hpp), which routes through
 // a per-Scheduler* controller registry compiled only into the variant lib.
 
-SLUICE_TEST_CASE(e7_t11_coordinated_mw_s2_admission_race) {
+SLUICE_TEST_CASE(mwcoord_coordinated_mw_s2_admission_race) {
     if constexpr (!fiber_ctx::supported) return;
 
     // Deterministic interleaving via the SchedulerTestHooks admission seam.

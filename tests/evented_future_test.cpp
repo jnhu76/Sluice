@@ -45,7 +45,7 @@ struct FiberStack {
 // runs (liveness: B progresses while A waits), then completes the Future; the
 // Scheduler's next poll of &fut.ready_ wakes A; A resumes with the result and
 // its pre-suspend local survives (resume fidelity).
-SLUICE_TEST_CASE(e5_a2_evented_future_await_suspends_liveness_resumes_fidelity) {
+SLUICE_TEST_CASE(efuture_evented_future_await_suspends_liveness_resumes_fidelity) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -98,7 +98,7 @@ SLUICE_TEST_CASE(e5_a2_evented_future_await_suspends_liveness_resumes_fidelity) 
 // ---- F5: idempotent repeated await after ready ----------------------------
 // After A resumes, a second await returns the cached result without suspending.
 // Future's documented idempotent-await contract is unchanged under Evented.
-SLUICE_TEST_CASE(e5_a2_evented_future_repeated_await_idempotent) {
+SLUICE_TEST_CASE(efuture_evented_future_repeated_await_idempotent) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -136,7 +136,7 @@ SLUICE_TEST_CASE(e5_a2_evented_future_repeated_await_idempotent) {
 // the regression guard: the Evented policy is purely additive; Future's
 // Threaded path is unchanged. Uses a real cross-thread producer (std::thread)
 // because that's the Threaded model's contract — TSan applies here.
-SLUICE_TEST_CASE(e5_a2_threaded_future_regression_still_works) {
+SLUICE_TEST_CASE(efuture_threaded_future_regression_still_works) {
     Future<int> fut;  // default = ThreadedWaitPolicy
     int result = -1;
     std::thread worker([&fut] {

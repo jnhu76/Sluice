@@ -92,7 +92,7 @@ T release_popped(QueuePort& port, QueueOpaquePopResult&& r) {
 }
 }  // namespace
 
-SLUICE_TEST_CASE(e12_queue_capacity_and_fifo) {
+SLUICE_TEST_CASE(queue_capacity_and_fifo) {
     Fixture f{3};
     SLUICE_CHECK(f.port->capacity() == 3);
     SLUICE_CHECK(f.port->size() == 0);
@@ -124,7 +124,7 @@ SLUICE_TEST_CASE(e12_queue_capacity_and_fifo) {
     SLUICE_CHECK(f.port->size() == 0);
 }
 
-SLUICE_TEST_CASE(e12_queue_capacity1) {
+SLUICE_TEST_CASE(queue_capacity1) {
     Fixture f{1};
     SLUICE_CHECK(f.port->capacity() == 1);
     {
@@ -148,13 +148,13 @@ SLUICE_TEST_CASE(e12_queue_capacity1) {
     SLUICE_CHECK(f.port->size() == 0);
 }
 
-SLUICE_TEST_CASE(e12_queue_try_pop_would_block_when_empty_open) {
+SLUICE_TEST_CASE(queue_try_pop_would_block_when_empty_open) {
     Fixture f{2};
     auto r = f.port->try_pop();
     SLUICE_CHECK(r.status() == QueueOpaquePopStatus::would_block);
 }
 
-SLUICE_TEST_CASE(e12_queue_close_idempotent_and_closed_empty_terminal) {
+SLUICE_TEST_CASE(queue_close_idempotent_and_closed_empty_terminal) {
     Fixture f{2};
     SLUICE_CHECK(!f.port->is_closed());
     f.port->close();
@@ -167,7 +167,7 @@ SLUICE_TEST_CASE(e12_queue_close_idempotent_and_closed_empty_terminal) {
     SLUICE_CHECK(r.status() == QueueOpaquePopStatus::closed);
 }
 
-SLUICE_TEST_CASE(e12_queue_closed_drains_buffered_then_closed) {
+SLUICE_TEST_CASE(queue_closed_drains_buffered_then_closed) {
     Fixture f{2};
     {
         auto r = f.port->try_push(make_lease<int>(*f.port, 7));
@@ -183,7 +183,7 @@ SLUICE_TEST_CASE(e12_queue_closed_drains_buffered_then_closed) {
     SLUICE_CHECK(r2.status() == QueueOpaquePopStatus::closed);
 }
 
-SLUICE_TEST_CASE(e12_queue_push_closed_returns_exact_lease) {
+SLUICE_TEST_CASE(queue_push_closed_returns_exact_lease) {
     Fixture f{1};
     f.port->close();
     // P3 PushClosed: producer rejected; exact lease returned (no copy/alias).
@@ -195,7 +195,7 @@ SLUICE_TEST_CASE(e12_queue_push_closed_returns_exact_lease) {
     SLUICE_CHECK(recovered == "payload");  // exact original
 }
 
-SLUICE_TEST_CASE(e12_queue_oneshot_lease_move_empties_source) {
+SLUICE_TEST_CASE(queue_oneshot_lease_move_empties_source) {
     Fixture f{1};
     auto a = make_lease<int>(*f.port, 5);
     SLUICE_CHECK(static_cast<bool>(a));
@@ -236,7 +236,7 @@ struct FiberStack {
 // ---- P4: blocking pop wakes when a producer commits (single worker) ------
 // Producer fiber commits an item; a consumer fiber (spawned FIRST, parks on
 // empty ring) is granted the item via the reconciler and resumes with it.
-SLUICE_TEST_CASE(e12_queue_p4_blocking_pop_granted_on_push) {
+SLUICE_TEST_CASE(queue_p4_blocking_pop_granted_on_push) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -273,7 +273,7 @@ SLUICE_TEST_CASE(e12_queue_p4_blocking_pop_granted_on_push) {
 }
 
 // ---- P4: blocking push wakes when a consumer frees a slot (cap-1) --------
-SLUICE_TEST_CASE(e12_queue_p4_blocking_push_granted_on_pop) {
+SLUICE_TEST_CASE(queue_p4_blocking_push_granted_on_pop) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -318,7 +318,7 @@ SLUICE_TEST_CASE(e12_queue_p4_blocking_push_granted_on_pop) {
 }
 
 // ---- P5: close completes a blocked producer with `closed` (lease retained)
-SLUICE_TEST_CASE(e12_queue_p5_close_completes_blocked_producer) {
+SLUICE_TEST_CASE(queue_p5_close_completes_blocked_producer) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -362,7 +362,7 @@ SLUICE_TEST_CASE(e12_queue_p5_close_completes_blocked_producer) {
 }
 
 // ---- P5: close drains buffered items to a blocked consumer, then closed ---
-SLUICE_TEST_CASE(e12_queue_p5_close_drains_to_blocked_consumer) {
+SLUICE_TEST_CASE(queue_p5_close_drains_to_blocked_consumer) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -424,7 +424,7 @@ SLUICE_TEST_CASE(e12_queue_p5_close_drains_to_blocked_consumer) {
 // surface a well-formed caller observes.
 
 // ---- P7: begin_teardown drains a multi-item ring in FIFO order ------------
-SLUICE_TEST_CASE(e12_queue_p7_teardown_drains_ring_fifo) {
+SLUICE_TEST_CASE(queue_p7_teardown_drains_ring_fifo) {
     Fixture f{4};
     // Buffer three items.
     for (int v : {10, 20, 30}) {
@@ -461,7 +461,7 @@ SLUICE_TEST_CASE(e12_queue_p7_teardown_drains_ring_fifo) {
 // session dtor sees ring-empty; ~QueuePort sees ring_count_ == 0. Both succeed.
 
 // ---- P7: begin_teardown on an empty ring yields an immediately-empty session
-SLUICE_TEST_CASE(e12_queue_p7_teardown_empty_ring) {
+SLUICE_TEST_CASE(queue_p7_teardown_empty_ring) {
     Fixture f{2};
     QueueTeardownSession session = f.port->begin_teardown();
     SLUICE_CHECK(session.empty());
@@ -470,7 +470,7 @@ SLUICE_TEST_CASE(e12_queue_p7_teardown_empty_ring) {
 // Session + port destroyed cleanly (ring empty + lifecycle tearing_down).
 
 // ---- P7: teardown session is move-only; move empties the source -----------
-SLUICE_TEST_CASE(e12_queue_p7_session_move_only) {
+SLUICE_TEST_CASE(queue_p7_session_move_only) {
     Fixture f{2};
     {
         auto lease = make_lease<int>(*f.port, 7);
@@ -509,7 +509,7 @@ SLUICE_TEST_CASE(e12_queue_p7_session_move_only) {
 //   - begin_teardown + typed release_teardown
 
 // ---- P8: AsyncQueue<T> typed FIFO + failure recovery ----------------------
-SLUICE_TEST_CASE(e12_queue_p8_typed_fifo_and_failure_recovery) {
+SLUICE_TEST_CASE(queue_p8_typed_fifo_and_failure_recovery) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncQueue<std::string> q(sched, 3);
@@ -558,7 +558,7 @@ SLUICE_TEST_CASE(e12_queue_p8_typed_fifo_and_failure_recovery) {
 }
 
 // ---- P8: AsyncQueue<T> teardown drains ring via typed release_teardown -----
-SLUICE_TEST_CASE(e12_queue_p8_typed_teardown_drains_fifo) {
+SLUICE_TEST_CASE(queue_p8_typed_teardown_drains_fifo) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncQueue<int> q(sched, 4);
@@ -588,7 +588,7 @@ SLUICE_TEST_CASE(e12_queue_p8_typed_teardown_drains_fifo) {
 // == 0 and the session dtor sees an empty ring.
 
 // ---- P8: AsyncQueue<T> ctor rejects capacity 0 ----------------------------
-SLUICE_TEST_CASE(e12_queue_p8_capacity_zero_rejected) {
+SLUICE_TEST_CASE(queue_p8_capacity_zero_rejected) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     bool threw = false;
@@ -652,7 +652,7 @@ static_assert(std::is_nothrow_move_assignable_v<
 //   dest=failed+P   src=committed         => old dest payload destroyed
 //   dest=failed+P   src=failed+Q          => Q replaces P
 //   self-move                             => object not corrupted
-SLUICE_TEST_CASE(e12_queue_pr12_push_result_move_assign_states) {
+SLUICE_TEST_CASE(queue_pr12_push_result_move_assign_states) {
     using R = QueuePushResult<MoveConstructOnly>;
 
     // dest=committed, src=failed+payload(7) => dest becomes failed+(7).
@@ -696,7 +696,7 @@ SLUICE_TEST_CASE(e12_queue_pr12_push_result_move_assign_states) {
 //
 // Symmetric to the push case. dest/source may be any of item/closed/expired/
 // would_block; only item carries a payload.
-SLUICE_TEST_CASE(e12_queue_pr12_pop_result_move_assign_states) {
+SLUICE_TEST_CASE(queue_pr12_pop_result_move_assign_states) {
     using R = QueuePopResult<MoveConstructOnly>;
 
     // dest=closed, src=item+(7) => dest becomes item+(7).
@@ -784,7 +784,7 @@ inline void spin_wait(std::atomic<bool>& flag) {
 // slot; no close occurs. The deadline elapses (driven by advance_clock); the
 // producer resumes with `expired` and the EXACT original T is recovered. The
 // timer is retired (no leak).
-SLUICE_TEST_CASE(e12_queue_g1_push_until_expires_recovers_value) {
+SLUICE_TEST_CASE(queue_g1_push_until_expires_recovers_value) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -846,7 +846,7 @@ SLUICE_TEST_CASE(e12_queue_g1_push_until_expires_recovers_value) {
 // A consumer parks on an empty open ring with a future deadline. No producer
 // arrives; no close occurs. The deadline elapses; the consumer resumes with
 // `expired` (empty out-lease). Timer retired, no leak.
-SLUICE_TEST_CASE(e12_queue_g1_pop_until_expires) {
+SLUICE_TEST_CASE(queue_g1_pop_until_expires) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -893,7 +893,7 @@ SLUICE_TEST_CASE(e12_queue_g1_pop_until_expires) {
 // test asserts the producer commits (no lost wake) and the consumer observed
 // the pre-filled item. run_live(2) keeps the run resident while the producer
 // is parked.
-SLUICE_TEST_CASE(e12_queue_g2_multi_worker_producer_consumer) {
+SLUICE_TEST_CASE(queue_g2_multi_worker_producer_consumer) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -992,7 +992,7 @@ SLUICE_TEST_CASE(e12_queue_g2_multi_worker_producer_consumer) {
 // ---- H1: push_until with already-due deadline + free slot -> committed -----
 // Resource-first: a free slot is admissible, so the already-due deadline is
 // NOT consulted. The push commits inline; no suspension; no timer registered.
-SLUICE_TEST_CASE(e12_queue_h1_push_until_already_due_free_slot_committed) {
+SLUICE_TEST_CASE(queue_h1_push_until_already_due_free_slot_committed) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1029,7 +1029,7 @@ SLUICE_TEST_CASE(e12_queue_h1_push_until_already_due_free_slot_committed) {
 // ---- H2: push_until with already-due deadline + full ring -> expired -------
 // Resource NOT admissible (ring full) AND deadline already due -> expired
 // inline (no suspension). The exact original T is recovered. No timer leak.
-SLUICE_TEST_CASE(e12_queue_h2_push_until_already_due_full_ring_expired) {
+SLUICE_TEST_CASE(queue_h2_push_until_already_due_full_ring_expired) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1075,7 +1075,7 @@ SLUICE_TEST_CASE(e12_queue_h2_push_until_already_due_full_ring_expired) {
 // ---- H3: pop_until with already-due deadline + available item -> item ------
 // Resource-first: a buffered item is admissible, so the already-due deadline
 // is NOT consulted. The pop returns the item inline; no suspension; no timer.
-SLUICE_TEST_CASE(e12_queue_h3_pop_until_already_due_item_available) {
+SLUICE_TEST_CASE(queue_h3_pop_until_already_due_item_available) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1116,7 +1116,7 @@ SLUICE_TEST_CASE(e12_queue_h3_pop_until_already_due_item_available) {
 // ---- H4: pop_until with already-due deadline + empty open ring -> expired --
 // Resource NOT admissible (ring empty AND open) AND deadline already due ->
 // expired inline (no suspension). No timer leak.
-SLUICE_TEST_CASE(e12_queue_h4_pop_until_already_due_empty_ring_expired) {
+SLUICE_TEST_CASE(queue_h4_pop_until_already_due_empty_ring_expired) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);

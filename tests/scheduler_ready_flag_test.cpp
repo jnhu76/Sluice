@@ -44,7 +44,7 @@ struct State {
 }  // namespace
 
 // ---- R1: already ready — await returns immediately, no suspend -------------
-SLUICE_TEST_CASE(e5_a1_r1_already_ready_no_suspend) {
+SLUICE_TEST_CASE(readyflag_r1_already_ready_no_suspend) {
     if constexpr (!fiber_ctx::supported) return;
 
     FakeAsyncBackend b;  // never actually completed; just satisfies the ctor.
@@ -80,7 +80,7 @@ SLUICE_TEST_CASE(e5_a1_r1_already_ready_no_suspend) {
 // A second fiber sets the flag; the scheduler's next poll wakes the first.
 // This covers R4 (ready after switch) and exercises the same poll path that
 // catches R3 (ready between re-check and switch — the flag is persistent).
-SLUICE_TEST_CASE(e5_a1_r4_pending_wait_then_ready_resumes) {
+SLUICE_TEST_CASE(readyflag_r4_pending_wait_then_ready_resumes) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -126,7 +126,7 @@ SLUICE_TEST_CASE(e5_a1_r4_pending_wait_then_ready_resumes) {
 // A fiber wakes; the registration is erased. A later poll must not find it.
 // We assert exactly-once via a counter incremented on each resume: it must be
 // exactly 1 even though the scheduler polls multiple times after the wake.
-SLUICE_TEST_CASE(e5_a1_r5_exactly_once_no_double_enqueue) {
+SLUICE_TEST_CASE(readyflag_r5_exactly_once_no_double_enqueue) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -173,7 +173,7 @@ SLUICE_TEST_CASE(e5_a1_r5_exactly_once_no_double_enqueue) {
 // the re-check at step 4-5 observes the persistent flag. This test covers the
 // R1-collapse shape; the structural R2/R3 safety is covered by R4 (which uses
 // the same persistent-flag + poll path).
-SLUICE_TEST_CASE(e5_a1_r2_ready_at_first_check_no_suspend) {
+SLUICE_TEST_CASE(readyflag_r2_ready_at_first_check_no_suspend) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -212,7 +212,7 @@ SLUICE_TEST_CASE(e5_a1_r2_ready_at_first_check_no_suspend) {
 // of the store relative to the switch, which the persistent-flag model makes
 // irrelevant. Covered by R4. This case is a second instance with the setter
 // spawned AFTER the waiter to exercise the FIFO ordering the other way.
-SLUICE_TEST_CASE(e5_a1_r3_ready_after_switch_caught_by_poll) {
+SLUICE_TEST_CASE(readyflag_r3_ready_after_switch_caught_by_poll) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());

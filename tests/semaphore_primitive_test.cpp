@@ -95,7 +95,7 @@ SLUICE_MAIN()
 // initial=0,max>0 and initial=max are both valid. available() returns the
 // initial snapshot. Proves the constructor stores the initial count and the
 // capacity bound without exception.
-SLUICE_TEST_CASE(e12_sem_t0_construction_and_available_snapshot) {
+SLUICE_TEST_CASE(sem_t0_construction_and_available_snapshot) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -121,7 +121,7 @@ SLUICE_TEST_CASE(e12_sem_t0_construction_and_available_snapshot) {
 // available() to 0; a third fails (returns false, no mutation). Proves
 // try_acquire admits a stored permit when the queue is empty and does not
 // admit beyond supply.
-SLUICE_TEST_CASE(e12_sem_t1_try_acquire_consumes_exactly_one) {
+SLUICE_TEST_CASE(sem_t1_try_acquire_consumes_exactly_one) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -142,7 +142,7 @@ SLUICE_TEST_CASE(e12_sem_t1_try_acquire_consumes_exactly_one) {
 //
 // A Semaphore with no stored permits: try_acquire returns false and available()
 // is unchanged. No underflow, no negative count.
-SLUICE_TEST_CASE(e12_sem_t2_try_acquire_failure_at_zero_no_mutation) {
+SLUICE_TEST_CASE(sem_t2_try_acquire_failure_at_zero_no_mutation) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -160,7 +160,7 @@ SLUICE_TEST_CASE(e12_sem_t2_try_acquire_failure_at_zero_no_mutation) {
 // A fiber calls acquire on a Semaphore with an available permit. The wait
 // resolves Woken inline (no release needed), available() decrements, and the
 // fiber reaches done without any other fiber running.
-SLUICE_TEST_CASE(e12_sem_t3_immediate_acquire_resolves_woken) {
+SLUICE_TEST_CASE(sem_t3_immediate_acquire_resolves_woken) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -196,7 +196,7 @@ SLUICE_TEST_CASE(e12_sem_t3_immediate_acquire_resolves_woken) {
 // run does NOT terminate (STALLED). We use run_live + a timeout guard + then
 // release to complete cleanly. This proves immediate acquisition stops at zero
 // and the second waiter suspends rather than barging.
-SLUICE_TEST_CASE(e12_sem_t4_immediate_acquisitions_stop_at_zero) {
+SLUICE_TEST_CASE(sem_t4_immediate_acquisitions_stop_at_zero) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -248,7 +248,7 @@ SLUICE_TEST_CASE(e12_sem_t4_immediate_acquisitions_stop_at_zero) {
 // A waiter on a zero-permit Semaphore suspends. One release transfers its
 // pending permit directly to the FIFO head (available_ stays 0). The waiter
 // resumes Woken.
-SLUICE_TEST_CASE(e12_sem_t5_zero_acquire_suspends_one_release_grants) {
+SLUICE_TEST_CASE(sem_t5_zero_acquire_suspends_one_release_grants) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -289,7 +289,7 @@ SLUICE_TEST_CASE(e12_sem_t5_zero_acquire_suspends_one_release_grants) {
 //
 // A release on an empty-queue, below-capacity Semaphore stores the permit:
 // available() increments. Proves the store branch (not transfer, not reject).
-SLUICE_TEST_CASE(e12_sem_t6_release_no_waiter_increments_available) {
+SLUICE_TEST_CASE(sem_t6_release_no_waiter_increments_available) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -310,7 +310,7 @@ SLUICE_TEST_CASE(e12_sem_t6_release_no_waiter_increments_available) {
 //
 // A release on an empty-queue, AT-capacity Semaphore is rejected: returns
 // false and available() is unchanged. No overflow, no mutation.
-SLUICE_TEST_CASE(e12_sem_t7_release_at_capacity_false_no_mutation) {
+SLUICE_TEST_CASE(sem_t7_release_at_capacity_false_no_mutation) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -330,7 +330,7 @@ SLUICE_TEST_CASE(e12_sem_t7_release_at_capacity_false_no_mutation) {
 // permit to the waiter (Woken). available() stays 0 — the release did NOT also
 // store. This is the permit-conservation guard: one release contributes one
 // pending permit, exactly one disposition.
-SLUICE_TEST_CASE(e12_sem_t8_one_release_never_both_wake_and_store) {
+SLUICE_TEST_CASE(sem_t8_one_release_never_both_wake_and_store) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -377,7 +377,7 @@ SLUICE_TEST_CASE(e12_sem_t8_one_release_never_both_wake_and_store) {
 // path never decrements available_ (it starts at 0 and stays 0). No unsigned
 // underflow. This is the load-bearing guard against the deleted available_-- /
 // refund model.
-SLUICE_TEST_CASE(e12_sem_t9_queued_grant_from_zero_no_underflow) {
+SLUICE_TEST_CASE(sem_t9_queued_grant_from_zero_no_underflow) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -433,7 +433,7 @@ SLUICE_TEST_CASE(e12_sem_t9_queued_grant_from_zero_no_underflow) {
 // FIFO order requires W1 to be granted first, then W2. We record each waiter's
 // acquire index and assert 0 (W1) before 1 (W2). No barging: W2 cannot be
 // granted before W1 even though both are live.
-SLUICE_TEST_CASE(e12_sem_t10_fifo_w1_before_w2) {
+SLUICE_TEST_CASE(sem_t10_fifo_w1_before_w2) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -491,7 +491,7 @@ SLUICE_TEST_CASE(e12_sem_t10_fifo_w1_before_w2) {
 // suspends. A SINGLE release must grant W1 (the FIFO head), not W2. Proves a
 // later-arriving waiter cannot steal the earlier waiter's release permit.
 // (A second release then drains W2 so the run terminates cleanly.)
-SLUICE_TEST_CASE(e12_sem_t11_w2_cannot_steal_w1_release_permit) {
+SLUICE_TEST_CASE(sem_t11_w2_cannot_steal_w1_release_permit) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -551,7 +551,7 @@ SLUICE_TEST_CASE(e12_sem_t11_w2_cannot_steal_w1_release_permit) {
 // because W has FIFO priority. We make this deterministic: W is registered and
 // suspended, then try_acquire is called from a second fiber — it must return
 // false (the queue is non-empty; W has priority). Then a release grants W.
-SLUICE_TEST_CASE(e12_sem_t12_try_acquire_cannot_bypass_queued_waiter) {
+SLUICE_TEST_CASE(sem_t12_try_acquire_cannot_bypass_queued_waiter) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -609,7 +609,7 @@ SLUICE_TEST_CASE(e12_sem_t12_try_acquire_cannot_bypass_queued_waiter) {
 // so when release acquires global_mtx_ next it observes W2 as the FIFO head and
 // grants W2. This is NOT a release-side skip-after-null — it is W1 being
 // unlinked before release observes the queue (Conclusion A).
-SLUICE_TEST_CASE(e12_sem_t13_w1_cancelled_before_release_grants_w2) {
+SLUICE_TEST_CASE(sem_t13_w1_cancelled_before_release_grants_w2) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -680,7 +680,7 @@ SLUICE_TEST_CASE(e12_sem_t13_w1_cancelled_before_release_grants_w2) {
 // due at admission. Permit admission has precedence (A4): resolve Woken inline,
 // NOT Expired. available_ decrements; the timer is retired; the fiber does not
 // suspend.
-SLUICE_TEST_CASE(e12_sem_t14_permit_plus_due_deadline_is_woken) {
+SLUICE_TEST_CASE(sem_t14_permit_plus_due_deadline_is_woken) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -717,7 +717,7 @@ SLUICE_TEST_CASE(e12_sem_t14_permit_plus_due_deadline_is_woken) {
 // acquire_until on a zero-permit Semaphore, with a deadline already due at
 // admission. No permit is admissible, so the I5 admission closure resolves
 // Expired inline (the fiber does NOT suspend to wait for a timer scan).
-SLUICE_TEST_CASE(e12_sem_t15_no_permit_plus_due_deadline_is_expired) {
+SLUICE_TEST_CASE(sem_t15_no_permit_plus_due_deadline_is_expired) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -750,7 +750,7 @@ SLUICE_TEST_CASE(e12_sem_t15_no_permit_plus_due_deadline_is_expired) {
 //
 // acquire_until with a stored permit and a future deadline. Permit admission
 // resolves Woken inline; the future deadline is moot and retired.
-SLUICE_TEST_CASE(e12_sem_t16_permit_plus_future_deadline_immediate_woken) {
+SLUICE_TEST_CASE(sem_t16_permit_plus_future_deadline_immediate_woken) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -783,7 +783,7 @@ SLUICE_TEST_CASE(e12_sem_t16_permit_plus_future_deadline_immediate_woken) {
 // occurs BEFORE the timer expires. release wins (Woken); the later timer expiry
 // is the loser (no-op). Determinism: release runs first (winner_done barrier),
 // then advance_clock.
-SLUICE_TEST_CASE(e12_sem_t17_release_wins_before_timer) {
+SLUICE_TEST_CASE(sem_t17_release_wins_before_timer) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -834,7 +834,7 @@ SLUICE_TEST_CASE(e12_sem_t17_release_wins_before_timer) {
 // expires BEFORE a release. Timer wins (Expired); the later release then stores
 // the permit (no eligible waiter remains). Determinism: timer runs first (retry
 // advance_clock until terminal), then release.
-SLUICE_TEST_CASE(e12_sem_t18_timer_wins_before_release) {
+SLUICE_TEST_CASE(sem_t18_timer_wins_before_release) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -890,7 +890,7 @@ SLUICE_TEST_CASE(e12_sem_t18_timer_wins_before_release) {
 //
 // A registered waiter is cancelled via Semaphore::cancel. Returns true; the node
 // resolves Cancelled; available_ unchanged; the wait count returns to baseline.
-SLUICE_TEST_CASE(e12_sem_t19_registered_cancel_true_cancelled) {
+SLUICE_TEST_CASE(sem_t19_registered_cancel_true_cancelled) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -930,7 +930,7 @@ SLUICE_TEST_CASE(e12_sem_t19_registered_cancel_true_cancelled) {
 //
 // A waiter is granted (Woken) by a release BEFORE the cancel. cancel then
 // returns false (the node is already Woken / unlinked). No second resolution.
-SLUICE_TEST_CASE(e12_sem_t20_cancel_after_grant_false) {
+SLUICE_TEST_CASE(sem_t20_cancel_after_grant_false) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -974,7 +974,7 @@ SLUICE_TEST_CASE(e12_sem_t20_cancel_after_grant_false) {
 //
 // A timed waiter expires BEFORE the cancel. cancel then returns false (the node
 // is already Expired / unlinked).
-SLUICE_TEST_CASE(e12_sem_t21_cancel_after_expiry_false) {
+SLUICE_TEST_CASE(sem_t21_cancel_after_expiry_false) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1022,7 +1022,7 @@ SLUICE_TEST_CASE(e12_sem_t21_cancel_after_expiry_false) {
 //
 // A successful cancel is followed by a second cancel of the same node. The
 // second returns false (the node is now Cancelled / unlinked).
-SLUICE_TEST_CASE(e12_sem_t22_repeated_cancel_second_false) {
+SLUICE_TEST_CASE(sem_t22_repeated_cancel_second_false) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1062,7 +1062,7 @@ SLUICE_TEST_CASE(e12_sem_t22_repeated_cancel_second_false) {
 //
 // A fresh (Detached, never-registered) node cancel returns false without
 // mutation. No membership in any queue.
-SLUICE_TEST_CASE(e12_sem_t23_detached_cancel_false) {
+SLUICE_TEST_CASE(sem_t23_detached_cancel_false) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1081,7 +1081,7 @@ SLUICE_TEST_CASE(e12_sem_t23_detached_cancel_false) {
 // A node registered in Semaphore A is cancelled on Semaphore B (same Scheduler).
 // B's membership check scans its OWN queue (empty / different membership), so
 // cancel returns false. A's node is untouched. Cross-Semaphore safety.
-SLUICE_TEST_CASE(e12_sem_t24_wrong_semaphore_same_scheduler_false) {
+SLUICE_TEST_CASE(sem_t24_wrong_semaphore_same_scheduler_false) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1128,7 +1128,7 @@ SLUICE_TEST_CASE(e12_sem_t24_wrong_semaphore_same_scheduler_false) {
 // on Scheduler B. B scans its OWN queue under B's global_mtx_; it never reads
 // the foreign node's home_ and never locks foreign Scheduler A. Returns false
 // safely. This is the cross-Scheduler structural-safety guard.
-SLUICE_TEST_CASE(e12_sem_t25_wrong_semaphore_different_scheduler_false) {
+SLUICE_TEST_CASE(sem_t25_wrong_semaphore_different_scheduler_false) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx_a(std::make_unique<IdleBackend>());
@@ -1183,7 +1183,7 @@ SLUICE_TEST_CASE(e12_sem_t25_wrong_semaphore_different_scheduler_false) {
 // waiter through the Scheduler wake source (route_runnable_locked ->
 // signal_wake_locked) and the Fiber resumes Woken. No Semaphore-private wake
 // channel. Mirrors E12-A T19 (external-thread set).
-SLUICE_TEST_CASE(e12_sem_t26_external_thread_release_wakes_live) {
+SLUICE_TEST_CASE(sem_t26_external_thread_release_wakes_live) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1231,7 +1231,7 @@ SLUICE_TEST_CASE(e12_sem_t26_external_thread_release_wakes_live) {
 // After all waits resolve terminally and the run drains, the Semaphore's private
 // queue is empty (waiting_count == 0). Safe to destroy. Proves no queue/timer
 // leak across terminal closure.
-SLUICE_TEST_CASE(e12_sem_t27_terminal_waits_leave_queue_empty) {
+SLUICE_TEST_CASE(sem_t27_terminal_waits_leave_queue_empty) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1274,7 +1274,7 @@ SLUICE_TEST_CASE(e12_sem_t27_terminal_waits_leave_queue_empty) {
 // A timed wait that resolves terminally must retire its timer registration.
 // After the run, active_deadline_count == 0 and the timer pool has no ACTIVE
 // block. Proves the I4 lifetime closure for Semaphore timed waits.
-SLUICE_TEST_CASE(e12_sem_t28_terminal_timed_wait_no_timer_leak) {
+SLUICE_TEST_CASE(sem_t28_terminal_timed_wait_no_timer_leak) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1321,7 +1321,7 @@ SLUICE_TEST_CASE(e12_sem_t28_terminal_timed_wait_no_timer_leak) {
 // After all waits resolve terminally (Woken via release), destroying the
 // Semaphore is safe: the WaitQueue destructor asserts empty in debug, and no
 // timer retains destroyed-queue state. This is the destruction contract (A3).
-SLUICE_TEST_CASE(e12_sem_t29_safe_destruction_after_terminal_closure) {
+SLUICE_TEST_CASE(sem_t29_safe_destruction_after_terminal_closure) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1395,7 +1395,7 @@ SLUICE_TEST_CASE(e12_sem_t29_safe_destruction_after_terminal_closure) {
 // Three waiters on a zero-permit Semaphore. Two are released (Woken via FIFO
 // transfer); one is cancelled (Cancelled). Repeated. Each iteration must yield
 // exactly 3 terminal outcomes (2 Woken + 1 Cancelled), no leak, available_==0.
-SLUICE_TEST_CASE(e12_sem_t30_repeated_mixed_multi_waiter_stress) {
+SLUICE_TEST_CASE(sem_t30_repeated_mixed_multi_waiter_stress) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());

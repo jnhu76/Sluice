@@ -46,7 +46,7 @@ struct FiberStack {
 // The "peer" here is implemented as a second scheduler-spawned Fiber (not a
 // Group task) so the test exercises Group-task-suspend + peer-progress without
 // coupling two Group tasks' lifecycles.
-SLUICE_TEST_CASE(e5_b_evented_group_task_suspends_and_resumes_on_fiber) {
+SLUICE_TEST_CASE(egroup_evented_group_task_suspends_and_resumes_on_fiber) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -100,7 +100,7 @@ SLUICE_TEST_CASE(e5_b_evented_group_task_suspends_and_resumes_on_fiber) {
 // (no threads exist in Evented mode). If it had, the peer Fiber could not
 // have run. This test makes the contract explicit: assert no std::thread is
 // involved by checking the task ran on the same thread as await().
-SLUICE_TEST_CASE(e5_b_evented_group_runs_on_awaiting_thread) {
+SLUICE_TEST_CASE(egroup_evented_group_runs_on_awaiting_thread) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -125,7 +125,7 @@ SLUICE_TEST_CASE(e5_b_evented_group_runs_on_awaiting_thread) {
 // ---- G6: Threaded Group regression ----------------------------------------
 // A default-constructed Group still uses std::thread + ThreadedWaitPolicy. The
 // existing T3 behavior is unchanged. Uses a real cross-thread producer; TSan.
-SLUICE_TEST_CASE(e5_b_threaded_group_regression) {
+SLUICE_TEST_CASE(egroup_threaded_group_regression) {
     std::thread::id main_tid = std::this_thread::get_id();
     std::thread::id task_tid;
     int ran = 0;

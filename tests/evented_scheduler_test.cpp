@@ -41,7 +41,7 @@ struct FiberStack {
 // Fiber A submits a held-pending op and suspends. Fiber B runs and records
 // progress while A's op is STILL PENDING. This proves A returned the worker to
 // the scheduler (one worker, B could not have run otherwise).
-SLUICE_TEST_CASE(e4_t1_single_worker_scheduler_liveness) {
+SLUICE_TEST_CASE(sched_single_worker_scheduler_liveness) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto backend_up = std::make_unique<FakeAsyncBackend>();
@@ -106,7 +106,7 @@ SLUICE_TEST_CASE(e4_t1_single_worker_scheduler_liveness) {
 // ---- E4-T2: completion resumes the waiting fiber --------------------------
 // After T1's pending state, release A's op; the scheduler observes the
 // completion and resumes A at the exact suspension point.
-SLUICE_TEST_CASE(e4_t2_completion_resumes_waiting_fiber) {
+SLUICE_TEST_CASE(sched_completion_resumes_waiting_fiber) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto backend_up = std::make_unique<FakeAsyncBackend>();
@@ -160,7 +160,7 @@ SLUICE_TEST_CASE(e4_t2_completion_resumes_waiting_fiber) {
 // One completion must enqueue the waiting fiber exactly once. Repeated polls
 // after the wake must NOT re-enqueue. We observe via the runnable queue being
 // drained and the fiber reaching `done` exactly once (entry runs once).
-SLUICE_TEST_CASE(e4_t3_exactly_once_runnable_transition) {
+SLUICE_TEST_CASE(sched_exactly_once_runnable_transition) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto backend_up = std::make_unique<FakeAsyncBackend>();
@@ -207,7 +207,7 @@ SLUICE_TEST_CASE(e4_t3_exactly_once_runnable_transition) {
 // ---- E4-T4: a runnable task is not starved by a pending operation ---------
 // With A pending and B runnable, the single worker runs B without waiting for
 // A. (Structurally overlaps T1, but the contract is made explicit here.)
-SLUICE_TEST_CASE(e4_t4_runnable_not_starved_by_pending) {
+SLUICE_TEST_CASE(sched_runnable_not_starved_by_pending) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto backend_up = std::make_unique<FakeAsyncBackend>();

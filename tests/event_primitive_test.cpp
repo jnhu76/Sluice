@@ -136,7 +136,7 @@ SLUICE_MAIN()
 // A waiter Fiber suspends on an UNSET Event. A waker Fiber calls set(). The
 // waiter must resume with outcome Woken. Proves the basic suspend + set-wake
 // path through the Event substrate.
-SLUICE_TEST_CASE(e12_t0_unset_event_wait_suspends_and_wakes) {
+SLUICE_TEST_CASE(event_unset_event_wait_suspends_and_wakes) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -178,7 +178,7 @@ SLUICE_TEST_CASE(e12_t0_unset_event_wait_suspends_and_wakes) {
 // A waiter Fiber calls wait() on a SET Event. It must return Woken WITHOUT
 // suspending (entries == 2 in a single run with no waker). This is the
 // level-triggered persistent readiness property: a late waiter observes SET.
-SLUICE_TEST_CASE(e12_t1_set_event_wait_returns_immediately) {
+SLUICE_TEST_CASE(event_set_event_wait_returns_immediately) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -210,7 +210,7 @@ SLUICE_TEST_CASE(e12_t1_set_event_wait_returns_immediately) {
 // Calling set() on an already-SET Event is a no-op: no extra wake, no state
 // change. Two set() calls leave the Event SET and do not produce spurious
 // wakeups.
-SLUICE_TEST_CASE(e12_t2_set_idempotent) {
+SLUICE_TEST_CASE(event_set_idempotent) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -241,7 +241,7 @@ SLUICE_TEST_CASE(e12_t2_set_idempotent) {
 // After reset(), a subsequent wait() on the now-UNSET Event suspends (requires
 // a waker). Proves reset transitions SET -> UNSET and the readiness is no
 // longer observable by late waiters.
-SLUICE_TEST_CASE(e12_t3_reset_clears_readiness) {
+SLUICE_TEST_CASE(event_reset_clears_readiness) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -284,7 +284,7 @@ SLUICE_TEST_CASE(e12_t3_reset_clears_readiness) {
 // set() makes the Event SET. A waiter that arrives AFTER set() observes SET
 // and returns Woken without suspension. This is the "late waiter" property of
 // level-triggered persistent readiness.
-SLUICE_TEST_CASE(e12_t4_late_waiter_after_set_returns_immediately) {
+SLUICE_TEST_CASE(event_late_waiter_after_set_returns_immediately) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -325,7 +325,7 @@ SLUICE_TEST_CASE(e12_t4_late_waiter_after_set_returns_immediately) {
 // set() runs and completes (SET + drain of an empty queue) BEFORE the waiter
 // reaches wait(). The waiter's admission observes SET and returns Woken inline
 // without registering or suspending. No lost set: the readiness is persistent.
-SLUICE_TEST_CASE(e12_t5_set_before_admission_observes_set) {
+SLUICE_TEST_CASE(event_set_before_admission_observes_set) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -370,7 +370,7 @@ SLUICE_TEST_CASE(e12_t5_set_before_admission_observes_set) {
 // Either way the waiter resolves Woken — no third outcome, no stranded waiter.
 // This test forces the race by having the setter spin until the waiter has
 // entered wait(), then set().
-SLUICE_TEST_CASE(e12_t6_set_during_admission_no_stranded_waiter) {
+SLUICE_TEST_CASE(event_set_during_admission_no_stranded_waiter) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -412,7 +412,7 @@ SLUICE_TEST_CASE(e12_t6_set_during_admission_no_stranded_waiter) {
 // The waiter registers and commits suspension (Fiber waiting). set() then runs
 // and its drain resolves the registered waiter through the canonical
 // RESOURCE_WAKE path (wake_wait_one_locked -> resolve_(Woken) + route).
-SLUICE_TEST_CASE(e12_t7_set_after_suspension_wakes_through_scheduler) {
+SLUICE_TEST_CASE(event_set_after_suspension_wakes_through_scheduler) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -458,7 +458,7 @@ SLUICE_TEST_CASE(e12_t7_set_after_suspension_wakes_through_scheduler) {
 // N >= 3 waiters register on an UNSET Event. set() must RESOURCE_WAKE every
 // registered epoch: all observe Woken, one runnable publication per winner,
 // the WaitQueue is structurally empty after, and waiting_count returns to 0.
-SLUICE_TEST_CASE(e12_t8_set_releases_all_registered_waiters) {
+SLUICE_TEST_CASE(event_set_releases_all_registered_waiters) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -505,7 +505,7 @@ SLUICE_TEST_CASE(e12_t8_set_releases_all_registered_waiters) {
 // The test advances the clock to expire W2's deadline, THEN calls set().
 // W2 resolves Expired (timer won before set's drain reached it); W1/W3 resolve
 // Woken. Event remains SET. Each outcome is independent.
-SLUICE_TEST_CASE(e12_t9_one_expires_during_set_broadcast) {
+SLUICE_TEST_CASE(event_one_expires_during_set_broadcast) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -567,7 +567,7 @@ SLUICE_TEST_CASE(e12_t9_one_expires_during_set_broadcast) {
 // W1, W2, W3 register on an UNSET Event. A canceller cancels W2, THEN set()
 // runs. W2 resolves Cancelled (cancel won before set's drain); W1/W3 resolve
 // Woken. Event remains SET.
-SLUICE_TEST_CASE(e12_t10_one_cancels_during_set_broadcast) {
+SLUICE_TEST_CASE(event_one_cancels_during_set_broadcast) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -639,7 +639,7 @@ SLUICE_TEST_CASE(e12_t10_one_cancels_during_set_broadcast) {
 // Determinism: the winner (set) runs first and completes (verified via a
 // winner_done barrier); the loser (advance_clock) runs only after. This makes
 // the outcome deterministic under all sanitizer timings.
-SLUICE_TEST_CASE(e12_t11_resource_wake_wins_timer_expire) {
+SLUICE_TEST_CASE(event_resource_wake_wins_timer_expire) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -689,7 +689,7 @@ SLUICE_TEST_CASE(e12_t11_resource_wake_wins_timer_expire) {
 //
 // Determinism: the winner (timer) runs first via advance_clock retry until the
 // node is terminal; the loser (set) runs only after the barrier.
-SLUICE_TEST_CASE(e12_t12_timer_expire_wins_resource_wake) {
+SLUICE_TEST_CASE(event_timer_expire_wins_resource_wake) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -741,7 +741,7 @@ SLUICE_TEST_CASE(e12_t12_timer_expire_wins_resource_wake) {
 // later is the loser (no-op). Result: Woken.
 //
 // Determinism: set() runs first (winner_done barrier); cancel runs after.
-SLUICE_TEST_CASE(e12_t13_resource_wake_wins_cancel) {
+SLUICE_TEST_CASE(event_resource_wake_wins_cancel) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -789,7 +789,7 @@ SLUICE_TEST_CASE(e12_t13_resource_wake_wins_cancel) {
 //
 // Determinism: cancel runs first (retry loop until won; winner_done barrier);
 // set runs after.
-SLUICE_TEST_CASE(e12_t14_cancel_wins_resource_wake) {
+SLUICE_TEST_CASE(event_cancel_wins_resource_wake) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -840,7 +840,7 @@ SLUICE_TEST_CASE(e12_t14_cancel_wins_resource_wake) {
 //
 // Determinism: timer runs first (retry advance_clock; winner_done barrier);
 // cancel runs after.
-SLUICE_TEST_CASE(e12_t15_timer_expire_wins_cancel) {
+SLUICE_TEST_CASE(event_timer_expire_wins_cancel) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -890,7 +890,7 @@ SLUICE_TEST_CASE(e12_t15_timer_expire_wins_cancel) {
 // outcome (XOR of woken/cancelled/expired) and wait-count closure. Uses
 // bounded retry loops (not random sleeps). Stress is supplementary to the
 // causal two-way proofs above.
-SLUICE_TEST_CASE(e12_t16_three_way_race_one_winner_repeated) {
+SLUICE_TEST_CASE(event_three_way_race_one_winner_repeated) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -969,7 +969,7 @@ SLUICE_TEST_CASE(e12_t16_three_way_race_one_winner_repeated) {
 // reset() must NOT resolve/cancel/expire/unlink W — W remains Registered and
 // is governed by future set(). A later set() wakes W. Proves reset is a pure
 // state flip (E5 — Reset Non-Resolution).
-SLUICE_TEST_CASE(e12_t17_reset_does_not_cancel_registered_waiter) {
+SLUICE_TEST_CASE(event_reset_does_not_cancel_registered_waiter) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1027,7 +1027,7 @@ SLUICE_TEST_CASE(e12_t17_reset_does_not_cancel_registered_waiter) {
 // in the queue during S1's drain. This test forces the exact trace: S1 drains
 // Wold, then reset, then Wnew registers, then S2 wakes Wnew. Wold resolves
 // Woken from S1; Wnew resolves Woken from S2 (NOT from S1).
-SLUICE_TEST_CASE(e12_t18_old_set_does_not_wake_post_reset_waiter) {
+SLUICE_TEST_CASE(event_old_set_does_not_wake_post_reset_waiter) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1109,7 +1109,7 @@ SLUICE_TEST_CASE(e12_t18_old_set_does_not_wake_post_reset_waiter) {
 // (not the park-entry proof — T32 is the mechanical park-entry proof using the
 // park-commit seam); the test asserts the OUTCOME, not that the Worker reached
 // park.
-SLUICE_TEST_CASE(e12_t19_external_thread_set_wakes_live) {
+SLUICE_TEST_CASE(event_external_thread_set_wakes_live) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1159,7 +1159,7 @@ SLUICE_TEST_CASE(e12_t19_external_thread_set_wakes_live) {
 // and no Event state is Worker-bound. This test uses 2 workers: the waiter on
 // worker 0, the setter on worker 1; the setter's set() routes the wake to the
 // waiter's owner, which may involve steal routing.
-SLUICE_TEST_CASE(e12_t20_woken_waiter_resumes_after_steal) {
+SLUICE_TEST_CASE(event_woken_waiter_resumes_after_steal) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1203,7 +1203,7 @@ SLUICE_TEST_CASE(e12_t20_woken_waiter_resumes_after_steal) {
 // In Drain mode, an unresolved Event wait (MW-S3) returns STALLED — the run
 // terminates without hanging. The Event waiter remains registered (unresolved);
 // the caller must cancel it before the node's scope ends. No hang, no park.
-SLUICE_TEST_CASE(e12_t21_drain_unresolved_event_returns_stalled) {
+SLUICE_TEST_CASE(event_drain_unresolved_event_returns_stalled) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1238,7 +1238,7 @@ SLUICE_TEST_CASE(e12_t21_drain_unresolved_event_returns_stalled) {
 // After all Event waits are terminal, destroying the Event is safe. The
 // destructor does NOT cancel/wake/synthesize; the WaitQueue is empty (all
 // waiters resolved+unlinked). This proves the destruction contract.
-SLUICE_TEST_CASE(e12_t22_destruction_after_terminal_waits_safe) {
+SLUICE_TEST_CASE(event_destruction_after_terminal_waits_safe) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1298,7 +1298,7 @@ SLUICE_TEST_CASE(e12_t22_destruction_after_terminal_waits_safe) {
 //   - Event remains SET
 //   - the late W5 observes SET
 // This is supplementary stress to the causal proofs (T8–T16).
-SLUICE_TEST_CASE(e12_t23_multi_waiter_mixed_outcome_stress) {
+SLUICE_TEST_CASE(event_multi_waiter_mixed_outcome_stress) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1393,7 +1393,7 @@ SLUICE_TEST_CASE(e12_t23_multi_waiter_mixed_outcome_stress) {
 // The narrow per-wait-epoch CANCEL authority. A waiter is Registered on an
 // UNSET Event. Event::cancel(node) wins the resolve_ CAS -> Cancelled, exactly
 // once, routed through the Scheduler wake seam. A second cancel returns false.
-SLUICE_TEST_CASE(e12_t25_cancel_correct_event_node_wins_cancelled) {
+SLUICE_TEST_CASE(event_cancel_correct_event_node_wins_cancelled) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1438,7 +1438,7 @@ SLUICE_TEST_CASE(e12_t25_cancel_correct_event_node_wins_cancelled) {
 // The narrow cancellation authority cannot cancel a node belonging to another
 // Event, a detached node, or an already-terminal node. Each loses safely
 // (returns false, no state mutation).
-SLUICE_TEST_CASE(e12_t26_cancel_wrong_event_detached_terminal_loses) {
+SLUICE_TEST_CASE(event_cancel_wrong_event_detached_terminal_loses) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1537,7 +1537,7 @@ SLUICE_TEST_CASE(e12_t26_cancel_wrong_event_detached_terminal_loses) {
 // Event/Scheduler).
 
 // ---- CANCEL-1: correct Event + live Registered node -> true/Cancelled once --
-SLUICE_TEST_CASE(e12_cancel1_correct_event_live_node_wins) {
+SLUICE_TEST_CASE(event_correct_event_live_node_wins) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1597,7 +1597,7 @@ SLUICE_TEST_CASE(e12_cancel1_correct_event_live_node_wins) {
 // fcancel now waits for Scheduler::waiting_count() >= 1, which becomes true
 // only after the WaitNode is linked, Registered, and included in Scheduler
 // waiting accounting.  cancel_done remains the fcancel-vs-fset gate.
-SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
+SLUICE_TEST_CASE(event_wrong_event_same_scheduler_loses_safely) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1665,7 +1665,7 @@ SLUICE_TEST_CASE(e12_cancel2a_wrong_event_same_scheduler_loses_safely) {
 // WITHOUT reading node.home_ (which is protected by Scheduler A's global_mtx_,
 // a DIFFERENT mutex -- no happens-before across Schedulers). The node remains
 // Registered on Event A and is later woken by Event A.set() normally.
-SLUICE_TEST_CASE(e12_cancel2b_wrong_event_different_scheduler_loses_safely) {
+SLUICE_TEST_CASE(event_wrong_event_different_scheduler_loses_safely) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx_a(std::make_unique<IdleBackend>());
@@ -1719,7 +1719,7 @@ SLUICE_TEST_CASE(e12_cancel2b_wrong_event_different_scheduler_loses_safely) {
 }
 
 // ---- CANCEL-3: detached node -> false ---------------------------------------
-SLUICE_TEST_CASE(e12_cancel3_detached_node_loses) {
+SLUICE_TEST_CASE(event_detached_node_loses) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1734,7 +1734,7 @@ SLUICE_TEST_CASE(e12_cancel3_detached_node_loses) {
 }
 
 // ---- CANCEL-4: Woken node -> false ------------------------------------------
-SLUICE_TEST_CASE(e12_cancel4_woken_node_loses) {
+SLUICE_TEST_CASE(event_woken_node_loses) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1755,7 +1755,7 @@ SLUICE_TEST_CASE(e12_cancel4_woken_node_loses) {
 }
 
 // ---- CANCEL-5: Expired node -> false ----------------------------------------
-SLUICE_TEST_CASE(e12_cancel5_expired_node_loses) {
+SLUICE_TEST_CASE(event_expired_node_loses) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1790,7 +1790,7 @@ SLUICE_TEST_CASE(e12_cancel5_expired_node_loses) {
 }
 
 // ---- CANCEL-6: already-Cancelled node -> false ------------------------------
-SLUICE_TEST_CASE(e12_cancel6_cancelled_node_loses) {
+SLUICE_TEST_CASE(event_cancelled_node_loses) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1823,7 +1823,7 @@ SLUICE_TEST_CASE(e12_cancel6_cancelled_node_loses) {
 }
 
 // ---- CANCEL-7: RESOURCE_WAKE wins before cancel -> false, Woken final -------
-SLUICE_TEST_CASE(e12_cancel7_resource_wake_wins_before_cancel) {
+SLUICE_TEST_CASE(event_resource_wake_wins_before_cancel) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1869,7 +1869,7 @@ SLUICE_TEST_CASE(e12_cancel7_resource_wake_wins_before_cancel) {
 // A later set() finds the queue empty (the node is gone) and leaves the node
 // Cancelled. The Event becomes SET (set() still flips the flag) but the node's
 // outcome is final Cancelled.
-SLUICE_TEST_CASE(e12_cancel8_cancel_wins_before_set_leaves_cancelled) {
+SLUICE_TEST_CASE(event_cancel_wins_before_set_leaves_cancelled) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1932,7 +1932,7 @@ SLUICE_TEST_CASE(e12_cancel8_cancel_wins_before_set_leaves_cancelled) {
 //   - Release S1; it drains Wold (routing it runnable -> wakes the parked
 //     Worker) and releases global_mtx_. The reset then completes.
 // No timing inference: the seam is the causal block observation.
-SLUICE_TEST_CASE(e12_t27_causal_set_drain_blocks_reset) {
+SLUICE_TEST_CASE(event_causal_set_drain_blocks_reset) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -2019,7 +2019,7 @@ SLUICE_TEST_CASE(e12_t27_causal_set_drain_blocks_reset) {
 // records its attempt but CANNOT complete (global_mtx_ is held). After S1
 // releases, the contender completes. Actual Event-admission blocking is proven
 // by T31 (the two-phase admission-attempt marker).
-SLUICE_TEST_CASE(e12_t28_causal_set_drain_blocks_admission) {
+SLUICE_TEST_CASE(event_causal_set_drain_blocks_admission) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -2098,7 +2098,7 @@ SLUICE_TEST_CASE(e12_t28_causal_set_drain_blocks_admission) {
 // active-drain serialization is proven by T27 (set-drain blocks reset via the
 // seam) and T31 (set-drain blocks admission via the two-phase marker). T29 is
 // supplementary sanity only.
-SLUICE_TEST_CASE(e12_t29_post_reset_waiter_waits_for_s2_not_stale_s1) {
+SLUICE_TEST_CASE(event_post_reset_waiter_waits_for_s2_not_stale_s1) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -2178,7 +2178,7 @@ SLUICE_TEST_CASE(e12_t29_post_reset_waiter_waits_for_s2_not_stale_s1) {
 // Worker fiber is paused, the worker_loop CANNOT drain — but that is fine: the
 // only fiber (W) is paused inside await_event_wait, and the coordinator (main
 // thread) drives the seam release.
-SLUICE_TEST_CASE(e12_t30_causal_admission_first_ordering) {
+SLUICE_TEST_CASE(event_causal_admission_first_ordering) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -2253,7 +2253,7 @@ SLUICE_TEST_CASE(e12_t30_causal_admission_first_ordering) {
 //   wait_done == false
 // This proves admission did NOT cross the active set drain. After releasing the
 // setter, admission takes global_mtx_, observes SET, and returns Woken inline.
-SLUICE_TEST_CASE(e12_t31_causal_set_first_ordering) {
+SLUICE_TEST_CASE(event_causal_set_first_ordering) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -2353,7 +2353,7 @@ SLUICE_TEST_CASE(e12_t31_causal_set_first_ordering) {
 // armed gate + drives Event::set() so the run terminates and ALL threads join
 // before the test returns (no UAF from detached threads). The timeout is ONLY a
 // failure guard; the park phase itself is observed mechanically.
-SLUICE_TEST_CASE(e12_t32_parked_live_worker_awakened_by_external_set) {
+SLUICE_TEST_CASE(event_parked_live_worker_awakened_by_external_set) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -2446,7 +2446,7 @@ SLUICE_TEST_CASE(e12_t32_parked_live_worker_awakened_by_external_set) {
 // deadline -> Woken inline (no suspension), with the timer registration safely
 // retired and no later expiry publication. Uses the controllable test clock so
 // the deadline is provably already due at admission.
-SLUICE_TEST_CASE(e12_t33_set_plus_already_due_deadline_is_woken) {
+SLUICE_TEST_CASE(event_set_plus_already_due_deadline_is_woken) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());

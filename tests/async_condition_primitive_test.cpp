@@ -122,7 +122,7 @@ SLUICE_MAIN()
 // Construct an AsyncCondition bound to a Mutex; destroy it empty (no active
 // waits). Bug prevented: wrong-Mutex binding, destruction-with-active-wait.
 // Evidence: SEQUENTIAL-FUNCTIONAL.
-SLUICE_TEST_CASE(e12_cond_t0_construction_and_destruction) {
+SLUICE_TEST_CASE(cond_t0_construction_and_destruction) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -131,7 +131,7 @@ SLUICE_TEST_CASE(e12_cond_t0_construction_and_destruction) {
 
 // ---- T6-empty: notify_one on empty Condition queue is a no-op --------------
 // Evidence: SEQUENTIAL-FUNCTIONAL.
-SLUICE_TEST_CASE(e12_cond_t6_notify_one_empty_noop) {
+SLUICE_TEST_CASE(cond_t6_notify_one_empty_noop) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -143,7 +143,7 @@ SLUICE_TEST_CASE(e12_cond_t6_notify_one_empty_noop) {
 
 // ---- T10-empty: notify_all on empty Condition queue is a no-op -------------
 // Evidence: SEQUENTIAL-FUNCTIONAL.
-SLUICE_TEST_CASE(e12_cond_t10_notify_all_empty_noop) {
+SLUICE_TEST_CASE(cond_t10_notify_all_empty_noop) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -157,7 +157,7 @@ SLUICE_TEST_CASE(e12_cond_t10_notify_all_empty_noop) {
 // Owner calls notify_one() THEN wait(cn). The notify must NOT be consumed by
 // the later wait. The waiter suspends and is released only by a SECOND notify.
 // Bug prevented: notification-before-wait accumulated. Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t2_notify_before_wait_is_lost) {
+SLUICE_TEST_CASE(cond_t2_notify_before_wait_is_lost) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -203,7 +203,7 @@ SLUICE_TEST_CASE(e12_cond_t2_notify_before_wait_is_lost) {
 // One owner parks at cond.wait(cn); a coordinator calls notify_one. The waiter
 // resumes, reacquires the Mutex, and wait() returns Woken. Bug prevented: lost
 // wakeup / no reacquire. Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t7_notify_one_single_waiter) {
+SLUICE_TEST_CASE(cond_t7_notify_one_single_waiter) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -252,7 +252,7 @@ SLUICE_TEST_CASE(e12_cond_t7_notify_one_single_waiter) {
 // second holder keeps the Mutex occupied after notify so the waiter must QUEUE
 // for reacquire; assert it does NOT return until the second holder unlocks.
 // Bug prevented: return-without-ownership. Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t16_wait_returns_owning_reacquire) {
+SLUICE_TEST_CASE(cond_t16_wait_returns_owning_reacquire) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -327,7 +327,7 @@ SLUICE_TEST_CASE(e12_cond_t16_wait_returns_owning_reacquire) {
 // handoff). The coordinator then releases the seam AND notifies so the owner
 // can complete (the seam pause alone does not resolve the Condition wait).
 // Bug prevented: release-before-register lost-notify. Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t3_register_before_release_closure) {
+SLUICE_TEST_CASE(cond_t3_register_before_release_closure) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -395,7 +395,7 @@ SLUICE_TEST_CASE(e12_cond_t3_register_before_release_closure) {
 // the handoff winner (owner committed to W1 before publication) and the
 // condition waiter is still suspended, then releases + notifies.
 // Bug prevented: handoff diverted to the condition waiter. Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t5_mutex_handoff_to_fifo_head_during_admission) {
+SLUICE_TEST_CASE(cond_t5_mutex_handoff_to_fifo_head_during_admission) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -462,7 +462,7 @@ SLUICE_TEST_CASE(e12_cond_t5_mutex_handoff_to_fifo_head_during_admission) {
 // Notifier holds mtx, calls notify_one, then continues holding mtx. The
 // notified waiter must NOT return from wait() until the notifier unlocks.
 // Bug prevented: return-without-reacquire. Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t14_notified_waiter_waits_for_reacquire) {
+SLUICE_TEST_CASE(cond_t14_notified_waiter_waits_for_reacquire) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -520,7 +520,7 @@ SLUICE_TEST_CASE(e12_cond_t14_notified_waiter_waits_for_reacquire) {
 // while the waiter is suspended. Assert the condition node resolves Expired,
 // the waiter reacquires the Mutex, and wait_until returns Expired WITH ownership.
 // Bug prevented: Expired path skips reacquire. Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t17_reacquire_after_expired) {
+SLUICE_TEST_CASE(cond_t17_reacquire_after_expired) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -566,7 +566,7 @@ SLUICE_TEST_CASE(e12_cond_t17_reacquire_after_expired) {
 // Cancel the condition node; assert the waiter resumes, reacquires the Mutex,
 // and returns Cancelled with ownership. Bug prevented: Cancelled path skips
 // reacquire. Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t18_reacquire_after_cancelled) {
+SLUICE_TEST_CASE(cond_t18_reacquire_after_cancelled) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -612,7 +612,7 @@ SLUICE_TEST_CASE(e12_cond_t18_reacquire_after_cancelled) {
 // wait_until with an ALREADY-due deadline at admission: resolve Expired inline,
 // do NOT release the Mutex, do NOT suspend, do NOT reacquire. Caller retains
 // ownership. Bug prevented: WaitDueInline releases Mutex. Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t1_already_due_inline_expired_retains_ownership) {
+SLUICE_TEST_CASE(cond_t1_already_due_inline_expired_retains_ownership) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -652,7 +652,7 @@ SLUICE_TEST_CASE(e12_cond_t1_already_due_inline_expired_retains_ownership) {
 }
 
 // ---- T24: external-thread notify_one -----------------------------------------
-SLUICE_TEST_CASE(e12_cond_t24_external_thread_notify) {
+SLUICE_TEST_CASE(cond_t24_external_thread_notify) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -686,7 +686,7 @@ SLUICE_TEST_CASE(e12_cond_t24_external_thread_notify) {
 }
 
 // ---- T4: notify in release/register boundary does not strand -----------------
-SLUICE_TEST_CASE(e12_cond_t4_notify_in_release_register_boundary) {
+SLUICE_TEST_CASE(cond_t4_notify_in_release_register_boundary) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -729,7 +729,7 @@ SLUICE_TEST_CASE(e12_cond_t4_notify_in_release_register_boundary) {
 }
 
 // ---- T8: notify_one FIFO multiple waiters ------------------------------------
-SLUICE_TEST_CASE(e12_cond_t8_notify_one_fifo_multiple_waiters) {
+SLUICE_TEST_CASE(cond_t8_notify_one_fifo_multiple_waiters) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -801,7 +801,7 @@ SLUICE_TEST_CASE(e12_cond_t8_notify_one_fifo_multiple_waiters) {
 }
 
 // ---- T10: notify_all snapshot completeness -----------------------------------
-SLUICE_TEST_CASE(e12_cond_t10_notify_all_snapshot) {
+SLUICE_TEST_CASE(cond_t10_notify_all_snapshot) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -880,7 +880,7 @@ SLUICE_TEST_CASE(e12_cond_t10_notify_all_snapshot) {
 // resolves W3.
 // Bug prevented: late waiter consumed by stale notify_all snapshot.
 // Evidence: CAUSAL (W3 must wait for W2 done before registering).
-SLUICE_TEST_CASE(e12_cond_t11_notify_all_excludes_late_waiter) {
+SLUICE_TEST_CASE(cond_t11_notify_all_excludes_late_waiter) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -961,7 +961,7 @@ SLUICE_TEST_CASE(e12_cond_t11_notify_all_excludes_late_waiter) {
 // cancel resolves Cancelled first; then notify_all runs on empty queue (no-op).
 // Verifies: outcome is Cancelled, notify_all does NOT re-resolve, waiting
 // count decremented once, timer retired once. Deterministic sequential order.
-SLUICE_TEST_CASE(e12_cond_t12a_cancel_wins_over_notify_all) {
+SLUICE_TEST_CASE(cond_t12a_cancel_wins_over_notify_all) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1006,7 +1006,7 @@ SLUICE_TEST_CASE(e12_cond_t12a_cancel_wins_over_notify_all) {
 // notify_all resolves Woken and drains queue; then cancel runs and returns
 // false (node already terminal, not in queue). Verifies: no double resolution,
 // no second unlink, no double waiting-count decrement.
-SLUICE_TEST_CASE(e12_cond_t12b_notify_all_wins_over_cancel) {
+SLUICE_TEST_CASE(cond_t12b_notify_all_wins_over_cancel) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1052,7 +1052,7 @@ SLUICE_TEST_CASE(e12_cond_t12b_notify_all_wins_over_cancel) {
 // Deadline expires first (timer pump wins resolve_ CAS); then notify_all runs
 // on empty queue (no-op). Verifies: outcome is Expired, no double resolution,
 // no double waiting-count decrement, timer retired once.
-SLUICE_TEST_CASE(e12_cond_t13a_expire_wins_over_notify_all) {
+SLUICE_TEST_CASE(cond_t13a_expire_wins_over_notify_all) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1098,7 +1098,7 @@ SLUICE_TEST_CASE(e12_cond_t13a_expire_wins_over_notify_all) {
 // notify_all resolves Woken and retires timer; then the deadline pump runs
 // but the timer is already RETIRED (stale expiry is inert).
 // Verifies: outcome is Woken, timer retired, no stale re-resolution.
-SLUICE_TEST_CASE(e12_cond_t13b_notify_all_wins_over_expire) {
+SLUICE_TEST_CASE(cond_t13b_notify_all_wins_over_expire) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1152,7 +1152,7 @@ SLUICE_TEST_CASE(e12_cond_t13b_notify_all_wins_over_expire) {
 // Grant order proves: Ordinary before Reacquire in the same Mutex queue.
 // Evidence: CAUSAL (the mutex_waiter_registered_before_grant seam fires
 // for each queued fiber; b_done set before o_done proves FIFO handoff order).
-SLUICE_TEST_CASE(e12_cond_t15a_ordinary_then_reacquire) {
+SLUICE_TEST_CASE(cond_t15a_ordinary_then_reacquire) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1241,7 +1241,7 @@ SLUICE_TEST_CASE(e12_cond_t15a_ordinary_then_reacquire) {
 // Grant order proves: Reacquire before Ordinary in the same Mutex queue.
 // Evidence: CAUSAL (the mutex_waiter_registered_before_grant seam fires
 // for each queued fiber; o_done set before b_done proves FIFO handoff order).
-SLUICE_TEST_CASE(e12_cond_t15b_reacquire_then_ordinary) {
+SLUICE_TEST_CASE(cond_t15b_reacquire_then_ordinary) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1323,7 +1323,7 @@ SLUICE_TEST_CASE(e12_cond_t15b_reacquire_then_ordinary) {
 }
 
 // ---- T27: safe destruction empty ---------------------------------------------
-SLUICE_TEST_CASE(e12_cond_t27_safe_destruction_empty) {
+SLUICE_TEST_CASE(cond_t27_safe_destruction_empty) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1350,7 +1350,7 @@ SLUICE_TEST_CASE(e12_cond_t27_safe_destruction_empty) {
 // node registered in a DIFFERENT AsyncCondition on the same Mutex/Scheduler.
 
 // ---- T30: cancel against a Detached (unregistered) node -> false, no mutation
-SLUICE_TEST_CASE(e12_cond_t30_cancel_detached_node_returns_false) {
+SLUICE_TEST_CASE(cond_t30_cancel_detached_node_returns_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1369,7 +1369,7 @@ SLUICE_TEST_CASE(e12_cond_t30_cancel_detached_node_returns_false) {
 // target). A waiter parked on cond_B cannot be cancelled via cond_A.cancel():
 // the membership gate rejects it. Bug prevented: cancel across conditions.
 // Evidence: CAUSAL.
-SLUICE_TEST_CASE(e12_cond_t31_cancel_wrong_condition_returns_false) {
+SLUICE_TEST_CASE(cond_t31_cancel_wrong_condition_returns_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1446,7 +1446,7 @@ SLUICE_TEST_CASE(e12_cond_t31_cancel_wrong_condition_returns_false) {
 // reacquire admission; the defect was the test ASSUMING the steal trace rather
 // than establishing it.
 //
-// DETERMINISM DISCIPLINE (mirrors e12_mtx_t19_real_migration_lock_own_unlock,
+// DETERMINISM DISCIPLINE (mirrors mtx_t19_real_migration_lock_own_unlock,
 // the Mutex migration corrective). A steal is deterministic ONLY when the
 // victim (W0) is provably BUSY running a fiber (cannot pop its own queue) and
 // the thief (W1) is IDLE (so it steals) — and only fA (not f_blocker) is
@@ -1477,7 +1477,7 @@ SLUICE_TEST_CASE(e12_cond_t31_cancel_wrong_condition_returns_false) {
 // flag_wake) + notify_one() so the suspended fA can drain, then runner.join()
 // and FAIL with a state dump. The bound is kBoundedWaitIters (200000) — a
 // failure guard, never causal sync. This is the W1.6 / W2.5 discipline.
-SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
+SLUICE_TEST_CASE(cond_t25_migration_condition_reacquire) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -1654,7 +1654,7 @@ SLUICE_TEST_CASE(e12_cond_t25_migration_condition_reacquire) {
 // the seam is paused. This proves the notification is caught (not lost)
 // because the Registration happened first — even though the waiter hasn't yet
 // released the Mutex or suspended. Each iteration uses a fresh Condition.
-SLUICE_TEST_CASE(e12_cond_t30_lost_notify_window_50) {
+SLUICE_TEST_CASE(cond_t30_lost_notify_window_50) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 50;
     int total_woken = 0;
@@ -1713,7 +1713,7 @@ SLUICE_TEST_CASE(e12_cond_t30_lost_notify_window_50) {
 // each terminal cause operates correctly and that the losers for each node
 // are no-ops (exactly-one terminal cause). Two-way arbitration (notify vs
 // cancel, notify vs expire, cancel vs expire) is covered by T12a/b/T13a/b.
-SLUICE_TEST_CASE(e12_cond_t31_notify_cancel_expire_500) {
+SLUICE_TEST_CASE(cond_t31_notify_cancel_expire_500) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 500;
     constexpr int K = 3;  // waiters per iteration (Woken/Cancelled/Expired)
@@ -1790,7 +1790,7 @@ SLUICE_TEST_CASE(e12_cond_t31_notify_cancel_expire_500) {
 // nodes are resolved (the drain is still pending). After seam release, the
 // drain runs and all registered waiters resolve Woken. This exercises the
 // previously-dead notify_before_drain seam code path.
-SLUICE_TEST_CASE(e12_cond_t32_notify_before_drain_seam_50) {
+SLUICE_TEST_CASE(cond_t32_notify_before_drain_seam_50) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 50;
 
@@ -1860,7 +1860,7 @@ SLUICE_TEST_CASE(e12_cond_t32_notify_before_drain_seam_50) {
 // ---- T33: notify-after-park stress 200/200 --------------------------------
 // 200 iterations: cooperative waiter+notifier, notify after full suspension.
 // Pure stress — no seam, no race. The lost-notify window is covered by T30.
-SLUICE_TEST_CASE(e12_cond_t33_notify_after_park_200) {
+SLUICE_TEST_CASE(cond_t33_notify_after_park_200) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 200;
     int total_woken = 0;
@@ -1907,7 +1907,7 @@ SLUICE_TEST_CASE(e12_cond_t33_notify_after_park_200) {
 
 // ---- T34: notify_all static stress 200/200 --------------------------------
 // 200 iterations: 3 static waiters, notify_all after all parked. Pure stress.
-SLUICE_TEST_CASE(e12_cond_t34_notify_all_stress_200) {
+SLUICE_TEST_CASE(cond_t34_notify_all_stress_200) {
     if constexpr (!fiber_ctx::supported) return;
     constexpr int ITERS = 200;
     constexpr int N = 3;

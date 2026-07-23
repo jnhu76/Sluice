@@ -46,7 +46,7 @@ struct FiberStack {
 // wake_wait_one. The waiter must resume EXACTLY ONCE (entered twice: before and
 // after the await). This proves the canonical seam delivers exactly one
 // runnable enqueue and the winner transition routes through route_runnable.
-SLUICE_TEST_CASE(e10_c10_wake_resumes_once_via_canonical_seam) {
+SLUICE_TEST_CASE(schedwait_wake_resumes_once_via_canonical_seam) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -99,7 +99,7 @@ SLUICE_TEST_CASE(e10_c10_wake_resumes_once_via_canonical_seam) {
 //
 // Symmetric to C10 but via cancel_wait. The waiter resumes with outcome
 // Cancelled (still exactly one runnable enqueue).
-SLUICE_TEST_CASE(e10_c10_cancel_resumes_once_via_canonical_seam) {
+SLUICE_TEST_CASE(schedwait_cancel_resumes_once_via_canonical_seam) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -144,7 +144,7 @@ SLUICE_TEST_CASE(e10_c10_cancel_resumes_once_via_canonical_seam) {
 // Two fibers race to resolve the same node (one wakes, one cancels). The waiter
 // must resume EXACTLY ONCE regardless of which wins. Run many iterations to
 // stress the scheduler-side race under the canonical seam.
-SLUICE_TEST_CASE(e10_c10_wake_cancel_race_one_resume) {
+SLUICE_TEST_CASE(schedwait_wake_cancel_race_one_resume) {
     if constexpr (!fiber_ctx::supported) return;
 
     constexpr int kIters = 2000;
@@ -235,7 +235,7 @@ SLUICE_TEST_CASE(e10_c10_wake_cancel_race_one_resume) {
 // hang forever (the old E9 Drain-park defect) and must NOT redefine wake
 // capability. The wait is left unresolved; the caller observes the fiber is
 // still Waiting and the node is still Registered.
-SLUICE_TEST_CASE(e10_c11_drain_mw_s3_returns_stalled) {
+SLUICE_TEST_CASE(schedwait_drain_mw_s3_returns_stalled) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());

@@ -73,7 +73,7 @@ inline void spin_wait(std::atomic<bool>& flag) {
 // Bounded spin-wait (E11-TIMER-ASAN-BUSY-POLL-HANG-CORRECTIVE-1 / W2).
 //
 // ROOT CAUSE (category A: test-harness defect). The unbounded `spin_wait`
-// above is used by some cases (notably e11_t7) to wait, INSIDE A FIBER on a
+// above is used by some cases (notably timer_t7) to wait, INSIDE A FIBER on a
 // worker thread, for an outcome published by another fiber on another worker.
 // Under ASan the worker is much slower; if the routed wake ticket is not
 // drained by the other worker within the waker's bounded retry budget, the
@@ -119,7 +119,7 @@ using E11TimerTestHooks = sluice_async_test::TimerTestControl;
 // the minimal causal proof that `expired` is a real terminal outcome reached
 // through resolve_, terminal + absorbing, and observably distinct from cancel.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t0_expired_is_distinct_terminal_outcome) {
+SLUICE_TEST_CASE(timer_expired_is_distinct_terminal_outcome) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -167,7 +167,7 @@ SLUICE_TEST_CASE(e11_t0_expired_is_distinct_terminal_outcome) {
 // elapses (clock advanced) before any wake -> outcome Expired, NOT Woken.
 // Exactly one cause wins the resolve_ CAS in each case.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t2_resource_wins_before_timer) {
+SLUICE_TEST_CASE(timer_resource_wins_before_timer) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -207,7 +207,7 @@ SLUICE_TEST_CASE(e11_t2_resource_wins_before_timer) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
 }
 
-SLUICE_TEST_CASE(e11_t3_timer_wins_before_resource_wake) {
+SLUICE_TEST_CASE(timer_timer_wins_before_resource_wake) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -258,7 +258,7 @@ SLUICE_TEST_CASE(e11_t3_timer_wins_before_resource_wake) {
 // T6 (embedded): a losing timer (cancel won first) performs NO publication —
 // waiting_count is exactly 0 (one resolution, one runnable ticket).
 // =============================================================================
-SLUICE_TEST_CASE(e11_t4_cancel_wins_timer_loses) {
+SLUICE_TEST_CASE(timer_cancel_wins_timer_loses) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -325,7 +325,7 @@ SLUICE_TEST_CASE(e11_t4_cancel_wins_timer_loses) {
 // The decisive production guarantee is the retirement state observed BEFORE any
 // node dereference, independent of address.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t8_storage_reuse_epoch_isolation) {
+SLUICE_TEST_CASE(timer_storage_reuse_epoch_isolation) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -386,7 +386,7 @@ SLUICE_TEST_CASE(e11_t8_storage_reuse_epoch_isolation) {
 // switch that parks forever (the E9-CORRECTIVE Drain-hang regression). The
 // wait is left unresolved; the caller cancels it to destroy the node cleanly.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t14_drain_mode_no_deadline_hang) {
+SLUICE_TEST_CASE(timer_drain_mode_no_deadline_hang) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -429,7 +429,7 @@ SLUICE_TEST_CASE(e11_t14_drain_mode_no_deadline_hang) {
 // not let the Scheduler park indefinitely past it. run_live + advance_clock
 // from an external driver thread.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t15_live_mode_deadline_progress) {
+SLUICE_TEST_CASE(timer_live_mode_deadline_progress) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -482,7 +482,7 @@ SLUICE_TEST_CASE(e11_t15_live_mode_deadline_progress) {
 // accounting closure (waiting_count == 0, one runnable ticket => run resumes).
 // This is the core I1/I2 arbitration proof for the wake|timer pair.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t5_resource_vs_timer_one_winner) {
+SLUICE_TEST_CASE(timer_resource_vs_timer_one_winner) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -547,7 +547,7 @@ SLUICE_TEST_CASE(e11_t5_resource_vs_timer_one_winner) {
 // deadline MUST NOT resolve E+1. E+1 stays Registered until explicitly woken.
 // This is the cross-epoch isolation proof (I3) — independent of address reuse.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
+SLUICE_TEST_CASE(timer_old_timer_cannot_resolve_later_epoch) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -565,7 +565,7 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
     //
     // E11-TIMER-ASAN-BUSY-POLL-HANG-CORRECTIVE-1 (W2) corrective.
     //
-    // ROOT CAUSE (category A: test-harness defect). The original e11_t7 used
+    // ROOT CAUSE (category A: test-harness defect). The original timer_t7 used
     // sched.run(2) — DRAIN mode — with two fibers that spin_wait on each other
     // between epochs. But run(2) DRAIN RETURNS STALLED as soon as a fiber
     // suspends in await_wait_deadline (MW-S3-unresolved), orphaning the other
@@ -576,7 +576,7 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
     //
     // CORRECTIVE: drive the two epochs from a coordinator OS thread while a
     // single waiter fiber runs under run_live(1) — the proven liveness pattern
-    // of e11_t15. run_live stays resident while the waiter is suspended, so the
+    // of timer_t15. run_live stays resident while the waiter is suspended, so the
     // coordinator can deterministically wake E, observe resolution, register
     // E+1, advance the clock past E's retired deadline (inert), and finally
     // wake E+1. Every coordinator wait is BOUNDED (kBoundedCoordIters); on
@@ -622,7 +622,7 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
     // 1. Wait for E registration, then wake E (retires E's timer).
     if (!coord_wait(registered_e)) {
         runner.join();
-        SLUICE_FAIL("e11_t7: coordinator timed out waiting for E registration");
+        SLUICE_FAIL("timer_t7: coordinator timed out waiting for E registration");
         return;
     }
     for (int i = 0; i < 10000; ++i) {
@@ -631,7 +631,7 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
     }
     if (!coord_wait(e_resolved)) {
         std::fprintf(stderr,
-            "e11_t7 FAIL state dump (epoch E not resolved): registered_e=%d "
+            "timer_t7 FAIL state dump (epoch E not resolved): registered_e=%d "
             "e_resolved=%d e1_registered=%d active_deadline_count=%zu "
             "waiting_count=%zu\n",
             registered_e.load(), e_resolved.load(), e1_registered.load(),
@@ -640,7 +640,7 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
         // Resolve E if stranded so the runner can drain cleanly.
         sched.wake_wait_one(q);
         runner.join();
-        SLUICE_FAIL("e11_t7: coordinator timed out waiting for E resolution "
+        SLUICE_FAIL("timer_t7: coordinator timed out waiting for E resolution "
                     "(see stderr state dump)");
         return;
     }
@@ -648,14 +648,14 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
     // 2. Wait for E+1 registration with its far-future (100000) deadline.
     if (!coord_wait(e1_registered)) {
         std::fprintf(stderr,
-            "e11_t7 FAIL state dump (epoch E+1 not registered): e_resolved=%d "
+            "timer_t7 FAIL state dump (epoch E+1 not registered): e_resolved=%d "
             "e1_registered=%d active_deadline_count=%zu waiting_count=%zu\n",
             e_resolved.load(), e1_registered.load(),
             E11TimerTestHooks::active_deadline_count(sched),
             sched.waiting_count());
         sched.wake_wait_one(q);
         runner.join();
-        SLUICE_FAIL("e11_t7: coordinator timed out waiting for E+1 registration "
+        SLUICE_FAIL("timer_t7: coordinator timed out waiting for E+1 registration "
                     "(see stderr state dump)");
         return;
     }
@@ -672,7 +672,7 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
     if (e1_resolved.load(std::memory_order_acquire)) {
         sched.wake_wait_one(q);
         runner.join();
-        SLUICE_FAIL("e11_t7: E+1 was resolved by E's retired timer (cross-epoch "
+        SLUICE_FAIL("timer_t7: E+1 was resolved by E's retired timer (cross-epoch "
                     "isolation violated, I3)");
         return;
     }
@@ -685,14 +685,14 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
     }
     if (!coord_wait(e1_resolved)) {
         std::fprintf(stderr,
-            "e11_t7 FAIL state dump (epoch E+1 not resolved by explicit wake): "
+            "timer_t7 FAIL state dump (epoch E+1 not resolved by explicit wake): "
             "e1_registered=%d e1_resolved=%d active_deadline_count=%zu "
             "waiting_count=%zu\n",
             e1_registered.load(), e1_resolved.load(),
             E11TimerTestHooks::active_deadline_count(sched),
             sched.waiting_count());
         runner.join();
-        SLUICE_FAIL("e11_t7: coordinator timed out waiting for E+1 resolution "
+        SLUICE_FAIL("timer_t7: coordinator timed out waiting for E+1 resolution "
                     "(see stderr state dump)");
         return;
     }
@@ -716,7 +716,7 @@ SLUICE_TEST_CASE(e11_t7_old_timer_cannot_resolve_later_epoch) {
 // resolution. The decisive causal boundary is the retirement state, observed
 // BEFORE any node dereference — not the address.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t9_t10_forced_stale_pump_after_destruction_is_inert) {
+SLUICE_TEST_CASE(timer_t10_forced_stale_pump_after_destruction_is_inert) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -779,7 +779,7 @@ SLUICE_TEST_CASE(e11_t9_t10_forced_stale_pump_after_destruction_is_inert) {
 // NOT use sleep_for as causal proof: the causal seam is the controllable clock
 // + advance_clock() pump.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t11_one_active_deadline_progresses) {
+SLUICE_TEST_CASE(timer_one_active_deadline_progresses) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -820,7 +820,7 @@ SLUICE_TEST_CASE(e11_t11_one_active_deadline_progresses) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
 }
 
-SLUICE_TEST_CASE(e11_t12_new_earlier_deadline_becomes_earliest) {
+SLUICE_TEST_CASE(timer_new_earlier_deadline_becomes_earliest) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -883,7 +883,7 @@ SLUICE_TEST_CASE(e11_t12_new_earlier_deadline_becomes_earliest) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "both deadlines resolved");
 }
 
-SLUICE_TEST_CASE(e11_t13_retiring_earliest_preserves_next_deadline) {
+SLUICE_TEST_CASE(timer_retiring_earliest_preserves_next_deadline) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -992,7 +992,7 @@ SLUICE_TEST_CASE(e11_t13_retiring_earliest_preserves_next_deadline) {
 // registration — NOT sleep_for, NOT stress (M7). Single worker => deterministic
 // (no cross-worker scheduling races).
 // =============================================================================
-SLUICE_TEST_CASE(e11_t17_new_earlier_deadline_during_park) {
+SLUICE_TEST_CASE(timer_new_earlier_deadline_during_park) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1125,7 +1125,7 @@ SLUICE_TEST_CASE(e11_t17_new_earlier_deadline_during_park) {
 // deadlines have not yet been reached), but bounded by the deadline horizon and
 // proven to drain at-deadline. Uses the controllable clock (no sleep_for, M7).
 // =============================================================================
-SLUICE_TEST_CASE(e11_t18_timer_reclamation_lazy_at_deadline) {
+SLUICE_TEST_CASE(timer_timer_reclamation_lazy_at_deadline) {
     if constexpr (!fiber_ctx::supported) return;
 
     constexpr unsigned N = 4;
@@ -1214,7 +1214,7 @@ SLUICE_TEST_CASE(e11_t18_timer_reclamation_lazy_at_deadline) {
 // evidence after the causal proofs (T0..T5); it guards against rare interleaving
 // regressions. Bounded iteration count.
 // =============================================================================
-SLUICE_TEST_CASE(e11_t16_three_way_race_one_winner_repeated) {
+SLUICE_TEST_CASE(timer_three_way_race_one_winner_repeated) {
     if constexpr (!fiber_ctx::supported) return;
 
     constexpr int kIters = 200;

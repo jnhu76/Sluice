@@ -82,7 +82,7 @@ SLUICE_TEST_CASE(make_runnable_returns_true_only_on_real_transition) {
 // flag becomes ready and the wake fires. The assertion is behavioral: the run
 // completes cleanly with the fiber run EXACTLY ONCE (no crash, no second
 // dispatch). A stress loop runs this 5000x; pre-fix it crashed ~0.7%.
-SLUICE_TEST_CASE(e7_dup_publication_wake_while_runnable) {
+SLUICE_TEST_CASE(duppub_publication_wake_while_runnable) {
     if constexpr (!fiber_ctx::supported) return;
 
     // Scenario mirroring T2's fb: a fiber awaits a flag; a setter sets it.

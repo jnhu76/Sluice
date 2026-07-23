@@ -74,7 +74,7 @@ public:
 // T1/T3: a Live run with one E10 waiter; an external thread resolves it via
 // wake_wait_one. The waiter MUST resume exactly once. Against uncorrected E10
 // the run STALLED before the external wake could land (the regression).
-SLUICE_TEST_CASE(e10_corrective_c1_external_waitq_wake_live) {
+SLUICE_TEST_CASE(wqext_c1_external_waitq_wake_live) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -123,7 +123,7 @@ SLUICE_TEST_CASE(e10_corrective_c1_external_waitq_wake_live) {
 }
 
 // T1b/T3b: symmetric via cancel_wait from an external thread (Cancelled outcome).
-SLUICE_TEST_CASE(e10_corrective_c1_external_waitq_cancel_live) {
+SLUICE_TEST_CASE(wqext_c1_external_waitq_cancel_live) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());

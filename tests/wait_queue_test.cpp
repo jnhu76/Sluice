@@ -91,7 +91,7 @@ inline void spin_wait(std::atomic<bool>& flag) {
 // wins, then wake returns null/false. Each transition is observed through the
 // Scheduler seams + the node's terminal-outcome projection.
 // =============================================================================
-SLUICE_TEST_CASE(e10_c1_wake_vs_cancel_one_winner) {
+SLUICE_TEST_CASE(wq_wake_vs_cancel_one_winner) {
     if constexpr (!fiber_ctx::supported) return;
 
     // Case A: wake wins first; cancel loses.
@@ -184,7 +184,7 @@ SLUICE_TEST_CASE(e10_c1_wake_vs_cancel_one_winner) {
 // Wake the head once (winner). A second wake_wait_one finds the queue empty
 // (winner unlinked the node) and returns false. The outcome stays Woken.
 // =============================================================================
-SLUICE_TEST_CASE(e10_c2_repeated_wake_second_loses) {
+SLUICE_TEST_CASE(wq_repeated_wake_second_loses) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -229,7 +229,7 @@ SLUICE_TEST_CASE(e10_c2_repeated_wake_second_loses) {
 // =============================================================================
 // C3: repeated cancellation — second cancel loses / no-ops.
 // =============================================================================
-SLUICE_TEST_CASE(e10_c3_repeated_cancel_second_loses) {
+SLUICE_TEST_CASE(wq_repeated_cancel_second_loses) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -278,7 +278,7 @@ SLUICE_TEST_CASE(e10_c3_repeated_cancel_second_loses) {
 // empty / loser). The Cancelled outcome is permanent: a terminal node cannot be
 // re-registered, so no later wake has a live slot.
 // =============================================================================
-SLUICE_TEST_CASE(e10_c4_wake_after_cancel_no_resurrection) {
+SLUICE_TEST_CASE(wq_wake_after_cancel_no_resurrection) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -325,7 +325,7 @@ SLUICE_TEST_CASE(e10_c4_wake_after_cancel_no_resurrection) {
 // =============================================================================
 // C5: cancel after wake — a woken node cannot change terminal outcome.
 // =============================================================================
-SLUICE_TEST_CASE(e10_c5_cancel_after_wake_outcome_unchanged) {
+SLUICE_TEST_CASE(wq_cancel_after_wake_outcome_unchanged) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -380,7 +380,7 @@ SLUICE_TEST_CASE(e10_c5_cancel_after_wake_outcome_unchanged) {
 // single-worker run: fibers run in spawn order, and await_wait suspends each in
 // turn, so A registers before B before C (no interleaving on one worker).
 // =============================================================================
-SLUICE_TEST_CASE(e10_c6_unlink_exactly_once_links_intact) {
+SLUICE_TEST_CASE(wq_unlink_exactly_once_links_intact) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -460,7 +460,7 @@ SLUICE_TEST_CASE(e10_c6_unlink_exactly_once_links_intact) {
 // (still live) and wake C. This proves a wake of one node does not terminally
 // perturb its queue neighbors.
 // =============================================================================
-SLUICE_TEST_CASE(e10_c7_multiple_waiters_others_unaffected) {
+SLUICE_TEST_CASE(wq_multiple_waiters_others_unaffected) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -540,7 +540,7 @@ SLUICE_TEST_CASE(e10_c7_multiple_waiters_others_unaffected) {
 // behavior: a fiber attempting to await_wait on an already-terminal node does
 // NOT suspend and the node's outcome is unchanged.
 // =============================================================================
-SLUICE_TEST_CASE(e10_c8_node_reuse_rejected) {
+SLUICE_TEST_CASE(wq_node_reuse_rejected) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -604,7 +604,7 @@ SLUICE_TEST_CASE(e10_c8_node_reuse_rejected) {
 // The NEGATIVE case (destroying a Registered node) is the ~WaitNode debug
 // assert; executing it would abort under NDEBUG=0.
 // =============================================================================
-SLUICE_TEST_CASE(e10_c9_destruction_invariant) {
+SLUICE_TEST_CASE(wq_destruction_invariant) {
     if constexpr (!fiber_ctx::supported) return;
 
     // Case A: a node resolved via cancel destroys cleanly after the run.
@@ -686,7 +686,7 @@ SLUICE_TEST_CASE(e10_c9_destruction_invariant) {
 // fiber is the sole registrant (await_wait), so the Fiber identity is exactly
 // ws->current captured by the Scheduler integration authority (I2).
 // =============================================================================
-SLUICE_TEST_CASE(e10_c12_race_stress_exactly_one_winner) {
+SLUICE_TEST_CASE(wq_race_stress_exactly_one_winner) {
     if constexpr (!fiber_ctx::supported) return;
 
     constexpr int kIters = 20000;

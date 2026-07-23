@@ -58,7 +58,7 @@ struct OwnedScheduler {
 // Required: notify returns true; destructor had not passed invalidation
 // while the callback lease was paused; destructor completes after release;
 // no crash.
-SLUICE_TEST_CASE(e9_life_t1_notifier_wins_lease) {
+SLUICE_TEST_CASE(wakelife_t1_notifier_wins_lease) {
     OwnedScheduler own;
     SchedulerWakeHandle wh = own.sched->make_wake_handle();
     SLUICE_CHECK(wh.bound());
@@ -138,7 +138,7 @@ SLUICE_TEST_CASE(e9_life_t1_notifier_wins_lease) {
 //   Notifier later calls notify.
 // Required: notify returns false; notify_external_wake is NOT entered; no
 // wake_epoch mutation; no Scheduler member access.
-SLUICE_TEST_CASE(e9_life_t2_destructor_wins) {
+SLUICE_TEST_CASE(wakelife_t2_destructor_wins) {
     OwnedScheduler own;
     SchedulerWakeHandle wh = own.sched->make_wake_handle();
     SLUICE_CHECK(wh.bound());
@@ -166,7 +166,7 @@ SLUICE_TEST_CASE(e9_life_t2_destructor_wins) {
 // Conceptually (spec 14 T3): a WakeHandle outlives the Scheduler scope;
 // notify() returns false, no crash. Proves stale-handle existence is safe.
 // (Does NOT by itself prove concurrent destruction — that is T1/T4.)
-SLUICE_TEST_CASE(e9_life_t3_stale_handle_after_destruction) {
+SLUICE_TEST_CASE(wakelife_t3_stale_handle_after_destruction) {
     SchedulerWakeHandle wh;
     {
         OwnedScheduler own;
@@ -191,7 +191,7 @@ SLUICE_TEST_CASE(e9_life_t3_stale_handle_after_destruction) {
 // Object-lifetime discipline (spec 15): the notifier thread accesses ONLY
 // the handle; the destruction owner is unique. The notifier never holds a
 // Scheduler*. A timeout guards against hang.
-SLUICE_TEST_CASE(e9_life_t4_concurrent_destruction_stress) {
+SLUICE_TEST_CASE(wakelife_t4_concurrent_destruction_stress) {
     constexpr int kIters = 400;
     for (int i = 0; i < kIters; ++i) {
         OwnedScheduler own;

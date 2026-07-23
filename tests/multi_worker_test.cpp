@@ -12,7 +12,7 @@
 //   invariant of production (sched_ctx is reached only via the local ws /
 //   g_worker at every switch site — see run_next_on / fiber_entry_bridge /
 //   await_* in src/async/scheduler.cpp) and is exercised across a legal E8
-//   W1-suspend -> W0-resume migration by e8_t3_steal_run_suspend_wake_resume_
+//   W1-suspend -> W0-resume migration by steal_t3_steal_run_suspend_wake_resume_
 //   on_thief, which asserts wid_pre == wid_post on the thief. E7-T2 is a
 //   distinct coordinated suspend/resume regression, NOT a C-A proof.
 //
@@ -26,7 +26,7 @@
 //
 // PROVES: worker-local current (T1); coordinated suspend/resume liveness (T2).
 // DOES NOT PROVE: worker-local sched_ctx pairing (C-A — proven structurally +
-//   e8_t3); pinned routing (E7-B, superseded by E8); MW coordination (E7-C).
+//   steal_t3); pinned routing (E7-B, superseded by E8); MW coordination (E7-C).
 //
 // Single coordinated run(2) per test — no double-run (sched_ctx is OS-thread-
 // stack-dependent; destroying/recreating threads between run() calls dangles
@@ -66,7 +66,7 @@ struct FiberStack {
 // The flags start UNREADY; both Fibers suspend. Worker 0 drives backend
 // progress (Fake poll); since nothing is staged, run returns at MW-S3. The
 // test asserts the registrations survived (both Fibers are waiting).
-SLUICE_TEST_CASE(e7_t1_worker_local_current_no_cross_registration) {
+SLUICE_TEST_CASE(mw_worker_local_current_no_cross_registration) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -131,10 +131,10 @@ SLUICE_TEST_CASE(e7_t1_worker_local_current_no_cross_registration) {
 // ws / g_worker at every switch site — src/async/scheduler.cpp run_next_on,
 // fiber_entry_bridge, await_completion_*, await_ready_flag) and is exercised
 // across a legal E8 W1-suspend -> W0-resume migration by
-// e8_t3_steal_run_suspend_wake_resume_on_thief (asserts wid_pre == wid_post on
+// steal_t3_steal_run_suspend_wake_resume_on_thief (asserts wid_pre == wid_post on
 // the thief). The test name is preserved for historical identity; do not read
 // it as a C-A proof claim.
-SLUICE_TEST_CASE(e7_t2_worker_local_scheduler_context) {
+SLUICE_TEST_CASE(mw_worker_local_scheduler_context) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -188,7 +188,7 @@ SLUICE_TEST_CASE(e7_t2_worker_local_scheduler_context) {
 // suspends on a ready flag. A different Worker (Worker 1) observes the flag
 // becomes ready (via the readiness drain) and routes A back to Worker 0.
 // Assert: A resumes on the same OS thread as Worker 0 (its owner).
-SLUICE_TEST_CASE(e7_t3_pinned_resume_on_owning_worker) {
+SLUICE_TEST_CASE(mw_pinned_resume_on_owning_worker) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -238,7 +238,7 @@ SLUICE_TEST_CASE(e7_t3_pinned_resume_on_owning_worker) {
 // unchanged and still asserted. The "different worker" proxy is dropped as
 // E8-invalid. The E7-pinned variant is preserved in e7_dup_publication_test
 // semantics; E8 stealing is proven in e8_steal_test.
-SLUICE_TEST_CASE(e7_t7_internal_worker_notification) {
+SLUICE_TEST_CASE(mw_internal_worker_notification) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -283,7 +283,7 @@ SLUICE_TEST_CASE(e7_t7_internal_worker_notification) {
 // Fiber A on Worker 0 waits on flag X; Fiber B on Worker 1 makes X ready.
 // Before MW-S3/quiescence admission, X readiness is observed; A is routed to
 // Worker 0; A resumes. Assert: A resumes; no stalled state.
-SLUICE_TEST_CASE(e7_t10a_persistent_flag_before_idle_admission) {
+SLUICE_TEST_CASE(mw_persistent_flag_before_idle_admission) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());

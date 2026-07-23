@@ -76,7 +76,7 @@ int make_temp_fd_with_bytes(const std::byte* seed, std::size_t n) {
 // the worker's pread completes with a definite result; the only nondeterminism
 // is WHEN the worker finishes relative to B, and that is exactly what wait_one
 // abstracts — the test does not assert timing, only the terminal outcome.
-SLUICE_TEST_CASE(e6_t1_real_backend_completion_resumes_via_wait_one) {
+SLUICE_TEST_CASE(progress_real_backend_completion_resumes_via_wait_one) {
     if constexpr (!fiber_ctx::supported) return;
 
     const std::byte seed[8]{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4},
@@ -129,7 +129,7 @@ SLUICE_TEST_CASE(e6_t1_real_backend_completion_resumes_via_wait_one) {
 // the scheduler; the S2 wait_one lets the Group task complete even though its
 // only progress source is the backend worker. Pre-E6 this would strand (the
 // "no progress -> break" guard returned early).
-SLUICE_TEST_CASE(e6_t2_evented_group_task_awaits_real_backend) {
+SLUICE_TEST_CASE(progress_evented_group_task_awaits_real_backend) {
     if constexpr (!fiber_ctx::supported) return;
 
     const std::byte seed[4]{std::byte{0xA}, std::byte{0xB}, std::byte{0xC}, std::byte{0xD}};
@@ -174,7 +174,7 @@ SLUICE_TEST_CASE(e6_t2_evented_group_task_awaits_real_backend) {
 // and the awaiter was resumed (runnable drained, no Completion waits), it
 // would block on the Fake backend's wait_one — but Fake returns 0, so the gate
 // breaks. We assert the run terminates (no hang) and the awaiter resumed.
-SLUICE_TEST_CASE(e6_t3_ready_flag_only_does_not_call_wait_one) {
+SLUICE_TEST_CASE(progress_ready_flag_only_does_not_call_wait_one) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());  // real backend
@@ -209,7 +209,7 @@ SLUICE_TEST_CASE(e6_t3_ready_flag_only_does_not_call_wait_one) {
 // smoke check: a Fiber awaits a Completion, the Scheduler completes it via
 // poll, and the Fiber resumes — the E4 shape, unchanged. (Full regression is
 // the existing E4/E5 test suites, which remain green.)
-SLUICE_TEST_CASE(e6_t4_e4_completion_path_unchanged) {
+SLUICE_TEST_CASE(progress_e4_completion_path_unchanged) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());

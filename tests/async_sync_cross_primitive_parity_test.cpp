@@ -85,7 +85,7 @@ SLUICE_MAIN()
 // Cross-primitive check that Event follows the same precedence as Semaphore/
 // AsyncMutex/AsyncCondition (resource-first). Already covered in detail by
 // e12_event_test T33; included here as a cross-primitive parity marker.
-SLUICE_TEST_CASE(e12_parity_d3_event_set_plus_already_due_woken) {
+SLUICE_TEST_CASE(parity_d3_event_set_plus_already_due_woken) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -116,7 +116,7 @@ SLUICE_TEST_CASE(e12_parity_d3_event_set_plus_already_due_woken) {
 // ---- D3-SEM: Semaphore permit + already-due deadline -> Woken --------------
 // A permit is admissible; the already-due deadline is NOT consulted. Inline
 // Woken, no suspension, no timer registered. Parity with Event/Mutex/Condition.
-SLUICE_TEST_CASE(e12_parity_d3_semaphore_permit_plus_already_due_woken) {
+SLUICE_TEST_CASE(parity_d3_semaphore_permit_plus_already_due_woken) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -147,7 +147,7 @@ SLUICE_TEST_CASE(e12_parity_d3_semaphore_permit_plus_already_due_woken) {
 // ---- D3-MTX: AsyncMutex free + already-due deadline -> Woken ---------------
 // The Mutex is free; the already-due deadline is NOT consulted. Inline Woken,
 // no suspension, no timer registered. Parity with Event/Semaphore/Condition.
-SLUICE_TEST_CASE(e12_parity_d3_mutex_free_plus_already_due_woken) {
+SLUICE_TEST_CASE(parity_d3_mutex_free_plus_already_due_woken) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -187,7 +187,7 @@ SLUICE_TEST_CASE(e12_parity_d3_mutex_free_plus_already_due_woken) {
 // the same Scheduler).
 
 // ---- D4-EVT: Event cancel against a node in a DIFFERENT Event -> false ----
-SLUICE_TEST_CASE(e12_parity_d4_event_cancel_wrong_event_returns_false) {
+SLUICE_TEST_CASE(parity_d4_event_cancel_wrong_event_returns_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -225,7 +225,7 @@ SLUICE_TEST_CASE(e12_parity_d4_event_cancel_wrong_event_returns_false) {
 }
 
 // ---- D4-SEM: Semaphore cancel against a node in a DIFFERENT Semaphore ------
-SLUICE_TEST_CASE(e12_parity_d4_semaphore_cancel_wrong_semaphore_returns_false) {
+SLUICE_TEST_CASE(parity_d4_semaphore_cancel_wrong_semaphore_returns_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -263,7 +263,7 @@ SLUICE_TEST_CASE(e12_parity_d4_semaphore_cancel_wrong_semaphore_returns_false) {
 }
 
 // ---- D4-MTX: AsyncMutex cancel against a node in a DIFFERENT Mutex ---------
-SLUICE_TEST_CASE(e12_parity_d4_mutex_cancel_wrong_mutex_returns_false) {
+SLUICE_TEST_CASE(parity_d4_mutex_cancel_wrong_mutex_returns_false) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -328,7 +328,7 @@ SLUICE_TEST_CASE(e12_parity_d4_mutex_cancel_wrong_mutex_returns_false) {
 // state of a fresh WaitNode. Absorbing terminals and concurrent exactly-once
 // publication are proved by the existing per-primitive tests.
 
-SLUICE_TEST_CASE(e12_parity_waitoutcome_values_are_distinct_and_fresh_unresolved) {
+SLUICE_TEST_CASE(parity_waitoutcome_values_are_distinct_and_fresh_unresolved) {
     // Sanity: the four binding outcomes are mutually exclusive. The enum is
     // backed by uint8_t; the four values are 0/1/2/3. This is the runtime
     // counterpart to the compile-time assertion in e12_api_contract_probes.

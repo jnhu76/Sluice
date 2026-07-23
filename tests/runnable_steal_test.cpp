@@ -50,7 +50,7 @@ struct FiberStack {
 //     Running (not Runnable), it is not stealable; F2 is the only stealable
 //     ticket, on W0's queue. W1 (idle) steals F2 and executes it.
 // Prove: F2 ran on W1 (the thief); each fiber ran exactly once.
-SLUICE_TEST_CASE(e8_t1_idle_worker_steals_runnable_fiber) {
+SLUICE_TEST_CASE(steal_idle_worker_steals_runnable_fiber) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -114,7 +114,7 @@ SLUICE_TEST_CASE(e8_t1_idle_worker_steals_runnable_fiber) {
 // ---- E8-T2: steal transfers owner; ticket not duplicated ---------------
 // Same deterministic setup as T1: F0 runs on W0 (spinning); F2 spawned-on
 // W0's queue; W1 steals F2. Observe owner before/after and exactly-once.
-SLUICE_TEST_CASE(e8_t2_steal_transfers_owner_no_duplicate) {
+SLUICE_TEST_CASE(steal_steal_transfers_owner_no_duplicate) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -196,7 +196,7 @@ SLUICE_TEST_CASE(e8_t2_steal_transfers_owner_no_duplicate) {
 // because W1 pops F1 first under its own inbox_mtx). Once F1 runs on W1
 // and is spinning, W1 is deterministically busy, and F2 (spawned-onto W1)
 // is stealable by W0 with no ambiguity.
-SLUICE_TEST_CASE(e8_t3_steal_run_suspend_wake_resume_on_thief) {
+SLUICE_TEST_CASE(steal_steal_run_suspend_wake_resume_on_thief) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -304,7 +304,7 @@ SLUICE_TEST_CASE(e8_t3_steal_run_suspend_wake_resume_on_thief) {
 // fast, so W0 immediately tries to pop F2; concurrently W1 (idle after F1)
 // tries to steal F2. The race is genuine; the outcome varies per trial;
 // the invariant (F2 runs exactly once) must hold in every trial.
-SLUICE_TEST_CASE(e8_t4_steal_vs_pop_exactly_one_wins) {
+SLUICE_TEST_CASE(steal_steal_vs_pop_exactly_one_wins) {
     if constexpr (!fiber_ctx::supported) return;
 
     constexpr int kTrials = 200;
@@ -351,7 +351,7 @@ SLUICE_TEST_CASE(e8_t4_steal_vs_pop_exactly_one_wins) {
 // E8-T5 (Waiting): F_wait suspends on W0 (waiting); W1 searches. F_wait
 //   must remain registered+waiting, not stolen. Prove: F_wait.state==waiting
 //   and waiting_ready_count()==1 after the run (it was not consumed/stolen).
-SLUICE_TEST_CASE(e8_t5_no_steal_of_waiting_fiber) {
+SLUICE_TEST_CASE(steal_no_steal_of_waiting_fiber) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -416,7 +416,7 @@ SLUICE_TEST_CASE(e8_t5_no_steal_of_waiting_fiber) {
 // searches. F_run spins (running) on W0; W1 searches. Prove F_run is not
 // stolen: it remains running (we observe mid-run) and completes exactly
 // once on W0.
-SLUICE_TEST_CASE(e8_t6_no_steal_of_running_fiber) {
+SLUICE_TEST_CASE(steal_no_steal_of_running_fiber) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -463,7 +463,7 @@ SLUICE_TEST_CASE(e8_t6_no_steal_of_running_fiber) {
 // E8-T7 (Done): a Done Fiber is never exposed as stealable work. We run a
 // Fiber to completion, then verify W1 (idle) does not steal it (it's Done;
 // not in any runnable queue). Prove: the done fiber is not re-executed.
-SLUICE_TEST_CASE(e8_t7_no_steal_of_done_fiber) {
+SLUICE_TEST_CASE(steal_no_steal_of_done_fiber) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -519,7 +519,7 @@ SLUICE_TEST_CASE(e8_t7_no_steal_of_done_fiber) {
 // awaiting pop, has owner == thief. We stress this by repeatedly stealing
 // under load and asserting owner_id_of matches the worker the Fiber ends
 // up running on.
-SLUICE_TEST_CASE(e8_t8_owner_route_race_visible_ticket_agrees) {
+SLUICE_TEST_CASE(steal_owner_route_race_visible_ticket_agrees) {
     if constexpr (!fiber_ctx::supported) return;
 
     constexpr int kFibers = 8;
@@ -585,7 +585,7 @@ SLUICE_TEST_CASE(e8_t8_owner_route_race_visible_ticket_agrees) {
 // completes once the gate releases. (The E7 two-phase admission already
 // requires MW-S2 == ~MW-S1, and stealable work is MW-S1; this test confirms
 // the integration end-to-end.)
-SLUICE_TEST_CASE(e8_t9_mw_s1_stealable_prevents_blocking_admission) {
+SLUICE_TEST_CASE(steal_mw_s1_stealable_prevents_blocking_admission) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -637,7 +637,7 @@ SLUICE_TEST_CASE(e8_t9_mw_s1_stealable_prevents_blocking_admission) {
 // existence of steal attempts (idle thief loops) does not create logical
 // work. Prove: a run with only trivial fibers that all complete reaches
 // quiescence and terminates (no hang), and waiting/running counts are zero.
-SLUICE_TEST_CASE(e8_t10_quiescence_steal_attempts_not_logical_work) {
+SLUICE_TEST_CASE(steal_quiescence_steal_attempts_not_logical_work) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -669,7 +669,7 @@ SLUICE_TEST_CASE(e8_t10_quiescence_steal_attempts_not_logical_work) {
 // Prove: each Fiber completes exactly once, no duplicate dispatch, no
 // missing Fiber. Run under heavy stealing pressure (2 workers, imbalanced
 // initial assignment via a gate fiber on W0).
-SLUICE_TEST_CASE(e8_t11_exactly_once_stress) {
+SLUICE_TEST_CASE(steal_exactly_once_stress) {
     if constexpr (!fiber_ctx::supported) return;
 
     constexpr int kFibers = 32;

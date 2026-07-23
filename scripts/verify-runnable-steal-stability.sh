@@ -1,37 +1,37 @@
 #!/usr/bin/env bash
-# verify-e8-stability.sh — reproducible E8/E7 stress-gate runner.
+# verify-runnable-steal-stability.sh — reproducible runnable-steal / multi-worker stress-gate runner.
 #
 # Runs ONE selected test binary N times, stopping on the first failure, and
 # prints a one-line result per iteration plus a summary. Selects an
 # individual test case via $SLUICE_TEST_FILTER (substring match; see
-# tests/harness.hpp). This makes the E8/E7 stability gates reproducible from
+# tests/harness.hpp). This makes the steal/worker stability gates reproducible from
 # committed artifacts without ad hoc shell loops.
 #
 # Usage:
-#   scripts/verify-e8-stability.sh MODE BINARY [FILTER] [COUNT]
-#   scripts/verify-e8-stability.sh release e8_steal_test e8_t3 1000
-#   scripts/verify-e8-stability.sh debug   e8_steal_test e8_t11 2000
-#   scripts/verify-e8-stability.sh release e7_worker_test "" 1000
+#   scripts/verify-runnable-steal-stability.sh MODE BINARY [FILTER] [COUNT]
+#   scripts/verify-runnable-steal-stability.sh release runnable_steal_test steal_steal_run_suspend_wake_resume_on_thief 1000
+#   scripts/verify-runnable-steal-stability.sh debug   runnable_steal_test steal_quiescence_steal_attempts_not_logical_work 2000
+#   scripts/verify-runnable-steal-stability.sh release multi_worker_test "" 1000
 #
 # Arguments:
 #   MODE    build mode: release | debug | tsan | asan | ubsan | asanubsan
-#   BINARY  test binary name (e.g. e8_steal_test). Must be an xmake target.
-#   FILTER  optional SLUICE_TEST_FILTER token (substring, e.g. e8_t3).
-#           Use a precise token to avoid multi-match (e8_t1 also matches
-#           e8_t10/e8_t11). Empty/unset => run the whole binary.
+#   BINARY  test binary name (e.g. runnable_steal_test). Must be an xmake target.
+#   FILTER  optional SLUICE_TEST_FILTER token (substring, e.g. steal_steal_run_suspend_wake_resume_on_thief).
+#           Use a precise token to avoid multi-match (steal_steal_transfers_owner_no_duplicate also matches
+#           steal_steal_transfers_owner_no_duplicate0/steal_quiescence_steal_attempts_not_logical_work). Empty/unset => run the whole binary.
 #   COUNT   iterations (default 1000). Stop on first failure.
 #
 # Exit status: 0 iff every iteration passed; 1 otherwise.
 #
 # NOTE on filter precision: SLUICE_TEST_FILTER is a substring allowlist
-# (tests/harness.hpp). "e8_t3" matches only e8_t3_...; "e8_t11" matches only
-# e8_t11_...; but "e8_t1" matches e8_t1, e8_t10, AND e8_t11. Always use the
-# full case tag (e8_t3, e8_t4, e8_t11) — never an ambiguous prefix.
+# (tests/harness.hpp). "steal_steal_run_suspend_wake_resume_on_thief" matches only steal_steal_run_suspend_wake_resume_on_thief_...; "steal_quiescence_steal_attempts_not_logical_work" matches only
+# steal_quiescence_steal_attempts_not_logical_work_...; but "steal_steal_transfers_owner_no_duplicate" matches steal_steal_transfers_owner_no_duplicate, steal_steal_transfers_owner_no_duplicate0, AND steal_quiescence_steal_attempts_not_logical_work. Always use the
+# full case tag (steal_steal_run_suspend_wake_resume_on_thief, e8_t4, steal_quiescence_steal_attempts_not_logical_work) — never an ambiguous prefix.
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
   echo "usage: $0 MODE BINARY [FILTER] [COUNT]" >&2
-  echo "  e.g. $0 release e8_steal_test e8_t3 1000" >&2
+  echo "  e.g. $0 release runnable_steal_test steal_steal_run_suspend_wake_resume_on_thief 1000" >&2
   exit 2
 fi
 

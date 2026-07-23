@@ -98,7 +98,7 @@ static_assert(!has_cancel_all<WaitQueue>::value,
     "C3: WaitQueue::cancel_all must be removed (no authoritative E10 shutdown semantic, "
     "zero production callsites)");
 
-SLUICE_TEST_CASE(e10_corrective_c2_bypass_not_expressible_runtime_mirror) {
+SLUICE_TEST_CASE(wqauth_c2_bypass_not_expressible_runtime_mirror) {
     // Runtime mirror of the compile-time proof above, so a release build that
     // somehow lost the static_assert (e.g. header rot) still catches a regression.
     SLUICE_CHECK_MSG(!has_public_wake_one<WaitQueue>::value,
@@ -140,7 +140,7 @@ public:
 
 // T4a: wake_wait_one resolution decrements waiting_count back to 0 (no stale
 // count from a bypass). A direct WaitQueue resolve would leave it at 1.
-SLUICE_TEST_CASE(e10_corrective_c4_wake_keeps_wait_count_zero) {
+SLUICE_TEST_CASE(wqauth_c4_wake_keeps_wait_count_zero) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -188,7 +188,7 @@ SLUICE_TEST_CASE(e10_corrective_c4_wake_keeps_wait_count_zero) {
 }
 
 // T4b: cancel_wait resolution also keeps waiting_count at 0.
-SLUICE_TEST_CASE(e10_corrective_c4_cancel_keeps_wait_count_zero) {
+SLUICE_TEST_CASE(wqauth_c4_cancel_keeps_wait_count_zero) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());

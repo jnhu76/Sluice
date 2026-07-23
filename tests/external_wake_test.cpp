@@ -121,7 +121,7 @@ private:
 // EXTERNAL OS thread sets the flag + notifies. The parked Worker wakes,
 // drains, routes the fiber, runs it. run_live() returns with the fiber
 // completed — NO caller-driven re-entry.
-SLUICE_TEST_CASE(e9_t1_external_thread_wakes_parked_scheduler) {
+SLUICE_TEST_CASE(wake_external_thread_wakes_parked_scheduler) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -168,7 +168,7 @@ SLUICE_TEST_CASE(e9_t1_external_thread_wakes_parked_scheduler) {
 }
 
 // ---- T2: Live MIXED-WAKE — external wake observable independent of backend -
-SLUICE_TEST_CASE(e9_t2_mixed_wake_external_wake_not_blocked_by_backend) {
+SLUICE_TEST_CASE(wake_mixed_wake_external_wake_not_blocked_by_backend) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto backend = std::make_unique<HoldingBackend>();
@@ -224,7 +224,7 @@ SLUICE_TEST_CASE(e9_t2_mixed_wake_external_wake_not_blocked_by_backend) {
 // drain (under global_mtx_) observes the ready flag and routes the fiber
 // before any physical park. Deterministic seam: pause the Worker at the
 // ParkCandidate boundary, publish, then release.
-SLUICE_TEST_CASE(e9_t3_publication_before_candidate) {
+SLUICE_TEST_CASE(wake_publication_before_candidate) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -273,7 +273,7 @@ SLUICE_TEST_CASE(e9_t3_publication_before_candidate) {
 // wait. The epoch validation at park time (observed_epoch recorded under
 // wake_mtx_) closes this window: the predicate sees the advanced epoch and
 // does not block.
-SLUICE_TEST_CASE(e9_t4_commit_before_physical_wait_race) {
+SLUICE_TEST_CASE(wake_commit_before_physical_wait_race) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -319,7 +319,7 @@ SLUICE_TEST_CASE(e9_t4_commit_before_physical_wait_race) {
 }
 
 // ---- T5: publication while physically parked (Live) ------------------------
-SLUICE_TEST_CASE(e9_t5_publication_while_physically_parked) {
+SLUICE_TEST_CASE(wake_publication_while_physically_parked) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -361,7 +361,7 @@ SLUICE_TEST_CASE(e9_t5_publication_while_physically_parked) {
 // ---- T6: spurious wake (Live) ----------------------------------------------
 // A wake with no new persistent state must re-drain safely and not produce a
 // duplicate publication.
-SLUICE_TEST_CASE(e9_t6_spurious_wake) {
+SLUICE_TEST_CASE(wake_spurious_wake) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -404,7 +404,7 @@ SLUICE_TEST_CASE(e9_t6_spurious_wake) {
 
 // ---- T7: coalesced wake (Live) ---------------------------------------------
 // Multiple notifies coalesce; the fiber is routed exactly-once.
-SLUICE_TEST_CASE(e9_t7_coalesced_wake) {
+SLUICE_TEST_CASE(wake_coalesced_wake) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -448,7 +448,7 @@ SLUICE_TEST_CASE(e9_t7_coalesced_wake) {
 // route_runnable_locked signals the wake source. A fiber spawned mid-run must
 // wake a parked Worker. The wake notification does NOT create a runnable
 // token (route_runnable does the PUBLISH).
-SLUICE_TEST_CASE(e9_t8_runnable_publication_wakes_parked_worker) {
+SLUICE_TEST_CASE(wake_runnable_publication_wakes_parked_worker) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -483,7 +483,7 @@ SLUICE_TEST_CASE(e9_t8_runnable_publication_wakes_parked_worker) {
 // backendOutstanding + external wait; Live; external Future becomes ready
 // FIRST while the backend stays incomplete. The fiber resumes WITHOUT the
 // backend completing.
-SLUICE_TEST_CASE(e9_t9_mixed_wake_external_wins_first) {
+SLUICE_TEST_CASE(wake_mixed_wake_external_wins_first) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto backend = std::make_unique<HoldingBackend>();
@@ -538,7 +538,7 @@ SLUICE_TEST_CASE(e9_t9_mixed_wake_external_wins_first) {
 // No external-wake-capable wait registered: the MW-S2 participant uses the
 // E7 ctx_.wait_one() path. Real backend progress (auto_bytes) resumes the
 // fiber. Preserves the E7-T5 proof.
-SLUICE_TEST_CASE(e9_t10_backend_only_progress_preserved) {
+SLUICE_TEST_CASE(wake_backend_only_progress_preserved) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto fake = std::make_unique<FakeAsyncBackend>();
@@ -568,7 +568,7 @@ SLUICE_TEST_CASE(e9_t10_backend_only_progress_preserved) {
 // MOVE + OWNER TRANSFER (exactly once). Minimal load-bearing assertion: a
 // 2-worker Live run with distributed work terminates cleanly with each fiber
 // run exactly once.
-SLUICE_TEST_CASE(e9_t11_parked_worker_steal_integration) {
+SLUICE_TEST_CASE(wake_parked_worker_steal_integration) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -592,7 +592,7 @@ SLUICE_TEST_CASE(e9_t11_parked_worker_steal_integration) {
 // external-wake park would hang forever, so we rely on the test NOT arming
 // a producer and instead the run being bounded by the absence of an
 // effective wake. Use a quiescent Live run (no external wait) -> returns.
-SLUICE_TEST_CASE(e9_t12_shutdown_wakes_live_parked_workers) {
+SLUICE_TEST_CASE(wake_shutdown_wakes_live_parked_workers) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -617,7 +617,7 @@ SLUICE_TEST_CASE(e9_t12_shutdown_wakes_live_parked_workers) {
 // make_runnable / route / erase / queue mutation. We assert the fiber still
 // reaches exactly-once runnable via the Scheduler drain path (the producer
 // never made it runnable itself).
-SLUICE_TEST_CASE(e9_t13_external_producer_signal_only) {
+SLUICE_TEST_CASE(wake_external_producer_signal_only) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -665,7 +665,7 @@ SLUICE_TEST_CASE(e9_t13_external_producer_signal_only) {
 // Many Fibers wait on persistent external-ready sources; multiple producer
 // threads complete/coalesce notifications. Each waiting->runnable transition
 // once, each fiber resumes once.
-SLUICE_TEST_CASE(e9_t14_concurrent_external_ready_exactly_once) {
+SLUICE_TEST_CASE(wake_concurrent_external_ready_exactly_once) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -719,7 +719,7 @@ SLUICE_TEST_CASE(e9_t14_concurrent_external_ready_exactly_once) {
 // runnable/running and no backend outstanding, MUST return STALLED. The run
 // returns; the registration remains; the fiber stays Waiting; NO physical
 // Scheduler-domain park loop.
-SLUICE_TEST_CASE(e9_drain_t1_drain_mw_s3_returns_stalled) {
+SLUICE_TEST_CASE(wake_t1_drain_mw_s3_returns_stalled) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());

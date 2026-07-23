@@ -87,7 +87,7 @@ public:
 };
 }  // namespace
 
-SLUICE_TEST_CASE(e10_corrective_c5_scheduler_integrated_topology) {
+SLUICE_TEST_CASE(wqtopo_c5_scheduler_integrated_topology) {
     if constexpr (!fiber_ctx::supported) return;
 
     constexpr int kIters = 2000;
