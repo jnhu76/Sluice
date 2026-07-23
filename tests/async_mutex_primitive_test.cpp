@@ -45,7 +45,7 @@ using namespace sluice::async;
 using sluice::Result;
 
 namespace {
-using E11TimerTestHooks = sluice_async_test::TimerTestControl;
+using TimerCtl = sluice_async_test::TimerTestControl;
 using SchedulerParkSeam = sluice_async_test::SchedulerParkSeam;
 using AsyncMutexSeam = sluice_async_test::AsyncMutexSeam;
 using sluice_async_test::ControllerGuard;
@@ -613,8 +613,8 @@ SLUICE_TEST_CASE(mtx_t11_lock_until_free_due_is_woken) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncMutex mtx(sched);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 100);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);
     WaitNode node;
     std::atomic<int> entries{0};
     Fiber f;
@@ -633,7 +633,7 @@ SLUICE_TEST_CASE(mtx_t11_lock_until_free_due_is_woken) {
     SLUICE_CHECK_MSG(node.was_woken(), "free + due -> Woken (ownership beats due deadline)");
     SLUICE_CHECK_MSG(!node.was_expired(), "not Expired (resource-first)");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
                      "timer retired at admission (no leak)");
 }
 
@@ -643,8 +643,8 @@ SLUICE_TEST_CASE(mtx_t12_lock_until_owned_due_is_expired) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncMutex mtx(sched);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 100);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);
     WaitNode n0, n1;
     std::atomic<bool> w1_registered{false}, w1_resumed{false};
     ReadyFlag release_g0;
@@ -673,7 +673,7 @@ SLUICE_TEST_CASE(mtx_t12_lock_until_owned_due_is_expired) {
     SLUICE_CHECK_MSG(n1.was_expired(), "owned + due -> Expired");
     SLUICE_CHECK_MSG(!n1.was_woken(), "W1 did not acquire");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
                      "timer retired at admission (no leak)");
 }
 
@@ -683,8 +683,8 @@ SLUICE_TEST_CASE(mtx_t13_unlock_wins_before_timer) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncMutex mtx(sched);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 0);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 0);
     WaitNode n0, n1;
     std::atomic<bool> w1_registered{false}, granted{false}, w1_resumed{false};
     ReadyFlag release_g0;
@@ -724,7 +724,7 @@ SLUICE_TEST_CASE(mtx_t13_unlock_wins_before_timer) {
     SLUICE_CHECK_MSG(n1.was_woken(), "W1 resolved Woken");
     SLUICE_CHECK_MSG(!n1.was_expired(), "late timer did not expire W1");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
                      "timer retired exactly once (no leak)");
 }
 
@@ -734,8 +734,8 @@ SLUICE_TEST_CASE(mtx_t14_timer_wins_before_unlock) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncMutex mtx(sched);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 0);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 0);
     WaitNode n0, n1;
     std::atomic<bool> w1_registered{false}, expired{false}, w1_resumed{false};
     ReadyFlag release_g0;
@@ -778,7 +778,7 @@ SLUICE_TEST_CASE(mtx_t14_timer_wins_before_unlock) {
     SLUICE_CHECK_MSG(n1.was_expired(), "W1 resolved Expired (timer won)");
     SLUICE_CHECK_MSG(!n1.was_woken(), "W1 did not acquire");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
                      "timer retired exactly once (no leak)");
 }
 

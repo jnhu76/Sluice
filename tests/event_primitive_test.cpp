@@ -7,10 +7,10 @@
 //   - Event::is_set / set / reset / wait / wait_until / cancel
 //     (cancel is the narrow per-wait-epoch CANCEL authority; raw wait_queue()
 //      is REMOVED from the production surface — F-EVENT-AUTH)
-//   - E12EventTestHooks: test-only phase seams + the underlying WaitQueue,
+//   - EventHooks: test-only phase seams + the underlying WaitQueue,
 //     reachable ONLY through this friend struct (defined here, in the test TU).
-//     An ordinary production TU cannot name E12EventTestHooks.
-//   - Scheduler::advance_clock / E11TimerTestHooks       (deterministic timer)
+//     An ordinary production TU cannot name EventHooks.
+//   - Scheduler::advance_clock / TimerCtl       (deterministic timer)
 //   - WaitNode public lock-free state queries (was_woken/was_cancelled/
 //     was_expired/is_terminal/outcome)
 //   - Scheduler::waiting_count()  (the wait-accounting authority)
@@ -40,8 +40,8 @@
 using namespace sluice::async;
 using sluice::Result;
 
-// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable E11TimerTestHooks +
-// E12EventTestHooks friends are removed. The clock/timer + Event phase seams +
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable TimerCtl +
+// EventHooks friends are removed. The clock/timer + Event phase seams +
 // the E9 park-commit seam (reused by T32) are driven by the internal-testing
 // controller facades TimerTestControl / EventSeam / SchedulerParkSeam
 // (tests/async_test_control.hpp), which route through Scheduler::AsyncTestAccess
@@ -50,8 +50,8 @@ using sluice::Result;
 // Event::cancel is the authority. Call sites keep the historical names via
 // local aliases so the test cases read unchanged.
 namespace {
-using E11TimerTestHooks = sluice_async_test::TimerTestControl;
-using E12EventTestHooks = sluice_async_test::EventSeam;
+using TimerCtl = sluice_async_test::TimerTestControl;
+using EventHooks = sluice_async_test::EventSeam;
 }  // namespace
 
 namespace {
@@ -510,7 +510,7 @@ SLUICE_TEST_CASE(event_one_expires_during_set_broadcast) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode n1, n2, n3;
@@ -644,7 +644,7 @@ SLUICE_TEST_CASE(event_resource_wake_wins_timer_expire) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
@@ -694,7 +694,7 @@ SLUICE_TEST_CASE(event_timer_expire_wins_resource_wake) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
@@ -845,7 +845,7 @@ SLUICE_TEST_CASE(event_timer_expire_wins_cancel) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
@@ -895,7 +895,7 @@ SLUICE_TEST_CASE(event_three_way_race_one_winner_repeated) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     constexpr int ITERS = 200;
     int woken = 0, cancelled = 0, expired = 0;
@@ -1303,7 +1303,7 @@ SLUICE_TEST_CASE(event_multi_waiter_mixed_outcome_stress) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     constexpr int ITERS = 20;
     for (int it = 0; it < ITERS; ++it) {
@@ -1478,7 +1478,7 @@ SLUICE_TEST_CASE(event_cancel_wrong_event_detached_terminal_loses) {
     // --- (c) cancel an already-Expired node -> false ---
     {
         Event ev(sched, /*initially_set=*/false);
-        E11TimerTestHooks::enable_test_clock(sched);
+        TimerCtl::enable_test_clock(sched);
         WaitNode node;
         std::atomic<bool> registered{false};
         Fiber f, fdriver;
@@ -1760,7 +1760,7 @@ SLUICE_TEST_CASE(event_expired_node_loses) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
     std::atomic<bool> registered{false};
@@ -1956,13 +1956,13 @@ SLUICE_TEST_CASE(event_causal_set_drain_blocks_reset) {
 
     // Arm the set-store-before-drain seam BEFORE the Live run. S1 will pause
     // mid-drain on an external thread.
-    E12EventTestHooks::arm_set_store_before_drain(sched);
+    EventHooks::arm_set_store_before_drain(sched);
 
     // Reset contender (external thread): waits for the seam to be paused, then
     // attempts reset() which must block on global_mtx_.
     std::thread reset_thread([&] {
         // Spin until S1 has paused mid-drain (mechanical observation).
-        spin_wait_pred([&] { return E12EventTestHooks::is_set_paused(sched); });
+        spin_wait_pred([&] { return EventHooks::is_set_paused(sched); });
         reset_attempted.store(true, std::memory_order_release);
         ev.reset();  // blocks on global_mtx_ until S1 releases
         reset_completed.store(true, std::memory_order_release);
@@ -1984,7 +1984,7 @@ SLUICE_TEST_CASE(event_causal_set_drain_blocks_reset) {
     std::thread run_thread([&] { sched.run_live(1); });
 
     // Wait for S1 to reach the paused mid-drain state.
-    E12EventTestHooks::wait_set_paused(sched);
+    EventHooks::wait_set_paused(sched);
     // Give the reset contender a chance to record its attempt (it is blocked).
     spin_wait(reset_attempted);
     std::this_thread::yield();
@@ -1995,7 +1995,7 @@ SLUICE_TEST_CASE(event_causal_set_drain_blocks_reset) {
 
     // Release S1: it drains Wold (routing it runnable -> wakes the parked
     // Worker via signal_wake_locked) and releases global_mtx_.
-    E12EventTestHooks::release_set(sched);
+    EventHooks::release_set(sched);
 
     s1_thread.join();
     reset_thread.join();
@@ -2041,7 +2041,7 @@ SLUICE_TEST_CASE(event_causal_set_drain_blocks_admission) {
     SLUICE_CHECK(sched.init_fiber(f_old, s_old.base(), s_old.size()));
     sched.spawn(f_old);
 
-    E12EventTestHooks::arm_set_store_before_drain(sched);
+    EventHooks::arm_set_store_before_drain(sched);
 
     // Admission contender (external thread): attempts ev.wait() while S1 holds
     // global_mtx_. Because ev.wait() performs a context_switch, it must run on
@@ -2055,7 +2055,7 @@ SLUICE_TEST_CASE(event_causal_set_drain_blocks_admission) {
                                   // AFTER acquiring global_mtx_ (which it cannot
                                   // while S1 holds it).
     std::thread admission_thread([&] {
-        spin_wait_pred([&] { return E12EventTestHooks::is_set_paused(sched); });
+        spin_wait_pred([&] { return EventHooks::is_set_paused(sched); });
         admission_attempted.store(true, std::memory_order_release);
         // ev.cancel takes global_mtx_ (same domain admission needs). It blocks
         // until S1 releases, then loses (detached node) and returns false.
@@ -2070,13 +2070,13 @@ SLUICE_TEST_CASE(event_causal_set_drain_blocks_admission) {
 
     std::thread run_thread([&] { sched.run_live(1); });
 
-    E12EventTestHooks::wait_set_paused(sched);
+    EventHooks::wait_set_paused(sched);
     spin_wait(admission_attempted);
     std::this_thread::yield();
     SLUICE_CHECK_MSG(admission_attempted.load(), "admission attempt recorded while S1 paused");
     SLUICE_CHECK_MSG(!admission_completed.load(), "admission could not complete (drain holds global_mtx_)");
 
-    E12EventTestHooks::release_set(sched);
+    EventHooks::release_set(sched);
 
     s1_thread.join();
     admission_thread.join();
@@ -2198,12 +2198,12 @@ SLUICE_TEST_CASE(event_causal_admission_first_ordering) {
     SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
     sched.spawn(fwait);
 
-    E12EventTestHooks::arm_admission_before_final_check(sched);
+    EventHooks::arm_admission_before_final_check(sched);
 
     // Setter contender (external): waits for admission to pause, then attempts
     // set() which blocks on global_mtx_.
     std::thread set_thread([&] {
-        spin_wait_pred([&] { return E12EventTestHooks::is_admission_paused(sched); });
+        spin_wait_pred([&] { return EventHooks::is_admission_paused(sched); });
         setter_attempted.store(true, std::memory_order_release);
         ev.set();  // blocks on global_mtx_ until admission releases
         setter_completed.store(true, std::memory_order_release);
@@ -2212,7 +2212,7 @@ SLUICE_TEST_CASE(event_causal_admission_first_ordering) {
     std::thread run_thread([&] { sched.run_live(1); });
 
     // Wait for admission to reach the paused state.
-    E12EventTestHooks::wait_admission_paused(sched);
+    EventHooks::wait_admission_paused(sched);
     spin_wait(setter_attempted);
     std::this_thread::yield();
     SLUICE_CHECK_MSG(setter_attempted.load(), "setter attempted while admission paused");
@@ -2221,7 +2221,7 @@ SLUICE_TEST_CASE(event_causal_admission_first_ordering) {
     // Release W's admission: it completes the final SET check under UNSET (set
     // is still blocked), commits waiting, releases. The setter then runs, stores
     // SET, and drains W (now Registered+Suspended) -> Woken, waking the Worker.
-    E12EventTestHooks::release_admission(sched);
+    EventHooks::release_admission(sched);
 
     set_thread.join();
     run_thread.join();
@@ -2285,15 +2285,15 @@ SLUICE_TEST_CASE(event_causal_set_first_ordering) {
 
     // Arm BOTH the pre-lock phase (blocks fwait before the lock) AND the
     // set-store-before-drain phase (blocks the setter mid-drain).
-    E12EventTestHooks::reset_admission_attempt(sched);
+    EventHooks::reset_admission_attempt(sched);
     sluice_async_test::arm(sched, sluice_async_test::PhaseTag::event_admission_attempt_before_global_lock);
-    E12EventTestHooks::arm_set_store_before_drain(sched);
+    EventHooks::arm_set_store_before_drain(sched);
 
     // Start the Live run: the Worker distributes + runs fwait, which blocks at
     // the armed pre-lock phase (BEFORE acquiring global_mtx_).
     std::thread run_thread([&] { sched.run_live(1); });
     spin_wait_pred([&] {
-        return E12EventTestHooks::admission_attempt_reached(sched);
+        return EventHooks::admission_attempt_reached(sched);
     });
 
     // fwait is blocked at the pre-lock phase. Now start the setter: it acquires
@@ -2302,7 +2302,7 @@ SLUICE_TEST_CASE(event_causal_set_first_ordering) {
         ev.set();
         setter_acquired.store(true, std::memory_order_release);
     });
-    E12EventTestHooks::wait_set_paused(sched);
+    EventHooks::wait_set_paused(sched);
 
     // Release the pre-lock phase: fwait proceeds and attempts LockGuard(global_mtx_).
     // The setter HOLDS global_mtx_ (paused mid-drain), so fwait blocks on the
@@ -2315,9 +2315,9 @@ SLUICE_TEST_CASE(event_causal_set_first_ordering) {
     // fwait reached the pre-lock point but could NOT enter its CS (global_mtx_
     // held by the active set drain). wait_done is false; the setter has not
     // returned (still paused mid-drain).
-    SLUICE_CHECK_MSG(E12EventTestHooks::admission_attempt_reached(sched),
+    SLUICE_CHECK_MSG(EventHooks::admission_attempt_reached(sched),
                      "T31: admission pre-lock attempt reached");
-    SLUICE_CHECK_MSG(!E12EventTestHooks::is_admission_paused(sched),
+    SLUICE_CHECK_MSG(!EventHooks::is_admission_paused(sched),
                      "T31: admission could NOT enter its CS (setter holds global_mtx_)");
     SLUICE_CHECK_MSG(!wait_done.load(), "T31: wait did not complete while setter holds global_mtx_");
     SLUICE_CHECK_MSG(!setter_acquired.load(), "T31: setter still paused mid-drain");
@@ -2325,7 +2325,7 @@ SLUICE_TEST_CASE(event_causal_set_first_ordering) {
     // Release the setter: it finishes the drain (empty queue, fwait not
     // registered yet) + releases global_mtx_. fwait then acquires the lock,
     // registers, observes SET, returns Woken inline.
-    E12EventTestHooks::release_set(sched);
+    EventHooks::release_set(sched);
 
     set_thread.join();
     run_thread.join();
@@ -2381,7 +2381,7 @@ SLUICE_TEST_CASE(event_parked_live_worker_awakened_by_external_set) {
 
     // Arm the park-commit seam so the Worker pauses at the physical-park
     // boundary. The external set runs AFTER we observe the pause.
-    E12EventTestHooks::arm_park_commit(sched);
+    EventHooks::arm_park_commit(sched);
 
     std::thread ext([&] {
         // Wait until the waiter has registered.
@@ -2389,13 +2389,13 @@ SLUICE_TEST_CASE(event_parked_live_worker_awakened_by_external_set) {
             std::this_thread::yield();
         }
         // Mechanically observe the Worker reached the real park boundary.
-        E12EventTestHooks::wait_park_commit_paused(sched);
+        EventHooks::wait_park_commit_paused(sched);
         park_observed.store(true, std::memory_order_release);
         // Now release the park seam so the Worker enters the physical wait, then
         // immediately set() from the external thread. The Worker's observed
         // epoch was recorded AFTER the commit boundary, so a wake via
         // signal_wake_locked is observed.
-        E12EventTestHooks::release_park_commit(sched);
+        EventHooks::release_park_commit(sched);
         ev.set();  // external-thread set: broadcast via the Scheduler wake source
     });
 
@@ -2416,7 +2416,7 @@ SLUICE_TEST_CASE(event_parked_live_worker_awakened_by_external_set) {
         }
         // Timeout: release any armed gate + drive set() so the run terminates.
         watchdog_fired.store(true, std::memory_order_release);
-        E12EventTestHooks::release_park_commit(sched);
+        EventHooks::release_park_commit(sched);
         ev.set();
     });
 
@@ -2451,12 +2451,12 @@ SLUICE_TEST_CASE(event_set_plus_already_due_deadline_is_woken) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     // Event initially SET; clock starts at 0.
     Event ev(sched, /*initially_set=*/true);
     // Set the clock so a deadline of 0 (or any value <= now) is already due.
-    E11TimerTestHooks::set_clock(sched, 50);  // now = 50
+    TimerCtl::set_clock(sched, 50);  // now = 50
 
     WaitNode node;
     std::atomic<int> entries{0};
@@ -2480,7 +2480,7 @@ SLUICE_TEST_CASE(event_set_plus_already_due_deadline_is_woken) {
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no waits remain");
     // Advance the clock past the deadline and pump: NO later expiry publication
     // (the registration was retired at admission; the node is terminal Woken).
-    E11TimerTestHooks::set_clock(sched, 1000);
+    TimerCtl::set_clock(sched, 1000);
     sched.advance_clock(1000);
     SLUICE_CHECK_MSG(node.was_woken(), "no later expiry publication (still Woken)");
 }

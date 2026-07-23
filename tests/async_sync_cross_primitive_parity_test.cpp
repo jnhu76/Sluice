@@ -52,7 +52,7 @@ using namespace sluice::async;
 using sluice::Result;
 
 namespace {
-using E11TimerTestHooks = sluice_async_test::TimerTestControl;
+using TimerCtl = sluice_async_test::TimerTestControl;
 
 struct FiberStack {
     static constexpr std::size_t kBytes = 64 * 1024;
@@ -89,8 +89,8 @@ SLUICE_TEST_CASE(parity_d3_event_set_plus_already_due_woken) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);  // now = 100
     Event ev(sched, /*initially_set=*/true);
 
     WaitNode node;
@@ -109,7 +109,7 @@ SLUICE_TEST_CASE(parity_d3_event_set_plus_already_due_woken) {
 
     SLUICE_CHECK_MSG(entries.load() == 2, "waiter never suspended (resource-first)");
     SLUICE_CHECK_MSG(node.was_woken(), "SET + already-due deadline -> Woken");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
                      "no timer registered (inline resolution)");
 }
 
@@ -120,8 +120,8 @@ SLUICE_TEST_CASE(parity_d3_semaphore_permit_plus_already_due_woken) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);  // now = 100
     Semaphore sem(sched, /*initial=*/1, /*max=*/1);
 
     WaitNode node;
@@ -140,7 +140,7 @@ SLUICE_TEST_CASE(parity_d3_semaphore_permit_plus_already_due_woken) {
 
     SLUICE_CHECK_MSG(entries.load() == 2, "waiter never suspended (resource-first)");
     SLUICE_CHECK_MSG(node.was_woken(), "permit + already-due deadline -> Woken");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
                      "no timer registered (inline resolution)");
 }
 
@@ -151,8 +151,8 @@ SLUICE_TEST_CASE(parity_d3_mutex_free_plus_already_due_woken) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);  // now = 100
     AsyncMutex mtx(sched);
 
     WaitNode node;
@@ -172,7 +172,7 @@ SLUICE_TEST_CASE(parity_d3_mutex_free_plus_already_due_woken) {
 
     SLUICE_CHECK_MSG(entries.load() == 2, "waiter never suspended (resource-first)");
     SLUICE_CHECK_MSG(node.was_woken(), "free Mutex + already-due deadline -> Woken");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
                      "no timer registered (inline resolution)");
 }
 

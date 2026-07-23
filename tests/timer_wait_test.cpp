@@ -99,7 +99,7 @@ constexpr unsigned kSpinWaitBoundedIters = 200000;
 }
 }  // namespace
 
-// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable E11TimerTestHooks
+// ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the forgeable TimerCtl
 // friend is removed. The clock/timer/park-commit controls are driven by the
 // internal-testing controller facade TimerTestControl (tests/async_test_control.hpp),
 // which routes through Scheduler::AsyncTestAccess (a guarded nested struct
@@ -107,7 +107,7 @@ constexpr unsigned kSpinWaitBoundedIters = 200000;
 // The call sites below keep the historical name via a local alias so the
 // 15 test cases read unchanged; the actual authority is the new controller.
 namespace {
-using E11TimerTestHooks = sluice_async_test::TimerTestControl;
+using TimerCtl = sluice_async_test::TimerTestControl;
 }  // namespace
 
 // =============================================================================
@@ -124,7 +124,7 @@ SLUICE_TEST_CASE(timer_expired_is_distinct_terminal_outcome) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     WaitNode n;
@@ -146,7 +146,7 @@ SLUICE_TEST_CASE(timer_expired_is_distinct_terminal_outcome) {
     sched.spawn(fwait);
     // Advance the controllable clock so the deadline (10) is already due when
     // the fiber's await_wait_deadline reaches the admission recheck.
-    E11TimerTestHooks::set_clock(sched, 100);
+    TimerCtl::set_clock(sched, 100);
     sched.run(1);
 
     SLUICE_CHECK_MSG(ran_after.load(), "waiter resumed (not stranded by due deadline)");
@@ -172,7 +172,7 @@ SLUICE_TEST_CASE(timer_resource_wins_before_timer) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     WaitNode n;
@@ -212,7 +212,7 @@ SLUICE_TEST_CASE(timer_timer_wins_before_resource_wake) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     WaitNode n;
@@ -263,7 +263,7 @@ SLUICE_TEST_CASE(timer_cancel_wins_timer_loses) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     WaitNode n;
@@ -330,7 +330,7 @@ SLUICE_TEST_CASE(timer_storage_reuse_epoch_isolation) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     std::atomic<bool> registered{false};
@@ -368,7 +368,7 @@ SLUICE_TEST_CASE(timer_storage_reuse_epoch_isolation) {
     // still be physically present in the heap (lazy). Advance the clock past
     // E's deadline and pump: the stale entry MUST be inert (retired) and MUST
     // NOT resolve any node. There is no live node to resolve.
-    E11TimerTestHooks::set_clock(sched, 200000);
+    TimerCtl::set_clock(sched, 200000);
     sched.advance_clock(200000);
 
     // If the stale entry were not inert, it would have dereferenced the
@@ -391,7 +391,7 @@ SLUICE_TEST_CASE(timer_drain_mode_no_deadline_hang) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     WaitNode n;
@@ -434,7 +434,7 @@ SLUICE_TEST_CASE(timer_live_mode_deadline_progress) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     WaitNode n;
@@ -487,7 +487,7 @@ SLUICE_TEST_CASE(timer_resource_vs_timer_one_winner) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     WaitNode n;
@@ -552,7 +552,7 @@ SLUICE_TEST_CASE(timer_old_timer_cannot_resolve_later_epoch) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     std::atomic<bool> registered_e{false};
@@ -635,7 +635,7 @@ SLUICE_TEST_CASE(timer_old_timer_cannot_resolve_later_epoch) {
             "e_resolved=%d e1_registered=%d active_deadline_count=%zu "
             "waiting_count=%zu\n",
             registered_e.load(), e_resolved.load(), e1_registered.load(),
-            E11TimerTestHooks::active_deadline_count(sched),
+            TimerCtl::active_deadline_count(sched),
             sched.waiting_count());
         // Resolve E if stranded so the runner can drain cleanly.
         sched.wake_wait_one(q);
@@ -651,7 +651,7 @@ SLUICE_TEST_CASE(timer_old_timer_cannot_resolve_later_epoch) {
             "timer_t7 FAIL state dump (epoch E+1 not registered): e_resolved=%d "
             "e1_registered=%d active_deadline_count=%zu waiting_count=%zu\n",
             e_resolved.load(), e1_registered.load(),
-            E11TimerTestHooks::active_deadline_count(sched),
+            TimerCtl::active_deadline_count(sched),
             sched.waiting_count());
         sched.wake_wait_one(q);
         runner.join();
@@ -689,7 +689,7 @@ SLUICE_TEST_CASE(timer_old_timer_cannot_resolve_later_epoch) {
             "e1_registered=%d e1_resolved=%d active_deadline_count=%zu "
             "waiting_count=%zu\n",
             e1_registered.load(), e1_resolved.load(),
-            E11TimerTestHooks::active_deadline_count(sched),
+            TimerCtl::active_deadline_count(sched),
             sched.waiting_count());
         runner.join();
         SLUICE_FAIL("timer_t7: coordinator timed out waiting for E+1 resolution "
@@ -721,7 +721,7 @@ SLUICE_TEST_CASE(timer_t10_forced_stale_pump_after_destruction_is_inert) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     std::atomic<bool> registered{false};
@@ -784,7 +784,7 @@ SLUICE_TEST_CASE(timer_one_active_deadline_progresses) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     WaitNode n;
@@ -825,7 +825,7 @@ SLUICE_TEST_CASE(timer_new_earlier_deadline_becomes_earliest) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue qA, qB;
     WaitNode na, nb;
@@ -847,10 +847,10 @@ SLUICE_TEST_CASE(timer_new_earlier_deadline_becomes_earliest) {
     fcoord.set_entry([&](Fiber&) {
         // Wait for both deadlines to be registered+active.
         for (int i = 0; i < 100000; ++i) {
-            std::size_t cnt = E11TimerTestHooks::active_deadline_count(sched);
+            std::size_t cnt = TimerCtl::active_deadline_count(sched);
             if (cnt >= 2) {
                 Scheduler::deadline_t e = 0;
-                if (E11TimerTestHooks::earliest_active_deadline(sched, e) && e == 200) {
+                if (TimerCtl::earliest_active_deadline(sched, e) && e == 200) {
                     earliest_is_b.store(true, std::memory_order::release);
                     break;
                 }
@@ -888,7 +888,7 @@ SLUICE_TEST_CASE(timer_retiring_earliest_preserves_next_deadline) {
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue qA, qB;
     WaitNode na, nb;
@@ -919,7 +919,7 @@ SLUICE_TEST_CASE(timer_retiring_earliest_preserves_next_deadline) {
         for (int i = 0; i < 100000; ++i) {
             if (a_woken.load(std::memory_order::acquire)) {
                 Scheduler::deadline_t e = 0;
-                if (E11TimerTestHooks::earliest_active_deadline(sched, e) && e == 200) {
+                if (TimerCtl::earliest_active_deadline(sched, e) && e == 200) {
                     next_is_b.store(true, std::memory_order::release);
                     break;
                 }
@@ -998,7 +998,7 @@ SLUICE_TEST_CASE(timer_new_earlier_deadline_during_park) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     sluice_async_test::ControllerGuard ctrl(sched);  // park-commit seam registry
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue qA, qB;
     WaitNode na, nb;  // na: the parked A wait. nb: the externally-registered B.
@@ -1019,24 +1019,24 @@ SLUICE_TEST_CASE(timer_new_earlier_deadline_during_park) {
     // Arm the park-commit seam BEFORE run_live so the worker is held at the
     // commit boundary when it parks (after computing its park obligation from
     // earliest_active_deadline_, before the physical cv.wait).
-    E11TimerTestHooks::arm_park_commit(sched);
+    TimerCtl::arm_park_commit(sched);
 
     std::thread runner([&] { sched.run_live(1); });
 
     // 1. Wait for A to register and the worker to reach+pause at the park-commit
     //    boundary. At this point the only active deadline is A (10000).
     while (!a_registered.load(std::memory_order::acquire)) std::this_thread::yield();
-    E11TimerTestHooks::wait_park_commit_paused(sched);
+    TimerCtl::wait_park_commit_paused(sched);
 
     // 2. Causal observation: at the park-commit boundary, the earliest active
     //    deadline is A (10000) — the worker committed to park using A's state.
     //    Only A is active (B not yet registered).
     {
         Scheduler::deadline_t e = 0;
-        const bool has = E11TimerTestHooks::earliest_active_deadline(sched, e);
+        const bool has = TimerCtl::earliest_active_deadline(sched, e);
         SLUICE_CHECK_MSG(has && e == 10000,
                          "worker parked with A(10000) as the earliest obligation");
-        std::size_t cnt = E11TimerTestHooks::active_deadline_count(sched);
+        std::size_t cnt = TimerCtl::active_deadline_count(sched);
         SLUICE_CHECK_MSG(cnt == 1, "only A is active at the park-commit seam");
     }
 
@@ -1045,25 +1045,25 @@ SLUICE_TEST_CASE(timer_new_earlier_deadline_during_park) {
     //    test hook (global_mtx_ is free: the worker is paused at the seam with
     //    no lock held). This is the F2 interleaving: committed-to-park-with-A,
     //    THEN B registers.
-    TimerRegistration* reg_b = E11TimerTestHooks::register_test_deadline(
+    TimerRegistration* reg_b = TimerCtl::register_test_deadline(
         sched, &nb, &qB, Scheduler::deadline_t{200});
     SLUICE_CHECK_MSG(reg_b != nullptr,
                      "B(200) registered while worker held at the park-commit seam");
     // The new earlier deadline changed the earliest obligation to B (200).
     {
         Scheduler::deadline_t e = 0;
-        const bool has = E11TimerTestHooks::earliest_active_deadline(sched, e);
+        const bool has = TimerCtl::earliest_active_deadline(sched, e);
         SLUICE_CHECK_MSG(has && e == 200,
                          "new earlier deadline B(200) became the earliest obligation");
-        std::size_t cnt = E11TimerTestHooks::active_deadline_count(sched);
+        std::size_t cnt = TimerCtl::active_deadline_count(sched);
         SLUICE_CHECK_MSG(cnt == 2, "both A and B are now active");
     }
 
     // 4. Make B due (200) — strictly before A (10000). Release the seam. The
     //    worker re-loops; pump_deadlines_locked observes B due under global_mtx_
     //    and resolves B's node Expired. A is NOT due (10000 > 250).
-    E11TimerTestHooks::set_clock(sched, 250);
-    E11TimerTestHooks::release_park_commit(sched);
+    TimerCtl::set_clock(sched, 250);
+    TimerCtl::release_park_commit(sched);
 
     // Wait for the pump to resolve B (deterministic: the worker re-loops after
     // the seam release and pumps under global_mtx_). Bounded poll, not sleep.
@@ -1131,7 +1131,7 @@ SLUICE_TEST_CASE(timer_timer_reclamation_lazy_at_deadline) {
     constexpr unsigned N = 4;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
 
     WaitQueue q;
     std::array<WaitNode, N> nodes;
@@ -1152,9 +1152,9 @@ SLUICE_TEST_CASE(timer_timer_reclamation_lazy_at_deadline) {
     sched.run(1);  // Drain: each waiter registers then suspends (no resolver).
 
     // (pre) All N deadlines are ACTIVE and physically present.
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == N,
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == N,
                      "N active deadlines registered");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::timer_pool_size(sched) == N,
+    SLUICE_CHECK_MSG(TimerCtl::timer_pool_size(sched) == N,
                      "pool holds N entries (all active)");
 
     // Resolve each via RESOURCE_WAKE. The wake winner RETIRES the bound
@@ -1180,26 +1180,26 @@ SLUICE_TEST_CASE(timer_timer_reclamation_lazy_at_deadline) {
     // remain physically in the pool+heap because their deadlines (100000) have
     // not been reached by the pump. This is the overclaim F3 corrects: the pool
     // is NOT empty here.
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == 0,
                      "logical retirement immediate: 0 active after wakes");
     SLUICE_CHECK_MSG(
-        E11TimerTestHooks::timer_pool_count_in_state(
+        TimerCtl::timer_pool_count_in_state(
             sched, TimerRegistration::State::retired) == N,
         "N entries RETIRED (logical retirement immediate)");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::timer_pool_size(sched) == N,
+    SLUICE_CHECK_MSG(TimerCtl::timer_pool_size(sched) == N,
                      "physical retention: pool still holds N RETIRED entries");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::deadline_heap_size(sched) == N,
+    SLUICE_CHECK_MSG(TimerCtl::deadline_heap_size(sched) == N,
                      "physical retention: heap still holds N RETIRED entries");
 
     // (b) Advance the clock PAST the far-future deadlines and pump. Now the
     // pump pops each RETIRED entry (at its deadline) and erases its pool block.
     // Physical reclamation completes at the deadline.
-    E11TimerTestHooks::set_clock(sched, 200000);
+    TimerCtl::set_clock(sched, 200000);
     sched.advance_clock(200000);
 
-    SLUICE_CHECK_MSG(E11TimerTestHooks::timer_pool_size(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::timer_pool_size(sched) == 0,
                      "physical reclamation at-deadline: pool drained");
-    SLUICE_CHECK_MSG(E11TimerTestHooks::deadline_heap_size(sched) == 0,
+    SLUICE_CHECK_MSG(TimerCtl::deadline_heap_size(sched) == 0,
                      "physical reclamation at-deadline: heap drained");
     SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits");
 }
@@ -1221,7 +1221,7 @@ SLUICE_TEST_CASE(timer_three_way_race_one_winner_repeated) {
     for (int it = 0; it < kIters; ++it) {
         AsyncIoContext ctx(std::make_unique<IdleBackend>());
         Scheduler sched(ctx);
-        E11TimerTestHooks::enable_test_clock(sched);
+        TimerCtl::enable_test_clock(sched);
 
         WaitQueue q;
         WaitNode n;

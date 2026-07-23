@@ -763,7 +763,7 @@ SLUICE_TEST_CASE(queue_pr12_pop_result_move_assign_states) {
 #include <thread>
 
 namespace {
-using E11TimerTestHooks = sluice_async_test::TimerTestControl;
+using TimerCtl = sluice_async_test::TimerTestControl;
 
 constexpr unsigned kBoundedWaitIters = 200000;
 inline bool bounded_wait(std::atomic<bool>& flag,
@@ -788,8 +788,8 @@ SLUICE_TEST_CASE(queue_g1_push_until_expires_recovers_value) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 0);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 0);
     QueuePort port(sched, 1);
 
     // Pre-fill the ring so the producer must park.
@@ -850,8 +850,8 @@ SLUICE_TEST_CASE(queue_g1_pop_until_expires) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 0);
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 0);
     QueuePort port(sched, 2);
 
     std::atomic<bool> registered{false};
@@ -996,8 +996,8 @@ SLUICE_TEST_CASE(queue_h1_push_until_already_due_free_slot_committed) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);  // now = 100
     QueuePort port(sched, 2);
 
     bool committed = false;
@@ -1015,8 +1015,8 @@ SLUICE_TEST_CASE(queue_h1_push_until_already_due_free_slot_committed) {
     sched.run(1);
 
     SLUICE_CHECK_MSG(committed, "already-due push + free slot -> committed (resource-first)");
-    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
+    auto timers_before = TimerCtl::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     // Drain to satisfy the ring-empty destruction contract.
     auto rp = port.try_pop();
@@ -1033,8 +1033,8 @@ SLUICE_TEST_CASE(queue_h2_push_until_already_due_full_ring_expired) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);  // now = 100
     QueuePort port(sched, 1);
 
     // Pre-fill the ring so the producer cannot commit.
@@ -1061,8 +1061,8 @@ SLUICE_TEST_CASE(queue_h2_push_until_already_due_full_ring_expired) {
 
     SLUICE_CHECK_MSG(expired, "already-due push + full ring -> expired inline");
     SLUICE_CHECK_MSG(recovered == 777, "exact original T recovered on expire");
-    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
+    auto timers_before = TimerCtl::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     // Drain the pre-filled item to satisfy the ring-empty destruction contract.
     auto rp = port.try_pop();
@@ -1079,8 +1079,8 @@ SLUICE_TEST_CASE(queue_h3_pop_until_already_due_item_available) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);  // now = 100
     QueuePort port(sched, 2);
 
     // Pre-fill the ring so the consumer can pop immediately.
@@ -1106,8 +1106,8 @@ SLUICE_TEST_CASE(queue_h3_pop_until_already_due_item_available) {
 
     SLUICE_CHECK_MSG(got_item, "already-due pop + buffered item -> item (resource-first)");
     SLUICE_CHECK_MSG(popped == 314, "exact buffered value popped");
-    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
+    auto timers_before = TimerCtl::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     QueueTeardownSession session = port.begin_teardown();
     SLUICE_CHECK(session.empty());
@@ -1120,8 +1120,8 @@ SLUICE_TEST_CASE(queue_h4_pop_until_already_due_empty_ring_expired) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11TimerTestHooks::enable_test_clock(sched);
-    E11TimerTestHooks::set_clock(sched, 100);  // now = 100
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 100);  // now = 100
     QueuePort port(sched, 2);
 
     bool expired = false;
@@ -1138,8 +1138,8 @@ SLUICE_TEST_CASE(queue_h4_pop_until_already_due_empty_ring_expired) {
     sched.run(1);
 
     SLUICE_CHECK_MSG(expired, "already-due pop + empty ring -> expired inline");
-    auto timers_before = E11TimerTestHooks::active_deadline_count(sched);
-    SLUICE_CHECK_MSG(E11TimerTestHooks::active_deadline_count(sched) == timers_before,
+    auto timers_before = TimerCtl::active_deadline_count(sched);
+    SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     QueueTeardownSession session = port.begin_teardown();
     SLUICE_CHECK(session.empty());

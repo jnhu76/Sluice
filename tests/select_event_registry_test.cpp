@@ -496,11 +496,11 @@ SLUICE_TEST_CASE(test_real_ordinary_waiter_and_coexistence) {
     Event ev(sched, /*initially_set=*/false);
     WaitNode node;
 
-    using E12Hooks = sluice_async_test::EventSeam;
+    using EventHooks = sluice_async_test::EventSeam;
 
     // Arm admission seam: pauses AFTER WaitNode registration, BEFORE final
     // SET check, WHILE holding global_mtx_ + q.mtx().
-    E12Hooks::arm_admission_before_final_check(sched);
+    EventHooks::arm_admission_before_final_check(sched);
 
     Fiber fwait;
     fwait.set_entry([&](Fiber&) {
@@ -532,13 +532,13 @@ SLUICE_TEST_CASE(test_real_ordinary_waiter_and_coexistence) {
     std::thread run_thread([&] { sched.run_live(1); });
 
     // Mechanical observation: WaitNode is registered.
-    E12Hooks::wait_admission_paused(sched);
+    EventHooks::wait_admission_paused(sched);
 
     // Start setter — it blocks on global_mtx_ (waiter holds it).
     std::thread set_thread([&] { ev.set(); });
 
     // Release waiter: submits Waiting and releases global_mtx_.
-    E12Hooks::release_admission(sched);
+    EventHooks::release_admission(sched);
 
     set_thread.join();
     run_thread.join();
@@ -588,10 +588,10 @@ SLUICE_TEST_CASE(test_phase_seam_reset_serialization) {
     SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
     sched.spawn(fwait);
 
-    using E12Hooks = sluice_async_test::EventSeam;
+    using EventHooks = sluice_async_test::EventSeam;
 
     // Arm the set-store-before-drain seam.
-    E12Hooks::arm_set_store_before_drain(sched);
+    EventHooks::arm_set_store_before_drain(sched);
 
     // External set() thread: stores SET, pauses mid-drain holding global_mtx_.
     std::thread set_thread([&] {
@@ -601,7 +601,7 @@ SLUICE_TEST_CASE(test_phase_seam_reset_serialization) {
 
     // Reset contender: attempts reset() while set() holds global_mtx_.
     std::thread reset_thread([&] {
-        E12Hooks::wait_set_paused(sched);
+        EventHooks::wait_set_paused(sched);
         reset_attempted.store(true, std::memory_order_release);
         ev.reset();
         reset_completed.store(true, std::memory_order_release);
@@ -618,7 +618,7 @@ SLUICE_TEST_CASE(test_phase_seam_reset_serialization) {
                      "reset blocked while set holds global_mtx_");
 
     // Release set: drain completes, global_mtx_ released, reset finishes.
-    E12Hooks::release_set(sched);
+    EventHooks::release_set(sched);
 
     set_thread.join();
     reset_thread.join();

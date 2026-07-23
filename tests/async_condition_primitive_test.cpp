@@ -53,10 +53,10 @@ using namespace sluice::async;
 using sluice::Result;
 
 namespace {
-using E11Timer = sluice_async_test::TimerTestControl;
+using TimerCtl = sluice_async_test::TimerTestControl;
 using SchedulerParkSeam = sluice_async_test::SchedulerParkSeam;
 using AsyncMutexSeam = sluice_async_test::AsyncMutexSeam;
-using E12CondSeam = sluice_async_test::AsyncConditionSeam;
+using CondSeam = sluice_async_test::AsyncConditionSeam;
 using AsyncMutexWaiterSeam = sluice_async_test::AsyncMutexWaiterSeam;
 using sluice_async_test::ControllerGuard;
 
@@ -354,12 +354,12 @@ SLUICE_TEST_CASE(cond_t3_register_before_release_closure) {
     // Arm the seam BEFORE the run starts (no race). run_live runs in a background
     // thread so THIS (main) thread can drive the seam coordination while the run
     // is resident (mirrors e12_event_test T30's proven pattern).
-    E12CondSeam::arm_register_before_handoff(sched);
+    CondSeam::arm_register_before_handoff(sched);
     std::thread run_thread([&] { sched.run_live(1); });
 
     // Block until the single worker parks in the phase seam (holding global_mtx_).
-    E12CondSeam::wait_register_paused(sched);
-    if (E12CondSeam::is_register_paused(sched)) {
+    CondSeam::wait_register_paused(sched);
+    if (CondSeam::is_register_paused(sched)) {
         // CAUSAL: the Condition node is Registered (waiting_count >= 1) and the
         // Mutex is STILL owned (the seam is BEFORE handoff). A concurrent notify
         // here would observe the registered node — InvNoLostNotifyWindow.
@@ -371,7 +371,7 @@ SLUICE_TEST_CASE(cond_t3_register_before_release_closure) {
         // The seam is reached AFTER register and BEFORE handoff, so the owner
         // has NOT released the Mutex: ownership is retained at this instant.
         mutex_still_owned_observed.store(true, std::memory_order::release);
-        E12CondSeam::release_register(sched);
+        CondSeam::release_register(sched);
         // After release the handoff runs and the owner parks on the Condition
         // queue; notify resolves it so wait() can return.
         cond.notify_one();
@@ -524,7 +524,7 @@ SLUICE_TEST_CASE(cond_t17_reacquire_after_expired) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11Timer::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
     AsyncMutex mtx(sched);
     AsyncCondition cond(mtx);
 
@@ -616,8 +616,8 @@ SLUICE_TEST_CASE(cond_t1_already_due_inline_expired_retains_ownership) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11Timer::enable_test_clock(sched);
-    E11Timer::set_clock(sched, 500);   // clock is at 500
+    TimerCtl::enable_test_clock(sched);
+    TimerCtl::set_clock(sched, 500);   // clock is at 500
     AsyncMutex mtx(sched);
     AsyncCondition cond(mtx);
 
@@ -708,16 +708,16 @@ SLUICE_TEST_CASE(cond_t4_notify_in_release_register_boundary) {
     SLUICE_CHECK(sched.init_fiber(owner, sa.base(), sa.size()));
     sched.spawn(owner);
 
-    E12CondSeam::arm_register_before_handoff(sched);
+    CondSeam::arm_register_before_handoff(sched);
     std::thread run_thread([&] { sched.run_live(1); });
-    E12CondSeam::wait_register_paused(sched);
+    CondSeam::wait_register_paused(sched);
 
     std::thread notify_thread([&] {
         cond.notify_one();
         notify_completed.store(true, std::memory_order::release);
     });
     std::this_thread::yield();
-    E12CondSeam::release_register(sched);
+    CondSeam::release_register(sched);
 
     run_thread.join();
     notify_thread.join();
@@ -1056,7 +1056,7 @@ SLUICE_TEST_CASE(cond_t13a_expire_wins_over_notify_all) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11Timer::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
     AsyncMutex mtx(sched);
     AsyncCondition cond(mtx);
 
@@ -1102,7 +1102,7 @@ SLUICE_TEST_CASE(cond_t13b_notify_all_wins_over_expire) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    E11Timer::enable_test_clock(sched);
+    TimerCtl::enable_test_clock(sched);
     AsyncMutex mtx(sched);
     AsyncCondition cond(mtx);
 
@@ -1682,16 +1682,16 @@ SLUICE_TEST_CASE(cond_t30_lost_notify_window_50) {
         SLUICE_CHECK(sched.init_fiber(w, sa.base(), sa.size()));
         sched.spawn(w);
 
-        E12CondSeam::arm_register_before_handoff(sched);
+        CondSeam::arm_register_before_handoff(sched);
         std::thread run_thread([&] { sched.run_live(1); });
-        E12CondSeam::wait_register_paused(sched);
+        CondSeam::wait_register_paused(sched);
         // Spawn a separate thread to call notify_one. It will block on
         // global_mtx_ (held by the seam-paused worker). After release_register,
         // the worker continues through handoff → suspend, releases global_mtx_,
         // and then the notify thread resolves the node — proving the notify
         // arrives during the registered-but-not-yet-resumed vulnerable window.
         std::thread notify_thread([&] { cond.notify_one(); });
-        E12CondSeam::release_register(sched);
+        CondSeam::release_register(sched);
         notify_thread.join();
         run_thread.join();
 
@@ -1722,7 +1722,7 @@ SLUICE_TEST_CASE(cond_t31_notify_cancel_expire_500) {
     for (int it = 0; it < ITERS; ++it) {
         AsyncIoContext ctx(std::make_unique<IdleBackend>());
         Scheduler sched(ctx);
-        E11Timer::enable_test_clock(sched);
+        TimerCtl::enable_test_clock(sched);
         AsyncMutex mtx(sched);
         AsyncCondition cond(mtx);
 
@@ -1833,9 +1833,9 @@ SLUICE_TEST_CASE(cond_t32_notify_before_drain_seam_50) {
         SLUICE_CHECK(sched.init_fiber(notifier, sn.base(), sn.size()));
         sched.spawn(notifier);
 
-        E12CondSeam::arm_notify_before_drain(sched);
+        CondSeam::arm_notify_before_drain(sched);
         std::thread run_thread([&] { sched.run_live(1); });
-        E12CondSeam::wait_notify_paused(sched);
+        CondSeam::wait_notify_paused(sched);
 
         // Seam is paused: global_mtx_ held by notifier, drain NOT started.
         // Verify that no nodes are resolved yet.
@@ -1844,7 +1844,7 @@ SLUICE_TEST_CASE(cond_t32_notify_before_drain_seam_50) {
                              "seam paused before any node resolved");
         }
 
-        E12CondSeam::release_notify(sched);
+        CondSeam::release_notify(sched);
         run_thread.join();
 
         int resolved = 0;

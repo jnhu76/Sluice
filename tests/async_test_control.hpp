@@ -14,7 +14,7 @@
 //     on Scheduler (compiled only under the define).
 //
 // The old forgeable friend structs (SchedulerTestHooks, E9ParkSeamHooks,
-// E11TimerTestHooks, E12EventTestHooks) are REMOVED. Tests use this facade.
+// TimerCtl, EventHooks) are REMOVED. Tests use this facade.
 #pragma once
 
 #include "async_test_control_internal.hpp"
@@ -88,7 +88,7 @@ struct SchedulerParkSeam {
     }
 };
 
-// ---- E11 clock/timer control (was E11TimerTestHooks) ----
+// ---- E11 clock/timer control (was TimerCtl) ----
 // Routes through Scheduler::AsyncTestAccess (guarded accessor). The clock/
 // timer fields are dual-use production state; only the WRITE/observation
 // accessors are test-variant-only.
@@ -148,7 +148,7 @@ struct TimerTestControl {
     }
 };
 
-// ---- E12 event phase seams (was E12EventTestHooks) ----
+// ---- E12 event phase seams (was EventHooks) ----
 struct EventSeam {
     static void arm_set_store_before_drain(sluice::async::Scheduler& s) noexcept {
         sluice_async_test::arm(s, PhaseTag::event_set_store_before_drain);

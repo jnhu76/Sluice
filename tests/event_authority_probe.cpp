@@ -12,14 +12,14 @@
 //
 // It deliberately includes ONLY public production headers and uses fully-
 // qualified names (no test TU friend struct). The friend struct
-// E12EventTestHooks is defined ONLY in the e12_event test TU; an ordinary
+// EventHooks is defined ONLY in the e12_event test TU; an ordinary
 // production TU cannot name it.
 #include <sluice/async/event.hpp>
 #include <sluice/async/scheduler.hpp>
 
 // Attempt the forbidden bypass. This must fail to compile because Event has NO
 // public wait_queue() accessor (it is private, reachable only via the test-only
-// friend struct E12EventTestHooks defined in the e12 test TU).
+// friend struct EventHooks defined in the e12 test TU).
 void bypass_event_authority(sluice::async::Event& event,
                             sluice::async::Scheduler& scheduler) {
     // F-EVENT-AUTH: this would resolve an Event waiter as Woken while the Event
