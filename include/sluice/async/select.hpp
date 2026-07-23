@@ -84,7 +84,6 @@ public:
 
 private:
     friend class Scheduler;
-    friend struct detail::SelectCaseDescriptor;
 
     // P5: the narrow production construction path (docs/e13-select-public-api.md
     // §6). Scheduler-only: an admitted group builds exactly ONE SelectResult
@@ -121,7 +120,7 @@ public:
 
 private:
     friend class Scheduler;
-    friend struct detail::SelectCaseDescriptor;
+    friend class detail::SelectCaseDescriptor;  // matches definition (ODR tag)
     Event* event_;
 };
 
@@ -135,7 +134,7 @@ public:
 
 private:
     friend class Scheduler;
-    friend struct detail::SelectCaseDescriptor;
+    friend class detail::SelectCaseDescriptor;  // matches definition (ODR tag)
     Scheduler* scheduler_;
     select_deadline_t deadline_;
 };
