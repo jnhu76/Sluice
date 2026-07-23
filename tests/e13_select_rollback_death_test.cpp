@@ -143,20 +143,27 @@ void child_n2_rollback_after_finish_registration() {
 void child_n3_rollback_after_winner() {
     install_death_handlers();
     RGroup g;
-    // Forge a winner via the detached-group test entry on a throwaway group,
-    // then point THIS group's winner at it via the friend claim path is not
-    // available; instead set a winner directly by claiming on a detached group
-    // and copying — simpler: the winner check reads group.winner(); we set it
-    // by routing a real claim on a registered candidate. The cleanest forge is
-    // to claim on a detached group then point group.winner_ — but winner_ is
-    // private. Instead, build a registered candidate and claim it.
     g.add_event_arm(0);
     g.arms[0].state = ArmState::candidate_ready;
-    // Claim the winner through the real processor (sets group.winner_).
-    (void)AsyncTestAccess::select_process_group(g.sched, g.group, /*candidate=*/0);
-    // group.phase is now Completed (inline publication); BeginRollback rejects
-    // both because phase != Building AND winner != kNoWinner.
-    g.group.set_phase(GroupPhase::building);  // reset phase only; winner stays
+    // Claim the winner through the real processor (sets group.winner_). The
+    // processor's preflight asserts the phase is Selecting or Armed, so drive
+    // it in the Selecting domain rather than Building — otherwise the child
+    // would terminate on the preflight PHASE assert instead of reaching
+    // BeginRollback, masking the winner-precondition we mean to prove.
+    g.group.set_phase(GroupPhase::selecting);
+    const bool claimed =
+        AsyncTestAccess::select_process_group(g.sched, g.group, /*candidate=*/0);
+    // The whole point of N3 is a PRESENT winner; if the claim did not land we
+    // would be proving nothing. Bail to a distinct non-termination exit so a
+    // regression (silent claim-lost) shows up as an explicit failure rather
+    // than a false pass.
+    if (!claimed || g.group.winner() == sad::kNoWinner) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    // Reset ONLY the phase to Building so BeginRollback passes its phase check
+    // and reaches the winner precondition (the invariant under test). winner
+    // is left in place on purpose.
+    g.group.set_phase(GroupPhase::building);
     AsyncTestAccess::select_begin_rollback(g.sched, g.group);
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }

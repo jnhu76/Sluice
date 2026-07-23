@@ -1396,7 +1396,6 @@ void Scheduler::select_rollback_arm_locked(
 void Scheduler::select_finish_rollback_locked(
     detail::SelectGroup& group, detail::SelectArmSlot* arms,
     std::size_t arm_count, std::size_t registered_count) noexcept {
-    (void)group;
     // Every registered arm must be Retired and fully unlinked/retired.
     for (std::size_t i = 0; i < registered_count; ++i) {
         const detail::SelectArmSlot& arm = arms[i];

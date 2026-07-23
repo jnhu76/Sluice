@@ -537,6 +537,154 @@ SLUICE_TEST_CASE(p7_t8_stale_timer_after_frame_unwind) {
 }
 
 // ===========================================================================
+// P7-T9 — rollback transaction isolation under global_mtx_.
+//
+// Goal: prove that while the rollback transaction holds global_mtx_, a
+// concurrent Event set on a DIFFERENT arm cannot observe partial
+// registration state. The Event set path (Phase-1 Select scan) takes
+// global_mtx_ too, so it must serialize AFTER the rollback completes and
+// must see only the clean post-rollback (Aborted) group.
+//
+// Determinism (no sleep_for as a correctness condition):
+//   1. arm e13_rollback_aborted so the worker PAUSES at the end of the
+//      rollback transaction while STILL HOLDING global_mtx_;
+//   2. wait_reached -> the rollback transaction is now in flight, G held;
+//   3. start the contender thread; it calls ev.set() which blocks on G;
+//   4. spin-verify the contender has NOT completed (it is blocked on G),
+//      so the partial-registration window is never observable to it;
+//   5. release the phase -> worker finishes rollback, rethrows, drops G;
+//   6. the contender's ev.set() now proceeds and observes only the clean
+//      post-rollback group: no winner, no publication, no stale arm.
+//
+// Topology (mirrors ST-16/ST-17): run_live blocks the main thread driving
+// the worker; a coordinator thread orchestrates the seam + contender so it
+// all runs concurrently with the live worker.
+//
+// Assertions: contender did block (not an instantaneous no-op); rollback
+// threw; no publication / liveness drift; the Event SET is recorded; the
+// next Select on a fresh group still works (no Scheduler corruption).
+// TSan-clean by construction (the only shared mutation is under G).
+// ===========================================================================
+SLUICE_TEST_CASE(p7_t9_rollback_isolation_under_g) {
+    if constexpr (!sa::fiber_ctx::supported) return;
+    RollbackFixture f;
+    Event ev(f.sched, /*initially_set=*/false);
+    stest::E11TimerControl::set_clock(f.sched, 0);
+
+    // Inject failure after the FIRST arm registers (Event arm commits, the
+    // Timer arm's registration then throws -> rollback of the Event prefix).
+    RollbackSeam::configure_fail_after(f.sched, 1);
+
+    const std::size_t adc_before =
+        stest::E11TimerControl::active_deadline_count(f.sched);
+    const std::size_t ast_before = active_select_timers(f.sched);
+
+    std::atomic<bool> caught{false};
+    Fiber fb;
+    fb.set_entry([&](Fiber&) {
+        try {
+            (void)sa::select(f.sched,
+                             EventSelectCase{ev},
+                             TimerSelectCase{f.sched, Scheduler::deadline_t{1000}});
+        } catch (const RollbackSeam::FailureException&) {
+            caught.store(true, std::memory_order_release);
+        }
+    });
+    FiberStack sw;
+    [[maybe_unused]] const bool inited =
+        f.sched.init_fiber(fb, sw.base(), sw.size());
+    f.sched.spawn(fb);
+
+    // Arm the in-transaction pause so the worker holds G at rollback end.
+    stest::arm(f.sched, stest::PhaseTag::e13_rollback_aborted);
+
+    std::atomic<bool> contender_done{false};
+    std::atomic<bool> contender_blocked_observed{false};
+    std::thread contender;
+    std::thread coordinator([&] {
+        // (1) The caller Fiber only reaches select() under run_live below, so
+        // this coordinator runs CONCURRENTLY with the live worker. Wait until
+        // the rollback transaction is genuinely in flight: paused at
+        // e13_rollback_aborted, HOLDING global_mtx_.
+        stest::wait_reached(f.sched, stest::PhaseTag::e13_rollback_aborted);
+
+        // (2) NOW start the contender: an external OS thread sets the Event.
+        // Event::set acquires global_mtx_ for its Phase-1 Select scan; since
+        // the worker holds G inside the rollback transaction, the contender
+        // MUST block here until the rollback releases G. This is the
+        // load-bearing isolation window.
+        contender = std::thread([&] {
+            ev.set();
+            contender_done.store(true, std::memory_order_release);
+        });
+
+        // (3) Deterministic proof the contender is blocked ON G (not finished):
+        // it cannot have completed while the worker still holds G. A bounded
+        // yield loop is OBSERVATION, not the correctness condition —
+        // correctness is the mutex ordering; this confirms the contender
+        // actually serialized behind the rollback.
+        for (int i = 0; i < 128; ++i) {
+            if (contender_done.load(std::memory_order_acquire)) break;
+            std::this_thread::yield();
+        }
+        contender_blocked_observed.store(
+            !contender_done.load(std::memory_order_acquire),
+            std::memory_order_release);
+
+        // (4) Release the in-transaction pause: the worker completes the
+        // rollback, rethrows the synthetic failure, and drops global_mtx_.
+        stest::release(f.sched, stest::PhaseTag::e13_rollback_aborted);
+    });
+
+    // Drive the run on the main thread. The worker runs the caller Fiber into
+    // select(), the registration-failure seam fires, the rollback transaction
+    // runs + pauses holding G, the contender blocks on G, the coordinator
+    // releases the seam, the worker finishes + rethrows + drops G, the
+    // contender's ev.set() proceeds. run_live returns once quiescent.
+    f.sched.run_live(1);
+    coordinator.join();
+    contender.join();
+
+    // --- post-conditions: no partial-registration leakage ---
+    SLUICE_CHECK_MSG(contender_blocked_observed.load(std::memory_order_acquire),
+                     "contender blocked on global_mtx_ during rollback "
+                     "(could not observe partial registration)");
+    SLUICE_CHECK_MSG(caught.load(std::memory_order_acquire),
+                     "rollback completed and rethrew the synthetic failure");
+    SLUICE_CHECK_MSG(contender_done.load(std::memory_order_acquire),
+                     "contender's ev.set() completed after rollback released G");
+    // No Select winner / publication survived the rollback.
+    SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(f.sched) == 0,
+                     "no lingering waiting Select after rollback");
+    SLUICE_CHECK_MSG(f.sched.runnable_count() == 0,
+                     "no runnable drift after rollback + contender");
+    // Timer authority fully closed by the rollback (the Timer arm's
+    // registration threw before it committed, so it was never Scheduler-owned;
+    // asserted for completeness).
+    SLUICE_CHECK_MSG(
+        stest::E11TimerControl::active_deadline_count(f.sched) == adc_before,
+        "active_deadline_count at baseline (Timer arm never committed)");
+    SLUICE_CHECK_MSG(active_select_timers(f.sched) == ast_before,
+                     "no ACTIVE Select Timer blocks leaked");
+    SLUICE_CHECK_MSG(ev.is_set(), "Event SET recorded by the contender");
+
+    // The injection seam MUST be disabled before the sanity-probe Select, or
+    // the probe would itself hit the synthetic failure.
+    RollbackSeam::disable(f.sched);
+
+    // The next Select on a FRESH group still works: the Scheduler was not
+    // corrupted by the concurrent rollback + Event set.
+    Event ev2(f.sched, /*initially_set=*/true);
+    SelectResult again;
+    Fiber probe_fb;
+    run_one_worker(f.sched, probe_fb, [&] {
+        again = sa::select(f.sched, EventSelectCase{ev2});
+    });
+    SLUICE_CHECK_MSG(again.has_winner(), "Scheduler usable after isolation test");
+    SLUICE_CHECK_MSG(again.kind() == SelectKind::event, "fresh Select Event winner");
+}
+
+// ===========================================================================
 // P7-T10 — repeated rollback operations on the same Scheduler.
 // After every call: all Event ports clean, active_deadline_count baseline
 // restored, no accumulating ACTIVE Select Timer blocks, stale heap entries

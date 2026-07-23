@@ -53,14 +53,22 @@ echo "# started:  $(date -u +%FT%TZ)" >&2
 passed=0
 failed_iter=0
 failed_status=0
-fail_out=""
+# Capture the FIRST failure's stdout+stderr verbatim. A flaky failure may not
+# reproduce on a second run, so we must NOT re-run the binary to fetch output —
+# we record the real first-run output + exit status and never overwrite them.
+fail_tmp=$(mktemp -t sluice-stability-fail.XXXXXX)
+trap 'rm -f "$fail_tmp"' EXIT
 start=$(date +%s)
 
 for ((i=1; i<=COUNT; i++)); do
-  if ! "$BIN_PATH" >/dev/null 2>&1; then
+  # Run ONCE, capturing combined output to the capture file. Preserve the REAL
+  # exit status (no `|| true`, no masking): if the binary fails, this is the
+  # authoritative failure现场. We read $? immediately into failed_status so a
+  # later `set -e` cannot erase it.
+  "$BIN_PATH" >"$fail_tmp" 2>&1 || failed_status=$?
+  if [ "$failed_status" -ne 0 ]; then
     failed_iter=$i
-    fail_out=$("$BIN_PATH" 2>&1 || true)
-    failed_status=1
+    passed=$((i - 1))
     break
   fi
   passed=$i
@@ -72,13 +80,21 @@ done
 end=$(date +%s)
 elapsed=$((end - start))
 
+# Sanitizer env summary (only the ones that change binary behavior).
+san_env=""
+for v in ASAN_OPTIONS TSAN_OPTIONS UBSAN_OPTIONS MSAN_OPTIONS; do
+  if [ -n "${!v:-}" ]; then san_env+="${v}=${!v} "; fi
+done
+
 echo "# ----- summary -----" >&2
 echo "# binary=$BINARY filter='${FILTER:-}' requested=$COUNT passed=$passed" >&2
-if [ "$failed_status" -ne 0 ]; then
+if [ "$failed_iter" -ne 0 ]; then
   echo "# FAILED at iteration $failed_iter/$COUNT" >&2
-  echo "# exit status: 1" >&2
-  echo "# failure output (last run):" >&2
-  printf '%s\n' "$fail_out" | sed 's/^/#   /' >&2
+  echo "# exit code:   $failed_status" >&2
+  echo "# sanitizer:   ${san_env:-<none>}" >&2
+  echo "# commit:      $(git -C "$(dirname "$0")/.." rev-parse --short HEAD 2>/dev/null || echo unknown)" >&2
+  echo "# first-failure output (run ${failed_iter}, captured once, NOT re-run):" >&2
+  sed 's/^/#   /' "$fail_tmp" >&2
   exit 1
 fi
 echo "# exit status: 0" >&2

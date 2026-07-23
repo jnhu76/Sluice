@@ -43,6 +43,7 @@ namespace stest = sluice_async_test;
 using Scheduler = sa::Scheduler;
 using Event = sa::Event;
 using Fiber = sa::Fiber;
+using AsyncTestAccess = sa::Scheduler::AsyncTestAccess;
 
 namespace {
 
@@ -81,6 +82,15 @@ void run_one_worker(Scheduler& sched, Fiber& fb, Body&& body) {
 SLUICE_TEST_CASE(st22_select_from_external_thread_rejected) {
     ContractFixture f;
     Event ev(f.sched);
+    // Snapshot the read-only Scheduler observables BEFORE the rejected call.
+    // A pre-admission rejection must not touch any of them (no Event arm
+    // linked, no Timer committed, no pending Select, no runnable publication).
+    const std::size_t adc_before =
+        stest::E11TimerControl::active_deadline_count(f.sched);
+    const std::size_t wsc_before =
+        AsyncTestAccess::waiting_select_count(f.sched);
+    const std::size_t runnable_before = f.sched.runnable_count();
+
     bool caught_logic = false;
     // Call select() from a plain std::thread (g_worker == nullptr on it).
     std::thread t([&] {
@@ -95,8 +105,15 @@ SLUICE_TEST_CASE(st22_select_from_external_thread_rejected) {
     t.join();
     SLUICE_CHECK_MSG(caught_logic,
                      "select() from an external OS thread throws std::logic_error");
-    // No registration occurred: the Event port is clean.
-    SLUICE_CHECK_MSG(true, "no registration side effect (rejection is pre-admission)");
+    // Real no-side-effect observation (not a tautology): every Scheduler
+    // observable is unchanged — the rejection happened before any registration.
+    SLUICE_CHECK_MSG(
+        stest::E11TimerControl::active_deadline_count(f.sched) == adc_before,
+        "no Timer committed (rejection is pre-admission)");
+    SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(f.sched) == wsc_before,
+                     "no pending Select registered (rejection is pre-admission)");
+    SLUICE_CHECK_MSG(f.sched.runnable_count() == runnable_before,
+                     "no runnable publication (rejection is pre-admission)");
 }
 
 // ===========================================================================
@@ -109,6 +126,12 @@ SLUICE_TEST_CASE(st23_wrong_current_worker_scheduler_rejected) {
     sa::AsyncIoContext ctx_b{std::make_unique<sa::FakeAsyncBackend>()};
     Scheduler sched_b(ctx_b);
     Event ev(sched_b);
+    // Snapshot sched_b BEFORE: a wrong-Scheduler rejection must not register
+    // anything on the target Scheduler either.
+    const std::size_t adc_b_before =
+        stest::E11TimerControl::active_deadline_count(sched_b);
+    const std::size_t wsc_b_before =
+        AsyncTestAccess::waiting_select_count(sched_b);
 
     bool caught_logic = false;
     // Run a Fiber on sched (sched's worker), but call select() on sched_b:
@@ -126,6 +149,12 @@ SLUICE_TEST_CASE(st23_wrong_current_worker_scheduler_rejected) {
     SLUICE_CHECK_MSG(
         caught_logic,
         "select() on a Scheduler that does not own this worker throws std::logic_error");
+    // Real no-side-effect observation: sched_b is untouched by the rejection.
+    SLUICE_CHECK_MSG(
+        stest::E11TimerControl::active_deadline_count(sched_b) == adc_b_before,
+        "no Timer committed on sched_b (rejection is pre-admission)");
+    SLUICE_CHECK_MSG(AsyncTestAccess::waiting_select_count(sched_b) == wsc_b_before,
+                     "no pending Select on sched_b (rejection is pre-admission)");
 }
 
 // ===========================================================================

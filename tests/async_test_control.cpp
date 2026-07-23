@@ -44,6 +44,20 @@ PhaseState& phase_of(SchedulerController& c, PhaseTag tag) noexcept {
     return c.phases[static_cast<std::size_t>(tag)];
 }
 
+// Reset every rollback-observation field on the controller. Shared by
+// configure_rollback_fail_after and reset_rollback_injection (which differ only
+// in the rollback_configured_fail_after value they store). Caller MUST already
+// hold the e13_rollback_aborted phase lock: these fields are observed under it.
+void reset_rollback_observation_locked(SchedulerController& c) noexcept {
+    c.rollback_successful_registrations = 0;
+    c.rollback_begin_count = 0;
+    c.rollback_finish_count = 0;
+    c.rollback_arm_order_len = 0;
+    c.rollback_arm_order_indices.fill(0);
+    c.rollback_arm_order_kinds.fill(0);
+    c.rollback_event_linked_before.fill(false);
+}
+
 }  // namespace
 
 void test_phase(sluice::async::Scheduler& s, PhaseTag tag) noexcept {
@@ -290,13 +304,7 @@ void configure_rollback_fail_after(sluice::async::Scheduler& s,
     std::lock_guard<std::mutex> lk(p.mtx);
     c->rollback_configured_fail_after = fail_after;
     // Reset the per-call observation for the next failing admission.
-    c->rollback_successful_registrations = 0;
-    c->rollback_begin_count = 0;
-    c->rollback_finish_count = 0;
-    c->rollback_arm_order_len = 0;
-    c->rollback_arm_order_indices.fill(0);
-    c->rollback_arm_order_kinds.fill(0);
-    c->rollback_event_linked_before.fill(false);
+    reset_rollback_observation_locked(*c);
 }
 
 void reset_rollback_injection(sluice::async::Scheduler& s) noexcept {
@@ -305,13 +313,7 @@ void reset_rollback_injection(sluice::async::Scheduler& s) noexcept {
     PhaseState& p = phase_of(*c, PhaseTag::e13_rollback_aborted);
     std::lock_guard<std::mutex> lk(p.mtx);
     c->rollback_configured_fail_after = kRollbackFailAfterDisabled;
-    c->rollback_successful_registrations = 0;
-    c->rollback_begin_count = 0;
-    c->rollback_finish_count = 0;
-    c->rollback_arm_order_len = 0;
-    c->rollback_arm_order_indices.fill(0);
-    c->rollback_arm_order_kinds.fill(0);
-    c->rollback_event_linked_before.fill(false);
+    reset_rollback_observation_locked(*c);
 }
 
 std::size_t rollback_fail_after(sluice::async::Scheduler& s) noexcept {
