@@ -415,24 +415,45 @@ injection seam — no natural allocation failure occurs mid-registration):
 
 ```text
 under global_mtx_ (still held from the registration CS):
-    for each arm a in 0..last_registered:
-        if a is an Event arm and a is linked in its SelectPort:
-            SelectPort::unlink_locked(a)        // structural removal
-            a.state = retired                   // terminal classification
-        if a is a Timer arm and a.stable_reg is active:
-            a.stable_reg.state_.store(retired)  // retire the stable block
-            a.state = retired
-    group.phase = Aborted
+    BeginRollback: group.phase = Rollback   // preflight: Building/NoWinner/None
+    for each registered arm a in reverse order (last_registered .. 0):
+        a.state = retired                   // terminal classification FIRST
+        if a is an Event arm:
+            SelectPort::unlink_locked(a)    // canonical structural removal
+        if a is a Timer arm:
+            select_timer_retire_locked(a.stable_reg)   // ACTIVE->RETIRED CAS,
+                                                        // --active_deadline_count_,
+                                                        // recompute earliest
+    for each never-registered suffix arm a in last_registered..arm_count:
+        a.state = detached                  // normalize Prepared -> Detached
+    FinishRollback: group.phase = Aborted   // only after every authority closed
 release global_mtx_
-throw (the synthetic SelectRegistrationError, or the original exception)
+rethrow (the original exception, unchanged)
 ```
 
+**Ordering (normative, matches the closed formal adapter
+`E13SelectEventTimer.tla` and the existing Timer-loser discipline SN-9):**
+classify the registered arm as Retired *before* closing its external callback
+authority. For a Timer arm this refines
+`RollbackCancelTimer(i)` (arm `Registered -> TimerCancelled`, `timer_state` still
+Active) *then* `RollbackRetireTimer(i)` (`timer_state Active -> Retired`). The
+registration prefix is rolled back in reverse registration order
+(`last_registered-1 .. 0`); the never-registered suffix
+(`[last_registered, arm_count)`) is normalized to Detached and its Timer blocks
+stay in the caller-frame `tmp_pool` (never Scheduler-owned, never retired through
+Scheduler authority). See `docs/e13-select-p7-rollback-closeout.md` §25 for the
+full formal-to-production refinement map.
+
 No runnable publication occurs. No result is written. The caller frame unwinds
-and destroys the group + arms. The rollback is safe because each Timer block is
-spliced individually during registration: only already-registered Timer arms
-have their blocks in the Scheduler pool (and are retired by the loop above);
-not-yet-registered Timer blocks remain in the local `tmp_pool` and are
-destroyed with the frame, never having been observable by any other thread.
+and destroys the group + arms (the destructor accepts Aborted for an admitted
+group). The rollback is safe because each Timer block is spliced individually
+during registration: only already-registered Timer arms have their blocks in the
+Scheduler pool (and are retired by the loop above, after arm classification);
+not-yet-registered Timer blocks remain in the local `tmp_pool` and are destroyed
+with the frame, never having been observable by any other thread. The retired
+stable block is the post-frame UAF safety boundary: the pump loads its state
+first and, seeing RETIRED, skips without dereferencing the now-dead caller-frame
+arm (the `TimerPumpSkip` closure, unchanged from P3).
 
 ### 5.3 No half-registered state observable
 
