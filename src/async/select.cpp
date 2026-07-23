@@ -1269,6 +1269,13 @@ void Scheduler::select_begin_rollback_locked(detail::SelectGroup& group) noexcep
            "select_begin_rollback_locked: group.arm_count_ < 1");
     assert(group.arm_count_ <= kPreflightMaxArms &&
            "select_begin_rollback_locked: arm_count_ exceeds kSelectMaxArms");
+    // Release defense-in-depth: wrong-home group, null arms, or an arm_count_
+    // outside the valid registration range is a structural invariant violation
+    // that must fail fast before phase/winner inspection (no recovery).
+    if (group.scheduler_ != this || group.arms_ == nullptr ||
+        group.arm_count_ < 1 || group.arm_count_ > kPreflightMaxArms) {
+        detail::select_invariant_fail_fast();
+    }
 
     const detail::GroupPhase phase = group.phase();
     // Release-mode defense-in-depth: only Building is the legal rollback domain.
@@ -1308,6 +1315,9 @@ void Scheduler::select_rollback_arm_locked(
     // The arm is a fully-registered arm of this group.
     assert(arm.group == &group &&
            "select_rollback_arm_locked: arm.group != &group");
+    if (arm.group != &group) {
+        detail::select_invariant_fail_fast();
+    }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // Record the arm BEFORE classification (its kind + whether its Event
@@ -1326,6 +1336,11 @@ void Scheduler::select_rollback_arm_locked(
                "select_rollback_arm_locked: Event arm not Registered");
         assert(arm.event.event_ != nullptr &&
                "select_rollback_arm_locked: Event arm event_ is null");
+        // Release fail-fast BEFORE any unlink/retire/state mutation: a
+        // non-Registered Event arm must not be classified/closed here.
+        if (arm.state != detail::ArmState::registered) {
+            detail::select_invariant_fail_fast();
+        }
         // Mechanical membership: home_ must point at this Event's port (P7-N5
         // wrong-Event membership fails here BEFORE any unlink mutation).
         Event& ev = *arm.event.event_;
@@ -1344,6 +1359,11 @@ void Scheduler::select_rollback_arm_locked(
         // (§9.2) Required preconditions for a Timer arm.
         assert(arm.state == detail::ArmState::registered &&
                "select_rollback_arm_locked: Timer arm not Registered");
+        // Release fail fast BEFORE the reg validity checks / retire: a
+        // non-Registered Timer arm must not be classified/closed here.
+        if (arm.state != detail::ArmState::registered) {
+            detail::select_invariant_fail_fast();
+        }
         detail::SelectTimerRegistration* reg = arm.timer.stable_reg_;
         if (reg == nullptr ||
             reg->scheduler() != this ||
@@ -1440,6 +1460,11 @@ void Scheduler::select_rollback_registration_locked(
            "select_rollback_registration_locked: arms is null");
     assert(registered_count <= arm_count &&
            "select_rollback_registration_locked: registered_count > arm_count");
+    // Release fail fast BEFORE indexing/traversing: a null arms array or an
+    // out-of-range registered_count would walk arms[idx-1] out of bounds.
+    if (arms == nullptr || registered_count > arm_count) {
+        detail::select_invariant_fail_fast();
+    }
 
     select_begin_rollback_locked(group);
 
