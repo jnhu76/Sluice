@@ -199,7 +199,7 @@ template <class... Cases>
     requires (
         sizeof...(Cases) >= 1 &&
         sizeof...(Cases) <= kSelectMaxArms &&
-        (SelectCaseType<std::remove_cvref_t<Cases>> && ...)
+        (SelectCaseType<Cases> && ...)
     )
 SelectResult select(Scheduler& scheduler, Cases&&... cases) {
     std::array<detail::SelectCaseDescriptor, sizeof...(Cases)> descs{
