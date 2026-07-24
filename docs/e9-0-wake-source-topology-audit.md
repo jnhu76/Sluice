@@ -15,7 +15,7 @@ All evidence below is read from actual production source (HEAD
 
 ```
 HEAD:    1ca5d73db0dce1dc557b381e350b77d2212eb882
-command: scripts/verify-e8-stability.sh release e7_coord_test "" 500
+command: scripts/verify-runnable-steal-stability.sh release multi_worker_coord_test "" 500
 result:  500/500 PASS
 ```
 

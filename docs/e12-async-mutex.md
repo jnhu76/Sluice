@@ -1431,8 +1431,8 @@ synchronous `Mutex` (`include/sluice/async/mutex.hpp`) is unchanged.
 | `tests/async_test_control_internal.hpp` | `PhaseTag::e12_mutex_handoff_before_publication` (phases[7]) |
 | `tests/async_test_control.hpp` | `E12MutexSeam` facade |
 | `tests/async_test_control.cpp` | `std::size(c->phases)` loop (no hardcoded count) |
-| `tests/e12_async_mutex_test.cpp` | T0–T22 deterministic + 500/500 coordination |
-| `tests/e12_async_mutex_authority_probe.cpp` | Negative compile probe (must-not-compile) |
+| `tests/async_mutex_primitive_test.cpp` | T0–T22 deterministic + 500/500 coordination |
+| `tests/async_mutex_authority_probe.cpp` | Negative compile probe (must-not-compile) |
 
 ### 20.3 Private Scheduler helpers
 
@@ -1504,7 +1504,7 @@ OK    COMPILE-PROBE gate (raw WaitQueue/owner/is_locked bypass sealed)
 
 ### 20.7 Runtime test inventory
 
-`tests/e12_async_mutex_test.cpp` — 23 cases (T0–T22):
+`tests/async_mutex_primitive_test.cpp` — 23 cases (T0–T22):
 
 | Category | Tests |
 | -------- | ----- |
@@ -1531,8 +1531,8 @@ E12-C coordination: 500 / 500 PASS
 
 (T20: 500 iterations, K=2 waiters each, total_resolved == ITERS*K; cancel and
 handoff each win at least once; no queue/timer leak per iteration. Per repo
-convention the gate is assertion-only, matching e12_semaphore_test T30 /
-e12_event_test.)
+convention the gate is assertion-only, matching semaphore_primitive_test T30 /
+event_primitive_test.)
 
 ### 20.9 Sanitizer + regression results
 
@@ -1548,25 +1548,25 @@ handshake (no unsynchronized Scheduler state reads); full suite clean under
 TSan/ASan/UBSan.
 
 Regression:
-  E10 (e10_wait_queue_test):      ALL TESTS PASSED
-  E10 (e10_corrective_c5_test):   ALL TESTS PASSED
-  E11 (e11_timer_wait_test):      ALL TESTS PASSED
-  E12-A (e12_event_test):         ALL TESTS PASSED
-  E12-B (e12_semaphore_test):     ALL TESTS PASSED
-  E12-C (e12_async_mutex_test):   ALL TESTS PASSED (23 cases, 0 fail, 0 skip)
-  E8 steal (e8_steal_test e8_t3): 500 / 500 PASS
+  E10 (wait_queue_test):      ALL TESTS PASSED
+  E10 (wait_queue_unlink_topology_test):   ALL TESTS PASSED
+  E11 (timer_wait_test):      ALL TESTS PASSED
+  E12-A (event_primitive_test):         ALL TESTS PASSED
+  E12-B (semaphore_primitive_test):     ALL TESTS PASSED
+  E12-C (async_mutex_primitive_test):   ALL TESTS PASSED (23 cases, 0 fail, 0 skip)
+  E8 steal (runnable_steal_test e8_t3): 500 / 500 PASS
   full suite:                     ALL TESTS PASSED (0 fail, 0 skip)
 ```
 
 #### 20.9.1 Migration 500/500 gate (post Corrective-4)
 
 ```text
-T19 ownership migration: 500 / 500 PASS   (e12_async_mutex_test e12_mtx_t19_real_migration)
-E8 steal regression:     500 / 500 PASS   (e8_steal_test e8_t3)
-E12-C coordination:      500 / 500 PASS   (e12_async_mutex_test e12_mtx_t20_coordination_500)
+T19 ownership migration: 500 / 500 PASS   (async_mutex_primitive_test e12_mtx_t19_real_migration)
+E8 steal regression:     500 / 500 PASS   (runnable_steal_test e8_t3)
+E12-C coordination:      500 / 500 PASS   (async_mutex_primitive_test e12_mtx_t20_coordination_500)
 ```
 
-Runner: `scripts/verify-e8-stability.sh release <binary> <filter> 500`. Each T19
+Runner: `scripts/verify-runnable-steal-stability.sh release <binary> <filter> 500`. Each T19
 invocation started the binary, executed T19, asserted `blocker_running` on W0,
 asserted `acquire_worker==0` and `unlock_worker==1`, and exited successfully:
 0 launch failures, 0 retries, 0 skips.

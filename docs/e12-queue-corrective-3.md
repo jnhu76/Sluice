@@ -176,6 +176,6 @@ ticket is consumed).
   expiry. Pre-Corrective-3 these would `std::terminate` 5/5; post-
   Corrective-3 they PASS (the pump-driven expiry decrements both
   per-port counters, and `begin_teardown` succeeds).
-- All 20 `e12_async_queue_test` cases PASS on Clang Debug, GCC Debug,
+- All 20 `async_queue_primitive_test` cases PASS on Clang Debug, GCC Debug,
   Clang ASan, Clang TSan. E11/E12 sync primitive tests regress-clean.
 - Production `sluice_async` target compiles clean.

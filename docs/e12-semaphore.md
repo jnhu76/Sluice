@@ -591,9 +591,9 @@ record, not a reopening of §1–§13 (the CLOSED preparation authority).
 include/sluice/async/semaphore.hpp    (new)   public Semaphore API
 include/sluice/async/scheduler.hpp    (+)     private E12-B Scheduler seams
 src/async/scheduler.cpp               (+)     E12-B Scheduler implementation
-tests/e12_semaphore_test.cpp          (new)   deterministic runtime tests
-tests/e12_semaphore_authority_probe.cpp (new) NEG compile probe (F-SEM-SEAM-1)
-xmake.lua                             (+)     e12_semaphore_test target
+tests/semaphore_primitive_test.cpp          (new)   deterministic runtime tests
+tests/semaphore_authority_probe.cpp (new) NEG compile probe (F-SEM-SEAM-1)
+xmake.lua                             (+)     semaphore_primitive_test target
 scripts/verify-e12-semaphore-formal.sh (+)   compile-probe gate added
 ```
 
@@ -662,7 +662,7 @@ These seams are PUBLIC Scheduler methods (so the inline Semaphore wrappers can
 call them) but they take `WaitQueue&` / `std::atomic<uint32_t>&` by reference.
 Ordinary production code CANNOT obtain a Semaphore's private `waiters_` (no
 `wait_queue()` accessor) and therefore cannot synthesize a RESOURCE_WAKE —
-proven by the NEG compile probe (`e12_semaphore_authority_probe.cpp`).
+proven by the NEG compile probe (`semaphore_authority_probe.cpp`).
 
 ### 14.4 Lock order and synchronization domain
 
@@ -770,7 +770,7 @@ Scheduler worker. No Semaphore-private wake channel. (Proven by
 
 ### 14.12 Test inventory
 
-`tests/e12_semaphore_test.cpp` (31 cases):
+`tests/semaphore_primitive_test.cpp` (31 cases):
 
 ```text
 T0  construction + available() snapshot
@@ -806,20 +806,20 @@ T29 safe destruction after terminal closure
 T30 repeated mixed multi-waiter stress (100x K=3)
 ```
 
-NEG compile probe: `tests/e12_semaphore_authority_probe.cpp` (F-SEM-SEAM-1
+NEG compile probe: `tests/semaphore_authority_probe.cpp` (F-SEM-SEAM-1
 authority sealing).
 
 ### 14.13 Verification results (autonomous run)
 
 ```text
-targeted e12_semaphore_test (debug)            PASS (31/31)
-targeted e12_semaphore_test (release)          PASS
-TSan  e12_semaphore_test (clang tsan)          PASS (0 warnings)
-ASan  e12_semaphore_test (clang asan)          PASS (0 errors, 0 leaks)
-UBSan e12_semaphore_test (clang asanubsan)     PASS (0 errors, 0 leaks)
-TSan regression: e12_event_test                PASS (0 warnings)
-TSan regression: e11_timer_wait_test           PASS (0 warnings)
-TSan regression: e9_external_wake_test         PASS (0 warnings)
+targeted semaphore_primitive_test (debug)            PASS (31/31)
+targeted semaphore_primitive_test (release)          PASS
+TSan  semaphore_primitive_test (clang tsan)          PASS (0 warnings)
+ASan  semaphore_primitive_test (clang asan)          PASS (0 errors, 0 leaks)
+UBSan semaphore_primitive_test (clang asanubsan)     PASS (0 errors, 0 leaks)
+TSan regression: event_primitive_test                PASS (0 warnings)
+TSan regression: timer_wait_test           PASS (0 warnings)
+TSan regression: external_wake_test         PASS (0 warnings)
 async regression (debug): E12-A/E11/E10/E9     PASS (GREEN)
 formal gate (verify-e12-semaphore-formal.sh)   exit 0
   correct safety model                         PASS (58332 states / 12214 distinct)
@@ -839,7 +839,7 @@ TLC runtime version                            2026.07.09.134028 (rev 227f61b)
 
 See the final implementation report's section N. No blocking defect was found
 during the autonomous adversarial self-review; one non-blocking pre-existing
-observation was recorded (the `e10_corrective_c5_test` `-Wunused-variable` on
+observation was recorded (the `wait_queue_unlink_topology_test` `-Wunused-variable` on
 `order_bad`, unrelated to E12-B, present at HEAD `aab46e4`, out of scope).
 
 ### 14.15 Scope audit (autonomous)

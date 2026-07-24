@@ -238,7 +238,7 @@ P8 broadcast worklist in rollback:                                      0
 public SelectRegistrationFailure symbol:                                0
 ```
 
-### §30 Stability (reproducible via scripts/verify-e13-p7-stability.sh)
+### §30 Stability (reproducible via scripts/verify-select-rollback-stability.sh)
 
 ```text
 P7-T1  failure before first registration:  1000/1000 debug, 1000/1000 release

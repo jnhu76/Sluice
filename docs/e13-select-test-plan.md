@@ -581,9 +581,9 @@ All E13 tests require:
     - Debug build (assertions enabled)
 
 Test file naming convention:
-    e13_select_test.cpp         -- core Select tests (T1-T17)
+    select_test.cpp         -- core Select tests (T1-T17)
     e13_select_authority_probe.cpp -- authority/seal verification
-    e13_select_stress_test.cpp  -- high-contention stress (T14-T15)
+    select_stress_test.cpp  -- high-contention stress (T14-T15)
 
 Formal model:
     TLA+ spec for Candidate A protocol (Event + Timer)

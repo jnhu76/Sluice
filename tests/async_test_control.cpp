@@ -47,7 +47,7 @@ PhaseState& phase_of(SchedulerController& c, PhaseTag tag) noexcept {
 // Reset every rollback-observation field on the controller. Shared by
 // configure_rollback_fail_after and reset_rollback_injection (which differ only
 // in the rollback_configured_fail_after value they store). Caller MUST already
-// hold the e13_rollback_aborted phase lock: these fields are observed under it.
+// hold the select_rollback_aborted phase lock: these fields are observed under it.
 void reset_rollback_observation_locked(SchedulerController& c) noexcept {
     c.rollback_successful_registrations = 0;
     c.rollback_begin_count = 0;
@@ -190,9 +190,9 @@ void capture_admission_snapshot(sluice::async::Scheduler& s, PhaseTag tag,
     // worker holds global_mtx_ at this point.
     {
         std::lock_guard<std::mutex> lk(p.mtx);
-        if (tag == PhaseTag::e13_admission_armed) {
+        if (tag == PhaseTag::select_admission_armed) {
             c->admission_armed_snapshot = snap;
-        } else if (tag == PhaseTag::e13_admission_consumed) {
+        } else if (tag == PhaseTag::select_admission_consumed) {
             c->admission_consumed_snapshot = snap;
         }
     }
@@ -204,9 +204,9 @@ AdmissionSnapshot read_admission_snapshot(sluice::async::Scheduler& s,
     if (c == nullptr) return AdmissionSnapshot{};
     PhaseState& p = phase_of(*c, tag);
     std::lock_guard<std::mutex> lk(p.mtx);
-    if (tag == PhaseTag::e13_admission_armed) {
+    if (tag == PhaseTag::select_admission_armed) {
         return c->admission_armed_snapshot;
-    } else if (tag == PhaseTag::e13_admission_consumed) {
+    } else if (tag == PhaseTag::select_admission_consumed) {
         return c->admission_consumed_snapshot;
     }
     return AdmissionSnapshot{};
@@ -223,11 +223,11 @@ void capture_publication_snapshot(sluice::async::Scheduler& s, PhaseTag tag,
     // / resume path holds global_mtx_ at this point.
     {
         std::lock_guard<std::mutex> lk(p.mtx);
-        if (tag == PhaseTag::e13_publish_entry) {
+        if (tag == PhaseTag::select_publish_entry) {
             c->publish_entry_snapshot = snap;
-        } else if (tag == PhaseTag::e13_publish_done) {
+        } else if (tag == PhaseTag::select_publish_done) {
             c->publish_done_snapshot = snap;
-        } else if (tag == PhaseTag::e13_suspended_before_consume) {
+        } else if (tag == PhaseTag::select_suspended_before_consume) {
             c->suspended_before_consume_snapshot = snap;
         }
     }
@@ -239,11 +239,11 @@ PublicationSnapshot read_publication_snapshot(sluice::async::Scheduler& s,
     if (c == nullptr) return PublicationSnapshot{};
     PhaseState& p = phase_of(*c, tag);
     std::lock_guard<std::mutex> lk(p.mtx);
-    if (tag == PhaseTag::e13_publish_entry) {
+    if (tag == PhaseTag::select_publish_entry) {
         return c->publish_entry_snapshot;
-    } else if (tag == PhaseTag::e13_publish_done) {
+    } else if (tag == PhaseTag::select_publish_done) {
         return c->publish_done_snapshot;
-    } else if (tag == PhaseTag::e13_suspended_before_consume) {
+    } else if (tag == PhaseTag::select_suspended_before_consume) {
         return c->suspended_before_consume_snapshot;
     }
     return PublicationSnapshot{};
@@ -256,7 +256,7 @@ void increment_result_publication(sluice::async::Scheduler& s) noexcept {
     // (the same mutex the snapshots use) so a coordinator thread observes them
     // without acquiring global_mtx_. Incremented under global_mtx_ by the
     // publication path.
-    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    PhaseState& p = phase_of(*c, PhaseTag::select_publish_done);
     std::lock_guard<std::mutex> lk(p.mtx);
     ++c->result_publication_count;
 }
@@ -264,7 +264,7 @@ void increment_result_publication(sluice::async::Scheduler& s) noexcept {
 void increment_runnable_publication(sluice::async::Scheduler& s) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    PhaseState& p = phase_of(*c, PhaseTag::select_publish_done);
     std::lock_guard<std::mutex> lk(p.mtx);
     ++c->runnable_publication_count;
 }
@@ -272,7 +272,7 @@ void increment_runnable_publication(sluice::async::Scheduler& s) noexcept {
 std::size_t result_publication_count(sluice::async::Scheduler& s) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return 0;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    PhaseState& p = phase_of(*c, PhaseTag::select_publish_done);
     std::lock_guard<std::mutex> lk(p.mtx);
     return c->result_publication_count;
 }
@@ -280,7 +280,7 @@ std::size_t result_publication_count(sluice::async::Scheduler& s) noexcept {
 std::size_t runnable_publication_count(sluice::async::Scheduler& s) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return 0;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    PhaseState& p = phase_of(*c, PhaseTag::select_publish_done);
     std::lock_guard<std::mutex> lk(p.mtx);
     return c->runnable_publication_count;
 }
@@ -288,7 +288,7 @@ std::size_t runnable_publication_count(sluice::async::Scheduler& s) noexcept {
 void reset_publication_counts(sluice::async::Scheduler& s) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_publish_done);
+    PhaseState& p = phase_of(*c, PhaseTag::select_publish_done);
     std::lock_guard<std::mutex> lk(p.mtx);
     c->result_publication_count = 0;
     c->runnable_publication_count = 0;
@@ -300,7 +300,7 @@ void configure_rollback_fail_after(sluice::async::Scheduler& s,
                                    std::size_t fail_after) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_rollback_aborted);
+    PhaseState& p = phase_of(*c, PhaseTag::select_rollback_aborted);
     std::lock_guard<std::mutex> lk(p.mtx);
     c->rollback_configured_fail_after = fail_after;
     // Reset the per-call observation for the next failing admission.
@@ -310,7 +310,7 @@ void configure_rollback_fail_after(sluice::async::Scheduler& s,
 void reset_rollback_injection(sluice::async::Scheduler& s) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_rollback_aborted);
+    PhaseState& p = phase_of(*c, PhaseTag::select_rollback_aborted);
     std::lock_guard<std::mutex> lk(p.mtx);
     c->rollback_configured_fail_after = kRollbackFailAfterDisabled;
     reset_rollback_observation_locked(*c);
@@ -319,7 +319,7 @@ void reset_rollback_injection(sluice::async::Scheduler& s) noexcept {
 std::size_t rollback_fail_after(sluice::async::Scheduler& s) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return kRollbackFailAfterDisabled;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_rollback_aborted);
+    PhaseState& p = phase_of(*c, PhaseTag::select_rollback_aborted);
     std::lock_guard<std::mutex> lk(p.mtx);
     return c->rollback_configured_fail_after;
 }
@@ -328,7 +328,7 @@ bool rollback_should_inject_after(sluice::async::Scheduler& s,
                                   std::size_t successful) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return false;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_rollback_aborted);
+    PhaseState& p = phase_of(*c, PhaseTag::select_rollback_aborted);
     std::lock_guard<std::mutex> lk(p.mtx);
     const std::size_t boundary = c->rollback_configured_fail_after;
     if (boundary == kRollbackFailAfterDisabled) return false;
@@ -339,7 +339,7 @@ void rollback_record_begin(sluice::async::Scheduler& s,
                            std::size_t successful_registrations) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_rollback_aborted);
+    PhaseState& p = phase_of(*c, PhaseTag::select_rollback_aborted);
     std::lock_guard<std::mutex> lk(p.mtx);
     c->rollback_successful_registrations = successful_registrations;
     ++c->rollback_begin_count;
@@ -353,7 +353,7 @@ void rollback_record_arm(sluice::async::Scheduler& s,
                          bool event_linked_before) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_rollback_aborted);
+    PhaseState& p = phase_of(*c, PhaseTag::select_rollback_aborted);
     std::lock_guard<std::mutex> lk(p.mtx);
     const std::size_t idx = c->rollback_arm_order_len;
     if (idx < c->rollback_arm_order_indices.size()) {
@@ -367,7 +367,7 @@ void rollback_record_arm(sluice::async::Scheduler& s,
 void rollback_record_finish(sluice::async::Scheduler& s) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return;
-    PhaseState& p = phase_of(*c, PhaseTag::e13_rollback_aborted);
+    PhaseState& p = phase_of(*c, PhaseTag::select_rollback_aborted);
     std::lock_guard<std::mutex> lk(p.mtx);
     ++c->rollback_finish_count;
 }
@@ -376,7 +376,7 @@ RollbackObservation read_rollback_observation(
     sluice::async::Scheduler& s) noexcept {
     SchedulerController* c = find_controller(s);
     if (c == nullptr) return RollbackObservation{};
-    PhaseState& p = phase_of(*c, PhaseTag::e13_rollback_aborted);
+    PhaseState& p = phase_of(*c, PhaseTag::select_rollback_aborted);
     std::lock_guard<std::mutex> lk(p.mtx);
     RollbackObservation o;
     o.configured_fail_after = c->rollback_configured_fail_after;

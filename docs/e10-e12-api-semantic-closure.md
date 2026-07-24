@@ -552,7 +552,7 @@ IMPLEMENTATION EFFECT:
   None.
 TEST EFFECT:
   Covered. Queue already-due deadline tests H1–H4 exist in
-  tests/e12_async_queue_test.cpp (see §11.2–11.3).
+  tests/async_queue_primitive_test.cpp (see §11.2–11.3).
 DOCUMENTS SUPERSEDED:
   None.
 ```
@@ -794,7 +794,7 @@ IMPLEMENTATION EFFECT:
   Preserve existing MoveConstructOnly tests. Add static_assert probes for
   all primitives (non-copyable, non-movable).
 TEST EFFECT:
-  Existing MoveConstructOnly tests in e12_async_queue_test.cpp are adequate.
+  Existing MoveConstructOnly tests in async_queue_primitive_test.cpp are adequate.
   Add static_assert probes for Event/Semaphore/AsyncMutex/AsyncCondition
   non-copyable/non-movable constraints.
 DOCUMENTS SUPERSEDED:
@@ -1034,7 +1034,7 @@ Add compile-time API contract probes for primitives that lack them:
 
 | Probe | Primitive(s) Missing | File to Create | Status |
 |-------|---------------------|----------------|--------|
-| non-copyable, non-movable | Event, Semaphore, AsyncCondition | tests/e12_api_contract_probes.cpp | COMPLETED |
+| non-copyable, non-movable | Event, Semaphore, AsyncCondition | tests/async_sync_api_contract_probe.cpp | COMPLETED |
 | QueueResult move-only, non-copyable | (already exists) | — | COMPLETED |
 | QueueResult move-assignable with MoveConstructOnly | (already exists) | — | COMPLETED |
 
@@ -1229,9 +1229,9 @@ Impact: Breaking if it changes destruction contract. Requires separate
 ### 11.2 Required Test Additions
 
 > **Status (2026-07-19):** T1–T4 are **IMPLEMENTED and PASSING** as part of
-> this closure. The new TUs are `tests/e12_api_contract_probes.cpp` (T3),
-> `tests/e12_cross_primitive_parity_test.cpp` (T2), and additions to
-> `tests/e12_async_queue_test.cpp` (T1) and `tests/e12_async_condition_test.cpp`
+> this closure. The new TUs are `tests/async_sync_api_contract_probe.cpp` (T3),
+> `tests/async_sync_cross_primitive_parity_test.cpp` (T2), and additions to
+> `tests/async_queue_primitive_test.cpp` (T1) and `tests/async_condition_primitive_test.cpp`
 > (T4). All are wired into `xmake.lua` under the `test` group. Corrective-2
 > requires a fresh toolchain matrix; §11.3 intentionally does not reuse the
 > earlier author summary.
@@ -1259,7 +1259,7 @@ Impact: Breaking if it changes destruction contract. Requires separate
 - `NOT_APPLICABLE`: Queue D4 cancellation (no public wait-epoch cancel API).
 
 #### T3: Compile-Time API Contract Probes — IMPLEMENTED
-- All primitives non-copyable, non-movable (static_assert) — `tests/e12_api_contract_probes.cpp` D5 lifecycle block
+- All primitives non-copyable, non-movable (static_assert) — `tests/async_sync_api_contract_probe.cpp` D5 lifecycle block
 - QueueResult move-only, non-copyable (static_assert) — same file D1/D9 block
 - QueueResult move-assignable with MoveConstructOnly (static_assert) — same file PR #12 block, using a hand-written `NonMoveAssignable` test type
 - WaitOutcome four-value enum distinctness (static_assert) — same file vocabulary block
@@ -1341,7 +1341,7 @@ the absolute deadline `100` in every iteration while repeatedly calling the
 absolute-time `advance_clock(100)`, so from the second iteration W2 expired
 inline instead of completing a registered timed wait.
 
-The corrective changes are confined to `tests/e12_event_test.cpp` only.
+The corrective changes are confined to `tests/event_primitive_test.cpp` only.
 **No Event production semantics were changed** (`include/sluice/async/event.hpp`,
 `include/sluice/async/wait_node.hpp`, `include/sluice/async/wait_queue.hpp`,
 `src/async/scheduler.cpp`, `src/async/event.cpp` are unmodified — verified
@@ -1605,24 +1605,24 @@ Six contradictions were identified and resolved:
 
 **New (original closure):**
 - `docs/e10-e12-api-semantic-closure.md` (this document)
-- `tests/e12_api_contract_probes.cpp`
-- `tests/e12_cross_primitive_parity_test.cpp`
+- `tests/async_sync_api_contract_probe.cpp`
+- `tests/async_sync_cross_primitive_parity_test.cpp`
 - `docs/reviews/E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1-REVIEW-REQUEST.md`
 
 **Modified (original closure, non-breaking):**
 - `docs/api-reference.md`, `docs/api-reference-zh.md`
 - `docs/changelog.md`, `docs/async-runtime-plan.md`, `docs/e12-condition.md`
 - `docs/e12-queue-scheduler-integration.md` (§8 supersession notice)
-- `tests/e12_async_condition_test.cpp` (T30/T31)
-- `tests/e12_async_queue_test.cpp` (H1–H4)
+- `tests/async_condition_primitive_test.cpp` (T30/T31)
+- `tests/async_queue_primitive_test.cpp` (H1–H4)
 - `xmake.lua` (two new test targets)
 
 **Modified/added by Corrective-2 (this revision, non-breaking):**
-- `tests/e12_event_test.cpp` (C1: T23 + CANCEL-2a deterministic closure —
+- `tests/event_primitive_test.cpp` (C1: T23 + CANCEL-2a deterministic closure —
   no Event production semantics changed)
-- `tests/e12_cross_primitive_parity_test.cpp` and `xmake.lua` (truthful D3/D4
+- `tests/async_sync_cross_primitive_parity_test.cpp` and `xmake.lua` (truthful D3/D4
   scope and no dynamic-terminal overclaim)
-- `tests/e12_api_contract_probes.cpp` plus
+- `tests/async_sync_api_contract_probe.cpp` plus
   `scripts/verify-e12-api-contract-negative-compile.sh` (nine automated
   expected-failure compiles)
 - `docs/e10-e12-api-semantic-closure.md` (C2/C3/C4/C5/C6/C7 wording and
@@ -1650,19 +1650,19 @@ altered. The audit is doc + test only.
 
 ### 14.9 Tests
 
-- New compile-time probe: `tests/e12_api_contract_probes.cpp` (lifecycle,
+- New compile-time probe: `tests/async_sync_api_contract_probe.cpp` (lifecycle,
   WaitOutcome vocabulary, Queue result constraints + 9 negative-compile
   blocks); the negative branches are automated by
   `scripts/verify-e12-api-contract-negative-compile.sh`.
-- New cross-primitive parity test: `tests/e12_cross_primitive_parity_test.cpp`
+- New cross-primitive parity test: `tests/async_sync_cross_primitive_parity_test.cpp`
   (D3 and D4 for Event/Semaphore/AsyncMutex; enum distinctness + fresh
   unresolved only; 7 cases). AsyncCondition/Queue and dynamic terminal
   publication remain existing per-primitive evidence.
-- New Queue already-due cases: H1–H4 in `tests/e12_async_queue_test.cpp`.
+- New Queue already-due cases: H1–H4 in `tests/async_queue_primitive_test.cpp`.
 - New AsyncCondition wrong-object cancel cases: T30/T31 in
-  `tests/e12_async_condition_test.cpp`.
+  `tests/async_condition_primitive_test.cpp`.
 - **Corrective-2 (C1)**: Event T23 + CANCEL-2a deterministic closure in
-  `tests/e12_event_test.cpp` (replaces `yield()`-based causal sync with
+  `tests/event_primitive_test.cpp` (replaces `yield()`-based causal sync with
   mechanically-gated atomics + `waiting_count()` admission proof).
 
 ### 14.10 Verification

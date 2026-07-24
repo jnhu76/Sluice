@@ -331,7 +331,7 @@ void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANA
     // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
-        sluice_async_test::PhaseTag::e9_park_commit);
+        sluice_async_test::PhaseTag::scheduler_park_commit);
 #endif
 
     std::unique_lock<Mutex> lk(wake_mtx_);
@@ -663,7 +663,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 // function that looks up controller state by Scheduler*.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                 sluice_async_test::test_phase(*this,
-                    sluice_async_test::PhaseTag::e7_admission_phase_b);
+                    sluice_async_test::PhaseTag::mw_admission_phase_b);
 #endif
 
                 bool phase_b_committed = false;
@@ -865,7 +865,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
         // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         sluice_async_test::test_phase(*this,
-            sluice_async_test::PhaseTag::e9_park_candidate);
+            sluice_async_test::PhaseTag::scheduler_park_candidate);
 #endif
 
         // E9: park on the unified wake source (wake_cv + wake epoch). This
@@ -1360,7 +1360,7 @@ std::size_t Scheduler::event_set_broadcast(Event& event) {
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
-        sluice_async_test::PhaseTag::e12_set_store_before_drain);
+        sluice_async_test::PhaseTag::event_set_store_before_drain);
 #endif
     std::size_t woken = 0;
     while (wake_wait_one_locked(event.waiters_) != nullptr) {
@@ -1645,7 +1645,7 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
     // not have entered its critical section yet. Controller-driven (test variant).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
-        sluice_async_test::PhaseTag::e12_admission_attempt_before_global_lock);
+        sluice_async_test::PhaseTag::event_admission_attempt_before_global_lock);
 #endif
     {
         LockGuard lk(global_mtx_);
@@ -1669,7 +1669,7 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
         // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: controller-driven (test variant).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         sluice_async_test::test_phase(*this,
-            sluice_async_test::PhaseTag::e12_admission_before_final_check);
+            sluice_async_test::PhaseTag::event_admission_before_final_check);
 #endif
         // Admission closure: if SET is observed after registration, resolve this
         // wait as Woken inline through the canonical resolve_ authority. The node
@@ -2165,7 +2165,7 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
         // observing this phase proves the node queued (T15a/T15b).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::e12_mutex_waiter_registered_before_grant);
+            *this, sluice_async_test::PhaseTag::mutex_waiter_registered_before_grant);
 #endif
         me->make_waiting();
     }
@@ -2323,7 +2323,7 @@ WaitNode* Scheduler::mutex_handoff_one_locked(WaitQueue& waiters, Fiber*& owner)
     // No allocation, no callback, no lock held beyond global_mtx_ (already held
     // by the caller); compiled ONLY for the internal-testing variant.
     sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::e12_mutex_handoff_before_publication);
+        *this, sluice_async_test::PhaseTag::mutex_handoff_before_publication);
 #endif
     retire_timer_for_node_locked(*won);  // E11 I4 timer closure (same CS)
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
@@ -2867,7 +2867,7 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
         // and that a concurrent notify sees the registered node.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::e12_condition_register_before_handoff);
+            *this, sluice_async_test::PhaseTag::condition_register_before_handoff);
 #endif
         // INTERNALLY (under global_mtx_); the Condition queue mtx was already
         // released above, so the two queue mtxes are NEVER held simultaneously
@@ -2967,7 +2967,7 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
         // Step 2: register-before-handoff phase seam (same as the untimed seam).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::e12_condition_register_before_handoff);
+            *this, sluice_async_test::PhaseTag::condition_register_before_handoff);
 #endif
         // Step 3: release the bound Mutex via the ONE accepted handoff.
         if (mutex_handoff_one_locked(mutex_waiters, owner) == nullptr) {
@@ -3015,7 +3015,7 @@ std::size_t Scheduler::condition_notify_all(WaitQueue& cond_waiters) {
     // cancel / expiry serialize AFTER the snapshot (they need global_mtx_).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::e12_condition_notify_before_drain);
+        *this, sluice_async_test::PhaseTag::condition_notify_before_drain);
 #endif
     while (wake_wait_one_locked(cond_waiters) != nullptr) {
         ++woken;

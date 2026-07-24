@@ -211,7 +211,7 @@ bool Scheduler::select_process_group_locked(detail::SelectGroup& group,
     // not arm it) it is absent entirely. Does not change P4 finalization order.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::e13_admission_claimed);
+        *this, sluice_async_test::PhaseTag::select_admission_claimed);
 #endif
     select_commit_winner_locked(group, candidate_index);
     for (std::uint32_t i = 0; i < group.arm_count_; ++i) {
@@ -376,7 +376,7 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // P6 §14 e13_publish_entry seam: at select_publish_locked entry, before
+    // P6 §14 select_publish_entry seam: at select_publish_locked entry, before
     // result mutation. Capture the publication-entry snapshot under global_mtx_
     // so the test reads publication preconditions without acquiring G.
     {
@@ -398,10 +398,10 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
         snap.runnable_publication_count =
             sluice_async_test::runnable_publication_count(*this);
         sluice_async_test::capture_publication_snapshot(
-            *this, sluice_async_test::PhaseTag::e13_publish_entry, snap);
+            *this, sluice_async_test::PhaseTag::select_publish_entry, snap);
     }
     sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::e13_publish_entry);
+        *this, sluice_async_test::PhaseTag::select_publish_entry);
 #endif
 
     // -------------------------------------------------------------------
@@ -455,7 +455,7 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         sluice_async_test::increment_result_publication(*this);
         sluice_async_test::increment_runnable_publication(*this);
-        // P6 §14 e13_publish_done seam: after phase Completed and, for
+        // P6 §14 select_publish_done seam: after phase Completed and, for
         // suspended mode, after successful make_runnable + route.
         {
             sluice_async_test::PublicationSnapshot snap{};
@@ -476,10 +476,10 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
             snap.runnable_publication_count =
                 sluice_async_test::runnable_publication_count(*this);
             sluice_async_test::capture_publication_snapshot(
-                *this, sluice_async_test::PhaseTag::e13_publish_done, snap);
+                *this, sluice_async_test::PhaseTag::select_publish_done, snap);
         }
         sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::e13_publish_done);
+            *this, sluice_async_test::PhaseTag::select_publish_done);
 #endif
     } else {
         // ----- Inline branch (P6 §8.3) -----
@@ -510,10 +510,10 @@ void Scheduler::select_publish_locked(detail::SelectGroup& group) {
             snap.runnable_publication_count =
                 sluice_async_test::runnable_publication_count(*this);
             sluice_async_test::capture_publication_snapshot(
-                *this, sluice_async_test::PhaseTag::e13_publish_done, snap);
+                *this, sluice_async_test::PhaseTag::select_publish_done, snap);
         }
         sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::e13_publish_done);
+            *this, sluice_async_test::PhaseTag::select_publish_done);
 #endif
     }
 }
@@ -991,10 +991,10 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
             select_rollback_registration_locked(group, arms.data(), count,
                                                 registered_count);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            // e13_rollback_aborted seam: AFTER Aborted reached, BEFORE rethrow.
+            // select_rollback_aborted seam: AFTER Aborted reached, BEFORE rethrow.
             // Proves rollback completed while G is held. Holds global_mtx_.
             sluice_async_test::test_phase(
-                *this, sluice_async_test::PhaseTag::e13_rollback_aborted);
+                *this, sluice_async_test::PhaseTag::select_rollback_aborted);
 #endif
             throw;
         }
@@ -1027,10 +1027,10 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
                 }
             }
             sluice_async_test::capture_admission_snapshot(
-                *this, sluice_async_test::PhaseTag::e13_admission_armed, snap);
+                *this, sluice_async_test::PhaseTag::select_admission_armed, snap);
         }
         sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::e13_admission_armed);
+            *this, sluice_async_test::PhaseTag::select_admission_armed);
 #endif
 
         // (9) Immutable readiness snapshot. Capture monotonic_now() ONCE and
@@ -1106,10 +1106,10 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
                     }
                 }
                 sluice_async_test::capture_admission_snapshot(
-                    *this, sluice_async_test::PhaseTag::e13_admission_consumed, snap);
+                    *this, sluice_async_test::PhaseTag::select_admission_consumed, snap);
             }
             sluice_async_test::test_phase(
-                *this, sluice_async_test::PhaseTag::e13_admission_consumed);
+                *this, sluice_async_test::PhaseTag::select_admission_consumed);
 #endif
 
             SelectResult return_value = group.result_;
@@ -1146,7 +1146,7 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
     // acquire load under global_mtx_.
     caller_owner->suspend_switch_pending.store(true, std::memory_order_release);
 
-    // (P6 §9) e13_select_suspend_before_switch seam: AFTER G is released,
+    // (P6 §9) select_suspend_before_switch seam: AFTER G is released,
     // BEFORE the physical context_switch. A coordinator thread can resolve the
     // group (Event::set / clock advance) here and prove the wake-before-
     // physical-switch window is closed: the caller is committed Waiting +
@@ -1155,7 +1155,7 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
     // No wall-clock sleeps.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::e13_select_suspend_before_switch);
+        *this, sluice_async_test::PhaseTag::select_suspend_before_switch);
 #endif
 
     fiber_ctx::Switch s;
@@ -1200,7 +1200,7 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
         // (Defensive: a correct publication guarantees this; we do not assert
         // an exact global value since other Selects may be in flight.)
 
-        // e13_suspended_before_consume seam: AFTER the resumed caller
+        // select_suspended_before_consume seam: AFTER the resumed caller
         // reacquires G and validates the result, BEFORE phase Consumed. Its
         // snapshot proves phase==Completed, mode==Suspended, result present,
         // winner stable, caller resumed, runnable publication count == 1.
@@ -1230,10 +1230,10 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
             snap.runnable_publication_count =
                 sluice_async_test::runnable_publication_count(*this);
             sluice_async_test::capture_publication_snapshot(
-                *this, sluice_async_test::PhaseTag::e13_suspended_before_consume, snap);
+                *this, sluice_async_test::PhaseTag::select_suspended_before_consume, snap);
         }
         sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::e13_suspended_before_consume);
+            *this, sluice_async_test::PhaseTag::select_suspended_before_consume);
 #endif
 
         // Only the resumed caller sets Consumed (the resolver/publication thread

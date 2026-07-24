@@ -95,7 +95,7 @@ bool Scheduler::select_timer_pump_entry_locked(
         // physically reclaims the popped block. This is the I4 closure.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         sluice_async_test::test_phase(
-            *this, sluice_async_test::PhaseTag::e13_timer_pump_skip);
+            *this, sluice_async_test::PhaseTag::select_timer_pump_skip);
 #endif
         return true;  // stale; skipped
     }
@@ -114,7 +114,7 @@ bool Scheduler::select_timer_pump_entry_locked(
     // site (immediately before select_resolve_timer_locked reads arm_) so
     // stale tests can prove arm-load delta == 0 for RETIRED/CONSUMED pops.
     sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::e13_timer_pump_active);
+        *this, sluice_async_test::PhaseTag::select_timer_pump_active);
     ++select_timer_arm_load_count_;
 #endif
     (void)select_resolve_timer_locked(reg);
@@ -292,7 +292,7 @@ void Scheduler::select_finalize_timer_loser_locked(
     // here and assert reg->is_active() (arm Retired while reg ACTIVE), then
     // the retire CAS below flips it to RETIRED.
     sluice_async_test::test_phase(
-        *this, sluice_async_test::PhaseTag::e13_timer_loser_arm_classified);
+        *this, sluice_async_test::PhaseTag::select_timer_loser_arm_classified);
 #endif
 
     // 2. ACTIVE -> RETIRED via the accounting helper, AFTER arm

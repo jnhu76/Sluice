@@ -41,56 +41,56 @@ namespace sluice_async_test {
 // site requires removing the tag (the controller asserts on unknown tags).
 enum class PhaseTag : unsigned char {
     // E7-T11: worker paused at MW-S2 Phase-B commit boundary.
-    e7_admission_phase_b,
+    mw_admission_phase_b,
     // E9-CORRECTIVE: worker paused at ParkCandidate boundary (pre-physical-wait).
-    e9_park_candidate,
+    scheduler_park_candidate,
     // E9-CORRECTIVE: worker paused at park commit boundary (pre-wake_cv.wait).
-    e9_park_commit,
+    scheduler_park_commit,
     // E12-A: setter paused after SET store, holding global_mtx_, before drain.
-    e12_set_store_before_drain,
+    event_set_store_before_drain,
     // E12-A-EVENT-CORRECTIVE-2 (T31): admission attempt marker, BEFORE taking
     // global_mtx_. Marks that wait() was called but has not entered its CS.
-    e12_admission_attempt_before_global_lock,
+    event_admission_attempt_before_global_lock,
     // E12-A: admission paused after registration, holding global_mtx_+q.mtx(),
     // before the final SET check.
-    e12_admission_before_final_check,
+    event_admission_before_final_check,
     // E12-C: MUTEX-HANDOFF-ONE paused AFTER owner commit (owner_ == winner
     // Fiber), BEFORE make_runnable / route_runnable_locked publication. Holding
     // global_mtx_ (+ waiters_.mtx() inside). Proves owner-before-publication.
-    e12_mutex_handoff_before_publication,
+    mutex_handoff_before_publication,
     // E12-D: CONDITION-WAIT-PREPARE paused AFTER the Condition node is Registered
     // + linked in the Condition queue, holding global_mtx_, BEFORE the bound
     // Mutex is released/handed off. A test observing this phase proves the
     // register-before-release ordering (InvNoLostNotifyWindow / NEG-C8) and that
     // a concurrent notify sees the registered node while the Mutex is still
     // owned. The Condition queue mtx has been released; only global_mtx_ held.
-    e12_condition_register_before_handoff,
+    condition_register_before_handoff,
     // E12-D: notify_all paused AFTER acquiring global_mtx_ authority, BEFORE the
     // drain loop begins. A test observing this phase proves late registration /
     // cancel / expiry serialize AFTER the snapshot (they need global_mtx_).
-    e12_condition_notify_before_drain,
+    condition_notify_before_drain,
     // E12-D-CLOSURE: mutex_lock queuing path. Fires AFTER register_wait_locked
     // succeeds and the fiber WILL suspend (no immediate ownership). Proves this
     // fiber's WaitNode is registered in the Mutex waiter queue (T15a/T15b).
-    e12_mutex_waiter_registered_before_grant,
+    mutex_waiter_registered_before_grant,
 
     // E13 P3: Select timer pump paused AFTER the ACTIVE check, BEFORE the
     // arm dereference / fail-fast. A due ACTIVE Select entry is unreachable in
     // valid P3 (no admission); observing this phase proves the pump reached
     // an ACTIVE Select entry and is about to fail fast (stage-boundary guard,
     // NOT supported production behavior).
-    e13_timer_pump_active,
+    select_timer_pump_active,
     // E13 P3: Select timer pump observing a stale (non-ACTIVE) entry being
     // skipped — the deterministic proof of the I4 closure: the pump observed
     //    RETIRED/CONSUMED and did NOT read arm_ (arm-load delta == 0).
-    e13_timer_pump_skip,
+    select_timer_pump_skip,
 
     // E13 P4: Timer loser arm classified Retired, with the registration STILL
     // ACTIVE, immediately BEFORE the ACTIVE->RETIRED retire CAS. The load-
     // bearing SN-9 ordering: a test observing this phase proves arm.state
     // became Retired WHILE the registration was still ACTIVE, then the retire
     // CAS (below this seam) flipped it to RETIRED. No wall-clock timing.
-    e13_timer_loser_arm_classified,
+    select_timer_loser_arm_classified,
 
     // E13 P5: admission armed — AFTER every arm is registered AND group phase
     // becomes Selecting, BEFORE the readiness snapshot. A test observing this
@@ -98,7 +98,7 @@ enum class PhaseTag : unsigned char {
     // early-registration shortcut) and that no winner/result/runnable exists
     // yet. The seam blocks the admission worker under global_mtx_, so a
     // coordinator thread can inspect the registered group deterministically.
-    e13_admission_armed,
+    select_admission_armed,
     // E13 P5: admission claimed — AFTER the winner CAS succeeds (fresh claim),
     // BEFORE winner/loser finalization. Fires only on a real claim attempt that
     // won (not on claim-lost). A test observing this phase proves the snapshot's
@@ -106,12 +106,12 @@ enum class PhaseTag : unsigned char {
     // finalized. Reached inside select_process_group_locked; does NOT change P4
     // production semantics (it is a pure observation with no blocking unless
     // armed by a registered controller).
-    e13_admission_claimed,
+    select_admission_claimed,
     // E13 P5: admission consumed — AFTER inline phase becomes Completed,
     // BEFORE phase becomes Consumed. A test observing this phase proves the
     // inline result is committed, every authority is closed, completion_mode is
     // Inline, and runnable delta is 0 — the inline lifecycle ordering.
-    e13_admission_consumed,
+    select_admission_consumed,
 
     // E13 P6: caller Fiber paused AFTER the no-ready suspension commit
     // (make_waiting + phase Armed + waiting_select_count_++), AFTER global_mtx_
@@ -120,30 +120,30 @@ enum class PhaseTag : unsigned char {
     // prove the wake-before-physical-switch window is closed (the caller is
     // queued exactly once even if it has not yet switched away). The seam runs
     // OUTSIDE global_mtx_ (the caller has released it).
-    e13_select_suspend_before_switch,
+    select_suspend_before_switch,
     // E13 P6: select_publish_locked entry, BEFORE any result mutation. A test
     // observing this phase proves publication-entry preconditions hold (winner
     // exists, all authority closed, result not yet written, completion_mode
     // none, phase Selecting/Armed). Holds global_mtx_ (use a snapshot).
-    e13_publish_entry,
+    select_publish_entry,
     // E13 P6: AFTER phase becomes Completed and, for suspended mode, AFTER
     // successful make_runnable + route_runnable_locked. A test observing this
     // phase proves the suspended publication committed result + runnable once
     // (or inline published result once with no runnable). Holds global_mtx_.
-    e13_publish_done,
+    select_publish_done,
     // E13 P6: AFTER the resumed caller reacquires global_mtx_ and validates the
     // result, BEFORE phase becomes Consumed. A test observing this phase proves
     // phase==Completed, mode==Suspended, result present, winner stable, all
     // authority closed, caller Running, runnable publication count==1.
     // Holds global_mtx_.
-    e13_suspended_before_consume,
+    select_suspended_before_consume,
 
     // E13 P7: fired inside select_admit's catch block, AFTER
     // select_rollback_registration_locked reached Aborted, BEFORE the original
     // exception is rethrown. A test observing this phase proves the rollback
     // completed (phase==Aborted) while global_mtx_ is still held. Reached only
     // via the synthetic failure-injection seam; absent in production.
-    e13_rollback_aborted,
+    select_rollback_aborted,
 
     count
 };
@@ -163,7 +163,7 @@ struct PhaseState {
 // Captured by the admission worker under global_mtx_ immediately before each
 // seam, then read by the coordinator thread under the controller's own mutex
 // (no global_mtx_ acquisition). Only the two expected PhaseTag values are
-// valid: e13_admission_armed and e13_admission_consumed.
+// valid: select_admission_armed and select_admission_consumed.
 struct AdmissionSnapshot {
     sluice::async::detail::GroupPhase phase{sluice::async::detail::GroupPhase::building};
     sluice::async::detail::CompletionMode completion_mode{sluice::async::detail::CompletionMode::none};
@@ -280,7 +280,7 @@ AdmissionSnapshot read_admission_snapshot(sluice::async::Scheduler& s,
 // E13 P6: capture a publication boundary snapshot (same discipline as the
 // admission snapshot: captured under global_mtx_ before the P6 seam, read by
 // the coordinator under the controller's own mutex). Valid tag values:
-// e13_publish_entry, e13_publish_done, e13_suspended_before_consume. No-op if
+// select_publish_entry, select_publish_done, select_suspended_before_consume. No-op if
 // `s` has no registered controller.
 void capture_publication_snapshot(sluice::async::Scheduler& s, PhaseTag tag,
                                   const PublicationSnapshot& snap) noexcept;
