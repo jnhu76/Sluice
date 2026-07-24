@@ -619,6 +619,14 @@ SLUICE_TEST_CASE(steal_mw_s1_stealable_prevents_blocking_admission) {
     while (stolen_ran.load(std::memory_order_acquire) == 0) {
         std::this_thread::yield();
     }
+    // The victim increments `stolen_ran` inside its entry; the bridge publishes
+    // FiberState::done only after the entry returns. Wait for that terminal
+    // publication before asserting it (and before any early return could leave
+    // `runner` joinable).
+    while (f_victim.state() != FiberState::done ||
+           f_w1.state() != FiberState::done) {
+        std::this_thread::yield();
+    }
     // f_victim ran on W1 — proving W1 stole it instead of parking in MW-S2.
     SLUICE_CHECK(stolen_ran.load() == 1);
     SLUICE_CHECK(f_victim.state() == FiberState::done);

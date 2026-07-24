@@ -22,6 +22,7 @@
 // when the original op's CQE is reaped.
 #include <sluice/async/uring_backend.hpp>
 
+#include <sluice/detail/io_validation.hpp>
 #include <sluice/error.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
@@ -31,8 +32,11 @@
 #if defined(SLUICE_HAS_LIBURING)
 #include <liburing.h>
 
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
+#include <deque>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 #endif
@@ -117,6 +121,17 @@ struct OpRec {
     bool cancel_requested = false; // caller asked to cancel; intent only
     __u64 cancel_op_id = 0;        // id of the cancel SQE submitted for this op,
                                    // or 0 if none submitted yet
+    bool submitted = false;        // true once the kernel owns this operation SQE
+};
+
+enum class PendingSqeKind : std::uint8_t {
+    operation,
+    cancellation,
+};
+
+struct PendingSqe {
+    PendingSqeKind kind = PendingSqeKind::operation;
+    __u64 id = 0;
 };
 
 // Toggle a stat counter if a sink is attached.
@@ -144,6 +159,22 @@ struct UringAsyncBackend::Impl {
     // map serves both Completion<size_t> and Completion<void>. Maintained
     // alongside ops: inserted at register_op, erased at reap_op_cqe.
     std::unordered_map<void*, __u64> comp_to_op;
+    // Prepared SQEs that the kernel has not accepted yet, in exact ring order.
+    // io_uring_queue_init(..., flags=0) does not enable SQPOLL, so a positive
+    // io_uring_submit return is the exact accepted prefix of this queue.
+    std::deque<PendingSqe> pending_sqes;
+    // First unrecoverable submit error. Once set, no code path submits another
+    // SQE; already-submitted operations may still be reaped by CQE.
+    std::optional<IoError> fatal_error;
+    // One anomalous zero-submit is retryable; a second consecutive zero with
+    // pending SQEs is terminal so callers cannot re-drive forever.
+    unsigned consecutive_zero_submits = 0;
+    // Completions failed during a submit-time pressure flush are surfaced by
+    // the next poll()/wait_one() count.
+    std::size_t deferred_ready = 0;
+#if defined(SLUICE_URING_INTERNAL_TESTING)
+    UringBackendSubmitTestHooks test_hooks{};
+#endif
 
     Impl() = default;
     ~Impl() {
@@ -156,6 +187,124 @@ struct UringAsyncBackend::Impl {
     Impl(const Impl&) = delete;
     Impl& operator=(const Impl&) = delete;
 
+    int submit_pending() noexcept {
+#if defined(SLUICE_URING_INTERNAL_TESTING)
+        if (test_hooks.submit != nullptr) {
+            return test_hooks.submit(test_hooks.context, &ring);
+        }
+#endif
+        return ::io_uring_submit(&ring);
+    }
+
+    std::size_t take_deferred_ready() noexcept {
+        const std::size_t ready = deferred_ready;
+        deferred_ready = 0;
+        return ready;
+    }
+
+    bool complete_op_error(__u64 op_id, IoError error,
+                           sluice::AsyncStats* stats) {
+        auto it = ops.find(op_id);
+        if (it == ops.end()) return false;
+        OpRec& rec = it->second;
+        void* comp_key = rec.is_void
+                             ? static_cast<void*>(rec.void_c)
+                             : static_cast<void*>(rec.size_c);
+        if (rec.is_void) {
+            rec.void_c->complete_with(make_unexpected<void>(error));
+        } else {
+            rec.size_c->complete_with(
+                make_unexpected<std::size_t>(error));
+        }
+        bump(stats, &AsyncStats::completion_errors);
+        ops.erase(it);
+        comp_to_op.erase(comp_key);
+        return true;
+    }
+
+    // Record the ordered prefix accepted by the kernel. Operation records stay
+    // outstanding for their CQEs; cancel records stay in cancel_to_op until
+    // their informational CQEs arrive.
+    void accept_submitted_prefix(unsigned count) noexcept {
+        while (count-- > 0 && !pending_sqes.empty()) {
+            const PendingSqe pending = pending_sqes.front();
+            pending_sqes.pop_front();
+            if (pending.kind == PendingSqeKind::operation) {
+                auto it = ops.find(pending.id);
+                if (it != ops.end()) it->second.submitted = true;
+            }
+        }
+    }
+
+    // Complete only operation SQEs that are provably still userspace-owned.
+    // Submitted operations remain in ops and are resolved by their CQEs.
+    std::size_t fail_unsubmitted(IoError error,
+                                 sluice::AsyncStats* stats) {
+        std::size_t completed = 0;
+        for (const PendingSqe pending : pending_sqes) {
+            if (pending.kind == PendingSqeKind::operation) {
+                auto it = ops.find(pending.id);
+                if (it != ops.end() && !it->second.submitted &&
+                    complete_op_error(pending.id, error, stats)) {
+                    ++completed;
+                }
+                continue;
+            }
+
+            auto cancel_it = cancel_to_op.find(pending.id);
+            if (cancel_it == cancel_to_op.end()) continue;
+            auto op_it = ops.find(cancel_it->second);
+            if (op_it != ops.end()) {
+                op_it->second.cancel_requested = false;
+                op_it->second.cancel_op_id = 0;
+            }
+            cancel_to_op.erase(cancel_it);
+        }
+        pending_sqes.clear();
+        return completed;
+    }
+
+    void enter_fatal(IoError error, sluice::AsyncStats* stats) {
+        if (fatal_error.has_value()) return;
+        fatal_error = error;
+        deferred_ready += fail_unsubmitted(error, stats);
+    }
+
+    static bool transient_submit_error(int error) noexcept {
+        return error == EINTR || error == EAGAIN || error == EBUSY;
+    }
+
+    // Update SQE ownership from one liburing submit result. There is no retry
+    // loop here: a driver call performs at most one submit attempt.
+    void process_submit_result(int result, std::size_t pending_before,
+                               sluice::AsyncStats* stats) {
+        if (result < 0) {
+            consecutive_zero_submits = 0;
+            const int error = -result;
+            if (!transient_submit_error(error)) {
+                enter_fatal(sluice::from_errno_value(error), stats);
+            }
+            return;
+        }
+
+        const std::size_t accepted = static_cast<std::size_t>(result);
+        if (accepted > pending_before || accepted > pending_sqes.size()) {
+            enter_fatal(IoError{IoError::Code::backend_error, 0}, stats);
+            return;
+        }
+
+        accept_submitted_prefix(static_cast<unsigned>(accepted));
+        if (pending_before != 0 && accepted == 0) {
+            ++consecutive_zero_submits;
+            if (consecutive_zero_submits >= 2) {
+                enter_fatal(
+                    IoError{IoError::Code::backend_error, 0}, stats);
+            }
+        } else {
+            consecutive_zero_submits = 0;
+        }
+    }
+
     // Acquire an SQE, flushing the ring on pressure (mirror the 013 spike's
     // flush+retry). Returns nullptr only if the ring cannot make room even after
     // a flush; the caller then reports backend_error (and bumps
@@ -163,10 +312,15 @@ struct UringAsyncBackend::Impl {
     // genuinely full ring, distinct from the L8 !idle reject which is counted
     // uniformly at the AsyncIoContext layer).
     io_uring_sqe* get_sqe_with_pressure(sluice::AsyncStats* stats) {
+        if (fatal_error.has_value()) return nullptr;
         io_uring_sqe* sqe = ::io_uring_get_sqe(&ring);
         if (sqe != nullptr) return sqe;
         bump(stats, &sluice::AsyncStats::queue_full_retries);
-        if (::io_uring_submit(&ring) < 0) return nullptr;
+        const std::size_t pending_before = pending_sqes.size();
+        if (pending_before == 0) return nullptr;
+        const int result = submit_pending();
+        process_submit_result(result, pending_before, stats);
+        if (fatal_error.has_value()) return nullptr;
         return ::io_uring_get_sqe(&ring);
     }
 
@@ -176,9 +330,9 @@ struct UringAsyncBackend::Impl {
     //                         is the kernel honoring our cancel; canceled_ops)
     //   res >= 0 (size op) -> bytes transferred (may be short; short_completions)
     //   res >= 0 (void op) -> success
-    void reap_op_cqe(__u64 op_id, int res, sluice::AsyncStats* stats) {
+    bool reap_op_cqe(__u64 op_id, int res, sluice::AsyncStats* stats) {
         auto it = ops.find(op_id);
-        if (it == ops.end()) return;  // unknown id (shouldn't happen); drop
+        if (it == ops.end()) return false;  // unknown id (shouldn't happen); drop
         OpRec& rec = it->second;
 
         // Determine the Completion* for the reverse-index erase BEFORE we move
@@ -212,6 +366,7 @@ struct UringAsyncBackend::Impl {
         }
         ops.erase(it);
         comp_to_op.erase(comp_key);  // B3: keep reverse index in sync
+        return true;
     }
 
     // O(1) cancel lookup: find the op id for a Completion*, or 0 if not
@@ -256,8 +411,7 @@ struct UringAsyncBackend::Impl {
                     // informational only; the op CQE is authoritative. Drop.
                     continue;
                 }
-                reap_op_cqe(id, res, stats);
-                ++completed;
+                if (reap_op_cqe(id, res, stats)) ++completed;
             }
             if (got < BATCH) break;
         }
@@ -273,7 +427,14 @@ struct UringAsyncBackend::Impl {
         auto it = ops.find(op_id);
         if (it == ops.end()) return;  // op already reaped; nothing to cancel
         io_uring_sqe* sqe = get_sqe_with_pressure(stats);
-        if (sqe == nullptr) return;  // best-effort; op completes normally
+        if (sqe == nullptr) {
+            // Best-effort cancel was not queued. get_sqe_with_pressure() may
+            // have entered fatal state and erased an unsubmitted target, so
+            // re-find rather than using the pre-flush iterator.
+            auto current = ops.find(op_id);
+            if (current != ops.end()) current->second.cancel_requested = false;
+            return;
+        }
         __u64 cancel_id = next_id++;
         // Target the original op by its user_data. flags=0: cancel first match.
         ::io_uring_prep_cancel64(sqe, op_id, 0);
@@ -281,6 +442,8 @@ struct UringAsyncBackend::Impl {
             sqe, reinterpret_cast<void*>(static_cast<std::uintptr_t>(cancel_id)));
         it->second.cancel_op_id = cancel_id;
         cancel_to_op.emplace(cancel_id, op_id);
+        pending_sqes.push_back(
+            PendingSqe{PendingSqeKind::cancellation, cancel_id});
     }
 };
 
@@ -299,6 +462,14 @@ UringAsyncBackend::UringAsyncBackend(unsigned queue_depth)
     }
 }
 
+#if defined(SLUICE_URING_INTERNAL_TESTING)
+UringAsyncBackend::UringAsyncBackend(unsigned queue_depth,
+                                     UringBackendSubmitTestHooks hooks)
+    : UringAsyncBackend(queue_depth) {
+    if (impl_ != nullptr) impl_->test_hooks = hooks;
+}
+#endif
+
 UringAsyncBackend::~UringAsyncBackend() { delete impl_; }
 
 namespace {
@@ -316,6 +487,8 @@ __u64 register_op(ImplLike& impl, __u64 id, C& c, OpRec rec) {
                          : static_cast<void*>(rec.size_c);
     impl.comp_to_op.emplace(comp_key, id);  // B3: O(1) cancel lookup
     impl.ops.emplace(id, std::move(rec));
+    impl.pending_sqes.push_back(
+        PendingSqe{PendingSqeKind::operation, id});
     impl.next_id = id + 1;
     return id;
 }
@@ -324,20 +497,30 @@ __u64 register_op(ImplLike& impl, __u64 id, C& c, OpRec rec) {
 
 Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
     if (!impl_ || !impl_->have_ring) return no_ring();
+    if (impl_->fatal_error.has_value())
+        return make_unexpected<void>(*impl_->fatal_error);
     if (!c.idle()) {
         // L8 reject (submit into a non-idle Completion). Counted ONCE by
         // AsyncIoContext::tally_submit (the cross-backend L8 authority) when it
         // sees invalid_state. Do NOT double-count here.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
+    auto native_length = sluice::detail::checked_uring_length(op.len);
+    if (!native_length.has_value())
+        return make_unexpected<void>(native_length.error());
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // get_sqe_with_pressure is the authoritative queue_full_retries
+        // counter for the ring-full path (it bumps on pressure). Bumping here
+        // too double-counts; a nullptr on the fatal-error path is not a
+        // ring-full event and must not be counted as one. Fatal vs backend
+        // error is still distinguished below for the returned Result.
+        if (impl_->fatal_error.has_value())
+            return make_unexpected<void>(*impl_->fatal_error);
         return make_unexpected<void>(IoError{IoError::Code::backend_error});
     }
     __u64 id = impl_->next_id;
-    ::io_uring_prep_read(sqe, op.fd, op.dst, static_cast<unsigned>(op.len),
-                         static_cast<__s64>(op.offset));
+    ::io_uring_prep_read(sqe, op.fd, op.dst, native_length.value(), op.offset);
     ::io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(static_cast<std::uintptr_t>(id)));
     register_op(*impl_, id, c,
                 OpRec{&c, nullptr, /*is_void=*/false, op.len, false, 0});
@@ -346,18 +529,28 @@ Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& 
 
 Result<void> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
     if (!impl_ || !impl_->have_ring) return no_ring();
+    if (impl_->fatal_error.has_value())
+        return make_unexpected<void>(*impl_->fatal_error);
     if (!c.idle()) {
         // L8 reject; counted ONCE by AsyncIoContext::tally_submit. See submit_read.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
+    auto native_length = sluice::detail::checked_uring_length(op.len);
+    if (!native_length.has_value())
+        return make_unexpected<void>(native_length.error());
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // get_sqe_with_pressure is the authoritative queue_full_retries
+        // counter for the ring-full path (it bumps on pressure). Bumping here
+        // too double-counts; a nullptr on the fatal-error path is not a
+        // ring-full event and must not be counted as one. Fatal vs backend
+        // error is still distinguished below for the returned Result.
+        if (impl_->fatal_error.has_value())
+            return make_unexpected<void>(*impl_->fatal_error);
         return make_unexpected<void>(IoError{IoError::Code::backend_error});
     }
     __u64 id = impl_->next_id;
-    ::io_uring_prep_write(sqe, op.fd, op.src, static_cast<unsigned>(op.len),
-                          static_cast<__s64>(op.offset));
+    ::io_uring_prep_write(sqe, op.fd, op.src, native_length.value(), op.offset);
     ::io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(static_cast<std::uintptr_t>(id)));
     register_op(*impl_, id, c,
                 OpRec{&c, nullptr, /*is_void=*/false, op.len, false, 0});
@@ -366,13 +559,21 @@ Result<void> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>
 
 Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
     if (!impl_ || !impl_->have_ring) return no_ring();
+    if (impl_->fatal_error.has_value())
+        return make_unexpected<void>(*impl_->fatal_error);
     if (!c.idle()) {
         // L8 reject; counted ONCE by AsyncIoContext::tally_submit. See submit_read.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // get_sqe_with_pressure is the authoritative queue_full_retries
+        // counter for the ring-full path (it bumps on pressure). Bumping here
+        // too double-counts; a nullptr on the fatal-error path is not a
+        // ring-full event and must not be counted as one. Fatal vs backend
+        // error is still distinguished below for the returned Result.
+        if (impl_->fatal_error.has_value())
+            return make_unexpected<void>(*impl_->fatal_error);
         return make_unexpected<void>(IoError{IoError::Code::backend_error});
     }
     __u64 id = impl_->next_id;
@@ -385,13 +586,21 @@ Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>
 
 Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& c) {
     if (!impl_ || !impl_->have_ring) return no_ring();
+    if (impl_->fatal_error.has_value())
+        return make_unexpected<void>(*impl_->fatal_error);
     if (!c.idle()) {
         // L8 reject; counted ONCE by AsyncIoContext::tally_submit. See submit_read.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // get_sqe_with_pressure is the authoritative queue_full_retries
+        // counter for the ring-full path (it bumps on pressure). Bumping here
+        // too double-counts; a nullptr on the fatal-error path is not a
+        // ring-full event and must not be counted as one. Fatal vs backend
+        // error is still distinguished below for the returned Result.
+        if (impl_->fatal_error.has_value())
+            return make_unexpected<void>(*impl_->fatal_error);
         return make_unexpected<void>(IoError{IoError::Code::backend_error});
     }
     __u64 id = impl_->next_id;
@@ -404,28 +613,71 @@ Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
 
 std::size_t UringAsyncBackend::poll() {
     if (!impl_ || !impl_->have_ring) return 0;
-    // Flush any pending SQEs (non-blocking) so progress is visible without a
-    // blocking wait. submit() returns submitted-or-negative; either way we reap.
-    (void)::io_uring_submit(&impl_->ring);
-    return impl_->reap_ready(stats_);
+    // A fatal backend never submits again. CQEs for the kernel-owned prefix are
+    // still reaped normally; userspace-owned suffix operations were failed
+    // exactly once when the fatal state was entered.
+    if (!impl_->fatal_error.has_value() && !impl_->pending_sqes.empty()) {
+        const std::size_t pending_before = impl_->pending_sqes.size();
+        const int submit_result = impl_->submit_pending();
+        const auto progress = sluice::detail::classify_uring_submit(
+            submit_result, static_cast<unsigned>(pending_before));
+        impl_->process_submit_result(submit_result, pending_before, stats_);
+        if (progress != sluice::detail::UringSubmitProgress::complete) {
+            bump(stats_, &AsyncStats::queue_full_retries);
+        }
+    }
+    return impl_->take_deferred_ready() + impl_->reap_ready(stats_);
 }
 
 Result<std::size_t> UringAsyncBackend::wait_one() {
     if (!impl_ || !impl_->have_ring) return std::size_t{0};
-    // submit_and_wait flushes pending SQEs AND blocks for >=1 CQE. -errno on
-    // failure (e.g. -EINTR); map to a backend error and let the caller retry.
-    int rc = ::io_uring_submit_and_wait(&impl_->ring, 1);
-    if (rc < 0) {
-        // EINTR on the wait is recoverable; report it as interrupted so the
-        // caller can retry rather than treating it as a hard backend failure.
-        IoError e = sluice::from_errno_value(-rc);
-        return make_unexpected<std::size_t>(e);
+    std::size_t completed =
+        impl_->take_deferred_ready() + impl_->reap_ready(stats_);
+    if (completed != 0) return completed;
+
+    if (impl_->fatal_error.has_value()) {
+        // Do not block after an unrecoverable submit failure: an accepted
+        // operation may itself be indefinitely blocking, and no further cancel
+        // SQE can be submitted. poll() continues to reap any CQEs that become
+        // ready; wait_one() exposes the stored backend error immediately.
+        return make_unexpected<std::size_t>(*impl_->fatal_error);
     }
-    return impl_->reap_ready(stats_);
+
+    if (impl_->pending_sqes.empty()) {
+        if (impl_->ops.empty()) return std::size_t{0};
+        io_uring_cqe* cqe = nullptr;
+        const int rc = ::io_uring_wait_cqe(&impl_->ring, &cqe);
+        if (rc < 0)
+            return make_unexpected<std::size_t>(
+                sluice::from_errno_value(-rc));
+        return impl_->reap_ready(stats_);
+    }
+
+    // submit_and_wait returns the number of SQEs submitted (not the CQE count).
+    // Feed that accepted prefix through the same ownership state machine before
+    // reaping the CQEs for those requests.
+    const std::size_t pending_before = impl_->pending_sqes.size();
+    const int rc = ::io_uring_submit_and_wait(&impl_->ring, 1);
+    impl_->process_submit_result(rc, pending_before, stats_);
+    if (rc < 0) {
+        completed = impl_->take_deferred_ready() +
+                    impl_->reap_ready(stats_);
+        if (completed != 0) return completed;
+        if (impl_->fatal_error.has_value())
+            return make_unexpected<std::size_t>(*impl_->fatal_error);
+        return make_unexpected<std::size_t>(
+            sluice::from_errno_value(-rc));
+    }
+    completed = impl_->take_deferred_ready() + impl_->reap_ready(stats_);
+    if (completed != 0) return completed;
+    if (impl_->fatal_error.has_value())
+        return make_unexpected<std::size_t>(*impl_->fatal_error);
+    return std::size_t{0};
 }
 
 void UringAsyncBackend::cancel(Completion<std::size_t>& c) {
     if (!impl_ || !impl_->have_ring) return;
+    if (impl_->fatal_error.has_value()) return;
     // O(1) cancel lookup via the reverse index (B3). Was a linear scan of ops.
     const __u64 id = impl_->op_id_for(static_cast<void*>(&c));
     if (id == 0) return;  // not outstanding (already reaped or never submitted)
@@ -438,6 +690,7 @@ void UringAsyncBackend::cancel(Completion<std::size_t>& c) {
 
 void UringAsyncBackend::cancel(Completion<void>& c) {
     if (!impl_ || !impl_->have_ring) return;
+    if (impl_->fatal_error.has_value()) return;
     const __u64 id = impl_->op_id_for(static_cast<void*>(&c));
     if (id == 0) return;
     auto it = impl_->ops.find(id);

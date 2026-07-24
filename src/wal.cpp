@@ -1,8 +1,10 @@
 // WAL record write/read implementation. Little-endian framing.
 #include <sluice/wal.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstring>
+#include <new>
 
 namespace sluice::wal {
 
@@ -16,6 +18,11 @@ Result<std::uint32_t> checked_u32_len(std::size_t len) {
         return make_unexpected<std::uint32_t>(IoError{.code = IoError::Code::invalid_state});
     }
     return static_cast<std::uint32_t>(len);
+}
+
+std::size_t read_chunk_size(std::size_t remaining) noexcept {
+    constexpr std::size_t kReadChunkBytes = 64 * 1024;
+    return std::min(remaining, kReadChunkBytes);
 }
 
 } // namespace detail
@@ -121,9 +128,24 @@ Result<std::vector<std::byte>> read_record(Reader& reader) {
             IoError{.code = IoError::Code::invalid_state});
     }
 
-    std::vector<std::byte> payload(length);
-    if (length > 0) {
-        auto p = reader.read_exact(std::span<std::byte>(payload));
+    std::vector<std::byte> payload;
+    const std::size_t payload_size = static_cast<std::size_t>(length);
+    if (payload_size > payload.max_size()) {
+        return make_unexpected<std::vector<std::byte>>(
+            IoError{.code = IoError::Code::invalid_state});
+    }
+    while (payload.size() < payload_size) {
+        const std::size_t old_size = payload.size();
+        const std::size_t chunk =
+            detail::read_chunk_size(payload_size - old_size);
+        try {
+            payload.resize(old_size + chunk);
+        } catch (const std::bad_alloc&) {
+            return make_unexpected<std::vector<std::byte>>(
+                IoError{.code = IoError::Code::backend_error});
+        }
+        auto p = reader.read_exact(
+            std::span<std::byte>(payload).subspan(old_size, chunk));
         if (!p.has_value()) {
             return make_unexpected<std::vector<std::byte>>(p.error());
         }

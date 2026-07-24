@@ -16,6 +16,7 @@
 #include <sluice/async/select.hpp>
 #include <sluice/async/event.hpp>
 #include <sluice/async/fiber_ctx.hpp>
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/select_port.hpp>
 
 #include "queue_detail.hpp"  // QueueWaitCtx (shared with queue_port.cpp; non-installed)
@@ -48,11 +49,7 @@ void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
     }
     fiber->make_done();
     // Switch back to this worker's scheduler context forever.
-    fiber_ctx::Switch s;
-    s.old = &fiber->ctx;
-    s.new_ = &g_worker->sched_ctx;
-    (void)fiber_ctx::context_switch(&s);
-    __builtin_unreachable();
+    fiber_ctx::context_switch_final(fiber->ctx, g_worker->sched_ctx);
 }
 
 }  // namespace
@@ -182,6 +179,13 @@ Scheduler::~Scheduler() {
            "~Scheduler: waiting_select_count_ != 0 (a suspended SelectGroup "
            "remains Armed — an Event-only Select with no active Timer escapes "
            "the timer teardown checks; caller contract violation)");
+    if (any_active_select || active_deadline_count_ != 0 ||
+        waiting_select_count_ != 0) {
+        // Destruction cannot safely recover live caller-frame Select authority,
+        // and destructors must not throw. Preserve the debug diagnostics above
+        // while enforcing the same fail-fast contract in NDEBUG builds.
+        detail::select_invariant_fail_fast();
+    }
 }
 
 // ---- E9 SchedulerWakeHandle::notify + bound ----
@@ -486,7 +490,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
     // is a defense-in-depth that also makes a misuse fail loudly (jump to 0)
     // instead of silently into recycled stack memory.
     for (auto& w : workers_) {
-        w->sched_ctx = fiber_ctx::Context{};
+        fiber_ctx::reset_context(w->sched_ctx);
     }
 
     // Distribute any pending_spawn_ across workers round-robin.
@@ -1394,24 +1398,36 @@ void Scheduler::select_event_link_locked(Event& event,
     // Event must belong to this Scheduler.
     assert(&event.scheduler_ == this &&
            "select_event_link_locked: Event does not belong to this Scheduler");
+    if (&event.scheduler_ != this) detail::select_invariant_fail_fast();
     // Precondition: arm is not already linked.
     // The caller (future select() admission) is responsible for setting
     // arm.state to Prepared and arm.group to the owning SelectGroup.
     assert(arm.home_ == nullptr &&
            "select_event_link_locked: arm already linked");
+    if (arm.home_ != nullptr) detail::select_invariant_fail_fast();
     assert(arm.next_ == nullptr &&
            "select_event_link_locked: arm.next_ not null");
+    if (arm.next_ != nullptr) detail::select_invariant_fail_fast();
     assert(arm.prev_ == nullptr &&
            "select_event_link_locked: arm.prev_ not null");
+    if (arm.prev_ != nullptr) detail::select_invariant_fail_fast();
     assert(arm.kind == detail::ArmKind::event &&
            "select_event_link_locked: arm kind must be event");
+    if (arm.kind != detail::ArmKind::event)
+        detail::select_invariant_fail_fast();
     assert(arm.event.event_ == &event &&
            "select_event_link_locked: arm.event does not point to this Event");
+    if (arm.event.event_ != &event) detail::select_invariant_fail_fast();
     assert((arm.state == detail::ArmState::detached ||
             arm.state == detail::ArmState::prepared) &&
            "select_event_link_locked: arm state must be Detached or Prepared");
+    if (arm.state != detail::ArmState::detached &&
+        arm.state != detail::ArmState::prepared) {
+        detail::select_invariant_fail_fast();
+    }
     assert(arm.group != nullptr &&
            "select_event_link_locked: arm.group must be set");
+    if (arm.group == nullptr) detail::select_invariant_fail_fast();
 
     arm.home_ = &event.select_port_;
     arm.state = detail::ArmState::registered;
@@ -1430,13 +1446,21 @@ void Scheduler::select_event_unlink_locked(Event& event,
                                            detail::SelectArmSlot& arm) {
     assert(&event.scheduler_ == this &&
            "select_event_unlink_locked: Event does not belong to this Scheduler");
+    if (&event.scheduler_ != this) detail::select_invariant_fail_fast();
     // Validate that the arm belongs to this Event's port.
     assert(arm.home_ == &event.select_port_ &&
            "select_event_unlink_locked: arm does not belong to this Event");
+    if (arm.home_ != &event.select_port_)
+        detail::select_invariant_fail_fast();
     assert((arm.state == detail::ArmState::registered ||
             arm.state == detail::ArmState::candidate_ready ||
             arm.state == detail::ArmState::retired) &&
            "select_event_unlink_locked: unexpected arm state");
+    if (arm.state != detail::ArmState::registered &&
+        arm.state != detail::ArmState::candidate_ready &&
+        arm.state != detail::ArmState::retired) {
+        detail::select_invariant_fail_fast();
+    }
 
     detail::SelectPort& port = event.select_port_;
 
@@ -1462,6 +1486,7 @@ void Scheduler::select_event_unlink_locked(Event& event,
 std::size_t Scheduler::select_event_scan_locked(Event& event) {
     assert(&event.scheduler_ == this &&
            "select_event_scan_locked: Event does not belong to this Scheduler");
+    if (&event.scheduler_ != this) detail::select_invariant_fail_fast();
     // Walk the Event's SelectPort, marking eligible Event Select arms
     // CandidateReady. P2: readiness-offer only — no claim, no finalization,
     // no publication, no unlink, no worklist construction.
@@ -1532,8 +1557,10 @@ bool Scheduler::AsyncTestAccess::select_all_authority_closed(
 void Scheduler::AsyncTestAccess::assert_select_all_authority_closed(
     const Scheduler& s, const detail::SelectGroup& group) {
     LockGuard lk(s.global_mtx_);
-    assert(s.select_all_authority_closed_locked(group) &&
+    const bool closed = s.select_all_authority_closed_locked(group);
+    assert(closed &&
            "Select publication requires all arm authority closed");
+    if (!closed) detail::select_invariant_fail_fast();
 }
 
 // E13 P4 EH corrective: forge a stale-but-equality-passing Event home_. PRE:

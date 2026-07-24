@@ -13,6 +13,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <stdexcept>
 #include <thread>
 
 using namespace sluice::async;
@@ -88,6 +89,30 @@ SLUICE_TEST_CASE(group_await_and_cancel_are_idempotent) {
     g.cancel();   // idempotent — no tasks
     SLUICE_CHECK(n.load() == 1);
     SLUICE_CHECK(g.size() == 0);
+}
+
+SLUICE_TEST_CASE(group_task_exception_is_contained_and_await_drains) {
+    Group g;
+    std::atomic<int> reached{0};
+    g.async([&](CancelToken&) {
+        ++reached;
+        throw std::runtime_error("task failure remains inside Group");
+    });
+    g.await();
+    SLUICE_CHECK(reached.load() == 1);
+    SLUICE_CHECK(g.size() == 0);
+}
+
+SLUICE_TEST_CASE(group_destructor_contains_task_exception_and_joins) {
+    std::atomic<int> reached{0};
+    {
+        Group g;
+        g.async([&](CancelToken&) {
+            ++reached;
+            throw std::runtime_error("destructor drain");
+        });
+    }
+    SLUICE_CHECK(reached.load() == 1);
 }
 
 SLUICE_MAIN()

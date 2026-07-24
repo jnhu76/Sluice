@@ -1365,10 +1365,9 @@ SLUICE_TEST_CASE(event_multi_waiter_mixed_outcome_stress) {
         sched.spawn(f4);
         sched.spawn(f5);
         sched.spawn(fdriver);
-        // 3 workers: keeps the test deterministic while avoiding the known
-        // raw fiber-asm + TSan DEADLYSIGNAL at high concurrent-worker counts
-        // (classified separately; T8-T16 provide the causal race proofs under
-        // TSan). Stress is supplementary only (H7).
+        // Three workers exercise cross-thread fiber migration.  Under TSan
+        // this is also the regression for the context-switch annotations:
+        // each logical fiber must carry its sanitizer stack between workers.
         sched.run(3);
 
         SLUICE_CHECK_MSG(

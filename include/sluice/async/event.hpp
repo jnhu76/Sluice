@@ -59,6 +59,7 @@
 #include <atomic>
 #include <cassert>
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/select_port.hpp>
 #include <sluice/async/scheduler.hpp>
 #include <sluice/async/wait_node.hpp>
@@ -85,11 +86,16 @@ public:
     // unlink Select arms, and does NOT synthesize RESOURCE_WAKE. The
     // underlying ~WaitQueue asserts empty in debug (caller must drain first).
     // The SelectPort assertion fires if Select arms remain registered (caller
-    // contract violation). In release builds, no recovery/cancel-all protocol
-    // is required.
-    ~Event() {
-        assert(select_port_.empty() &&
+    // contract violation). Recovery is unsafe because the intrusive arms may
+    // point into caller frames that are being destroyed, so both Debug and
+    // Release builds fail fast rather than continuing with dangling linkage.
+    ~Event() noexcept {
+        const bool select_registry_empty = select_port_.empty();
+        assert(select_registry_empty &&
                "Event destroyed with live Select arms — caller contract violation");
+        if (!select_registry_empty) {
+            detail::select_invariant_fail_fast();
+        }
     }
 
     Event(const Event&) = delete;

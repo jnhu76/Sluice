@@ -10,6 +10,7 @@
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/queue_port.hpp>  // detail::QueuePort / QueueRole (E12-E Queue seams)
 #include <sluice/async/detail/select_registration.hpp>  // detail::DeadlineHeapEntry, SelectTimerRegistration (E13 P3)
 #include <sluice/async/select_fwd.hpp>  // E13 P5 CORRECTIVE: select() template declaration + forward decls
@@ -1761,12 +1762,18 @@ public:
             detail::SelectTimerRegistration& reg) noexcept {
             assert(reg.scheduler() == nullptr &&
                    "detached CAS accessor requires a never-registered registration");
+            if (reg.scheduler() != nullptr) {
+                detail::select_invariant_fail_fast();
+            }
             return reg.try_claim_expiry();
         }
         static bool detached_retire(
             detail::SelectTimerRegistration& reg) noexcept {
             assert(reg.scheduler() == nullptr &&
                    "detached CAS accessor requires a never-registered registration");
+            if (reg.scheduler() != nullptr) {
+                detail::select_invariant_fail_fast();
+            }
             return reg.retire();
         }
 

@@ -658,13 +658,12 @@ SLUICE_TEST_CASE(cond_t24_external_thread_notify) {
     Scheduler sched(ctx);
     AsyncMutex mtx(sched);
     AsyncCondition cond(mtx);
-    std::atomic<bool> waiter_suspended{false}, waiter_done{false};
+    std::atomic<bool> waiter_done{false};
     std::atomic<bool> outcome_woken{false};
     WaitNode mlock, cn;
     Fiber w;
     w.set_entry([&](Fiber&) {
         mtx.lock(mlock);
-        waiter_suspended.store(true, std::memory_order::release);
         WaitOutcome r = cond.wait(cn);
         outcome_woken.store(r == WaitOutcome::woken, std::memory_order::release);
         waiter_done.store(true, std::memory_order::release);
@@ -674,7 +673,10 @@ SLUICE_TEST_CASE(cond_t24_external_thread_notify) {
     SLUICE_CHECK(sched.init_fiber(w, sa.base(), sa.size()));
     sched.spawn(w);
     std::thread run_thread([&] { sched.run_live(1); });
-    while (!waiter_suspended.load(std::memory_order::acquire)) {
+    // The previous flag was published immediately before cond.wait(), leaving
+    // a notify-before-registration race that could strand the waiter. The
+    // public Fiber state becomes waiting only after registration completes.
+    while (w.state() != FiberState::waiting) {
         std::this_thread::yield();
     }
     cond.notify_one();

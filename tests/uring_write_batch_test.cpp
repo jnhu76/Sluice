@@ -47,7 +47,8 @@ struct TempPath {
 };
 bool file_has(const std::string& path, std::string_view want) {
     std::ifstream in(path, std::ios::binary);
-    std::string content((std::istreambuf_iterator<char>(in), {}));
+    std::string content{std::istreambuf_iterator<char>(in),
+                        std::istreambuf_iterator<char>()};
     return content == std::string(want);
 }
 } // namespace
@@ -60,9 +61,10 @@ SLUICE_TEST_CASE(uring_write_batch_writes_small_file) {
     if (fd < 0)
         return;
     std::string payload = "hello uring";
-    std::vector<std::byte> buf(payload.begin(), payload.end());
+    std::span<const std::byte> buf{
+        reinterpret_cast<const std::byte*>(payload.data()), payload.size()};
     sluice::experimental::UringWriteBatch batch(8);
-    auto r = batch.write_all(fd, std::span<const std::byte>(buf), 0);
+    auto r = batch.write_all(fd, buf, 0);
     ::close(fd);
     SLUICE_CHECK(r.has_value());
     if (r.has_value()) {

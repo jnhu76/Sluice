@@ -53,10 +53,13 @@ SLUICE_TEST_CASE(uring_stats_increment_on_successful_write) {
     sluice::UringStats st{};
     ctx.set_stats(&st);
     std::string payload = "uring stats";
-    std::vector<std::byte> buf(payload.begin(), payload.end());
-    auto r = ctx.write_file_all(tp.str(), std::span<const std::byte>(buf));
+    std::span<const std::byte> buf{
+        reinterpret_cast<const std::byte*>(payload.data()), payload.size()};
+    auto r = ctx.write_file_all(tp.str(), buf);
     SLUICE_CHECK(r.has_value());
-    SLUICE_CHECK(st.queue_init_calls >= 1);
+    // set_stats() is called after UringIoContext (and its ring) is constructed,
+    // so construction-time queue init is intentionally not retroactive.
+    SLUICE_CHECK(st.queue_init_calls == 0);
     SLUICE_CHECK(st.submitted_ops >= 1);
     SLUICE_CHECK(st.completed_ops >= 1);
     SLUICE_CHECK(st.bytes_completed == payload.size());

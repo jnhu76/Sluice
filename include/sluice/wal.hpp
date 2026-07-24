@@ -5,6 +5,15 @@
 //   length:   u32   (payload byte count)
 //   payload:  bytes (length bytes)
 //   checksum: u32   (sum of payload bytes mod 2^32)
+//
+// Trust/resource contract: this format is for application-owned local records
+// produced by write_record/write_record_vec. read_record validates framing and
+// checksum but is not an untrusted-file parser and intentionally has no record
+// size policy below the on-disk u32 limit. It grows the payload incrementally so
+// a corrupt short file cannot trigger one allocation from its declared length;
+// a genuinely present multi-gigabyte record can still consume corresponding
+// memory. Callers accepting external or partially trusted input must impose
+// their own byte/record limit before using this API.
 #pragma once
 
 #include <sluice/reader.hpp>
@@ -78,6 +87,11 @@ namespace detail {
 // success or invalid_state if it would truncate. Extracted so the overflow
 // check is testable without allocating a 4 GiB payload.
 Result<std::uint32_t> checked_u32_len(std::size_t len);
+
+// Bounded growth step used by read_record. This is not a record-format limit:
+// it prevents a corrupt length header from causing one up-front allocation,
+// while preserving every u32-representable payload length.
+std::size_t read_chunk_size(std::size_t remaining) noexcept;
 
 } // namespace detail
 

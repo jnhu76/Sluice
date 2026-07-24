@@ -5,9 +5,61 @@
 // lib/std/Io/fiber.zig x86_64 block).
 #include <sluice/async/fiber_ctx.hpp>
 
+#include <cstdlib>
 #include <cstdint>
 
+#if SLUICE_FIBER_ASAN_ENABLED
+extern "C" {
+void __sanitizer_start_switch_fiber(void** fake_stack_save,
+                                    const void* bottom, std::size_t size);
+void __sanitizer_finish_switch_fiber(void* fake_stack_save,
+                                     const void** bottom_old,
+                                     std::size_t* size_old);
+}
+#endif
+
+#if SLUICE_FIBER_TSAN_ENABLED
+extern "C" {
+void* __tsan_get_current_fiber();
+void* __tsan_create_fiber(unsigned flags);
+void __tsan_destroy_fiber(void* fiber);
+void __tsan_switch_to_fiber(void* fiber, unsigned flags);
+}
+#endif
+
 namespace sluice::async::fiber_ctx {
+
+#if SLUICE_FIBER_TSAN_ENABLED
+namespace {
+
+void release_sanitizer_fiber(Context& ctx) noexcept {
+    if (ctx.owns_sanitizer_fiber && ctx.sanitizer_fiber != nullptr) {
+        __tsan_destroy_fiber(ctx.sanitizer_fiber);
+    }
+    ctx.sanitizer_fiber = nullptr;
+    ctx.owns_sanitizer_fiber = false;
+}
+
+}  // namespace
+
+Context::~Context() noexcept {
+    release_sanitizer_fiber(*this);
+}
+#endif
+
+void reset_context(Context& ctx) noexcept {
+#if SLUICE_FIBER_ASAN_ENABLED
+    ctx.asan_fake_stack = nullptr;
+    ctx.asan_stack_bottom = nullptr;
+    ctx.asan_stack_size = 0;
+#endif
+#if SLUICE_FIBER_TSAN_ENABLED
+    release_sanitizer_fiber(ctx);
+#endif
+    ctx.rsp = 0;
+    ctx.rbp = 0;
+    ctx.rip = 0;
+}
 
 // ---- The entry trampoline ------------------------------------------------
 // A freshly-initialized fiber's `rip` points here, with rsp/rbp arranged so
@@ -26,6 +78,33 @@ extern "C" void fiber_entry_trampoline();
 // extern "C" linkage so the asm can name it.
 
 #if defined(__x86_64__)
+
+#if SLUICE_FIBER_ASAN_ENABLED
+__attribute__((no_sanitize("address")))
+#endif
+void finish_asan_switch(Switch* resumed_by, void* fake_stack) noexcept {
+#if SLUICE_FIBER_ASAN_ENABLED
+    const void* old_bottom = nullptr;
+    std::size_t old_size = 0;
+    __sanitizer_finish_switch_fiber(fake_stack, &old_bottom, &old_size);
+    resumed_by->old->asan_stack_bottom = old_bottom;
+    resumed_by->old->asan_stack_size = old_size;
+#else
+    (void)resumed_by;
+    (void)fake_stack;
+#endif
+}
+
+#if SLUICE_FIBER_ASAN_ENABLED
+__attribute__((no_sanitize("address")))
+#endif
+extern "C" void fiber_entry_trampoline_bridge(
+    Switch* resumed_by, void* user_data, Entry entry) {
+#if SLUICE_FIBER_ASAN_ENABLED
+    finish_asan_switch(resumed_by, resumed_by->new_->asan_fake_stack);
+#endif
+    entry(resumed_by, user_data);
+}
 
 // ---- context_switch (x86_64) ---------------------------------------------
 // AT&T port of Zig fiber.zig:244-254. Extended asm with the full clobber list
@@ -57,34 +136,35 @@ extern "C" void fiber_entry_trampoline();
 //   init_context sets the fresh fiber's rsp to point at a frame that holds, in
 //   order (low -> high addresses):
 //     [entry fn ptr]    <- initial rsp points here on first resume
-//     [resumed_by ptr]
+//     [alignment slot]
 //     [user_data ptr]
 //   and rbp = 0, rip = &fiber_entry_trampoline.
 //
-//   The trampoline pops entry, then sets up rdi=resumed_by, rsi=user_data (the
-//   Entry's two args per SysV AMD64: first arg in rdi, second in rsi) and
-//   tail-calls entry. (No return address is on the stack — Entry must not
-//   return.)
-// The trampoline pops (entry, resumed_by, user_data), places the latter two
-// in the SysV AMD64 arg registers (rdi, rsi), and `callq`s the entry. We use
-// `callq` (NOT `jmpq`) so a normal C++ entry function — whose compiler-emitted
-// prologue expects a return address at (rsp) — is entered correctly. The entry
-// must switch away via context_switch before returning (it never returns to
-// the trampoline); the `ud2` after the call traps loudly if it ever does.
+//   The trampoline preserves the incoming rsi (the real Switch*), pops entry
+//   and user_data, then calls a C++ bridge. The bridge completes ASan's first
+//   switch onto a fresh stack before calling entry(resumed_by, user_data).
+//   `callq` gives the bridge a normal SysV return address. Entry must switch
+//   away via context_switch before returning; `ud2` traps if it does.
 asm(
     ".text\n"
     ".globl fiber_entry_trampoline\n"
     ".type fiber_entry_trampoline, @function\n"
     "fiber_entry_trampoline:\n"
-    "  popq %rax\n"          // rax = entry (Entry fn ptr), stashed by init_context
-    "  popq %rdi\n"          // rdi = resumed_by (first arg, SysV AMD64)
-    "  popq %rsi\n"          // rsi = user_data (second arg, SysV AMD64)
-    "  callq *%rax\n"        // call entry(rdi, rsi); pushes a return address
+    "  popq %rdx\n"          // rdx = entry (third bridge arg)
+    "  addq $8, %rsp\n"      // discard the alignment slot
+    "  movq %rsi, %rdi\n"    // rdi = incoming Switch* (first bridge arg)
+    "  popq %rsi\n"          // rsi = user_data (second bridge arg)
+    "  callq fiber_entry_trampoline_bridge\n"
     "  ud2\n"                // entry must NOT return; trap if it does
     ".size fiber_entry_trampoline, .-fiber_entry_trampoline\n"
 );
 
-Switch* context_switch(Switch* s) noexcept {
+namespace {
+
+#if SLUICE_FIBER_ASAN_ENABLED || SLUICE_FIBER_TSAN_ENABLED
+__attribute__((disable_sanitizer_instrumentation))
+#endif
+Switch* native_context_switch(Switch* s) noexcept {
     Switch* resumed_by;
     __asm__ volatile (
         "movq 0(%%rsi), %%rax\n\t"
@@ -118,6 +198,57 @@ Switch* context_switch(Switch* s) noexcept {
     return resumed_by;
 }
 
+#if SLUICE_FIBER_TSAN_ENABLED
+__attribute__((disable_sanitizer_instrumentation))
+#endif
+void prepare_tsan_switch(Switch* s) noexcept {
+#if SLUICE_FIBER_TSAN_ENABLED
+    // Match compiler-rt's fiber_asm test protocol: save the current logical
+    // fiber on the context being suspended, then tell TSan which logical
+    // stack will become active immediately before the native stack switch.
+    s->old->sanitizer_fiber = __tsan_get_current_fiber();
+    __tsan_switch_to_fiber(s->new_->sanitizer_fiber, 0);
+#else
+    (void)s;
+#endif
+}
+
+}  // namespace
+
+#if SLUICE_FIBER_TSAN_ENABLED
+__attribute__((no_sanitize("thread")))
+#endif
+Switch* context_switch(Switch* s) noexcept {
+#if SLUICE_FIBER_ASAN_ENABLED
+    __sanitizer_start_switch_fiber(
+        &s->old->asan_fake_stack, s->new_->asan_stack_bottom,
+        s->new_->asan_stack_size);
+#endif
+    prepare_tsan_switch(s);
+    Switch* resumed_by = native_context_switch(s);
+#if SLUICE_FIBER_ASAN_ENABLED
+    finish_asan_switch(resumed_by, s->old->asan_fake_stack);
+#endif
+    return resumed_by;
+}
+
+#if SLUICE_FIBER_ASAN_ENABLED || SLUICE_FIBER_TSAN_ENABLED
+__attribute__((disable_sanitizer_instrumentation))
+#endif
+void context_switch_final(Context& old, const Context& new_) noexcept {
+    // This Switch intentionally lives in an uninstrumented frame. ASan may
+    // destroy the departing fiber's fake stack in start_switch_fiber(nullptr),
+    // so the native handoff must not retain a pointer into that fake stack.
+    Switch s{&old, &new_};
+#if SLUICE_FIBER_ASAN_ENABLED
+    __sanitizer_start_switch_fiber(nullptr, new_.asan_stack_bottom,
+                                   new_.asan_stack_size);
+#endif
+    prepare_tsan_switch(&s);
+    (void)native_context_switch(&s);
+    std::abort();  // A terminal context must never be resumed.
+}
+
 // ---- init_context (x86_64) -----------------------------------------------
 // Set up a fresh Context so its first context_switch enters the trampoline,
 // which `callq`s entry(resumed_by, user_data). The init frame holds
@@ -129,6 +260,19 @@ bool init_context(Context& ctx, Entry entry, void* user_data,
     if (entry == nullptr || stack_base == nullptr || stack_size < 64) {
         return false;
     }
+#if SLUICE_FIBER_TSAN_ENABLED
+    release_sanitizer_fiber(ctx);
+    ctx.sanitizer_fiber = __tsan_create_fiber(0);
+    if (ctx.sanitizer_fiber == nullptr) {
+        return false;
+    }
+    ctx.owns_sanitizer_fiber = true;
+#endif
+#if SLUICE_FIBER_ASAN_ENABLED
+    ctx.asan_fake_stack = nullptr;
+    ctx.asan_stack_bottom = stack_base;
+    ctx.asan_stack_size = stack_size;
+#endif
     // Alignment math (System V AMD64, rsp must be ≡ 8 (mod 16) at a callee's
     // first instruction — i.e. immediately after a `call`'s implicit push):
     //
@@ -143,16 +287,14 @@ bool init_context(Context& ctx, Entry entry, void* user_data,
     //
     // Init frame layout (high -> low), 3 slots, no dummy:
     //   top-0x08:  user_data      (p[-1])
-    //   top-0x10:  resumed_by     (p[-2], placeholder; the real value is the
-    //                              Switch* the resumer passed in rsi at the
-    //                              initial context_switch. The trampoline loads
-    //                              it into rdi for the entry.)
+    //   top-0x10:  alignment slot (p[-2]); the real resumed_by Switch* arrives
+    //                              in rsi from context_switch.
     //   top-0x18:  entry          (p[-3])  <- initial rsp points here
     auto top = reinterpret_cast<std::uintptr_t>(stack_base) + stack_size;
     top &= ~static_cast<std::uintptr_t>(0xF);  // 16-byte align down (SysV AMD64)
     auto* p = reinterpret_cast<std::uint64_t*>(top);
     p[-1] = reinterpret_cast<std::uint64_t>(user_data);     // top-0x08
-    p[-2] = 0;                                               // top-0x10: resumed_by placeholder
+    p[-2] = 0;                                               // top-0x10: alignment slot
     p[-3] = reinterpret_cast<std::uint64_t>(entry);         // top-0x18
 
     // R0 = &p[-3] = top-24. As shown above, R0 ≡ 8 (mod 16); after the
@@ -166,6 +308,11 @@ bool init_context(Context& ctx, Entry entry, void* user_data,
 #else  // non-x86_64: unsupported. init_context returns false so a caller that
        // gates on `supported` (the header constant) never reaches here in a
        // well-formed build; reaching it is a misuse and fails closed.
+[[noreturn]] void context_switch_final(Context& /*old*/,
+                                       const Context& /*new_*/) noexcept {
+    std::abort();
+}
+
 bool init_context(Context& /*ctx*/, Entry /*entry*/, void* /*user_data*/,
                   std::byte* /*stack_base*/, std::size_t /*stack_size*/) noexcept {
     return false;

@@ -86,19 +86,30 @@ void Scheduler::select_preflight_shape_locked(
     detail::SelectGroup& group, std::uint32_t candidate_index) const {
     assert(group.scheduler_ == this &&
            "select_process_group_locked: group.scheduler_ != this");
+    if (group.scheduler_ != this) detail::select_invariant_fail_fast();
     assert(group.arms_ != nullptr &&
            "select_process_group_locked: group.arms_ is null");
+    if (group.arms_ == nullptr) detail::select_invariant_fail_fast();
     assert(group.arm_count_ >= 1 &&
            "select_process_group_locked: group.arm_count_ < 1");
+    if (group.arm_count_ < 1) detail::select_invariant_fail_fast();
     assert(group.arm_count_ <= kPreflightMaxArms &&
            "select_process_group_locked: group.arm_count_ exceeds kSelectMaxArms");
+    if (group.arm_count_ > kPreflightMaxArms)
+        detail::select_invariant_fail_fast();
     assert(candidate_index < group.arm_count_ &&
            "select_process_group_locked: candidate_index out of range");
+    if (candidate_index >= group.arm_count_)
+        detail::select_invariant_fail_fast();
 
     [[maybe_unused]] const auto phase = group.phase();
     assert((phase == detail::GroupPhase::selecting ||
             phase == detail::GroupPhase::armed) &&
            "select_process_group_locked: group phase must be Selecting or Armed");
+    if (phase != detail::GroupPhase::selecting &&
+        phase != detail::GroupPhase::armed) {
+        detail::select_invariant_fail_fast();
+    }
 }
 
 void Scheduler::select_preflight_claim_locked(
@@ -108,21 +119,33 @@ void Scheduler::select_preflight_claim_locked(
         group.arms_[candidate_index];
     assert(candidate.group == &group &&
            "select_process_group_locked: candidate arm.group != &group");
+    if (candidate.group != &group) detail::select_invariant_fail_fast();
     assert(candidate.state == detail::ArmState::candidate_ready &&
            "select_process_group_locked: candidate arm not CandidateReady");
+    if (candidate.state != detail::ArmState::candidate_ready)
+        detail::select_invariant_fail_fast();
 
     // --- every arm checks ---
     for (std::size_t i = 0; i < group.arm_count_; ++i) {
         [[maybe_unused]] detail::SelectArmSlot& arm = group.arms_[i];
         assert(arm.group == &group &&
                "select_process_group_locked: arm.group != &group");
+        if (arm.group != &group) detail::select_invariant_fail_fast();
         assert((arm.kind == detail::ArmKind::event ||
                 arm.kind == detail::ArmKind::timer) &&
                "select_process_group_locked: arm.kind must be Event or Timer");
+        if (arm.kind != detail::ArmKind::event &&
+            arm.kind != detail::ArmKind::timer) {
+            detail::select_invariant_fail_fast();
+        }
         assert((arm.state == detail::ArmState::registered ||
                 arm.state == detail::ArmState::candidate_ready) &&
                "select_process_group_locked: arm.state must be Registered or "
                "CandidateReady");
+        if (arm.state != detail::ArmState::registered &&
+            arm.state != detail::ArmState::candidate_ready) {
+            detail::select_invariant_fail_fast();
+        }
     }
 
     // --- Event arm preflight ---
@@ -131,11 +154,15 @@ void Scheduler::select_preflight_claim_locked(
         if (arm.kind != detail::ArmKind::event) continue;
         assert(arm.event.event_ != nullptr &&
                "select_process_group_locked: Event arm event_ is null");
+        if (arm.event.event_ == nullptr) detail::select_invariant_fail_fast();
         Event& ev = *arm.event.event_;
         assert(&ev.scheduler_ == this &&
                "select_process_group_locked: Event does not belong to this Scheduler");
+        if (&ev.scheduler_ != this) detail::select_invariant_fail_fast();
         assert(arm.home_ == &ev.select_port_ &&
                "select_process_group_locked: Event arm not linked to its Event port");
+        if (arm.home_ != &ev.select_port_)
+            detail::select_invariant_fail_fast();
         // Mechanical membership: the arm must actually be reachable from the
         // port's intrusive list (defends against a stale home_ pointer).
         bool found = false;
@@ -145,7 +172,8 @@ void Scheduler::select_preflight_claim_locked(
         }
         (void)found;
         assert(found && "select_process_group_locked: Event arm home_ points at "
-               "this Event's port but the arm is not in the intrusive list");
+                        "this Event's port but the arm is not in the intrusive list");
+        if (!found) detail::select_invariant_fail_fast();
     }
 
     // --- Timer arm preflight ---
@@ -156,16 +184,22 @@ void Scheduler::select_preflight_claim_locked(
             arm.timer.stable_reg_;
         assert(reg != nullptr &&
                "select_process_group_locked: Timer arm stable_reg_ is null");
+        if (reg == nullptr) detail::select_invariant_fail_fast();
         assert(reg->scheduler() == this &&
                "select_process_group_locked: Timer registration belongs to "
                "another Scheduler");
+        if (reg->scheduler() != this) detail::select_invariant_fail_fast();
         assert(pool_owns_select_block_locked(*reg) &&
                "select_process_group_locked: Scheduler pool does not own the "
                "Timer registration");
+        if (!pool_owns_select_block_locked(*reg))
+            detail::select_invariant_fail_fast();
         assert(reg->is_active() &&
                "select_process_group_locked: Timer registration is not ACTIVE");
+        if (!reg->is_active()) detail::select_invariant_fail_fast();
         assert(reg->arm() == &arm &&
                "select_process_group_locked: Timer registration.arm() != &arm");
+        if (reg->arm() != &arm) detail::select_invariant_fail_fast();
     }
 }
 
@@ -224,6 +258,8 @@ bool Scheduler::select_process_group_locked(detail::SelectGroup& group,
     assert(select_all_authority_closed_locked(group) &&
            "select_process_group_locked: all-authority-closed invariant failed "
            "after finalization");
+    if (!select_all_authority_closed_locked(group))
+        detail::select_invariant_fail_fast();
 
     return true;
 }

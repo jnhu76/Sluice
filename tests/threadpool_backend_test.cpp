@@ -19,7 +19,9 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
+#include <sys/types.h>
 #include <unistd.h>
 #include <vector>
 
@@ -33,10 +35,22 @@ namespace {
 class TempPath {
 public:
     TempPath() {
+        // Process-unique name: parallel test runs (sharding, contention stress,
+        // CI matrix slots) otherwise produce the SAME path (per-process counter
+        // starts at 0) and each open()'s it O_TRUNC, truncating/overwriting a
+        // sibling's file mid-operation. PID makes it cross-process unique; the
+        // counter + instance address keep it unique within a process. See the
+        // same fix in uring_backend_test.cpp.
         path_ = (std::filesystem::temp_directory_path() /
-                 ("sluice_async_tp_" + std::to_string(counter_++) + ".tmp")).string();
+                 ("sluice_async_tp_" + std::to_string(::getpid()) + "_" +
+                  std::to_string(counter_++) + "_" +
+                  std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp"))
+                    .string();
     }
-    ~TempPath() { std::filesystem::remove(path_); }
+    ~TempPath() {
+        std::error_code ec;
+        std::filesystem::remove(path_, ec);
+    }
     TempPath(const TempPath&) = delete;
     TempPath& operator=(const TempPath&) = delete;
     const std::string& path() const { return path_; }
@@ -170,6 +184,30 @@ SLUICE_TEST_CASE(tp_submit_after_shutdown_rejected) {
     SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
     SLUICE_CHECK(!c.outstanding());  // rejected before mark_outstanding
     SLUICE_CHECK(backend.outstanding() == 0);
+}
+
+SLUICE_TEST_CASE(tp_offset_past_native_max_is_rejected_before_enqueue) {
+    constexpr std::uint64_t native_max =
+        static_cast<std::uint64_t>(std::numeric_limits<off_t>::max());
+    if constexpr (native_max < std::numeric_limits<std::uint64_t>::max()) {
+        TempPath tp;
+        int fd = open_temp(tp.path());
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        Completion<std::size_t> c;
+        std::byte byte{};
+
+        auto r = ctx.submit_read(ReadOp{fd, &byte, 1, native_max + 1}, c);
+        // Drain the old behavior before asserting so the red test does not
+        // violate AsyncIoContext's outstanding-completion destruction contract.
+        if (r.has_value()) {
+            (void)ctx.wait_one();
+        }
+        SLUICE_CHECK(!r.has_value());
+        SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
+        SLUICE_CHECK(c.idle());
+        SLUICE_CHECK(ctx.outstanding() == 0);
+        ::close(fd);
+    }
 }
 
 // ---- Slice 9 (025 B2): cancel records intent; op completes (best-effort) ---

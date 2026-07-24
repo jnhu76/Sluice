@@ -46,10 +46,27 @@ namespace {
 class TempPath {
 public:
     TempPath() {
+        // The name MUST be unique across processes, not just within one. Test
+        // binaries are often run in parallel (per-test sharding, contention
+        // stress, CI matrix slots). The earlier per-process counter started at
+        // 0 in every process, so two concurrent runs produced the SAME path and
+        // each open()'d it with O_TRUNC — one process truncated/overwrote the
+        // other's file mid-operation, surfacing as spurious short pread() (the
+        // historical flake at "n == 256") or even corruption/SEGV. Including
+        // the PID makes the path process-unique; the counter + instance address
+        // keep it unique within a process that constructs several TempPaths.
         path_ = (std::filesystem::temp_directory_path() /
-                 ("sluice_uring_async_" + std::to_string(counter_++) + ".tmp")).string();
+                 ("sluice_uring_async_" + std::to_string(::getpid()) + "_" +
+                  std::to_string(counter_++) + "_" +
+                  std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp"))
+                    .string();
     }
-    ~TempPath() { std::filesystem::remove(path_); }
+    ~TempPath() {
+        // Swallow cleanup errors: a failing remove (already gone, permission)
+        // must not throw during stack unwinding and terminate the test process.
+        std::error_code ec;
+        std::filesystem::remove(path_, ec);
+    }
     TempPath(const TempPath&) = delete;
     TempPath& operator=(const TempPath&) = delete;
     const std::string& path() const { return path_; }

@@ -64,8 +64,13 @@ void Group::await() {
         local_tasks.swap(tasks_);
         local_futures.swap(futures_);
     }
-    for (auto& f : local_futures) (void)f->await();
+    // A task publishes its Future immediately before its worker exits. Join
+    // first so every Future is already ready before await() observes it. This
+    // removes the only potentially-blocking wait from the scope that owns
+    // joinable std::threads: even if an underlying wait primitive could throw,
+    // no joinable thread can reach std::thread's terminating destructor.
     for (auto& t : local_tasks) if (t.joinable()) t.join();
+    for (auto& f : local_futures) (void)f->await();
 }
 
 Group::~Group() {
@@ -77,8 +82,11 @@ Group::~Group() {
         local_tasks.swap(tasks_);
         local_futures.swap(futures_);
     }
-    for (auto& f : local_futures) (void)f->await();
+    // Same exception-safety ordering as await(): do not call a potentially
+    // blocking Future wait while this noexcept destructor owns joinable
+    // std::threads.
     for (auto& t : local_tasks) if (t.joinable()) t.join();
+    for (auto& f : local_futures) (void)f->await();
     // Evented: fibers/stacks are owned by the group and released by the vector
     // destructors. The borrowed Scheduler outlives the group by contract.
 }

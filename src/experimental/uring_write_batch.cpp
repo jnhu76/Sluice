@@ -6,6 +6,7 @@
 // The stub keeps the project buildable with no liburing dependency (013B gate).
 #include <sluice/experimental/uring_write_batch.hpp>
 
+#include <sluice/detail/io_validation.hpp>
 #include <sluice/error.hpp>
 
 #if defined(SLUICE_HAS_LIBURING)
@@ -81,7 +82,8 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
                 return make_unexpected<UringWriteResult>(IoError{IoError::Code::invalid_state});
             }
         }
-        ::io_uring_prep_write(sqe, fd, p, remaining, static_cast<__off_t>(off));
+        const unsigned chunk_length = sluice::detail::uring_chunk_length(remaining);
+        ::io_uring_prep_write(sqe, fd, p, chunk_length, off);
         ++result.submitted;
         if (stats_)
             ++stats_->submitted_ops;
@@ -94,12 +96,16 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
         if (stats_)
             ++stats_->submit_calls;
         io_uring_cqe* cqe = nullptr;
-        int wait = ::io_uring_wait_cqe(ring, &cqe);
+        int wait = sluice::detail::retry_uring_wait_on_eintr(
+            [&] { return ::io_uring_wait_cqe(ring, &cqe); });
         if (wait < 0 || cqe == nullptr) {
             ++result.errors;
             if (stats_)
                 ++stats_->completion_errors;
-            return make_unexpected<UringWriteResult>(IoError{IoError::Code::backend_error});
+            const IoError error =
+                wait < 0 ? from_errno_value(-wait)
+                         : IoError{IoError::Code::backend_error};
+            return make_unexpected<UringWriteResult>(error);
         }
         int res = cqe->res;
         ::io_uring_cqe_seen(ring, cqe);
@@ -121,7 +127,12 @@ Result<UringWriteResult> UringWriteBatch::write_all(int fd, std::span<const std:
             ++result.errors;
             return make_unexpected<UringWriteResult>(IoError{IoError::Code::invalid_state});
         }
-        remaining -= std::min(wrote, remaining);
+        if (wrote > chunk_length || wrote > remaining) {
+            ++result.errors;
+            return make_unexpected<UringWriteResult>(
+                IoError{IoError::Code::invalid_state});
+        }
+        remaining -= wrote;
         p += wrote;
         off += wrote;
     }
