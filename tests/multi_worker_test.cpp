@@ -42,7 +42,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <thread>
 #include <vector>
 
 using namespace sluice::async;
@@ -183,11 +182,32 @@ SLUICE_TEST_CASE(mw_worker_local_scheduler_context) {
     SLUICE_CHECK(sched.waiting_ready_count() == 0);  // both registrations erased on wake
 }
 
-// ---- E7-T3: pinned resume — Fiber resumes on its owning Worker -----------
-// Fiber A starts on Worker 0 (round-robin: first spawned → worker 0). A
-// suspends on a ready flag. A different Worker (Worker 1) observes the flag
-// becomes ready (via the readiness drain) and routes A back to Worker 0.
-// Assert: A resumes on the same OS thread as Worker 0 (its owner).
+// ---- E7-T3: cross-worker routed wake — readiness drain wakes a suspended Fiber
+//
+// Historical identity: this case asserted `a_tid_pre == a_tid_post` ("Fiber A
+// resumes on the same OS thread as Worker 0, its owner") to encode the E7-era
+// C-B wait-epoch worker-affinity contract ("suspend-worker == resume-worker").
+//
+// E8 (ADR §9.3, selected Model B — ownership-transfer steal) superseded C-B by
+// allowing an idle Worker to STEAL a Runnable Fiber from another Worker's
+// routed inbox, transferring ownership to the thief as part of the steal. On
+// this topology A is routed to Worker 0's inbox, but an idle Worker 1 may
+// legitimately steal it and resume A on Worker 1. The same-thread oracle would
+// reject that legal E8 execution and is therefore an E8-invalid flake source
+// (~7% failure rate observed locally, also the source of the CI failure). The
+// oracle is dropped here for the same reason the E7-T2 / E7-T7 same-thread /
+// "different worker" proxies were dropped: C-B is not a valid C-A proxy, and
+// ADR §9.3 is the authority over this contract.
+//
+// Load-bearing claims that remain TRUE under E8 and are still asserted:
+//   - A registered a wait, then the readiness drain woke it and it RESUMED
+//     (regardless of which Worker executed the resume) — the routed-wake works.
+//   - A's wait registration was erased on wake (exactly-once terminal).
+//   - A and the setter both completed (liveness + clean terminal state).
+//
+// DOES NOT PROVE: that A resumed on Worker 0 specifically. Under E8 that is not
+// a guaranteed property once a steal is possible; runnable ownership transfer
+// is proven instead by runnable_steal_test (E8-T1/T2/T3) using owner_id_of().
 SLUICE_TEST_CASE(mw_pinned_resume_on_owning_worker) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -195,21 +215,22 @@ SLUICE_TEST_CASE(mw_pinned_resume_on_owning_worker) {
     Scheduler sched(ctx);
 
     std::atomic<bool> flag_a{false};
-    std::thread::id a_tid_pre{}, a_tid_post{};
     std::atomic<bool> a_suspended{false};
+    std::atomic<bool> a_resumed{false};
 
-    // Fiber A: starts on Worker 0 (first spawned, round-robin → worker 0).
+    // Fiber A: starts on Worker 0 (first spawned, round-robin → worker 0),
+    // suspends on flag_a. Under E8 it may legally be stolen and resume on a
+    // different Worker; only the fact that it DID resume is asserted.
     Fiber fa;
     fa.set_entry([&](Fiber&) {
-        a_tid_pre = std::this_thread::get_id();
-        a_suspended.store(true);
+        a_suspended.store(true, std::memory_order_release);
         sched.await_ready_flag(flag_a);
-        a_tid_post = std::this_thread::get_id();
+        a_resumed.store(true, std::memory_order_release);  // readiness drain woke A
     });
     // Setter Fiber: makes flag_a ready (starts on Worker 1 — second spawned).
     Fiber fset;
     fset.set_entry([&](Fiber&) {
-        while (!a_suspended.load()) {}
+        while (!a_suspended.load(std::memory_order_acquire)) {}
         flag_a.store(true, std::memory_order_release);
     });
     FiberStack sa, sset;
@@ -219,25 +240,31 @@ SLUICE_TEST_CASE(mw_pinned_resume_on_owning_worker) {
     sched.spawn(fset); // → Worker 1
     sched.run(2);
 
-    SLUICE_CHECK(a_tid_pre == a_tid_post);  // resumed on same OS thread (Worker 0)
+    SLUICE_CHECK(a_resumed.load());               // routed wake reached A
+    SLUICE_CHECK(sched.waiting_ready_count() == 0);  // registration erased on wake
     SLUICE_CHECK(fa.state() == FiberState::done);
     SLUICE_CHECK(fset.state() == FiberState::done);
 }
 
-// ---- E7-T7: internal Worker notification — cross-worker routed work -------
-// Worker 1 (setter) makes a flag ready for Fiber A owned by Worker 0. Worker 0
-// must observe the routed runnable work and resume A. Assert: A resumes on
-// its owner (Worker 0); the setter runs to completion.
+// ---- E7-T7: cross-worker routed wake — readiness drain wakes a suspended Fiber
+// -------
+// Worker 1 (setter) makes a flag ready for Fiber A owned by Worker 0. The
+// readiness drain must observe the flag, route A's runnable, and A must resume.
 //
 // E8 NOTE: E7-T7 originally asserted `a_tid != setter_tid` ("ran on different
-// Workers") as a proxy for "both fibers ran." E8 introduces work stealing
-// (ADR §9.3), so the setter — initially assigned to Worker 1 — may be STOLEN
-// by Worker 0 (which is idle while A waits). Under E8 this is correct:
-// ownership transfers to the thief. The load-bearing E7-T7 claim (cross-
-// worker routed wake: W0's A is woken by a flag and resumes on W0) is
-// unchanged and still asserted. The "different worker" proxy is dropped as
-// E8-invalid. The E7-pinned variant is preserved in e7_dup_publication_test
-// semantics; E8 stealing is proven in e8_steal_test.
+// Workers") as a proxy for "both fibers ran," and a later variant also asserted
+// `a_tid == a_tid_post` ("A resumed on Worker 0"). Both same/different-thread
+// oracles are E8-invalid: E8 introduces work stealing (ADR §9.3 Model B), so
+// any Runnable ticket — the setter, or A after it is routed — may be STOLEN by
+// an idle Worker, transferring ownership to the thief. Under E8 this is correct
+// and not a defect. Both thread-oracle proxies are dropped here for the same
+// reason as in mw_pinned_resume_on_owning_worker (E7-T3): they reject legal E8
+// executions (~3% flake rate observed locally for the `a_tid == a_tid_post`
+// variant).
+//
+// The load-bearing E7-T7 claim — "a cross-worker readiness drain wakes A and A
+// resumes" — is unchanged and now asserted directly via a_resumed. Runnable
+// ownership transfer itself is proven by runnable_steal_test (E8-T1/T2/T3).
 SLUICE_TEST_CASE(mw_internal_worker_notification) {
     if constexpr (!fiber_ctx::supported) return;
 
@@ -245,22 +272,21 @@ SLUICE_TEST_CASE(mw_internal_worker_notification) {
     Scheduler sched(ctx);
 
     std::atomic<bool> flag_a{false};
-    std::thread::id a_tid{}, a_tid_post{};
     std::atomic<bool> a_suspended{false};
+    std::atomic<bool> a_resumed{false};
     std::atomic<bool> setter_ran{false};
 
     Fiber fa;
     fa.set_entry([&](Fiber&) {
-        a_tid = std::this_thread::get_id();
-        a_suspended.store(true);
+        a_suspended.store(true, std::memory_order_release);
         sched.await_ready_flag(flag_a);
-        a_tid_post = std::this_thread::get_id();
+        a_resumed.store(true, std::memory_order_release);  // routed wake reached A
     });
     Fiber fset;
     fset.set_entry([&](Fiber&) {
-        while (!a_suspended.load()) {}
+        while (!a_suspended.load(std::memory_order_acquire)) {}
         flag_a.store(true, std::memory_order_release);
-        setter_ran.store(true);
+        setter_ran.store(true, std::memory_order_release);
     });
     FiberStack sa, sset;
     SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
@@ -269,12 +295,12 @@ SLUICE_TEST_CASE(mw_internal_worker_notification) {
     sched.spawn(fset); // → Worker 1
     sched.run(2);
 
-    // Load-bearing E7-T7 claim: A resumed on its owning Worker 0 (pinned
-    // wake routing preserved even under E8 stealing — a stolen Fiber's
-    // wake routes to its CURRENT owner, and A was never stolen: it
-    // suspended on W0 and woke on W0).
-    SLUICE_CHECK(a_tid == a_tid_post);
+    // Load-bearing: the cross-worker readiness drain woke A (regardless of
+    // which Worker resumed it), both fibers completed, and the registration
+    // was erased on wake.
+    SLUICE_CHECK(a_resumed.load());
     SLUICE_CHECK(setter_ran.load());
+    SLUICE_CHECK(sched.waiting_ready_count() == 0);
     SLUICE_CHECK(fa.state() == FiberState::done);
     SLUICE_CHECK(fset.state() == FiberState::done);
 }
