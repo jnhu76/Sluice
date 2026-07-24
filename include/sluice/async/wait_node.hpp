@@ -248,7 +248,7 @@ private:
 
     Fiber* fiber_{nullptr};
     std::atomic<State> state_{State::detached};
-    void* user_{nullptr};  // E12-E Queue per-op context (QueueWaitCtx*); else null
+    void* user_{nullptr};  // E12-E Queue / E12-F RwLock per-op context; else null
 };
 
 }  // namespace sluice::async

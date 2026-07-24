@@ -725,6 +725,39 @@ are constraints of `AsyncQueue<T>` itself. The result members remain declared
 Both result types are move-only. Move-assignment uses destroy-and-rebuild so
 `T` need not be move-assignable (PR #12 corrective).
 
+### `sluice::async::AsyncRwLock`
+
+Fiber-suspending async Read-Write Lock with writer-fair phase-batched scheduling.
+Non-copyable, non-movable. Multiple concurrent readers OR one exclusive writer.
+
+Writer-fair policy: new readers cannot barge past queued writers. When the queue
+head is a reader, the maximal consecutive reader prefix is granted as one batch.
+
+```cpp
+class AsyncRwLock {
+public:
+    explicit AsyncRwLock(Scheduler& scheduler) noexcept;
+    ~AsyncRwLock();  // assert(active_readers_==0, !writer_active_, waiters empty)
+    AsyncRwLock(const AsyncRwLock&) = delete;
+    AsyncRwLock& operator=(const AsyncRwLock&) = delete;
+    AsyncRwLock(AsyncRwLock&&) = delete;
+    AsyncRwLock& operator=(AsyncRwLock&&) = delete;
+
+    [[nodiscard]] bool try_read_lock();              // any thread; fails if writer active or queue non-empty
+    void read_lock(WaitNode& node);                  // Fiber-only
+    void read_lock_until(WaitNode& node, Scheduler::deadline_t deadline);  // Fiber-only
+
+    [[nodiscard]] bool try_write_lock();             // Fiber-only; recursive→false
+    void write_lock(WaitNode& node);                 // Fiber-only
+    void write_lock_until(WaitNode& node, Scheduler::deadline_t deadline); // Fiber-only
+
+    void unlock_read() noexcept;                     // any thread; caller must hold read share
+    void unlock_write() noexcept;                    // Fiber-only; must be writer owner
+
+    [[nodiscard]] bool cancel(WaitNode& node);       // per-wait-epoch cancel; any thread
+};
+```
+
 ### Common Vocabulary
 
 | Term | Meaning |
