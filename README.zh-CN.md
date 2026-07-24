@@ -170,6 +170,10 @@ auto got = sluice::wal::read_record(reader);     // 读回
 sluice::wal::write_record_vec(writer, iovecs);   // 向量变体
 ```
 
+这是由应用自行生成和持有的本地测试格式，不是不可信文件解析器，也不是数据库恢复格式。`read_record`
+会校验 framing 和 checksum，并避免在实际字节到达前按声明长度一次性分配全部内存；但它不会在磁盘
+格式的 `u32` 长度之下额外施加策略上限。若调用方接收外部或部分可信的记录，必须自行限制输入大小。
+
 ## 构建
 
 项目使用 [xmake](https://xmake.io)。

@@ -8,7 +8,10 @@
 #include <sluice/reader.hpp>
 #include <sluice/writer.hpp>
 
+#include <algorithm>
+#include <array>
 #include <cstring>
+#include <limits>
 #include <span>
 #include <string>
 #include <vector>
@@ -24,6 +27,43 @@ std::vector<std::byte> bytes_of(std::string_view s) {
 }
 std::span<const std::byte> span_of(const std::vector<std::byte>& v) {
     return std::span<const std::byte>(v.data(), v.size());
+}
+
+class TrackingReader final : public sluice::Reader {
+  public:
+    explicit TrackingReader(std::vector<std::byte> bytes)
+        : bytes_(std::move(bytes)) {}
+
+    sluice::Result<std::size_t> read_some(std::span<std::byte> dst) override {
+        max_request_ = std::max(max_request_, dst.size());
+        const std::size_t available = bytes_.size() - offset_;
+        const std::size_t count = std::min(available, dst.size());
+        if (count > 0) {
+            std::memcpy(dst.data(), bytes_.data() + offset_, count);
+            offset_ += count;
+        }
+        return count;
+    }
+
+    std::size_t max_request() const noexcept { return max_request_; }
+
+  private:
+    std::vector<std::byte> bytes_;
+    std::size_t offset_ = 0;
+    std::size_t max_request_ = 0;
+};
+
+std::vector<std::byte> header_with_length(std::uint32_t length) {
+    std::vector<std::byte> header(8);
+    const auto put_u32 = [&](std::size_t offset, std::uint32_t value) {
+        for (unsigned i = 0; i < 4; ++i) {
+            header[offset + i] =
+                std::byte{static_cast<unsigned char>((value >> (i * 8)) & 0xff)};
+        }
+    };
+    put_u32(0, sluice::wal::magic);
+    put_u32(4, length);
+    return header;
 }
 
 } // namespace
@@ -169,6 +209,28 @@ SLUICE_TEST_CASE(wal_checked_u32_len_rejects_overflow) {
     auto r = sluice::wal::detail::checked_u32_len(static_cast<std::size_t>(UINT32_MAX) + 1);
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == sluice::IoError::Code::invalid_state);
+}
+
+SLUICE_TEST_CASE(wal_read_chunk_size_is_bounded_and_overflow_free) {
+    SLUICE_CHECK(sluice::wal::detail::read_chunk_size(0) == 0);
+    SLUICE_CHECK(sluice::wal::detail::read_chunk_size(1) == 1);
+    const auto maximum =
+        sluice::wal::detail::read_chunk_size(std::numeric_limits<std::uint32_t>::max());
+    SLUICE_CHECK(maximum > 0);
+    SLUICE_CHECK(maximum < std::numeric_limits<std::uint32_t>::max());
+}
+
+SLUICE_TEST_CASE(wal_extreme_declared_length_does_not_allocate_up_front) {
+    TrackingReader in(
+        header_with_length(std::numeric_limits<std::uint32_t>::max()));
+    auto result = sluice::wal::read_record(in);
+    SLUICE_CHECK(!result.has_value());
+    SLUICE_CHECK(result.error().code == sluice::IoError::Code::eof);
+    // Header read is 8 bytes; the first payload request is one bounded chunk,
+    // never the malicious 0xffffffff declaration.
+    SLUICE_CHECK(in.max_request() <=
+                 sluice::wal::detail::read_chunk_size(
+                     std::numeric_limits<std::uint32_t>::max()));
 }
 
 SLUICE_MAIN()

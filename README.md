@@ -168,6 +168,12 @@ auto got = sluice::wal::read_record(reader);     // read it back
 sluice::wal::write_record_vec(writer, iovecs);   // vector variant
 ```
 
+This is an application-owned local test format, not an untrusted-file parser
+or database recovery format. `read_record` validates framing and checksum and
+avoids allocating the whole declared length before bytes arrive, but it does
+not impose a policy limit below the on-disk `u32` length. Callers that accept
+external or partially trusted records must enforce their own input limit.
+
 ## Building
 
 The project uses [xmake](https://xmake.io).
