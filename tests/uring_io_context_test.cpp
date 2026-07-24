@@ -42,7 +42,8 @@ struct TempPath {
 };
 bool file_has(const std::string& path, std::string_view want) {
     std::ifstream in(path, std::ios::binary);
-    std::string content((std::istreambuf_iterator<char>(in), {}));
+    std::string content{std::istreambuf_iterator<char>(in),
+                        std::istreambuf_iterator<char>()};
     return content == std::string(want);
 }
 } // namespace
@@ -50,9 +51,10 @@ bool file_has(const std::string& path, std::string_view want) {
 SLUICE_TEST_CASE(uring_io_context_write_file_all_writes_bytes) {
     TempPath tp;
     std::string payload = "uring io context payload";
-    std::vector<std::byte> buf(payload.begin(), payload.end());
+    std::span<const std::byte> buf{
+        reinterpret_cast<const std::byte*>(payload.data()), payload.size()};
     sluice::experimental::UringIoContext ctx(8);
-    auto r = ctx.write_file_all(tp.str(), std::span<const std::byte>(buf));
+    auto r = ctx.write_file_all(tp.str(), buf);
     SLUICE_CHECK(r.has_value());
     if (r.has_value()) {
         SLUICE_CHECK(r.value().bytes_written == payload.size());
