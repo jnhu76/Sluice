@@ -13,6 +13,7 @@
 // (E7-T1/T2) and preserve single-worker regression (E4-E6).
 #include <sluice/async/scheduler.hpp>
 
+#include <sluice/async/async_rwlock.hpp>  // E12-F ExpireCtx (pump routing)
 #include <sluice/async/select.hpp>
 #include <sluice/async/event.hpp>
 #include <sluice/async/fiber_ctx.hpp>
@@ -22,6 +23,7 @@
 #include "queue_detail.hpp"  // QueueWaitCtx (shared with queue_port.cpp; non-installed)
 
 #include <utility>
+#include <cstdlib>  // std::abort (E12-F Category B fail-fast)
 
 // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the internal-testing variant pulls in
 // the non-installed test-control header so the phase call sites below resolve to
@@ -2393,6 +2395,529 @@ void Scheduler::mutex_unlock(WaitQueue& waiters, Fiber*& owner) {
 }
 
 // ===========================================================================
+// E12-F AsyncRwLock private seams (sluice-CORE-E12-F).
+//
+// Writer-fair, phase-batched Read-Write Lock. ALL authoritative state
+// mutations occur under global_mtx_ (G) -> waiters_.mtx() (W). The unified
+// grant helper dispatches to reader batch or single writer grant based on
+// the queue head mode. Cancel and expiry perform head reconcile after unlink.
+// ===========================================================================
+
+namespace {
+// Per-operation context stored on WaitNode::user_ for RwLock waiters.
+// Stack-local in the lock function; alive for the entire suspension epoch.
+struct RwWaitCtx {
+    enum class Mode : std::uint8_t { read, write };
+    Mode mode;
+};
+}  // anonymous namespace
+
+void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
+                                             std::size_t& active_readers,
+                                             bool& writer_active,
+                                             Fiber*& writer_owner) {
+    // Unified head-driven grant reconcile. Caller MUST hold G; this function
+    // acquires W internally (like mutex_handoff_one_locked). Dispatches based
+    // on queue head mode. Publication is under G after W release.
+    //
+    // Publication data is collected into a local intrusive list (readers) or a
+    // single Fiber* (writer) while W is held, then published after W release.
+    Fiber* single_writer_fiber = nullptr;
+    WaitNode* pub_head = nullptr;
+    WaitNode* pub_tail = nullptr;
+    std::size_t granted_readers = 0;
+    bool granted_writer = false;
+
+    {
+        LockGuard qlk(waiters.mtx());
+        if (waiters.head_ == nullptr) return;  // empty queue
+
+        WaitNode* head = waiters.head_;
+        auto* ctx = static_cast<RwWaitCtx*>(head->user());
+        if (ctx == nullptr) {
+            assert(false && "E12-F grant_from_head: linked head has null user_ "
+                            "(internal invariant violation)");
+            std::abort();
+            return;
+        }
+
+        if (ctx->mode == RwWaitCtx::Mode::write) {
+            // --- Writer grant: grant exactly ONE writer ---
+            if (active_readers > 0 || writer_active) return;  // not admissible
+
+            Fiber* f = head->fiber();
+            // Claim: resolve Woken + unlink + retire timer + accounting.
+            bool won = waiters.wake_node_locked(*head);
+            if (!won) {
+                assert(false && "E12-F grant_from_head: wake_node_locked failed "
+                                "for linked writer head (Category B)");
+                std::abort();
+            }
+            retire_timer_for_node_locked(*head);
+            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+            // Commit ownership BEFORE publication.
+            writer_active = true;
+            writer_owner = f;
+            single_writer_fiber = f;
+            granted_writer = true;
+        } else {
+            // --- Reader batch grant: maximal consecutive reader prefix ---
+            if (writer_active) return;  // not admissible
+
+            for (WaitNode* n = waiters.head_; n != nullptr; ) {
+                WaitNode* next = n->next_;  // cache BEFORE claim clears links
+                auto* nctx = static_cast<RwWaitCtx*>(n->user());
+                if (nctx == nullptr) {
+                    assert(false && "E12-F reader_batch: linked node has null "
+                                    "user_ (internal invariant violation)");
+                    std::abort();
+                    return;
+                }
+                if (nctx->mode != RwWaitCtx::Mode::read) break;  // writer stops batch
+                // Claim: resolve Woken + unlink + retire + accounting.
+                bool won = waiters.wake_node_locked(*n);
+                if (!won) {
+                    assert(false && "E12-F reader_batch: wake_node_locked failed "
+                                    "(Category B)");
+                    std::abort();
+                }
+                retire_timer_for_node_locked(*n);
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // Thread onto local publication list.
+                n->next_ = nullptr;
+                n->prev_ = pub_tail;
+                if (pub_tail != nullptr) pub_tail->next_ = n;
+                else pub_head = n;
+                pub_tail = n;
+                ++granted_readers;
+                n = next;
+            }
+            if (granted_readers > 0) active_readers += granted_readers;
+        }
+    }  // W released here
+
+    // Publication under G (W already released).
+    if (granted_writer) {
+        if (single_writer_fiber != nullptr && single_writer_fiber->make_runnable()) {
+            auto it = fiber_owner_.find(single_writer_fiber);
+            WorkerState* owner_ws = (it != fiber_owner_.end()) ? it->second : g_worker;
+            route_runnable_locked(single_writer_fiber, owner_ws);
+        }
+    }
+    WaitNode* w = pub_head;
+    while (w != nullptr) {
+        WaitNode* pub_next = w->next_;
+        Fiber* fib = w->fiber();
+        auto it = fiber_owner_.find(fib);
+        WorkerState* owner_ws = (it != fiber_owner_.end()) ? it->second : g_worker;
+        w->next_ = nullptr;
+        w->prev_ = nullptr;
+        if (fib != nullptr && fib->make_runnable()) {
+            route_runnable_locked(fib, owner_ws);
+        }
+        w = pub_next;
+    }
+}
+
+bool Scheduler::rwlock_try_read_lock(WaitQueue& waiters,
+                                     std::size_t& active_readers,
+                                     bool& writer_active) {
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(waiters.mtx());
+    if (!writer_active && waiters.empty_locked()) {
+        ++active_readers;
+        return true;
+    }
+    return false;
+}
+
+void Scheduler::rwlock_read_lock(WaitQueue& waiters,
+                                 std::size_t& active_readers,
+                                 bool& writer_active,
+                                 WaitNode& node) {
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncRwLock::read_lock requires a running Fiber");
+    Fiber* me = ws->current;
+    assert(node.user() == nullptr && "AsyncRwLock::read_lock: node.user() must "
+                                     "be nullptr on entry (caller contract)");
+    // Stack-local context for this wait epoch.
+    RwWaitCtx ctx{RwWaitCtx::Mode::read};
+    node.set_user(&ctx);
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(waiters.mtx());
+        if (!waiters.register_wait_locked(node, me)) {
+            node.set_user(nullptr);
+            return;  // C8 contract violation
+        }
+        ++waiting_waitq_count_;
+
+        // Admission recheck via unified head reconcile.
+        // If this node became the head and resource is free, grant inline.
+        if (node.prev_ == nullptr && !writer_active) {
+            // This node is the FIFO head and no writer active: grant it.
+            if (waiters.wake_node_locked(node)) {
+                ++active_readers;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                retire_timer_for_node_locked(node);
+                node.set_user(nullptr);
+                if (me != nullptr) (void)me->make_runnable();
+                return;  // node.outcome() == woken; do NOT suspend
+            }
+        }
+
+        // Defense-in-depth.
+        if (node.is_terminal()) {
+            waiters.unlink_locked(node);
+            --waiting_waitq_count_;
+            node.set_user(nullptr);
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+    // Resumed: clear user_ before return.
+    node.set_user(nullptr);
+}
+
+bool Scheduler::rwlock_try_write_lock(WaitQueue& waiters,
+                                      std::size_t& active_readers,
+                                      bool& writer_active,
+                                      Fiber*& writer_owner) {
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncRwLock::try_write_lock requires a running Fiber");
+    Fiber* me = ws->current;
+    LockGuard lk(global_mtx_);
+    LockGuard qlk(waiters.mtx());
+    // Recursive call by current owner: return false, no mutation.
+    if (writer_owner == me) return false;
+    if (active_readers == 0 && !writer_active && waiters.empty_locked()) {
+        writer_active = true;
+        writer_owner = me;
+        return true;
+    }
+    return false;
+}
+
+void Scheduler::rwlock_write_lock(WaitQueue& waiters,
+                                  std::size_t& active_readers,
+                                  bool& writer_active,
+                                  Fiber*& writer_owner,
+                                  WaitNode& node) {
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncRwLock::write_lock requires a running Fiber");
+    Fiber* me = ws->current;
+    assert(writer_owner != me && "AsyncRwLock::write_lock recursive acquisition "
+                                 "is a caller precondition violation");
+    assert(node.user() == nullptr && "AsyncRwLock::write_lock: node.user() must "
+                                     "be nullptr on entry (caller contract)");
+    RwWaitCtx ctx{RwWaitCtx::Mode::write};
+    node.set_user(&ctx);
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(waiters.mtx());
+        if (!waiters.register_wait_locked(node, me)) {
+            node.set_user(nullptr);
+            return;
+        }
+        ++waiting_waitq_count_;
+
+        // Admission recheck: if this node is the FIFO head and resource free.
+        if (node.prev_ == nullptr && active_readers == 0 && !writer_active) {
+            if (waiters.wake_node_locked(node)) {
+                writer_active = true;
+                writer_owner = me;
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                retire_timer_for_node_locked(node);
+                node.set_user(nullptr);
+                if (me != nullptr) (void)me->make_runnable();
+                return;
+            }
+        }
+
+        if (node.is_terminal()) {
+            waiters.unlink_locked(node);
+            --waiting_waitq_count_;
+            node.set_user(nullptr);
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+    node.set_user(nullptr);
+}
+
+void Scheduler::rwlock_unlock_read(WaitQueue& waiters,
+                                   std::size_t& active_readers,
+                                   bool& writer_active,
+                                   Fiber*& writer_owner) {
+    LockGuard lk(global_mtx_);
+    assert(active_readers > 0 && "AsyncRwLock::unlock_read without held share "
+                                 "(caller contract violation)");
+    --active_readers;
+    if (active_readers > 0) return;  // other readers still hold
+    // Last reader released: reconcile queue head (grant acquires W internally).
+    rwlock_grant_from_head_locked(waiters, active_readers, writer_active,
+                                  writer_owner);
+}
+
+void Scheduler::rwlock_unlock_write(WaitQueue& waiters,
+                                    std::size_t& active_readers,
+                                    bool& writer_active,
+                                    Fiber*& writer_owner) {
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncRwLock::unlock_write requires a running Fiber");
+    Fiber* me = ws->current;
+    LockGuard lk(global_mtx_);
+    assert(writer_active && "AsyncRwLock::unlock_write while not write-locked "
+                            "(caller contract violation)");
+    assert(writer_owner == me && "AsyncRwLock::unlock_write by non-owner "
+                                 "(caller contract violation)");
+    (void)me;
+    writer_active = false;
+    writer_owner = nullptr;
+    // Reconcile queue head (grant acquires W internally).
+    rwlock_grant_from_head_locked(waiters, active_readers, writer_active,
+                                  writer_owner);
+}
+
+bool Scheduler::rwlock_cancel(WaitQueue& waiters,
+                              std::size_t& active_readers,
+                              bool& writer_active,
+                              Fiber*& writer_owner,
+                              WaitNode& node) {
+    LockGuard lk(global_mtx_);
+    Fiber* cancel_fiber = nullptr;
+    WorkerState* cancel_owner = nullptr;
+    {
+        LockGuard qlk(waiters.mtx());
+        // Membership gate.
+        if (!waiters.contains_locked(node)) return false;
+        if (!waiters.cancel_locked(node)) return false;  // concurrent resolver won
+        retire_timer_for_node_locked(node);
+        if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+        // Capture publication data for the cancel winner.
+        cancel_fiber = node.fiber();
+        auto it = fiber_owner_.find(cancel_fiber);
+        cancel_owner = (it != fiber_owner_.end()) ? it->second : g_worker;
+    }  // W released
+
+    // Head reconcile: the newly exposed head may be admissible.
+    // grant acquires W internally.
+    rwlock_grant_from_head_locked(waiters, active_readers, writer_active,
+                                  writer_owner);
+
+    // Publish cancel winner (after grant publications).
+    if (cancel_fiber != nullptr && cancel_fiber->make_runnable()) {
+        route_runnable_locked(cancel_fiber, cancel_owner);
+    }
+    return true;
+}
+
+void Scheduler::rwlock_expire_wait(WaitQueue& waiters,
+                                   std::size_t& active_readers,
+                                   bool& writer_active,
+                                   Fiber*& writer_owner,
+                                   WaitNode& node) {
+    // Called under G (from pump_deadlines_locked). Acquire W for expire, then
+    // release; grant acquires W internally.
+    Fiber* exp_fiber = nullptr;
+    WorkerState* exp_owner = nullptr;
+    {
+        LockGuard qlk(waiters.mtx());
+        if (!waiters.expire_locked(node)) return;  // lost to grant/cancel
+        // Timer already CONSUMED by pump. Update accounting.
+        if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+        // Capture publication data.
+        exp_fiber = node.fiber();
+        auto it = fiber_owner_.find(exp_fiber);
+        exp_owner = (it != fiber_owner_.end()) ? it->second : g_worker;
+    }  // W released
+
+    // Head reconcile (grant acquires W internally).
+    rwlock_grant_from_head_locked(waiters, active_readers, writer_active,
+                                  writer_owner);
+
+    // Publish expired waiter.
+    if (exp_fiber != nullptr && exp_fiber->make_runnable()) {
+        route_runnable_locked(exp_fiber, exp_owner);
+    }
+}
+
+void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
+                                       std::size_t& active_readers,
+                                       bool& writer_active,
+                                       WaitNode& node,
+                                       deadline_t deadline,
+                                       void* expire_ctx) {
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncRwLock::read_lock_until requires a running Fiber");
+    Fiber* me = ws->current;
+    assert(node.user() == nullptr && "AsyncRwLock::read_lock_until: node.user() "
+                                     "must be nullptr on entry");
+    RwWaitCtx ctx{RwWaitCtx::Mode::read};
+    node.set_user(&ctx);
+    TimerRegistration* reg = nullptr;
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(waiters.mtx());
+        if (!waiters.register_wait_locked(node, me)) {
+            node.set_user(nullptr);
+            return;
+        }
+        ++waiting_waitq_count_;
+        // Create timer registration.
+        timer_pool_.emplace_back(&node, &waiters, deadline);
+        reg = &timer_pool_.back();
+        reg->on_resolve_ = &rwlock_timer_expire_reconcile;
+        reg->owner_ctx_ = expire_ctx;
+        ++active_deadline_count_;
+        heap_push_ordinary_locked(reg);
+        recompute_earliest_deadline_locked();
+
+        // Admission precedence 1: resource admission wins over due deadline.
+        if (node.prev_ == nullptr && !writer_active) {
+            if (waiters.wake_node_locked(node)) {
+                ++active_readers;
+                if (reg->retire()) --active_deadline_count_;
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                node.set_user(nullptr);
+                if (me != nullptr) (void)me->make_runnable();
+                return;
+            }
+        }
+
+        // Admission precedence 2: already-due deadline (E11 I5).
+        if (clock_now_unlocked() >= deadline) {
+            if (waiters.expire_locked(node)) {
+                reg->try_claim_expiry();
+                --active_deadline_count_;
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                node.set_user(nullptr);
+                if (me != nullptr) (void)me->make_runnable();
+                return;
+            }
+        }
+
+        if (node.is_terminal()) {
+            waiters.unlink_locked(node);
+            --waiting_waitq_count_;
+            if (reg->retire()) --active_deadline_count_;
+            recompute_earliest_deadline_locked();
+            node.set_user(nullptr);
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+    node.set_user(nullptr);
+}
+
+void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
+                                        std::size_t& active_readers,
+                                        bool& writer_active,
+                                        Fiber*& writer_owner,
+                                        WaitNode& node,
+                                        deadline_t deadline,
+                                        void* expire_ctx) {
+    WorkerState* ws = g_worker;
+    assert(ws != nullptr && "AsyncRwLock::write_lock_until requires a running Fiber");
+    Fiber* me = ws->current;
+    assert(writer_owner != me && "AsyncRwLock::write_lock_until recursive "
+                                 "acquisition is a caller precondition violation");
+    assert(node.user() == nullptr && "AsyncRwLock::write_lock_until: node.user() "
+                                     "must be nullptr on entry");
+    RwWaitCtx ctx{RwWaitCtx::Mode::write};
+    node.set_user(&ctx);
+    TimerRegistration* reg = nullptr;
+    {
+        LockGuard lk(global_mtx_);
+        LockGuard qlk(waiters.mtx());
+        if (!waiters.register_wait_locked(node, me)) {
+            node.set_user(nullptr);
+            return;
+        }
+        ++waiting_waitq_count_;
+        timer_pool_.emplace_back(&node, &waiters, deadline);
+        reg = &timer_pool_.back();
+        reg->on_resolve_ = &rwlock_timer_expire_reconcile;
+        reg->owner_ctx_ = expire_ctx;
+        ++active_deadline_count_;
+        heap_push_ordinary_locked(reg);
+        recompute_earliest_deadline_locked();
+
+        // Admission precedence 1: resource admission.
+        if (node.prev_ == nullptr && active_readers == 0 && !writer_active) {
+            if (waiters.wake_node_locked(node)) {
+                writer_active = true;
+                writer_owner = me;
+                if (reg->retire()) --active_deadline_count_;
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                node.set_user(nullptr);
+                if (me != nullptr) (void)me->make_runnable();
+                return;
+            }
+        }
+
+        // Admission precedence 2: already-due deadline.
+        if (clock_now_unlocked() >= deadline) {
+            if (waiters.expire_locked(node)) {
+                reg->try_claim_expiry();
+                --active_deadline_count_;
+                recompute_earliest_deadline_locked();
+                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                node.set_user(nullptr);
+                if (me != nullptr) (void)me->make_runnable();
+                return;
+            }
+        }
+
+        if (node.is_terminal()) {
+            waiters.unlink_locked(node);
+            --waiting_waitq_count_;
+            if (reg->retire()) --active_deadline_count_;
+            recompute_earliest_deadline_locked();
+            node.set_user(nullptr);
+            return;
+        }
+        me->make_waiting();
+    }
+    fiber_ctx::Switch s;
+    s.old = &me->ctx;
+    s.new_ = &ws->sched_ctx;
+    (void)fiber_ctx::context_switch(&s);
+    node.set_user(nullptr);
+}
+
+void Scheduler::rwlock_timer_expire_reconcile(void* owner_ctx,
+                                              bool timer_won) noexcept {
+    // This is the on_resolve_ hook installed on RwLock TimerRegistrations.
+    // For RwLock, we only need to handle the timer-won case (the pump calls
+    // this AFTER try_claim_expiry succeeds). The timer-lost case (retired by
+    // grant/cancel) is handled by retire_timer_for_node_locked which already
+    // does the accounting. This hook is a no-op for timer_won=false because
+    // the standard retire path handles it.
+    //
+    // NOTE: The actual expiry reconcile (resolve + unlink + head advance) is
+    // performed by rwlock_expire_wait which is called from pump_deadlines_locked
+    // directly. This hook exists only for the on_resolve_ accounting pattern.
+    (void)owner_ctx;
+    (void)timer_won;
+}
+
+// ===========================================================================
 // E12-E AsyncQueue private seams (sluice-CORE-E12-E).
 //
 // Blocking/timed wait admission + reconciliation. A QueuePort owns a producer
@@ -3132,6 +3657,21 @@ std::size_t Scheduler::pump_deadlines_locked() {
         // publication guard. Erasing keeps the pool bounded by live deadline
         // waits (no accumulation across epochs).
         if (n != nullptr && q != nullptr) {
+            // E12-F RwLock timer: route to rwlock_expire_wait (expire + head
+            // reconcile + publish). Identified by the on_resolve function ptr.
+            // rwlock_expire_wait acquires W internally, so we must NOT hold it.
+            if (top->on_resolve_ == &rwlock_timer_expire_reconcile) {
+                auto* ctx = static_cast<AsyncRwLock::ExpireCtx*>(top->owner_ctx_);
+                if (ctx != nullptr) {
+                    rwlock_expire_wait(*ctx->waiters, *ctx->active_readers,
+                                       *ctx->writer_active, *ctx->writer_owner,
+                                       *n);
+                    ++won;
+                }
+                erase_popped_registration_locked(top);
+                continue;
+            }
+            // Generic / Queue path: expire inline under qlk.
             // expire_wait re-acquires global_mtx_ + q.mtx(); but we ALREADY hold
             // global_mtx_. Call the resolve path inline (no re-acquire) to avoid
             // a self-deadlock. The registration is already consumed; the resolve

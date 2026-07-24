@@ -1084,6 +1084,25 @@ do
     end
 end
 
+-- async_rwlock_test — Fiber-suspending Async Read-Write Lock (sluice-CORE-E12-F).
+-- Writer-fair phase-batched RwLock: try/read/write/unlock, FIFO fairness,
+-- reader batch grant, writer starvation prevention, cancel + head reconcile,
+-- deadline (read_lock_until / write_lock_until), timer expiry routing.
+-- Deterministic causal tests (NO sleep_for proof). Gated to x86_64.
+do
+    local p = "tests/async_rwlock_test.cpp"
+    if os.isfile(p) then
+        target("async_rwlock_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("async_rwlock_test")
+    end
+end
+
 -- async_queue_primitive_test — AsyncQueue (sluice-CORE-E12-E).
 -- P2+P3 scope: QueuePort fast paths (try_push / try_pop / close / snapshot),
 -- capacity/FIFO, failed-payload identity, one-shot lease, close idempotency,
