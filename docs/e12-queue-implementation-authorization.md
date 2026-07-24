@@ -87,10 +87,10 @@ There is:
   `std::terminate` does not appear in `include/sluice/async/mutex.hpp` or
   anywhere under `src/async/`;
 - no test of injected/controlled lock failure terminating rather than
-  returning. `tests/e12_async_mutex_test.cpp` (1416 lines) covers the
+  returning. `tests/async_mutex_primitive_test.cpp` (1416 lines) covers the
   Fiber-suspending `AsyncMutex` (E12-C) behavior; a grep for `noexcept`,
   `terminate`, `nothrow`, `system_error`, `ASYNC-MUTEX-NOTHROW` returns
-  zero hits. `tests/e12_async_mutex_authority_probe.cpp` is a negative
+  zero hits. `tests/async_mutex_authority_probe.cpp` is a negative
   compile probe for a *different* authority (`F-MTX-SEAM-1`).
 
 **PR #11 landed only documentation.** `git show --stat c6efa13` shows PR #11
@@ -246,9 +246,9 @@ independently before Queue implementation." A repo-wide search for
 
 **Reproducible evidence exists; no fix exists.** The hang is reproduced by
 `e12_cond_t25_migration_condition_reacquire` at
-`tests/e12_async_condition_test.cpp:1348-1429` (case body 1355-1429), a
+`tests/async_condition_primitive_test.cpp:1348-1429` (case body 1355-1429), a
 real two-worker migration test using `sched.run_live(2)` with an E8 steal.
-`git log -- tests/e12_async_condition_test.cpp include/sluice/async/condition.hpp
+`git log -- tests/async_condition_primitive_test.cpp include/sluice/async/condition.hpp
 src/async/scheduler.cpp` shows the last commit touching any of them is
 `aeb9255` (the original E12-D landing). No corrective commit exists.
 
@@ -256,9 +256,9 @@ src/async/scheduler.cpp` shows the last commit touching any of them is
 spins unbounded:
 
 ```text
-tests/e12_async_condition_test.cpp:1404-1406
+tests/async_condition_primitive_test.cpp:1404-1406
     while (!blocker_running.load(...)) { std::this_thread::yield(); }
-tests/e12_async_condition_test.cpp:1415-1417
+tests/async_condition_primitive_test.cpp:1415-1417
     while (!a_unlocked.load(...)) { std::this_thread::yield(); }
 ```
 
@@ -271,7 +271,7 @@ to eliminate exactly this class of hang (`docs/e12-async-mutex.md:1262-1306`
 the steal target busy.
 
 **The Condition test ships those helpers but never calls them.**
-`tests/e12_async_condition_test.cpp:89-105` defines `bounded_wait` and
+`tests/async_condition_primitive_test.cpp:89-105` defines `bounded_wait` and
 `bounded_pred` (both `[[maybe_unused]]`); grep finds zero call sites in
 the file. The Mutex test calls `bounded_wait` six times. This is precisely
 why the authority labels the Condition suite `RUNTIME SUITE INCOMPLETE`
@@ -286,7 +286,7 @@ production path: `Scheduler::try_steal` (`src/async/scheduler.cpp:533-543`),
 **No hidden timeouts / skipped tests / weakened assertions mask the hang.**
 The reverse is true: the hang is caused by *unbounded* waits. The only
 test exclusions are honestly disclosed destruction-contract death tests
-(`tests/e12_async_condition_test.cpp:1338-1342`), excluded for lack of a
+(`tests/async_condition_primitive_test.cpp:1338-1342`), excluded for lack of a
 death-test harness and verified by ASan/debug builds instead. The T25
 assertions themselves (`:1421-1428`) are strong; they are simply
 unreachable because the preceding spin hangs.
@@ -420,7 +420,7 @@ task per the binding authority):
 3. **B3 — Condition T25 hang audit.** Close
    `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1`: port the Mutex
    T19 corrective pattern (bounded coordinator waits, `release_for_drain`,
-   `f_idle`) to `tests/e12_async_condition_test.cpp:1348-1429`, drive the
+   `f_idle`) to `tests/async_condition_primitive_test.cpp:1348-1429`, drive the
    Condition runtime suite to green, and update the verdict blocks in
    `docs/e12-sync-primitives-plan.md:69-76` and `docs/e12-queue.md:144-154`.
 4. **B4 — Queue formal model.** Author the Queue TLA+ spec(s) for Models A
@@ -506,7 +506,7 @@ runtime tests passing; independent production implementation review PASS.
   allocation/lock/I/O-free → `std::terminate`).
 - Death tests landed: commit `e2cfe61`
   ("test(async): verify Mutex acquisition failure terminates") —
-  `tests/e12_async_mutex_death_test.cpp` T1–T4 exercise the production
+  `tests/async_mutex_death_test.cpp` T1–T4 exercise the production
   entry (direct lock, try_lock, condition_variable reacquire, control).
 - Contract documented: commit `e4b08b1`.
 - Independent production implementation review PASS:

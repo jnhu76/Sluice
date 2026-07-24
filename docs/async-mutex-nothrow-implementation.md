@@ -170,7 +170,7 @@ fast path; the `catch (...)` body is off-path).
 
 ## 4. Death tests
 
-Harness: `tests/death_test_runner_posix.hpp` + `tests/e12_async_mutex_death_test.cpp`.
+Harness: `tests/death_test_runner_posix.hpp` + `tests/async_mutex_death_test.cpp`.
 POSIX self-exec discipline (§F1): the binary re-execs itself with
 `--death-child=<case>`; the child installs a deterministic terminate handler
 (`std::set_terminate([]{ std::_Exit(86); })`); the parent `fork`/`waitpid`s
@@ -189,11 +189,11 @@ Per-case direct child invocation (independent verification, not just the
 parent driver):
 
 ```text
-$ e12_async_mutex_death_test --death-child=T1   ; exit 86
-$ e12_async_mutex_death_test --death-child=T2   ; exit 86
-$ e12_async_mutex_death_test --death-child=T3   ; exit 86
-$ e12_async_mutex_death_test --death-child=T4   ; exit 0
-$ e12_async_mutex_death_test --death-child=BOGUS; exit 88   (unknown-case negative)
+async_mutex_death_test --death-child=T1   ; exit 86
+async_mutex_death_test --death-child=T2   ; exit 86
+async_mutex_death_test --death-child=T3   ; exit 86
+async_mutex_death_test --death-child=T4   ; exit 0
+async_mutex_death_test --death-child=BOGUS; exit 88   (unknown-case negative)
 ```
 
 T3 is deterministic by construction (plan-review P0-3): no notifier thread —
@@ -260,14 +260,14 @@ Commands actually executed, per target, per configuration. Toolchain: Clang
 individually (`xmake f -c --toolchain=<tc> -m <mode>`; `xmake build <t>`;
 `xmake run <t>`).
 
-Targets exercised: `e4_scheduler_test`, `e6_scheduler_progress_test`,
-`e7_worker_test`, `e7_coord_test`, `e8_steal_test`, `e9_external_wake_test`,
-`e9_wake_handle_lifetime_test`, `e10_wait_queue_test`,
-`e10_scheduler_wait_test`, `e10_corrective_c1_test`,
-`e10_corrective_c2_c3_test`, `e10_corrective_c5_test`, `e11_timer_wait_test`,
-`e12_event_test`, `e12_semaphore_test`, `e12_async_mutex_test`,
-`e12_async_condition_test`, `e12_async_mutex_death_test`,
-`e12_async_mutex_nothrow_authority_probe` (19 targets; the TSA build evidence
+Targets exercised: `evented_scheduler_test`, `scheduler_progress_test`,
+`multi_worker_test`, `multi_worker_coord_test`, `runnable_steal_test`, `external_wake_test`,
+`wake_handle_lifetime_test`, `wait_queue_test`,
+`scheduler_wait_test`, `wait_queue_external_wake_test`,
+`wait_queue_resolution_authority_test`, `wait_queue_unlink_topology_test`, `timer_wait_test`,
+`event_primitive_test`, `semaphore_primitive_test`, `async_mutex_primitive_test`,
+`async_condition_primitive_test`, `async_mutex_death_test`,
+`async_mutex_nothrow_authority_probe` (19 targets; the TSA build evidence
 is the Clang builds below — `-Werror=thread-safety` is per-target on
 `sluice_async`/`sluice_async_internal_testing`).
 
@@ -284,7 +284,7 @@ is the Clang builds below — `-Werror=thread-safety` is per-target on
 ### Condition T25 handling (§J1)
 
 This task does not fix T25 (`e12_cond_t25_migration_condition_reacquire`). In
-the regression matrix runs above, `e12_async_condition_test` passed in full
+the regression matrix runs above, `async_condition_primitive_test` passed in full
 (Clang Debug and Clang Release), including T25. Per §J1, a single green run
 does **not** close T25: T25 is the documented nondeterministic coordinator
 spin (authority `docs/e12-queue-implementation-authorization.md`), tracked
@@ -307,17 +307,17 @@ assertion — here we only bound the *harness* wait, not the test).
 
 | Sanitizer | Result |
 |---|---|
-| ASan (`-m asan`) | **PASS with one documented T25 timeout.** All targets clean (`e4_scheduler_test`, `e10_wait_queue_test`, `e9_external_wake_test`, `e12_event_test`, `e12_semaphore_test`, `e12_async_mutex_test`, `e12_async_mutex_nothrow_authority_probe`, `e12_async_mutex_death_test` — incl. T1–T4 death cases). `e12_async_condition_test` exceeded the 90s harness timeout on `e12_cond_t25_migration_condition_reacquire` — this is the known independent T25 blocker (§J1, B3), NOT a Mutex regression: the same suite with T25 filtered (`SLUICE_TEST_FILTER='-e12_cond_t25'`) is clean under ASan (`ALL TESTS PASSED`). `e11_timer_wait_test` is EXCLUDED from the ASan cell: it pre-existingly busy-spins under ASan (test-clock polling amplified by ASan overhead), unrelated to this task. No ASan error report on any run target. |
-| UBSan (`-m ubsan`) | **PASS** — all 9 targets clean, including `e12_async_condition_test` (full suite, T25 included — UBSan does not amplify the T25 coordinator spin the way ASan does) and `e12_async_mutex_death_test` (T1–T4). No UBSan `runtime error`. |
-| TSan (`-m tsan`) | **PASS** — all targets clean: `e4_scheduler_test`, `e10_wait_queue_test`, `e9_external_wake_test`, `e12_event_test`, `e12_semaphore_test`, `e12_async_mutex_test`, `e12_async_mutex_nothrow_authority_probe`, `e12_async_mutex_death_test` (T1–T4), and `e12_async_condition_test` with T25 filtered (the T25 case is excluded under TSan for the same documented-hang reason as ASan; it is the known B3 blocker). No `ThreadSanitizer: data race` report on any run target. |
-| ASan+UBSan (`-m asanubsan`) | **PASS** — `e4_scheduler_test`, `e10_wait_queue_test`, `e12_async_mutex_test`, `e12_async_mutex_nothrow_authority_probe`, `e12_async_mutex_death_test` (T1–T4) all clean. No sanitizer finding. |
+| ASan (`-m asan`) | **PASS with one documented T25 timeout.** All targets clean (`evented_scheduler_test`, `wait_queue_test`, `external_wake_test`, `event_primitive_test`, `semaphore_primitive_test`, `async_mutex_primitive_test`, `async_mutex_nothrow_authority_probe`, `async_mutex_death_test` — incl. T1–T4 death cases). `async_condition_primitive_test` exceeded the 90s harness timeout on `e12_cond_t25_migration_condition_reacquire` — this is the known independent T25 blocker (§J1, B3), NOT a Mutex regression: the same suite with T25 filtered (`SLUICE_TEST_FILTER='-e12_cond_t25'`) is clean under ASan (`ALL TESTS PASSED`). `timer_wait_test` is EXCLUDED from the ASan cell: it pre-existingly busy-spins under ASan (test-clock polling amplified by ASan overhead), unrelated to this task. No ASan error report on any run target. |
+| UBSan (`-m ubsan`) | **PASS** — all 9 targets clean, including `async_condition_primitive_test` (full suite, T25 included — UBSan does not amplify the T25 coordinator spin the way ASan does) and `async_mutex_death_test` (T1–T4). No UBSan `runtime error`. |
+| TSan (`-m tsan`) | **PASS** — all targets clean: `evented_scheduler_test`, `wait_queue_test`, `external_wake_test`, `event_primitive_test`, `semaphore_primitive_test`, `async_mutex_primitive_test`, `async_mutex_nothrow_authority_probe`, `async_mutex_death_test` (T1–T4), and `async_condition_primitive_test` with T25 filtered (the T25 case is excluded under TSan for the same documented-hang reason as ASan; it is the known B3 blocker). No `ThreadSanitizer: data race` report on any run target. |
+| ASan+UBSan (`-m asanubsan`) | **PASS** — `evented_scheduler_test`, `wait_queue_test`, `async_mutex_primitive_test`, `async_mutex_nothrow_authority_probe`, `async_mutex_death_test` (T1–T4) all clean. No sanitizer finding. |
 
-Targets covered across the matrix: `e4_scheduler_test`, `e10_wait_queue_test`,
-`e9_external_wake_test`, `e12_event_test`, `e12_semaphore_test`,
-`e12_async_mutex_test`, `e12_async_condition_test`,
-`e12_async_mutex_nothrow_authority_probe`, `e12_async_mutex_death_test`.
-Excluded and honestly recorded: `e11_timer_wait_test` (pre-existing ASan
-busy-spin, not this task), and the T25 case of `e12_async_condition_test`
+Targets covered across the matrix: `evented_scheduler_test`, `wait_queue_test`,
+`external_wake_test`, `event_primitive_test`, `semaphore_primitive_test`,
+`async_mutex_primitive_test`, `async_condition_primitive_test`,
+`async_mutex_nothrow_authority_probe`, `async_mutex_death_test`.
+Excluded and honestly recorded: `timer_wait_test` (pre-existing ASan
+busy-spin, not this task), and the T25 case of `async_condition_primitive_test`
 under ASan/TSan (known B3 blocker).
 
 No unrun sanitizer is reported as PASS.
@@ -331,7 +331,7 @@ No unrun sanitizer is reported as PASS.
   masked. Until it is resolved (a separate task to drop `{force=true}` on
   those `add_cxxflags` or otherwise gate the flags to Clang), the GCC matrix
   cell stays open.
-* **`e11_timer_wait_test` busy-spins under ASan** (test-clock polling
+* **`timer_wait_test` busy-spins under ASan** (test-clock polling
   amplified by ASan overhead). Pre-existing, not introduced by this task;
   excluded from the ASan cell and recorded honestly. Not a Mutex regression.
 * **`e12_cond_t25_migration_condition_reacquire` hangs under ASan and TSan**

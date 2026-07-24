@@ -511,16 +511,16 @@ end
 -- resume fidelity, exactly-once. Uses FakeAsyncBackend held-pending mode.
 -- Gated to x86_64 (depends on fiber_ctx::context_switch).
 do
-    local p = "tests/e4_scheduler_test.cpp"
+    local p = "tests/evented_scheduler_test.cpp"
     if os.isfile(p) then
-        target("e4_scheduler_test")
+        target("evented_scheduler_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e4_scheduler_test")
+            add_tests("evented_scheduler_test")
     end
 end
 
@@ -528,16 +528,16 @@ end
 -- Tests Scheduler::await_ready_flag in isolation (no Future). Proves R1-R5.
 -- Gated to x86_64.
 do
-    local p = "tests/e5_a1_ready_flag_test.cpp"
+    local p = "tests/scheduler_ready_flag_test.cpp"
     if os.isfile(p) then
-        target("e5_a1_ready_flag_test")
+        target("scheduler_ready_flag_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e5_a1_ready_flag_test")
+            add_tests("scheduler_ready_flag_test")
     end
 end
 
@@ -546,16 +546,16 @@ end
 -- (liveness); completion resumes the awaiter; resume fidelity; idempotent
 -- repeat; Threaded regression. Gated to x86_64.
 do
-    local p = "tests/e5_a2_evented_future_test.cpp"
+    local p = "tests/evented_future_test.cpp"
     if os.isfile(p) then
-        target("e5_a2_evented_future_test")
+        target("evented_future_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e5_a2_evented_future_test")
+            add_tests("evented_future_test")
     end
 end
 
@@ -563,16 +563,16 @@ end
 -- tasks run on Fibers (not std::thread), can suspend inside Future::await,
 -- resume, and complete; Threaded regression. Gated to x86_64.
 do
-    local p = "tests/e5_b_evented_group_test.cpp"
+    local p = "tests/evented_group_test.cpp"
     if os.isfile(p) then
-        target("e5_b_evented_group_test")
+        target("evented_group_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e5_b_evented_group_test")
+            add_tests("evented_group_test")
     end
 end
 
@@ -581,16 +581,16 @@ end
 -- after the runnable queue drains is resumed via wait_one. ThreadPoolBackend is
 -- the real completion source (cv-wait). Gated to x86_64.
 do
-    local p = "tests/e6_scheduler_progress_test.cpp"
+    local p = "tests/scheduler_progress_test.cpp"
     if os.isfile(p) then
-        target("e6_scheduler_progress_test")
+        target("scheduler_progress_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e6_scheduler_progress_test")
+            add_tests("scheduler_progress_test")
     end
 end
 
@@ -598,16 +598,16 @@ end
 -- execution state, pinned routing, serialized backend access, MW coordination.
 -- Gated to x86_64.
 do
-    local p = "tests/e7_worker_test.cpp"
+    local p = "tests/multi_worker_test.cpp"
     if os.isfile(p) then
-        target("e7_worker_test")
+        target("multi_worker_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e7_worker_test")
+            add_tests("multi_worker_test")
     end
 end
 
@@ -616,16 +616,16 @@ end
 -- E7-C coordination tests (sluice-CORE-E7-C). Serialized backend access probe,
 -- quiescence, MW-S3. Gated to x86_64.
 do
-    local p = "tests/e7_coord_test.cpp"
+    local p = "tests/multi_worker_coord_test.cpp"
     if os.isfile(p) then
-        target("e7_coord_test")
+        target("multi_worker_coord_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e7_coord_test")
+            add_tests("multi_worker_coord_test")
     end
 end
 
@@ -712,20 +712,20 @@ if has_liburing then
     end
 end
 
--- e13_select_type — E13 Select type construction and compile-fail gates (P1).
+-- select_type_test — E13 Select type construction and compile-fail gates (P1).
 -- Tests public value types, internal type graph, and constraint gates.
 -- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_type.cpp"
+    local p = "tests/select_type_test.cpp"
     if os.isfile(p) then
-        target("e13_select_type")
+        target("select_type_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_type")
+            add_tests("select_type_test")
     end
 end
 
@@ -768,172 +768,172 @@ target("sluice_experimental_uring")
 --   Run all benches:     xmake run -g bench
 -- ---------------------------------------------------------------------------
 
--- e7_dup_publication_test — focused regression for the E7-T2 root cause
+-- runnable_dup_publication_test — focused regression for the E7-T2 root cause
 -- (exactly-once runnable publication). Unit-level make_runnable contract +
 -- integration wake-while-runnable scenario. Fails on pre-fix code.
 do
-    local p = "tests/e7_dup_publication_test.cpp"
+    local p = "tests/runnable_dup_publication_test.cpp"
     if os.isfile(p) then
-        target("e7_dup_publication_test")
+        target("runnable_dup_publication_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e7_dup_publication_test")
+            add_tests("runnable_dup_publication_test")
     end
 end
 
--- e8_steal_test — runnable ownership transfer / work stealing (sluice-CORE-E8).
+-- runnable_steal_test — runnable ownership transfer / work stealing (sluice-CORE-E8).
 -- Proves steal = MOVE + OWNER TRANSFER (never PUBLISH); stolen Fiber
 -- wake-routes to the thief. Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e8_steal_test.cpp"
+    local p = "tests/runnable_steal_test.cpp"
     if os.isfile(p) then
-        target("e8_steal_test")
+        target("runnable_steal_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e8_steal_test")
+            add_tests("runnable_steal_test")
     end
 end
 
--- e9_external_wake_test — Scheduler park admission + unified wake-source
+-- external_wake_test — Scheduler park admission + unified wake-source
 -- protocol (sluice-CORE-E9). Proves external-thread flag completion wakes a
 -- parked Scheduler (no caller re-entry), MIXED-WAKE closure, wake coalescing,
 -- the pre-park race, wake-handle lifetime, and E7/E8 runnable/shutdown wake.
 -- Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e9_external_wake_test.cpp"
+    local p = "tests/external_wake_test.cpp"
     if os.isfile(p) then
-        target("e9_external_wake_test")
+        target("external_wake_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e9_external_wake_test")
+            add_tests("external_wake_test")
     end
 end
 
--- e9_wake_handle_lifetime_test — SchedulerWakeHandle callback-lifetime lease
+-- wake_handle_lifetime_test — SchedulerWakeHandle callback-lifetime lease
 -- (sluice-CORE-E9 LIFETIME-CORRECTIVE). Proves notify() holds Control::mtx
 -- (the callback lease) through the Scheduler wake callback, so destruction
 -- cannot interleave with an in-flight callback. Deterministic T1 (notifier
 -- wins) / T2 (destructor wins) / T3 (stale handle) + concurrent T4 stress.
 -- Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e9_wake_handle_lifetime_test.cpp"
+    local p = "tests/wake_handle_lifetime_test.cpp"
     if os.isfile(p) then
-        target("e9_wake_handle_lifetime_test")
+        target("wake_handle_lifetime_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e9_wake_handle_lifetime_test")
+            add_tests("wake_handle_lifetime_test")
     end
 end
 
--- e10_wait_queue_test — WaitNode/WaitQueue cancellation-safe protocol
+-- wait_queue_test — WaitNode/WaitQueue cancellation-safe protocol
 -- (sluice-CORE-E10). Pure-protocol tests (no scheduler): wake-vs-cancel single
 -- winner, repeated wake/cancel, wake-after-cancel/cancel-after-wake, unlink
 -- exactly-once, multiple waiters, node-reuse rejection, destruction invariant,
 -- and a high-iteration wake||cancel stress. Header-only WaitNode/WaitQueue, so
 -- this links sluice_async only to stay consistent with the async test family.
 do
-    local p = "tests/e10_wait_queue_test.cpp"
+    local p = "tests/wait_queue_test.cpp"
     if os.isfile(p) then
-        target("e10_wait_queue_test")
+        target("wait_queue_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e10_wait_queue_test")
+            add_tests("wait_queue_test")
     end
 end
 
--- e10_scheduler_wait_test — Scheduler integration of WaitNode/WaitQueue
+-- scheduler_wait_test — Scheduler integration of WaitNode/WaitQueue
 -- (sluice-CORE-E10). Integration tests with real fibers: C10 exactly-one winner
 -- makes the fiber runnable via the canonical wake seam (wake + cancel + race),
 -- C11 Drain interaction (MW-S3 wait returns STALLED, no revival of E9 hang).
 -- Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e10_scheduler_wait_test.cpp"
+    local p = "tests/scheduler_wait_test.cpp"
     if os.isfile(p) then
-        target("e10_scheduler_wait_test")
+        target("scheduler_wait_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e10_scheduler_wait_test")
+            add_tests("scheduler_wait_test")
     end
 end
 
--- e10_corrective_c1_test — E10-CORRECTIVE C1 external wake-domain classification
+-- wait_queue_external_wake_test — E10-CORRECTIVE C1 external wake-domain classification
 -- regression (sluice-CORE-E10). Proves a Live run with an externally-resolvable
 -- WaitQueue wait parks (not STALLED) so an external wake_wait_one/cancel_wait
 -- resumes the waiter. Fails on uncorrected 0debd21.
 do
-    local p = "tests/e10_corrective_c1_test.cpp"
+    local p = "tests/wait_queue_external_wake_test.cpp"
     if os.isfile(p) then
-        target("e10_corrective_c1_test")
+        target("wait_queue_external_wake_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e10_corrective_c1_test")
+            add_tests("wait_queue_external_wake_test")
     end
 end
 
--- e10_corrective_c2_c3_test — E10-CORRECTIVE C2 resolution-authority bypass
+-- wait_queue_resolution_authority_test — E10-CORRECTIVE C2 resolution-authority bypass
 -- (structural: public wake_one/cancel/cancel_all are not expressible) + C3
 -- cancel_all surface (REMOVED) + T4 non-bypass count consistency. Compile-time
 -- static_assert + runtime mirror + fiber integration.
 do
-    local p = "tests/e10_corrective_c2_c3_test.cpp"
+    local p = "tests/wait_queue_resolution_authority_test.cpp"
     if os.isfile(p) then
-        target("e10_corrective_c2_c3_test")
+        target("wait_queue_resolution_authority_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e10_corrective_c2_c3_test")
+            add_tests("wait_queue_resolution_authority_test")
     end
 end
 
--- e10_corrective_c5_test — E10-CORRECTIVE C5 middle-node concurrent unlink
+-- wait_queue_unlink_topology_test — E10-CORRECTIVE C5 middle-node concurrent unlink
 -- topology stress (A<->B<->C; concurrent wake-head-A || cancel-middle-B). Locks
 -- in the doubly-linked list topology invariants at a meaningful stress count.
 do
-    local p = "tests/e10_corrective_c5_test.cpp"
+    local p = "tests/wait_queue_unlink_topology_test.cpp"
     if os.isfile(p) then
-        target("e10_corrective_c5_test")
+        target("wait_queue_unlink_topology_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs("include")
             add_files(p)
-            add_tests("e10_corrective_c5_test")
+            add_tests("wait_queue_unlink_topology_test")
     end
 end
 
--- e11_timer_wait_test — Deadline / Timer Wait Integration (sluice-CORE-E11).
+-- timer_wait_test — Deadline / Timer Wait Integration (sluice-CORE-E11).
 -- Deterministic production tests: already-due deadline, resource-wins/timer-
 -- wins/cancel-wins races at the resolve_ seam, losing-timer cannot publish,
 -- stale timer cannot resolve a later wait epoch, storage-reuse epoch isolation,
@@ -941,40 +941,40 @@ end
 -- RunMode classification. Uses a controllable monotonic clock + explicit timer
 -- driver (NO sleep_for causal proof). Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e11_timer_wait_test.cpp"
+    local p = "tests/timer_wait_test.cpp"
     if os.isfile(p) then
-        target("e11_timer_wait_test")
+        target("timer_wait_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e11_timer_wait_test")
+            add_tests("timer_wait_test")
     end
 end
 
--- e12_event_test — Async Event synchronization primitive (sluice-CORE-E12-A).
+-- event_primitive_test — Async Event synchronization primitive (sluice-CORE-E12-A).
 -- Persistent manual-reset Event on the E10/E11 substrate: basic semantics,
 -- lost-set admission closure, set-all broadcast, deadline/cancel composition,
 -- set/reset epoch isolation, external-thread set, E8 steal, Drain STALLED,
 -- destruction contract. Deterministic causal tests (NO sleep_for proof).
 -- Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e12_event_test.cpp"
+    local p = "tests/event_primitive_test.cpp"
     if os.isfile(p) then
-        target("e12_event_test")
+        target("event_primitive_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e12_event_test")
+            add_tests("event_primitive_test")
     end
 end
 
--- e12_semaphore_test — Async counting Semaphore (sluice-CORE-E12-B).
+-- semaphore_primitive_test — Async counting Semaphore (sluice-CORE-E12-B).
 -- Counting Semaphore on the E10/E11/E12-A substrate: construction/available,
 -- try_acquire (no barging), immediate + queued acquire, FIFO release transfer
 -- /store/overflow, deadline precedence (permit-first), queue-identity-safe
@@ -982,20 +982,20 @@ end
 -- Deterministic causal tests (NO sleep_for proof). Gated to x86_64
 -- (fiber_ctx::supported).
 do
-    local p = "tests/e12_semaphore_test.cpp"
+    local p = "tests/semaphore_primitive_test.cpp"
     if os.isfile(p) then
-        target("e12_semaphore_test")
+        target("semaphore_primitive_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e12_semaphore_test")
+            add_tests("semaphore_primitive_test")
     end
 end
 
--- e12_async_mutex_test — Fiber-suspending Async Mutex (sluice-CORE-E12-C).
+-- async_mutex_primitive_test — Fiber-suspending Async Mutex (sluice-CORE-E12-C).
 -- AsyncMutex on the E10/E11/E12-A/E12-B substrate: construction/try_lock,
 -- immediate + queued lock, FIFO direct handoff, deadline precedence
 -- (resource-first), queue-identity-safe cancel, external-thread cancel,
@@ -1003,20 +1003,20 @@ end
 -- Deterministic causal tests (NO sleep_for proof). Gated to x86_64
 -- (fiber_ctx::supported).
 do
-    local p = "tests/e12_async_mutex_test.cpp"
+    local p = "tests/async_mutex_primitive_test.cpp"
     if os.isfile(p) then
-        target("e12_async_mutex_test")
+        target("async_mutex_primitive_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e12_async_mutex_test")
+            add_tests("async_mutex_primitive_test")
     end
 end
 
--- e12_async_condition_test — Fiber-suspending async condition variable
+-- async_condition_primitive_test — Fiber-suspending async condition variable
 -- (sluice-CORE-E12-D). AsyncCondition bound to one AsyncMutex: two-epoch
 -- (Condition wait + mandatory reacquire) protocol, register-before-release
 -- lost-notify closure, notify_one FIFO, notify_all snapshot/drain,
@@ -1024,23 +1024,23 @@ end
 -- owner-before-publication, inline-Expired retains ownership, destruction
 -- contract. Deterministic causal tests via E12ConditionSeam phase seams
 -- (NO sleep_for proof). Gated to x86_64 (fiber_ctx::supported). The authority
--- probe (e12_async_condition_authority_probe.cpp) is NOT a target: it is a
+-- probe (async_condition_authority_probe.cpp) is NOT a target: it is a
 -- negative-compile probe driven by the verify script's compile-probe gate.
 do
-    local p = "tests/e12_async_condition_test.cpp"
+    local p = "tests/async_condition_primitive_test.cpp"
     if os.isfile(p) then
-        target("e12_async_condition_test")
+        target("async_condition_primitive_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e12_async_condition_test")
+            add_tests("async_condition_primitive_test")
     end
 end
 
--- e12_async_queue_test — AsyncQueue (sluice-CORE-E12-E).
+-- async_queue_primitive_test — AsyncQueue (sluice-CORE-E12-E).
 -- P2+P3 scope: QueuePort fast paths (try_push / try_pop / close / snapshot),
 -- capacity/FIFO, failed-payload identity, one-shot lease, close idempotency,
 -- closed+empty terminal. Exercised via the non-template QueuePort authority +
@@ -1051,20 +1051,20 @@ end
 -- QueuePort, which is in sluice_async; the internal-testing variant keeps
 -- the option open for the deterministic phase seams added in P5/P6).
 do
-    local p = "tests/e12_async_queue_test.cpp"
+    local p = "tests/async_queue_primitive_test.cpp"
     if os.isfile(p) then
-        target("e12_async_queue_test")
+        target("async_queue_primitive_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e12_async_queue_test")
+            add_tests("async_queue_primitive_test")
     end
 end
 
--- e12_async_mutex_death_test — verifies the Mutex acquisition fail-fast
+-- async_mutex_death_test — verifies the Mutex acquisition fail-fast
 -- boundary (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1 §F) via a POSIX
 -- fork/exec/waitpid child-process harness. Each case (T1 lock / T2 try_lock /
 -- T3 condition_variable_any reacquire / T4 control) re-execs this binary with
@@ -1076,20 +1076,20 @@ end
 -- in this task (the harness is not implemented there); see
 -- tests/death_test_runner_posix.hpp.
 do
-    local p = "tests/e12_async_mutex_death_test.cpp"
+    local p = "tests/async_mutex_death_test.cpp"
     if os.isfile(p) and is_plat("linux", "macosx") then
-        target("e12_async_mutex_death_test")
+        target("async_mutex_death_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e12_async_mutex_death_test")
+            add_tests("async_mutex_death_test")
     end
 end
 
--- e12_async_mutex_nothrow_authority_probe — positive-compile + run probe for
+-- async_mutex_nothrow_authority_probe — positive-compile + run probe for
 -- the Mutex noexcept contract (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1
 -- §I1). Holds the static_asserts over noexcept(...) and
 -- std::is_nothrow_invocable_v<...> for lock/try_lock/unlock so a regression of
@@ -1098,20 +1098,20 @@ end
 -- internal_testing variant so the seam header resolves, though the probe
 -- itself exercises the production Mutex entries.
 do
-    local p = "tests/e12_async_mutex_nothrow_authority_probe.cpp"
+    local p = "tests/async_mutex_nothrow_authority_probe.cpp"
     if os.isfile(p) then
-        target("e12_async_mutex_nothrow_authority_probe")
+        target("async_mutex_nothrow_authority_probe")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e12_async_mutex_nothrow_authority_probe")
+            add_tests("async_mutex_nothrow_authority_probe")
     end
 end
 
--- e12_api_contract_probes — cross-primitive compile-time contract probe
+-- async_sync_api_contract_probe — cross-primitive compile-time contract probe
 -- (E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1).
 -- Verifies that every public async synchronization primitive is non-copyable
 -- AND non-movable (D5), that WaitOutcome is the four-value vocabulary enum,
@@ -1125,20 +1125,20 @@ end
 -- special member. Depends on sluice_async_internal_testing so the seam header
 -- resolves (the positive probe itself exercises the public production surface).
 do
-    local p = "tests/e12_api_contract_probes.cpp"
+    local p = "tests/async_sync_api_contract_probe.cpp"
     if os.isfile(p) then
-        target("e12_api_contract_probes")
+        target("async_sync_api_contract_probe")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e12_api_contract_probes")
+            add_tests("async_sync_api_contract_probe")
     end
 end
 
--- e12_cross_primitive_parity_test — cross-primitive semantic parity tests
+-- async_sync_cross_primitive_parity_test — cross-primitive semantic parity tests
 -- (E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1). Directly verifies D3
 -- resource-first deadline precedence and D4 queue-identity cancellation for
 -- Event / Semaphore / AsyncMutex, plus pairwise WaitOutcome enum distinctness
@@ -1146,74 +1146,57 @@ end
 -- publication remain per-primitive evidence; this TU does not claim them.
 -- Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e12_cross_primitive_parity_test.cpp"
+    local p = "tests/async_sync_cross_primitive_parity_test.cpp"
     if os.isfile(p) and is_arch("x86_64") then
-        target("e12_cross_primitive_parity_test")
+        target("async_sync_cross_primitive_parity_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e12_cross_primitive_parity_test")
+            add_tests("async_sync_cross_primitive_parity_test")
     end
 end
 
--- e13_select_event_registry — E13 Event Select private registry (P2).
+-- select_event_registry_test — E13 Event Select private registry (P2).
 -- Sealed per-Event SelectPort: link/unlink/scan operations, Event SET Phase-1
 -- scan, idempotence, serialization, and destruction contract.
 -- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_event_registry.cpp"
+    local p = "tests/select_event_registry_test.cpp"
     if os.isfile(p) then
-        target("e13_select_event_registry")
+        target("select_event_registry_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_event_registry")
+            add_tests("select_event_registry_test")
     end
 end
 
--- e13_select_event_registry_death_test — E13 Select registry death tests (P2).
+-- select_event_registry_death_test — E13 Select registry death tests (P2).
 -- Verifies identity-check assertions fire for duplicate-link, wrong-Event unlink,
 -- cross-Scheduler link/unlink, and live-arm Event destruction. Each case runs in
 -- a forked child that re-execs this binary via death_test_runner_posix.hpp.
 -- POSIX-only: gated to linux/macosx.
 do
-    local p = "tests/e13_select_event_registry_death_test.cpp"
+    local p = "tests/select_event_registry_death_test.cpp"
     if os.isfile(p) and is_plat("linux", "macosx") then
-        target("e13_select_event_registry_death_test")
+        target("select_event_registry_death_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_event_registry_death_test")
+            add_tests("select_event_registry_death_test")
     end
 end
 
--- e13_select_type — E13 Select type construction and compile-fail gates (P1).
--- Tests public value types, internal type graph, and constraint gates.
--- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
-do
-    local p = "tests/e13_select_type.cpp"
-    if os.isfile(p) then
-        target("e13_select_type")
-            set_kind("binary")
-            set_default(false)
-            set_group("test")
-            add_deps("sluice_core", "sluice_async_internal_testing")
-            add_includedirs("include", "tests")
-            add_files(p)
-            add_tests("e13_select_type")
-    end
-end
-
--- e13_select_timer_registration — E13 Select Timer stable registration (P3).
+-- select_timer_registration_test — E13 Select Timer stable registration (P3).
 -- Verifies the Select timer substrate: state transitions, address stability
 -- after splice, tagged deadline-heap ordering, ordinary timer regression,
 -- RETIRED/CONSUMED stale-skip, state-before-arm instrumentation, earliest-
@@ -1221,40 +1204,40 @@ end
 -- Scheduler identity, no-premature-Select. Deterministic (test clock + causal
 -- phase seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_timer_registration.cpp"
+    local p = "tests/select_timer_registration_test.cpp"
     if os.isfile(p) then
-        target("e13_select_timer_registration")
+        target("select_timer_registration_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_timer_registration")
+            add_tests("select_timer_registration_test")
     end
 end
 
--- e13_select_timer_pump_death_test — E13 Select timer pump ACTIVE-due
+-- select_timer_pump_death_test — E13 Select timer pump ACTIVE-due
 -- stage-boundary fail-fast (P3). A due ACTIVE SelectTimerRegistration is
 -- unreachable in valid P3 (no admission path); the pump must fail fast rather
 -- than claim/mark/retire/consume. Runs in a forked child that re-execs this
 -- binary via death_test_runner_posix.hpp. POSIX-only; gated to linux/macosx.
 -- This is an invariant GUARD, NOT supported production Select behavior.
 do
-    local p = "tests/e13_select_timer_pump_death_test.cpp"
+    local p = "tests/select_timer_pump_death_test.cpp"
     if os.isfile(p) and is_plat("linux", "macosx") then
-        target("e13_select_timer_pump_death_test")
+        target("select_timer_pump_death_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_timer_pump_death_test")
+            add_tests("select_timer_pump_death_test")
     end
 end
 
--- e13_select_claim — E13 P4 Select central claim + winner/loser finalization
+-- select_claim_test — E13 P4 Select central claim + winner/loser finalization
 -- tests. Drives select_process_group_locked + select_all_authority_closed_locked
 -- via guarded internal-testing seams. Covers C1-C12 (first-claim-wins, second-
 -- claim-loses, winner stability, Event/Timer winner+loser, mixed, same-Event-
@@ -1262,20 +1245,20 @@ end
 -- Timer loser ordering SN-9). Deterministic (test clock + causal phase seams);
 -- NO sleep_for. Gated to x86_64 (fiber_ctx::supported) for parity with E13.
 do
-    local p = "tests/e13_select_claim.cpp"
+    local p = "tests/select_claim_test.cpp"
     if os.isfile(p) then
-        target("e13_select_claim")
+        target("select_claim_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_claim")
+            add_tests("select_claim_test")
     end
 end
 
--- e13_select_claim_death_test — E13 P4 Select claim/finalization death tests.
+-- select_claim_death_test — E13 P4 Select claim/finalization death tests.
 -- Verifies preflight assertions fire BEFORE the winner CAS for: candidate index
 -- out of range (CG), cross-Scheduler group (CS), candidate not CandidateReady
 -- (CP), arm.group mismatch (CA), Event arm not linked to its port (EH), Timer
@@ -1284,20 +1267,20 @@ end
 -- assertion rejecting an open authority (OA). Runs in a forked child that
 -- re-execs this binary via death_test_runner_posix.hpp. POSIX-only.
 do
-    local p = "tests/e13_select_claim_death_test.cpp"
+    local p = "tests/select_claim_death_test.cpp"
     if os.isfile(p) and is_plat("linux", "macosx") then
-        target("e13_select_claim_death_test")
+        target("select_claim_death_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_claim_death_test")
+            add_tests("select_claim_death_test")
     end
 end
 
--- e13_select_inline — E13 P5 inline Select admission tests (ST-1..ST-8 + T1/T2/T3).
+-- select_inline — E13 P5 inline Select admission tests (ST-1..ST-8 + T1/T2/T3).
 -- Drives the PUBLIC variadic select() entry from a real running Fiber on the
 -- target Scheduler: Event already-set, Timer already-due, Event/Timer tie
 -- (lowest-index), duplicate Event, Event winner + Timer loser (stale pump skip),
@@ -1306,20 +1289,20 @@ end
 -- (T3). Deterministic (test clock + AdmissionArmed/Consumed causal phase seams);
 -- NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_inline.cpp"
+    local p = "tests/select_inline_test.cpp"
     if os.isfile(p) then
-        target("e13_select_inline")
+        target("select_inline_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_inline")
+            add_tests("select_inline_test")
     end
 end
 
--- e13_select_suspended — E13 P6 suspended Select publication tests (ST-9, ST-10,
+-- select_suspended — E13 P6 suspended Select publication tests (ST-9, ST-10,
 -- ST-13 + P6-D1 same-Event-twice + PUB boundary snapshots + P6-LW1/LW2 wake-
 -- before-physical-switch). Drives the PUBLIC variadic select() entry from a
 -- real Fiber on the target Scheduler for the no-ready branch. Deterministic
@@ -1327,62 +1310,62 @@ end
 -- e13_suspended_before_consume causal phase seams); NO sleep_for. Gated to
 -- x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_suspended.cpp"
+    local p = "tests/select_suspended_test.cpp"
     if os.isfile(p) then
-        target("e13_select_suspended")
+        target("select_suspended_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_suspended")
+            add_tests("select_suspended_test")
     end
 end
 
--- e13_select_multi_worker — E13 P6 multi-worker owner routing + external-thread
+-- select_multi_worker — E13 P6 multi-worker owner routing + external-thread
 -- Event set + exactly-one-runnable tests (ST-15, ST-16, ST-17 + PUB-1..4
 -- publication boundary snapshots). Drives the PUBLIC variadic select() entry
 -- from a real Fiber; resolves from an external OS thread and across workers.
 -- Deterministic (test clock + waiting_select_count liveness + PhaseTag causal
 -- seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
 do
-    local p = "tests/e13_select_multi_worker.cpp"
+    local p = "tests/select_multi_worker_test.cpp"
     if os.isfile(p) then
-        target("e13_select_multi_worker")
+        target("select_multi_worker_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_multi_worker")
+            add_tests("select_multi_worker_test")
     end
 end
 
--- e13_select_publication_death_test — E13 P6 publication invariant death tests
+-- select_publication_death_test — E13 P6 publication invariant death tests
 -- (SN-2 duplicate-publish / SN-10 open-authority / FP caller-not-waiting / MG
 -- multi-group-Event P8 stage-boundary / CTL valid-publication control). Drives
 -- the real production publication entry + Event resolver through guarded
 -- internal-testing drivers. Runs in forked children that re-exec this binary
 -- via death_test_runner_posix.hpp. POSIX-only; gated to linux/macosx.
 do
-    local p = "tests/e13_select_publication_death_test.cpp"
+    local p = "tests/select_publication_death_test.cpp"
     if os.isfile(p) and is_plat("linux", "macosx") then
-        target("e13_select_publication_death_test")
+        target("select_publication_death_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_publication_death_test")
+            add_tests("select_publication_death_test")
     end
 end
 
--- e13_select_rollback — E13 P7 registration-failure rollback tests (ST-14 +
--- P7-T1..T11). Drives the PUBLIC variadic select() entry from a real running
--- Fiber; the controller-only synthetic registration-failure seam
+-- select_registration_rollback_test — E13 P7 registration-failure rollback
+-- tests (ST-14 + P7-T1..T11). Drives the PUBLIC variadic select() entry from a
+-- real running Fiber; the controller-only synthetic registration-failure seam
 -- (E13SelectRollbackSeam, absent from production) injects a
 -- SelectRegistrationFailure after N successful registrations. select_admit's
 -- catch runs the rollback transaction and rethrows. Deterministic (test clock +
@@ -1390,51 +1373,52 @@ end
 -- Timer after caller-frame unwind). Gated to platforms where the test file is
 -- present; fiber work is gated at runtime via fiber_ctx::supported.
 do
-    local p = "tests/e13_select_rollback.cpp"
+    local p = "tests/select_registration_rollback_test.cpp"
     if os.isfile(p) then
-        target("e13_select_rollback")
+        target("select_registration_rollback_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_rollback")
+            add_tests("select_registration_rollback_test")
     end
 end
 
--- e13_select_rollback_death_test — E13 P7 rollback-domain negative tests
+-- select_rollback_invariant_death_test — E13 P7 rollback-domain negative tests
 -- (SN-8 rollback after suspension + P7-N1..N9). Exercises the guarded internal
 -- rollback authorities on invalid domains / corrupted membership, proving
 -- fail-fast. Runs in forked children via death_test_runner_posix.hpp.
 -- POSIX-only; gated to linux/macosx.
 do
-    local p = "tests/e13_select_rollback_death_test.cpp"
+    local p = "tests/select_rollback_invariant_death_test.cpp"
     if os.isfile(p) and is_plat("linux", "macosx") then
-        target("e13_select_rollback_death_test")
+        target("select_rollback_invariant_death_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_rollback_death_test")
+            add_tests("select_rollback_invariant_death_test")
     end
 end
 
--- e13_select_contract — E13 P7 Select contract coverage (ST-18..ST-23) for the
--- genuinely-missing positive contract cases. Reuses existing tests where they
--- already prove the exact contract; this target adds only missing coverage.
+-- select_call_context_contract_test — E13 P7 Select contract coverage
+-- (ST-18..ST-23) for the genuinely-missing positive contract cases. Reuses
+-- existing tests where they already prove the exact contract; this target adds
+-- only missing coverage.
 do
-    local p = "tests/e13_select_contract.cpp"
+    local p = "tests/select_call_context_contract_test.cpp"
     if os.isfile(p) then
-        target("e13_select_contract")
+        target("select_call_context_contract_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async_internal_testing")
             add_includedirs("include", "tests")
             add_files(p)
-            add_tests("e13_select_contract")
+            add_tests("select_call_context_contract_test")
     end
 end

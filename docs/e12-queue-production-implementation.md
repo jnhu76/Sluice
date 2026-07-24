@@ -80,7 +80,7 @@ PopClosedEmpty / C3 TryPopWouldBlock), `close` (CL1/CL2), snapshots,
 teardown-session skeleton. Ring moves preserve control custody; no T under
 `state_mtx_`.
 
-Verified: `e12_async_queue_test` — 7 P2+P3 cases PASS (capacity/FIFO,
+Verified: `async_queue_primitive_test` — 7 P2+P3 cases PASS (capacity/FIFO,
 capacity-1, try_pop would_block, close idempotent + closed-empty terminal,
 closed drains buffered, push_closed returns exact lease, one-shot lease
 move empties source). Clang Debug + GCC Debug builds + runs green. P1
@@ -101,7 +101,7 @@ ring empties, then closed; each parked producer gets its lease retained as
 closed). Active-victim work stealing is inherited unchanged from E8 (the
 queue uses the standard runnable-ticket publication path).
 
-Verified: `e12_async_queue_test` — 4 P4-P6 concurrency cases PASS
+Verified: `async_queue_primitive_test` — 4 P4-P6 concurrency cases PASS
 (blocking pop granted on push, blocking push granted on pop, close
 completes blocked producer with `closed` + exact lease, close drains
 buffered items to a blocked consumer then closed). Clang Debug + GCC
@@ -134,7 +134,7 @@ each value via `release_teardown` and destroys the exact `Node<T>`
 outside locks. Session destruction is no-throw and succeeds iff the ring
 is empty.
 
-Verified: `e12_async_queue_test` — 3 P7 cases PASS (multi-item ring
+Verified: `async_queue_primitive_test` — 3 P7 cases PASS (multi-item ring
 drained FIFO, empty ring yields immediately-empty session, session
 move-only empties source). Clang Debug + GCC Debug + ASan + TSan clean.
 The fail-fast paths (second `begin_teardown`, ordinary op after teardown,
@@ -176,7 +176,7 @@ transition and the linear capability (P1).
 - `static_assert` enforces T is object + nothrow-move-constructible +
   nothrow-destructible.
 
-Verified: `e12_async_queue_test` — 3 P8 cases PASS (typed FIFO + failure
+Verified: `async_queue_primitive_test` — 3 P8 cases PASS (typed FIFO + failure
 recovery with exact-T `would_block` and `closed`, typed teardown via
 `release_teardown`, capacity-0 ctor rejection). Clang Debug + GCC Debug
 + ASan + TSan clean. Production `sluice_async` target compiles clean.
@@ -242,7 +242,7 @@ Phase G extends coverage beyond the single-worker deterministic subset:
   a typed-wrapper-only concern that adds no QueuePort state) and 6/6
   publication paths.
 
-Verified: 20/20 `e12_async_queue_test` cases PASS on Clang Debug, GCC
+Verified: 20/20 `async_queue_primitive_test` cases PASS on Clang Debug, GCC
 Debug, ASan, TSan. E11/E12 sync primitive tests regress-clean. Production
 `sluice_async` target compiles clean.
 

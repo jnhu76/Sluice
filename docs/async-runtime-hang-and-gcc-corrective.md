@@ -27,14 +27,14 @@ All three are PASS, but each on its own reproduced-and-corrected evidence (§B�
 ### B.1 W1 — Condition T25 hang
 
 ```text
-command:       SLUICE_TEST_FILTER='e12_cond_t25' timeout 15s ./e12_async_condition_test
+command:       SLUICE_TEST_FILTER='e12_cond_t25' timeout 15s ./async_condition_primitive_test
 configuration: Clang 21.1.8, Linux x86_64, xmake 3.0.9, -m asan
 frequency:     2/3 trials HANG (watchdog exit 124) — pre-fix
 watchdog:      15s external `timeout`; a watchdog kill is recorded as FAIL, never PASS
 first stuck state:
    last [run] line: [run] e12_cond_t25_migration_condition_reacquire
    coordinator unbounded `while (!a_unlocked) yield()` at
-   tests/e12_async_condition_test.cpp:1415-1417 (original)
+   tests/async_condition_primitive_test.cpp:1415-1417 (original)
 TSan note:     pre-fix T25 also failed 3/3 under TSan with SEGV on a WRITE
                at 0x7ffff617fff0 (ThreadSanitizer: nested bug) — a separate
                failure mode of the same non-deterministic test setup.
@@ -43,7 +43,7 @@ TSan note:     pre-fix T25 also failed 3/3 under TSan with SEGV on a WRITE
 ### B.2 W2 — E11 timer ASan busy-poll hang
 
 ```text
-command:       SLUICE_TEST_FILTER='e11_t7' timeout 30s ./e11_timer_wait_test
+command:       SLUICE_TEST_FILTER='e11_t7' timeout 30s ./timer_wait_test
 configuration: Clang 21.1.8, Linux x86_64, xmake 3.0.9, -m asan
 frequency:     5/5 trials HANG (watchdog exit 124) for e11_t7 — pre-fix.
                Other run_live cases (t11/t12/t13/t15/t17): 5/5 PASS each.
@@ -51,7 +51,7 @@ watchdog:      30s external `timeout`
 first stuck state:
    last [run] line: [run] e11_t7_old_timer_cannot_resolve_later_epoch
    fwake fiber unbounded `spin_wait(e_resolved)` at
-   tests/e11_timer_wait_test.cpp:558 (original)
+   tests/timer_wait_test.cpp:558 (original)
    observed process state: ~100% CPU, ~21GB virtual, never returns.
 ```
 
@@ -93,8 +93,8 @@ These were noted during investigation and are recorded as **remaining risks** (�
 
 | Commit | File | Correction |
 |---|---|---|
-| `db656b5` (W1) | `tests/e12_async_condition_test.cpp` | Rewrote `e12_cond_t25_migration_condition_reacquire` to mirror T19's determinism discipline: added `f_idle` on W1 (pins W1 until the steal window opens via `flag_wake`), three-way handshake (`a_acquired` + `a_suspended` + `blocker_running`) before opening the window, `cond.notify_one()` after, `bounded_wait` on every coordinator gate, and a `release_for_drain` lambda (releases `release_blocker` + `flag_wake` + `cond.notify_one()`) on every gate failure followed by `runner.join()` + `SLUICE_CHECK_MSG`/`SLUICE_FAIL` with a state dump. Suspend mechanism stays `cond.wait(cn)` (this is the Condition reacquire test). No production change. |
-| `7045e31` (W2) | `tests/e11_timer_wait_test.cpp` | Added the `spin_wait_bounded` primitive (documented W2 failure-guard). Rewrote `e11_t7_old_timer_cannot_resolve_later_epoch` to drive both epochs from a coordinator OS thread under `run_live(1)` (the proven liveness pattern of e11_t15), replacing the broken `run(2)`-DRAIN + fiber-to-fiber spin design. Every coordinator wait is bounded (`kBoundedCoordIters = 200000`); on exhaustion the test FAILs with a stderr state dump and releases the suspended fiber so the runner can drain. The cross-epoch isolation proof (I3: E's retired timer does not resolve E+1 when the clock advances past E's deadline) is preserved and strengthened (an explicit `e1_resolved` check before the E+1 wake). No `sleep_for`-as-fix: the pump after `advance_clock` is synchronous, so the post-pump observation needs no sleep (verified — a `sleep_for(2ms)` initially carried over from the e11_t15 idiom was removed as redundant; Debug 5/5 + ASan 10/10 pass without it). No production change. |
+| `db656b5` (W1) | `tests/async_condition_primitive_test.cpp` | Rewrote `e12_cond_t25_migration_condition_reacquire` to mirror T19's determinism discipline: added `f_idle` on W1 (pins W1 until the steal window opens via `flag_wake`), three-way handshake (`a_acquired` + `a_suspended` + `blocker_running`) before opening the window, `cond.notify_one()` after, `bounded_wait` on every coordinator gate, and a `release_for_drain` lambda (releases `release_blocker` + `flag_wake` + `cond.notify_one()`) on every gate failure followed by `runner.join()` + `SLUICE_CHECK_MSG`/`SLUICE_FAIL` with a state dump. Suspend mechanism stays `cond.wait(cn)` (this is the Condition reacquire test). No production change. |
+| `7045e31` (W2) | `tests/timer_wait_test.cpp` | Added the `spin_wait_bounded` primitive (documented W2 failure-guard). Rewrote `e11_t7_old_timer_cannot_resolve_later_epoch` to drive both epochs from a coordinator OS thread under `run_live(1)` (the proven liveness pattern of e11_t15), replacing the broken `run(2)`-DRAIN + fiber-to-fiber spin design. Every coordinator wait is bounded (`kBoundedCoordIters = 200000`); on exhaustion the test FAILs with a stderr state dump and releases the suspended fiber so the runner can drain. The cross-epoch isolation proof (I3: E's retired timer does not resolve E+1 when the clock advances past E's deadline) is preserved and strengthened (an explicit `e1_resolved` check before the E+1 wake). No `sleep_for`-as-fix: the pump after `advance_clock` is synchronous, so the post-pump observation needs no sleep (verified — a `sleep_for(2ms)` initially carried over from the e11_t15 idiom was removed as redundant; Debug 5/5 + ASan 10/10 pass without it). No production change. |
 | `63cf850` (W3) | `xmake.lua` | Replaced `add_cxxflags("-Wthread-safety", {force = true})` + `add_cxxflags("-Werror=thread-safety", {force = true})` with `add_cxxflags("-Wthread-safety", "-Werror=thread-safety", {tools = {"clang", "clang_cl"}})` at both sites (`sluice_async` target and the `async_tsa_flags()` helper used by `sluice_async_internal_testing`). Dropped `force=true` (the option that broke GCC filtering). `{tools={"clang","clang_cl"}}` scopes the flags to both Clang frontends so Linux/Mac clang AND Windows clang-cl keep TSA; GCC never receives them. Updated the stale comments. Verified against official xmake docs (context7 `/xmake-io/xmake-docs`: `add_cxxflags("...", {tools = {"clang_cl", "cl"}})` is the documented per-frontend scoping API). |
 
 ---
@@ -103,7 +103,7 @@ These were noted during investigation and are recorded as **remaining risks** (�
 
 Toolchain: Clang 21.1.8, GCC 15.2.0, Linux x86_64, xmake 3.0.9.
 
-### E.1 W1 — Condition suite (e12_async_condition_test)
+### E.1 W1 — Condition suite (async_condition_primitive_test)
 
 | Configuration | Scope | Result |
 |---|---|---|
@@ -114,7 +114,7 @@ Toolchain: Clang 21.1.8, GCC 15.2.0, Linux x86_64, xmake 3.0.9.
 | Clang ASan | full suite (30 cases) | exit 0, ALL TESTS PASSED, no TSan race |
 | Clang TSan | full suite (30 cases) | exit 0, ALL TESTS PASSED, no TSan race |
 
-### E.2 W2 — E11 timer suite (e11_timer_wait_test)
+### E.2 W2 — E11 timer suite (timer_wait_test)
 
 | Configuration | Scope | Result |
 |---|---|---|

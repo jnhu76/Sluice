@@ -169,7 +169,7 @@ E12-A-EVENT-CORRECTIVE-1 (F-EVENT-AUTH): it leaked the Event's underlying
 WaitQueue to ordinary production code, which could combine it with
 `Scheduler::wake_wait_one` to resolve an Event waiter as `Woken` while the Event
 remained UNSET and `set()` was never called. A compile-negative probe
-(`tests/e12_event_authority_probe.cpp`, gated by the formal verify script)
+(`tests/event_authority_probe.cpp`, gated by the formal verify script)
 mechanically verifies the bypass no longer compiles. The Event's private
 WaitQueue is NOT reachable from ordinary production code: ASYNC-TEST-SEAM-
 AUTHORITY-CORRECTIVE-1 removed the forgeable `E12EventTestHooks` friend from the
@@ -834,7 +834,7 @@ Verification:
   compile with -Werror=thread-safety).
 - E7–E11 regression suite passes (e7_worker, e7_coord, e8_steal, e9_external_wake,
   e10_wait_queue, e10_scheduler_wait, e10_corrective_c1/c2_c3, e11_timer_wait).
-- **`e10_corrective_c5_test` is a PROVEN BASELINE DEFECT**: it fails to compile
+- **`wait_queue_unlink_topology_test` is a PROVEN BASELINE DEFECT**: it fails to compile
   (`error: unused variable 'order_bad' [-Werror,-Wunused-variable]`) on the
   baseline — the defect is OUTSIDE this corrective diff and is NOT silently
   "fixed" here. The suite is NOT "all green" while this baseline compile defect
