@@ -184,7 +184,7 @@ This document deliberately does **not** recommend hard-coding limits such as
 
 **Revisit trigger.**
 
-* `worker_count` can be controlled by user input, config file, environment
+* The `worker_count` can be controlled by user input, config file, environment
   variable, or network input.
 * The project begins shipping an out-of-the-box server/runtime configuration.
 * A unified resource budget is required.

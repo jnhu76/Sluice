@@ -510,7 +510,11 @@ Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& 
         return make_unexpected<void>(native_length.error());
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // get_sqe_with_pressure is the authoritative queue_full_retries
+        // counter for the ring-full path (it bumps on pressure). Bumping here
+        // too double-counts; a nullptr on the fatal-error path is not a
+        // ring-full event and must not be counted as one. Fatal vs backend
+        // error is still distinguished below for the returned Result.
         if (impl_->fatal_error.has_value())
             return make_unexpected<void>(*impl_->fatal_error);
         return make_unexpected<void>(IoError{IoError::Code::backend_error});
@@ -536,7 +540,11 @@ Result<void> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>
         return make_unexpected<void>(native_length.error());
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // get_sqe_with_pressure is the authoritative queue_full_retries
+        // counter for the ring-full path (it bumps on pressure). Bumping here
+        // too double-counts; a nullptr on the fatal-error path is not a
+        // ring-full event and must not be counted as one. Fatal vs backend
+        // error is still distinguished below for the returned Result.
         if (impl_->fatal_error.has_value())
             return make_unexpected<void>(*impl_->fatal_error);
         return make_unexpected<void>(IoError{IoError::Code::backend_error});
@@ -559,7 +567,11 @@ Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>
     }
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // get_sqe_with_pressure is the authoritative queue_full_retries
+        // counter for the ring-full path (it bumps on pressure). Bumping here
+        // too double-counts; a nullptr on the fatal-error path is not a
+        // ring-full event and must not be counted as one. Fatal vs backend
+        // error is still distinguished below for the returned Result.
         if (impl_->fatal_error.has_value())
             return make_unexpected<void>(*impl_->fatal_error);
         return make_unexpected<void>(IoError{IoError::Code::backend_error});
@@ -582,7 +594,11 @@ Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
     }
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
-        bump(stats_, &AsyncStats::queue_full_retries);
+        // get_sqe_with_pressure is the authoritative queue_full_retries
+        // counter for the ring-full path (it bumps on pressure). Bumping here
+        // too double-counts; a nullptr on the fatal-error path is not a
+        // ring-full event and must not be counted as one. Fatal vs backend
+        // error is still distinguished below for the returned Result.
         if (impl_->fatal_error.has_value())
             return make_unexpected<void>(*impl_->fatal_error);
         return make_unexpected<void>(IoError{IoError::Code::backend_error});

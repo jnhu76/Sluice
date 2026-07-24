@@ -135,12 +135,6 @@ using Entry = void (*)(Switch* resumed_by, void* user_data);
 // src/async/fiber_ctx.cpp so the asm lives in one TU.
 Switch* context_switch(Switch* s) noexcept;
 
-// Permanently leave `old` and switch to `new`. Unlike context_switch(), this
-// path tells ASan to discard the departing fiber's fake stack and never
-// returns. Use only after the fiber has reached a terminal state.
-[[noreturn]] void context_switch_final(Context& old,
-                                       const Context& new_) noexcept;
-
 #else  // non-x86_64: unsupported stub. Compiles; calling it aborts so a misuse
        // fails loudly rather than silently emulating threads-per-task (E0 ADR §7).
 inline Switch* context_switch(Switch* /*s*/) noexcept {
@@ -149,6 +143,17 @@ inline Switch* context_switch(Switch* /*s*/) noexcept {
     return nullptr;
 }
 #endif
+
+// Permanently leave `old` and switch to `new`. Unlike context_switch(), this
+// path tells ASan to discard the departing fiber's fake stack and never
+// returns. Use only after the fiber has reached a terminal state.
+//
+// Declared unconditionally (like init_context / reset_context) so callers such
+// as scheduler.cpp see the same symbol on every supported architecture; the
+// definition is platform-specific (x86_64 performs the native handoff, other
+// arches abort — see src/async/fiber_ctx.cpp). The [[noreturn]] / noexcept
+// contract is identical for both definitions.
+[[noreturn]] void context_switch_final(Context& old, const Context& new_) noexcept;
 
 // Initialize a fresh Context so that its FIRST context_switch into it begins
 // executing `entry(resumed_by, user_data)`. The context's stack is `[stack_base,
