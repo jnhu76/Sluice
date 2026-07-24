@@ -712,6 +712,24 @@ if has_liburing then
     end
 end
 
+-- Dedicated real-liburing submit-failure state-machine tests. This target
+-- compiles only the uring backend source with a private submit seam, so the
+-- production sluice_async ABI and all other async tests remain hook-free.
+if has_liburing and os.isfile("tests/uring_submit_failure_test.cpp") then
+    target("uring_submit_failure_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core")
+        add_includedirs("include")
+        add_files("src/async/uring_backend.cpp",
+                  "tests/uring_submit_failure_test.cpp")
+        add_defines("SLUICE_HAS_LIBURING",
+                    "SLUICE_URING_INTERNAL_TESTING")
+        add_packages("liburing")
+        add_tests("uring_submit_failure_test")
+end
+
 -- select_type_test — E13 Select type construction and compile-fail gates (P1).
 -- Tests public value types, internal type graph, and constraint gates.
 -- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).

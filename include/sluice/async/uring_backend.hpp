@@ -28,6 +28,14 @@
 // can submit many SQEs per flush. This matches Zig Io/Uring.zig's enqueue/submit
 // split.
 //
+// Submit failure policy: transient -EINTR/-EAGAIN/-EBUSY and one anomalous
+// zero-progress result retain the userspace-owned SQE suffix for a later driver
+// call. The first permanent negative error (or repeated zero progress) makes
+// the backend terminal: the accepted prefix remains kernel-owned and completes
+// from CQEs, the provably unsubmitted suffix completes once with that error,
+// later submissions fail synchronously, poll() never resubmits the suffix, and
+// wait_one() returns the stored error instead of blocking indefinitely.
+//
 // Feature gates (026 B3): SLUICE_URING_REGISTERED_BUFFERS and
 // SLUICE_URING_REGISTERED_FILES are build options, both OFF by default (matching
 // Zig upstream — Io/Uring.zig uses neither). A future job may implement them
@@ -44,13 +52,32 @@
 #include <cstddef>
 #include <cstdint>
 
+#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_URING_INTERNAL_TESTING)
+struct io_uring;
+#endif
+
 namespace sluice::async {
+
+#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_URING_INTERNAL_TESTING)
+// Non-installed submit seam used by the dedicated real-liburing fault tests.
+// Production targets never define SLUICE_URING_INTERNAL_TESTING and therefore
+// expose neither this type nor the constructor overload below.
+struct UringBackendSubmitTestHooks {
+    using SubmitFn = int (*)(void*, ::io_uring*) noexcept;
+
+    void* context = nullptr;
+    SubmitFn submit = nullptr;
+};
+#endif
 
 class UringAsyncBackend : public AsyncBackend {
 public:
     // Construct with a submit/completion queue depth (clamped to kernel limits
     // when liburing is present). Stub mode ignores depth.
     explicit UringAsyncBackend(unsigned queue_depth = 64);
+#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_URING_INTERNAL_TESTING)
+    UringAsyncBackend(unsigned queue_depth, UringBackendSubmitTestHooks hooks);
+#endif
     ~UringAsyncBackend() override;
 
     UringAsyncBackend(const UringAsyncBackend&) = delete;
@@ -69,7 +96,9 @@ public:
 
     std::size_t outstanding() const noexcept override;
 
-    // Whether this instance is backed by a real io_uring (false in stub mode).
+    // Whether this instance initialized a real io_uring (false in stub mode).
+    // This is a capability query, not a health query: a later terminal submit
+    // error is observed through Completion results, wait_one(), and submit_*.
     bool available() const noexcept;
 
 private:
