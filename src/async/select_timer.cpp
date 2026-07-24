@@ -56,8 +56,10 @@ detail::SelectTimerRegistration* Scheduler::select_timer_splice_one_locked(
     // block is bound to this Scheduler.
     assert(it != tmp_pool.end() &&
            "select_timer_splice_one_locked: iterator is end-of-temp-pool");
+    if (it == tmp_pool.end()) detail::select_invariant_fail_fast();
     assert(it->scheduler() == this &&
            "select_timer_splice_one_locked: block scheduler_ != this");
+    if (it->scheduler() != this) detail::select_invariant_fail_fast();
 
     // Splice exactly this one node to the end of the Scheduler pool.
     select_timer_pool_.splice(select_timer_pool_.end(), tmp_pool, it);
@@ -129,8 +131,11 @@ bool Scheduler::select_timer_retire_locked(
     // a cross-Scheduler mistake).
     assert(reg.scheduler() == this &&
            "select_timer_retire_locked: block scheduler_ != this");
-    assert(pool_owns_select_block_locked(reg) &&
+    if (reg.scheduler() != this) detail::select_invariant_fail_fast();
+    const bool owned = pool_owns_select_block_locked(reg);
+    assert(owned &&
            "select_timer_retire_locked: block not in select_timer_pool_");
+    if (!owned) detail::select_invariant_fail_fast();
 
     if (reg.retire()) {  // CAS ACTIVE -> RETIRED
         --active_deadline_count_;  // exactly once
@@ -145,8 +150,11 @@ bool Scheduler::select_timer_consume_locked(
     detail::SelectTimerRegistration& reg) {
     assert(reg.scheduler() == this &&
            "select_timer_consume_locked: block scheduler_ != this");
-    assert(pool_owns_select_block_locked(reg) &&
+    if (reg.scheduler() != this) detail::select_invariant_fail_fast();
+    const bool owned = pool_owns_select_block_locked(reg);
+    assert(owned &&
            "select_timer_consume_locked: block not in select_timer_pool_");
+    if (!owned) detail::select_invariant_fail_fast();
 
     if (reg.try_claim_expiry()) {  // CAS ACTIVE -> CONSUMED
         --active_deadline_count_;  // exactly once
@@ -173,8 +181,9 @@ void Scheduler::erase_popped_select_registration_locked(
     }
     // Not finding the block would indicate a double-erase or a block that was
     // never Scheduler-owned — both are invariant violations. Fail loudly in
-    // debug rather than silently returning.
+    // every build rather than silently returning with a broken ownership graph.
     assert(false && "erase_popped_select_registration_locked: block not in pool");
+    detail::select_invariant_fail_fast();
 }
 
 // Predicate: is `reg` a Scheduler-owned block in select_timer_pool_?
@@ -228,21 +237,29 @@ void Scheduler::select_finalize_timer_winner_locked(
     detail::SelectGroup& group, detail::SelectArmSlot& arm) {
     assert(arm.kind == detail::ArmKind::timer &&
            "select_finalize_timer_winner_locked: arm is not a Timer arm");
+    if (arm.kind != detail::ArmKind::timer)
+        detail::select_invariant_fail_fast();
     detail::SelectTimerRegistration* reg = arm.timer.stable_reg_;
     assert(reg != nullptr &&
            "select_finalize_timer_winner_locked: stable_reg_ is null");
+    if (reg == nullptr) detail::select_invariant_fail_fast();
     assert(reg->scheduler() == this &&
            "select_finalize_timer_winner_locked: registration belongs to "
            "another Scheduler");
-    assert(pool_owns_select_block_locked(*reg) &&
+    if (reg->scheduler() != this) detail::select_invariant_fail_fast();
+    const bool owned = pool_owns_select_block_locked(*reg);
+    assert(owned &&
            "select_finalize_timer_winner_locked: pool does not own the "
            "registration");
+    if (!owned) detail::select_invariant_fail_fast();
     assert(reg->is_active() &&
            "select_finalize_timer_winner_locked: registration not ACTIVE at "
            "winner finalize (group was claimed but registration already "
            "terminal — invariant violation)");
+    if (!reg->is_active()) detail::select_invariant_fail_fast();
     assert(reg->arm() == &arm &&
            "select_finalize_timer_winner_locked: registration.arm() != &arm");
+    if (reg->arm() != &arm) detail::select_invariant_fail_fast();
 
     // 2. ACTIVE -> CONSUMED via the accounting helper (CAS + decrement +
     //    recompute, exactly once). After a successful group claim with an
@@ -271,17 +288,24 @@ void Scheduler::select_finalize_timer_loser_locked(
     detail::SelectGroup& group, detail::SelectArmSlot& arm) {
     assert(arm.kind == detail::ArmKind::timer &&
            "select_finalize_timer_loser_locked: arm is not a Timer arm");
+    if (arm.kind != detail::ArmKind::timer)
+        detail::select_invariant_fail_fast();
     detail::SelectTimerRegistration* reg = arm.timer.stable_reg_;
     assert(reg != nullptr &&
            "select_finalize_timer_loser_locked: stable_reg_ is null");
+    if (reg == nullptr) detail::select_invariant_fail_fast();
     assert(reg->scheduler() == this &&
            "select_finalize_timer_loser_locked: registration belongs to "
            "another Scheduler");
-    assert(pool_owns_select_block_locked(*reg) &&
+    if (reg->scheduler() != this) detail::select_invariant_fail_fast();
+    const bool owned = pool_owns_select_block_locked(*reg);
+    assert(owned &&
            "select_finalize_timer_loser_locked: pool does not own the "
            "registration");
+    if (!owned) detail::select_invariant_fail_fast();
     assert(reg->arm() == &arm &&
            "select_finalize_timer_loser_locked: registration.arm() != &arm");
+    if (reg->arm() != &arm) detail::select_invariant_fail_fast();
 
     // 1. arm loser classification FIRST (SN-9). The registration is still
     //    ACTIVE at this point.
@@ -303,6 +327,7 @@ void Scheduler::select_finalize_timer_loser_locked(
            "select_finalize_timer_loser_locked: registration not ACTIVE at "
            "retire (arm classified but registration already terminal — "
            "invariant violation)");
+    if (!reg->is_active()) detail::select_invariant_fail_fast();
     const bool retired = select_timer_retire_locked(*reg);
     if (!retired) {
         // Unreachable: preflight checked ACTIVE, this CS is held, no other
