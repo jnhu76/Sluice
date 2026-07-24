@@ -1011,11 +1011,11 @@ SLUICE_TEST_CASE(queue_h1_push_until_already_due_free_slot_committed) {
     });
     FiberStack sp;
     SLUICE_CHECK(sched.init_fiber(producer, sp.base(), sp.size()));
+    const auto timers_before = TimerCtl::active_deadline_count(sched);
     sched.spawn(producer);
     sched.run(1);
 
     SLUICE_CHECK_MSG(committed, "already-due push + free slot -> committed (resource-first)");
-    auto timers_before = TimerCtl::active_deadline_count(sched);
     SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     // Drain to satisfy the ring-empty destruction contract.
@@ -1056,12 +1056,12 @@ SLUICE_TEST_CASE(queue_h2_push_until_already_due_full_ring_expired) {
     });
     FiberStack sp;
     SLUICE_CHECK(sched.init_fiber(producer, sp.base(), sp.size()));
+    const auto timers_before = TimerCtl::active_deadline_count(sched);
     sched.spawn(producer);
     sched.run(1);
 
     SLUICE_CHECK_MSG(expired, "already-due push + full ring -> expired inline");
     SLUICE_CHECK_MSG(recovered == 777, "exact original T recovered on expire");
-    auto timers_before = TimerCtl::active_deadline_count(sched);
     SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     // Drain the pre-filled item to satisfy the ring-empty destruction contract.
@@ -1101,12 +1101,12 @@ SLUICE_TEST_CASE(queue_h3_pop_until_already_due_item_available) {
     });
     FiberStack sc;
     SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    const auto timers_before = TimerCtl::active_deadline_count(sched);
     sched.spawn(consumer);
     sched.run(1);
 
     SLUICE_CHECK_MSG(got_item, "already-due pop + buffered item -> item (resource-first)");
     SLUICE_CHECK_MSG(popped == 314, "exact buffered value popped");
-    auto timers_before = TimerCtl::active_deadline_count(sched);
     SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     QueueTeardownSession session = port.begin_teardown();
@@ -1134,11 +1134,11 @@ SLUICE_TEST_CASE(queue_h4_pop_until_already_due_empty_ring_expired) {
     });
     FiberStack sc;
     SLUICE_CHECK(sched.init_fiber(consumer, sc.base(), sc.size()));
+    const auto timers_before = TimerCtl::active_deadline_count(sched);
     sched.spawn(consumer);
     sched.run(1);
 
     SLUICE_CHECK_MSG(expired, "already-due pop + empty ring -> expired inline");
-    auto timers_before = TimerCtl::active_deadline_count(sched);
     SLUICE_CHECK_MSG(TimerCtl::active_deadline_count(sched) == timers_before,
                      "no timer registered (inline resolution)");
     QueueTeardownSession session = port.begin_teardown();

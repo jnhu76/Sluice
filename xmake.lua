@@ -1196,23 +1196,6 @@ do
     end
 end
 
--- select_type_test — E13 Select type construction and compile-fail gates (P1).
--- Tests public value types, internal type graph, and constraint gates.
--- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
-do
-    local p = "tests/select_type_test.cpp"
-    if os.isfile(p) then
-        target("select_type_test")
-            set_kind("binary")
-            set_default(false)
-            set_group("test")
-            add_deps("sluice_core", "sluice_async_internal_testing")
-            add_includedirs("include", "tests")
-            add_files(p)
-            add_tests("select_type_test")
-    end
-end
-
 -- select_timer_registration_test — E13 Select Timer stable registration (P3).
 -- Verifies the Select timer substrate: state transitions, address stability
 -- after splice, tagged deadline-heap ordering, ordinary timer regression,

@@ -189,11 +189,11 @@ Per-case direct child invocation (independent verification, not just the
 parent driver):
 
 ```text
-$ async_mutex_death_test --death-child=T1   ; exit 86
-$ async_mutex_death_test --death-child=T2   ; exit 86
-$ async_mutex_death_test --death-child=T3   ; exit 86
-$ async_mutex_death_test --death-child=T4   ; exit 0
-$ async_mutex_death_test --death-child=BOGUS; exit 88   (unknown-case negative)
+async_mutex_death_test --death-child=T1   ; exit 86
+async_mutex_death_test --death-child=T2   ; exit 86
+async_mutex_death_test --death-child=T3   ; exit 86
+async_mutex_death_test --death-child=T4   ; exit 0
+async_mutex_death_test --death-child=BOGUS; exit 88   (unknown-case negative)
 ```
 
 T3 is deterministic by construction (plan-review P0-3): no notifier thread —

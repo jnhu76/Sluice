@@ -7,10 +7,12 @@
 //   - Event::is_set / set / reset / wait / wait_until / cancel
 //     (cancel is the narrow per-wait-epoch CANCEL authority; raw wait_queue()
 //      is REMOVED from the production surface — F-EVENT-AUTH)
-//   - EventHooks: test-only phase seams + the underlying WaitQueue,
-//     reachable ONLY through this friend struct (defined here, in the test TU).
-//     An ordinary production TU cannot name EventHooks.
-//   - Scheduler::advance_clock / TimerCtl       (deterministic timer)
+//   - EventHooks: local alias (tests/async_test_control.hpp's shared
+//     EventSeam facade) for the test-only phase seams + the underlying
+//     WaitQueue. The controller seam lives in the internal-testing variant
+//     only; a production TU does not link it.
+//   - Scheduler::advance_clock / TimerCtl       (deterministic timer; TimerCtl
+//     is a local alias for the shared TimerTestControl facade)
 //   - WaitNode public lock-free state queries (was_woken/was_cancelled/
 //     was_expired/is_terminal/outcome)
 //   - Scheduler::waiting_count()  (the wait-accounting authority)

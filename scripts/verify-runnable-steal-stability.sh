@@ -16,17 +16,19 @@
 # Arguments:
 #   MODE    build mode: release | debug | tsan | asan | ubsan | asanubsan
 #   BINARY  test binary name (e.g. runnable_steal_test). Must be an xmake target.
-#   FILTER  optional SLUICE_TEST_FILTER token (substring, e.g. steal_steal_run_suspend_wake_resume_on_thief).
-#           Use a precise token to avoid multi-match (steal_steal_transfers_owner_no_duplicate also matches
-#           steal_steal_transfers_owner_no_duplicate0/steal_quiescence_steal_attempts_not_logical_work). Empty/unset => run the whole binary.
+#   FILTER  optional SLUICE_TEST_FILTER token (substring). Use a precise, full
+#           case name to avoid multi-match (see NOTE below). Empty/unset =>
+#           run the whole binary.
 #   COUNT   iterations (default 1000). Stop on first failure.
 #
 # Exit status: 0 iff every iteration passed; 1 otherwise.
 #
 # NOTE on filter precision: SLUICE_TEST_FILTER is a substring allowlist
-# (tests/harness.hpp). "steal_steal_run_suspend_wake_resume_on_thief" matches only steal_steal_run_suspend_wake_resume_on_thief_...; "steal_quiescence_steal_attempts_not_logical_work" matches only
-# steal_quiescence_steal_attempts_not_logical_work_...; but "steal_steal_transfers_owner_no_duplicate" matches steal_steal_transfers_owner_no_duplicate, steal_steal_transfers_owner_no_duplicate0, AND steal_quiescence_steal_attempts_not_logical_work. Always use the
-# full case tag (steal_steal_run_suspend_wake_resume_on_thief, e8_t4, steal_quiescence_steal_attempts_not_logical_work) — never an ambiguous prefix.
+# (tests/harness.hpp). A short prefix matches several cases — e.g. the prefix
+# "steal_steal_" matches steal_steal_run_suspend_wake_resume_on_thief,
+# steal_steal_transfers_owner_no_duplicate, AND steal_steal_vs_pop_exactly_one_wins.
+# Always use the full case name (e.g. steal_steal_transfers_owner_no_duplicate),
+# never an ambiguous shared prefix.
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
@@ -51,7 +53,7 @@ fi
 
 export SLUICE_TEST_FILTER="$FILTER"
 
-echo "# verify-e8-stability" >&2
+echo "# verify-runnable-steal-stability" >&2
 echo "# binary:   $BIN_PATH" >&2
 echo "# filter:   '${FILTER:-<none>}'  (SLUICE_TEST_FILTER substring; empty = whole binary)" >&2
 echo "# count:    $COUNT  (stop on first failure)" >&2
