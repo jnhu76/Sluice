@@ -1,3 +1,9 @@
+# review
+.c-review-results/
+
+# tla
+tla2tools.jar
+
 # skill
 .agents
 .zcode
