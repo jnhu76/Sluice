@@ -21,6 +21,32 @@ end
 set_languages("c++20")
 set_warnings("all", "error")
 
+option("hardened")
+    set_default(false)
+    set_description("Enable supported release hardening flags (use with -m release).")
+option_end()
+
+rule("sluice.hardened.release")
+    on_config(function ()
+        if has_config("hardened") and not is_mode("release") then
+            raise("--hardened requires -m release")
+        end
+    end)
+rule_end()
+add_rules("sluice.hardened.release")
+
+-- Hardening is opt-in because sluice_core/sluice_async are static libraries:
+-- the final application remains responsible for its own linker policy.
+if has_config("hardened") then
+    if is_plat("linux", "macosx") then
+        add_cxxflags("-fstack-protector-strong", "-D_FORTIFY_SOURCE=2", "-fPIC",
+                     {tools = {"gcc", "clang"}})
+    end
+    if is_plat("linux") then
+        add_ldflags("-Wl,-z,relro", "-Wl,-z,now", "-pie")
+    end
+end
+
 -- CPP-STATIC-1: Clang Thread Safety Analysis gate.
 -- The TSA flags are added only for the sluice_async target (pilot scope),
 -- via unconditional add_cxxflags on that target below.
