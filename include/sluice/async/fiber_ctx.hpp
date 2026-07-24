@@ -36,6 +36,30 @@
 #include <cstddef>
 #include <cstdint>
 
+#if defined(__SANITIZE_ADDRESS__)
+#define SLUICE_FIBER_ASAN_ENABLED 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define SLUICE_FIBER_ASAN_ENABLED 1
+#endif
+#endif
+
+#ifndef SLUICE_FIBER_ASAN_ENABLED
+#define SLUICE_FIBER_ASAN_ENABLED 0
+#endif
+
+#if defined(__SANITIZE_THREAD__)
+#define SLUICE_FIBER_TSAN_ENABLED 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define SLUICE_FIBER_TSAN_ENABLED 1
+#endif
+#endif
+
+#ifndef SLUICE_FIBER_TSAN_ENABLED
+#define SLUICE_FIBER_TSAN_ENABLED 0
+#endif
+
 namespace sluice::async::fiber_ctx {
 
 // Whether this build supports a real fiber context switch. x86_64 only for now;
@@ -54,6 +78,35 @@ struct Context {
     std::uint64_t rsp = 0;
     std::uint64_t rbp = 0;
     std::uint64_t rip = 0;
+
+#if SLUICE_FIBER_ASAN_ENABLED
+    // AddressSanitizer tracks each alternate stack and its fake stack. The
+    // first three fields retain their fixed asm offsets.
+    void* asan_fake_stack = nullptr;
+    const void* asan_stack_bottom = nullptr;
+    std::size_t asan_stack_size = 0;
+#endif
+
+#if SLUICE_FIBER_TSAN_ENABLED
+    // ThreadSanitizer keeps a logical call stack per fiber.  The first three
+    // fields intentionally retain their fixed asm offsets; this metadata is
+    // used only by TSan builds and lives after the native context.
+    void* sanitizer_fiber = nullptr;
+    bool owns_sanitizer_fiber = false;
+#endif
+
+#if SLUICE_FIBER_ASAN_ENABLED || SLUICE_FIBER_TSAN_ENABLED
+    Context() noexcept = default;
+#if SLUICE_FIBER_TSAN_ENABLED
+    ~Context() noexcept;
+#else
+    ~Context() noexcept = default;
+#endif
+    Context(const Context&) = delete;
+    Context& operator=(const Context&) = delete;
+    Context(Context&&) = delete;
+    Context& operator=(Context&&) = delete;
+#endif
 };
 
 // A context-switch request: save the current CPU state into *old, restore the
@@ -82,6 +135,12 @@ using Entry = void (*)(Switch* resumed_by, void* user_data);
 // src/async/fiber_ctx.cpp so the asm lives in one TU.
 Switch* context_switch(Switch* s) noexcept;
 
+// Permanently leave `old` and switch to `new`. Unlike context_switch(), this
+// path tells ASan to discard the departing fiber's fake stack and never
+// returns. Use only after the fiber has reached a terminal state.
+[[noreturn]] void context_switch_final(Context& old,
+                                       const Context& new_) noexcept;
+
 #else  // non-x86_64: unsupported stub. Compiles; calling it aborts so a misuse
        // fails loudly rather than silently emulating threads-per-task (E0 ADR §7).
 inline Switch* context_switch(Switch* /*s*/) noexcept {
@@ -102,5 +161,9 @@ inline Switch* context_switch(Switch* /*s*/) noexcept {
 // 1085 sets sp/fp/pc so the first resume enters AsyncClosure.entry -> .call).
 bool init_context(Context& ctx, Entry entry, void* user_data,
                   std::byte* stack_base, std::size_t stack_size) noexcept;
+
+// Forget saved native state and release any sanitizer-owned logical fiber.
+// Scheduler contexts refer to the OS thread's TSan context and never own it.
+void reset_context(Context& ctx) noexcept;
 
 }  // namespace sluice::async::fiber_ctx

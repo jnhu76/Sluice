@@ -49,11 +49,7 @@ void fiber_entry_bridge(fiber_ctx::Switch* resumed_by, void* user_data) {
     }
     fiber->make_done();
     // Switch back to this worker's scheduler context forever.
-    fiber_ctx::Switch s;
-    s.old = &fiber->ctx;
-    s.new_ = &g_worker->sched_ctx;
-    (void)fiber_ctx::context_switch(&s);
-    __builtin_unreachable();
+    fiber_ctx::context_switch_final(fiber->ctx, g_worker->sched_ctx);
 }
 
 }  // namespace
@@ -494,7 +490,7 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
     // is a defense-in-depth that also makes a misuse fail loudly (jump to 0)
     // instead of silently into recycled stack memory.
     for (auto& w : workers_) {
-        w->sched_ctx = fiber_ctx::Context{};
+        fiber_ctx::reset_context(w->sched_ctx);
     }
 
     // Distribute any pending_spawn_ across workers round-robin.

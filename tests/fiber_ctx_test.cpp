@@ -37,20 +37,16 @@ struct ScratchStack {
 struct Slice1State {
     Context main_ctx{};       // main thread's saved context
     Context fiber_ctx{};
+    Switch* entered_by = nullptr;
     int ran = 0;
 };
 
 static void slice1_fiber(Switch* resumed_by, void* user_data) {
-    (void)resumed_by;
     auto* st = static_cast<Slice1State*>(user_data);
+    st->entered_by = resumed_by;
     st->ran = 1;
     // Switch back to main. st->main_ctx was filled when main switched into us.
-    Switch s;
-    s.old = &st->fiber_ctx;     // our own context (unused on return — we end)
-    s.new_ = &st->main_ctx;     // resume main
-    (void)context_switch(&s);
-    // Never reached: main does not switch back into us after this.
-    __builtin_unreachable();
+    context_switch_final(st->fiber_ctx, st->main_ctx);
 }
 
 }  // namespace
@@ -80,6 +76,7 @@ SLUICE_TEST_CASE(fiber_context_switch_main_fiber_main) {
 
     // We're back. The fiber ran and switched into st.main_ctx.
     SLUICE_CHECK(st.ran == 1);
+    SLUICE_CHECK(st.entered_by == &s);
     // resumed_by is the Switch* the fiber used to wake us (&s in slice1_fiber,
     // whose .new_ = &st.main_ctx). Non-null proves the rsi return path works.
     SLUICE_CHECK(resumed_by != nullptr);
@@ -116,11 +113,7 @@ static void fiber_b(Switch* resumed_by, void* user_data) {
 
     // Switch back to A. A's context was saved when A called context_switch into
     // us; it lives in pp->a_ctx.
-    Switch s;
-    s.old = &pp->b_ctx;       // B's own context (unused; B ends)
-    s.new_ = &pp->a_ctx;      // resume A
-    (void)context_switch(&s);
-    __builtin_unreachable();  // A does not switch back into B
+    context_switch_final(pp->b_ctx, pp->a_ctx);
 }
 
 static void fiber_a(Switch* resumed_by, void* user_data) {
@@ -139,11 +132,7 @@ static void fiber_a(Switch* resumed_by, void* user_data) {
     pp->a_observed_return = pp->b_returned;   // A reads B's return (70)
 
     // Switch back to main. Main's context lives in pp->main_ctx.
-    Switch to_main;
-    to_main.old = &pp->a_ctx;
-    to_main.new_ = &pp->main_ctx;
-    (void)context_switch(&to_main);
-    __builtin_unreachable();  // main does not switch back into A
+    context_switch_final(pp->a_ctx, pp->main_ctx);
 }
 }  // namespace
 
