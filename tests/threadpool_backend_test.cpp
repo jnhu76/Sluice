@@ -35,10 +35,22 @@ namespace {
 class TempPath {
 public:
     TempPath() {
+        // Process-unique name: parallel test runs (sharding, contention stress,
+        // CI matrix slots) otherwise produce the SAME path (per-process counter
+        // starts at 0) and each open()'s it O_TRUNC, truncating/overwriting a
+        // sibling's file mid-operation. PID makes it cross-process unique; the
+        // counter + instance address keep it unique within a process. See the
+        // same fix in uring_backend_test.cpp.
         path_ = (std::filesystem::temp_directory_path() /
-                 ("sluice_async_tp_" + std::to_string(counter_++) + ".tmp")).string();
+                 ("sluice_async_tp_" + std::to_string(::getpid()) + "_" +
+                  std::to_string(counter_++) + "_" +
+                  std::to_string(reinterpret_cast<std::uintptr_t>(this)) + ".tmp"))
+                    .string();
     }
-    ~TempPath() { std::filesystem::remove(path_); }
+    ~TempPath() {
+        std::error_code ec;
+        std::filesystem::remove(path_, ec);
+    }
     TempPath(const TempPath&) = delete;
     TempPath& operator=(const TempPath&) = delete;
     const std::string& path() const { return path_; }
