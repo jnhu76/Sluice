@@ -15,8 +15,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <sys/types.h>
 
 namespace {
 
@@ -92,6 +94,19 @@ SLUICE_TEST_CASE(read_at_zero_length_is_noop) {
     auto res = r.read_at(0, std::span<std::byte>{});
     SLUICE_CHECK(res.has_value());
     SLUICE_CHECK(res.value() == 0);
+}
+
+SLUICE_TEST_CASE(read_at_rejects_offset_past_native_max) {
+    constexpr std::uint64_t native_max =
+        static_cast<std::uint64_t>(std::numeric_limits<off_t>::max());
+    if constexpr (native_max < std::numeric_limits<std::uint64_t>::max()) {
+        auto tp = seed_file("ABC");
+        sluice::FileReader r(tp.str());
+        std::array<std::byte, 1> buf{};
+        auto result = r.read_at(native_max + 1, buf);
+        SLUICE_CHECK(!result.has_value());
+        SLUICE_CHECK(result.error().code == sluice::IoError::Code::invalid_state);
+    }
 }
 
 // ---- Slice 5: write_at writes at an explicit offset -------------------------

@@ -1,5 +1,6 @@
 // FileReader / FileWriter POSIX implementation.
 #include <sluice/file.hpp>
+#include <sluice/detail/io_validation.hpp>
 #include <sluice/detail/posix_retry.hpp>
 
 #include <cerrno>
@@ -9,13 +10,6 @@
 #include <fcntl.h>
 #include <sys/types.h>
 
-// Positional I/O (pread/pwrite/preadv/pwritev) narrows std::uint64_t offsets to
-// off_t via static_cast. This is lossless ONLY when off_t is 64-bit (the LFS /
-// _FILE_OFFSET_BITS=64 configuration sluice targets). Fail the build on a 32-bit
-// off_t platform rather than silently truncating offsets to invalid values.
-static_assert(sizeof(off_t) == 8, "sluice positional I/O requires 64-bit off_t "
-                                  "(_FILE_OFFSET_BITS=64 / LFS). A 32-bit off_t would silently "
-                                  "truncate uint64 offsets in pread/pwrite.");
 #include <sys/uio.h> // readv / writev / struct iovec
 #include <algorithm>
 #include <optional>
@@ -214,14 +208,13 @@ Result<std::size_t> FileReader::read_at(std::uint64_t offset, std::span<std::byt
     if (dst.empty()) {
         return std::size_t{0};
     }
-    // pread does not move the file cursor. off_t is signed; offset is uint64.
-    // This NARROWS via static_cast (not a clamp): on the supported configuration
-    // (off_t is 64-bit, _FILE_OFFSET_BITS=64 / LFS) the cast is lossless for all
-    // representable file offsets. Offsets beyond off_t's positive range yield
-    // implementation-defined behavior; the kernel rejects such syscalls with
-    // EINVAL/EOVERFLOW. Same rationale applies to write_at/*_vec_at below.
+    auto native_offset = detail::checked_posix_offset(offset);
+    if (!native_offset.has_value()) {
+        return make_unexpected<std::size_t>(native_offset.error());
+    }
+    // pread does not move the file cursor.
     ssize_t n = detail::retry_on_eintr(
-        [&] { return ::pread(fd_, dst.data(), dst.size(), static_cast<off_t>(offset)); });
+        [&] { return ::pread(fd_, dst.data(), dst.size(), native_offset.value()); });
     auto result = syscall_result(n);
     if (stats_) {
         if (result.has_value()) {
@@ -269,10 +262,14 @@ Result<std::size_t> FileReader::read_vec_at(std::uint64_t offset, std::span<IoSl
     std::size_t idx = 0; // current iovec index
     std::uint64_t off = offset;
     while (idx < iovs.size()) {
+        auto native_offset = detail::checked_posix_offset(off);
+        if (!native_offset.has_value()) {
+            return make_unexpected<std::size_t>(native_offset.error());
+        }
         std::size_t chunk =
             std::min<std::size_t>(iovs.size() - idx, static_cast<std::size_t>(iov_max()));
         ssize_t n = detail::retry_on_eintr([&] {
-            return ::preadv(fd_, &iovs[idx], iovcnt_clamped(chunk), static_cast<off_t>(off));
+            return ::preadv(fd_, &iovs[idx], iovcnt_clamped(chunk), native_offset.value());
         });
         auto r = syscall_result(n);
         if (stats_) {
@@ -470,12 +467,13 @@ Result<std::size_t> FileWriter::write_at(std::uint64_t offset, std::span<const s
     if (src.empty()) {
         return std::size_t{0};
     }
-    // pwrite does not move the file cursor. off_t is signed; offset is uint64.
-    // NARROWS via static_cast (not a clamp) — see read_at for the full rationale
-    // (lossless on the supported 64-bit off_t / LFS config; kernel rejects
-    // out-of-range offsets with EINVAL/EOVERFLOW).
+    auto native_offset = detail::checked_posix_offset(offset);
+    if (!native_offset.has_value()) {
+        return make_unexpected<std::size_t>(native_offset.error());
+    }
+    // pwrite does not move the file cursor.
     ssize_t n = detail::retry_on_eintr(
-        [&] { return ::pwrite(fd_, src.data(), src.size(), static_cast<off_t>(offset)); });
+        [&] { return ::pwrite(fd_, src.data(), src.size(), native_offset.value()); });
     auto result = syscall_result(n);
     if (stats_) {
         if (result.has_value()) {
@@ -525,10 +523,14 @@ Result<std::size_t> FileWriter::write_vec_at(std::uint64_t offset,
     std::size_t idx = 0;
     std::uint64_t off = offset;
     while (idx < iovs.size()) {
+        auto native_offset = detail::checked_posix_offset(off);
+        if (!native_offset.has_value()) {
+            return make_unexpected<std::size_t>(native_offset.error());
+        }
         std::size_t chunk =
             std::min<std::size_t>(iovs.size() - idx, static_cast<std::size_t>(iov_max()));
         ssize_t n = detail::retry_on_eintr([&] {
-            return ::pwritev(fd_, &iovs[idx], iovcnt_clamped(chunk), static_cast<off_t>(off));
+            return ::pwritev(fd_, &iovs[idx], iovcnt_clamped(chunk), native_offset.value());
         });
         auto r = syscall_result(n);
         if (stats_) {

@@ -7,6 +7,7 @@
 // flight worker — the captured `this` in worker lambdas stays valid.
 #include <sluice/async/threadpool_backend.hpp>
 
+#include <sluice/detail/io_validation.hpp>
 #include <sluice/detail/posix_retry.hpp>
 #include <sluice/error.hpp>
 
@@ -32,16 +33,16 @@ ThreadPoolBackend::~ThreadPoolBackend() {
 
 namespace {
 // Run a blocking read (pread) and return the result. EINTR retried.
-Result<std::size_t> do_read(int fd, std::byte* dst, std::size_t len, std::uint64_t off) {
+Result<std::size_t> do_read(int fd, std::byte* dst, std::size_t len, off_t off) {
     ssize_t n = sluice::detail::retry_on_eintr([&] {
-        return ::pread(fd, dst, len, static_cast<off_t>(off));
+        return ::pread(fd, dst, len, off);
     });
     if (n < 0) return make_unexpected<std::size_t>(sluice::from_errno_value(errno));
     return static_cast<std::size_t>(n);
 }
-Result<std::size_t> do_write(int fd, const std::byte* src, std::size_t len, std::uint64_t off) {
+Result<std::size_t> do_write(int fd, const std::byte* src, std::size_t len, off_t off) {
     ssize_t n = sluice::detail::retry_on_eintr([&] {
-        return ::pwrite(fd, src, len, static_cast<off_t>(off));
+        return ::pwrite(fd, src, len, off);
     });
     if (n < 0) return make_unexpected<std::size_t>(sluice::from_errno_value(errno));
     return static_cast<std::size_t>(n);
@@ -107,13 +108,23 @@ void ThreadPoolBackend::shutting_down_for_test() {
 Result<void> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
     if (!c.idle() || !accepting_new_work())
         return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
-    enqueue_size(c, [op] { return do_read(op.fd, op.dst, op.len, op.offset); });
+    auto native_offset = sluice::detail::checked_posix_offset(op.offset);
+    if (!native_offset.has_value())
+        return make_unexpected<void>(native_offset.error());
+    enqueue_size(c, [op, off = native_offset.value()] {
+        return do_read(op.fd, op.dst, op.len, off);
+    });
     return {};
 }
 Result<void> ThreadPoolBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
     if (!c.idle() || !accepting_new_work())
         return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
-    enqueue_size(c, [op] { return do_write(op.fd, op.src, op.len, op.offset); });
+    auto native_offset = sluice::detail::checked_posix_offset(op.offset);
+    if (!native_offset.has_value())
+        return make_unexpected<void>(native_offset.error());
+    enqueue_size(c, [op, off = native_offset.value()] {
+        return do_write(op.fd, op.src, op.len, off);
+    });
     return {};
 }
 Result<void> ThreadPoolBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {

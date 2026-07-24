@@ -140,7 +140,7 @@ local tests = {
     "copy_strategy_stats", "syncable_writer", "file_sync", "wal_writer",
     "io_context_api", "blocking_io_context", "read_vec_all",
     "memory_reader_convenience", "memory_io_context",
-    "file_positional", "sync_contract_negative",
+    "file_positional", "sync_contract_negative", "io_validation",
 }
 for _, t in ipairs(tests) do
     sluice_one_file_target("binary", "test", t .. "_test", "tests", "sluice_core")

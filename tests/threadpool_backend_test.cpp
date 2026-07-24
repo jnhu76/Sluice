@@ -19,7 +19,9 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
+#include <sys/types.h>
 #include <unistd.h>
 #include <vector>
 
@@ -170,6 +172,30 @@ SLUICE_TEST_CASE(tp_submit_after_shutdown_rejected) {
     SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
     SLUICE_CHECK(!c.outstanding());  // rejected before mark_outstanding
     SLUICE_CHECK(backend.outstanding() == 0);
+}
+
+SLUICE_TEST_CASE(tp_offset_past_native_max_is_rejected_before_enqueue) {
+    constexpr std::uint64_t native_max =
+        static_cast<std::uint64_t>(std::numeric_limits<off_t>::max());
+    if constexpr (native_max < std::numeric_limits<std::uint64_t>::max()) {
+        TempPath tp;
+        int fd = open_temp(tp.path());
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        Completion<std::size_t> c;
+        std::byte byte{};
+
+        auto r = ctx.submit_read(ReadOp{fd, &byte, 1, native_max + 1}, c);
+        // Drain the old behavior before asserting so the red test does not
+        // violate AsyncIoContext's outstanding-completion destruction contract.
+        if (r.has_value()) {
+            (void)ctx.wait_one();
+        }
+        SLUICE_CHECK(!r.has_value());
+        SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
+        SLUICE_CHECK(c.idle());
+        SLUICE_CHECK(ctx.outstanding() == 0);
+        ::close(fd);
+    }
 }
 
 // ---- Slice 9 (025 B2): cancel records intent; op completes (best-effort) ---
