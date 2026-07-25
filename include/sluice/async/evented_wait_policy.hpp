@@ -42,9 +42,11 @@ namespace sluice::async {
 class EventedWaitPolicy final : public WaitPolicy {
 public:
     // Borrow the scheduler that drives Fibers using this policy. The scheduler
-    // must outlive any Future that uses this policy.
+    // must outlive any Future that uses this policy. Acquires a
+    // SchedulerWakeHandle at construction for external-producer notification
+    // (E14 D-E14-1, T-WAKE-1: policy-level, not per-Future/per-registration).
     explicit EventedWaitPolicy(Scheduler& scheduler) noexcept
-        : scheduler_(scheduler) {}
+        : scheduler_(scheduler), wake_handle_(scheduler.make_wake_handle()) {}
 
     // The physical Evented wait: suspend the current Fiber on the persistent
     // `ready` flag via the Scheduler's level-triggered protocol. The mutex and
@@ -56,8 +58,20 @@ public:
         scheduler_.await_ready_flag(ready);
     }
 
+    // E14 D-E14-1 (T-WAKE-5): producer notification. Called by
+    // Future::complete_with AFTER the first terminal publication, OUTSIDE the
+    // Future's mutex. Wakes a parked Scheduler Worker so it re-drains and
+    // routes the now-ready Fiber via wake_ready_flags_locked.
+    // T-WAKE-7: safe across Scheduler destruction (the handle's control block
+    // outlives the Scheduler; a late notify is a harmless no-op).
+    void notify_ready() noexcept override {
+        wake_handle_.notify();
+    }
+
 private:
     Scheduler& scheduler_;
+    SchedulerWakeHandle wake_handle_;  // T-WAKE-1/2: policy-level, acquired at
+                                       // construction, valid for policy lifetime.
 };
 
 }  // namespace sluice::async

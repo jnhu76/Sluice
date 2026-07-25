@@ -73,4 +73,36 @@ namespace sluice::async::detail {
 // Same contract as the other fail-fast entries.
 [[noreturn]] void select_invariant_fail_fast() noexcept;
 
+// E14 D-E14-F2a: Group lifetime fail-fast. Called from ~Group when an Evented
+// task Future is still pending at destruction time. This is a caller-contract
+// violation (the caller must await or cancel before destroying an Evented
+// Group). The destructor MUST NOT call Evented Future::await from a non-Fiber
+// context (g_worker is null on an ordinary caller thread, causing a null
+// dereference in Scheduler::await_ready_flag). Failing fast surfaces the
+// violation deterministically instead of allowing UB.
+//
+// Same contract as the other fail-fast entries: [[noreturn]] noexcept, no
+// allocation / locking / I/O / dynamic string, no state recovery, ultimately
+// std::terminate().
+[[noreturn]] void group_lifetime_fail_fast() noexcept;
+
+// E14 D-E14-2: Evented admission fail-fast. Called when an Evented public
+// admission boundary is reached on a target where fiber_ctx::supported is
+// false. Deterministically testable via the bool parameter (production passes
+// fiber_ctx::supported; death tests pass false).
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void evented_admission_fail_fast() noexcept;
+
+// E14 D-E14-2: internal testable guard. Production code calls
+// require_evented_supported(fiber_ctx::supported). On supported targets this
+// is an optimized no-op (the parameter is a compile-time true constant). On
+// unsupported targets or when called with false (death test), it calls
+// evented_admission_fail_fast().
+inline void require_evented_supported(bool supported) {
+    if (!supported) {
+        evented_admission_fail_fast();
+    }
+}
+
 }  // namespace sluice::async::detail

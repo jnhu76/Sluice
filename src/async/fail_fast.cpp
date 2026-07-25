@@ -38,4 +38,14 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// E14 D-E14-F2a: Group lifetime fail-fast. ~Group with pending Evented task.
+[[noreturn]] void group_lifetime_fail_fast() noexcept {
+    std::terminate();
+}
+
+// E14 D-E14-2: Evented admission fail-fast. Unsupported target.
+[[noreturn]] void evented_admission_fail_fast() noexcept {
+    std::terminate();
+}
+
 }  // namespace sluice::async::detail

@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -193,8 +194,15 @@ void Group::async_evented(Fn fn) {
     });
     // Init the fiber's context (must happen before spawn). The scheduler's
     // internal bridge will invoke fiber.entry()(*fiber).
+    // E14-F3: propagate init_fiber failure BEFORE any vector mutation or
+    // spawn. Strong exception-safety: no Fiber enqueued, no pointer retained,
+    // Group vectors unchanged, temporary allocations released normally.
     bool ok = sched_->init_fiber(*fiber_raw, stack_base, kStackBytes);
-    (void)ok;  // production code would propagate; E5 test asserts externally
+    if (!ok) {
+        throw std::runtime_error(
+            "sluice::async::Group::async_evented: init_fiber failed "
+            "(invalid stack or unsupported architecture)");
+    }
     std::lock_guard<std::mutex> lk(mtx_);
     evented_fibers_.push_back(std::move(fiber_up));
     evented_stacks_.push_back(std::move(stack_up));
