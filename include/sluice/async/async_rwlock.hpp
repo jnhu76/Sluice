@@ -62,16 +62,6 @@ namespace sluice::async {
 // matters for wait resolution routing).
 class AsyncRwLock {
 public:
-    // Stable context for TimerRegistration on_resolve hook. Address-stable
-    // for the lifetime of this AsyncRwLock. The pump identifies RwLock timers
-    // by the hook function pointer and uses this ctx to call rwlock_expire_wait.
-    struct ExpireCtx {
-        WaitQueue* waiters;
-        std::size_t* active_readers;
-        bool* writer_active;
-        Fiber** writer_owner;
-    };
-
     // Construct an AsyncRwLock bound to `scheduler`, initially unlocked.
     // The Scheduler must outlive the AsyncRwLock.
     explicit AsyncRwLock(Scheduler& scheduler) noexcept
@@ -186,6 +176,23 @@ public:
     }
 
 private:
+    // The Scheduler is the sole authority that routes RwLock timer expiries.
+    // It needs to read the internal ExpireCtx stashed on TimerRegistration
+    // (timer-routing authority, mirroring E12-E Queue's owner_ctx pattern).
+    friend class Scheduler;
+
+    // Stable context for TimerRegistration on_resolve hook. Address-stable
+    // for the lifetime of this AsyncRwLock. PRIVATE: this is the internal
+    // timer-routing authority — ordinary users must NOT be able to name,
+    // construct, or modify it. Only Scheduler (via friend) reads it from
+    // TimerRegistration::owner_ctx_ during pump_deadlines_locked.
+    struct ExpireCtx {
+        WaitQueue* waiters;
+        std::size_t* active_readers;
+        bool* writer_active;
+        Fiber** writer_owner;
+    };
+
     Scheduler& scheduler_;
     std::size_t active_readers_;
     bool writer_active_;

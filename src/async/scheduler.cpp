@@ -1605,6 +1605,93 @@ void Scheduler::AsyncTestAccess::select_event_forge_wrong_home(
     // so it fails -> fail fast before any unlink.
     arm.home_ = &event_b.select_port_;
 }
+
+// ---- E12-F AsyncRwLock Category B death-test accessors ----
+//
+// Each constructs a deliberately-corrupted linked-node topology under G + W
+// and then invokes the SAME production grant path so the fail-fast is the
+// real production boundary (assert(false) + std::abort in Debug AND Release).
+//
+// The forged nodes are NOT caller-owned Fibers — they are stack-local to the
+// accessor and the grant terminates before the accessor returns, so the
+// forged linkage is never observed by a normal resolver.
+//
+// We access rw.waiters_ / rw.active_readers_ / rw.writer_active_ /
+// rw.writer_owner_ through the Scheduler friend grant (AsyncRwLock declares
+// Scheduler friend). This is the ONLY non-production path that forges user_
+// on a linked node; ordinary tests cannot reach these symbols.
+namespace {
+// A RwWaitCtx-compatible layout with a valid mode value (read=0). Matches the
+// production RwWaitCtx layout so the grant's static_cast<RwWaitCtx*> reads a
+// well-formed mode byte. Production RwWaitCtx is in an anonymous namespace
+// inside scheduler.cpp; this test-local mirror keeps the seam header-stable.
+struct ForgedRwWaitCtx {
+    enum class Mode : std::uint8_t { read, write };
+    Mode mode;
+};
+}  // namespace
+void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_head_mode(
+    Scheduler& s, AsyncRwLock& rw) {
+    // Forged context: mode value 99 (neither read=0 nor write=1).
+    struct BadCtx { std::uint8_t mode{99}; } bad;
+    WaitNode forged_head;  // detached
+    forged_head.set_user(&bad);  // install the bad-mode context BEFORE register
+    {
+        LockGuard lk(s.global_mtx_);
+        LockGuard qlk(rw.waiters_.mtx());
+        (void)rw.waiters_.register_wait_locked(forged_head, nullptr);
+        ++s.waiting_waitq_count_;
+        // user_ remains pointing at `bad` (register_wait_locked does not
+        // touch user_). The grant's switch on mode MUST hit the default and
+        // abort.
+    }  // W released; G released.
+    // Re-acquire G and call the production grant. grant_from_head_locked
+    // requires the caller to hold G; it acquires W internally.
+    LockGuard glk(s.global_mtx_);
+    s.rwlock_grant_from_head_locked(rw.waiters_, rw.active_readers_,
+                                    rw.writer_active_, rw.writer_owner_);
+    // Unreachable on the intended path: the grant MUST have aborted above.
+}
+
+void Scheduler::AsyncTestAccess::rwlock_death_forge_null_head_user(
+    Scheduler& s, AsyncRwLock& rw) {
+    WaitNode forged_head;  // detached; user_ defaults to null
+    // Do NOT call set_user — leave user_ null.
+    {
+        LockGuard lk(s.global_mtx_);
+        LockGuard qlk(rw.waiters_.mtx());
+        (void)rw.waiters_.register_wait_locked(forged_head, nullptr);
+        ++s.waiting_waitq_count_;
+    }
+    LockGuard lk(s.global_mtx_);
+    s.rwlock_grant_from_head_locked(rw.waiters_, rw.active_readers_,
+                                    rw.writer_active_, rw.writer_owner_);
+    // Unreachable: the null-user_ check MUST have aborted.
+}
+
+void Scheduler::AsyncTestAccess::rwlock_death_forge_invalid_batch_member(
+    Scheduler& s, AsyncRwLock& rw) {
+    // Head: a valid read-mode context. Second: an invalid-mode context.
+    // The grant will claim the head reader, then encounter the second node's
+    // invalid mode and abort (proving the per-node batch check is load-bearing).
+    ForgedRwWaitCtx good_read{ForgedRwWaitCtx::Mode::read};
+    struct BadCtx { std::uint8_t mode{99}; } bad;
+    WaitNode forged_head;     // will be a valid reader
+    WaitNode forged_second;   // will have invalid mode
+    forged_head.set_user(&good_read);
+    forged_second.set_user(&bad);
+    {
+        LockGuard lk(s.global_mtx_);
+        LockGuard qlk(rw.waiters_.mtx());
+        (void)rw.waiters_.register_wait_locked(forged_head, nullptr);
+        (void)rw.waiters_.register_wait_locked(forged_second, nullptr);
+        s.waiting_waitq_count_ += 2;
+    }
+    LockGuard lk(s.global_mtx_);
+    s.rwlock_grant_from_head_locked(rw.waiters_, rw.active_readers_,
+                                    rw.writer_active_, rw.writer_owner_);
+    // Unreachable: the per-node mode check MUST have aborted on the 2nd node.
+}
 #endif
 
 bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
@@ -2412,6 +2499,40 @@ struct RwWaitCtx {
 };
 }  // anonymous namespace
 
+// No-publication head-claim primitive. Caller MUST hold G + W. Resolves the
+// node Woken (winner CAS), unlinks, retires timer, decrements
+// waiting_waitq_count_, and clears the node's temporary next_/prev_ linkage.
+// Returns true iff this call won the CAS. Does NOT publish. The caller is
+// responsible for committing any resource state (active_readers_++ or
+// writer_active_) BEFORE publishing, and for calling route_runnable_locked.
+//
+// AUTHORITY: shared by rwlock_grant_from_head_locked AND the inline admission
+// recheck in the lock_* registration paths, so there is ONE resolve/unlink/
+// retire/accounting sequence — not two potentially-drifted copies.
+bool Scheduler::rwlock_claim_node_woken_locked(WaitQueue& waiters,
+                                               WaitNode& node) {
+    // Caller already holds G + W (verified by SLUICE_REQUIRES at the declaration
+    // site). The resolve_ CAS is the single winner authority.
+    bool won = waiters.wake_node_locked(node);
+    if (!won) {
+        // Under continuous G + W, a valid linked eligible node CANNOT lose its
+        // CAS (E10 Unlink Law: terminal transition + unlink occur in the same
+        // CS; a linked node is therefore Registered and resolvable). A loss
+        // here is internal corruption — Category B fail-fast (debug assert +
+        // deterministic Release abort). Do NOT silently treat as success.
+        assert(false && "E12-F claim_node: wake_node_locked failed for linked "
+                        "node (Category B internal invariant violation)");
+        std::abort();
+    }
+    retire_timer_for_node_locked(node);
+    if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+    // Clear any residual intrusive linkage so the caller (batch loop or
+    // publication loop) cannot observe a stale queue position.
+    node.next_ = nullptr;
+    node.prev_ = nullptr;
+    return true;
+}
+
 void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
                                              std::size_t& active_readers,
                                              bool& writer_active,
@@ -2422,6 +2543,13 @@ void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
     //
     // Publication data is collected into a local intrusive list (readers) or a
     // single Fiber* (writer) while W is held, then published after W release.
+    //
+    // AUTHORITY: this is the ONLY head-driven grant path. The unlock_read,
+    // unlock_write, cancel, and expiry reconcile flows all call this helper.
+    // The inline admission recheck in the registration paths ALSO calls this
+    // helper (see registration_admission_drift note in each lock_* function):
+    // there is no second grant logic with potentially-drifted mode handling,
+    // timer retirement, or accounting.
     Fiber* single_writer_fiber = nullptr;
     WaitNode* pub_head = nullptr;
     WaitNode* pub_tail = nullptr;
@@ -2441,26 +2569,29 @@ void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
             return;
         }
 
-        if (ctx->mode == RwWaitCtx::Mode::write) {
+        // Explicit mode dispatch with a Category B fail-fast default. A linked
+        // node's mode MUST be read or write; any other value is internal state
+        // corruption (the Scheduler set user_ before registration and is the
+        // only authority that clears it while the node is linked). Treating an
+        // unknown mode as either reader or writer would silently mask the
+        // corruption; instead we deterministically abort.
+        switch (ctx->mode) {
+        case RwWaitCtx::Mode::write: {
             // --- Writer grant: grant exactly ONE writer ---
             if (active_readers > 0 || writer_active) return;  // not admissible
 
             Fiber* f = head->fiber();
-            // Claim: resolve Woken + unlink + retire timer + accounting.
-            bool won = waiters.wake_node_locked(*head);
-            if (!won) {
-                assert(false && "E12-F grant_from_head: wake_node_locked failed "
-                                "for linked writer head (Category B)");
-                std::abort();
-            }
-            retire_timer_for_node_locked(*head);
-            if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+            // Shared claim primitive: resolve + unlink + retire + accounting.
+            // (Same primitive the inline admission recheck uses — no drift.)
+            rwlock_claim_node_woken_locked(waiters, *head);
             // Commit ownership BEFORE publication.
             writer_active = true;
             writer_owner = f;
             single_writer_fiber = f;
             granted_writer = true;
-        } else {
+            break;
+        }
+        case RwWaitCtx::Mode::read: {
             // --- Reader batch grant: maximal consecutive reader prefix ---
             if (writer_active) return;  // not admissible
 
@@ -2473,17 +2604,24 @@ void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
                     std::abort();
                     return;
                 }
-                if (nctx->mode != RwWaitCtx::Mode::read) break;  // writer stops batch
-                // Claim: resolve Woken + unlink + retire + accounting.
-                bool won = waiters.wake_node_locked(*n);
-                if (!won) {
-                    assert(false && "E12-F reader_batch: wake_node_locked failed "
-                                    "(Category B)");
+                // Per-node mode check: read continues the batch; write is a
+                // batch boundary (correct FIFO stop); any other value is an
+                // internal corruption that MUST NOT be silently treated as
+                // either (Category B fail-fast).
+                switch (nctx->mode) {
+                case RwWaitCtx::Mode::read:
+                    break;  // batch member
+                case RwWaitCtx::Mode::write:
+                    goto batch_done;  // writer stops the batch (FIFO boundary)
+                default:
+                    assert(false && "E12-F reader_batch: linked node has invalid "
+                                    "mode (Category B)");
                     std::abort();
                 }
-                retire_timer_for_node_locked(*n);
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                // Thread onto local publication list.
+                // Shared claim primitive (resolves + unlinks + retires + clears
+                // next_/prev_ — so we thread onto the publication list AFTER).
+                rwlock_claim_node_woken_locked(waiters, *n);
+                // Thread onto local publication list (claim cleared links).
                 n->next_ = nullptr;
                 n->prev_ = pub_tail;
                 if (pub_tail != nullptr) pub_tail->next_ = n;
@@ -2492,7 +2630,17 @@ void Scheduler::rwlock_grant_from_head_locked(WaitQueue& waiters,
                 ++granted_readers;
                 n = next;
             }
+        batch_done:
             if (granted_readers > 0) active_readers += granted_readers;
+            break;
+        }
+        default:
+            // Category B: a linked node carries a mode that is neither read nor
+            // write. Debug: precise assert. Release: deterministic fail-fast.
+            assert(false && "E12-F grant_from_head: linked head has invalid mode "
+                            "(Category B internal invariant violation)");
+            std::abort();
+            return;
         }
     }  // W released here
 
@@ -2552,16 +2700,39 @@ void Scheduler::rwlock_read_lock(WaitQueue& waiters,
         }
         ++waiting_waitq_count_;
 
-        // Admission recheck via unified head reconcile.
-        // If this node became the head and resource is free, grant inline.
+        // REGISTRATION-ADMISSION-DRIFT NOTE.
+        //
+        // The design's authoritative admission recheck is
+        // rwlock_grant_from_head_locked. We CANNOT call it directly from the
+        // read registration path because this seam does not own a
+        // `writer_owner&` slot (a read admission MUST NOT mutate writer
+        // ownership). If the queue head were a writer admissible at this
+        // instant, the helper would have to commit writer_active +
+        // writer_owner — a write-side authority this path has no right to
+        // perform. (Per docs/e12-rwlock.md §"Queued path (read_lock)", grant
+        // is exclusively head-driven and writer ownership is committed only by
+        // the writer-grant authority.)
+        //
+        // Equivalent authority is preserved by the following invariant: when a
+        // reader registers and becomes the queue head, an earlier-registered
+        // writer head CANNOT be admissible. Either (a) the writer was already
+        // admissible and was granted by its own registration admission
+        // recheck (writer-grant path), so it is no longer head; or (b) it was
+        // not admissible (active_readers_ > 0), and remains so because this
+        // read registration does not change active_readers_. Therefore, if
+        // this node is the head AND no writer is active, the head IS this
+        // reader and granting it is the same head-prefix claim the unified
+        // helper would make. We share the claim mechanics via
+        // rwlock_claim_node_woken_locked (the no-publication primitive that
+        // unlock/cancel/expiry use internally through grant_from_head).
         if (node.prev_ == nullptr && !writer_active) {
-            // This node is the FIFO head and no writer active: grant it.
-            if (waiters.wake_node_locked(node)) {
+            // This node is the FIFO head and no writer active: claim it.
+            if (rwlock_claim_node_woken_locked(waiters, node)) {
                 ++active_readers;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                retire_timer_for_node_locked(node);
                 node.set_user(nullptr);
-                if (me != nullptr) (void)me->make_runnable();
+                // The current Fiber is Running (it is executing this code on
+                // a worker); make_runnable returns false and no publication
+                // is needed — the caller continues without suspending.
                 return;  // node.outcome() == woken; do NOT suspend
             }
         }
@@ -2625,15 +2796,19 @@ void Scheduler::rwlock_write_lock(WaitQueue& waiters,
         }
         ++waiting_waitq_count_;
 
-        // Admission recheck: if this node is the FIFO head and resource free.
+        // Admission recheck (REGISTRATION-ADMISSION-DRIFT NOTE — see
+        // rwlock_read_lock): use the shared no-publication claim primitive so
+        // resolve/unlink/retire/accounting match the unlock/cancel/expiry
+        // authority exactly. This node is the FIFO head and the resource is
+        // free, so a head-prefix claim of exactly this node is the same grant
+        // the unified helper would make.
         if (node.prev_ == nullptr && active_readers == 0 && !writer_active) {
-            if (waiters.wake_node_locked(node)) {
+            if (rwlock_claim_node_woken_locked(waiters, node)) {
                 writer_active = true;
                 writer_owner = me;
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-                retire_timer_for_node_locked(node);
                 node.set_user(nullptr);
-                if (me != nullptr) (void)me->make_runnable();
+                // Current Fiber is Running; make_runnable returns false, no
+                // publication needed — the caller continues without suspending.
                 return;
             }
         }
@@ -2782,14 +2957,17 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
         recompute_earliest_deadline_locked();
 
         // Admission precedence 1: resource admission wins over due deadline.
+        // REGISTRATION-ADMISSION-DRIFT NOTE (see rwlock_read_lock): use the
+        // shared no-publication claim primitive. claim_node retires the bound
+        // TimerRegistration internally (via retire_timer_for_node_locked) and
+        // recomputes the earliest deadline, so we only need to commit the
+        // reader-side resource state afterward.
         if (node.prev_ == nullptr && !writer_active) {
-            if (waiters.wake_node_locked(node)) {
+            if (rwlock_claim_node_woken_locked(waiters, node)) {
                 ++active_readers;
-                if (reg->retire()) --active_deadline_count_;
-                recompute_earliest_deadline_locked();
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 node.set_user(nullptr);
-                if (me != nullptr) (void)me->make_runnable();
+                // Current Fiber is Running; make_runnable returns false. The
+                // caller continues without suspending.
                 return;
             }
         }
@@ -2858,15 +3036,15 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
         recompute_earliest_deadline_locked();
 
         // Admission precedence 1: resource admission.
+        // REGISTRATION-ADMISSION-DRIFT NOTE (see rwlock_read_lock): use the
+        // shared no-publication claim primitive. claim_node retires the bound
+        // TimerRegistration internally and recomputes the earliest deadline.
         if (node.prev_ == nullptr && active_readers == 0 && !writer_active) {
-            if (waiters.wake_node_locked(node)) {
+            if (rwlock_claim_node_woken_locked(waiters, node)) {
                 writer_active = true;
                 writer_owner = me;
-                if (reg->retire()) --active_deadline_count_;
-                recompute_earliest_deadline_locked();
-                if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 node.set_user(nullptr);
-                if (me != nullptr) (void)me->make_runnable();
+                // Current Fiber is Running; no publication needed.
                 return;
             }
         }

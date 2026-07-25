@@ -203,6 +203,11 @@ struct WorkerState {
     WorkerState& operator=(const WorkerState&) = delete;
 };
 
+// E12-F: forward-declared so the AsyncTestAccess death-test accessors (under
+// SLUICE_ASYNC_INTERNAL_TESTING) can name AsyncRwLock& without pulling the
+// full public header into every Scheduler TU.
+class AsyncRwLock;
+
 class Scheduler {
 public:
     explicit Scheduler(AsyncIoContext& ctx) noexcept;
@@ -1029,6 +1034,19 @@ private:
                                        bool& writer_active,
                                        Fiber*& writer_owner)
         SLUICE_REQUIRES(global_mtx_);
+
+    // No-publication head-claim primitive (design: claim_waiter_woken_no_
+    // publish_locked). Caller MUST hold G + W. Resolves the node Woken (the
+    // single winner CAS — fail-fast Category B if it loses for a valid linked
+    // eligible node), unlinks it from the queue, retires any bound
+    // TimerRegistration, decrements waiting_waitq_count_, and clears the
+    // node's temporary next_/prev_ linkage. Does NOT publish the winner
+    // (route_runnable_locked is the caller's responsibility). Used by both the
+    // unified head reconcile (rwlock_grant_from_head_locked) and the inline
+    // admission recheck in the registration paths so the two share ONE claim
+    // authority — no drift in resolve/unlink/timer/accounting semantics.
+    bool rwlock_claim_node_woken_locked(WaitQueue& waiters, WaitNode& node)
+        SLUICE_REQUIRES(global_mtx_, waiters.mtx_);
 
     // RwLock timer expiry reconcile hook (installed on TimerRegistration).
     // The pump identifies RwLock timers by this function pointer. The hook
@@ -2063,6 +2081,35 @@ public:
             // covers all test fixtures' deadlines.
             s.advance_clock(static_cast<deadline_t>(1) << 62);
         }
+
+        // ---- E12-F AsyncRwLock Category B death-test accessors ----
+        //
+        // These exist ONLY to construct a deliberately-corrupted linked-node
+        // topology and then invoke the SAME production grant path
+        // (rwlock_grant_from_head_locked), so the fail-fast is the production
+        // one (assert(false) + std::abort in BOTH Debug and Release). They do
+        // NOT expose the production WaitQueue structural authority to
+        // ordinary tests: each entry takes an AsyncRwLock& (the primitive),
+        // not a WaitQueue&, and the forged user_ is installed through this
+        // seam — the ONLY non-production code permitted to do so while a node
+        // is linked. Acquires global_mtx_ internally. The forged node is left
+        // linked; the grant invocation MUST terminate before any subsequent
+        // use. Absent in production (compiled only under the define).
+        //
+        // B1: forge a head node whose user_ points at a context with an
+        //     invalid mode (neither read nor write). The grant's switch
+        //     default MUST abort.
+        static void rwlock_death_forge_invalid_head_mode(Scheduler& s,
+                                                         AsyncRwLock& rw);
+        // B2: forge a head node whose user_ is null. The grant's null-user_
+        //     check MUST abort.
+        static void rwlock_death_forge_null_head_user(Scheduler& s,
+                                                      AsyncRwLock& rw);
+        // B3: forge a head reader prefix whose SECOND node has an invalid
+        //     mode. The reader-batch per-node mode check MUST abort after
+        //     claiming the (valid) head reader.
+        static void rwlock_death_forge_invalid_batch_member(Scheduler& s,
+                                                            AsyncRwLock& rw);
     };
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };
