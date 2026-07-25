@@ -3,7 +3,9 @@
 ```text
 TASK:    E14-THREADED-EVENTED-SEMANTIC-PARITY-PREPARATION-1
 MODE:    AS-BUILT PRODUCTION-FIRST AUDIT + IMPLEMENTATION PREPARATION
-STATUS:  PREPARATION ONLY — IMPLEMENTATION NOT AUTHORIZED BY THIS DOCUMENT
+STATUS:  ARCHIVED PREPARATION + IMPLEMENTATION CLOSEOUT (E14-IMPLEMENTATION-1)
+         Implementation completed and merged via PR #29 (2026-07-26).
+         Review follow-up merged (5661f19). This document is historical.
 ```
 
 > **Revision banner (2026-07-26).** This is the **rev-3+1** preparation. It
@@ -2606,7 +2608,8 @@ F6 is independent: documentation updates.
 
 ## 20. Phased production implementation plan
 
-RECORDED FOR A LATER TASK. NOT AUTHORIZED BY THIS DOCUMENT. Per task §16, no
+RECORDED FOR A LATER TASK. (Historical: this plan was executed by
+E14-IMPLEMENTATION-1 and merged via PR #29.) Per task §16, no
 big-bang phase is acceptable. The actual phases must follow the evidence.
 
 ### P1 — Freeze E14 public semantic matrix and correct status/document drift
@@ -3442,52 +3445,33 @@ D-E14-3   RESOLVED: parity with Threaded.
 
 ## Implementation Closeout (E14-IMPLEMENTATION-1, 2026-07-26)
 
-All four frozen decisions are implemented and verified:
+All four frozen decisions are implemented and verified. Review follow-up
+(5661f19) added Group-scoped Live termination, complete F5 admission, and
+real RT-F3 regression tests.
 
 | Finding | Production change | Files |
 |---------|------------------|-------|
-| F1 (external-producer wake) | `EventedWaitPolicy` owns `SchedulerWakeHandle`; `WaitPolicy::notify_ready()` virtual; `Future::complete_with` calls `policy_->notify_ready()` after first terminal publication; `Group::await` uses `run_live(1)` drive | `evented_wait_policy.hpp`, `wait_policy.hpp`, `future.hpp`, `group.cpp` |
+| F1 (external-producer wake) | `EventedWaitPolicy` owns `SchedulerWakeHandle`; `WaitPolicy::notify_ready()` virtual; `Future::complete_with` calls `policy_->notify_ready()` after first terminal publication; `Group::await` uses Group-scoped `run_live(1, stop_fn, ctx)` drive | `evented_wait_policy.hpp`, `wait_policy.hpp`, `future.hpp`, `group.cpp`, `scheduler.cpp` |
 | F2a (destructor fail-fast) | `~Group` Evented branch: pending Future → `group_lifetime_fail_fast()` | `group.cpp`, `fail_fast.hpp`, `fail_fast.cpp` |
-| F3 (init_fiber failure) | `Group::async_evented` throws `std::runtime_error` on `init_fiber` failure | `group.hpp` |
+| F3 (init_fiber failure) | `Group::async_evented` throws `std::runtime_error` on `init_fiber` failure; internal-testing seam for real regression | `group.hpp`, `scheduler.cpp` |
 | F4 (post-await reaping) | `Group::await` Evented path reaps `futures_/evented_fibers_/evented_stacks_` when all terminal | `group.cpp` |
-| F5 (admission guard) | `Group(Scheduler&)` calls `require_evented_supported(fiber_ctx::supported)` | `group.cpp`, `fail_fast.hpp`, `fail_fast.cpp` |
+| F5 (admission guard) | `Scheduler(AsyncIoContext&)` and `Group(Scheduler&)` call `require_evented_supported(evented_admission_check())` | `scheduler.cpp`, `group.cpp`, `fail_fast.hpp`, `fail_fast.cpp` |
 
-Verification gates:
+Verification gates (post review follow-up):
 
-- Clang Debug: 104/104 tests passed
-- Clang Release: 104/104 tests passed
-- ASan/UBSan: E14 + scheduler + wake-handle tests passed (full suite timeout on pre-existing stress tests)
-- TSan: E14 + scheduler + wake-handle tests passed, no data-race warnings
-
----
-
-## Implementation Closeout (E14-IMPLEMENTATION-1, 2026-07-26)
-
-All four frozen decisions are implemented and verified:
-
-| Finding | Production change | Files |
-|---------|------------------|-------|
-| F1 (external-producer wake) | `EventedWaitPolicy` owns `SchedulerWakeHandle`; `WaitPolicy::notify_ready()` virtual; `Future::complete_with` calls `policy_->notify_ready()` after first terminal publication; `Group::await` uses `run_live(1)` drive | `evented_wait_policy.hpp`, `wait_policy.hpp`, `future.hpp`, `group.cpp` |
-| F2a (destructor fail-fast) | `~Group` Evented branch: pending Future → `group_lifetime_fail_fast()` | `group.cpp`, `fail_fast.hpp`, `fail_fast.cpp` |
-| F3 (init_fiber failure) | `Group::async_evented` throws `std::runtime_error` on `init_fiber` failure | `group.hpp` |
-| F4 (post-await reaping) | `Group::await` Evented path reaps `futures_/evented_fibers_/evented_stacks_` when all terminal | `group.cpp` |
-| F5 (admission guard) | `Group(Scheduler&)` calls `require_evented_supported(fiber_ctx::supported)` | `group.cpp`, `fail_fast.hpp`, `fail_fast.cpp` |
-
-Verification gates:
-
-- Clang Debug: 104/104 tests passed
-- Clang Release: 104/104 tests passed
-- ASan/UBSan: E14 + scheduler + wake-handle tests passed (full suite timeout on pre-existing stress tests)
-- TSan: E14 + scheduler + wake-handle tests passed, no data-race warnings
+- Clang Debug: 105/105 tests passed
+- Clang Release: 105/105 tests passed
+- ASan/UBSan: 105/105 tests passed
+- TSan: 105/105 tests passed (lock-order inversion fixed)
 
 ---
 
 ## Cross-links
 
-- Implementation closeout: E14-IMPLEMENTATION-1 (2026-07-26). All four
-  decisions (D-E14-1, D-E14-F2a, D-E14-2, D-E14-3) implemented and verified.
-  Gates: Clang Debug 104/104, Release 104/104, ASan/UBSan E14+scheduler
-  passed, TSan E14+scheduler passed (no races).
+- Implementation closeout: E14-IMPLEMENTATION-1 (2026-07-26) + review
+  follow-up (5661f19). All four decisions (D-E14-1, D-E14-F2a, D-E14-2,
+  D-E14-3) implemented and verified. Gates: Clang Debug 105/105, Release
+  105/105, ASan/UBSan 105/105, TSan 105/105.
 - Authority: `AGENTS.md`, `docs/adr/ADR-execution-model.md`,
   `docs/adr/ADR-async-io-model.md`, `docs/async-runtime-plan.md`,
   `docs/async-runtime-construction-method.md`,
