@@ -3,15 +3,35 @@
 // Two execution modes:
 //   - Threaded (Group()): std::thread per task; await blocks + joins.
 //   - Evented  (Group(Scheduler&)): Fiber per task on the scheduler; await
-//     drives sched.run_until_idle() cooperatively until all task Futures ready.
+//     drives sched.run_live(1) until all task Futures are terminal (E14-F1).
 #include <sluice/async/group.hpp>
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/evented_wait_policy.hpp>
 #include <sluice/async/scheduler.hpp>
 
 namespace sluice::async {
 
+// E14-F1: Group-scoped invocation stop predicate for run_live. Returns true
+// when all of the Group's task Futures are terminal (ready). Called under
+// Scheduler global_mtx_ at the MW-S3 boundary. Acquires Group::mtx_ (no
+// inversion: Group never holds mtx_ while calling into Scheduler).
+bool Group::group_stop_predicate(void* ctx) {
+    auto* self = static_cast<Group*>(ctx);
+    std::lock_guard<std::mutex> lk(self->mtx_);
+    for (auto& f : self->futures_) {
+        if (!f->ready()) return false;
+    }
+    return true;
+}
+
 Group::Group(Scheduler& sched) : sched_(&sched) {
+    // E14 D-E14-2: construction-time fail-fast on unsupported targets.
+    // The Scheduler constructor already guards the earliest Evented admission
+    // boundary; this is defense-in-depth for the Group-specific surface.
+    // Production passes fiber_ctx::supported (compile-time true on x86_64);
+    // death tests exercise the false path deterministically.
+    detail::require_evented_supported(detail::evented_admission_check());
     // Create the shared EventedWaitPolicy once per group. It borrows sched_,
     // which outlives the group by contract. All task Futures in this group
     // reference *evented_policy_.
@@ -20,12 +40,20 @@ Group::Group(Scheduler& sched) : sched_(&sched) {
 
 void Group::await() {
     if (sched_) {
-        // Evented: drive the scheduler cooperatively until every task Future is
-        // ready. Does NOT block on a cv; does NOT join threads (none). Each
-        // run_until_idle makes progress on runnable Fibers; if a task Future is
-        // not yet ready, it is waiting on an Evented Future whose producer is
-        // another Fiber in the same scheduler (in-scheduler production) or an
-        // external producer the caller is responsible for staging between runs.
+        // E14-F1/D-E14-1: Evented Group-scoped Live drive. Drive the scheduler
+        // in LIVE mode with an invocation stop predicate that returns true when
+        // all of THIS Group's task Futures are terminal. This prevents unrelated
+        // Scheduler registrations (other Groups/Fibers) from permanently blocking
+        // this Group's await(). The stop predicate is checked under global_mtx_
+        // at the MW-S3 boundary; it acquires mtx_ (no inversion: Group never
+        // holds mtx_ while calling into Scheduler).
+        //
+        // External producers completing a Future trigger
+        // SchedulerWakeHandle::notify() → signal_wake → the parked worker
+        // resumes → wake_ready_flags_locked() → task fiber resumes → completes.
+        // run_live returns when: (a) all this Group's Futures are terminal
+        // (stop predicate fires), or (b) QUIESCENT, or (c) MW-S3 without
+        // effective wake source.
         while (true) {
             std::size_t pending = 0;
             {
@@ -35,23 +63,29 @@ void Group::await() {
                 }
             }
             if (pending == 0) break;
-            sched_->run_until_idle();
-            // Re-check after driving. If run_until_idle made no task Future
-            // ready (after_pending == pending), an external producer must stage
-            // more work; break to avoid an infinite loop. (E5 scope: producers
-            // are in-scheduler Fibers or staged by the test between awaits.)
-            // Single pass per call; the caller may re-invoke await() if it
-            // staged external work. For purely in-scheduler producers this
-            // loop terminates because the producer Fiber completes inside
-            // run_until_idle.
-            std::size_t after_pending = 0;
-            {
-                std::lock_guard<std::mutex> lk(mtx_);
-                for (auto& f : futures_) {
-                    if (!f->ready()) ++after_pending;
-                }
+            // Group-scoped Live drive: the stop predicate returns true when
+            // all this Group's Futures are terminal, allowing run_live to
+            // return even if unrelated Scheduler registrations remain.
+            sched_->run_live(1, &group_stop_predicate, this);
+            // run_live returned: the scheduler run terminated. Loop to verify
+            // all futures are ready.
+        }
+        // E14-F4/D-E14-3: reap completed task Futures and release Fiber/stack
+        // storage. After a successful await all admitted task Futures are
+        // terminal; size() becomes 0 (parity with Threaded). Repeated await
+        // is idempotent (vectors already empty). Fiber/stack address stability
+        // is preserved until this point (terminal completion).
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            bool all_terminal = true;
+            for (auto& f : futures_) {
+                if (!f->ready()) { all_terminal = false; break; }
             }
-            if (after_pending == pending) break;  // no progress; caller stages
+            if (all_terminal) {
+                futures_.clear();
+                evented_fibers_.clear();
+                evented_stacks_.clear();
+            }
         }
         return;
     }
@@ -74,6 +108,26 @@ void Group::await() {
 }
 
 Group::~Group() {
+    // E14 D-E14-F2a: Evented destructor fail-fast. If any Evented task Future
+    // is still pending, the caller violated the contract (must await/cancel
+    // before destroying). Calling Evented Future::await from a non-Fiber
+    // context (ordinary caller thread) would dereference null g_worker in
+    // Scheduler::await_ready_flag. Fail fast deterministically instead.
+    if (sched_) {
+        std::lock_guard<std::mutex> lk(mtx_);
+        for (auto& f : futures_) {
+            if (!f->ready()) {
+                detail::group_lifetime_fail_fast();  // [[noreturn]]
+            }
+        }
+        // All Evented task Futures are terminal. Clean up without blocking.
+        // No Evented Future::await is needed (results are already materialized).
+        futures_.clear();
+        evented_fibers_.clear();
+        evented_stacks_.clear();
+        return;
+    }
+
     // Threaded: drain if await was never called (no detached threads, CP.26).
     std::vector<std::thread> local_tasks;
     std::vector<std::shared_ptr<Future<void>>> local_futures;
@@ -87,8 +141,6 @@ Group::~Group() {
     // std::threads.
     for (auto& t : local_tasks) if (t.joinable()) t.join();
     for (auto& f : local_futures) (void)f->await();
-    // Evented: fibers/stacks are owned by the group and released by the vector
-    // destructors. The borrowed Scheduler outlives the group by contract.
 }
 
 }  // namespace sluice::async

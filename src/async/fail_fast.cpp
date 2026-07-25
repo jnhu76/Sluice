@@ -6,6 +6,9 @@
 // the language-standard process terminator and is the most auditable shape.
 #include <sluice/async/detail/fail_fast.hpp>
 
+#include <sluice/async/fiber_ctx.hpp>
+
+#include <atomic>
 #include <exception>  // std::terminate
 
 namespace sluice::async::detail {
@@ -37,5 +40,48 @@ namespace sluice::async::detail {
 [[noreturn]] void select_invariant_fail_fast() noexcept {
     std::terminate();
 }
+
+// E14 D-E14-F2a: Group lifetime fail-fast. ~Group with pending Evented task.
+[[noreturn]] void group_lifetime_fail_fast() noexcept {
+    std::terminate();
+}
+
+// E14 D-E14-2: Evented admission fail-fast. Unsupported target.
+[[noreturn]] void evented_admission_fail_fast() noexcept {
+    std::terminate();
+}
+
+// E14 D-E14-2: Evented admission check. Returns the effective fiber support
+// status. Production: fiber_ctx::supported (compile-time constant). Internal-
+// testing: may be overridden to simulate unsupported targets on x86_64.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+namespace {
+// -1 = no override (use fiber_ctx::supported); 0 = force unsupported; 1 = force supported.
+std::atomic<int> g_evented_admission_override{-1};
+}  // namespace
+
+bool evented_admission_check() noexcept {
+    int ovr = g_evented_admission_override.load(std::memory_order_acquire);
+    if (ovr >= 0) return ovr != 0;
+    return fiber_ctx::supported;
+}
+
+// AsyncTestAccess entry points (declared in scheduler.hpp under the macro).
+// Defined here because the override state lives in this TU.
+void set_evented_admission_override_impl(bool supported) noexcept {
+    g_evented_admission_override.store(supported ? 1 : 0, std::memory_order_release);
+}
+void clear_evented_admission_override_impl() noexcept {
+    g_evented_admission_override.store(-1, std::memory_order_release);
+}
+bool get_evented_admission_override_impl() noexcept {
+    int ovr = g_evented_admission_override.load(std::memory_order_acquire);
+    return ovr >= 0 ? (ovr != 0) : fiber_ctx::supported;
+}
+#else
+bool evented_admission_check() noexcept {
+    return fiber_ctx::supported;
+}
+#endif
 
 }  // namespace sluice::async::detail

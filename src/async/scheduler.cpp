@@ -96,6 +96,12 @@ struct SchedulerWakeHandle::Control {
 };
 
 Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
+    // E14 D-E14-2: construction-time fail-fast on unsupported targets.
+    // Scheduler is the earliest Evented admission boundary; all downstream
+    // primitives (E12 Event/Semaphore/Mutex/Condition/Queue/RwLock, Select,
+    // Group(Scheduler&), EventedWaitPolicy) require a Scheduler reference.
+    // Guarding here covers the complete Evented public admission surface.
+    detail::require_evented_supported(detail::evented_admission_check());
     // E9: create the wake control block. Every issued SchedulerWakeHandle
     // holds a shared_ptr to it; the Scheduler holds a shared_ptr too so the
     // block outlives the Scheduler's stack locals. A handle's notify() detects
@@ -266,7 +272,7 @@ void SchedulerWakeHandle::lifetime_seam_release() noexcept {
 }
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-SchedulerWakeHandle Scheduler::make_wake_handle() {
+SchedulerWakeHandle Scheduler::make_wake_handle() noexcept {
     // The control block is shared with this Scheduler; it points back here.
     // Mutate scheduler/alive under Control::mtx, matching ~Scheduler and every
     // reader (notify/bound). A concurrent notify() on a previously-issued
@@ -398,6 +404,14 @@ void Scheduler::park_on_wake_source(WorkerState* ws) SLUICE_NO_THREAD_SAFETY_ANA
 }
 
 bool Scheduler::init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stack_size) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // E14 RT-F3: one-shot failure injection. If armed, consume the flag and
+    // return false WITHOUT calling fiber_ctx::init_context. This simulates
+    // an invalid stack or unsupported architecture deterministically.
+    if (force_init_fiber_fail_.exchange(false, std::memory_order_acq_rel)) {
+        return false;
+    }
+#endif
     return fiber_ctx::init_context(fiber.ctx, &fiber_entry_bridge, &fiber,
                                    stack_base, stack_size);
 }
@@ -463,6 +477,19 @@ void Scheduler::run_live(unsigned worker_count) {
     // an unresolved wait has an effective Scheduler wake source. Used by the
     // E9-T1..T14 no-re-entry external-wake proofs.
     run_impl(worker_count, RunMode::live);
+}
+
+void Scheduler::run_live(unsigned worker_count, bool (*stop_fn)(void*), void* stop_ctx) {
+    // E14-F1: Group-scoped Live invocation. The stop predicate is checked at
+    // the MW-S3+Live+external_wake boundary; if it returns true the run
+    // terminates instead of parking. This prevents unrelated Scheduler
+    // registrations from permanently blocking a Group::await() whose own
+    // Futures are already terminal.
+    invocation_stop_fn_ = stop_fn;
+    invocation_stop_ctx_ = stop_ctx;
+    run_impl(worker_count, RunMode::live);
+    invocation_stop_fn_ = nullptr;
+    invocation_stop_ctx_ = nullptr;
 }
 
 void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
@@ -818,15 +845,44 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 //   Live  + MW-S3 + external-wake-capable -> PARK (resident)
                 //   Drain + MW-S3                         -> RETURN STALLED
                 //   Live  + MW-S3 without external wake   -> RETURN STALLED
+                //   Live  + MW-S3 + stop predicate true   -> RETURN (E14-F1)
                 if (final_state == MwState::mw_s3_unresolved &&
                     run_mode_ == RunMode::live &&
                     external_wake_possible_locked()) {
-                    // Live: keep the run resident. Do NOT contribute to the
-                    // idle/terminate count; fall through to park_on_wake_source.
-                    // The bounded wake_cv timeout re-drains; persistent state
-                    // is the authority (E9-LIFE-8).
-                    idle_workers_.store(0, std::memory_order_release);
-                    // Fall through to park_on_wake_source below.
+                    // E14-F1: check the invocation stop predicate BEFORE
+                    // deciding to park. If the caller (e.g. Group::await)
+                    // says its own Futures are all terminal, terminate the
+                    // run instead of parking on unrelated registrations.
+                    if (invocation_stop_fn_ != nullptr &&
+                        invocation_stop_fn_(invocation_stop_ctx_)) {
+                        // Stop requested: fall through to the idle/terminate
+                        // path (same as Drain MW-S3). The run returns to the
+                        // caller; unrelated registrations remain for later.
+                        unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
+                        if (prev + 1 >= workers_.size()) {
+                            MwState still = classify_locked();
+                            if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
+                                global_terminate_.store(true, std::memory_order_release);
+                                for (auto& w : workers_) {
+                                    std::lock_guard<std::mutex> wlk(w->inbox_mtx);
+                                    w->inbox_cv.notify_all();
+                                }
+                                signal_wake_locked();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                                sluice_async_test::release_all_phases(*this);
+#endif
+                                break;
+                            }
+                            idle_workers_.store(0, std::memory_order_release);
+                        }
+                    } else {
+                        // Live: keep the run resident. Do NOT contribute to the
+                        // idle/terminate count; fall through to park_on_wake_source.
+                        // The bounded wake_cv timeout re-drains; persistent state
+                        // is the authority (E9-LIFE-8).
+                        idle_workers_.store(0, std::memory_order_release);
+                        // Fall through to park_on_wake_source below.
+                    }
                 } else {
                     unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
                     if (prev + 1 >= workers_.size()) {
@@ -4308,6 +4364,22 @@ bool Scheduler::AsyncTestAccess::deadline_heap_has_select_target(
         }
     }
     return false;
+}
+
+// E14 RT-F5: Evented admission override. The impl functions live in
+// fail_fast.cpp (same TU as the override state). Extern-declare and forward.
+namespace detail {
+void set_evented_admission_override_impl(bool supported) noexcept;
+void clear_evented_admission_override_impl() noexcept;
+bool get_evented_admission_override_impl() noexcept;
+}  // namespace detail
+
+void Scheduler::AsyncTestAccess::set_evented_admission_override(bool supported) noexcept {
+    detail::set_evented_admission_override_impl(supported);
+}
+
+bool Scheduler::AsyncTestAccess::evented_admission_override() noexcept {
+    return detail::get_evented_admission_override_impl();
 }
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

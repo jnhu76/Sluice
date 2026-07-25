@@ -91,12 +91,12 @@ SLUICE_TEST_CASE(egroup_evented_group_task_suspends_and_resumes_on_fiber) {
     SLUICE_CHECK(task_returned == 1);                   // G4 task body returned
     SLUICE_CHECK(task_observed == 99);                  // G3 resume + result
     SLUICE_CHECK(task_post == 0xDEAD);                  // G3 resume fidelity
-    SLUICE_CHECK(g.size() == 1);                        // one task
+    SLUICE_CHECK(g.size() == 0);  // D-E14-3: reaped after successful await
 }
 
 // ---- G5: Evented Group await does not block the worker on a cv/join --------
-// Structurally proven by G1-G4: g.await() drove sched.run_until_idle(), which
-// is cooperative — it did NOT block on a condition_variable or join a thread
+// Structurally proven by G1-G4: g.await() drove sched.run_live(1), which is
+// cooperative — it did NOT block on a condition_variable or join a thread
 // (no threads exist in Evented mode). If it had, the peer Fiber could not
 // have run. This test makes the contract explicit: assert no std::thread is
 // involved by checking the task ran on the same thread as await().

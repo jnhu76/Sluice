@@ -47,6 +47,17 @@ public:
                                   std::mutex& mtx,
                                   std::condition_variable& cv) = 0;
 
+    // E14 D-E14-1: producer notification seam. Called by Future::complete_with
+    // AFTER the first successful terminal publication (ready_ is true) and
+    // OUTSIDE the Future's mutex. The default is a no-op (Threaded policy uses
+    // cv_.notify_all which is already issued by complete_with). An Evented
+    // policy overrides this to wake a parked Scheduler Worker via its
+    // SchedulerWakeHandle.
+    //
+    // Contract: noexcept, may be spurious, cannot be lost after registration,
+    // only the winning first complete_with publication issues it.
+    virtual void notify_ready() noexcept {}
+
 protected:
     WaitPolicy() = default;
 };

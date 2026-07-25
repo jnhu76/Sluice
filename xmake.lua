@@ -1508,3 +1508,53 @@ do
             add_tests("select_call_context_contract_test")
     end
 end
+
+-- e14_parity_test — E14 Threaded/Evented semantic parity regression tests.
+-- RT-F1 (external-producer wake), RT-F3 (init_fiber failure), RT-F4 (size
+-- parity), RT-F5a (supported-target admission no-op).
+do
+    local p = "tests/e14_parity_test.cpp"
+    if os.isfile(p) then
+        target("e14_parity_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include")
+            add_files(p)
+            add_tests("e14_parity_test")
+    end
+end
+
+-- e14_group_death_test — E14 RT-F2a (destructor fail-fast) and RT-F5b
+-- (unsupported-target admission) death tests. POSIX only.
+do
+    local p = "tests/e14_group_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("e14_group_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e14_group_death_test")
+    end
+end
+
+-- e14_f3_internal_test — E14 RT-F3 real init_fiber failure regression test.
+-- Uses SLUICE_ASYNC_INTERNAL_TESTING seam to force init_fiber failure.
+-- Links against sluice_async_internal_testing (NOT production sluice_async).
+do
+    local p = "tests/e14_f3_internal_test.cpp"
+    if os.isfile(p) then
+        target("e14_f3_internal_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e14_f3_internal_test")
+    end
+end

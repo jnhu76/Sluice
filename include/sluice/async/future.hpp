@@ -64,13 +64,23 @@ public:
     // (asserts in debug). Wake any awaiter. Thread-safe (producer may run on a
     // worker thread different from the awaiter).
     void complete_with(Result<T> r) {
+        bool first_publication = false;
         {
             std::lock_guard<std::mutex> lk(mtx_);
             if (ready_) return;  // exactly-once terminal
             result_.emplace(std::move(r));
             ready_.store(true, std::memory_order::release);
+            first_publication = true;
         }
         cv_.notify_all();
+        // E14 D-E14-1 (T-WAKE-3/8): notify the WaitPolicy AFTER the first
+        // terminal publication wins, OUTSIDE mtx_. Only the winning first
+        // complete_with reaches here (the exactly-once gate above ensures a
+        // repeated call that loses returns early). Threaded: no-op. Evented:
+        // wakes a parked Scheduler Worker via SchedulerWakeHandle::notify().
+        if (first_publication) {
+            policy_->notify_ready();
+        }
     }
 
     // The cooperative cancel token for this future. A producer that respects
