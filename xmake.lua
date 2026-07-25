@@ -1103,6 +1103,29 @@ do
     end
 end
 
+-- async_rwlock_death_test — E12-F AsyncRwLock fail-fast boundary tests
+-- (Category A caller-contract + Category B internal-invariant corruption).
+-- Each case runs in a forked child that re-execs this binary via
+-- death_test_runner_posix.hpp; the child installs a deterministic terminate
+-- handler and the parent asserts the exact exit code. Category A cases are
+-- DEBUG-only (Release compiles out the assertions and trusts the caller per
+-- the design contract); Category B cases are deterministic fail-fast in BOTH
+-- Debug and Release (assert(false) + std::abort). POSIX-only: gated to
+-- linux/macosx.
+do
+    local p = "tests/async_rwlock_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("async_rwlock_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("async_rwlock_death_test")
+    end
+end
+
 -- async_queue_primitive_test — AsyncQueue (sluice-CORE-E12-E).
 -- P2+P3 scope: QueuePort fast paths (try_push / try_pop / close / snapshot),
 -- capacity/FIFO, failed-payload identity, one-shot lease, close idempotency,
