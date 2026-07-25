@@ -203,6 +203,11 @@ struct WorkerState {
     WorkerState& operator=(const WorkerState&) = delete;
 };
 
+// E12-F: forward-declared so the AsyncTestAccess death-test accessors (under
+// SLUICE_ASYNC_INTERNAL_TESTING) can name AsyncRwLock& without pulling the
+// full public header into every Scheduler TU.
+class AsyncRwLock;
+
 class Scheduler {
 public:
     explicit Scheduler(AsyncIoContext& ctx) noexcept;
@@ -797,6 +802,89 @@ public:
     static void queue_timer_on_resolve(void* owner_ctx, bool timer_won) noexcept;
 
 
+    // ---- E12-F AsyncRwLock (sluice-CORE-E12-F) ----
+    // Writer-fair, phase-batched Read-Write Lock seams. AsyncRwLock owns a
+    // single unified FIFO WaitQueue (readers + writers) and passes its state
+    // BY REFERENCE into these Scheduler seams. ALL authoritative RwLock state
+    // mutations occur under global_mtx_ -> waiters_.mtx() (same lock order as
+    // E12-A/B/C/D/E). No RwLock-local lock is introduced.
+    //
+    // The unified grant helper (rwlock_grant_from_head_locked) dispatches to
+    // reader batch grant or single writer grant depending on the queue head
+    // mode. Cancel and expiry perform head reconcile after unlink.
+
+    // Attempt inline read acquisition. Under G + W: if writer_active == false
+    // AND waiters is empty: active_readers++; return true. Else false.
+    [[nodiscard]] bool rwlock_try_read_lock(WaitQueue& waiters,
+                                            std::size_t& active_readers,
+                                            bool& writer_active);
+
+    // Blocking read admission. Register node at FIFO tail, recheck via
+    // grant_from_head_locked. If granted inline: return (node Woken). Otherwise
+    // suspend. Internally manages RwWaitCtx{mode=read} on node.user().
+    void rwlock_read_lock(WaitQueue& waiters, std::size_t& active_readers,
+                          bool& writer_active, WaitNode& node);
+
+    // Deadline-aware read admission (resource-first precedence).
+    // `expire_ctx` is stored on the TimerRegistration for pump routing.
+    void rwlock_read_lock_until(WaitQueue& waiters, std::size_t& active_readers,
+                                bool& writer_active, WaitNode& node,
+                                deadline_t deadline, void* expire_ctx);
+
+    // Attempt inline write acquisition. Under G + W: if active_readers == 0
+    // AND writer_active == false AND waiters empty AND current Fiber exists
+    // AND current Fiber != writer_owner: commit ownership; return true.
+    // Recursive call by current owner returns false. External thread: forbidden.
+    [[nodiscard]] bool rwlock_try_write_lock(WaitQueue& waiters,
+                                             std::size_t& active_readers,
+                                             bool& writer_active,
+                                             Fiber*& writer_owner);
+
+    // Blocking write admission. Register node at FIFO tail, recheck via
+    // grant_from_head_locked. If granted inline: return (node Woken). Otherwise
+    // suspend. Internally manages RwWaitCtx{mode=write} on node.user().
+    void rwlock_write_lock(WaitQueue& waiters, std::size_t& active_readers,
+                           bool& writer_active, Fiber*& writer_owner,
+                           WaitNode& node);
+
+    // Deadline-aware write admission (resource-first precedence).
+    // `expire_ctx` is stored on the TimerRegistration for pump routing.
+    void rwlock_write_lock_until(WaitQueue& waiters, std::size_t& active_readers,
+                                 bool& writer_active, Fiber*& writer_owner,
+                                 WaitNode& node, deadline_t deadline,
+                                 void* expire_ctx);
+
+    // Release one read share. Under G + W: active_readers--; if reaches 0,
+    // reconcile queue head via grant_from_head_locked. Allows external thread.
+    void rwlock_unlock_read(WaitQueue& waiters, std::size_t& active_readers,
+                            bool& writer_active, Fiber*& writer_owner);
+
+    // Release exclusive write ownership. Under G + W: clear writer state,
+    // reconcile queue head. Non-owner unlock is a debug assert.
+    void rwlock_unlock_write(WaitQueue& waiters, std::size_t& active_readers,
+                             bool& writer_active, Fiber*& writer_owner);
+
+    // Queue-identity-safe RwLock cancellation with head reconcile. Returns true
+    // ONLY if node is Registered AND linked in `waiters` AND CANCEL wins. After
+    // unlink, calls grant_from_head_locked to advance the queue. Safe from any
+    // OS thread.
+    [[nodiscard]] bool rwlock_cancel(WaitQueue& waiters,
+                                     std::size_t& active_readers,
+                                     bool& writer_active, Fiber*& writer_owner,
+                                     WaitNode& node);
+
+    // RwLock-specific deadline expiry with head reconcile. Called ONLY by
+    // pump_deadlines_locked (under G). Resolves the node Expired, unlinks,
+    // performs head reconcile (grant acquires W internally), publishes.
+    // Returns true iff this call won the resolve CAS (expire_locked succeeded).
+    // A losing race (concurrent resolver won) returns false; the caller must
+    // NOT increment its won counter in that case.
+    bool rwlock_expire_wait(WaitQueue& waiters, std::size_t& active_readers,
+                            bool& writer_active, Fiber*& writer_owner,
+                            WaitNode& node)
+        SLUICE_REQUIRES(global_mtx_);
+
+
     // ---- E9 external wake source (ADR §9.4) ----
     // Issue a generation-validated wake handle. The holder may call notify()
     // from an external thread to wake a parked Worker whose wake set includes
@@ -938,6 +1026,37 @@ private:
     // node (nullptr if empty or head lost). Used by the public wake_wait_one AND
     // event_set_broadcast's drain loop. Caller MUST hold global_mtx_.
     WaitNode* wake_wait_one_locked(WaitQueue& q) SLUICE_REQUIRES(global_mtx_);
+
+    // ---- E12-F RwLock private helpers ----
+    // Unified head-driven grant reconcile. Caller MUST hold G; this function
+    // acquires W internally (like mutex_handoff_one_locked). Dispatches to
+    // reader batch or writer grant based on head mode. Publishes granted
+    // winners under G after W release.
+    void rwlock_grant_from_head_locked(WaitQueue& waiters,
+                                       std::size_t& active_readers,
+                                       bool& writer_active,
+                                       Fiber*& writer_owner)
+        SLUICE_REQUIRES(global_mtx_);
+
+    // No-publication head-claim primitive (design: claim_waiter_woken_no_
+    // publish_locked). Caller MUST hold G + W. Resolves the node Woken (the
+    // single winner CAS — fail-fast Category B if it loses for a valid linked
+    // eligible node), unlinks it from the queue, retires any bound
+    // TimerRegistration, decrements waiting_waitq_count_, and clears the
+    // node's temporary next_/prev_ linkage. Does NOT publish the winner
+    // (route_runnable_locked is the caller's responsibility). Used by both the
+    // unified head reconcile (rwlock_grant_from_head_locked) and the inline
+    // admission recheck in the registration paths so the two share ONE claim
+    // authority — no drift in resolve/unlink/timer/accounting semantics.
+    bool rwlock_claim_node_woken_locked(WaitQueue& waiters, WaitNode& node)
+        SLUICE_REQUIRES(global_mtx_, waiters.mtx_);
+
+    // RwLock timer expiry reconcile hook (installed on TimerRegistration).
+    // The pump identifies RwLock timers by this function pointer. The hook
+    // itself is a no-op; the pump calls rwlock_expire_wait directly.
+    static void rwlock_timer_expire_reconcile(void* owner_ctx,
+                                              bool timer_won) noexcept;
+
     void worker_loop(WorkerState* ws);
     // E9-CORRECTIVE: one internal run implementation parameterized by
     // RunMode. The worker loop reads run_mode_ to select the idle action
@@ -1965,6 +2084,35 @@ public:
             // covers all test fixtures' deadlines.
             s.advance_clock(static_cast<deadline_t>(1) << 62);
         }
+
+        // ---- E12-F AsyncRwLock Category B death-test accessors ----
+        //
+        // These exist ONLY to construct a deliberately-corrupted linked-node
+        // topology and then invoke the SAME production grant path
+        // (rwlock_grant_from_head_locked), so the fail-fast is the production
+        // one (assert(false) + std::abort in BOTH Debug and Release). They do
+        // NOT expose the production WaitQueue structural authority to
+        // ordinary tests: each entry takes an AsyncRwLock& (the primitive),
+        // not a WaitQueue&, and the forged user_ is installed through this
+        // seam — the ONLY non-production code permitted to do so while a node
+        // is linked. Acquires global_mtx_ internally. The forged node is left
+        // linked; the grant invocation MUST terminate before any subsequent
+        // use. Absent in production (compiled only under the define).
+        //
+        // B1: forge a head node whose user_ points at a context with an
+        //     invalid mode (neither read nor write). The grant's switch
+        //     default MUST abort.
+        static void rwlock_death_forge_invalid_head_mode(Scheduler& s,
+                                                         AsyncRwLock& rw);
+        // B2: forge a head node whose user_ is null. The grant's null-user_
+        //     check MUST abort.
+        static void rwlock_death_forge_null_head_user(Scheduler& s,
+                                                      AsyncRwLock& rw);
+        // B3: forge a head reader prefix whose SECOND node has an invalid
+        //     mode. The reader-batch per-node mode check MUST abort after
+        //     claiming the (valid) head reader.
+        static void rwlock_death_forge_invalid_batch_member(Scheduler& s,
+                                                            AsyncRwLock& rw);
     };
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };
