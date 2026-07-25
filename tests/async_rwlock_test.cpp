@@ -21,6 +21,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <memory>  // std::make_unique
 #include <thread>
 #include <vector>
 
@@ -51,22 +52,6 @@ public:
     std::size_t outstanding() const noexcept override { return 0; }
 };
 
-[[maybe_unused]] inline void spin_wait(std::atomic<bool>& flag) {
-    while (!flag.load(std::memory_order::acquire)) {
-        std::this_thread::yield();
-    }
-}
-
-constexpr unsigned kBoundedWaitIters = 200000;
-
-[[maybe_unused]] inline bool bounded_wait(std::atomic<bool>& flag,
-                                          unsigned max_iters = kBoundedWaitIters) {
-    for (unsigned i = 0; i < max_iters; ++i) {
-        if (flag.load(std::memory_order::acquire)) return true;
-        std::this_thread::yield();
-    }
-    return flag.load(std::memory_order::acquire);
-}
 }  // namespace
 
 SLUICE_MAIN()
@@ -229,15 +214,22 @@ SLUICE_TEST_CASE(rwlock_t4_writer_blocks_readers_batch_grant) {
         rw.unlock_read();
     });
 
-    // Coordinator fiber: waits for writer to acquire, spawns readers, signals.
+    // Coordinator fiber: observes both readers queued (via the thread-safe
+    // sched.waiting_count()), THEN signals readers_queued to release the writer.
+    // This replaces the previous bare yield() calls with an observable gate.
+    // Uses sched.run(2) so the coordinator can yield while readers queue in
+    // parallel on a second worker (a single-worker run(1) would let the
+    // coordinator spin without the readers making progress).
+    std::atomic<bool> coord_done{false};
     Fiber cf;
     cf.set_entry([&](Fiber&) {
-        sched.await_ready_flag(writer_acquired);
-        // Readers are already spawned; wait for them to queue.
-        // Give them a chance to register.
-        std::this_thread::yield();
-        std::this_thread::yield();
+        // Wait until both readers are confirmed queued behind the writer.
+        // The writer is parked on readers_queued; only readers can be queued.
+        while (sched.waiting_count() < 2) {
+            std::this_thread::yield();  // cooperative: let readers queue
+        }
         readers_queued.store(true, std::memory_order_release);
+        coord_done.store(true, std::memory_order_release);
     });
 
     FiberStack sw, sr1, sr2, sc;
@@ -250,8 +242,15 @@ SLUICE_TEST_CASE(rwlock_t4_writer_blocks_readers_batch_grant) {
     sched.spawn(rf1);
     sched.spawn(rf2);
     sched.spawn(cf);
-    sched.run(1);
+    // Bounded run so the test fails rather than hangs. Two workers let the
+    // coordinator yield while readers queue in parallel.
+    for (int i = 0; i < 200 && !coord_done.load(); ++i) {
+        sched.run(2);
+    }
+    // Final run: writer releases, readers granted and complete.
+    sched.run(2);
 
+    SLUICE_CHECK_MSG(writer_acquired.load(), "writer acquired");
     SLUICE_CHECK_MSG(reader1_acquired.load(), "reader1 acquired after writer release");
     SLUICE_CHECK_MSG(reader2_acquired.load(), "reader2 acquired after writer release");
     SLUICE_CHECK_MSG(reader_batch_count.load() == 2, "both readers granted");
@@ -778,8 +777,11 @@ SLUICE_TEST_CASE(rwlock_t13_cancel_foreign_rwlock_false) {
 //   - exactly-once publication; waiting_count reaches zero after cleanup
 //
 // CAUSAL PROOF: the assertion that R1/R2 reached the post-read_lock line
-// runs BEFORE r0_released is set. If cancel did NOT reconcile the head, R1/R2
-// would remain suspended and the post-bounded-wait would time out.
+// runs BEFORE r0_released is set. The synchronization is via deterministic
+// phase seams (separate sched.run(1) calls) and atomic gate observation — NOT
+// sleep_for timing. If cancel did NOT reconcile the head, R1/R2 would remain
+// suspended and the bounded sched.run loop would exhaust without observing
+// r1_acquired/r2_acquired.
 SLUICE_TEST_CASE(rwlock_head_writer_cancel_grants_reader_prefix_immediately) {
     if constexpr (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
@@ -1200,6 +1202,15 @@ SLUICE_TEST_CASE(rwlock_mw_two_readers_on_different_workers) {
     std::atomic<int> at_barrier{0};
     std::atomic<bool> a_acquired{false}, b_acquired{false};
 
+    // Barrier-await helper: cooperatively wait until the shared counter reaches
+    // the target. Yields between polls so both fibers can make progress even if
+    // they share a worker (a bare spin would hang in that case).
+    auto await_barrier = [](std::atomic<int>& counter, int target) {
+        while (counter.load(std::memory_order_acquire) < target) {
+            std::this_thread::yield();
+        }
+    };
+
     Fiber fa, fb;
     fa.set_entry([&](Fiber&) {
         WaitNode rn;
@@ -1207,7 +1218,7 @@ SLUICE_TEST_CASE(rwlock_mw_two_readers_on_different_workers) {
         wid_a.store(Scheduler::current_worker_id(), std::memory_order_release);
         a_acquired.store(true, std::memory_order_release);
         at_barrier.fetch_add(1, std::memory_order_acq_rel);
-        while (at_barrier.load(std::memory_order_acquire) < 2) {}
+        await_barrier(at_barrier, 2);
         rw.unlock_read();
     });
     fb.set_entry([&](Fiber&) {
@@ -1216,7 +1227,7 @@ SLUICE_TEST_CASE(rwlock_mw_two_readers_on_different_workers) {
         wid_b.store(Scheduler::current_worker_id(), std::memory_order_release);
         b_acquired.store(true, std::memory_order_release);
         at_barrier.fetch_add(1, std::memory_order_acq_rel);
-        while (at_barrier.load(std::memory_order_acquire) < 2) {}
+        await_barrier(at_barrier, 2);
         rw.unlock_read();
     });
 

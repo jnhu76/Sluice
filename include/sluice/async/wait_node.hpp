@@ -138,15 +138,19 @@ public:
                "WaitNode destroyed while Registered (resolve the wait first)");
     }
 
-    // ---- E12-E Queue per-operation context hook ----
+    // ---- Per-operation context hook (E12-E Queue / E12-F RwLock) ----
     // An optional, caller-owned opaque pointer stashed on the node BEFORE
     // registration, so a reconciler that resolves THIS node (via
     // wake_one_locked, which returns the winning WaitNode*) can reach the
-    // per-operation context it needs to finalize atomically. Only the E12-E
-    // Queue uses this in production; it is never dereferenced by WaitQueue or
-    // by the generic Scheduler wake path. Null by default; the Queue sets it
-    // to a QueueWaitCtx* on its wait nodes. Kept trivial (no ownership) so the
-    // node remains trivially relocatable in spirit and zero-cost when unused.
+    // per-operation context it needs to finalize atomically. Authorized
+    // production users: AsyncQueue (E12-E) and AsyncRwLock (E12-F); it is never
+    // dereferenced by WaitQueue or by the generic Scheduler wake path. Null by
+    // default; each primitive sets it to its wait-node context (QueueWaitCtx*
+    // or RwWaitCtx*) before registration and clears it after terminal
+    // resolution. Kept trivial (no ownership) so the node remains trivially
+    // relocatable in spirit and zero-cost when unused. The linked node's user_
+    // is read ONLY by the owning Scheduler seam under G + W while linked — it
+    // is NOT a general-purpose user payload.
     void* user() const noexcept { return user_; }
     void set_user(void* p) noexcept { user_ = p; }
 

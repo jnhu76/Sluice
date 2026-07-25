@@ -116,7 +116,7 @@ expect_pass "E12RwLock [10 invariants]" \
 # Negative: reader bypasses writer
 expect_fail "NEG ReaderBypass" \
             E12RwLockNegReaderBypass E12RwLockNegReaderBypass.cfg \
-            WriterFairness E12RwLockNeg1 || rc=1
+            NoReaderBarging E12RwLockNeg1 || rc=1
 
 echo
 echo "=== gate ${rc}-ed (0 = all expected verdicts) ==="

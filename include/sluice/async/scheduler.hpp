@@ -876,7 +876,10 @@ public:
     // RwLock-specific deadline expiry with head reconcile. Called ONLY by
     // pump_deadlines_locked (under G). Resolves the node Expired, unlinks,
     // performs head reconcile (grant acquires W internally), publishes.
-    void rwlock_expire_wait(WaitQueue& waiters, std::size_t& active_readers,
+    // Returns true iff this call won the resolve CAS (expire_locked succeeded).
+    // A losing race (concurrent resolver won) returns false; the caller must
+    // NOT increment its won counter in that case.
+    bool rwlock_expire_wait(WaitQueue& waiters, std::size_t& active_readers,
                             bool& writer_active, Fiber*& writer_owner,
                             WaitNode& node)
         SLUICE_REQUIRES(global_mtx_);

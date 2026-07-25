@@ -779,7 +779,7 @@ public:
 | Operation Class | Examples | Requires Fiber | Safe from Ext Thread |
 |----------------|----------|---------------|---------------------|
 | Blocking/timed wait | `wait`, `acquire`, `lock`, `push`, `pop` | Yes | No |
-| Non-blocking try | `try_acquire`, `try_push`, `try_pop` | No | Yes |
+| Non-blocking try | `try_acquire`, `try_push`, `try_pop` | No | Yes (except `try_write_lock` — Fiber-only; requires current Fiber to record writer ownership) |
 | Wake/notify | `set`, `release`, `notify_one`, `notify_all` | No | Yes |
 | Cancel | `cancel` (all primitives with cancel) | No | Yes |
 | Observation | `is_set`, `available`, `is_closed`, `capacity`, `size` | No | Yes |

@@ -2895,24 +2895,26 @@ bool Scheduler::rwlock_cancel(WaitQueue& waiters,
     return true;
 }
 
-void Scheduler::rwlock_expire_wait(WaitQueue& waiters,
+bool Scheduler::rwlock_expire_wait(WaitQueue& waiters,
                                    std::size_t& active_readers,
                                    bool& writer_active,
                                    Fiber*& writer_owner,
                                    WaitNode& node) {
     // Called under G (from pump_deadlines_locked). Acquire W for expire, then
-    // release; grant acquires W internally.
+    // release; grant acquires W internally. Returns true iff expire_locked won.
     Fiber* exp_fiber = nullptr;
     WorkerState* exp_owner = nullptr;
+    bool won = false;
     {
         LockGuard qlk(waiters.mtx());
-        if (!waiters.expire_locked(node)) return;  // lost to grant/cancel
+        if (!waiters.expire_locked(node)) return false;  // lost to grant/cancel
         // Timer already CONSUMED by pump. Update accounting.
         if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
         // Capture publication data.
         exp_fiber = node.fiber();
         auto it = fiber_owner_.find(exp_fiber);
         exp_owner = (it != fiber_owner_.end()) ? it->second : g_worker;
+        won = true;
     }  // W released
 
     // Head reconcile (grant acquires W internally).
@@ -2923,6 +2925,7 @@ void Scheduler::rwlock_expire_wait(WaitQueue& waiters,
     if (exp_fiber != nullptr && exp_fiber->make_runnable()) {
         route_runnable_locked(exp_fiber, exp_owner);
     }
+    return won;
 }
 
 void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
@@ -2973,10 +2976,17 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
         }
 
         // Admission precedence 2: already-due deadline (E11 I5).
+        // Gate the timer-accounting cleanup on a successful try_claim_expiry():
+        // expire_locked won the resolve CAS, but the bound timer is still
+        // ACTIVE until claimed. If the claim somehow fails (should be
+        // unreachable under continuous G+W — the node is terminal and the
+        // timer is unclaimed), we must NOT decrement active_deadline_count_
+        // for a timer we did not consume.
         if (clock_now_unlocked() >= deadline) {
             if (waiters.expire_locked(node)) {
-                reg->try_claim_expiry();
-                --active_deadline_count_;
+                if (reg->try_claim_expiry()) --active_deadline_count_;
+                else assert(false && "E12-F read_lock_until: try_claim_expiry "
+                                     "failed after expire_locked win (Category B)");
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 node.set_user(nullptr);
@@ -3050,10 +3060,13 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
         }
 
         // Admission precedence 2: already-due deadline.
+        // Gate the timer-accounting cleanup on a successful try_claim_expiry()
+        // (same reasoning as rwlock_read_lock_until).
         if (clock_now_unlocked() >= deadline) {
             if (waiters.expire_locked(node)) {
-                reg->try_claim_expiry();
-                --active_deadline_count_;
+                if (reg->try_claim_expiry()) --active_deadline_count_;
+                else assert(false && "E12-F write_lock_until: try_claim_expiry "
+                                     "failed after expire_locked win (Category B)");
                 recompute_earliest_deadline_locked();
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
                 node.set_user(nullptr);
@@ -3840,10 +3853,19 @@ std::size_t Scheduler::pump_deadlines_locked() {
             // rwlock_expire_wait acquires W internally, so we must NOT hold it.
             if (top->on_resolve_ == &rwlock_timer_expire_reconcile) {
                 auto* ctx = static_cast<AsyncRwLock::ExpireCtx*>(top->owner_ctx_);
-                if (ctx != nullptr) {
-                    rwlock_expire_wait(*ctx->waiters, *ctx->active_readers,
+                if (ctx == nullptr) {
+                    // A RwLock timer without a valid ExpireCtx is internal state
+                    // corruption (Category B): the context is address-stable for
+                    // the AsyncRwLock lifetime and set unconditionally at
+                    // construction. Silently erasing here would leave the bound
+                    // node unresolved in its queue. Fail fast instead.
+                    assert(false && "E12-F pump: RwLock timer with null ExpireCtx "
+                                    "(Category B internal invariant violation)");
+                    std::abort();
+                }
+                if (rwlock_expire_wait(*ctx->waiters, *ctx->active_readers,
                                        *ctx->writer_active, *ctx->writer_owner,
-                                       *n);
+                                       *n)) {
                     ++won;
                 }
                 erase_popped_registration_locked(top);

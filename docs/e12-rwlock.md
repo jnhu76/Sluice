@@ -325,21 +325,15 @@ Lifecycle proof obligations:
 5. **Clear before return**: user_ is set to nullptr BEFORE the lock function
    returns to the caller. No dangling pointer survives the call.
 
-### `WaitNode::user_` documentation update (design-only; header not modified this round)
+### `WaitNode::user_` contract
 
-The existing comment on `user_` in `wait_node.hpp` currently implies Queue-only
-production use. The corrected specification:
-
-```text
-user_ is a controlled primitive-per-operation context hook.
-Authorized production users: AsyncQueue (E12-E), AsyncRwLock (E12-F).
-Each primitive sets user_ before registration and clears it after terminal
-resolution. user_ is read ONLY by the owning Scheduler seam under G + W
-while the node is linked. It is NOT a general-purpose user payload.
-```
-
-This round modifies ONLY this design document. The header comment update is
-an implementation-phase deliverable.
+`user_` is a controlled primitive-per-operation context hook. Authorized
+production users: AsyncQueue (E12-E), AsyncRwLock (E12-F). Each primitive sets
+`user_` before registration and clears it after terminal resolution. `user_` is
+read ONLY by the owning Scheduler seam under G + W while the node is linked. It
+is NOT a general-purpose user payload. The header comment on `user()` in
+`wait_node.hpp` names both primitives and retains the linked-node lifetime
+restriction.
 
 ### Legal states
 
@@ -1752,7 +1746,7 @@ AUTHORIZED FOR IMPLEMENTATION
 | Cancel head reconcile defined | ✓ (rwlock_cancel takes full state; calls grant_from_head_locked after unlink) |
 | Deadline expiry reconcile defined | ✓ (rwlock_expire_wait + TimerRegistration on_expire_reconcile_ hook) |
 | RwWaitCtx ownership determined | ✓ (internal stack-local; caller does NOT construct; lifecycle proved) |
-| user_ documentation updated | ✓ (design-only; header update is implementation deliverable) |
+| user_ documentation updated | ✓ (both AsyncQueue and AsyncRwLock named; header reflects both primitives) |
 | Fail-fast on invalid linked nodes | ✓ (Category B: debug assert + Release abort; E10 Unlink Law consequence) |
 | Race matrix corrected | ✓ (G + W serialization; no per-node CAS failure in batch) |
 | Canonical no-publish helper designed | ✓ (claim_waiter_woken_no_publish_locked; no alloc; no throw; returns WaitNode*) |

@@ -54,6 +54,9 @@
 
 #include <csignal>
 #include <cstddef>
+#include <cstdlib>  // std::_Exit
+#include <atomic>   // std::atomic
+#include <memory>   // std::make_unique
 #include <iostream>
 #include <string>
 #include <vector>
@@ -220,21 +223,30 @@ void child_a5_destroy_with_active_writer() {
 }
 
 // A6 — destroy with queued waiter.
+//
+// The writer parks on a SEPARATE never-signalled gate (release_writer), NOT
+// on writer_holds. The previous version parked on writer_holds which was
+// already TRUE (just set on the line above), so await_ready_flag returned
+// immediately and the writer fiber actually returned without parking — leaving
+// writer_active_ false. A separate gate that is NEVER set keeps the writer
+// genuinely parked while holding the write lock, so the subsequent queued
+// reader exercises the ~WaitQueue head_ != nullptr assertion (A6), not the
+// writer_active_ assertion (A5).
 void child_a6_destroy_with_queued_waiter() {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncRwLock* rw = new AsyncRwLock(sched);
     std::atomic<bool> writer_holds{false};
+    std::atomic<bool> release_writer{false};  // never set before delete rw
     Fiber wf;
     wf.set_entry([&](Fiber&) {
         WaitNode wn;
         rw->write_lock(wn);
         writer_holds.store(true, std::memory_order_release);
-        // Parked forever (test destroys with this writer queued; the writer
-        // itself holds the lock — see A5 for that variant. Here we want a
-        // QUEUED waiter, so we instead leave a READ waiter parked behind an
-        // active writer; destroying then triggers ~WaitQueue head_ != null.)
-        sched.await_ready_flag(writer_holds);  // never set; we destroy first
+        // Park on a gate that is NEVER set. The writer remains suspended
+        // holding the write lock for the entire test.
+        sched.await_ready_flag(release_writer);
+        rw->unlock_write();  // unreachable before destructor abort
     });
     FiberStack sw;
     if (!sched.init_fiber(wf, sw.base(), sw.size())) {

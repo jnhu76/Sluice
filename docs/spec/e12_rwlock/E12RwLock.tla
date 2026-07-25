@@ -26,14 +26,16 @@ VARIABLES
     resolutionCount,    \* [Epoch -> 0..1]: terminal resolution count
     publicationCount,   \* [Epoch -> 0..1]: runnable publication count
     grantedReaders,     \* SUBSET Epochs: epochs currently holding read lock
-    bargingOccurred     \* HISTORY: TRUE if a reader was admitted while writer queued
+    bargingOccurred,    \* HISTORY: TRUE if a reader was admitted while writer queued
+    writerWasQueued     \* HISTORY: TRUE if a writer has ever been queued (for barging obs)
 
 NoWriter == 999
 Mode == {"read", "write"}
 NState == {"Free", "Queued", "Woken", "Cancelled", "Expired"}
 
 vars == <<activeReaders, writerOwner, queue, mode, nodeState,
-          resolutionCount, publicationCount, grantedReaders, bargingOccurred>>
+          resolutionCount, publicationCount, grantedReaders, bargingOccurred,
+          writerWasQueued>>
 
 \* ---- Helpers ----
 \* Head/Tail from Sequences module (standard)
@@ -56,6 +58,7 @@ Init ==
     /\ publicationCount = [e \in Epochs |-> 0]
     /\ grantedReaders = {}
     /\ bargingOccurred = FALSE
+    /\ writerWasQueued = FALSE
 
 \* ---- Transitions ----
 
@@ -70,8 +73,11 @@ ReadAdmit(e) ==
     /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
     /\ grantedReaders' = grantedReaders \cup {e}
     /\ activeReaders' = activeReaders + 1
-    /\ bargingOccurred' = bargingOccurred \* unchanged (queue was empty)
-    /\ UNCHANGED <<writerOwner, queue, publicationCount>>
+    \* In the correct model, ReadAdmit requires Len(queue)=0, so no writer is
+    \* queued at admission time — barging cannot occur here. bargingOccurred
+    \* stays unchanged (the negative model overrides ReadAdmit to record the
+    \* violation when it drops the Len(queue)=0 guard).
+    /\ UNCHANGED <<writerOwner, queue, publicationCount, bargingOccurred, writerWasQueued>>
 
 \* ReadQueue: reader must queue (writer active OR queue non-empty)
 ReadQueue(e) ==
@@ -82,7 +88,7 @@ ReadQueue(e) ==
     /\ nodeState' = [nodeState EXCEPT ![e] = "Queued"]
     /\ queue' = Append(queue, e)
     /\ UNCHANGED <<activeReaders, writerOwner, resolutionCount,
-                   publicationCount, grantedReaders, bargingOccurred>>
+                   publicationCount, grantedReaders, bargingOccurred, writerWasQueued>>
 
 \* WriteAdmit: immediate write admission (no readers, no writer, queue empty)
 WriteAdmit(e) ==
@@ -95,7 +101,7 @@ WriteAdmit(e) ==
     /\ nodeState' = [nodeState EXCEPT ![e] = "Woken"]
     /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
     /\ writerOwner' = e
-    /\ UNCHANGED <<activeReaders, queue, publicationCount, grantedReaders, bargingOccurred>>
+    /\ UNCHANGED <<activeReaders, queue, publicationCount, grantedReaders, bargingOccurred, writerWasQueued>>
 
 \* WriteQueue: writer must queue
 WriteQueue(e) ==
@@ -105,6 +111,7 @@ WriteQueue(e) ==
     /\ mode' = [mode EXCEPT ![e] = "write"]
     /\ nodeState' = [nodeState EXCEPT ![e] = "Queued"]
     /\ queue' = Append(queue, e)
+    /\ writerWasQueued' = TRUE
     /\ UNCHANGED <<activeReaders, writerOwner, resolutionCount,
                    publicationCount, grantedReaders, bargingOccurred>>
 
@@ -112,8 +119,6 @@ WriteQueue(e) ==
 UnlockRead(e) ==
     /\ e \in grantedReaders
     /\ activeReaders > 0
-    /\ grantedReaders' = grantedReaders \ {e}
-    /\ activeReaders' = activeReaders - 1
     /\ IF activeReaders - 1 = 0 /\ Len(queue) > 0
        THEN \* reconcile: grant from head
             /\ LET prefix == ReaderPrefixLen(queue)
@@ -144,12 +149,11 @@ UnlockRead(e) ==
             /\ UNCHANGED <<writerOwner, queue, nodeState, resolutionCount, publicationCount>>
             /\ grantedReaders' = grantedReaders \ {e}
             /\ activeReaders' = activeReaders - 1
-    /\ UNCHANGED <<mode, bargingOccurred>>
+    /\ UNCHANGED <<mode, bargingOccurred, writerWasQueued>>
 
 \* UnlockWrite: release write lock
 UnlockWrite(e) ==
     /\ writerOwner = e
-    /\ writerOwner' = NoWriter
     /\ IF Len(queue) > 0
        THEN LET prefix == ReaderPrefixLen(queue)
             IN IF prefix > 0
@@ -166,6 +170,7 @@ UnlockWrite(e) ==
                          IF \E j \in 1..prefix : queue[j] = i
                          THEN 1 ELSE publicationCount[i]]
                     /\ queue' = SubSeq(queue, prefix + 1, Len(queue))
+                    /\ writerOwner' = NoWriter
                ELSE \* grant head writer
                     /\ activeReaders' = 0
                     /\ grantedReaders' = {}
@@ -177,8 +182,9 @@ UnlockWrite(e) ==
        ELSE \* empty queue
             /\ activeReaders' = 0
             /\ grantedReaders' = {}
+            /\ writerOwner' = NoWriter
             /\ UNCHANGED <<queue, nodeState, resolutionCount, publicationCount>>
-    /\ UNCHANGED <<mode, bargingOccurred>>
+    /\ UNCHANGED <<mode, bargingOccurred, writerWasQueued>>
 
 \* CancelQueued: cancel a queued epoch + reconcile head
 CancelQueued(e) ==
@@ -190,13 +196,14 @@ CancelQueued(e) ==
        /\ nodeState' = [nodeState EXCEPT ![e] = "Cancelled"]
        /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
        /\ publicationCount' = [publicationCount EXCEPT ![e] = 1]
-       /\ IF pos = 1 /\ Len(newQ) > 0 /\ activeReaders = 0 /\ writerOwner = NoWriter
-          THEN \* head cancelled: reconcile new head
+       /\ IF pos = 1 /\ Len(newQ) > 0 /\ writerOwner = NoWriter
+          THEN \* head cancelled: reconcile new head (admit reader prefix even
+               \* if activeReaders > 0 — preserve existing readers and merge)
                LET prefix == ReaderPrefixLen(newQ)
                IN IF prefix > 0
-                  THEN \* grant reader prefix from new head
-                       /\ activeReaders' = prefix
-                       /\ grantedReaders' = {newQ[i] : i \in 1..prefix}
+                  THEN \* grant reader prefix from new head (merge into existing)
+                       /\ activeReaders' = activeReaders + prefix
+                       /\ grantedReaders' = grantedReaders \cup {newQ[i] : i \in 1..prefix}
                        /\ nodeState' = [i \in Epochs |->
                             IF i = e THEN "Cancelled"
                             ELSE IF \E j \in 1..prefix : newQ[j] = i
@@ -234,7 +241,7 @@ CancelQueued(e) ==
           ELSE \* non-head cancel or cannot grant
                /\ queue' = newQ
                /\ UNCHANGED <<activeReaders, writerOwner, grantedReaders>>
-    /\ UNCHANGED <<mode, bargingOccurred>>
+    /\ UNCHANGED <<mode, bargingOccurred, writerWasQueued>>
 
 \* ExpireQueued: same semantics as cancel (different outcome label)
 ExpireQueued(e) ==
@@ -246,11 +253,11 @@ ExpireQueued(e) ==
        /\ nodeState' = [nodeState EXCEPT ![e] = "Expired"]
        /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
        /\ publicationCount' = [publicationCount EXCEPT ![e] = 1]
-       /\ IF pos = 1 /\ Len(newQ) > 0 /\ activeReaders = 0 /\ writerOwner = NoWriter
+       /\ IF pos = 1 /\ Len(newQ) > 0 /\ writerOwner = NoWriter
           THEN LET prefix == ReaderPrefixLen(newQ)
                IN IF prefix > 0
-                  THEN /\ activeReaders' = prefix
-                       /\ grantedReaders' = {newQ[i] : i \in 1..prefix}
+                  THEN /\ activeReaders' = activeReaders + prefix
+                       /\ grantedReaders' = grantedReaders \cup {newQ[i] : i \in 1..prefix}
                        /\ nodeState' = [i \in Epochs |->
                             IF i = e THEN "Expired"
                             ELSE IF \E j \in 1..prefix : newQ[j] = i
@@ -285,7 +292,7 @@ ExpireQueued(e) ==
                        /\ UNCHANGED <<activeReaders, writerOwner, grantedReaders>>
           ELSE /\ queue' = newQ
                /\ UNCHANGED <<activeReaders, writerOwner, grantedReaders>>
-    /\ UNCHANGED <<mode, bargingOccurred>>
+    /\ UNCHANGED <<mode, bargingOccurred, writerWasQueued>>
 
 \* ---- Specification ----
 Next ==

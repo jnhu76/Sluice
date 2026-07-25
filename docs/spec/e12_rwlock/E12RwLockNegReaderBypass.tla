@@ -9,11 +9,13 @@ CONSTANTS Epochs, E1, E2, E3
 VARIABLES
     activeReaders, writerOwner, queue, mode, nodeState,
     resolutionCount, publicationCount, grantedReaders,
-    writerWasQueued  \* history: has a writer ever been queued?
+    bargingOccurred,    \* HISTORY: TRUE if a reader was admitted while writer queued
+    writerWasQueued     \* HISTORY: TRUE if a writer has ever been queued
 
 NoWriter == 999
 vars == <<activeReaders, writerOwner, queue, mode, nodeState,
-          resolutionCount, publicationCount, grantedReaders, writerWasQueued>>
+          resolutionCount, publicationCount, grantedReaders,
+          bargingOccurred, writerWasQueued>>
 
 RECURSIVE ReaderPrefixLen(_)
 ReaderPrefixLen(q) ==
@@ -30,6 +32,7 @@ Init ==
     /\ resolutionCount = [e \in Epochs |-> 0]
     /\ publicationCount = [e \in Epochs |-> 0]
     /\ grantedReaders = {}
+    /\ bargingOccurred = FALSE
     /\ writerWasQueued = FALSE
 
 \* BUG: ReadAdmit drops Len(queue)=0 check (allows barging)
@@ -43,6 +46,12 @@ ReadAdmit(e) ==
     /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
     /\ grantedReaders' = grantedReaders \cup {e}
     /\ activeReaders' = activeReaders + 1
+    \* Barging observation: a reader admitted while a writer is currently
+    \* queued is a violation. Check the current queue for a writer.
+    \* Uses IF/THEN/ELSE (not \\/) to avoid a TLC parsing limitation where
+    \* primed-variable assignment combined with an existential over nested
+    \* function application (mode[queue[i]]) produces an unspecied successor.
+    /\ bargingOccurred' = IF (\E i \in 1..Len(queue) : mode[queue[i]] = "write") THEN TRUE ELSE bargingOccurred
     /\ UNCHANGED <<writerOwner, queue, publicationCount, writerWasQueued>>
 
 ReadQueue(e) ==
@@ -53,7 +62,7 @@ ReadQueue(e) ==
     /\ nodeState' = [nodeState EXCEPT ![e] = "Queued"]
     /\ queue' = Append(queue, e)
     /\ UNCHANGED <<activeReaders, writerOwner, resolutionCount,
-                   publicationCount, grantedReaders, writerWasQueued>>
+                   publicationCount, grantedReaders, bargingOccurred, writerWasQueued>>
 
 WriteAdmit(e) ==
     /\ nodeState[e] = "Free"
@@ -65,7 +74,7 @@ WriteAdmit(e) ==
     /\ nodeState' = [nodeState EXCEPT ![e] = "Woken"]
     /\ resolutionCount' = [resolutionCount EXCEPT ![e] = 1]
     /\ writerOwner' = e
-    /\ UNCHANGED <<activeReaders, queue, publicationCount, grantedReaders, writerWasQueued>>
+    /\ UNCHANGED <<activeReaders, queue, publicationCount, grantedReaders, bargingOccurred, writerWasQueued>>
 
 WriteQueue(e) ==
     /\ nodeState[e] = "Free"
@@ -76,7 +85,7 @@ WriteQueue(e) ==
     /\ queue' = Append(queue, e)
     /\ writerWasQueued' = TRUE  \* record that a writer was queued
     /\ UNCHANGED <<activeReaders, writerOwner, resolutionCount,
-                   publicationCount, grantedReaders>>
+                   publicationCount, grantedReaders, bargingOccurred>>
 
 UnlockRead(e) ==
     /\ e \in grantedReaders
@@ -84,7 +93,7 @@ UnlockRead(e) ==
     /\ grantedReaders' = grantedReaders \ {e}
     /\ activeReaders' = activeReaders - 1
     /\ UNCHANGED <<writerOwner, queue, nodeState, resolutionCount,
-                   publicationCount, mode, writerWasQueued>>
+                   publicationCount, mode, bargingOccurred, writerWasQueued>>
 
 UnlockWrite(e) ==
     /\ writerOwner = e
@@ -114,7 +123,7 @@ UnlockWrite(e) ==
        ELSE /\ activeReaders' = 0
             /\ grantedReaders' = {}
             /\ UNCHANGED <<queue, nodeState, resolutionCount, publicationCount>>
-    /\ UNCHANGED <<mode, writerWasQueued>>
+    /\ UNCHANGED <<mode, bargingOccurred, writerWasQueued>>
 
 Next ==
     \/ \E e \in Epochs : ReadAdmit(e) \/ ReadQueue(e)
@@ -124,10 +133,11 @@ Next ==
 
 Spec == Init /\ [][Next]_vars
 
-\* Writer fairness: once a writer has been queued, no reader can be admitted
-\* inline (ReadAdmit). In the buggy model, ReadAdmit can fire even when
-\* writerWasQueued is TRUE, violating this invariant.
-WriterFairness ==
-    writerWasQueued => \A e \in grantedReaders : mode[e] = "write" \/ nodeState[e] # "Woken"
+\* Writer fairness: bargingOccurred must remain FALSE — a reader may never be
+\* admitted inline while a writer has been queued. In the buggy model, ReadAdmit
+\* drops the Len(queue)=0 guard and sets bargingOccurred' = TRUE when a writer was
+\* queued, violating this invariant.
+NoReaderBarging ==
+    bargingOccurred = FALSE
 
 =============================================================================
