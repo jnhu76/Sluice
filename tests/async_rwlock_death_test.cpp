@@ -162,33 +162,37 @@ void child_a3_unlock_write_non_owner() {
 }
 
 // A4 — destroy with active reader.
+//
+// A single reader Fiber acquires a read share and then parks on a gate that
+// is NEVER set before the destructor runs. At the moment of delete, the
+// Fiber is still suspended holding its share, so active_readers_ > 0 and
+// the destructor MUST assert and terminate. This matches the documented
+// case: the Fiber is live and parked, not returned-and-cleaned-up.
 void child_a4_destroy_with_active_reader() {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncRwLock* rw = new AsyncRwLock(sched);
-    Fiber f;
-    f.set_entry([&](Fiber&) {
+
+    std::atomic<bool> reader_holds{false};
+    std::atomic<bool> release{false};  // never set before delete rw
+
+    Fiber reader;
+    reader.set_entry([&](Fiber&) {
         WaitNode rn;
         rw->read_lock(rn);
-        // DO NOT release; let the Fiber return so the destructor runs below.
-        // (rn is destroyed at function exit but the count was incremented.)
-        rw->unlock_read();  // counteract so rn destruction is clean
+        reader_holds.store(true, std::memory_order_release);
+        // Park while STILL holding the read share. The destructor aborts
+        // before `release` is ever set, so unlock_read is unreachable.
+        sched.await_ready_flag(release);
+        rw->unlock_read();
     });
-    FiberStack s;
-    if (!sched.init_fiber(f, s.base(), s.size())) {
+    FiberStack sr;
+    if (!sched.init_fiber(reader, sr.base(), sr.size())) {
         std::_Exit(sluice_death_test::kChildTestFailExit);
     }
-    sched.spawn(f);
+    sched.spawn(reader);
     sched.run(1);
-    // Now acquire a read share from a Fiber and LEAVE it held, then destroy.
-    Fiber g;
-    g.set_entry([&](Fiber&) { (void)rw->try_read_lock(); });
-    FiberStack sg;
-    if (!sched.init_fiber(g, sg.base(), sg.size())) {
-        std::_Exit(sluice_death_test::kChildTestFailExit);
-    }
-    sched.spawn(g);
-    sched.run(1);
+    // The reader Fiber is now parked holding its share (reader_holds == true).
     delete rw;  // MUST terminate (active_readers_ > 0); never returns.
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
@@ -266,6 +270,9 @@ void child_a6_destroy_with_queued_waiter() {
 // does NOT expose WaitQueue structural authority to ordinary tests; it is
 // the unique test entry permitted to forge user_ on a linked node, and it
 // routes through rwlock_grant_from_head_locked so the fail-fast is real.
+//
+// In Release builds, Category B termination is guaranteed by std::abort;
+// the assert is diagnostic only and may be compiled out under NDEBUG.
 // ===========================================================================
 
 // B1 — grant_from_head on linked head with INVALID mode (neither read nor write).

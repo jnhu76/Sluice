@@ -1394,11 +1394,6 @@ SLUICE_TEST_CASE(rwlock_mw_reader_batch_publication_across_workers) {
         rw.unlock_write();
     });
 
-    auto make_reader = [&]() {
-        // Each reader has its own stack + WaitNode; we spawn 3 readers below.
-    };
-    (void)make_reader;
-
     Fiber rf1, rf2, rf3;
     rf1.set_entry([&](Fiber&) {
         WaitNode rn;
@@ -1534,6 +1529,14 @@ SLUICE_TEST_CASE(rwlock_mw_cancel_and_unlock_on_different_workers) {
 // fiber/owner captured BEFORE route_runnable_locked, and never dereferences
 // a node after publication. Under ASan this catches post-publication node
 // access (UAF); under TSan it catches any data race on the published node.
+//
+// SAFETY ARGUMENT: the grant/publication loop runs while holding Scheduler
+// global_mtx_. A published Fiber cannot truly resume execution until
+// global_mtx_ is released, so the first reader's stack-local WaitNode
+// outlives the entire loop — even though that Fiber has already been
+// marked runnable. The loop caches next/fiber/owner BEFORE each
+// route_runnable_locked call and never dereferences the current WaitNode
+// after routing it.
 //
 // Deterministic phase seams (NOT sleep_for): each phase is driven by a
 // separate sched.run(1) call after the previous phase's gate is observed.
