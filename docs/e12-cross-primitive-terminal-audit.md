@@ -37,7 +37,7 @@ E12-G-AS-BUILT-AUDIT: PASS
 E12-G-PRODUCTION-CORRECTIVE: NOT REQUIRED
 E12-G-TEST-CORRECTIVE: NOT REQUIRED  (optional non-blocking parity additions identified)
 E12-G-FORMAL-CORRECTIVE: NOT REQUIRED (F1 chosen; RwLock negative-model parity gap is non-blocking)
-E12-G-CLOSEOUT: READY FOR INDEPENDENT REVIEW
+E12-G-CLOSEOUT: READY FOR INDEPENDENT RE-REVIEW
 ```
 
 **Verdict in one line:** every E12 primitive satisfies the G-TERM laws as
@@ -151,7 +151,7 @@ G-TERM-3 evidence.
 | **Semaphore** | `Semaphore::cancel` | `Scheduler::sem_cancel` (`scheduler.cpp:2100`) | G → q.mtx() | membership gate; serialized before release observes queue (Conclusion A) |
 | **AsyncMutex** | `AsyncMutex::lock` admission | `Scheduler::mutex_lock` (`scheduler.cpp:2211`) | G → q.mtx() | register; FIFO head + owner==nullptr → `wake_node_locked` + `owner = me`; else suspend |
 | **AsyncMutex** | `AsyncMutex::lock_until` admission | `Scheduler::mutex_lock_until` (`scheduler.cpp:2294`) | G → q.mtx() | resource-first over already-due deadline → Woken + `owner = me` |
-| **AsyncMutex** | `AsyncMutex::unlock` handoff | `Scheduler::mutex_handoff_one_locked` (`scheduler.cpp:2411`) | caller holds G; takes q.mtx() internally | `wake_one_locked` → `owner = winner Fiber` (line 2079-equivalent) BEFORE `make_runnable`+`route_runnable_locked`. **MUTEX-HANDOFF-ONE seam.** |
+| **AsyncMutex** | `AsyncMutex::unlock` handoff | `Scheduler::mutex_handoff_one_locked` (`scheduler.cpp:2411`) | caller holds G; takes q.mtx() internally | `wake_one_locked` → `owner = winner Fiber` (`scheduler.cpp:2434`) BEFORE `make_runnable`+`route_runnable_locked`. **MUTEX-HANDOFF-ONE seam.** |
 | **AsyncMutex** | `AsyncMutex::cancel` | `Scheduler::mutex_cancel` (`scheduler.cpp:2381`) | G → q.mtx() | membership gate; cancel of queued waiter just unlinks (no owner change) |
 | **AsyncCondition** | `AsyncCondition::wait` prepare | `Scheduler::condition_wait_prepare` (`scheduler.cpp:3569`) | G; cond_waiters.mtx() then released; mutex_waiters.mtx() via handoff (NEVER simultaneous) | CONDITION-WAIT-PREPARE: register cond_node under cond.mtx() → `mutex_handoff_one_locked(mutex_waiters)` → `make_waiting` → release G → switch |
 | **AsyncCondition** | `AsyncCondition::wait_until` prepare | `Scheduler::condition_wait_prepare_until` (`scheduler.cpp:3650`) | G; cond.mtx() then mutex.mtx() (sequential) | **deadline-FIRST** (C-H4): already-due deadline at admission → Expired inline, Mutex NOT released, no reacquire epoch. Else register+timer+handoff |
@@ -164,8 +164,8 @@ G-TERM-3 evidence.
 | **AsyncQueue** | `queue_grant_producer_locked` | `Scheduler::queue_grant_producer_locked` (`scheduler.cpp:3505`) | caller holds G+S; takes producer.mtx() | resolve head → retire → move winner's `prod_lease` into freed ring slot (or retain if Closed) → accounting → publish |
 | **AsyncQueue** | queue timer hook | `Scheduler::queue_timer_on_resolve` (`scheduler.cpp:3167`) | G | `static_cast<QueuePort*>(owner_ctx)`; `--active_queue_timers_` if >0; invoked exactly once per ACTIVE→terminal |
 | **AsyncQueue** | timer expiry in pump | `pump_deadlines_locked` inline path (`scheduler.cpp:3879–3901`) | G → q.mtx() | expire_locked → if has_on_resolve: `--port->active_wait_associations_`, fire on_resolve (`--active_queue_timers_`) → `--waiting_waitq_count_` → make_runnable+route |
-| **AsyncQueue** | close drain | `QueuePort::close` (`queue_port.cpp:321,325`) | G+S held | `while (queue_grant_consumer_locked)` + `while (queue_grant_producer_locked)`; close-vs-grant serialized by G+S |
-| **AsyncQueue** | teardown | `QueuePort::begin_teardown` (`queue_port.cpp:466`) | G+S | irreversible operational→tearing_down; preconditions: zero active_port_calls_/wait_associations/queue_timers/granted_not_resumed, both role queues empty |
+| **AsyncQueue** | close drain | `QueuePort::close` (`queue_port.cpp:297`; drain loops at 321 and 325) | G+S held | `while (queue_grant_consumer_locked)` + `while (queue_grant_producer_locked)`; close-vs-grant serialized by G+S |
+| **AsyncQueue** | teardown | `QueuePort::begin_teardown` (`queue_port.cpp:464`) | G+S | irreversible operational→tearing_down; preconditions: zero active_port_calls_/wait_associations/queue_timers/granted_not_resumed, both role queues empty |
 | **AsyncRwLock** | `AsyncRwLock::read_lock` admission | `Scheduler::rwlock_read_lock` (`scheduler.cpp:2682`) | G → W (waiters_.mtx()) | install `RwWaitCtx{read}` on node.user(); admission via `rwlock_claim_node_woken_locked` (NO `grant_from_head` — see REGISTRATION-ADMISSION-DRIFT note) |
 | **AsyncRwLock** | `AsyncRwLock::write_lock` admission | `Scheduler::rwlock_write_lock` (`scheduler.cpp:2776`) | G → W | install `RwWaitCtx{write}`; admission claim + commit `writer_active=true, writer_owner=me` |
 | **AsyncRwLock** | `AsyncRwLock::unlock_read` reconcile | `Scheduler::rwlock_unlock_read` (`scheduler.cpp:2831`) | G | `--active_readers`; if reaches 0 → `rwlock_grant_from_head_locked` |
@@ -298,7 +298,7 @@ handoff seam     : writer: writer_active_=true + writer_owner_=winner BEFORE pub
 terminal causes  : Woken (read/write admission or prefix-batch/handoff grant) |
                    Cancelled | Expired
 reconcile        : **EXPLICIT** — rwlock_cancel and rwlock_expire_wait both call
-                   rwlock_grant_from_head_locked in the SAME G+W hold after unlink;
+                   rwlock_grant_from_head_locked under a continuous G hold across two distinct W critical sections (unlink in the first W CS, head reconcile in the second);
                    reader prefix can join an existing reader phase; writer boundary
                    grants exactly one writer
 admission precedence: resource admissible (no writer + empty queue for reader;
@@ -365,7 +365,8 @@ them):
 | Event `set` / Semaphore `release` / Condition `notify_one`/`notify_all` | ✓ | ✓ | ✓ (ext-thread safe; `g_worker==nullptr` → route via `pending_spawn_`+`signal_wake_locked`) | n/a | n/a |
 | Event `reset` | ✓ | ✓ | ✓ | n/a | n/a |
 | Event `wait`/`wait_until`, Semaphore `acquire`/`acquire_until`, AsyncMutex `lock`/`lock_until`, AsyncRwLock `read_lock`/`write_lock`(+`_until`), Queue `push`/`pop`(+`_until`) | ✓ (Fiber-only; suspends) | ✗ | ✗ | n/a | n/a |
-| `try_*` (Event n/a; Semaphore `try_acquire`; AsyncMutex `try_lock`; Queue `try_push`/`try_pop`; AsyncRwLock `try_read_lock`) | ✓ | ✓ | ✓ | n/a | n/a |
+| `try_*` cross-thread-safe (Semaphore `try_acquire`; Queue `try_push`/`try_pop`; AsyncRwLock `try_read_lock`) | ✓ | ✓ | ✓ | n/a | n/a |
+| AsyncMutex `try_lock` | ✓ (Fiber-only — successful acquisition commits `owner_` to the current Fiber) | ✗ | ✗ | n/a | n/a |
 | AsyncRwLock `try_write_lock` | ✓ (Fiber-only — must record `writer_owner_`) | ✗ | ✗ | n/a | n/a |
 | AsyncMutex `unlock` | ✓ | ✗ | ✗ | **✓ (owner Fiber only)** | n/a |
 | AsyncRwLock `unlock_read` | ✓ | ✓ | ✓ (ext-thread safe) | n/a | ✓ (must hold a read share — not runtime-enforced in v1) |
@@ -377,6 +378,7 @@ them):
 | Destruction | ✓ | ✓ | ✓ (requires quiescence: empty WaitQueue, no active condition waits, no mutex owner) | n/a | n/a |
 
 **Notes on accuracy:**
+- `AsyncMutex::try_lock` is Fiber-context-only because a successful acquisition commits `owner_` to the current Fiber identity. The internal critical section is thread-safe under `global_mtx_` + `waiters_.mtx()`, but that does NOT make the public call legal without a running Fiber (the implementation asserts `g_worker != nullptr` and reads `ws->current`).
 - `unlock_read()` from an external OS thread is an **accepted v1 limitation**: a
   wrong-context `unlock_read` is NOT runtime-detected. This is documented in
   `e12-rwlock.md` and is not a defect.
@@ -461,7 +463,7 @@ resource for the exact CAS winner BEFORE `make_runnable` + `route_runnable_locke
 | Primitive | Commit before publication | Evidence |
 | --- | --- | --- |
 | Semaphore (release transfer) | pending permit transferred (conceptually `accepted_release_count++`, `acquiredCount++`); `available_` UNCHANGED | `sem_release` (`scheduler.cpp:2129`) |
-| AsyncMutex (handoff) | `owner = winner Fiber` (line 2079-equivalent) BEFORE `make_runnable` | `mutex_handoff_one_locked` (`scheduler.cpp:2411`); `e12-async-mutex.md` §10.5 |
+| AsyncMutex (handoff) | `owner = winner Fiber` (`scheduler.cpp:2434`) BEFORE `make_runnable` | `mutex_handoff_one_locked` (`scheduler.cpp:2411`); `e12-async-mutex.md` §10.5 |
 | AsyncCondition (notify + reacquire) | notify resolves Condition epoch; the latched Condition outcome is returned; **mandatory Mutex reacquire is a separate epoch** (return holds Mutex in all Condition-outcome cases — Model A) | `condition_wait_prepare*` (`scheduler.cpp:3569/3650`) |
 | AsyncQueue (payload/ring ownership) | lease moved into ring (producer) or ring HEAD moved into `cons_out` (consumer) BEFORE publication; `QueueCompletion` written BEFORE publication | `queue_grant_producer_locked` (`scheduler.cpp:3505`); `queue_grant_consumer_locked` (`scheduler.cpp:3474`); F.6 retire-before-commit |
 | AsyncRwLock (reader count) | `active_readers_ += batch_size` committed AFTER all members claimed, BEFORE batch publication | `rwlock_grant_from_head_locked` (`scheduler.cpp:2536`); `e12-rwlock.md` reader-batch section |
@@ -571,7 +573,7 @@ Per-primitive classification:
 | **Semaphore** | IMPLICIT / STRUCTURALLY IMPOSSIBLE | Stable-state invariant `EligibleQueuedWaiterExists ⇒ available_ == 0` (Conclusion A). Cancel/expire of the FIFO head happens under `global_mtx_`, unlinking the head BEFORE a later `release` observes the queue. There is no state where `available_ > 0` AND an eligible queued waiter exists. So head removal cannot strand a permit. Proof: `e12-semaphore.md` §5.4; `sem_cancel`/`sem_acquire_until` admission recheck + `sem_release` serialization. |
 | **AsyncMutex** | IMPLICIT / STRUCTURALLY IMPOSSIBLE | The handoff is ONE atomic transition: `wake_one_locked` → `owner := winner` → unlink, all in the same `global_mtx_`+`q.mtx()` CS. Cancel/expire of a Suspended queued node unlinks it; the successor becomes the new FIFO head and is handed off at the NEXT `unlock`. A stable observable state `owner == nullptr ∧ non-empty wait queue ∧ no in-flight handoff` does not exist: either the queue is empty (no successor to strand) OR a handoff is committed atomically with the unlink. Cancel/expire of an already-Woken (handed-off) node loses (Category B fail-fast); there is no window where the head is Woken but `owner` is not yet committed. Proof: `mutex_handoff_one_locked` (`scheduler.cpp:2411`); `e12-async-mutex.md` §10.5; test `mtx_t22_cancelled_head_then_handoff`. |
 | **AsyncQueue** | IMPLICIT / STRUCTURALLY IMPOSSIBLE | Producer expiry (P9): lease NEVER entered ring (no slot consumed) → nothing to reconcile. Consumer expiry (C8): ring UNCHANGED (no item reserved) → nothing to reconcile. The single `resolve_` CAS plus G+S serialization is the sole arbiter; expiry and grant commit are mutually exclusive via the CAS (only one performs a ring mutation, and expiry never does). Close-vs-expiry is serialized by G+S. Counter deltas for expiry are only `W-1, T-1` (no ring delta). Proof: `e12-queue-state-machine.md` §3.1/§3.2/§8; `e12-queue.md` §D.4 Case A/B; tests `queue_g1_push_until_expires_recovers_value`, `queue_g1_pop_until_expires`, `queue_h1..h4`. |
-| **AsyncRwLock** | **EXPLICIT RECONCILE** | `rwlock_cancel` and `rwlock_expire_wait` BOTH call `rwlock_grant_from_head_locked` in the SAME G+W hold after unlink, when the queue is non-empty. This may grant the newly-exposed head: reader prefix can join an existing reader phase (`writer_active_==false ∧ active_readers_>0` → join); writer boundary grants exactly one writer. The reconcile is MANDATORY regardless of whether the removed node was the head (a non-head removal is a no-op reconcile because the head is unchanged). The dedicated `rwlock_expire_wait` seam exists precisely because the generic `expire_wait` does NOT reconcile. Proof: `e12-rwlock.md` §"Cancel and expiry queue advancement"; `rwlock_cancel` (`scheduler.cpp:2865`); `rwlock_expire_wait` (`scheduler.cpp:2898`); tests `rwlock_head_writer_cancel_grants_reader_prefix_immediately`, `rwlock_head_writer_expiry_grants_reader_prefix_immediately`, `rwlock_cancel_reconcile_preserves_fifo`, `rwlock_expiry_reconcile_preserves_fifo`. |
+| **AsyncRwLock** | **EXPLICIT RECONCILE** | `rwlock_cancel` and `rwlock_expire_wait` BOTH call `rwlock_grant_from_head_locked` under a continuous G hold across two distinct W critical sections: the first W CS performs unlink + accounting, then W is released while G remains held, and the second W CS performs head reconciliation. This may grant the newly-exposed head: reader prefix can join an existing reader phase (`writer_active_==false ∧ active_readers_>0` → join); writer boundary grants exactly one writer. The reconcile is MANDATORY regardless of whether the removed node was the head (a non-head removal is a no-op reconcile because the head is unchanged). The dedicated `rwlock_expire_wait` seam exists precisely because the generic `expire_wait` does NOT reconcile. Proof: `e12-rwlock.md` §"Cancel and expiry queue advancement"; `rwlock_cancel` (`scheduler.cpp:2865`); `rwlock_expire_wait` (`scheduler.cpp:2898`); tests `rwlock_head_writer_cancel_grants_reader_prefix_immediately`, `rwlock_head_writer_expiry_grants_reader_prefix_immediately`, `rwlock_cancel_reconcile_preserves_fifo`, `rwlock_expiry_reconcile_preserves_fifo`. |
 
 The "global_mtx_ serializes so safe" hand-wave is REJECTED for every primitive
 above; each row gives the full state argument.
@@ -595,10 +597,22 @@ conflated.
 Every external-thread-callable resolver routes through the Scheduler canonical
 path: `make_runnable` → `route_runnable_locked` → `signal_wake_locked`.
 
-- When `g_worker == nullptr` (external OS thread), `route_runnable_locked`
-  pushes to `pending_spawn_` and `signal_wake_locked` wakes a parked Worker.
-  No Semaphore/Event/Condition/AsyncMutex/AsyncRwLock cancel/release/notify
-  path uses the current worker when `g_worker` is null.
+- Canonical routing is determined by the **explicit `WorkerState* owner`**
+  supplied to `route_runnable_locked` (`scheduler.cpp:968`), not directly by
+  `g_worker` inside the routing helper: `owner != nullptr` → enqueue
+  `owner->local_runnable`; `owner == nullptr` → enqueue `pending_spawn_`;
+  either way `signal_wake_locked` fires.
+- Resolver families differ in how they obtain the owner:
+  - Generic Event / Semaphore / Condition / AsyncMutex wake/cancel paths
+    commonly pass `g_worker`; an external caller therefore supplies `nullptr`
+    and routes through `pending_spawn_`.
+  - Queue / AsyncRwLock specialized resolver paths capture the canonical
+    `WorkerState*` from `fiber_owner_` before publication; an external caller
+    can therefore still route directly to an owner inbox when the Fiber has a
+    recorded home worker.
+- All resolver families share the terminal-winner → `make_runnable`
+  publication guard → `route_runnable_locked(explicit owner)` →
+  `signal_wake_locked` shape.
 - Evidence: `event_external_thread_set_wakes_live`, `sem_t26_external_thread_release_wakes_live`, `cond_t24_external_thread_notify`, `mtx_t10_external_thread_cancel_succeeds`.
 
 ### G-TERM-11 — Context lifetime [AS-BUILT]
@@ -644,10 +658,17 @@ publication; the `user_` context is read only inside the pre-publication CS.
 ### G-TERM-13 — Accounting ledger [AS-BUILT]
 
 See G-TERM-4 table. For each increment, all legal decrement paths are listed.
-The `if (>0)` guards on `--waiting_waitq_count_` and `--active_*` are
-defense-in-depth; after the E10-CORRECTIVE-2 seal (registration only via
-`Scheduler::await_wait`), an underflow is unreachable. The Queue
-`active_wait_associations_` / `active_queue_timers_` / `granted_not_resumed_`
+The guards prevent numeric underflow in the current implementation, but are
+not themselves proof of accounting correctness: an unexpected double-decrement
+would be masked by leaving the counter at zero. The PASS conclusion comes from
+the path-by-path increment/decrement ledger, terminal-winner ownership, and
+exactly-once timer-state transition analysis in G-TERM-4. WaitQueue structural
+registration authority is sealed to Scheduler-owned seams: `Scheduler::await_wait`
+is one generic seam; E12 primitives register through additional primitive-specific
+Scheduler admission seams (`await_wait_deadline`, `await_event_wait*`, `sem_acquire*`,
+`mutex_lock*`, `condition_wait_prepare*`, `queue_push_admit*`, `queue_pop_admit*`,
+`rwlock_read_lock*`, `rwlock_write_lock*`), all funneling through `WaitQueue::register_wait_locked`.
+The Queue `active_wait_associations_` / `active_queue_timers_` / `granted_not_resumed_`
 live on QueuePort (queue_port.hpp:429–431) and are reached by Scheduler via
 the `friend class ::sluice::async::detail::QueuePort` grant.
 
@@ -771,7 +792,7 @@ Strictly Queue v1 as-built.
 | New reader cannot bypass any queued waiter | Fast path requires `!writer_active_ && waiters_.empty()`. | `rwlock_try_read_lock`; `rwlock_read_lock` admission |
 | Head reader prefix batch | `rwlock_grant_from_head_locked` dispatches on head.mode; reader → maximal consecutive prefix. | `rwlock_grant_readers_locked`; `rwlock_t11_reader_batch_stops_at_writer` |
 | Head writer single grant | prefix stops at first writer; exactly one writer granted. | `rwlock_grant_one_writer_locked`; `rwlock_t4_writer_blocks_readers_batch_grant` |
-| Cancel/expiry explicit head reconcile | MANDATORY: both `rwlock_cancel` and `rwlock_expire_wait` call `rwlock_grant_from_head_locked` in the SAME G+W hold after unlink. | `e12-rwlock.md` §"Cancel and expiry queue advancement"; `rwlock_head_writer_cancel_grants_reader_prefix_immediately`, `rwlock_head_writer_expiry_grants_reader_prefix_immediately`, `rwlock_cancel_reconcile_preserves_fifo`, `rwlock_expiry_reconcile_preserves_fifo` |
+| Cancel/expiry explicit head reconcile | MANDATORY: both `rwlock_cancel` and `rwlock_expire_wait` call `rwlock_grant_from_head_locked` under a continuous G hold across two distinct W critical sections (unlink in the first, head reconcile in the second). | `e12-rwlock.md` §"Cancel and expiry queue advancement"; `rwlock_head_writer_cancel_grants_reader_prefix_immediately`, `rwlock_head_writer_expiry_grants_reader_prefix_immediately`, `rwlock_cancel_reconcile_preserves_fifo`, `rwlock_expiry_reconcile_preserves_fifo` |
 | Reader prefix can join existing reader phase | YES — after W1 cancel/expiry, R2 (new head) joins R1's reader phase immediately (`writer_active_==false ∧ active_readers_>0`). | `e12-rwlock.md` §9.1 reader-prefix-joining scenario |
 | Writer owner commit before publication | `writer_active_=true, writer_owner_=winner` BEFORE publication. | `rwlock_write_lock`/`rwlock_grant_one_writer_locked` |
 | Batch publication does NOT access resumed WaitNode | YES — next/fiber/owner cached before route; no post-route dereference. | `e12-rwlock.md` §"Intrusive publication list"; `rwlock_batch_publication_does_not_access_published_node` |
@@ -975,9 +996,9 @@ Per-primitive TUs (Method A — primitive-specific resource semantics):
   event_primitive_test              (42 cases)
   semaphore_primitive_test          (31 cases)
   async_mutex_primitive_test        (23 cases)
-  async_condition_primitive_test    (35 cases)
+  async_condition_primitive_test    (32 cases)
   async_queue_primitive_test        (26 cases)
-  async_rwlock_test                 (25 cases)
+  async_rwlock_test                 (24 cases)
   async_rwlock_death_test           (Category A/B fail-fast)
   async_mutex_death_test            (Category A fail-fast)
   timer_wait_test                   (16 cases — E11 substrate)
@@ -999,7 +1020,7 @@ truly shared and that would be erased by per-primitive differences:
 | Law | Class | Existing evidence |
 | --- | --- | --- |
 | G-TERM-1 (one terminal winner) | PROVEN BY EXISTING TEST | per-primitive three-way race tests; `parity_waitoutcome_*` |
-| G-TERM-2 (winner owns unlink) | PROVEN BY EXISTING TEST | `wait_queue_test`, `wait_queue_resolution_authority_test`, `wait_queue_unlink_topology_test` (note: baseline `-Wunused-variable` defect on `order_bad`, pre-existing, OUT OF SCOPE) |
+| G-TERM-2 (winner owns unlink) | PROVEN BY EXISTING TEST | `wait_queue_test`, `wait_queue_resolution_authority_test`, `wait_queue_unlink_topology_test` |
 | G-TERM-3 (resource commit before publication) | PROVEN BY EXISTING TEST | `mtx_t5_owner_before_publication_phase`; `rwlock_batch_publication_does_not_access_published_node`; `queue_p4_*` |
 | G-TERM-4 (timer lifecycle exactly once) | PROVEN BY EXISTING TEST | `timer_*` suite (T8–T18); `sem_t28_terminal_timed_wait_no_timer_leak` |
 | G-TERM-5 (state-before-node) | PROVEN BY EXISTING TEST | `timer_t10_forced_stale_pump_after_destruction_is_inert` |
@@ -1069,13 +1090,13 @@ model mapping is below.
 | --- | --- |
 | G-TERM-1 (one terminal winner) | `E10WaitNode` (`InvNoDoubleCompletion`); inherited by every E12 model. |
 | G-TERM-2 (winner owns unlink) | `E10WaitNode` formalization of the CAS+unlink critical section. |
-| G-TERM-3 (resource commit before publication) | `e12_async_mutex` `InvGrantOwnerCommit`/`InvGrantPublicationCoupling`; `e12_queue` `InvPublishBeforeCommit` (negative); `e12_semaphore` `InvGrantCommitCoupling`. |
+| G-TERM-3 (resource commit before publication) | `e12_async_mutex` `InvGrantOwnerCommit`/`InvGrantPublicationCoupling`; `e12_queue`: invariant `NoPublishedPendingCompletion`, negative model `E12QueueNegPublishBeforeCommit`; `e12_semaphore` `InvGrantCommitCoupling`. |
 | G-TERM-4 (timer lifecycle exactly once) | `e11_timer_wait` `TimerLifetimeClosure`; NEG-4. |
 | G-TERM-5 (state-before-node) | `e11_timer_wait` NEG-3 (stale cross-epoch) + NEG-4 (post-destruction). |
 | G-TERM-6 (admission precedence) | `e12_semaphore` `InvPermitFirstDeadline` + NEG-7; `e12_async_mutex` admission closure invariants; `e12_async_condition` `InvDueInlineRetainsOwnership`. |
 | G-TERM-7 (queue-identity cancel) | DOCUMENT-ONLY (membership gate is structural; per-primitive TUs prove it causally). Not separately modelled — the resolve_ CAS authority already covers single-winner; membership is a structural property. |
-| G-TERM-8 (terminal-removal progress) | `e12_rwlock` `LivenessCanceledHeadDoesNotBlock` (negative BrokenStarvation); `e12_semaphore` stable-state invariant `InvNoIdlePermitWithEligibleWaiter` (NEG-6). |
-| G-TERM-9 (FIFO / no-barging) | `e12_semaphore` `InvFIFOGrant` (NEG-4); `e12_async_mutex` FIFO invariants; `e12_async_condition` `InvNotifyOneFIFO`/`InvNotifyAllSnapshotComplete`; `e12_queue` `NegBarging`; `e12_rwlock` `InvNoBarge` (BrokenBargingWriter/Reader). |
+| G-TERM-8 (terminal-removal progress) | No dedicated RwLock formal invariant or negative model specifically encodes cancel/expiry head reconciliation. Evidence: causal C++ tests `rwlock_head_writer_cancel_grants_reader_prefix_immediately`, `rwlock_head_writer_expiry_grants_reader_prefix_immediately`, `rwlock_cancel_reconcile_preserves_fifo`, `rwlock_expiry_reconcile_preserves_fifo`; as-built source audit of `rwlock_cancel` / `rwlock_expire_wait` / `rwlock_grant_from_head_locked`. Formal classification: FORMAL-GAP F-G-3, non-blocking. `e12_semaphore` stable-state invariant `InvNoIdlePermitWithEligibleWaiter` (NEG-6). |
+| G-TERM-9 (FIFO / no-barging) | `e12_semaphore` `InvFIFOGrant` (NEG-4); `e12_async_mutex` FIFO invariants; `e12_async_condition` `InvNotifyOneFIFO`/`InvNotifyAllSnapshotComplete`; `e12_queue`: invariant `NoBarging`, negative model `E12QueueNegBarging`; `e12_rwlock`: fairness invariant relevant to G-TERM-9 `NoReaderBarging`, negative model `E12RwLockNegReaderBypass`. |
 | G-TERM-10 (external-thread publication) | DOCUMENT-ONLY (production-mechanism proof; `g_worker==nullptr` routing). Not separately modelled — the Scheduler publication model (E7/E8/E9) covers exactly-once publication. |
 | G-TERM-11/12 (context/post-publication) | `e12_rwlock` `batch_publication_does_not_access_published_node` (runtime); the formal model represents publication as one step. |
 | G-TERM-13 (accounting ledger) | `e12_semaphore` `InvPermitConservation`; `e12_queue` lease-conservation invariants; `e11_timer_wait` active-count invariants. |
@@ -1104,8 +1125,8 @@ primitive — is currently covered only by deterministic C++ tests
 (`rwlock_head_writer_cancel_grants_reader_prefix_immediately` and siblings),
 not by a formal negative. This is a **FORMAL-GAP, non-blocking**: the C++
 evidence is causal and direct, the production behavior is correct, and the
-formal model's `LivenessCanceledHeadDoesNotBlock` liveness property plus the
-runtime reconcile tests jointly protect the property. A future RwLock negative
+runtime reconcile tests protect the property (no dedicated formal invariant or
+negative model encodes the reconcile path). A future RwLock negative
 model for the reconcile path (e.g. `E12RwLockNegNoReconcileAfterCancel`) would
 bring parity with the sibling models; it is NOT required to close E12-G and is
 NOT authorized by this audit.
@@ -1121,8 +1142,7 @@ NOT authorized by this audit.
 | F-G-3 | RwLock formal model coverage | FORMAL-GAP | LOW | `docs/spec/e12_rwlock/` has only 1 negative (reader-bypass); the EXPLICIT reconcile class is formal-implicit (covered by liveness + runtime tests only). | Non-blocking. Future F1+ work may add `E12RwLockNegNoReconcileAfterCancel` for parity. NOT required to close E12-G; NOT authorized by this audit. |
 | F-G-4 | Cross-primitive parity test coverage | TEST-GAP (non-blocking) | LOW | `async_sync_cross_primitive_parity_test` covers D3 (Event/Sem/mtx) and D4 (Event/Sem/mtx). RwLock and Queue resource-first admission precedence and a few cross-law ledger assertions are covered only per-primitive. | Non-blocking. Optional future Method-B additions listed in §10.3. NOT required to close E12-G; NOT authorized by this audit. |
 | F-G-5 | Queue external cancellation | DEFERRED-BY-DESIGN | N/A | Queue v1 has no public cancel API; P8/C7 reserved. | None. NOT a parity failure (G-TERM-7). Do NOT add a Queue cancel API under E12-G. |
-| F-G-6 | `wait_queue_unlink_topology_test` baseline defect | (out of scope) | N/A | Pre-existing `-Wunused-variable` on `order_bad` at HEAD; documented in `e12-event.md` §14 as a PROVEN BASELINE DEFECT outside the E12-A corrective. | None. Out of E12-G scope. Flagged only so it is not mistaken for an E12-G regression. |
-| F-G-7 | Event / Semaphore / AsyncMutex / AsyncCondition / AsyncQueue / AsyncRwLock (production behavior) | PASS | N/A | Every G-TERM law has a code site + deterministic test (§10.2). No authority corruption, no public-API conflict, no Scheduler defect. | None. |
+| F-G-6 | Event / Semaphore / AsyncMutex / AsyncCondition / AsyncQueue / AsyncRwLock (production behavior) | PASS | N/A | Every G-TERM law is mapped to an as-built code site and an explicit evidence class (runtime test, death test, formal invariant/negative, or contract audit). No authority corruption, no public-API conflict, no Scheduler defect. | None. |
 
 **No PRODUCTION-BUG finding.** No API-CONTRACT-CONFLICT finding. The only
 non-PASS findings are DOC-DRIFT (F-G-1, F-G-2), FORMAL-GAP (F-G-3, non-blocking),
@@ -1196,14 +1216,15 @@ E12-G-AS-BUILT-AUDIT: PASS
 E12-G-PRODUCTION-CORRECTIVE: NOT REQUIRED
 E12-G-TEST-CORRECTIVE: NOT REQUIRED  (optional non-blocking Method-B additions identified in §10.3)
 E12-G-FORMAL-CORRECTIVE: NOT REQUIRED (F1 chosen; RwLock negative-model parity gap F-G-3 is non-blocking)
-E12-G-CLOSEOUT: READY FOR INDEPENDENT REVIEW
+E12-G-CLOSEOUT: READY FOR INDEPENDENT RE-REVIEW
 ```
 
 The E12 primitive set (Event / Semaphore / AsyncMutex / AsyncCondition /
 AsyncQueue / AsyncRwLock), built on the E10 WaitNode/WaitQueue and E11
 TimerRegistration substrate, satisfies the G-TERM-1..14 cross-primitive
 terminal-resolution laws **as built**. Every law has a code site
-(`file:line`) and a deterministic test. The single deliberate, documented
+(`file:line`) and an explicit evidence class (runtime test, death test, formal
+invariant/negative, or contract audit). The single deliberate, documented
 divergence (Condition deadline-first admission, C-H4) has explicit authority
 and a parity test. The single EXPLICIT reconcile class (RwLock cancel/expiry
 head-reconcile) is implemented mandatorily and tested causally.
