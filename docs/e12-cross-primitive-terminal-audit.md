@@ -42,7 +42,7 @@ E12-G-CLOSEOUT: READY FOR INDEPENDENT RE-REVIEW
 
 **Verdict in one line:** every E12 primitive satisfies the G-TERM laws as
 built. No production defect, no public-API conflict, no Scheduler authority
-corruption was found. One DOC-DRIFT finding (the obsolete preparation matrix)
+corruption was found. Two DOC-DRIFT findings (F-G-1 RwLock preparation matrix drift, F-G-2 Condition admission precedence drift)
 and several non-blocking parity / formal-coverage observations are recorded.
 No corrective production implementation is authorized or required by this
 audit.
@@ -859,8 +859,9 @@ downstream dereference is gated on it.
 ### 8.3 Counter ledger (G-TERM-13)
 
 See G-TERM-4 table. The cross-cutting audit conclusion: every increment has at
-least one named legal decrement path, and the `if (>0)` guards are
-defense-in-depth (the registration-seal makes underflow unreachable).
+least one named legal decrement path. The `if (>0)` guards exist and prevent
+numeric underflow, but are not themselves correctness proof; the PASS conclusion
+rests on the path-by-path increment/decrement ledger and terminal-winner ownership.
 
 ---
 
@@ -1028,10 +1029,10 @@ truly shared and that would be erased by per-primitive differences:
 | G-TERM-7 (queue-identity cancel) | PROVEN BY EXISTING TEST | `parity_d4_*`; `event_wrong_event_*`; `sem_t23/t24/t25`; `mtx_t8/t9`; `cond_t31`; `rwlock_t13` |
 | G-TERM-8 (terminal-removal progress) | PARTIALLY COVERED | Semaphore/Mutex/Queue: IMPLICIT, structurally proven by code + `sem_t13`/`mtx_t22`/`queue_g1_*`. RwLock: EXPLICIT, proven by `rwlock_head_writer_cancel_grants_reader_prefix_immediately` + 3 sibling reconcile tests. **No production bug.** |
 | G-TERM-9 (FIFO / no-barging) | PROVEN BY EXISTING TEST | `sem_t10/t11/t12`; `mtx_t3/t4/t21`; `cond_t8`; `queue_capacity_and_fifo`; `rwlock_t4/t5/t10/t11` |
-| G-TERM-10 (external-thread publication) | PROVEN BY EXISTING TEST | `event_external_thread_set_wakes_live`; `sem_t26`; `cond_t24`; `mtx_t10` |
+| G-TERM-10 (external-thread publication) | PARTIALLY COVERED | Generic resolver families (`event_external_thread_set_wakes_live`, `sem_t26`, `cond_t24`, `mtx_t10`) and RwLock specialized cancellation (`rwlock_head_writer_cancel_grants_reader_prefix_immediately` — calls `AsyncRwLock::cancel` from the main external OS thread while queued Fibers are owned by the Scheduler, then verifies canonical publication and head reconciliation) are covered causally. Queue specialized routing is established by source/authority audit (no dedicated external-thread `close()` runtime test exists). |
 | G-TERM-11 (context lifetime) | PROVEN BY EXISTING TEST (ASan/UBSan) | per-primitive ASan/UBSan clean runs; `rwlock_batch_publication_does_not_access_published_node` |
 | G-TERM-12 (no post-publication access) | PROVEN BY EXISTING TEST | `rwlock_batch_publication_does_not_access_published_node` |
-| G-TERM-13 (accounting ledger) | PARTIALLY COVERED | counters are defense-in-depth; `sem_t27/t28`, `timer_*` exercise the decrement paths. No dedicated ledger-invariant test, but no reachable underflow. |
+| G-TERM-13 (accounting ledger) | PARTIALLY COVERED | Guarded decrements prevent numeric underdepth but are not themselves correctness proof. `sem_t27/t28` and `timer_*` exercise key decrement paths; the complete result relies on the path-by-path increment/decrement ledger, terminal-winner ownership, and source audit. No dedicated cross-counter ledger-invariant runtime test exists. |
 | G-TERM-14 (destruction is not a resolver) | PROVEN BY EXISTING TEST | `event_destruction_after_terminal_waits_safe`; `mtx_t18_destruction_safe_unlocked_empty`; `cond_t27_safe_destruction_empty`; `rwlock_t0_construction_and_destruction`; `async_rwlock_death_test`; `async_mutex_death_test` |
 
 ### 10.3 Optional non-blocking parity additions (NOT required by this audit)
@@ -1097,7 +1098,7 @@ model mapping is below.
 | G-TERM-7 (queue-identity cancel) | DOCUMENT-ONLY (membership gate is structural; per-primitive TUs prove it causally). Not separately modelled — the resolve_ CAS authority already covers single-winner; membership is a structural property. |
 | G-TERM-8 (terminal-removal progress) | No dedicated RwLock formal invariant or negative model specifically encodes cancel/expiry head reconciliation. Evidence: causal C++ tests `rwlock_head_writer_cancel_grants_reader_prefix_immediately`, `rwlock_head_writer_expiry_grants_reader_prefix_immediately`, `rwlock_cancel_reconcile_preserves_fifo`, `rwlock_expiry_reconcile_preserves_fifo`; as-built source audit of `rwlock_cancel` / `rwlock_expire_wait` / `rwlock_grant_from_head_locked`. Formal classification: FORMAL-GAP F-G-3, non-blocking. `e12_semaphore` stable-state invariant `InvNoIdlePermitWithEligibleWaiter` (NEG-6). |
 | G-TERM-9 (FIFO / no-barging) | `e12_semaphore` `InvFIFOGrant` (NEG-4); `e12_async_mutex` FIFO invariants; `e12_async_condition` `InvNotifyOneFIFO`/`InvNotifyAllSnapshotComplete`; `e12_queue`: invariant `NoBarging`, negative model `E12QueueNegBarging`; `e12_rwlock`: fairness invariant relevant to G-TERM-9 `NoReaderBarging`, negative model `E12RwLockNegReaderBypass`. |
-| G-TERM-10 (external-thread publication) | DOCUMENT-ONLY (production-mechanism proof; `g_worker==nullptr` routing). Not separately modelled — the Scheduler publication model (E7/E8/E9) covers exactly-once publication. |
+| G-TERM-10 (external-thread publication) | DOCUMENT-ONLY — production-mechanism proof based on the explicit `WorkerState* owner` argument supplied to `route_runnable_locked`. Not separately modelled — the Scheduler publication model (E7/E8/E9) covers exactly-once publication; external-thread destination selection itself is not separately modelled. |
 | G-TERM-11/12 (context/post-publication) | `e12_rwlock` `batch_publication_does_not_access_published_node` (runtime); the formal model represents publication as one step. |
 | G-TERM-13 (accounting ledger) | `e12_semaphore` `InvPermitConservation`; `e12_queue` lease-conservation invariants; `e11_timer_wait` active-count invariants. |
 | G-TERM-14 (destruction not a resolver) | `e12_async_condition` NEG-C7 `DestroyWithActiveWaiters` → `InvDestructionPrecondition`; per-primitive destruction is documented caller-contract. |
