@@ -1534,6 +1534,33 @@ implement RwLock in this preparation task.
 
 ## 10. Cross-primitive semantic matrix (Task I)
 
+> **E12-G status / authority (2026-07-25).** This section (§10) is the
+> **preparation baseline** for the E12-G cross-primitive audit only. The
+> authoritative as-built cross-primitive terminal-resolution audit is
+> [`docs/e12-cross-primitive-terminal-audit.md`](e12-cross-primitive-terminal-audit.md)
+> (verdict `E12-G-AS-BUILT-AUDIT: PASS`; no production corrective required).
+> The matrices below contain **obsolete preparation-era candidates** that the
+> as-built primitives have since closed differently; in particular:
+>
+> - **RwLock row** (`1–2 (readers, writers)` queues; `read-permit (anonymous,
+>   may pre-increment)`; `refund read permit if expire wins before grant`;
+>   `upgrade state` in §9): the as-built E12-F [`docs/e12-rwlock.md`](e12-rwlock.md)
+>   uses **ONE unified FIFO queue**, commits `active_readers_` only at claim
+>   under continuous G+W (no per-node refund path), and DEFERs upgrade.
+> - **Condition row** (`Model A: mandatory non-cancellable; Model B: separate,
+>   may expire — §7`): Model A is **CLOSED** as authoritative
+>   ([`docs/e12-condition.md`](e12-condition.md) C-H1); the Model A/B debate
+>   is NOT reopened.
+> - **Admission precedence**: as-built, every primitive uses **resource-first**
+>   admission precedence EXCEPT AsyncCondition, which uses **deadline-first**
+>   (C-H4) for the Condition epoch (a deliberate, documented, tested
+>   divergence — see the audit G-TERM-6 and `docs/api-reference.md`).
+> - **Queue external cancellation**: `DEFERRED in v1` is
+>   `DEFERRED-BY-DESIGN`, NOT a parity failure.
+>
+> The matrices are retained verbatim as the historical preparation record;
+> they MUST NOT be re-imposed on the closed as-built primitives.
+
 ### 10.1 State / cleanup matrix
 
 | Primitive | Resource state | WaitQueue count | Grant/reservation state | Ownership identity | Deadline cleanup | Cancellation cleanup |
