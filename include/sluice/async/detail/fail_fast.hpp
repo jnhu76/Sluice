@@ -99,10 +99,17 @@ namespace sluice::async::detail {
 // is an optimized no-op (the parameter is a compile-time true constant). On
 // unsupported targets or when called with false (death test), it calls
 // evented_admission_fail_fast().
-inline void require_evented_supported(bool supported) {
+inline void require_evented_supported(bool supported) noexcept {
     if (!supported) {
         evented_admission_fail_fast();
     }
 }
+
+// E14 D-E14-2: Evented admission check. Returns the effective fiber support
+// status. Production: returns fiber_ctx::supported (compile-time constant on
+// the target). Internal-testing: may be overridden via
+// AsyncTestAccess::set_evented_admission_override to simulate unsupported
+// targets on x86_64. Defined out-of-line in fail_fast.cpp.
+bool evented_admission_check() noexcept;
 
 }  // namespace sluice::async::detail

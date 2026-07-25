@@ -1541,3 +1541,20 @@ do
             add_tests("e14_group_death_test")
     end
 end
+
+-- e14_f3_internal_test — E14 RT-F3 real init_fiber failure regression test.
+-- Uses SLUICE_ASYNC_INTERNAL_TESTING seam to force init_fiber failure.
+-- Links against sluice_async_internal_testing (NOT production sluice_async).
+do
+    local p = "tests/e14_f3_internal_test.cpp"
+    if os.isfile(p) then
+        target("e14_f3_internal_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs("include", "tests")
+            add_files(p)
+            add_tests("e14_f3_internal_test")
+    end
+end

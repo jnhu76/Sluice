@@ -259,4 +259,66 @@ SLUICE_TEST_CASE(e14_rt_f5a_supported_target_admission_noop) {
     SLUICE_CHECK(ran == 1);
 }
 
+// ============================================================================
+// RT-F1-B: Multi-Group same-Scheduler isolation. A blocker Group/Fiber
+// registers a wait on an uncompleted Future; a target Group admits a task
+// that completes immediately. target.await() MUST return once target's own
+// task is terminal, even though the blocker's registration keeps
+// external_wake_possible_locked() true.
+//
+// Pre-fix (without stop predicate): run_live(1) parks indefinitely because
+// the blocker's waiting_ready_ registration makes MW-S3 + external_wake
+// true. target.await() never returns.
+// Post-fix: the Group-scoped stop predicate fires (all target Futures
+// terminal), run_live returns, target.await() completes.
+// ============================================================================
+SLUICE_TEST_CASE(e14_rt_f1b_multi_group_same_scheduler_isolation) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
+    Scheduler sched(ctx);
+
+    // Blocker: a Fiber (not a Group task) that suspends on an uncompleted
+    // Future, creating a persistent waiting_ready_ registration.
+    EventedWaitPolicy blocker_policy(sched);
+    Future<int> blocker_future{blocker_policy};  // never completed until cleanup
+    std::atomic<bool> blocker_suspended{false};
+
+    Fiber blocker_fiber;
+    blocker_fiber.set_entry([&](Fiber&) {
+        blocker_suspended.store(true, std::memory_order_release);
+        (void)blocker_future.await();  // suspends: registers in waiting_ready_
+    });
+    FiberStack blocker_stack;
+    SLUICE_CHECK(sched.init_fiber(blocker_fiber, blocker_stack.base(), blocker_stack.size()));
+    sched.spawn(blocker_fiber);
+
+    // Drive once so the blocker Fiber suspends.
+    sched.run_until_idle();
+    SLUICE_CHECK(blocker_suspended.load(std::memory_order_acquire));
+    SLUICE_CHECK(sched.waiting_ready_count() == 1);  // blocker registered
+
+    // Target Group: admits a task that completes immediately.
+    Group target{sched};
+    int target_ran = 0;
+    target.async([&](CancelToken&) { ++target_ran; });
+
+    // target.await() MUST return even though the blocker's registration
+    // keeps external_wake_possible_locked() true.
+    target.await();
+
+    SLUICE_CHECK(target_ran == 1);
+    SLUICE_CHECK(target.size() == 0);  // reaped
+
+    // Blocker remains pending and alive.
+    SLUICE_CHECK(sched.waiting_ready_count() == 1);
+    SLUICE_CHECK(blocker_fiber.state() == FiberState::waiting);
+
+    // Cleanup: complete the blocker and drain.
+    blocker_future.complete_with(Result<int>{0});
+    sched.run_until_idle();
+    SLUICE_CHECK(blocker_fiber.state() == FiberState::done);
+    SLUICE_CHECK(sched.waiting_ready_count() == 0);
+}
+
 SLUICE_MAIN()

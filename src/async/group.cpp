@@ -12,11 +12,26 @@
 
 namespace sluice::async {
 
+// E14-F1: Group-scoped invocation stop predicate for run_live. Returns true
+// when all of the Group's task Futures are terminal (ready). Called under
+// Scheduler global_mtx_ at the MW-S3 boundary. Acquires Group::mtx_ (no
+// inversion: Group never holds mtx_ while calling into Scheduler).
+bool Group::group_stop_predicate(void* ctx) {
+    auto* self = static_cast<Group*>(ctx);
+    std::lock_guard<std::mutex> lk(self->mtx_);
+    for (auto& f : self->futures_) {
+        if (!f->ready()) return false;
+    }
+    return true;
+}
+
 Group::Group(Scheduler& sched) : sched_(&sched) {
     // E14 D-E14-2: construction-time fail-fast on unsupported targets.
+    // The Scheduler constructor already guards the earliest Evented admission
+    // boundary; this is defense-in-depth for the Group-specific surface.
     // Production passes fiber_ctx::supported (compile-time true on x86_64);
     // death tests exercise the false path deterministically.
-    detail::require_evented_supported(fiber_ctx::supported);
+    detail::require_evented_supported(detail::evented_admission_check());
     // Create the shared EventedWaitPolicy once per group. It borrows sched_,
     // which outlives the group by contract. All task Futures in this group
     // reference *evented_policy_.
@@ -25,16 +40,20 @@ Group::Group(Scheduler& sched) : sched_(&sched) {
 
 void Group::await() {
     if (sched_) {
-        // E14-F1/D-E14-1: Evented live-capable drive. Drive the scheduler in
-        // LIVE mode until every task Future is terminal. Unlike the old Drain
-        // approach (run_until_idle + no-progress break), Live mode parks the
-        // worker when an unresolved wait has an effective wake source
-        // (waiting_ready_ non-empty → external_wake_possible_locked() == true),
-        // instead of returning STALLED. An external producer completing a
-        // Future triggers SchedulerWakeHandle::notify() → signal_wake → the
-        // parked worker resumes → wake_ready_flags_locked() → task fiber
-        // resumes → completes. run_live returns only after the run terminates
-        // (QUIESCENT or MW-S3 without effective wake source).
+        // E14-F1/D-E14-1: Evented Group-scoped Live drive. Drive the scheduler
+        // in LIVE mode with an invocation stop predicate that returns true when
+        // all of THIS Group's task Futures are terminal. This prevents unrelated
+        // Scheduler registrations (other Groups/Fibers) from permanently blocking
+        // this Group's await(). The stop predicate is checked under global_mtx_
+        // at the MW-S3 boundary; it acquires mtx_ (no inversion: Group never
+        // holds mtx_ while calling into Scheduler).
+        //
+        // External producers completing a Future trigger
+        // SchedulerWakeHandle::notify() → signal_wake → the parked worker
+        // resumes → wake_ready_flags_locked() → task fiber resumes → completes.
+        // run_live returns when: (a) all this Group's Futures are terminal
+        // (stop predicate fires), or (b) QUIESCENT, or (c) MW-S3 without
+        // effective wake source.
         while (true) {
             std::size_t pending = 0;
             {
@@ -44,7 +63,10 @@ void Group::await() {
                 }
             }
             if (pending == 0) break;
-            sched_->run_live(1);
+            // Group-scoped Live drive: the stop predicate returns true when
+            // all this Group's Futures are terminal, allowing run_live to
+            // return even if unrelated Scheduler registrations remain.
+            sched_->run_live(1, &group_stop_predicate, this);
             // run_live returned: the scheduler run terminated. Loop to verify
             // all futures are ready.
         }

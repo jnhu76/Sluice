@@ -61,8 +61,19 @@ public:
 
     // Evented mode (E5-B). Tasks run as Fibers on `sched`; task Futures use
     // EventedWaitPolicy(sched). The caller MUST drive `sched` (typically via
-    // this group's await(), which calls sched.run_until_idle()). The scheduler
-    // is borrowed; it must outlive the group.
+    // this group's await(), which calls sched.run_live(1) with a Group-scoped
+    // stop predicate and parks until all task Futures are terminal). The
+    // scheduler is borrowed; it must outlive the group.
+    //
+    // Evented await semantics (E14):
+    //   - await() waits until ALL tasks admitted to this Group are terminal.
+    //   - It may block indefinitely if a required external producer never
+    //     completes. External producers are required to publish terminal
+    //     completion.
+    //   - cancel() is cooperative and is NOT an unconditional escape hatch;
+    //     a task or awaited operation that does not observe cancellation can
+    //     still prevent cancel() from returning.
+    //   - Scheduler must outlive Group.
     explicit Group(Scheduler& sched);
 
     ~Group();
@@ -113,6 +124,11 @@ public:
     }
 
 private:
+    // E14-F1: Group-scoped invocation stop predicate for Scheduler::run_live.
+    // Returns true when all task Futures are terminal. Called under Scheduler
+    // global_mtx_ at the MW-S3 boundary; acquires mtx_ (no inversion).
+    static bool group_stop_predicate(void* ctx);
+
     // Threaded async: spawn a std::thread per task (existing path).
     template <class Fn>
     void async_threaded(Fn fn) {
@@ -203,14 +219,23 @@ void Group::async_evented(Fn fn) {
             "sluice::async::Group::async_evented: init_fiber failed "
             "(invalid stack or unsupported architecture)");
     }
-    std::lock_guard<std::mutex> lk(mtx_);
-    evented_fibers_.push_back(std::move(fiber_up));
-    evented_stacks_.push_back(std::move(stack_up));
-    futures_.push_back(std::move(fut));
+    // Lock ordering: acquire mtx_ ONLY for vector mutation, then release
+    // BEFORE calling spawn(). spawn() acquires Scheduler global_mtx_.
+    // group_stop_predicate acquires mtx_ under global_mtx_ (called from
+    // worker_loop MW-S3 boundary). If we held mtx_ during spawn, that would
+    // create a lock-order inversion (mtx_→global_mtx_ vs global_mtx_→mtx_).
+    Fiber* spawn_target = nullptr;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        evented_fibers_.push_back(std::move(fiber_up));
+        evented_stacks_.push_back(std::move(stack_up));
+        futures_.push_back(std::move(fut));
+        spawn_target = fiber_raw;
+    }
     // spawn is non-blocking (just enqueues the fiber on the scheduler's
-    // runnable queue). Single-worker E5: await() and async() run on the same
-    // thread; the lock discipline is defensive.
-    sched_->spawn(*fiber_raw);
+    // runnable queue). Called WITHOUT holding mtx_ to preserve lock order:
+    // Scheduler global_mtx_ > Group::mtx_ (never the reverse).
+    sched_->spawn(*spawn_target);
 }
 
 }  // namespace sluice::async

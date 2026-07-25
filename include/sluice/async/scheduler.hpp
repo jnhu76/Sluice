@@ -248,6 +248,21 @@ public:
     // proof). See ADR §9.4.0 / §9.4.3.
     void run_live(unsigned worker_count);
 
+    // E14-F1 Group-scoped Live invocation. Identical to run_live(worker_count)
+    // EXCEPT the MW-S3 park decision additionally checks a caller-supplied
+    // invocation stop predicate. If the predicate returns true, the run
+    // terminates (returns to the caller) instead of parking, even if unrelated
+    // Scheduler registrations would otherwise keep it resident.
+    //
+    // stop_fn(stop_ctx) is called under global_mtx_ at the MW-S3 boundary.
+    // It MUST NOT acquire global_mtx_ (already held). It MAY acquire the
+    // caller's own lock (e.g. Group::mtx_) — no inversion because the caller
+    // never holds its own lock while calling into Scheduler.
+    //
+    // The predicate's lifetime must span the entire run invocation (it is
+    // stored as a raw pointer pair, not copied). Pass nullptr to disable.
+    void run_live(unsigned worker_count, bool (*stop_fn)(void*), void* stop_ctx);
+
     // Legacy single-worker entry point (E4-E6 compatibility). Delegates to
     // run(1) (Drain).
     void run_until_idle() { run(1); }
@@ -891,7 +906,7 @@ public:
     // the Scheduler wake source. Safe across Scheduler destruction. The handle
     // is bound to this Scheduler and invalidated (notify becomes a no-op) on
     // destruction.
-    SchedulerWakeHandle make_wake_handle();
+    SchedulerWakeHandle make_wake_handle() noexcept;
 
     // Attach an external wake handle to the currently-registered ready-flag
     // wait on `ready` (the Fiber that just suspended via await_ready_flag).
@@ -1167,6 +1182,18 @@ private:
     // invocation has ONE mode). Plain bool-storage is safe: it is written
     // once before any worker thread starts and only read thereafter.
     RunMode run_mode_{RunMode::drain};
+
+    // E14-F1: invocation-scoped stop predicate for Group-scoped Live runs.
+    // Set by run_impl before worker_loop; null for ordinary run/run_live.
+    // Checked at the MW-S3+Live+external_wake boundary under global_mtx_.
+    // If stop_fn(stop_ctx) returns true, the run terminates instead of parking.
+    bool (*invocation_stop_fn_)(void*){nullptr};
+    void* invocation_stop_ctx_{nullptr};
+
+    // E14 RT-F3 internal-testing seam: one-shot init_fiber failure injection.
+    // When true, the next init_fiber() returns false and resets the flag.
+    // Production (SLUICE_ASYNC_INTERNAL_TESTING undefined): never written.
+    std::atomic<bool> force_init_fiber_fail_{false};
 
     // E7-C fixup: MW-S2 admission coordination state (protected by
     // global_mtx_). admission_ transitions NONE→CANDIDATE→COMMITTED under
@@ -2113,6 +2140,27 @@ public:
         //     claiming the (valid) head reader.
         static void rwlock_death_forge_invalid_batch_member(Scheduler& s,
                                                             AsyncRwLock& rw);
+
+        // ---- E14 RT-F3: init_fiber failure injection ----
+        // Force the NEXT Scheduler::init_fiber() call to return false,
+        // simulating an invalid stack or unsupported architecture. The flag
+        // is consumed (one-shot): after one init_fiber returns false, the
+        // override resets to normal. Does NOT modify fiber_ctx state.
+        static void force_next_init_fiber_fail(Scheduler& s) noexcept {
+            s.force_init_fiber_fail_.store(true, std::memory_order::release);
+        }
+        static bool init_fiber_fail_armed(const Scheduler& s) noexcept {
+            return s.force_init_fiber_fail_.load(std::memory_order::acquire);
+        }
+
+        // ---- E14 RT-F5: Evented admission override ----
+        // Override the fiber_ctx::supported check so tests on x86_64 can
+        // simulate an unsupported target. When set to false, the next
+        // Scheduler construction (or Group(Scheduler&) construction) calls
+        // evented_admission_fail_fast(). Reset to true restores normal.
+        // Global (not per-Scheduler) because it gates construction.
+        static void set_evented_admission_override(bool supported) noexcept;
+        static bool evented_admission_override() noexcept;
     };
 #endif  // defined(SLUICE_ASYNC_INTERNAL_TESTING)
 };
