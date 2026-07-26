@@ -19,7 +19,7 @@ std::size_t Batch::add(BatchOp op) {
     return index;
 }
 
-std::size_t Batch::await_one(AsyncIoContext& ctx) {
+Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
     // Phase 1: submit every not-yet-submitted op to ctx. A submit may fail
     // (queue full / invalid); on failure the slot is marked ready with the
     // error so next() surfaces it (mirrors ADR E5: submit-time errors are
@@ -63,9 +63,18 @@ std::size_t Batch::await_one(AsyncIoContext& ctx) {
     for (const auto& sp : slots_) {
         if (sp->ready && !sp->popped) { any_ready = true; break; }
     }
+    // E15-P2-01: capture a backend wait_one() error rather than discarding it.
+    // The error propagates as the await_one() return value (see below). Slots
+    // already made ready this call (submit-time errors above, or completions
+    // reaped in earlier iterations of this loop) REMAIN ready and poppable via
+    // next(); the caller may drain them before observing the error.
+    std::optional<IoError> wait_err;
     while (!any_ready && ctx.outstanding() > 0) {
         auto wr = ctx.wait_one();
-        if (!wr.has_value()) break;  // backend error; stop, surface nothing new
+        if (!wr.has_value()) {
+            wait_err = wr.error();  // capture instead of discarding
+            break;
+        }
         for (auto& sp : slots_) {
             Slot& s = *sp;
             if (!s.ready) {
@@ -98,6 +107,12 @@ std::size_t Batch::await_one(AsyncIoContext& ctx) {
     std::size_t ready_count = 0;
     for (const auto& sp : slots_) {
         if (sp->ready && !sp->popped) ++ready_count;
+    }
+    // E15-P2-01: a captured backend wait error takes precedence over the
+    // ready-count return so callers cannot mistake a backend failure for "no
+    // newly ready items". Ready slots remain poppable via next().
+    if (wait_err.has_value()) {
+        return make_unexpected<std::size_t>(*wait_err);
     }
     return ready_count;
 }

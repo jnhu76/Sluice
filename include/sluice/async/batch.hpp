@@ -81,10 +81,19 @@ public:
     std::size_t add(BatchOp op);
 
     // Submit every added op to `ctx`, then drive ctx.wait_one() until >=1 op
-    // completes. Returns the number of ops made ready this call. After this,
-    // next() yields completions. Idempotent-ish: ops already submitted are not
-    // re-submitted.
-    std::size_t await_one(AsyncIoContext& ctx);
+    // completes.
+    //
+    // Returns the number of ops made ready this call on success. On a BACKEND
+    // wait_one() error (E15-P2-01), the error is PROPAGATED via Result and any
+    // ops that were made ready this call (Phase 1 submit-time errors, earlier
+    // reaps in the same loop) REMAIN ready for next() to pop — the caller can
+    // drain them before observing the error. A success-returning await_one
+    // never silently swallows a backend error; a zero return on success
+    // genuinely means "nothing newly ready".
+    //
+    // After this, next() yields completions. Idempotent-ish: ops already
+    // submitted are not re-submitted.
+    Result<std::size_t> await_one(AsyncIoContext& ctx);
 
     // Pop the next completed operation in actual BACKEND REAP order, or
     // nullopt if none ready. Each completion is dequeued exactly once. Mirrors

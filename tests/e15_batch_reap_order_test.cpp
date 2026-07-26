@@ -37,6 +37,10 @@ namespace {
 // (with this byte count / void success)" by pointer; poll() reaps every
 // currently-staged completion in stage order, marking each ready. The order
 // is fully test-controlled so Batch::next() ordering is assertable exactly.
+//
+// E15-P2-01: set_next_wait_one_error() causes the NEXT wait_one() call to
+// return the given backend error (and consume nothing), letting a test prove
+// Batch::await_one propagates it instead of silently discarding it.
 class SequenceBackend : public AsyncBackend {
 public:
     void stage_size(Completion<std::size_t>* c, std::size_t bytes) {
@@ -50,6 +54,8 @@ public:
     void stage_void_ok(Completion<void>* c) {
         reap_queue_.push_back({c, true});
     }
+    // E15-P2-01: arm an error to return from the next wait_one() call.
+    void set_next_wait_one_error(IoError e) { next_wait_err_ = e; }
 
     Result<void> submit_read(ReadOp, Completion<std::size_t>& c) override {
         if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
@@ -99,7 +105,17 @@ public:
         }
         return n;
     }
-    Result<std::size_t> wait_one() override { return poll(); }
+    Result<std::size_t> wait_one() override {
+        // E15-P2-01: if a wait-error is armed, return it (and do NOT consume
+        // any staged completion). Tests use this to prove Batch::await_one
+        // propagates backend wait_one() errors.
+        if (next_wait_err_.has_value()) {
+            IoError e = *next_wait_err_;
+            next_wait_err_.reset();
+            return make_unexpected<std::size_t>(e);
+        }
+        return poll();
+    }
     void cancel(Completion<std::size_t>&) override {}
     void cancel(Completion<void>&) override {}
     std::size_t outstanding() const noexcept override { return outstanding_; }
@@ -113,6 +129,7 @@ private:
     std::map<Completion<std::size_t>*, std::size_t> size_bytes_;
     std::map<Completion<std::size_t>*, IoError> size_err_;
     std::size_t outstanding_ = 0;
+    std::optional<IoError> next_wait_err_;  // E15-P2-01
 };
 }  // namespace
 
@@ -140,7 +157,7 @@ SLUICE_TEST_CASE(batch_reap_single_completion_returns_its_index) {
     // Stage BEFORE await_one so the wait_one inside await_one reaps it.
     raw->stage_size(&b.test_size_completion_at(0), 4);
 
-    SLUICE_CHECK(b.await_one(ctx) >= 1);
+    SLUICE_CHECK(b.await_one(ctx).value() >= 1);
     auto r = b.next();
     SLUICE_CHECK(r.has_value());
     SLUICE_CHECK(r->index == 0);
@@ -169,7 +186,7 @@ SLUICE_TEST_CASE(batch_reap_reverse_order_returns_reaped_first) {
     raw->stage_size(&b.test_size_completion_at(1), 4);
     raw->stage_size(&b.test_size_completion_at(0), 4);
 
-    SLUICE_CHECK(b.await_one(ctx) >= 2);
+    SLUICE_CHECK(b.await_one(ctx).value() >= 2);
     // THE REGRESSION ASSERTION: exact expected order — slot 1, then slot 0.
     auto first = b.next();
     SLUICE_CHECK(first.has_value());
@@ -197,7 +214,7 @@ SLUICE_TEST_CASE(batch_reap_forward_order_returns_in_order) {
     raw->stage_size(&b.test_size_completion_at(1), 4);
     raw->stage_size(&b.test_size_completion_at(2), 4);
 
-    SLUICE_CHECK(b.await_one(ctx) >= 3);
+    SLUICE_CHECK(b.await_one(ctx).value() >= 3);
     SLUICE_CHECK(b.next()->index == 0);
     SLUICE_CHECK(b.next()->index == 1);
     SLUICE_CHECK(b.next()->index == 2);
@@ -222,7 +239,7 @@ SLUICE_TEST_CASE(batch_reap_mixed_order_three_completions) {
     raw->stage_size(&b.test_size_completion_at(0), 4);
     raw->stage_size(&b.test_size_completion_at(1), 6);
 
-    SLUICE_CHECK(b.await_one(ctx) >= 3);
+    SLUICE_CHECK(b.await_one(ctx).value() >= 3);
     auto r0 = b.next();
     auto r1 = b.next();
     auto r2 = b.next();
@@ -257,7 +274,7 @@ SLUICE_TEST_CASE(batch_reap_multi_in_one_wait_retains_relative_order) {
     raw->stage_size(&b.test_size_completion_at(2), 4);
     raw->stage_size(&b.test_size_completion_at(0), 4);
 
-    SLUICE_CHECK(b.await_one(ctx) == 4);
+    SLUICE_CHECK(b.await_one(ctx).value() == 4);
     SLUICE_CHECK(b.next()->index == 3);
     SLUICE_CHECK(b.next()->index == 1);
     SLUICE_CHECK(b.next()->index == 2);
@@ -279,14 +296,14 @@ SLUICE_TEST_CASE(batch_reap_one_per_wait_across_multiple_awaits) {
 
     // Stage slot 1, await, expect next() == 1.
     raw->stage_size(&b.test_size_completion_at(1), 4);
-    SLUICE_CHECK(b.await_one(ctx) >= 1);
+    SLUICE_CHECK(b.await_one(ctx).value() >= 1);
     SLUICE_CHECK(b.next()->index == 1);
     // Slot 0 not yet reaped: next() returns nullopt until reaped.
     SLUICE_CHECK(b.next() == std::nullopt);
 
     // Now stage slot 0.
     raw->stage_size(&b.test_size_completion_at(0), 4);
-    SLUICE_CHECK(b.await_one(ctx) >= 1);
+    SLUICE_CHECK(b.await_one(ctx).value() >= 1);
     SLUICE_CHECK(b.next()->index == 0);
     SLUICE_CHECK(b.next() == std::nullopt);
 }
@@ -316,7 +333,7 @@ SLUICE_TEST_CASE(batch_reap_next_before_ready_returns_nullopt) {
 
     // Now stage and reap to drain.
     raw->stage_size(&b.test_size_completion_at(0), 4);
-    SLUICE_CHECK(b.await_one(ctx) >= 1);
+    SLUICE_CHECK(b.await_one(ctx).value() >= 1);
     SLUICE_CHECK(b.next()->index == 0);
     SLUICE_CHECK(b.next() == std::nullopt);
 }
@@ -338,7 +355,7 @@ SLUICE_TEST_CASE(batch_reap_each_completion_exactly_once) {
     raw->stage_size(&b.test_size_completion_at(0), 4);
     raw->stage_size(&b.test_size_completion_at(1), 4);
 
-    SLUICE_CHECK(b.await_one(ctx) == 3);
+    SLUICE_CHECK(b.await_one(ctx).value() == 3);
     bool seen[3] = {false, false, false};
     int count = 0;
     while (auto r = b.next()) {
@@ -371,7 +388,7 @@ SLUICE_TEST_CASE(batch_reap_mixed_kind_preserves_order) {
     raw->stage_size(&b.test_size_completion_at(2), 4);
     raw->stage_size(&b.test_size_completion_at(0), 4);
 
-    SLUICE_CHECK(b.await_one(ctx) == 3);
+    SLUICE_CHECK(b.await_one(ctx).value() == 3);
     auto r0 = b.next();
     auto r1 = b.next();
     auto r2 = b.next();
@@ -409,7 +426,7 @@ SLUICE_TEST_CASE(batch_reap_submit_failure_surfaces_first) {
         std::byte buf[4]{};
         b.add(make_read_op(0, buf, 4, 0));
         raw->stage_size(&b.test_size_completion_at(0), 4);
-        SLUICE_CHECK(b.await_one(ctx) == 1);
+        SLUICE_CHECK(b.await_one(ctx).value() == 1);
         auto r = b.next();
         SLUICE_CHECK(r.has_value());
         SLUICE_CHECK(r->index == 0);
@@ -439,7 +456,7 @@ SLUICE_TEST_CASE(batch_reap_submit_failure_surfaces_first) {
         std::byte buf[4]{};
         b.add(make_read_op(99, buf, 4, 0));
         // await_one submits index 0 -> rejected -> ready with the error.
-        SLUICE_CHECK(b.await_one(ctx) >= 1);
+        SLUICE_CHECK(b.await_one(ctx).value() >= 1);
         SLUICE_CHECK(ctx.outstanding() == 0); // submit failed: never outstanding
 
         auto r = b.next();
@@ -451,6 +468,160 @@ SLUICE_TEST_CASE(batch_reap_submit_failure_surfaces_first) {
         // reap_seq stayed 0 — submit-time errors are NOT reaped.
         SLUICE_CHECK(b.test_size_completion_at(0).reap_seq() == 0);
     }
+}
+
+// =============================================================================
+// E15-P2-01 — Batch::await_one must not discard a backend wait_one() error.
+//
+// Pre-fix behavior:
+//   AsyncIoContext::wait_one() returns Result<size_t>; a backend error came
+//   back as !has_value(). Batch::await_one's loop did `if (!wr.has_value())
+//   break;` and then RETURNED the ready count, silently discarding wr.error().
+//   Callers could not distinguish "no newly ready items" from "backend wait
+//   failed", and outstanding Batch state could remain unresolved.
+//
+// Post-fix behavior:
+//   await_one returns Result<size_t>. On a backend wait_one() error the error
+//   PROPAGATES; ready slots made this call remain poppable via next().
+// =============================================================================
+
+// ---- P2-01 Slice A: pure backend wait-error propagates from await_one -------
+// Layout note: assertions are captured into local booleans BEFORE any
+// SLUICE_CHECK, so a regression-induced failure (SLUICE_CHECK returns from the
+// case) does not strand an outstanding Completion and trigger the context's
+// outstanding-destroy fail-fast at scope exit. The slot is drained first.
+
+SLUICE_TEST_CASE(batch_await_one_propagates_backend_wait_error) {
+    auto owned = std::make_unique<SequenceBackend>();
+    SequenceBackend* raw = owned.get();
+    AsyncIoContext ctx(std::move(owned));
+
+    Batch b;
+    std::byte buf[4]{};
+    b.add(make_read_op(0, buf, 4, 0));  // index 0
+
+    // Step 1: stage + reap slot 0 normally so ctx has no outstanding work.
+    raw->stage_size(&b.test_size_completion_at(0), 4);
+    {
+        auto ar = b.await_one(ctx);
+        SLUICE_CHECK(ar.has_value());
+        SLUICE_CHECK(ar.value() >= 1);
+        SLUICE_CHECK(b.next()->index == 0);
+    }
+
+    // Step 2: add a second slot, arm a wait_one error, observe await_one's
+    // return, and DRAIN slot 1 BEFORE asserting (so a regression does not
+    // leave outstanding work for ~AsyncIoContext to fail-fast on).
+    b.add(make_read_op(0, buf, 4, 0));  // index 1
+    raw->set_next_wait_one_error(IoError{IoError::Code::backend_error});
+    bool got_error = false;
+    IoError got_code{IoError::Code::backend_error};
+    {
+        auto ar = b.await_one(ctx);
+        got_error = !ar.has_value();
+        if (got_error) got_code = ar.error();
+    }
+    // Drain slot 1 (the wait error did not reap it).
+    raw->stage_size(&b.test_size_completion_at(1), 4);
+    {
+        auto ar = b.await_one(ctx);
+        SLUICE_CHECK(ar.has_value());
+        SLUICE_CHECK(ar.value() >= 1);
+        SLUICE_CHECK(b.next()->index == 1);
+    }
+
+    // THE REGRESSION ASSERTION: the backend error propagated (not silently
+    // swallowed as a ready-count return).
+    SLUICE_CHECK(got_error);
+    SLUICE_CHECK(got_code.code == IoError::Code::backend_error);
+}
+
+// ---- P2-01 Slice B: ready slots remain poppable after a wait error ----------
+// A submit-time-failed slot is ready BEFORE the wait loop runs; even when the
+// subsequent wait_one() errors, that slot must still be returned by next().
+
+SLUICE_TEST_CASE(batch_await_one_wait_error_keeps_ready_slots_poppable) {
+    class RejectFdBackend : public SequenceBackend {
+    public:
+        explicit RejectFdBackend(int bad_fd) : bad_fd_(bad_fd) {}
+        Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override {
+            if (op.fd == bad_fd_) {
+                return make_unexpected<void>(IoError{IoError::Code::permission_denied});
+            }
+            return SequenceBackend::submit_read(op, c);
+        }
+        int bad_fd_;
+    };
+
+    auto owned = std::make_unique<RejectFdBackend>(99);
+    RejectFdBackend* raw = owned.get();
+    AsyncIoContext ctx(std::move(owned));
+
+    Batch b;
+    std::byte buf[4]{};
+    // index 0: submit-rejected -> ready with permission_denied (Phase 1).
+    b.add(make_read_op(99, buf, 4, 0));
+
+    // Arm a wait error (irrelevant here because Phase 2 won't loop — slot 0 is
+    // already ready — but the test asserts the error does not interfere).
+    raw->set_next_wait_one_error(IoError{IoError::Code::backend_error});
+
+    auto ar = b.await_one(ctx);
+    // Slot 0 was made ready via submit-time failure; await_one reports >=1
+    // ready. The armed wait_one error was NOT consumed (the loop never ran).
+    SLUICE_CHECK(ar.has_value());
+    SLUICE_CHECK(ar.value() >= 1);
+
+    auto r = b.next();
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(r->index == 0);
+    SLUICE_CHECK(r->size_res.value().error().code ==
+                 IoError::Code::permission_denied);
+}
+
+// ---- P2-01 Slice C: a wait error is distinguishable from a successful reap -
+// Stage one slot, reap it (success, ready count >= 1). Then submit a second
+// slot and arm a wait error — await_one must return the error (not the ready
+// count from the previous reap, and not silently zero). The two outcomes are
+// distinguishable by has_value().
+
+SLUICE_TEST_CASE(batch_await_one_distinguishes_success_from_error) {
+    auto owned = std::make_unique<SequenceBackend>();
+    SequenceBackend* raw = owned.get();
+    AsyncIoContext ctx(std::move(owned));
+
+    Batch b;
+    std::byte buf[4]{};
+    b.add(make_read_op(0, buf, 4, 0));   // index 0
+
+    // Success path: stage + reap slot 0.
+    raw->stage_size(&b.test_size_completion_at(0), 4);
+    auto ar = b.await_one(ctx);
+    SLUICE_CHECK(ar.has_value());
+    SLUICE_CHECK(ar.value() >= 1);  // success, NOT an error
+    SLUICE_CHECK(b.next()->index == 0);
+
+    // Now add a second slot, arm a wait error — await_one must surface the
+    // error, not silently return 0 or a stale ready count. Observe + drain
+    // BEFORE asserting so a regression does not strand outstanding work.
+    b.add(make_read_op(0, buf, 4, 0));   // index 1, submitted + outstanding
+    raw->set_next_wait_one_error(IoError{IoError::Code::backend_error});
+    bool got_error = false;
+    IoError got_code{IoError::Code::backend_error};
+    {
+        auto ar2 = b.await_one(ctx);
+        got_error = !ar2.has_value();
+        if (got_error) got_code = ar2.error();
+    }
+    // Drain slot 1 first.
+    raw->stage_size(&b.test_size_completion_at(1), 4);
+    auto ar3 = b.await_one(ctx);
+    SLUICE_CHECK(ar3.has_value());
+    SLUICE_CHECK(b.next()->index == 1);
+
+    // THE REGRESSION ASSERTION.
+    SLUICE_CHECK(got_error);
+    SLUICE_CHECK(got_code.code == IoError::Code::backend_error);
 }
 
 SLUICE_MAIN()
