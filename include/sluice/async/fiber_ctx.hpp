@@ -62,10 +62,19 @@
 
 namespace sluice::async::fiber_ctx {
 
-// Whether this build supports a real fiber context switch. x86_64 only for now;
-// mirroring Zig fiber.zig:1-4 (aarch64/riscv64/x86_64 upstream — cppio ports
-// x86_64 first; other arches are follow-ons).
-#if defined(__x86_64__)
+// Whether this build supports a real fiber context switch. E15-P2-04: the
+// accepted Evented scope is Linux x86_64 ONLY. The previous gate checked
+// architecture alone (__x86_64__), which would admit x86_64 macOS/BSD targets
+// into the System V AMD64 fiber asm without a verified ELF/stack/asan story on
+// those OSes. The corrected gate requires BOTH __x86_64__ AND __linux__; all
+// other targets get supported=false and the Evented public admission boundary
+// (detail::require_evented_supported) fails fast deterministically.
+// Portable Threaded async (Group::async_threaded) does NOT consult this gate
+// and remains available everywhere.
+//
+// Mirroring Zig fiber.zig:1-4 (aarch64/riscv64/x86_64 upstream — cppio ports
+// x86_64-linux first; other arch/OS combos are follow-ons, not this task).
+#if defined(__x86_64__) && defined(__linux__)
 inline constexpr bool supported = true;
 #else
 inline constexpr bool supported = false;

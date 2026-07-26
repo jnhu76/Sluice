@@ -20,6 +20,18 @@
 
 using namespace sluice::async::fiber_ctx;
 
+// E15-P2-04: pin the supported-target matrix at compile time. Evented is
+// accepted on Linux x86_64 ONLY; every other target must report
+// fiber_ctx::supported == false so the Evented public admission boundary fails
+// fast deterministically. (Portable Threaded async is unaffected.) These
+// static_asserts make a regression to architecture-only gating a compile error.
+#if defined(__x86_64__) && defined(__linux__)
+static_assert(supported, "Evented must be supported on linux/x86_64");
+#else
+static_assert(!supported, "Evented must NOT be supported off linux/x86_64 "
+                          "(E15-P2-04: OS gate, not architecture alone)");
+#endif
+
 namespace {
 
 // A 16 KiB scratch stack for a fiber, 16-byte aligned so init_context's top
