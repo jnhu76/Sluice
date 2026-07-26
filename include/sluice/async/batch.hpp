@@ -86,9 +86,18 @@ public:
     // re-submitted.
     std::size_t await_one(AsyncIoContext& ctx);
 
-    // Pop the next completed operation in completion (reap) order, or nullopt
-    // if none ready. Each completion is dequeued exactly once. Mirrors Zig
-    // Batch.next (Io.zig:551).
+    // Pop the next completed operation in actual BACKEND REAP order, or
+    // nullopt if none ready. Each completion is dequeued exactly once. Mirrors
+    // Zig Batch.next (Io.zig:551).
+    //
+    // E15-P1-04: ordering is by the monotonic reap sequence stamped on each
+    // Completion by complete_with() at backend reap time (ADR §6 O2). This
+    // preserves the backend's true reap order across slot 0/1/2... regardless
+    // of submission order: a backend that reaps slot 1 before slot 0 yields
+    // next() returning slot 1 first, then slot 0. Submit-time failures
+    // (Batch::await_one Phase 1 rejections) carry reap_seq 0 and surface
+    // before any backend-reaped completion, in submission order among
+    // themselves (ADR E5).
     //
     // It is not required to drain all completions before awaiting again.
     std::optional<BatchResult> next() noexcept;
@@ -96,6 +105,22 @@ public:
     // Number of ops added but not yet popped via next() (submitted + pending +
     // completed). For inspection.
     std::size_t pending_count() const noexcept { return slots_.size() - popped_; }
+
+    // ---- test-only batch-aware probes (E15-P1-04 reap-order regression) ----
+    // These expose just enough of a slot's Completion so a deterministic test
+    // backend can be told "reap THIS slot's completion next" without making
+    // the whole Slot or slots_ vector public. They return references into the
+    // batch's own storage; the caller (a test backend) MUST NOT outlive the
+    // batch. Production code does not call these.
+    Completion<std::size_t>& test_size_completion_at(std::size_t index) {
+        return slots_.at(index)->size_c;
+    }
+    Completion<void>& test_void_completion_at(std::size_t index) {
+        return slots_.at(index)->void_c;
+    }
+    bool test_slot_is_void(std::size_t index) const {
+        return slots_.at(index)->is_void;
+    }
 
 private:
     struct Slot {

@@ -25,16 +25,41 @@
 // `ready()` true means the op has a terminal result (success/error/canceled)
 // available via `result()`. Exactly-once: once ready, the backend never mutates
 // it again. reset() returns it to idle so it can be reused for a new op.
+//
+// E15-P1-04 reap sequence: every successful complete_with() stamps the
+// Completion with a monotonic reap sequence number (next_reap_seq(), see
+// below). This is the narrowest mechanism that lets Batch::next() surface
+// completions in actual backend reap order (ADR §6 O2) WITHOUT a new
+// AsyncBackend vtable entry: any backend that calls complete_with (which is
+// the only path to ready per A3/O1) publishes the order for free. The field
+// is read by Batch; ordinary callers ignore it. reset() zeroes it so the
+// Completion is reusable. Synchronization matches the existing `state_`
+// field: writes occur under AsyncIoContext::access_mtx_ (E7-C) during
+// poll()/wait_one(); Batch reads it after the same lock has been released by
+// await_one's wait_one() call.
 #pragma once
 
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 
 namespace sluice::async {
+
+// E15-P1-04: process-wide monotonic reap counter, used by Completion::
+// complete_with() to stamp a reap sequence on every reaped Completion. Order
+// reflects the actual sequence in which backends call complete_with() under
+// AsyncIoContext::access_mtx_ (ADR E7-C); Batch::next() consumes it to surface
+// completions in true reap order (ADR §6 O2). Relaxed ordering is sufficient:
+// the only writer/readers are serialized through the context's access mutex
+// (writes) and the Batch's await_one -> next happens-before chain (reads).
+inline std::uint64_t next_reap_seq() noexcept {
+    static std::atomic<std::uint64_t> counter{0};
+    return ++counter;
+}
 
 template <class T>
 class Completion {
@@ -56,6 +81,11 @@ public:
     bool outstanding() const noexcept { return state_ == State::outstanding; }
     bool idle() const noexcept { return state_ == State::idle; }
 
+    // E15-P1-04: monotonic reap sequence stamped by complete_with(). 0 means
+    // "never reaped" (idle or outstanding); a non-zero value orders ready
+    // Completions by their actual reap moment. Batch::next() consumes this.
+    std::uint64_t reap_seq() const noexcept { return reap_seq_; }
+
     // ADR L9: result() before ready is a contract violation. Debug asserts;
     // release returns invalid_state rather than stale/garbage.
     Result<T> result() const {
@@ -74,23 +104,29 @@ public:
                "submit into a non-idle Completion (L8)");
         state_ = State::outstanding;
         storage_ = Storage{};  // clear any prior result
+        reap_seq_ = 0;
     }
     // Mark ready with a value (success path) or an error (failure path).
+    // E15-P1-04: stamps a monotonic reap sequence so Batch::next() can order
+    // completions by actual backend reap order (ADR §6 O2).
     void complete_with(Result<T> res) {
         assert(state_ == State::outstanding &&
                "complete on a non-outstanding Completion (double-completion?)");
         storage_.set(std::move(res));
+        reap_seq_ = next_reap_seq();
         state_ = State::ready;
     }
     // Return to idle so the Completion can be reused for a new op.
     void reset() {
         state_ = State::idle;
         storage_ = Storage{};
+        reap_seq_ = 0;
     }
 
 private:
     enum class State : std::uint8_t { idle, outstanding, ready };
     State state_ = State::idle;
+    std::uint64_t reap_seq_ = 0;
 
     // Storage for the terminal result. Holds either a T or an IoError. The
     // partial specialization on void (below) gives Completion<void> a value-less
@@ -135,6 +171,9 @@ public:
     bool outstanding() const noexcept { return state_ == State::outstanding; }
     bool idle() const noexcept { return state_ == State::idle; }
 
+    // E15-P1-04: see Completion<T>::reap_seq().
+    std::uint64_t reap_seq() const noexcept { return reap_seq_; }
+
     Result<void> result() const {
         if (state_ != State::ready) {
             assert(false && "Completion::result() called before ready (L9)");
@@ -148,17 +187,20 @@ public:
         assert(state_ == State::idle && "submit into a non-idle Completion (L8)");
         state_ = State::outstanding;
         has_error_ = false;
+        reap_seq_ = 0;
     }
     void complete_with(Result<void> res) {
         assert(state_ == State::outstanding &&
                "complete on a non-outstanding Completion (double-completion?)");
         if (!res.has_value()) { error_ = res.error(); has_error_ = true; }
         else { has_error_ = false; }
+        reap_seq_ = next_reap_seq();
         state_ = State::ready;
     }
     void reset() {
         state_ = State::idle;
         has_error_ = false;
+        reap_seq_ = 0;
     }
 
 private:
@@ -166,6 +208,7 @@ private:
     State state_ = State::idle;
     bool has_error_ = false;
     IoError error_{IoError::Code::backend_error};
+    std::uint64_t reap_seq_ = 0;
 };
 
 }  // namespace sluice::async

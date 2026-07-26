@@ -300,6 +300,14 @@ Enforcement strategy (incremental):
 O1. Completions are produced only inside poll()/wait_one() (single reaping family).
 O2. Within one reap, completions are surfaced in the order their backends
     report them ready; no global FIFO across backends is promised.
+    E15-P1-04 implementation: every successful complete_with() stamps a
+    monotonic reap sequence on the Completion (a process-wide counter
+    incremented in reap order). Batch::next() returns the ready-but-not-popped
+    slot with the SMALLEST reap sequence, so the batch's iteration order
+    matches the backend's true reap order regardless of slot submission order.
+    No new AsyncBackend vtable entry is required: any backend that calls
+    complete_with (the only path to ready per A3/O1) publishes the order for
+    free.
 O3. Per-backend completion order:
       Fake       = submit order (deterministic; test-controllable on demand)
       ThreadPool = unspecified (worker-thread race)

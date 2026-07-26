@@ -103,27 +103,44 @@ std::size_t Batch::await_one(AsyncIoContext& ctx) {
 }
 
 std::optional<BatchResult> Batch::next() noexcept {
-    // Scan all slots for a ready-but-not-popped one. Completions arrive in
-    // arbitrary order under concurrency, so a monotonic cursor would miss
-    // late-ready earlier slots. Small N (batch path); the full scan is fine.
-    // Each slot is popped exactly once (the `popped` flag enforces it).
+    // E15-P1-04: return the ready-but-not-popped slot with the SMALLEST reap
+    // sequence (i.e. the one the backend reaped earliest), not the lowest
+    // index. The reap sequence is stamped on each Completion by complete_with
+    // at backend reap time, so this preserves true backend reap order across
+    // slot 0/1/2... regardless of submission order. Each slot is popped
+    // exactly once (the `popped` flag enforces it). A small linear scan is
+    // fine: the batch path is small-N and next() is called once per result.
+    std::size_t best = slots_.size();
+    std::uint64_t best_seq = 0;
     for (std::size_t idx = 0; idx < slots_.size(); ++idx) {
         Slot& s = *slots_[idx];
-        if (s.ready && !s.popped) {
-            s.popped = true;
-            ++popped_;
-            BatchResult r;
-            r.index = idx;
-            r.is_void = s.is_void;
-            if (s.is_void) {
-                r.void_res = std::move(*s.void_res);
-            } else {
-                r.size_res = std::move(*s.size_res);
-            }
-            return r;
+        if (!s.ready || s.popped) continue;
+        // Submit-time errors are surfaced with reap_seq 0 (the slot is marked
+        // ready without ever going through complete_with). They sort BEFORE
+        // any backend-reaped completion (first-available), matching the ADR E5
+        // "submit-time errors are synchronous" model.
+        const std::uint64_t seq = (s.is_void ? s.void_c.reap_seq() : s.size_c.reap_seq());
+        if (best == slots_.size() || seq < best_seq ||
+            // tie-break: stable by index for equal seq (e.g. submit-time
+            // errors all at seq 0 surface in submission order)
+            (seq == best_seq && idx < best)) {
+            best = idx;
+            best_seq = seq;
         }
     }
-    return std::nullopt;
+    if (best == slots_.size()) return std::nullopt;
+    Slot& s = *slots_[best];
+    s.popped = true;
+    ++popped_;
+    BatchResult r;
+    r.index = best;
+    r.is_void = s.is_void;
+    if (s.is_void) {
+        r.void_res = std::move(*s.void_res);
+    } else {
+        r.size_res = std::move(*s.size_res);
+    }
+    return r;
 }
 
 }  // namespace sluice::async
