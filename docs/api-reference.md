@@ -66,6 +66,22 @@ if (!ok) return ok.error();
 |---|---|
 | `make_unexpected<T>(IoError)` | Create an error-result |
 
+**Copy / move / assignment semantics (E15-P1-01/02):**
+
+- `Result<T>` is copyable and movable; `Result<void>` is trivially copyable.
+- Copy/move **construction** and copy/move **assignment** all perform
+  placement-new construction of `T` into the storage (assignment never calls
+  `T::operator=`). The advertised `noexcept` therefore tracks
+  `std::is_nothrow_move_constructible_v<T>`, not move-assignability — a type
+  with a non-throwing move-assign but throwing move-ctor yields a
+  `noexcept(false)` move-assignment.
+- **Exception guarantee on assignment:** the old value (if any) is destroyed
+  and the discriminator cleared *before* the replacement is constructed. If the
+  replacement construction throws, `*this` is left in a destroy-safe state with
+  `has_value() == false`; the exception propagates and the eventual destructor
+  does not run `~T()` a second time. The post-throw value state is unspecified
+  beyond "no live value".
+
 ---
 
 ## Core abstractions
