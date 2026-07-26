@@ -6,14 +6,14 @@ local R = SLUICE_ROOT
 
 -- E7-C coordination tests (sluice-CORE-E7-C). Serialized backend access probe,
 -- quiescence, MW-S3. Gated to x86_64.
-sluice_one_file_test("multi_worker_coord_test")
+sluice_internal_async_test("multi_worker_coord_test")
 
 -- external_wake_test — Scheduler park admission + unified wake-source
 -- protocol (sluice-CORE-E9). Proves external-thread flag completion wakes a
 -- parked Scheduler (no caller re-entry), MIXED-WAKE closure, wake coalescing,
 -- the pre-park race, wake-handle lifetime, and E7/E8 runnable/shutdown wake.
 -- Gated to x86_64 (fiber_ctx::supported).
-sluice_one_file_test("external_wake_test")
+sluice_internal_async_test("external_wake_test")
 
 -- wake_handle_lifetime_test — SchedulerWakeHandle callback-lifetime lease
 -- (sluice-CORE-E9 LIFETIME-CORRECTIVE). Proves notify() holds Control::mtx
@@ -21,7 +21,7 @@ sluice_one_file_test("external_wake_test")
 -- cannot interleave with an in-flight callback. Deterministic T1 (notifier
 -- wins) / T2 (destructor wins) / T3 (stale handle) + concurrent T4 stress.
 -- Gated to x86_64 (fiber_ctx::supported).
-sluice_one_file_test("wake_handle_lifetime_test")
+sluice_internal_async_test("wake_handle_lifetime_test")
 
 -- timer_wait_test — Deadline / Timer Wait Integration (sluice-CORE-E11).
 -- Deterministic production tests: already-due deadline, resource-wins/timer-
@@ -30,7 +30,7 @@ sluice_one_file_test("wake_handle_lifetime_test")
 -- timer retirement closes WaitNode dereference, deadline park liveness,
 -- RunMode classification. Uses a controllable monotonic clock + explicit timer
 -- driver (NO sleep_for causal proof). Gated to x86_64 (fiber_ctx::supported).
-sluice_one_file_test("timer_wait_test")
+sluice_internal_async_test("timer_wait_test")
 
 -- event_primitive_test — Async Event synchronization primitive (sluice-CORE-E12-A).
 -- Persistent manual-reset Event on the E10/E11 substrate: basic semantics,
@@ -38,7 +38,7 @@ sluice_one_file_test("timer_wait_test")
 -- set/reset epoch isolation, external-thread set, E8 steal, Drain STALLED,
 -- destruction contract. Deterministic causal tests (NO sleep_for proof).
 -- Gated to x86_64 (fiber_ctx::supported).
-sluice_one_file_test("event_primitive_test")
+sluice_internal_async_test("event_primitive_test")
 
 -- semaphore_primitive_test — Async counting Semaphore (sluice-CORE-E12-B).
 -- Counting Semaphore on the E10/E11/E12-A substrate: construction/available,
@@ -47,7 +47,7 @@ sluice_one_file_test("event_primitive_test")
 -- cancel, external-thread release, Drain STALLED, destruction contract.
 -- Deterministic causal tests (NO sleep_for proof). Gated to x86_64
 -- (fiber_ctx::supported).
-sluice_one_file_test("semaphore_primitive_test")
+sluice_internal_async_test("semaphore_primitive_test")
 
 -- async_mutex_primitive_test — Fiber-suspending Async Mutex (sluice-CORE-E12-C).
 -- AsyncMutex on the E10/E11/E12-A/E12-B substrate: construction/try_lock,
@@ -56,7 +56,7 @@ sluice_one_file_test("semaphore_primitive_test")
 -- migration, destruction contract, 500/500 coordination.
 -- Deterministic causal tests (NO sleep_for proof). Gated to x86_64
 -- (fiber_ctx::supported).
-sluice_one_file_test("async_mutex_primitive_test")
+sluice_internal_async_test("async_mutex_primitive_test")
 
 -- async_condition_primitive_test — Fiber-suspending async condition variable
 -- (sluice-CORE-E12-D). AsyncCondition bound to one AsyncMutex: two-epoch
@@ -68,14 +68,14 @@ sluice_one_file_test("async_mutex_primitive_test")
 -- (NO sleep_for proof). Gated to x86_64 (fiber_ctx::supported). The authority
 -- probe (async_condition_authority_probe.cpp) is NOT a target: it is a
 -- negative-compile probe driven by the verify script's compile-probe gate.
-sluice_one_file_test("async_condition_primitive_test")
+sluice_internal_async_test("async_condition_primitive_test")
 
 -- async_rwlock_test — Fiber-suspending Async Read-Write Lock (sluice-CORE-E12-F).
 -- Writer-fair phase-batched RwLock: try/read/write/unlock, FIFO fairness,
 -- reader batch grant, writer starvation prevention, cancel + head reconcile,
 -- deadline (read_lock_until / write_lock_until), timer expiry routing.
 -- Deterministic causal tests (NO sleep_for proof). Gated to x86_64.
-sluice_one_file_test("async_rwlock_test")
+sluice_internal_async_test("async_rwlock_test")
 
 -- async_queue_primitive_test — AsyncQueue (sluice-CORE-E12-E).
 -- P2+P3 scope: QueuePort fast paths (try_push / try_pop / close / snapshot),
@@ -87,7 +87,7 @@ sluice_one_file_test("async_rwlock_test")
 -- sluice_async_internal_testing (the authority lives in the non-template
 -- QueuePort, which is in sluice_async; the internal-testing variant keeps
 -- the option open for the deterministic phase seams added in P5/P6).
-sluice_one_file_test("async_queue_primitive_test")
+sluice_internal_async_test("async_queue_primitive_test")
 
 -- async_mutex_nothrow_authority_probe — positive-compile + run probe for
 -- the Mutex noexcept contract (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1
@@ -97,7 +97,7 @@ sluice_one_file_test("async_queue_primitive_test")
 -- the death tests (those verify runtime fail-fast behavior). Depends on the
 -- internal_testing variant so the seam header resolves, though the probe
 -- itself exercises the production Mutex entries.
-sluice_one_file_test("async_mutex_nothrow_authority_probe")
+sluice_internal_async_test("async_mutex_nothrow_authority_probe")
 
 -- async_sync_api_contract_probe — cross-primitive compile-time contract probe
 -- (E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1).
@@ -112,7 +112,7 @@ sluice_one_file_test("async_mutex_nothrow_authority_probe")
 -- NEG_* macro and requires that compilation fail for the intended deleted
 -- special member. Depends on sluice_async_internal_testing so the seam header
 -- resolves (the positive probe itself exercises the public production surface).
-sluice_one_file_test("async_sync_api_contract_probe")
+sluice_internal_async_test("async_sync_api_contract_probe")
 
 -- async_sync_cross_primitive_parity_test — cross-primitive semantic parity tests
 -- (E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1). Directly verifies D3
@@ -138,13 +138,13 @@ end
 -- select_type_test — E13 Select type construction and compile-fail gates (P1).
 -- Tests public value types, internal type graph, and constraint gates.
 -- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
-sluice_one_file_test("select_type_test")
+sluice_internal_async_test("select_type_test")
 
 -- select_event_registry_test — E13 Event Select private registry (P2).
 -- Sealed per-Event SelectPort: link/unlink/scan operations, Event SET Phase-1
 -- scan, idempotence, serialization, and destruction contract.
 -- Deterministic, NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
-sluice_one_file_test("select_event_registry_test")
+sluice_internal_async_test("select_event_registry_test")
 
 -- select_timer_registration_test — E13 Select Timer stable registration (P3).
 -- Verifies the Select timer substrate: state transitions, address stability
@@ -153,7 +153,7 @@ sluice_one_file_test("select_event_registry_test")
 -- active-deadline participation, lazy reclamation, mixed stale+ordinary pump,
 -- Scheduler identity, no-premature-Select. Deterministic (test clock + causal
 -- phase seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
-sluice_one_file_test("select_timer_registration_test")
+sluice_internal_async_test("select_timer_registration_test")
 
 -- select_claim_test — E13 P4 Select central claim + winner/loser finalization
 -- tests. Drives select_process_group_locked + select_all_authority_closed_locked
@@ -162,7 +162,7 @@ sluice_one_file_test("select_timer_registration_test")
 -- twice, claim-lost no-mutation, authority-closed invariant, no-publication,
 -- Timer loser ordering SN-9). Deterministic (test clock + causal phase seams);
 -- NO sleep_for. Gated to x86_64 (fiber_ctx::supported) for parity with E13.
-sluice_one_file_test("select_claim_test")
+sluice_internal_async_test("select_claim_test")
 
 -- select_inline — E13 P5 inline Select admission tests (ST-1..ST-8 + T1/T2/T3).
 -- Drives the PUBLIC variadic select() entry from a real running Fiber on the
@@ -172,7 +172,7 @@ sluice_one_file_test("select_claim_test")
 -- registered-before-snapshot (T2), and the inline Completed->Consumed lifecycle
 -- (T3). Deterministic (test clock + AdmissionArmed/Consumed causal phase seams);
 -- NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
-sluice_one_file_test("select_inline_test")
+sluice_internal_async_test("select_inline_test")
 
 -- select_suspended — E13 P6 suspended Select publication tests (ST-9, ST-10,
 -- ST-13 + P6-D1 same-Event-twice + PUB boundary snapshots + P6-LW1/LW2 wake-
@@ -181,7 +181,7 @@ sluice_one_file_test("select_inline_test")
 -- (test clock + e13_select_suspend_before_switch / e13_publish_* /
 -- e13_suspended_before_consume causal phase seams); NO sleep_for. Gated to
 -- x86_64 (fiber_ctx::supported).
-sluice_one_file_test("select_suspended_test")
+sluice_internal_async_test("select_suspended_test")
 
 -- select_multi_worker — E13 P6 multi-worker owner routing + external-thread
 -- Event set + exactly-one-runnable tests (ST-15, ST-16, ST-17 + PUB-1..4
@@ -189,7 +189,7 @@ sluice_one_file_test("select_suspended_test")
 -- from a real Fiber; resolves from an external OS thread and across workers.
 -- Deterministic (test clock + waiting_select_count liveness + PhaseTag causal
 -- seams); NO sleep_for. Gated to x86_64 (fiber_ctx::supported).
-sluice_one_file_test("select_multi_worker_test")
+sluice_internal_async_test("select_multi_worker_test")
 
 -- select_registration_rollback_test — E13 P7 registration-failure rollback
 -- tests (ST-14 + P7-T1..T11). Drives the PUBLIC variadic select() entry from a
@@ -200,15 +200,15 @@ sluice_one_file_test("select_multi_worker_test")
 -- rollback observation); NO sleep_for. ASan is load-bearing for P7-T8 (stale
 -- Timer after caller-frame unwind). Gated to platforms where the test file is
 -- present; fiber work is gated at runtime via fiber_ctx::supported.
-sluice_one_file_test("select_registration_rollback_test")
+sluice_internal_async_test("select_registration_rollback_test")
 
 -- select_call_context_contract_test — E13 P7 Select contract coverage
 -- (ST-18..ST-23) for the genuinely-missing positive contract cases. Reuses
 -- existing tests where they already prove the exact contract; this target adds
 -- only missing coverage.
-sluice_one_file_test("select_call_context_contract_test")
+sluice_internal_async_test("select_call_context_contract_test")
 
 -- e14_f3_internal_test — E14 RT-F3 real init_fiber failure regression test.
 -- Uses SLUICE_ASYNC_INTERNAL_TESTING seam to force init_fiber failure.
 -- Links against sluice_async_internal_testing (NOT production sluice_async).
-sluice_one_file_test("e14_f3_internal_test")
+sluice_internal_async_test("e14_f3_internal_test")

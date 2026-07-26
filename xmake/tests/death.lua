@@ -12,7 +12,7 @@ local R = SLUICE_ROOT
 -- the design contract); Category B cases are deterministic fail-fast in BOTH
 -- Debug and Release (assert(false) + std::abort). POSIX-only: gated to
 -- linux/macosx.
-sluice_one_file_test("async_rwlock_death_test", {platform_gate = {"linux", "macosx"}})
+sluice_internal_async_test("async_rwlock_death_test", {platform_gate = {"linux", "macosx"}})
 
 -- async_mutex_death_test — verifies the Mutex acquisition fail-fast
 -- boundary (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1 §F) via a POSIX
@@ -25,14 +25,14 @@ sluice_one_file_test("async_rwlock_death_test", {platform_gate = {"linux", "maco
 -- POSIX-only (fork/exec/waitpid): gated to linux/macosx. Windows is NOT RUN
 -- in this task (the harness is not implemented there); see
 -- tests/death_test_runner_posix.hpp.
-sluice_one_file_test("async_mutex_death_test", {platform_gate = {"linux", "macosx"}})
+sluice_internal_async_test("async_mutex_death_test", {platform_gate = {"linux", "macosx"}})
 
 -- select_event_registry_death_test — E13 Select registry death tests (P2).
 -- Verifies identity-check assertions fire for duplicate-link, wrong-Event unlink,
 -- cross-Scheduler link/unlink, and live-arm Event destruction. Each case runs in
 -- a forked child that re-execs this binary via death_test_runner_posix.hpp.
 -- POSIX-only: gated to linux/macosx.
-sluice_one_file_test("select_event_registry_death_test", {platform_gate = {"linux", "macosx"}})
+sluice_internal_async_test("select_event_registry_death_test", {platform_gate = {"linux", "macosx"}})
 
 -- select_timer_pump_death_test — E13 Select timer pump ACTIVE-due
 -- stage-boundary fail-fast (P3). A due ACTIVE SelectTimerRegistration is
@@ -40,7 +40,7 @@ sluice_one_file_test("select_event_registry_death_test", {platform_gate = {"linu
 -- than claim/mark/retire/consume. Runs in a forked child that re-execs this
 -- binary via death_test_runner_posix.hpp. POSIX-only; gated to linux/macosx.
 -- This is an invariant GUARD, NOT supported production Select behavior.
-sluice_one_file_test("select_timer_pump_death_test", {platform_gate = {"linux", "macosx"}})
+sluice_internal_async_test("select_timer_pump_death_test", {platform_gate = {"linux", "macosx"}})
 
 -- select_claim_death_test — E13 P4 Select claim/finalization death tests.
 -- Verifies preflight assertions fire BEFORE the winner CAS for: candidate index
@@ -50,7 +50,7 @@ sluice_one_file_test("select_timer_pump_death_test", {platform_gate = {"linux", 
 -- registration not pool-owned (TP), and the post-claim all-authority-closed
 -- assertion rejecting an open authority (OA). Runs in a forked child that
 -- re-execs this binary via death_test_runner_posix.hpp. POSIX-only.
-sluice_one_file_test("select_claim_death_test", {platform_gate = {"linux", "macosx"}})
+sluice_internal_async_test("select_claim_death_test", {platform_gate = {"linux", "macosx"}})
 
 -- select_publication_death_test — E13 P6 publication invariant death tests
 -- (SN-2 duplicate-publish / SN-10 open-authority / FP caller-not-waiting / MG
@@ -58,14 +58,14 @@ sluice_one_file_test("select_claim_death_test", {platform_gate = {"linux", "maco
 -- the real production publication entry + Event resolver through guarded
 -- internal-testing drivers. Runs in forked children that re-exec this binary
 -- via death_test_runner_posix.hpp. POSIX-only; gated to linux/macosx.
-sluice_one_file_test("select_publication_death_test", {platform_gate = {"linux", "macosx"}})
+sluice_internal_async_test("select_publication_death_test", {platform_gate = {"linux", "macosx"}})
 
 -- select_rollback_invariant_death_test — E13 P7 rollback-domain negative tests
 -- (SN-8 rollback after suspension + P7-N1..N9). Exercises the guarded internal
 -- rollback authorities on invalid domains / corrupted membership, proving
 -- fail-fast. Runs in forked children via death_test_runner_posix.hpp.
 -- POSIX-only; gated to linux/macosx.
-sluice_one_file_test("select_rollback_invariant_death_test", {platform_gate = {"linux", "macosx"}})
+sluice_internal_async_test("select_rollback_invariant_death_test", {platform_gate = {"linux", "macosx"}})
 
 -- e14_group_death_test — E14 RT-F2a (destructor fail-fast) and RT-F5b
 -- (unsupported-target admission) death tests. POSIX only.
