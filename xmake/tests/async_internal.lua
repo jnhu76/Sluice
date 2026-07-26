@@ -13,7 +13,7 @@ sluice_internal_async_test("multi_worker_coord_test")
 -- SLUICE_ASYNC_INTERNAL_TESTING) to force tasks_ push_back to throw, proving
 -- the join-on-failure path keeps no joinable thread stranded. The production
 -- sluice_async build compiles the seam out.
-sluice_internal_async_test("e15_group_exception_safety_test")
+sluice_internal_async_test("group_exception_safety_test")
 
 -- external_wake_test — Scheduler park admission + unified wake-source
 -- protocol (sluice-CORE-E9). Proves external-thread flag completion wakes a

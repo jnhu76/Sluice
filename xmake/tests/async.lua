@@ -11,7 +11,7 @@ sluice_production_async_test("async_completion_test")
 -- SAFE move paths (idle-to-idle, source-with-outstanding transfer, self move,
 -- chained moves, moved-from destruction) are exercised here; the FAIL-FAST
 -- paths (destination-outstanding move-assign, destroy-with-outstanding) live
--- in e15_context_death_test.cpp (POSIX fork/exec).
+-- in async_io_context_death_test.cpp (POSIX fork/exec).
 sluice_production_async_test("async_io_context_test")
 
 -- FakeAsyncBackend tests (sluice-CORE-019). The deterministic test vehicle.
@@ -69,11 +69,11 @@ sluice_production_async_test("group_test")
 -- uses real I/O (ThreadPoolBackend + temp fds). Links sluice_async (batch.cpp).
 sluice_production_async_test("batch_test")
 
--- E15-P1-04 / E15-P2-01 Batch reap-order + wait-error regression tests.
--- Uses a deterministic in-test SequenceBackend that lets each case DIRECT
--- the exact reap order, so Batch::next()'s "completion (reap) order" contract
--- is asserted exactly (the ThreadPoolBackend-based batch_test cannot).
-sluice_production_async_test("e15_batch_reap_order_test")
+-- Batch reap-order + wait-error regression tests. Uses a deterministic
+	-- in-test SequenceBackend that lets each case DIRECT the exact reap order,
+	-- so Batch::next()'s "completion (reap) order" contract is asserted exactly
+	-- (the ThreadPoolBackend-based batch_test cannot).
+	sluice_production_async_test("batch_reap_order_test")
 
 -- Fiber state-model tests (sluice-CORE-E1). Pure C++ state machine; no asm yet
 -- (E2). Links sluice_async (fiber.cpp + cancel.cpp).

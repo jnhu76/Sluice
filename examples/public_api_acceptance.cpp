@@ -1,4 +1,4 @@
-// e15_public_api_acceptance — public-only acceptance consumer (E15 §17).
+// public_api_acceptance — public-only acceptance consumer for the async foundation.
 //
 // Exercises a small but real sequence against INSTALLED/PUBLIC headers only:
 //   - construct a sync Result<T> (success + error) and observe has_value/value/error

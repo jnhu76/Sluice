@@ -143,7 +143,7 @@ void child_p1_03_safe_transfer_not_fail_fast() {
 
 // ---- Parent-side test cases -------------------------------------------------
 
-SLUICE_TEST_CASE(e15_death_p1_03_move_assign_over_outstanding) {
+SLUICE_TEST_CASE(context_death_move_assign_over_outstanding) {
     auto r = sluice_death_test::run_death_case("P1-03");
     SLUICE_CHECK_MSG(
         sluice_death_test::expect_terminated_via_fail_fast(r),
@@ -151,7 +151,7 @@ SLUICE_TEST_CASE(e15_death_p1_03_move_assign_over_outstanding) {
         "fail-fast (exit 86), not silently abandon the Completions");
 }
 
-SLUICE_TEST_CASE(e15_death_p2_06_destroy_with_outstanding) {
+SLUICE_TEST_CASE(context_death_destroy_with_outstanding) {
     auto r = sluice_death_test::run_death_case("P2-06");
     SLUICE_CHECK_MSG(
         sluice_death_test::expect_terminated_via_fail_fast(r),
@@ -159,14 +159,14 @@ SLUICE_TEST_CASE(e15_death_p2_06_destroy_with_outstanding) {
         "fail-fast (exit 86) in BOTH Debug and Release");
 }
 
-SLUICE_TEST_CASE(e15_death_control_valid_lifecycle) {
+SLUICE_TEST_CASE(context_death_control_valid_lifecycle) {
     auto r = sluice_death_test::run_death_case("control");
     SLUICE_CHECK_MSG(
         sluice_death_test::expect_normal_exit_zero(r),
         "Control: valid AsyncIoContext move + clean destroy must exit 0");
 }
 
-SLUICE_TEST_CASE(e15_death_p1_03_safe_transfer_no_fail_fast) {
+SLUICE_TEST_CASE(context_death_safe_transfer_no_fail_fast) {
     auto r = sluice_death_test::run_death_case("safe-transfer");
     SLUICE_CHECK_MSG(
         sluice_death_test::expect_normal_exit_zero(r),
@@ -196,7 +196,7 @@ int main(int argc, char** argv) {
 
 #else  // !defined(__unix__)
 
-SLUICE_TEST_CASE(e15_death_skip_non_posix) {
+SLUICE_TEST_CASE(context_death_skip_non_posix) {
     // Death tests require POSIX fork/exec.
 }
 SLUICE_MAIN()
