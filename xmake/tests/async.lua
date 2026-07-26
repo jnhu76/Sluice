@@ -7,6 +7,13 @@ local R = SLUICE_ROOT
 -- measurement) and sluice_async (Completion/AsyncIoContext/backends).
 sluice_production_async_test("async_completion_test")
 
+-- AsyncIoContext lifecycle / move-semantics tests (E15-P1-03 / E15-P2-06). The
+-- SAFE move paths (idle-to-idle, source-with-outstanding transfer, self move,
+-- chained moves, moved-from destruction) are exercised here; the FAIL-FAST
+-- paths (destination-outstanding move-assign, destroy-with-outstanding) live
+-- in e15_context_death_test.cpp (POSIX fork/exec).
+sluice_production_async_test("async_io_context_test")
+
 -- FakeAsyncBackend tests (sluice-CORE-019). The deterministic test vehicle.
 sluice_production_async_test("fake_backend_test")
 

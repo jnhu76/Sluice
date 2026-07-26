@@ -98,6 +98,23 @@ protected:
 // The public L1 foundation (parallels the blocking IoContext). Owns a backend;
 // routes submit_*/poll/wait_one/cancel to it; tallies AsyncStats.
 // Move-only, non-copyable (L6).
+//
+// E15-P1-03 / E15-P2-06 / ADR §5 L11 — outstanding-Completion lifecycle:
+//   * This context is the SOLE publication authority for any Completion that
+//     is currently outstanding against its backend.
+//   * Destroying this context — OR move-assigning another context over it —
+//     while Completions are still outstanding is a CONTRACT VIOLATION and
+//     fails fast in BOTH Debug and Release
+//     (detail::async_context_outstanding_fail_fast → std::terminate). A
+//     destructor / move-assignment has no Result channel to surface
+//     invalid_state, and silent abandonment would strand caller-owned,
+//     address-stable Completions permanently outstanding.
+//   * Move CONSTRUCTION from a source with outstanding work is SAFE: the
+//     backend instance (and thus every outstanding Completion pointer it
+//     holds) transfers to the new owner, so callers observing those
+//     Completions via the new owner still see them resolve.
+//   * Move ASSIGNMENT requires the DESTINATION to have zero outstanding work;
+//     the SOURCE's outstanding work transfers with the backend.
 class AsyncIoContext {
 public:
     // Construct with a concrete backend (owned). stats may be null (no counting).
@@ -107,7 +124,12 @@ public:
 
     AsyncIoContext(const AsyncIoContext&) = delete;
     AsyncIoContext& operator=(const AsyncIoContext&) = delete;
+    // Move ctor: safe even if the source has outstanding work (the backend
+    // transfers with it). See the class-header L11 note.
     AsyncIoContext(AsyncIoContext&&) noexcept;
+    // Move assign: requires the destination's backend (if any) to have zero
+    // outstanding work, else fail-fast. Source-side outstanding work transfers.
+    // Self-assignment is a no-op. See the class-header L11 note.
     AsyncIoContext& operator=(AsyncIoContext&&) noexcept;
 
     // A1/A2: submit does not block; records the op outstanding. Submit-time

@@ -258,16 +258,32 @@ L10. The fd/handle referenced by an op MUST remain valid until the Completion is
      ready. Closing a handle with outstanding ops referencing it is a caller
      contract violation (the op would touch a closed/invalid descriptor).
 L11. Destroying an AsyncIoContext that still has outstanding Completions is a
-     contract violation: debug-mode assertion failure; release-mode
-     invalid_state. Destruction does NOT implicitly cancel or drain — silent
-     teardown of in-flight ops would hide bugs.
+     contract violation (E15-P2-06 closeout, supersedes the original wording):
+     the destructor has NO Result channel, so "release-mode invalid_state" was
+     not implementable truthfully — the original behavior was a Debug-only
+     assert and silent abandonment in Release. The corrected, truthful contract
+     is deterministic FAIL-FAST in BOTH Debug and Release
+     (detail::async_context_outstanding_fail_fast → std::terminate). The same
+     applies to move-assignment: operator=(AsyncIoContext&&) over a DESTINATION
+     that owns a backend with >0 outstanding Completions would silently
+     destroy that backend (E15-P1-03) and strand the caller-owned,
+     address-stable Completions permanently outstanding with no path to ready;
+     it therefore fails fast the same way. Move CONSTRUCTION and the
+     SOURCE-side of move-assignment are SAFE even with outstanding work, since
+     the backend instance (and thus every outstanding Completion pointer it
+     holds) transfers to the new owner. Destruction does NOT implicitly cancel
+     or drain — silent teardown of in-flight ops would hide bugs.
 ```
 
 Enforcement strategy (incremental):
 
 ```text
-- Debug-mode assertions for L7–L11 (outstanding-when-destroyed, result-before-
-  ready, submit-into-non-ready, context-destroyed-with-outstanding).
+- L7–L11 fail-fast (E15-P2-06): destroying an AsyncIoContext with outstanding
+  Completions, OR move-assigning over a destination with outstanding
+  Completions, deterministically terminates the process in BOTH Debug and
+  Release via detail::async_context_outstanding_fail_fast. result-before-ready,
+  submit-into-non-ready, and Completion address-stability remain Debug asserts
+  / compile-time guarantees as before.
 - The fake backend (job 019) explicitly tests "buffer reused after completion is
   fine; buffer reused while outstanding is a contract violation", and "outstanding
   Completion destroyed/moved is caught".

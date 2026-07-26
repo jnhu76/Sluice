@@ -4,9 +4,21 @@
 // tallies AsyncStats. E7-C adds access_mtx_ — all backend calls are serialized
 // (at most one concurrent caller). This satisfies the E7 ADR §9.2.5 serialized
 // backend access domain contract.
+//
+// E15-P1-03 / E15-P2-06: lifetime contract for outstanding Completions. Per
+// ADR §5 L11 the context is the publication authority for every outstanding
+// Completion it owns. Destroying the backend (either by destroying the context
+// or by overwriting it via move-assignment) while Completions are still
+// outstanding would strand them permanently: their backend pointer is gone,
+// no poll()/wait_one() can ever mark them ready, and they have no Result
+// channel of their own. The truthful deterministic contract is therefore
+// fail-fast in BOTH Debug and Release via async_context_outstanding_fail_fast
+// (no silent abandonment, no claimed-but-unreturnable invalid_state).
 #include <sluice/async/async_io_context.hpp>
 
-#include <cassert>
+#include <sluice/async/detail/fail_fast.hpp>
+
+#include <utility>
 
 namespace sluice::async {
 
@@ -16,19 +28,43 @@ AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats
 }
 
 AsyncIoContext::~AsyncIoContext() {
-    if (backend_) {
-        assert(backend_->outstanding() == 0 &&
-               "AsyncIoContext destroyed with outstanding Completions (L11)");
+    if (backend_ && backend_->outstanding() != 0) {
+        // E15-P1-03 / E15-P2-06 / ADR §5 L11: outstanding-when-destroyed.
+        // The fail-fast (std::terminate) is the truthful deterministic contract
+        // in BOTH Debug and Release — we deliberately do NOT use assert() here,
+        // because assert() aborts (SIGABRT) and would bypass a process-wide
+        // std::terminate handler that death tests rely on for a stable exit
+        // code. async_context_outstanding_fail_fast routes through
+        // std::terminate so the handler sees a clean terminate, not a signal.
+        detail::async_context_outstanding_fail_fast();
     }
 }
 
 AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept
-    : backend_(std::move(other.backend_)), stats_(other.stats_) {}
+    : backend_(std::move(other.backend_)), stats_(other.stats_) {
+    // Source-side outstanding state is SAFE to transfer: the backend instance
+    // (now ours) retains every outstanding Completion pointer, so callers that
+    // poll/wait_one on us still see them resolve. No contract check needed.
+}
 
 AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
     if (this != &other) {
+        // E15-P1-03: the DESTINATION must not already own a backend with
+        // outstanding Completions — overwriting it would destroy the backend
+        // (the publication authority for those Completions) and strand them
+        // permanently outstanding with no path to ready. This is the same L11
+        // invariant the destructor enforces; fail-fast deterministically in
+        // Debug AND Release rather than silently abandoning in-flight ops.
+        // (No assert(): abort() would bypass a std::terminate handler — see
+        // ~AsyncIoContext above.)
+        if (backend_ && backend_->outstanding() != 0) {
+            detail::async_context_outstanding_fail_fast();
+        }
         backend_ = std::move(other.backend_);
         stats_ = other.stats_;
+        // The SOURCE's outstanding state transfers with the backend (see the
+        // move ctor); the source is left with backend_ == nullptr and any
+        // further use (poll/wait_one/submit) is the caller's responsibility.
     }
     return *this;
 }
