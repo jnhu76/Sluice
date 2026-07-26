@@ -8,6 +8,13 @@ local R = SLUICE_ROOT
 -- quiescence, MW-S3. Gated to x86_64.
 sluice_internal_async_test("multi_worker_coord_test")
 
+-- E15-P2-02 Group::async_threaded exception-safety regression. Uses the
+-- test_set_tasks_throw_on_nth() seam (only available under
+-- SLUICE_ASYNC_INTERNAL_TESTING) to force tasks_ push_back to throw, proving
+-- the join-on-failure path keeps no joinable thread stranded. The production
+-- sluice_async build compiles the seam out.
+sluice_internal_async_test("group_exception_safety_test")
+
 -- external_wake_test — Scheduler park admission + unified wake-source
 -- protocol (sluice-CORE-E9). Proves external-thread flag completion wakes a
 -- parked Scheduler (no caller re-entry), MIXED-WAKE closure, wake coalescing,

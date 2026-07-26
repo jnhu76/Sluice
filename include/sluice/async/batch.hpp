@@ -81,14 +81,32 @@ public:
     std::size_t add(BatchOp op);
 
     // Submit every added op to `ctx`, then drive ctx.wait_one() until >=1 op
-    // completes. Returns the number of ops made ready this call. After this,
-    // next() yields completions. Idempotent-ish: ops already submitted are not
-    // re-submitted.
-    std::size_t await_one(AsyncIoContext& ctx);
+    // completes.
+    //
+    // Returns the number of ops made ready this call on success. On a BACKEND
+    // wait_one() error (E15-P2-01), the error is PROPAGATED via Result and any
+    // ops that were made ready this call (Phase 1 submit-time errors, earlier
+    // reaps in the same loop) REMAIN ready for next() to pop — the caller can
+    // drain them before observing the error. A success-returning await_one
+    // never silently swallows a backend error; a zero return on success
+    // genuinely means "nothing newly ready".
+    //
+    // After this, next() yields completions. Idempotent-ish: ops already
+    // submitted are not re-submitted.
+    Result<std::size_t> await_one(AsyncIoContext& ctx);
 
-    // Pop the next completed operation in completion (reap) order, or nullopt
-    // if none ready. Each completion is dequeued exactly once. Mirrors Zig
-    // Batch.next (Io.zig:551).
+    // Pop the next completed operation in actual BACKEND REAP order, or
+    // nullopt if none ready. Each completion is dequeued exactly once. Mirrors
+    // Zig Batch.next (Io.zig:551).
+    //
+    // E15-P1-04: ordering is by the monotonic reap sequence stamped on each
+    // Completion by complete_with() at backend reap time (ADR §6 O2). This
+    // preserves the backend's true reap order across slot 0/1/2... regardless
+    // of submission order: a backend that reaps slot 1 before slot 0 yields
+    // next() returning slot 1 first, then slot 0. Submit-time failures
+    // (Batch::await_one Phase 1 rejections) carry reap_seq 0 and surface
+    // before any backend-reaped completion, in submission order among
+    // themselves (ADR E5).
     //
     // It is not required to drain all completions before awaiting again.
     std::optional<BatchResult> next() noexcept;

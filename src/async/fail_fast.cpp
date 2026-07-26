@@ -51,6 +51,16 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// E15-P1-03 / E15-P2-06: AsyncIoContext destroyed or move-assigned over while
+// it still owns a backend with outstanding Completions. Per ADR §5 L11 this is
+// a contract violation; the truthful deterministic behavior is fail-fast in
+// BOTH Debug and Release (a destructor / move-assign has no Result channel for
+// invalid_state, and silent abandonment would strand caller-owned Completions
+// permanently outstanding). Mirrors group_lifetime_fail_fast.
+[[noreturn]] void async_context_outstanding_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <new>       // std::bad_alloc (E15-P2-02 test seam)
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -98,6 +99,16 @@ public:
         }
     }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // E15-P2-02 test seam: arm the Nth admission (1-indexed by the resulting
+    // tasks_.size()) inside async_threaded to throw std::bad_alloc from the
+    // reserve step BEFORE the worker thread is created. Lets a deterministic
+    // test prove that async() failure means the task body did NOT execute.
+    // Test-only; production compiles this out.
+    void test_set_tasks_throw_on_nth(std::size_t n) { tasks_throw_on_nth_ = n; }
+    std::size_t test_tasks_throw_on_nth() const { return tasks_throw_on_nth_; }
+#endif
+
     // The shared cancel token for all tasks in this group. A task observes it
     // at its cancel points (see cancel.hpp). cancel() requests it.
     CancelToken& group_token() noexcept { return token_; }
@@ -130,9 +141,36 @@ private:
     static bool group_stop_predicate(void* ctx);
 
     // Threaded async: spawn a std::thread per task (existing path).
+    //
+    // E15-P2-02 exception safety (F-01 closeout): ALL fallible capacity
+    // preparation (vector reserve) happens BEFORE the worker thread is created.
+    // If reserve throws, no thread exists, the task body has NOT executed, and
+    // the Group's vectors are unchanged — strong exception safety with correct
+    // admission semantics (async() failure means task not admitted).
+    //
+    // After reserve succeeds, both push_back calls are guaranteed not to
+    // allocate (sufficient capacity), so they cannot throw. std::thread move
+    // and shared_ptr move are noexcept. The entire post-reserve sequence is
+    // therefore exception-safe without a try/catch.
     template <class Fn>
     void async_threaded(Fn fn) {
         auto fut = std::make_shared<Future<void>>();
+
+        // E15-P2-02 (F-01): reserve capacity BEFORE spawning the worker.
+        // If either reserve throws (std::bad_alloc), no thread has been
+        // created, fn has NOT executed, and vectors are unchanged.
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            if (tasks_throw_on_nth_ > 0 && (tasks_.size() + 1) == tasks_throw_on_nth_) {
+                throw std::bad_alloc();
+            }
+#endif
+            tasks_.reserve(tasks_.size() + 1);
+            futures_.reserve(futures_.size() + 1);
+        }
+
+        // Capacity is now guaranteed. Create the worker thread.
         std::thread w([fut, fn = std::move(fn), tok = &token_]() mutable {
             try {
                 fn(*tok);
@@ -142,9 +180,13 @@ private:
             }
             fut->complete_with(sluice::Result<void>{});
         });
-        std::lock_guard<std::mutex> lk(mtx_);
-        tasks_.push_back(std::move(w));
-        futures_.push_back(std::move(fut));
+
+        // Post-reserve push_back: cannot allocate, cannot throw.
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            tasks_.push_back(std::move(w));
+            futures_.push_back(std::move(fut));
+        }
     }
 
     // Evented async: spawn a Fiber on sched_ per task. The Fiber body wraps fn
@@ -158,6 +200,12 @@ private:
     std::vector<std::shared_ptr<Future<void>>> futures_;
     CancelToken token_;
     Scheduler* sched_ = nullptr;                  // Evented mode (borrowed)
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // E15-P2-02 deterministic test seam: if >0, the Nth admission's reserve
+    // step throws std::bad_alloc BEFORE thread creation (see async_threaded).
+    // Test-only; not present in production.
+    std::size_t tasks_throw_on_nth_ = 0;
+#endif
     // Evented-mode owned state. The EventedWaitPolicy is shared across all
     // task Futures in this group (one policy per group; it borrows sched_).
     // Stored as unique_ptr so its address is stable across Group copies (none

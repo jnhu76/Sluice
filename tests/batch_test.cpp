@@ -50,13 +50,16 @@ SLUICE_TEST_CASE(batch_add_await_next_yields_all_completions) {
     SLUICE_CHECK(ia == 0);
     SLUICE_CHECK(ic == 1);
 
-    // await_one() returns >=1 ready (Zig Io.zig:578: "wait for at least one").
-    // Loop await_one/drain-next until both completions are reaped OR nothing is
-    // outstanding. Stop if await_one yields no new completion AND nothing is
-    // outstanding (avoids a blocking wait_one on an empty backend).
+    // await_one() returns Result<size_t>; success carries the ready count,
+    // a backend wait_one() error propagates (E15-P2-01). Loop await_one/drain-
+    // next until both completions are reaped OR nothing is outstanding. Stop
+    // if await_one yields no new completion AND nothing is outstanding (avoids
+    // a blocking wait_one on an empty backend).
     int seen_a = 0, seen_c = 0, count = 0;
     while (count < 2) {
-        std::size_t ready = b.await_one(ctx);
+        auto ar = b.await_one(ctx);
+        SLUICE_CHECK(ar.has_value());     // success path: no backend error
+        std::size_t ready = ar.value();
         SLUICE_CHECK(ready >= 1);
         std::size_t popped_now = 0;
         while (auto r = b.next()) {
@@ -98,7 +101,7 @@ SLUICE_TEST_CASE(batch_mixed_kinds_complete_independently) {
     Batch seed_batch;
     BatchOp w; w.kind = BatchOp::Kind::write; w.write = WriteOp{fd, seed, 4, 0};
     const std::size_t iw = seed_batch.add(w);
-    (void)seed_batch.await_one(ctx);
+    (void)seed_batch.await_one(ctx).value();   // E15-P2-01: Result<size_t>
     auto wr = seed_batch.next();
     SLUICE_CHECK(wr.has_value());
     SLUICE_CHECK(wr->index == iw);
@@ -117,7 +120,9 @@ SLUICE_TEST_CASE(batch_mixed_kinds_complete_independently) {
 
     int reads = 0, syncs = 0, count = 0;
     while (count < 2) {
-        std::size_t ready = b.await_one(ctx);
+        auto ar = b.await_one(ctx);
+        SLUICE_CHECK(ar.has_value());
+        std::size_t ready = ar.value();
         SLUICE_CHECK(ready >= 1);
         std::size_t popped_now = 0;
         while (auto r = b.next()) {

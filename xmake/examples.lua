@@ -11,3 +11,23 @@ end
 -- experimental_uring_write links the experimental uring lib (stub or real).
 sluice_one_file_target("binary", "examples", "experimental_uring_write", "examples",
                       {"sluice_core", "sluice_experimental_uring"})
+
+-- public_api_acceptance — public-only acceptance consumer. Uses INSTALLED/
+-- PUBLIC headers only (no tests/ include path, no SLUICE_ASYNC_INTERNAL_TESTING,
+-- no private source). Exercises Result + AsyncIoContext + Completion + Batch
+-- end-to-end against the production sluice_async. Build + run proves the public
+-- async-foundation surface is usable from a consumer that sees only the
+-- installed headers.
+do
+    local R = SLUICE_ROOT
+    local p = R .. "examples/public_api_acceptance.cpp"
+    if os.isfile(p) then
+        target("public_api_acceptance")
+            set_kind("binary")
+            set_default(false)
+            set_group("examples")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include")
+            add_files(p)
+    end
+end

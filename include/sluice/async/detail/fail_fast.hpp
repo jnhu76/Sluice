@@ -94,6 +94,22 @@ namespace sluice::async::detail {
 // Same contract as the other fail-fast entries.
 [[noreturn]] void evented_admission_fail_fast() noexcept;
 
+// E15-P1-03 / E15-P2-06: AsyncIoContext outstanding-Completion fail-fast.
+// Called from AsyncIoContext::~AsyncIoContext() and operator=(AsyncIoContext&&)
+// when the context still owns a backend with >0 outstanding Completions. Per
+// ADR §5 L11 this is a caller-contract violation: outstanding Completions are
+// address-stable and CALLER-OWNED; silently discarding the backend that
+// publishes them would strand them permanently outstanding (no Result channel,
+// no path to ready). A destructor / move-assignment has no Result channel to
+// surface invalid_state, so the truthful contract is deterministic fail-fast
+// in BOTH Debug and Release (no silent abandonment, no claimed-but-unreturnable
+// invalid_state). Mirrors group_lifetime_fail_fast.
+//
+// Same contract as the other fail-fast entries: [[noreturn]] noexcept, no
+// allocation / locking / I/O / dynamic string, no state recovery, ultimately
+// std::terminate(). No parameter (the operation is known only to the caller).
+[[noreturn]] void async_context_outstanding_fail_fast() noexcept;
+
 // E14 D-E14-2: internal testable guard. Production code calls
 // require_evented_supported(fiber_ctx::supported). On supported targets this
 // is an optimized no-op (the parameter is a compile-time true constant). On

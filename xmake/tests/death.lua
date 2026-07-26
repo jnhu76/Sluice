@@ -82,3 +82,23 @@ do
             add_tests("e14_group_death_test")
     end
 end
+
+-- async_io_context_death_test — move-assign over a destination with outstanding
+-- Completions must fail-fast, and destroying a context with outstanding
+-- Completions must fail-fast in BOTH Debug and Release. The truthful
+-- deterministic contract: a destructor / move-assignment has no Result channel
+-- for invalid_state, and silent abandonment would strand caller-owned address-
+-- stable Completions permanently outstanding. POSIX only.
+do
+    local p = R .. "tests/async_io_context_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("async_io_context_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(p)
+            add_tests("async_io_context_death_test")
+    end
+end
