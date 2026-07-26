@@ -240,7 +240,16 @@ examples/                Runnable examples
 bench/                   Microbenchmarks (CSV output)
 docs/                    Design notes, audits, decision records
 scripts/                 Build/analysis helpers
+xmake/                   Build configuration (split from root xmake.lua)
+  ├── helpers.lua        Shared target-declaration helpers
+  ├── libraries.lua      Production libs (core, async, bench_common)
+  ├── experimental.lua   io_uring spike + liburing gate
+  ├── tests/             Test target definitions (core, async, internal, death)
+  ├── examples.lua       Buildable examples
+  └── benchmarks.lua     Microbench targets
 ```
+
+The root `xmake.lua` contains only project-wide configuration (rules, languages, warnings, hardening) and `includes()` the files under `xmake/`. Each sub-file owns one concern: a library family, a test class, or a target group. This keeps the root file short (~100 lines) while each sub-file stays focused.
 
 ## Tests
 

@@ -240,7 +240,16 @@ examples/                可运行示例
 bench/                   微基准测试（CSV 输出）
 docs/                    设计文档、审计、决策记录
 scripts/                 构建/分析辅助脚本
+xmake/                   构建配置（从根 xmake.lua 拆分）
+  ├── helpers.lua        共享目标声明助手
+  ├── libraries.lua      生产库（core、async、bench_common）
+  ├── experimental.lua   io_uring spike + liburing 门控
+  ├── tests/             测试目标定义（core、async、internal、death）
+  ├── examples.lua       可运行示例
+  └── benchmarks.lua     微基准目标
 ```
+
+根 `xmake.lua` 仅包含项目级配置（rules、languages、warnings、hardening），并通过 `includes()` 引入 `xmake/` 下的文件。每个子文件负责一个关注点：一个库族、一个测试类或一个目标组。这使根文件保持简短（约 100 行），同时每个子文件保持聚焦。
 
 ## 测试
 
