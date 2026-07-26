@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <new>       // std::bad_alloc (E15-P2-02 test seam)
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -98,6 +99,15 @@ public:
         }
     }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // E15-P2-02 test seam: arm the Nth tasks_ push_back (1-indexed by the
+    // resulting tasks_.size()) inside async_threaded to throw std::bad_alloc.
+    // Lets a death/exception-safety test deterministically prove the join-on-
+    // failure path. Test-only; production compiles this out.
+    void test_set_tasks_throw_on_nth(std::size_t n) { tasks_throw_on_nth_ = n; }
+    std::size_t test_tasks_throw_on_nth() const { return tasks_throw_on_nth_; }
+#endif
+
     // The shared cancel token for all tasks in this group. A task observes it
     // at its cancel points (see cancel.hpp). cancel() requests it.
     CancelToken& group_token() noexcept { return token_; }
@@ -130,6 +140,18 @@ private:
     static bool group_stop_predicate(void* ctx);
 
     // Threaded async: spawn a std::thread per task (existing path).
+    //
+    // E15-P2-02 exception safety: the worker std::thread is constructed BEFORE
+    // the Group's bookkeeping vectors are mutated. If tasks_/futures_ push_back
+    // throws (vector reallocation / std::bad_alloc), the local `w` would
+    // otherwise be destroyed while joinable — std::thread::~thread on a
+    // joinable thread calls std::terminate, taking the process down while the
+    // worker is still running fn against the group's CancelToken. The fix
+    // wraps the bookkeeping mutation in a try/catch: on failure, JOIN the
+    // already-spawned worker (so its handle is safe to drop) and rethrow. The
+    // worker body swallows fn exceptions (cancel-propagation boundary), so join
+    // returns cleanly; no untracked task remains, and futures_/tasks_ stay
+    // consistent (the push either fully succeeded or fully rolled back).
     template <class Fn>
     void async_threaded(Fn fn) {
         auto fut = std::make_shared<Future<void>>();
@@ -142,9 +164,30 @@ private:
             }
             fut->complete_with(sluice::Result<void>{});
         });
-        std::lock_guard<std::mutex> lk(mtx_);
-        tasks_.push_back(std::move(w));
-        futures_.push_back(std::move(fut));
+        try {
+            std::lock_guard<std::mutex> lk(mtx_);
+            // E15-P2-02 test seam: under SLUICE_ASYNC_INTERNAL_TESTING, the
+            // test can arm a per-Group counter to throw a std::bad_alloc from
+            // the Nth tasks_ push_back to prove the join-on-failure path. The
+            // production build compiles this hook out (no overhead, no layout
+            // change).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            if (tasks_throw_on_nth_ > 0 && (tasks_.size() + 1) == tasks_throw_on_nth_) {
+                throw std::bad_alloc();
+            }
+#endif
+            tasks_.push_back(std::move(w));
+            futures_.push_back(std::move(fut));
+        } catch (...) {
+            // Bookkeeping allocation failed. The worker is already running;
+            // join it (the body swallows exceptions, so this completes) so its
+            // std::thread handle is not in a joinable state when the local `w`
+            // destructs. Then propagate the allocation failure to the caller.
+            // joinable() covers both the "push_back of w threw before moving"
+            // and the (impossible here) "w already moved" cases.
+            if (w.joinable()) w.join();
+            throw;
+        }
     }
 
     // Evented async: spawn a Fiber on sched_ per task. The Fiber body wraps fn
@@ -158,6 +201,11 @@ private:
     std::vector<std::shared_ptr<Future<void>>> futures_;
     CancelToken token_;
     Scheduler* sched_ = nullptr;                  // Evented mode (borrowed)
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // E15-P2-02 deterministic test seam: if >0, the Nth tasks_ push_back throws
+    // std::bad_alloc (see async_threaded). Test-only; not present in production.
+    std::size_t tasks_throw_on_nth_ = 0;
+#endif
     // Evented-mode owned state. The EventedWaitPolicy is shared across all
     // task Futures in this group (one policy per group; it borrows sched_).
     // Stored as unique_ptr so its address is stable across Group copies (none
