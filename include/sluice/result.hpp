@@ -103,11 +103,21 @@ template <class T> struct result_storage {
     // Tear down the live value (if any) AND reset the discriminator. E15-P1-01:
     // the reset must happen here so that any subsequent throwing construction
     // cannot leave the discriminator claiming a value is live when it is not.
-    void destroy_and_clear() {
+    //
+    // E15-P1-01 (F-00 closeout): unconditionally write a deterministic error
+    // sentinel so that if the FOLLOWING placement-new throws, the object is not
+    // merely destroy-safe but is a VALID error-state Result: has_value()==false
+    // AND error() returns a meaningful code. Without this, a value→value
+    // assignment whose replacement throws would leave error_.code indeterminate
+    // (the union member was live, error_ was never assigned). The public API
+    // offers no third "valueless" discriminator, so has_value()==false MUST
+    // imply a readable error(). Cost: one trivial IoError store per transition.
+    void destroy_and_clear() noexcept {
         if (has_value_) {
             value_.~T();
-            has_value_ = false;
         }
+        error_ = IoError{IoError::Code::invalid_state};
+        has_value_ = false;
     }
     // Destroy the live value without touching the discriminator. Used only by
     // ~result_storage() (where the whole object is going away) and by legacy

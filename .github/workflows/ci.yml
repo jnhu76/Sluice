@@ -78,8 +78,11 @@ jobs:
         # synchronization primitives compiles-away (not just missing headers).
         run: bash scripts/verify-e12-api-contract-negative-compile.sh
 
-      - name: Build acceptance consumer
+      - name: Build and run acceptance consumer
         # Proves the public async-foundation surface (Result + AsyncIoContext +
         # Completion + Batch) is usable from a consumer that sees only the
-        # installed public headers.
-        run: xmake build public_api_acceptance
+        # installed public headers. Build AND execute: a runtime behavioral
+        # regression must fail CI, not merely a compile error.
+        run: |
+          xmake build public_api_acceptance
+          xmake run public_api_acceptance

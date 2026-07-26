@@ -49,6 +49,7 @@
 
 namespace sluice::async {
 
+namespace detail {
 // E15-P1-04: process-wide monotonic reap counter, used by Completion::
 // complete_with() to stamp a reap sequence on every reaped Completion. Order
 // reflects the actual sequence in which backends call complete_with() under
@@ -56,13 +57,22 @@ namespace sluice::async {
 // completions in true reap order (ADR §6 O2). Relaxed ordering is sufficient:
 // the only writer/readers are serialized through the context's access mutex
 // (writes) and the Batch's await_one -> next happens-before chain (reads).
+//
+// F-02 closeout: moved into detail to signal this is an internal mechanism,
+// not part of the public API surface. Completion::complete_with() (the sole
+// production consumer) calls it inline.
 inline std::uint64_t next_reap_seq() noexcept {
     static std::atomic<std::uint64_t> counter{0};
     return ++counter;
 }
+}  // namespace detail
 
 template <class T>
 class Completion {
+    // F-02 closeout: reap_seq is an internal ordering mechanism consumed only
+    // by Batch::next(). It is not part of the public caller-facing API.
+    friend class Batch;
+
 public:
     using value_type = T;
 
@@ -80,11 +90,6 @@ public:
     bool ready() const noexcept { return state_ == State::ready; }
     bool outstanding() const noexcept { return state_ == State::outstanding; }
     bool idle() const noexcept { return state_ == State::idle; }
-
-    // E15-P1-04: monotonic reap sequence stamped by complete_with(). 0 means
-    // "never reaped" (idle or outstanding); a non-zero value orders ready
-    // Completions by their actual reap moment. Batch::next() consumes this.
-    std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
     // ADR L9: result() before ready is a contract violation. Debug asserts;
     // release returns invalid_state rather than stale/garbage.
@@ -113,7 +118,7 @@ public:
         assert(state_ == State::outstanding &&
                "complete on a non-outstanding Completion (double-completion?)");
         storage_.set(std::move(res));
-        reap_seq_ = next_reap_seq();
+        reap_seq_ = detail::next_reap_seq();
         state_ = State::ready;
     }
     // Return to idle so the Completion can be reused for a new op.
@@ -124,6 +129,12 @@ public:
     }
 
 private:
+    // E15-P1-04: monotonic reap sequence stamped by complete_with(). 0 means
+    // "never reaped" (idle or outstanding); a non-zero value orders ready
+    // Completions by their actual reap moment. Batch::next() consumes this
+    // via the friend grant above; ordinary callers never need it.
+    std::uint64_t reap_seq() const noexcept { return reap_seq_; }
+
     enum class State : std::uint8_t { idle, outstanding, ready };
     State state_ = State::idle;
     std::uint64_t reap_seq_ = 0;
@@ -157,6 +168,8 @@ struct Completion<T>::Storage {
 // carries no value (success is just "no error"). Used by sync ops.
 template <>
 class Completion<void> {
+    friend class Batch;
+
 public:
     using value_type = void;
 
@@ -170,9 +183,6 @@ public:
     bool ready() const noexcept { return state_ == State::ready; }
     bool outstanding() const noexcept { return state_ == State::outstanding; }
     bool idle() const noexcept { return state_ == State::idle; }
-
-    // E15-P1-04: see Completion<T>::reap_seq().
-    std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
     Result<void> result() const {
         if (state_ != State::ready) {
@@ -194,7 +204,7 @@ public:
                "complete on a non-outstanding Completion (double-completion?)");
         if (!res.has_value()) { error_ = res.error(); has_error_ = true; }
         else { has_error_ = false; }
-        reap_seq_ = next_reap_seq();
+        reap_seq_ = detail::next_reap_seq();
         state_ = State::ready;
     }
     void reset() {
@@ -204,6 +214,9 @@ public:
     }
 
 private:
+    // F-02: see Completion<T>::reap_seq().
+    std::uint64_t reap_seq() const noexcept { return reap_seq_; }
+
     enum class State : std::uint8_t { idle, outstanding, ready };
     State state_ = State::idle;
     bool has_error_ = false;

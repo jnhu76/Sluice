@@ -614,6 +614,79 @@ SLUICE_TEST_CASE(result_move_assign_with_throwing_move_propagates_not_terminates
     SLUICE_CHECK(ThrowOnNthMove::dt_double_destroy == 0);
 }
 
+// ---- F-00 closeout: post-throw state must be a VALID error state -----------
+//
+// destroy_and_clear() writes a deterministic IoError{invalid_state} sentinel
+// so that callers observing !has_value() can safely call error() and get a
+// meaningful code. The object must also be recoverable: re-assignable to both
+// value and error states.
+
+SLUICE_TEST_CASE(result_throwing_assign_leaves_deterministic_error_state) {
+    ThrowOnNthCopy::copies = 0;
+    ThrowOnNthCopy::dt_double_destroy = 0;
+    sluice::Result<ThrowOnNthCopy> src{ThrowOnNthCopy{7}};
+    sluice::Result<ThrowOnNthCopy> dst{ThrowOnNthCopy{0}};
+    ThrowOnNthCopy::copies = 0;
+    g_throw_copy_n = 1;
+    bool threw = false;
+    try {
+        dst = src;
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    g_throw_copy_n = -1;
+    SLUICE_CHECK(threw);
+
+    // F-00: post-throw public state must be a valid, distinguishable error.
+    SLUICE_CHECK(!dst.has_value());
+    SLUICE_CHECK(dst.error().code == sluice::IoError::Code::invalid_state);
+
+    // Recoverability: re-assign to a valid value.
+    ThrowOnNthCopy::copies = 0;
+    g_throw_copy_n = -1;  // no throw
+    sluice::Result<ThrowOnNthCopy> good{ThrowOnNthCopy{42}};
+    dst = good;
+    SLUICE_CHECK(dst.has_value());
+    SLUICE_CHECK(dst.value().v == 42);
+
+    // Recoverability: re-assign to an error.
+    dst = sluice::make_unexpected<ThrowOnNthCopy>(
+        sluice::IoError{sluice::IoError::Code::eof});
+    SLUICE_CHECK(!dst.has_value());
+    SLUICE_CHECK(dst.error().code == sluice::IoError::Code::eof);
+
+    SLUICE_CHECK(ThrowOnNthCopy::dt_double_destroy == 0);
+}
+
+SLUICE_TEST_CASE(result_throwing_move_assign_leaves_deterministic_error_state) {
+    ThrowOnNthMove::moves = 0;
+    ThrowOnNthMove::dt_double_destroy = 0;
+    sluice::Result<ThrowOnNthMove> src{ThrowOnNthMove{7}};
+    sluice::Result<ThrowOnNthMove> dst{ThrowOnNthMove{0}};
+    ThrowOnNthMove::moves = 0;
+    g_throw_move_n = 1;
+    bool threw = false;
+    try {
+        dst = std::move(src);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    g_throw_move_n = -1;
+    SLUICE_CHECK(threw);
+
+    // F-00: deterministic error sentinel.
+    SLUICE_CHECK(!dst.has_value());
+    SLUICE_CHECK(dst.error().code == sluice::IoError::Code::invalid_state);
+
+    // Recoverability: re-assign to a valid value.
+    sluice::Result<ThrowOnNthMove> good{ThrowOnNthMove{99}};
+    dst = std::move(good);
+    SLUICE_CHECK(dst.has_value());
+    SLUICE_CHECK(dst.value().v == 99);
+
+    SLUICE_CHECK(ThrowOnNthMove::dt_double_destroy == 0);
+}
+
 // ---- Self move-assignment must not corrupt state (no aliasing UB) -----------
 
 SLUICE_TEST_CASE(result_self_move_assignment_safe) {

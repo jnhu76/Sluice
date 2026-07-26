@@ -115,22 +115,6 @@ public:
     // completed). For inspection.
     std::size_t pending_count() const noexcept { return slots_.size() - popped_; }
 
-    // ---- test-only batch-aware probes (E15-P1-04 reap-order regression) ----
-    // These expose just enough of a slot's Completion so a deterministic test
-    // backend can be told "reap THIS slot's completion next" without making
-    // the whole Slot or slots_ vector public. They return references into the
-    // batch's own storage; the caller (a test backend) MUST NOT outlive the
-    // batch. Production code does not call these.
-    Completion<std::size_t>& test_size_completion_at(std::size_t index) {
-        return slots_.at(index)->size_c;
-    }
-    Completion<void>& test_void_completion_at(std::size_t index) {
-        return slots_.at(index)->void_c;
-    }
-    bool test_slot_is_void(std::size_t index) const {
-        return slots_.at(index)->is_void;
-    }
-
 private:
     struct Slot {
         BatchOp op;
