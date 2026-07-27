@@ -1,13 +1,18 @@
 // Independent test-only WAL record decoder.
 //
 // This oracle re-implements the WAL frame layout from scratch — it does NOT call
-// any production WAL helper. Its job is to answer, for an arbitrary byte stream,
-// "does a well-formed record start here, and what are its fields?" so the fuzz
-// target can compare production's read_record() answer against an independent
-// expectation.
+// any production WAL helper and does NOT include <sluice/wal.hpp>. Its job is to
+// answer, for an arbitrary byte stream, "does a well-formed record start here,
+// and what are its fields?" so the fuzz target can compare production's
+// read_record() answer against an independent expectation.
+//
+// Standard-library headers only. The persisted-format constants (magic, layout,
+// checksum rule) are duplicated deliberately so a common-mode mutation that
+// changes the production constant/checksum is detectable by this oracle rather
+// than agreeing with it.
 //
 // Layout (little-endian), mirrored from docs and wal.hpp:
-//   magic:    u32   (== sluice::wal::magic)
+//   magic:    u32   (== kOracleWalMagic)
 //   length:   u32   (payload byte count)
 //   payload:  bytes (length bytes)
 //   checksum: u32   (sum of payload bytes mod 2^32)
@@ -17,8 +22,6 @@
 // reflect only what was present.
 #pragma once
 
-#include <sluice/wal.hpp> // for sluice::wal::magic sentinel only
-
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -26,8 +29,14 @@
 
 namespace fuzz {
 
+// Independent persisted-format constant. Mirrors the on-disk magic used by the
+// production WAL ("WAL" -> 0x0057414C) but is defined here, not sourced from
+// sluice::wal::magic, so a mutation that flips the production constant cannot
+// silently agree with the oracle.
+inline constexpr std::uint32_t kOracleWalMagic = 0x0057414CU;
+
 // Independent checksum: sum of payload bytes modulo 2^32. Mirrors production's
-// checksum_of() without calling it.
+// checksum_of() without calling it and without sharing its source.
 inline std::uint32_t oracle_checksum_of(std::span<const std::byte> payload) {
     std::uint64_t sum = 0;
     for (auto b : payload) {
@@ -37,7 +46,7 @@ inline std::uint32_t oracle_checksum_of(std::span<const std::byte> payload) {
 }
 
 // Read a little-endian u32 from p, assuming p .. p+4 is valid. The caller checks
-// bounds before calling.
+// bounds before calling. Independent of production's get_le_u32.
 inline std::uint32_t oracle_get_le_u32(const std::byte* p) {
     return std::uint32_t(std::to_integer<unsigned>(p[0])) |
            (std::uint32_t(std::to_integer<unsigned>(p[1])) << 8) |
@@ -55,12 +64,23 @@ struct WalOracle {
     std::size_t consumed = 0;    // total bytes the record would consume
 
     // True only when the frame is structurally valid AND the stored checksum
-    // matches the independent checksum of the payload.
+    // matches the independent checksum of the (fully-present) payload.
     bool checksum_ok() const {
         return decoded && oracle_checksum_of(payload) == stored_checksum;
     }
 
-    bool magic_ok() const { return magic == sluice::wal::magic; }
+    // True only when the magic field equals the independent oracle magic.
+    bool magic_ok() const { return magic == kOracleWalMagic; }
+
+    // A frame is "valid" iff the structure is complete, the magic matches the
+    // independent magic, and the independent checksum of the present payload
+    // equals the stored checksum. This is the canonical-validity predicate the
+    // fuzz target compares against production success.
+    bool valid() const { return decoded && magic_ok() && checksum_ok(); }
+
+    // Expected total consumed size for a complete record: header(8) +
+    // payload(length) + checksum(4).
+    std::size_t expected_consumed() const { return 8 + length + 4; }
 };
 
 // Decode at most one record from the front of `bytes`. Trailing bytes beyond the

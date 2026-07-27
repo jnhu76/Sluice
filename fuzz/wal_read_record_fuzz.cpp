@@ -3,15 +3,22 @@
 // Treats the fuzz input as: [config byte] [arbitrary byte stream]. The config
 // byte selects a short-read cap for the tracking reader; the rest is fed to the
 // real production sluice::wal::read_record(). An INDEPENDENT oracle (see
-// wal_oracle.hpp) decodes the same stream from scratch and the target checks:
+// wal_oracle.hpp) decodes the same stream from scratch — without including
+// <sluice/wal.hpp> or calling any production WAL helper — and the target checks:
 //
 //   W1 no crash / sanitizer failure  — implicit: any UB traps here
-//   W2 successful decode => valid frame (magic, length, checksum, payload)
-//   W3 invalid canonical framing => no success
-//   W4 error classification => eof or invalid_state
-//   W5 bounded read request => never more than one production chunk
+//   W2 production success  <=>  oracle canonical validity (decoded AND magic ok
+//      AND checksum ok). Bidirectional: a valid canonical frame MUST be accepted
+//      and an invalid one MUST be rejected. This closes the gap where a valid
+//      persisted frame could be rejected by production without failing the
+//      harness.
+//   W3 on success, the returned payload equals the oracle payload byte-for-byte
+//   W4 on failure, the error classifies as eof or invalid_state
+//   W5 bounded read request => never more than one production chunk growth step
 //
-// The oracle does not call any production WAL helper.
+// The oracle does not include any production header and does not call any
+// production WAL helper, so a common-mode mutation that changes the production
+// magic or checksum rule is detected here rather than silently agreeing.
 #include <sluice/wal.hpp>
 
 #include <fuzz/support/byte_cursor.hpp>
@@ -19,8 +26,10 @@
 #include <fuzz/support/tracking_reader.hpp>
 #include <fuzz/support/wal_oracle.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <span>
 #include <vector>
@@ -28,6 +37,8 @@
 using fuzz::ByteCursor;
 using fuzz::TrackingReader;
 using fuzz::WalOracle;
+using fuzz::decode_one;
+using fuzz::kOracleWalMagic;
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
     // Need at least the config byte. With only a config byte and no stream the
@@ -42,37 +53,42 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     std::size_t max_short = cur.take_range(1, 64);
     auto stream = cur.take_rest();
 
-    // Independent oracle decode of the same stream.
-    WalOracle oracle = fuzz::decode_one(stream);
+    // Independent oracle decode of the same stream. Uses the oracle's own magic
+    // constant and checksum rule, never production's.
+    WalOracle oracle = decode_one(stream);
+
+    // The canonical-validity predicate used for the bidirectional equivalence
+    // check. A frame is valid iff it is structurally complete, the magic field
+    // equals the independent oracle magic, and the independent checksum of the
+    // present payload equals the stored checksum.
+    const bool oracle_valid = oracle.decoded && oracle.magic == kOracleWalMagic &&
+                              oracle.checksum_ok();
 
     // Production decode through a tracking reader.
     TrackingReader reader(stream, max_short);
     auto result = sluice::wal::read_record(reader);
 
+    // W2 (bidirectional): production success <=> oracle canonical validity.
+    // This is the central invariant. It fails if production accepts a frame the
+    // independent oracle rejects, OR rejects a frame the oracle accepts.
+    FUZZ_ASSERT(result.has_value() == oracle_valid);
+
     if (result.has_value()) {
-        // W2: success implies a fully present, valid frame.
-        FUZZ_ASSERT(oracle.decoded);
-        FUZZ_ASSERT(oracle.magic_ok());
-        FUZZ_ASSERT(stream.size() >= 12); // header(8) + checksum(4), empty payload ok
-        FUZZ_ASSERT(oracle.checksum_ok());
+        // W3: success implies byte-for-byte payload agreement with the oracle.
         const auto& payload = result.value();
         FUZZ_ASSERT(payload.size() == oracle.payload.size());
         if (!payload.empty()) {
             FUZZ_ASSERT(std::memcmp(payload.data(), oracle.payload.data(), payload.size()) == 0);
         }
+        // The oracle frame must be complete and self-consistent on success.
+        FUZZ_ASSERT(oracle.consumed == oracle.expected_consumed());
     } else {
         // W4: with the bounded in-memory harness, failure must classify as eof
-        // or invalid_state. A backend_error here would signal a resource
-        // problem worth preserving rather than allowlisting.
+        // or invalid_state. A backend_error here would signal a resource problem
+        // worth preserving rather than allowlisting.
         const auto code = result.error().code;
         FUZZ_ASSERT(code == sluice::IoError::Code::eof ||
                     code == sluice::IoError::Code::invalid_state);
-    }
-
-    // W3: if the oracle sees a structurally invalid frame (truncated, bad magic,
-    // bad checksum), production must not succeed.
-    if (!oracle.decoded || !oracle.magic_ok() || !oracle.checksum_ok()) {
-        FUZZ_ASSERT(!result.has_value());
     }
 
     // W5: production must never request more than one bounded growth step. The
