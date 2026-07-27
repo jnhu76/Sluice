@@ -4,10 +4,23 @@
 local R = SLUICE_ROOT
 
 -- Core static library: Reader/Writer abstractions + wrappers.
+--
+-- The authoritative production source manifest for the core is shared via
+-- core_sources() so sluice_core and the fuzz-instrumented sluice_core_fuzz
+-- compile the exact same src/*.cpp set from one place (no duplicated manifest
+-- drift). Both targets compile the same production code; only their sanitizer
+-- instrumentation differs.
+-- Shared authoritative core source manifest. Visible to fuzz.lua (and any
+-- future instrumented variant) so the production source list lives in exactly
+-- one place.
+core_sources = function()
+    return { R .. "src/*.cpp" }
+end
+
 target("sluice_core")
     set_kind("static")
     add_includedirs(R .. "include", {public = true})
-    add_files(R .. "src/*.cpp")
+    add_files(core_sources())
 
 -- Async runtime library (sluice-CORE-017+). OPT-IN, namespace sluice::async.
 -- Built alongside the core but kept a separate static lib so the blocking
