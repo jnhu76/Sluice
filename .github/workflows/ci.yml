@@ -88,3 +88,14 @@ jobs:
           xmake build async_foundation_quickstart
           xmake run async_foundation_quickstart
 
+      - name: Documentation verification
+        # Link checker. Validates ONLY git-tracked Markdown (via `git ls-files`)
+        # so generated/gitignored files under docs/ never enter the scan set —
+        # this is what makes the gate safe to enforce in CI where local build
+        # artifacts could otherwise leak in.
+        #  1. --self-test: negative tests that the checker actually catches
+        #     broken/stale links and excludes untracked files.
+        #  2. full scan: every tracked doc link must resolve.
+        run: |
+          python3 scripts/check-doc-links.py --self-test
+          python3 scripts/check-doc-links.py

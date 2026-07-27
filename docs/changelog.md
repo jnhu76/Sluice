@@ -19,7 +19,10 @@ library behavior or unit-test behavior changed.
   mode added. 69+ stale doc links repaired.
 - **Changelog** — corrected version identity and E13/E14/E15 status.
 - **Build metadata** — `xmake/examples.lua` adds `async_foundation_quickstart`
-  target; `.github/workflows/ci.yml` adds acceptance and documentation gates.
+  target; `.github/workflows/ci.yml` restores the documentation verification
+  gate (self-test + full scan). The link checker now scans only git-tracked
+  Markdown via `git ls-files`, so generated/gitignored files under `docs/`
+  cannot leak into the CI scan set.
 
 ## v0.1.0 — Runtime Foundation (E10–E15)
 
@@ -61,7 +64,8 @@ execution strategies.
 ```text
 io_uring remains experimental unless real liburing validation supports promotion.
 No production io_uring backend yet.
-No cancellation model (public API); internal cancellation only.
+Cancellation is cooperative (CancelToken/CancelState/CancelGuard, Future, Group);
+no application-runtime-wide cancellation owner or shutdown policy yet.
 No networking.
 No default backend switch (BlockingIoContext stays the default).
 No universal performance conclusion.

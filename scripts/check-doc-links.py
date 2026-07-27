@@ -2,7 +2,9 @@
 """check-doc-links.py — repository documentation link validator.
 
 Checks:
-  - Root README files (README.md, README.zh-CN.md), AGENTS.md, and all docs Markdown.
+  - Git-tracked Markdown only: root README files (README.md, README.zh-CN.md),
+    AGENTS.md, and every tracked Markdown under docs/. Generated/gitignored
+    Markdown is excluded so the local and CI scan sets are identical.
   - Markdown links [text](path) resolve to existing files/directories.
   - Backtick-quoted repository-relative paths (`path/to/file`) resolve.
   - Fails on broken links and stale moved-path references.
@@ -38,17 +40,62 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Files to scan
-SCAN_FILES = [
-    ROOT / "README.md",
-    ROOT / "README.zh-CN.md",
-    ROOT / "AGENTS.md",
+# Documents to scan. We resolve the set from `git ls-files` so the checker
+# validates exactly what the repository commits — never generated/ignored
+# Markdown that happens to live under docs/ during a local build. This keeps
+# the local scan set identical to the CI scan set.
+#
+# The patterns mirror the historical hard-coded set: root README files,
+# AGENTS.md, and every tracked Markdown under docs/.
+_TRACKED_PATTERNS = [
+    "README.md",
+    "README.zh-CN.md",
+    "AGENTS.md",
+    "docs/*.md",
+    "docs/**/*.md",
 ]
 
-# docs/ directory
-DOCS_DIR = ROOT / "docs"
-for p in sorted(DOCS_DIR.rglob("*.md")):
-    SCAN_FILES.append(p)
+
+def _discover_scan_files() -> list[Path]:
+    """Return the list of Markdown files to scan.
+
+    Prefers `git ls-files` so generated/gitignored Markdown under docs/ is
+    excluded (this is the structural reason the docs gate was originally
+    deleted — see docs/changelog.md). Falls back to a direct rglob walk only
+    when git is unavailable or the script runs outside a work tree, e.g. in
+    the --self-test scratch path.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "--", *_TRACKED_PATTERNS],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        # No git, or not inside a work tree. Fall back to a filesystem walk
+        # so the checker remains usable in stripped/artifact checkouts.
+        files = [
+            ROOT / "README.md",
+            ROOT / "README.zh-CN.md",
+            ROOT / "AGENTS.md",
+        ]
+        files.extend(sorted((ROOT / "docs").rglob("*.md")))
+        return [f for f in files if f.exists()]
+
+    files = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line:
+            files.append(ROOT / line)
+    return sorted(files)
+
+
+# Files to scan (resolved lazily at import so self_test() can construct its
+# own scan targets without depending on the work tree).
+SCAN_FILES = _discover_scan_files()
 
 # Directories whose content is generated and should be skipped entirely
 SKIP_DIRS = [
@@ -845,6 +892,38 @@ def self_test() -> int:
             failures += 1
         else:
             print("SELF-TEST PASS: nested doc repo-root-looking link is flagged as broken")
+
+    # --- Test 6: scan set excludes untracked / gitignored Markdown ---
+    # Structural regression guard: the scan set MUST come from `git ls-files`
+    # so generated Markdown under docs/ (e.g. build artifacts) is never
+    # validated. A stray untracked .md in the work tree must not appear in
+    # SCAN_FILES. We cannot run this when git is unavailable.
+    import shutil as _shutil
+    if _shutil.which("git") is not None:
+        # SCAN_FILES is resolved at import; reach into _discover_scan_files
+        # with a temp work tree to exercise the exclusion directly.
+        import subprocess as _sp
+        try:
+            in_tree = _sp.run(
+                ["git", "-C", str(ROOT), "rev-parse", "--is-inside-work-tree"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        except _sp.CalledProcessError:
+            in_tree = "false"
+        if in_tree == "true":
+            untracked = ROOT / "docs" / "_self_test_untracked_probe.md"
+            existed = untracked.exists()
+            try:
+                untracked.write_text("# probe\n", encoding="utf-8")
+                scan_paths = {p.resolve() for p in _discover_scan_files()}
+                if untracked.resolve() in scan_paths:
+                    print("SELF-TEST FAIL: untracked Markdown leaked into scan set")
+                    failures += 1
+                else:
+                    print("SELF-TEST PASS: untracked Markdown excluded from scan set")
+            finally:
+                if not existed:
+                    untracked.unlink(missing_ok=True)
 
     return failures
 
