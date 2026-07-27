@@ -52,13 +52,16 @@ class ByteCursor {
         return v;
     }
 
-    // Map the next byte into [0, count-1], clamping at the top if the byte is
-    // too large. Total: an exhausted stream yields 0.
+    // Map the next byte uniformly into [0, count-1] via real modulo. Total: an
+    // exhausted stream yields 0, and count==0 yields 0. Unlike a clamp, this
+    // distributes values across the whole range so enum selectors (failure modes,
+    // error codes, strategies, buffered capability) are exercised evenly rather
+    // than biasing the last member.
     std::uint8_t take_mod(std::uint8_t count) noexcept {
         if (count == 0) {
             return 0;
         }
-        return static_cast<std::uint8_t>(std::min<int>(take_u8(), count - 1));
+        return static_cast<std::uint8_t>(take_u8() % count);
     }
 
     // Consume a length in [lo, hi] (inclusive) from a little-endian u32, clamped
@@ -73,8 +76,13 @@ class ByteCursor {
         return lo + static_cast<std::size_t>(raw % (span + 1));
     }
 
-    // View of the unconsumed tail. Does not advance the cursor.
+    // View of the unconsumed tail. Does not advance the cursor. Safe for an
+    // exhausted or empty input: returns an empty span without dereferencing
+    // data_ (which may be null for an empty libFuzzer buffer).
     std::span<const std::byte> tail() const noexcept {
+        if (pos_ >= size_) {
+            return {};
+        }
         return {data_ + pos_, size_ - pos_};
     }
 
