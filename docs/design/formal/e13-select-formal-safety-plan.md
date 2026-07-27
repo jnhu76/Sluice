@@ -89,8 +89,8 @@
 - [x] `docs/spec/e13_select/NON_VACUITY.md`：20 witnesses 矩阵。
 - [x] `docs/spec/e13_select/REFINEMENT.md`：mapping 表 + X cfgs。
 - [x] `docs/spec/e13_select/EVIDENCE_SAFETY.md`：source-safety 与 reproducibility。
-- [x] `docs/formal/e13-select-formal-safety-design.md`：架构与边界。
-- [x] `docs/formal/e13-select-formal-safety-plan.md`（本文件）。
+- [x] `docs/design/formal/e13-select-formal-safety-design.md`：架构与边界。
+- [x] `docs/design/formal/e13-select-formal-safety-plan.md`（本文件）。
 
 ## 任务 AA：README status
 

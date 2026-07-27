@@ -9,7 +9,7 @@ surface. Existing behavior (v0.1) is recorded as-is; new positional helpers
 (phases 4–5); this doc fixes the contract first.
 
 Companion docs: architecture in `docs/sync-io-architecture.md`; durability in
-`docs/sync-durability-model.md`; planning/gaps in `docs/sync-io-model-gap-audit.md`.
+`docs/sync-durability-model.md`; planning/gaps in `docs/history/closeout/sync-io-model-gap-audit.md`.
 
 ## Reader semantics
 
@@ -160,7 +160,7 @@ these blocking contracts.
 
 - Architecture: `docs/sync-io-architecture.md`.
 - Durability contract: `docs/sync-durability-model.md`.
-- Gaps this contract closes (G1/G2/G3): `docs/sync-io-model-gap-audit.md` §2.
-- Jobs that realize the [NEW] pieces: `docs/sync-io-next-jobs.md` (018S positional, 019S helpers).
-- Existing readv/writev note: `docs/design-readv-writev.md`.
+- Gaps this contract closes (G1/G2/G3): `docs/history/closeout/sync-io-model-gap-audit.md` §2.
+- Jobs that realize the [NEW] pieces: `docs/history/implementation-plans/sync-io-next-jobs.md` (018S positional, 019S helpers).
+- Existing readv/writev note: `docs/history/implementation-plans/design-readv-writev.md`.
 - Async compatibility target: `docs/adr/ADR-async-io-model.md` (016D).

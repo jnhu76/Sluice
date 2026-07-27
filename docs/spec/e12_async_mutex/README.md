@@ -6,7 +6,7 @@
 > Status: **E12-C-PREPARATION-CORRECTIVE-5-REAUDIT: PASS — E12-C-PREPARATION:
 > CLOSED — E12-C-IMPLEMENTATION: READY.** This model is the formal half of the
 > E12-C preparation; the authority document is
-> [`docs/e12-async-mutex.md`](../../e12-async-mutex.md).
+> [`docs/history/closeout/e12-async-mutex.md`](../../history/closeout/e12-async-mutex.md).
 
 This directory contains the **safety-only** TLA+ / TLC formal model for the
 E12-C AsyncMutex preparation. It proves the single-ownership-authority,
@@ -58,7 +58,7 @@ The gate is [`scripts/verify-e12-async-mutex-formal.sh`](../../../scripts/verify
 
 ## State model
 
-Authoritative state (`docs/e12-async-mutex.md` §14.3):
+Authoritative state (`docs/history/closeout/e12-async-mutex.md` §14.3):
 
 ```
 owner : Fiber ∪ {NoOwner}          -- SOLE ownership authority (no locked_)

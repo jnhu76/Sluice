@@ -419,7 +419,7 @@ recompiles. Under the Itanium ABI verified for the current toolchains,
 `noexcept` is not part of symbol mangling, so the symbol names are unchanged.
 This is **not** claimed as an absolute ABI guarantee across all toolchains or
 platforms; it is limited to the platforms and compilers actually verified
-(see `docs/async-mutex-nothrow-implementation.md` for the verified set).
+(see `docs/history/closeout/async-mutex-nothrow-implementation.md` for the verified set).
 
 ---
 

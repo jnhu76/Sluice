@@ -337,6 +337,6 @@ Zig `std.Io` 是参考模型。`./zig` 下的 Zig 源码树**不**编译或链�
 
 异步**设计**（`docs/adr/ADR-async-io-model.md`）保持接受状态。异步**实现**将针对工程化的阻塞基线进行——而非仅顺序阻塞。
 
-实验性 io_uring 写入 spike（SLUICE-CORE-013）位于 `sluice::experimental`，通过可选的 `--with-liburing` 构建门控。它**不是**默认后端。详见 `docs/io-uring-spike.md`。
+实验性 io_uring 写入 spike（SLUICE-CORE-013）位于 `sluice::experimental`，通过可选的 `--with-liburing` 构建门控。它**不是**默认后端。详见 `docs/history/implementation-plans/io-uring-spike.md`。
 
 完整变更日志见 `docs/changelog.md`。

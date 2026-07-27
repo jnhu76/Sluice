@@ -353,6 +353,6 @@ The sync runtime contract (`docs/adr/ADR-024S-sync-runtime-contract.md`) is fixe
 
 The async **design** (`docs/adr/ADR-async-io-model.md`) remains accepted. Async **implementation** proceeds against the engineered blocking baselines — not sequential-only blocking.
 
-An experimental io_uring write spike (SLUICE-CORE-013) lives under `sluice::experimental` behind an optional `--with-liburing` build gate. It is **not** the default backend. See `docs/io-uring-spike.md`.
+An experimental io_uring write spike (SLUICE-CORE-013) lives under `sluice::experimental` behind an optional `--with-liburing` build gate. It is **not** the default backend. See `docs/history/implementation-plans/io-uring-spike.md`.
 
 For the full changelog, see `docs/changelog.md`.

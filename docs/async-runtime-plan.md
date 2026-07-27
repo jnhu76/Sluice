@@ -1,5 +1,9 @@
 # Sluice Async Runtime Construction Roadmap
 
+**Status:** Current
+**Authority:** Architecture (async runtime)
+**Last verified against:** v0.1.0
+
 ## Current Baseline
 
 Sluice has completed the execution substrate through E9 (Scheduler park/wake
@@ -351,15 +355,15 @@ at most one runnable publication
 
 ## Exit condition
 
-The Scheduler has a reusable cancellation-safe single-wait queue substrate that does not depend on a particular synchronization primitive. **[CLOSED — `0debd21` / `dbabd21` / `3cd17c6`; as-built: `docs/e10-waitnode-wait-queue.md`]**
+The Scheduler has a reusable cancellation-safe single-wait queue substrate that does not depend on a particular synchronization primitive. **[CLOSED — `0debd21` / `dbabd21` / `3cd17c6`; as-built: `docs/history/closeout/e10-waitnode-wait-queue.md`]**
 
 ---
 
 # E11 — Deadline / Timer Wait Integration
 
 **Status: [CLOSED].** Authoritative spec:
-[`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md).
-Insertion audit: [`docs/e11-arch-recon-audit.md`](e11-arch-recon-audit.md)
+[`docs/history/closeout/e11-deadline-timer-wait.md`](history/closeout/e11-deadline-timer-wait.md).
+Insertion audit: [`docs/history/closeout/e11-arch-recon-audit.md`](history/closeout/e11-arch-recon-audit.md)
 (verdict `E11-READY-WITH-CONSTRAINTS`, implementation GO).
 Formal model: [`docs/spec/e11_timer_wait/`](spec/e11_timer_wait/).
 As-built: `Scheduler::await_wait_deadline` / `expire_wait` /
@@ -414,7 +418,7 @@ a destroyed `WaitNode`; an already-due deadline cannot be lost during wait
 admission; a Scheduler with an active deadline cannot park indefinitely past it;
 the NEG-1…NEG-5 TLA+ models produce counterexamples for broken protocols; I1–I7
 hold; deterministic + sanitizer gates green. Full normative text:
-[`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md).
+[`docs/history/closeout/e11-deadline-timer-wait.md`](history/closeout/e11-deadline-timer-wait.md).
 
 ---
 
@@ -423,15 +427,15 @@ hold; deterministic + sanitizer gates green. Full normative text:
 Only after E9-E11 should Sluice add user-facing asynchronous synchronization primitives.
 
 Canonical decomposition (protocol-dependency order, resolved by the E12
-preparation audit — see [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)):
+preparation audit — see [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](history/implementation-plans/e12-sync-primitives-plan.md)):
 
 ```text
-E12-A Event              [CLOSED — E12-A-EVENT-CORRECTIVE-2 + ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1; both independent reviews PASS; formal script exit 1 under current TLC runtime, PREEXISTING TOOLCHAIN-SENSITIVE LIMITATION WITH BASELINE PARITY — docs/e12-event.md; formal: docs/spec/e12_event/]
-E12-B Semaphore          [CLOSED — E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1 ACCEPT (WITH OBSERVATIONS); closure condition satisfied by E12-G final review PASS, 2026-07-19 — docs/e12-semaphore.md]
-E12-C AsyncMutex         [CLOSED — E12-C-ASYNC-MUTEX-MIGRATION-DATA-RACE-MICRO-REVIEW-1 PASS, 2026-07-19 — docs/e12-async-mutex.md]
-E12-D AsyncCondition     [CLOSED — E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW PASS, 2026-07-19 — docs/e12-condition.md]
-E12-E AsyncQueue<T>      [IMPLEMENTATION COMPLETE — Phase I review PASS (WITH OBSERVATIONS) — docs/e12-queue.md]
-E12-F RwLock             [DEFERRED]
+E12-A Event              [CLOSED — E12-A-EVENT-CORRECTIVE-2 + ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1; both independent reviews PASS; formal script exit 1 under current TLC runtime, PREEXISTING TOOLCHAIN-SENSITIVE LIMITATION WITH BASELINE PARITY — docs/history/closeout/e12-event.md; formal: docs/spec/e12_event/]
+E12-B Semaphore          [CLOSED — E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1 ACCEPT (WITH OBSERVATIONS); closure condition satisfied by E12-G final review PASS, 2026-07-19 — docs/history/closeout/e12-semaphore.md]
+E12-C AsyncMutex         [CLOSED — E12-C-ASYNC-MUTEX-MIGRATION-DATA-RACE-MICRO-REVIEW-1 PASS, 2026-07-19 — docs/history/closeout/e12-async-mutex.md]
+E12-D AsyncCondition     [CLOSED — E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW PASS, 2026-07-19 — docs/history/closeout/e12-condition.md]
+E12-E AsyncQueue<T>      [IMPLEMENTATION COMPLETE — Phase I review PASS (WITH OBSERVATIONS) — docs/history/closeout/e12-queue.md]
+E12-F RwLock             [DEFERRED — see docs/design/e12-rwlock.md]
 E12-G Cross-Primitive Audit [CLOSED — E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1 AUTHORIZED; E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1 PASS, 2026-07-19 — docs/e10-e12-api-semantic-closure.md]
 ```
 
@@ -453,7 +457,7 @@ Useful to validate WaitNode integration.
 Introduces permit accounting and waiter queue ordering.
 
 Key invariant (supply accounting — corrected in E12-PREP-CORRECTIVE-2; see
-[`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §5.1):
+[`docs/history/implementation-plans/e12-sync-primitives-plan.md`](history/implementation-plans/e12-sync-primitives-plan.md) §5.1):
 
 ```text
 initial_supply + successful_release_count
@@ -806,7 +810,7 @@ E10
 WaitNode and cancellation-safe wait queue core [CLOSED]
 
 E11
-Deadline / timer wait integration   [CLOSED — spec: docs/e11-deadline-timer-wait.md; formal: docs/spec/e11_timer_wait/]
+Deadline / timer wait integration   [CLOSED — spec: docs/history/closeout/e11-deadline-timer-wait.md; formal: docs/spec/e11_timer_wait/]
 
 E12
 Async synchronization primitives

@@ -33,7 +33,7 @@ VERIFIED COVERAGE — AUTHOR SELF-ASSESSMENT:
 6/6 publication transitions
 
 E12-E IMPLEMENTATION AUTHORIZATION: all four prerequisite gates PASS.
-See docs/e12-queue-implementation-authorization.md (AUTHORIZATION-2).
+See docs/history/closeout/e12-queue-implementation-authorization.md (AUTHORIZATION-2).
 
 Gate status (current):
   B1 Mutex no-throw substrate:               PASS  (independent review complete)
@@ -574,7 +574,7 @@ Transition deltas use `(A,W,T,R)` for these four counters:
 > **SUPERSESSION NOTICE (E10-E12-API-SEMANTIC-CLOSURE-1, finding F1).** The
 > `PreparedQueueTimer` design described in this section is **SUPERSEDED** for the
 > production implementation. The authority for the queue timer model is
-> `docs/e12-queue-corrective-3.md`, which records that production never
+> `docs/history/closeout/e12-queue-corrective-3.md`, which records that production never
 > implemented `PreparedQueueTimer`: timers are constructed directly ACTIVE via
 > the generic `TimerRegistration` path with an `on_resolve_` hook, and the
 > PREPARED/ACTIVE split below is preserved here only as the historical design

@@ -135,6 +135,6 @@ Record the chosen cells under `docs/results/` with full parameters.
 - Architecture (modes): `docs/sync-io-architecture.md` §3.
 - Durability policy names: `docs/sync-durability-model.md` §4.
 - Positional I/O contract (Q3 dependency): `docs/sync-io-model.md` (Positional I/O semantics).
-- Optimization notes (observations → future work): `docs/sync-optimization-notes.md`.
-- Existing single-stream matrix: `docs/bench-decision-matrix.md`.
-- Jobs: `docs/sync-io-next-jobs.md` (022S builds the matrix, 023S tunes).
+- Optimization notes (observations → future work): `docs/history/closeout/sync-optimization-notes.md`.
+- Existing single-stream matrix: `docs/history/implementation-plans/bench-decision-matrix.md`.
+- Jobs: `docs/history/implementation-plans/sync-io-next-jobs.md` (022S builds the matrix, 023S tunes).

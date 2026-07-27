@@ -1,9 +1,10 @@
 # ADR: Dual Threaded/Evented Execution Model
 
-**Status: sluice-CORE-E0.** Architecture Decision Record.
-**State: Accepted (decision only).** The ADR records the execution-model
+**Status:** Accepted (sluice-CORE-E0)
+**Authority:** ADR (execution model)
+**State:** Accepted (decision only). The ADR records the execution-model
 decision; implementation follows in jobs E0-A through E6 (see
-`docs/zig-stdio-migration-jobs.md` PHASE E).
+`docs/history/implementation-plans/zig-stdio-migration-jobs.md` PHASE E).
 **Decides:** the execution-strategy contract for logical task waiting in
 cppio's async layer, and the relationship between the Threaded and Evented
 strategies. This is the **principal experiment** of the project (task §9): can
@@ -13,10 +14,10 @@ Threaded and Evented execution strategies?
 - Sits above `docs/adr/ADR-async-io-model.md` (016D, the L1 completion-based
   foundation). Does not supersede it; this ADR adds the execution-strategy
   layer the L1 ADR deferred (016D §13 Phase 9, "separate ADR").
-- Consumes the source graph in `docs/zig-stdio-async-port-map.md` (023A),
+- Consumes the source graph in `docs/history/implementation-plans/zig-stdio-async-port-map.md` (023A),
   especially `Io/fiber.zig` (the 3-arch stack-switching seam) and
   `Io/Uring.zig` (the Evented scheduler).
-- Governs the PHASE E job sequence in `docs/zig-stdio-migration-jobs.md`.
+- Governs the PHASE E job sequence in `docs/history/implementation-plans/zig-stdio-migration-jobs.md`.
 
 This ADR makes **one** recommendation. It introduces **no dependency** without
 explicit evaluation (§11). It makes **no performance claim** merely from
@@ -844,7 +845,7 @@ This section defines the E8 runnable-ownership-transfer decision. E8
 extends E7's pinned-ownership contract to allow an idle Worker to execute
 a Runnable Fiber currently owned by another Worker, by *transferring
 ownership* of the Fiber to the thief as part of the steal. The E8-0
-ownership topology audit (`docs/e8-0-ownership-topology-audit.md`)
+ownership topology audit (`docs/history/closeout/e8-0-ownership-topology-audit.md`)
 established that no E7 invariant contradicts this; this section records
 the chosen protocol.
 
@@ -889,7 +890,7 @@ Evaluation against the E8 load-bearing path
   steal and `run_next_on`, the owner record says W0 while the ticket is
   in W1's queue. If the thief pops and runs the fiber before any other
   action, this is observationally equivalent to B — but the audit
-  (`docs/e8-0-ownership-topology-audit.md` O10) shows the wake path and
+  (`docs/history/closeout/e8-0-ownership-topology-audit.md` O10) shows the wake path and
   `classify_locked` read owner/ticket-location independently; the
   in-between window is a real observable state that would require an
   IN_TRANSIT state to model. §4.4 forbids inventing such a state unless
@@ -1031,7 +1032,7 @@ runnable ownership / steal-consistency record, not the routing authority.
 The TLA+ model has been corrected to separate `ownerRecord[f]`,
 `execWorker[f]`, and `waitOwner[f]`, with `WakeReady` routing by
 `waitOwner[f]`. See `docs/spec/e8_ownership_transfer/` and the audit at
-`docs/e8-formal-corrective/audit.md`.
+`docs/history/closeout/e8-formal-corrective/audit.md`.
 
 ### 9.3.6 Wake routing after transfer
 
@@ -1123,7 +1124,7 @@ while Runnable and after its ownership transfer is committed.
 
 This section defines the E9 park-admission and wake-source decision. E9
 closes the two gaps identified by the E9-0 wake-source topology audit
-(`docs/e9-0-wake-source-topology-audit.md`):
+(`docs/history/closeout/e9-0-wake-source-topology-audit.md`):
 
 ```text
 GAP-1 (external wake, source W8):
@@ -1856,9 +1857,9 @@ DEPS       : fiber.zig port (x86_64, gated) + existing optional liburing.
 
 ## 15. Cross-links
 
-- Source graph: `docs/zig-stdio-async-port-map.md` (023A) — `Io/fiber.zig`,
+- Source graph: `docs/history/implementation-plans/zig-stdio-async-port-map.md` (023A) — `Io/fiber.zig`,
   `Io/Uring.zig` Evented.
-- Parity audit: `docs/async-backend-parity.md` (023B).
-- Job sequence: `docs/zig-stdio-migration-jobs.md` (023C) — PHASE E.
+- Parity audit: `docs/history/closeout/async-backend-parity.md` (023B).
+- Job sequence: `docs/history/implementation-plans/zig-stdio-migration-jobs.md` (023C) — PHASE E.
 - Async foundation ADR (this sits above): `docs/adr/ADR-async-io-model.md` (016D).
-- Existing async jobs (GREEN baseline): `docs/async-next-jobs.md` (016F).
+- Existing async jobs (GREEN baseline): `docs/history/implementation-plans/async-next-jobs.md` (016F).

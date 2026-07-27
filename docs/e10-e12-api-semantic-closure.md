@@ -960,7 +960,7 @@ RESOLUTION:
 FINDING F5:
 SEVERITY: P1 (documentation vs implementation drift)
 CONTRADICTION:
-  docs/e12-condition.md status banner says IMPLEMENTATION BLOCKED,
+  docs/history/closeout/e12-condition.md status banner says IMPLEMENTATION BLOCKED,
   but the production code in condition.hpp is fully implemented
   and passes all 34 test cases.
   WaitOutcome returns directly from wait()/wait_until() (L223, L256).
@@ -1611,7 +1611,7 @@ Six contradictions were identified and resolved:
 
 **Modified (original closure, non-breaking):**
 - `docs/api-reference.md`, `docs/api-reference-zh.md`
-- `docs/changelog.md`, `docs/async-runtime-plan.md`, `docs/e12-condition.md`
+- `docs/changelog.md`, `docs/async-runtime-plan.md`, `docs/history/closeout/e12-condition.md`
 - `docs/e12-queue-scheduler-integration.md` (§8 supersession notice)
 - `tests/async_condition_primitive_test.cpp` (T30/T31)
 - `tests/async_queue_primitive_test.cpp` (H1–H4)
@@ -1628,7 +1628,7 @@ Six contradictions were identified and resolved:
 - `docs/e10-e12-api-semantic-closure.md` (C2/C3/C4/C5/C6/C7 wording and
   status corrections, §11.3/§11.4/§12/§14 reconciliation)
 - `docs/api-reference.md`, `docs/api-reference-zh.md` (exact public inventory)
-- `docs/e12-condition.md`, `docs/e12-async-mutex.md`,
+- `docs/history/closeout/e12-condition.md`, `docs/history/closeout/e12-async-mutex.md`,
   `docs/reviews/E12-C-REVIEW.md`, and the historical-status notice in
   `docs/reviews/E12-D-CONDITION-PREPARATION-AUDIT-1.md` (C3 authority status)
 - `docs/reviews/E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1-REVIEW-REQUEST.md`

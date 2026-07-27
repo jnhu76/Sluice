@@ -74,10 +74,10 @@ STATUS:  ARCHIVED PREPARATION + IMPLEMENTATION CLOSEOUT (E14-IMPLEMENTATION-1)
    - docs/async-runtime-plan.md                 (E8–E14 roadmap)
    - docs/async-runtime-construction-method.md  (M1–M9 method lock)
    - docs/e10-e12-api-semantic-closure.md       (closed cross-primitive audit)
-   - docs/e12-cross-primitive-terminal-audit.md (E12-G closed)
-   - docs/e13-select-production-architecture.md (E13 master)
-   - docs/e13-select-production-test-plan.md
-   - docs/e13-select-p7-rollback-closeout.md
+   - docs/history/closeout/e12-cross-primitive-terminal-audit.md (E12-G closed)
+   - docs/design/e13-select-production-architecture.md (E13 master)
+   - docs/design/e13-select-production-test-plan.md
+   - docs/history/closeout/e13-select-p7-rollback-closeout.md
 4. public headers under include/sluice/async/ + docs/api-reference.md
 5. production implementation under src/async/ + include/sluice/async/
 6. tests/ + scripts/verify-e* scripts
@@ -107,7 +107,7 @@ FORMAL MODEL CHANGES: FORBIDDEN by this task
 COMMIT / PUSH / PR:   FORBIDDEN by this task
 ```
 
-This document writes only to `docs/e14-threaded-evented-parity-preparation.md`,
+This document writes only to `docs/design/e14-threaded-evented-parity-preparation.md`,
 `docs/reviews/E14-...-REVIEW-REQUEST.md`, and (only if supported by merged
 as-built evidence) a minimal status/link correction to
 `docs/async-runtime-plan.md`. It does not modify `include/**`, `src/**`,
@@ -3476,10 +3476,10 @@ Verification gates (post review follow-up):
   `docs/adr/ADR-async-io-model.md`, `docs/async-runtime-plan.md`,
   `docs/async-runtime-construction-method.md`,
   `docs/e10-e12-api-semantic-closure.md`,
-  `docs/e12-cross-primitive-terminal-audit.md`,
-  `docs/e13-select-production-architecture.md`.
+  `docs/history/closeout/e12-cross-primitive-terminal-audit.md`,
+  `docs/design/e13-select-production-architecture.md`.
 - Review request: `docs/reviews/E14-THREADED-EVENTED-SEMANTIC-PARITY-PREPARATION-1-REVIEW-REQUEST.md`.
-- Closed E12-G audit: `docs/e12-cross-primitive-terminal-audit.md`.
+- Closed E12-G audit: `docs/history/closeout/e12-cross-primitive-terminal-audit.md`.
 - Closed E12 semantic closure: `docs/e10-e12-api-semantic-closure.md`.
-- E13 master: `docs/e13-select-production-architecture.md`.
+- E13 master: `docs/design/e13-select-production-architecture.md`.
 - Construction method (normative M1–M9): `docs/async-runtime-construction-method.md`.

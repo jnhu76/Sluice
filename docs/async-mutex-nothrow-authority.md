@@ -14,7 +14,7 @@
 > `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
 > (commit `15dc9b4`). The author's self-assessment that production
 > implementation landed is recorded in
-> `docs/async-mutex-nothrow-implementation.md`; the independent review
+> `docs/history/closeout/async-mutex-nothrow-implementation.md`; the independent review
 > confirmed it.
 
 ## 1. Current-source fact

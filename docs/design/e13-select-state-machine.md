@@ -1,7 +1,7 @@
 # E13 Select State Machine Specification
 
 **Task**: `E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1`
-**Parent**: `docs/e13-select-preparation.md`
+**Parent**: `docs/history/closeout/e13-select-preparation.md`
 
 ---
 

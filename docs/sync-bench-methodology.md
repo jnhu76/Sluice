@@ -1,8 +1,10 @@
 # Sync benchmark methodology
 
-**Status: SYNC-IO-COMPLETE Phase 9 (sync doc reconciliation).** Defines how the
-blocking W1–W4 benchmark matrix is run and interpreted. It extends (does not
-replace) `docs/bench-methodology.md` and `docs/bench-decision-matrix.md`, which
+**Status:** Current
+**Authority:** Verification Guide (benchmark methodology)
+
+Defines how the blocking W1–W4 benchmark matrix is run and interpreted. It extends (does not
+replace) `docs/history/implementation-plans/bench-methodology.md` and `docs/history/implementation-plans/bench-decision-matrix.md`, which
 cover the existing single-stream benches. **No universal performance claim is
 made or implied.** Results are per-workload, per-machine, per-parameter.
 
@@ -41,7 +43,7 @@ sync_uring_spike           only if present + build-gated (SLUICE_HAS_LIBURING);
 
 ## 3. Workloads
 
-The four workloads (defined in `docs/async-problem-statement.md` W1–W4, mirrored
+The four workloads (defined in `docs/history/implementation-plans/async-problem-statement.md` W1–W4, mirrored
 here on the blocking side):
 
 - **W1 — many independent writes.** `streams` writers, each writing
@@ -89,7 +91,7 @@ required `streams`/`pool_threads`/`threads_used` columns provide).
 ```text
 - Each run records: workload, mode, all parameters, machine info, sluice build
   (debug/release, sanitizer mode if any).
-- Results notes live under docs/results/ (per the convention in
+- Results notes live under docs/history/closeout/results/ (per the convention in
   docs/io-uring-liburing-validation.md).
 - Sanitizer runs (ASan/TSan) are for correctness of the pool/concurrency code,
   NOT for performance numbers (sanitizers skew timing).
@@ -100,6 +102,6 @@ required `streams`/`pool_threads`/`threads_used` columns provide).
 - Matrix (workloads × modes × parameters × metrics × decision questions): `docs/sync-bench-matrix.md`.
 - Architecture (modes defined): `docs/sync-io-architecture.md` §3.
 - Durability policy names: `docs/sync-durability-model.md` §4.
-- Existing single-stream methodology: `docs/bench-methodology.md`, `docs/bench-decision-matrix.md`.
-- Optimization notes (observations → future work): `docs/sync-optimization-notes.md`.
-- Jobs: `docs/sync-io-next-jobs.md` (022S matrix, 023S optimization).
+- Existing single-stream methodology: `docs/history/implementation-plans/bench-methodology.md`, `docs/history/implementation-plans/bench-decision-matrix.md`.
+- Optimization notes (observations → future work): `docs/history/closeout/sync-optimization-notes.md`.
+- Jobs: `docs/history/implementation-plans/sync-io-next-jobs.md` (022S matrix, 023S optimization).

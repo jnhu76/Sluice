@@ -1,5 +1,8 @@
 # Async-Runtime Construction Method (Project Method Lock)
 
+**Status:** Current
+**Authority:** Architecture (async construction method)
+
 Status: **NORMATIVE** for E9-CORRECTIVE and all later async-runtime phases (E10+).
 
 This is NOT a generic software-engineering essay. It is the project-specific

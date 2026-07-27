@@ -1,11 +1,14 @@
 # Sync I/O architecture
 
-**Status: SYNC-IO-COMPLETE Phase 2 (sync doc reconciliation).** This is the
-*architecture* layer of the synchronous/blocking I/O model. It defines what the
+**Status:** Current
+**Authority:** Architecture (synchronous I/O model)
+**Last verified against:** v0.1.0
+
+This is the *architecture* layer of the synchronous/blocking I/O model. It defines what the
 sync model **is** — the backend taxonomy, the execution-model (runtime) taxonomy,
 what is borrowed from Zig `std.Io`, and what is explicitly not borrowed. It sits
-above the planning layer (`docs/sync-io-model-gap-audit.md`, gaps G1–G7;
-`docs/sync-io-next-jobs.md`, job cards 017S–023S) and below the per-topic contract
+above the planning layer (historical: `docs/history/closeout/sync-io-model-gap-audit.md`, gaps G1–G7;
+`docs/history/implementation-plans/sync-io-next-jobs.md`, job cards 017S–023S) and below the per-topic contract
 docs (`docs/sync-io-model.md` primitive contract, `docs/sync-durability-model.md`,
 `docs/sync-bench-methodology.md`).
 
@@ -135,7 +138,7 @@ The sync stage stays **simple, explicit, blocking-first**.
 
 ## 6. Current sync components (inventory snapshot)
 
-Already present (see `docs/sync-io-model-gap-audit.md` §1 for the evidence table):
+Already present (see `docs/history/closeout/sync-io-model-gap-audit.md` §1 for the evidence table):
 
 ```text
 Reader / Writer (reader.hpp, writer.hpp)
@@ -148,12 +151,12 @@ Fault / Observed wrappers (fault.hpp, observed.hpp) testing/measurement layers
 SyncableWriter (sync.hpp) + sync_data/sync_all      durability primitives
 WalWriter (wal.hpp)                                 written<=flushed<=durable LSN
 Measurement structs (measurement.hpp)               caller-owned raw counters
-Microbench harness (bench/, docs/bench-methodology.md) 5 single-stream targets
+Microbench harness (bench/, docs/history/implementation-plans/bench-methodology.md) 5 single-stream targets
 ```
 
 ## 7. Missing sync pieces (the gaps this architecture must close)
 
-From `docs/sync-io-model-gap-audit.md` (gaps G1–G7), restated in this architecture's
+From `docs/history/closeout/sync-io-model-gap-audit.md` (gaps G1–G7), restated in this architecture's
 terminology:
 
 ```text
@@ -175,8 +178,8 @@ G7 Bench single-stream only     → W1-W4 blocking benchmark matrix across modes
 
 ## 8. Future async dependency on this baseline
 
-Async implementation (jobs 017+, `docs/async-next-jobs.md`) is **blocked** behind
-the sync-first readiness gate (`docs/sync-before-async-readiness-gate.md`). The
+Async implementation (jobs 017+, `docs/history/implementation-plans/async-next-jobs.md`) is **blocked** behind
+the sync-first readiness gate (`docs/history/closeout/sync-before-async-readiness-gate.md`). The
 gate requires: positional I/O decision made, durability model documented, bounded
 pool baseline exists, W1–W4 blocking benchmark matrix exists, baseline engineered.
 
@@ -194,10 +197,10 @@ must be **defined** before it is run, against an engineered baseline.
 - Primitive contract: `docs/sync-io-model.md`.
 - Durability model: `docs/sync-durability-model.md`.
 - Bench methodology: `docs/sync-bench-methodology.md`, `docs/sync-bench-matrix.md`.
-- Optimization notes: `docs/sync-optimization-notes.md`.
-- Planning layer (gaps + jobs): `docs/sync-io-model-gap-audit.md`, `docs/sync-io-next-jobs.md` (017S–023S).
-- Sync-first readiness gate (blocks async): `docs/sync-before-async-readiness-gate.md`.
-- Async deferral note: `docs/async-deferred-until-sync-baseline.md`.
+- Optimization notes: `docs/history/closeout/sync-optimization-notes.md`.
+- Planning layer (gaps + jobs): `docs/history/closeout/sync-io-model-gap-audit.md`, `docs/history/implementation-plans/sync-io-next-jobs.md` (017S–023S).
+- Sync-first readiness gate (blocks async): `docs/history/closeout/sync-before-async-readiness-gate.md`.
+- Async deferral note: `docs/history/implementation-plans/async-deferred-until-sync-baseline.md`.
 - Async design (accepted, frozen): `docs/adr/ADR-async-io-model.md` (016D).
-- Existing durability design: `docs/design-flush-sync-durability.md`, `docs/design-wal-durability.md`.
-- Existing IoContext design: `docs/design-io-context.md` (009).
+- Existing durability design: `docs/history/implementation-plans/design-flush-sync-durability.md`, `docs/history/implementation-plans/design-wal-durability.md`.
+- Existing IoContext design: `docs/history/implementation-plans/design-io-context.md` (009).
