@@ -278,4 +278,4 @@ E14-PREPARATION-REVIEW: FAIL
 - Construction method (normative for review): `docs/history/implementation-plans/async-runtime-construction-method.md`.
 - Authority: `AGENTS.md`, `docs/adr/ADR-execution-model.md`.
 - Closed E12-G audit (input): `docs/history/closeout/e12-cross-primitive-terminal-audit.md`.
-- Closed E13 production architecture (input): `docs/e13-select-production-architecture.md`.
+- Closed E13 production architecture (input): `docs/history/implementation-plans/e13-select-production-architecture.md`.

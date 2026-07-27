@@ -69,8 +69,8 @@ No author self-assessment was accepted. All findings below are independently der
 | File | Lines | Status |
 |------|-------|--------|
 | `docs/history/closeout/e13-select-preparation.md` | 1173 | Primary design document |
-| `docs/e13-select-state-machine.md` | 326 | State machine specification |
-| `docs/e13-select-test-plan.md` | 506 | Test plan (16 tests) |
+| `docs/history/implementation-plans/e13-select-state-machine.md` | 326 | State machine specification |
+| `docs/history/implementation-plans/e13-select-test-plan.md` | 506 | Test plan (16 tests) |
 | `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md` | 854 | Original audit |
 | `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REVIEW-REQUEST.md` | 123 | Corrective review request |
 

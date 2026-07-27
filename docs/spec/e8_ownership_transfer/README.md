@@ -39,7 +39,7 @@ Waiting), but they are **different production fields**.
 refinement ambiguity. Production `wake_ready_*_locked` read
 `it->second.owner` (the registration's captured `WaitReg.owner`) and call
 `route_runnable_locked(f, owner)`; no wake path references `fiber_owner_`.
-See the audit at `docs/e8-formal-corrective/audit.md` (A4) for file/line
+See the audit at docs/e8-formal-corrective/audit.md (historical path, target not preserved) (A4) for file/line
 evidence.
 
 `ownerRecord` and `waitOwner` are invariant-equal in all reachable Waiting

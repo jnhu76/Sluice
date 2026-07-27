@@ -3,8 +3,8 @@
 一个实验性的 C++20 I/O 控制流库，围绕显式能力、可插拔后端和后端无关的
 `Reader` / `Writer` 语义构建。
 
-**当前状态：** v0.1 Runtime Foundation MVP — 同步核心已完成，异步运行时
-（E10–E15）已实现。E16 Application Runtime 是下一个提议阶段。
+**当前状态：** v0.1.0 — Runtime Foundation (E10–E15) 已完成。
+同步核心、异步运行时和同步原语已可生产。E16 Application Runtime 是下一个提议阶段。
 
 ## 为什么选择 Sluice
 

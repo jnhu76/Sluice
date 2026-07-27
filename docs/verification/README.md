@@ -68,8 +68,13 @@ Validate default stub/off path. When liburing available, also configure with
 
 ## Five-layer quality model
 
-1. **Acceptance Testing** — `xmake test -v` on every PR.
-2. **Unit / Component Testing** — per-slice test binaries (see `tests/`).
+1. **Acceptance Testing** — public-only compile+run probes that prove the
+   installed headers are usable end-to-end:
+   - `xmake build public_api_acceptance && xmake run public_api_acceptance`
+   - `xmake build async_foundation_quickstart && xmake run async_foundation_quickstart`
+   - Future: E16 application acceptance consumer
+2. **Unit / Component Testing** — `xmake build -g test && xmake test -v`
+   (per-slice test binaries in `tests/`).
 3. **Mutation Testing** — manual targeted mutation evidence was completed for
    E15; automated repository-wide mutation tooling is planned.
 4. **Code Quality Analysis** — `clang-tidy`, `.clang-format`, `.clang-tidy`.

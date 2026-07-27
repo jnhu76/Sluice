@@ -76,8 +76,8 @@ SHA256: 1d88162d9cdce918da143c2ad65e2f488b258b887fbe9d47111b5694e1d2507f
 | File | Lines |
 |------|-------|
 | `docs/history/closeout/e13-select-preparation.md` | 1318 |
-| `docs/e13-select-state-machine.md` | 314 |
-| `docs/e13-select-test-plan.md` | 429 |
+| `docs/history/implementation-plans/e13-select-state-machine.md` | 314 |
+| `docs/history/implementation-plans/e13-select-test-plan.md` | 429 |
 | `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1-REVIEW-REQUEST.md` | 197 |
 
 ### Existing authorities reviewed

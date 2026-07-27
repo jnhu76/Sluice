@@ -93,7 +93,7 @@ warnings, recorded as P2-1.
 
 Committed PR task files:
 
-- `docs/formal/e13-select-formal-core-design.md`
+- `docs/history/formal-design/e13-select-formal-core-design.md`
 - `docs/formal/e13-select-formal-core-plan.md`
 - `docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md`
 - `docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-REVIEW-REQUEST.md`

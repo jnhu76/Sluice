@@ -71,7 +71,7 @@ and the separate B4 TLA+ formal model — none is authorized or claimed here.
 
 ### B.0 No Queue production code exists (verified)
 
-`grep -rn "AsyncQueue\|QueueItemLease\|QueueItemControl\|QueuePort\|QueueTeardownSession\|PreparedQueueTimer\|queue_runnable_head_\|QueueRunnableTicket" include/ src/ tests/ xmake.lua` returns zero hits across `include/`, `src/`, `tests/`, and `xmake.lua`. `find . -iname '*queue*' -path '*/async/*'` returns only `docs/e12-queue*.md` (design) — no header, source, or test under `async/`. The `tests/test_t3_simple.cpp` untracked file contains only an `AsyncCondition` smoke test (verified, unrelated). This matches the design's `DENIED — B2/B4 OPEN` status and the existing `docs/history/closeout/e12-queue-implementation-authorization.md` investigation report.
+`grep -rn "AsyncQueue\|QueueItemLease\|QueueItemControl\|QueuePort\|QueueTeardownSession\|PreparedQueueTimer\|queue_runnable_head_\|QueueRunnableTicket" include/ src/ tests/ xmake.lua` returns zero hits across `include/`, `src/`, `tests/`, and `xmake.lua`. `find . -iname '*queue*' -path '*/async/*'` returns only docs/e12-queue*.md (historical path, target not preserved) (design) — no header, source, or test under `async/`. The `tests/test_t3_simple.cpp` untracked file contains only an `AsyncCondition` smoke test (verified, unrelated). This matches the design's `DENIED — B2/B4 OPEN` status and the existing `docs/history/closeout/e12-queue-implementation-authorization.md` investigation report.
 
 ### B.1 Precondition gate status (independently verified)
 

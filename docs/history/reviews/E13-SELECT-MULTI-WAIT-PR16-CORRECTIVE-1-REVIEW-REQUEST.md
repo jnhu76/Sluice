@@ -18,8 +18,8 @@ No production code, test code, formal spec, or build policy was modified.
 | File | Description |
 |------|-------------|
 | `docs/history/closeout/e13-select-preparation.md` | Corrected preparation design (WaitNode finalization law, event/timer winner, loser, lifecycle, state machine, invariants, timer authority) |
-| `docs/e13-select-state-machine.md` | Corrected state machine (inline SelectOperation path, phase-aware timer invariants, branch-specific lifecycle, timer authority) |
-| `docs/e13-select-test-plan.md` | Corrected test plan (17 deterministic tests, T12a/T12b split, T17 timer authority lease, winner/loser checks) |
+| `docs/history/implementation-plans/e13-select-state-machine.md` | Corrected state machine (inline SelectOperation path, phase-aware timer invariants, branch-specific lifecycle, timer authority) |
+| `docs/history/implementation-plans/e13-select-test-plan.md` | Corrected test plan (17 deterministic tests, T12a/T12b split, T17 timer authority lease, winner/loser checks) |
 | `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md` | Historical erratum (authorization, untracked provenance) |
 | `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REAUDIT-1.md` | Supersession notice |
 | `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1-REVIEW-REQUEST.md` | Historical count annotation |

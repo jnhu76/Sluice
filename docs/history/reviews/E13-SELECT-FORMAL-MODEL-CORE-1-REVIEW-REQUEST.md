@@ -89,7 +89,7 @@ Formal model:
 
 Supporting material:
 
-- `docs/formal/e13-select-formal-core-design.md`
+- `docs/history/formal-design/e13-select-formal-core-design.md`
 - `docs/formal/e13-select-formal-core-plan.md`
 - `tools/formal/verify-e13-select-core.sh`
 - this review request

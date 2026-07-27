@@ -1,63 +1,25 @@
 # Changelog
 
-## v0.2.0 — Runtime Foundation (E10–E15)
+## Unreleased — documentation corrective (post-v0.1.0)
 
-The Runtime Foundation completes the async synchronization substrate and
-runtime. E10 WaitNode/WaitQueue, E11 deadline/timer, E12-A through E12-F
-primitives, E13 Select, and E14 Threaded/Evented parity are all implemented
-and merged to production. The runtime is now production-ready for
-fiber-suspending synchronization primitives, multi-arm select, and both
-Threaded and Evented execution strategies.
-
-### Added
-
-- **E10 WaitNode / WaitQueue** (`sluice-CORE-E10`). Canonical wait lifecycle
-  primitive with one-winner `resolve_` CAS protocol.
-  See `docs/history/closeout/e10-waitnode-wait-queue.md`.
-
-- **E11 Deadline / Timer Wait** (`sluice-CORE-E11`). `TimerRegistration`
-  control block with monotonic `deadline_t`, `await_wait_deadline`,
-  `expire_wait`. See `docs/history/closeout/e11-deadline-timer-wait.md`.
-
-- **E12-A Event** through **E12-F AsyncRwLock** (`sluice-CORE-E12-A..F`).
-  Event, Semaphore, AsyncMutex, AsyncCondition, AsyncQueue\<T\>, AsyncRwLock.
-  All closed under recorded authorities with independent review PASS.
-  See `docs/history/closeout/e10-e12-api-semantic-closure.md`.
-
-- **E13 Select** (`sluice-CORE-E13`). Multi-arm Event/Timer select with
-  registration-rollback exception topology and destruction-contract closure.
-  Formal model (TLA+) PASS. See `docs/history/closeout/e13-select-p7-rollback-closeout.md`.
-
-- **E14 Threaded / Evented Parity** (`sluice-CORE-E14`). Both execution
-  strategies implemented and merged (PR #29). `ThreadedWaitPolicy` and
-  `EventedWaitPolicy` provide the physical-wait seam for `Future<T>` and
-  `Group`. See `docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md`.
-
-- **E15 Runtime Foundation closure.** Substrate complete and production-ready.
+Documentation-only changes since the v0.1.0 tag. No production, test, or
+build code modified.
 
 ### Changed
 
-- **`sluice::async::Mutex` acquisition is now `noexcept` / fail-fast.**
-  `lock()`, `try_lock()`, and `unlock()` are declared `noexcept`. An
-  underlying acquisition failure is converted to process termination via
-  `std::terminate` (fail-fast entry
-  `sluice::async::detail::async_mutex_lock_fail_fast`). Rationale in
-  `docs/history/implementation-plans/async-mutex-nothrow-authority.md`; evidence in
-  `docs/history/closeout/async-mutex-nothrow-implementation.md`.
+- **API reference accuracy** — `docs/api-reference.md` Async Runtime section
+  rewritten to match installed public headers exactly. Test-only seams
+  (`spawn_on`, `advance_clock`, `shutting_down_for_test`) marked as NOT user API.
+- **Async quickstart** — new `examples/async_foundation_quickstart.cpp` (public
+  headers only). README examples match.
+- **Async runtime architecture** — `docs/architecture/async-runtime.md`
+  separates Scheduler-integrated primitives from policy-based task waiting.
+- **Link checker integrity** — `scripts/check-doc-links.py` now resolves
+  markdown links strictly doc-relative (matches GitHub rendering). Self-test
+  mode added. 69+ stale doc links repaired.
+- **Changelog** — corrected version identity and E13/E14/E15 status.
 
-### Verification
-
-- **Sanitizer-clean:** ASan, UBSan, TSan, Valgrind all pass.
-- **Formal models:** E12-E Queue Models A/B, E13 Select TLA+ — all TLC PASS.
-- **Negative-compile verification:** for E12-E Queue and E13 Select invariants.
-- **Deterministic causal tests:** all phase-seam tests PASS.
-
-### Known limitations
-
-- io_uring remains experimental (`sluice::experimental`, build-gated).
-- E16 Application Runtime is the next proposed phase.
-
-## v0.1.0 — blocking measurable Zig-inspired I/O core
+## v0.1.0 — Runtime Foundation (E10–E15)
 
 The first tagged release. A blocking, measurable, Zig-`std.Io`-inspired C++ I/O
 core. Explicitly **not** async, **not** io_uring-as-default, and makes **no

@@ -63,7 +63,7 @@ does **not**:
 The corrective only edits files under:
 
 - `docs/spec/e13_select/**`
-- `docs/formal/**`
+- docs/formal/** (historical path, target not preserved)
 - `docs/history/reviews/**`
 - `tools/formal/**`
 

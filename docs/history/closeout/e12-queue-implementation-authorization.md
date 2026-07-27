@@ -151,7 +151,7 @@ mentions in `E12-C-REVIEW.md` refer to
 corrective — a name collision, not the Queue Corrective-2.
 
 **The only E12-E Queue reviewers of record are author self-assessment and
-two doc-nit bots.** Every commit touching `docs/e12-queue*.md` is authored
+two doc-nit bots.** Every commit touching docs/e12-queue*.md (historical path, target not preserved) is authored
 by `jnhu <me@hoooo.org>` (GitHub `jnhu76`), the Corrective-2 author. PR #10
 ("docs(async): E12-E Corrective-2 integration architecture", `dc690f8`)
 received exactly two bot reviews, both `state: COMMENTED`,

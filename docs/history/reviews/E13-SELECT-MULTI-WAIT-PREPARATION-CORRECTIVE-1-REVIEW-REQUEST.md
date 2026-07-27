@@ -18,8 +18,8 @@ Select-aware internal seams required for Event and Timer resolution.
 | File | Description |
 |------|-------------|
 | `docs/history/closeout/e13-select-preparation.md` | Corrected preparation design |
-| `docs/e13-select-state-machine.md` | Corrected state machine spec |
-| `docs/e13-select-test-plan.md` | Corrected test plan (15 tests) |
+| `docs/history/implementation-plans/e13-select-state-machine.md` | Corrected state machine spec |
+| `docs/history/implementation-plans/e13-select-test-plan.md` | Corrected test plan (15 tests) |
 | `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REVIEW-REQUEST.md` | This document |
 
 ### Out of scope

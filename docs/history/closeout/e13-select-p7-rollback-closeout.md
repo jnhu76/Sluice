@@ -137,7 +137,7 @@ arm terminal classification (Retired) FIRST
 Timer ACTIVE -> RETIRED retirement SECOND
 ```
 
-### Drift 1 — `docs/e13-select-type-and-lifetime.md` §5.2 (CORRECTED)
+### Drift 1 — `docs/history/implementation-plans/e13-select-type-and-lifetime.md` §5.2 (CORRECTED)
 
 The preparation prose described the Timer rollback loop in the **opposite**
 order:

@@ -4,9 +4,9 @@ An experimental C++20 I/O control-flow library built around explicit
 capabilities, pluggable backends, and backend-neutral `Reader` / `Writer`
 semantics.
 
-**Current status:** v0.1 Runtime Foundation MVP — synchronous core complete,
-async runtime (E10–E15) implemented. E16 Application Runtime is the next
-proposed phase.
+**Current status:** v0.1.0 — Runtime Foundation (E10–E15) complete.
+Synchronous core, async runtime, and synchronization primitives are
+production-ready. E16 Application Runtime is the next proposed phase.
 
 ## Why Sluice
 

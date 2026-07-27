@@ -838,106 +838,46 @@ public:
     // Run entry points
     void run(unsigned worker_count);
     void run_live(unsigned worker_count);
-    void run_live(unsigned worker_count, bool (*stop_fn)(void*), void* stop_ctx);
     void run_until_idle();
 
     // E5/E6 completion awaits
     void await_completion_size(Completion<std::size_t>& c);
     void await_completion_void(Completion<void>& c);
-    void await_ready_flag(const std::atomic<bool>& ready);
-
-    // E10 WaitQueue suspension
-    void await_wait(WaitQueue& q, WaitNode& node);
-    bool wake_wait_one(WaitQueue& q);
-    bool cancel_wait(WaitQueue& q, WaitNode& node);
-
-    // E11 deadline / timer wait
-    deadline_t monotonic_now() const noexcept;
-    void await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t deadline);
-    bool expire_wait(WaitQueue& q, WaitNode& node);
-
-    // E12-A Event
-    std::size_t event_set_broadcast(Event& event);
-    void event_reset(std::atomic<bool>& set_flag);
-    void await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag, WaitNode& node);
-    void await_event_wait_deadline(WaitQueue& q, const std::atomic<bool>& set_flag,
-                                   WaitNode& node, deadline_t deadline);
-    bool event_cancel_wait(WaitQueue& q, WaitNode& node);
-
-    // E12-B Semaphore
-    [[nodiscard]] bool sem_try_acquire(WaitQueue& waiters, std::atomic<std::uint32_t>& available);
-    void sem_acquire(WaitQueue& waiters, std::atomic<std::uint32_t>& available, WaitNode& node);
-    void sem_acquire_until(WaitQueue& waiters, std::atomic<std::uint32_t>& available,
-                           WaitNode& node, deadline_t deadline);
-    [[nodiscard]] bool sem_cancel(WaitQueue& waiters, WaitNode& node);
-    [[nodiscard]] bool sem_release(WaitQueue& waiters, std::atomic<std::uint32_t>& available,
-                                   std::uint32_t max_permits);
-
-    // E12-C AsyncMutex
-    [[nodiscard]] bool mutex_try_lock(WaitQueue& waiters, Fiber*& owner);
-    void mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node);
-    void mutex_lock_until(WaitQueue& waiters, Fiber*& owner, WaitNode& node, deadline_t deadline);
-    [[nodiscard]] bool mutex_cancel(WaitQueue& waiters, WaitNode& node);
-    void mutex_unlock(WaitQueue& waiters, Fiber*& owner);
-
-    // E12-D AsyncCondition
-    WaitOutcome condition_wait_prepare(WaitQueue& cond_waiters, WaitNode& cond_node,
-                                       WaitQueue& mutex_waiters, Fiber*& owner, bool& released_mutex);
-    WaitOutcome condition_wait_prepare_until(WaitQueue& cond_waiters, WaitNode& cond_node,
-                                             WaitQueue& mutex_waiters, Fiber*& owner,
-                                             deadline_t deadline, bool& released_mutex);
-    void condition_notify_one(WaitQueue& cond_waiters);
-    std::size_t condition_notify_all(WaitQueue& cond_waiters);
-    [[nodiscard]] bool condition_cancel_wait(WaitQueue& cond_waiters, WaitNode& cond_node);
-
-    // E12-E Queue
-    void queue_push_admit(detail::QueuePort& port, WaitNode& node, detail::QueueItemLease& lease);
-    void queue_pop_admit(detail::QueuePort& port, WaitNode& node, detail::QueueItemLease& out);
-    void queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
-                                detail::QueueItemLease& lease, deadline_t deadline);
-    void queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
-                               detail::QueueItemLease& out, deadline_t deadline);
-    [[nodiscard]] bool queue_cancel(detail::QueuePort& port, detail::QueueRole role, WaitNode& node);
-
-    // E12-F AsyncRwLock
-    [[nodiscard]] bool rwlock_try_read_lock(WaitQueue& waiters, std::size_t& active_readers, bool& writer_active);
-    void rwlock_read_lock(WaitQueue& waiters, std::size_t& active_readers, bool& writer_active, WaitNode& node);
-    void rwlock_read_lock_until(WaitQueue& waiters, std::size_t& active_readers,
-                                bool& writer_active, WaitNode& node, deadline_t deadline, void* expire_ctx);
-    [[nodiscard]] bool rwlock_try_write_lock(WaitQueue& waiters, std::size_t& active_readers,
-                                             bool& writer_active, Fiber*& writer_owner);
-    void rwlock_write_lock(WaitQueue& waiters, std::size_t& active_readers,
-                           bool& writer_active, Fiber*& writer_owner, WaitNode& node);
-    void rwlock_write_lock_until(WaitQueue& waiters, std::size_t& active_readers,
-                                 bool& writer_active, Fiber*& writer_owner,
-                                 WaitNode& node, deadline_t deadline, void* expire_ctx);
-    void rwlock_unlock_read(WaitQueue& waiters, std::size_t& active_readers,
-                            bool& writer_active, Fiber*& writer_owner);
-    void rwlock_unlock_write(WaitQueue& waiters, std::size_t& active_readers,
-                             bool& writer_active, Fiber*& writer_owner);
-    [[nodiscard]] bool rwlock_cancel(WaitQueue& waiters, std::size_t& active_readers,
-                                     bool& writer_active, Fiber*& writer_owner, WaitNode& node);
 
     // E9 external wake
     SchedulerWakeHandle make_wake_handle() noexcept;
-    void attach_ready_wake(const std::atomic<bool>& ready, SchedulerWakeHandle& wh);
 
     // Diagnostics
     std::size_t runnable_count() const;
     std::size_t waiting_count() const;
     std::size_t waiting_ready_count() const;
     static unsigned current_worker_id();
-    WorkerState* owner_of(const Fiber& f) const;
-    unsigned owner_id_of(const Fiber& f) const;
 
     // ================================================================
-    // Test-only / internal seams — NOT supported user API
-    // These are public due to encapsulation boundaries but are NOT part of
-    // the stable contract. Production code MUST NOT call them.
+    // Test-only seams — NOT supported user API
     // ================================================================
     void spawn_on(Fiber& fiber, unsigned worker_id) noexcept;  // deterministic-test hook
     void advance_clock(deadline_t t);  // TEST-ONLY causal seam (M7)
 };
+```
+
+**Installed runtime substrate (not direct user API).** The following are
+public in the installed header due to encapsulation boundaries but are NOT
+part of the supported user contract. They are used internally by the async
+primitives (`Event`, `Semaphore`, `AsyncMutex`, `AsyncCondition`,
+`AsyncQueue<T>`, `AsyncRwLock`) to drive the Scheduler's internal state
+machine. Production code MUST NOT call them directly:
+
+- `await_ready_flag`, `await_wait`, `wake_wait_one`, `cancel_wait` (WaitQueue seams)
+- `monotonic_now`, `await_wait_deadline`, `expire_wait` (E11 timer seams)
+- `event_set_broadcast`, `event_reset`, `await_event_wait`, `await_event_wait_deadline`, `event_cancel_wait` (E12-A)
+- `sem_try_acquire`, `sem_acquire`, `sem_acquire_until`, `sem_cancel`, `sem_release` (E12-B)
+- `mutex_try_lock`, `mutex_lock`, `mutex_lock_until`, `mutex_cancel`, `mutex_unlock` (E12-C)
+- `condition_wait_prepare`, `condition_wait_prepare_until`, `condition_notify_one`, `condition_notify_all`, `condition_cancel_wait` (E12-D)
+- `queue_push_admit`, `queue_pop_admit`, `queue_push_admit_until`, `queue_pop_admit_until`, `queue_cancel` (E12-E, accept `detail::QueuePort&` / `detail::QueueItemLease&`)
+- `rwlock_try_read_lock`, `rwlock_read_lock`, `rwlock_read_lock_until`, `rwlock_try_write_lock`, `rwlock_write_lock`, `rwlock_write_lock_until`, `rwlock_unlock_read`, `rwlock_unlock_write`, `rwlock_cancel` (E12-F)
+- `attach_ready_wake`, `owner_of`, `owner_id_of` (internal diagnostics)
+- `run_live(unsigned, bool(*)(void*), void*)` — Group-scoped live invocation with raw predicate lifetime constraints
 ```
 
 `select()` is a **free function** (not a `Scheduler` member):

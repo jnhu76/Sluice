@@ -96,38 +96,38 @@ every formal invariant in the closed PR #18 safety suite?**
 
 ### Highest-risk areas (please scrutinize)
 
-1. **WaitNode separation (`docs/e13-select-type-and-lifetime.md` §1).** The
+1. **WaitNode separation (`docs/history/implementation-plans/e13-select-type-and-lifetime.md` §1).** The
    previous preparation (`docs/history/closeout/e13-select-preparation.md` §4–5) proposed
    reusing `WaitNode::user_` with a kind tag. This task **rejects** that route
    and introduces a separate `SelectArmSlot`. The review should
    confirm the separation does not re-invent the winner state machine, timer
    retirement, intrusive membership, or terminal authority (§1.4).
 
-2. **Single winner authority (`docs/e13-select-locking-and-publication.md`
+2. **Single winner authority (`docs/history/implementation-plans/e13-select-locking-and-publication.md`
    §1).** The design uses a hybrid: `SelectGroup::winner_` CAS *under*
    `global_mtx_`. The review should confirm there is no competing winner
    authority (e.g. a per-arm CAS) and that the CAS is the single
    linearization point mapping to `ContractLinearizeWinner`.
 
-3. **Two-phase Event broadcast (`docs/e13-select-event-adapter.md` §4–§5).**
+3. **Two-phase Event broadcast (`docs/history/implementation-plans/e13-select-event-adapter.md` §4–§5).**
     The Phase 1 scan must snapshot a deduplicated group set *before* Phase 2
     finalization mutates the registry. The review should confirm the snapshot
     discipline (intrusive worklist chain using `broadcast_next_`/`broadcast_epoch_`
     on `SelectGroup`, no fixed-size caller-local array) prevents the forbidden
     "finalize mutates the list being scanned" pattern.
 
-4. **Timer stale-entry safety (`docs/e13-select-timer-adapter.md` §6).** The
+4. **Timer stale-entry safety (`docs/history/implementation-plans/e13-select-timer-adapter.md` §6).** The
    I4 closure depends on `SelectTimerRegistration::state_` being observed
    *before* `arm_` is read, and `state_` transitioning out of `active` in the
    same `global_mtx_` CS that finalizes the arm. The review should confirm
    this order is enforced in `select_timer_pump_entry` and the finalize path.
 
-5. **Publication exactly-once (`docs/e13-select-locking-and-publication.md`
+5. **Publication exactly-once (`docs/history/implementation-plans/e13-select-locking-and-publication.md`
    §5).** Exactly one call to `select_publish_locked`; the suspended branch's
    `make_runnable` return value is the runnable publication guard. The review
    should confirm no arm-finalize path reaches `route_runnable_locked`.
 
-6. **Forgeable-authority exclusion (`docs/e13-select-production-test-plan.md`
+6. **Forgeable-authority exclusion (`docs/history/implementation-plans/e13-select-production-test-plan.md`
    §4.5).** The production installed headers declare no Select test-hook type
    and grant no test friend. The PhaseTag seams live only in the
    `sluice_async_internal_testing` variant. The review should confirm the
@@ -136,14 +136,14 @@ every formal invariant in the closed PR #18 safety suite?**
 
 ### Medium-risk areas
 
-7. **Public API irreversibility (`docs/e13-select-public-api.md` §8).** The
+7. **Public API irreversibility (`docs/history/implementation-plans/e13-select-public-api.md` §8).** The
    review should confirm the frozen surface (`SelectResult`, the variadic
    `select`, `kSelectMaxArms`, index semantics) is coherent and that the
    deferred alternatives (span, builder) can indeed be added later without
    breaking the variadic core.
 
 8. **Implementation split gates
-   (`docs/e13-select-production-test-plan.md` §7).** Each stage's exit gate is
+   (`docs/history/implementation-plans/e13-select-production-test-plan.md` §7).** Each stage's exit gate is
    a set of test IDs. The review should confirm the gates are ordered
    correctly (no stage depends on behavior enabled by a later stage) and that
    each stage is independently reviewable.

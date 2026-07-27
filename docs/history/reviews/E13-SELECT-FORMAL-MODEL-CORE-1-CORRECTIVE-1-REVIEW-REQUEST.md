@@ -143,7 +143,7 @@ Tooling (source isolation):
 Documentation:
 
 - `docs/spec/e13_select/README.md`
-- `docs/formal/e13-select-formal-core-design.md`
+- `docs/history/formal-design/e13-select-formal-core-design.md`
 - `docs/formal/e13-select-formal-core-plan.md`
 
 Review artifacts:

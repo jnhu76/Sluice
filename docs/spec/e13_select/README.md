@@ -9,7 +9,7 @@ PRODUCTION PREPARATION:   UNDER REVIEW (E13-SELECT-PRODUCTION-PREPARATION-1, PR 
 PRODUCTION IMPLEMENTATION:DENIED PENDING PREPARATION REVIEW
 ```
 
-The production preparation lives in `docs/e13-select-production-*.md` (under
+The production preparation lives in docs/e13-select-production-*.md (historical path, target not preserved) (under
 the repo `docs/` root, not this directory). It maps the closed formal model
 below onto the existing production code. It does not modify any `.tla` file
 in this directory; the formal model is the authority.
@@ -351,14 +351,14 @@ existing production code (E10–E12). It produces architecture documents only;
 
 | Production preparation doc | Maps |
 |----------------------------|------|
-| `docs/e13-select-production-architecture.md` | Master architecture + selected decisions |
-| `docs/e13-select-public-api.md` | Public API (Candidate C fixed variadic) |
-| `docs/e13-select-type-and-lifetime.md` | Type graph + destruction contract + WaitNode separation |
-| `docs/e13-select-event-adapter.md` | Option E1 separate Select registry + two-phase broadcast |
-| `docs/e13-select-timer-adapter.md` | Option T1 dedicated SelectTimerRegistration + I4 closure |
-| `docs/e13-select-locking-and-publication.md` | Central claim CAS + lock matrix + single publication |
-| `docs/e13-select-production-test-plan.md` | Positive + negative test matrix, seams, P1–P9 split |
-| `docs/e13-select-formal-production-mapping.md` | Formal action → planned C++ function table |
+| `docs/history/implementation-plans/e13-select-production-architecture.md` | Master architecture + selected decisions |
+| `docs/history/implementation-plans/e13-select-public-api.md` | Public API (Candidate C fixed variadic) |
+| `docs/history/implementation-plans/e13-select-type-and-lifetime.md` | Type graph + destruction contract + WaitNode separation |
+| `docs/history/implementation-plans/e13-select-event-adapter.md` | Option E1 separate Select registry + two-phase broadcast |
+| `docs/history/implementation-plans/e13-select-timer-adapter.md` | Option T1 dedicated SelectTimerRegistration + I4 closure |
+| `docs/history/implementation-plans/e13-select-locking-and-publication.md` | Central claim CAS + lock matrix + single publication |
+| `docs/history/implementation-plans/e13-select-production-test-plan.md` | Positive + negative test matrix, seams, P1–P9 split |
+| `docs/history/formal-design/e13-select-formal-production-mapping.md` | Formal action → planned C++ function table |
 | `docs/history/reviews/E13-SELECT-PRODUCTION-PREPARATION-1-REVIEW-REQUEST.md` | Independent review request |
 
 PR #19 does not modify any file in this directory. The formal model is the
