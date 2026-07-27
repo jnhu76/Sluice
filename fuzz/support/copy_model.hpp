@@ -160,13 +160,18 @@ class ModelReader final : public sluice::Reader {
         pos_ += count;
         bytes_read_ += count;
 
-        // Broken-reader mode: on a FULL read (dst was completely fillable and
-        // there was source left), report one more byte than actually copied.
-        // This dominates failure injection so the over-report is what copy_all
-        // sees. The model never copies beyond dst, so the excess is fictitious.
-        if (cfg_.broken_reader && dst.size() > 0 && count == dst.size()) {
+        // Broken-reader mode: report one more byte than requested (dst.size() +
+        // 1) on every non-empty read, regardless of how many bytes were
+        // actually copied. This matches the spec ("return requested_size + 1
+        // in the broken-reader mode") and guarantees the over-report fires
+        // even on short reads (e.g. rshort=1 with a large scratch). The model
+        // never copies beyond dst — only the reported count is fictitious — so
+        // the excess is what copy_all's defensive `got > to_read` check must
+        // catch. This dominates failure injection so the over-report is what
+        // copy_all sees.
+        if (cfg_.broken_reader && dst.size() > 0) {
             broke_ = true;
-            return count + 1;
+            return dst.size() + 1;
         }
 
         // Failure injection: after N calls. Threshold 0 => first call fails.

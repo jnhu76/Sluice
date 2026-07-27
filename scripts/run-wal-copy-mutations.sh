@@ -216,11 +216,14 @@ run_mutation "M-WAL-03" "$WAL" "$TMPDIR/wal03.old" "$TMPDIR/wal03.new" "wal" $WA
 
 # M-WAL-04: enlarge the bounded read chunk beyond the documented bound (mutate
 # the call site so the oracle's read_chunk_size() bound stays the true one).
+# NOTE: the fragment is split across two lines in the source.
 cat > "$TMPDIR/wal04.old" << 'EOF'
-        const std::size_t chunk = detail::read_chunk_size(payload_size - old_size);
+        const std::size_t chunk =
+            detail::read_chunk_size(payload_size - old_size);
 EOF
 cat > "$TMPDIR/wal04.new" << 'EOF'
-        const std::size_t chunk = detail::read_chunk_size(payload_size - old_size) + 64 * 1024;
+        const std::size_t chunk =
+            detail::read_chunk_size(payload_size - old_size) + 64 * 1024;
 EOF
 run_mutation "M-WAL-04" "$WAL" "$TMPDIR/wal04.old" "$TMPDIR/wal04.new" "wal" $WAL_TARGETS
 
@@ -244,11 +247,19 @@ COPY="src/copy.cpp"
 COPY_TARGETS="copy_all_fault_fuzz fuzz/corpus/copy_all_fault"
 
 # M-COPY-01: remove the remaining-limit clamp from the Reader request size.
+# Remove the whole `if (limit.is_limited())` block so the clamp is gone without
+# leaving the `left` variable unused (which would trip -Werror).
 cat > "$TMPDIR/copy01.old" << 'EOF'
+        if (limit.is_limited()) {
+            std::uint64_t left = limit.remaining() - total;
             to_read = static_cast<std::size_t>(std::min<std::uint64_t>(scratch.size(), left));
+        }
 EOF
 cat > "$TMPDIR/copy01.new" << 'EOF'
-            to_read = static_cast<std::size_t>(scratch.size());
+        if (false && limit.is_limited()) {
+            std::uint64_t left = limit.remaining() - total;
+            to_read = static_cast<std::size_t>(std::min<std::uint64_t>(scratch.size(), left));
+        }
 EOF
 run_mutation "M-COPY-01" "$COPY" "$TMPDIR/copy01.old" "$TMPDIR/copy01.new" "copy" $COPY_TARGETS
 
