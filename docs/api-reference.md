@@ -76,11 +76,12 @@ if (!ok) return ok.error();
   with a non-throwing move-assign but throwing move-ctor yields a
   `noexcept(false)` move-assignment.
 - **Exception guarantee on assignment:** the old value (if any) is destroyed
-  and the discriminator cleared *before* the replacement is constructed. If the
-  replacement construction throws, `*this` is left in a destroy-safe state with
-  `has_value() == false`; the exception propagates and the eventual destructor
-  does not run `~T()` a second time. The post-throw value state is unspecified
-  beyond "no live value".
+  and a deterministic `IoError::Code::invalid_state` sentinel is written
+  *before* the replacement is constructed. If the replacement construction
+  throws, `*this` is left in a valid error-state `Result`:
+  `has_value() == false` AND `error().code == IoError::Code::invalid_state`;
+  the object remains destroy-safe and reassignable. The exception propagates
+  and the eventual destructor does not run `~T()` a second time.
 
 ---
 
@@ -802,6 +803,248 @@ public:
 | Construction/destruction | ctors, dtors | No | Yes (constructors); destruction requires quiescence (empty WaitQueue, no active condition waits, no mutex owner) |
 
 ---
+
+## Async Runtime (E13+)
+
+The async runtime types build on the E10–E12 synchronization substrate. See
+`docs/architecture/async-runtime.md` and `docs/architecture/async-io-foundation.md`
+for the architectural context.
+
+### `sluice::async::Scheduler`
+
+M:N fiber scheduler. Non-copyable, non-movable. Owns Workers, the deadline
+heap, and the external-wake control block.
+
+```cpp
+class Scheduler {
+public:
+    using deadline_t = std::uint64_t;  // monotonic ticks
+
+    // Construct with an execution strategy.
+    template <class... Args>
+    explicit Scheduler(ExecutionStrategy strategy, Args&& ...args);
+    ~Scheduler();  // assert: no live waiters/outstanding registrations
+
+    // Fiber management.
+    template <class Fn>
+    Fiber* spawn(Fn&& fn);  // spawn a new Fiber
+
+    // Drive the scheduler (single-threaded caller).
+    void run();  // returns when all Fibers complete or shutdown
+
+    // Select admission (E13).
+    template <class... Arms>
+    SelectResult select(Arm&&... arms);
+
+    // Shutdown.
+    void shutdown();
+};
+```
+
+**Execution strategies:**
+
+| Strategy | Description | Platform |
+|----------|-------------|----------|
+| `threaded` | Each blocking wait consumes an OS thread (`std::condition_variable`). | Any |
+| `evented` | Fibers suspend/resume on a single thread; requires `fiber_ctx::supported`. | x86_64 Linux |
+
+### `sluice::async::CancellationToken` / `sluice::async::CancelState`
+
+Cooperative cancellation primitives (E27). `CancelToken` is the
+cancel-request state; `CancelState` is per-consumer protection/acknowledge
+state.
+
+```cpp
+class CancelToken {
+public:
+    void request() noexcept;          // idempotent cancel request
+    bool is_requested() const noexcept;
+};
+
+enum class CancelProtection : std::uint8_t { unblocked, blocked };
+
+class CancelState {
+public:
+    void protect() noexcept;          // enter protected region (block delivery)
+    void unprotect() noexcept;        // exit protected region
+    Result<void> check_cancel(const CancelToken&) noexcept;
+};
+```
+
+### `sluice::async::Future<T>`
+
+Single-task awaitable (E28). Producer side: `complete_with()`. Consumer side:
+`await()` / `cancel()`. Idempotent: once the result is materialized, both are
+no-ops returning the cached result.
+
+```cpp
+template <class T>
+class Future {
+public:
+    Future();                          // Threaded wait policy (default)
+    explicit Future(WaitPolicy& policy);  // inject Evented policy
+
+    Result<T> await();                 // Threaded: blocks; Evented: suspends Fiber
+    Result<T> cancel();                // request cancel; idempotent
+    void complete_with(Result<T> r);   // producer publishes result
+};
+```
+
+### `sluice::async::Group`
+
+Unordered task set (E29). Tasks are added via `async(fn)`; the group is awaited
+as a whole or canceled as a whole. Cancel-propagation boundary: tasks swallow
+`IoError::canceled`.
+
+```cpp
+class Group {
+public:
+    Group();                           // Threaded mode
+    explicit Group(Scheduler& scheduler);  // Evented mode
+
+    template <class Fn>
+    void async(Fn&& fn);               // spawn a task
+
+    void await();                      // wait for ALL tasks
+    void cancel();                     // request cancel on all tasks, then await
+};
+```
+
+### `sluice::async::SelectResult`
+
+E13 Select winner descriptor.
+
+```cpp
+class SelectResult {
+public:
+    bool has_winner() const noexcept;           // false if all arms expired/canceled
+    std::size_t index() const noexcept;         // winning arm index
+    SelectKind kind() const noexcept;           // event or timer
+    SelectTimerOutcome timer_outcome() const noexcept;  // fired (timer winner only)
+};
+```
+
+### `sluice::async::Completion<T>`
+
+Single outstanding operation's state (E17). Caller-owned, address-stable,
+non-copyable, non-movable.
+
+```cpp
+template <class T>
+class Completion {
+public:
+    Completion() noexcept = default;
+
+    bool ready() const noexcept;
+    Result<T> result() const noexcept;   // valid only when ready
+    void reset() noexcept;               // return to idle for reuse
+
+    std::size_t next_reap_seq() const noexcept;  // reap order (E15-P1-04)
+};
+```
+
+### `sluice::async::AsyncBackend`
+
+Internal backend boundary (ADR §4). Not public-facing; `AsyncIoContext`
+delegates to it. Concrete backends implement `submit_*` / `poll` / `wait_one`.
+
+```cpp
+class AsyncBackend {
+public:
+    virtual ~AsyncBackend() = default;
+    virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
+    virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
+    virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
+    virtual Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) = 0;
+    virtual std::size_t poll() = 0;      // non-blocking reap
+    virtual std::size_t wait_one() = 0;  // blocking reap
+};
+```
+
+### `sluice::async::AsyncIoContext`
+
+Public L1 async API surface (E17). Owns an `AsyncBackend`. Non-copyable; move
+semantics governed by E15-P1-03 / E15-P2-06.
+
+```cpp
+class AsyncIoContext {
+public:
+    // Construction.
+    template <class Backend, class... Args>
+    explicit AsyncIoContext(in_place_type_t<Backend>, Args&&... args);
+
+    // Op submission.
+    Result<void> submit_read(ReadOp op, Completion<std::size_t>& c);
+    Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
+    Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
+    Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
+
+    // Reap.
+    std::size_t poll();              // non-blocking
+    std::size_t wait_one();          // blocking
+
+    // Cancel.
+    std::size_t cancel();            // cancel all outstanding ops
+
+    // Stats.
+    void attach_stats(AsyncStats* s);  // caller-owned, nullable
+};
+```
+
+### `sluice::async::Batch`
+
+Grouped completions (E30). Submit N ops together, await as a whole, iterate in
+completion order via `next()`.
+
+```cpp
+class Batch {
+public:
+    explicit Batch(AsyncIoContext& io);
+    ~Batch();
+
+    void add(BatchOp op);            // add an op to the batch
+    void await_one();                // wait until >=1 completion
+    std::optional<BatchResult> next();  // iterate in reap order
+    std::size_t cancel();            // cancel all outstanding ops
+};
+```
+
+### `sluice::async::ThreadPoolBackend`
+
+Portable real backend (sluice-CORE-020A). One `std::thread` per outstanding op.
+Always buildable; no external dependency.
+
+```cpp
+class ThreadPoolBackend : public AsyncBackend {
+public:
+    ThreadPoolBackend();
+    // ... AsyncBackend implementation
+};
+```
+
+### `sluice::async::UringAsyncBackend`
+
+Linux io_uring backend (sluice-CORE-020B). Build-gated behind liburing. Without
+`SLUICE_HAS_LIBURING`, it is an unsupported stub: `submit_*` returns
+`IoError::backend_error` synchronously; `poll()` / `wait_one()` reap nothing.
+
+```cpp
+class UringAsyncBackend : public AsyncBackend {
+public:
+    UringAsyncBackend();
+    // ... AsyncBackend implementation (real path gated by SLUICE_HAS_LIBURING)
+};
+```
+
+Factory functions:
+
+```cpp
+// Construct a ThreadPoolBackend-backed AsyncIoContext.
+AsyncIoContext threadpool_backend();
+
+// Construct a UringAsyncBackend-backed AsyncIoContext.
+AsyncIoContext uring_backend();
+```
 
 ## Measurement
 
