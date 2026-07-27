@@ -53,7 +53,7 @@ E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1-REVIEW-REQUEST
 | Audit identifier | `E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1` (+ Corrective-2) |
 | Branch | `audit/e10-e12-api-semantic-closure` |
 | Baseline HEAD (master) | `d0cd915` (Merge PR #12 — E12-E Queue production impl) |
-| Authority document | `docs/e10-e12-api-semantic-closure.md` (new) |
+| Authority document | `docs/history/closeout/e10-e12-api-semantic-closure.md` (new) |
 | Final report | Section 14 of the authority document |
 | Status | **CORRECTIVE-2 PASS — AUTHOR SELF-ASSESSMENT; INDEPENDENT RE-REVIEW REQUIRED** |
 
@@ -66,7 +66,7 @@ The reviewer should start from the audit branch tip and verify against master
 
 ### 2.1 Original closure (new files)
 
-- `docs/e10-e12-api-semantic-closure.md` — the authoritative closure document.
+- `docs/history/closeout/e10-e12-api-semantic-closure.md` — the authoritative closure document.
   Contains:
   - Public API Inventory Matrix (every primitive's full public signature,
     sourced from real headers, with `file:line` evidence).
@@ -117,12 +117,12 @@ The reviewer should start from the audit branch tip and verify against master
   (Fiber-suspending).
 - `docs/changelog.md` — added the audit entry under "unreleased — async
   substrate".
-- `docs/async-runtime-plan.md` — updated E12 primitive statuses and added the
+- `docs/history/implementation-plans/async-runtime-plan.md` — updated E12 primitive statuses and added the
   F1 cross-primitive audit line.
-- `docs/e12-condition.md` — updated status banner (IMPLEMENTATION BLOCKED →
+- `docs/history/closeout/e12-condition.md` — updated status banner (IMPLEMENTATION BLOCKED →
   IMPLEMENTATION COMPLETE, REVIEW-REQUIRED).
-- `docs/e12-queue-scheduler-integration.md` §8 — added a SUPERSESSION NOTICE
-  pointing to `docs/e12-queue-corrective-3.md` as the binding authority for
+- `docs/history/implementation-plans/e12-queue-scheduler-integration.md` §8 — added a SUPERSESSION NOTICE
+  pointing to `docs/history/closeout/e12-queue-corrective-3.md` as the binding authority for
   the queue timer model (the `PreparedQueueTimer` design was never
   implemented; production uses generic ACTIVE-on-creation `TimerRegistration`
   with `on_resolve_` hook).
@@ -146,7 +146,7 @@ The reviewer should start from the audit branch tip and verify against master
     bounds. The driver observes `waiting_count() >= 4`, uses a monotonically
     increasing absolute deadline per iteration, advances the test clock to
     that exact value, and performs one expire/cancel/set sequence.
-- `docs/e10-e12-api-semantic-closure.md` (C2/C3/C4/C5/C6/C7 + §11/§12/§14
+- `docs/history/closeout/e10-e12-api-semantic-closure.md` (C2/C3/C4/C5/C6/C7 + §11/§12/§14
   reconciliation):
   - C2: E13 cancellation contract — primitive cancel is NOT a Select-level
     loser authority; E13 needs a parent/group claim ordering group-winner
@@ -171,7 +171,7 @@ The reviewer should start from the audit branch tip and verify against master
 - `docs/api-reference.md`, `docs/api-reference-zh.md` (C4/C5/C6) — matching
   wording corrections for `WaitNode`, `WaitOutcome`, `AsyncQueue<T>`.
 - `docs/changelog.md` (C6) — `WaitOutcome` classification + substrate wording.
-- `docs/e12-condition.md` (C3) — authority-baseline reconciliation.
+- `docs/history/closeout/e12-condition.md` (C3) — authority-baseline reconciliation.
 
 ### 2.4 What was NOT changed
 
@@ -351,7 +351,7 @@ The reviewer should confirm:
 2. Review the exact final branch tip and its baseline-to-HEAD diff.
 3. **First**: verify scope — `git diff` must NOT touch any file under
    `include/sluice/async/`, `src/async/`, or `docs/spec/`.
-4. Read `docs/e10-e12-api-semantic-closure.md` end-to-end (note the
+4. Read `docs/history/closeout/e10-e12-api-semantic-closure.md` end-to-end (note the
    Corrective-2 status banner at the top and the C1–C7 changes in §14.1).
 5. For each matrix cell, open the cited `file:line` and confirm.
 6. Reproduce the verification matrix (§3.6 above) — Clang Debug + ASan ×3
@@ -360,7 +360,7 @@ The reviewer should confirm:
    corrective recommendation.
 
 The review is complete when the reviewer signs the verdict block at the top
-of `docs/e10-e12-api-semantic-closure.md` (currently marked "PASS — AUTHOR
+of `docs/history/closeout/e10-e12-api-semantic-closure.md` (currently marked "PASS — AUTHOR
 SELF-ASSESSMENT (Corrective-2 applied); INDEPENDENT RE-REVIEW REQUIRED") or
 files a REQUEST-CHANGES. Corrective-2's author self-assessment is not an
 independent PASS.

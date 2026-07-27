@@ -81,7 +81,7 @@ stealing). Non-copyable, non-movable.
 
 The internal `sluice::async::Mutex` (Clang-TSA-annotated) is a separate type
 used by the Scheduler itself. Its acquisition failure contract is fail-fast
-(`std::terminate`) — documented in `docs/async-mutex-nothrow-authority.md`
+(`std::terminate`) — documented in `docs/history/implementation-plans/async-mutex-nothrow-authority.md`
 (now at `docs/history/implementation-plans/async-mutex-nothrow-authority.md`).
 
 ## AsyncCondition (E12-D)

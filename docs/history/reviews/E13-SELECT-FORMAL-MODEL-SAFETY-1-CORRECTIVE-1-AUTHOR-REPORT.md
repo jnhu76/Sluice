@@ -133,12 +133,12 @@ Added:
 - `docs/spec/e13_select/E13SelectMultiGroupNeg.tla`
 - `docs/spec/e13_select/E13SelectMultiGroupNeg.MG1.cfg`
 - `docs/spec/e13_select/E13SelectMultiGroupNeg.restore.cfg`
-- `docs/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-CORRECTIVE-1-REVIEW-REQUEST.md`
-- `docs/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-CORRECTIVE-1-AUTHOR-REPORT.md` (this file)
+- `docs/history/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-CORRECTIVE-1-REVIEW-REQUEST.md`
+- `docs/history/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-CORRECTIVE-1-AUTHOR-REPORT.md` (this file)
 
 Deleted (was an untracked rejected PASS draft, never committed):
 
-- `docs/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-INDEPENDENT-REVIEW-1.md`
+- `docs/history/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-INDEPENDENT-REVIEW-1.md`
 
 The two pre-existing untracked files `tests/test_t3_simple.cpp` and
 `tla2tools.jar` remain untracked and unchanged.
@@ -426,7 +426,7 @@ git status --short tests/test_t3_simple.cpp tla2tools.jar  # both remain '??'
 No path under `include/`, `src/`, `tests/`, `examples/`, `benchmarks/`,
 public API, build policy, or unrelated CI appears in either diff.  The
 rejected PASS draft
-`docs/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-INDEPENDENT-REVIEW-1.md` is
+`docs/history/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-INDEPENDENT-REVIEW-1.md` is
 deleted (it was an untracked file, never committed).
 
 ## S. Residual risks

@@ -398,7 +398,7 @@ public:
 `Mutex` 边界会将其转换为进程终止（fail-fast，经 `std::terminate`）。在权威
 Scheduler 转移中，运行时无法在一次锁失败之后既能恢复用户执行又能保持所有权、
 队列成员、发布等不变量，因此可恢复异常边界的存在是不正确的。该契约记录于
-`docs/async-mutex-nothrow-authority.md`。
+`docs/history/implementation-plans/async-mutex-nothrow-authority.md`。
 
 违反 `unlock()` 所有权前置条件（解锁一个你不拥有的 `Mutex`）属于程序不变量违反
 （未定义行为），而非可恢复错误；此处的 `noexcept` 仅用于说明不存在恢复路径。
@@ -416,7 +416,7 @@ Scheduler 转移中，运行时无法在一次锁失败之后既能恢复用户�
 ## 异步同步原语 (E10–E12)
 
 异步同步原语建立在 E10 `WaitNode`/`WaitQueue` 基底与 E11 截止期/计时器集成之上。
-跨原语权威文档见 `docs/e10-e12-api-semantic-closure.md`。
+跨原语权威文档见 `docs/history/closeout/e10-e12-api-semantic-closure.md`。
 
 > **注意：** `include/sluice/async/mutex.hpp` 中的 `Mutex` 是 Scheduler 内部线程阻塞锁
 > （TSA 注解的 `std::mutex` 包装），**不是** Fiber 挂起式 `AsyncMutex`。二者不可在
@@ -627,7 +627,7 @@ nothrow 可析构。`T` **不必**可默认构造或可移动赋值。
 `AsyncQueue<T>` v1 **没有**公开的 wait-epoch 取消 API，也**没有** `Cancelled`
 结果。`close()` 与截止期到期是 Queue 状态机的独立原因（`closed` / `expired`
 状态），**不是**取消。`AsyncQueue<T>` 上没有 `cancel(WaitNode&)`；按 wait-epoch
-的取消推迟到未来的权威机构（见 `docs/e10-e12-api-semantic-closure.md` D4）。
+的取消推迟到未来的权威机构（见 `docs/history/closeout/e10-e12-api-semantic-closure.md` D4）。
 
 ```cpp
 template <class T>

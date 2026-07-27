@@ -142,7 +142,7 @@ class AsyncCondition {
 };
 ```
 
-**文档**（`docs/e12-condition.md`）：全面规范，包含 12 个协议点、15 个排序保证、锁顺序图、违反不变量列表、过期表达式优先级（P1–P3）、与 Pthreads 和 C++ 标准 cv 的差异。附有跨原语对等矩阵。
+**文档**（`docs/history/closeout/e12-condition.md`）：全面规范，包含 12 个协议点、15 个排序保证、锁顺序图、违反不变量列表、过期表达式优先级（P1–P3）、与 Pthreads 和 C++ 标准 cv 的差异。附有跨原语对等矩阵。
 
 **封装**：没有公开 `WaitQueue`、`AsyncMutex`、`Scheduler` 或内部状态的引用。`cancel()` 需要 `contains_locked` 作为门，强制执行队列身份验证。
 

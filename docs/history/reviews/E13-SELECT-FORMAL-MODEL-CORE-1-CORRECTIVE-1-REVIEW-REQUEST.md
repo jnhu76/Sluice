@@ -149,7 +149,7 @@ Documentation:
 Review artifacts:
 
 - this file
-- `docs/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md`
+- `docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md`
   (baseline-binding corrections only; the `REQUEST-CHANGES` verdict is preserved)
 
 No file under `include/**`, `src/**`, `tests/**`, or any build-policy path is

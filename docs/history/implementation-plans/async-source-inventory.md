@@ -9,8 +9,8 @@ references and one-line concepts. Zig remains a design reference, never a
 dependency.
 
 This inventory feeds directly into:
-- `docs/async-problem-statement.md` (016B) — why async, for which workloads.
-- `docs/async-design-alternatives.md` (016C) — option comparison.
+- `docs/history/implementation-plans/async-problem-statement.md` (016B) — why async, for which workloads.
+- `docs/history/implementation-plans/async-design-alternatives.md` (016C) — option comparison.
 - `docs/adr/ADR-async-io-model.md` (016D) — the recommendation.
 
 ## 1. Current synchronous sluice abstractions (what exists)
@@ -48,7 +48,7 @@ buffer lifetime is its own readiness-gate item (016E).
 ## 2. Current experimental io_uring abstractions (what exists, build-gated)
 
 Namespace `sluice::experimental`, gated behind `SLUICE_HAS_LIBURING`. Documented
-in `docs/io-uring-spike.md` and `docs/io-uring-liburing-validation.md`. These are
+in `docs/history/implementation-plans/io-uring-spike.md` and `docs/io-uring-liburing-validation.md`. These are
 **experiments**, not the default backend and **not** plugged into
 `BlockingIoContext`.
 
@@ -162,13 +162,13 @@ as decisions, not defaults:
 
 ## 6. Cross-links
 
-- Why async, for which workloads: `docs/async-problem-statement.md` (016B).
-- Option comparison: `docs/async-design-alternatives.md` (016C).
+- Why async, for which workloads: `docs/history/implementation-plans/async-problem-statement.md` (016B).
+- Option comparison: `docs/history/implementation-plans/async-design-alternatives.md` (016C).
 - Decision: `docs/adr/ADR-async-io-model.md` (016D).
-- Preconditions to start implementation: `docs/async-readiness-gate.md` (016E).
-- Implementation split: `docs/async-next-jobs.md` (016F).
-- Synchronous baseline this rests on: `docs/design-io-context.md` (009).
-- io_uring spike detail: `docs/io-uring-spike.md` (013).
-- io_uring readiness gate (the *prior* gate, for the spike): `docs/io-uring-readiness-gate.md` (012D).
+- Preconditions to start implementation: `docs/history/implementation-plans/async-readiness-gate.md` (016E).
+- Implementation split: `docs/history/implementation-plans/async-next-jobs.md` (016F).
+- Synchronous baseline this rests on: `docs/history/implementation-plans/design-io-context.md` (009).
+- io_uring spike detail: `docs/history/implementation-plans/io-uring-spike.md` (013).
+- io_uring readiness gate (the *prior* gate, for the spike): `docs/history/implementation-plans/io-uring-readiness-gate.md` (012D).
 - liburing validation runbook: `docs/io-uring-liburing-validation.md` (014C).
-- Local Zig inventory (fuller): `docs/zig-std-io-source-inventory.md` (012B).
+- Local Zig inventory (fuller): `docs/history/implementation-plans/zig-std-io-source-inventory.md` (012B).

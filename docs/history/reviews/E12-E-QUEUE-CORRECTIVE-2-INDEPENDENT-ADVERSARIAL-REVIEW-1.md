@@ -71,7 +71,7 @@ and the separate B4 TLA+ formal model — none is authorized or claimed here.
 
 ### B.0 No Queue production code exists (verified)
 
-`grep -rn "AsyncQueue\|QueueItemLease\|QueueItemControl\|QueuePort\|QueueTeardownSession\|PreparedQueueTimer\|queue_runnable_head_\|QueueRunnableTicket" include/ src/ tests/ xmake.lua` returns zero hits across `include/`, `src/`, `tests/`, and `xmake.lua`. `find . -iname '*queue*' -path '*/async/*'` returns only `docs/e12-queue*.md` (design) — no header, source, or test under `async/`. The `tests/test_t3_simple.cpp` untracked file contains only an `AsyncCondition` smoke test (verified, unrelated). This matches the design's `DENIED — B2/B4 OPEN` status and the existing `docs/e12-queue-implementation-authorization.md` investigation report.
+`grep -rn "AsyncQueue\|QueueItemLease\|QueueItemControl\|QueuePort\|QueueTeardownSession\|PreparedQueueTimer\|queue_runnable_head_\|QueueRunnableTicket" include/ src/ tests/ xmake.lua` returns zero hits across `include/`, `src/`, `tests/`, and `xmake.lua`. `find . -iname '*queue*' -path '*/async/*'` returns only `docs/e12-queue*.md` (design) — no header, source, or test under `async/`. The `tests/test_t3_simple.cpp` untracked file contains only an `AsyncCondition` smoke test (verified, unrelated). This matches the design's `DENIED — B2/B4 OPEN` status and the existing `docs/history/closeout/e12-queue-implementation-authorization.md` investigation report.
 
 ### B.1 Precondition gate status (independently verified)
 
@@ -81,7 +81,7 @@ HEAD reference of `c6efa13` predates three landings).
 
 | Gate | Design claim | Independent verification | Result |
 | --- | --- | --- | --- |
-| B1 Mutex no-throw substrate | `PASS` | `include/sluice/async/mutex.hpp:54,71,81` declares `lock() noexcept`/`try_lock() noexcept`/`unlock() noexcept`; `:67-68,77-78` routes failures to `detail::async_mutex_lock_fail_fast()`; commit `be07564` ("feat(async): make Mutex acquisition fail-fast"); death tests in `tests/e12_async_mutex_death_test.cpp` landed by `e2cfe61`; independent production review at `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md` returns `PASS`. | **PASS** |
+| B1 Mutex no-throw substrate | `PASS` | `include/sluice/async/mutex.hpp:54,71,81` declares `lock() noexcept`/`try_lock() noexcept`/`unlock() noexcept`; `:67-68,77-78` routes failures to `detail::async_mutex_lock_fail_fast()`; commit `be07564` ("feat(async): make Mutex acquisition fail-fast"); death tests in `tests/e12_async_mutex_death_test.cpp` landed by `e2cfe61`; independent production review at `docs/history/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md` returns `PASS`. | **PASS** |
 | B2 Corrective-2 independent review | `OPEN` | This document is that review. | **CLOSED BY THIS REPORT** |
 | B3 Condition T25 hang audit | `PASS` | Commit `db656b5` ("test(async): make Condition T25 migration trace deterministic") rewrote `tests/e12_async_condition_test.cpp` (165 insertions / 37 deletions); `bounded_wait`/`release_for_drain`/`f_idle` now CALLED (e.g. `:1500,1506`); the determinism corrective mirrors the Mutex T19 pattern. | **PASS** |
 | B4 Queue formal model | `OPEN` | `find docs/spec -iname '*queue*'` returns zero hits; `grep -rln "QueueItemLease\|QueueTeardown" docs/spec/ scripts/` returns zero hits; no `verify-e12-queue-formal.sh` exists. | **OPEN** (correctly) |
@@ -116,7 +116,7 @@ The design's substrate claims are faithful.
 
 All probes live under `/tmp/e12e_probe/` (repo-external; not added to the
 repo). Each is a minimal stand-in matching the design's declared
-relationships from `docs/e12-queue-scheduler-integration.md` §4–§8. The
+relationships from `docs/history/implementation-plans/e12-queue-scheduler-integration.md` §4–§8. The
 design has no production code, so the probes test whether the design's
 *claimed* type structure is realizable.
 
@@ -553,7 +553,7 @@ enforces — not in a debug assertion.
 
 **F.1.1 — Forward-looking `fiber_owner_.erase` dependency (binding obligation on future implementers).**
 
-- Location: `docs/e12-queue-scheduler-integration.md` §9 lines 711-716.
+- Location: `docs/history/implementation-plans/e12-queue-scheduler-integration.md` §9 lines 711-716.
 - Claim: "Fiber completion cleanup must therefore occur after the Queue operation releases the slot."
 - Substrate fact: production `fiber_owner_` is NEVER erased today (`grep -n "fiber_owner_.erase" src/ include/` returns zero hits; the four writes at `scheduler.cpp:363,389,451,2694` only add/update entries).
 - Consequence: the §9 invariant is currently *trivially* satisfied. If a future change adds `fiber_owner_.erase(f)` on Fiber completion (e.g. for memory hygiene or to support unbounded Fiber lifetimes), it would invalidate the captured mapped-value address used by the Queue ticket unless gated on slot release. The design *prescribes* the gating ("must therefore occur after the Queue operation releases the slot") but cannot enforce it from the design alone — the gating is an implementation obligation.
@@ -567,7 +567,7 @@ clarification, not blocking.
 
 **F.2.1 — `make_prepared_queue` declared `noexcept` but described as may-throw.**
 
-- Location: `docs/e12-queue-scheduler-integration.md` §8 line 649-651.
+- Location: `docs/history/implementation-plans/e12-queue-scheduler-integration.md` §8 line 649-651.
 - Text: `static TimerRegistration make_prepared_queue(Scheduler::deadline_t) noexcept;`
 - Conflict: §8 line 683-684 says "Preparation may reserve deadline-heap capacity, emplace the list element, and throw allocation exceptions before registration." §8.1 line 632 says "`prepare_queue_timer_locked()` — may throw allocation exceptions". §11 row "timer heap reserve/list block | PREPARED preparation | G | before registration | may throw; guard rolls back".
 - Likely intent: the `noexcept` on line 650 refers to the underlying `TimerRegistration` static factory that constructs the *control block*; the may-throw path is `prepare_queue_timer_locked` (line 672-673, no `noexcept`) which performs the heap-capacity reserve / list emplace. The two are distinct functions and the design prose treats them as distinct.
@@ -576,7 +576,7 @@ clarification, not blocking.
 
 **F.2.2 — `make_active_generic` / `make_prepared_queue` return `TimerRegistration` by value, but `TimerRegistration` is non-movable in production.**
 
-- Location: `docs/e12-queue-scheduler-integration.md` §8 lines 647-651.
+- Location: `docs/history/implementation-plans/e12-queue-scheduler-integration.md` §8 lines 647-651.
 - Conflict: `include/sluice/async/timer_registration.hpp:87-88` deletes `TimerRegistration(TimerRegistration&&)` and `operator=(TimerRegistration&&)`. Returning by value would require either (NRVO) copy elision (forbidden by the deleted move ctor — NRVO does not require movability in C++17+, but the design has not stated NRVO is intended) or in-place construction.
 - Likely intent: these are factory declarations describing logical construction into the `timer_pool_` `std::list` (in-place `emplace_back`), not by-value returns. The design says (§8 line 574) "PREPARED and ACTIVE registrations occupy the same list element" — implying list-embedded construction.
 - Required clarification: state that the factories construct in-place into `timer_pool_` (returning a reference/iterator, not a value), or spell the construction as `timer_pool_.emplace_back(...)` directly.
@@ -584,7 +584,7 @@ clarification, not blocking.
 
 **F.2.3 — §10 `pop_queue_runnable_locked` does not state what happens when the own-oldest ticket's owner is no longer the current worker.**
 
-- Location: `docs/e12-queue-scheduler-integration.md` §10 lines 736-751.
+- Location: `docs/history/implementation-plans/e12-queue-scheduler-integration.md` §10 lines 736-751.
 - Observation: `find_oldest_owned_ticket_locked(current)` finds the oldest ticket whose stored owner-slot value points to `&current`. A steal may have already rewritten that slot to a different worker, so the ticket is no longer "owned" by `current`. The pseudocode returns the first ticket that still points to `current`, which is correct. But the prose does not explicitly say what `find_oldest_owned_ticket_locked` returns when the current worker has NO still-owned ticket (the answer is implicit: returns null, falls through to the global head path).
 - Required clarification: spell out the null-return fall-through, and confirm the "own-oldest" preference is over tickets whose CURRENT (post-steal) owner is the current worker, not tickets whose ADMISSION owner was the current worker.
 - Independent verdict: the binding semantics at §10 lines 754-766 are unambiguous and correct ("own-oldest, otherwise global-oldest; admission owner's active/inactive state never affects eligibility"). Only the helper pseudocode could be clearer.
@@ -612,7 +612,7 @@ future reviewer does not re-litigate):
 - **33/33 counterexamples** dispositioned; every one is BLOCKED by type structure, access control, lock order, state machine, or testable runtime structure — not by debug assertions.
 - **No design defect blocks the Corrective-2 design authority.** The single BLOCKING-class observation is a binding implementation obligation (the §9 `fiber_owner_.erase` gating), which the design correctly prescribes; it gates implementation, not the design under review. The three MINOR wording items are clarifications, not corrections.
 
-The design authority under review (`E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2`, `E12-E-QUEUE-STATE-MACHINE-DESIGN-CORRECTIVE-2`, and the Queue-relevant sections of `docs/e12-queue.md` and `docs/e12-sync-primitives-plan.md` §8) is independently verified sound. Implementation remains denied pending B4 (the Queue TLA+ formal model).
+The design authority under review (`E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2`, `E12-E-QUEUE-STATE-MACHINE-DESIGN-CORRECTIVE-2`, and the Queue-relevant sections of `docs/history/closeout/e12-queue.md` and `docs/history/implementation-plans/e12-sync-primitives-plan.md` §8) is independently verified sound. Implementation remains denied pending B4 (the Queue TLA+ formal model).
 
 ```text
 E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1: PASS

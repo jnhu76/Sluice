@@ -10,7 +10,7 @@ ASYNC-MUTEX-NOTHROW-AUTHORITY-1-INDEPENDENT-REVIEW-1
 > and runtime regression claims; the working tree is byte-identical to review
 > start (§K).
 
-The authority document under review is `docs/async-mutex-nothrow-authority.md`.
+The authority document under review is `docs/history/implementation-plans/async-mutex-nothrow-authority.md`.
 The author's own `PASS` stamp and the binding Queue documents' `E12-E
 IMPLEMENTATION AUTHORIZATION: DENIED` are treated as claims, not evidence.
 
@@ -309,7 +309,7 @@ fail-fast authority?
 
 ### F.1 The Queue design's own `CommitGap` (binding Corrective-2)
 
-`docs/e12-queue-scheduler-integration.md`:
+`docs/history/implementation-plans/e12-queue-scheduler-integration.md`:
 
 * §11 "Locking, lifetime, allocation, and exception boundaries" (`:789-826`):
   ```
@@ -572,7 +572,7 @@ Even with this review's PASS, the implementation task must satisfy:
 3. **B3** — `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1` closed.
    *Separate required task.* (In this review's run, `e12_async_condition_test`
    passed, including the T25 case — but the authority
-   `docs/e12-queue-implementation-authorization.md:247-296` documents the
+   `docs/history/closeout/e12-queue-implementation-authorization.md:247-296` documents the
    hang as nondeterministic coordinator spin; one green run does not close
    the audit.)
 4. **B4** — Queue TLA+ formal model. *Separate required task; no `.tla`

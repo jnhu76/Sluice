@@ -6,7 +6,7 @@
 
 **Pre-Reaudit Hardening**: `E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-PRE-REAUDIT-HARDENING-1`
 
-**Corrective Authority**: `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md`
+**Corrective Authority**: `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md`
 
 ---
 

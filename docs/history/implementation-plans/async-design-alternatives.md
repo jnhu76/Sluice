@@ -254,8 +254,8 @@ io_uring-native (6)        : accepted as ONE backend behind the seam, validated
 
 ## 6. Cross-links
 
-- Inventory: `docs/async-source-inventory.md` (016A).
-- Problem statement: `docs/async-problem-statement.md` (016B).
+- Inventory: `docs/history/implementation-plans/async-source-inventory.md` (016A).
+- Problem statement: `docs/history/implementation-plans/async-problem-statement.md` (016B).
 - Decision: `docs/adr/ADR-async-io-model.md` (016D).
-- Preconditions: `docs/async-readiness-gate.md` (016E).
-- Implementation split: `docs/async-next-jobs.md` (016F).
+- Preconditions: `docs/history/implementation-plans/async-readiness-gate.md` (016E).
+- Implementation split: `docs/history/implementation-plans/async-next-jobs.md` (016F).

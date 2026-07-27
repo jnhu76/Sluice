@@ -359,7 +359,7 @@ existing production code (E10–E12). It produces architecture documents only;
 | `docs/e13-select-locking-and-publication.md` | Central claim CAS + lock matrix + single publication |
 | `docs/e13-select-production-test-plan.md` | Positive + negative test matrix, seams, P1–P9 split |
 | `docs/e13-select-formal-production-mapping.md` | Formal action → planned C++ function table |
-| `docs/reviews/E13-SELECT-PRODUCTION-PREPARATION-1-REVIEW-REQUEST.md` | Independent review request |
+| `docs/history/reviews/E13-SELECT-PRODUCTION-PREPARATION-1-REVIEW-REQUEST.md` | Independent review request |
 
 PR #19 does not modify any file in this directory. The formal model is the
 authority against which the production mapping is checked by inspection.

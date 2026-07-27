@@ -22,8 +22,8 @@ jobs below have been implemented and are green (52/52 tests pass).
 > by this notice.** All async implementation jobs are now complete on
 > `feat/async-runtime`.
 
-The sync-first gate (`docs/sync-before-async-readiness-gate.md`) is **GREEN**.
-The async readiness gate (`docs/async-readiness-gate.md`) is **GREEN**.
+The sync-first gate (`docs/history/closeout/sync-before-async-readiness-gate.md`) is **GREEN**.
+The async readiness gate (`docs/history/implementation-plans/async-readiness-gate.md`) is **GREEN**.
 
 Once the gate is green, the async jobs proceed in the order below, and async
 bench (job 022) MUST compare against the engineered concurrent W1–W4 blocking
@@ -76,7 +76,7 @@ Why this order:
   real backend to compare against before the gated uring one.
 
 A job may only start when its predecessors' acceptance criteria are met and the
-readiness gate (`docs/async-readiness-gate.md`, 016E) items it depends on are
+readiness gate (`docs/history/implementation-plans/async-readiness-gate.md`, 016E) items it depends on are
 closed.
 
 Conventions for every card:
@@ -373,8 +373,8 @@ exists first.
 **Goal.** A microbench harness for async workloads W1–W4 (016B) that compares
 Fake / ThreadPool / Uring backends against the blocking baseline, producing
 **workload-specific** evidence (ADR §13 Phase 8; gate item 8). Reuses the
-existing bench framework (`bench/`, `docs/bench-methodology.md`,
-`docs/bench-decision-matrix.md`).
+existing bench framework (`bench/`, `docs/history/implementation-plans/bench-methodology.md`,
+`docs/history/implementation-plans/bench-decision-matrix.md`).
 
 **Non-goals.**
 - No universal performance claim (ADR R6; 016B C9).
@@ -409,16 +409,16 @@ existing bench framework (`bench/`, `docs/bench-methodology.md`,
 
 ## Cross-links
 
-- ⛔ **Sync-first gate (BLOCKS all jobs below until GREEN):** `docs/sync-before-async-readiness-gate.md` (016G).
-- Sync-first job cards (must complete first): `docs/sync-io-next-jobs.md` (017S–023S).
-- Sync gap audit (why async is blocked): `docs/sync-io-model-gap-audit.md` (016G).
+- ⛔ **Sync-first gate (BLOCKS all jobs below until GREEN):** `docs/history/closeout/sync-before-async-readiness-gate.md` (016G).
+- Sync-first job cards (must complete first): `docs/history/implementation-plans/sync-io-next-jobs.md` (017S–023S).
+- Sync gap audit (why async is blocked): `docs/history/closeout/sync-io-model-gap-audit.md` (016G).
 - ADR: `docs/adr/ADR-async-io-model.md` (016D).
-- Inventory: `docs/async-source-inventory.md` (016A).
-- Problem statement: `docs/async-problem-statement.md` (016B) — defines W1–W5.
-- Alternatives: `docs/async-design-alternatives.md` (016C).
-- Readiness gate (the async-side gate, after the sync-first gate): `docs/async-readiness-gate.md` (016E).
-- io_uring spike (reference point for 020B): `docs/io-uring-spike.md` (013).
+- Inventory: `docs/history/implementation-plans/async-source-inventory.md` (016A).
+- Problem statement: `docs/history/implementation-plans/async-problem-statement.md` (016B) — defines W1–W5.
+- Alternatives: `docs/history/implementation-plans/async-design-alternatives.md` (016C).
+- Readiness gate (the async-side gate, after the sync-first gate): `docs/history/implementation-plans/async-readiness-gate.md` (016E).
+- io_uring spike (reference point for 020B): `docs/history/implementation-plans/io-uring-spike.md` (013).
 - liburing validation runbook (020B follows this): `docs/io-uring-liburing-validation.md` (014C).
 - Blocking bench methodology (022 extends this; async bench compares against the
-  engineered W1–W4 rows from sync-first 022S/023S): `docs/bench-methodology.md`,
-  `docs/bench-decision-matrix.md`.
+  engineered W1–W4 rows from sync-first 022S/023S): `docs/history/implementation-plans/bench-methodology.md`,
+  `docs/history/implementation-plans/bench-decision-matrix.md`.

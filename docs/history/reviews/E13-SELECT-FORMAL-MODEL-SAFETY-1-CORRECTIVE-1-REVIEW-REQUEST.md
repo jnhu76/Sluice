@@ -64,7 +64,7 @@ The corrective only edits files under:
 
 - `docs/spec/e13_select/**`
 - `docs/formal/**`
-- `docs/reviews/**`
+- `docs/history/reviews/**`
 - `tools/formal/**`
 
 ## C. Original review disposition

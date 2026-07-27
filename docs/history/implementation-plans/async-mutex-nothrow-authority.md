@@ -11,7 +11,7 @@
 > authorize a Queue production change. E12-E Queue remains implementation-
 > denied at the Queue gate level (B2/B4 open), but this substrate's own
 > independent production implementation review has now passed:
-> `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
+> `docs/history/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
 > (commit `15dc9b4`). The author's self-assessment that production
 > implementation landed is recorded in
 > `docs/history/closeout/async-mutex-nothrow-implementation.md`; the independent review

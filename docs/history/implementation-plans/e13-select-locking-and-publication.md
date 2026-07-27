@@ -472,7 +472,7 @@ via the Event scan; the caller Fiber and owner are read from the group, not
 from `g_worker` (which is null on an external thread).
 `route_runnable_locked` handles the `owner == nullptr` case (only possible if
 the group was admitted with a null owner, which is a caller contract violation
-— see `docs/design/e13-select-public-api.md` §4.11) via `pending_spawn_` routing,
+— see `docs/history/implementation-plans/e13-select-public-api.md` §4.11) via `pending_spawn_` routing,
 exactly as for ordinary external-thread wakes (`scheduler.cpp:910+`).
 
 ### 5.4 Inline vs suspended: the publication branch

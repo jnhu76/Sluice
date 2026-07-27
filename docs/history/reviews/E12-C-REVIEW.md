@@ -496,5 +496,5 @@ The historical review verdicts and Corrective-1 through Corrective-4 records
 above remain preserved. This block records the final governance effect of the
 independently completed migration/data-race micro-review. It does not
 predetermine the status of E12-D, which was closed by its own independent
-review artifact (`docs/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md`).
+review artifact (`docs/history/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md`).
 

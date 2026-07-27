@@ -497,7 +497,7 @@ E11 NEG-5 与 Event NEG-EVENT-2 的完整当前/baseline TLC 输出已保存在�
 | R-C2-7 E13 Select contract realization | OPEN-NON-BLOCKING | contract 已正确记录，实际设计仍需 parent/group claim、commit ordering、same-Scheduler first scope；未开始实现。 |
 | R-C2-8 Corrective-2 independent re-review | OPEN-BLOCKING | 同一主体不能把自己的修复判为 independent PASS。 |
 | R2 stale AsyncCondition formal evidence | CLOSED | fresh AsyncCondition script exit 0，包括所有 negative/reachability/wrong-property/compile probes。 |
-| R5 stale plan ordering/status | CLOSED | `docs/async-runtime-plan.md` 实文与 dependency trunk/status 对齐。 |
+| R5 stale plan ordering/status | CLOSED | `docs/history/implementation-plans/async-runtime-plan.md` 实文与 dependency trunk/status 对齐。 |
 
 ## J. Final closure decision
 

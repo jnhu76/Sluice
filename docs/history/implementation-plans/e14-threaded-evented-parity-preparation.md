@@ -107,10 +107,10 @@ FORMAL MODEL CHANGES: FORBIDDEN by this task
 COMMIT / PUSH / PR:   FORBIDDEN by this task
 ```
 
-This document writes only to `docs/design/e14-threaded-evented-parity-preparation.md`,
-`docs/reviews/E14-...-REVIEW-REQUEST.md`, and (only if supported by merged
+This document writes only to `docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md`,
+`docs/history/reviews/E14-...-REVIEW-REQUEST.md`, and (only if supported by merged
 as-built evidence) a minimal status/link correction to
-`docs/async-runtime-plan.md`. It does not modify `include/**`, `src/**`,
+`docs/history/implementation-plans/async-runtime-plan.md`. It does not modify `include/**`, `src/**`,
 `tests/**`, `scripts/**`, `xmake.lua`, `.github/**`, `README.md`,
 `docs/api-reference*.md`, or any formal model.
 
@@ -3473,13 +3473,13 @@ Verification gates (post review follow-up):
   D-E14-3) implemented and verified. Gates: Clang Debug 105/105, Release
   105/105, ASan/UBSan 105/105, TSan 105/105.
 - Authority: `AGENTS.md`, `docs/adr/ADR-execution-model.md`,
-  `docs/adr/ADR-async-io-model.md`, `docs/async-runtime-plan.md`,
-  `docs/async-runtime-construction-method.md`,
-  `docs/e10-e12-api-semantic-closure.md`,
+  `docs/adr/ADR-async-io-model.md`, `docs/history/implementation-plans/async-runtime-plan.md`,
+  `docs/history/implementation-plans/async-runtime-construction-method.md`,
+  `docs/history/closeout/e10-e12-api-semantic-closure.md`,
   `docs/history/closeout/e12-cross-primitive-terminal-audit.md`,
-  `docs/design/e13-select-production-architecture.md`.
-- Review request: `docs/reviews/E14-THREADED-EVENTED-SEMANTIC-PARITY-PREPARATION-1-REVIEW-REQUEST.md`.
+  `docs/history/implementation-plans/e13-select-production-architecture.md`.
+- Review request: `docs/history/reviews/E14-THREADED-EVENTED-SEMANTIC-PARITY-PREPARATION-1-REVIEW-REQUEST.md`.
 - Closed E12-G audit: `docs/history/closeout/e12-cross-primitive-terminal-audit.md`.
-- Closed E12 semantic closure: `docs/e10-e12-api-semantic-closure.md`.
-- E13 master: `docs/design/e13-select-production-architecture.md`.
-- Construction method (normative M1–M9): `docs/async-runtime-construction-method.md`.
+- Closed E12 semantic closure: `docs/history/closeout/e10-e12-api-semantic-closure.md`.
+- E13 master: `docs/history/implementation-plans/e13-select-production-architecture.md`.
+- Construction method (normative M1–M9): `docs/history/implementation-plans/async-runtime-construction-method.md`.

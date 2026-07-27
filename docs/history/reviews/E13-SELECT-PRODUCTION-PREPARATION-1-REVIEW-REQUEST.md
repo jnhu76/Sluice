@@ -97,7 +97,7 @@ every formal invariant in the closed PR #18 safety suite?**
 ### Highest-risk areas (please scrutinize)
 
 1. **WaitNode separation (`docs/e13-select-type-and-lifetime.md` §1).** The
-   previous preparation (`docs/e13-select-preparation.md` §4–5) proposed
+   previous preparation (`docs/history/closeout/e13-select-preparation.md` §4–5) proposed
    reusing `WaitNode::user_` with a kind tag. This task **rejects** that route
    and introduces a separate `SelectArmSlot`. The review should
    confirm the separation does not re-invent the winner state machine, timer

@@ -75,21 +75,21 @@ SHA256: 1d88162d9cdce918da143c2ad65e2f488b258b887fbe9d47111b5694e1d2507f
 
 | File | Lines |
 |------|-------|
-| `docs/e13-select-preparation.md` | 1318 |
+| `docs/history/closeout/e13-select-preparation.md` | 1318 |
 | `docs/e13-select-state-machine.md` | 314 |
 | `docs/e13-select-test-plan.md` | 429 |
-| `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1-REVIEW-REQUEST.md` | 197 |
+| `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1-REVIEW-REQUEST.md` | 197 |
 
 ### Existing authorities reviewed
 
 | File | Classification |
 |------|---------------|
-| `docs/e10-e12-api-semantic-closure.md` (D10) | Binding |
-| `docs/e12-event.md` | Binding |
-| `docs/e12-semaphore.md` | Binding |
-| `docs/e12-async-mutex.md` | Binding |
-| `docs/e12-condition.md` | Binding |
-| `docs/e12-queue.md` | Contextual |
+| `docs/history/closeout/e10-e12-api-semantic-closure.md` (D10) | Binding |
+| `docs/history/closeout/e12-event.md` | Binding |
+| `docs/history/closeout/e12-semaphore.md` | Binding |
+| `docs/history/closeout/e12-async-mutex.md` | Binding |
+| `docs/history/closeout/e12-condition.md` | Binding |
+| `docs/history/closeout/e12-queue.md` | Contextual |
 
 ### Source code sampled
 
@@ -850,7 +850,7 @@ $ git diff --name-status be70fdec...HEAD
 (no output -- HEAD == master base)
 ```
 
-Only the review artifact (`docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md`)
+Only the review artifact (`docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md`)
 was created by this review. No other files were modified.
 
 ---

@@ -118,9 +118,5 @@ bug-free.
 
 | Topic | Document |
 |-------|----------|
-| Testing strategy | `docs/verification/testing-strategy.md` *(not yet created)* |
-| Fuzzing strategy | `docs/verification/fuzzing-strategy.md` *(not yet created)* |
-| Sanitizer matrix | `docs/verification/sanitizer-matrix.md` *(not yet created)* |
-| Mutation testing | `docs/verification/mutation-testing.md` *(not yet created)* |
 | Formal models | `docs/spec/` |
 | io_uring validation | `docs/history/archive/liburing-validation-2026-07-03.md` |

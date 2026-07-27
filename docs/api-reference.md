@@ -405,7 +405,7 @@ the `Mutex` boundary converts it to process termination (fail-fast via
 failure while preserving ownership, queue-membership, and publication
 invariants inside an authoritative Scheduler transition, so a recoverable
 exception edge would be unsound. This contract is recorded in
-`docs/async-mutex-nothrow-authority.md`.
+`docs/history/implementation-plans/async-mutex-nothrow-authority.md`.
 
 A violated `unlock()` ownership precondition (unlocking a `Mutex` you do not
 own) is a program invariant violation (undefined behavior), not a recoverable
@@ -427,7 +427,7 @@ platforms; it is limited to the platforms and compilers actually verified
 ## Async Synchronization (E10–E12)
 
 The async synchronization primitives are built on the E10 `WaitNode`/`WaitQueue` substrate
-and the E11 deadline/timer integration. See `docs/e10-e12-api-semantic-closure.md` for the
+and the E11 deadline/timer integration. See `docs/history/closeout/e10-e12-api-semantic-closure.md` for the
 cross-primitive authority.
 
 ### `sluice::async::WaitOutcome`
@@ -644,7 +644,7 @@ or move-assignable.
 state-machine causes (`closed` / `expired` statuses), not cancellation. There
 is no `cancel(WaitNode&)` on `AsyncQueue<T>`; per-wait-epoch cancellation is
 deferred to a future authority (see
-`docs/e10-e12-api-semantic-closure.md` D4).
+`docs/history/closeout/e10-e12-api-semantic-closure.md` D4).
 
 ```cpp
 template <class T>

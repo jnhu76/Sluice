@@ -199,7 +199,7 @@ PRODUCTION IMPLEMENTATION: DENIED
 ```
 
 The corrective diff modified this historical file
-(`docs/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md`), so
+(`docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md`), so
 its diff was inspected line-by-line to confirm the verdict was **not** rewritten
 to PASS. The changes are baseline-binding recordkeeping only:
 
@@ -617,7 +617,7 @@ SCOPE: CLEAN — no production/test/build/API change; no PR #18 content.
 
 ### P2-1 — Documentation: corrective-HEAD SHA not recorded in §F of the review request
 
-- Location: `docs/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-CORRECTIVE-1-REVIEW-REQUEST.md:31`
+- Location: `docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-CORRECTIVE-1-REVIEW-REQUEST.md:31`
   (§A says "The exact SHA is recorded in the author's final self-assessment")
   vs `...:203–247` (§F "Self-assessment verdict" contains only verdict labels,
   no SHA).

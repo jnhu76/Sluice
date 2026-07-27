@@ -64,7 +64,7 @@
 **文件：**
 - 创建：`tools/formal/verify-e13-select-core.sh`
 - 创建：`docs/spec/e13_select/README.md`
-- 创建：`docs/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-REVIEW-REQUEST.md`
+- 创建：`docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-REVIEW-REQUEST.md`
 
 - [x] formal gate 使用 fresh `-metadir`，校验三个正向模型 PASS、两级 refinement PROPERTY PASS、每个 R1-R12 命中正确 named predicate。
 - [x] README 记录三层 seam、refinement mapping、变量/action 映射、TLC version/states/depth/runtime、抽象边界与 PR #18 延后项。

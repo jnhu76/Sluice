@@ -1,6 +1,6 @@
 # E13 Select Formal Safety 实现计划 (PR #18)
 
-> **面向 AI 代理的工作者：** 在 `feat/e13-select-formal-safety` 分支内施工；基线权限 commit 为 `57435a913ad6d679df19a17f17f1c36e711dfc60`（PR #17 合并）。严禁修改、删除、暂存或提交预存未追踪文件 `tests/test_t3_simple.cpp` 与 `tla2tools.jar`。仅允许新增/修改 `docs/spec/e13_select/**`、`docs/formal/**`、`docs/reviews/**`、`tools/formal/**`。
+> **面向 AI 代理的工作者：** 在 `feat/e13-select-formal-safety` 分支内施工；基线权限 commit 为 `57435a913ad6d679df19a17f17f1c36e711dfc60`（PR #17 合并）。严禁修改、删除、暂存或提交预存未追踪文件 `tests/test_t3_simple.cpp` 与 `tla2tools.jar`。仅允许新增/修改 `docs/spec/e13_select/**`、`docs/formal/**`、`docs/history/reviews/**`、`tools/formal/**`。
 
 **目标：** 在 PR #17 三层正式模型基础上，加入分层 safety invariants、focused negative models、non-vacuity evidence、bounded multi-group non-interference、可重复 source-safe verifier，闭合 E13 Select 的安全基础。不写任何生产 C++。
 
@@ -89,8 +89,8 @@
 - [x] `docs/spec/e13_select/NON_VACUITY.md`：20 witnesses 矩阵。
 - [x] `docs/spec/e13_select/REFINEMENT.md`：mapping 表 + X cfgs。
 - [x] `docs/spec/e13_select/EVIDENCE_SAFETY.md`：source-safety 与 reproducibility。
-- [x] `docs/design/formal/e13-select-formal-safety-design.md`：架构与边界。
-- [x] `docs/design/formal/e13-select-formal-safety-plan.md`（本文件）。
+- [x] `docs/history/formal-design/e13-select-formal-safety-design.md`：架构与边界。
+- [x] `docs/history/formal-design/e13-select-formal-safety-plan.md`（本文件）。
 
 ## 任务 AA：README status
 
@@ -98,7 +98,7 @@
 
 ## 任务 Z/AB：review request
 
-- [x] `docs/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-REVIEW-REQUEST.md`：按 A-O 章节记录 baseline、范围、证据、残余风险。
+- [x] `docs/history/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-REVIEW-REQUEST.md`：按 A-O 章节记录 baseline、范围、证据、残余风险。
 
 ## 任务 AD/AF/AG：final validation
 

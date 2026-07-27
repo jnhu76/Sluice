@@ -95,8 +95,8 @@ Committed PR task files:
 
 - `docs/formal/e13-select-formal-core-design.md`
 - `docs/formal/e13-select-formal-core-plan.md`
-- `docs/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md`
-- `docs/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-REVIEW-REQUEST.md`
+- `docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md`
+- `docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-REVIEW-REQUEST.md`
 - `docs/spec/e13_select/*.tla`
 - `docs/spec/e13_select/*.cfg`
 - `docs/spec/e13_select/README.md`
@@ -112,7 +112,7 @@ Pre-existing local files observed separately:
 No candidate file was found under `include/**`, `src/**`, the public API, or
 production build policy. No candidate negative model was added. The formal
 candidate is confined to `docs/formal/`, `docs/spec/e13_select/`,
-`docs/reviews/`, and `tools/formal/`.
+`docs/history/reviews/`, and `tools/formal/`.
 
 `tests/test_t3_simple.cpp` is an untracked AsyncCondition smoke test, not E13
 Select evidence. Its filesystem birth/modify time is 2026-07-15, before the

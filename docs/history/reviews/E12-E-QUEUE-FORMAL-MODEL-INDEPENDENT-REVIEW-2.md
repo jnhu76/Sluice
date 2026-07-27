@@ -16,10 +16,10 @@ E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2
 > file under `docs/spec/e12_queue/`, any Queue design doc, or any production
 > path was modified. Nothing was committed.
 >
-> Authority obeyed: `docs/e12-queue-state-machine.md` (Corrective-2 binding
-> semantics), `docs/e12-queue.md` (binding decisions above the historical
-> marker), `docs/e12-queue-scheduler-integration.md`, and the B2 review
-> (`docs/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`).
+> Authority obeyed: `docs/history/implementation-plans/e12-queue-state-machine.md` (Corrective-2 binding
+> semantics), `docs/history/closeout/e12-queue.md` (binding decisions above the historical
+> marker), `docs/history/implementation-plans/e12-queue-scheduler-integration.md`, and the B2 review
+> (`docs/history/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`).
 
 ---
 
@@ -464,7 +464,7 @@ This is honest and correct. `grep` for the old mis-attribution
 ("corollary of monotonicity", "covered by ClosedAbsorbing" for teardown)
 returns zero hits. The B1 description (line 124) is correctly scoped to
 "`queueState` is monotonic Open->Closed (close is absorbing)". The
-authority (`docs/e12-queue-state-machine.md` §1.1 lines 47-57) explicitly
+authority (`docs/history/implementation-plans/e12-queue-state-machine.md` §1.1 lines 47-57) explicitly
 separates the two axes; the README now matches it. **RESOLVED.**
 
 ### G.2 F.2.2 (MAJOR) — Non-existent "production test suite": RESOLVED

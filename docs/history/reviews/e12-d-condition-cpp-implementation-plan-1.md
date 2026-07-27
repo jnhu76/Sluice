@@ -17,7 +17,7 @@ E12-D-CONDITION-CPP-IMPLEMENTATION-PLAN-ONLY-1:
 READY-FOR-APPROVAL
 ```
 
-Rationale: the closed TLA+ formal gate, the frozen preparation spec (`docs/e12-condition.md`,
+Rationale: the closed TLA+ formal gate, the frozen preparation spec (`docs/history/closeout/e12-condition.md`,
 policy register C-H1..C-H10 CLOSED, frozen public API, T0–T32 test list), and the existing
 E12-C substrate together provide a complete, code-evidenced implementation frontier. The one
 load-bearing missing internal seam — a caller-holds-`global_mtx_` variant of the Mutex
@@ -546,7 +546,7 @@ FIFO head, kind-agnostic (C-H8, C9/C10). No new grant protocol is introduced.
 | `tests/e12_async_condition_authority_probe.cpp` (NEW) | Seal the public API (F-E5) | New negative compile probe mirroring `e12_async_mutex_authority_probe.cpp`: attempts `cond.wait_queue()`, `cond.mutex()`, `cond.waiting_count()`, `cond.notify_n()`, `cond.reacquire_node()`, and `scheduler.wake_wait_one(cond.wait_queue())` — all must NOT compile. | — (new file) | compiled (expecting FAILURE) by the extended verify script |
 | `xmake.lua` | Register the new test target | Add `target("e12_async_condition_test")` block mirroring `e12_async_mutex_test` (xmake.lua:972-984): `add_deps("sluice_core","sluice_async_internal_testing")`, `add_includedirs("include","tests")`, `set_group("test")`, `add_tests(...)`. The authority probe is NOT a target (compiled by the verify script, mirroring the mutex pattern). | Existing targets, build modes, sanitizer config, TSA flags | `xmake run e12_async_condition_test` |
 | `scripts/verify-e12-async-condition-formal.sh` | Add the compile-probe authority gate (F-E5) | Add a `compile_probe_gate` mirroring `scripts/verify-e12-async-mutex-formal.sh:210-230`, compiling `tests/e12_async_condition_authority_probe.cpp` with `$CXX -std=c++20 -fsyntax-only -I include` and asserting FAILURE on the sealed names. Conditionally enforced only if the probe file exists. | The TLA+/TLC gate list (already 0-ed), the verdict logic, the jar handling | the script itself |
-| `docs/e12-condition.md` | (NO CHANGE) | The preparation spec is CLOSED; this plan does not modify it. | — | — |
+| `docs/history/closeout/e12-condition.md` | (NO CHANGE) | The preparation spec is CLOSED; this plan does not modify it. | — | — |
 
 **Files explicitly NOT touched:** `include/sluice/async/event.hpp`, `semaphore.hpp`,
 `wait_node.hpp`, `wait_queue.hpp`, `fiber.hpp`, `mutex.hpp`, `thread_annotations.hpp`,
@@ -849,6 +849,6 @@ AWAITING EXTERNAL PLAN APPROVAL
 
 No production code, test code, existing documentation, or worktree state was modified in this
 task. The single artifact produced is this plan file
-(`docs/reviews/e12-d-condition-cpp-implementation-plan-1.md`), which is the explicitly
+(`docs/history/reviews/e12-d-condition-cpp-implementation-plan-1.md`), which is the explicitly
 permitted output. The worktree remains clean at `4501585` on `feat/e12-D-condition-formal`.
 Implementation awaits external approval of this plan.

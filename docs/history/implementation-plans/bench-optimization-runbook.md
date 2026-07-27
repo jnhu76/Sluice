@@ -55,7 +55,7 @@ Only if all three hold can a cell graduate to a candidate rule.
 
 - **Do nothing** if no cell shows a stable, workload-relevant, environment-noted
   win that is large enough to matter for a real workload.
-- **Document a candidate rule** in `docs/bench-decision-matrix.md` with a
+- **Document a candidate rule** in `docs/history/implementation-plans/bench-decision-matrix.md` with a
   link to the CSV run, the host/filesystem, and the magnitude. Phrase it as
   "observed", never "always".
 - **Never implement** an optimization based on a single run or a single cell.

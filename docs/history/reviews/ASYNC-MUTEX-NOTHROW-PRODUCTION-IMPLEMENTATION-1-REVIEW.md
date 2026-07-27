@@ -19,7 +19,7 @@ ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-INDEPENDENT-REVIEW-1
 
 The implementation under review is the four-commit chain on
 `e12-e-queue-production-impl` (see §B). The author's `PASS — AUTHOR
-SELF-ASSESSMENT` stamp in `docs/async-mutex-nothrow-implementation.md` is
+SELF-ASSESSMENT` stamp in `docs/history/closeout/async-mutex-nothrow-implementation.md` is
 treated as a claim, not evidence.
 
 ---
@@ -100,10 +100,10 @@ summary.
 
 | Commit | Files | Scope verdict |
 |---|---|---|
-| 0 `629617c` | `docs/reviews/ASYNC-MUTEX-NOTHROW-AUTHORITY-1-REVIEW.md` (+615) | **CLEAN** — design review only. |
+| 0 `629617c` | `docs/history/reviews/ASYNC-MUTEX-NOTHROW-AUTHORITY-1-REVIEW.md` (+615) | **CLEAN** — design review only. |
 | 1 `be07564` | `include/sluice/async/detail/fail_fast.hpp` (new), `include/sluice/async/mutex.hpp` (+44/-3), `src/async/fail_fast.cpp` (new) | **CLEAN** — only the production fail-fast realization. `mutex.hpp` adds `noexcept`, the `try/catch -> async_mutex_lock_fail_fast()` body, and the dual catch+noexcept header comment. **No** Queue code, **no** `AsyncMutex` change, **no** `inbox_mtx` change, **no** Scheduler lock-order change, **no** `LockGuard` exception-spec change, **no** unrelated cleanup, **no** public API surface added. |
 | 2 `e2cfe61` | `include/sluice/async/detail/mutex_test_seam.hpp` (new), `include/sluice/async/mutex.hpp` (+14), `src/async/mutex_test_seam.cpp` (new), `tests/async_test_control.hpp` (+struct MutexFailSeam), `tests/death_test_runner_posix.hpp` (new), `tests/e12_async_mutex_death_test.cpp` (new), `tests/e12_async_mutex_nothrow_authority_probe.cpp` (new), `xmake.lua` (+47) | **CLEAN** — only the internal-testing failure seam, the noexcept probe, the POSIX death-test harness, T1–T4, and the two xmake targets that gate them. The `mutex.hpp` edit is purely the `#if defined(SLUICE_ASYNC_INTERNAL_TESTING) detail::maybe_inject_mutex_failure(...); #endif` call sites inside the existing `try {}` blocks (verified by `git show e2cfe61 -- include/sluice/async/mutex.hpp`); no production behavior change when the macro is undefined. |
-| 3 `e4b08b1` | `docs/api-reference.md`, `docs/api-reference-zh.md`, `docs/async-mutex-nothrow-authority.md`, `docs/async-mutex-nothrow-implementation.md`, `docs/changelog.md` | **CLEAN** — docs + implementation evidence only. |
+| 3 `e4b08b1` | `docs/api-reference.md`, `docs/api-reference-zh.md`, `docs/history/implementation-plans/async-mutex-nothrow-authority.md`, `docs/history/closeout/async-mutex-nothrow-implementation.md`, `docs/changelog.md` | **CLEAN** — docs + implementation evidence only. |
 
 ### Scope-pollution negative checks
 
@@ -563,7 +563,7 @@ substrate" with the same bounded ABI note. No overclaim found.
 
 ### H.4 Authority status
 
-`docs/async-mutex-nothrow-authority.md:5-17` records:
+`docs/history/implementation-plans/async-mutex-nothrow-authority.md:5-17` records:
 
 ```text
 Design status:       PASS — INDEPENDENT REVIEW REQUIRED
@@ -610,7 +610,7 @@ e12_async_mutex_death_test, e12_async_mutex_nothrow_authority_probe
 `e12_async_condition_test` (including `e12_cond_t25_migration_condition_reacquire`)
 passed in full on Clang Debug and Clang Release in this review's independent
 runs. T25 is the documented nondeterministic coordinator-spin case
-(`docs/e12-queue-implementation-authorization.md`, B3); a single green run
+(`docs/history/closeout/e12-queue-implementation-authorization.md`, B3); a single green run
 does **not** close `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1`. The
 Mutex change did not add a timeout, skip, or weaken any Condition assertion.
 

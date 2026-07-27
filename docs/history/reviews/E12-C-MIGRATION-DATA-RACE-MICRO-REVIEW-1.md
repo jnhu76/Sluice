@@ -31,7 +31,7 @@ T19 file identical on master and review/e12-B-Semaphore branch.
 
 ## C. Historical-artifact reconstruction
 
-The Corrective-4 record in `docs/reviews/E12-C-REVIEW.md` §L correctly describes four iterative correctives. Defects closed by each:
+The Corrective-4 record in `docs/history/reviews/E12-C-REVIEW.md` §L correctly describes four iterative correctives. Defects closed by each:
 
 | Corrective | Defect closed |
 |---|---|

@@ -68,4 +68,4 @@ honored).
 - Durability model: `docs/sync-durability-model.md`.
 - W4 multi-stream baseline: `docs/results/sync-w1-w4-baseline.md`.
 - Bench target: `bench/w4_durability_bench.cpp`.
-- Job: `docs/sync-io-next-jobs.md` (020S).
+- Job: `docs/history/implementation-plans/sync-io-next-jobs.md` (020S).

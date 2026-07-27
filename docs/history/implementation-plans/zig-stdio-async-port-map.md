@@ -8,13 +8,13 @@ and one-line signatures only — **no Zig code is copied**; Zig remains a design
 reference, never a build/runtime dependency (xmake.lua:1-2).
 
 This document supersedes the design-level inventory/parity notes in
-`docs/zig-std-io-source-inventory.md` (012B) and `docs/zig-std-io-parity-audit.md`
+`docs/history/implementation-plans/zig-std-io-source-inventory.md` (012B) and `docs/history/implementation-plans/zig-std-io-parity-audit.md`
 (012C) **for the async execution layer**. Those docs predate the async
 foundation (jobs 017–022) and describe the MVP-era blocking-only baseline; they
 remain accurate for the blocking Reader/Writer/File layer but understate the
 Zig async model. The backend parity audit that consumes this map is
-`docs/async-backend-parity.md` (023B). The job-card sequence built from it is
-`docs/zig-stdio-migration-jobs.md` (023C).
+`docs/history/closeout/async-backend-parity.md` (023B). The job-card sequence built from it is
+`docs/history/implementation-plans/zig-stdio-migration-jobs.md` (023C).
 
 ## License / attribution
 
@@ -499,11 +499,11 @@ the order in which cppio must migrate to preserve Zig semantics faithfully.
 
 ## F. Cross-links
 
-- Backend parity audit (consumes §D, decides A/B/C): `docs/async-backend-parity.md` (023B).
-- Job-card sequence (built from §E): `docs/zig-stdio-migration-jobs.md` (023C).
+- Backend parity audit (consumes §D, decides A/B/C): `docs/history/closeout/async-backend-parity.md` (023B).
+- Job-card sequence (built from §E): `docs/history/implementation-plans/zig-stdio-migration-jobs.md` (023C).
 - Async ADR (the accepted L1 model): `docs/adr/ADR-async-io-model.md` (016D).
 - Async source inventory (the design-level inventory this extends):
-  `docs/async-source-inventory.md` (016A).
-- Async next jobs (the 017-022 sequence, all GREEN): `docs/async-next-jobs.md` (016F).
+  `docs/history/implementation-plans/async-source-inventory.md` (016A).
+- Async next jobs (the 017-022 sequence, all GREEN): `docs/history/implementation-plans/async-next-jobs.md` (016F).
 - Earlier (MVP-era) Zig inventory/parity (blocking-only, superseded here for
-  async): `docs/zig-std-io-source-inventory.md` (012B), `docs/zig-std-io-parity-audit.md` (012C).
+  async): `docs/history/implementation-plans/zig-std-io-source-inventory.md` (012B), `docs/history/implementation-plans/zig-std-io-parity-audit.md` (012C).

@@ -14,7 +14,7 @@ docs (`docs/sync-io-model.md` primitive contract, `docs/sync-durability-model.md
 
 This is the blocking-first companion to the async design (`docs/adr/ADR-async-io-
 model.md`, 016D). Async implementation is blocked behind the sync-first gate
-(`docs/sync-before-async-readiness-gate.md`) until this architecture is realized
+(`docs/history/closeout/sync-before-async-readiness-gate.md`) until this architecture is realized
 by jobs 017S–023S. **No async code exists yet.**
 
 ## 1. Scope

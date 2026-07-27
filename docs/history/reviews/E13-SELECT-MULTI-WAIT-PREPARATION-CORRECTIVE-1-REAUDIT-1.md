@@ -68,26 +68,26 @@ No author self-assessment was accepted. All findings below are independently der
 
 | File | Lines | Status |
 |------|-------|--------|
-| `docs/e13-select-preparation.md` | 1173 | Primary design document |
+| `docs/history/closeout/e13-select-preparation.md` | 1173 | Primary design document |
 | `docs/e13-select-state-machine.md` | 326 | State machine specification |
 | `docs/e13-select-test-plan.md` | 506 | Test plan (16 tests) |
-| `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md` | 854 | Original audit |
-| `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REVIEW-REQUEST.md` | 123 | Corrective review request |
+| `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md` | 854 | Original audit |
+| `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REVIEW-REQUEST.md` | 123 | Corrective review request |
 
 ### Artifact documents (read, where present)
 
 | File | Status |
 |------|--------|
-| `docs/reviews/E13-SELECT-MULTI-WAIT-INDEPENDENT-DESIGN-CHALLENGE-1.md` | Present, read |
-| `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-PRE-REAUDIT-HARDENING-1.md` | Not present as separate file; hardening applied inline |
+| `docs/history/reviews/E13-SELECT-MULTI-WAIT-INDEPENDENT-DESIGN-CHALLENGE-1.md` | Present, read |
+| `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-PRE-REAUDIT-HARDENING-1.md` | Not present as separate file; hardening applied inline |
 
 ### Authority documents (verified)
 
 | File | Classification |
 |------|---------------|
-| `docs/e10-e12-api-semantic-closure.md` | Binding |
-| `docs/e12-event.md` | Binding |
-| `docs/e12-queue.md` | Contextual |
+| `docs/history/closeout/e10-e12-api-semantic-closure.md` | Binding |
+| `docs/history/closeout/e12-event.md` | Binding |
+| `docs/history/closeout/e12-queue.md` | Contextual |
 
 ### Source code inspected (real file paths, current line numbers)
 
@@ -984,7 +984,7 @@ A	docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1.md
 A	docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REVIEW-REQUEST.md
 ```
 
-Only the review artifact (`docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REAUDIT-1.md`) was created by this review. No other files were modified.
+Only the review artifact (`docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-CORRECTIVE-1-REAUDIT-1.md`) was created by this review. No other files were modified.
 
 ---
 

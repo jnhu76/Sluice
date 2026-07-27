@@ -55,6 +55,6 @@ xmake build -g bench
 
 ## Out of scope for this merge (do not block on)
 
-- Async runtime, io_uring default backend, P2300 — all explicitly deferred to the `async-runtime` branch (see `docs/async-deferred-until-sync-baseline.md`).
+- Async runtime, io_uring default backend, P2300 — all explicitly deferred to the `async-runtime` branch (see `docs/history/implementation-plans/async-deferred-until-sync-baseline.md`).
 - p50/p95/p99 latency columns in the bench CSV (methodology "add where feasible").
 - Real-disk W4 re-measurement (tmpfs-understates caveat is documented).

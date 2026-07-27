@@ -112,4 +112,4 @@ TLC_WORKERS=1 ./tools/formal/verify-e13-select-safety.sh
 
 Independent review of invariant coverage, fault reachability, target
 match, source safety, and scope adherence.  See
-`docs/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-REVIEW-REQUEST.md`.
+`docs/history/reviews/E13-SELECT-FORMAL-MODEL-SAFETY-1-REVIEW-REQUEST.md`.

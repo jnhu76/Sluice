@@ -748,7 +748,7 @@ and exercised by the G1+G2 matrix.
 
 ### F.3 — CLOSED (via binding supersession)
 
-The `docs/e12-queue-corrective-3.md` document is a properly-formed BINDING
+The `docs/history/closeout/e12-queue-corrective-3.md` document is a properly-formed BINDING
 supersession of Corrective-2 §8. It explicitly documents:
 
 - The authority conflict (§8 binds `PreparedQueueTimer` / `prepare_*` /

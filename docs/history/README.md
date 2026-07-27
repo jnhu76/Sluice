@@ -13,7 +13,7 @@ Includes:
 - E13 preparation and rollback closeout
 - Sync runtime closeout evidence
 - Async runtime corrective evidence
-- Review records (from `docs/reviews/`)
+- Review records (from `docs/history/reviews/`)
 
 ### `implementation-plans/` — Planning documents
 

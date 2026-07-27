@@ -17,10 +17,10 @@ code was modified.
 
 | File | Description |
 |------|-------------|
-| `docs/e13-select-preparation.md` | Main preparation design (20 sections) |
+| `docs/history/closeout/e13-select-preparation.md` | Main preparation design (20 sections) |
 | `docs/e13-select-state-machine.md` | State machine specification |
 | `docs/e13-select-test-plan.md` | Test plan with 15 core tests |
-| `docs/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1-REVIEW-REQUEST.md` | This document |
+| `docs/history/reviews/E13-SELECT-MULTI-WAIT-PREPARATION-AUDIT-1-REVIEW-REQUEST.md` | This document |
 
 ### Out of scope
 

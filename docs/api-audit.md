@@ -62,7 +62,7 @@ surface may change without deprecation.
   (`posix_retry.hpp`). Impl-only; may change or move without notice.
 - **`wal::detail::checked_u32_len`** and other `detail::` symbols inside `wal`.
 - The `void* ring_` member and the liburing-specific branch in
-  `experimental/uring_write_batch.cpp` — implementation detail of the spike.
+  `src/experimental/uring_write_batch.cpp` — implementation detail of the spike.
 - `bench/bench_common.*` — bench-only helper, not a library API.
 
 ## APIs intentionally left unchanged (this task)

@@ -15,7 +15,7 @@ Review of the E12-B Semaphore production implementation (`sluice-CORE-E12-B`):
 - **Production code**: `include/sluice/async/semaphore.hpp` (new), `include/sluice/async/scheduler.hpp` (seams), `src/async/scheduler.cpp` (implementation)
 - **Tests**: `tests/e12_semaphore_test.cpp` (31 deterministic tests), `tests/e12_semaphore_authority_probe.cpp` (NEG compile probe)
 - **Formal model**: `docs/spec/e12_semaphore/` (8 TLA+ modules: 1 correct + 7 negative)
-- **Documentation**: `docs/e12-semaphore.md` (880-line authority + as-built), `docs/async-runtime-plan.md` E12 status
+- **Documentation**: `docs/history/closeout/e12-semaphore.md` (880-line authority + as-built), `docs/history/implementation-plans/async-runtime-plan.md` E12 status
 - **Build integration**: `xmake.lua` (test target)
 
 ## Executive Summary
@@ -180,7 +180,7 @@ is documented with a complete call-site table (§5 of the design doc).
 
 ### 3.2 Documentation
 
-`docs/e12-semaphore.md` is 880 lines and covers: policy decisions (A1-A5),
+`docs/history/closeout/e12-semaphore.md` is 880 lines and covers: policy decisions (A1-A5),
 corrected permit conservation law, exact release state machine, Conclusion A
 proof (complete call-site table), stable-state invariant, formal model catalog
 with all 12 invariants, negative-model matrix, runtime test plan, implementation

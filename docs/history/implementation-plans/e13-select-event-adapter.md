@@ -125,7 +125,7 @@ Concretely E3 fails on every axis the brief requires reviewed:
   reachable through the same `user_` pointer a Queue context uses, doubling
   the cast-then-dereference surface.
 
-E3 is rejected. (See also `docs/design/e13-select-type-and-lifetime.md` §1 for the
+E3 is rejected. (See also `docs/history/implementation-plans/e13-select-type-and-lifetime.md` §1 for the
 parallel WaitNode-reuse decision.)
 
 ### 3.4 Verdict
@@ -374,7 +374,7 @@ event_set_broadcast(event):
 path on an external thread uses `group.caller_owner_` (stored at admission),
 not `g_worker`. The group's stored owner is the authoritative routing target
 regardless of which thread calls `Event::set()`. If the group was admitted from
-a valid Fiber (required by the caller contract, `docs/design/e13-select-public-api.md`
+a valid Fiber (required by the caller contract, `docs/history/implementation-plans/e13-select-public-api.md`
 §4.11), `caller_owner_` is non-null and `route_runnable_locked` routes to the
 correct worker. The cross-worker routing concern is already solved by the
 existing E7-B/E8 machinery.
@@ -468,4 +468,4 @@ E13PhaseEventWorklistWalk   // pause mid-worklist walk (test multi-group chain)
 These mirror the existing internal-testing discipline
 (`scheduler.hpp:39-58`, `tests/async_test_control_internal.hpp`). They drive
 causal proofs without sleep. Full plan:
-`docs/design/e13-select-production-test-plan.md` §seams.
+`docs/history/implementation-plans/e13-select-production-test-plan.md` §seams.

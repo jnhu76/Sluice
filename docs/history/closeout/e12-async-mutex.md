@@ -18,21 +18,21 @@
 > ```
 >
 > The migration/data-race micro-review closing Corrective-4 was completed by
-> [`docs/reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md`](reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md)
+> [`docs/history/reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md`](reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md)
 > (2026-07-19), verdict PASS. The final governance effect is also recorded in
 > the FINAL STATUS block at the end of
-> [`docs/reviews/E12-C-REVIEW.md`](reviews/E12-C-REVIEW.md). E12-C is CLOSED.
+> [`docs/history/reviews/E12-C-REVIEW.md`](reviews/E12-C-REVIEW.md). E12-C is CLOSED.
 >
 > Authority baseline: E10 CLOSED
-> ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED
-> at `7715808` ([`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md));
-> E12-A Event CLOSED ([`docs/e12-event.md`](e12-event.md)); E12-B Semaphore
+> ([`docs/history/closeout/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED
+> at `7715808` ([`docs/history/closeout/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md));
+> E12-A Event CLOSED ([`docs/history/closeout/e12-event.md`](e12-event.md)); E12-B Semaphore
 > CLOSED
-> ([`docs/e12-semaphore.md`](e12-semaphore.md)). This document does NOT reopen
+> ([`docs/history/closeout/e12-semaphore.md`](e12-semaphore.md)). This document does NOT reopen
 > E10/E11/E12-A/E12-B preparation; it builds on those authorities.
 >
 > Cross-primitive preparation:
-> [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §6 (updated
+> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §6 (updated
 > by this corrective).
 >
 > This document is the authoritative E12-C Async Mutex preparation specification.
@@ -1274,7 +1274,7 @@ Fiber A unlocks AsyncMutex → succeeds
 
 #### 17.3.1 Corrective history (T19 blocker-execution race)
 
-T19 passed through three correctives (full record: `docs/reviews/E12-C-REVIEW.md` §L):
+T19 passed through three correctives (full record: `docs/history/reviews/E12-C-REVIEW.md` §L):
 
 - **Corrective-1** rewrote T19 with an E8-T1/T3 steal pattern but left the run
   hanging/nondeterministic (DRAIN + `pending_spawn_` routing).

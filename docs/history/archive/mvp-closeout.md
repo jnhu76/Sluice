@@ -86,7 +86,7 @@ spike** in 013, never as the default backend.
 
 ## 8. Next readiness gate
 
-`docs/io-uring-readiness-gate.md` (012D) decides whether sluice is ready for the
+`docs/history/implementation-plans/io-uring-readiness-gate.md` (012D) decides whether sluice is ready for the
 narrow experimental spike and records the chosen first slice, risks, and abort
-conditions. The audit in `docs/zig-std-io-parity-audit.md` (012C) and the source
-inventory in `docs/zig-std-io-source-inventory.md` (012B) feed that decision.
+conditions. The audit in `docs/history/implementation-plans/zig-std-io-parity-audit.md` (012C) and the source
+inventory in `docs/history/implementation-plans/zig-std-io-source-inventory.md` (012B) feed that decision.

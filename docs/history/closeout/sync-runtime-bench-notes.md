@@ -66,4 +66,4 @@ xmake run w1_write_bench   # (and w2_read_bench / w3_copy_bench / w4_durability_
 - Durability baseline row: `docs/results/sync-durability-baseline.md`
 - Methodology: `docs/sync-bench-methodology.md`
 - Matrix spec: `docs/sync-bench-matrix.md`
-- Optimization notes (evidence pass): `docs/sync-optimization-notes.md`
+- Optimization notes (evidence pass): `docs/history/closeout/sync-optimization-notes.md`

@@ -46,6 +46,6 @@ When a code change alters a modeled state transition, admission rule, winner rul
 | Topic | Document |
 |-------|----------|
 | BlockingIoPool TLA+ spec | `spec/tla/BlockingIoPool.tla` |
-| E13 formal design | `docs/formal/e13-select-formal-core-design.md` *(proposed)* |
-| E13 formal safety | `docs/formal/e13-select-formal-safety-design.md` *(proposed)* |
+| E13 formal design | `docs/history/formal-design/e13-select-formal-core-design.md` *(historical)* |
+| E13 formal safety | `docs/history/formal-design/e13-select-formal-safety-design.md` *(historical)* |
 | TLA+ spec guide | `docs/spec/blocking-io-pool-tla-spec.md` |

@@ -7,7 +7,7 @@ formal action (from `E13SelectContract.tla`, `E13SelectCentralClaim.tla`, and
 method, with its lock domain and its linearization/commit point.
 
 The C++ names are the **planned** production names from
-`docs/design/e13-select-production-architecture.md` §8. They are not yet defined; no
+`docs/history/implementation-plans/e13-select-production-architecture.md` §8. They are not yet defined; no
 production code exists. The mapping is the contract the implementation must
 satisfy.
 

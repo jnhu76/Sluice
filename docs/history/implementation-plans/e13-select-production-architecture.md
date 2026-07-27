@@ -142,20 +142,20 @@ publication.
 
 | Decision                       | Selected option                                              | Detail doc                              |
 |--------------------------------|--------------------------------------------------------------|-----------------------------------------|
-| Public API                     | **Candidate C** fixed variadic `select(sched, case, case, …)`| `docs/design/e13-select-public-api.md`         |
-| SelectGroup ownership          | **caller stack frame** (embedded in the select call frame)   | `docs/design/e13-select-type-and-lifetime.md`  |
+| Public API                     | **Candidate C** fixed variadic `select(sched, case, case, …)`| `docs/history/implementation-plans/e13-select-public-api.md`         |
+| SelectGroup ownership          | **caller stack frame** (embedded in the select call frame)   | `docs/history/implementation-plans/e13-select-type-and-lifetime.md`  |
 | Arm registration ownership     | **caller stack frame** (one per case slot, fixed array of `SelectArmSlot`) | type-and-lifetime                       |
-| Event registry strategy        | **E1 — separate private Select registry per Event**          | `docs/design/e13-select-event-adapter.md`      |
-| Timer registration strategy    | **T1 — dedicated SelectTimerRegistration stable block**      | `docs/design/e13-select-timer-adapter.md`      |
-| WaitNode relation              | **SEPARATE — new `SelectArmSlot`, no WaitNode reuse**  | `docs/design/e13-select-type-and-lifetime.md`  |
-| Winner authority               | **C1+C2 hybrid — CAS on SelectGroup, under global_mtx_**     | `docs/design/e13-select-locking-and-publication.md` |
+| Event registry strategy        | **E1 — separate private Select registry per Event**          | `docs/history/implementation-plans/e13-select-event-adapter.md`      |
+| Timer registration strategy    | **T1 — dedicated SelectTimerRegistration stable block**      | `docs/history/implementation-plans/e13-select-timer-adapter.md`      |
+| WaitNode relation              | **SEPARATE — new `SelectArmSlot`, no WaitNode reuse**  | `docs/history/implementation-plans/e13-select-type-and-lifetime.md`  |
+| Winner authority               | **C1+C2 hybrid — CAS on SelectGroup, under global_mtx_**     | `docs/history/implementation-plans/e13-select-locking-and-publication.md` |
 | Lock order                     | **G → one primitive registry → one SelectGroup (no group m.)**| locking-and-publication                 |
 | Allocation policy              | **stack-anchored, per-Timer-arm stable block, no lock alloc**| section 7 / type-and-lifetime           |
 | Publication                    | **single `Scheduler::select_publish_locked(SelectGroup&)`**  | locking-and-publication                 |
 | Wrong-Scheduler behavior       | **compile-time tag + debug assert + safe rejection**         | section 9                               |
-| Destruction contract           | **all arm authority closed before caller resume**            | `docs/design/e13-select-type-and-lifetime.md`  |
+| Destruction contract           | **all arm authority closed before caller resume**            | `docs/history/implementation-plans/e13-select-type-and-lifetime.md`  |
 | Implementation file layout     | planned in section 8 (NOT created by this task)              | section 8                               |
-| Test seam strategy             | **deterministic PhaseTag under `sluice_async_internal_testing`**| `docs/design/e13-select-production-test-plan.md`|
+| Test seam strategy             | **deterministic PhaseTag under `sluice_async_internal_testing`**| `docs/history/implementation-plans/e13-select-production-test-plan.md`|
 
 ---
 
@@ -186,7 +186,7 @@ Select follows the exact same discipline.
 ## 4. Core type graph (summary)
 
 The full type graph with per-field ownership, address stability, and access
-domain lives in `docs/design/e13-select-type-and-lifetime.md`. The shape is:
+domain lives in `docs/history/implementation-plans/e13-select-type-and-lifetime.md`. The shape is:
 
 ```text
 public:
@@ -227,7 +227,7 @@ container mirroring `timer_pool_`. Nodes are constructed in a temporary
 individually** under G during its arm's registration step via
 `std::list::splice` (O(1), no allocation inside the lock). The deadline heap
 is migrated to `DeadlineHeapEntry` to hold both `TimerRegistration*` and
-`SelectTimerRegistration*` (see `docs/design/e13-select-timer-adapter.md` §4). Its
+`SelectTimerRegistration*` (see `docs/history/implementation-plans/e13-select-timer-adapter.md` §4). Its
 atomic `active/retired/consumed` state is the post-destruction safety boundary
 (I4): a stale pump entry observes retirement and skips without dereferencing
 the caller-frame arm.
@@ -290,8 +290,8 @@ deadline heap `reserve`s capacity for all Timer arms before any registration
 mutation; if `reserve` throws, no arm is registered and no splice has occurred.
 No other allocation occurs inside the lock.
 
-Full detail: `docs/design/e13-select-public-api.md` §allocation and
-`docs/design/e13-select-type-and-lifetime.md` §exception-rollback.
+Full detail: `docs/history/implementation-plans/e13-select-public-api.md` §allocation and
+`docs/history/implementation-plans/e13-select-type-and-lifetime.md` §exception-rollback.
 
 ---
 
@@ -319,7 +319,7 @@ tests/select_negative_test.cpp
 ```
 
 Each `.cpp` corresponds to one review stage in
-`docs/design/e13-select-production-test-plan.md` §production-implementation-split.
+`docs/history/implementation-plans/e13-select-production-test-plan.md` §production-implementation-split.
 
 ---
 
@@ -340,7 +340,7 @@ Cross-Scheduler Select is **forbidden**. Every case carries an implicit
 Scheduler binding (via the Event handle or the explicit Scheduler argument);
 mismatch is a debug assert + `std::invalid_argument`.
 
-Full detail: `docs/design/e13-select-public-api.md` §wrong-input.
+Full detail: `docs/history/implementation-plans/e13-select-public-api.md` §wrong-input.
 
 ---
 

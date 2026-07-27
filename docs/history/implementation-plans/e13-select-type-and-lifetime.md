@@ -140,11 +140,11 @@ Each type below records the eight fields the brief requires.
 | public visibility         | none — `detail`                                               |
 
 `winner_` is the **central claim CAS target** (section K, Option C1+C2 hybrid,
-see `docs/design/e13-select-locking-and-publication.md`). The CAS is the single
+see `docs/history/implementation-plans/e13-select-locking-and-publication.md`). The CAS is the single
 linearization authority.
 
 Additional fields for broadcast worklist (see
-`docs/design/e13-select-event-adapter.md` §4.6):
+`docs/history/implementation-plans/e13-select-event-adapter.md` §4.6):
 ```cpp
 SelectGroup* broadcast_next_;             // intrusive worklist chain (under G only)
 std::uint64_t broadcast_epoch_;           // deduplication generation counter
@@ -247,7 +247,7 @@ Ownership transfer: nodes are constructed in a temporary `std::list` outside G,
 then each block is spliced individually under G during its arm's registration
 step via `std::list::splice` (O(1), no allocation inside the lock). The
 deadline heap stores `DeadlineHeapEntry` values, not raw `TimerRegistration*`
-— see `docs/design/e13-select-timer-adapter.md` §4.
+— see `docs/history/implementation-plans/e13-select-timer-adapter.md` §4.
 
 #### 2.3.6 `SelectPort` (Scheduler-side per-Event registry head)
 

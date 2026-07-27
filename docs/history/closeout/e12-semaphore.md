@@ -17,22 +17,22 @@
 > verbatim). §14 (As-Built Implementation) records the production implementation
 > produced under E12-B-IMPLEMENTATION-1. Independent adversarial implementation
 > review completed by
-> [`docs/reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md`](reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md)
+> [`docs/history/reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md`](reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md)
 > (2026-07-19), verdict `ACCEPT (WITH OBSERVATIONS)`; three non-blocking
 > observations (O1 stress retry loop, O2 defensive terminal check, O3 E12-G
 > cross-primitive dependency) are recorded in that artifact. The closure
 > condition (E12-G cross-primitive audit PASS) was satisfied by
-> [`docs/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md`](reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md)
+> [`docs/history/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md`](reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md)
 > (2026-07-19). E12-B is CLOSED.
 >
 > Authority baseline: E10 CLOSED
-> ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED
-> at `7715808` ([`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md));
-> E12-A Event CLOSED ([`docs/e12-event.md`](e12-event.md)). This document does
+> ([`docs/history/closeout/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED
+> at `7715808` ([`docs/history/closeout/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md));
+> E12-A Event CLOSED ([`docs/history/closeout/e12-event.md`](e12-event.md)). This document does
 > NOT reopen E10/E11/E12-A; it builds on them as authoritative.
 >
 > Cross-primitive preparation:
-> [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §5 (updated
+> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §5 (updated
 > in the preparation corrective).
 >
 > Formal model: [`docs/spec/e12_semaphore/`](spec/e12_semaphore/). Formal gate
@@ -551,9 +551,9 @@ double-publication negative is not added in this corrective.
 
 1. **Corrected verdict:** `E12-B-PREPARATION-CORRECTIVE-1: COMPLETE —
    REAUDIT-REQUIRED — IMPLEMENTATION BLOCKED`.
-2. **Changed authority documents:** `docs/e12-semaphore.md` (this file, new);
+2. **Changed authority documents:** `docs/history/closeout/e12-semaphore.md` (this file, new);
    `docs/spec/e12_semaphore/` (new); `scripts/verify-e12-semaphore-formal.sh`
-   (new); `docs/e12-sync-primitives-plan.md` §5.2/§5.3/§5.5/§11.2/§14.3.2/§12
+   (new); `docs/history/implementation-plans/e12-sync-primitives-plan.md` §5.2/§5.3/§5.5/§11.2/§14.3.2/§12
    (edited — deleted pre-reservation/refund model, fixed conservation law,
    updated status + pointer).
 3. **Accepted policy decision register:** A1–A5 (§2).
@@ -878,12 +878,12 @@ documentation commit      docs(async): record E12-B semaphore implementation
 ## 13. Cross-links
 
 - E10 as-built (authoritative wait protocol):
-  [`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)
+  [`docs/history/closeout/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)
 - E11 spec (CLOSED, authoritative deadline/timer):
-  [`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md)
+  [`docs/history/closeout/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md)
 - E12-A Event as-built (CLOSED):
-  [`docs/e12-event.md`](e12-event.md)
+  [`docs/history/closeout/e12-event.md`](e12-event.md)
 - Cross-primitive preparation:
-  [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)
+  [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)
 - Formal model: [`docs/spec/e12_semaphore/`](spec/e12_semaphore/)
 - Formal gate (safety): [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh)

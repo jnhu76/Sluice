@@ -34,7 +34,7 @@ performance claim.
 
 As of SLUICE-CORE-007 this fast path is also an **explicit `CopyStrategy`**
 (`BufferedFirst`, with `Auto` resolving to it). Forcing the pre-006 scratch path
-is now `CopyStrategy::Scratch`. See `docs/design-copy-strategy.md`.
+is now `CopyStrategy::Scratch`. See `docs/history/implementation-plans/design-copy-strategy.md`.
 
 Detection uses `dynamic_cast` (not a virtual hook on the `Reader` base) so that
 unbuffered readers (`FileReader`, `MemoryReader`, `FaultReader`, ...) carry zero
@@ -68,7 +68,7 @@ scratch path serve bytes?), not throughput/latency numbers. No microbenchmark
 exists yet (SLUICE-CORE-010). Whether draining the buffer saves enough to matter
 — vs the `dynamic_cast` probe, the per-iteration `peek`/`consume`, or the
 `write_all` round-trip — is unmeasured and must not be asserted. The discipline
-from `docs/zig-std-io-parity-audit.md` holds: do not optimize before
+from `docs/history/implementation-plans/zig-std-io-parity-audit.md` holds: do not optimize before
 measuring.
 
 ## 4. Deferred

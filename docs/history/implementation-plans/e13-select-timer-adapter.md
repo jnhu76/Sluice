@@ -28,7 +28,7 @@ winner callback:
 
 A Select Timer arm therefore cannot bind to an ordinary `TimerRegistration`
 through its `{node, queue}` target. The Select Timer arm has no `WaitNode`
-(see `docs/design/e13-select-type-and-lifetime.md` §1 — WaitNode is not reused), so
+(see `docs/history/implementation-plans/e13-select-type-and-lifetime.md` §1 — WaitNode is not reused), so
 there is no `node` to bind, and the arm does not park in any ordinary
 `WaitQueue`, so there is no `queue`.
 
@@ -431,7 +431,7 @@ This matches the formal `AdmissionObserveReady` / `ClaimAdmissionWinner` /
 ## 8. No `WaitNode`, no `WaitQueue`
 
 A Timer arm has no `WaitNode` (WaitNode is not reused,
-`docs/design/e13-select-type-and-lifetime.md` §1) and parks in no `WaitQueue`. The
+`docs/history/implementation-plans/e13-select-type-and-lifetime.md` §1) and parks in no `WaitQueue`. The
 `SelectTimerRegistration` is the sole registration object; the caller-frame
 `TimerArmPayload` arm is reached only via the stable block's `arm_`
 pointer while `active`. There is no queue to unlink from; the only cleanup is
@@ -473,4 +473,4 @@ E13PhaseTimerPumpSkip       // pause to observe a stale (non-active) entry skip
 `E13PhaseTimerPumpSkip` is the deterministic proof of the I4 closure: it lets
 a test force the pump to observe a `retired`/`consumed` entry and assert that
 `arm_` is never read. Full plan:
-`docs/design/e13-select-production-test-plan.md` §seams and §negative.
+`docs/history/implementation-plans/e13-select-production-test-plan.md` §seams and §negative.

@@ -3,9 +3,9 @@
 **Status: sluice-CORE-016G (sync-first planning patch).** Splits the **blocking**
 I/O model completion phase into small, independently abortable jobs. **No code is
 written in this patch.** These jobs run *before* any async implementation job
-(017+); the async implementation jobs in `docs/async-next-jobs.md` (016F) are
+(017+); the async implementation jobs in `docs/history/implementation-plans/async-next-jobs.md` (016F) are
 **blocked** behind the sync-first readiness gate
-(`docs/sync-before-async-readiness-gate.md`).
+(`docs/history/closeout/sync-before-async-readiness-gate.md`).
 
 The async **design** (016A–016F) stays accepted. This phase only engineers the
 blocking baseline so async is later compared against a fair, multi-stream
@@ -15,7 +15,7 @@ blocking baseline — not against sequential-only blocking.
 > (actionable job cards). The *architecture/contract/policy layer* lives in:
 > `docs/sync-io-architecture.md` (architecture + taxonomy), `docs/sync-io-model.md`
 > (primitive contract), `docs/sync-durability-model.md`, `docs/sync-bench-
-> methodology.md`, `docs/sync-bench-matrix.md`, `docs/sync-optimization-notes.md`.
+> methodology.md`, `docs/sync-bench-matrix.md`, `docs/history/closeout/sync-optimization-notes.md`.
 > The job numbers below (017S–023S) **stay** as the actionable units; the
 > SYNC-IO-COMPLETE phases are a doc-structure overlay. Terminology used below is
 > aligned to the architecture doc: backends (`BlockingIoContext`/`MemoryIoContext`/
@@ -36,8 +36,8 @@ blocking baseline — not against sequential-only blocking.
 | Phase 7 — bounded pool | **021S** | `BlockingIoPool` (code; bench/support) |
 | Phase 8 — W1–W4 bench matrix | **022S** | bench targets + CSV |
 | Phase 9 — bench methodology docs | 022S | `docs/sync-bench-methodology.md`, `docs/sync-bench-matrix.md` ✓ (written) |
-| Phase 10 — optimization notes | **023S** | `docs/sync-optimization-notes.md` ✓ (template written) |
-| Phase 11 — async deferral note | — | `docs/async-deferred-until-sync-baseline.md` ✓ (written) |
+| Phase 10 — optimization notes | **023S** | `docs/history/closeout/sync-optimization-notes.md` ✓ (template written) |
+| Phase 11 — async deferral note | — | `docs/history/implementation-plans/async-deferred-until-sync-baseline.md` ✓ (written) |
 | Phase 12 — tests & validation | each | per-job tests |
 
 Docs marked ✓ already exist (written in the reconciliation patch). Code phases
@@ -99,7 +99,7 @@ Conventions for every card:
 
 ## 017S — Sync I/O model audit
 
-**Goal.** Turn `docs/sync-io-model-gap-audit.md` into a reviewed, evidence-locked
+**Goal.** Turn `docs/history/closeout/sync-io-model-gap-audit.md` into a reviewed, evidence-locked
 audit of the blocking model, with a go/no-go decision on positional I/O (G1/G2)
 and an explicit list of what each subsequent job must and must not touch. This is
 the planning anchor for 018S–023S.
@@ -117,7 +117,7 @@ the planning anchor for 018S–023S.
 - A per-job "do not touch" list (existing semantics frozen).
 
 **Acceptance criteria.**
-- `docs/sync-io-model-gap-audit.md` reviewed; positional decision recorded inline.
+- `docs/history/closeout/sync-io-model-gap-audit.md` reviewed; positional decision recorded inline.
 - Each of 018S–023S has an unambiguous scope derived from this audit.
 - Build/tests green (docs-only job; verification is a no-op build check).
 
@@ -209,7 +209,7 @@ what blocking durability *is* and measures it.
 - No stronger durability guarantee than what fsync/fdatasync give.
 
 **Required artifacts + tests.**
-- A durability-policy doc (extends `docs/design-flush-sync-durability.md`):
+- A durability-policy doc (extends `docs/history/implementation-plans/design-flush-sync-durability.md`):
   when a blocking writer should sync; cadence options (per-record / per-batch /
   caller-driven); accepted limits of the single-writer-barrier WAL.
 - A blocking durability baseline bench row: cost of `sync_data`/`sync_all` under
@@ -334,7 +334,7 @@ is the analogue of the existing 011 decision-matrix work, extended to W1–W4.
 - No optimization that requires a new dependency.
 
 **Required artifacts + tests.**
-- An evidence-linked decision matrix (extends `docs/bench-decision-matrix.md`)
+- An evidence-linked decision matrix (extends `docs/history/implementation-plans/bench-decision-matrix.md`)
   recording, per W1–W4 cell, the chosen blocking tuning and why.
 - Re-run 022S after tuning; record before/after, scoped per workload.
 - Regression: single-stream tests and the 011 single-stream baseline do not
@@ -342,7 +342,7 @@ is the analogue of the existing 011 decision-matrix work, extended to W1–W4.
 
 **Acceptance criteria.**
 - The blocking baseline is engineered (tuned with evidence) across W1–W4.
-- The sync-first readiness gate (`docs/sync-before-async-readiness-gate.md`) can
+- The sync-first readiness gate (`docs/history/closeout/sync-before-async-readiness-gate.md`) can
   go GREEN: the blocking baseline is positional, durability-defined, concurrent,
   and measured.
 - Build/tests green.
@@ -356,8 +356,8 @@ is the analogue of the existing 011 decision-matrix work, extended to W1–W4.
 
 ## After 023S: the sync-first readiness gate
 
-Once 017S–023S are accepted, `docs/sync-before-async-readiness-gate.md` goes
-GREEN and the async implementation jobs in `docs/async-next-jobs.md` (016F:
+Once 017S–023S are accepted, `docs/history/closeout/sync-before-async-readiness-gate.md` goes
+GREEN and the async implementation jobs in `docs/history/implementation-plans/async-next-jobs.md` (016F:
 017 → 019 → 018 → 018B → 020A → 021 → 020B → 022) are **unblocked**. Async then
 measures itself against the engineered blocking W1–W4 matrix from 022S/023S, not
 against sequential blocking.
@@ -369,18 +369,18 @@ against sequential blocking.
 - Primitive contract: `docs/sync-io-model.md`.
 - Durability model: `docs/sync-durability-model.md`.
 - Bench methodology: `docs/sync-bench-methodology.md`, `docs/sync-bench-matrix.md`.
-- Optimization notes: `docs/sync-optimization-notes.md`.
-- Async deferral note: `docs/async-deferred-until-sync-baseline.md`.
+- Optimization notes: `docs/history/closeout/sync-optimization-notes.md`.
+- Async deferral note: `docs/history/implementation-plans/async-deferred-until-sync-baseline.md`.
 
 **Planning layer (016G):**
-- Gap audit: `docs/sync-io-model-gap-audit.md` (016G).
-- Sync-first readiness gate: `docs/sync-before-async-readiness-gate.md`.
+- Gap audit: `docs/history/closeout/sync-io-model-gap-audit.md` (016G).
+- Sync-first readiness gate: `docs/history/closeout/sync-before-async-readiness-gate.md`.
 
 **Async (frozen / blocked):**
-- Async next jobs (blocked until the gate is green): `docs/async-next-jobs.md` (016F).
+- Async next jobs (blocked until the gate is green): `docs/history/implementation-plans/async-next-jobs.md` (016F).
 - Async ADR (accepted, unchanged): `docs/adr/ADR-async-io-model.md` (016D).
-- Async problem statement (W1–W5): `docs/async-problem-statement.md` (016B).
+- Async problem statement (W1–W5): `docs/history/implementation-plans/async-problem-statement.md` (016B).
 
 **Existing (extended, not replaced):**
-- Durability design: `docs/design-flush-sync-durability.md`, `docs/design-wal-durability.md`.
-- Bench methodology: `docs/bench-methodology.md`, `docs/bench-decision-matrix.md`.
+- Durability design: `docs/history/implementation-plans/design-flush-sync-durability.md`, `docs/history/implementation-plans/design-wal-durability.md`.
+- Bench methodology: `docs/history/implementation-plans/bench-methodology.md`, `docs/history/implementation-plans/bench-decision-matrix.md`.

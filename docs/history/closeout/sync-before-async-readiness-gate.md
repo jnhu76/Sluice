@@ -2,10 +2,10 @@
 
 **Status: sluice-CORE-016G (sync-first planning patch).** A gate, not an
 implementation. It lists the preconditions that **must** be satisfied by the
-sync-first phase (jobs 017S–023S, `docs/sync-io-next-jobs.md`) before any async
-**implementation** (jobs 017+, `docs/async-next-jobs.md`/016F) may start.
+sync-first phase (jobs 017S–023S, `docs/history/implementation-plans/sync-io-next-jobs.md`) before any async
+**implementation** (jobs 017+, `docs/history/implementation-plans/async-next-jobs.md`/016F) may start.
 
-It is the analogue of `docs/async-readiness-gate.md` (016E), but one level
+It is the analogue of `docs/history/implementation-plans/async-readiness-gate.md` (016E), but one level
 earlier: 016E gates *async implementation* on *async design*; this gate gates
 *async implementation* on a *fair, engineered blocking baseline*. The async
 **design** (016A–016F) remains accepted and is not re-litigated here.
@@ -26,8 +26,8 @@ Test suite:            52/52 PASS
 
 ## 1. Minimum required gate items
 
-Each item maps to a gap in `docs/sync-io-model-gap-audit.md`, a job in
-`docs/sync-io-next-jobs.md`, and a contract doc in the SYNC-IO-COMPLETE
+Each item maps to a gap in `docs/history/closeout/sync-io-model-gap-audit.md`, a job in
+`docs/history/implementation-plans/sync-io-next-jobs.md`, and a contract doc in the SYNC-IO-COMPLETE
 architecture/contract layer.
 
 | # | Gate item | Closes gap | Closed by | Contract doc | Status |
@@ -90,7 +90,7 @@ Scoped per-workload/per-machine, never universal.
 
 Using the 022S matrix, the blocking baseline is tuned (023S: buffer sizes, vector
 chunking, copy-strategy selection, sync cadence) with an evidence-linked decision
-matrix (extends `docs/bench-decision-matrix.md`). Single-stream tests and the 011
+matrix (extends `docs/history/implementation-plans/bench-decision-matrix.md`). Single-stream tests and the 011
 baseline do not regress beyond documented bounds.
 
 ### Item 7 — [POLICY] async compared against engineered blocking baselines
@@ -125,11 +125,11 @@ unblocked and completed on `feat/async-runtime`. The async implementation orderi
 
 ## 5. Cross-links
 
-- Gap audit: `docs/sync-io-model-gap-audit.md` (016G).
-- Sync-first job cards: `docs/sync-io-next-jobs.md` (017S–023S).
-- Async next jobs (blocked until this gate is green): `docs/async-next-jobs.md` (016F).
-- Async readiness gate (the next gate, after this one): `docs/async-readiness-gate.md` (016E).
+- Gap audit: `docs/history/closeout/sync-io-model-gap-audit.md` (016G).
+- Sync-first job cards: `docs/history/implementation-plans/sync-io-next-jobs.md` (017S–023S).
+- Async next jobs (blocked until this gate is green): `docs/history/implementation-plans/async-next-jobs.md` (016F).
+- Async readiness gate (the next gate, after this one): `docs/history/implementation-plans/async-readiness-gate.md` (016E).
 - Async ADR (accepted, unchanged): `docs/adr/ADR-async-io-model.md` (016D).
-- Async problem statement (W1–W5): `docs/async-problem-statement.md` (016B).
-- Existing durability design: `docs/design-flush-sync-durability.md`.
-- Existing bench methodology: `docs/bench-methodology.md`, `docs/bench-decision-matrix.md`.
+- Async problem statement (W1–W5): `docs/history/implementation-plans/async-problem-statement.md` (016B).
+- Existing durability design: `docs/history/implementation-plans/design-flush-sync-durability.md`.
+- Existing bench methodology: `docs/history/implementation-plans/bench-methodology.md`, `docs/history/implementation-plans/bench-decision-matrix.md`.

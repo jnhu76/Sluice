@@ -38,7 +38,7 @@ docs/async-runtime-plan.md
 ```
 
 Only the Corrective-2 sections of the three Queue documents are binding
-(`docs/e12-queue.md:173` onward is explicitly `NON-BINDING HISTORICAL
+(`docs/history/closeout/e12-queue.md:173` onward is explicitly `NON-BINDING HISTORICAL
 ANALYSIS`).
 
 ---
@@ -51,7 +51,7 @@ no-throw / fail-fast authority, and the corresponding compile, TSA, and
 runtime tests passing.
 
 **Finding:** The authority is **design-only**. Its own header states
-(`docs/async-mutex-nothrow-authority.md:3-12`):
+(`docs/history/implementation-plans/async-mutex-nothrow-authority.md:3-12`):
 
 ```text
 Design status:  PASS — INDEPENDENT REVIEW REQUIRED
@@ -61,7 +61,7 @@ implementation-denied until this decision has passed an independent review
 and its production realization has been separately authorized.
 ```
 
-and its closing block (`docs/async-mutex-nothrow-authority.md:161-164`):
+and its closing block (`docs/history/implementation-plans/async-mutex-nothrow-authority.md:161-164`):
 
 ```text
 ASYNC-MUTEX-NOTHROW-AUTHORITY-1 IMPLEMENTATION: UNAUTHORIZED
@@ -78,7 +78,7 @@ void unlock() SLUICE_RELEASE() { impl_.unlock(); }
 ```
 
 This is byte-for-byte the "Current-source fact" the authority documents as
-the state to be replaced (`docs/async-mutex-nothrow-authority.md:14-22`).
+the state to be replaced (`docs/history/implementation-plans/async-mutex-nothrow-authority.md:14-22`).
 There is:
 
 - no `noexcept` on `lock()` / `try_lock()` / `unlock()` (only the ctor at
@@ -102,7 +102,7 @@ scripts/run-e12-tlc-all.sh              (+113)
 ```
 
 Zero `.hpp`, zero `.cpp`. The six verification obligations in
-`docs/async-mutex-nothrow-authority.md:147-158` (TSA compile, no
+`docs/history/implementation-plans/async-mutex-nothrow-authority.md:147-158` (TSA compile, no
 `std::system_error` catch dependency, condition-variable reacquire
 well-formedness, injected-failure termination, ASan/UBSan/TSan green,
 independent adversarial review) are explicitly pending.
@@ -135,7 +135,7 @@ publication transitions, and the 33 counterexamples blocked by production
 structure (not debug assertions).
 
 **Finding:** No such review exists. The canonical home for independent
-reviews, `docs/reviews/`, contains only:
+reviews, `docs/history/reviews/`, contains only:
 
 ```text
 docs/reviews/E12-C-REVIEW.md                          (E12-C AsyncMutex)
@@ -188,15 +188,15 @@ topic is argued only in self-authored design prose:
 
 **The binding documents themselves concede the gap.** Direct quotes:
 
-- `docs/e12-queue.md:6` — `Status: PASS — AUTHOR SELF-ASSESSMENT —
+- `docs/history/closeout/e12-queue.md:6` — `Status: PASS — AUTHOR SELF-ASSESSMENT —
   INDEPENDENT REVIEW REQUIRED`
-- `docs/e12-queue.md:162` — "Corrective-2 needs a fresh independent
+- `docs/history/closeout/e12-queue.md:162` — "Corrective-2 needs a fresh independent
   adversarial review"
-- `docs/e12-queue.md:168` — `E12-E IMPLEMENTATION AUTHORIZATION: DENIED`
-- `docs/e12-queue-scheduler-integration.md:6,19,30-31,984-986` — same
+- `docs/history/closeout/e12-queue.md:168` — `E12-E IMPLEMENTATION AUTHORIZATION: DENIED`
+- `docs/history/implementation-plans/e12-queue-scheduler-integration.md:6,19,30-31,984-986` — same
   `AUTHOR SELF-ASSESSMENT` / `INDEPENDENT ADVERSARIAL REVIEW REQUIRED` /
   "none is authorized here"
-- `docs/e12-queue-state-machine.md:458-472` —
+- `docs/history/implementation-plans/e12-queue-state-machine.md:458-472` —
   `E12-E-QUEUE-STATE-MACHINE-DESIGN-CORRECTIVE-2: PASS — AUTHOR
   SELF-ASSESSMENT` / `INDEPENDENT ADVERSARIAL REVIEW REQUIRED` /
   `E12-E IMPLEMENTATION AUTHORIZATION: DENIED`
@@ -227,8 +227,8 @@ complete Condition runtime suite passing, and no hidden timeouts, skipped
 tests, or weakened assertions.
 
 **Finding:** The audit is **open**. The binding authorities state
-uniformly (`docs/e12-sync-primitives-plan.md:69-76`, `:1736`,
-`:1784-1786`; `docs/e12-queue.md:144-154`):
+uniformly (`docs/history/implementation-plans/e12-sync-primitives-plan.md:69-76`, `:1736`,
+`:1784-1786`; `docs/history/closeout/e12-queue.md:144-154`):
 
 ```text
 E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1:
@@ -239,7 +239,7 @@ Condition runtime suite: INCOMPLETE
 T25 migration/reacquire: HANG OBSERVED
 ```
 
-and `docs/e12-queue.md:152-154`: "The T25 hang neither proves nor
+and `docs/history/closeout/e12-queue.md:152-154`: "The T25 hang neither proves nor
 disproves active-victim Queue ticket stealing, but it must close
 independently before Queue implementation." A repo-wide search for
 `T25.*(CLOSED|PASS|RESOLVED|FIXED)` returns zero matches.
@@ -265,7 +265,7 @@ tests/async_condition_primitive_test.cpp:1415-1417
 When the intended steal/migration interleaving does not occur, `a_unlocked`
 is never set and the process hangs. The sibling Mutex migration test
 `e12_mtx_t19_real_migration_lock_own_unlock` went through four correctives
-to eliminate exactly this class of hang (`docs/e12-async-mutex.md:1262-1306`
+to eliminate exactly this class of hang (`docs/history/closeout/e12-async-mutex.md:1262-1306`
 §17.3.1): bounded coordinator waits via `bounded_wait`/`bounded_pred`, a
 `release_for_drain()` failure-bound guard, and an `f_idle` fiber keeping
 the steal target busy.
@@ -338,22 +338,22 @@ Queue spec to check.
 
 **The binding authority disclaims formal coverage.** Direct quotes:
 
-- `docs/e12-queue.md:141-142` — "Corrective-2 modifies no TLA+ artifact.
+- `docs/history/closeout/e12-queue.md:141-142` — "Corrective-2 modifies no TLA+ artifact.
   Formal status is not updated and no formal PASS is claimed."
-- `docs/e12-queue-state-machine.md:421-430` — "Existing Queue models have
+- `docs/history/implementation-plans/e12-queue-state-machine.md:421-430` — "Existing Queue models have
   not been normalized to the one-shot lease/control location, active-victim
   stealing, or teardown lifecycle. Therefore: `FORMAL/TLA CORRECTIVE-2
   STATUS: NOT UPDATED` / `FORMAL PASS: NOT CLAIMED`."
-- `docs/e12-queue.md:164-165` — gate 4 explicitly defers: "later formal
+- `docs/history/closeout/e12-queue.md:164-165` — gate 4 explicitly defers: "later formal
   normalization must preserve the one-shot lease and corrected
   steal/teardown semantics."
-- `docs/e12-queue.md:168` / `docs/e12-queue-state-machine.md:472` —
+- `docs/history/closeout/e12-queue.md:168` / `docs/history/implementation-plans/e12-queue-state-machine.md:472` —
   `E12-E IMPLEMENTATION AUTHORIZATION: DENIED`.
 
 The "19/19 canonical" and "6/6 publication" claims in
-`docs/e12-queue-state-machine.md:461-467` are author self-assessment prose
+`docs/history/implementation-plans/e12-queue-state-machine.md:461-467` are author self-assessment prose
 inside a Markdown document, not the output of any TLC run against a `.tla`
-spec. The candidate invariants at `docs/e12-queue.md:1381-1414` are
+spec. The candidate invariants at `docs/history/closeout/e12-queue.md:1381-1414` are
 Phase-5 planning prose, not formalized.
 
 **Coverage matrix (every required element):**
@@ -410,19 +410,19 @@ task per the binding authority):
 1. **B1 — Mutex no-throw substrate.** Author, independently review, and
    implement `ASYNC-MUTEX-NOTHROW-AUTHORITY-1` in production
    (`include/sluice/async/mutex.hpp:27-29`); satisfy the six obligations
-   at `docs/async-mutex-nothrow-authority.md:147-158`; land a runtime test
+   at `docs/history/implementation-plans/async-mutex-nothrow-authority.md:147-158`; land a runtime test
    of injected-failure termination.
 2. **B2 — Corrective-2 independent adversarial review.** Commission a
    review by a context distinct from the Corrective-2 author, covering all
    11 required topics, with production-structure reasoning for the 33
-   counterexamples. Deposit the artifact at `docs/reviews/E12-E-REVIEW.md`
-   (or equivalent) following the precedent of `docs/reviews/E12-C-REVIEW.md`.
+   counterexamples. Deposit the artifact at `docs/history/reviews/E12-E-REVIEW.md`
+   (or equivalent) following the precedent of `docs/history/reviews/E12-C-REVIEW.md`.
 3. **B3 — Condition T25 hang audit.** Close
    `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1`: port the Mutex
    T19 corrective pattern (bounded coordinator waits, `release_for_drain`,
    `f_idle`) to `tests/async_condition_primitive_test.cpp:1348-1429`, drive the
    Condition runtime suite to green, and update the verdict blocks in
-   `docs/e12-sync-primitives-plan.md:69-76` and `docs/e12-queue.md:144-154`.
+   `docs/history/implementation-plans/e12-sync-primitives-plan.md:69-76` and `docs/history/closeout/e12-queue.md:144-154`.
 4. **B4 — Queue formal model.** Author the Queue TLA+ spec(s) for Models A
    and B under `docs/spec/e12_queue/`, encode the Corrective-2 shape
    (one-shot lease, no Permit, no direct handoff, active-victim stealing,
@@ -510,7 +510,7 @@ runtime tests passing; independent production implementation review PASS.
   entry (direct lock, try_lock, condition_variable reacquire, control).
 - Contract documented: commit `e4b08b1`.
 - Independent production implementation review PASS:
-  `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
+  `docs/history/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
   (commit `15dc9b4`) — verdict `PASS`; fail-fast contract, zero-symbol
   production archive, real death tests T1–T4, sanitizer matrix green, 25
   counterexamples blocked by type/build/test structure.
@@ -531,7 +531,7 @@ counterexamples blocked by production structure.
 **Evidence:**
 
 - Independent adversarial design review PASS:
-  `docs/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`
+  `docs/history/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`
   (commit `4f81d6c`) — verdict `PASS`; 11/11 required topics verified
   against current source; 19/19 canonical + 6/6 publication transitions
   independently recounted; 33/33 counterexamples dispositioned (each
@@ -562,7 +562,7 @@ assertions.
 - Fix mirrors the Mutex T19 determinism discipline: `f_idle` on W1,
   three-way handshake, `bounded_wait` on every gate, `release_for_drain`
   on gate failure.
-- Evidence report: `docs/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1:
+- Evidence report: `docs/history/closeout/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1:
   - T25 alone ×20 Clang Debug: 20/20 PASS (was 2/3 HANG pre-fix);
   - T25 alone ×10 Clang ASan: 10/10 PASS;
   - T25 alone ×10 Clang TSan: 10/10 PASS (was 3/3 SEGV pre-fix);
@@ -618,7 +618,7 @@ plus an independent formal review.
   verified: Model B state space expanded ~40% (1.17M → 1.96M distinct),
   previously-vacuous clauses now live, all gates still green.
 - Independent formal review PASS:
-  `docs/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`
+  `docs/history/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`
   (commit `6aa2334`) — verdict `PASS`; F.1.1 fix verified real and
   complete; zero primed/UNCHANGED conflicts across all 159 actions in all
   9 model files; full gate green; no new vacuity/defect; MAJOR/MINOR

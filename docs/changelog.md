@@ -20,7 +20,7 @@ for fiber-suspending synchronization primitives.
 
 - **E12-F AsyncRwLock** (`sluice-CORE-E12-F`). Fiber-suspending async
   Read-Write Lock with writer-fair phase-batched scheduling. Design and
-  proposed implementation authorized. See `docs/design/e12-rwlock.md`.
+  proposed implementation authorized. See `docs/history/implementation-plans/e12-rwlock.md`.
 
 - **E10–E12 implemented async synchronization substrate closure.**
   Independent reviews for E12-B Semaphore, E12-C AsyncMutex (including
@@ -28,7 +28,7 @@ for fiber-suspending synchronization primitives.
   E12-G cross-primitive semantic closure are complete. E12-B, E12-C,
   E12-D, and E12-G are closed under their recorded authorities. E12-E
   production implementation is authorized and complete. See
-  `docs/e10-e12-api-semantic-closure.md` §15.
+  `docs/history/closeout/e10-e12-api-semantic-closure.md` §15.
 
 ### Changed
 
@@ -37,7 +37,7 @@ for fiber-suspending synchronization primitives.
   underlying acquisition failure is converted to process termination via
   `std::terminate` (fail-fast entry
   `sluice::async::detail::async_mutex_lock_fail_fast`). Rationale in
-  `docs/async-mutex-nothrow-authority.md`; evidence in
+  `docs/history/implementation-plans/async-mutex-nothrow-authority.md`; evidence in
   `docs/history/closeout/async-mutex-nothrow-implementation.md`.
 
 - **E15 corrective: T25 migration/reacquire hang fixed.** Condition
@@ -114,7 +114,7 @@ for fiber-suspending synchronization primitives.
 - **E10-E12 API & Semantic Closure** (`E10-E12-ASYNC-SYNC-API-SEMANTIC-
   CLOSURE-1`). Cross-primitive API inventory, semantic contract matrix,
   D1-D10 decision register, E13 Select dependency contract.
-  See `docs/e10-e12-api-semantic-closure.md`.
+  See `docs/history/closeout/e10-e12-api-semantic-closure.md`.
 
 - **E10–E12 implemented async synchronization substrate closure.**
   Independent reviews for E12-B Semaphore, E12-C AsyncMutex (including
@@ -124,7 +124,7 @@ for fiber-suspending synchronization primitives.
   remains at Phase I review PASS (WITH OBSERVATIONS). E12-F RwLock
   remains deferred. E13 Select preparation may begin, but Select design
   and production implementation are not yet authorized. See
-  `docs/e10-e12-api-semantic-closure.md` §15.
+  `docs/history/closeout/e10-e12-api-semantic-closure.md` §15.
 
 ### Changed
 
@@ -135,7 +135,7 @@ for fiber-suspending synchronization primitives.
   recoverable exception; the `Mutex` boundary converts it to process
   termination via `std::terminate` (a single named fail-fast entry,
   `sluice::async::detail::async_mutex_lock_fail_fast`). Rationale and the
-  full contract live in `docs/async-mutex-nothrow-authority.md`; production
+  full contract live in `docs/history/implementation-plans/async-mutex-nothrow-authority.md`; production
   realization evidence in `docs/history/closeout/async-mutex-nothrow-implementation.md`.
   `noexcept` is part of the function type: downstream code taking
   `&sluice::async::Mutex::lock` must be recompiled. No in-repo TU does so,
@@ -170,7 +170,7 @@ universal performance claim**.
   `written ≤ flushed ≤ durable` LSN invariant.
 - **Backend boundary** (009): `IoContext` (abstract) + `BlockingIoContext`
   (POSIX); open errors surfaced at open time.
-- **Microbench harness** (010): `bench/*_bench` (small_writes/copy_strategy/
+- **Microbench harness** (010): `bench/*_bench.cpp` (small_writes/copy_strategy/
   wal_write/sync_smoke) + run script + summarizer + methodology doc.
 - **Optimization decision matrix** (011): runbook + summarizer +
   evidence-linked, scoped decisions (no universal claims).

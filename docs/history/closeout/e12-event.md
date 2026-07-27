@@ -7,9 +7,9 @@
 > (Built on E12-A-EVENT-CORRECTIVE-1 + ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1.)
 >
 > Authority baseline: E10 CLOSED
-> ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED at
-> `7715808` ([`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md)).
-> Preparation: [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)
+> ([`docs/history/closeout/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED at
+> `7715808` ([`docs/history/closeout/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md)).
+> Preparation: [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)
 > (E12-PREP READY).
 >
 > This document is the authoritative E12-A Event specification, refined by:

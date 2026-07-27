@@ -4,7 +4,7 @@ Compares the local Zig source (`./zig/lib/std/Io/`) against the current C++
 core. Status: after SLUICE-CORE-012. Zig is a **design reference only** — never a
 build/runtime dependency.
 
-> **Authoritative parity table:** `docs/zig-std-io-parity-audit.md` (012C) is
+> **Authoritative parity table:** `docs/history/implementation-plans/zig-std-io-parity-audit.md` (012C) is
 > now the single source of truth for concept-by-concept fidelity. This document
 > keeps the narrative gap analysis and per-section commentary that predates the
 > audit; where the two overlap, the audit table wins.
@@ -70,7 +70,7 @@ buffered, unread bytes) directly to the writer before invoking the vtable stream
 `consume_buffered()` before falling back to the scratch path. Detection is a
 `dynamic_cast` probe, so unbuffered readers pay nothing. The wrapper-vs-
 interface-owned-buffer divergence remains, and the scratch path still runs when
-no buffered bytes are exposed — see `docs/buffered-fast-path.md`. Not a
+no buffered bytes are exposed — see `docs/history/implementation-plans/design-buffered-fast-path.md`. Not a
 performance claim; measurement lands in SLUICE-CORE-010.
 
 ### 4.3 Flush is split, not uniform
@@ -95,7 +95,7 @@ SLUICE-CORE-005 added `read_vec`/`write_vec`/`write_all_vec` plus POSIX
 `readv`/`writev` overrides on the file backends and a `write_record_vec` WAL
 path; SLUICE-CORE-005B then aligned the default fallback to conservative
 readv/writev-style semantics (stop on EOF / error / first positive short result)
-— see `docs/readv-writev-design-note.md`. The *shape* now matches Zig's
+— see `docs/history/implementation-plans/design-readv-writev.md`. The *shape* now matches Zig's
 `readVec`/`readVecAll`/`writeVec`/`writeVecAll`. One deliberate semantic
 divergence remains (not a bug):
 
@@ -124,7 +124,7 @@ an observable, caller-chosen, testable strategy over an implicit, vtable-
 negotiated one. Auto currently resolves to BufferedFirst (006's default); the
 four `*Deferred` strategies (Vector/FileRange/Sendfile/Splice) are reserved
 slots that report unsupported rather than pretending to work. See
-`docs/copy-strategy.md`.
+`docs/history/implementation-plans/design-copy-strategy.md`.
 
 ### 4.8 Backend boundary: explicit IoContext vs Zig's context object — improved in SLUICE-CORE-009
 SLUICE-CORE-009 introduces `IoContext` (abstract) + `BlockingIoContext` (POSIX),
@@ -135,7 +135,7 @@ wholesale (no async runtime yet), but `IoContext` mirrors the *seam*: handles
 are obtained from a context, and the choice of backend is centralized there.
 This improves the strategy boundary but does not make sluice equal to Zig
 `std.Io` — there is still no async/evented/uring backend, and the direct
-`FileReader`/`FileWriter` constructors remain valid. See `docs/io-context.md`.
+`FileReader`/`FileWriter` constructors remain valid. See `docs/history/implementation-plans/design-io-context.md`.
 
 ## 5. Measurement gap (post-005)
 
@@ -161,8 +161,8 @@ relative cost of the scratch copy vs a would-be zero-copy fast path.
 ## 7. Next-step recommendation
 
 With 004–011 landed, the correctness + measurement foundation is complete. The
-optimization decision matrix (`docs/optimization-decision-matrix.md`) records
-scoped, evidence-linked rules; `docs/next-steps-after-011.md` lists candidates
+optimization decision matrix (`docs/history/implementation-plans/bench-decision-matrix.md`) records
+scoped, evidence-linked rules; `docs/history/archive/next-steps-after-011.md` lists candidates
 that the matrix points at. The remaining roadmap item is io_uring (012), which
 requires an async/evented backend that does not yet exist. Do not start any
-optimization without re-measuring first per `docs/optimization-runbook.md`.
+optimization without re-measuring first per `docs/history/implementation-plans/bench-optimization-runbook.md`.

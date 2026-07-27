@@ -15,10 +15,10 @@ E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-1
 > any Queue design doc, or any production path was modified. Nothing was
 > committed.
 >
-> Authority obeyed: `docs/e12-queue-state-machine.md` (Corrective-2 binding
-> semantics), `docs/e12-queue.md` (binding decisions above the historical
-> marker), `docs/e12-queue-scheduler-integration.md`, and the B2 review
-> (`docs/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`).
+> Authority obeyed: `docs/history/implementation-plans/e12-queue-state-machine.md` (Corrective-2 binding
+> semantics), `docs/history/closeout/e12-queue.md` (binding decisions above the historical
+> marker), `docs/history/implementation-plans/e12-queue-scheduler-integration.md`, and the B2 review
+> (`docs/history/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`).
 
 ---
 
@@ -335,7 +335,7 @@ vacuous. One-line fix verified.
   and the §"What this model does NOT cover" entry.
 - The README claims teardown reuse-freedom is covered by `ClosedAbsorbing`
   (B1) and that "reuse-freedom is a corollary of monotonicity."
-- The authority (`docs/e12-queue-state-machine.md` §1.1, lines 42-57) is
+- The authority (`docs/history/implementation-plans/e12-queue-state-machine.md` §1.1, lines 42-57) is
   explicit that **`ObjectLifecycle = operational | tearing_down` is a
   SEPARATE axis from `QueueState = Open | Closed`**: "`Closed` is absorbing
   ... `tearing_down` is also absorbing and prevents every ordinary QueuePort
@@ -365,7 +365,7 @@ vacuous. One-line fix verified.
   `src/`, or `tests/` (`grep -rln "AsyncQueue|QueueItemLease|QueuePort|
   queue_runnable" include/ src/ tests/` returns zero hits). The named
   "scheduler-integration suite" is a *design document*
-  (`docs/e12-queue-scheduler-integration.md`), not executable tests.
+  (`docs/history/implementation-plans/e12-queue-scheduler-integration.md`), not executable tests.
 - Citing a non-existent test suite as the named coverage for a scope-out
   violates Check 7's requirement that the named coverage "is REAL and
   actually covers the topic." For ActiveVictim and Teardown, the real

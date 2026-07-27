@@ -178,9 +178,9 @@ C10. Must introduce no dependency unless the ADR explicitly evaluates it.
 
 ## 7. Cross-links
 
-- What exists today (synchronous + spike + Zig reference): `docs/async-source-inventory.md` (016A).
-- Option comparison: `docs/async-design-alternatives.md` (016C).
+- What exists today (synchronous + spike + Zig reference): `docs/history/implementation-plans/async-source-inventory.md` (016A).
+- Option comparison: `docs/history/implementation-plans/async-design-alternatives.md` (016C).
 - Decision: `docs/adr/ADR-async-io-model.md` (016D).
-- Preconditions to start: `docs/async-readiness-gate.md` (016E).
-- Implementation split: `docs/async-next-jobs.md` (016F).
-- io_uring spike (synchronous-over-uring origin): `docs/io-uring-spike.md` (013).
+- Preconditions to start: `docs/history/implementation-plans/async-readiness-gate.md` (016E).
+- Implementation split: `docs/history/implementation-plans/async-next-jobs.md` (016F).
+- io_uring spike (synchronous-over-uring origin): `docs/history/implementation-plans/io-uring-spike.md` (013).

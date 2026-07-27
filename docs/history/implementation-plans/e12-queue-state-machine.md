@@ -430,7 +430,7 @@ The Queue TLA+ formal model is authored (B4 PASS): Model A (bounded MPMC
 FIFO, 12 invariants) + Model B (Open/Closed, 7 invariants) + 7 negative
 models under `docs/spec/e12_queue/`; gate `scripts/verify-e12-queue-formal.sh`
 (exit 0); independent formal review PASS
-(`docs/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`). The model
+(`docs/history/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`). The model
 normalizes the abstract machine to the one-shot lease/control location,
 selected-waiter grant, no-barging, winner-before-publication, and close
 monotonicity. The `tearing_down` lifecycle axis and E11 timer/expiry are

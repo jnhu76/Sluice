@@ -346,7 +346,7 @@ NONE
 ```
 
 All task changes are confined to `docs/spec/e13_select/`, `docs/formal/`,
-`docs/reviews/`, and `tools/formal/`. The pre-existing untracked production
+`docs/history/reviews/`, and `tools/formal/`. The pre-existing untracked production
 test remains outside the task and untouched.
 
 ## O. Residual risks

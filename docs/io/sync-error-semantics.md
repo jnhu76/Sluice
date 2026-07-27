@@ -17,7 +17,7 @@ the change being visible here.
 | Short write (0 < n < requested) | `write_all` advances `src` by `n` and loops until `src` is fully written. Never returns a partial write to the caller. | `Writer::write_all` |
 | `write_some` returns 0 on non-empty `src` | `write_all` returns `IoError::invalid_state` (broken backend; not an infinite loop). | `Writer::write_all` |
 | Reader/Writer returns n > requested | `invalid_state` (defensive; a reader/writer returning more than asked is broken). | `read_exact`, `write_all`, `read_vec`, `write_all_vec` |
-| `EINTR` | **Retried**, never propagated. `detail::retry_on_eintr` loops only on `errno == EINTR`; any other return is returned immediately. Applies to read/write/readv/writev/pread/pwrite/preadv/pwritev/fdatasync/fsync. | `detail/posix_retry.hpp` |
+| `EINTR` | **Retried**, never propagated. `detail::retry_on_eintr` loops only on `errno == EINTR`; any other return is returned immediately. Applies to read/write/readv/writev/pread/pwrite/preadv/pwritev/fdatasync/fsync. | `include/sluice/detail/posix_retry.hpp` |
 | `EAGAIN` / `EWOULDBLOCK` | Propagated as `IoError::would_block`. (The sync backend opens fds blocking; this is reached only if a fd is set non-blocking externally.) Not retried. | `from_errno_value` |
 | `ENOSPC` / out of space | `IoError::no_space`. | `from_errno_value` |
 | `EACCES` / permission | `IoError::permission_denied`. | `from_errno_value` |

@@ -580,7 +580,7 @@ Transition deltas use `(A,W,T,R)` for these four counters:
 > PREPARED/ACTIVE split below is preserved here only as the historical design
 > record that Corrective-3 supersedes. No code change resulted from this notice;
 > it clarifies document authority only. See
-> `docs/e10-e12-api-semantic-closure.md` finding F1 for the cross-document
+> `docs/history/closeout/e10-e12-api-semantic-closure.md` finding F1 for the cross-document
 > trace.
 
 The concrete pool remains `std::list<TimerRegistration>`. PREPARED and ACTIVE
