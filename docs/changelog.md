@@ -2,8 +2,8 @@
 
 ## Unreleased — documentation corrective (post-v0.1.0)
 
-Documentation-only changes since the v0.1.0 tag. No production, test, or
-build code modified.
+Documentation and build metadata changes since the v0.1.0 tag. No production
+library behavior or unit-test behavior changed.
 
 ### Changed
 
@@ -18,67 +18,51 @@ build code modified.
   markdown links strictly doc-relative (matches GitHub rendering). Self-test
   mode added. 69+ stale doc links repaired.
 - **Changelog** — corrected version identity and E13/E14/E15 status.
+- **Build metadata** — `xmake/examples.lua` adds `async_foundation_quickstart`
+  target; `.github/workflows/ci.yml` adds acceptance and documentation gates.
 
 ## v0.1.0 — Runtime Foundation (E10–E15)
 
-The first tagged release. A blocking, measurable, Zig-`std.Io`-inspired C++ I/O
-core. Explicitly **not** async, **not** io_uring-as-default, and makes **no
-universal performance claim**.
+The first tagged release. Synchronous core (`sluice_core`) and asynchronous
+runtime (`sluice_async`) both production-ready.
 
 ### Added
 
-- **Core abstractions** (001): `Reader`/`Writer`/`Result<T>`/`IoError`,
-  `read_some`/`write_some`/`read_exact`/`write_all`.
-- **POSIX file backend** (002): `FileReader`/`FileWriter` with EINTR retry and
-  errno preservation on open failure.
-- **Copy/stream limits** (003): `CopyLimit` (unlimited/bytes/nothing) and the
-  flush-contract documentation.
-- **Measurement hooks** (004): `SyscallStats`/`BufferStats`/`CopyStats` —
-  optional, caller-owned, never global.
-- **Vector I/O** (005): `IoSlice`/`ConstIoSlice`, `read_vec`/`write_vec`/
-  `write_all_vec`, POSIX `readv`/`writev` overrides with `IOV_MAX` chunking,
-  `VectorStats`, `wal::write_record_vec`.
-- **Buffered fast path** (006): `BufferedReadable` capability interface +
-  `copy_all` fast path + MVP examples.
-- **Copy strategy layer** (007): `CopyStrategy`/`CopyOptions`/`CopyDecision`
-  (Auto/Scratch/BufferedFirst + deferred slots).
-- **Flush/sync/durability separation** (008): `SyncableWriter`
-  (`sync_data`/`sync_all`), `SyncStats`, `wal::WalWriter` with the
-  `written ≤ flushed ≤ durable` LSN invariant.
-- **Backend boundary** (009): `IoContext` (abstract) + `BlockingIoContext`
-  (POSIX); open errors surfaced at open time.
-- **Microbench harness** (010): `bench/*_bench.cpp` (small_writes/copy_strategy/
-  wal_write/sync_smoke) + run script + summarizer + methodology doc.
-- **Optimization decision matrix** (011): runbook + summarizer +
-  evidence-linked, scoped decisions (no universal claims).
-- **Experimental io_uring spike** (013): `sluice::experimental::UringWriteBatch`/
-  `UringIoContext`/`UringStats`, build-gated behind `--with-liburing`,
-  skip-clean without liburing. **Not the default backend.**
+**Synchronous core (`sluice_core`):**
 
-### Documentation
+- `Result<T>`/`IoError` error model, `Reader`/`Writer` semantics, `copy_all`
+  with `CopyStrategy` (Scratch/BufferedFirst/Auto), `FileReader`/`FileWriter`
+  (POSIX, positional I/O, vector I/O), `BlockingIoContext`/`MemoryIoContext`,
+  `SyncableWriter` (`sync_data`/`sync_all`), WAL record format, `BlockingIoPool`.
 
-- MVP closeout, Zig `std.Io` source inventory + parity audit, io_uring readiness
-  gate, io_uring spike design, flush/sync/durability contract, WAL durability
-  model, copy-strategy contract, buffered-fast-path note, core-microbench
-  methodology, optimization runbook, optimization decision matrix,
-  release checklist, liburing validation runbook, changelog.
+**Asynchronous runtime (`sluice_async`):**
+
+- E10 `WaitNode`/`WaitQueue`, E11 `TimerRegistration`/deadline.
+- E12-A `Event`, E12-B `Semaphore`, E12-C `AsyncMutex`, E12-D `AsyncCondition`,
+  E12-E `AsyncQueue<T>`, E12-F `AsyncRwLock`.
+- E13 `Select` (multi-arm Event/Timer select).
+- E14 Threaded/Evented parity (`ThreadedWaitPolicy`/`EventedWaitPolicy`).
+- `Scheduler`, `Fiber`, `Completion<T>`, `AsyncIoContext`, `Future<T>`,
+  `Group`, `Batch`, `ThreadPoolBackend`.
+
+**Experimental:**
+
+- `UringAsyncBackend` — Linux io_uring (build-gated behind `--with-liburing`,
+  stub without liburing). **Not the default backend.**
 
 ### Tests
 
-35 tests, all green in debug and release. Coverage spans result/error
-semantics, every wrapper, vector I/O (default + POSIX), the copy strategy layer
-(all strategies + deferred handling + counters), sync/durability (LSN invariant
-on all paths), the IoContext boundary, and the uring stub path.
+109 tests, all green in debug and release. Coverage spans the synchronous
+core, all async synchronization primitives, multi-worker scheduling, and both
+execution strategies.
 
 ### Known limitations
 
 ```text
 io_uring remains experimental unless real liburing validation supports promotion.
 No production io_uring backend yet.
-No async runtime.
-No cancellation model.
+No cancellation model (public API); internal cancellation only.
 No networking.
-No timers.
 No default backend switch (BlockingIoContext stays the default).
 No universal performance conclusion.
 liburing/kernel support required for the uring path; without it the path is a clean stub.
@@ -88,9 +72,6 @@ Zig stdlib remains design reference only, not a dependency.
 
 ### Non-goals for this release
 
-- Async/evented backend.
 - io_uring as the default backend.
-- Networking, timers, mmap.
+- Networking, mmap.
 - Universal performance claims.
-
-See `docs/history/archive/release-v0.1-mvp-checklist.md` for the tagging checklist.

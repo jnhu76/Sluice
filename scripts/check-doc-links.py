@@ -11,9 +11,14 @@ Checks:
   - Returns non-zero on every actionable problem.
 
 Path resolution convention in this repository:
-  - Paths in docs are REPO-ROOT-RELATIVE (e.g. `docs/api-reference.md` from
-    `docs/README.md` resolves to `<repo>/docs/api-reference.md`).
-  - Some older docs use doc-relative paths; we try doc-relative as a fallback.
+  - Markdown links [text](path) are resolved STRICTLY DOC-RELATIVE (matching
+    GitHub rendering): `docs/foo.md` in `docs/history/closeout/e12-event.md`
+    resolves to `docs/history/closeout/docs/foo.md`, NOT to
+    `<repo>/docs/foo.md`. This catches links that the old root-first
+    resolver falsely reported as valid.
+  - Backtick references (`path/to/file`) are ambiguous — they may be paths
+    or code identifiers. They use the NON_PATH_PATTERNS heuristic and try
+    doc-relative first, then repo-root-relative, then zig-root as fallbacks.
   - Zig source references (`Io/fiber.zig`) resolve against the `zig/` subtree.
   - Glob patterns (`src/*.cpp`, `include/sluice/async/detail/queue_*.hpp`) are
     checked by globbing — they pass if >=1 file matches.

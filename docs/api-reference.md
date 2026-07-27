@@ -878,7 +878,6 @@ machine. Production code MUST NOT call them directly:
 - `rwlock_try_read_lock`, `rwlock_read_lock`, `rwlock_read_lock_until`, `rwlock_try_write_lock`, `rwlock_write_lock`, `rwlock_write_lock_until`, `rwlock_unlock_read`, `rwlock_unlock_write`, `rwlock_cancel` (E12-F)
 - `attach_ready_wake`, `owner_of`, `owner_id_of` (internal diagnostics)
 - `run_live(unsigned, bool(*)(void*), void*)` — Group-scoped live invocation with raw predicate lifetime constraints
-```
 
 `select()` is a **free function** (not a `Scheduler` member):
 
