@@ -120,6 +120,40 @@ HISTORICAL_ALLOWLIST = {
     "docs/history/formal-design",
 }
 
+# Environment-conditional references.
+#
+# These are path prefixes that documentation legitimately references but
+# that are INTENTIONALLY untracked (gitignored). They exist on a developer's
+# machine but NOT in CI (actions/checkout does not materialize gitignored
+# content). Examples:
+#   - zig/              : the Zig stdlib design reference (AGENTS.md §1 —
+#                         "design reference only, not a dependency"). Docs
+#                         like docs/adr/ADR-execution-model.md reference
+#                         `Io/fiber.zig`, `Io/Uring.zig`, etc. via ZIG_ROOT.
+#   - .c-review-results/: automated review findings (AGENTS.md §10).
+#   - .agents/, .zcode/,
+#     .mimocode/        : local agent/skill tooling.
+#   - states/           : TLC transient disk state (.gitignore).
+#
+# A backtick reference that resolves under one of these prefixes is NOT a
+# documentation defect and MUST NOT fail the gate. When the target is present
+# locally it resolves normally; when it is absent (CI), we report it as an
+# informational ENVIRONMENT-CONDITIONAL note rather than a broken path.
+#
+# This is what reconciles local-vs-CI: the scan set comes from `git ls-files`
+# (no generated docs leak in), but legitimate refs to the untracked design
+# reference / local-only artifacts must not be flagged as broken just because
+# CI does not check them out.
+ENVIRONMENT_CONDITIONAL_PREFIXES = {
+    "zig",
+    ".c-review-results",
+    ".agents",
+    ".zcode",
+    ".mimocode",
+    "states",
+}
+
+
 # Paths that are known to have moved; references to them from non-historical
 # docs are stale-path errors unless allowlisted above.
 # Maps old prefix -> new prefix for path prefix replacement.
@@ -632,6 +666,47 @@ def is_historical(resolved: Path) -> bool:
     )
 
 
+def environment_conditional_prefix(ref: str, resolved: Path) -> str | None:
+    """Return the ENVIRONMENT_CONDITIONAL_PREFIXES entry that `ref` (or its
+    resolved path) falls under, else None.
+
+    A reference is environment-conditional if the target lives under a
+    gitignored-but-legitimate subtree. Three detection strategies, because the
+    resolver returns a doc-relative fallback when the real target is absent:
+
+      1. Raw-ref prefix: `.c-review-results/...`, `.agents/skills/...`,
+         `states/...`, `zig/...` — the ref text itself names the subtree.
+      2. Zig-design-reference shape: `Io/*.zig`, `Io/Foo/*.zig`, etc. These
+         resolve under ZIG_ROOT = zig/lib/std/Io (gitignored per AGENTS.md §1).
+         Detected via looks_like_zig_path() regardless of how the resolver
+         fell back, so this works in CI where zig/ is absent.
+      3. Path-component match: any trailing path component equal to a
+         name-based .gitignore dir rule (e.g. `states/` matches
+         `docs/spec/e13_select/states`). Covers gitignore rules that are
+         matched at any depth.
+
+    Returns the matched prefix so the caller can emit a precise note.
+    """
+    clean = strip_line_ref(ref).lstrip("./")
+    # Strategy 1: raw-ref prefix.
+    for prefix in ENVIRONMENT_CONDITIONAL_PREFIXES:
+        if clean == prefix or clean.startswith(prefix + "/"):
+            return prefix
+    # Strategy 2: Zig design-reference shape.
+    if looks_like_zig_path(clean):
+        return "zig"
+    # Strategy 3: name-based .gitignore dir component anywhere in the path.
+    try:
+        rel = os.path.relpath(resolved, ROOT).replace("\\", "/")
+    except ValueError:
+        return None
+    parts = [p for p in rel.split("/") if p]
+    for prefix in ENVIRONMENT_CONDITIONAL_PREFIXES:
+        if prefix in parts:
+            return prefix
+    return None
+
+
 def is_known_moved(ref: str, doc_path: Path | None = None,
                   resolved: Path | None = None) -> str | None:
     """Return the new path if ref (or its resolved path) matches a known
@@ -663,20 +738,21 @@ def is_known_moved(ref: str, doc_path: Path | None = None,
     return None
 
 
-def check_file(path: Path) -> tuple[list[str], list[str], list[str]]:
+def check_file(path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
     """Check a single Markdown file.
 
-    Returns (broken, stale, historical_unallowlisted).
+    Returns (broken, stale, historical_unallowlisted, envcond).
     """
     broken = []
     stale = []
     historical = []
+    envcond = []
 
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as e:
         broken.append(f"{path}: cannot read: {e}")
-        return broken, stale, historical
+        return broken, stale, historical, envcond
 
     line_of = lambda pos: text[: pos].count("\n") + 1
 
@@ -702,10 +778,17 @@ def check_file(path: Path) -> tuple[list[str], list[str], list[str]]:
                     f"HISTORICAL (allowlisted): `{ref}`"
                 )
             else:
-                broken.append(
-                    f"{path}:{line_of(m.start())}: "
-                    f"BROKEN MARKDOWN LINK: `{ref}` -> {resolved}"
-                )
+                eco = environment_conditional_prefix(ref, resolved)
+                if eco is not None:
+                    envcond.append(
+                        f"{path}:{line_of(m.start())}: "
+                        f"ENVIRONMENT-CONDITIONAL (`{eco}/` is gitignored): `{ref}`"
+                    )
+                else:
+                    broken.append(
+                        f"{path}:{line_of(m.start())}: "
+                        f"BROKEN MARKDOWN LINK: `{ref}` -> {resolved}"
+                    )
 
     # --- Backtick paths ---
     # Backtick references are ambiguous — `foo/bar` could be a path or a
@@ -729,18 +812,26 @@ def check_file(path: Path) -> tuple[list[str], list[str], list[str]]:
                     f"HISTORICAL (allowlisted): `{ref}`"
                 )
             else:
-                broken.append(
-                    f"{path}:{line_of(m.start())}: "
-                    f"BROKEN BACKTICK PATH: `{ref}` -> {resolved}"
-                )
+                eco = environment_conditional_prefix(ref, resolved)
+                if eco is not None:
+                    envcond.append(
+                        f"{path}:{line_of(m.start())}: "
+                        f"ENVIRONMENT-CONDITIONAL (`{eco}/` is gitignored): `{ref}`"
+                    )
+                else:
+                    broken.append(
+                        f"{path}:{line_of(m.start())}: "
+                        f"BROKEN BACKTICK PATH: `{ref}` -> {resolved}"
+                    )
 
-    return broken, stale, historical
+    return broken, stale, historical, envcond
 
 
 def main() -> int:
     all_broken = []
     all_stale = []
     all_historical = []
+    all_envcond = []
 
     for f in SCAN_FILES:
         if not f.exists():
@@ -748,10 +839,11 @@ def main() -> int:
             continue
         if should_skip(f):
             continue
-        b, s, h = check_file(f)
+        b, s, h, e = check_file(f)
         all_broken.extend(b)
         all_stale.extend(s)
         all_historical.extend(h)
+        all_envcond.extend(e)
 
     # Report
     print("=" * 60)
@@ -771,6 +863,13 @@ def main() -> int:
             print(f"  {item}")
     else:
         print(f"STALE_REPOSITORY_PATHS: 0")
+
+    if all_envcond:
+        print(f"\nENVIRONMENT-CONDITIONAL (gitignored, present locally, absent in CI): {len(all_envcond)}")
+        for item in all_envcond:
+            print(f"  {item}")
+    else:
+        print(f"ENVIRONMENT-CONDITIONAL: 0")
 
     if all_historical:
         print(f"\nHISTORICAL_REFERENCES (allowlisted, informational): {len(all_historical)}")
@@ -813,7 +912,7 @@ def self_test() -> int:
         f.write("[good](README.md)\n")
         tmp1 = Path(f.name)
 
-    b, s, _ = check_file(tmp1)
+    b, s, _, _ = check_file(tmp1)
     if not any("docs/does_not_exist_anywhere.md" in x for x in b):
         print("SELF-TEST FAIL: broken markdown link not detected")
         failures += 1
@@ -828,7 +927,7 @@ def self_test() -> int:
         f.write("[stale](docs/e12-event.md)\n")
         tmp2 = Path(f.name)
 
-    b, s, _ = check_file(tmp2)
+    b, s, _, _ = check_file(tmp2)
     if not any("docs/e12-event.md" in x for x in s):
         print("SELF-TEST FAIL: stale moved path not detected")
         failures += 1
@@ -844,7 +943,7 @@ def self_test() -> int:
         f.write("[masked](e12-event.md)\n")
         tmp3 = Path(f.name)
 
-    b, s, _ = check_file(tmp3)
+    b, s, _, _ = check_file(tmp3)
     flagged = any("e12-event.md" in x for x in b) or any("e12-event.md" in x for x in s)
     if not flagged:
         print("SELF-TEST FAIL: formerly-masked doc name not detected")
@@ -862,7 +961,7 @@ def self_test() -> int:
         f.write("[plan](e12-sync-primitives-plan.md)\n")
         tmp4 = Path(f.name)
 
-    b, s, _ = check_file(tmp4)
+    b, s, _, _ = check_file(tmp4)
     flagged = any("e12-sync-primitives-plan.md" in x for x in b) or \
               any("e12-sync-primitives-plan.md" in x for x in s)
     if not flagged:
@@ -886,7 +985,7 @@ def self_test() -> int:
         # relative to the nested document. It must be flagged as broken.
         nested_file.write_text("[spec](docs/spec/e12_event/)\n", encoding="utf-8")
 
-        b, s, _ = check_file(nested_file)
+        b, s, _, _ = check_file(nested_file)
         if not any("docs/spec/e12_event/" in x for x in b):
             print("SELF-TEST FAIL: nested doc repo-root-looking link was silently resolved")
             failures += 1
@@ -924,6 +1023,35 @@ def self_test() -> int:
             finally:
                 if not existed:
                     untracked.unlink(missing_ok=True)
+
+    # --- Test 7: refs to intentionally-untracked dirs are environment-conditional ---
+    # Documents like docs/adr/ADR-execution-model.md reference the Zig design
+    # reference tree (zig/, gitignored per AGENTS.md §1) via `Io/fiber.zig`
+    # etc. These resolve locally (ZIG_ROOT) but NOT in CI (actions/checkout
+    # does not materialize gitignored content). Such refs MUST be reported as
+    # ENVIRONMENT-CONDITIONAL notes, never as BROKEN — otherwise the docs gate
+    # is structurally un-enforceable in CI. The same applies to local-only
+    # artifact dirs (.c-review-results/, .agents/, states/).
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".md", delete=False, encoding="utf-8"
+    ) as f:
+        # A Zig-ref-shaped backtick that cannot resolve (no zig/ in this
+        # scratch context). Must land in envcond, not broken.
+        f.write("see `Io/fiber.zig` and `.c-review-results/run.md`\n")
+        tmp7 = Path(f.name)
+
+    b, s, _, e = check_file(tmp7)
+    eco_hits = [x for x in e if "ENVIRONMENT-CONDITIONAL" in x]
+    broken_leaks = [x for x in b if "Io/fiber.zig" in x or ".c-review-results" in x]
+    if eco_hits and not broken_leaks:
+        print("SELF-TEST PASS: gitignored-dir refs reported as environment-conditional")
+    else:
+        if broken_leaks:
+            print("SELF-TEST FAIL: gitignored-dir refs leaked into broken set")
+        else:
+            print("SELF-TEST FAIL: gitignored-dir refs not flagged as environment-conditional")
+        failures += 1
+    tmp7.unlink(missing_ok=True)
 
     return failures
 
