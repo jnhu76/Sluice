@@ -19,6 +19,7 @@ Architecture Decision Records for Sluice.
 | [ADR-024S](ADR-024S-sync-runtime-contract.md) | Sync Runtime Contract | **Accepted** | Synchronous core | — | — |
 | [ADR-async-io-model](ADR-async-io-model.md) | Async I/O model | **Accepted** | Async runtime | — | — |
 | [ADR-execution-model](ADR-execution-model.md) | Dual Threaded/Evented Execution Model | **Accepted** | Async runtime | — | — |
+| [ADR-application-runtime](ADR-application-runtime.md) | Application Runtime Architecture | **Proposed** | Async runtime (E16) | — | — |
 
 ## ADR details
 
@@ -49,6 +50,17 @@ Architecture Decision Records for Sluice.
 - **Superseded by:** none
 - **Current authority?** Yes — defines the Threaded/Evented execution strategy contract.
 - **Implementation:** E10–E13 (scheduler, timer, primitives) complete. Evented (E14+) deferred.
+
+### ADR-application-runtime (E16): Application Runtime Architecture
+
+- **Status:** Proposed
+- **Subsystem:** Async runtime (E16)
+- **Supersedes:** none
+- **Superseded by:** none
+- **Current authority?** No — proposed, under review.
+- **Decides:** the architecture of the E16 Application Runtime layer — ownership, lifecycle, admission, cancellation, drain/join, destructor, restartability, error model, and public-surface direction.
+- **Design document:** `docs/design/e16-application-runtime.md`
+- **Implementation:** Unauthorized. Requires accepted ADR + independent design review.
 
 ## Historical notes
 

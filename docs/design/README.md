@@ -25,7 +25,7 @@ The following future-phase proposals may exist:
 
 | Design | Status | Related ADR |
 |--------|--------|-------------|
-| E16 Application Runtime | Not yet proposed | — |
+| [E16 Application Runtime](e16-application-runtime.md) | Proposed | [ADR-application-runtime](../adr/ADR-application-runtime.md) |
 | Fuzz infrastructure | Not yet proposed | — |
 
 If no actual design document exists for a row above, it is a placeholder for
