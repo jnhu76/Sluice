@@ -1,0 +1,25 @@
+# libFuzzer dictionary for WAL record frames.
+# Useful four-byte fragments the mutator can splice into the input. libFuzzer
+# treats each quoted token as a dictionary element.
+#
+# WAL magic in little-endian form (0x57414C -> bytes 4C 41 57 00).
+"\\x4c\\x41\\x57\\x00"
+# All-zero u32 (common length / checksum).
+"\\x00\\x00\\x00\\x00"
+# 0xffffffff (max u32 — exercises the bounded-growth path).
+"\\xff\\xff\\xff\\xff"
+# Small common lengths (little-endian u32).
+"\\x01\\x00\\x00\\x00"
+"\\x04\\x00\\x00\\x00"
+"\\x08\\x00\\x00\\x00"
+"\\x10\\x00\\x00\\x00"
+"\\x20\\x00\\x00\\x00"
+"\\x40\\x00\\x00\\x00"
+"\\x80\\x00\\x00\\x00"
+"\\x00\\x01\\x00\\x00"
+"\\x00\\x00\\x01\\x00"
+"\\x00\\x00\\x00\\x01"
+# Single-byte checksum patterns (little-endian u32).
+"\\x02\\x00\\x00\\x00"
+"\\x03\\x00\\x00\\x00"
+"\\xff\\x00\\x00\\x00"
