@@ -8,10 +8,17 @@
 //   checksum = sum(payload bytes) mod 2^32
 //
 // copy_all_fault config layout mirrors fuzz::decode_config():
-//   scratch:u32 | limit:u8 | limit_val:u32 | rshort:u32 | wshort:u32
-//   rfail:u8 | rfail_thresh:u8 | wfail:u8 | wfail_thresh:u8
-//   injected:u8 | strategy:u8 | broken:u8
+//   scratch:u32 | limit:mod3(u8) | limit_val:u32 | rshort:u32 | wshort:u32
+//   rfail:mod3(u8) | rfail_thresh:u8 | wfail:mod3(u8) | wfail_thresh:u8
+//   injected:mod3(u8) | strategy:mod5(u8) | broken:mod2(u8)
+//   capability:mod2(u8) | buffered_prefix:u32 | consume_fail:mod2(u8)
+//   writer_zero_progress:mod2(u8) | early_eof_after:u32
 //   then the source payload bytes.
+//
+// NOTE: the mod-encoded selectors are emitted as their target VALUE (not as a
+// raw byte that the harness would reduce mod N). take_mod(count) returns
+// take_u8() % count, so emitting the value v directly yields v only when v <
+// count, which holds for every selector below (0..count-1).
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -189,11 +196,17 @@ static void gen_wal_roundtrip() {
 }
 
 // copy_all_fault config + source. See the layout comment at the top.
-static void append_config(std::vector<std::byte>& out, std::uint8_t scratch, std::uint8_t limit,
-                          std::uint32_t limit_val, std::uint8_t rshort, std::uint8_t wshort,
+//
+// Selector bytes (limit, rfail, wfail, injected, strategy, broken, capability,
+// consume_fail, writer_zero_progress) are emitted as their TARGET value because
+// take_mod(count) returns take_u8() % count and the value is already < count.
+static void append_config(std::vector<std::byte>& out, std::uint32_t scratch, std::uint8_t limit,
+                          std::uint32_t limit_val, std::uint32_t rshort, std::uint32_t wshort,
                           std::uint8_t rfail, std::uint8_t rfail_t, std::uint8_t wfail,
                           std::uint8_t wfail_t, std::uint8_t injected, std::uint8_t strategy,
-                          std::uint8_t broken) {
+                          std::uint8_t broken, std::uint8_t capability,
+                          std::uint32_t buffered_prefix, std::uint8_t consume_fail,
+                          std::uint8_t writer_zero_progress, std::uint32_t early_eof_after) {
     put_le_u32(out, scratch);
     out.push_back(b(limit));
     put_le_u32(out, limit_val);
@@ -206,16 +219,30 @@ static void append_config(std::vector<std::byte>& out, std::uint8_t scratch, std
     out.push_back(b(injected));
     out.push_back(b(strategy));
     out.push_back(b(broken));
+    out.push_back(b(capability));
+    put_le_u32(out, buffered_prefix);
+    out.push_back(b(consume_fail));
+    out.push_back(b(writer_zero_progress));
+    put_le_u32(out, early_eof_after);
 }
 
-static std::vector<std::byte> cfg(std::uint8_t scratch, std::uint8_t limit, std::uint32_t limit_val,
-                                  std::uint8_t rshort, std::uint8_t wshort, std::uint8_t rfail = 0,
+// Defaults: plain reader, no buffered prefix, no consume fail, no zero-progress,
+// no early EOF. Keeps existing seeds' intent while filling the new config fields
+// with benign values.
+static std::vector<std::byte> cfg(std::uint32_t scratch, std::uint8_t limit, std::uint32_t limit_val,
+                                  std::uint32_t rshort, std::uint32_t wshort, std::uint8_t rfail = 0,
                                   std::uint8_t rfail_t = 0, std::uint8_t wfail = 0,
                                   std::uint8_t wfail_t = 0, std::uint8_t injected = 0,
-                                  std::uint8_t strategy = 1 /*Auto*/, std::uint8_t broken = 0) {
+                                  std::uint8_t strategy = 1 /*Auto*/, std::uint8_t broken = 0,
+                                  std::uint8_t capability = 0 /*Plain*/,
+                                  std::uint32_t buffered_prefix = 0,
+                                  std::uint8_t consume_fail = 0,
+                                  std::uint8_t writer_zero_progress = 0,
+                                  std::uint32_t early_eof_after = 0) {
     std::vector<std::byte> v;
     append_config(v, scratch, limit, limit_val, rshort, wshort, rfail, rfail_t, wfail, wfail_t,
-                  injected, strategy, broken);
+                  injected, strategy, broken, capability, buffered_prefix, consume_fail,
+                  writer_zero_progress, early_eof_after);
     return v;
 }
 
@@ -337,6 +364,92 @@ static void gen_copy_all_fault() {
         auto v = cfg(64, 0, 0, 64, 64);
         v.insert(v.end(), {b(0x00), b(0xFF), b(0x55), b(0xAA)});
         write_file("binary_source", v);
+    }
+
+    // --- §5: BufferedReadable coverage. ---
+
+    // buffered prefix fully satisfies an unlimited copy (Auto).
+    {
+        auto v = cfg(64, 0, 0, 64, 64, 0, 0, 0, 0, 0, 1, 0, /*capability*/ 1,
+                     /*buffered_prefix*/ 100);
+        src(v, 100);
+        write_file("buffered_full", v);
+    }
+    // buffered prefix smaller than source: drains prefix then continues through
+    // scratch (exercises the buffered-to-scratch transition CB5).
+    {
+        auto v = cfg(8, 0, 0, 8, 8, 0, 0, 0, 0, 0, 1, 0, /*capability*/ 1,
+                     /*buffered_prefix*/ 3);
+        src(v, 100);
+        write_file("buffered_then_scratch", v);
+    }
+    // buffered + bounded limit smaller than buffered prefix (limit clamp CB2;
+    // expected killer for M-COPY-07).
+    {
+        auto v = cfg(64, 2, 10, 64, 64, 0, 0, 0, 0, 0, 1, 0, /*capability*/ 1,
+                     /*buffered_prefix*/ 100);
+        src(v, 100);
+        write_file("buffered_limit_smaller", v);
+    }
+    // Scratch strategy with a buffered reader: must NOT touch the buffered
+    // capability (peek/consume never called).
+    {
+        auto v = cfg(64, 0, 0, 64, 64, 0, 0, 0, 0, 0, 0 /*Scratch*/, 0,
+                     /*capability*/ 1, /*buffered_prefix*/ 100);
+        src(v, 100);
+        write_file("buffered_scratch_strategy", v);
+    }
+    // BufferedFirst with a writer failure while draining buffered bytes: the
+    // failed region consumes nothing and buffered bytes are preserved (CB3;
+    // expected killer for M-COPY-08).
+    {
+        auto v = cfg(64, 0, 0, 64, 64, 0, 0, /*wfail AfterCalls*/ 1, /*thresh*/ 0, 0,
+                     /*BufferedFirst*/ 2, 0, /*capability*/ 1, /*buffered_prefix*/ 100);
+        src(v, 100);
+        write_file("buffered_writer_fail", v);
+    }
+    // consume_buffered fails after a successful write (CB6).
+    {
+        auto v = cfg(64, 0, 0, 64, 64, 0, 0, 0, 0, 0, /*BufferedFirst*/ 2, 0,
+                     /*capability*/ 1, /*buffered_prefix*/ 100, /*consume_fail*/ 1);
+        src(v, 100);
+        write_file("buffered_consume_fail", v);
+    }
+
+    // --- §19: source beyond the old 4096 truncation bound. Proves bytes past
+    //     offset 4095 participate in the output oracle (unlimited, fault-free). ---
+    {
+        auto v = cfg(64, 0, 0, 64, 64);
+        src(v, 5000);
+        write_file("source_beyond_4096", v);
+    }
+
+    // --- §20: zero-progress writer and early clean EOF. ---
+
+    // Zero-progress writer: copy_all returns invalid_state; target terminates.
+    {
+        auto v = cfg(64, 0, 0, 64, 64, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                     /*writer_zero_progress*/ 1);
+        src(v, 100);
+        write_file("writer_zero_progress", v);
+    }
+    // early_eof_before_first: clean EOF before any byte is transferred. The
+    // model's early-EOF predicate fires on the first read only when the source
+    // is already exhausted (clean EOF), which is the genuine "EOF before first
+    // byte" contract. Distinct from an injected reader error or broken-reader
+    // over-report.
+    {
+        auto v = cfg(64, 0, 0, 64, 64, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0);
+        // no source bytes appended -> first read returns 0 -> clean EOF
+        write_file("early_eof_before_first", v);
+    }
+    // early_eof_after_prefix: clean EOF after a configured number of successful
+    // bytes even though more source bytes remain.
+    {
+        auto v = cfg(64, 0, 0, 64, 64, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                     /*early_eof_after*/ 5);
+        src(v, 100);
+        write_file("early_eof_after_prefix", v);
     }
 }
 
