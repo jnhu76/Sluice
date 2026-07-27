@@ -6,7 +6,7 @@
 > Status: **B4: COMPLETE — INDEPENDENT FORMAL REVIEW REQUIRED.** This model
 > obeys the **Corrective-2** design authority
 > (`E12-E-QUEUE-SCHEDULER-INTEGRATION-DESIGN-CORRECTIVE-2: PASS`, B2). The
-> semantic authority document is [`docs/e12-queue.md`](../../e12-queue.md).
+> semantic authority document is [`docs/history/closeout/e12-queue.md`](../../history/closeout/e12-queue.md).
 
 This directory contains the **safety-only** TLA+ / TLC formal model for the
 E12-E Queue. It proves the one-shot-lease / bounded-MPMC-FIFO safety properties

@@ -1,18 +1,19 @@
 # ADR: Async I/O model for sluice
 
-**Status: sluice-CORE-016D.** Architecture Decision Record.
-**State: Accepted (design only — no code in this job).**
-**Implementation: DEFERRED behind the sync-first readiness gate** (`docs/sync-before-async-readiness-gate.md`, added in the 016G sync-first planning patch). The async **model decision** below is unchanged; only the start of async **coding** waits until the blocking baseline is engineered (jobs 017S–023S, `docs/sync-io-next-jobs.md`). See `docs/sync-io-model-gap-audit.md` for why.
+**Status:** Accepted (sluice-CORE-016D)
+**Authority:** ADR (async I/O model)
+**State:** Accepted (design only — no code in this job).
+**Implementation:** DEFERRED behind the sync-first readiness gate (`docs/history/closeout/sync-before-async-readiness-gate.md`, added in the 016G sync-first planning patch). The async **model decision** below is unchanged; only the start of async **coding** waits until the blocking baseline is engineered (jobs 017S–023S, `docs/history/implementation-plans/sync-io-next-jobs.md`). See `docs/history/closeout/sync-io-model-gap-audit.md` for why.
 **Decides:** the async model sluice will adopt, its public API shape, its backend
 boundary, and what is explicitly deferred.
 
-- Supersedes nothing; sits above `docs/io-uring-readiness-gate.md` (012D, the
-  *spike* gate) and `docs/io-uring-spike.md` (013, the experiment).
-- Rests on `docs/async-source-inventory.md` (016A),
-  `docs/async-problem-statement.md` (016B), and
-  `docs/async-design-alternatives.md` (016C).
-- Preconditions before any code: `docs/async-readiness-gate.md` (016E).
-- Implementation split: `docs/async-next-jobs.md` (016F).
+- Supersedes nothing; sits above `docs/history/implementation-plans/io-uring-readiness-gate.md` (012D, the
+  *spike* gate) and `docs/history/implementation-plans/io-uring-spike.md` (013, the experiment).
+- Rests on `docs/history/implementation-plans/async-source-inventory.md` (016A),
+  `docs/history/implementation-plans/async-problem-statement.md` (016B), and
+  `docs/history/implementation-plans/async-design-alternatives.md` (016C).
+- Preconditions before any code: `docs/history/implementation-plans/async-readiness-gate.md` (016E).
+- Implementation split: `docs/history/implementation-plans/async-next-jobs.md` (016F).
 
 This ADR makes **one** recommendation. It introduces **no dependency** without
 explicit evaluation (§11). It makes **no universal performance claim**.

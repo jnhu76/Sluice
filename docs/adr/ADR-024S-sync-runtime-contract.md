@@ -1,8 +1,9 @@
 # ADR-024S: Sync Runtime Contract (merge-readiness closeout)
 
 **Status:** Accepted (sluice-CORE-024S, sync-runtime merge-readiness).
+**Authority:** ADR (sync runtime contract)
 **Supersedes:** none. **Supplemented by:** `docs/io/sync-error-semantics.md`,
-`docs/bench/sync-runtime-bench-notes.md`, `docs/reviews/024S-sync-runtime-merge-readiness.md`.
+`docs/history/closeout/sync-runtime-bench-notes.md`, `docs/reviews/024S-sync-runtime-merge-readiness.md`.
 
 ## Context
 

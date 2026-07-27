@@ -184,7 +184,7 @@ SelectResult select(Scheduler& scheduler, Cases&&... cases);
 ```
 
 The implementation lives in `detail/select_port.hpp` (planned,
-`docs/e13-select-production-architecture.md` §8). The variadic expands into a
+`docs/design/e13-select-production-architecture.md` §8). The variadic expands into a
 fixed `std::array<SelectArmSlot, N>` of union-based slots inside the `select`
 frame; no per-call heap, no derived-to-base slicing.
 
@@ -226,7 +226,7 @@ The `completion_mode` (`Inline` vs `Suspended` in the formal contract) is
 **not** exposed on `SelectResult`. The two modes are observably identical to
 the caller: the function returns the same `SelectResult`. The mode is an
 internal accounting field used by the publication protocol
-(`docs/e13-select-locking-and-publication.md`). Exposing it would invite
+(`docs/design/e13-select-locking-and-publication.md`). Exposing it would invite
 callers to depend on scheduler timing.
 
 ### 4.5 Empty case list

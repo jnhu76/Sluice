@@ -89,7 +89,7 @@ exactly as before; Select has its own parallel authority for its own arms.
 ```cpp
 namespace sluice::async {
 
-class SelectResult;                 // see docs/e13-select-public-api.md §3.3
+class SelectResult;                 // see docs/design/e13-select-public-api.md §3.3
 class EventSelectCase;              // a case value: holds Event& only
 class TimerSelectCase;              // a case value: holds Scheduler& + deadline
 
@@ -140,11 +140,11 @@ Each type below records the eight fields the brief requires.
 | public visibility         | none — `detail`                                               |
 
 `winner_` is the **central claim CAS target** (section K, Option C1+C2 hybrid,
-see `docs/e13-select-locking-and-publication.md`). The CAS is the single
+see `docs/design/e13-select-locking-and-publication.md`). The CAS is the single
 linearization authority.
 
 Additional fields for broadcast worklist (see
-`docs/e13-select-event-adapter.md` §4.6):
+`docs/design/e13-select-event-adapter.md` §4.6):
 ```cpp
 SelectGroup* broadcast_next_;             // intrusive worklist chain (under G only)
 std::uint64_t broadcast_epoch_;           // deduplication generation counter
@@ -247,7 +247,7 @@ Ownership transfer: nodes are constructed in a temporary `std::list` outside G,
 then each block is spliced individually under G during its arm's registration
 step via `std::list::splice` (O(1), no allocation inside the lock). The
 deadline heap stores `DeadlineHeapEntry` values, not raw `TimerRegistration*`
-— see `docs/e13-select-timer-adapter.md` §4.
+— see `docs/design/e13-select-timer-adapter.md` §4.
 
 #### 2.3.6 `SelectPort` (Scheduler-side per-Event registry head)
 
@@ -441,7 +441,7 @@ registration prefix is rolled back in reverse registration order
 (`last_registered-1 .. 0`); the never-registered suffix
 (`[last_registered, arm_count)`) is normalized to Detached and its Timer blocks
 stay in the caller-frame `tmp_pool` (never Scheduler-owned, never retired through
-Scheduler authority). See `docs/e13-select-p7-rollback-closeout.md` §25 for the
+Scheduler authority). See `docs/history/closeout/e13-select-p7-rollback-closeout.md` §25 for the
 full formal-to-production refinement map.
 
 No runnable publication occurs. No result is written. The caller frame unwinds

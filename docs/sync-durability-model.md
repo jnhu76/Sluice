@@ -1,10 +1,14 @@
 # Sync durability model
 
-**Status: SYNC-IO-COMPLETE Phase 6 (sync doc reconciliation).** Defines the
-blocking durability model: the three durability-related operations, what each
+**Status:** Current
+**Authority:** Architecture (durability model)
+**Last verified against:** v0.1.0
+
+Defines the blocking durability model: the three durability-related operations, what each
 guarantees, and the benchmark **sync-policy names** used by the W1–W4 blocking
-benchmark matrix. It extends (does not replace) `docs/design-flush-sync-
-durability.md` and `docs/design-wal-durability.md`. Async overlapped durability
+benchmark matrix. It extends (does not replace) historical design docs
+(`docs/history/implementation-plans/design-flush-sync-durability.md` and
+`docs/history/implementation-plans/design-wal-durability.md`). Async overlapped durability
 (W4) is out of scope here — it is blocked behind the sync-first gate; this doc
 defines the blocking baseline async W4 must beat.
 
@@ -46,7 +50,7 @@ sync_all()         // fsync — data + metadata integrity
 ## 3. WAL durability (existing, restated)
 
 `WalWriter` maintains the invariant `durable_lsn <= flushed_lsn <= written_lsn`
-(`docs/design-wal-durability.md`):
+(`docs/history/implementation-plans/design-wal-durability.md`):
 
 ```text
   write_record(_vec)  advances written_lsn
@@ -111,6 +115,6 @@ Avoid physical-disk durability claims. Test API behavior and error propagation.
 
 - Architecture: `docs/sync-io-architecture.md`.
 - Primitive contract: `docs/sync-io-model.md`.
-- Existing durability design: `docs/design-flush-sync-durability.md`, `docs/design-wal-durability.md`.
+- Existing durability design: `docs/history/implementation-plans/design-flush-sync-durability.md`, `docs/history/implementation-plans/design-wal-durability.md`.
 - Bench methodology (uses these policy names): `docs/sync-bench-methodology.md`, `docs/sync-bench-matrix.md`.
-- Job that baselines this: `docs/sync-io-next-jobs.md` (020S).
+- Job that baselines this: `docs/history/implementation-plans/sync-io-next-jobs.md` (020S).

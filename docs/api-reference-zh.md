@@ -396,7 +396,7 @@ Scheduler 转移中，运行时无法在一次锁失败之后既能恢复用户�
 内联在头文件中，因此每个 TU 都会重新编译。在当前已验证工具链对应的 Itanium ABI
 下，`noexcept` 不参与符号修饰，因此符号名不变。此处**不**声称在所有工具链/平台上
 对 ABI 绝对不受影响；仅限于实际验证过的平台与编译器（已验证集合见
-`docs/async-mutex-nothrow-implementation.md`）。
+`docs/history/closeout/async-mutex-nothrow-implementation.md`）。
 
 ---
 

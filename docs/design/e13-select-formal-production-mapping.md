@@ -7,7 +7,7 @@ formal action (from `E13SelectContract.tla`, `E13SelectCentralClaim.tla`, and
 method, with its lock domain and its linearization/commit point.
 
 The C++ names are the **planned** production names from
-`docs/e13-select-production-architecture.md` §8. They are not yet defined; no
+`docs/design/e13-select-production-architecture.md` §8. They are not yet defined; no
 production code exists. The mapping is the contract the implementation must
 satisfy.
 
@@ -44,7 +44,7 @@ satisfy.
 > `select_rollback_arm_locked` / `select_finish_rollback_locked` /
 > `select_rollback_registration_locked`; the orchestrator processes the
 > registered prefix in reverse order and normalizes the never-registered suffix
-> to Detached before `Aborted`. See `docs/e13-select-p7-rollback-closeout.md`
+> to Detached before `Aborted`. See `docs/history/closeout/e13-select-p7-rollback-closeout.md`
 > §25 for the full refinement map with preconditions and exception behavior.
 
 ### 1.1 ContractReservation reservation_state

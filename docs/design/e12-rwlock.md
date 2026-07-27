@@ -13,7 +13,7 @@
 > This document does NOT reopen any closed subsystem.
 >
 > Cross-primitive preparation:
-> [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §9
+> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](../history/implementation-plans/e12-sync-primitives-plan.md) §9
 > (RwLock semantic authority, Task H) — this document resolves the
 > HUMAN-DECISION-REQUIRED fairness policy classification.
 
@@ -1795,9 +1795,9 @@ include/sluice/async/async_queue.hpp      — E12-E QueuePort, user_ pointer
 include/sluice/async/select.hpp           — E13 Select (Event/Timer arms only)
 include/sluice/async/group.hpp            — Group (not relevant to RwLock)
 include/sluice/async/lock_guard.hpp       — LockGuard (TSA annotation, not RwLock guard)
-docs/e12-sync-primitives-plan.md §9       — RwLock semantic authority (Task H)
-docs/e12-async-mutex.md                   — M-H1..M-H4 policy register
-docs/e12-semaphore.md                     — A1..A5 policy register
+docs/history/implementation-plans/e12-sync-primitives-plan.md §9       — RwLock semantic authority (Task H)
+docs/history/closeout/e12-async-mutex.md                   — M-H1..M-H4 policy register
+docs/history/closeout/e12-semaphore.md                     — A1..A5 policy register
 docs/api-reference.md                     — Result<T>/IoError model
 Tokio sync::RwLock (context7)             — writer-fair FIFO policy reference
 ```
