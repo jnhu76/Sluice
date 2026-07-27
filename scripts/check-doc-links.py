@@ -498,11 +498,15 @@ def resolve_ref(doc_path: Path, ref: str, from_backtick: bool = False) -> Path |
     """Resolve a reference. Returns the resolved Path or None if it cannot
     be resolved as a repository path (e.g. URL, anchor-only, non-path).
 
-    Tries repo-root-relative first, then doc-relative, then zig-root.
+    CRITICAL: Markdown links are resolved STRICTLY relative to the current
+    document (doc_path.parent), NOT relative to the repository root. This
+    matches how GitHub renders Markdown: a link `docs/foo.md` in
+    `docs/history/closeout/e12-event.md` is interpreted by GitHub as
+    `docs/history/closeout/docs/foo.md`, NOT as `<repo>/docs/foo.md`.
 
-    Markdown links (from_backtick=False) are ALWAYS treated as paths — the
-    NON_PATH_PATTERNS heuristic only applies to backtick references, where
-    the same text could be either a path or a code identifier.
+    Backtick references (from_backtick=True) are ambiguous — `foo/bar` could
+    be a path or a code identifier — so they use the NON_PATH_PATTERNS
+    heuristic and try repo-root-relative as a fallback.
     """
     if is_url(ref):
         return None  # external — skip
@@ -518,24 +522,42 @@ def resolve_ref(doc_path: Path, ref: str, from_backtick: bool = False) -> Path |
 
     # Handle glob patterns: check if any files match
     if "*" in clean_ref or "?" in clean_ref:
-        # Try repo-root-relative glob
-        matches = globmod.glob(str(ROOT / clean_ref), recursive=True)
-        if matches:
-            return Path(matches[0])  # return first match (exists)
-        # Try doc-relative glob
+        # For markdown links: doc-relative only
+        if not from_backtick:
+            matches = globmod.glob(str(doc_path.parent / clean_ref), recursive=True)
+            if matches:
+                return Path(matches[0])
+            return (doc_path.parent / clean_ref).resolve()
+        # For backtick: try doc-relative first, then repo-root-relative
         matches = globmod.glob(str(doc_path.parent / clean_ref), recursive=True)
         if matches:
             return Path(matches[0])
-        # No matches — will be reported as broken
+        matches = globmod.glob(str(ROOT / clean_ref), recursive=True)
+        if matches:
+            return Path(matches[0])
         return (ROOT / clean_ref).resolve()
 
-    # Try repo-root-relative first (the dominant convention)
-    candidate = (ROOT / clean_ref).resolve()
+    # === Markdown links: STRICTLY doc-relative ===
+    # GitHub resolves [text](ref) relative to the current document's directory.
+    # A link `docs/foo.md` in `docs/history/closeout/e12-event.md` becomes
+    # `docs/history/closeout/docs/foo.md` on GitHub — which is broken.
+    # The checker must flag this, not silently resolve it against the root.
+    if not from_backtick:
+        candidate = (doc_path.parent / clean_ref).resolve()
+        if candidate.exists():
+            return candidate
+        # Not found relative to the document — this is a broken link.
+        return candidate  # return the (non-existent) doc-relative path
+
+    # === Backtick references: doc-relative first, then repo-root fallback ===
+    # Backtick `foo/bar` is ambiguous: it could be a path or a code identifier.
+    # We already passed the is_non_path() check above, so try path resolution.
+    candidate = (doc_path.parent / clean_ref).resolve()
     if candidate.exists():
         return candidate
 
-    # Try doc-relative
-    candidate = (doc_path.parent / clean_ref).resolve()
+    # Try repo-root-relative as a fallback for backtick references
+    candidate = (ROOT / clean_ref).resolve()
     if candidate.exists():
         return candidate
 
@@ -545,8 +567,8 @@ def resolve_ref(doc_path: Path, ref: str, from_backtick: bool = False) -> Path |
         if candidate.exists():
             return candidate
 
-    # Return the repo-root-relative path for error reporting
-    return (ROOT / clean_ref).resolve()
+    # Return the doc-relative path for error reporting
+    return (doc_path.parent / clean_ref).resolve()
 
 
 def is_historical(resolved: Path) -> bool:
@@ -797,6 +819,27 @@ def self_test() -> int:
     else:
         print("SELF-TEST PASS: markdown link to old doc name is flagged")
     tmp4.unlink()
+
+    # --- Test 5: nested doc with repo-root-looking link (P1-04 regression) ---
+    # This is the critical regression test: a markdown link that looks like a
+    # repo-root-relative path (e.g. `docs/spec/e12_event/`) but is in a nested
+    # document. GitHub resolves it relative to the current document, so it
+    # becomes `docs/history/closeout/docs/spec/e12_event/` — which is broken.
+    # The checker must NOT silently resolve it against the repo root.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        nested_dir = Path(tmpdir) / "docs" / "history" / "closeout"
+        nested_dir.mkdir(parents=True)
+        nested_file = nested_dir / "test-nested.md"
+        # This link exists at the repo root (docs/spec/e12_event/) but NOT
+        # relative to the nested document. It must be flagged as broken.
+        nested_file.write_text("[spec](docs/spec/e12_event/)\n", encoding="utf-8")
+
+        b, s, _ = check_file(nested_file)
+        if not any("docs/spec/e12_event/" in x for x in b):
+            print("SELF-TEST FAIL: nested doc repo-root-looking link was silently resolved")
+            failures += 1
+        else:
+            print("SELF-TEST PASS: nested doc repo-root-looking link is flagged as broken")
 
     return failures
 

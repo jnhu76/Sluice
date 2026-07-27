@@ -147,7 +147,7 @@ xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test
 
 ## 验证模型
 
-- **验收** — `public_api_acceptance`（公共头文件编译+运行探测）；未来的 E16 运行时验收消费者
+- **验收** — `public_api_acceptance`（公共头文件编译+运行探测）；`async_foundation_quickstart`（异步基础消费者）；未来的 E16 运行时验收消费者
 - **单元/组件** — `xmake test -v`（每个 slice 的测试二进制）
 - **确定性因果测试** — `SLUICE_ASYNC_INTERNAL_TESTING` 阶段接缝
 - **Sanitizer 门控** — ASan、UBSan、TSan

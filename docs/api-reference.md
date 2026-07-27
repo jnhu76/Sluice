@@ -821,6 +821,9 @@ class Scheduler {
 public:
     using deadline_t = std::uint64_t;  // monotonic ticks
 
+    // ================================================================
+    // Supported user API
+    // ================================================================
     explicit Scheduler(AsyncIoContext& ctx) noexcept;
     ~Scheduler();
     Scheduler(const Scheduler&) = delete;
@@ -831,7 +834,6 @@ public:
     // Fiber lifecycle
     bool init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stack_size);
     void spawn(Fiber& fiber) noexcept;
-    void spawn_on(Fiber& fiber, unsigned worker_id) noexcept;
 
     // Run entry points
     void run(unsigned worker_count);
@@ -851,7 +853,6 @@ public:
 
     // E11 deadline / timer wait
     deadline_t monotonic_now() const noexcept;
-    void advance_clock(deadline_t t);
     void await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t deadline);
     bool expire_wait(WaitQueue& q, WaitNode& node);
 
@@ -928,6 +929,14 @@ public:
     static unsigned current_worker_id();
     WorkerState* owner_of(const Fiber& f) const;
     unsigned owner_id_of(const Fiber& f) const;
+
+    // ================================================================
+    // Test-only / internal seams — NOT supported user API
+    // These are public due to encapsulation boundaries but are NOT part of
+    // the stable contract. Production code MUST NOT call them.
+    // ================================================================
+    void spawn_on(Fiber& fiber, unsigned worker_id) noexcept;  // deterministic-test hook
+    void advance_clock(deadline_t t);  // TEST-ONLY causal seam (M7)
 };
 ```
 
@@ -1031,7 +1040,7 @@ class CancelGuard {
 public:
     CancelGuard(CancelState& state, CancelProtection next) noexcept;
     ~CancelGuard();
-    CancelGuard(CancelGuard&&) noexcept = default;
+    CancelGuard(CancelGuard&& other) noexcept;  // NOT defaulted — nulls source state
     CancelGuard(const CancelGuard&) = delete;
     CancelGuard& operator=(const CancelGuard&) = delete;
     CancelGuard& operator=(CancelGuard&&) = delete;
@@ -1325,6 +1334,10 @@ public:
     ThreadPoolBackend();
     ~ThreadPoolBackend() override;
     // ... AsyncBackend implementation
+
+    // Test-only hook — NOT supported user API.
+    // Flips the shutdown gate so submit_* returns invalid_state.
+    // Production code never calls it.
     void shutting_down_for_test();
 };
 ```

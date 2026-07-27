@@ -1,34 +1,39 @@
 # Changelog
 
-## v0.1.0 — E15 Runtime Foundation MVP
+## v0.2.0 — Runtime Foundation (E10–E15)
 
-The E15 Runtime Foundation completes the async synchronization substrate, closing
-E10–E12 and the E15 Runtime Foundation. The runtime foundation is now production-ready
-for fiber-suspending synchronization primitives.
+The Runtime Foundation completes the async synchronization substrate and
+runtime. E10 WaitNode/WaitQueue, E11 deadline/timer, E12-A through E12-F
+primitives, E13 Select, and E14 Threaded/Evented parity are all implemented
+and merged to production. The runtime is now production-ready for
+fiber-suspending synchronization primitives, multi-arm select, and both
+Threaded and Evented execution strategies.
 
 ### Added
 
-- **E12-E AsyncQueue\<T\>** (`sluice-CORE-E12-E`). Bounded MPMC FIFO
-  channel: `push(T)`/`push_until(T, deadline_t)`/`try_push(T)`/
-  `pop()`/`pop_until(deadline_t)`/`try_pop()`/`close()`/
-  `begin_teardown()`. Typed result objects (`QueuePushResult<T>`,
-  `QueuePopResult<T>`). Non-template `QueuePort` core + thin template
-  wrapper. Queue production implementation with Corrective-2 state machine,
-  Corrective-3 timer substrate supersession, and B1–B4 authorization gates.
-  Formal model (Models A/B) + independent review PASS.
-  See `docs/history/closeout/e12-queue.md`.
+- **E10 WaitNode / WaitQueue** (`sluice-CORE-E10`). Canonical wait lifecycle
+  primitive with one-winner `resolve_` CAS protocol.
+  See `docs/history/closeout/e10-waitnode-wait-queue.md`.
 
-- **E12-F AsyncRwLock** (`sluice-CORE-E12-F`). Fiber-suspending async
-  Read-Write Lock with writer-fair phase-batched scheduling. Design and
-  proposed implementation authorized. See `docs/history/implementation-plans/e12-rwlock.md`.
+- **E11 Deadline / Timer Wait** (`sluice-CORE-E11`). `TimerRegistration`
+  control block with monotonic `deadline_t`, `await_wait_deadline`,
+  `expire_wait`. See `docs/history/closeout/e11-deadline-timer-wait.md`.
 
-- **E10–E12 implemented async synchronization substrate closure.**
-  Independent reviews for E12-B Semaphore, E12-C AsyncMutex (including
-  the migration/data-race micro-review), E12-D AsyncCondition, and the
-  E12-G cross-primitive semantic closure are complete. E12-B, E12-C,
-  E12-D, and E12-G are closed under their recorded authorities. E12-E
-  production implementation is authorized and complete. See
-  `docs/history/closeout/e10-e12-api-semantic-closure.md` §15.
+- **E12-A Event** through **E12-F AsyncRwLock** (`sluice-CORE-E12-A..F`).
+  Event, Semaphore, AsyncMutex, AsyncCondition, AsyncQueue\<T\>, AsyncRwLock.
+  All closed under recorded authorities with independent review PASS.
+  See `docs/history/closeout/e10-e12-api-semantic-closure.md`.
+
+- **E13 Select** (`sluice-CORE-E13`). Multi-arm Event/Timer select with
+  registration-rollback exception topology and destruction-contract closure.
+  Formal model (TLA+) PASS. See `docs/history/closeout/e13-select-p7-rollback-closeout.md`.
+
+- **E14 Threaded / Evented Parity** (`sluice-CORE-E14`). Both execution
+  strategies implemented and merged (PR #29). `ThreadedWaitPolicy` and
+  `EventedWaitPolicy` provide the physical-wait seam for `Future<T>` and
+  `Group`. See `docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md`.
+
+- **E15 Runtime Foundation closure.** Substrate complete and production-ready.
 
 ### Changed
 
@@ -40,109 +45,19 @@ for fiber-suspending synchronization primitives.
   `docs/history/implementation-plans/async-mutex-nothrow-authority.md`; evidence in
   `docs/history/closeout/async-mutex-nothrow-implementation.md`.
 
-- **E15 corrective: T25 migration/reacquire hang fixed.** Condition
-  variable migration-reacquire hang resolved by committed `db656b5`.
-
-- **E12-E Queue Corrective-3: timer substrate supersession.** The E12-E
-  Queue now uses the E13 `TimerRegistration` heap (independent sleep
-  node heap) instead of the earlier E11 linked-list timer substrate.
-  See `docs/history/closeout/e12-queue-corrective-3.md`.
-
 ### Verification
 
 - **Sanitizer-clean:** ASan, UBSan, TSan, Valgrind all pass.
-- **Formal models:** E12-E Queue Models A/B (12 invariants, 7 negatives)
-  TLC PASS. Independent formal review PASS.
-- **Negative-compile verification:** added for E12-E Queue invariants.
-- **Deterministic causal tests:** T25 migration/reacquire 500/500 PASS.
+- **Formal models:** E12-E Queue Models A/B, E13 Select TLA+ — all TLC PASS.
+- **Negative-compile verification:** for E12-E Queue and E13 Select invariants.
+- **Deterministic causal tests:** all phase-seam tests PASS.
 
 ### Known limitations
 
-- E13 Select production implementation is not yet authorized.
-- E14 Evented parity is deferred.
 - io_uring remains experimental (`sluice::experimental`, build-gated).
-- E16 Application Runtime is not yet proposed.
+- E16 Application Runtime is the next proposed phase.
 
-## unreleased — ongoing async substrate work
-
-### Added
-
-- **E10 WaitNode and WaitQueue** (`sluice-CORE-E10`). One canonical wait
-  lifecycle primitive: `WaitNode` (caller-owned, non-copyable, non-movable,
-  one-per-epoch) with `WaitOutcome` enum (`unresolved`, with terminal outcomes
-  `woken` / `cancelled` / `expired`). `WaitQueue` is a Scheduler-integrated
-  runtime substrate (intrusive FIFO, **sealed authority** — Scheduler is the
-  sole registration and resolution friend; not a standalone user
-  synchronization primitive). One-winner `resolve_` CAS protocol.
-  See `docs/history/closeout/e10-waitnode-wait-queue.md`.
-
-- **E11 Deadline / Timer Wait** (`sluice-CORE-E11`). `TimerRegistration`
-  control block (Scheduler-integrated runtime substrate, not a standalone
-  user synchronization primitive) with independently-stable retirement state
-  (`ACTIVE`/`RETIRED`/`CONSUMED`). `Scheduler::deadline_t` (monotonic
-  absolute deadline). `await_wait_deadline`, `expire_wait`, `monotonic_now`.
-  See `docs/history/closeout/e11-deadline-timer-wait.md`.
-
-- **E12-A Event** (`sluice-CORE-E12-A`). Persistent manual-reset async
-  `Event`: `set()`/`reset()`/`wait(WaitNode&)`/`wait_until(WaitNode&,
-  deadline_t)`/`cancel(WaitNode&)`. `set()` broadcasts to all registered
-  waiters. Queue-identity-gated cancellation. See `docs/history/closeout/e12-event.md`.
-
-- **E12-B Semaphore** (`sluice-CORE-E12-B`). Async counting `Semaphore`:
-  `acquire(WaitNode&)`/`acquire_until(WaitNode&, deadline_t)`/
-  `try_acquire()`/`release()`/`cancel(WaitNode&)`. Permit transfer or store.
-  No barging. See `docs/history/closeout/e12-semaphore.md`.
-
-- **E12-C AsyncMutex** (`sluice-CORE-E12-C`). Fiber-suspending async
-  `AsyncMutex`: `lock(WaitNode&)`/`lock_until(WaitNode&, deadline_t)`/
-  `try_lock()`/`unlock()`/`cancel(WaitNode&)`. Direct ownership handoff
-  (owner commit BEFORE publication). See `docs/history/closeout/e12-async-mutex.md`.
-
-- **E12-D AsyncCondition** (`sluice-CORE-E12-D`). Fiber-suspending async
-  condition variable: `wait(WaitNode&)`/`wait_until(WaitNode&, deadline_t)`/
-  `notify_one()`/`notify_all()`/`cancel(WaitNode&)`. Two-epoch protocol
-  (Condition epoch + mandatory Mutex reacquire). Returns `WaitOutcome`
-  directly. See `docs/history/closeout/e12-condition.md`.
-
-- **E12-E AsyncQueue\<T\>** (`sluice-CORE-E12-E`). Bounded MPMC FIFO
-  channel: `push(T)`/`push_until(T, deadline_t)`/`try_push(T)`/
-  `pop()`/`pop_until(deadline_t)`/`try_pop()`/`close()`/
-  `begin_teardown()`. Typed result objects (`QueuePushResult<T>`,
-  `QueuePopResult<T>`). Non-template `QueuePort` core + thin template
-  wrapper. See `docs/history/closeout/e12-queue.md`.
-
-- **E10-E12 API & Semantic Closure** (`E10-E12-ASYNC-SYNC-API-SEMANTIC-
-  CLOSURE-1`). Cross-primitive API inventory, semantic contract matrix,
-  D1-D10 decision register, E13 Select dependency contract.
-  See `docs/history/closeout/e10-e12-api-semantic-closure.md`.
-
-- **E10–E12 implemented async synchronization substrate closure.**
-  Independent reviews for E12-B Semaphore, E12-C AsyncMutex (including
-  the migration/data-race micro-review), E12-D AsyncCondition, and the
-  E12-G cross-primitive semantic closure are complete. E12-B, E12-C,
-  E12-D, and E12-G are closed under their recorded authorities. E12-E
-  remains at Phase I review PASS (WITH OBSERVATIONS). E12-F RwLock
-  remains deferred. E13 Select preparation may begin, but Select design
-  and production implementation are not yet authorized. See
-  `docs/history/closeout/e10-e12-api-semantic-closure.md` §15.
-
-### Changed
-
-- **`sluice::async::Mutex` acquisition is now `noexcept` / fail-fast.**
-  `lock()`, `try_lock()`, and `unlock()` are declared `noexcept`. An
-  underlying acquisition failure (the `std::system_error` that
-  `std::mutex::lock()`/`try_lock()` may throw) is no longer propagated as a
-  recoverable exception; the `Mutex` boundary converts it to process
-  termination via `std::terminate` (a single named fail-fast entry,
-  `sluice::async::detail::async_mutex_lock_fail_fast`). Rationale and the
-  full contract live in `docs/history/implementation-plans/async-mutex-nothrow-authority.md`; production
-  realization evidence in `docs/history/closeout/async-mutex-nothrow-implementation.md`.
-  `noexcept` is part of the function type: downstream code taking
-  `&sluice::async::Mutex::lock` must be recompiled. No in-repo TU does so,
-  and the `Mutex` surface is inline-only, so this is transparent for
-  in-tree consumers.
-
-## v0.1-mvp — blocking measurable Zig-inspired I/O core
+## v0.1.0 — blocking measurable Zig-inspired I/O core
 
 The first tagged release. A blocking, measurable, Zig-`std.Io`-inspired C++ I/O
 core. Explicitly **not** async, **not** io_uring-as-default, and makes **no

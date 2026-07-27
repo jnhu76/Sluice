@@ -152,7 +152,7 @@ xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test
 
 ## Verification model
 
-- **Acceptance** — `public_api_acceptance` (public-only compile+run probe); future E16 runtime acceptance consumer
+- **Acceptance** — `public_api_acceptance` (public-only compile+run probe); `async_foundation_quickstart` (async foundation consumer); future E16 runtime acceptance consumer
 - **Unit / component** — `xmake test -v` (per-slice test binaries)
 - **Deterministic causal tests** — `SLUICE_ASYNC_INTERNAL_TESTING` phase seams
 - **Sanitizer gates** — ASan, UBSan, TSan
