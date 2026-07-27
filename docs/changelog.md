@@ -64,8 +64,9 @@ execution strategies.
 ```text
 io_uring remains experimental unless real liburing validation supports promotion.
 No production io_uring backend yet.
-Cancellation is cooperative (CancelToken/CancelState/CancelGuard, Future, Group);
-no application-runtime-wide cancellation owner or shutdown policy yet.
+Public cooperative cancellation primitives exist (CancelToken, CancelState,
+CancelGuard, check_cancel()), but E16 has not yet introduced
+application-runtime-wide cancellation ownership and shutdown policy.
 No networking.
 No default backend switch (BlockingIoContext stays the default).
 No universal performance conclusion.
