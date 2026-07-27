@@ -18,7 +18,7 @@
 > E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1.
 >
 > E12-D preparation and implementation were independently reviewed by
-> [`docs/history/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md`](reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md)
+> [`docs/history/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md`](docs/history/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md)
 > (2026-07-19), verdict PASS (see §K of that artifact for the design-consistency
 > matrix covering preparation policy points 1–12). E12-D is CLOSED.
 >
@@ -32,7 +32,7 @@
 >   ([`docs/history/closeout/e12-async-mutex.md`](e12-async-mutex.md))
 >
 > Cross-primitive preparation:
-> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §7.
+> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md) §7.
 >
 > This document is the authoritative E12-D AsyncCondition preparation
 > specification. It records the CLOSED human policy register, corrects the

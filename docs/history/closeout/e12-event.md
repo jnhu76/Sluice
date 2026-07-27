@@ -9,7 +9,7 @@
 > Authority baseline: E10 CLOSED
 > ([`docs/history/closeout/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED at
 > `7715808` ([`docs/history/closeout/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md)).
-> Preparation: [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)
+> Preparation: [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md)
 > (E12-PREP READY).
 >
 > This document is the authoritative E12-A Event specification, refined by:
@@ -23,8 +23,8 @@
 >   safe), CANCEL-1..8 tests, T28/T29/T31/T32 evidence corrections, formal
 >   Expired-not-reachable / TLC reporting accuracy.
 >
-> Formal model: [`docs/spec/e12_event/`](spec/e12_event/). Formal gate:
-> [`scripts/verify-e12-event-formal.sh`](../scripts/verify-e12-event-formal.sh).
+> Formal model: [`docs/spec/e12_event/`](docs/history/closeout). Formal gate:
+> [`scripts/verify-e12-event-formal.sh`](scripts/verify-e12-event-formal.sh).
 
 ---
 

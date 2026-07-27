@@ -29,7 +29,7 @@ The library is inspired by Zig's `std.Io` but adapted for C++20 idioms. It is
 | Library | Description | Default |
 |---------|-------------|---------|
 | `sluice_core` | Synchronous core: Result, Reader/Writer, copy, file I/O, WAL, BlockingIoPool | Always builds |
-| `sluice_async` | Async runtime: Scheduler, Fiber, synchronization primitives, Completion, Future/Group/Batch | Always builds |
+| `sluice_async` | Async runtime: Scheduler, Fiber, synchronization primitives, Completion, Future/Group/Batch | Opt-in; built explicitly or as a dependency of async tests/examples |
 | `sluice_async_internal_testing` | Test-only variant with deterministic causal seams | Test-only |
 | `sluice_experimental_uring` | Optional io_uring code (stub without liburing) | Off by default |
 
@@ -57,30 +57,41 @@ int main() {
 ## 5-minute asynchronous example
 
 ```cpp
-// Async runtime: submit an op, await completion.
+// Async runtime: submit an op, poll for completion, read the result.
+// (examples/async_foundation_quickstart.cpp — builds against public headers)
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/async_mutex.hpp>
+#include <sluice/async/completion.hpp>
+#include <sluice/async/fake_backend.hpp>
+#include <cstddef>
 #include <cstdio>
+#include <memory>
 
 int main() {
-    // ThreadPoolBackend: portable, always available.
-    sluice::AsyncIoContext io{sluice::threadpool_backend()};
+    // FakeAsyncBackend is a deterministic test backend: auto_bytes(n) makes
+    // the next poll() complete each outstanding op with n bytes.
+    auto backend = std::make_unique<sluice::async::FakeAsyncBackend>();
+    sluice::async::FakeAsyncBackend* raw = backend.get();
+    raw->auto_bytes(8);
 
-    // AsyncMutex: fiber-suspendable on an Evented scheduler, or
-    // cv-based on Threaded.
-    sluice::AsyncMutex mutex{/* scheduler */};
+    sluice::async::AsyncIoContext ctx(std::move(backend));
 
-    // Submit a read against a caller-owned Completion.
-    sluice::Completion<std::size_t> c;
-    char buf[1024];
-    io.submit_read({/*.fd=*/fd, /*.dst=*/reinterpret_cast<std::byte*>(buf),
-                    /*.len=*/sizeof(buf), /*.offset=*/0}, c);
+    // submit_read against a caller-owned Completion.
+    sluice::async::Completion<std::size_t> c;
+    std::byte buf[8]{};
+    if (!ctx.submit_read(sluice::async::ReadOp{0, buf, 8, 0}, c).has_value())
+        return 1;
 
-    // Await (Threaded: blocks calling thread; Evented: suspends Fiber).
-    auto result = io.wait_one(c);
-    if (result.has_value()) {
-        std::printf("read %zu bytes\n", result.value());
-    }
+    // poll() reaps completions non-blockingly; returns count reaped.
+    if (ctx.poll() != 1) return 2;
+
+    // The op result is read from the Completion after it is ready — NOT from
+    // wait_one()/poll() return values.
+    if (!c.ready()) return 3;
+    auto r = c.result();
+    if (!r.has_value() || r.value() != 8) return 4;
+
+    std::printf("async quickstart: read %zu bytes\n", r.value());
+    return 0;
 }
 ```
 
@@ -105,7 +116,7 @@ int main() {
 - `Event` (E12-A), `Semaphore` (E12-B), `AsyncMutex` (E12-C)
 - `AsyncCondition` (E12-D), `AsyncQueue<T>` (E12-E), `AsyncRwLock` (E12-F)
 - `Select` (E13) — multi-arm Event/Timer select
-- `CancellationToken` / `CancelState` (E27)
+- `CancelToken` / `CancelState` / `CancelGuard` (cancellation primitives)
 - `Future<T>` (E28), `Group` (E29), `Batch` (E30)
 - `Completion<T>` / `AsyncIoContext` / `AsyncBackend`
 - `FakeAsyncBackend` (deterministic test vehicle)
@@ -141,7 +152,8 @@ xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test
 
 ## Verification model
 
-- **Acceptance tests** — `xmake test -v` (Clang Debug, CI gate)
+- **Acceptance** — `public_api_acceptance` (public-only compile+run probe); future E16 runtime acceptance consumer
+- **Unit / component** — `xmake test -v` (per-slice test binaries)
 - **Deterministic causal tests** — `SLUICE_ASYNC_INTERNAL_TESTING` phase seams
 - **Sanitizer gates** — ASan, UBSan, TSan
 - **Formal models** — TLA+ specs under `docs/spec/` and `spec/tla/`

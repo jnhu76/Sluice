@@ -812,238 +812,576 @@ for the architectural context.
 
 ### `sluice::async::Scheduler`
 
-M:N fiber scheduler. Non-copyable, non-movable. Owns Workers, the deadline
-heap, and the external-wake control block.
+M:N fiber scheduler. Non-copyable, non-movable. Constructs against an
+`AsyncIoContext&`. Owns Workers, the deadline heap, and the external-wake
+control block.
 
 ```cpp
 class Scheduler {
 public:
     using deadline_t = std::uint64_t;  // monotonic ticks
 
-    // Construct with an execution strategy.
-    template <class... Args>
-    explicit Scheduler(ExecutionStrategy strategy, Args&& ...args);
-    ~Scheduler();  // assert: no live waiters/outstanding registrations
+    explicit Scheduler(AsyncIoContext& ctx) noexcept;
+    ~Scheduler();
+    Scheduler(const Scheduler&) = delete;
+    Scheduler& operator=(const Scheduler&) = delete;
+    Scheduler(Scheduler&&) = delete;
+    Scheduler& operator=(Scheduler&&) = delete;
 
-    // Fiber management.
-    template <class Fn>
-    Fiber* spawn(Fn&& fn);  // spawn a new Fiber
+    // Fiber lifecycle
+    bool init_fiber(Fiber& fiber, std::byte* stack_base, std::size_t stack_size);
+    void spawn(Fiber& fiber) noexcept;
+    void spawn_on(Fiber& fiber, unsigned worker_id) noexcept;
 
-    // Drive the scheduler (single-threaded caller).
-    void run();  // returns when all Fibers complete or shutdown
+    // Run entry points
+    void run(unsigned worker_count);
+    void run_live(unsigned worker_count);
+    void run_live(unsigned worker_count, bool (*stop_fn)(void*), void* stop_ctx);
+    void run_until_idle();
 
-    // Select admission (E13).
-    template <class... Arms>
-    SelectResult select(Arm&&... arms);
+    // E5/E6 completion awaits
+    void await_completion_size(Completion<std::size_t>& c);
+    void await_completion_void(Completion<void>& c);
+    void await_ready_flag(const std::atomic<bool>& ready);
 
-    // Shutdown.
-    void shutdown();
+    // E10 WaitQueue suspension
+    void await_wait(WaitQueue& q, WaitNode& node);
+    bool wake_wait_one(WaitQueue& q);
+    bool cancel_wait(WaitQueue& q, WaitNode& node);
+
+    // E11 deadline / timer wait
+    deadline_t monotonic_now() const noexcept;
+    void advance_clock(deadline_t t);
+    void await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t deadline);
+    bool expire_wait(WaitQueue& q, WaitNode& node);
+
+    // E12-A Event
+    std::size_t event_set_broadcast(Event& event);
+    void event_reset(std::atomic<bool>& set_flag);
+    void await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag, WaitNode& node);
+    void await_event_wait_deadline(WaitQueue& q, const std::atomic<bool>& set_flag,
+                                   WaitNode& node, deadline_t deadline);
+    bool event_cancel_wait(WaitQueue& q, WaitNode& node);
+
+    // E12-B Semaphore
+    [[nodiscard]] bool sem_try_acquire(WaitQueue& waiters, std::atomic<std::uint32_t>& available);
+    void sem_acquire(WaitQueue& waiters, std::atomic<std::uint32_t>& available, WaitNode& node);
+    void sem_acquire_until(WaitQueue& waiters, std::atomic<std::uint32_t>& available,
+                           WaitNode& node, deadline_t deadline);
+    [[nodiscard]] bool sem_cancel(WaitQueue& waiters, WaitNode& node);
+    [[nodiscard]] bool sem_release(WaitQueue& waiters, std::atomic<std::uint32_t>& available,
+                                   std::uint32_t max_permits);
+
+    // E12-C AsyncMutex
+    [[nodiscard]] bool mutex_try_lock(WaitQueue& waiters, Fiber*& owner);
+    void mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node);
+    void mutex_lock_until(WaitQueue& waiters, Fiber*& owner, WaitNode& node, deadline_t deadline);
+    [[nodiscard]] bool mutex_cancel(WaitQueue& waiters, WaitNode& node);
+    void mutex_unlock(WaitQueue& waiters, Fiber*& owner);
+
+    // E12-D AsyncCondition
+    WaitOutcome condition_wait_prepare(WaitQueue& cond_waiters, WaitNode& cond_node,
+                                       WaitQueue& mutex_waiters, Fiber*& owner, bool& released_mutex);
+    WaitOutcome condition_wait_prepare_until(WaitQueue& cond_waiters, WaitNode& cond_node,
+                                             WaitQueue& mutex_waiters, Fiber*& owner,
+                                             deadline_t deadline, bool& released_mutex);
+    void condition_notify_one(WaitQueue& cond_waiters);
+    std::size_t condition_notify_all(WaitQueue& cond_waiters);
+    [[nodiscard]] bool condition_cancel_wait(WaitQueue& cond_waiters, WaitNode& cond_node);
+
+    // E12-E Queue
+    void queue_push_admit(detail::QueuePort& port, WaitNode& node, detail::QueueItemLease& lease);
+    void queue_pop_admit(detail::QueuePort& port, WaitNode& node, detail::QueueItemLease& out);
+    void queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
+                                detail::QueueItemLease& lease, deadline_t deadline);
+    void queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
+                               detail::QueueItemLease& out, deadline_t deadline);
+    [[nodiscard]] bool queue_cancel(detail::QueuePort& port, detail::QueueRole role, WaitNode& node);
+
+    // E12-F AsyncRwLock
+    [[nodiscard]] bool rwlock_try_read_lock(WaitQueue& waiters, std::size_t& active_readers, bool& writer_active);
+    void rwlock_read_lock(WaitQueue& waiters, std::size_t& active_readers, bool& writer_active, WaitNode& node);
+    void rwlock_read_lock_until(WaitQueue& waiters, std::size_t& active_readers,
+                                bool& writer_active, WaitNode& node, deadline_t deadline, void* expire_ctx);
+    [[nodiscard]] bool rwlock_try_write_lock(WaitQueue& waiters, std::size_t& active_readers,
+                                             bool& writer_active, Fiber*& writer_owner);
+    void rwlock_write_lock(WaitQueue& waiters, std::size_t& active_readers,
+                           bool& writer_active, Fiber*& writer_owner, WaitNode& node);
+    void rwlock_write_lock_until(WaitQueue& waiters, std::size_t& active_readers,
+                                 bool& writer_active, Fiber*& writer_owner,
+                                 WaitNode& node, deadline_t deadline, void* expire_ctx);
+    void rwlock_unlock_read(WaitQueue& waiters, std::size_t& active_readers,
+                            bool& writer_active, Fiber*& writer_owner);
+    void rwlock_unlock_write(WaitQueue& waiters, std::size_t& active_readers,
+                             bool& writer_active, Fiber*& writer_owner);
+    [[nodiscard]] bool rwlock_cancel(WaitQueue& waiters, std::size_t& active_readers,
+                                     bool& writer_active, Fiber*& writer_owner, WaitNode& node);
+
+    // E9 external wake
+    SchedulerWakeHandle make_wake_handle() noexcept;
+    void attach_ready_wake(const std::atomic<bool>& ready, SchedulerWakeHandle& wh);
+
+    // Diagnostics
+    std::size_t runnable_count() const;
+    std::size_t waiting_count() const;
+    std::size_t waiting_ready_count() const;
+    static unsigned current_worker_id();
+    WorkerState* owner_of(const Fiber& f) const;
+    unsigned owner_id_of(const Fiber& f) const;
 };
 ```
 
-**Execution strategies:**
+`select()` is a **free function** (not a `Scheduler` member):
 
-| Strategy | Description | Platform |
-|----------|-------------|----------|
-| `threaded` | Each blocking wait consumes an OS thread (`std::condition_variable`). | Any |
-| `evented` | Fibers suspend/resume on a single thread; requires `fiber_ctx::supported`. | x86_64 Linux |
+```cpp
+template <class... Cases>
+    requires (
+        sizeof...(Cases) >= 1 &&
+        sizeof...(Cases) <= kSelectMaxArms &&
+        (SelectCaseType<Cases> && ...)
+    )
+SelectResult select(Scheduler& scheduler, Cases&&... cases);
+```
 
-### `sluice::async::CancellationToken` / `sluice::async::CancelState`
+### `sluice::async::SchedulerWakeHandle`
 
-Cooperative cancellation primitives (E27). `CancelToken` is the
-cancel-request state; `CancelState` is per-consumer protection/acknowledge
-state.
+External-wake handle. Move-only. Lets an external producer thread wake a
+parked Scheduler Worker without holding a raw `Scheduler*`.
+
+```cpp
+class SchedulerWakeHandle {
+public:
+    SchedulerWakeHandle() = default;
+    SchedulerWakeHandle(SchedulerWakeHandle&&) noexcept = default;
+    SchedulerWakeHandle& operator=(SchedulerWakeHandle&&) noexcept = default;
+    SchedulerWakeHandle(const SchedulerWakeHandle&) = delete;
+    SchedulerWakeHandle& operator=(const SchedulerWakeHandle&) = delete;
+
+    bool notify() noexcept;
+    bool bound() const noexcept;
+};
+```
+
+### `sluice::async::Fiber`
+
+Logical task. Non-copyable, non-movable. The caller provides an entry
+function and (for Evented mode) a stack. `Fiber` is **not** itself a
+cancel-propagation boundary — `Group` is (see below).
+
+```cpp
+class Fiber {
+public:
+    using Entry = std::function<void(Fiber&)>;
+
+    Fiber() = default;
+    explicit Fiber(Entry entry);
+    Fiber(const Fiber&) = delete;
+    Fiber& operator=(const Fiber&) = delete;
+    Fiber(Fiber&&) = delete;
+    Fiber& operator=(Fiber&&) = delete;
+
+    FiberState state() const noexcept;
+    bool make_runnable() noexcept;
+    void make_running() noexcept;
+    void make_waiting() noexcept;
+    void make_done() noexcept;
+
+    Entry& entry() noexcept;
+    const Entry& entry() const noexcept;
+    void set_entry(Entry e);
+    CancelToken& cancel_token() noexcept;
+    CancelState& cancel_state() noexcept;
+
+    fiber_ctx::Context ctx{};  // public data member
+};
+```
+
+### `sluice::async::CancelToken` / `sluice::async::CancelState` / `sluice::async::CancelGuard`
+
+Cooperative cancellation primitives. `CancelToken` is the cancel-request
+state; `CancelState` is per-consumer protection/acknowledge state.
 
 ```cpp
 class CancelToken {
 public:
-    void request() noexcept;          // idempotent cancel request
+    CancelToken() = default;
+    CancelToken(const CancelToken&) = delete;
+    CancelToken& operator=(const CancelToken&) = delete;
+    CancelToken(CancelToken&&) = delete;
+    CancelToken& operator=(CancelToken&&) = delete;
+
+    void request() noexcept;       // idempotent cancel request
     bool is_requested() const noexcept;
+    void rearm() noexcept;
+    void clear() noexcept;
 };
 
 enum class CancelProtection : std::uint8_t { unblocked, blocked };
 
 class CancelState {
 public:
-    void protect() noexcept;          // enter protected region (block delivery)
-    void unprotect() noexcept;        // exit protected region
-    Result<void> check_cancel(const CancelToken&) noexcept;
+    CancelProtection protection() const noexcept;
+    CancelProtection swap_protection(CancelProtection next) noexcept;
+    bool acknowledged() const noexcept;
+    void acknowledge() noexcept;
+    void reset_acknowledgement() noexcept;
 };
+
+class CancelGuard {
+public:
+    CancelGuard(CancelState& state, CancelProtection next) noexcept;
+    ~CancelGuard();
+    CancelGuard(CancelGuard&&) noexcept = default;
+    CancelGuard(const CancelGuard&) = delete;
+    CancelGuard& operator=(const CancelGuard&) = delete;
+    CancelGuard& operator=(CancelGuard&&) = delete;
+};
+```
+
+The cancellation point is the free function:
+
+```cpp
+Result<void> check_cancel(const CancelToken& token, CancelState& state) noexcept;
 ```
 
 ### `sluice::async::Future<T>`
 
 Single-task awaitable (E28). Producer side: `complete_with()`. Consumer side:
-`await()` / `cancel()`. Idempotent: once the result is materialized, both are
-no-ops returning the cached result.
+`await()` / `cancel()`. The physical wait delegates to a `WaitPolicy&`
+(injected at construction). `Future()` uses the `default_wait_policy()`
+(Threaded). `explicit Future(WaitPolicy& policy)` injects an Evented policy.
 
 ```cpp
 template <class T>
 class Future {
 public:
-    Future();                          // Threaded wait policy (default)
-    explicit Future(WaitPolicy& policy);  // inject Evented policy
+    Future();
+    explicit Future(WaitPolicy& policy);
+    Future(const Future&) = delete;
+    Future& operator=(const Future&) = delete;
+    Future(Future&&) = delete;
+    Future& operator=(Future&&) = delete;
 
-    Result<T> await();                 // Threaded: blocks; Evented: suspends Fiber
-    Result<T> cancel();                // request cancel; idempotent
-    void complete_with(Result<T> r);   // producer publishes result
+    void complete_with(Result<T> r);
+    CancelToken& cancel_token() noexcept;
+    Result<T> await();
+    Result<T> cancel();
+    bool ready() const noexcept;
 };
 ```
 
 ### `sluice::async::Group`
 
 Unordered task set (E29). Tasks are added via `async(fn)`; the group is awaited
-as a whole or canceled as a whole. Cancel-propagation boundary: tasks swallow
-`IoError::canceled`.
+as a whole or canceled as a whole. **Cancel-propagation boundary**: tasks swallow
+`IoError::canceled`. The physical wait delegates to a `WaitPolicy&` (Scheduler
+for Evented, default Threaded otherwise).
 
 ```cpp
 class Group {
 public:
-    Group();                           // Threaded mode
-    explicit Group(Scheduler& scheduler);  // Evented mode
+    Group() = default;
+    explicit Group(Scheduler& sched);
+    ~Group();
+    Group(const Group&) = delete;
+    Group& operator=(const Group&) = delete;
+    Group(Group&&) = delete;
+    Group& operator=(Group&&) = delete;
 
     template <class Fn>
-    void async(Fn&& fn);               // spawn a task
+    void async(Fn fn);
 
-    void await();                      // wait for ALL tasks
-    void cancel();                     // request cancel on all tasks, then await
+    CancelToken& group_token() noexcept;
+    void await();
+    void cancel();
+
+    std::size_t size() const noexcept;
 };
+```
+
+### `sluice::async::WaitPolicy`
+
+Abstract policy that decides how `Future<T>` and `Group` physically wait.
+The async primitives (`Event`, `Semaphore`, `AsyncMutex`, `AsyncCondition`,
+`AsyncRwLock`, `AsyncQueue`) do **not** use `WaitPolicy` — they suspend fibers
+directly via `Scheduler` members.
+
+```cpp
+class WaitPolicy {
+public:
+    virtual ~WaitPolicy() = default;
+    WaitPolicy(const WaitPolicy&) = delete;
+    WaitPolicy& operator=(const WaitPolicy&) = delete;
+
+    virtual void wait_until_ready(const std::atomic<bool>& ready,
+                                  std::mutex& mtx,
+                                  std::condition_variable& cv) = 0;
+    virtual void notify_ready() noexcept {}
+};
+
+class ThreadedWaitPolicy : public WaitPolicy {
+public:
+    void wait_until_ready(const std::atomic<bool>& ready, std::mutex& mtx,
+                          std::condition_variable& cv) override;
+};
+
+class EventedWaitPolicy final : public WaitPolicy {
+public:
+    explicit EventedWaitPolicy(Scheduler& scheduler) noexcept;
+    void wait_until_ready(const std::atomic<bool>& ready, std::mutex&,
+                          std::condition_variable&) override;
+    void notify_ready() noexcept override;
+};
+
+WaitPolicy& default_wait_policy() noexcept;
 ```
 
 ### `sluice::async::SelectResult`
 
-E13 Select winner descriptor.
+E13 Select winner descriptor. `SelectKind` is `event` or `timer`.
+`SelectTimerOutcome` is `fired` (timer winner only).
 
 ```cpp
 class SelectResult {
 public:
-    bool has_winner() const noexcept;           // false if all arms expired/canceled
-    std::size_t index() const noexcept;         // winning arm index
-    SelectKind kind() const noexcept;           // event or timer
-    SelectTimerOutcome timer_outcome() const noexcept;  // fired (timer winner only)
+    constexpr SelectResult() noexcept = default;
+
+    [[nodiscard]] constexpr bool has_winner() const noexcept;
+    [[nodiscard]] constexpr std::size_t index() const noexcept;
+    [[nodiscard]] constexpr SelectKind kind() const noexcept;
+    [[nodiscard]] constexpr SelectTimerOutcome timer_outcome() const noexcept;
 };
+```
+
+Select arms:
+
+```cpp
+class EventSelectCase {
+public:
+    explicit EventSelectCase(Event& event) noexcept;
+};
+
+class TimerSelectCase {
+public:
+    explicit TimerSelectCase(Scheduler& scheduler, select_deadline_t deadline) noexcept;
+};
+
+inline constexpr std::size_t kSelectMaxArms = 8;
 ```
 
 ### `sluice::async::Completion<T>`
 
 Single outstanding operation's state (E17). Caller-owned, address-stable,
-non-copyable, non-movable.
+non-copyable, non-movable. `result()` / `reset()` / `complete_with()` /
+`mark_outstanding()` are **not** `noexcept`.
 
 ```cpp
 template <class T>
 class Completion {
 public:
-    Completion() noexcept = default;
+    Completion() = default;
+    ~Completion() = default;
+    Completion(const Completion&) = delete;
+    Completion& operator=(const Completion&) = delete;
+    Completion(Completion&&) = delete;
+    Completion& operator=(Completion&&) = delete;
 
     bool ready() const noexcept;
-    Result<T> result() const noexcept;   // valid only when ready
-    void reset() noexcept;               // return to idle for reuse
-
-    std::size_t next_reap_seq() const noexcept;  // reap order (E15-P1-04)
+    bool outstanding() const noexcept;
+    bool idle() const noexcept;
+    Result<T> result() const;           // valid only when ready
+    void mark_outstanding();
+    void complete_with(Result<T> res);
+    void reset();
 };
 ```
 
+`detail::next_reap_seq()` is a free function in `sluice::async::detail`, not
+part of the public `Completion` surface.
+
 ### `sluice::async::AsyncBackend`
 
-Internal backend boundary (ADR §4). Not public-facing; `AsyncIoContext`
-delegates to it. Concrete backends implement `submit_*` / `poll` / `wait_one`.
+Internal backend boundary (ADR §4). `AsyncIoContext` delegates to it. Concrete
+backends implement `submit_*` / `poll` / `wait_one`. `wait_one()` returns
+`Result<std::size_t>`; `cancel()` has two overloads.
 
 ```cpp
 class AsyncBackend {
 public:
     virtual ~AsyncBackend() = default;
+    AsyncBackend(const AsyncBackend&) = delete;
+    AsyncBackend& operator=(const AsyncBackend&) = delete;
+
+    void attach_stats(AsyncStats* s);
+
     virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
     virtual Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) = 0;
-    virtual std::size_t poll() = 0;      // non-blocking reap
-    virtual std::size_t wait_one() = 0;  // blocking reap
+
+    virtual std::size_t poll() = 0;               // non-blocking reap
+    virtual Result<std::size_t> wait_one() = 0;   // blocking reap
+
+    virtual void cancel(Completion<std::size_t>& c);
+    virtual void cancel(Completion<void>& c);
+
+    virtual std::size_t outstanding() const noexcept = 0;
 };
+```
+
+Op descriptors (public structs in the same header):
+
+```cpp
+struct ReadOp    { int fd = -1; std::byte* dst = nullptr; std::size_t len = 0; std::uint64_t offset = 0; };
+struct WriteOp   { int fd = -1; const std::byte* src = nullptr; std::size_t len = 0; std::uint64_t offset = 0; };
+struct SyncDataOp{ int fd = -1; };
+struct SyncAllOp { int fd = -1; };
 ```
 
 ### `sluice::async::AsyncIoContext`
 
-Public L1 async API surface (E17). Owns an `AsyncBackend`. Non-copyable; move
-semantics governed by E15-P1-03 / E15-P2-06.
+Public L1 async API surface (E17). Owns an `AsyncBackend` via
+`std::unique_ptr`. Non-copyable; move-semantic. `wait_one()` returns the
+reap count for that wait, **not** the op's byte result — read the op result
+from the `Completion` after it is ready.
 
 ```cpp
 class AsyncIoContext {
 public:
-    // Construction.
-    template <class Backend, class... Args>
-    explicit AsyncIoContext(in_place_type_t<Backend>, Args&&... args);
+    explicit AsyncIoContext(std::unique_ptr<AsyncBackend> backend,
+                            AsyncStats* stats = nullptr);
+    ~AsyncIoContext();
+    AsyncIoContext(const AsyncIoContext&) = delete;
+    AsyncIoContext& operator=(const AsyncIoContext&) = delete;
+    AsyncIoContext(AsyncIoContext&&) noexcept;
+    AsyncIoContext& operator=(AsyncIoContext&&) noexcept;
 
-    // Op submission.
+    // Op submission
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c);
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
-    // Reap.
+    // Reap
     std::size_t poll();              // non-blocking
-    std::size_t wait_one();          // blocking
+    Result<std::size_t> wait_one();  // blocking; returns count reaped
 
-    // Cancel.
-    std::size_t cancel();            // cancel all outstanding ops
+    // Cancel
+    void cancel(Completion<std::size_t>& c);
+    void cancel(Completion<void>& c);
 
-    // Stats.
-    void attach_stats(AsyncStats* s);  // caller-owned, nullable
+    // Stats / observation
+    std::size_t outstanding() const noexcept;
+    const AsyncStats* stats() const noexcept;
 };
 ```
 
-### `sluice::async::Batch`
+### `sluice::async::BatchOp` / `sluice::async::BatchResult` / `sluice::async::Batch`
 
-Grouped completions (E30). Submit N ops together, await as a whole, iterate in
-completion order via `next()`.
+Grouped completions (E30). `Batch` has a **default** constructor (no
+`AsyncIoContext&` parameter). `add()` takes a `BatchOp`. `await_one()` takes
+the `AsyncIoContext&` to reap through and returns `Result<std::size_t>` (the
+reap count). `next()` iterates in reap order. **No `cancel()` method.**
 
 ```cpp
+struct BatchOp {
+    ReadOp read{};
+    WriteOp write{};
+    SyncDataOp sync_data{};
+    SyncAllOp sync_all{};
+    enum class Kind : std::uint8_t { read, write, sync_data, sync_all } kind = Kind::read;
+};
+
+struct BatchResult {
+    std::size_t index = 0;
+    bool is_void = false;
+    std::optional<Result<std::size_t>> size_res;
+    std::optional<Result<void>> void_res;
+};
+
 class Batch {
 public:
-    explicit Batch(AsyncIoContext& io);
-    ~Batch();
+    Batch() = default;
+    Batch(const Batch&) = delete;
+    Batch& operator=(const Batch&) = delete;
+    Batch(Batch&&) = delete;
+    Batch& operator=(Batch&&) = delete;
 
-    void add(BatchOp op);            // add an op to the batch
-    void await_one();                // wait until >=1 completion
-    std::optional<BatchResult> next();  // iterate in reap order
-    std::size_t cancel();            // cancel all outstanding ops
+    std::size_t add(BatchOp op);
+    Result<std::size_t> await_one(AsyncIoContext& ctx);
+    std::optional<BatchResult> next() noexcept;
+    std::size_t pending_count() const noexcept;
 };
 ```
 
 ### `sluice::async::ThreadPoolBackend`
 
-Portable real backend (sluice-CORE-020A). One `std::thread` per outstanding op.
-Always buildable; no external dependency.
+Portable real backend. One `std::thread` per outstanding op. Always buildable;
+no external dependency. Construct directly; there is no factory function.
 
 ```cpp
 class ThreadPoolBackend : public AsyncBackend {
 public:
     ThreadPoolBackend();
+    ~ThreadPoolBackend() override;
     // ... AsyncBackend implementation
+    void shutting_down_for_test();
 };
 ```
 
 ### `sluice::async::UringAsyncBackend`
 
-Linux io_uring backend (sluice-CORE-020B). Build-gated behind liburing. Without
-`SLUICE_HAS_LIBURING`, it is an unsupported stub: `submit_*` returns
+Linux io_uring backend. Build-gated behind `SLUICE_HAS_LIBURING`. Without
+liburing, it is an unsupported stub: `submit_*` returns
 `IoError::backend_error` synchronously; `poll()` / `wait_one()` reap nothing.
+Construct directly; there is no factory function.
 
 ```cpp
 class UringAsyncBackend : public AsyncBackend {
 public:
-    UringAsyncBackend();
+    explicit UringAsyncBackend(unsigned queue_depth = 64);
+    ~UringAsyncBackend() override;
     // ... AsyncBackend implementation (real path gated by SLUICE_HAS_LIBURING)
+    bool available() const noexcept;
 };
 ```
 
-Factory functions:
+### `sluice::async::FakeAsyncBackend`
+
+Deterministic test backend. Construct directly and configure `auto_bytes()`,
+`auto_error()`, `auto_eof()`, `auto_short_then_full()`; or drive
+`complete_oldest_with_bytes()` / `complete_oldest_with_error()` manually.
 
 ```cpp
-// Construct a ThreadPoolBackend-backed AsyncIoContext.
-AsyncIoContext threadpool_backend();
+class FakeAsyncBackend : public AsyncBackend {
+public:
+    FakeAsyncBackend() = default;
+    ~FakeAsyncBackend() override = default;
 
-// Construct a UringAsyncBackend-backed AsyncIoContext.
-AsyncIoContext uring_backend();
+    void auto_bytes(std::size_t n);
+    void auto_error(IoError e);
+    void auto_eof();
+    void auto_disable();
+    void auto_short_then_full(std::size_t first_short);
+
+    void complete_oldest_with_bytes(std::size_t n);
+    void complete_oldest_with_error(IoError e);
+    void complete_oldest_sync_ok();
+    void complete_oldest_sync_error(IoError e);
+
+    // ... AsyncBackend implementation
+};
+```
+
+### Free functions (I/O coordinators)
+
+```cpp
+Result<std::size_t> read_all(AsyncIoContext& ctx, int fd, std::span<std::byte> dst,
+                             std::uint64_t offset);
+Result<std::size_t> write_all(AsyncIoContext& ctx, int fd, std::span<const std::byte> src,
+                              std::uint64_t offset);
+Result<void> sync_data_all(AsyncIoContext& ctx, int fd);
+Result<void> sync_all_all(AsyncIoContext& ctx, int fd);
 ```
 
 ## Measurement

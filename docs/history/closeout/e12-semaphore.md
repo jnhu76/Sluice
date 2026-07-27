@@ -17,12 +17,12 @@
 > verbatim). §14 (As-Built Implementation) records the production implementation
 > produced under E12-B-IMPLEMENTATION-1. Independent adversarial implementation
 > review completed by
-> [`docs/history/reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md`](reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md)
+> [`docs/history/reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md`](docs/history/reviews/E12-B-SEMAPHORE-IMPLEMENTATION-INDEPENDENT-REVIEW-1.md)
 > (2026-07-19), verdict `ACCEPT (WITH OBSERVATIONS)`; three non-blocking
 > observations (O1 stress retry loop, O2 defensive terminal check, O3 E12-G
 > cross-primitive dependency) are recorded in that artifact. The closure
 > condition (E12-G cross-primitive audit PASS) was satisfied by
-> [`docs/history/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md`](reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md)
+> [`docs/history/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md`](docs/history/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md)
 > (2026-07-19). E12-B is CLOSED.
 >
 > Authority baseline: E10 CLOSED
@@ -32,11 +32,11 @@
 > NOT reopen E10/E11/E12-A; it builds on them as authoritative.
 >
 > Cross-primitive preparation:
-> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §5 (updated
+> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md) §5 (updated
 > in the preparation corrective).
 >
-> Formal model: [`docs/spec/e12_semaphore/`](spec/e12_semaphore/). Formal gate
-> (safety-only + compile-probe): [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh).
+> Formal model: [`docs/spec/e12_semaphore/`](docs/history/closeout). Formal gate
+> (safety-only + compile-probe): [`scripts/verify-e12-semaphore-formal.sh`](scripts/verify-e12-semaphore-formal.sh).
 >
 > Scope of §1–§13 (preparation): documentation, design-authority, and
 > formal-model only. Scope of §14 (as-built): the production Semaphore public
@@ -884,6 +884,6 @@ documentation commit      docs(async): record E12-B semaphore implementation
 - E12-A Event as-built (CLOSED):
   [`docs/history/closeout/e12-event.md`](e12-event.md)
 - Cross-primitive preparation:
-  [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md)
-- Formal model: [`docs/spec/e12_semaphore/`](spec/e12_semaphore/)
-- Formal gate (safety): [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh)
+  [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md)
+- Formal model: [`docs/spec/e12_semaphore/`](docs/history/closeout)
+- Formal gate (safety): [`scripts/verify-e12-semaphore-formal.sh`](scripts/verify-e12-semaphore-formal.sh)

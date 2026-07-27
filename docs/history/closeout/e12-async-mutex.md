@@ -18,10 +18,10 @@
 > ```
 >
 > The migration/data-race micro-review closing Corrective-4 was completed by
-> [`docs/history/reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md`](reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md)
+> [`docs/history/reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md`](docs/history/reviews/E12-C-MIGRATION-DATA-RACE-MICRO-REVIEW-1.md)
 > (2026-07-19), verdict PASS. The final governance effect is also recorded in
 > the FINAL STATUS block at the end of
-> [`docs/history/reviews/E12-C-REVIEW.md`](reviews/E12-C-REVIEW.md). E12-C is CLOSED.
+> [`docs/history/reviews/E12-C-REVIEW.md`](docs/history/reviews/E12-C-REVIEW.md). E12-C is CLOSED.
 >
 > Authority baseline: E10 CLOSED
 > ([`docs/history/closeout/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)); E11 CLOSED
@@ -32,7 +32,7 @@
 > E10/E11/E12-A/E12-B preparation; it builds on those authorities.
 >
 > Cross-primitive preparation:
-> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §6 (updated
+> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md) §6 (updated
 > by this corrective).
 >
 > This document is the authoritative E12-C Async Mutex preparation specification.

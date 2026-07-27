@@ -327,97 +327,10 @@ NON_PATH_PATTERNS = [
     r'^do_read/write/sync$',
     # Non-existent result files
     r'^docs/results/sync-durability-baseline\.md$',
-    # Doc-relative references to moved docs (without docs/ prefix)
-    r'^e12-sync-primitives-plan\.md$',
-    r'^e12-semaphore\.md$',
-    r'^e12-async-mutex\.md$',
-    r'^e12-condition\.md$',
-    r'^e12-event\.md$',
-    r'^e12-queue\.md$',
-    r'^e12-rwlock\.md$',
-    r'^async-runtime-construction-method\.md$',
-    r'^async-runtime-plan\.md$',
-    r'^e10-waitnode-wait-queue\.md$',
-    r'^e11-deadline-timer-wait\.md$',
-    r'^e11-arch-recon-audit\.md$',
-    r'^e12-queue-implementation-authorization\.md$',
-    r'^e12-queue-production-implementation\.md$',
-    r'^e12-queue-corrective-3\.md$',
-    r'^e12-cross-primitive-terminal-audit\.md$',
-    r'^e13-select-preparation\.md$',
-    r'^e13-select-p7-rollback-closeout\.md$',
-    r'^sync-optimization-notes\.md$',
-    r'^bench-decision-matrix\.md$',
-    r'^bench-methodology\.md$',
-    r'^design-flush-sync-durability\.md$',
-    r'^design-copy-strategy\.md$',
-    r'^design-buffered-fast-path\.md$',
-    r'^design-io-context\.md$',
-    r'^design-wal-durability\.md$',
-    r'^design-readv-writev\.md$',
-    r'^mvp-closeout\.md$',
-    r'^mvp-core-model\.md$',
-    r'^next-steps-after-011\.md$',
-    r'^release-v0\.1-mvp-checklist\.md$',
-    r'^zig-std-io-gap-calibration\.md$',
-    r'^zig-std-io-parity-audit\.md$',
-    r'^zig-std-io-source-inventory\.md$',
-    r'^zig-stdio-async-port-map\.md$',
-    r'^zig-stdio-migration-jobs\.md$',
-    r'^async-backend-parity\.md$',
-    r'^async-mutex-nothrow-implementation\.md$',
-    r'^async-runtime-hang-and-gcc-corrective\.md$',
-    r'^e0a-waiting-policy-audit\.md$',
-    r'^sync-before-async-readiness-gate\.md$',
-    r'^sync-io-model-gap-audit\.md$',
-    r'^sync-runtime-bench-notes\.md$',
-    r'^io-uring-spike\.md$',
-    r'^io-uring-readiness-gate\.md$',
-    r'^async-source-inventory\.md$',
-    r'^async-problem-statement\.md$',
-    r'^async-design-alternatives\.md$',
-    r'^async-readiness-gate\.md$',
-    r'^async-next-jobs\.md$',
-    r'^sync-io-next-jobs\.md$',
-    r'^async-deferred-until-sync-baseline\.md$',
-    r'^bench-optimization-runbook\.md$',
-    # Moved design docs (doc-relative)
-    r'^design/e13-select-.*\.md$',
-    r'^design/e14-threaded-evented-parity-preparation\.md$',
-    r'^design/formal/e13-.*\.md$',
-    # Moved formal docs
-    r'^formal/e13-select-.*\.md$',
-    # Moved reviews (doc-relative)
-    r'^reviews/.*\.md$',
-    # Moved e10-e12 closure doc
-    r'^e10-e12-api-semantic-closure\.md$',
-    # Doc-relative scripts
-    r'^\.\./scripts/verify-e12-.*\.sh$',
-    # Moved design docs (with docs/ prefix)
-    r'^docs/design/e13-select-.*\.md$',
-    r'^docs/design/e14-threaded-evented-parity-preparation\.md$',
-    r'^docs/design/formal/e13-.*\.md$',
-    # Moved formal docs (with docs/ prefix)
-    r'^docs/formal/e13-select-.*\.md$',
-    r'^docs/formal/\*\*$',
-    # Moved e13-select docs (without docs/ prefix)
-    r'^docs/e13-select-.*\.md$',
-    # Moved closeout docs (with docs/ prefix)
-    r'^docs/e9-0-wake-source-topology-audit\.md$',
-    r'^docs/e8-0-ownership-topology-audit\.md$',
-    r'^docs/e8-formal-corrective/.*$',
-    # Moved queue docs (glob)
-    r'^docs/e12-queue.*\.md$',
     # Code member names
     r'^next_/prev_$',
     # Spec trace files
     r'^docs/spec/e13_select/.*\.keep$',
-    # Moved implementation plan docs (with docs/ prefix)
-    r'^docs/history/implementation-plans/e12-sync-primitives-plan\.md$',
-    r'^docs/history/closeout/e11-deadline-timer-wait\.md$',
-    # Moved queue docs (doc-relative from closeout)
-    r'^e12-queue-scheduler-integration\.md$',
-    r'^e12-queue-state-machine\.md$',
     # Code state names
     r'^woken/cancelled/expired$',
     r'^unresolved/woken/cancelled/expired$',
@@ -436,8 +349,6 @@ NON_PATH_PATTERNS = [
     r'^spec/e12_semaphore/$',
     r'^spec/e11_timer_wait/$',
     r'^spec/e12_semaphore/README\.md$',
-    # Doc-relative design references
-    r'^\.\./design/e14-threaded-evented-parity-preparation\.md$',
     # Formal directory reference
     r'^docs/formal/$',
     # More code identifiers
@@ -465,26 +376,15 @@ NON_PATH_PATTERNS = [
     r'^os/linux/IoUring$',
     r'^Io/net\*$',
     r'^sp/fp(/pc)?$',
-    # Doc-relative api-reference
-    r'^api-reference\.md$',
-    # Moved bench notes
-    r'^docs/bench/sync-runtime-bench-notes\.md$',
-    r'^docs/archive/mvp-closeout\.md$',
-    # Moved results
-    r'^docs/results/liburing-validation-2026-07-03\.md$',
-    # Doc-relative history references
-    r'^history/closeout/.*\.md$',
-    r'^history/implementation-plans/.*\.md$',
-    r'^\.\./history/implementation-plans/.*\.md$',
-    # TLA+ files in spec
-    r'^spec/e12_semaphore/E12Semaphore\.tla$',
     # Spec directory references
     r'^spec/e12_event/$',
     # Non-existent experimental headers
     r'^experimental/uring_write_batch\.hpp$',
     r'^experimental/uring_io_context\.hpp$',
-    # Code type with space (won't match backtick regex, but just in case)
+    # Code types / expressions with spaces (won't match backtick regex, but just in case)
     r'^Result<size_t>',
+    r'^auto&$',
+    r'^auto&',
     # More test case IDs with letter suffixes or multiple segments
     r'^cond_t\d+[a-z]*/t\d+[a-z]*$',
     r'^rwlock_t\d+(/t\d+)+$',
@@ -594,16 +494,20 @@ def is_tla_module(ref: str) -> bool:
     return False
 
 
-def resolve_ref(doc_path: Path, ref: str) -> Path | None:
+def resolve_ref(doc_path: Path, ref: str, from_backtick: bool = False) -> Path | None:
     """Resolve a reference. Returns the resolved Path or None if it cannot
     be resolved as a repository path (e.g. URL, anchor-only, non-path).
 
     Tries repo-root-relative first, then doc-relative, then zig-root.
+
+    Markdown links (from_backtick=False) are ALWAYS treated as paths — the
+    NON_PATH_PATTERNS heuristic only applies to backtick references, where
+    the same text could be either a path or a code identifier.
     """
     if is_url(ref):
         return None  # external — skip
 
-    if is_non_path(ref):
+    if from_backtick and is_non_path(ref):
         return None  # code identifier, not a file path
 
     if is_tla_module(ref):
@@ -703,9 +607,12 @@ def check_file(path: Path) -> tuple[list[str], list[str], list[str]]:
     line_of = lambda pos: text[: pos].count("\n") + 1
 
     # --- Markdown links ---
+    # Markdown links are ALWAYS treated as paths — never skipped by the
+    # NON_PATH_PATTERNS heuristic. A markdown link [text](target) is an
+    # explicit link; its target must resolve.
     for m in MD_LINK_RE.finditer(text):
         ref = m.group(2).strip()
-        resolved = resolve_ref(path, ref)
+        resolved = resolve_ref(path, ref, from_backtick=False)
         if resolved is None:
             continue
         if not resolved.exists():
@@ -727,9 +634,12 @@ def check_file(path: Path) -> tuple[list[str], list[str], list[str]]:
                 )
 
     # --- Backtick paths ---
+    # Backtick references are ambiguous — `foo/bar` could be a path or a
+    # code identifier. The NON_PATH_PATTERNS heuristic applies here to
+    # avoid false positives on code identifiers.
     for m in BACKTICK_PATH_RE.finditer(text):
         ref = m.group(1).strip()
-        resolved = resolve_ref(path, ref)
+        resolved = resolve_ref(path, ref, from_backtick=True)
         if resolved is None:
             continue
         if not resolved.exists():
@@ -806,5 +716,92 @@ def main() -> int:
         return min(problems, 255)
 
 
+def self_test() -> int:
+    """Negative tests for the checker itself.
+
+    Verifies that the checker actually catches:
+      1. A deliberately broken markdown link (non-existent target).
+      2. A deliberately stale moved-path reference (known-moved doc).
+      3. A markdown link that matches a former NON_PATH_PATTERNS entry
+         (e.g. `e12-event.md`) — must be flagged, not silently skipped.
+
+    Returns the number of test failures (0 = all passed).
+    """
+    import tempfile
+
+    failures = 0
+
+    # --- Test 1: deliberately broken markdown link ---
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".md", delete=False, encoding="utf-8"
+    ) as f:
+        f.write("[broken](docs/does_not_exist_anywhere.md)\n")
+        f.write("[good](README.md)\n")
+        tmp1 = Path(f.name)
+
+    b, s, _ = check_file(tmp1)
+    if not any("docs/does_not_exist_anywhere.md" in x for x in b):
+        print("SELF-TEST FAIL: broken markdown link not detected")
+        failures += 1
+    else:
+        print("SELF-TEST PASS: broken markdown link detected")
+    tmp1.unlink()
+
+    # --- Test 2: deliberately stale moved-path reference ---
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".md", delete=False, encoding="utf-8"
+    ) as f:
+        f.write("[stale](docs/e12-event.md)\n")
+        tmp2 = Path(f.name)
+
+    b, s, _ = check_file(tmp2)
+    if not any("docs/e12-event.md" in x for x in s):
+        print("SELF-TEST FAIL: stale moved path not detected")
+        failures += 1
+    else:
+        print("SELF-TEST PASS: stale moved path detected")
+    tmp2.unlink()
+
+    # --- Test 3: doc-relative old name (formerly masked by NON_PATH_PATTERNS) ---
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".md", delete=False, encoding="utf-8"
+    ) as f:
+        # e12-event.md was in NON_PATH_PATTERNS; now it must be flagged.
+        f.write("[masked](e12-event.md)\n")
+        tmp3 = Path(f.name)
+
+    b, s, _ = check_file(tmp3)
+    flagged = any("e12-event.md" in x for x in b) or any("e12-event.md" in x for x in s)
+    if not flagged:
+        print("SELF-TEST FAIL: formerly-masked doc name not detected")
+        failures += 1
+    else:
+        print("SELF-TEST PASS: formerly-masked doc name detected")
+    tmp3.unlink()
+
+    # --- Test 4: markdown link is NEVER skipped by is_non_path heuristic ---
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".md", delete=False, encoding="utf-8"
+    ) as f:
+        # `e12-sync-primitives-plan.md` was in NON_PATH_PATTERNS; as a
+        # markdown link it must now be flagged as broken/stale.
+        f.write("[plan](e12-sync-primitives-plan.md)\n")
+        tmp4 = Path(f.name)
+
+    b, s, _ = check_file(tmp4)
+    flagged = any("e12-sync-primitives-plan.md" in x for x in b) or \
+              any("e12-sync-primitives-plan.md" in x for x in s)
+    if not flagged:
+        print("SELF-TEST FAIL: markdown link to old doc name was silently skipped")
+        failures += 1
+    else:
+        print("SELF-TEST PASS: markdown link to old doc name is flagged")
+    tmp4.unlink()
+
+    return failures
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        sys.exit(self_test())
     sys.exit(main())

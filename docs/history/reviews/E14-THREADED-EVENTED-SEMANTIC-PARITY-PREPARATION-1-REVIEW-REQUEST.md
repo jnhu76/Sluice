@@ -18,7 +18,7 @@ REVISION UNDER REVIEW: rev-3+1
 **Date:** 2026-07-26 (rev-3+1).
 **Audited HEAD:** `master` at `4ffff76` (Merge PR #28 — E12-G terminal audit).
 **Working tree at audit start:** clean.
-**Document under review:** [`docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md`](../design/e14-threaded-evented-parity-preparation.md) (rev-3).
+**Document under review:** [`docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md`](docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md) (rev-3).
 
 > **Revision history of this review request.**
 > The rev-1 request framed F2 as a single destructor-drain finding, F1 as an
@@ -274,7 +274,7 @@ E14-PREPARATION-REVIEW: FAIL
 
 ## 8. Cross-links
 
-- Preparation document: [`docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md`](../design/e14-threaded-evented-parity-preparation.md) (rev-3).
+- Preparation document: [`docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md`](docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md) (rev-3).
 - Construction method (normative for review): `docs/history/implementation-plans/async-runtime-construction-method.md`.
 - Authority: `AGENTS.md`, `docs/adr/ADR-execution-model.md`.
 - Closed E12-G audit (input): `docs/history/closeout/e12-cross-primitive-terminal-audit.md`.

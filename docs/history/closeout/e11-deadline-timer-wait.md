@@ -11,7 +11,7 @@ insertion in [`docs/history/closeout/e11-arch-recon-audit.md`](e11-arch-recon-au
 `E11-READY-WITH-CONSTRAINTS`, implementation **GO**).
 
 E11 is bound by the project construction method
-[`docs/history/implementation-plans/async-runtime-construction-method.md`](async-runtime-construction-method.md)
+[`docs/history/implementation-plans/async-runtime-construction-method.md`](docs/history/implementation-plans/async-runtime-construction-method.md)
 (M1–M9).
 
 ---
@@ -960,5 +960,5 @@ Deterministic tests: `tests/timer_wait_test.cpp` (E11-T0..T18).
 - E10 formal model: `docs/spec/e10_waitnode/`
 - E11 insertion audit (GO/NO-GO, authority map): [`docs/history/closeout/e11-arch-recon-audit.md`](e11-arch-recon-audit.md)
 - E9 park/wake + external-wake protocol (deadline-liveness substrate): `docs/history/closeout/e9-0-wake-source-topology-audit.md`, `docs/spec/e9_park_wake/`
-- Construction method (M1–M9, binding): [`docs/history/implementation-plans/async-runtime-construction-method.md`](async-runtime-construction-method.md)
-- Roadmap placement (E11 in the dependency trunk): [`docs/history/implementation-plans/async-runtime-plan.md`](async-runtime-plan.md)
+- Construction method (M1–M9, binding): [`docs/history/implementation-plans/async-runtime-construction-method.md`](docs/history/implementation-plans/async-runtime-construction-method.md)
+- Roadmap placement (E11 in the dependency trunk): [`docs/history/implementation-plans/async-runtime-plan.md`](docs/history/implementation-plans/async-runtime-plan.md)

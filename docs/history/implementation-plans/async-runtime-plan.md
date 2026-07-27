@@ -362,10 +362,10 @@ The Scheduler has a reusable cancellation-safe single-wait queue substrate that 
 # E11 — Deadline / Timer Wait Integration
 
 **Status: [CLOSED].** Authoritative spec:
-[`docs/history/closeout/e11-deadline-timer-wait.md`](history/closeout/e11-deadline-timer-wait.md).
-Insertion audit: [`docs/history/closeout/e11-arch-recon-audit.md`](history/closeout/e11-arch-recon-audit.md)
+[`docs/history/closeout/e11-deadline-timer-wait.md`](docs/history/closeout/e11-deadline-timer-wait.md).
+Insertion audit: [`docs/history/closeout/e11-arch-recon-audit.md`](docs/history/closeout/e11-arch-recon-audit.md)
 (verdict `E11-READY-WITH-CONSTRAINTS`, implementation GO).
-Formal model: [`docs/spec/e11_timer_wait/`](spec/e11_timer_wait/).
+Formal model: [`docs/spec/e11_timer_wait/`](docs/history/closeout).
 As-built: `Scheduler::await_wait_deadline` / `expire_wait` /
 `advance_clock`; `TimerRegistration` (independently-stable ACTIVE/RETIRED/CONSUMED
 callback-lifetime control block); `WaitNode::expired` third terminal outcome
@@ -418,7 +418,7 @@ a destroyed `WaitNode`; an already-due deadline cannot be lost during wait
 admission; a Scheduler with an active deadline cannot park indefinitely past it;
 the NEG-1…NEG-5 TLA+ models produce counterexamples for broken protocols; I1–I7
 hold; deterministic + sanitizer gates green. Full normative text:
-[`docs/history/closeout/e11-deadline-timer-wait.md`](history/closeout/e11-deadline-timer-wait.md).
+[`docs/history/closeout/e11-deadline-timer-wait.md`](docs/history/closeout/e11-deadline-timer-wait.md).
 
 ---
 
@@ -427,7 +427,7 @@ hold; deterministic + sanitizer gates green. Full normative text:
 Only after E9-E11 should Sluice add user-facing asynchronous synchronization primitives.
 
 Canonical decomposition (protocol-dependency order, resolved by the E12
-preparation audit — see [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](history/implementation-plans/e12-sync-primitives-plan.md)):
+preparation audit — see [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md)):
 
 ```text
 E12-A Event              [CLOSED — E12-A-EVENT-CORRECTIVE-2 + ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1; both independent reviews PASS; formal script exit 1 under current TLC runtime, PREEXISTING TOOLCHAIN-SENSITIVE LIMITATION WITH BASELINE PARITY — docs/history/closeout/e12-event.md; formal: docs/spec/e12_event/]
@@ -457,7 +457,7 @@ Useful to validate WaitNode integration.
 Introduces permit accounting and waiter queue ordering.
 
 Key invariant (supply accounting — corrected in E12-PREP-CORRECTIVE-2; see
-[`docs/history/implementation-plans/e12-sync-primitives-plan.md`](history/implementation-plans/e12-sync-primitives-plan.md) §5.1):
+[`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md) §5.1):
 
 ```text
 initial_supply + successful_release_count

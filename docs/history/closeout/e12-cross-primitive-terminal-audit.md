@@ -5,7 +5,7 @@
 > the public API, the Scheduler, or any formal model. No commit, push, or PR is
 > authorized by this document. Its only authorized deliverables are (a) this
 > file and (b) a minimal status/link update to
-> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §10.
+> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md) §10.
 >
 > **Authority chain (per `AGENTS.md` §2):**
 > ```text
@@ -1240,18 +1240,18 @@ production change under E12-G.
 
 ## 16. Cross-links
 
-- Preparation baseline (corrected by §5): [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §10
+- Preparation baseline (corrected by §5): [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md) §10
 - E10 as-built: [`docs/history/closeout/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)
 - E11 as-built: [`docs/history/closeout/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md)
 - E12-A Event: [`docs/history/closeout/e12-event.md`](e12-event.md)
 - E12-B Semaphore: [`docs/history/closeout/e12-semaphore.md`](e12-semaphore.md)
 - E12-C AsyncMutex: [`docs/history/closeout/e12-async-mutex.md`](e12-async-mutex.md)
 - E12-D AsyncCondition: [`docs/history/closeout/e12-condition.md`](e12-condition.md)
-- E12-E AsyncQueue: [`docs/history/closeout/e12-queue.md`](e12-queue.md), [`docs/history/implementation-plans/e12-queue-state-machine.md`](e12-queue-state-machine.md), [`docs/history/implementation-plans/e12-queue-scheduler-integration.md`](e12-queue-scheduler-integration.md)
-- E12-F AsyncRwLock: [`docs/history/implementation-plans/e12-rwlock.md`](e12-rwlock.md)
+- E12-E AsyncQueue: [`docs/history/closeout/e12-queue.md`](e12-queue.md), [`docs/history/implementation-plans/e12-queue-state-machine.md`](docs/history/implementation-plans/e12-queue-state-machine.md), [`docs/history/implementation-plans/e12-queue-scheduler-integration.md`](docs/history/implementation-plans/e12-queue-scheduler-integration.md)
+- E12-F AsyncRwLock: [`docs/history/implementation-plans/e12-rwlock.md`](docs/history/implementation-plans/e12-rwlock.md)
 - Public API reference: [`docs/api-reference.md`](api-reference.md)
-- Construction method (M1–M9): [`docs/history/implementation-plans/async-runtime-construction-method.md`](async-runtime-construction-method.md)
-- Prior cross-primitive semantic-closure review: [`docs/history/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md`](reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md)
+- Construction method (M1–M9): [`docs/history/implementation-plans/async-runtime-construction-method.md`](docs/history/implementation-plans/async-runtime-construction-method.md)
+- Prior cross-primitive semantic-closure review: [`docs/history/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md`](docs/history/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md)
 - Formal models: `docs/spec/e10_waitnode/`, `docs/spec/e11_timer_wait/`, `docs/spec/e12_event/`, `docs/spec/e12_semaphore/`, `docs/spec/e12_async_mutex/`, `docs/spec/e12_async_condition/`, `docs/spec/e12_queue/`, `docs/spec/e12_rwlock/`
 - Formal gates: `scripts/verify-e12-*-formal.sh`
 - Cross-primitive parity tests: `tests/async_sync_cross_primitive_parity_test.cpp`

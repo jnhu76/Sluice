@@ -13,7 +13,7 @@
 > This document does NOT reopen any closed subsystem.
 >
 > Cross-primitive preparation:
-> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](../history/implementation-plans/e12-sync-primitives-plan.md) §9
+> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md) §9
 > (RwLock semantic authority, Task H) — this document resolves the
 > HUMAN-DECISION-REQUIRED fairness policy classification.
 

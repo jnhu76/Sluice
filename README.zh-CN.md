@@ -25,7 +25,7 @@
 | 库 | 描述 | 默认 |
 |---------|-------------|---------|
 | `sluice_core` | 同步核心：Result、Reader/Writer、copy、文件 I/O、WAL、BlockingIoPool | 始终构建 |
-| `sluice_async` | 异步运行时：Scheduler、Fiber、同步原语、Completion、Future/Group/Batch | 始终构建 |
+| `sluice_async` | 异步运行时：Scheduler、Fiber、同步原语、Completion、Future/Group/Batch | 可选；显式构建或作为 async tests/examples 的依赖 |
 | `sluice_async_internal_testing` | 测试专用变体，包含确定性因果接缝 | 仅测试 |
 | `sluice_experimental_uring` | 可选 io_uring 代码（无 liburing 时为 stub） | 默认关闭 |
 
@@ -53,30 +53,40 @@ int main() {
 ## 5 分钟异步示例
 
 ```cpp
-// 异步运行时：提交一个操作，等待完成。
+// 异步运行时：提交一个操作，轮询完成，读取结果。
+// (examples/async_foundation_quickstart.cpp — 针对公共头文件构建)
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/async_mutex.hpp>
+#include <sluice/async/completion.hpp>
+#include <sluice/async/fake_backend.hpp>
+#include <cstddef>
 #include <cstdio>
+#include <memory>
 
 int main() {
-    // ThreadPoolBackend：可移植，始终可用。
-    sluice::AsyncIoContext io{sluice::threadpool_backend()};
+    // FakeAsyncBackend 是确定性测试后端：auto_bytes(n) 使下一次 poll()
+    // 以 n 字节完成每个未完成的操作。
+    auto backend = std::make_unique<sluice::async::FakeAsyncBackend>();
+    sluice::async::FakeAsyncBackend* raw = backend.get();
+    raw->auto_bytes(8);
 
-    // AsyncMutex：在 Evented scheduler 上可 fiber 挂起，
-    // 在 Threaded 上基于 cv。
-    sluice::AsyncMutex mutex{/* scheduler */};
+    sluice::async::AsyncIoContext ctx(std::move(backend));
 
     // 针对调用者拥有的 Completion 提交读取。
-    sluice::Completion<std::size_t> c;
-    char buf[1024];
-    io.submit_read({/*.fd=*/fd, /*.dst=*/reinterpret_cast<std::byte*>(buf),
-                    /*.len=*/sizeof(buf), /*.offset=*/0}, c);
+    sluice::async::Completion<std::size_t> c;
+    std::byte buf[8]{};
+    if (!ctx.submit_read(sluice::async::ReadOp{0, buf, 8, 0}, c).has_value())
+        return 1;
 
-    // 等待（Threaded：阻塞调用线程；Evented：挂起 Fiber）。
-    auto result = io.wait_one(c);
-    if (result.has_value()) {
-        std::printf("读取 %zu 字节\n", result.value());
-    }
+    // poll() 非阻塞地收割完成；返回收割数量。
+    if (ctx.poll() != 1) return 2;
+
+    // 操作结果在 Completion 就绪后从中读取——而不是从 wait_one()/poll() 返回值读取。
+    if (!c.ready()) return 3;
+    auto r = c.result();
+    if (!r.has_value() || r.value() != 8) return 4;
+
+    std::printf("async quickstart: 读取 %zu 字节\n", r.value());
+    return 0;
 }
 ```
 
@@ -101,7 +111,7 @@ int main() {
 - `Event`（E12-A）、`Semaphore`（E12-B）、`AsyncMutex`（E12-C）
 - `AsyncCondition`（E12-D）、`AsyncQueue<T>`（E12-E）、`AsyncRwLock`（E12-F）
 - `Select`（E13）— 多臂 Event/Timer select
-- `CancellationToken` / `CancelState`（E27）
+- `CancelToken` / `CancelState` / `CancelGuard`（取消原语）
 - `Future<T>`（E28）、`Group`（E29）、`Batch`（E30）
 - `Completion<T>` / `AsyncIoContext` / `AsyncBackend`
 - `FakeAsyncBackend`（确定性测试工具）
@@ -137,7 +147,8 @@ xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test
 
 ## 验证模型
 
-- **验收测试** — `xmake test -v`（Clang Debug，CI 门控）
+- **验收** — `public_api_acceptance`（公共头文件编译+运行探测）；未来的 E16 运行时验收消费者
+- **单元/组件** — `xmake test -v`（每个 slice 的测试二进制）
 - **确定性因果测试** — `SLUICE_ASYNC_INTERNAL_TESTING` 阶段接缝
 - **Sanitizer 门控** — ASan、UBSan、TSan
 - **形式化模型** — TLA+ 规范，位于 `docs/spec/` 和 `spec/tla/`

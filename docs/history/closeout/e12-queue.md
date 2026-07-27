@@ -92,7 +92,7 @@ cannot construct a lease from a control pointer, mutate location, construct a
 teardown session, call reconciliation, forge a ticket, or mutate the owner map.
 The complete type graph, timer guard, call ledger, 19/6 rows, and 33
 counterexamples are binding in
-[`docs/history/implementation-plans/e12-queue-scheduler-integration.md`](e12-queue-scheduler-integration.md).
+[`docs/history/implementation-plans/e12-queue-scheduler-integration.md`](docs/history/implementation-plans/e12-queue-scheduler-integration.md).
 
 `begin_teardown()` requires zero ordinary port calls, linked waits, ACTIVE
 Queue timers, and granted-not-resumed operations, plus empty WaitQueues. It

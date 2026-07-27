@@ -45,7 +45,7 @@ documents are historical:
 | E12-C AsyncMutex | `docs/history/implementation-plans/` | `docs/history/closeout/e12-async-mutex.md` |
 | E12-D AsyncCondition | `docs/history/implementation-plans/` | `docs/history/closeout/e12-condition.md` |
 | E12-E AsyncQueue | `docs/history/implementation-plans/` | `docs/history/closeout/e12-queue.md` |
-| E12-F AsyncRwLock | `docs/history/implementation-plans/e12-rwlock.md` | `docs/history/closeout/e12-queue.md` |
+| E12-F AsyncRwLock | `docs/history/implementation-plans/e12-rwlock.md` | `docs/history/closeout/e10-e12-api-semantic-closure.md` |
 | E13 Select | `docs/history/implementation-plans/e13-select-*.md` | `docs/history/closeout/e13-select-p7-rollback-closeout.md` |
 | E14 Threaded/Evented Parity | `docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md` | — |
 

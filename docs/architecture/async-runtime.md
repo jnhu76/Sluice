@@ -39,25 +39,47 @@ implementation (`fiber_ctx::context_switch`) is architecture-specific:
 - **Other platforms** — `fiber_ctx::supported == false`; Evented tests skip
   cleanly.
 
-A Fiber is a cancellation-propagation boundary: tasks swallow
-`IoError::canceled` at their cancel points.
+A Fiber carries a `CancelToken` and `CancelState` but is **not** itself the
+cancel-propagation boundary. The documented cancel-propagation boundary is
+`Group`: tasks swallow `IoError::canceled` at their cancel points.
 
-## Threaded vs Evented
+## Two distinct waiting layers
 
-Two execution strategies share the same public primitive surface:
+The runtime has two distinct waiting layers that are easy to confuse:
 
-| Strategy | Wait mechanism | Fiber required | Platform |
-|----------|---------------|----------------|----------|
-| **Threaded** (`ThreadedWaitPolicy`) | `std::condition_variable` | No | Any |
-| **Evented** (`EventedWaitPolicy`) | Fiber suspend/resume | Yes | x86_64 Linux |
+**Scheduler-integrated primitives** (Fiber-only blocking path):
 
-The strategy is injected as a `WaitPolicy&` reference at construction or await
-time. All primitives (`Event::wait`, `Semaphore::acquire`, `AsyncMutex::lock`,
-`AsyncCondition::wait`, `AsyncQueue::push/pop`, `AsyncRwLock::read_lock/write_lock`,
-`Select`) suspend via the policy, so the same primitive code path works in both
-modes.
+| Primitive | Suspension mechanism |
+|-----------|---------------------|
+| `Event` | `Scheduler::await_event_wait` |
+| `Semaphore` | `Scheduler::sem_acquire` |
+| `AsyncMutex` | `Scheduler::mutex_lock` |
+| `AsyncCondition` | `Scheduler::condition_wait_prepare` |
+| `AsyncQueue<T>` | `Scheduler::queue_push_admit` / `queue_pop_admit` |
+| `AsyncRwLock` | `Scheduler::rwlock_read_lock` / `rwlock_write_lock` |
+| `Select` | `Scheduler::select_admit` (via friended free `select()`) |
 
-**Threaded** is the portable default. Each blocking wait consumes an OS thread.
+These primitives suspend fibers directly through `Scheduler` members. They do
+**not** use `WaitPolicy`, and there is no "Threaded primitive" implementation —
+they are fiber-scheduler-native.
+
+**Policy-based task waiting** (Threaded/Evented parity):
+
+| Type | Wait mechanism | Fiber required | Platform |
+|------|---------------|----------------|----------|
+| `Future<T>` | `WaitPolicy&` (injected) | Evented: Yes / Threaded: No | Any |
+| `Group` | `WaitPolicy&` (Scheduler or default) | Evented: Yes / Threaded: No | Any |
+
+`WaitPolicy` is the abstract seam that decides *how* a task waits physically:
+
+- `ThreadedWaitPolicy` — `std::condition_variable` (portable, any platform).
+- `EventedWaitPolicy` — Fiber suspend/resume via a `Scheduler&` (x86_64 Linux).
+
+`Future<T>` and `Group` are the only types that delegate the physical wait to a
+`WaitPolicy`. The async primitives do not.
+
+**Threaded** is the portable default for policy-based waiting. Each blocking
+wait consumes an OS thread.
 
 **Evented** requires a running `Scheduler` and x86_64 Linux. A Fiber awaiting a
 pending operation suspends (does not block a worker thread); the worker runs
@@ -112,8 +134,11 @@ E9 added the external-wake subsystem:
 - Authority probes (negative-compile) enforce queue-identity safety and
   resolution-authority boundaries.
 - Death tests (POSIX fork/exec) enforce fail-fast boundaries.
-- Cross-primitive parity tests enforce semantic equivalence between Threaded
-  and Evented strategies.
+- Cross-primitive parity tests enforce semantic equivalence across the
+  Scheduler-integrated primitives (Event / Semaphore / AsyncMutex / AsyncCondition
+  / AsyncQueue / AsyncRwLock).
+- Policy-based parity tests enforce semantic equivalence between Threaded and
+  Evented strategies for `Future<T>` and `Group`.
 
 ## References
 
