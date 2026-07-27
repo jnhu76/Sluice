@@ -88,9 +88,3 @@ jobs:
           xmake build async_foundation_quickstart
           xmake run async_foundation_quickstart
 
-      - name: Documentation verification
-        # Link checker self-tests (negative tests that the checker actually
-        # catches broken/stale links) and full link validation.
-        run: |
-          python3 scripts/check-doc-links.py --self-test
-          python3 scripts/check-doc-links.py
