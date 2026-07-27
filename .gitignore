@@ -36,3 +36,8 @@ a.out
 states/
 # TLC counterexample trace exploration specs (regenerated on each CEX run)
 *_TTrace*.tla
+
+# Fuzz crash artifacts and transient corpus growth (gitignored; committed
+# seeds live under fuzz/corpus/ and are tracked)
+fuzz/artifacts/
+crash-*
