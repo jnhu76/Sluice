@@ -122,5 +122,5 @@ This audit only refactors the SEAM into place; E5 plugs the Evented policy in.
 ## 5. Cross-links
 
 - ADR: `docs/adr/ADR-execution-model.md` (E0) §3.
-- Job sequence: `docs/zig-stdio-migration-jobs.md` (023C) — PHASE E.
-- Source graph: `docs/zig-stdio-async-port-map.md` (023A).
+- Job sequence: `docs/history/implementation-plans/zig-stdio-migration-jobs.md` (023C) — PHASE E.
+- Source graph: `docs/history/implementation-plans/zig-stdio-async-port-map.md` (023A).

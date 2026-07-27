@@ -162,5 +162,5 @@ run, each question gets an evidence-backed answer recorded here and under
 - Bench methodology: `docs/sync-bench-methodology.md`.
 - Bench matrix + decision questions: `docs/sync-bench-matrix.md`.
 - Architecture: `docs/sync-io-architecture.md`.
-- Jobs: `docs/sync-io-next-jobs.md` (022S produces evidence, 023S tunes).
-- Existing optimization runbook (single-stream): `docs/bench-optimization-runbook.md`.
+- Jobs: `docs/history/implementation-plans/sync-io-next-jobs.md` (022S produces evidence, 023S tunes).
+- Existing optimization runbook (single-stream): `docs/history/implementation-plans/bench-optimization-runbook.md`.

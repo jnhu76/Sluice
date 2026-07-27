@@ -1,6 +1,8 @@
 # Sluice Documentation
 
-Sluice is an experimental C++20 I/O control-flow library built around explicit capabilities, pluggable backends, and backend-neutral `Reader` / `Writer` semantics.
+Sluice is an experimental C++20 I/O control-flow library built around explicit
+capabilities, pluggable backends, and backend-neutral `Reader` / `Writer`
+semantics.
 
 ## Quick navigation
 
@@ -17,7 +19,11 @@ Sluice is an experimental C++20 I/O control-flow library built around explicit c
 
 ## Subsystem map
 
-### Synchronous core
+Statuses: **Implemented** (production headers + sources + tests), **Experimental**
+(build-gated, off by default), **Proposed** (design not yet authorized),
+**Historical** (superseded or closeout evidence).
+
+### Synchronous core (`sluice_core`)
 
 | Capability | Current contract | ADR | Verification |
 |------------|-----------------|-----|--------------|
@@ -26,20 +32,31 @@ Sluice is an experimental C++20 I/O control-flow library built around explicit c
 | WAL and durability | [`sync-durability-model.md`](sync-durability-model.md) | ADR-024S | [`wal_test`](../tests/wal_test.cpp) |
 | BlockingIoPool | [`api-reference.md`](api-reference.md) | ADR-024S | [`blocking_io_pool_test`](../tests/blocking_io_pool_test.cpp) |
 
-### Async runtime
+### Async runtime (`sluice_async`)
 
-| Capability | Current contract | ADR | Verification |
-|------------|-----------------|-----|--------------|
-| Scheduler and fibers | [`async-runtime-plan.md`](async-runtime-plan.md) | [ADR-execution-model.md](adr/ADR-execution-model.md) | Deterministic causal tests |
-| WaitQueue and primitives | [`e10-e12-api-semantic-closure.md`](e10-e12-api-semantic-closure.md) | ADR-execution-model | Formal TLA+ models in `docs/spec/` |
-| Select / cancellation / timers | *(proposed)* | *(proposed)* | *(proposed)* |
-| AsyncIoContext / Batch | *(proposed)* | [ADR-async-io-model.md](adr/ADR-async-io-model.md) | *(proposed)* |
+| Capability | Current contract | ADR | Verification | Status |
+|------------|-----------------|-----|--------------|--------|
+| Scheduler / Fiber | [`async-runtime.md`](architecture/async-runtime.md) | [ADR-execution-model.md](adr/ADR-execution-model.md) | Deterministic causal tests, multi-worker tests | Implemented |
+| WaitNode / WaitQueue | [`async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | [`wait_queue_test`](../tests/wait_queue_test.cpp), formal TLA+ | Implemented |
+| Event | [`async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | [`event_primitive_test`](../tests/event_primitive_test.cpp) | Implemented |
+| Semaphore | [`async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | [`semaphore_primitive_test`](../tests/semaphore_primitive_test.cpp) | Implemented |
+| AsyncMutex | [`async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | [`async_mutex_primitive_test`](../tests/async_mutex_primitive_test.cpp) | Implemented |
+| AsyncCondition | [`async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | [`async_condition_primitive_test`](../tests/async_condition_primitive_test.cpp) | Implemented |
+| AsyncQueue | [`async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | [`async_queue_primitive_test`](../tests/async_queue_primitive_test.cpp) | Implemented |
+| AsyncRwLock | [`async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | [`async_rwlock_test`](../tests/async_rwlock_test.cpp) | Implemented |
+| Select | [`async-synchronization.md`](architecture/async-synchronization.md) | ADR-execution-model | [`select_*_test`](../tests/select_inline_test.cpp) | Implemented |
+| CancellationToken | [`async-io-foundation.md`](architecture/async-io-foundation.md) | [ADR-async-io-model.md](adr/ADR-async-io-model.md) | [`cancel_token_test`](../tests/cancel_token_test.cpp) | Implemented |
+| Future / Group | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`future_test`](../tests/future_test.cpp), [`group_test`](../tests/group_test.cpp) | Implemented |
+| Completion / AsyncIoContext | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`async_io_context_test`](../tests/async_io_context_test.cpp) | Implemented |
+| Batch | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`batch_test`](../tests/batch_test.cpp) | Implemented |
+| ThreadPoolBackend | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`threadpool_backend_test`](../tests/threadpool_backend_test.cpp) | Implemented |
+| UringAsyncBackend | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`uring_backend_test`](../tests/uring_backend_test.cpp) | Experimental |
 
 ### Experimental
 
 | Capability | Status | Verification |
 |------------|--------|-------------|
-| io_uring (experimental) | Stub-only; build-gated behind `--with-liburing` | [`docs/io-uring-liburing-validation.md`](io-uring-liburing-validation.md) |
+| io_uring (`UringAsyncBackend`) | Experimental; stub-only by default, real path gated behind `--with-liburing` | [`uring_backend_test`](../tests/uring_backend_test.cpp) (stub-mode) |
 
 ### Formal models
 
@@ -61,7 +78,8 @@ Before changing a subsystem, read the following in order:
 7. The **production implementation** under `src/`
 8. The **tests** under `tests/`
 
-For historical context, see `docs/history/`. Historical documents are not current authority.
+For historical context, see `docs/history/`. Historical documents are not
+current authority.
 
 ## Status metadata
 
@@ -72,4 +90,5 @@ Status: Current | Accepted | Proposed | Superseded | Historical
 Authority: Public Contract | ADR | Architecture | Design | Verification | History
 ```
 
-Documents without this metadata are either historical records or non-authority references.
+Documents without this metadata are either historical records or non-authority
+references.

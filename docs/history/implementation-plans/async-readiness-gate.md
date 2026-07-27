@@ -2,8 +2,8 @@
 
 **Status: sluice-CORE-016E.** A gate, not an implementation. It lists the
 preconditions that **must** be satisfied before async implementation (jobs 017+,
-see `docs/async-next-jobs.md`) may start, and how each is verified. It is the
-async analogue of `docs/io-uring-readiness-gate.md` (012D), but for the async
+see `docs/history/implementation-plans/async-next-jobs.md`) may start, and how each is verified. It is the
+async analogue of `docs/history/implementation-plans/io-uring-readiness-gate.md` (012D), but for the async
 *runtime* rather than the io_uring *spike*.
 
 The gate is **not** "all green today." Several items are satisfied by this design
@@ -99,7 +99,7 @@ unchanged after every future job (item 9).
 The async context (`AsyncIoContext`) is an explicitly constructed, owned,
 move-only object — paralleling `IoContext`. There is no thread-local/global
 scheduler, in keeping with sluice's "stats never global, state never global"
-rule (016A §1; `docs/design-io-context.md`). This is a hard constraint: any
+rule (016A §1; `docs/history/implementation-plans/design-io-context.md`). This is a hard constraint: any
 future proposal to add a global scheduler requires a new ADR and explicit
 acceptance. **Accepted posture: no global scheduler.**
 
@@ -116,7 +116,7 @@ separate validation (later).
 
 ### Item 8 — Bench methodology exists for async workloads  **[DESIGN→IMPL]**
 
-The existing `docs/bench-methodology.md` and `docs/bench-decision-matrix.md`
+The existing `docs/history/implementation-plans/bench-methodology.md` and `docs/history/implementation-plans/bench-decision-matrix.md`
 define the no-universal-claims, workload-specific approach. Async benches (job
 022) extend this: throughput/latency for W1–W4 (016B) against Fake / ThreadPool
 (020A) / Uring (020B) backends, never claiming universal superiority.
@@ -157,10 +157,10 @@ complete. The gate is fully GREEN.
 ## 5. Cross-links
 
 - ADR: `docs/adr/ADR-async-io-model.md` (016D).
-- Inventory: `docs/async-source-inventory.md` (016A).
-- Problem statement: `docs/async-problem-statement.md` (016B).
-- Alternatives: `docs/async-design-alternatives.md` (016C).
-- Next jobs: `docs/async-next-jobs.md` (016F).
-- Prior (spike) gate: `docs/io-uring-readiness-gate.md` (012D).
+- Inventory: `docs/history/implementation-plans/async-source-inventory.md` (016A).
+- Problem statement: `docs/history/implementation-plans/async-problem-statement.md` (016B).
+- Alternatives: `docs/history/implementation-plans/async-design-alternatives.md` (016C).
+- Next jobs: `docs/history/implementation-plans/async-next-jobs.md` (016F).
+- Prior (spike) gate: `docs/history/implementation-plans/io-uring-readiness-gate.md` (012D).
 - liburing validation runbook: `docs/io-uring-liburing-validation.md` (014C).
-- Bench methodology: `docs/bench-methodology.md`, `docs/bench-decision-matrix.md`.
+- Bench methodology: `docs/history/implementation-plans/bench-methodology.md`, `docs/history/implementation-plans/bench-decision-matrix.md`.

@@ -44,7 +44,7 @@ All four prerequisite gates independently re-verified and closed:
 - B4 Queue formal model + independent formal review: PASS
   (model `9572985` + corrective `f53faf0` + review-2 `6aa2334`).
 
-See `docs/e12-queue-implementation-authorization.md` AUTHORIZATION-2 section
+See `docs/history/closeout/e12-queue-implementation-authorization.md` AUTHORIZATION-2 section
 for the full per-gate evidence.
 
 ## Implementation progress (Phase E)

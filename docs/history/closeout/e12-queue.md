@@ -92,7 +92,7 @@ cannot construct a lease from a control pointer, mutate location, construct a
 teardown session, call reconciliation, forge a ticket, or mutate the owner map.
 The complete type graph, timer guard, call ledger, 19/6 rows, and 33
 counterexamples are binding in
-[`docs/e12-queue-scheduler-integration.md`](e12-queue-scheduler-integration.md).
+[`docs/history/implementation-plans/e12-queue-scheduler-integration.md`](docs/history/implementation-plans/e12-queue-scheduler-integration.md).
 
 `begin_teardown()` requires zero ordinary port calls, linked waits, ACTIVE
 Queue timers, and granted-not-resumed operations, plus empty WaitQueues. It
@@ -143,7 +143,7 @@ The Queue formal model is now authored (B4): Model A (bounded MPMC FIFO,
 negative models, each producing a real counterexample on its named
 invariant. Gate: `scripts/verify-e12-queue-formal.sh` (exit 0). Independent
 formal review PASS
-(`docs/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`). The
+(`docs/history/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`). The
 formal model preserves the one-shot lease/control location and corrected
 steal/teardown semantics; the `tearing_down` lifecycle axis is explicitly
 out of B4 scope and deferred to a future teardown Model C.
@@ -160,7 +160,7 @@ T25 migration/reacquire: PASS (deterministic rewrite)
 The T25 hang was root-caused to a test-harness defect (unbounded coordinator
 waits, missing `f_idle`/`bounded_wait`/suspension handshake) and closed by
 mirroring the Mutex T19 determinism discipline; no production code was
-touched. Evidence: `docs/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1.
+touched. Evidence: `docs/history/closeout/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1.
 
 ### Authorization gates
 
@@ -170,11 +170,11 @@ Before production implementation:
    authorization and realization~~ — **B1 PASS**: production fail-fast Mutex
    landed (`be07564`) with death tests (`e2cfe61`), independent production
    implementation review PASS
-   (`docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`,
+   (`docs/history/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`,
    commit `15dc9b4`);
 2. ~~Corrective-2 needs a fresh independent adversarial review~~ — **B2 PASS**:
    independent adversarial design review PASS
-   (`docs/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`,
+   (`docs/history/reviews/E12-E-QUEUE-CORRECTIVE-2-INDEPENDENT-ADVERSARIAL-REVIEW-1.md`,
    commit `4f81d6c`; 11/11 topics verified, 33/33 counterexamples
    dispositioned, 6 compile probes green, 0 blocking findings);
 3. ~~Condition T25 needs its separate hang audit~~ — **B3 PASS** (W1
@@ -184,7 +184,7 @@ Before production implementation:
    (Model A bounded MPMC FIFO + Model B Open/Closed + 7 negatives) under
    `docs/spec/e12_queue/`, gate `scripts/verify-e12-queue-formal.sh`;
    independent formal review PASS
-   (`docs/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`,
+   (`docs/history/reviews/E12-E-QUEUE-FORMAL-MODEL-INDEPENDENT-REVIEW-2.md`,
    commit `6aa2334`; corrective F.1.1 in `f53faf0`).
 
 ```text
@@ -217,8 +217,8 @@ The following hierarchy was used (highest authority first):
 
 1. **Repository evidence** — Sluice E10/E11/E12 scheduler, waiter, timer,
    cancellation, locking, testing-seam, and lifecycle authorities.
-2. **Preparation audit** — `docs/e12-queue.md` §A–§O (the discovery record).
-3. **Cross-primitive plan** — `docs/e12-sync-primitives-plan.md` §8.
+2. **Preparation audit** — `docs/history/closeout/e12-queue.md` §A–§O (the discovery record).
+3. **Cross-primitive plan** — `docs/history/implementation-plans/e12-sync-primitives-plan.md` §8.
 4. **External research evidence** — CQS, Kotlin Channels, Kotlin Channel
    close/buffering/receive/send/cancellation semantics. Adapted to Sluice
    authorities; not copied as lock-free implementation.
@@ -517,7 +517,7 @@ E12-E-QUEUE-PREPARATION-AUDIT-1: READY-FOR-SPEC
 > No authoritative repository rule states that a primitive with unresolved
 > `HUMAN DECISION REQUIRED` items must receive `PARTIAL` rather than
 > `READY-FOR-SPEC`. The plan's per-primitive `HUMAN DECISION REQUIRED` label
-> (`docs/e12-sync-primitives-plan.md` §8.2, §12) is the *primitive's* cross-
+> (`docs/history/implementation-plans/e12-sync-primitives-plan.md` §8.2, §12) is the *primitive's* cross-
 > primitive status, not an audit-verdict authority, and it does not override
 > the task's explicit `READY-FOR-SPEC` definition. Since this audit found all
 > reusable authorities PROVEN and no critical evidence missing (see §B, §D),
@@ -561,7 +561,7 @@ IMPLEMENTATION           — NOT AUTHORIZED (see §M). Distinct from both gates
   wait-list that carries **no payloads** and is sealed behind
   `friend class Scheduler` (`include/sluice/async/wait_queue.hpp:119,145`). The
   `Queue`/`E12-E` primitive is documented only as future work
-  (`docs/e12-sync-primitives-plan.md` §8; `docs/async-runtime-plan.md:433,505`),
+  (`docs/history/implementation-plans/e12-sync-primitives-plan.md` §8; `docs/history/implementation-plans/async-runtime-plan.md:433,505`),
   with its core shape still `HUMAN DECISION REQUIRED`. **PROVEN — NOT FOUND.**
 
 * **Is the repository ready to begin an E12-E specification?** **Yes.**
@@ -580,7 +580,7 @@ IMPLEMENTATION           — NOT AUTHORIZED (see §M). Distinct from both gates
   couples to blocked-consumer wake behavior. This cluster settles:
   push-after-close, pop-after-close-but-data-remains, blocked-consumer wake
   semantics, and the linearization points of close-vs-push and close-vs-pop.
-  (`docs/e12-sync-primitives-plan.md` §8.2 marks this `HUMAN DECISION
+  (`docs/history/implementation-plans/e12-sync-primitives-plan.md` §8.2 marks this `HUMAN DECISION
   REQUIRED`.) Note: the destruction contract is a **separate** decision that is
   *not* automatically fixed by a close policy (§D.7, Check 7 of the
   corrective).
@@ -593,7 +593,7 @@ IMPLEMENTATION           — NOT AUTHORIZED (see §M). Distinct from both gates
   publication). Under a **condition-style wake-and-retry** design the existing
   `Scheduler::wake_wait_one` (returns `bool`, does not hand back the winner —
   `include/sluice/async/scheduler.hpp:255`, `src/async/scheduler.cpp:1108`) may
-  suffice. The plan §8.3 (`docs/e12-sync-primitives-plan.md:1348-1353`) states
+  suffice. The plan §8.3 (`docs/history/implementation-plans/e12-sync-primitives-plan.md:1348-1353`) states
   the commit-seam requirement **conditionally**: "If exact winner identity must
   be known to bind item X before publication, then REQUIRES WINNER-BEFORE-
   PUBLICATION COMMIT SEAM"; §14 is explicitly framed "For a grant-bearing
@@ -637,8 +637,8 @@ producer|consumer|push|pop|enqueue|dequeue|send|recv` across `include/`,
 | `tests/wait_queue_test.cpp` | — | test | Tests the `WaitNode`/`WaitQueue` protocol via public `Scheduler` seams (no test friend) | Test fixture for the internal wait-substrate | Test-only | (Reference for test conventions) | PROVEN test-only |
 | `tests/test_t3_simple.cpp` (untracked) | `t3_simple_live` | test | `AsyncCondition` cond.wait + notify_one smoke test | **No queue content.** Uses `AsyncMutex`, `AsyncCondition`, `WaitNode` | Test-only (uncommitted) | None — unrelated to queue | PROVEN unrelated |
 | `scripts/run-e12-tlc-all.sh` (untracked) | — | tooling | Runs 13 TLA+ TLC checks for E12-D `AsyncCondition` | **No queue content.** | Tooling (uncommitted) | None | PROVEN unrelated |
-| `docs/e12-sync-primitives-plan.md` §8 (lines 1281-1413) | "E12-E Queue" | doc/planning | Future primitive design: bounded/unbounded buffer, `send`/`push`, `recv`/`pop`, `close`, not-full/not-empty waiters, item/slot reservation | **Promises a future Queue API but NOT implemented.** Bounded-vs-unbounded is `HUMAN DECISION REQUIRED` (§8.2); capacity-zero (rendezvous) `DEFERRED` | Doc only — no code, no header | (The authority this audit deepens) | PROVEN future-design doc, not a shipped API |
-| `docs/async-runtime-plan.md:433,505-515` | "E12-E Queue" / "Queue" | doc/planning | Lists Queue as future E12-E: "Introduces producer/consumer backpressure"; requires not-empty/not-full waiters + close | Same future-design reference | Doc only | (Roadmap authority) | PROVEN future-design, no code |
+| `docs/history/implementation-plans/e12-sync-primitives-plan.md` §8 (lines 1281-1413) | "E12-E Queue" | doc/planning | Future primitive design: bounded/unbounded buffer, `send`/`push`, `recv`/`pop`, `close`, not-full/not-empty waiters, item/slot reservation | **Promises a future Queue API but NOT implemented.** Bounded-vs-unbounded is `HUMAN DECISION REQUIRED` (§8.2); capacity-zero (rendezvous) `DEFERRED` | Doc only — no code, no header | (The authority this audit deepens) | PROVEN future-design doc, not a shipped API |
+| `docs/history/implementation-plans/async-runtime-plan.md:433,505-515` | "E12-E Queue" / "Queue" | doc/planning | Lists Queue as future E12-E: "Introduces producer/consumer backpressure"; requires not-empty/not-full waiters + close | Same future-design reference | Doc only | (Roadmap authority) | PROVEN future-design, no code |
 | `docs/api-reference.md` | — | doc | Public v0.1-mvp API manifest | **No queue/channel primitive listed.** Only "queue" hits are `UringStats` io_uring submit/completion counts | Public-API manifest | — | PROVEN no public queue API promised |
 
 ### C.1 Explicit determinations (per Phase 1 checklist)
@@ -660,7 +660,7 @@ producer|consumer|push|pop|enqueue|dequeue|send|recv` across `include/`,
    exercises the internal `WaitQueue` substrate via public Scheduler seams. No
    `tests/test_*queue*` or `tests/test_*channel*` for any data queue exists.
 6. **Abandoned/stale queue designs in docs?** **YES** — `docs/e12-sync-
-   primitives-plan.md` §8 and `docs/async-runtime-plan.md` describe an E12-E
+   primitives-plan.md` §8 and `docs/history/implementation-plans/async-runtime-plan.md` describe an E12-E
    Queue that is **not implemented**. This is forward-looking, NOT frozen.
 7. **Documentation implicitly promising queue behavior?** **No implicit
    promise of a *shipped* queue.** Docs express *intent to one day add a
@@ -732,7 +732,7 @@ but the suspension/resumption idiom itself transfers verbatim.
   `deadline_tick_t` = `std::uint64_t` — a **monotonic absolute tick**
   (`include/sluice/async/timer_registration.hpp:65`,
   `include/sluice/async/scheduler.hpp:269`). **NOT** a duration or wall-clock
-  (`docs/e11-deadline-timer-wait.md:162,166-168`). The caller converts a
+  (`docs/history/closeout/e11-deadline-timer-wait.md:162,166-168`). The caller converts a
   relative duration via `monotonic_now() + duration` (`scheduler.hpp:266-274`).
 * **Timer registration/cancellation:** `class TimerRegistration`
   (`timer_registration.hpp:71-151`) — a Scheduler-owned, pointer-stable
@@ -748,13 +748,13 @@ but the suspension/resumption idiom itself transfers verbatim.
 * **Timeout-race linearization:** the **loser semantic** — three causes
   (`RESOURCE_WAKE`/`TIMER_EXPIRE`/`CANCEL`) compete for one `resolve_` CAS
   (`wait_node.hpp:225-235`). A grant whose CAS won is **final**; a late
-  expire/cancel is a no-op loser (`docs/e11-deadline-timer-wait.md:193-220`).
+  expire/cancel is a no-op loser (`docs/history/closeout/e11-deadline-timer-wait.md:193-220`).
   The non-timer winner retires the registration in the **same** `global_mtx_`
   critical section as its CAS (`retire_timer_for_node_locked`,
   `scheduler.cpp:2440-2467`, called at `:1097` and `:1134`).
 * **Timeout ownership:** **scheduler-owned**, not primitive-specific. All
   three causes enter the same `global_mtx_`+`q.mtx()` critical section
-  (`docs/e11-deadline-timer-wait.md:249-260`). There is **no** primitive-local
+  (`docs/history/closeout/e11-deadline-timer-wait.md:249-260`). There is **no** primitive-local
   timeout path. `expire_wait` is the single driver
   (`scheduler.cpp:1274-1297`) plus the worker-loop `pump_deadlines_locked`
   (`:2373`).
@@ -786,7 +786,7 @@ specific rollback.
   false with no mutation.
 * **Races with wakeup/close/timeout/destruction:** resolved by the single
   `resolve_` CAS + `global_mtx_` serialization (truth table at
-  `docs/e10-waitnode-wait-queue.md:227-238`). Cancel vs wake: one CAS wins,
+  `docs/history/closeout/e10-waitnode-wait-queue.md:227-238`). Cancel vs wake: one CAS wins,
   the other is a no-op loser. Cancel vs timeout: same. Cancel vs close/
   destruction: there is **no close authority yet** (E12-E introduces it);
   destruction is a caller-contract violation (see §D.7).
@@ -847,7 +847,7 @@ for Queue.
   slot/item with no owning producer/consumer). Under a wake-and-retry design
   there is no per-waiter reservation to be orphaned. The plan §8.3 states
   "EXPLICIT RESERVATION STATE REQUIRED" within the grant-bearing framing it
-  assumes (`docs/e12-sync-primitives-plan.md:1344-1346`); whether E12-E adopts
+  assumes (`docs/history/implementation-plans/e12-sync-primitives-plan.md:1344-1346`); whether E12-E adopts
   grant semantics is an open design decision (§E.5 D15, §D.4 transfer-semantics
   alternatives).
 * **Waiter registered but not yet suspended / premature runnable publication** —
@@ -882,7 +882,7 @@ for Queue.
 * **Queue mutation under the wrong lock** — Queue internal state (buffer,
   closed, bookkeeping) is protected by a **synchronous structural lock** (the
   `Mutex` wrapper at `mutex.hpp`), NOT the E12-C async Mutex (plan §8.4,
-  `docs/e12-sync-primitives-plan.md:1377-1402`). The structural lock must NOT
+  `docs/history/implementation-plans/e12-sync-primitives-plan.md:1377-1402`). The structural lock must NOT
   be held across `context_switch` or async Mutex acquire.
 * **Test seam altering production semantics** — the `ASYNC-TEST-SEAM-
   AUTHORITY-CORRECTIVE-1` banner (`scheduler.hpp:38-57`) forbids test hooks in
@@ -1010,10 +1010,10 @@ as a general cancel-after-reservation problem, it is corrected to case A only
 | --- | --- | --- | --- | --- | --- |
 | Global scheduler lock | `Scheduler::global_mtx_` (`scheduler.hpp:801`, `mutable`) protects all coordination state (waiting maps, `waiting_waitq_count_`, timer pool/heap, admission) | Decl `:801`; acquired at `scheduler.cpp:1053,1118,1131,1213,1287,1321` and throughout worker loop | **Yes** — Queue wake/cancel/expire serialize on it identically | None | Low |
 | Per-queue structural lock | `WaitQueue::mtx_` + `mtx()` (`wait_queue.hpp:319,152`); private, `friend Scheduler` | `:152`, `:319` | **Yes** — Queue's not-empty/not-full `WaitQueue`s each have one | None | Low |
-| Documented lock ordering | `global_mtx_` → `q.mtx()` → (optionally `wake_mtx_`) | `docs/e10-waitnode-wait-queue.md:321`; enforced at every site; reverse `wake_mtx_→global_mtx_` forbidden (`scheduler.hpp:872-874`) | **Yes** — Queue must follow the same order | **Queue-specific:** if a structural buffer lock is added *outside* `WaitQueue`, its position in the order must be defined (likely: `global_mtx_` → buffer-lock → `q.mtx()`, or buffer-state folded into the existing `q.mtx()` discipline) | Medium — a new lock is a new deadlock surface |
+| Documented lock ordering | `global_mtx_` → `q.mtx()` → (optionally `wake_mtx_`) | `docs/history/closeout/e10-waitnode-wait-queue.md:321`; enforced at every site; reverse `wake_mtx_→global_mtx_` forbidden (`scheduler.hpp:872-874`) | **Yes** — Queue must follow the same order | **Queue-specific:** if a structural buffer lock is added *outside* `WaitQueue`, its position in the order must be defined (likely: `global_mtx_` → buffer-lock → `q.mtx()`, or buffer-state folded into the existing `q.mtx()` discipline) | Medium — a new lock is a new deadlock surface |
 | Structural `Mutex` (sync) | `include/sluice/async/mutex.hpp:17-33` — TSA-annotated `std::mutex` wrapper, synchronous/thread-blocking, NOT async | Full class quoted at `:17-33` (`SLUICE_CAPABILITY`, delegates to `std::mutex impl_`) | **Yes — this is the lock Queue uses internally** (plan §8.4) | Must NOT be held across `context_switch`/async acquire | Low if rule obeyed |
 | TSA annotations | Pervasive vocabulary in `thread_annotations.hpp`; used across all primitives | e.g. `SLUICE_GUARDED_BY`, `SLUICE_REQUIRES`, `SLUICE_RETURN_CAPABILITY` | **Yes** — Queue fields/methods should be annotated identically | None | Low |
-| Callbacks/allocs/moves/dtors under runtime locks | **No user code under any runtime lock today.** `context_switch` always outside the lock. Only Scheduler-owned control-block allocations under `global_mtx_` (`timer_pool_.emplace_back`) | `scheduler.cpp:1271` (block ends `:1267`); comments `:1208,1400,1592`; `timer_pool_` bounded by live+pending deadline waits (`docs/e11-deadline-timer-wait.md:915-920`) | **Partial.** The "no user code under `global_mtx_`" rule is PROVEN and Queue must obey it. Whether user `T` ops may run under a *Queue internal* lock is UNRESOLVED (§D.6.1). | **Queue-specific rule required, not yet settled:** whether user `T` construct/move/destroy may run under the structural buffer lock, or must be moved outside all internal locks (§D.6 Q7.3 / §D.6.1). Do NOT assume "structural lock is fine." | **High** |
+| Callbacks/allocs/moves/dtors under runtime locks | **No user code under any runtime lock today.** `context_switch` always outside the lock. Only Scheduler-owned control-block allocations under `global_mtx_` (`timer_pool_.emplace_back`) | `scheduler.cpp:1271` (block ends `:1267`); comments `:1208,1400,1592`; `timer_pool_` bounded by live+pending deadline waits (`docs/history/closeout/e11-deadline-timer-wait.md:915-920`) | **Partial.** The "no user code under `global_mtx_`" rule is PROVEN and Queue must obey it. Whether user `T` ops may run under a *Queue internal* lock is UNRESOLVED (§D.6.1). | **Queue-specific rule required, not yet settled:** whether user `T` construct/move/destroy may run under the structural buffer lock, or must be moved outside all internal locks (§D.6 Q7.3 / §D.6.1). Do NOT assume "structural lock is fine." | **High** |
 | Allocator/lifetime | `WaitNode` caller-owned, address-stable, non-copy/move; `~WaitNode` debug-asserts `!is_registered()` (`wait_node.hpp:136-139`); `WaitQueue` debug-asserts empty (`wait_queue.hpp:132-137`) | as cited | **Yes** for wait-node lifetime | **Queue-specific (grant semantics only):** the item/slot reservation representation must survive E8 Worker migration (keyed by wait epoch/`WaitNode`, not Worker) — plan §14.3.4 | Medium |
 | Payload movement invoking user code under a runtime lock | **Currently impossible** — no primitive carries user payload `T`; a `WaitNode` holds only an opaque `Fiber*` | `wait_node.hpp:237`; no `T` in any primitive | **N/A today — Queue is the first payload-bearing primitive** | **A new rule is required** (see §D.6 / §D.6.1) | **High** |
 
@@ -1188,7 +1188,7 @@ own precedent evidence (the four existing-primitive destructors).
 caller-contract violation — `~Queue` debug-asserts both wait queues empty,
 buffer empty (or drained). **No cancel-on-destruct, no wake-on-destruct, no
 implicit-close-on-destruct.** This matches all four existing primitives and
-the Event destruction resolution (`docs/e12-sync-primitives-plan.md` §4.4). It
+the Event destruction resolution (`docs/history/implementation-plans/e12-sync-primitives-plan.md` §4.4). It
 is a recommendation for the specification to confirm, not a closed decision.
 
 **Status: UNDECIDED** — the plan does not explicitly close the Queue
@@ -1206,7 +1206,7 @@ legend: `RESOLVED` (repository authority fixes it), `HUMAN-DECISION-REQUIRED`
 (materially different valid choices exist), `DEFERRED` (out of first scope),
 `UNDECIDED` (not yet analyzed to a status).
 
-> The plan document (`docs/e12-sync-primitives-plan.md` §8) is the cross-
+> The plan document (`docs/history/implementation-plans/e12-sync-primitives-plan.md` §8) is the cross-
 > primitive authority; this register reproduces its Queue decisions and adds
 > the decisions the plan leaves implicit.
 
@@ -1223,7 +1223,7 @@ legend: `RESOLVED` (repository authority fixes it), `HUMAN-DECISION-REQUIRED`
 
 Candidate operations and classification (Phase 3.2 vocabulary). **No operation
 is `REQUIRED BY EXISTING PROJECT DIRECTION`** — the roadmap
-(`docs/async-runtime-plan.md:505-515`) requires only "not-empty waiters,
+(`docs/history/implementation-plans/async-runtime-plan.md:505-515`) requires only "not-empty waiters,
 not-full waiters, close semantics"; it does not name operations.
 
 | Operation | Candidate name(s) | Classification | Note |
@@ -1236,7 +1236,7 @@ not-full waiters, close semantics"; it does not name operations.
 | timed pop | `pop_until`/`recv_until` | CONSISTENT BUT UNPROVEN | |
 | close | `close` | CONSISTENT BUT UNPROVEN | Not a method on any async primitive today; `shutdown()` is `BlockingIoPool`-only (sync). |
 | closed query | `is_closed` | OPTIONAL | Mirrors Event `is_set()` (`event.hpp:95`). |
-| size query | `size` | OPTIONAL | Mirrors Semaphore `available()` (A5: observational snapshot, may stale; `docs/e12-semaphore.md`). |
+| size query | `size` | OPTIONAL | Mirrors Semaphore `available()` (A5: observational snapshot, may stale; `docs/history/closeout/e12-semaphore.md`). |
 | empty/full | `empty`/`full` | OPTIONAL | SEMANTICALLY DANGEROUS if used for TOCTOU decisions (plan §3.7); diagnostics-only is safe. |
 | waiting counts | `waiting_producers`/`waiting_consumers` | OPTIONAL | Test/diagnostic only; not in any primitive's public surface today. |
 
@@ -1319,7 +1319,7 @@ treating them as one atomic step (see §F).
 | D21 | FIFO order of buffered elements | yes (buffer is FIFO) | **RESOLVED** — buffer is a FIFO queue by definition (a `std::deque`-equivalent). |
 | D22 | FIFO order of blocked producers | yes (not-full `WaitQueue` is FIFO) | **RESOLVED** — `WaitQueue` is an intrusive FIFO (`wait_queue.hpp:319-321`); selection via `wake_one_locked` resolves head (`:199-211`). |
 | D23 | FIFO order of blocked consumers | yes (not-empty `WaitQueue` is FIFO) | **RESOLVED** — same. |
-| D24 | barging forbidden? | yes (no bypass of eligible queued waiter) | **STRONGLY IMPLIED RESOLVED** — Semaphore A2 and Mutex M-H3 both forbid barging (`docs/e12-sync-primitives-plan.md` §5.4, §6.3). Queue is expected to inherit this, but it is not explicitly closed for Queue. **UNDECIDED-to-RESOLVED** — recommend closing as no-barging for consistency. |
+| D24 | barging forbidden? | yes (no bypass of eligible queued waiter) | **STRONGLY IMPLIED RESOLVED** — Semaphore A2 and Mutex M-H3 both forbid barging (`docs/history/implementation-plans/e12-sync-primitives-plan.md` §5.4, §6.3). Queue is expected to inherit this, but it is not explicitly closed for Queue. **UNDECIDED-to-RESOLVED** — recommend closing as no-barging for consistency. |
 | D25 | scheduler run order / completion order | may differ from wake order | **RESOLVED** — scheduler run order is a Worker/E8 concern, not a primitive guarantee. FIFO wake ≠ FIFO completion (plan §3.6). |
 | D26 | starvation freedom | not guaranteed by safety-only models | **RESOLVED** (negative) — Semaphore/Mutex formal models are safety-only; liveness is out of scope for the same reason (external producer fairness unjustified). |
 
@@ -1836,7 +1836,7 @@ requires docs 4,5,8–12 and the closed decision cluster.
     specification says so explicitly and no cancellation-facing API is shipped.
     No authoritative roadmap or cross-primitive contract requires E12-E's first
     implementation to expose cancellation.** The roadmap
-    (`docs/async-runtime-plan.md:505-515`) requires only "not-empty waiters,
+    (`docs/history/implementation-plans/async-runtime-plan.md:505-515`) requires only "not-empty waiters,
     not-full waiters, close semantics"; the plan §8.2 resolves the cancel-race
     *semantic* (what happens if cancel and reservation race) but does not
     mandate that the first implementation expose a cancellation API. The
@@ -1920,8 +1920,8 @@ requires docs 4,5,8–12 and the closed decision cluster.
 - `tla2tools.jar` (repo root) — TLC runtime.
 
 **Cross-primitive authority (the doc this audit deepens, does NOT supersede):**
-- `docs/e12-sync-primitives-plan.md` §8 (Queue), §14 (grant-commit boundary).
-- `docs/async-runtime-plan.md:433,505-515` — Queue roadmap entry.
+- `docs/history/implementation-plans/e12-sync-primitives-plan.md` §8 (Queue), §14 (grant-commit boundary).
+- `docs/history/implementation-plans/async-runtime-plan.md:433,505-515` — Queue roadmap entry.
 
 ---
 
@@ -1935,7 +1935,7 @@ This audit is a **discovery and preparation audit only**. It cannot authorize
 implementation. Implementation requires, at minimum, closure of the P0 decision
 cluster (§I), production of the documents in §L in the order of §L.2, and a
 separate independent authorization act. The cross-primitive authority
-(`docs/e12-sync-primitives-plan.md` §8) remains `HUMAN-DECISION-REQUIRED` for
+(`docs/history/implementation-plans/e12-sync-primitives-plan.md` §8) remains `HUMAN-DECISION-REQUIRED` for
 the core Queue shape.
 
 > **SUPERSEDED HISTORICAL END NOTE:** The preceding historical denial reason is

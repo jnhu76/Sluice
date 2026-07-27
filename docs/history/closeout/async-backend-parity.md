@@ -3,7 +3,7 @@
 **Status: SLUICE-CORE-023B.** Backend-substrate parity audit comparing cppio's
 current `AsyncBackend` model against the actual Zig `std.Io` Threaded/Evented
 backend requirements, derived from the source graph in
-`docs/zig-stdio-async-port-map.md` (023A). This answers the central question
+`docs/history/implementation-plans/zig-stdio-async-port-map.md` (023A). This answers the central question
 posed by task §4:
 
 > Is cppio's current `AsyncBackend` a sufficient substrate for a Zig-like
@@ -17,7 +17,7 @@ the futex substrate, the fiber scheduler). Those land on a **separate layer
 above** `AsyncBackend`, mirroring how Zig's `Io.VTable` co-implements task and
 op surfaces but how the cppio L1 model already deliberately split them.
 
-This audit governs the PHASE B job cards in `docs/zig-stdio-migration-jobs.md`
+This audit governs the PHASE B job cards in `docs/history/implementation-plans/zig-stdio-migration-jobs.md`
 (023C).
 
 ## 1. The current cppio backend contract
@@ -237,10 +237,10 @@ The blockers for proceeding into PHASE E (Evented/fibers):
 
 ## 8. Cross-links
 
-- Source graph this consumes: `docs/zig-stdio-async-port-map.md` (023A).
-- Job-card sequence this governs: `docs/zig-stdio-migration-jobs.md` (023C).
+- Source graph this consumes: `docs/history/implementation-plans/zig-stdio-async-port-map.md` (023A).
+- Job-card sequence this governs: `docs/history/implementation-plans/zig-stdio-migration-jobs.md` (023C).
 - Async ADR (the accepted L1 model): `docs/adr/ADR-async-io-model.md` (016D).
-- Async next jobs (017-022, GREEN baseline): `docs/async-next-jobs.md` (016F).
+- Async next jobs (017-022, GREEN baseline): `docs/history/implementation-plans/async-next-jobs.md` (016F).
 
 ## 9. PHASE B close-out (GREEN)
 

@@ -31,3 +31,20 @@ do
             add_files(p)
     end
 end
+
+-- async_foundation_quickstart — minimal async-foundation quickstart. Uses
+-- INSTALLED/PUBLIC headers only (FakeAsyncBackend + AsyncIoContext +
+-- Completion). The README 5-minute async example is kept in sync with this file.
+do
+    local R = SLUICE_ROOT
+    local p = R .. "examples/async_foundation_quickstart.cpp"
+    if os.isfile(p) then
+        target("async_foundation_quickstart")
+            set_kind("binary")
+            set_default(false)
+            set_group("examples")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include")
+            add_files(p)
+    end
+end

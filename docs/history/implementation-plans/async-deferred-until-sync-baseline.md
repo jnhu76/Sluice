@@ -16,7 +16,7 @@ async implementation is BLOCKED until the sync-first baseline exists.
 
 ## What "sync-first baseline exists" means
 
-The sync-first readiness gate (`docs/sync-before-async-readiness-gate.md`) is
+The sync-first readiness gate (`docs/history/closeout/sync-before-async-readiness-gate.md`) is
 GREEN. Concretely:
 
 ```text
@@ -38,16 +38,16 @@ GREEN. Concretely:
 
 ## Where the details live
 
-- The gate: `docs/sync-before-async-readiness-gate.md` (status: BLOCKED).
-- Why the gate exists: `docs/sync-io-model-gap-audit.md` (the fairness argument).
+- The gate: `docs/history/closeout/sync-before-async-readiness-gate.md` (status: BLOCKED).
+- Why the gate exists: `docs/history/closeout/sync-io-model-gap-audit.md` (the fairness argument).
 - The sync architecture being completed first: `docs/sync-io-architecture.md`.
 - The accepted async design: `docs/adr/ADR-async-io-model.md` (016D).
-- Async job cards (blocked): `docs/async-next-jobs.md` (016F).
+- Async job cards (blocked): `docs/history/implementation-plans/async-next-jobs.md` (016F).
 
 ## Cross-links
 
-- Sync-first readiness gate: `docs/sync-before-async-readiness-gate.md`.
+- Sync-first readiness gate: `docs/history/closeout/sync-before-async-readiness-gate.md`.
 - Sync architecture: `docs/sync-io-architecture.md`.
 - Async ADR (accepted): `docs/adr/ADR-async-io-model.md`.
-- Async next jobs (blocked): `docs/async-next-jobs.md`.
-- Gap audit (rationale): `docs/sync-io-model-gap-audit.md`.
+- Async next jobs (blocked): `docs/history/implementation-plans/async-next-jobs.md`.
+- Gap audit (rationale): `docs/history/closeout/sync-io-model-gap-audit.md`.

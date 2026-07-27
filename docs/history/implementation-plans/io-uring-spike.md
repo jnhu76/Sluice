@@ -139,7 +139,7 @@ promote it behind the `IoContext` seam if the spike proves out.
 
 ## 12. Abort conditions
 
-(From `docs/io-uring-readiness-gate.md` §7.) Stop and revert if:
+(From `docs/history/implementation-plans/io-uring-readiness-gate.md` §7.) Stop and revert if:
 
 - the normal no-liburing build breaks;
 - the blocking backend's behavior or tests change;

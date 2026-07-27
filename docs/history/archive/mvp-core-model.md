@@ -137,7 +137,7 @@ rewrite: it exposes the wrapper's already-buffered unread bytes through an
 opt-in `BufferedReadable` interface so `copy_all` can drain them directly,
 mirroring Zig's `stream` fast path. The divergence from Zig (wrapper vs
 interface-owned buffer) is documented in
-`docs/buffered-fast-path.md` and `docs/zig-std-io-gap-calibration.md`.
+`docs/history/implementation-plans/design-buffered-fast-path.md` and `docs/history/archive/zig-std-io-gap-calibration.md`.
 
 Zig `std.Io` is a **design reference only** — never a build/runtime dependency,
 and no Zig stdlib code is copied.

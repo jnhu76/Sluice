@@ -83,7 +83,7 @@ owned buffer into the underlying sink — the same concept as sluice's
 `BufferedWriter::flush()`. Zig does **not** overload `flush` to mean durability;
 durability in Zig lives at the `std.fs.File` layer (`sync`, `updateTimes`)
 separately. sluice mirrors that separation: `flush()` drains, `SyncableWriter`
-syncs. See `docs/zig-std-io-parity-audit.md`.
+syncs. See `docs/history/implementation-plans/zig-std-io-parity-audit.md`.
 
 ## 8. What is deferred
 

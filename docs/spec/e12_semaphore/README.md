@@ -6,7 +6,7 @@
 > Status: **E12-B-PREPARATION-CORRECTIVE-1: COMPLETE — REAUDIT-REQUIRED —
 > IMPLEMENTATION BLOCKED.** This model is the formal half of the corrective;
 > the authority document is
-> [`docs/e12-semaphore.md`](../../history/closeout/e12-semaphore.md).
+> [`docs/history/closeout/e12-semaphore.md`](../../history/closeout/e12-semaphore.md).
 
 This directory contains the **safety-only** TLA+ / TLC formal model for the
 E12-B Semaphore preparation corrective. It proves the permit-accounting,
@@ -159,7 +159,7 @@ double-publication negative is not modelled.
   `wakePublicationPending` / `schedulerDispatchPending`); that is deferred.
 - **Conclusion A (Scheduler seam).** No negative model assumes a linked
   eligible FIFO head can lose its `resolve_(Woken)` CAS — see
-  `docs/e12-semaphore.md` §5 for the production lock-protocol proof that
+  `docs/history/closeout/e12-semaphore.md` §5 for the production lock-protocol proof that
   `wake_wait_one_locked` returns `nullptr` only when the queue is empty.
 
 ## Results (actual TLC execution)

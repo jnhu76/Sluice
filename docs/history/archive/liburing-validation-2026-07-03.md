@@ -38,8 +38,8 @@ closeout). The experimental targets compile as unsupported stubs:
 
 ## How to complete this validation
 
-Follow `docs/liburing-validation-runbook.md`: install liburing, reconfigure with
+Follow `docs/history/archive/liburing-validation-2026-07-03.md`: install liburing, reconfigure with
 `--with-liburing=true`, rebuild, run tests/example/bench. Replace this file with
 a real result (or add a dated sibling) once run. **Do not promote io_uring** in
 the decision matrix based on a stub — only on a real, repeated, liburing-equipped
-run per `docs/optimization-runbook.md`.
+run per `docs/history/implementation-plans/bench-optimization-runbook.md`.

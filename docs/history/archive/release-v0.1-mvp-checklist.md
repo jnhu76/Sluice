@@ -88,11 +88,11 @@ bash scripts/run_core_microbenches.sh release /tmp/v0.1-mvp-bench.csv
 ## 7. Required doc checks
 
 - `README.md` accurately states current capabilities and MVP status.
-- `docs/mvp-closeout.md` says the MVP is complete and io_uring is post-MVP.
-- `docs/zig-std-io-parity-audit.md` is honest (no `High` where it should be
+- `docs/history/archive/mvp-closeout.md` says the MVP is complete and io_uring is post-MVP.
+- `docs/history/implementation-plans/zig-std-io-parity-audit.md` is honest (no `High` where it should be
   `Partial` — e.g. the `flush` row).
-- `docs/optimization-decision-matrix.md` has no universal claims.
-- `docs/io-uring-spike.md` states the spike is experimental and non-default.
+- `docs/history/implementation-plans/bench-decision-matrix.md` has no universal claims.
+- `docs/history/implementation-plans/io-uring-spike.md` states the spike is experimental and non-default.
 - Known-limitations blocks are current.
 
 ## 8. Known limitations

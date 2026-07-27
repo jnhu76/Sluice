@@ -33,7 +33,7 @@ the flush first, so `flushed_lsn` may advance while `durable_lsn` does not).
 
 This is a single-writer barrier per `sync()` call. There is no coordinator that
 batches multiple writers' syncs. Group commit is deferred (see
-`docs/design-flush-sync-durability.md` §8).
+`docs/history/implementation-plans/design-flush-sync-durability.md` §8).
 
 ## Verification
 
@@ -46,4 +46,4 @@ three failure paths.
 `durable_lsn` reflects that `sync_data()` (fdatasync) was *requested*. Actual
 persistence depends on OS/filesystem/disk behavior; this model does not claim
 crash safety beyond what the OS sync provides. See
-`docs/design-flush-sync-durability.md` §9.
+`docs/history/implementation-plans/design-flush-sync-durability.md` §9.

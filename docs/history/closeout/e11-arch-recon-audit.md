@@ -42,7 +42,7 @@ Scheduler resolution integration (`wake_wait_one` / `cancel_wait`) that
 reaches ONE runnable-publication path (`make_runnable` +
 `route_runnable_locked`). Resource wake and cancellation ALREADY compete on
 that CAS. E11 adds `TIMER_EXPIRE` as a *third cause* using the *same
-authority* — and the design doc (`docs/e10-waitnode-wait-queue.md` §10) plus
+authority* — and the design doc (`docs/history/closeout/e10-waitnode-wait-queue.md` §10) plus
 the TLA+ refinement map both state this exact composition.
 
 The constraint (not a blocker) is that the E10 WaitNode carries NO
@@ -152,7 +152,7 @@ CANCEL:
 CAS winner proceeds to unlink + count-decrement + route. The loser's CAS
 fails and it performs no cleanup, no publication. This is the documented
 Design Law (§2, `wait_node.hpp`; §7, `wait_queue.hpp`; §6 truth table,
-`docs/e10-waitnode-wait-queue.md`).
+`docs/history/closeout/e10-waitnode-wait-queue.md`).
 
 **E11 extension point:** `TIMER_EXPIRE` becomes a third resolver that calls
 `resolve_(<timer-outcome>)` — through the same `global_mtx_` + `q.mtx()`

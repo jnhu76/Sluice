@@ -66,6 +66,19 @@ if (!ok) return ok.error();
 |---|---|
 | `make_unexpected<T>(IoError)` | 创建错误结果 |
 
+**复制 / 移动 / 赋值语义 (E15-P1-01/02)：**
+
+- `Result<T>` 可复制、可移动；`Result<void>` 可平凡复制。
+- 复制/移动**构造**和复制/移动**赋值**都在存储区中对 `T` 执行 placement-new
+  构造（赋值永不调用 `T::operator=`）。因此 `noexcept` 跟的是
+  `std::is_nothrow_move_constructible_v<T>`，而非 move 可赋值性——一个
+  move 赋值不抛但 move 构造抛的类型，其 move 赋值是 `noexcept(false)`。
+- **赋值的异常保证：** 旧值（如有）被销毁，并在替换构造*之前*写入一个
+  确定性的 `IoError::Code::invalid_state` 哨兵。如果替换构造抛出异常，
+  `*this` 处于合法的错误态 `Result`：`has_value() == false` 且
+  `error().code == IoError::Code::invalid_state`；对象保持可销毁、可重新赋值。
+  异常向外传播，最终析构函数不会第二次运行 `~T()`。
+
 ---
 
 ## 核心抽象
@@ -385,7 +398,7 @@ public:
 `Mutex` 边界会将其转换为进程终止（fail-fast，经 `std::terminate`）。在权威
 Scheduler 转移中，运行时无法在一次锁失败之后既能恢复用户执行又能保持所有权、
 队列成员、发布等不变量，因此可恢复异常边界的存在是不正确的。该契约记录于
-`docs/async-mutex-nothrow-authority.md`。
+`docs/history/implementation-plans/async-mutex-nothrow-authority.md`。
 
 违反 `unlock()` 所有权前置条件（解锁一个你不拥有的 `Mutex`）属于程序不变量违反
 （未定义行为），而非可恢复错误；此处的 `noexcept` 仅用于说明不存在恢复路径。
@@ -403,7 +416,7 @@ Scheduler 转移中，运行时无法在一次锁失败之后既能恢复用户�
 ## 异步同步原语 (E10–E12)
 
 异步同步原语建立在 E10 `WaitNode`/`WaitQueue` 基底与 E11 截止期/计时器集成之上。
-跨原语权威文档见 `docs/e10-e12-api-semantic-closure.md`。
+跨原语权威文档见 `docs/history/closeout/e10-e12-api-semantic-closure.md`。
 
 > **注意：** `include/sluice/async/mutex.hpp` 中的 `Mutex` 是 Scheduler 内部线程阻塞锁
 > （TSA 注解的 `std::mutex` 包装），**不是** Fiber 挂起式 `AsyncMutex`。二者不可在
@@ -614,7 +627,7 @@ nothrow 可析构。`T` **不必**可默认构造或可移动赋值。
 `AsyncQueue<T>` v1 **没有**公开的 wait-epoch 取消 API，也**没有** `Cancelled`
 结果。`close()` 与截止期到期是 Queue 状态机的独立原因（`closed` / `expired`
 状态），**不是**取消。`AsyncQueue<T>` 上没有 `cancel(WaitNode&)`；按 wait-epoch
-的取消推迟到未来的权威机构（见 `docs/e10-e12-api-semantic-closure.md` D4）。
+的取消推迟到未来的权威机构（见 `docs/history/closeout/e10-e12-api-semantic-closure.md` D4）。
 
 ```cpp
 template <class T>
@@ -738,6 +751,225 @@ nothrow 移动构造和 nothrow 析构约束属于 `AsyncQueue<T>` 本身。结�
 | 构造/析构 | 构造函数、析构函数 | 否 | 构造函数：是；析构函数：需要静默状态（WaitQueue 为空、无活跃 condition 等待、无 mutex 持有者） |
 
 ---
+
+## 异步运行时 (E13+)
+
+异步运行时类型构建在 E10–E12 同步基板之上。架构背景见
+`docs/architecture/async-runtime.md` 和 `docs/architecture/async-io-foundation.md`。
+
+### `sluice::async::Scheduler`
+
+M:N fiber 调度器。不可复制、不可移动。拥有 Worker、deadline 堆和外部唤醒控制块。
+
+```cpp
+class Scheduler {
+public:
+    using deadline_t = std::uint64_t;  // 单调 tick
+
+    template <class... Args>
+    explicit Scheduler(ExecutionStrategy strategy, Args&& ...args);
+    ~Scheduler();  // 断言：无活跃等待者/未完成注册
+
+    template <class Fn>
+    Fiber* spawn(Fn&& fn);  // 生成新 Fiber
+
+    void run();  // 运行调度器（单线程调用者）
+
+    template <class... Arms>
+    SelectResult select(Arm&&... arms);  // E13 入口
+
+    void shutdown();
+};
+```
+
+**执行策略：**
+
+| 策略 | 描述 | 平台 |
+|------|------|------|
+| `threaded` | 每个阻塞等待消耗一个 OS 线程（`std::condition_variable`）。 | 任意 |
+| `evented` | Fiber 在单线程上挂起/恢复；需要 `fiber_ctx::supported`。 | x86_64 Linux |
+
+### `sluice::async::CancellationToken` / `sluice::async::CancelState`
+
+协作式取消原语（E27）。`CancelToken` 是取消请求状态；`CancelState`
+是每消费者的保护/确认状态。
+
+```cpp
+class CancelToken {
+public:
+    void request() noexcept;          // 幂等的取消请求
+    bool is_requested() const noexcept;
+};
+
+enum class CancelProtection : std::uint8_t { unblocked, blocked };
+
+class CancelState {
+public:
+    void protect() noexcept;          // 进入保护区域（阻止传递）
+    void unprotect() noexcept;        // 退出保护区域
+    Result<void> check_cancel(const CancelToken&) noexcept;
+};
+```
+
+### `sluice::async::Future<T>`
+
+单任务可等待对象（E28）。生产者侧：`complete_with()`。消费者侧：
+`await()` / `cancel()`。幂等：结果确定后两者都是返回缓存结果的空操作。
+
+```cpp
+template <class T>
+class Future {
+public:
+    Future();                          // Threaded 等待策略（默认）
+    explicit Future(WaitPolicy& policy);  // 注入 Evented 策略
+
+    Result<T> await();                 // Threaded：阻塞；Evented：挂起 Fiber
+    Result<T> cancel();                // 请求取消；幂等
+    void complete_with(Result<T> r);   // 生产者发布结果
+};
+```
+
+### `sluice::async::Group`
+
+无序任务集（E29）。通过 `async(fn)` 添加任务；整体等待或整体取消。
+取消传播边界：任务吞掉 `IoError::canceled`。
+
+```cpp
+class Group {
+public:
+    Group();                           // Threaded 模式
+    explicit Group(Scheduler& scheduler);  // Evented 模式
+
+    template <class Fn>
+    void async(Fn&& fn);               // 生成一个任务
+
+    void await();                      // 等待所有任务
+    void cancel();                     // 请求取消所有任务，然后等待
+};
+```
+
+### `sluice::async::SelectResult`
+
+E13 Select 获胜者描述符。
+
+```cpp
+class SelectResult {
+public:
+    bool has_winner() const noexcept;           // 全过期/取消时返回 false
+    std::size_t index() const noexcept;         // 获胜臂索引
+    SelectKind kind() const noexcept;           // event 或 timer
+    SelectTimerOutcome timer_outcome() const noexcept;  // fired（仅 timer 获胜）
+};
+```
+
+### `sluice::async::Completion<T>`
+
+单个未完成操作的状态（E17）。调用者拥有，地址稳定，不可复制、不可移动。
+
+```cpp
+template <class T>
+class Completion {
+public:
+    Completion() noexcept = default;
+
+    bool ready() const noexcept;
+    Result<T> result() const noexcept;   // 仅 ready 时有效
+    void reset() noexcept;               // 回到 idle 可复用
+
+    std::size_t next_reap_seq() const noexcept;  // reap 顺序（E15-P1-04）
+};
+```
+
+### `sluice::async::AsyncBackend`
+
+内部后端边界（ADR §4）。不对外暴露；`AsyncIoContext` 委托给它。
+
+```cpp
+class AsyncBackend {
+public:
+    virtual ~AsyncBackend() = default;
+    virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
+    virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
+    virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
+    virtual Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) = 0;
+    virtual std::size_t poll() = 0;      // 非阻塞 reap
+    virtual std::size_t wait_one() = 0;  // 阻塞 reap
+};
+```
+
+### `sluice::async::AsyncIoContext`
+
+公开 L1 异步 API 表面（E17）。拥有 `AsyncBackend`。不可复制；移动语义
+遵循 E15-P1-03 / E15-P2-06。
+
+```cpp
+class AsyncIoContext {
+public:
+    template <class Backend, class... Args>
+    explicit AsyncIoContext(in_place_type_t<Backend>, Args&&... args);
+
+    Result<void> submit_read(ReadOp op, Completion<std::size_t>& c);
+    Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
+    Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
+    Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
+
+    std::size_t poll();              // 非阻塞
+    std::size_t wait_one();          // 阻塞
+
+    std::size_t cancel();            // 取消所有未完成操作
+
+    void attach_stats(AsyncStats* s);  // 调用者拥有，可空
+};
+```
+
+### `sluice::async::Batch`
+
+分组完成（E30）。一起提交 N 个操作，整体等待，通过 `next()` 按完成顺序迭代。
+
+```cpp
+class Batch {
+public:
+    explicit Batch(AsyncIoContext& io);
+    ~Batch();
+
+    void add(BatchOp op);            // 添加一个操作
+    void await_one();                // 等待 >=1 完成
+    std::optional<BatchResult> next();  // 按 reap 顺序迭代
+    std::size_t cancel();            // 取消所有未完成操作
+};
+```
+
+### `sluice::async::ThreadPoolBackend`
+
+可移植的真实后端（sluice-CORE-020A）。每个未完成操作一个 `std::thread`。
+始终可构建；无外部依赖。
+
+```cpp
+class ThreadPoolBackend : public AsyncBackend {
+public:
+    ThreadPoolBackend();
+};
+```
+
+### `sluice::async::UringAsyncBackend`
+
+Linux io_uring 后端（sluice-CORE-020B）。构建门控在 liburing 之后。没有
+`SLUICE_HAS_LIBURING` 时是不支持的 stub：`submit_*` 同步返回
+`IoError::backend_error`；`poll()` / `wait_one()` 不 reap 任何内容。
+
+```cpp
+class UringAsyncBackend : public AsyncBackend {
+public:
+    UringAsyncBackend();
+};
+```
+
+工厂函数：
+
+```cpp
+AsyncIoContext threadpool_backend();
+AsyncIoContext uring_backend();
+```
 
 ## 测量
 

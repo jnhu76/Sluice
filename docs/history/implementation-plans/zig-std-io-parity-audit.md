@@ -1,7 +1,7 @@
 # Zig `std.Io` parity audit
 
 **Status: SLUICE-CORE-012C.** Full parity audit of sluice against the local Zig
-`std.Io` source tree (inventoried in `docs/zig-std-io-source-inventory.md`).
+`std.Io` source tree (inventoried in `docs/history/implementation-plans/zig-std-io-source-inventory.md`).
 This replaces ad-hoc gap notes with a single authoritative table.
 
 ```text
@@ -39,7 +39,7 @@ Fidelity labels: **High** / **Partial** / **Intentional divergence** / **Deferre
 | Group/future/task model | (none) | Not implemented | Out of MVP scope | No async runtime. |
 | Testing I/O model (`Io/test.zig`) | `FaultReader`/`FaultWriter` + in-memory readers/writers | Intentional divergence | Implemented | sluice's deterministic fault injection replaces Zig's `Io.Threaded`-based test io. |
 | Async backend model | (none) | Not implemented | Out of MVP scope | — |
-| io_uring backend model | `sluice::experimental::UringWriteBatch` / `UringIoContext` (013) | Partial — experimental spike only | Implemented (spike) | Narrow synchronous-over-uring write path, stub without liburing; NOT a production backend and NOT parity with Zig `Io.Uring`. See `docs/io-uring-spike.md`. |
+| io_uring backend model | `sluice::experimental::UringWriteBatch` / `UringIoContext` (013) | Partial — experimental spike only | Implemented (spike) | Narrow synchronous-over-uring write path, stub without liburing; NOT a production backend and NOT parity with Zig `Io.Uring`. See `docs/history/implementation-plans/io-uring-spike.md`. |
 
 ## Conclusion
 
@@ -58,4 +58,4 @@ remaining gaps are:
 
 The experimental io_uring write spike (013) does **not** close these gaps — it
 probes whether a narrow write path is even expressible without them. See
-`docs/io-uring-readiness-gate.md`.
+`docs/history/implementation-plans/io-uring-readiness-gate.md`.

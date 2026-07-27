@@ -114,7 +114,7 @@ base `Reader`/`Writer` are minimal and unbuffered, so 007 introduces an
 **explicit external strategy layer** instead. This is an intentional C++ design
 divergence: sluice prefers an observable, caller-chosen strategy over an
 implicit, vtable-negotiated one. See
-`docs/zig-std-io-parity-audit.md`.
+`docs/history/implementation-plans/zig-std-io-parity-audit.md`.
 
 ## 8. Measurement and no-performance-claim rule
 

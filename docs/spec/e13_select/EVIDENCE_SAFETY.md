@@ -133,7 +133,7 @@ Every modified or added path must be under one of:
 
 - `docs/spec/e13_select/`
 - `docs/formal/`
-- `docs/reviews/`
+- `docs/history/reviews/`
 - `tools/formal/`
 
 No path under `include/`, `src/`, `tests/`, `examples/`, `benchmarks/`,

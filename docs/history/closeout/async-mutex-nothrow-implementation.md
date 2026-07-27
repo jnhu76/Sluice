@@ -5,15 +5,15 @@
 > **Status:** `PASS — AUTHOR SELF-ASSESSMENT`
 >
 > **Independent adversarial implementation review:** `PASS (B1)` — completed in
-> `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
+> `docs/history/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`
 > (commit `15dc9b4`). This document remains the author's own evidence; the
 > independent review is a separate artifact.
 
 This document records the production realization of the
 `ASYNC-MUTEX-NOTHROW-AUTHORITY-1` design (Candidate A: make the existing
 `sluice::async::Mutex` acquisition `noexcept` / fail-fast). The design
-authority is `docs/async-mutex-nothrow-authority.md`; the independent design
-review is `docs/reviews/ASYNC-MUTEX-NOTHROW-AUTHORITY-1-REVIEW.md`. This
+authority is `docs/history/implementation-plans/async-mutex-nothrow-authority.md`; the independent design
+review is `docs/history/reviews/ASYNC-MUTEX-NOTHROW-AUTHORITY-1-REVIEW.md`. This
 document satisfies §L of the implementation task.
 
 ---
@@ -287,7 +287,7 @@ This task does not fix T25 (`e12_cond_t25_migration_condition_reacquire`). In
 the regression matrix runs above, `async_condition_primitive_test` passed in full
 (Clang Debug and Clang Release), including T25. Per §J1, a single green run
 does **not** close T25: T25 is the documented nondeterministic coordinator
-spin (authority `docs/e12-queue-implementation-authorization.md`), tracked
+spin (authority `docs/history/closeout/e12-queue-implementation-authorization.md`), tracked
 separately under `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1` (B3).
 The Mutex change did not add a timeout, skip, or weaken any Condition
 assertion, and did not worsen T25. The Condition suite is reported green only

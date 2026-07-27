@@ -2,11 +2,11 @@
 
 **Status: SLUICE-CORE-023C.** Authoritative Job Card sequence for migrating
 Zig `std.Io`'s async execution architecture into cppio, built from the
-source-derived dependency graph in `docs/zig-stdio-async-port-map.md` (023A)
-and governed by the parity verdict in `docs/async-backend-parity.md` (023B).
+source-derived dependency graph in `docs/history/implementation-plans/zig-stdio-async-port-map.md` (023A)
+and governed by the parity verdict in `docs/history/closeout/async-backend-parity.md` (023B).
 
 Job IDs continue the repository's existing async numbering (017-022 are GREEN;
-see `docs/async-next-jobs.md`). New jobs start at **023** (the audit docs
+see `docs/history/implementation-plans/async-next-jobs.md`). New jobs start at **023** (the audit docs
 themselves are 023A/B/C). IDs are not reused and completed cards are not
 silently changed.
 
@@ -44,7 +44,7 @@ PHASE E (Evented runtime)     E0(ADR) → E1 → E2 → E3 → E4
 
 # PHASE B — backend substrate completeness
 
-Closes the substrate gaps identified in `docs/async-backend-parity.md` §5.
+Closes the substrate gaps identified in `docs/history/closeout/async-backend-parity.md` §5.
 No job here changes the `AsyncBackend` contract or the public L1 API; all are
 internal correctness, conformance, and seam additions.
 
@@ -245,7 +245,7 @@ job implements against).
 - `include/sluice/async/threadpool_backend.hpp`
 - `src/async/threadpool_backend.cpp`
 - `tests/threadpool_backend_test.cpp` (add cancel-not-started case)
-- `docs/async-backend-parity.md` (mark B2 done)
+- `docs/history/closeout/async-backend-parity.md` (mark B2 done)
 
 ---
 
@@ -368,7 +368,7 @@ gating for registered buffers/files.
 - `src/async/uring_backend.cpp`
 - `tests/uring_backend_test.cpp` (add batch-seam case)
 - `xmake.lua` (feature gates)
-- `docs/async-backend-parity.md` (mark B3 done)
+- `docs/history/closeout/async-backend-parity.md` (mark B3 done)
 
 ---
 
@@ -561,7 +561,7 @@ trampoline, gated (`Io/fiber.zig`).
 
 ## Cross-links
 
-- Source graph: `docs/zig-stdio-async-port-map.md` (023A).
-- Parity audit (governs PHASE B): `docs/async-backend-parity.md` (023B).
+- Source graph: `docs/history/implementation-plans/zig-stdio-async-port-map.md` (023A).
+- Parity audit (governs PHASE B): `docs/history/closeout/async-backend-parity.md` (023B).
 - Async ADR: `docs/adr/ADR-async-io-model.md` (016D).
-- Async next jobs (017-022, GREEN): `docs/async-next-jobs.md` (016F).
+- Async next jobs (017-022, GREEN): `docs/history/implementation-plans/async-next-jobs.md` (016F).

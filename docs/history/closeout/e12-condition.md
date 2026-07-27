@@ -18,21 +18,21 @@
 > E10-E12-ASYNC-SYNC-API-SEMANTIC-CLOSURE-1.
 >
 > E12-D preparation and implementation were independently reviewed by
-> [`docs/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md`](reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md)
+> [`docs/history/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md`](docs/history/reviews/E12-D-ASYNC-CONDITION-INDEPENDENT-REVIEW.md)
 > (2026-07-19), verdict PASS (see §K of that artifact for the design-consistency
 > matrix covering preparation policy points 1–12). E12-D is CLOSED.
 >
 > Authority baseline:
-> - E10 CLOSED ([`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md))
-> - E11 CLOSED (`7715808`, [`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md))
-> - E12-A Event CLOSED ([`docs/e12-event.md`](e12-event.md))
+> - E10 CLOSED ([`docs/history/closeout/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md))
+> - E11 CLOSED (`7715808`, [`docs/history/closeout/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md))
+> - E12-A Event CLOSED ([`docs/history/closeout/e12-event.md`](e12-event.md))
 > - E12-B Semaphore CLOSED
->   ([`docs/e12-semaphore.md`](e12-semaphore.md))
+>   ([`docs/history/closeout/e12-semaphore.md`](e12-semaphore.md))
 > - E12-C AsyncMutex CLOSED
->   ([`docs/e12-async-mutex.md`](e12-async-mutex.md))
+>   ([`docs/history/closeout/e12-async-mutex.md`](e12-async-mutex.md))
 >
 > Cross-primitive preparation:
-> [`docs/e12-sync-primitives-plan.md`](e12-sync-primitives-plan.md) §7.
+> [`docs/history/implementation-plans/e12-sync-primitives-plan.md`](docs/history/implementation-plans/e12-sync-primitives-plan.md) §7.
 >
 > This document is the authoritative E12-D AsyncCondition preparation
 > specification. It records the CLOSED human policy register, corrects the

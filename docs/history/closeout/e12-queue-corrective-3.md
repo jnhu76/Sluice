@@ -3,7 +3,7 @@
 > **Status:** BINDING (supersedes Corrective-2 §8 for the Queue timer model)
 > **Date:** 2026-07-19
 > **Origin:** Phase I independent adversarial review
-> (`docs/reviews/E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`),
+> (`docs/history/reviews/E12-E-QUEUE-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`),
 > findings F.1, F.2, F.3.
 
 ## Authority conflict that this Corrective-3 resolves

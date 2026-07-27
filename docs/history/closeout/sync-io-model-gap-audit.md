@@ -8,8 +8,8 @@ a "blocking baseline," but the current blocking baseline is **sequential
 single-stream only** — it is not an engineered baseline for the multi-stream W1–W4
 workloads async targets (016B). Comparing async against a sequential baseline
 would be unfair to blocking and would not isolate async's real value. This audit
-feeds `docs/sync-before-async-readiness-gate.md` (the gate) and
-`docs/sync-io-next-jobs.md` (the sync-first job cards).
+feeds `docs/history/closeout/sync-before-async-readiness-gate.md` (the gate) and
+`docs/history/implementation-plans/sync-io-next-jobs.md` (the sync-first job cards).
 
 The async **design** (016A–016F) remains accepted. This patch only **defers async
 implementation** behind a sync-first completion phase. It changes no async
@@ -21,8 +21,8 @@ decision and removes no async doc.
 > execution models), `docs/sync-io-model.md` (primitive contract incl. the
 > positional-I/O decision for G1/G2), `docs/sync-durability-model.md` (G4),
 > `docs/sync-bench-methodology.md` + `docs/sync-bench-matrix.md` (G6/G7), and
-> `docs/sync-optimization-notes.md`. Job cards 017S–023S in
-> `docs/sync-io-next-jobs.md` map to the SYNC-IO-COMPLETE phases. **Terminology
+> `docs/history/closeout/sync-optimization-notes.md`. Job cards 017S–023S in
+> `docs/history/implementation-plans/sync-io-next-jobs.md` map to the SYNC-IO-COMPLETE phases. **Terminology
 > note:** G5's "bounded pool" is `BlockingIoPool`, an **execution model for
 > benchmarks, not an I/O backend** (see `docs/sync-io-architecture.md` §3).
 
@@ -42,12 +42,12 @@ All of the following live in the `sluice` namespace and are blocking, single-thr
 | Durability primitives | `sync.hpp`, `src/file.cpp` | **partial** | `SyncableWriter::sync_data` (fdatasync) / `sync_all` (fsync). No policy. |
 | WAL durability | `wal.hpp`, `src/wal.cpp` | present | `written ≤ flushed ≤ durable` LSN invariant; single-writer barrier. |
 | Measurement structs | `measurement.hpp` | present | `SyscallStats`/`BufferStats`/`CopyStats`/`SyncStats`/`VectorStats`/`UringStats` — raw counters, caller-owned. |
-| Microbench harness | `bench/`, `docs/bench-methodology.md` | **partial** | 5 bench targets; **all single-stream sequential**. |
+| Microbench harness | `bench/`, `docs/history/implementation-plans/bench-methodology.md` | **partial** | 5 bench targets; **all single-stream sequential**. |
 
 ## 2. Gaps that block a fair async comparison
 
 These are the things the blocking baseline must gain before async is measured
-against it. Each maps to a sync-first job card in `docs/sync-io-next-jobs.md`.
+against it. Each maps to a sync-first job card in `docs/history/implementation-plans/sync-io-next-jobs.md`.
 
 ### G1 — Positional I/O is absent (parity gap with async P1)
 
@@ -88,7 +88,7 @@ a closeout/audit job (019S), not new architecture.
 
 ### G4 — No durability POLICY, only primitives
 
-`docs/design-flush-sync-durability.md` is explicit: the work "does not add group
+`docs/history/implementation-plans/design-flush-sync-durability.md` is explicit: the work "does not add group
 commit, async, io_uring, or a thread pool." Only the two primitives
 (`sync_data`/`sync_all`) and an observability counter exist. Open questions a
 blocking durability model should answer before async durability (W4) is compared:
@@ -156,7 +156,7 @@ All five bench targets are single-stream sequential:
 | `sync_smoke_bench` | flush/sync_data/sync_all | 1 |
 | `uring_write_bench` | blocking vs experimental uring | 1 |
 
-`docs/bench-methodology.md` explicitly excludes multi-stream and async regimes.
+`docs/history/implementation-plans/bench-methodology.md` explicitly excludes multi-stream and async regimes.
 **W1–W4 have zero blocking benchmark coverage.** Job 022S builds the blocking
 W1–W4 matrix (concurrent independent writes/reads/copy/overlapped-durability)
 against the pool baseline from 021S. Job 023S is an optimization pass that tunes
@@ -204,9 +204,9 @@ W1–W4 benchmark matrix, and an optimization pass. No async.
 ## 5. Cross-links
 
 - Async design (accepted, frozen): `docs/adr/ADR-async-io-model.md` (016D).
-- Async problem statement (W1–W5): `docs/async-problem-statement.md` (016B).
-- Sync-first job cards: `docs/sync-io-next-jobs.md` (017S–023S).
-- Sync-first readiness gate: `docs/sync-before-async-readiness-gate.md`.
-- Async next jobs (now blocked behind the sync gate): `docs/async-next-jobs.md` (016F).
-- Existing durability design: `docs/design-flush-sync-durability.md`, `docs/design-wal-durability.md`.
-- Existing bench methodology: `docs/bench-methodology.md`, `docs/bench-decision-matrix.md`.
+- Async problem statement (W1–W5): `docs/history/implementation-plans/async-problem-statement.md` (016B).
+- Sync-first job cards: `docs/history/implementation-plans/sync-io-next-jobs.md` (017S–023S).
+- Sync-first readiness gate: `docs/history/closeout/sync-before-async-readiness-gate.md`.
+- Async next jobs (now blocked behind the sync gate): `docs/history/implementation-plans/async-next-jobs.md` (016F).
+- Existing durability design: `docs/history/implementation-plans/design-flush-sync-durability.md`, `docs/history/implementation-plans/design-wal-durability.md`.
+- Existing bench methodology: `docs/history/implementation-plans/bench-methodology.md`, `docs/history/implementation-plans/bench-decision-matrix.md`.

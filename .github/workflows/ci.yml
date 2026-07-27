@@ -78,11 +78,24 @@ jobs:
         # synchronization primitives compiles-away (not just missing headers).
         run: bash scripts/verify-e12-api-contract-negative-compile.sh
 
-      - name: Build and run acceptance consumer
-        # Proves the public async-foundation surface (Result + AsyncIoContext +
-        # Completion + Batch) is usable from a consumer that sees only the
-        # installed public headers. Build AND execute: a runtime behavioral
-        # regression must fail CI, not merely a compile error.
+      - name: Build and run acceptance consumers
+        # Proves the public async-foundation surface is usable from consumers
+        # that see only the installed public headers. Build AND execute: a
+        # runtime behavioral regression must fail CI, not merely a compile error.
         run: |
           xmake build public_api_acceptance
           xmake run public_api_acceptance
+          xmake build async_foundation_quickstart
+          xmake run async_foundation_quickstart
+
+      - name: Documentation verification
+        # Link checker. Validates ONLY git-tracked Markdown (via `git ls-files`)
+        # so generated/gitignored files under docs/ never enter the scan set —
+        # this is what makes the gate safe to enforce in CI where local build
+        # artifacts could otherwise leak in.
+        #  1. --self-test: negative tests that the checker actually catches
+        #     broken/stale links and excludes untracked files.
+        #  2. full scan: every tracked doc link must resolve.
+        run: |
+          python3 scripts/check-doc-links.py --self-test
+          python3 scripts/check-doc-links.py

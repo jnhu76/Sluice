@@ -613,15 +613,15 @@ DEPS       : liburing optional (job 020B only); nothing else added.
 
 ## 17. Cross-links
 
-- ⛔ **Sync-first readiness gate (blocks implementation of this ADR):** `../sync-before-async-readiness-gate.md` (016G). The async *decision* here is accepted; async *coding* is deferred until that gate is GREEN.
-- Sync gap audit (why implementation is deferred): `../sync-io-model-gap-audit.md` (016G).
-- Sync-first job cards (must complete before async jobs): `../sync-io-next-jobs.md` (017S–023S).
-- Inventory: `../async-source-inventory.md` (016A).
-- Problem statement: `../async-problem-statement.md` (016B).
-- Alternatives: `../async-design-alternatives.md` (016C).
-- Readiness gate (the async-side gate, after the sync-first gate): `../async-readiness-gate.md` (016E).
-- Next jobs (blocked behind the sync-first gate): `../async-next-jobs.md` (016F).
-- io_uring spike: `../io-uring-spike.md` (013).
-- io_uring spike readiness gate (prior): `../io-uring-readiness-gate.md` (012D).
+- ⛔ **Sync-first readiness gate (blocks implementation of this ADR):** `../history/closeout/sync-before-async-readiness-gate.md` (016G). The async *decision* here is accepted; async *coding* is deferred until that gate is GREEN.
+- Sync gap audit (why implementation is deferred): `../history/closeout/sync-io-model-gap-audit.md` (016G).
+- Sync-first job cards (must complete before async jobs): `../history/implementation-plans/sync-io-next-jobs.md` (017S–023S).
+- Inventory: `../history/implementation-plans/async-source-inventory.md` (016A).
+- Problem statement: `../history/implementation-plans/async-problem-statement.md` (016B).
+- Alternatives: `../history/implementation-plans/async-design-alternatives.md` (016C).
+- Readiness gate (the async-side gate, after the sync-first gate): `../history/implementation-plans/async-readiness-gate.md` (016E).
+- Next jobs (blocked behind the sync-first gate): `../history/implementation-plans/async-next-jobs.md` (016F).
+- io_uring spike: `../history/implementation-plans/io-uring-spike.md` (013).
+- io_uring spike readiness gate (prior): `../history/implementation-plans/io-uring-readiness-gate.md` (012D).
 - liburing validation runbook: `../io-uring-liburing-validation.md` (014C).
-- IoContext (the blocking seam this parallels): `../design-io-context.md` (009).
+- IoContext (the blocking seam this parallels): `../history/implementation-plans/design-io-context.md` (009).

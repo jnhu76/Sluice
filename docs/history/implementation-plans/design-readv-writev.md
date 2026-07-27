@@ -187,7 +187,7 @@ Zig `std.Io.Reader`/`Writer` provide `readVec`/`readVecAll`/`writeVec`/
 
 - Zig's vector primitives negotiate around the **interface-owned buffer** inside
   each Reader/Writer. sluice has no internal buffer (external `BufferedReader`/
-  `BufferedWriter` wrappers — see `docs/zig-std-io-parity-audit.md`), so
+  `BufferedWriter` wrappers — see `docs/history/implementation-plans/zig-std-io-parity-audit.md`), so
   the fallback loops directly over `read_some`/`write_some`.
 - Zig's `readVec` swallows `EndOfStream` when bytes were already read
   (`if (n == 0) return error.EndOfStream else 0`). sluice instead models EOF as a

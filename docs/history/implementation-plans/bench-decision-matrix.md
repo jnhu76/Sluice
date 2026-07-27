@@ -1,7 +1,7 @@
 # Optimization decision matrix
 
 **Status: SLUICE-CORE-011D.** Records cautious, evidence-linked optimization
-decisions. Per the runbook (`docs/bench-optimization-runbook.md`), every entry is
+decisions. Per the runbook (`docs/history/implementation-plans/bench-optimization-runbook.md`), every entry is
 scoped ("on this host, in this run, for this workload") and never a universal
 claim.
 
@@ -23,7 +23,7 @@ No universal claims.
 ### 1. `CopyStrategy::Auto == BufferedFirst`
 - **Category:** Accepted (implemented in SLUICE-CORE-006, made explicit in 007).
 - **Scope:** in-memory reader → in-memory writer, all sizes tested.
-- **Evidence:** `docs/bench-summary-sample.txt`, `copy_strategy` case:
+- **Evidence:** `docs/history/implementation-plans/bench-summary-sample.txt`, `copy_strategy` case:
   BufferedFirst matches or beats Scratch at every tested size on the sample
   host, and never loses. Auto resolves to BufferedFirst.
 - **Caveat:** file-backed readers/writers (real syscalls) were not the focus of
@@ -75,7 +75,7 @@ Next step is an experimental io_uring spike, not a production backend
 (SLUICE-CORE-012D gate → 013 spike, now landed). The spike may add a guarded
 bench row here **only** if it produces stable, scoped, evidence-linked
 observations — never a universal "io_uring is faster" claim. See
-`docs/io-uring-readiness-gate.md`.
+`docs/history/implementation-plans/io-uring-readiness-gate.md`.
 
 ### 5. Experimental uring write path — no universal claim
 - **Category:** Candidate (deferred) — needs a liburing-equipped repeated run.

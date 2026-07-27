@@ -8,11 +8,11 @@
 >
 > **E12-B Semaphore per-primitive authority (E12-B-SEMAPHORE-PREPARATION-
 > CORRECTIVE-1):** the §5 Semaphore authority is superseded by
-> [`docs/e12-semaphore.md`](e12-semaphore.md) (policy register A1–A5, corrected
+> [`docs/history/closeout/e12-semaphore.md`](docs/history/closeout/e12-semaphore.md) (policy register A1–A5, corrected
 > permit conservation, release state machine, **Conclusion A** Scheduler-seam
 > proof) and the safety-only formal model in
-> [`docs/spec/e12_semaphore/`](spec/e12_semaphore/) (gate:
-> [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh)).
+> [`docs/spec/e12_semaphore/`](docs/history/closeout) (gate:
+> [`scripts/verify-e12-semaphore-formal.sh`](scripts/verify-e12-semaphore-formal.sh)).
 > E12-B status:
 > ```text
 > E12-B-PREPARATION-CORRECTIVE-1: COMPLETE
@@ -23,7 +23,7 @@
 > E12-B-IMPLEMENTATION: REVIEW-REQUIRED
 > ```
 > Preparation is CLOSED. The production Semaphore implementation is COMPLETE
-> and committed (see [`docs/e12-semaphore.md`](e12-semaphore.md) §14 As-Built);
+> and committed (see [`docs/history/closeout/e12-semaphore.md`](docs/history/closeout/e12-semaphore.md) §14 As-Built);
 > status remains REVIEW-REQUIRED pending an independent adversarial
 > implementation review. This document does NOT self-declare `E12-B: CLOSED`.
 > The cross-primitive preparation (this document) is otherwise unchanged.
@@ -31,7 +31,7 @@
 > **E12-C Async Mutex per-primitive authority (E12-C-PREPARATION-CORRECTIVE-1
 > through CORRECTIVE-5):**
 > the §6 Mutex authority is superseded by
-> [`docs/e12-async-mutex.md`](e12-async-mutex.md) (policy register M-H1–M-H4,
+> [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) (policy register M-H1–M-H4,
 > ownership state model, naming authority `AsyncMutex`, minimum private seam
 > `MUTEX-HANDOFF-ONE`, collapsed atomic admission actions (no interleaving
 > window), formal model with no admissionPhase field, queue = only Suspended
@@ -71,7 +71,7 @@
 > ```
 > Queue depends on `ASYNC-MUTEX-NOTHROW-AUTHORITY-1`, whose design is accepted
 > and whose production substrate is now implemented and independently reviewed
-> (B1 PASS — `docs/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`).
+> (B1 PASS — `docs/history/reviews/ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1-REVIEW.md`).
 >
 > **Condition baseline isolation:**
 > ```text
@@ -81,7 +81,7 @@
 > Condition runtime suite: PASS (Clang Debug/ASan/TSan full suite green)
 > T25 migration/reacquire: PASS (deterministic rewrite)
 > ```
-> Evidence: `docs/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1. The
+> Evidence: `docs/history/closeout/async-runtime-hang-and-gcc-corrective.md` §B.1/§C/§E.1. The
 > T25 hang was root-caused to a test-harness defect (unbounded coordinator
 > waits); no production code was changed.
 >
@@ -99,14 +99,14 @@
 > Mutex. See §4, §5, §7, §8, §14, and the cross-section matrices §10–§13.
 >
 > Authority baseline: E10 is CLOSED (as-built
-> [`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)). E11 is
+> [`docs/history/closeout/e10-waitnode-wait-queue.md`](docs/history/closeout/e10-waitnode-wait-queue.md)). E11 is
 > CLOSED at `7715808` (spec
-> [`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md); formal model
-> [`docs/spec/e11_timer_wait/`](spec/e11_timer_wait/)). This document does NOT
+> [`docs/history/closeout/e11-deadline-timer-wait.md`](docs/history/closeout/e11-deadline-timer-wait.md); formal model
+> [`docs/spec/e11_timer_wait/`](docs/history/closeout)). This document does NOT
 > reopen E10 or E11; it builds on them as authoritative.
 >
 > Bound by the project construction method
-> [`docs/async-runtime-construction-method.md`](async-runtime-construction-method.md)
+> [`docs/history/implementation-plans/async-runtime-construction-method.md`](async-runtime-construction-method.md)
 > (M1–M9).
 
 This document is **normative preparation only**. No E12 primitive code, no
@@ -134,7 +134,7 @@ IMPLEMENTATION BOUNDARY  — public semantic is fixed; the mechanism that
 
 ### 1.1 The inconsistency
 
-The roadmap ([`docs/async-runtime-plan.md`](async-runtime-plan.md)) contains
+The roadmap ([`docs/history/implementation-plans/async-runtime-plan.md`](async-runtime-plan.md)) contains
 two E12 orderings that disagree:
 
 - **Decomposition list** (§"Planned decomposition"):
@@ -714,7 +714,7 @@ waiter count is NEVER used on the supply side.
 > authority. The obsolete terms may appear ONLY in this labelled historical
 > passage and in name-and-reject passages; they do not describe any
 > first-scope Semaphore state. (See also §5.2 and
-> [`docs/e12-semaphore.md`](e12-semaphore.md) §3.)
+> [`docs/history/closeout/e12-semaphore.md`](docs/history/closeout/e12-semaphore.md) §3.)
 
 #### 5.1.1 (merged into §5.1)
 
@@ -822,7 +822,7 @@ observes W1 gone, grants W2) — NOT by a release-side skip-after-null. The
 existing private seam is **sufficient**; no Scheduler extension is introduced.
 Full evidence + the stable-state invariant
 (`EligibleQueuedWaiterExists => available_ == 0`) are in
-[`docs/e12-semaphore.md`](e12-semaphore.md) §5. (The grant-commit insertion
+[`docs/history/closeout/e12-semaphore.md`](docs/history/closeout/e12-semaphore.md) §5. (The grant-commit insertion
 boundary classification is unchanged: §14.3.2.)
 
 ### 5.3 Required policy decisions (A1–A5 closed by E12-B-PREPARATION-CORRECTIVE-1)
@@ -943,7 +943,7 @@ PREPARATION: REAUDIT-REQUIRED — IMPLEMENTATION BLOCKED
 
 > **E12-C-PREPARATION-CORRECTIVE-1 through CORRECTIVE-5:** §6 is
 > superseded by
-> [`docs/e12-async-mutex.md`](e12-async-mutex.md) (policy register M-H1–M-H4,
+> [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) (policy register M-H1–M-H4,
 > ownership state model, naming authority, seam specification, collapsed
 > atomic admission actions (no interleaving window), formal model with no
 > admissionPhase field, queue = only Suspended epochs, property classification,
@@ -999,7 +999,7 @@ pinning. `owner_of(f)` / `owner_id_of(f)` exist as diagnostics
 5. **On unlock with waiters:** **CLOSED — direct ownership handoff (M-H1).**
    Unlock resolves the eligible FIFO head with Woken, commits ownership to the
    winner Fiber BEFORE publishing it as runnable, and publishes the winner
-   AFTER ownership is committed. See [`docs/e12-async-mutex.md`](e12-async-mutex.md)
+   AFTER ownership is committed. See [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md)
    §8.3 and §9.
 
 6. **Timeout meaning if a waiter has been granted ownership but not resumed:**
@@ -1015,13 +1015,13 @@ pinning. `owner_of(f)` / `owner_id_of(f)` exist as diagnostics
 8. **Fairness guarantee:** **CLOSED — FIFO + no barging (M-H2, M-H3, M-H4).**
    Eligible queued waiters use FIFO order; barging is forbidden; try_lock fails
    while an eligible waiter has FIFO priority. See
-   [`docs/e12-async-mutex.md`](e12-async-mutex.md) §2.
+   [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) §2.
 
 ### 6.3 Mutex — CLOSED by E12-C-PREPARATION-CORRECTIVE-1
 
 The roadmap's three decisions — **fairness, handoff, barging** — are closed
 by E12-C-PREPARATION-CORRECTIVE-1 (policy register M-H1–M-H4 in
-[`docs/e12-async-mutex.md`](e12-async-mutex.md) §2):
+[`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) §2):
 
 ```text
 M-H1:  unlock-with-waiters uses direct ownership handoff
@@ -1036,7 +1036,7 @@ policy. This corrective is the human authority that selects direct handoff.
 **Grant-seam coupling (F-GRANT-1) — CLOSED.** Direct handoff requires the
 exact winner identity before runnable publication. The minimum private seam
 `MUTEX-HANDOFF-ONE` is specified in
-[`docs/e12-async-mutex.md`](e12-async-mutex.md) §10. The seam classification
+[`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) §10. The seam classification
 is now:
 
 ```text
@@ -1055,7 +1055,7 @@ READY.
 > The existing synchronous `sluice::async::Mutex` is a TSA-annotated
 > `std::mutex` wrapper (structural lock). The async primitive is named
 > `AsyncMutex` to coexist without collision. See
-> [`docs/e12-async-mutex.md`](e12-async-mutex.md) §3.
+> [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) §3.
 
 ---
 
@@ -1455,14 +1455,14 @@ separately authorized.
 
 Binding details live in:
 
-* [`docs/e12-queue.md`](e12-queue.md) current semantic authority;
-* [`docs/e12-queue-state-machine.md`](e12-queue-state-machine.md) corrected
+* [`docs/history/closeout/e12-queue.md`](docs/history/closeout/e12-queue.md) current semantic authority;
+* [`docs/history/implementation-plans/e12-queue-state-machine.md`](e12-queue-state-machine.md) corrected
   Corrective-2 lease/control state machine and 19/6 target;
-* [`docs/e12-queue-scheduler-integration.md`](e12-queue-scheduler-integration.md)
+* [`docs/history/implementation-plans/e12-queue-scheduler-integration.md`](e12-queue-scheduler-integration.md)
   fixed QueuePort access graph, exact public results, one-shot lease,
   teardown session, concrete PREPARED guard, active-victim runnable route,
   counter ledger, transition matrix, and adversarial traces;
-* [`docs/async-mutex-nothrow-authority.md`](async-mutex-nothrow-authority.md)
+* [`docs/history/implementation-plans/async-mutex-nothrow-authority.md`](async-mutex-nothrow-authority.md)
   dependent lock-failure policy.
 
 ```text
@@ -1537,19 +1537,19 @@ implement RwLock in this preparation task.
 > **E12-G status / authority (2026-07-25).** This section (§10) is the
 > **preparation baseline** for the E12-G cross-primitive audit only. The
 > authoritative as-built cross-primitive terminal-resolution audit is
-> [`docs/e12-cross-primitive-terminal-audit.md`](e12-cross-primitive-terminal-audit.md)
+> [`docs/history/closeout/e12-cross-primitive-terminal-audit.md`](docs/history/closeout/e12-cross-primitive-terminal-audit.md)
 > (verdict `E12-G-AS-BUILT-AUDIT: PASS`; no production corrective required).
 > The matrices below contain **obsolete preparation-era candidates** that the
 > as-built primitives have since closed differently; in particular:
 >
 > - **RwLock row** (`1–2 (readers, writers)` queues; `read-permit (anonymous,
 >   may pre-increment)`; `refund read permit if expire wins before grant`;
->   `upgrade state` in §9): the as-built E12-F [`docs/e12-rwlock.md`](e12-rwlock.md)
+>   `upgrade state` in §9): the as-built E12-F [`docs/history/implementation-plans/e12-rwlock.md`](e12-rwlock.md)
 >   uses **ONE unified FIFO queue**, commits `active_readers_` only at claim
 >   under continuous G+W (no per-node refund path), and DEFERs upgrade.
 > - **Condition row** (`Model A: mandatory non-cancellable; Model B: separate,
 >   may expire — §7`): Model A is **CLOSED** as authoritative
->   ([`docs/e12-condition.md`](e12-condition.md) C-H1); the Model A/B debate
+>   ([`docs/history/closeout/e12-condition.md`](docs/history/closeout/e12-condition.md) C-H1); the Model A/B debate
 >   is NOT reopened.
 > - **Admission precedence**: as-built, every primitive uses **resource-first**
 >   admission precedence EXCEPT AsyncCondition, which uses **deadline-first**
@@ -1627,7 +1627,7 @@ implemented in this preparation.
   production state); there is NO refund path (release creates a pending permit
   that is transferred / stored / rejected, never pre-decremented). Queued
   demand is NOT on the supply side. The full state-invariant catalog is in
-  [`docs/e12-semaphore.md`](e12-semaphore.md) §8 and modelled in
+  [`docs/history/closeout/e12-semaphore.md`](docs/history/closeout/e12-semaphore.md) §8 and modelled in
   [`docs/spec/e12_semaphore/E12Semaphore.tla`](spec/e12_semaphore/E12Semaphore.tla):
   `InvPermitConservation`, `InvPermitBounds`, `InvQueueWellFormed`,
   `InvSingleResolution`, `InvSinglePublication`, `InvGrantCommitCoupling`,
@@ -1658,7 +1658,7 @@ implemented in this preparation.
   `InvNoIdlePermitWithEligibleWaiter`; `E12SemNeg7DeadlinePrecedence` →
   `InvPermitFirstDeadline`. Real TLC results in
   [`docs/spec/e12_semaphore/README.md`](spec/e12_semaphore/README.md); gate:
-  [`scripts/verify-e12-semaphore-formal.sh`](../scripts/verify-e12-semaphore-formal.sh).
+  [`scripts/verify-e12-semaphore-formal.sh`](scripts/verify-e12-semaphore-formal.sh).
 
 ### 11.3 Mutex (E12-C-PREPARATION CLOSED — CORRECTIVE-1 through CORRECTIVE-5 + reaudit PASS)
 
@@ -1669,7 +1669,7 @@ implemented in this preparation.
   terminal but do NOT publish runnable; register-recheck-suspend is a single
   atomic admission action (no interleaving window); queue contains only
   Suspended epochs. See
-  [`docs/e12-async-mutex.md`](e12-async-mutex.md) §14.
+  [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) §14.
 - **Minimum state dimensions:** `owner ∈ Fiber ∪ {NoOwner}` (NO redundant
   `locked` bool); FIFO `queue : Seq(Epoch)` (only Registered/Suspended
   epochs); per-epoch `nodeState`
@@ -1683,10 +1683,10 @@ implemented in this preparation.
   critical section is ONE atomic step in the model.
   Late cancel/expire attempts against terminal epochs are explicit non-vacuous
   actions (CancelAttemptTerminal/ExpireAttemptTerminal).
-  See [`docs/e12-async-mutex.md`](e12-async-mutex.md) §14.
+  See [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) §14.
 - **Liveness:** NONE (safety-only model, matching Semaphore precedent).
 - **Required negative models (11 total):** NEG-M1 through NEG-M11 as
-  specified in [`docs/e12-async-mutex.md`](e12-async-mutex.md) §16. Each
+  specified in [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) §16. Each
   breaks one specific rule and fails one expected named invariant. Runtime-only
   negative (Worker identity ownership failure) is handled by a deterministic
   E8 migration test.
@@ -1768,7 +1768,7 @@ implemented in this preparation.
 | Primitive | Verdict | Resolved items | Open human-authority / boundary items |
 | --------- | ------- | -------------- | ------------------------------------- |
 | **E12-A Event** | `CLOSED` (two independent corrective reviews passed) | manual-reset choice; idempotent set; reset; wait-on-set; deadline/cancel composition; set-vs-register race; reset-vs-waiter; **wake cardinality = set releases all registered waits satisfied by SET (F-EVENT-1 closed)** | ~~destruction-with-waiters~~ (resolved: caller contract violation, debug assert); ~~IMPLEMENTATION BOUNDARY: loop wake-one vs narrow wake-many seam~~ (resolved: loop wake_wait_one_locked until drained, atomic under global_mtx_) |
-| **E12-B Semaphore** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant; **production implementation COMPLETE** (public API + private Scheduler seams mirroring E12-A; TSan/ASan/UBSan clean; 31 deterministic tests + NEG compile probe) — see [`docs/e12-semaphore.md`](e12-semaphore.md) §14 As-Built | independent adversarial implementation review still required before E12-B may be declared CLOSED (not self-declared) |
+| **E12-B Semaphore** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | **policy register A1–A5 closed**; **permit conservation corrected** (`available_ + acquiredCount == initial_permits + accepted_release_count`; no `granted_in_flight`, no refund); release atomic (transfer/store/reject); FIFO + no-barging (A2); deadline precedence permit-first (A4); **Scheduler seam Conclusion A** (sufficient; `nullptr` iff empty); safety-only formal model PASS (12 invariants) + 7 negative models each CEX on expected named invariant; **production implementation COMPLETE** (public API + private Scheduler seams mirroring E12-A; TSan/ASan/UBSan clean; 31 deterministic tests + NEG compile probe) — see [`docs/history/closeout/e12-semaphore.md`](docs/history/closeout/e12-semaphore.md) §14 As-Built | independent adversarial implementation review still required before E12-B may be declared CLOSED (not self-declared) |
 | **E12-C Mutex** | `PREPARATION CLOSED — IMPLEMENTATION-1 COMPLETE — REVIEW-REQUIRED` | Fiber-identity ownership; migration-safe unlock; ownership-checked unlock; recursive FORBID; grant final vs cancel/expire; **naming = AsyncMutex** (coexists with sync Mutex); **direct handoff (M-H1)**; **FIFO no-barging (M-H2–M-H4)**; destruction = caller violation; **minimum MUTEX-HANDOFF-ONE seam specified**; **collapsed atomic admission actions**; **formal model complete with 14 invariants + 11 negative models** (§14–§16 of e12-async-mutex.md) | independent implementation review remains required |
 | **E12-D Condition** | `RUNTIME SUITE PASS — T25 CLOSED` | build PASS; release/register atomic window; FIFO notify-one; no-E13-dependence; no spurious wake | `E12-CONDITION-T25-MIGRATION-REACQUIRE-HANG-AUDIT-1: PASS` — closed by W1 corrective `db656b5` (test-harness defect; no production change); Clang Debug/ASan/TSan full suite green |
 | **E12-E Queue** | `ALL PREREQUISITE GATES PASS — IMPLEMENTATION AUTHORIZED (AUTHORIZATION-2)` | one-shot unforgeable `QueueItemLease`; unique lease ring; exact opaque failed-lease return; no reservation owner; expiry retained; cancellation deferred; concrete PREPARED guard; own-oldest/global-oldest active-victim stealing; stable no-erase owner slot; irreversible teardown session; narrow `active_port_calls_`; author-verified 19/19 canonical and 6/6 publication targets | `ASYNC-MUTEX-NOTHROW` B1 PASS; Condition T25 B3 PASS; B2 Corrective-2 independent adversarial review PASS; **B4 Queue formal model PASS** (Model A + Model B + 7 negatives, gate exit 0, independent formal review PASS); `E12-E IMPLEMENTATION AUTHORIZATION: all four gates PASS` |
@@ -1807,7 +1807,7 @@ E12 implementation (any subphase) MUST stop and request human authority when:
    winner-before-publication commit seam before implementing that
    primitive's grant path. (Note: E12-C Mutex seam is RESOLVED —
    `MUTEX-HANDOFF-ONE` specified in
-   [`docs/e12-async-mutex.md`](e12-async-mutex.md) §9.)
+   [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) §9.)
    primitive's grant path.
 7. A Queue is implemented without an operation-owned payload handle and the
    one-shot move-only lease transfer `detached -> producer operation -> ring`
@@ -1989,7 +1989,7 @@ publish W
 Current `wake_wait_one` caller seam does NOT expose W before publication.
 The direct handoff policy is now CLOSED (M-H1). The minimum private seam
 `MUTEX-HANDOFF-ONE` is specified in
-[`docs/e12-async-mutex.md`](e12-async-mutex.md) §10. Classify:
+[`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md) §10. Classify:
 
 ```text
 MINIMUM MUTEX-SPECIFIC PRIVATE SEAM REQUIRED (MUTEX-HANDOFF-ONE)
@@ -2023,7 +2023,7 @@ The operation's one-shot `QueueItemLease` is final ownership state, not an
 independent reservation or refundable permit. Producer grants always enter the
 ring; no direct producer-to-consumer handoff exists. The fixed non-template
 QueuePort is the only Scheduler friend, and the full private seam is specified
-by `docs/e12-queue-scheduler-integration.md` Corrective-2. Ticket publication
+by `docs/history/implementation-plans/e12-queue-scheduler-integration.md` Corrective-2. Ticket publication
 does not choose a Worker; consumption chooses own-oldest or global-oldest and
 allows stealing from an active admission owner.
 
@@ -2116,19 +2116,19 @@ E12-C Mutex (MUTEX-HANDOFF-ONE — PREPARATION CLOSED, CORRECTIVE-1 through CORR
 ## 15. Cross-links
 
 - E10 as-built (authoritative wait protocol):
-  [`docs/e10-waitnode-wait-queue.md`](e10-waitnode-wait-queue.md)
+  [`docs/history/closeout/e10-waitnode-wait-queue.md`](docs/history/closeout/e10-waitnode-wait-queue.md)
 - E11 spec (CLOSED, authoritative deadline/timer):
-  [`docs/e11-deadline-timer-wait.md`](e11-deadline-timer-wait.md)
+  [`docs/history/closeout/e11-deadline-timer-wait.md`](docs/history/closeout/e11-deadline-timer-wait.md)
 - E11 insertion audit (style precedent for this document):
-  [`docs/e11-arch-recon-audit.md`](e11-arch-recon-audit.md)
+  [`docs/history/closeout/e11-arch-recon-audit.md`](docs/history/closeout/e11-arch-recon-audit.md)
 - E12-A Event as-built (CLOSED):
-  [`docs/e12-event.md`](e12-event.md)
+  [`docs/history/closeout/e12-event.md`](docs/history/closeout/e12-event.md)
 - E12-B Semaphore (REVIEW-REQUIRED):
-  [`docs/e12-semaphore.md`](e12-semaphore.md)
+  [`docs/history/closeout/e12-semaphore.md`](docs/history/closeout/e12-semaphore.md)
 - E12-C Async Mutex preparation corrective:
-  [`docs/e12-async-mutex.md`](e12-async-mutex.md)
+  [`docs/history/closeout/e12-async-mutex.md`](docs/history/closeout/e12-async-mutex.md)
 - Construction method (M1–M9, binding):
-  [`docs/async-runtime-construction-method.md`](async-runtime-construction-method.md)
+  [`docs/history/implementation-plans/async-runtime-construction-method.md`](async-runtime-construction-method.md)
 - Roadmap (E12 placement; updated in the same commit):
-  [`docs/async-runtime-plan.md`](async-runtime-plan.md)
+  [`docs/history/implementation-plans/async-runtime-plan.md`](async-runtime-plan.md)
 - Formal model directories: `docs/spec/e10_waitnode/`, `docs/spec/e11_timer_wait/`
