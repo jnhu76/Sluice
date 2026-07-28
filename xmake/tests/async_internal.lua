@@ -219,3 +219,13 @@ sluice_internal_async_test("select_call_context_contract_test")
 -- regression test. Uses SLUICE_ASYNC_INTERNAL_TESTING seam to force init_fiber
 -- failure. Links against sluice_async_internal_testing (NOT production sluice_async).
 sluice_internal_async_test("threaded_evented_internal_test")
+
+-- group_evented_admission_exception_safety_test — P2-01 Group transactional
+-- admission seam regression (§13.5). Uses the test_set_evented_admission_fail()
+-- seam (only available under SLUICE_ASYNC_INTERNAL_TESTING) to force each of the
+-- three reserve boundaries in async_evented to throw std::bad_alloc, proving the
+-- admission is a complete transaction: a reserve failure leaves no partial
+-- Fiber/stack/Future record, no Scheduler publication, and the Group remains
+-- destructible and reusable. The production sluice_async build compiles the seam
+-- out. Gated to x86_64 (fiber_ctx::supported) at runtime.
+sluice_internal_async_test("group_evented_admission_exception_safety_test")

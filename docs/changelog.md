@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased — Group Evented admission exception safety (P2-01)
+
+### Changed
+
+- **`sluice::async::Group::async_evented` admission is now transactional.** All
+  three bookkeeping vectors (`evented_fibers_`, `evented_stacks_`, `futures_`) are
+  reserved to `size() + 1` BEFORE the first `push_back`, inside one `mtx_`
+  critical section (`include/sluice/async/group.hpp`). Previously the three
+  `push_back`s could fail independently, leaving a partial Fiber/stack/Future
+  record on allocation failure. Now a reserve failure propagates
+  `std::bad_alloc` with no partial task record, no `Scheduler::spawn`, and the
+  user task never runs. The three moved types are noexcept-movable (pinned by
+  `static_assert`), so the post-reserve commit block is non-throwing. This
+  closes the E16 foundation prerequisite P2-01 (Group transactional admission
+  seam); it does NOT implement E16 Application Runtime. The Threaded
+  (`async_threaded`) public behavior is unchanged.
+
+### Tests
+
+- `tests/group_evented_admission_exception_safety_test.cpp` — deterministic
+  failure injection at each of the three reserve boundaries, proving no partial
+  task record, no Scheduler publication, safe destruction without `await()`, and
+  Group reusability. Links `sluice_async_internal_testing`; the test seam is
+  absent from production.
+
 ## Unreleased — documentation corrective (post-v0.1.0)
 
 Documentation and build metadata changes since the v0.1.0 tag. No production
