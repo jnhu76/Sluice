@@ -10,12 +10,13 @@
 *)
 EXTENDS Naturals, FiniteSets, TLC
 
-CONSTANTS Tasks, Callers, MaxIO, NONE, T0, T1, C0, C1
+CONSTANTS Tasks, Callers, MaxIO, MaxEpoch, NONE, T0, T1, C0, C1
 
 ASSUME
     /\ Tasks = {T0, T1}
     /\ Callers = {C0, C1}
-    /\ MaxIO = 2
+    /\ MaxIO \in 2..3
+    /\ MaxEpoch \in Nat \ {0}
     /\ NONE \notin Tasks \cup Callers
 
 VARIABLES
@@ -91,6 +92,7 @@ DriverExitAction ==
 JoinDriverAction ==
     /\ close_state = "InProgress"
     /\ driver_state = "exited"
+    /\ ~driver_joined
     /\ driver_joined' = TRUE
     /\ UNCHANGED <<runtime_state, stop_requested, root_cancel_published,
                    group_alive, close_state, close_owner,

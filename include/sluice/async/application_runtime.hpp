@@ -34,6 +34,7 @@ namespace sluice::async {
 // Forward declarations.
 class Group;
 class Fiber;
+class ApplicationRuntime;
 
 // ---------------------------------------------------------------------------
 // RuntimeTaskContext (P1-04): restricted, non-owning task execution context.
@@ -82,7 +83,7 @@ public:
 
     // Validate configuration and construct the Runtime on the heap.
     // Returns invalid_state if no backend is provided.
-    Result<std::unique_ptr<class ApplicationRuntime>> build();
+    Result<std::unique_ptr<ApplicationRuntime>> build();
 
 private:
     std::unique_ptr<AsyncBackend> backend_;
@@ -97,7 +98,10 @@ private:
 //
 // Thread safety: all public methods are safe to call from any thread except
 // drain()/join()/shutdown() which return invalid_state when called from a task
-// owned by this Runtime (detected via Fiber-local execution tag).
+// owned by this Runtime (detected via a thread-local execution tag; v1 seam —
+// correct for E16 v1 Evented mode where each task body runs to completion
+// within a single Fiber scheduling slice; a Fiber-local tag will replace this
+// for full multiplexing safety).
 // ---------------------------------------------------------------------------
 class ApplicationRuntime {
 public:
@@ -210,13 +214,14 @@ private:
     std::atomic<bool> fatal_snapshot_{false};
     std::atomic<bool> driver_exit_snapshot_{false};
     std::atomic<bool> task_set_terminal_snapshot_{true};  // Initially true (no tasks).
+    std::atomic<bool> admission_closed_snapshot_{false};  // true when admission closed.
 
     // --- Driver thread ---
     std::thread driver_thread_;
     bool driver_spawned_{false};
 
     // --- Fiber-local execution identity (P1-04 worker-call detection) ---
-    // Tag value is `this`; stored in the Fiber's opaque tag slot.
+    // Tag value is `this`; stored as thread_local (v1 seam; see class comment).
     static thread_local ApplicationRuntime* current_runtime_tls_;
 };
 

@@ -18,12 +18,13 @@
 *)
 EXTENDS Naturals, FiniteSets, TLC
 
-CONSTANTS Tasks, Callers, MaxIO, NONE, T0, T1, C0, C1
+CONSTANTS Tasks, Callers, MaxIO, MaxEpoch, NONE, T0, T1, C0, C1
 
 ASSUME
     /\ Tasks = {T0, T1}
     /\ Callers = {C0, C1}
-    /\ MaxIO = 2
+    /\ MaxIO \in 2..3
+    /\ MaxEpoch \in Nat \ {0}
     /\ NONE \notin Tasks \cup Callers
 
 VARIABLES
@@ -38,8 +39,8 @@ VARIABLES
     outstanding_io,         \* 0..MaxIO
     runtime_task_io_open,   \* BOOLEAN (per-task I/O capability)
     drain_complete,         \* BOOLEAN
-    control_epoch,          \* Nat (bounded by transitions)
-    observed_epoch,         \* Nat (driver's last observed)
+    control_epoch,          \* 0..MaxEpoch (bounded)
+    observed_epoch,         \* 0..MaxEpoch (driver's last observed)
     runtime_cv_signal,      \* BOOLEAN (abstract CV notification)
     scheduler_wake_signal,  \* BOOLEAN (abstract wake handle)
     driver_state,           \* {not_started,barrier_wait,in_run_live,between_invocations,drained_wait,exiting,exited}
@@ -118,6 +119,9 @@ Init ==
 task_set_terminal_snapshot ==
     (~admission_open /\ admitted_count = terminal_count)
 
+(* Epoch bound guard: all epoch-incrementing actions require this. *)
+epoch_can_bump == control_epoch < MaxEpoch
+
 (* =========================================================================
    Build (already constructed in Init; Build is identity for the model)
    ========================================================================= *)
@@ -190,6 +194,7 @@ StartupCommit ==
     /\ driver_spawned
     /\ ~stop_requested
     /\ ~startup_abort_requested
+    /\ epoch_can_bump
     /\ runtime_state' = "Running"
     /\ admission_open' = TRUE
     /\ control_epoch' = control_epoch + 1
@@ -254,6 +259,7 @@ RequestStopConstructed ==
 RequestStopStarting ==
     /\ runtime_state = "Starting"
     /\ ~stop_requested
+    /\ epoch_can_bump
     /\ stop_requested' = TRUE
     /\ startup_abort_requested' = TRUE
     /\ control_epoch' = control_epoch + 1
@@ -276,6 +282,7 @@ RequestStopStarting ==
 RequestStopRunning ==
     /\ runtime_state = "Running"
     /\ ~stop_requested
+    /\ epoch_can_bump
     /\ stop_requested' = TRUE
     /\ admission_open' = FALSE
     /\ root_cancel_published' = TRUE
@@ -359,7 +366,6 @@ StartupAbortClose ==
     /\ startup_abort_requested
     /\ driver_joined
     /\ close_state = "Open"
-    /\ close_state' = "InProgress"
     /\ close_owner' = C0  \* start owner
     /\ group_alive' = FALSE
     /\ scheduler_alive' = FALSE
@@ -409,6 +415,7 @@ SubmitReserve(t) ==
 SubmitGroupCommit(t) ==
     /\ admission_reservation_active
     /\ task_admitted[t]
+    /\ epoch_can_bump
     /\ admission_reservation_active' = FALSE
     /\ task_committed' = [task_committed EXCEPT ![t] = TRUE]
     /\ successful_submit_published' = TRUE
@@ -433,6 +440,7 @@ SubmitRollback(t) ==
     /\ admission_reservation_active
     /\ task_admitted[t]
     /\ ~task_committed[t]
+    /\ epoch_can_bump
     /\ admission_reservation_active' = FALSE
     /\ admitted_count' = admitted_count - 1
     /\ task_admitted' = [task_admitted EXCEPT ![t] = FALSE]
@@ -465,6 +473,7 @@ TaskBodyExit(t) ==
     /\ task_committed[t]
     /\ ~task_terminated[t]
     /\ driver_state = "in_run_live"
+    /\ epoch_can_bump
     /\ task_terminated' = [task_terminated EXCEPT ![t] = TRUE]
     /\ terminal_count' = terminal_count + 1
     /\ runtime_task_io_open' = FALSE
@@ -513,10 +522,11 @@ SubmitTaskIO(t) ==
     /\ close_state = "Open"
     /\ task_io_submitted' = [task_io_submitted EXCEPT ![t] = TRUE]
     /\ outstanding_io' = outstanding_io + 1
+    /\ runtime_task_io_open' = TRUE
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
                    root_cancel_published, startup_abort_requested,
                    admitted_count, terminal_count,
-                   group_future_terminal_count, runtime_task_io_open,
+                   group_future_terminal_count,
                    drain_complete,
                    control_epoch, observed_epoch,
                    runtime_cv_signal, scheduler_wake_signal,
@@ -675,6 +685,7 @@ DriverReenterRunLive ==
 (* DrainBegin: Stopping -> Draining. *)
 DrainBegin ==
     /\ runtime_state = "Stopping"
+    /\ epoch_can_bump
     /\ runtime_state' = "Draining"
     /\ control_epoch' = control_epoch + 1
     /\ runtime_cv_signal' = TRUE
@@ -701,6 +712,7 @@ PublishDrainComplete ==
     /\ group_future_terminal_count = admitted_count
     /\ outstanding_io = 0
     /\ ~drain_complete
+    /\ epoch_can_bump
     /\ drain_complete' = TRUE
     /\ control_epoch' = control_epoch + 1
     /\ runtime_cv_signal' = TRUE
@@ -777,6 +789,7 @@ CloseWaiterObserveInProgress ==
 RequestDriverExit ==
     /\ close_state = "InProgress"
     /\ ~driver_exit_requested
+    /\ epoch_can_bump
     /\ driver_exit_requested' = TRUE
     /\ control_epoch' = control_epoch + 1
     /\ runtime_cv_signal' = TRUE
@@ -961,6 +974,7 @@ ShutdownConstructed ==
 ShutdownStarting ==
     /\ runtime_state = "Starting"
     /\ ~startup_abort_requested
+    /\ epoch_can_bump
     /\ startup_abort_requested' = TRUE
     /\ stop_requested' = TRUE
     /\ control_epoch' = control_epoch + 1
@@ -983,6 +997,7 @@ ShutdownStarting ==
 ShutdownRunning ==
     /\ runtime_state = "Running"
     /\ ~stop_requested
+    /\ epoch_can_bump
     /\ stop_requested' = TRUE
     /\ admission_open' = FALSE
     /\ root_cancel_published' = TRUE
@@ -1005,6 +1020,7 @@ ShutdownRunning ==
 (* ShutdownStopping: proceed to drain. *)
 ShutdownStopping ==
     /\ runtime_state = "Stopping"
+    /\ epoch_can_bump
     /\ runtime_state' = "Draining"
     /\ control_epoch' = control_epoch + 1
     /\ runtime_cv_signal' = TRUE
@@ -1397,7 +1413,7 @@ NotReach_R10 == ~(driver_state = "drained_wait")
 NotReach_R11 == ~(runtime_state = "Stopped" /\ close_owner \in Callers)
 NotReach_R12 == ~(close_state = "InProgress")
 NotReach_R13 == ~(runtime_state = "Stopped" /\ ~driver_spawned)
-NotReach_R14 == ~(runtime_state = "Stopped" /\ runtime_state = "Stopped")
+NotReach_R14 == ~(runtime_state = "Stopped" /\ close_state = "Closed")
 NotReach_R15 == ~(startup_abort_requested /\ runtime_state = "Starting")
 NotReach_R16 == ~(\E t \in Tasks : task_terminated[t] /\ group_future_terminal_count > 0)
 

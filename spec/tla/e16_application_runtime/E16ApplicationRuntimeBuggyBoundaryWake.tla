@@ -12,12 +12,13 @@
 *)
 EXTENDS Naturals, FiniteSets, TLC
 
-CONSTANTS Tasks, Callers, MaxIO, NONE, T0, T1, C0, C1
+CONSTANTS Tasks, Callers, MaxIO, MaxEpoch, NONE, T0, T1, C0, C1
 
 ASSUME
     /\ Tasks = {T0, T1}
     /\ Callers = {C0, C1}
-    /\ MaxIO = 2
+    /\ MaxIO \in 2..3
+    /\ MaxEpoch \in Nat \ {0}
     /\ NONE \notin Tasks \cup Callers
 
 VARIABLES
@@ -44,6 +45,8 @@ vars == <<runtime_state, admission_open, stop_requested, root_cancel_published,
           successful_submit_published, admission_reservation_active,
           fatal_snapshot, task_admitted, task_terminated,
           task_io_submitted, task_io_complete>>
+
+epoch_can_bump == control_epoch < MaxEpoch
 
 Init ==
     /\ runtime_state = "Constructed"
@@ -126,6 +129,7 @@ StartupCommit ==
     /\ runtime_state' = "Running"
     /\ admission_open' = TRUE
     /\ task_set_terminal_snapshot' = FALSE
+    /\ epoch_can_bump
     /\ control_epoch' = control_epoch + 1
     /\ UNCHANGED <<stop_requested, root_cancel_published,
                    startup_abort_requested, admitted_count, terminal_count,

@@ -1390,8 +1390,8 @@ public:
 | `start()` | Constructed | `invalid_state` (or `canceled` if stop remembered) |
 | `submit()` | Running (admission open) | `invalid_state` |
 | `request_stop()` | Any (idempotent, noexcept) | — |
-| `drain()` | Stopping, Draining | `invalid_state` |
-| `join()` | After drain_complete | `invalid_state` |
+| `drain()` | Stopping, Draining | `invalid_state` (also from a Runtime task) |
+| `join()` | After drain_complete | `invalid_state` (also from a Runtime task) |
 | `shutdown()` | Any (state-dispatched) | `invalid_state` from a Runtime task |
 
 ### `sluice::async::RuntimeTaskContext`

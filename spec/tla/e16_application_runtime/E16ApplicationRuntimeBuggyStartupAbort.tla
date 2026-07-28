@@ -9,12 +9,13 @@
 *)
 EXTENDS Naturals, FiniteSets, TLC
 
-CONSTANTS Tasks, Callers, MaxIO, NONE, T0, T1, C0, C1
+CONSTANTS Tasks, Callers, MaxIO, MaxEpoch, NONE, T0, T1, C0, C1
 
 ASSUME
     /\ Tasks = {T0, T1}
     /\ Callers = {C0, C1}
-    /\ MaxIO = 2
+    /\ MaxIO \in 2..3
+    /\ MaxEpoch \in Nat \ {0}
     /\ NONE \notin Tasks \cup Callers
 
 VARIABLES
@@ -25,6 +26,8 @@ VARIABLES
 vars == <<runtime_state, stop_requested, startup_abort_requested,
           driver_state, driver_spawned, run_live_entered,
           admission_open, control_epoch>>
+
+epoch_can_bump == control_epoch < MaxEpoch
 
 Init ==
     /\ runtime_state = "Constructed"
@@ -57,6 +60,7 @@ RequestStopStarting ==
     /\ ~stop_requested
     /\ stop_requested' = TRUE
     /\ startup_abort_requested' = TRUE
+    /\ epoch_can_bump
     /\ control_epoch' = control_epoch + 1
     /\ UNCHANGED <<runtime_state, driver_state, driver_spawned,
                    run_live_entered, admission_open>>

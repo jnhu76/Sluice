@@ -51,7 +51,7 @@ run_tlc() {
 launched() { grep -q '^Starting\.\.\.' "$1" || grep -q 'TLC2 Version' "$1"; }
 passed()   { grep -q 'Model checking completed. No error has been found' "$1"; }
 named_violation() { grep -Eq "Invariant $2 is violated" "$1"; }
-temporal_violation() { grep -Eq "Temporal property violated" "$1"; }
+temporal_violation() { grep -Eq "Temporal propert(y|ies) (was|were) violated" "$1"; }
 state_count() { grep -oP '\d+ states generated' "$1" | head -1 || echo "states: ?"; }
 
 expect_pass() {
@@ -81,6 +81,9 @@ expect_temporal_cex() {
   run_tlc "$model" "$cfg" "$tag"
   if ! launched "$out"; then echo "FAIL  $label (no launch)"; tail -20 "$out"; return 1; fi
   if passed "$out"; then echo "FAIL  $label (expected counterexample, PASSED)"; return 1; fi
+  if ! temporal_violation "$out"; then
+    echo "FAIL  $label (expected temporal violation, got other error)"; tail -8 "$out"; return 1
+  fi
   echo "CEX   $label (temporal property violated)"; return 0
 }
 
@@ -143,6 +146,7 @@ CONSTANTS
     Tasks = {T0, T1}
     Callers = {C0, C1}
     MaxIO = 2
+    MaxEpoch = 8
     NONE = NONE
     T0 = T0
     T1 = T1
@@ -159,13 +163,20 @@ echo "--- Wrong-property control ---"
 out="$outroot/wrong_prop.out"
 run_tlc E16ApplicationRuntimeBuggyStartupAbort \
   E16ApplicationRuntimeBuggyStartupAbort.cfg wrong_prop
-if launched "$out" && passed "$out"; then
+if ! launched "$out"; then
+  echo "FAIL  wrong-property control (no launch)"; tail -20 "$out"
+  rc=1
+elif passed "$out"; then
   echo "FAIL  wrong-property (expected StartupAbortNeverRuns violation, got PASS)"
   rc=1
-elif launched "$out" && named_violation "$out" StartupAbortNeverRuns; then
+elif named_violation "$out" NoCancelAfterGroupDestroy; then
+  echo "FAIL  wrong-property control (unrelated invariant NoCancelAfterGroupDestroy violated)"
+  rc=1
+elif named_violation "$out" StartupAbortNeverRuns; then
   echo "PASS  wrong-property control (StartupAbort violates only its own invariant)"
 else
-  echo "PASS  wrong-property control (violated expected invariant only)"
+  echo "FAIL  wrong-property control (unexpected outcome)"; tail -20 "$out"
+  rc=1
 fi
 
 echo

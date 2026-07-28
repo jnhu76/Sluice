@@ -132,15 +132,25 @@ Result<void> ApplicationRuntime::start() {
         return make_unexpected_void(IoError{IoError::Code::backend_error});
     }
 
-    // Wait for the driver to reach the startup barrier.
+    // Wait for the driver to reach the startup barrier (or exit if abort won
+    // the race before we observed barrier_wait — Warning #2 fix).
     runtime_cv_.wait(lk, [this] {
-        return driver_state_ == DriverState::barrier_wait;
+        return driver_state_ == DriverState::barrier_wait ||
+               driver_state_ == DriverState::exited;
     });
 
-    // Startup barrier: wait for the driver to reach barrier_wait AND either
-    // commit (state → Running) or abort (startup_abort_requested).
-    // The driver is already at barrier_wait (it parks there on entry).
-    // Commit: transition to Running, open admission.
+    // If the driver already exited (abort won before barrier was observed),
+    // complete the abort path directly.
+    if (driver_state_ == DriverState::exited) {
+        state_ = State::Stopped;
+        close_state_ = CloseState::Closed;
+        runtime_cv_.notify_all();
+        lk.unlock();
+        if (driver_thread_.joinable()) driver_thread_.join();
+        return make_unexpected_void(IoError{IoError::Code::canceled});
+    }
+
+    // Startup barrier: the driver is at barrier_wait. Commit or abort.
     if (stop_requested_) {
         // Stop won the race pre-commit (P1-03 abort path).
         startup_abort_requested_ = true;
@@ -152,6 +162,7 @@ Result<void> ApplicationRuntime::start() {
         });
         state_ = State::Stopped;
         close_state_ = CloseState::Closed;
+        runtime_cv_.notify_all();
         lk.unlock();
         if (driver_thread_.joinable()) driver_thread_.join();
         return make_unexpected_void(IoError{IoError::Code::canceled});
@@ -182,8 +193,11 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
         return make_unexpected_void(IoError{IoError::Code::invalid_state});
     }
 
-    // Reserve admission slot.
+    // Reserve admission slot. Reset stale drain_complete_ (P0-1 fix: the
+    // driver may have set it in a prior quiescent window before this admission;
+    // a new task invalidates any prior drain observation).
     admitted_count_++;
+    drain_complete_ = false;
     recompute_task_set_terminal_locked();
 
     // Release lock before calling into Group (Group acquires its own mtx).
@@ -193,6 +207,8 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
     try {
         root_group_->async([this, task = std::move(task)](CancelToken& token) mutable {
             // Set execution identity for worker-call detection.
+            // Save/restore for nested or interleaved runtime safety.
+            auto* prev_runtime = current_runtime_tls_;
             current_runtime_tls_ = this;
 
             // RuntimeTaskContext delegates I/O to io_ctx_.
@@ -215,8 +231,8 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
             runtime_cv_.notify_all();
             wake_handle_.notify();
 
-            // Clear execution identity.
-            current_runtime_tls_ = nullptr;
+            // Restore previous execution identity.
+            current_runtime_tls_ = prev_runtime;
         });
     } catch (...) {
         // Group::async threw (e.g. bad_alloc from vector reserve).
@@ -254,6 +270,7 @@ void ApplicationRuntime::request_stop() noexcept {
     if (state_ == State::Running) {
         // Close admission.
         admission_open_ = false;
+        admission_closed_snapshot_.store(true, std::memory_order::release);
         // Publish root cancellation under lifecycle_mutex (P1-01).
         if (!root_cancel_published_ && root_group_) {
             root_group_->group_token().request();
@@ -401,22 +418,33 @@ Result<void> ApplicationRuntime::shutdown() {
         lk.unlock();
         request_stop();
         auto dr = drain();
-        if (!dr.has_value()) return dr;
+        if (!dr.has_value()) {
+            // Late caller: another shutdown owner may have completed.
+            std::lock_guard rlk(lifecycle_mtx_);
+            if (close_state_ == CloseState::Closed) return {};
+            return dr;
+        }
         return join();
     }
 
     case State::Stopping: {
         lk.unlock();
         auto dr = drain();
-        if (!dr.has_value()) return dr;
+        if (!dr.has_value()) {
+            std::lock_guard rlk(lifecycle_mtx_);
+            if (close_state_ == CloseState::Closed) return {};
+            return dr;
+        }
         return join();
     }
 
     case State::Draining: {
         // Wait for drain_complete then join.
         runtime_cv_.wait(lk, [this] {
-            return drain_complete_ || state_ == State::Fatal;
+            return drain_complete_ || state_ == State::Fatal ||
+                   close_state_ == CloseState::Closed;
         });
+        if (close_state_ == CloseState::Closed) return {};
         lk.unlock();
         return join();
     }
@@ -479,8 +507,13 @@ void ApplicationRuntime::driver_main() {
         }
 
         // Check drain_complete: all tasks terminal + no outstanding I/O.
+        // P0-1 fix: only publish drain_complete_ in Stopping/Draining. In
+        // Running, a quiescent window (zero admitted tasks or momentary gap
+        // between task completions) must NOT set drain_complete_ because
+        // future submissions are still legal and would see a stale true.
         if (task_set_terminal_snapshot_.load(std::memory_order::acquire) &&
-            io_ctx_.outstanding() == 0) {
+            io_ctx_.outstanding() == 0 &&
+            (state_ == State::Stopping || state_ == State::Draining)) {
             drain_complete_ = true;
             runtime_cv_.notify_all();
 
@@ -532,9 +565,14 @@ void ApplicationRuntime::driver_main() {
 // Reads ONLY lock-free atomic snapshots. Never acquires lifecycle_mtx_.
 // ---------------------------------------------------------------------------
 bool ApplicationRuntime::stop_predicate_fn() {
+    // The stop predicate fires only when the Runtime is shutting down AND all
+    // work is done. admission_closed_snapshot_ prevents premature run_live
+    // exit during Running (P0-1): without it, a quiescent gap between task
+    // completions would terminate the driver while admission is still open.
     return fatal_snapshot_.load(std::memory_order::acquire) ||
            driver_exit_snapshot_.load(std::memory_order::acquire) ||
-           task_set_terminal_snapshot_.load(std::memory_order::acquire);
+           (admission_closed_snapshot_.load(std::memory_order::acquire) &&
+            task_set_terminal_snapshot_.load(std::memory_order::acquire));
 }
 
 bool ApplicationRuntime::stop_predicate_trampoline(void* ctx) {
@@ -565,12 +603,14 @@ void ApplicationRuntime::close_resources() {
     // Destroy in reverse order: Group → Scheduler → IoContext.
     // The backend destructor joins backend workers.
     std::lock_guard lk(lifecycle_mtx_);
+    // Close admission so no new tasks can be submitted post-close (P0-1 fix).
+    admission_open_ = false;
+    admission_closed_snapshot_.store(true, std::memory_order::release);
     root_group_.reset();
     sched_.reset();
-    // io_ctx_ is a member; it will be destroyed in ~ApplicationRuntime.
-    // But we need it gone now for the Stopped contract.
-    // Since io_ctx_ is a value member, we can't reset it. Instead, the
-    // Stopped state signals that resources are logically destroyed.
+    // io_ctx_ is a value member destroyed in ~ApplicationRuntime. The Stopped
+    // state guarantees the driver thread is joined and no code path will use
+    // io_ctx_ after this point (Group and Scheduler are null).
     state_ = State::Stopped;
     close_state_ = CloseState::Closed;
     runtime_cv_.notify_all();
