@@ -32,10 +32,17 @@ a.out
 .vscode/
 .cache/
 
+# Formal verification run artifacts (preserved only when FORMAL_KEEP_ARTIFACTS=1)
+build/formal/
+
 # TLC (TLA+) transient disk state (checker fingerprint-set output)
 states/
 # TLC counterexample trace exploration specs (regenerated on each CEX run)
 *_TTrace*.tla
+
+# Python bytecode
+__pycache__/
+*.py[cod]
 
 # Fuzz crash artifacts and transient corpus growth (gitignored; committed
 # seeds live under fuzz/corpus/ and are tracked)

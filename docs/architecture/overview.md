@@ -91,6 +91,6 @@ sluice_experimental_uring ← depends on sluice_core, optional liburing
 2. **Unit / component tests** — per-slice test binaries
 3. **Sanitizer gates** — ASan, UBSan, TSan, Valgrind
 4. **Code quality** — `clang-tidy`, `.clang-format`
-5. **Formal models** — TLA+ specs under `docs/spec/` and `spec/tla/`
+5. **Formal models** — TLA+ specs under `spec/tla/`
 
 See `docs/verification/README.md` for the full verification matrix.

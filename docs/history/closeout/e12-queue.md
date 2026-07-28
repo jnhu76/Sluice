@@ -1915,7 +1915,7 @@ requires docs 4,5,8–12 and the closed decision cluster.
   `docs/spec/e12_async_mutex/E12AsyncMutex.tla` (19 invariants, 11 negatives);
   `docs/spec/e12_event/`, `docs/spec/e12_async_condition/`,
   `docs/spec/e11_timer_wait/`.
-- `scripts/verify-*-formal.sh` — TLC gate pattern (expect_pass /
+- `scripts/formal/verify-*.sh` — TLC gate pattern (expect_pass /
   expect_fail + named invariant / wrong_property_gate / compile_probe_gate).
 - `tla2tools.jar` (repo root) — TLC runtime.
 

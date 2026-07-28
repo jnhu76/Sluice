@@ -180,4 +180,4 @@ All primitives share these invariants:
 - ADR-execution-model.md — the accepted execution-strategy contract.
 - `docs/architecture/async-runtime.md` — the Scheduler and Fiber layer.
 - `docs/architecture/async-io-foundation.md` — Completion / AsyncIoContext / backends.
-- `docs/spec/` — per-subsystem TLA+ models (E10 WaitNode, E11 Timer, E12 primitives, E13 Select).
+- `spec/tla/` — per-subsystem TLA+ models (E10 WaitNode, E11 Timer, E12 primitives, E13 Select).

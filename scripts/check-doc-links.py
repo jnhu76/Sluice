@@ -151,6 +151,7 @@ ENVIRONMENT_CONDITIONAL_PREFIXES = {
     ".zcode",
     ".mimocode",
     "states",
+    "build",
 }
 
 
@@ -416,7 +417,7 @@ NON_PATH_PATTERNS = [
     # Code member names
     r'^next_/prev_$',
     # Spec trace files
-    r'^docs/spec/e13_select/.*\.keep$',
+    r'^spec/tla/e13_select/.*\.keep$',
     # Code state names
     r'^woken/cancelled/expired$',
     r'^unresolved/woken/cancelled/expired$',
@@ -666,6 +667,16 @@ def is_historical(resolved: Path) -> bool:
     )
 
 
+def is_source_historical(path: Path) -> bool:
+    """Return True if the source file itself is a historical document.
+
+    Historical source files may legitimately reference old/moved paths that
+    no longer exist (e.g. `tools/formal/**` in a migration-era review doc).
+    """
+    rel = os.path.relpath(path, ROOT)
+    return rel.startswith("docs/history/")
+
+
 def environment_conditional_prefix(ref: str, resolved: Path) -> str | None:
     """Return the ENVIRONMENT_CONDITIONAL_PREFIXES entry that `ref` (or its
     resolved path) falls under, else None.
@@ -682,7 +693,7 @@ def environment_conditional_prefix(ref: str, resolved: Path) -> str | None:
          fell back, so this works in CI where zig/ is absent.
       3. Path-component match: any trailing path component equal to a
          name-based .gitignore dir rule (e.g. `states/` matches
-         `docs/spec/e13_select/states`). Covers gitignore rules that are
+         `spec/tla/e13_select/states`). Covers gitignore rules that are
          matched at any depth.
 
     Returns the matched prefix so the caller can emit a precise note.
@@ -794,8 +805,13 @@ def check_file(path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
     # Backtick references are ambiguous — `foo/bar` could be a path or a
     # code identifier. The NON_PATH_PATTERNS heuristic applies here to
     # avoid false positives on code identifiers.
+    # Lines with <!-- old-path-ok --> are explicit allowlisted quotes.
+    lines = text.splitlines()
     for m in BACKTICK_PATH_RE.finditer(text):
         ref = m.group(1).strip()
+        lineno = text[: m.start()].count("\n")
+        if "<!-- old-path-ok -->" in lines[lineno]:
+            continue
         resolved = resolve_ref(path, ref, from_backtick=True)
         if resolved is None:
             continue
@@ -806,7 +822,7 @@ def check_file(path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
                     f"{path}:{line_of(m.start())}: "
                     f"STALE MOVED PATH (backtick): `{ref}` -> should reference `{moved}`"
                 )
-            elif is_historical(resolved):
+            elif is_historical(resolved) or is_source_historical(path):
                 historical.append(
                     f"{path}:{line_of(m.start())}: "
                     f"HISTORICAL (allowlisted): `{ref}`"

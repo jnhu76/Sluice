@@ -97,10 +97,10 @@ Committed PR task files:
 - `docs/formal/e13-select-formal-core-plan.md`
 - `docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-INDEPENDENT-REVIEW-1.md`
 - `docs/history/reviews/E13-SELECT-FORMAL-MODEL-CORE-1-REVIEW-REQUEST.md`
-- `docs/spec/e13_select/*.tla`
-- `docs/spec/e13_select/*.cfg`
-- `docs/spec/e13_select/README.md`
-- `tools/formal/verify-e13-select-core.sh`
+- `spec/tla/e13_select/*.tla`
+- `spec/tla/e13_select/*.cfg`
+- `spec/tla/e13_select/README.md`
+- `scripts/formal/verify-e13-select-core.sh`
 
 Pre-existing local files observed separately:
 

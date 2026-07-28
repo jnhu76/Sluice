@@ -67,12 +67,12 @@ curl -L -o /tmp/tla2tools.jar \
   https://github.com/tlaplus/tlaplus/releases/download/v1.7.0/tla2tools.jar
 
 # Safety (C1/C3/C4 + lifecycle; C1 is NoInternalProtocolStuck):
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/BlockingIoPool.cfg spec/tla/BlockingIoPool.tla
+java -cp tla2tools.jar tlc2.TLC \
+  -config spec/tla/blocking_io_pool/BlockingIoPool.cfg spec/tla/blocking_io_pool/BlockingIoPool.tla
 
 # Liveness (modeled-task progress C2, weak fairness on Dequeue+Complete):
-java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config spec/tla/BlockingIoPool_liveness.cfg spec/tla/BlockingIoPool.tla
+java -cp tla2tools.jar tlc2.TLC \
+  -config spec/tla/blocking_io_pool/BlockingIoPool_liveness.cfg spec/tla/blocking_io_pool/BlockingIoPool.tla
 ```
 
 ## Results (recorded run)
@@ -133,6 +133,6 @@ deadlock freedom.
 
 ## Files
 
-- `spec/tla/BlockingIoPool.tla` — the specification
-- `spec/tla/BlockingIoPool.cfg` — safety config (invariants + Spec)
-- `spec/tla/BlockingIoPool_liveness.cfg` — liveness config (FairSpec + property)
+- `spec/tla/blocking_io_pool/BlockingIoPool.tla` — the specification
+- `spec/tla/blocking_io_pool/BlockingIoPool.cfg` — safety config (invariants + Spec)
+- `spec/tla/blocking_io_pool/BlockingIoPool_liveness.cfg` — liveness config (FairSpec + property)

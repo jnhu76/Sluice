@@ -1031,7 +1031,7 @@ path references `fiber_owner_`. The `fiber_owner_` record is the
 runnable ownership / steal-consistency record, not the routing authority.
 The TLA+ model has been corrected to separate `ownerRecord[f]`,
 `execWorker[f]`, and `waitOwner[f]`, with `WakeReady` routing by
-`waitOwner[f]`. See `docs/spec/e8_ownership_transfer/` and the audit at
+`waitOwner[f]`. See `spec/tla/e8_ownership_transfer/` and the audit at
 `docs/history/closeout/e8-formal-corrective/audit.md`.
 
 ### 9.3.6 Wake routing after transfer
@@ -1343,7 +1343,7 @@ the project's load-bearing proof, ADR §9.1).
 
 A Worker must not park from a local-empty observation. Park admission is
 globally coordinated. The phases (names map to the TLA+ actions,
-`docs/spec/e9_park_wake/`):
+`spec/tla/e9_park_wake/`):
 
 ```text
 ACTIVE

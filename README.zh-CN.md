@@ -151,7 +151,7 @@ xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test
 - **单元/组件** — `xmake test -v`（每个 slice 的测试二进制）
 - **确定性因果测试** — `SLUICE_ASYNC_INTERNAL_TESTING` 阶段接缝
 - **Sanitizer 门控** — ASan、UBSan、TSan
-- **形式化模型** — TLA+ 规范，位于 `docs/spec/` 和 `spec/tla/`
+- **形式化模型** — TLA+ 规范，位于 `spec/tla/`（按套件目录组织）
 
 完整验证矩阵见 [`docs/verification/README.md`](docs/verification/README.md)。
 

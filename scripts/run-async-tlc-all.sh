@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run-async-tlc-all.sh -- 逐个跑 E12-D AsyncCondition 的全部 13 次 TLC 模型检验，
 # 实时输出到 stdout（并 tee 到日志），每个模型后给出 PASS/FAIL 判定。
-# 可选地追加运行 E12-E Queue 形式化 gate (verify-async-queue-formal.sh)。
+# 可选地追加运行 E12-E Queue 形式化 gate (verify-async-queue.sh)。
 #
 # 用法:
 #   bash scripts/run-async-tlc-all.sh                 # 默认: AsyncCondition + Queue (jar=repo 根)
@@ -34,7 +34,7 @@ esac
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$here/.."
-spec="$repo/docs/spec/e12_async_condition"
+spec="$repo/spec/tla/e12_async_condition"
 JAR="${TLA2TOOLS_JAR:-$repo/tla2tools.jar}"
 LOG="${TLC_LOG:-$repo/build/tlc-e12-all.log}"
 
@@ -124,16 +124,16 @@ run_async_condition() {
   run_one 13 "NEG-C10 SeparateQueues"         FAIL InvOrdinaryAndReacquireFIFO         E12AsyncConditionNegC10 E12AsyncConditionNegC10.cfg     || overall=1
 }
 
-# E12-E Queue 形式化 gate: 调用 verify-async-queue-formal.sh (独立脚本，自带
+# E12-E Queue 形式化 gate: 调用 verify-async-queue.sh (独立脚本，自带
 # 判定/命名属性校验/wrong-property gate/fresh outdir)。这里只转发退出码。
 run_queue() {
   echo "================================================================"
-  echo "E12-E Queue 形式化 gate (verify-async-queue-formal.sh)" | tee -a "$LOG.summary"
-  if [ ! -x "$repo/scripts/verify-async-queue-formal.sh" ]; then
-    echo "  (warn: verify-async-queue-formal.sh missing or not executable; skipping)" | tee -a "$LOG.summary"
+  echo "E12-E Queue 形式化 gate (verify-async-queue.sh)" | tee -a "$LOG.summary"
+  if [ ! -x "$repo/scripts/formal/verify-async-queue.sh" ]; then
+    echo "  (warn: verify-async-queue.sh missing or not executable; skipping)" | tee -a "$LOG.summary"
     return 0
   fi
-  TLA2TOOLS_JAR="$JAR" "$repo/scripts/verify-async-queue-formal.sh" 2>&1 | tee -a "$LOG"
+  TLA2TOOLS_JAR="$JAR" "$repo/scripts/formal/verify-async-queue.sh" 2>&1 | tee -a "$LOG"
   local rc=${PIPESTATUS[0]}
   if [ "$rc" -ne 0 ]; then overall=1; fi
 }

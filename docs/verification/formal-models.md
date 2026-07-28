@@ -12,23 +12,24 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 
 ## Model inventory
 
-| Subsystem | Model location | Verification script |
-|-----------|---------------|-------------------|
-| E10 WaitNode | `docs/spec/e10_waitnode/` | — |
-| E11 Timer Wait | `docs/spec/e11_timer_wait/` | — |
-| E12 Event | `docs/spec/e12_event/` | — |
-| E12 Semaphore | `docs/spec/e12_semaphore/` | `scripts/verify-async-semaphore-formal.sh` |
-| E12 AsyncMutex | `docs/spec/e12_async_mutex/` | — |
-| E12 AsyncCondition | `docs/spec/e12_async_condition/` | — |
-| E12 Queue | `docs/spec/e12_queue/` | `scripts/verify-async-queue-formal.sh` |
-| E12 RwLock | `docs/spec/e12_rwlock/` | — |
-| E13 Select | `docs/spec/e13_select/` | — |
-| E7 MultiWorker Progress | `docs/spec/e7_multiworker_progress/` | — |
-| E7 Publication | `docs/spec/e7_publication/` | — |
-| E8 Ownership Transfer | `docs/spec/e8_ownership_transfer/` | — |
-| E9 Park/Wake | `docs/spec/e9_park_wake/` | — |
-| E9 Wake Handle Lifetime | `docs/spec/e9_wake_handle_lifetime/` | — |
-| BlockingIoPool | `spec/tla/BlockingIoPool.tla` | — |
+| Suite ID | Subsystem | Model location | Verification script |
+|----------|-----------|---------------|-------------------|
+| blocking-io-pool | BlockingIoPool | `spec/tla/blocking_io_pool/` | `scripts/formal/verify-blocking-io-pool.sh` |
+| e7-publication | E7 Publication | `spec/tla/e7_publication/` | `scripts/formal/verify-e7-publication.sh` |
+| e7-multiworker-progress | E7 MultiWorker Progress | `spec/tla/e7_multiworker_progress/` | `scripts/formal/verify-e7-multiworker-progress.sh` |
+| e8-ownership-transfer | E8 Ownership Transfer | `spec/tla/e8_ownership_transfer/` | `scripts/formal/verify-e8-ownership-transfer.sh` |
+| e9-park-wake | E9 Park/Wake | `spec/tla/e9_park_wake/` | `scripts/formal/verify-e9-park-wake.sh` |
+| e9-wake-handle-lifetime | E9 Wake Handle Lifetime | `spec/tla/e9_wake_handle_lifetime/` | `scripts/formal/verify-e9-wake-handle-lifetime.sh` |
+| e10-waitnode | E10 WaitNode | `spec/tla/e10_waitnode/` | `scripts/formal/verify-e10-waitnode.sh` |
+| e11-timer-wait | E11 Timer Wait | `spec/tla/e11_timer_wait/` | `scripts/formal/verify-timer-wait.sh` |
+| e12-event | E12 Event | `spec/tla/e12_event/` | `scripts/formal/verify-event.sh` |
+| e12-semaphore | E12 Semaphore | `spec/tla/e12_semaphore/` | `scripts/formal/verify-async-semaphore.sh` |
+| e12-async-mutex | E12 AsyncMutex | `spec/tla/e12_async_mutex/` | `scripts/formal/verify-async-mutex.sh` |
+| e12-async-condition | E12 AsyncCondition | `spec/tla/e12_async_condition/` | `scripts/formal/verify-async-condition.sh` |
+| e12-queue | E12 Queue | `spec/tla/e12_queue/` | `scripts/formal/verify-async-queue.sh` |
+| e12-rwlock | E12 RwLock | `spec/tla/e12_rwlock/` | `scripts/formal/verify-async-rwlock.sh` |
+| e13-select-core | E13 Select Core | `spec/tla/e13_select/` | `scripts/formal/verify-e13-select-core.sh` |
+| e13-select-safety | E13 Select Safety | `spec/tla/e13_select/` | `scripts/formal/verify-e13-select-safety.sh` |
 
 ## Requirements
 
@@ -45,7 +46,7 @@ When a code change alters a modeled state transition, admission rule, winner rul
 
 | Topic | Document |
 |-------|----------|
-| BlockingIoPool TLA+ spec | `spec/tla/BlockingIoPool.tla` |
+| BlockingIoPool TLA+ spec | `docs/verification/formal/blocking-io-pool-tla-spec.md` |
 | E13 formal design | `docs/history/formal-design/e13-select-formal-core-design.md` *(historical)* |
 | E13 formal safety | `docs/history/formal-design/e13-select-formal-safety-design.md` *(historical)* |
-| TLA+ spec guide | `docs/spec/blocking-io-pool-tla-spec.md` |
+| TLA+ spec guide | `docs/verification/formal/blocking-io-pool-tla-spec.md` |

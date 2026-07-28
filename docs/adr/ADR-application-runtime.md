@@ -688,9 +688,9 @@ persistent predicate (driver_exit_requested ∨ fatal_snapshot ∨
 control_epoch != observed_epoch) and never busy-re-enters without an epoch
 change` (P1-07/P2-03).
 The repository has demonstrated capacity for this
-(`docs/spec/e7_publication/E7Buggy.tla`, `docs/spec/e9_wake_handle_lifetime/`,
-`docs/spec/e13_select/E13SelectContract.tla`; TLC via `tla2tools.jar`,
-`scripts/verify-timer-wait-formal.sh` et al. with deliberate Buggy/Neg counterexample
+(`spec/tla/e7_publication/E7Buggy.tla`, `spec/tla/e9_wake_handle_lifetime/`,
+`spec/tla/e13_select/E13SelectContract.tla`; TLC via `tla2tools.jar`,
+`scripts/formal/verify-timer-wait.sh` et al. with deliberate Buggy/Neg counterexample
 discipline). **ADR acceptance remains blocked until the required model exists and
 passes.**
 
