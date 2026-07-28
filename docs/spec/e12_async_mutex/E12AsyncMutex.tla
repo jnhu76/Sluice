@@ -2,7 +2,7 @@
 \* sluice::async::AsyncMutex -- first-scope Fiber-suspending async Mutex TLA+
 \* SAFETY model (E12-C-ASYNC-MUTEX-PREPARATION-CORRECTIVE-5, authority
 \* docs/e12-async-mutex.md). This is the formal half of E12-C. The gate is
-\* scripts/verify-e12-async-mutex-formal.sh; see README.md for the design.
+\* scripts/verify-async-mutex-formal.sh; see README.md for the design.
 \*
 \* The load-bearing E12-C questions:
 \*   M1  Single Ownership Authority  owner : Fiber set-with-NoOwner is the SOLE

@@ -76,7 +76,7 @@ jobs:
       - name: Negative-compile verification (E15-P2-03)
         # Verifies that every deleted/private API guard on the E10-E12 async
         # synchronization primitives compiles-away (not just missing headers).
-        run: bash scripts/verify-e12-api-contract-negative-compile.sh
+        run: bash scripts/verify-async-api-negative-compile.sh
 
       - name: Build and run acceptance consumers
         # Proves the public async-foundation surface is usable from consumers

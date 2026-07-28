@@ -94,14 +94,14 @@ bug-free.
 
 | Script | Status |
 |--------|--------|
-| `scripts/verify-e11-formal.sh` | Available now |
-| `scripts/verify-e12-queue-formal.sh` | Available now |
-| `scripts/verify-e12-semaphore-formal.sh` | Available now |
-| `scripts/verify-e12-async-mutex-formal.sh` | Available now |
-| `scripts/verify-e12-async-condition-formal.sh` | Available now |
-| `scripts/verify-e12-event-formal.sh` | Available now |
-| `scripts/verify-e12-rwlock-formal.sh` | Available now |
-| `scripts/verify-e12-api-contract-negative-compile.sh` | Available now |
+| `scripts/verify-timer-wait-formal.sh` | Available now |
+| `scripts/verify-async-queue-formal.sh` | Available now |
+| `scripts/verify-async-semaphore-formal.sh` | Available now |
+| `scripts/verify-async-mutex-formal.sh` | Available now |
+| `scripts/verify-async-condition-formal.sh` | Available now |
+| `scripts/verify-event-formal.sh` | Available now |
+| `scripts/verify-async-rwlock-formal.sh` | Available now |
+| `scripts/verify-async-api-negative-compile.sh` | Available now |
 | `scripts/verify-external-wake-stability.sh` | Available now |
 | `scripts/verify-runnable-steal-stability.sh` | Available now |
 | `scripts/verify-select-rollback-stability.sh` | Available now |

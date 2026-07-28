@@ -67,19 +67,19 @@ sluice_internal_async_test("select_publication_death_test", {platform_gate = {"l
 -- POSIX-only; gated to linux/macosx.
 sluice_internal_async_test("select_rollback_invariant_death_test", {platform_gate = {"linux", "macosx"}})
 
--- e14_group_death_test — E14 RT-F2a (destructor fail-fast) and RT-F5b
--- (unsupported-target admission) death tests. POSIX only.
+-- threaded_evented_death_test — Threaded/Evented RT-F2a (destructor fail-fast)
+-- and RT-F5b (unsupported-target admission) death tests. POSIX only.
 do
-    local p = R .. "tests/e14_group_death_test.cpp"
+    local p = R .. "tests/threaded_evented_death_test.cpp"
     if os.isfile(p) and is_plat("linux", "macosx") then
-        target("e14_group_death_test")
+        target("threaded_evented_death_test")
             set_kind("binary")
             set_default(false)
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs(R .. "include", R .. "tests")
             add_files(p)
-            add_tests("e14_group_death_test")
+            add_tests("threaded_evented_death_test")
     end
 end
 

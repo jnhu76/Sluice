@@ -162,7 +162,7 @@ SLUICE_TEST_CASE(st23_wrong_current_worker_scheduler_rejected) {
 // Aborted and its caller-frame SelectGroup destructor accepts Aborted (no
 // assert). Proves the Aborted lifecycle is destruction-safe.
 // ===========================================================================
-SLUICE_TEST_CASE(p7_destruction_closure_aborted_group) {
+SLUICE_TEST_CASE(rollback_destruction_closure_aborted_group) {
     if constexpr (!sa::fiber_ctx::supported) return;
     ContractFixture f;
     Event ev(f.sched);

@@ -94,7 +94,7 @@ inline std::size_t active_select_timers(const Scheduler& s) {
 // ===========================================================================
 // P7-T1 — failure before first registration (N=0).
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t1_failure_before_first_registration) {
+SLUICE_TEST_CASE(rollback_t1_failure_before_first_registration) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev0(f.sched), ev1(f.sched);
@@ -159,7 +159,7 @@ SLUICE_TEST_CASE(p7_t1_failure_before_first_registration) {
 // Verifies reverse-order processing and that every linked arm becomes Retired
 // and unlinked; suffix arms Detached; Event SET state unchanged.
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t2_event_only_prefix_matrix) {
+SLUICE_TEST_CASE(rollback_t2_event_only_prefix_matrix) {
     if constexpr (!sa::fiber_ctx::supported) return;
     constexpr unsigned kArms = 4;
     for (unsigned n = 0; n <= kArms; ++n) {
@@ -214,7 +214,7 @@ SLUICE_TEST_CASE(p7_t2_event_only_prefix_matrix) {
 // active_deadline_count returns to baseline, heap retains stale entries only
 // for the registered prefix.
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t3_timer_only_prefix_matrix) {
+SLUICE_TEST_CASE(rollback_t3_timer_only_prefix_matrix) {
     if constexpr (!sa::fiber_ctx::supported) return;
     constexpr unsigned kArms = 4;
     for (unsigned n = 0; n <= kArms; ++n) {
@@ -284,7 +284,7 @@ SLUICE_TEST_CASE(p7_t3_timer_only_prefix_matrix) {
 // Covers (Event,Timer,Event,Timer) and (Timer,Event,Timer,Event) for every
 // prefix; asserts exact per-kind authority closure.
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t4_mixed_event_timer_matrix) {
+SLUICE_TEST_CASE(rollback_t4_mixed_event_timer_matrix) {
     if constexpr (!sa::fiber_ctx::supported) return;
     // Two kind orderings.
     constexpr unsigned kArms = 4;
@@ -346,7 +346,7 @@ SLUICE_TEST_CASE(p7_t4_mixed_event_timer_matrix) {
 // The closest boundary to irreversible admission: all arms Registered, group
 // still Building, winner still NoWinner.
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t5_failure_after_all_arms_before_finish) {
+SLUICE_TEST_CASE(rollback_t5_failure_after_all_arms_before_finish) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);
@@ -385,7 +385,7 @@ SLUICE_TEST_CASE(p7_t5_failure_after_all_arms_before_finish) {
 // ===========================================================================
 // P7-T6 — original exception preserved (type + identifying payload/code).
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t6_original_exception_preserved) {
+SLUICE_TEST_CASE(rollback_t6_original_exception_preserved) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);
@@ -417,7 +417,7 @@ SLUICE_TEST_CASE(p7_t6_original_exception_preserved) {
 // ===========================================================================
 // P7-T7 — no liveness side effects (exact counter equality before/after).
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t7_no_liveness_side_effects) {
+SLUICE_TEST_CASE(rollback_t7_no_liveness_side_effects) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);
@@ -462,7 +462,7 @@ SLUICE_TEST_CASE(p7_t7_no_liveness_side_effects) {
 // the RETIRED block, skips WITHOUT reading arm_, and physically reclaims it.
 // ASan is load-bearing (no UAF).
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t8_stale_timer_after_frame_unwind) {
+SLUICE_TEST_CASE(rollback_t8_stale_timer_after_frame_unwind) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     stest::TimerTestControl::set_clock(f.sched, 0);
@@ -565,7 +565,7 @@ SLUICE_TEST_CASE(p7_t8_stale_timer_after_frame_unwind) {
 // next Select on a fresh group still works (no Scheduler corruption).
 // TSan-clean by construction (the only shared mutation is under G).
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t9_rollback_isolation_under_g) {
+SLUICE_TEST_CASE(rollback_t9_rollback_isolation_under_g) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched, /*initially_set=*/false);
@@ -690,7 +690,7 @@ SLUICE_TEST_CASE(p7_t9_rollback_isolation_under_g) {
 // restored, no accumulating ACTIVE Select Timer blocks, stale heap entries
 // eventually reclaimed, next successful Select still works.
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t10_repeated_rollback) {
+SLUICE_TEST_CASE(rollback_t10_repeated_rollback) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);
@@ -754,7 +754,7 @@ SLUICE_TEST_CASE(p7_t10_repeated_rollback) {
 // Proves rollback does not corrupt shared Scheduler state: after one or more
 // injected failures, disabling injection lets a normal Select complete.
 // ===========================================================================
-SLUICE_TEST_CASE(p7_t11_success_after_rollback) {
+SLUICE_TEST_CASE(rollback_t11_success_after_rollback) {
     if constexpr (!sa::fiber_ctx::supported) return;
     RollbackFixture f;
     Event ev(f.sched);

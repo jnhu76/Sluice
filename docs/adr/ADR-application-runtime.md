@@ -682,7 +682,7 @@ change` (P1-07/P2-03).
 The repository has demonstrated capacity for this
 (`docs/spec/e7_publication/E7Buggy.tla`, `docs/spec/e9_wake_handle_lifetime/`,
 `docs/spec/e13_select/E13SelectContract.tla`; TLC via `tla2tools.jar`,
-`scripts/verify-e11-formal.sh` et al. with deliberate Buggy/Neg counterexample
+`scripts/verify-timer-wait-formal.sh` et al. with deliberate Buggy/Neg counterexample
 discipline). **ADR acceptance remains blocked until the required model exists and
 passes.**
 

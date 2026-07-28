@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-e12-async-mutex-formal.sh -- reproducible E12-C AsyncMutex TLA+ / TLC
+# verify-async-mutex-formal.sh -- reproducible E12-C AsyncMutex TLA+ / TLC
 # formal gate (E12-C-ASYNC-MUTEX-PREPARATION-CORRECTIVE-5), SAFETY ONLY.
 #
 # Runs the correct E12 AsyncMutex safety model and ALL ELEVEN negative models
@@ -53,8 +53,8 @@
 # or fetch v1.8.0 from https://github.com/tlaplus/tlaplus/releases.
 #
 # Usage:
-#   scripts/verify-e12-async-mutex-formal.sh
-#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-e12-async-mutex-formal.sh
+#   scripts/verify-async-mutex-formal.sh
+#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-async-mutex-formal.sh
 #
 # Exit status: 0 iff every gate produced its expected verdict AND every negative
 # model's expected named property was observed as a violation AND the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-e12-rwlock-formal.sh -- E12-F AsyncRwLock TLA+ / TLC formal gate.
+# verify-async-rwlock-formal.sh -- E12-F AsyncRwLock TLA+ / TLC formal gate.
 #
 # Runs the correct E12 RwLock safety model and the negative model through TLC:
 #
@@ -10,8 +10,8 @@
 # TLA2TOOLS_JAR=/path/to/tla2tools.jar.
 #
 # Usage:
-#   scripts/verify-e12-rwlock-formal.sh
-#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-e12-rwlock-formal.sh
+#   scripts/verify-async-rwlock-formal.sh
+#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-async-rwlock-formal.sh
 #
 # Exit status: 0 iff the correct model passes AND the negative model produces
 # a counterexample for the expected property.

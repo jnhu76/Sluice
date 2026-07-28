@@ -291,7 +291,7 @@ SLUICE_TEST_CASE(st13_stale_timer_after_event_winner) {
 //   processed once; lowest argument index wins; other arm finalized loser;
 //   both intrusive nodes removed; one result publication; one runnable pub.
 // ===========================================================================
-SLUICE_TEST_CASE(p6_d1_same_event_twice_one_group) {
+SLUICE_TEST_CASE(suspend_d1_same_event_twice_one_group) {
     if constexpr (!sa::fiber_ctx::supported) return;
     SuspendedFixture f;
     Event ev(f.sched, /*initially_set=*/false);
@@ -344,7 +344,7 @@ SLUICE_TEST_CASE(p6_d1_same_event_twice_one_group) {
 //   becomes Runnable. Release caller so it executes context switch. Verify it
 //   later resumes and returns. (Lost-wake closure proof.)
 // ===========================================================================
-SLUICE_TEST_CASE(p6_lw1_event_resolves_before_physical_switch) {
+SLUICE_TEST_CASE(suspend_lw1_event_resolves_before_physical_switch) {
     if constexpr (!sa::fiber_ctx::supported) return;
     SuspendedFixture f;
     Event ev(f.sched, /*initially_set=*/false);
@@ -398,7 +398,7 @@ SLUICE_TEST_CASE(p6_lw1_event_resolves_before_physical_switch) {
 // ===========================================================================
 // P6-LW2 — Timer resolves before physical switch (same as P6-LW1, clock-driven)
 // ===========================================================================
-SLUICE_TEST_CASE(p6_lw2_timer_resolves_before_physical_switch) {
+SLUICE_TEST_CASE(suspend_lw2_timer_resolves_before_physical_switch) {
     if constexpr (!sa::fiber_ctx::supported) return;
     SuspendedFixture f;
     const Scheduler::deadline_t deadline = 100;

@@ -52,7 +52,7 @@ safety-only (no delivery liveness).
 | `E12QueueNegCommitAfterClose.tla/.cfg` | NEG-QUEUE-5: commit after close → `NoCommitAfterClose` |
 | `E12QueueNegCloseDiscardsBuffer.tla/.cfg` | NEG-QUEUE-6: close discards buffer → `NoBufferedItemDiscardOnClose` |
 | `E12QueueNegFailedPushLosesItem.tla/.cfg` | NEG-QUEUE-7: failed push loses item → `FailedPushRetainsOriginalItem` |
-| `_gen_neg.py` | Build aid that generates all 7 negatives from their parent models by a single-rule substitution. Not part of the formal gate. Re-run after editing a parent model, then re-run `scripts/verify-e12-queue-formal.sh`. |
+| `_gen_neg.py` | Build aid that generates all 7 negatives from their parent models by a single-rule substitution. Not part of the formal gate. Re-run after editing a parent model, then re-run `scripts/verify-async-queue-formal.sh`. |
 
 ## Model domain
 
@@ -231,10 +231,10 @@ distinct-state count rose from ~1.17M to ~1.9M–2.0M after the F.1.1 corrective
 (the previously-dead `ReleaseItem` action had hidden ~40% of the intended state
 space; the `consumerDrained` ghost and the `Released` location are now live).
 
-Reproduce: `scripts/verify-e12-queue-formal.sh`
+Reproduce: `scripts/verify-async-queue-formal.sh`
 (default JAR: `$repo/tla2tools.jar`; override with `TLA2TOOLS_JAR=...`).
 The full AsyncCondition + Queue suite:
-`bash scripts/run-e12-tlc-all.sh` (default `all`; or `async` / `queue`).
+`bash scripts/run-async-tlc-all.sh` (default `all`; or `async` / `queue`).
 
 ## What this model does NOT cover
 

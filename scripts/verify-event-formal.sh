@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-e12-event-formal.sh -- reproducible E12-A Event TLA+ / TLC formal gate
+# verify-event-formal.sh -- reproducible E12-A Event TLA+ / TLC formal gate
 # (E12-A-EVENT-CORRECTIVE-1).
 #
 # Runs the correct E12 Event safety + liveness models and ALL FOUR negative
@@ -40,8 +40,8 @@
 # The compile probe uses ${CXX:-clang++} with the repo include dir.
 #
 # Usage:
-#   scripts/verify-e12-event-formal.sh
-#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-e12-event-formal.sh
+#   scripts/verify-event-formal.sh
+#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-event-formal.sh
 #
 # Exit status: 0 iff every gate produced its expected verdict AND every negative
 # model's expected named property was observed as the first violation AND the

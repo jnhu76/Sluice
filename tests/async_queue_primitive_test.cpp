@@ -236,7 +236,7 @@ struct FiberStack {
 // ---- P4: blocking pop wakes when a producer commits (single worker) ------
 // Producer fiber commits an item; a consumer fiber (spawned FIRST, parks on
 // empty ring) is granted the item via the reconciler and resumes with it.
-SLUICE_TEST_CASE(queue_p4_blocking_pop_granted_on_push) {
+SLUICE_TEST_CASE(queue_blocking_pop_granted_on_push) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -273,7 +273,7 @@ SLUICE_TEST_CASE(queue_p4_blocking_pop_granted_on_push) {
 }
 
 // ---- P4: blocking push wakes when a consumer frees a slot (cap-1) --------
-SLUICE_TEST_CASE(queue_p4_blocking_push_granted_on_pop) {
+SLUICE_TEST_CASE(queue_blocking_push_granted_on_pop) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -318,7 +318,7 @@ SLUICE_TEST_CASE(queue_p4_blocking_push_granted_on_pop) {
 }
 
 // ---- P5: close completes a blocked producer with `closed` (lease retained)
-SLUICE_TEST_CASE(queue_p5_close_completes_blocked_producer) {
+SLUICE_TEST_CASE(queue_close_completes_blocked_producer) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -362,7 +362,7 @@ SLUICE_TEST_CASE(queue_p5_close_completes_blocked_producer) {
 }
 
 // ---- P5: close drains buffered items to a blocked consumer, then closed ---
-SLUICE_TEST_CASE(queue_p5_close_drains_to_blocked_consumer) {
+SLUICE_TEST_CASE(queue_close_drains_to_blocked_consumer) {
     if (!fiber_ctx::supported) return;
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
@@ -424,7 +424,7 @@ SLUICE_TEST_CASE(queue_p5_close_drains_to_blocked_consumer) {
 // surface a well-formed caller observes.
 
 // ---- P7: begin_teardown drains a multi-item ring in FIFO order ------------
-SLUICE_TEST_CASE(queue_p7_teardown_drains_ring_fifo) {
+SLUICE_TEST_CASE(queue_teardown_drains_ring_fifo) {
     Fixture f{4};
     // Buffer three items.
     for (int v : {10, 20, 30}) {
@@ -461,7 +461,7 @@ SLUICE_TEST_CASE(queue_p7_teardown_drains_ring_fifo) {
 // session dtor sees ring-empty; ~QueuePort sees ring_count_ == 0. Both succeed.
 
 // ---- P7: begin_teardown on an empty ring yields an immediately-empty session
-SLUICE_TEST_CASE(queue_p7_teardown_empty_ring) {
+SLUICE_TEST_CASE(queue_teardown_empty_ring) {
     Fixture f{2};
     QueueTeardownSession session = f.port->begin_teardown();
     SLUICE_CHECK(session.empty());
@@ -470,7 +470,7 @@ SLUICE_TEST_CASE(queue_p7_teardown_empty_ring) {
 // Session + port destroyed cleanly (ring empty + lifecycle tearing_down).
 
 // ---- P7: teardown session is move-only; move empties the source -----------
-SLUICE_TEST_CASE(queue_p7_session_move_only) {
+SLUICE_TEST_CASE(queue_session_move_only) {
     Fixture f{2};
     {
         auto lease = make_lease<int>(*f.port, 7);
@@ -509,7 +509,7 @@ SLUICE_TEST_CASE(queue_p7_session_move_only) {
 //   - begin_teardown + typed release_teardown
 
 // ---- P8: AsyncQueue<T> typed FIFO + failure recovery ----------------------
-SLUICE_TEST_CASE(queue_p8_typed_fifo_and_failure_recovery) {
+SLUICE_TEST_CASE(queue_typed_fifo_and_failure_recovery) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncQueue<std::string> q(sched, 3);
@@ -558,7 +558,7 @@ SLUICE_TEST_CASE(queue_p8_typed_fifo_and_failure_recovery) {
 }
 
 // ---- P8: AsyncQueue<T> teardown drains ring via typed release_teardown -----
-SLUICE_TEST_CASE(queue_p8_typed_teardown_drains_fifo) {
+SLUICE_TEST_CASE(queue_typed_teardown_drains_fifo) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncQueue<int> q(sched, 4);
@@ -588,7 +588,7 @@ SLUICE_TEST_CASE(queue_p8_typed_teardown_drains_fifo) {
 // == 0 and the session dtor sees an empty ring.
 
 // ---- P8: AsyncQueue<T> ctor rejects capacity 0 ----------------------------
-SLUICE_TEST_CASE(queue_p8_capacity_zero_rejected) {
+SLUICE_TEST_CASE(queue_capacity_zero_rejected) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     bool threw = false;

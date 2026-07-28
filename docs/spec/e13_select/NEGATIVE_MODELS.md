@@ -50,7 +50,7 @@ In addition, **`NEG-S2`** was retargeted to `S_InvClaimSnapshotImmutableAfterCla
 mutation now isolates the strict immutability law instead.
 
 The adapter accounting faults `NEG-A1`/`NEG-A2` are accompanied by a
-double-check in `verify-e13-select-safety.sh` (`expect_negative_no_typeok`)
+double-check in `verify-select-safety.sh` (`expect_negative_no_typeok`)
 that asserts the focused fault isolates the at-most-once law WITHOUT
 tripping `EventTimerTypeOK`.  This is enabled by the corrective-1 widening
 of the accounting counter TypeOK domain from `0..1` to `0..2`: a fault can
@@ -212,6 +212,6 @@ Restore cfg: `E13SelectMultiGroupNeg.restore.cfg` (FAULT="None") asserts
 
 ## Verification
 
-Run `tools/formal/verify-e13-select-safety.sh`.  Every `expect_negative`
+Run `tools/formal/verify-select-safety.sh`.  Every `expect_negative`
 line must print `NEG <label> (<LawName> violated; ...)`, and every
 `expect_restored` line must print `RESTORE <label> (FAULT="None" PASS; ...)`.

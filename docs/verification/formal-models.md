@@ -17,10 +17,10 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 | E10 WaitNode | `docs/spec/e10_waitnode/` | — |
 | E11 Timer Wait | `docs/spec/e11_timer_wait/` | — |
 | E12 Event | `docs/spec/e12_event/` | — |
-| E12 Semaphore | `docs/spec/e12_semaphore/` | `scripts/verify-e12-semaphore-formal.sh` |
+| E12 Semaphore | `docs/spec/e12_semaphore/` | `scripts/verify-async-semaphore-formal.sh` |
 | E12 AsyncMutex | `docs/spec/e12_async_mutex/` | — |
 | E12 AsyncCondition | `docs/spec/e12_async_condition/` | — |
-| E12 Queue | `docs/spec/e12_queue/` | `scripts/verify-e12-queue-formal.sh` |
+| E12 Queue | `docs/spec/e12_queue/` | `scripts/verify-async-queue-formal.sh` |
 | E12 RwLock | `docs/spec/e12_rwlock/` | — |
 | E13 Select | `docs/spec/e13_select/` | — |
 | E7 MultiWorker Progress | `docs/spec/e7_multiworker_progress/` | — |

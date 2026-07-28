@@ -11,7 +11,7 @@
 //         size()==0 after successful await. Repeated await is idempotent.
 // RT-F5a: Unsupported-target guard fires at Evented admission boundary.
 // RT-F5b: Unsupported-target branch is exercised deterministically (death
-//         test in e14_group_death_test; here we verify the seam exists).
+//         test in threaded_evented_death_test; here we verify the seam exists).
 //
 // Pre-fix expected failures:
 //   RT-F1: Group::await returns early (no-progress STALLED break) while
@@ -64,7 +64,7 @@ struct FiberStack {
 // task Future is pending. The external producer completes the Future AFTER
 // the wait registration is established (proven via waiting_ready_count).
 // ============================================================================
-SLUICE_TEST_CASE(e14_rt_f1_external_producer_wake_group_await) {
+SLUICE_TEST_CASE(te_f1_external_producer_wake_group_await) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -151,7 +151,7 @@ SLUICE_TEST_CASE(e14_rt_f1_external_producer_wake_group_await) {
 // Post-fix: an exception is thrown; Group size and Scheduler runnable count
 // do not increase.
 // ============================================================================
-SLUICE_TEST_CASE(e14_rt_f3_init_fiber_failure_propagation) {
+SLUICE_TEST_CASE(te_f3_init_fiber_failure_propagation) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -189,7 +189,7 @@ SLUICE_TEST_CASE(e14_rt_f3_init_fiber_failure_propagation) {
 // size()==0 after successful await. Repeated await is idempotent.
 // Pre-fix: Evented size() remains 1 after await (futures_ not reaped).
 // ============================================================================
-SLUICE_TEST_CASE(e14_rt_f4_threaded_size_zero_after_await) {
+SLUICE_TEST_CASE(te_f4_threaded_size_zero_after_await) {
     Group g;  // Threaded
     int ran = 0;
     g.async([&](CancelToken&) { ++ran; });
@@ -203,7 +203,7 @@ SLUICE_TEST_CASE(e14_rt_f4_threaded_size_zero_after_await) {
     SLUICE_CHECK(g.size() == 0);
 }
 
-SLUICE_TEST_CASE(e14_rt_f4_evented_size_zero_after_await) {
+SLUICE_TEST_CASE(te_f4_evented_size_zero_after_await) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -223,7 +223,7 @@ SLUICE_TEST_CASE(e14_rt_f4_evented_size_zero_after_await) {
     SLUICE_CHECK(g.size() == 0);
 }
 
-SLUICE_TEST_CASE(e14_rt_f4_evented_multiple_tasks_reaped) {
+SLUICE_TEST_CASE(te_f4_evented_multiple_tasks_reaped) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -245,7 +245,7 @@ SLUICE_TEST_CASE(e14_rt_f4_evented_multiple_tasks_reaped) {
 // first context switch. On x86_64 (supported), we verify the guard is a
 // no-op. The actual unsupported-path fire is tested via death test.
 // ============================================================================
-SLUICE_TEST_CASE(e14_rt_f5a_supported_target_admission_noop) {
+SLUICE_TEST_CASE(te_f5a_supported_target_admission_noop) {
     if constexpr (!fiber_ctx::supported) return;
 
     // On a supported target, constructing a Scheduler and Group must succeed
@@ -272,7 +272,7 @@ SLUICE_TEST_CASE(e14_rt_f5a_supported_target_admission_noop) {
 // Post-fix: the Group-scoped stop predicate fires (all target Futures
 // terminal), run_live returns, target.await() completes.
 // ============================================================================
-SLUICE_TEST_CASE(e14_rt_f1b_multi_group_same_scheduler_isolation) {
+SLUICE_TEST_CASE(te_f1b_multi_group_same_scheduler_isolation) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());

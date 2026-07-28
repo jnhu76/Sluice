@@ -185,7 +185,7 @@ Depth is not reported here; TLC's complete-state-graph search depth for the
 correct safety model is 13. The state counts above are the concrete
 `states generated` / `distinct states found` figures TLC reports.
 
-Reproduce: `scripts/verify-e12-semaphore-formal.sh`.
+Reproduce: `scripts/verify-async-semaphore-formal.sh`.
 
 ## What this model does NOT cover
 

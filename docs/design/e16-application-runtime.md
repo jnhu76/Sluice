@@ -2294,8 +2294,8 @@ counterexample discipline:
   refinement mappings and companion `NEGATIVE_MODELS.md`.
 
 The repo uses TLC (`tlc2.TLC` via `tla2tools.jar`) with deliberate `Buggy`/`Neg`
-counterexample discipline (e.g. `scripts/verify-e11-formal.sh`,
-`scripts/verify-e12-async-mutex-formal.sh`, `scripts/run-e12-tlc-all.sh`). The E16
+counterexample discipline (e.g. `scripts/verify-timer-wait-formal.sh`,
+`scripts/verify-async-mutex-formal.sh`, `scripts/run-async-tlc-all.sh`). The E16
 model MUST follow the same discipline: a correct model plus a negative/broken
 model that reproduces a known defect.
 
@@ -2458,4 +2458,4 @@ Authorization requires:
 | No public API for runtime lifecycle | `docs/api-reference.md` (no Runtime entry; "Async Runtime (E13+)" section at :807) |
 | E16 design doc placeholder | `docs/design/README.md:28` |
 | Existing formal models (E7/E9/E13) | `docs/spec/e7_publication/E7Buggy.tla`; `docs/spec/e9_wake_handle_lifetime/`; `docs/spec/e13_select/E13SelectContract.tla` |
-| TLC checker discipline | `scripts/verify-e11-formal.sh` et al.; `scripts/run-e12-tlc-all.sh` |
+| TLC checker discipline | `scripts/verify-timer-wait-formal.sh` et al.; `scripts/run-async-tlc-all.sh` |

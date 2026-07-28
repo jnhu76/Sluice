@@ -8,7 +8,7 @@ module renamed. A header comment records the defect + expected invariant.
 
 This is a build aid (not part of the formal gate). It mirrors
 docs/spec/e12_semaphore/_gen_neg.py. Re-run after editing a parent model to
-regenerate the negatives, then re-run scripts/verify-e12-queue-formal.sh.
+regenerate the negatives, then re-run scripts/verify-async-queue-formal.sh.
 
 Mapping (parent -> NEG -> expected invariant):
   E12Queue.tla (Model A):
