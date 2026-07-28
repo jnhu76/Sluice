@@ -6,7 +6,16 @@
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
-CONSTANTS PNodes, P0, P1, P2, CNodes, C0, C1, C2, Items, I0, I1, I2, Capacity
+\* NoSnap is a MODEL VALUE sentinel for the ghost closedRing "no snapshot yet"
+\* state (HISTORY for B3/B6). It MUST be a model value, not a string, because
+\* closedRing ranges over Seq(ItemId) after the first close: a string sentinel
+\* ("NoSnap") compared against a sequence (e.g. empty ring <<>> at close) is a
+\* cross-type equality that TLC reports as an INVARIANT EVALUATION ERROR rather
+\* than a boolean. Model values "can only be tested for equality with
+\* themselves" and compare cleanly against any other value (always unequal),
+\* which is the canonical TLA+ optional/sentinel idiom. The cfg binds
+\* NoSnap = NoSnap.
+CONSTANTS PNodes, P0, P1, P2, CNodes, C0, C1, C2, Items, I0, I1, I2, Capacity, NoSnap
 
 Location == {"Detached", "ProducerOp", "Ring", "ConsumerOp", "Released"}
 NodeState == {"Detached", "Registered", "Woken", "Closed"}
@@ -21,7 +30,6 @@ ActionKind == {"Init", "FastPush", "PushBlock", "PushClosed", "ProdRegister",
 
 NoItem == "NoItem"
 NoNode == "NoNode"
-NoSnap == "NoSnap"
 
 ASSUME /\ PNodes # {}
        /\ CNodes # {}

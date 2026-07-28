@@ -52,7 +52,8 @@ safety-only (no delivery liveness).
 | `E12QueueNegCommitAfterClose.tla/.cfg` | NEG-QUEUE-5: commit after close → `NoCommitAfterClose` |
 | `E12QueueNegCloseDiscardsBuffer.tla/.cfg` | NEG-QUEUE-6: close discards buffer → `NoBufferedItemDiscardOnClose` |
 | `E12QueueNegFailedPushLosesItem.tla/.cfg` | NEG-QUEUE-7: failed push loses item → `FailedPushRetainsOriginalItem` |
-| `_gen_neg.py` | Build aid that generates all 7 negatives from their parent models by a single-rule substitution. Not part of the formal gate. Re-run after editing a parent model, then re-run `scripts/verify-async-queue-formal.sh`. |
+| `E12QueueClosed.scene_r1..r8.cfg` | Reachability / non-vacuity scenes (8). Each checks a `NotReach_R<n>` witness invariant (defined in `E12QueueClosed.tla`) that is violated by a reachable state — the reachability witness. Covers the B3/B6 drain-on-close topology end-to-end. |
+| `_gen_neg.py` | Build aid that generates all 7 negatives from their parent models by a single-rule substitution. Not part of the formal gate. Re-run after editing a parent model, then re-run `scripts/formal/verify-async-queue.sh`. |
 
 ## Model domain
 
@@ -84,7 +85,7 @@ their FIFO/barging/no-handoff invariants reachable and checkable.
 | `queueState` | `{"Open","Closed"}` | Model B only: monotonic close state |
 | `failedPushItem` | `[PNode -> ItemId∪{NoItem}]` | Model B: the item a failed-push result owns |
 | `admittedItem` | `[PNode -> ItemId∪{NoItem}]` | Model B GHOST: the item a producer epoch admitted (for `FailedPushRetainsOriginalItem`) |
-| `closedRing` | `Seq(ItemId)∪{NoSnap}` | Model B GHOST: ring snapshot latched at close (for drain-on-close) |
+| `closedRing` | `Seq(ItemId)∪{NoSnap}` | Model B GHOST: ring snapshot latched at close (for drain-on-close). `NoSnap` is a **model value** CONSTANT (not a string) so `closedRing # NoSnap` is type-safe: `closedRing` ranges over `Seq(ItemId)` after close, and comparing a sequence (e.g. the empty ring `<<>>`) against a string sentinel is a cross-type equality TLC reports as an INVARIANT EVALUATION ERROR. |
 | `consumerDrained` | `Set(ItemId)` | Model B GHOST: items released via a consumer drain (for `NoBufferedItemDiscardOnClose`) |
 | `lastAction` | `ActionKind` | HISTORY: the action that produced the current state |
 | `lastCommitter` | `PNode∪{NoNode}` | HISTORY: the producer epoch that committed on the last ring-mutation |
@@ -223,6 +224,7 @@ TLC runtime version (exact runtime line, reported by TLC itself):
 | NEG-QUEUE-6 CloseDiscardsBuffer | CEX (`NoBufferedItemDiscardOnClose`) | ~51–127 | ~34–80 | 3 |
 | NEG-QUEUE-7 FailedPushLosesItem | CEX (`FailedPushRetainsOriginalItem`) | ~38–125 | ~21–101 | 3–4 |
 | WRONG-PROPERTY gate (NEG-1 vs `NoBarging`) | OK (passes; defect specific) | — | — | — |
+| REACHABILITY scenes R1..R8 | REACH (all 8 reachable) | 65–4.1k | 48–3.3k | 2–5 |
 
 State counts vary run-to-run (TLC's state enumeration is
 worker/scheduling-dependent); the verdicts are deterministic. Ranges span
@@ -230,11 +232,79 @@ independent reproductions (author + independent reviewer). Note: Model B's
 distinct-state count rose from ~1.17M to ~1.9M–2.0M after the F.1.1 corrective
 (the previously-dead `ReleaseItem` action had hidden ~40% of the intended state
 space; the `consumerDrained` ghost and the `Released` location are now live).
+After the NoSnap-sentinel typing corrective the distinct-state count is
+unchanged (~1.96M, depth 14), confirming the fix is purely evaluation-time, not
+a state-space narrowing.
 
-Reproduce: `scripts/verify-async-queue-formal.sh`
+Reproduce: `python3 scripts/formal/verify.py suite e12-queue` (or
+`scripts/formal/verify-async-queue.sh`).
 (default JAR: `$repo/tla2tools.jar`; override with `TLA2TOOLS_JAR=...`).
 The full AsyncCondition + Queue suite:
 `bash scripts/run-async-tlc-all.sh` (default `all`; or `async` / `queue`).
+
+## Root cause of the prior Model B / NEG-QUEUE-6 failure (corrective)
+
+Before this corrective, Model B (`E12QueueClosed`) and NEG-QUEUE-6 both failed —
+but **not** with an invariant violation. TLC reported:
+
+```
+Error: Evaluating invariant Inv failed.
+Attempted to check equality of the function <<>> with the value: "NoSnap"
+```
+
+**Root cause (ghost-sentinel typing defect).** The `closedRing` ghost variable
+ranges over `Seq(ItemId) ∪ {NoSnap}`: it is `NoSnap` until the first close, then
+the ring snapshot (a sequence) forever after. `NoSnap` was defined as a **string**
+(`NoSnap == "NoSnap"`). When close linearized on an empty ring, `closedRing`
+became the empty sequence `<<>>`, and the B3/B6 guards `closedRing # NoSnap`
+compared a **sequence** against a **string**. TLA+ is untyped and its value
+domains are disjoint; comparing values of different types is **not** a clean
+`FALSE`/`TRUE` — TLC reports it as an **INVARIANT EVALUATION ERROR** and stops.
+So B3 and B6 were never actually evaluated past the first close-on-empty state;
+NEG-QUEUE-6's defect likewise tripped the evaluation error instead of the named
+property. (The other five Model B invariants, which never reference `closedRing`,
+passed.)
+
+**The property B3/B6 assert is correct** — it matches the close contract
+(`docs/history/closeout/e12-queue.md` §"Close contract": "close never discards
+buffered items"). Only the *evaluation mechanism* was broken.
+
+**Repair.** `NoSnap` is now a **model value** CONSTANT (the canonical TLA+
+optional/sentinel idiom: model values "can only be tested for equality with
+themselves" and compare cleanly against any other value, always unequal). The
+`E12QueueClosed.cfg` and the three Model-B negative cfgs bind `NoSnap = NoSnap`.
+This is purely an evaluation-correctness fix: the reachable state space is
+unchanged (Model B still explores ~1.96M distinct states, depth 14), no
+invariant was weakened, and B3/B6 now genuinely evaluate to true on every
+reachable state. NEG-QUEUE-6 now produces a clean named violation
+(`Invariant NoBufferedItemDiscardOnClose is violated`) with a 3-state
+counterexample: `Init → FastPushCommit(P0,I0) → CloseLinearize` (defect clears
+the ring + marks the ring item Released without recording it in `consumerDrained`).
+
+## Reachability / non-vacuity gates
+
+A positive safety PASS is only meaningful if the property's load-bearing
+topology is actually reachable. `E12QueueClosed.tla` defines eight
+`NotReach_R<n>` witness invariants (TRUE except in the target reachable state
+R<n>); each `E12QueueClosed.scene_r<n>.cfg` checks one. A TLC
+"`Invariant NotReach_R<n> is violated`" with a reachable counterexample state IS
+the reachability witness; a scene that PASSes would mean the scenario is
+unreachable and the corresponding safety property is vacuous. `verify-async-queue.sh`
+runs all eight as `REACH` gates.
+
+| Scene | Scenario | Property it makes non-vacuous |
+|-------|----------|-------------------------------|
+| R1 | an item is committed into the ring | FIFO/owner/drain substrate |
+| R2 | close linearizes while the ring is nonempty | B3, B6 (`closedRing` nonempty) |
+| R3 | a buffered item is drained to a consumer op after close | B3 drain-on-close |
+| R4 | a buffered item is released by a consumer and recorded in `consumerDrained` | B6 end-to-end (the load-bearing gate) |
+| R5 | a producer is parked (Suspended) at close time | B4 closed-producer path |
+| R6 | a consumer pop from closed+empty yields the Closed terminal | B5 |
+| R7 | a producer commit linearizes before close | B7 commit-wins side |
+| R8 | close linearizes before a producer commit | B7 close-wins side |
+
+R4 reaches the complete B3/B6 topology in five states:
+`Init → FastPushCommit(P0,I0) → CloseLinearize → FastPopCommit(C0) → ReleaseItem(C0)`.
 
 ## What this model does NOT cover
 

@@ -155,10 +155,10 @@
       "tiers": ["full"],
       "positive_gate_count": 2,
       "negative_gate_count": 7,
-      "reachability_gate_count": 0,
+      "reachability_gate_count": 8,
       "owner_docs": ["docs/history/closeout/e12-queue.md"],
       "implementation_bindings": [],
-      "notes": "Safety-only. Model A (12 invariants) + Model B (7 invariants), 7 negative models, wrong-property gate."
+      "notes": "Safety-only. Model A (12 invariants) + Model B (7 invariants), 7 negative models, wrong-property gate, 8 reachability/non-vacuity scenes (R1..R8) covering the B3/B6 drain-on-close topology."
     },
     {
       "id": "e12-rwlock",

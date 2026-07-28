@@ -40,6 +40,11 @@
 #   WRONG-PROPERTY gate   -> NEG-1's duplicate-lease vs NoBarging PASSES
 #                            (defect is property-specific) and does NOT flag
 #                            UniqueRingItem under that config
+#   REACHABILITY scenes R1..R8 -> each NotReach_R<n> is VIOLATED by a reachable
+#                            counterexample state (the reachability witness).
+#                            Rejects a positive safety PASS that hides a vacuous
+#                            property whose load-bearing topology was never
+#                            reached (e.g. B3/B6 drain-on-close end-to-end).
 #
 # Expected-property mapping (declared once per negative model below). The script
 # FAILs if:
@@ -50,6 +55,7 @@
 #   - the WRONG invariant/property fails first (expected named property absent)
 #   - the wrong-property gate flags the expected property (defect not specific)
 #   - a negative DEADLOCKS instead of producing a counterexample
+#   - a reachability scene PASSES (scenario not reachable -> vacuous property)
 #   - stale output is reused (a fresh output directory is used per invocation)
 #
 # Requires a tla2tools.jar. By default uses the repo-root $repo/tla2tools.jar
@@ -178,6 +184,40 @@ expect_fail() {
   return 0
 }
 
+# REACHABILITY / non-vacuity scene runner. A scene config checks a NotReach_R<n>
+# invariant (defined in E12QueueClosed.tla) that is TRUE except in the target
+# reachable state R<n>. A TLC "Invariant NotReach_R<n> is violated" with a
+# reachable counterexample state IS the reachability witness. A positive safety
+# PASS that hides a vacuous property (whose topology was never reached) is
+# therefore rejected here.
+expect_reach() {
+  local label="$1" model="$2" cfg="$3" expected="$4" tag="$5"
+  local out="$outroot/${tag}.out"
+  run "$model" "$cfg" "$out"
+  if ! tlc_launched "$out"; then
+    echo "FAIL  $label (TLC did not launch / parse / config error)"
+    tail -20 "$out"
+    return 1
+  fi
+  if tlc_deadlocked "$out"; then
+    echo "FAIL  $label (deadlock instead of reachability witness)"
+    tail -12 "$out"
+    return 1
+  fi
+  if tlc_passed "$out"; then
+    echo "FAIL  $label (scenario NOT reachable; NotReach invariant held -- vacuous)"
+    return 1
+  fi
+  if ! named_violation "$out" "$expected"; then
+    echo "FAIL  $label (expected NotReach witness ${expected} NOT the violation)"
+    grep -m1 -E 'Invariant .+ is violated|Property .+ is violated' "$out" || true
+    tail -8 "$out"
+    return 1
+  fi
+  echo "REACH $label (${expected} reached, as expected)  ($(states_line "$out"))"
+  return 0
+}
+
 # WRONG-PROPERTY gate: a negative model checked against a property its defect
 # does NOT target must NOT flag the EXPECTED property. NEG-1's defect
 # (duplicate-lease / double-append of one ItemId) only mutates the ring; it does
@@ -282,9 +322,30 @@ expect_fail "NEG-QUEUE-7 FailedPushLosesItem" \
 # Wrong-property gate (defect specificity).
 wrong_property_gate || rc=1
 
+# REACHABILITY / non-vacuity scenes (R1..R8). Each NotReach_R<n> is TRUE except
+# in the target reachable state; a violation is the reachability witness. A
+# positive safety PASS that hides a vacuous property (topology never reached)
+# is rejected here. See E12QueueClosed.tla "REACHABILITY / NON-VACUITY WITNESSES".
+expect_reach "REACH-QUEUE-1 ItemCommittedToRing" \
+             E12QueueClosed E12QueueClosed.scene_r1.cfg NotReach_R1 reach1 || rc=1
+expect_reach "REACH-QUEUE-2 CloseNonemptyRing" \
+             E12QueueClosed E12QueueClosed.scene_r2.cfg NotReach_R2 reach2 || rc=1
+expect_reach "REACH-QUEUE-3 DrainAfterClose" \
+             E12QueueClosed E12QueueClosed.scene_r3.cfg NotReach_R3 reach3 || rc=1
+expect_reach "REACH-QUEUE-4 ConsumerReleaseDrained" \
+             E12QueueClosed E12QueueClosed.scene_r4.cfg NotReach_R4 reach4 || rc=1
+expect_reach "REACH-QUEUE-5 ProducerParkedAtClose" \
+             E12QueueClosed E12QueueClosed.scene_r5.cfg NotReach_R5 reach5 || rc=1
+expect_reach "REACH-QUEUE-6 PopClosedEmpty" \
+             E12QueueClosed E12QueueClosed.scene_r6.cfg NotReach_R6 reach6 || rc=1
+expect_reach "REACH-QUEUE-7 CommitWinsBeforeClose" \
+             E12QueueClosed E12QueueClosed.scene_r7.cfg NotReach_R7 reach7 || rc=1
+expect_reach "REACH-QUEUE-8 CloseWinsBeforeCommit" \
+             E12QueueClosed E12QueueClosed.scene_r8.cfg NotReach_R8 reach8 || rc=1
+
 echo
 echo "--- TLC runtime version (actual) ---"
 tlc_version
 echo
-echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + wrong-property gate) ==="
+echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + wrong-property gate + reachability scenes) ==="
 exit "$rc"
