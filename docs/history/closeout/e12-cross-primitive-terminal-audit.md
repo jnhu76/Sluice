@@ -1253,5 +1253,5 @@ production change under E12-G.
 - Construction method (M1–M9): [`docs/history/implementation-plans/async-runtime-construction-method.md`](docs/history/implementation-plans/async-runtime-construction-method.md)
 - Prior cross-primitive semantic-closure review: [`docs/history/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md`](docs/history/reviews/E12-G-CROSS-PRIMITIVE-SEMANTIC-CLOSURE-FINAL-REVIEW-1.md)
 - Formal models: `docs/spec/e10_waitnode/`, `docs/spec/e11_timer_wait/`, `docs/spec/e12_event/`, `docs/spec/e12_semaphore/`, `docs/spec/e12_async_mutex/`, `docs/spec/e12_async_condition/`, `docs/spec/e12_queue/`, `docs/spec/e12_rwlock/`
-- Formal gates: `scripts/verify-e12-*-formal.sh`
+- Formal gates: `scripts/verify-*-formal.sh`
 - Cross-primitive parity tests: `tests/async_sync_cross_primitive_parity_test.cpp`
