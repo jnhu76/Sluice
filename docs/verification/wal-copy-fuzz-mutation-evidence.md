@@ -187,14 +187,30 @@ VERDICT: PASS (all 14 mutants killed by tracked BASE_SHA seeds)
 
 | Gate | Command | Result |
 |---|---|---|
-| Debug unit tests | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build -g test && xmake test -v` | PASS 109/109 (one flaky async timing test, `event_primitive_test`, fails intermittently under load and passes in isolation and on re-run; unrelated to fuzz — only fuzz/scripts/xmake-fuzz/docs changed) |
-| ASan/UBSan unit tests | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0) |
-| Fuzz build | `xmake build -g fuzz` | PASS |
-| Exact corpus replay | `bash scripts/replay-wal-copy-fuzz-corpus.sh` | PASS (76/76 tracked seeds) |
+| Debug unit tests (Clang) | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build -g test && xmake test -v` | PASS 109/109 (one flaky async timing test, `event_primitive_test`, fails intermittently under load and passes in isolation and on re-run; unrelated to fuzz — only fuzz/scripts/xmake-fuzz/docs changed) |
+| ASan/UBSan unit tests (Clang) | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0) |
+| Ordinary GCC tests (§27) | `xmake f -m debug --toolchain=gcc -y && xmake build sluice_core && xmake build -g test && xmake test -v` | PASS 108/109 (`event_primitive_test` flaky race-stress case failed under load, passes in isolation; GCC production + test build clean) |
+| Fuzz build (Clang) | `xmake build -g fuzz` | PASS |
+| Release corpus replay (§26) | `xmake f -m release --toolchain=clang -y && xmake build -g fuzz && bash scripts/replay-wal-copy-fuzz-corpus.sh` | PASS (76/76 tracked seeds under optimized code) |
+| Exact corpus replay (debug) | `bash scripts/replay-wal-copy-fuzz-corpus.sh` | PASS (76/76 tracked seeds) |
 | Curated seed determinism | `bash scripts/verify-wal-copy-curated-seeds.sh` | PASS (45 curated, 0 drift) |
-| Bounded smoke | `bash scripts/run-wal-copy-fuzz-smoke.sh` | PASS (exact replay + bounded runs) |
+| Bounded smoke | `bash scripts/run-wal-copy-fuzz-smoke.sh` | PASS (exact replay + 1000-run bounded session; copy_all cov 1964/ft 7462) |
 | Mutation proof | `bash scripts/run-wal-copy-mutations.sh` | PASS (14/14 killed) |
-| Clang-only fuzz guard (GCC negative probe) | `xmake f -m debug --toolchain=gcc -y && xmake build -g fuzz` | correctly raises "requires Clang" error; GCC production/test builds unaffected |
+| Clang-only fuzz guard (GCC negative probe) | `xmake f -m debug --toolchain=gcc -y && xmake build -g fuzz` | under GCC the fuzz targets are not declared (file-level `is_config` gate), so `xmake build -g fuzz` builds nothing; the per-target `on_config` guard raises "requires Clang" if a fuzz target is ever requested under a non-clang toolchain |
+
+### GCC ordinary-test detail (§27)
+
+`xmake f -m debug --toolchain=gcc -y` now exits 0 (the file-level
+`is_config("toolchain", "clang", "clang-cl")` gate in `xmake/fuzz.lua` means no
+fuzz target is declared under GCC, so no fuzz `on_config` runs and no spurious
+errors). `xmake build sluice_core` and `xmake build -g test` build cleanly under
+GCC. `xmake test -v` reported `99% tests passed, 1 test(s) failed out of 109`;
+the single failure was `event_primitive_test` (exit code -1 during the
+`event_three_way_race_one_winner_repeated` race-stress case). This is the same
+flaky async timing test that also fails intermittently under Clang; it passes in
+isolation under GCC (`xmake run event_primitive_test` → `ALL TESTS PASSED`,
+exit 0). It is unrelated to the fuzz corrective (which touched only `fuzz/`,
+`scripts/`, `xmake/fuzz.lua`, and docs).
 
 ## 6. Proof-chain fixes applied in this corrective
 
