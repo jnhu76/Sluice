@@ -351,6 +351,7 @@ class ModelBufferedReader final : public sluice::Reader, public sluice::Buffered
         std::size_t avail = buffered_.size() - logical_pos_;
         // avail is only nonzero within the pre-fetched prefix region.
         if (n > avail) {
+            consume_failed_ = true;
             return sluice::make_unexpected<void>(
                 sluice::IoError{.code = sluice::IoError::Code::invalid_state});
         }
