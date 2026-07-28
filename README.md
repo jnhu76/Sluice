@@ -156,7 +156,7 @@ xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test
 - **Unit / component** — `xmake test -v` (per-slice test binaries)
 - **Deterministic causal tests** — `SLUICE_ASYNC_INTERNAL_TESTING` phase seams
 - **Sanitizer gates** — ASan, UBSan, TSan
-- **Formal models** — TLA+ specs under `docs/spec/` and `spec/tla/`
+- **Formal models** — TLA+ specs under `spec/tla/` (per-suite directory)
 
 For the full verification matrix, see [`docs/verification/README.md`](docs/verification/README.md).
 

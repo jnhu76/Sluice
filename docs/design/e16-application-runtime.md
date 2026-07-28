@@ -2325,18 +2325,18 @@ recommended) to catch counterexamples in:
 
 The repository has demonstrated capacity for focused state models with deliberate
 counterexample discipline:
-- `docs/spec/e7_publication/E7Buggy.tla` — a deliberately broken model whose
+- `spec/tla/e7_publication/E7Buggy.tla` — a deliberately broken model whose
   counterexample (`InvDoneNoTicket`, `DefectDuplicatePublish`) is documented in
   its README.
-- `docs/spec/e9_wake_handle_lifetime/` — the SchedulerWakeHandle callback-lifetime
+- `spec/tla/e9_wake_handle_lifetime/` — the SchedulerWakeHandle callback-lifetime
   lease model (closed defect E9-LIFETIME-CORRECTIVE), including
   `E9WakeHandleLifetimeBuggySnapshot.tla`.
-- `docs/spec/e13_select/E13SelectContract.tla` — layered formal core with TLC-checked
+- `spec/tla/e13_select/E13SelectContract.tla` — layered formal core with TLC-checked
   refinement mappings and companion `NEGATIVE_MODELS.md`.
 
 The repo uses TLC (`tlc2.TLC` via `tla2tools.jar`) with deliberate `Buggy`/`Neg`
-counterexample discipline (e.g. `scripts/verify-timer-wait-formal.sh`,
-`scripts/verify-async-mutex-formal.sh`, `scripts/run-async-tlc-all.sh`). The E16
+counterexample discipline (e.g. `scripts/formal/verify-timer-wait.sh`,
+`scripts/formal/verify-async-mutex.sh`, `scripts/run-async-tlc-all.sh`). The E16
 model MUST follow the same discipline: a correct model plus a negative/broken
 model that reproduces a known defect.
 
@@ -2503,5 +2503,5 @@ Authorization requires:
 | Production targets: sluice_core, sluice_async | `libraries.lua:7-33` |
 | No public API for runtime lifecycle | `docs/api-reference.md` (no Runtime entry; "Async Runtime (E13+)" section at :807) |
 | E16 design doc placeholder | `docs/design/README.md:28` |
-| Existing formal models (E7/E9/E13) | `docs/spec/e7_publication/E7Buggy.tla`; `docs/spec/e9_wake_handle_lifetime/`; `docs/spec/e13_select/E13SelectContract.tla` |
-| TLC checker discipline | `scripts/verify-timer-wait-formal.sh` et al.; `scripts/run-async-tlc-all.sh` |
+| Existing formal models (E7/E9/E13) | `spec/tla/e7_publication/E7Buggy.tla`; `spec/tla/e9_wake_handle_lifetime/`; `spec/tla/e13_select/E13SelectContract.tla` |
+| TLC checker discipline | `scripts/formal/verify-timer-wait.sh` et al.; `scripts/run-async-tlc-all.sh` |

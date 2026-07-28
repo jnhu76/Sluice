@@ -416,7 +416,7 @@ NON_PATH_PATTERNS = [
     # Code member names
     r'^next_/prev_$',
     # Spec trace files
-    r'^docs/spec/e13_select/.*\.keep$',
+    r'^spec/tla/e13_select/.*\.keep$',
     # Code state names
     r'^woken/cancelled/expired$',
     r'^unresolved/woken/cancelled/expired$',
@@ -682,7 +682,7 @@ def environment_conditional_prefix(ref: str, resolved: Path) -> str | None:
          fell back, so this works in CI where zig/ is absent.
       3. Path-component match: any trailing path component equal to a
          name-based .gitignore dir rule (e.g. `states/` matches
-         `docs/spec/e13_select/states`). Covers gitignore rules that are
+         `spec/tla/e13_select/states`). Covers gitignore rules that are
          matched at any depth.
 
     Returns the matched prefix so the caller can emit a precise note.

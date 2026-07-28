@@ -277,19 +277,32 @@ handling, and exactly-once publication. Do not reconstruct these laws from memor
 
 ## 9. Formal models and protocol evidence
 
-Formal models under `spec/` supplement implementation tests; they do not prove that the C++ code is
-bug-free.
+Formal models under `spec/tla/` (per-suite directory) supplement implementation tests; they do not prove that
+the C++ code is bug-free.
 
-When a code change alters a modeled state transition, admission rule, winner rule, queue bound,
-lifecycle, or shutdown behavior:
+Canonical locations:
 
-- update the matching model or explicitly explain why the model is unaffected;
-- run the repository's existing verification script or documented checker command;
-- preserve a negative/broken-model check when the subsystem uses one to demonstrate that the model
-  can actually produce a counterexample;
-- add or retain a C++ regression test connecting the modeled property to implementation behavior.
+- Models (`.tla`, `.cfg`, per-suite README): `spec/tla/` (per-suite directory)
+- Machine-readable inventory: `spec/tla/manifest.json`
+- Tooling and verifier scripts: `scripts/formal/`
+- Unified orchestrator: `python3 scripts/formal/verify.py`
+- CI workflow: `.github/workflows/formal.yml`
 
-Never report "formally verified implementation" when only the abstract protocol model was checked.
+Rules:
+
+- Never run TLC directly inside `spec/tla/`. Every verifier must copy the suite's files into an
+  isolated `mktemp` workspace (`sluice-formal.<suite>.<random>`), run TLC there, and clean up on
+  exit. This prevents `MC.out`, `states/`, `metadir`, and `*_TTrace*` from polluting the source
+  tree.
+- Do not describe abstract model checking as C++ implementation formal verification.
+- When a code change alters a modeled state transition, admission rule, winner rule, queue bound,
+  lifecycle, or shutdown behavior:
+  - update the matching model or explicitly explain why the model is unaffected;
+  - run the repository's existing verification script or documented checker command;
+  - preserve a negative/broken-model check when the subsystem uses one to demonstrate that the
+    model can actually produce a counterexample;
+  - add or retain a C++ regression test connecting the modeled property to implementation behavior.
+- Never report "formally verified implementation" when only the abstract protocol model was checked.
 
 ## 10. Security and review findings
 

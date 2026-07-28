@@ -85,26 +85,30 @@ Validate default stub/off path. When liburing available, also configure with
 TLA+ models supplement implementation tests; they do not prove C++ code is
 bug-free.
 
-- TLA+ specs: `docs/spec/` (per-subsystem), `spec/tla/` (BlockingIoPool)
+- TLA+ specs: `spec/tla/` (per-suite directory)
 - TLA+ is abstract protocol evidence only
 - A modeled transition change requires model review
 - A C++ regression must connect the model property to implementation behavior
+- Unified orchestrator: `python3 scripts/formal/verify.py`
 
 **Verification scripts:**
 
 | Script | Status |
 |--------|--------|
-| `scripts/verify-timer-wait-formal.sh` | Available now |
-| `scripts/verify-async-queue-formal.sh` | Available now |
-| `scripts/verify-async-semaphore-formal.sh` | Available now |
-| `scripts/verify-async-mutex-formal.sh` | Available now |
-| `scripts/verify-async-condition-formal.sh` | Available now |
-| `scripts/verify-event-formal.sh` | Available now |
-| `scripts/verify-async-rwlock-formal.sh` | Available now |
-| `scripts/verify-async-api-negative-compile.sh` | Available now |
-| `scripts/verify-external-wake-stability.sh` | Available now |
-| `scripts/verify-runnable-steal-stability.sh` | Available now |
-| `scripts/verify-select-rollback-stability.sh` | Available now |
+| `scripts/formal/verify-timer-wait.sh` | Available now |
+| `scripts/formal/verify-async-queue.sh` | Available now |
+| `scripts/formal/verify-async-semaphore.sh` | Available now |
+| `scripts/formal/verify-async-mutex.sh` | Available now |
+| `scripts/formal/verify-async-condition.sh` | Available now |
+| `scripts/formal/verify-event.sh` | Available now |
+| `scripts/formal/verify-async-rwlock.sh` | Available now |
+| `scripts/formal/verify-e13-select-core.sh` | Available now |
+| `scripts/formal/verify-e13-select-safety.sh` | Available now |
+| `scripts/formal/verify-blocking-io-pool.sh` | Available now |
+| `scripts/formal/verify-e7-publication.sh` | Available now |
+| `scripts/formal/verify-e8-ownership-transfer.sh` | Available now |
+| `scripts/formal/verify-e9-park-wake.sh` | Available now |
+| `scripts/formal/verify-e10-waitnode.sh` | Available now |
 
 ## Evidence status
 
@@ -123,5 +127,5 @@ bug-free.
 
 | Topic | Document |
 |-------|----------|
-| Formal models | `docs/spec/` |
+| Formal models | `spec/tla/` |
 | io_uring validation | `docs/history/archive/liburing-validation-2026-07-03.md` |

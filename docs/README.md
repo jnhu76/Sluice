@@ -62,8 +62,7 @@ Statuses: **Implemented** (production headers + sources + tests), **Experimental
 
 | Model | Guide |
 |-------|-------|
-| TLA+ specifications | [`docs/spec/`](spec/) |
-| BlockingIoPool TLA+ | [`spec/tla/`](../spec/tla/) |
+| TLA+ specifications | [`spec/tla/`](../spec/tla/) |
 
 ## Reading order for agents
 

@@ -1,0 +1,135 @@
+# Formal verification gate — TLA+ model checking.
+#
+# Two tiers:
+#   PR smoke  : runs on PR touch to spec/tla/**, scripts/formal/**,
+#               docs/verification/formal/**, and this workflow file.
+#               Runs bootstrap + doctor + check + smoke.
+#   Full      : workflow_dispatch only. Runs bootstrap + doctor + check + all.
+#
+# The full suite includes expensive models (E13 Select core runs ~10 min for
+# the 4-arm root alone). The smoke tier is measured-fast suites only.
+name: formal
+
+on:
+  pull_request:
+    paths:
+      - "spec/tla/**"
+      - "scripts/formal/**"
+      - "docs/verification/formal/**"
+      - "AGENTS.md"
+      - ".github/workflows/formal.yml"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Verification mode"
+        required: true
+        type: choice
+        options:
+          - smoke
+          - all
+        default: "smoke"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Bootstrap TLA+ tools
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache tla2tools.jar
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sluice/formal/
+          key: tla2tools-${{ hashFiles('scripts/formal/tla2tools.lock.json') }}
+
+      - name: Bootstrap
+        run: python3 scripts/formal/bootstrap.py
+
+  check:
+    name: Structural checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify manifest and structure
+        run: |
+          python3 scripts/formal/verify.py doctor
+          python3 scripts/formal/verify.py check
+
+  smoke:
+    name: PR smoke tier
+    needs: [bootstrap, check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Restore tla2tools.jar cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sluice/formal/
+          key: tla2tools-${{ hashFiles('scripts/formal/tla2tools.lock.json') }}
+
+      - name: Run smoke tier
+        run: python3 scripts/formal/verify.py smoke
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: formal-smoke-${{ github.run_id }}
+          path: build/formal/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  full:
+    name: Full verification
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'all'
+    needs: [bootstrap, check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Restore tla2tools.jar cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sluice/formal/
+          key: tla2tools-${{ hashFiles('scripts/formal/tla2tools.lock.json') }}
+
+      - name: Run all suites
+        run: python3 scripts/formal/verify.py all
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: formal-all-${{ github.run_id }}
+          path: build/formal/**
+          if-no-files-found: ignore
+          retention-days: 7
