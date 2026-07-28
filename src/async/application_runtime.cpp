@@ -589,16 +589,6 @@ void ApplicationRuntime::recompute_task_set_terminal_locked() {
     task_set_terminal_snapshot_.store(terminal, std::memory_order::release);
 }
 
-void ApplicationRuntime::publish_epoch_and_wake() {
-    // Caller must NOT hold lifecycle_mtx_.
-    {
-        std::lock_guard lk(lifecycle_mtx_);
-        control_epoch_++;
-    }
-    runtime_cv_.notify_all();
-    wake_handle_.notify();
-}
-
 void ApplicationRuntime::close_resources() {
     // Destroy in reverse order: Group → Scheduler → IoContext.
     // The backend destructor joins backend workers.

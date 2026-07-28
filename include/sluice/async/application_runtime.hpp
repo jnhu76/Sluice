@@ -180,7 +180,6 @@ private:
     bool stop_predicate_fn();
     static bool stop_predicate_trampoline(void* ctx);
     void recompute_task_set_terminal_locked();
-    void publish_epoch_and_wake();
     void close_resources();
     bool is_runtime_task() const noexcept;
 
