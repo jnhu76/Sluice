@@ -8,10 +8,21 @@
 --     instrumentation reaches production code — not just the harness.
 --   - Production sluice_core stays sanitizer-clean by default; instrumentation
 --     is gated behind an explicit fuzz configuration.
---   - Clang-only: libFuzzer is a Clang feature. An explicit guard (below) fails
---     the configuration with a clear error when a fuzz target is requested with
---     a non-Clang compiler, rather than relying on sanitizer flags failing later
---     with an opaque diagnostic.
+--   - Clang-only: libFuzzer is a Clang feature. The WHOLE FILE is gated on the
+--     configured toolchain below, so under a non-Clang compiler (gcc, msvc...)
+--     not a single fuzz target is declared. That keeps `xmake f --toolchain=gcc`
+--     clean: no fuzz on_config runs, no spurious errors, and the GCC production
+--     / test gate works. (We cannot use a per-target on_config guard alone,
+--     because xmake runs on_config for every declared target during `xmake f`,
+--     including set_default(false) ones — is_enabled() is independent of
+--     set_default().)
+--
+-- Toolchain detection note: there is NO global is_toolchain() builtin in xmake.
+-- The configured toolchain is exposed as the "toolchain" config key (set by
+-- `xmake f --toolchain=...`), so we read it with is_config(). xmake evaluates
+-- the description scope more than once during `xmake f`; the early passes see a
+-- nil toolchain (targets simply not declared that pass) and the final pass sees
+-- the real value, which is what governs whether the targets exist.
 --
 -- Usage:
 --   xmake f -m debug --toolchain=clang -y
@@ -19,16 +30,27 @@
 --   xmake run wal_read_record_fuzz -- -runs=0   # smoke-check one target
 local R = SLUICE_ROOT
 
+-- Declare the fuzz targets ONLY under a Clang toolchain. Accept both the
+-- Linux/macOS "clang" driver and the Windows "clang-cl" driver. When the
+-- toolchain is anything else (gcc, msvc, env/...) or unset, this entire file
+-- declares nothing, so `xmake f --toolchain=gcc` succeeds and the GCC
+-- production/test builds are unaffected.
+if not is_config("toolchain", "clang", "clang-cl") then
+    return
+end
+
 -- ---------------------------------------------------------------------------
--- Clang-only guard. libFuzzer (-fsanitize=fuzzer) and the fuzzer-no-link
--- coverage mode are Clang features; GCC does not provide them. Fail the
--- configuration loudly and early when a fuzz target is enabled under a non-Clang
--- compiler, instead of letting the forced sanitizer flags fail later with an
--- opaque message.
+-- Defense-in-depth Clang guard. The file-level is_config() gate above is the
+-- primary mechanism: under a non-Clang toolchain the fuzz targets are not
+-- declared at all. This per-target on_config is a SECONDARY check that still
+-- pays off if a fuzz target is later given its own per-target toolchain via
+-- set_toolchains("clang") (which overrides the global --toolchain=...). In that
+-- case the file gate could pass under a non-clang global toolchain while the
+-- target itself compiles with something else; this guard catches that.
 --
--- This does NOT impose a global Clang requirement: production sluice_core /
--- sluice_async and the ordinary test group build with any supported compiler.
--- It only fires when one of the opt-in fuzz targets would actually be built.
+-- It uses the target-scoped API (target:toolchains()) rather than the global
+-- config, because it must reflect the toolchain ACTUALLY applied to THIS target
+-- (including per-target set_toolchains), not just the global default.
 -- ---------------------------------------------------------------------------
 local function clang_only_fuzz_guard(target)
     on_config(function (t)
