@@ -69,10 +69,11 @@ only thread the Runtime spawns; it is the only caller of
 re-entering on a loop because `run_live` returns for reasons other than all-work-done.
 
 This is **not** a "zero new seam" layer. The design requires five private
-PROPOSED foundation seams/prerequisites (§9) — none public, none authorizing
+foundation seams/prerequisites in total (§9) — none public, none authorizing
 implementation, none a change to Scheduler *drive semantics*. One (the Group
-transactional admission seam) is a foundation prerequisite that blocks E16
-implementation.
+transactional admission seam, P2-01) was a foundation prerequisite for E16
+admission rollback; it is now **SATISFIED** (item 5, §9), so it no longer blocks
+E16 implementation. The remaining four are Runtime-side and unauthorized.
 
 ## 3. Ownership decision
 
@@ -324,9 +325,11 @@ Evidence: `docs/design/e16-application-runtime.md` §10, §18.
 ## 9. Consequences — required private PROPOSED seams/prerequisites
 
 To close the lifecycle authority gaps honestly, the design requires **five
-private PROPOSED foundation seams/prerequisites**. **None is a public API; none
+private foundation seams/prerequisites** in total. **None is a public API; none
 authorizes implementation; none is a change to Scheduler *drive semantics*.**
-Production currently has none of them.
+Of these, **one (P2-01, the Group transactional admission seam — item 5 below)
+is SATISFIED**; the remaining four (items 1–4) are Runtime-side and remain
+PROPOSED/unimplemented.
 
 1. **`sluice::app::detail::runtime_lifetime_fail_fast`** — a private Runtime
    fail-fast entry for the destructor. Production currently has NO generic
@@ -577,10 +580,11 @@ Replaced by the Fiber-local execution-identity seam (§9).
   `AsyncIoContext::outstanding()` query (`async_io_context.hpp:149`), and the
   existing `Scheduler::make_wake_handle()` / `run_live(worker_count, stop_fn,
   stop_ctx)` API (`scheduler.hpp:264,909`).
-- The five private PROPOSED seams/prerequisites (§9) are implementation
+- The five private foundation seams/prerequisites (§9) are implementation
   details / prerequisites; none is a public API change. The Group transactional
   admission seam (P2-01) is a private `Group::async_evented` change, not a
-  public API change.
+  public API change, and is **SATISFIED** (item 5, §9); the other four remain
+  PROPOSED.
 
 ## 15. Verification obligations
 

@@ -46,8 +46,10 @@ is one-shot (Constructed → Running → Stopped). The destructor requires expli
 `shutdown()` and fail-fast on misuse.
 
 This is not a "zero new seam" layer. To close the lifecycle authority gaps
-honestly, the design requires **five private PROPOSED foundation seams** (none
-public, none authorizing implementation):
+honestly, the design requires **five private foundation seams/prerequisites** in
+total (none public, none authorizing implementation). Of these, **one (the Group
+transactional admission seam, P2-01) is SATISFIED** (item 5 below); the
+remaining four are PROPOSED:
 
 - `sluice::app::detail::runtime_lifetime_fail_fast` — a private fail-fast entry
   for the Runtime destructor (production currently has NO generic fail-fast;
@@ -1725,9 +1727,10 @@ updated to `RuntimeTaskFn = void(RuntimeTaskContext&)`.
 
 ### 21.6 Foundation seam count (P2-01 correction)
 
-E16 requires **five** private PROPOSED foundation seams (not four), because
-`Group::async_evented` must gain a transactional admission seam before E16
-admission rollback is correct (§13.5):
+E16 requires **five** private foundation seams/prerequisites in total (not
+four), because `Group::async_evented` required a transactional admission seam
+before E16 admission rollback is correct (§13.5) — that prerequisite (P2-01) is
+now **SATISFIED**, leaving four PROPOSED Runtime-side seams:
 
 1. `runtime_lifetime_fail_fast` (§18.1)
 2. Fiber-local execution-identity seam (§21.4)
