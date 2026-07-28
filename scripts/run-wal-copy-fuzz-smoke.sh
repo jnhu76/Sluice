@@ -63,32 +63,49 @@ echo "=== EXACT TRACKED-CORPUS REPLAY ==="
 bash "${SCRIPT_DIR}/replay-wal-copy-fuzz-corpus.sh"
 
 # --- Common libFuzzer flags for the bounded random session. ---
+# Resolve the committed corpus directory for a target name.
+committed_corpus_dir() {
+    case "$1" in
+        wal_read_record_fuzz) echo "${PROJECT_ROOT}/fuzz/corpus/wal_read_record" ;;
+        wal_roundtrip_fuzz)   echo "${PROJECT_ROOT}/fuzz/corpus/wal_roundtrip" ;;
+        copy_all_fault_fuzz)  echo "${PROJECT_ROOT}/fuzz/corpus/copy_all_fault" ;;
+    esac
+}
+
 run_smoke() {
     local name="$1"
     local binary="${PROJECT_ROOT}/build/linux/x86_64/debug/${name}"
-    local corpus="${PROJECT_ROOT}/fuzz/corpus/${name#wal_}"
-    # The copy target's directory name differs from the binary suffix.
-    if [[ "$name" == "copy_all_fault_fuzz" ]]; then
-        corpus="${PROJECT_ROOT}/fuzz/corpus/copy_all_fault"
-    elif [[ "$name" == "wal_read_record_fuzz" ]]; then
-        corpus="${PROJECT_ROOT}/fuzz/corpus/wal_read_record"
-    elif [[ "$name" == "wal_roundtrip_fuzz" ]]; then
-        corpus="${PROJECT_ROOT}/fuzz/corpus/wal_roundtrip"
-    fi
+    local committed_corpus
+    committed_corpus=$(committed_corpus_dir "$name")
     local artifact_dir="${ARTIFACTS_DIR}/${name}"
-    mkdir -p "${artifact_dir}"
+    # Isolated working corpus for the bounded random session. Seeding it from the
+    # committed corpus gives libFuzzer a starting point, while keeping any newly
+    # discovered inputs under the gitignored artifact tree so the committed
+    # fuzz/corpus/ is never polluted by a PR smoke run (§24 isolation).
+    local work_corpus="${artifact_dir}/corpus"
+    mkdir -p "${work_corpus}"
 
     if [[ ! -x "${binary}" ]]; then
         echo "ERROR: binary not found: ${binary}" >&2
         exit 1
     fi
 
+    # Seed the working corpus from the committed corpus (copy, do not symlink,
+    # so libFuzzer can merge into it freely). rsync if available, else cp.
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete "${committed_corpus}/" "${work_corpus}/"
+    else
+        rm -rf "${work_corpus:?}"/*
+        cp -a "${committed_corpus}/." "${work_corpus}/"
+    fi
+
     echo ""
     echo "=== ${name}: bounded smoke (runs=${SMOKE_RUNS}, max_len=${MAXLEN[$name]}) ==="
-    # A short random session seeded from the corpus. -runs bounds it so the
-    # smoke is fast and CI-stable; the target-specific -max_len bounds input
-    # size per the documented resource profile.
-    "${binary}" "${corpus}" \
+    # A short random session against the ISOLATED working corpus. -runs bounds it
+    # so the smoke is fast and CI-stable; the target-specific -max_len bounds
+    # input size per the documented resource profile. Newly discovered inputs
+    # land in work_corpus (gitignored), never in fuzz/corpus/.
+    "${binary}" "${work_corpus}" \
         "-timeout=${TIMEOUT}" \
         "-rss_limit_mb=${RSS_LIMIT_MB}" \
         "-max_len=${MAXLEN[$name]}" \
@@ -97,16 +114,12 @@ run_smoke() {
         -dict="${DICT}"
 }
 
-CORPUS_WAL_RAW="${PROJECT_ROOT}/fuzz/corpus/wal_read_record"
-CORPUS_WAL_RTP="${PROJECT_ROOT}/fuzz/corpus/wal_roundtrip"
-CORPUS_COPY="${PROJECT_ROOT}/fuzz/corpus/copy_all_fault"
-
 echo ""
 echo "SEED CORPORA (tracked):"
 echo "  wal_read_record:   $(git ls-files fuzz/corpus/wal_read_record | wc -l) files"
 echo "  wal_roundtrip:     $(git ls-files fuzz/corpus/wal_roundtrip | wc -l) files"
 echo "  copy_all_fault:    $(git ls-files fuzz/corpus/copy_all_fault | wc -l) files"
-echo "ARTIFACT DIR: ${ARTIFACTS_DIR}"
+echo "ARTIFACT DIR: ${ARTIFACTS_DIR}  (bounded-smoke working corpora live under <artifact>/<target>/corpus/, gitignored)"
 
 run_smoke wal_read_record_fuzz
 run_smoke wal_roundtrip_fuzz
