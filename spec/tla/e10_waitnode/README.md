@@ -3,7 +3,7 @@
 Narrow TLA+ model of the E10 wait-protocol (sluice-CORE-E10), realizing the
 §2 Design Law (one winner transition) and §7 Unlink Law (removal is not an
 independent protocol). Mirrors the style of the E7/E8/E9 TLA+ models
-(`docs/spec/e7_publication/`, `e8_ownership_transfer/`, `e9_park_wake/`).
+(`spec/tla/e7_publication/`, `e8_ownership_transfer/`, `e9_park_wake/`).
 
 The load-bearing E10 question:
 
@@ -55,11 +55,11 @@ jar exactly as the E7/E8/E9 models are; running them is:
 
 ```bash
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e10_waitnode/E10WaitNode.cfg docs/spec/e10_waitnode/E10WaitNode
+  -config spec/tla/e10_waitnode/E10WaitNode.cfg spec/tla/e10_waitnode/E10WaitNode
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e10_waitnode/E10WaitNodeLiveness.cfg docs/spec/e10_waitnode/E10WaitNode
+  -config spec/tla/e10_waitnode/E10WaitNodeLiveness.cfg spec/tla/e10_waitnode/E10WaitNode
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e10_waitnode/E10WaitNodeBuggyNoWinner.cfg docs/spec/e10_waitnode/E10WaitNodeBuggyNoWinner
+  -config spec/tla/e10_waitnode/E10WaitNodeBuggyNoWinner.cfg spec/tla/e10_waitnode/E10WaitNodeBuggyNoWinner
 ```
 
 Expected (by construction, pending actual TLC execution):

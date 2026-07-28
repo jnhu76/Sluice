@@ -6,7 +6,7 @@ protocol's abstract safety and demonstrates that the two production
 admission decisions the ADR highlights (authoritative backend outstanding
 for MW-S2; final readiness re-drain before commit) are each load-bearing.
 
-This is a **companion** to `docs/spec/e7_publication/` (the runnable-
+This is a **companion** to `spec/tla/e7_publication/` (the runnable-
 publication model, commit 63ed522). Where that model closes the
 exactly-once publication contract, this one closes the **global MW-state
 classification + two-phase blocking admission** contract that sits on top

@@ -120,7 +120,7 @@ to work in PR #18, and the temporal PROPERTY still passes.
 
 ## Verification
 
-Run `tools/formal/verify-select-safety.sh` and look for the
+Run `scripts/formal/verify-select-safety.sh` and look for the
 `PASS  Central -> Contract refinement (3-arm admission tie)` line under
 the "Widened-domain refinement (X)" section.  The PR #17 canonical
 refinement configs are still checked by `verify-select-core.sh`.

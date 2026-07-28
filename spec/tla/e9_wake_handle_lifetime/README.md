@@ -115,16 +115,16 @@ the `.tla`):
 
 ```bash
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e9_wake_handle_lifetime/E9WakeHandleLifetime.cfg \
-  docs/spec/e9_wake_handle_lifetime/E9WakeHandleLifetime
+  -config spec/tla/e9_wake_handle_lifetime/E9WakeHandleLifetime.cfg \
+  spec/tla/e9_wake_handle_lifetime/E9WakeHandleLifetime
 
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e9_wake_handle_lifetime/E9WakeHandleLifetimeLiveness.cfg \
-  docs/spec/e9_wake_handle_lifetime/E9WakeHandleLifetime
+  -config spec/tla/e9_wake_handle_lifetime/E9WakeHandleLifetimeLiveness.cfg \
+  spec/tla/e9_wake_handle_lifetime/E9WakeHandleLifetime
 
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e9_wake_handle_lifetime/E9WakeHandleLifetimeBuggySnapshot.cfg \
-  docs/spec/e9_wake_handle_lifetime/E9WakeHandleLifetimeBuggySnapshot
+  -config spec/tla/e9_wake_handle_lifetime/E9WakeHandleLifetimeBuggySnapshot.cfg \
+  spec/tla/e9_wake_handle_lifetime/E9WakeHandleLifetimeBuggySnapshot
 ```
 
 ## Results
@@ -212,7 +212,7 @@ Scheduler is destroyed; its later `notify()` acquires the (still-live)
 ## What this model does NOT cover
 
 - The E9 park/wake protocol (park admission, RunMode, MW classifier, wake
-  epoch) — see `docs/spec/e9_park_wake/`. CLOSED; this corrective does not
+  epoch) — see `spec/tla/e9_park_wake/`. CLOSED; this corrective does not
   touch it.
 - The Fiber / AsyncBackend / AsyncIoContext internals — signal-only external
   producer boundary (9.4.9) is preserved; `notify_external_wake` /

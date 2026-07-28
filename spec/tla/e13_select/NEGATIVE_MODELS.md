@@ -212,6 +212,6 @@ Restore cfg: `E13SelectMultiGroupNeg.restore.cfg` (FAULT="None") asserts
 
 ## Verification
 
-Run `tools/formal/verify-select-safety.sh`.  Every `expect_negative`
+Run `scripts/formal/verify-select-safety.sh`.  Every `expect_negative`
 line must print `NEG <label> (<LawName> violated; ...)`, and every
 `expect_restored` line must print `RESTORE <label> (FAULT="None" PASS; ...)`.

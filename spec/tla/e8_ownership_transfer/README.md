@@ -1,7 +1,7 @@
 # E8 Runnable Ownership-Transfer / Work-Stealing — TLA+ Model
 
 Narrow TLA+ model of the E8 runnable-ownership-transfer protocol, extending
-the E7 runnable-publication vocabulary (`docs/spec/e7_publication/`).
+the E7 runnable-publication vocabulary (`spec/tla/e7_publication/`).
 
 The load-bearing E8 question:
 
@@ -61,11 +61,11 @@ consistency relation separate in the model.
 
 ```bash
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e8_ownership_transfer/E8OwnershipTransfer.cfg \
-  docs/spec/e8_ownership_transfer/E8OwnershipTransfer
+  -config spec/tla/e8_ownership_transfer/E8OwnershipTransfer.cfg \
+  spec/tla/e8_ownership_transfer/E8OwnershipTransfer
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e8_ownership_transfer/E8OwnershipTransferBuggyOwner.cfg \
-  docs/spec/e8_ownership_transfer/E8OwnershipTransferBuggyOwner
+  -config spec/tla/e8_ownership_transfer/E8OwnershipTransferBuggyOwner.cfg \
+  spec/tla/e8_ownership_transfer/E8OwnershipTransferBuggyOwner
 ```
 
 ## Model domain (finite, exhaustive TLC)
@@ -217,13 +217,13 @@ StealRunnable calls no make_runnable.
 
 This is the load-bearing E8 invariant: steal is transport, not
 publication. Conflating the two risks reintroducing the E7-T2
-duplicate-publication defect class (`docs/spec/e7_publication/`).
+duplicate-publication defect class (`spec/tla/e7_publication/`).
 
 ## What this model does NOT cover
 
 - AsyncBackend internals, io_uring, ThreadPool (out of scope; E7 closed).
 - MW-S2 blocking admission (closed by
-  `docs/spec/e7_multiworker_progress/E7MultiWorkerProgress.tla`). E8 reuses
+  `spec/tla/e7_multiworker_progress/E7MultiWorkerProgress.tla`). E8 reuses
   that protocol unchanged; stealable work is MW-S1, and the E7 classifier
   already counts every `local_runnable` (E8-0 audit O7), so stealable work
   is automatically MW-S1-visible with no classifier change.

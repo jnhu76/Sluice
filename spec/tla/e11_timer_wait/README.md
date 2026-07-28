@@ -2,7 +2,7 @@
 
 Narrow TLA+ model of the E11 deadline/timer wait integration (sluice-CORE-E11),
 extending the E10 WaitNode protocol
-([`docs/spec/e10_waitnode/`](../e10_waitnode/)) with a THIRD resolution cause
+([`spec/tla/e10_waitnode/`](../e10_waitnode/)) with a THIRD resolution cause
 `TIMER_EXPIRE` and the three new state dimensions E11 introduces over E10:
 
 ```text

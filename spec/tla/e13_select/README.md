@@ -48,7 +48,7 @@ a universal primitive or contract state.
 | `E13SelectEventTimer.cfg` | Two-arm adapter safety/refinement |
 | `E13Select.cfg` | Four-arm bounded mixed root: same-Event pair + two Timers |
 | `E13Select.scene_*.cfg` | Concrete R1-R12 causal reachability probes |
-| `tools/formal/verify-select-core.sh` | Reproducible complete PR #17 formal gate |
+| `scripts/formal/verify-select-core.sh` | Reproducible complete PR #17 formal gate |
 
 ## Layer 1: stable Select contract
 
@@ -223,20 +223,20 @@ confined to the pre-suspension registration domain.
 ## Reproduction
 
 ```bash
-tools/formal/verify-select-core.sh
+scripts/formal/verify-select-core.sh
 ```
 
 Environment overrides:
 
 ```bash
 TLA2TOOLS_JAR=/path/to/tla2tools.jar TLC_WORKERS=1 \
-  tools/formal/verify-select-core.sh
+  scripts/formal/verify-select-core.sh
 ```
 
 The runner copies the spec tree into a fresh `mktemp` work directory, runs every
 TLC invocation with a private `-metadir` inside that temporary root, and cleans
 up only the temporary root. It never deletes or writes generated-looking files
-into `docs/spec/e13_select/`. A source-preservation sentinel regression
+into `spec/tla/e13_select/`. A source-preservation sentinel regression
 (`E13SelectUserTTrace.keep`) confirms no source-tree trace/metadir artifact is
 created. The runner rejects parse/config failures and deadlocks, requires all
 positive/refinement checks to pass, and requires every reachability run to
@@ -302,7 +302,7 @@ reproduce exactly):
 - **Bounded multi-group non-interference.**  `E13SelectMultiGroup.tla`
   composes two 1-arm SelectGroups sharing a single Event identity space.
 - **Repeatable verification tooling.**
-  `tools/formal/verify-select-safety.sh` runs the full suite in an
+  `scripts/formal/verify-select-safety.sh` runs the full suite in an
   isolated mktemp workspace.  See `EVIDENCE_SAFETY.md`.
 
 ### PR #18 file additions
@@ -320,7 +320,7 @@ reproduce exactly):
 | `E13Select*Neg.*.cfg` | Focused negative models (per-fault) |
 | `E13Select*.nv_*.cfg` / `*.central_*.cfg` / `*.adapter_*.cfg` | Non-vacuity witnesses |
 | `E13SelectCentralClaim.refine3.cfg` | Widened refinement check |
-| `tools/formal/verify-select-safety.sh` | Reproducible PR #18 formal gate |
+| `scripts/formal/verify-select-safety.sh` | Reproducible PR #18 formal gate |
 | `INVARIANTS.md` / `NEGATIVE_MODELS.md` / `NON_VACUITY.md` / `REFINEMENT.md` / `EVIDENCE_SAFETY.md` | Safety docs |
 
 ### PR #18 scope
@@ -334,8 +334,8 @@ staged, or committed.
 ### Reproduce
 
 ```bash
-TLC_WORKERS=1 ./tools/formal/verify-select-core.sh     # PR #17 regression
-TLC_WORKERS=1 ./tools/formal/verify-select-safety.sh   # PR #18 safety suite
+TLC_WORKERS=1 ./scripts/formal/verify-select-core.sh     # PR #17 regression
+TLC_WORKERS=1 ./scripts/formal/verify-select-safety.sh   # PR #18 safety suite
 ```
 
 Both must end with `=== PASS: ... ===`.

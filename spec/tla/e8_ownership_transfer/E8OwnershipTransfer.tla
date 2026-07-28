@@ -42,7 +42,7 @@
   claimed wake routing reads fiber_owner_ — a refinement ambiguity that is
   corrected here.
 
-  Extends the E7 runnable-publication vocabulary (docs/spec/e7_publication/
+  Extends the E7 runnable-publication vocabulary (spec/tla/e7_publication/
   E7Publication.tla): one successful created|waiting -> runnable transition
   grants one runnable publication capability; transport/consumption move/
   consume the ticket without publishing. E8 adds ONE new action, StealRunnable,

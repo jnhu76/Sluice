@@ -7,7 +7,7 @@ the README and review request is backed by a reproducible command.
 
 ## Source-safe verifier
 
-`tools/formal/verify-select-safety.sh` is the reproducible PR #18 gate.
+`scripts/formal/verify-select-safety.sh` is the reproducible PR #18 gate.
 It inherits the source-safety design of PR #17's `verify-select-core.sh`:
 
 1. **Isolated workspace.** Every TLC run happens inside a fresh
@@ -70,10 +70,10 @@ command.  The canonical sequence:
 
 ```bash
 # PR #17 regression (still must pass):
-TLC_WORKERS=1 tools/formal/verify-select-core.sh
+TLC_WORKERS=1 scripts/formal/verify-select-core.sh
 
 # PR #18 safety suite (the new gate):
-TLC_WORKERS=1 tools/formal/verify-select-safety.sh
+TLC_WORKERS=1 scripts/formal/verify-select-safety.sh
 ```
 
 Both scripts:
@@ -131,10 +131,10 @@ git diff master --stat
 
 Every modified or added path must be under one of:
 
-- `docs/spec/e13_select/`
+- `spec/tla/e13_select/`
 - `docs/formal/`
 - `docs/history/reviews/`
-- `tools/formal/`
+- `scripts/formal/`
 
 No path under `include/`, `src/`, `tests/`, `examples/`, `benchmarks/`,
 CI configuration, or production build policy may appear in the diff.

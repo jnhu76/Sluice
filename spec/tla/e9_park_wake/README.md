@@ -50,20 +50,20 @@ defects than BuggyDrainParks. They are kept; do not delete them.
 
 ```
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e9_park_wake/E9ParkWake.cfg \
-  docs/spec/e9_park_wake/E9ParkWake
+  -config spec/tla/e9_park_wake/E9ParkWake.cfg \
+  spec/tla/e9_park_wake/E9ParkWake
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e9_park_wake/E9ParkWakeLiveness.cfg \
-  docs/spec/e9_park_wake/E9ParkWake
+  -config spec/tla/e9_park_wake/E9ParkWakeLiveness.cfg \
+  spec/tla/e9_park_wake/E9ParkWake
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e9_park_wake/E9ParkWakeBuggyDrainParks.cfg \
-  docs/spec/e9_park_wake/E9ParkWakeBuggyDrainParks
+  -config spec/tla/e9_park_wake/E9ParkWakeBuggyDrainParks.cfg \
+  spec/tla/e9_park_wake/E9ParkWakeBuggyDrainParks
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e9_park_wake/E9ParkWakeBuggyPrePark.cfg \
-  docs/spec/e9_park_wake/E9ParkWakeBuggyPrePark
+  -config spec/tla/e9_park_wake/E9ParkWakeBuggyPrePark.cfg \
+  spec/tla/e9_park_wake/E9ParkWakeBuggyPrePark
 java -cp /tmp/tla2tools.jar tlc2.TLC \
-  -config docs/spec/e9_park_wake/E9ParkWakeBuggyMixedSource.cfg \
-  docs/spec/e9_park_wake/E9ParkWakeBuggyMixedSource
+  -config spec/tla/e9_park_wake/E9ParkWakeBuggyMixedSource.cfg \
+  spec/tla/e9_park_wake/E9ParkWakeBuggyMixedSource
 ```
 
 ## Model domain (finite, exhaustive TLC)

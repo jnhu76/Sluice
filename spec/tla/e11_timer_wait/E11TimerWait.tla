@@ -2,7 +2,7 @@
 (*
   E11 Deadline / Timer Wait Integration (sluice-CORE-E11) — correct model.
 
-  Extends the E10 WaitNode protocol (docs/spec/e10_waitnode/E10WaitNode.tla)
+  Extends the E10 WaitNode protocol (spec/tla/e10_waitnode/E10WaitNode.tla)
   with a THIRD resolution cause, TIMER_EXPIRE, and the three new state dimensions
   E11 introduces over E10:
 
