@@ -27,11 +27,9 @@ if ! command -v java >/dev/null 2>&1; then
   echo "error: java not found on PATH" >&2; exit 2
 fi
 
-outroot="$(mktemp -d "${TMPDIR:-$repo/tmp}/sluice-formal.e16-application-runtime.XXXXXX")"
+outroot="$(mktemp -d -t sluice-formal.e16-app-runtime.XXXXXX)"
 cleanup() {
-  if [[ -n "$outroot" ]] \
-     && [[ "$outroot" == "$repo/tmp/"sluice-formal.e16-application-runtime.* \
-           || "$outroot" == "${TMPDIR:-/tmp}"/sluice-formal.e16-application-runtime.* ]]; then
+  if [[ -n "$outroot" ]] && [[ "$outroot" == *sluice-formal.e16-app-runtime.* ]]; then
     rm -rf -- "$outroot"
   fi
 }
