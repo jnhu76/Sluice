@@ -63,7 +63,9 @@ public, none authorizing implementation):
 - a **Group transactional admission seam** — `Group::async_evented` must gain a
   strongly exception-safe / aggregate task-record insertion before E16 admission
   rollback is correct (§13.5, P2-01). This is a foundation **prerequisite**, not
-  a Runtime seam, so E16 implementation is blocked until it lands.
+  a Runtime seam. **STATUS: SATISFIED** — `Group::async_evented` now reserves all
+  three vectors before the first `push_back` (`group.hpp:350-368`), making one
+  Evented task admission an all-or-nothing transaction (option B); see §13.5.
 
 None of these is a change to Scheduler *drive semantics* and none is a new public
 API. They are private implementation seams / prerequisites, listed as ADR
@@ -159,8 +161,10 @@ The E16 Application Runtime exists to close these gaps.
     Fiber-local identity tag, and private component pointers.
 13. Publish root cancellation **under `lifecycle_mutex`** so it cannot race with
     the resource close that destroys the root Group (P1-01).
-14. Block E16 implementation on a **Group transactional admission seam** (§13.5)
-    so admission failure cannot leave malformed partial task records (P2-01).
+14. **Group transactional admission seam (§13.5) — SATISFIED** so admission
+    failure cannot leave malformed partial task records (P2-01). `Group::async_evented`
+    now reserves all three vectors before the first `push_back`
+    (`group.hpp:350-368`).
 
 ## 5. Non-goals
 
@@ -763,16 +767,15 @@ Fiber was published. The Runtime reservation+rollback protocol closes the
 - "terminal_count > admitted_count" (the reservation is decremented before
   control returns to the caller).
 
-**It does NOT, by itself, close the Group internal ownership failure mode**
-(P2-01): `Group::async_evented` performs three independent vector `push_back`s
-(`futures_`, `evented_fibers_`, `evented_stacks_`) under `mtx_` with no capacity
-reservation (`group.hpp:278-280`). A later `push_back` may throw after an earlier
-`push_back` succeeded, leaving the Group with a malformed partial task record (e.g. a Fiber
-without its matching stack, or a Fiber+stack without a Future). `Scheduler::spawn`
-has not occurred and user code has not run, so the partial record is not
-*observed* at runtime, but the Group may retain malformed ownership. Closing this
-requires the Group transactional admission seam (§13.5), listed as a foundation
-prerequisite.
+**The Group internal ownership failure mode (P2-01) is now CLOSED** (§13.5):
+`Group::async_evented` now reserves all three vectors
+(`futures_`, `evented_fibers_`, `evented_stacks_`) BEFORE the first `push_back`
+inside one `mtx_` critical section (`group.hpp:350-368`), so a later `push_back`
+cannot throw after an earlier one succeeded. One Evented task admission is an
+all-or-nothing transaction: either all three ownership records commit (and only
+then does `Scheduler::spawn` publish the Fiber) or none commit. This satisfies
+the S0 prerequisite slice; E16 production implementation itself remains
+unauthorized (§28).
 
 ### 13.2 Admission answers
 
@@ -791,7 +794,7 @@ prerequisite.
 | Does cancellation precede closing admission or follow it? | In the locked compound commit `stop_requested=true`, `admission_open=false`, AND root cancellation (`root_group.group_token().request()`) are published together **while `lifecycle_mutex` is held** (§15 case 3). Publishing cancellation under the mutex is what prevents the request_stop-vs-close use-after-free (P1-01). |
 | How is rejected submission reported? | `submit()` returns `Result` with `IoError::invalid_state`. |
 | Can rejection run user code? | No. Rejection returns before the reservation; no task body runs. |
-| Can admission failure leave observable partial ownership? | **Runtime admission accounting** (`admitted_count`, task-set snapshot) rolls back fully under `lifecycle_mutex`. **Group internal ownership** (Future/stack/Fiber/`futures_`/`evented_*_` vectors) does NOT roll back today — `Group::async_evented` performs three independent vector `push_back`s with no reservation (`group.hpp:278-280`), so a later insertion may throw and leave the Group with a partial task record. This is why E16 is blocked on the Group transactional admission seam (§13.5, P2-01). |
+| Can admission failure leave observable partial ownership? | **Runtime admission accounting** (`admitted_count`, task-set snapshot) rolls back fully under `lifecycle_mutex`. **Group internal ownership** (Future/stack/Fiber/`futures_`/`evented_*_` vectors) is now all-or-nothing: `Group::async_evented` reserves all three vectors BEFORE the first `push_back` (`group.hpp:350-368`), so a reserve failure propagates with no partial task record (§13.5, P2-01 — SATISFIED). The Runtime-level `admitted_count` rollback remains E16 production work. |
 
 ### 13.3 Post-commit open (T4 trace closure)
 
@@ -815,66 +818,89 @@ path. (The root `CancelToken&` is still directly reachable inside the task via
 
 ### 13.5 Group transactional admission seam — E16 implementation prerequisite (P2-01)
 
-**E16 implementation is blocked until `Group::async_evented` provides a
-transactional admission seam.** Today it performs three independent vector
-`push_back`s under `mtx_` with no capacity reservation
-(`group.hpp:278-280`):
+**Group transactional admission prerequisite: SATISFIED.** `Group::async_evented`
+now provides a strongly exception-safe admission transaction (selected option B
+from the alternatives below): all three vector capacity reservations complete
+BEFORE the first `push_back`, inside one `mtx_` critical section, so one Evented
+task admission is an all-or-nothing transaction. This unblocks the S0
+prerequisite slice for E16 admission rollback. **E16 itself remains
+unauthorized and unimplemented** (§28); only this one foundation prerequisite
+has closed.
 
+Previously `Group::async_evented` performed three independent vector
+`push_back`s under `mtx_` with no capacity reservation, so a later insertion
+could throw after an earlier insertion succeeded, leaving the Group with a
+partial task record (e.g. Fiber without stack, or Fiber+stack without Future).
+`Scheduler::spawn` had not occurred and user code had not run, so the partial
+record was not *executed*, but the Group could retain malformed ownership that
+complicated destruction and later submission.
+
+**Selected implementation: reserve-all-before-first-push (option B).** Under one
+`mtx_` critical section, before any ownership commit, all three vectors are
+reserved to `size() + 1` (`group.hpp:350-362`). The subsequent three
+`push_back`s (`group.hpp:366-368`) are guaranteed not to allocate (sufficient
+capacity) and move `unique_ptr<Fiber>`, `unique_ptr<std::byte[]>`, and
+`shared_ptr<Future<void>>` — all noexcept-movable, pinned by `static_assert`s
+(`group.hpp:329-334`). Therefore either ALL three ownership records commit (and
+only then does `Scheduler::spawn` publish the Fiber, `group.hpp:374`) or NONE
+commit (a reserve failure propagates `std::bad_alloc` with no partial task
+record, no Scheduler publication, and the user task never runs). This mirrors
+the existing `async_threaded` reserve-before-spawn pattern (`group.hpp:170`).
+
+Rejected alternatives:
 ```text
-evented_fibers_.push_back(std::move(fiber_up));   // may throw (realloc)
-evented_stacks_.push_back(std::move(stack_up));   // may throw (realloc)
-futures_.push_back(std::move(fut));               // may throw (realloc)
+A. an explicit Group reservation/commit API — rejected: introduces a new public
+   abstraction for no contract benefit over option B, violating the "no new
+   public abstraction as an incidental fix" rule.
+C. a single aggregate task-record container (EventedTaskRecord) inserted
+   atomically — rejected: would require rewriting await(), the destructor,
+   group_stop_predicate, and size(), and break futures_ as the shared
+   Threaded/Evented terminal-state collection, for no contract benefit over B.
 ```
+Option B is sufficient: minimal change, consistent with the existing Threaded
+path, no new public abstraction, no rewrite of await/destructor/size.
 
-A later insertion may throw after an earlier insertion succeeded, leaving the
-Group with a partial task record (e.g. Fiber without stack, or Fiber+stack
-without Future). `Scheduler::spawn` has not occurred and user code has not run,
-so the partial record is not *executed*, but the Group may retain malformed
-ownership that complicates destruction and later submission.
+**Admission linearization / commit boundary.** The transaction commits at the
+last `push_back` (`futures_.push_back`, `group.hpp:368`): once all three records
+are in place the admission is complete and `spawn_target` is set. `mtx_` is
+released before `Scheduler::spawn` (`group.hpp:374`), preserving the existing
+lock order (`Scheduler global_mtx_` → `Group::mtx_`; never the reverse). No
+Scheduler publication occurs before the complete ownership commit.
 
-The future implementation must provide one of:
-
-```text
-A. an explicit Group reservation/commit API;
-B. a strongly exception-safe async_evented insertion (reserve capacity before
-   the first push_back, as the Threaded path already does at group.hpp:170); or
-C. a single aggregate task-record container inserted atomically.
-```
-
-A preferred aggregate shape (conceptual only — PROPOSED):
-
-```cpp
-// Conceptual only — PROPOSED
-struct EventedTaskRecord {
-    std::unique_ptr<Fiber> fiber;
-    std::unique_ptr<std::byte[]> stack;
-    std::shared_ptr<Future<void>> future;
-};
-// Group inserts ONE record (strongly exception-safe) before Scheduler::spawn.
-```
-
-Then `Group::async_evented` inserts one record before `Scheduler::spawn`.
-
-**E16-A0 does NOT implement this seam.** It is listed as a required private
-foundation change / implementation prerequisite (ADR §9), and the foundation seam
-count is updated to **five** (§21.6).
+**Deterministic failure-injection coverage.** A test seam under
+`SLUICE_ASYNC_INTERNAL_TESTING` (absent from production) injects `std::bad_alloc`
+at each of the three reserve boundaries
+(`Group::EventedAdmissionFailPoint::{before_fiber_storage_reserve,
+before_stack_storage_reserve, before_future_storage_reserve}`), plus a
+three-size storage snapshot accessor. The regression
+`tests/group_evented_admission_exception_safety_test.cpp` proves, for every fail
+point: the user task never executes; the Group retains no partial task record
+(snapshot `{0,0,0}` on first-admission failure, snapshot `{1,1,1}` on
+second-admission failure with the first task intact); the Scheduler receives no
+new runnable Fiber; destruction is safe without `await()`; and the Group remains
+reusable. The test was confirmed to FAIL on the pre-fix defective code
+(partial fiber record left) and PASS on the fixed code — it is not a false-pass.
 
 **Runtime reservation behavior with the seam.** The Runtime may still roll back
-`admitted_count` because user code has not run. But the design now states
+`admitted_count` because user code has not run. With the seam now in place the
+Group internal ownership is also all-or-nothing, so the design now states
 accurately:
 
 ```text
 Runtime admission accounting rollback is possible.
-Group internal ownership rollback REQUIRES the new transactional Group seam.
+Group internal ownership rollback is now all-or-nothing (seam satisfied).
 ```
 
-**Acceptance/mutation obligation (A18):** inject failure at each
-allocation/insertion point and prove:
-- the user task never executes;
-- Runtime `admitted_count` rolls back;
-- the Group retains no malformed partial task record;
-- destruction is safe;
-- later submission remains valid.
+**Acceptance/mutation obligation (A18) — Group-internal subset: SATISFIED.**
+Inject failure at each allocation/insertion point and prove:
+- the user task never executes; ✓ (covered)
+- the Group retains no malformed partial task record; ✓ (covered)
+- destruction is safe; ✓ (covered)
+- later submission remains valid. ✓ (covered)
+
+The Runtime-level A18 obligations (`admitted_count` rollback under
+`lifecycle_mutex`) remain E16 production work and are NOT satisfied here; E16
+production implementation remains unauthorized (§28).
 
 ## 14. Cancellation contract
 
@@ -1461,8 +1487,9 @@ workers — under this design `start()` really does spawn the driver).
 See §13.1. On `Group::async` throw, `admitted_count--` and
 `recompute_task_set_terminal_locked()` run under `lifecycle_mutex` before
 `control_epoch++` and dual-wake. This rolls back **Runtime admission accounting**;
-**Group internal ownership** rollback requires the Group transactional admission
-seam (§13.5, P2-01).
+**Group internal ownership** is now all-or-nothing (the Group transactional
+admission seam is SATISFIED, §13.5, P2-01 — `Group::async_evented` reserves all
+three vectors before the first `push_back`, `group.hpp:350-368`).
 
 ### 20.5 Throw-safe terminal guard
 
@@ -1706,7 +1733,11 @@ admission rollback is correct (§13.5):
 2. Fiber-local execution-identity seam (§21.4)
 3. `RuntimeTaskTerminalGuard` (§16.3)
 4. `recompute_task_set_terminal_locked()` (§16.2)
-5. **Group transactional admission seam** (§13.5) — new prerequisite
+5. **Group transactional admission seam** (§13.5) — **SATISFIED**:
+   `Group::async_evented` now reserves all three vectors before the first
+   `push_back` (`group.hpp:350-368`), making one Evented task admission an
+   all-or-nothing transaction. The remaining four seams (1–4) are Runtime-side
+   and remain E16 production work.
 
 ## 22. Acceptance contracts
 
@@ -1930,15 +1961,22 @@ Specifically:
 ### A18 — Group task-record insertion failure (P2-01)
 
 ```text
-Given Group::async_evented with the future transactional admission seam
-When failure is injected at each insertion/allocation point
-  (Future alloc, stack alloc, Fiber alloc, init_fiber, vector push_back Nth)
+Given Group::async_evented with the transactional admission seam (now SATISFIED)
+When failure is injected at each reserve/insertion point
+  (before_fiber_storage_reserve, before_stack_storage_reserve,
+   before_future_storage_reserve; also Future alloc, stack alloc, Fiber alloc,
+   init_fiber — the latter four pre-date this seam)
 Then the user task body NEVER executes
-And Runtime admitted_count rolls back under lifecycle_mutex
 And the Group retains no malformed partial task record (transactional seam: all-or-nothing)
 And the Group remains safe to destroy
 And a later async_evented submission remains valid
+And Runtime admitted_count rolls back under lifecycle_mutex  [Runtime-level: E16 production work]
 ```
+
+The Group-internal subset of A18 (first four `And` clauses) is covered by
+`tests/group_evented_admission_exception_safety_test.cpp` and verified to FAIL
+on the pre-fix defective code. The Runtime-level `admitted_count` rollback
+clause remains E16 production work (§28).
 
 ### A19 — Post-drain driver park (P2-03)
 
@@ -2350,16 +2388,21 @@ stop/start barrier behavior        → startup barrier + abort path (P1-03)
 shutdown behavior by state         → state-dispatched (§17.1) (P1-05)
 terminal-close ownership           → unified close_state (§17.0) (P1-05)
 error mapping for documented failures → fixed table (§20.6) (P2-02)
-Group transactional admission prerequisite → listed (§13.5) (P2-01)
+Group transactional admission prerequisite → SATISFIED (§13.5) (P2-01)
 ```
 
 ## 27. Implementation slices
 
 If authorized, implementation would proceed in order:
 
-1. **S0 (PREREQUISITE): Group transactional admission seam** — `Group::async_evented`
-   must gain a strongly exception-safe / aggregate task-record insertion before
-   E16 admission rollback is correct (§13.5, P2-01). **Blocks S6.**
+1. **S0 (PREREQUISITE): Group transactional admission seam — SATISFIED.**
+   `Group::async_evented` now performs all three vector capacity reservations
+   BEFORE the first `push_back` in one `mtx_` critical section
+   (`group.hpp:350-368`), making one Evented task admission an all-or-nothing
+   transaction (option B, §13.5, P2-01). Deterministic failure injection at each
+   reserve boundary is covered by
+   `tests/group_evented_admission_exception_safety_test.cpp`. This slice no
+   longer blocks S6.
 2. **S1: Builder + config validation** — `RuntimeBuilder`, `RuntimeConfig`,
    validation; `build()` returns `Result<std::unique_ptr<ApplicationRuntime>>` (P1-02).
 3. **S2: Owned-object construction** — `ApplicationRuntime` (heap, stable address)

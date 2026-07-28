@@ -173,13 +173,11 @@ throw (all throwable steps precede `Scheduler::spawn`, `group.hpp:264-282`),
 
 **The Runtime reservation+rollback rolls back Runtime admission accounting
 ONLY** (admitted_count, snapshot). **Group internal ownership** (Future/stack/
-Fiber vectors) does NOT roll back today: `Group::async_evented` performs three
-independent vector `push_back`s with no reservation (`group.hpp:278-280`), so a
-later insertion may throw after an earlier succeeded, leaving a malformed partial
-task record (P2-01). **E16 implementation is blocked until `Group::async_evented`
-provides a transactional admission seam** (reservation/commit, strongly
-exception-safe insertion, or aggregate task-record container) — see §9 seam 5
-and design §13.5.
+Fiber vectors) is now all-or-nothing: `Group::async_evented` reserves all three
+vectors BEFORE the first `push_back` (`group.hpp:350-368`), so a reserve failure
+propagates with no partial task record (P2-01 — SATISFIED; see §9 seam 5 and
+design §13.5). The Runtime-level `admitted_count` rollback remains E16 production
+work.
 
 Admission opens **only after** the startup commit AND only if
 `!stop_requested` at commit. Therefore "admission opens then commit fails / stop
@@ -354,15 +352,20 @@ Production currently has none of them.
 4. **`recompute_task_set_terminal_locked()`** — invoked under `lifecycle_mutex`
    on every mutation of `admission_open` / `admitted_count` / `terminal_count`.
 
-5. **Group transactional admission seam (P2-01)** — `Group::async_evented` must
-   gain a strongly exception-safe / aggregate task-record insertion before E16
-   admission rollback is correct. Today it performs three independent vector
-   `push_back`s with no reservation (`group.hpp:278-280`); a later insertion may
-   throw after an earlier succeeded, leaving a malformed partial task record.
-   The future implementation must provide a reservation/commit API, a strongly
-   exception-safe insertion, or a single aggregate task-record container inserted
-   atomically. **This is a foundation prerequisite that blocks E16
-   implementation** (design §13.5); it is NOT implemented in A0.
+5. **Group transactional admission seam (P2-01) — SATISFIED.** `Group::async_evented`
+   now reserves all three vectors (`evented_fibers_`, `evented_stacks_`,
+   `futures_`) BEFORE the first `push_back` inside one `mtx_` critical section
+   (`group.hpp:350-368`), making one Evented task admission an all-or-nothing
+   transaction (selected option B: reserve-all-before-first-push). The three
+   `push_back`s are guaranteed not to allocate, and their moved types are
+   noexcept-movable (pinned by `static_assert`s, `group.hpp:329-334`). A reserve
+   failure propagates `std::bad_alloc` with no partial task record, no
+   `Scheduler::spawn`, and the user task does not run. Deterministic failure
+   injection at each reserve boundary is covered by
+   `tests/group_evented_admission_exception_safety_test.cpp` (confirmed to fail
+   on the pre-fix defective code). This foundation prerequisite no longer blocks
+   E16 implementation; the remaining four foundation seams (1–4) and the full
+   E16 production surface remain unauthorized (design §13.5, §28).
 
 Evidence: `docs/design/e16-application-runtime.md` §8, §13.5, §16, §18, §21.
 
@@ -496,8 +499,9 @@ Evidence: `docs/design/e16-application-runtime.md` §21.
 - Builder pattern adds API surface.
 - **Five** new private PROPOSED foundation seams/prerequisites (§9) — honest cost
   of closing the lifecycle authority gaps; not zero-seam. One of them (the Group
-  transactional admission seam, P2-01) is a foundation prerequisite that blocks
-  E16 implementation.
+  transactional admission seam, P2-01) is a foundation prerequisite that has now
+  been SATISFIED (§9 seam 5); the remaining four are Runtime-side and remain
+  E16 production work.
 - Owned-indirection return type (`unique_ptr`, P1-02) adds one heap allocation
   and an indirection; accepted because the Runtime is non-movable and the stable
   address anchors driver captures and the Fiber-local tag.
@@ -712,7 +716,7 @@ are optional product decisions. Resolved (no longer open):
 - terminal-close ownership → unified `close_state` (P1-05)
 - successful-submit wake → epoch++ + dual-wake (P1-07)
 - error mapping for documented failures → fixed table (§10) (P2-02)
-- Group transactional admission prerequisite → listed (§9 seam 5) (P2-01)
+- Group transactional admission prerequisite → SATISFIED (§9 seam 5) (P2-01)
 - formal-model requirement → MODEL_REQUIRED (§15) (P2-03)
 - deterministic test seams → design §23.11 (P2-02)
 

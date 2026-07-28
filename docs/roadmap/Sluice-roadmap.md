@@ -92,10 +92,31 @@ E16 Application Runtime 已完成了架构设计和 ADR 撰写，但**实现尚�
 ### 不存在
 
 * `ApplicationRuntime`、`RuntimeBuilder`、`RuntimeTaskContext` — 无 public header，无 `.cpp` 实现，无构建目标；
-* Group 事务性准入 seam（P2-01） — `Group::async_evented` 的三次独立 `push_back` 无 reservation，E16 admission rollback 不正确；
+* ~~Group 事务性准入 seam（P2-01）~~ — **已完成**（见 §3.1）：`Group::async_evented` 现在在第一次 `push_back` 前完成全部三个 vector 的容量准备（`group.hpp:350-368`），一次 Evented task admission 成为完整事务；
 * TLA+ lifecycle 模型（MODEL_REQUIRED, P2-03） — ADR 接受的前提条件；
 * Runtime public acceptance consumer — 现有的 `public_api_acceptance` 明确排除 Group/Scheduler/Fiber，不能证明 Runtime API；
 * 独立设计审查 — ADR 接受的前提条件。
+
+### 3.1 已完成的前提 — Group 事务性准入 seam（P2-01）
+
+`Group::async_evented` 的异常安全问题已修复（方案 B：reserve-all-before-first-push）。实现要点：
+
+* 在同一个 `Group::mtx_` 临界区中、第一次 `push_back` 之前，对 `evented_fibers_`、`evented_stacks_`、`futures_` 三个 vector 全部执行 `reserve(size() + 1)`（`group.hpp:350-362`）；
+* 三个 `push_back`（`group.hpp:366-368`）因容量已保证而不再分配；被移动类型 `unique_ptr<Fiber>`、`unique_ptr<std::byte[]>`、`shared_ptr<Future<void>>` 均为 noexcept-movable，由 `static_assert`（`group.hpp:329-334`）固化；
+* reserve 失败直接传播 `std::bad_alloc`，不调用 `Scheduler::spawn`，用户任务不执行，Group 不保留部分 Fiber/stack/Future record；
+* `mtx_` 在 `Scheduler::spawn`（`group.hpp:374`）之前释放，锁顺序不变；
+* 确定性故障注入（仅在 `SLUICE_ASYNC_INTERNAL_TESTING` 下）覆盖每个 reserve 边界，并已在缺陷版本上确认会失败。
+
+这仅关闭 E16 的一个 foundation 前提。下列仍未完成：
+
+```text
+TLA+ lifecycle 模型（MODEL_REQUIRED, P2-03）
+独立 E16 设计/模型审查
+ADR Proposed -> Accepted
+E16 Application Runtime production 实现
+```
+
+不得据此声称 E16 已完成、ADR 已 Accepted 或 `ApplicationRuntime` 已实现。
 
 ### Fuzz 范围说明
 
@@ -115,8 +136,8 @@ E16 Application Runtime fuzz/acceptance:
 
 以下四个阶段 A 步骤必须全部完成后，才授权 E16 production implementation：
 
-1. **Group 事务性准入 seam（P2-01）**
-   `Group::async_evented` 必须提供强异常安全的 reservation/commit，或原子的 aggregate task-record 插入，并通过确定性故障注入验证，使 E16 admission rollback 在两次后续 `push_back` 失败时不留下畸形 task record。
+1. **Group 事务性准入 seam（P2-01） — ✅ 已完成**
+   `Group::async_evented` 采用方案 B（reserve-all-before-first-push）：在同一个 `mtx_` 临界区、第一次 `push_back` 之前完成全部三个 vector 的容量准备（`group.hpp:350-368`），一次 Evented task admission 成为完整事务。三个 `push_back` 因容量已保证而不会分配，且被移动类型为 noexcept-movable（由 `static_assert` 固化）。确定性故障注入覆盖每个 reserve 边界（`tests/group_evented_admission_exception_safety_test.cpp`），并在缺陷版本上确认会失败。E16 admission rollback 的 Group 内部所有权前提已满足；Runtime 级 `admitted_count` 回滚仍属 E16 production 工作。
 
 2. **TLA+ lifecycle 模型（P2-03）**
    完成并验证 E16 lifecycle 模型，同时保留故意损坏的 negative/broken 模型及其 TLC counterexample。
