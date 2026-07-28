@@ -12,7 +12,7 @@
 # This is a SAFETY-ONLY gate. There is no liveness run. Liveness / progress
 # (every admitted item is eventually delivered or returned; every waiter is
 # eventually granted or released) is out of scope for B4 and is deferred to a
-# later model-C/task as documented in docs/spec/e12_queue/README.md.
+# later model-C/task as documented in spec/tla/e12_queue/README.md.
 #
 #   Model A (E12Queue)     -> 12 named invariants PASS
 #                             (CapacityBound, UniqueItemOwner, UniqueRingItem,
@@ -65,8 +65,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$here/.."
-spec="$repo/docs/spec/e12_queue"
+repo="$here/../.."
+spec="$repo/spec/tla/e12_queue"
 JAR="${TLA2TOOLS_JAR:-$repo/tla2tools.jar}"
 WORKERS="${TLC_WORKERS:-auto}"
 

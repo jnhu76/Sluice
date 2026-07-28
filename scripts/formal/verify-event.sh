@@ -59,8 +59,8 @@ fi
 CXX_BIN="${CXX:-clang++}"
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-spec="$here/../docs/spec/e12_event"
-repo="$here/.."
+spec="$here/../../spec/tla/e12_event"
+repo="$here/../.."
 cd "$spec"
 
 # Fresh output directory per invocation (stale-output guard).

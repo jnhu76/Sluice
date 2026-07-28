@@ -5,7 +5,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
-spec="$repo/docs/spec/e13_select"
+spec="$repo/spec/tla/e13_select"
 jar="${TLA2TOOLS_JAR:-$repo/tla2tools.jar}"
 workers="${TLC_WORKERS:-1}"
 

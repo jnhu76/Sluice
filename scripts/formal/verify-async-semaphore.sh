@@ -64,8 +64,8 @@ if [ ! -f "$JAR" ]; then
 fi
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$here/.."
-spec="$repo/docs/spec/e12_semaphore"
+repo="$here/../.."
+spec="$repo/spec/tla/e12_semaphore"
 cd "$spec"
 # C++ compiler for the COMPILE-PROBE gate (the authority-sealing negative probe).
 CXX_BIN="${CXX:-c++}"

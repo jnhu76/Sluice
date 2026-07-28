@@ -45,7 +45,7 @@ if [ ! -f "$JAR" ]; then
 fi
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-spec="$here/../docs/spec/e11_timer_wait"
+spec="$here/../../spec/tla/e11_timer_wait"
 cd "$spec"
 
 # Fresh per-invocation output directory. No stale output is ever parsed: each

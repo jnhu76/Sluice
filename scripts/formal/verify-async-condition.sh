@@ -58,8 +58,8 @@ if [ ! -f "$JAR" ]; then
 fi
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$here/.."
-spec="$repo/docs/spec/e12_async_condition"
+repo="$here/../.."
+spec="$repo/spec/tla/e12_async_condition"
 cd "$spec"
 
 # C++ compiler for the COMPILE-PROBE authority-seal gate (§1.4).

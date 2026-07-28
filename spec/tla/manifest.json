@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "toolchain": {
+    "lock_file": "scripts/formal/tla2tools.lock.json"
+  },
+  "suites": [
+    {
+      "id": "blocking-io-pool",
+      "spec_dir": "spec/tla/blocking_io_pool",
+      "verifier": "scripts/formal/verify-blocking-io-pool.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 6,
+      "negative_gate_count": 0,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/verification/formal/blocking-io-pool-tla-spec.md"],
+      "implementation_bindings": ["src/core/blocking_io_pool.cpp"],
+      "notes": "COVERAGE GAP: no negative model. Liveness checked via FairSpec temporal property."
+    },
+    {
+      "id": "e7-publication",
+      "spec_dir": "spec/tla/e7_publication",
+      "verifier": "scripts/formal/verify-e7-publication.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 1,
+      "negative_gate_count": 1,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e7-publication.md"],
+      "implementation_bindings": ["src/async/scheduler.cpp"],
+      "notes": "E7 runnable-publication protocol. Buggy model expects InvDoneNoTicket violation."
+    },
+    {
+      "id": "e7-multiworker-progress",
+      "spec_dir": "spec/tla/e7_multiworker_progress",
+      "verifier": "scripts/formal/verify-e7-multiworker-progress.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 1,
+      "negative_gate_count": 2,
+      "reachability_gate_count": 0,
+      "owner_docs": [],
+      "implementation_bindings": ["src/async/scheduler.cpp"],
+      "notes": "Two buggy models: BuggyAdmission, BuggyOutstanding."
+    },
+    {
+      "id": "e8-ownership-transfer",
+      "spec_dir": "spec/tla/e8_ownership_transfer",
+      "verifier": "scripts/formal/verify-e8-ownership-transfer.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 1,
+      "negative_gate_count": 1,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e8-formal-corrective/audit.md"],
+      "implementation_bindings": [],
+      "notes": "BuggyOwner model expects a named invariant violation."
+    },
+    {
+      "id": "e9-park-wake",
+      "spec_dir": "spec/tla/e9_park_wake",
+      "verifier": "scripts/formal/verify-e9-park-wake.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 2,
+      "negative_gate_count": 3,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e9-0-wake-source-topology-audit.md"],
+      "implementation_bindings": [],
+      "notes": "Liveness config + 3 buggy models (DrainParks, MixedSource, PrePark)."
+    },
+    {
+      "id": "e9-wake-handle-lifetime",
+      "spec_dir": "spec/tla/e9_wake_handle_lifetime",
+      "verifier": "scripts/formal/verify-e9-wake-handle-lifetime.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 2,
+      "negative_gate_count": 1,
+      "reachability_gate_count": 0,
+      "owner_docs": [],
+      "implementation_bindings": [],
+      "notes": "Liveness config + BuggySnapshot model."
+    },
+    {
+      "id": "e10-waitnode",
+      "spec_dir": "spec/tla/e10_waitnode",
+      "verifier": "scripts/formal/verify-e10-waitnode.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 2,
+      "negative_gate_count": 1,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e10-waitnode-wait-queue.md"],
+      "implementation_bindings": [],
+      "notes": "COVERAGE GAP: E10WaitNode.tla has a pre-existing semantic error (unknown operator SumResolvedCount at line 169). The correct model does not parse under TLC 2.19. Only the BuggyNoWinner negative model runs. The correct safety/liveness models are BLOCKED."
+    },
+    {
+      "id": "e11-timer-wait",
+      "spec_dir": "spec/tla/e11_timer_wait",
+      "verifier": "scripts/formal/verify-timer-wait.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 2,
+      "negative_gate_count": 6,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e11-deadline-timer-wait.md"],
+      "implementation_bindings": ["src/async/scheduler.cpp"],
+      "notes": "Safety + liveness correct models, 6 negative models (NEG-1..NEG-6)."
+    },
+    {
+      "id": "e12-event",
+      "spec_dir": "spec/tla/e12_event",
+      "verifier": "scripts/formal/verify-event.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 2,
+      "negative_gate_count": 4,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e12-event.md"],
+      "implementation_bindings": [],
+      "notes": "Safety + liveness correct, 4 negative models, wrong-property gate, compile-probe gate. BASELINE: NEG-EVENT-2 has a known toolchain limitation (pre-existing)."
+    },
+    {
+      "id": "e12-semaphore",
+      "spec_dir": "spec/tla/e12_semaphore",
+      "verifier": "scripts/formal/verify-async-semaphore.sh",
+      "tiers": ["full"],
+      "positive_gate_count": 1,
+      "negative_gate_count": 7,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e12-semaphore.md"],
+      "implementation_bindings": [],
+      "notes": "Safety-only. 7 negative models (NEG-SEM-1..7), wrong-property gate, compile-probe gate."
+    },
+    {
+      "id": "e12-async-mutex",
+      "spec_dir": "spec/tla/e12_async_mutex",
+      "verifier": "scripts/formal/verify-async-mutex.sh",
+      "tiers": ["full"],
+      "positive_gate_count": 1,
+      "negative_gate_count": 11,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e12-async-mutex.md"],
+      "implementation_bindings": [],
+      "notes": "Safety-only. 11 negative models (NEG-M1..M11), wrong-property gate, compile-probe gate."
+    },
+    {
+      "id": "e12-async-condition",
+      "spec_dir": "spec/tla/e12_async_condition",
+      "verifier": "scripts/formal/verify-async-condition.sh",
+      "tiers": ["full"],
+      "positive_gate_count": 1,
+      "negative_gate_count": 10,
+      "reachability_gate_count": 2,
+      "owner_docs": ["docs/history/closeout/e12-condition.md"],
+      "implementation_bindings": [],
+      "notes": "Safety-only. 10 negative models (NEG-C1..C10), 2 reachability witnesses, wrong-property gate, compile-probe gate."
+    },
+    {
+      "id": "e12-queue",
+      "spec_dir": "spec/tla/e12_queue",
+      "verifier": "scripts/formal/verify-async-queue.sh",
+      "tiers": ["full"],
+      "positive_gate_count": 2,
+      "negative_gate_count": 7,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e12-queue.md"],
+      "implementation_bindings": [],
+      "notes": "Safety-only. Model A (12 invariants) + Model B (7 invariants), 7 negative models, wrong-property gate."
+    },
+    {
+      "id": "e12-rwlock",
+      "spec_dir": "spec/tla/e12_rwlock",
+      "verifier": "scripts/formal/verify-async-rwlock.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 1,
+      "negative_gate_count": 1,
+      "reachability_gate_count": 0,
+      "owner_docs": ["docs/history/closeout/e12-cross-primitive-terminal-audit.md"],
+      "implementation_bindings": [],
+      "notes": "COVERAGE GAP: only 1 negative model (ReaderBypass). No reconcile-after-cancel negative."
+    },
+    {
+      "id": "e13-select-core",
+      "spec_dir": "spec/tla/e13_select",
+      "verifier": "scripts/formal/verify-e13-select-core.sh",
+      "tiers": ["full"],
+      "positive_gate_count": 5,
+      "negative_gate_count": 0,
+      "reachability_gate_count": 15,
+      "owner_docs": ["docs/history/formal-design/e13-select-formal-core-design.md"],
+      "implementation_bindings": [],
+      "notes": "Layered formal core (PR #17). Contract + Central + Adapter + root positive models. R1-R12 causal reachability witnesses. No negative models (covered by e13-select-safety)."
+    },
+    {
+      "id": "e13-select-safety",
+      "spec_dir": "spec/tla/e13_select",
+      "verifier": "scripts/formal/verify-e13-select-safety.sh",
+      "tiers": ["full"],
+      "positive_gate_count": 11,
+      "negative_gate_count": 29,
+      "reachability_gate_count": 20,
+      "owner_docs": ["docs/history/formal-design/e13-select-formal-safety-design.md"],
+      "implementation_bindings": [],
+      "notes": "Layered formal safety (PR #18). Multi-layer safety aggregates, multi-group non-interference, widened-domain refinement, Contract NEG-C1..C9, Central NEG-S1..S7, Event/Timer/Accounting NEG-E1..E6/T1..T5/A1..A4, MG NEG-MG1, restoration checks, per-law non-vacuity witnesses, PR #17 regression."
+    }
+  ]
+}

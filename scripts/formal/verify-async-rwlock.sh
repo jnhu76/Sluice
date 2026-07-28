@@ -18,8 +18,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$here/.."
-spec="$repo/docs/spec/e12_rwlock"
+repo="$here/../.."
+spec="$repo/spec/tla/e12_rwlock"
 JAR="${TLA2TOOLS_JAR:-$repo/tla2tools.jar}"
 WORKERS="${TLC_WORKERS:-auto}"
 
