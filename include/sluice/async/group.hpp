@@ -107,6 +107,38 @@ public:
     // Test-only; production compiles this out.
     void test_set_tasks_throw_on_nth(std::size_t n) { tasks_throw_on_nth_ = n; }
     std::size_t test_tasks_throw_on_nth() const { return tasks_throw_on_nth_; }
+
+    // ---- P2-01 (Group transactional admission seam) test seams ------------
+    // Evented admission failure injection. Arms the NEXT async_evented call to
+    // throw std::bad_alloc at a specific reserve boundary (before the
+    // corresponding real fallible operation), proving the admission is
+    // transactional: a reserve failure leaves no partial task record, no
+    // Scheduler publication, and the Group remains reusable. One-shot (the
+    // caller resets it). Test-only; production compiles this out.
+    enum class EventedAdmissionFailPoint {
+        none,
+        before_fiber_storage_reserve,
+        before_stack_storage_reserve,
+        before_future_storage_reserve,
+    };
+    void test_set_evented_admission_fail(EventedAdmissionFailPoint fp) {
+        evented_fail_point_ = fp;
+    }
+    EventedAdmissionFailPoint test_evented_admission_fail() const {
+        return evented_fail_point_;
+    }
+
+    // Internal-testing-only snapshot of the three Evented storage sizes. Read
+    // under mtx_. Test-only; production compiles this out.
+    struct EventedStorageSnapshot {
+        std::size_t fibers;
+        std::size_t stacks;
+        std::size_t futures;
+    };
+    EventedStorageSnapshot test_evented_storage_snapshot() const {
+        std::lock_guard<std::mutex> lk(mtx_);
+        return {evented_fibers_.size(), evented_stacks_.size(), futures_.size()};
+    }
 #endif
 
     // The shared cancel token for all tasks in this group. A task observes it
@@ -205,6 +237,10 @@ private:
     // step throws std::bad_alloc BEFORE thread creation (see async_threaded).
     // Test-only; not present in production.
     std::size_t tasks_throw_on_nth_ = 0;
+    // P2-01 deterministic test seam: if !=none, the NEXT async_evented call
+    // throws std::bad_alloc at the named reserve boundary. One-shot; the test
+    // resets it. Test-only; not present in production.
+    EventedAdmissionFailPoint evented_fail_point_ = EventedAdmissionFailPoint::none;
 #endif
     // Evented-mode owned state. The EventedWaitPolicy is shared across all
     // task Futures in this group (one policy per group; it borrows sched_).
@@ -267,14 +303,66 @@ void Group::async_evented(Fn fn) {
             "sluice::async::Group::async_evented: init_fiber failed "
             "(invalid stack or unsupported architecture)");
     }
-    // Lock ordering: acquire mtx_ ONLY for vector mutation, then release
-    // BEFORE calling spawn(). spawn() acquires Scheduler global_mtx_.
-    // group_stop_predicate acquires mtx_ under global_mtx_ (called from
-    // worker_loop MW-S3 boundary). If we held mtx_ during spawn, that would
-    // create a lock-order inversion (mtx_→global_mtx_ vs global_mtx_→mtx_).
+    // P2-01 (Group transactional admission seam, §13.5): the admission of one
+    // Evented task is now a SINGLE transaction. All fallible bookkeeping
+    // preparation (the three vector reserves) happens BEFORE the first
+    // push_back, inside one mtx_ critical section. The subsequent push_backs
+    // are guaranteed not to allocate (sufficient capacity), so they cannot
+    // throw; and the three moved types are noexcept-movable (static_asserts
+    // below). Therefore either ALL three ownership records commit (and only
+    // then does Scheduler::spawn publish the Fiber) or NONE commit (a reserve
+    // failure propagates std::bad_alloc with no partial task record, no
+    // Scheduler publication, and the user task never runs). This matches the
+    // async_threaded reserve-before-spawn pattern (group.hpp above) and is the
+    // foundation prerequisite for E16 admission rollback (§13.5, P2-01).
+    //
+    // Lock ordering is unchanged: mtx_ is acquired ONLY for the reserve+commit
+    // critical section, then released BEFORE spawn(). spawn() acquires
+    // Scheduler global_mtx_. group_stop_predicate acquires mtx_ under
+    // global_mtx_ (called from worker_loop MW-S3 boundary). If we held mtx_
+    // during spawn, that would create a lock-order inversion (mtx_→global_mtx_
+    // vs global_mtx_→mtx_).
+    //
+    // The three push_backs move unique_ptr<Fiber>, unique_ptr<std::byte[]>,
+    // and shared_ptr<Future<void>>. All three moves are noexcept; pin that so
+    // a future type change cannot silently re-introduce a throw after reserve.
+    static_assert(std::is_nothrow_move_constructible_v<std::unique_ptr<Fiber>>,
+                  "unique_ptr<Fiber> move must be noexcept for transactional commit");
+    static_assert(std::is_nothrow_move_constructible_v<std::unique_ptr<std::byte[]>>,
+                  "unique_ptr<std::byte[]> move must be noexcept for transactional commit");
+    static_assert(std::is_nothrow_move_constructible_v<std::shared_ptr<Future<void>>>,
+                  "shared_ptr<Future<void>> move must be noexcept for transactional commit");
     Fiber* spawn_target = nullptr;
     {
         std::lock_guard<std::mutex> lk(mtx_);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // One-shot deterministic failure injection. Read the fail point once
+        // and clear it; each arm below fires BEFORE the matching real reserve,
+        // so a throw propagates with no logical task-record size change. The
+        // fp local lives for the whole critical section so every arm can test
+        // it without re-reading the (now-cleared) member.
+        const auto fp = evented_fail_point_;
+        evented_fail_point_ = EventedAdmissionFailPoint::none;
+        if (fp == EventedAdmissionFailPoint::before_fiber_storage_reserve) {
+            throw std::bad_alloc();
+        }
+#endif
+        evented_fibers_.reserve(evented_fibers_.size() + 1);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        if (fp == EventedAdmissionFailPoint::before_stack_storage_reserve) {
+            throw std::bad_alloc();
+        }
+#endif
+        evented_stacks_.reserve(evented_stacks_.size() + 1);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        if (fp == EventedAdmissionFailPoint::before_future_storage_reserve) {
+            throw std::bad_alloc();
+        }
+#endif
+        futures_.reserve(futures_.size() + 1);
+        // Capacity is now guaranteed for all three vectors; push_backs cannot
+        // allocate. Combined with the noexcept-move static_asserts above, this
+        // whole commit block is non-throwing.
         evented_fibers_.push_back(std::move(fiber_up));
         evented_stacks_.push_back(std::move(stack_up));
         futures_.push_back(std::move(fut));
