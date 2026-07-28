@@ -45,14 +45,6 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
   * ThreadPoolBackend
   * experimental io_uring backend
 
-* Application Runtime (E16)：
-
-  * 设计已完成（`docs/design/e16-application-runtime.md`）；
-  * ADR 状态：**Proposed**，实现未授权；
-  * **未实现** — 主分支无 `ApplicationRuntime` / `RuntimeBuilder` / `RuntimeTaskContext`；
-  * 阻塞前提：Group 事务性准入 seam（P2-01）、TLA+ lifecycle 模型（MODEL_REQUIRED, P2-03）；
-  * `public_api_acceptance` 排除 Group/Scheduler/Fiber，不能替代 Runtime acceptance。
-
 * Fuzz Foundation：
 
   * WAL record decode
@@ -63,7 +55,16 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
 
 ## 尚未完成
 
-* E16 Application Runtime（设计已完成，未实现 — 见 §3）
+* **E16 Application Runtime**
+
+  * 架构设计已完成：`docs/design/e16-application-runtime.md`；
+  * ADR 状态：**Proposed**，实现尚未授权；
+  * **尚未实现** — 主分支不存在 `ApplicationRuntime`、`RuntimeBuilder`、`RuntimeTaskContext`，也无 Runtime public acceptance consumer；
+  * 阻塞前提：Group 事务性准入 seam（P2-01）、TLA+ lifecycle 模型（MODEL_REQUIRED, P2-03）、独立设计审查、ADR 由 Proposed 升级为 Accepted（见 §3）；
+  * `public_api_acceptance` 排除 Group/Scheduler/Fiber，不能替代 Runtime acceptance。
+
+  > E15 Runtime Foundation（Scheduler、Fiber、同步原语、Future/Group/Batch、AsyncIoContext/AsyncBackend 等）是已完成的 runtime 层；E16 Application Runtime 只是设计完成、尚未实现，二者不可混淆。
+
 * 真正的异步 reference application
 * Stackless coroutine execution model
 * Stackful/stackless 应用语义对照
@@ -104,30 +105,42 @@ Fuzz foundation complete (sluice_core):
     ✓ WAL round-trip
     ✓ copy_all fault model
 
-Async Runtime fuzz:
-    ✗ NOT started — E16 implementation prerequisite
+E16 Application Runtime fuzz/acceptance:
+    ✗ NOT started — production implementation does not exist
 ```
 
-不得把 core fuzz foundation 描述成"整个异步 Runtime 已完成 fuzz"。
+不得把 core fuzz foundation 描述成"整个异步 Runtime 已完成 fuzz"。`E16 Application Runtime fuzz/acceptance: NOT started` 仅指 E16 Application Runtime 层的 fuzz/acceptance 尚未开始，不代表 E10–E15 异步 runtime（Scheduler、同步原语、Future/Group/Batch、AsyncIoContext/AsyncBackend 等）缺少并发测试、sanitizer、形式模型或其他验证证据。
 
-### 阻塞前提（必须先完成才能实现 E16）
+### 阻塞前提（必须在 E16 production implementation 之前完成）
 
-1. **Group 事务性准入 seam（P2-01）** — `Group::async_evented` 必须提供 reservation/commit 或原子的 aggregate task-record 插入；
-2. **TLA+ lifecycle 模型（P2-03）** — 含故意引入错误的 negative/broken 模型；
-3. **独立设计审查** — 无未解决的 P0/P1 findings；
-4. **ADR 从 Proposed 升级为 Accepted**。
+以下四个阶段 A 步骤必须全部完成后，才授权 E16 production implementation：
 
-## 后续工作
+1. **Group 事务性准入 seam（P2-01）**
+   `Group::async_evented` 必须提供强异常安全的 reservation/commit，或原子的 aggregate task-record 插入，并通过确定性故障注入验证，使 E16 admission rollback 在两次后续 `push_back` 失败时不留下畸形 task record。
 
-前提满足后，实际实现包括：
+2. **TLA+ lifecycle 模型（P2-03）**
+   完成并验证 E16 lifecycle 模型，同时保留故意损坏的 negative/broken 模型及其 TLC counterexample。
 
-* 实现 `ApplicationRuntime` / `RuntimeBuilder` / `RuntimeTaskContext`（头文件 + 源码）；
+3. **独立设计审查**
+   审查对象必须包括当前 E16 设计、生命周期模型和 Group prerequisite；不得存在未解决的 P0/P1 finding。
+
+4. **ADR 接受**
+   满足以上条件后，将 `ADR-application-runtime` 从 `Proposed` 更新为 `Accepted`。**只有 Accepted ADR 才授权 production implementation**。
+
+## ADR Accepted 后的实现工作
+
+ADR 进入 `Accepted` 后，E16 production implementation 才允许开始，实际实现与验证包括：
+
+* 实现 `ApplicationRuntime`、`RuntimeBuilder` 和 `RuntimeTaskContext`（public headers + 源码）；
+* 接入 public headers、production sources 和 xmake build graph；
 * 新增 Runtime public acceptance consumer（见 §3.2）；
-* TLA+ 模型 + 验证脚本；
-* 确定性因果测试 + death tests；
-* ASan / UBSan / TSan 门控；
-* 更新 ADR 状态 → Accepted/Implemented；
-* 同步所有文档。
+* 实现确定性 lifecycle / admission / stop / drain / join / shutdown 测试 + death tests + 错误路径验证；
+* 运行 Debug、Release、ASan/UBSan、TSan 和完整 CI gate；
+* 更新 API reference、architecture、verification、README 和 changelog。
+
+### 实现完成后的状态转换
+
+E16 production implementation、public acceptance、完整验证和实现审查全部通过后，再将 ADR 状态从 `Accepted` 更新为 `Implemented`，并新增 E16 closeout。`Accepted` 与 `Implemented` 对应不同时间点，不要把两者合写为一个含糊的状态。
 
 ### 3.2 Runtime Public Acceptance（未来实现后的验收标准）
 
