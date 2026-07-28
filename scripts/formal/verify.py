@@ -76,15 +76,19 @@ def cmd_doctor(manifest: dict) -> int:
     print("=== formal verification doctor ===\n")
 
     # Java
-    java = subprocess.run(
-        ["java", "-version"], capture_output=True, text=True
-    )
-    if java.returncode != 0:
+    try:
+        java = subprocess.run(
+            ["java", "-version"], capture_output=True, text=True
+        )
+        if java.returncode != 0:
+            print("FAIL  java not found on PATH")
+            rc = 1
+        else:
+            version_line = (java.stderr or java.stdout).splitlines()[0]
+            print(f"OK    java: {version_line}")
+    except FileNotFoundError:
         print("FAIL  java not found on PATH")
         rc = 1
-    else:
-        version_line = (java.stderr or java.stdout).splitlines()[0]
-        print(f"OK    java: {version_line}")
 
     # Jar
     sys.path.insert(0, str(SCRIPT_DIR))
@@ -192,7 +196,6 @@ def cmd_list(manifest: dict, markdown: bool = False) -> int:
 # Old-path references inside these files are expected and must not be flagged.
 HISTORICAL_PATHS = [
     "docs/history/",
-    "docs/adr/",
 ]
 
 # Implementation files that define OLD_PATHS or check for them naturally contain
@@ -200,6 +203,11 @@ HISTORICAL_PATHS = [
 IMPLEMENTATION_FILES = [
     "scripts/formal/verify.py",
     "scripts/check-doc-links.py",
+]
+
+# Files that document the migration mapping and legitimately reference old paths
+# in table rows (lines containing '|'). Non-table lines are still checked.
+MIGRATION_TABLE_FILES = [
     "docs/verification/formal/migration-report.md",
 ]
 
@@ -294,15 +302,24 @@ def cmd_check(manifest: dict) -> int:
         print(f"OK    all {len(cfg_files)} .cfg files belong to a manifest suite")
 
     # 4. No old-path references in non-historical tracked files
-    # Historical documents (docs/history/**, docs/adr/**) are NOT updated by
-    # this migration and are expected to retain old-path references.
+    # Historical documents (docs/history/**) are NOT updated by this migration
+    # and are expected to retain old-path references.
     files = _scan_files()
     old_refs: list[tuple[str, str]] = []
     for rel, content in files.items():
         if _is_historical(rel) or _is_implementation(rel):
             continue
+        if rel in MIGRATION_TABLE_FILES:
+            # Only check non-table lines (table rows document the mapping).
+            # Lines with <!-- old-path-ok --> are explicit allowlisted quotes.
+            checked = "\n".join(
+                ln for ln in content.splitlines()
+                if "|" not in ln and "<!-- old-path-ok -->" not in ln
+            )
+        else:
+            checked = content
         for old in OLD_PATHS:
-            if old.lower() in content:
+            if old.lower() in checked:
                 old_refs.append((rel, old))
     if old_refs:
         print("FAIL  old-path references found (excluding historical docs):")

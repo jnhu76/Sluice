@@ -8,7 +8,7 @@
 
 Task: `FORMAL-VERIFICATION-SYSTEM-CONSOLIDATION-1`
 
-Unify the scattered formal verification assets (former `docs/spec/**`, `tools/formal/**`,
+Unify the scattered formal verification assets (former `docs/spec/**`, `tools/formal/**`, <!-- old-path-ok -->
 root-level verifier scripts, and loose `spec/tla/` files) into a single canonical
 structure under `spec/tla/`, `scripts/formal/`, and `docs/verification/formal/`.
 
@@ -33,7 +33,7 @@ structure under `spec/tla/`, `scripts/formal/`, and `docs/verification/formal/`.
 | Model directories under `docs/spec/` | 14 |
 | Loose files in `spec/tla/` | 3 (BlockingIoPool) |
 | Verifiers in `scripts/` (root) | 7 |
-| Verifiers in `tools/formal/` | 2 |
+| Verifiers in `tools/formal/` | 2 | <!-- old-path-ok -->
 | Suites without any verifier | 4 (E7, E8, E9, E10) |
 
 ### Post-migration state
@@ -45,7 +45,7 @@ structure under `spec/tla/`, `scripts/formal/`, and `docs/verification/formal/`.
 | Model directories under `docs/spec/` | 0 |
 | Loose files in `spec/tla/` | 0 (all packaged) |
 | Verifiers in `scripts/` (root) | 0 |
-| Verifiers in `tools/formal/` | 0 |
+| Verifiers in `tools/formal/` | 0 | <!-- old-path-ok -->
 | Verifiers in `scripts/formal/` | 16 |
 | Suites with a verifier | 16 |
 

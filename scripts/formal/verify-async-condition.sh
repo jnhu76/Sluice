@@ -214,7 +214,7 @@ tlc_version() {
 #   4. notify_n()          5. reacquire_node()  6. Scheduler private seam
 #   7. wake_wait_one bypass via the private queue
 compile_probe_gate() {
-  local probe="$repo/tests/e12_async_condition_authority_probe.cpp"
+  local probe="$repo/tests/async_condition_authority_probe.cpp"
   if [ ! -f "$probe" ]; then
     echo "FAIL  COMPILE-PROBE gate (probe file missing: $probe)"
     return 1
@@ -313,7 +313,7 @@ wrong_property_gate || rc=1
 # Authority-seal compile-probe gate (construction authorization §1.4). Enforced
 # only when the production probe exists. Each of the seven sealed surfaces must
 # fail to compile independently.
-if [ -f "$repo/tests/e12_async_condition_authority_probe.cpp" ]; then
+if [ -f "$repo/tests/async_condition_authority_probe.cpp" ]; then
   compile_probe_gate || rc=1
 else
   echo "SKIP  COMPILE-PROBE gate (production probe not yet present)"

@@ -213,7 +213,7 @@ tlc_version() {
 # RESOURCE_WAKE via scheduler.wake_wait_one(mtx.wait_queue()), nor reach the
 # private Scheduler Mutex seams, owner(), or is_locked().
 compile_probe_gate() {
-  local probe="$repo/tests/e12_async_mutex_authority_probe.cpp"
+  local probe="$repo/tests/async_mutex_authority_probe.cpp"
   if [ ! -f "$probe" ]; then
     echo "FAIL  COMPILE-PROBE gate (probe file missing: $probe)"
     return 1
@@ -303,7 +303,7 @@ wrong_property_gate || rc=1
 # Compile-probe gate (only if the production probe exists; Commit D onward).
 # During Commit C (formal-only) the probe is absent and the gate is SKIPPED
 # (reported, not failed). Once Commit D adds the probe, the gate is enforced.
-if [ -f "$repo/tests/e12_async_mutex_authority_probe.cpp" ]; then
+if [ -f "$repo/tests/async_mutex_authority_probe.cpp" ]; then
   compile_probe_gate || rc=1
 else
   echo "SKIP  COMPILE-PROBE gate (production probe not yet present; Commit D)"

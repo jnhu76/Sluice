@@ -205,7 +205,7 @@ tlc_version() {
 # (no public wait_queue() accessor) and therefore cannot synthesize a
 # RESOURCE_WAKE via scheduler.wake_wait_one(sem.wait_queue()).
 compile_probe_gate() {
-  local probe="$repo/tests/e12_semaphore_authority_probe.cpp"
+  local probe="$repo/tests/semaphore_authority_probe.cpp"
   if [ ! -f "$probe" ]; then
     echo "FAIL  COMPILE-PROBE gate (probe file missing: $probe)"
     return 1

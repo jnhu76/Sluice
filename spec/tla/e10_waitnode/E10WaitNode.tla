@@ -190,7 +190,7 @@ LivenessSpec == Spec
 FairResolve ==
     /\ WF_<<nodeState, linked, resolvedCount, wakeDispatched>>(\E n \in Nodes : ResolveWake(n))
     /\ WF_<<nodeState, linked, resolvedCount, wakeDispatched>>(\E n \in Nodes : ResolveCancel(n))
-LivenessSpecFair == LivenessSpec /\ []FairResolve
+LivenessSpecFair == LivenessSpec /\ FairResolve
 
 EventualResolution ==
     \A n \in Nodes : (nodeState[n] = "Registered" ~> nodeState[n] # "Registered")

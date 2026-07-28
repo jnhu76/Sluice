@@ -20,7 +20,7 @@
 #   WRONG-PROPERTY gate   -> NEG-3 vs InvSingleResolutionWinner PASSES (defect
 #                            is property-specific) and does NOT flag
 #                            InvSetEpochIsolation
-#   COMPILE-PROBE gate    -> e12_event_authority_probe.cpp FAILS to compile
+#   COMPILE-PROBE gate    -> event_authority_probe.cpp FAILS to compile
 #                            (raw WaitQueue bypass is sealed)
 #
 # Source-safe: TLC runs in an isolated mktemp workspace, NOT in spec/tla/.
@@ -174,7 +174,7 @@ EOF
 # COMPILE-PROBE gate: the raw WaitQueue bypass must FAIL to compile (the Event
 # public authority is sealed). T24.
 compile_probe_gate() {
-  local probe="$repo/tests/e12_event_authority_probe.cpp"
+  local probe="$repo/tests/event_authority_probe.cpp"
   if [ ! -f "$probe" ]; then
     echo "FAIL  COMPILE-PROBE gate (probe file missing: $probe)"
     return 1
