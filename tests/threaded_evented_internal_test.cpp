@@ -56,7 +56,7 @@ struct FiberStack {
 // Forces the next init_fiber call to return false, then verifies the
 // exception and all state invariants.
 // ============================================================================
-SLUICE_TEST_CASE(e14_rt_f3_init_fiber_failure_internal_seam) {
+SLUICE_TEST_CASE(te_f3_init_fiber_failure_internal_seam) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -112,7 +112,7 @@ SLUICE_TEST_CASE(e14_rt_f3_init_fiber_failure_internal_seam) {
 // RT-F3-B: Multiple consecutive failures. The Group survives repeated
 // init_fiber failures and remains usable.
 // ============================================================================
-SLUICE_TEST_CASE(e14_rt_f3b_repeated_init_fiber_failures) {
+SLUICE_TEST_CASE(te_f3b_repeated_init_fiber_failures) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
@@ -171,14 +171,14 @@ void child_f5_group_boundary() {
 }
 }  // namespace
 
-SLUICE_TEST_CASE(e14_rt_f5_sched_admission_real_boundary) {
+SLUICE_TEST_CASE(te_f5_sched_admission_real_boundary) {
     auto r = sluice_death_test::run_death_case("F5-sched");
     SLUICE_CHECK_MSG(
         sluice_death_test::expect_terminated_via_fail_fast(r),
         "RT-F5: Scheduler ctor with unsupported admission must fail-fast");
 }
 
-SLUICE_TEST_CASE(e14_rt_f5_group_admission_real_boundary) {
+SLUICE_TEST_CASE(te_f5_group_admission_real_boundary) {
     auto r = sluice_death_test::run_death_case("F5-group");
     SLUICE_CHECK_MSG(
         sluice_death_test::expect_terminated_via_fail_fast(r),

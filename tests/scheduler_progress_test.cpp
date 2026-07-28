@@ -209,7 +209,7 @@ SLUICE_TEST_CASE(progress_ready_flag_only_does_not_call_wait_one) {
 // smoke check: a Fiber awaits a Completion, the Scheduler completes it via
 // poll, and the Fiber resumes — the E4 shape, unchanged. (Full regression is
 // the existing E4/E5 test suites, which remain green.)
-SLUICE_TEST_CASE(progress_e4_completion_path_unchanged) {
+SLUICE_TEST_CASE(progress_completion_path_unchanged) {
     if constexpr (!fiber_ctx::supported) return;
 
     AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());

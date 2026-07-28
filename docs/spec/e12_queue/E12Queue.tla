@@ -5,7 +5,7 @@
   (Corrective-2 binding decisions) and docs/e12-queue-state-machine.md.
 
   This is the formal half of the B4 gate. It is SAFETY-ONLY. The verify
-  script is scripts/verify-e12-queue-formal.sh; the design narrative is in
+  script is scripts/verify-async-queue-formal.sh; the design narrative is in
   docs/spec/e12_queue/README.md.
 
   The load-bearing E12-E Model-A questions (docs/e12-queue.md

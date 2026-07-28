@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-e12-api-contract-negative-compile.sh
+# verify-async-api-negative-compile.sh
 #
 # Verifies that the deleted/private API guards on the E10-E12 async
 # synchronization primitives are compile-enforced. Each NEG_<KIND> macro in

@@ -5,7 +5,7 @@
 
   This is the formal half of the E12-B preparation corrective. The authority
   document is docs/e12-semaphore.md; the gate is
-  scripts/verify-e12-semaphore-formal.sh. See that README for the design.
+  scripts/verify-async-semaphore-formal.sh. See that README for the design.
 
   The load-bearing E12-B questions:
     P1  Permit Conservation       available + acquiredCount

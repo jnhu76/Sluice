@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-e12-queue-formal.sh -- reproducible E12-E Queue TLA+ / TLC formal gate
+# verify-async-queue-formal.sh -- reproducible E12-E Queue TLA+ / TLC formal gate
 # (E12-E-QUEUE-FORMAL-MODEL-1 / B4), SAFETY ONLY.
 #
 # Runs the two correct E12 Queue safety models (Model A: bounded MPMC FIFO;
@@ -55,9 +55,9 @@
 # TLA2TOOLS_JAR=/path/to/tla2tools.jar.
 #
 # Usage:
-#   scripts/verify-e12-queue-formal.sh
-#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-e12-queue-formal.sh
-#   TLC_WORKERS=4 scripts/verify-e12-queue-formal.sh
+#   scripts/verify-async-queue-formal.sh
+#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-async-queue-formal.sh
+#   TLC_WORKERS=4 scripts/verify-async-queue-formal.sh
 #
 # Exit status: 0 iff every gate produced its expected verdict AND every negative
 # model's expected named property was observed as a violation AND the

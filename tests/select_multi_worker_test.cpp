@@ -342,7 +342,7 @@ SLUICE_TEST_CASE(st17_exactly_one_runnable_publication) {
 //   one runnable publication. NOT "did not crash": the corruption a missing
 //   guard would cause (double entry / stale ctx) is caught by the counts.
 // ===========================================================================
-SLUICE_TEST_CASE(p6_lw_mw_steal_before_switch_excluded) {
+SLUICE_TEST_CASE(suspend_lw_mw_steal_before_switch_excluded) {
     if constexpr (!sa::fiber_ctx::supported) return;
     MWFixture f;
     Event ev(f.sched, /*initially_set=*/false);

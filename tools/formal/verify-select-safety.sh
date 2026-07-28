@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Reproducible PR #18 gate for the layered E13 Select formal safety suite.
-# Builds on PR #17 (verify-e13-select-core.sh) by adding:
+# Builds on PR #17 (verify-select-core.sh) by adding:
 #   - the full named layered safety invariants (Contract/Central/Adapter)
 #   - focused negative models (Contract NEG-C1..C9, Central NEG-S1..S7,
 #     Event/Timer/Accounting NEG-E1..E6 + NEG-T1..T5 + NEG-A1..A4,
@@ -229,7 +229,7 @@ echo "--- Widened-domain refinement (X) ---"
 expect_pass "Central -> Contract refinement (3-arm admission tie)" \
   E13SelectCentralClaim E13SelectCentralClaim.refine3.cfg x_central_refine3 || rc=1
 # The 2-arm adapter -> Central refinement is already covered by PR #17
-# (verify-e13-select-core.sh, E13SelectEventTimer.cfg).  Wider adapter
+# (verify-select-core.sh, E13SelectEventTimer.cfg).  Wider adapter
 # refinement PROPERTY checks (3-mix, 4-mix) blow up past the 5-minute TLC
 # budget; the 3-arm adapter domain is instead exercised by AdapterSafetyInv
 # in E13SelectEventTimer.safety3mix.cfg.

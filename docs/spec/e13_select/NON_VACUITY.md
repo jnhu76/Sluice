@@ -79,7 +79,7 @@ history laws:
 ## Verification
 
 All 28 witnesses report `Invariant NotReach_<X> is violated`.  Run
-`tools/formal/verify-e13-select-safety.sh` and look for the `REACH <label>`
+`tools/formal/verify-select-safety.sh` and look for the `REACH <label>`
 lines under the "Per-law non-vacuity witnesses (W)" section (Layer C/S/A)
 and the "Multi-group bounded non-interference (O)" section (Layer MG).
 

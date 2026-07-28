@@ -195,4 +195,4 @@ Every law above is verified by one of:
 
 See NEGATIVE_MODELS.md for the focused negative matrix, NON_VACUITY.md for
 the per-law reachability witness matrix, and run
-`tools/formal/verify-e13-select-safety.sh` for the reproducible gate.
+`tools/formal/verify-select-safety.sh` for the reproducible gate.

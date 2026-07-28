@@ -54,7 +54,7 @@ model safety-only (no scheduler-fairness liveness).
 | `E12AsyncMutexNegM11.tla/.cfg` | NEG-M11: destruction while owned/queued → `InvDestructionPrecondition` |
 | `_gen_neg.py` | Build aid that generates NEG-M1..NEG-M11 from `E12AsyncMutex.tla` by single-rule action substitution |
 
-The gate is [`scripts/verify-e12-async-mutex-formal.sh`](../../../scripts/verify-e12-async-mutex-formal.sh).
+The gate is [`scripts/verify-async-mutex-formal.sh`](../../../scripts/verify-async-mutex-formal.sh).
 
 ## State model
 

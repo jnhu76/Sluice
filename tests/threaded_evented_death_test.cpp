@@ -108,7 +108,7 @@ void child_control() {
 }  // namespace
 
 // Parent-side test dispatch.
-SLUICE_TEST_CASE(e14_death_f2a_destructor_pending_evented) {
+SLUICE_TEST_CASE(te_death_f2a_destructor_pending_evented) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto r = sluice_death_test::run_death_case("F2a");
@@ -120,7 +120,7 @@ SLUICE_TEST_CASE(e14_death_f2a_destructor_pending_evented) {
         "RT-F2a: ~Group with pending Evented task must fail-fast (exit 86)");
 }
 
-SLUICE_TEST_CASE(e14_death_f5b_unsupported_admission) {
+SLUICE_TEST_CASE(te_death_f5b_unsupported_admission) {
     // This test does not require fiber_ctx::supported because it tests the
     // guard itself (passing false deterministically).
     auto r = sluice_death_test::run_death_case("F5b");
@@ -129,7 +129,7 @@ SLUICE_TEST_CASE(e14_death_f5b_unsupported_admission) {
         "RT-F5b: require_evented_supported(false) must fail-fast (exit 86)");
 }
 
-SLUICE_TEST_CASE(e14_death_control_normal_lifecycle) {
+SLUICE_TEST_CASE(te_death_control_normal_lifecycle) {
     if constexpr (!fiber_ctx::supported) return;
 
     auto r = sluice_death_test::run_death_case("control");
@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
 
 #else  // !defined(__unix__)
 
-SLUICE_TEST_CASE(e14_death_skip_non_posix) {
+SLUICE_TEST_CASE(te_death_skip_non_posix) {
     // Death tests require POSIX fork/exec.
 }
 SLUICE_MAIN()

@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# run-e12-tlc-all.sh -- 逐个跑 E12-D AsyncCondition 的全部 13 次 TLC 模型检验，
+# run-async-tlc-all.sh -- 逐个跑 E12-D AsyncCondition 的全部 13 次 TLC 模型检验，
 # 实时输出到 stdout（并 tee 到日志），每个模型后给出 PASS/FAIL 判定。
-# 可选地追加运行 E12-E Queue 形式化 gate (verify-e12-queue-formal.sh)。
+# 可选地追加运行 E12-E Queue 形式化 gate (verify-async-queue-formal.sh)。
 #
 # 用法:
-#   bash scripts/run-e12-tlc-all.sh                 # 默认: AsyncCondition + Queue (jar=repo 根)
-#   bash scripts/run-e12-tlc-all.sh async           # 只跑 AsyncCondition (原有行为)
-#   bash scripts/run-e12-tlc-all.sh queue           # 只跑 Queue formal gate
-#   bash scripts/run-e12-tlc-all.sh all             # 两者都跑 (默认)
-#   TLA2TOOLS_JAR=/path/tla2tools.jar bash scripts/run-e12-tlc-all.sh
+#   bash scripts/run-async-tlc-all.sh                 # 默认: AsyncCondition + Queue (jar=repo 根)
+#   bash scripts/run-async-tlc-all.sh async           # 只跑 AsyncCondition (原有行为)
+#   bash scripts/run-async-tlc-all.sh queue           # 只跑 Queue formal gate
+#   bash scripts/run-async-tlc-all.sh all             # 两者都跑 (默认)
+#   TLA2TOOLS_JAR=/path/tla2tools.jar bash scripts/run-async-tlc-all.sh
 #   JFLAGS_EXTRA="-Dtlc2.tool.impl.fp.fpset.impl.MSBDiskFPSet.init=false" \
-#       bash scripts/run-e12-tlc-all.sh
+#       bash scripts/run-async-tlc-all.sh
 #
 # 预期结果 (AsyncCondition):
 #   #1  正确性模型        -> PASS (No error has been found)
 #   #2  reach1            -> FAIL (NoReachOrdThenReq 可达, 即期望违反)
 #   #3  reach2            -> FAIL (NoReachReqThenOrd 可达, 即期望违反)
 #   #4-#13 NEG-C1..NEG-C10 -> FAIL (各自违反其命名不变式)
-# 预期结果 (Queue, via verify-e12-queue-formal.sh):
+# 预期结果 (Queue, via verify-async-queue-formal.sh):
 #   Model A (E12Queue)      -> PASS (12 invariants)
 #   Model B (E12QueueClosed)-> PASS (7 invariants)
 #   NEG-QUEUE-1..7          -> FAIL (各自违反其命名不变式)
@@ -124,16 +124,16 @@ run_async_condition() {
   run_one 13 "NEG-C10 SeparateQueues"         FAIL InvOrdinaryAndReacquireFIFO         E12AsyncConditionNegC10 E12AsyncConditionNegC10.cfg     || overall=1
 }
 
-# E12-E Queue 形式化 gate: 调用 verify-e12-queue-formal.sh (独立脚本，自带
+# E12-E Queue 形式化 gate: 调用 verify-async-queue-formal.sh (独立脚本，自带
 # 判定/命名属性校验/wrong-property gate/fresh outdir)。这里只转发退出码。
 run_queue() {
   echo "================================================================"
-  echo "E12-E Queue 形式化 gate (verify-e12-queue-formal.sh)" | tee -a "$LOG.summary"
-  if [ ! -x "$repo/scripts/verify-e12-queue-formal.sh" ]; then
-    echo "  (warn: verify-e12-queue-formal.sh missing or not executable; skipping)" | tee -a "$LOG.summary"
+  echo "E12-E Queue 形式化 gate (verify-async-queue-formal.sh)" | tee -a "$LOG.summary"
+  if [ ! -x "$repo/scripts/verify-async-queue-formal.sh" ]; then
+    echo "  (warn: verify-async-queue-formal.sh missing or not executable; skipping)" | tee -a "$LOG.summary"
     return 0
   fi
-  TLA2TOOLS_JAR="$JAR" "$repo/scripts/verify-e12-queue-formal.sh" 2>&1 | tee -a "$LOG"
+  TLA2TOOLS_JAR="$JAR" "$repo/scripts/verify-async-queue-formal.sh" 2>&1 | tee -a "$LOG"
   local rc=${PIPESTATUS[0]}
   if [ "$rc" -ne 0 ]; then overall=1; fi
 }

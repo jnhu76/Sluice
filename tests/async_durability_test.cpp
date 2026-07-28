@@ -84,7 +84,7 @@ SLUICE_TEST_CASE(w4_sync_overlaps_writes_at_submit_time) {
 // submit sync. Submitting sync BEFORE writes complete does NOT imply those
 // writes are durable. (Structural: the test demonstrates the awaited-then-sync
 // sequence is expressible and that out-of-order submit is observable.) --------
-SLUICE_TEST_CASE(p3_await_writes_then_sync_is_durable_sequence) {
+SLUICE_TEST_CASE(durable_await_writes_then_sync_is_durable_sequence) {
     auto backend = std::make_unique<FakeAsyncBackend>();
     FakeAsyncBackend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));

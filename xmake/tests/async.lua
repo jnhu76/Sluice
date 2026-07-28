@@ -160,7 +160,7 @@ sluice_production_async_test("wait_queue_resolution_authority_test")
 -- in the doubly-linked list topology invariants at a meaningful stress count.
 sluice_production_async_test("wait_queue_unlink_topology_test")
 
--- e14_parity_test — E14 Threaded/Evented semantic parity regression tests.
+-- threaded_evented_parity_test — Threaded/Evented semantic parity regression tests.
 -- RT-F1 (external-producer wake), RT-F3 (init_fiber failure), RT-F4 (size
 -- parity), RT-F5a (supported-target admission no-op).
-sluice_production_async_test("e14_parity_test")
+sluice_production_async_test("threaded_evented_parity_test")

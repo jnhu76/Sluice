@@ -98,7 +98,7 @@ suspendedDue[n]   : deadline-due fact recorded at the final admission decision
 **TLC WAS EXECUTED.** The gate runs against the TLC version actually reported by
 the jar — currently `Version 2026.07.09.134028 (rev: 227f61b)` from
 `tla2tools.jar` (fetched from the TLA+ GitHub release). The reproducible runner
-is `scripts/verify-e11-formal.sh` (M8); it asserts every model's expected
+is `scripts/verify-timer-wait-formal.sh` (M8); it asserts every model's expected
 verdict AND that each negative model violates its EXPECTED NAMED property (not
 just any generic "Invariant violated"). To run it yourself:
 
@@ -107,7 +107,7 @@ just any generic "Invariant violated"). To run it yourself:
 curl -sSL -o /tmp/tla2tools.jar \
   https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
 # then:
-scripts/verify-e11-formal.sh
+scripts/verify-timer-wait-formal.sh
 ```
 
 Actual executed results (all models exhaustive over the finite domain
@@ -173,13 +173,13 @@ the resolve. These were all corrected so the gate is now actually executed.
 A later formal-closure review then found I5 was still a tautology (`P => TRUE`)
 and I3 merely checked domain-membership; this corrective adds the
 admission-phase dimension, the non-tautological I5, NEG-6, the strengthened I3,
-and hardens `verify-e11-formal.sh` to assert each negative model's EXPECTED
+and hardens `verify-timer-wait-formal.sh` to assert each negative model's EXPECTED
 NAMED property. The E10 README's claim that "§12 permits an executable fallback
 when TLC is unavailable" is withdrawn — no such §12 exists in the E10 spec (it
 ends at §11), and M8 requires the gate be runnable from committed artifacts
-(which it now is, via `scripts/verify-e11-formal.sh`).
+(which it now is, via `scripts/verify-timer-wait-formal.sh`).
 
-TLC IS run (see Results above + `scripts/verify-e11-formal.sh`). The formal
+TLC IS run (see Results above + `scripts/verify-timer-wait-formal.sh`). The formal
 gate and the **refinement map + explicit causal proof below** are complementary:
 the gate proves the finite model preserves I1–I7 and that each broken variant
 has a reachable defect; the refinement map ties each formal concept to its

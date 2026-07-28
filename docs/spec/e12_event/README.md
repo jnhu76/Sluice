@@ -212,7 +212,7 @@ concrete `states generated` / `distinct states` figures TLC reports.
 Plus: WRONG-PROPERTY gate OK (InvSetEpochIsolation not mis-flagged under a
 wrong-property config); COMPILE-PROBE gate OK (raw WaitQueue bypass sealed).
 
-Reproduce: `scripts/verify-e12-event-formal.sh`.
+Reproduce: `scripts/verify-event-formal.sh`.
 
 ## What this model does NOT cover
 

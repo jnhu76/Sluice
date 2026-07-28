@@ -7,8 +7,8 @@ the README and review request is backed by a reproducible command.
 
 ## Source-safe verifier
 
-`tools/formal/verify-e13-select-safety.sh` is the reproducible PR #18 gate.
-It inherits the source-safety design of PR #17's `verify-e13-select-core.sh`:
+`tools/formal/verify-select-safety.sh` is the reproducible PR #18 gate.
+It inherits the source-safety design of PR #17's `verify-select-core.sh`:
 
 1. **Isolated workspace.** Every TLC run happens inside a fresh
    `mktemp -d -t e13-select-safety.XXXXXX` workspace.  The spec `.tla` and
@@ -47,8 +47,8 @@ It inherits the source-safety design of PR #17's `verify-e13-select-core.sh`:
 6. **Corrective-1 portable tmpdir hardening.**  The cleanup guard combines
    the non-empty check, the prefix check, and the `rm` into a single
    guarded command so `set -e` cannot short-circuit between the check and
-   the `rm`.  Both `verify-e13-select-core.sh` and
-   `verify-e13-select-safety.sh` use this combined form.
+   the `rm`.  Both `verify-select-core.sh` and
+   `verify-select-safety.sh` use this combined form.
 
 ## Pre-existing untracked files preserved
 
@@ -70,10 +70,10 @@ command.  The canonical sequence:
 
 ```bash
 # PR #17 regression (still must pass):
-TLC_WORKERS=1 tools/formal/verify-e13-select-core.sh
+TLC_WORKERS=1 tools/formal/verify-select-core.sh
 
 # PR #18 safety suite (the new gate):
-TLC_WORKERS=1 tools/formal/verify-e13-select-safety.sh
+TLC_WORKERS=1 tools/formal/verify-select-safety.sh
 ```
 
 Both scripts:

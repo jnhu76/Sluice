@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-e12-semaphore-formal.sh -- reproducible E12-B Semaphore TLA+ / TLC
+# verify-async-semaphore-formal.sh -- reproducible E12-B Semaphore TLA+ / TLC
 # formal gate (E12-B-SEMAPHORE-PREPARATION-CORRECTIVE-1), SAFETY ONLY.
 #
 # Runs the correct E12 Semaphore safety model and ALL SEVEN negative models
@@ -47,8 +47,8 @@
 # or fetch v1.8.0 from https://github.com/tlaplus/tlaplus/releases.
 #
 # Usage:
-#   scripts/verify-e12-semaphore-formal.sh
-#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-e12-semaphore-formal.sh
+#   scripts/verify-async-semaphore-formal.sh
+#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-async-semaphore-formal.sh
 #
 # Exit status: 0 iff every gate produced its expected verdict AND every negative
 # model's expected named property was observed as a violation AND the

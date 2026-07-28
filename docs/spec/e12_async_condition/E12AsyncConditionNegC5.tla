@@ -2,7 +2,7 @@
 \* sluice::async::AsyncCondition -- first-scope Fiber-suspending async Condition
 \* SAFETY model (E12-D-CONDITION-PREPARATION-CORRECTIVE-1, authority
 \* docs/e12-condition.md). The gate is
-\* scripts/verify-e12-async-condition-formal.sh; see README.md for the design.
+\* scripts/verify-async-condition-formal.sh; see README.md for the design.
 \*
 \* The load-bearing E12-D questions, closed by C-H1..C-H10:
 \*   C-H1  Model A: mandatory Mutex reacquire before return.

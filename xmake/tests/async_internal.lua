@@ -115,7 +115,7 @@ sluice_internal_async_test("async_mutex_nothrow_authority_probe")
 -- verification is static_assert; main() is trivial. Does NOT replace the
 -- per-primitive authority probes — this gates the cross-primitive parity
 -- contract only. This normal xmake target is the POSITIVE compile/run probe;
--- scripts/verify-e12-api-contract-negative-compile.sh separately defines each
+-- scripts/verify-async-api-negative-compile.sh separately defines each
 -- NEG_* macro and requires that compilation fail for the intended deleted
 -- special member. Depends on sluice_async_internal_testing so the seam header
 -- resolves (the positive probe itself exercises the public production surface).
@@ -215,7 +215,7 @@ sluice_internal_async_test("select_registration_rollback_test")
 -- only missing coverage.
 sluice_internal_async_test("select_call_context_contract_test")
 
--- e14_f3_internal_test — E14 RT-F3 real init_fiber failure regression test.
--- Uses SLUICE_ASYNC_INTERNAL_TESTING seam to force init_fiber failure.
--- Links against sluice_async_internal_testing (NOT production sluice_async).
-sluice_internal_async_test("e14_f3_internal_test")
+-- threaded_evented_internal_test — Threaded/Evented RT-F3 real init_fiber failure
+-- regression test. Uses SLUICE_ASYNC_INTERNAL_TESTING seam to force init_fiber
+-- failure. Links against sluice_async_internal_testing (NOT production sluice_async).
+sluice_internal_async_test("threaded_evented_internal_test")
