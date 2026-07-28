@@ -144,6 +144,15 @@ class ReaderView {
     ModelBufferedReader* buffered_;
 };
 
+// Returns true when the configured limit effectively allows zero bytes.
+// Production's CopyLimit::bytes(0) behaves identically to CopyLimit::nothing()
+// (src/copy.cpp:108-113): both produce an immediate success(0) return without
+// touching endpoints, so the oracle must treat them the same way.
+static bool is_effectively_zero(const CopyConfig& cfg) noexcept {
+    return cfg.limit == LimitKind::Zero ||
+           (cfg.limit == LimitKind::Bounded && cfg.limit_value == 0);
+}
+
 // Check every universal invariant first. These MUST hold on every exit path
 // before any result-specific reasoning, so they are evaluated unconditionally.
 static void check_universal(const CopyConfig& cfg, std::span<const std::byte> source,
@@ -174,8 +183,11 @@ static void check_universal(const CopyConfig& cfg, std::span<const std::byte> so
     // (src/copy.cpp), so when consume_buffered fails after a successful write
     // the sink has bytes that stats does not yet credit. That is the documented
     // CB6 behavior, so this invariant is only checked when consume did not fail
-    // on the buffered path.
-    if (!rv.consume_failed()) {
+    // on the buffered path. Additionally, Writer::write_all may short-write and
+    // then fail (e.g. AfterCalls/AfterBytes in the model), leaving partial bytes
+    // in the sink that stats does not yet credit. Skip the check when a writer
+    // error was injected for the same reason.
+    if (!rv.consume_failed() && !writer.injected()) {
         FUZZ_ASSERT(stats.bytes_written == sink_size);
     }
 
@@ -252,7 +264,9 @@ static void check_oracle(const CopyConfig& cfg, std::span<const std::byte> sourc
     }
 
     // --- Empty scratch with a non-zero/unlimited copy => invalid_state. ---
-    if (cfg.scratch_size == 0 && cfg.limit != LimitKind::Zero) {
+    // Bounded(0) is excluded: production returns success(0) immediately without
+    // touching endpoints (is_effectively_zero).
+    if (cfg.scratch_size == 0 && !is_effectively_zero(cfg)) {
         FUZZ_ASSERT(!result.has_value());
         FUZZ_ASSERT(result.error().code == sluice::IoError::Code::invalid_state);
         FUZZ_ASSERT(rv.read_calls() == 0);
@@ -263,7 +277,9 @@ static void check_oracle(const CopyConfig& cfg, std::span<const std::byte> sourc
     }
 
     // --- Zero limit => success with 0, endpoints never touched. ---
-    if (cfg.limit == LimitKind::Zero) {
+    // Bounded(0) is included: production returns success(0) before any
+    // endpoint operation (src/copy.cpp:108-113).
+    if (is_effectively_zero(cfg)) {
         FUZZ_ASSERT(result.has_value());
         FUZZ_ASSERT(result.value() == 0);
         FUZZ_ASSERT(rv.read_calls() == 0);
