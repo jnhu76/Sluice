@@ -51,7 +51,7 @@ run_tlc() {
 launched() { grep -q '^Starting\.\.\.' "$1" || grep -q 'TLC2 Version' "$1"; }
 passed()   { grep -q 'Model checking completed. No error has been found' "$1"; }
 named_violation() { grep -Eq "Invariant $2 is violated" "$1"; }
-temporal_violation() { grep -Eq "Temporal propert(y|ies) (was|were) violated" "$1"; }
+temporal_violation() { grep -Eq "Temporal propert(y|ies).* (was|were) violated" "$1"; }
 state_count() { grep -oP '\d+ states generated' "$1" | head -1 || echo "states: ?"; }
 
 expect_pass() {
