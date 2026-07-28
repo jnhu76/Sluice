@@ -251,16 +251,19 @@ exit 0). It is unrelated to the fuzz corrective (which touched only `fuzz/`,
 
 ## 7. Documentation CI
 
-DEFERRED UNTIL PR #35 IS MERGED AND PR #36 IS REBASED.
+Previously deferred until PR #35 was merged and PR #36 was rebased. After
+rebasing PR #36 onto the updated master (which includes the PR #35 documentation
+checker corrections), the documentation link checker now reports:
 
-The current Documentation verification CI failure may be caused by PR ordering
-(PR #36 is based on a master revision that may not yet include the documentation
-checker corrections from PR #35). Per the corrective scope, this task did NOT
-touch `scripts/check-doc-links.py`, documentation-link allowlists, the
-documentation gate, the documentation CI step, PR #35 files, or make unrelated
-documentation cleanup. After PR #35 merges, rebase PR #36 onto the new master
-and reassess the documentation gate; do not claim PR #36 is globally CI-green
-until that rebase has happened.
+```
+VERDICT: PASS — no broken links, no stale paths
+```
+
+The only non-zero count is `ENVIRONMENT-CONDITIONAL` entries (gitignored `zig/`
+paths in ADR documents), which are expected and correctly classified as
+environment-conditional (present locally, absent in CI). No actionable broken
+links or stale repository paths remain. No documentation-checker workaround was
+added to PR #36.
 
 ## 8. Residual notes / lessons learned
 
