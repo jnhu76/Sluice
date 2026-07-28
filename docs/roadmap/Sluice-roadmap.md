@@ -45,10 +45,13 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
   * ThreadPoolBackend
   * experimental io_uring backend
 
-* Application Runtime：
+* Application Runtime (E16)：
 
-  * 按当前项目进度视为实现完成；
-  * 仓库文档、ADR 状态和 closeout 仍需同步。
+  * 设计已完成（`docs/design/e16-application-runtime.md`）；
+  * ADR 状态：**Proposed**，实现未授权；
+  * **未实现** — 主分支无 `ApplicationRuntime` / `RuntimeBuilder` / `RuntimeTaskContext`；
+  * 阻塞前提：Group 事务性准入 seam（P2-01）、TLA+ lifecycle 模型（MODEL_REQUIRED, P2-03）；
+  * `public_api_acceptance` 排除 Group/Scheduler/Fiber，不能替代 Runtime acceptance。
 
 * Fuzz Foundation：
 
@@ -60,6 +63,7 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
 
 ## 尚未完成
 
+* E16 Application Runtime（设计已完成，未实现 — 见 §3）
 * 真正的异步 reference application
 * Stackless coroutine execution model
 * Stackful/stackless 应用语义对照
@@ -72,53 +76,60 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
 
 ---
 
-# 3. Milestone 0 — Runtime Truth Sync and Closeout
+# 3. Milestone 0 — E16 Definition Complete; Implementation Not Started
 
-## 目标
+## 当前状态
 
-确保代码、文档、ADR、测试和项目首页描述的是同一个项目状态。
+E16 Application Runtime 已完成了架构设计和 ADR 撰写，但**实现尚未开始**。
 
-## 工作内容
+### 已存在
 
-### 3.1 Runtime 状态同步
+* **设计文档** — `docs/design/e16-application-runtime.md`（2461 行，含完整架构、API 定义、验收契约 A1-A20、变异测试矩阵）；
+* **ADR** — `docs/adr/ADR-application-runtime.md`（736 行，状态：**Proposed**）；
+* **基础组件** — `Scheduler`、`Group`、`Future`、`Completion<T>`、`AsyncIoContext`、`AsyncBackend`、`FakeAsyncBackend`、`ThreadPoolBackend`、全 E10-E15 同步原语。
 
-* 确认 Application Runtime 实现已经进入主分支；
-* 将 Application Runtime ADR 从 Proposed 更新为 Accepted 或 Implemented；
-* 将 E16 设计文档移入历史实现计划目录；
-* 新增 Application Runtime closeout；
-* 更新：
+### 不存在
 
-  * `README.md`
-  * `README.zh-CN.md`
-  * `docs/roadmap/README.md`
-  * `docs/design/README.md`
-  * `docs/adr/README.md`
-  * `docs/changelog.md`
-  * `docs/api-reference.md`
-  * `docs/api-reference-zh.md`
-  * architecture overview
-  * verification matrix
+* `ApplicationRuntime`、`RuntimeBuilder`、`RuntimeTaskContext` — 无 public header，无 `.cpp` 实现，无构建目标；
+* Group 事务性准入 seam（P2-01） — `Group::async_evented` 的三次独立 `push_back` 无 reservation，E16 admission rollback 不正确；
+* TLA+ lifecycle 模型（MODEL_REQUIRED, P2-03） — ADR 接受的前提条件；
+* Runtime public acceptance consumer — 现有的 `public_api_acceptance` 明确排除 Group/Scheduler/Fiber，不能证明 Runtime API；
+* 独立设计审查 — ADR 接受的前提条件。
 
-### 3.2 明确 fuzz 范围
-
-文档必须准确区分：
+### Fuzz 范围说明
 
 ```text
-Fuzz foundation complete:
-    WAL + copy_all in sluice_core
+Fuzz foundation complete (sluice_core):
+    ✓ WAL record decode
+    ✓ WAL round-trip
+    ✓ copy_all fault model
 
-Async runtime verification:
-    deterministic causal tests
-    mutation tests
-    TSan
-    ASan/UBSan
-    death tests
-    formal models
+Async Runtime fuzz:
+    ✗ NOT started — E16 implementation prerequisite
 ```
 
-不得把 core fuzz foundation 描述成“整个异步 Runtime 已完成 fuzz”。
+不得把 core fuzz foundation 描述成"整个异步 Runtime 已完成 fuzz"。
 
-### 3.3 Runtime Public Acceptance
+### 阻塞前提（必须先完成才能实现 E16）
+
+1. **Group 事务性准入 seam（P2-01）** — `Group::async_evented` 必须提供 reservation/commit 或原子的 aggregate task-record 插入；
+2. **TLA+ lifecycle 模型（P2-03）** — 含故意引入错误的 negative/broken 模型；
+3. **独立设计审查** — 无未解决的 P0/P1 findings；
+4. **ADR 从 Proposed 升级为 Accepted**。
+
+## 后续工作
+
+前提满足后，实际实现包括：
+
+* 实现 `ApplicationRuntime` / `RuntimeBuilder` / `RuntimeTaskContext`（头文件 + 源码）；
+* 新增 Runtime public acceptance consumer（见 §3.2）；
+* TLA+ 模型 + 验证脚本；
+* 确定性因果测试 + death tests；
+* ASan / UBSan / TSan 门控；
+* 更新 ADR 状态 → Accepted/Implemented；
+* 同步所有文档。
+
+### 3.2 Runtime Public Acceptance（未来实现后的验收标准）
 
 新增只依赖 installed/public headers 的 Runtime acceptance consumer，至少覆盖：
 
@@ -133,16 +144,6 @@ Async runtime verification:
 * rejected submit after stop
 * task exception terminal accounting
 * outstanding I/O 在 shutdown 前被 reap
-
-## Exit Gate
-
-* clean clone 可以完成完整构建；
-* Runtime acceptance build + run PASS；
-* Debug / Release PASS；
-* ASan + UBSan PASS；
-* TSan PASS；
-* documentation checker PASS；
-* README、ADR、roadmap、changelog 无状态矛盾。
 
 ---
 

@@ -19,8 +19,9 @@ The following phases are **complete** and no longer active:
 
 ### E16 Application Runtime
 
-- **Status:** Not yet proposed or discussed.
-- **Do not present as accepted or planned.**
+- **Status:** Proposed — design only, not implemented.
+- **Preconditions not met:** See `docs/adr/ADR-application-runtime.md` §15, §17.
+- **Do not present as accepted or implemented.**
 
 ### v0.1.x hardening / bug hunt
 
