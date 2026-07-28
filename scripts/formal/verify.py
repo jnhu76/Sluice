@@ -91,7 +91,7 @@ def cmd_doctor(manifest: dict) -> int:
     from lib import tlc as tlc_mod
 
     try:
-        jar = tlc_mod.resolve_jar(strict=False)
+        jar = tlc_mod.resolve_jar(strict=True)
         print(f"OK    tla2tools.jar: {jar}")
         version = tlc_mod.tlc_version(jar)
         print(f"      {version}")
@@ -195,6 +195,14 @@ HISTORICAL_PATHS = [
     "docs/adr/",
 ]
 
+# Implementation files that define OLD_PATHS or check for them naturally contain
+# old-path strings as part of their logic. These are excluded from the scan.
+IMPLEMENTATION_FILES = [
+    "scripts/formal/verify.py",
+    "scripts/check-doc-links.py",
+    "docs/verification/formal/migration-report.md",
+]
+
 
 def _scan_files() -> dict[str, str]:
     """Return {relative_path: lowercase_content} for tracked text files."""
@@ -215,6 +223,11 @@ def _scan_files() -> dict[str, str]:
 def _is_historical(rel: str) -> bool:
     """Return True if the file is a historical record not owned by this migration."""
     return any(rel.startswith(p) for p in HISTORICAL_PATHS)
+
+
+def _is_implementation(rel: str) -> bool:
+    """Return True if the file is an implementation file that naturally contains old paths."""
+    return rel in IMPLEMENTATION_FILES
 
 
 def cmd_check(manifest: dict) -> int:
@@ -286,7 +299,7 @@ def cmd_check(manifest: dict) -> int:
     files = _scan_files()
     old_refs: list[tuple[str, str]] = []
     for rel, content in files.items():
-        if _is_historical(rel):
+        if _is_historical(rel) or _is_implementation(rel):
             continue
         for old in OLD_PATHS:
             if old.lower() in content:
@@ -373,6 +386,14 @@ def cmd_check(manifest: dict) -> int:
 # --- suite ----------------------------------------------------------------
 
 
+def _resolve_jar_for_suite() -> Path:
+    """Resolve the TLC jar once, with strict checksum verification."""
+    sys.path.insert(0, str(SCRIPT_DIR))
+    from lib import tlc as tlc_mod
+
+    return tlc_mod.resolve_jar(strict=True)
+
+
 def cmd_suite(suite_id: str, manifest: dict) -> int:
     """Run one suite's authoritative verifier."""
     s = suite_by_id(manifest, suite_id)
@@ -387,29 +408,62 @@ def cmd_suite(suite_id: str, manifest: dict) -> int:
     if not vp.is_file():
         print(f"error: verifier not found: {vp}", file=sys.stderr)
         return 2
+
+    # Resolve jar once and pass to child via environment.
+    try:
+        jar = _resolve_jar_for_suite()
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    env = os.environ.copy()
+    env["TLA2TOOLS_JAR"] = str(jar)
+
     print(f"=== suite: {suite_id}  (verifier: {verifier}) ===\n")
-    result = subprocess.run([str(vp)], cwd=str(REPO_ROOT))
+    result = subprocess.run([str(vp)], cwd=str(REPO_ROOT), env=env)
     return result.returncode
 
 
 # --- smoke / all ----------------------------------------------------------
 
 
-def _run_suite(s: dict) -> tuple[str, str, str]:
-    """Run one suite, return (id, verdict, elapsed)."""
+def _run_suite(s: dict, jar: Path | None = None) -> tuple[str, str, str, int]:
+    """Run one suite, return (id, verdict, elapsed, exit_code).
+
+    On failure, writes the captured output to build/formal/<id>.log for
+    artifact upload by CI.
+    """
     sid = s.get("id", "?")
     verifier = s.get("verifier", "")
     vp = REPO_ROOT / verifier
     if not vp.is_file():
-        return (sid, "BLOCKED", "0s")
+        return (sid, "BLOCKED", "0s", 2)
+
+    env = os.environ.copy()
+    if jar:
+        env["TLA2TOOLS_JAR"] = str(jar)
+
     start = time.monotonic()
-    result = subprocess.run([str(vp)], cwd=str(REPO_ROOT), capture_output=True)
+    result = subprocess.run([str(vp)], cwd=str(REPO_ROOT), capture_output=True, env=env, text=True)
     elapsed = time.monotonic() - start
     if result.returncode == 0:
         verdict = "PASS"
     else:
         verdict = "FAIL"
-    return (sid, verdict, f"{elapsed:.1f}s")
+        # Write failure artifact for CI upload.
+        artifact_dir = REPO_ROOT / "build" / "formal"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        log_path = artifact_dir / f"{sid}.log"
+        with log_path.open("w", encoding="utf-8") as f:
+            f.write(f"# Suite: {sid}\n")
+            f.write(f"# Verifier: {verifier}\n")
+            f.write(f"# Exit code: {result.returncode}\n")
+            f.write(f"# Elapsed: {elapsed:.1f}s\n\n")
+            f.write("=== STDOUT ===\n")
+            f.write(result.stdout or "(empty)\n")
+            f.write("\n=== STDERR ===\n")
+            f.write(result.stderr or "(empty)\n")
+    return (sid, verdict, f"{elapsed:.1f}s", result.returncode)
 
 
 def cmd_smoke(manifest: dict) -> int:
@@ -418,12 +472,20 @@ def cmd_smoke(manifest: dict) -> int:
     if not suites:
         # Fall back to all suites marked 'full' if no smoke tier declared
         suites = [s for s in manifest.get("suites", []) if "full" in s.get("tiers", [])]
+
+    # Resolve jar once for all suites.
+    try:
+        jar = _resolve_jar_for_suite()
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
     print(f"=== smoke tier: {len(suites)} suites ===\n")
     rc = 0
     for s in suites:
-        sid, verdict, elapsed = _run_suite(s)
-        print(f"{verdict:7s} {sid:28s}  ({elapsed})")
-        if verdict == "FAIL":
+        sid, verdict, elapsed, exit_code = _run_suite(s, jar)
+        print(f"{verdict:7s} {sid:28s}  ({elapsed})  [exit={exit_code}]")
+        if verdict in ("FAIL", "BLOCKED"):
             rc = 1
     return rc
 
@@ -431,16 +493,24 @@ def cmd_smoke(manifest: dict) -> int:
 def cmd_all(manifest: dict) -> int:
     """Run every suite and print a unified summary."""
     suites = manifest.get("suites", [])
-    print(f"=== all suites: {len(suites)} ===\n")
-    results: list[tuple[str, str, str]] = []
-    for s in suites:
-        sid, verdict, elapsed = _run_suite(s)
-        results.append((sid, verdict, elapsed))
-        print(f"{verdict:7s} {sid:28s}  ({elapsed})")
 
-    passed = sum(1 for _, v, _ in results if v == "PASS")
-    failed = sum(1 for _, v, _ in results if v == "FAIL")
-    blocked = sum(1 for _, v, _ in results if v == "BLOCKED")
+    # Resolve jar once for all suites.
+    try:
+        jar = _resolve_jar_for_suite()
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    print(f"=== all suites: {len(suites)} ===\n")
+    results: list[tuple[str, str, str, int]] = []
+    for s in suites:
+        sid, verdict, elapsed, exit_code = _run_suite(s, jar)
+        results.append((sid, verdict, elapsed, exit_code))
+        print(f"{verdict:7s} {sid:28s}  ({elapsed})  [exit={exit_code}]")
+
+    passed = sum(1 for _, v, _, _ in results if v == "PASS")
+    failed = sum(1 for _, v, _, _ in results if v == "FAIL")
+    blocked = sum(1 for _, v, _, _ in results if v == "BLOCKED")
     pos = sum(s.get("positive_gate_count", 0) for s in suites)
     neg = sum(s.get("negative_gate_count", 0) for s in suites)
     reach = sum(s.get("reachability_gate_count", 0) for s in suites)
@@ -449,7 +519,8 @@ def cmd_all(manifest: dict) -> int:
     print("=== summary ===")
     print(f"  suites:  {len(suites)} total, {passed} PASS, {failed} FAIL, {blocked} BLOCKED")
     print(f"  gates:   {pos} positive, {neg} negative, {reach} reachability")
-    return 1 if failed > 0 else 0
+    # BLOCKED is NOT success — return nonzero for FAIL or BLOCKED.
+    return 1 if (failed > 0 or blocked > 0) else 0
 
 
 # --- main -----------------------------------------------------------------

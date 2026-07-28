@@ -91,7 +91,7 @@ The **production** pool (`sluice::BlockingIoPool`, `include/sluice/blocking_io_p
 
 ### 5. Formal verification scope
 
-The TLA+ model in `spec/tla/BlockingIoPool.tla` verifies the **internal
+The TLA+ model in `spec/tla/blocking_io_pool/BlockingIoPool.tla` verifies the **internal
 admission / bounded-queue / dequeue / completion / shutdown-drain protocol**.
 It checks:
 

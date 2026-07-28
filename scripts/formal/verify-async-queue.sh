@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# verify-async-queue-formal.sh -- reproducible E12-E Queue TLA+ / TLC formal gate
-# (E12-E-QUEUE-FORMAL-MODEL-1 / B4), SAFETY ONLY.
+# verify-async-queue.sh -- reproducible E12-E Queue TLA+ / TLC formal gate
+# SAFETY ONLY.
+#
+# Source-safe: TLC runs in an isolated mktemp workspace.
 #
 # Runs the two correct E12 Queue safety models (Model A: bounded MPMC FIFO;
 # Model B: Open/Closed monotonicity) and ALL SEVEN in-scope negative models
@@ -57,7 +59,7 @@
 # Usage:
 #   scripts/verify-async-queue-formal.sh
 #   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-async-queue-formal.sh
-#   TLC_WORKERS=4 scripts/verify-async-queue-formal.sh
+#   TLC_WORKERS=4 scripts/formal/verify-async-queue.sh
 #
 # Exit status: 0 iff every gate produced its expected verdict AND every negative
 # model's expected named property was observed as a violation AND the
@@ -65,16 +67,14 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$here/../.."
+repo="$(cd "$here/../.." && pwd)"
 spec="$repo/spec/tla/e12_queue"
-JAR="${TLA2TOOLS_JAR:-$repo/tla2tools.jar}"
 WORKERS="${TLC_WORKERS:-auto}"
 
-if [ ! -f "$JAR" ]; then
-  echo "error: tla2tools.jar not found at $JAR" >&2
-  echo "  set TLA2TOOLS_JAR=/path/to/tla2tools.jar" >&2
-  exit 2
-fi
+# Resolve jar via shared helper (sets TLA2TOOLS_JAR).
+source "$here/resolve-jar.sh"
+JAR="$TLA2TOOLS_JAR"
+
 if ! command -v java >/dev/null 2>&1; then
   echo "error: java not found on PATH" >&2
   exit 2
@@ -84,16 +84,18 @@ if [ ! -d "$spec" ]; then
   exit 2
 fi
 
-cd "$spec"
-
-# Fresh output directory per invocation (stale-output guard). TLC writes its
-# disk-backed state queue / fpset here, and we must never reuse a prior run's.
-outroot="$(mktemp -d -t e12queue-tlc.XXXXXX)"
+outroot="$(mktemp -d -t sluice-formal.e12-queue.XXXXXX)"
 cleanup() {
-  find . -maxdepth 1 -name '*TTrace*' -delete
-  rm -rf "$outroot"
+  if [[ -n "$outroot" ]] && [[ "$outroot" == *sluice-formal.e12-queue.* ]]; then
+    rm -rf -- "$outroot"
+  fi
 }
 trap cleanup EXIT
+
+workdir="$outroot/work"
+mkdir -p "$workdir"
+cp "$spec"/*.tla "$spec"/*.cfg "$workdir/"
+cd "$workdir"
 
 run() {  # run MODEL CFG OUTFILE
   local model="$1" cfg="$2" outfile="$3"

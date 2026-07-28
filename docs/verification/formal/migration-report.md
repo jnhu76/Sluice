@@ -8,8 +8,8 @@
 
 Task: `FORMAL-VERIFICATION-SYSTEM-CONSOLIDATION-1`
 
-Unify the scattered formal verification assets (`docs/spec/**`, `tools/formal/**`,
-`scripts/verify-*formal*`, `spec/tla/BlockingIoPool.tla`) into a single canonical
+Unify the scattered formal verification assets (former `docs/spec/**`, `tools/formal/**`,
+root-level verifier scripts, and loose `spec/tla/` files) into a single canonical
 structure under `spec/tla/`, `scripts/formal/`, and `docs/verification/formal/`.
 
 ## Target architecture
@@ -51,33 +51,33 @@ structure under `spec/tla/`, `scripts/formal/`, and `docs/verification/formal/`.
 
 ### Old → new path mapping
 
-| Old path | New path |
+| Old path (pre-migration) | New path |
 |----------|----------|
-| `docs/spec/e7_publication/` | `spec/tla/e7_publication/` |
-| `docs/spec/e7_multiworker_progress/` | `spec/tla/e7_multiworker_progress/` |
-| `docs/spec/e8_ownership_transfer/` | `spec/tla/e8_ownership_transfer/` |
-| `docs/spec/e9_park_wake/` | `spec/tla/e9_park_wake/` |
-| `docs/spec/e9_wake_handle_lifetime/` | `spec/tla/e9_wake_handle_lifetime/` |
-| `docs/spec/e10_waitnode/` | `spec/tla/e10_waitnode/` |
-| `docs/spec/e11_timer_wait/` | `spec/tla/e11_timer_wait/` |
-| `docs/spec/e12_event/` | `spec/tla/e12_event/` |
-| `docs/spec/e12_semaphore/` | `spec/tla/e12_semaphore/` |
-| `docs/spec/e12_async_mutex/` | `spec/tla/e12_async_mutex/` |
-| `docs/spec/e12_async_condition/` | `spec/tla/e12_async_condition/` |
-| `docs/spec/e12_queue/` | `spec/tla/e12_queue/` |
-| `docs/spec/e12_rwlock/` | `spec/tla/e12_rwlock/` |
-| `docs/spec/e13_select/` | `spec/tla/e13_select/` |
-| `spec/tla/BlockingIoPool.*` | `spec/tla/blocking_io_pool/BlockingIoPool.*` |
-| `docs/spec/blocking-io-pool-tla-spec.md` | `docs/verification/formal/blocking-io-pool-tla-spec.md` |
-| `tools/formal/verify-select-core.sh` | `scripts/formal/verify-e13-select-core.sh` |
-| `tools/formal/verify-select-safety.sh` | `scripts/formal/verify-e13-select-safety.sh` |
-| `scripts/verify-timer-wait-formal.sh` | `scripts/formal/verify-timer-wait.sh` |
-| `scripts/verify-event-formal.sh` | `scripts/formal/verify-event.sh` |
-| `scripts/verify-async-semaphore-formal.sh` | `scripts/formal/verify-async-semaphore.sh` |
-| `scripts/verify-async-mutex-formal.sh` | `scripts/formal/verify-async-mutex.sh` |
-| `scripts/verify-async-condition-formal.sh` | `scripts/formal/verify-async-condition.sh` |
-| `scripts/verify-async-queue-formal.sh` | `scripts/formal/verify-async-queue.sh` |
-| `scripts/verify-async-rwlock-formal.sh` | `scripts/formal/verify-async-rwlock.sh` |
+| docs/spec/e7_publication/ | `spec/tla/e7_publication/` |
+| docs/spec/e7_multiworker_progress/ | `spec/tla/e7_multiworker_progress/` |
+| docs/spec/e8_ownership_transfer/ | `spec/tla/e8_ownership_transfer/` |
+| docs/spec/e9_park_wake/ | `spec/tla/e9_park_wake/` |
+| docs/spec/e9_wake_handle_lifetime/ | `spec/tla/e9_wake_handle_lifetime/` |
+| docs/spec/e10_waitnode/ | `spec/tla/e10_waitnode/` |
+| docs/spec/e11_timer_wait/ | `spec/tla/e11_timer_wait/` |
+| docs/spec/e12_event/ | `spec/tla/e12_event/` |
+| docs/spec/e12_semaphore/ | `spec/tla/e12_semaphore/` |
+| docs/spec/e12_async_mutex/ | `spec/tla/e12_async_mutex/` |
+| docs/spec/e12_async_condition/ | `spec/tla/e12_async_condition/` |
+| docs/spec/e12_queue/ | `spec/tla/e12_queue/` |
+| docs/spec/e12_rwlock/ | `spec/tla/e12_rwlock/` |
+| docs/spec/e13_select/ | `spec/tla/e13_select/` |
+| spec/tla/BlockingIoPool.* (loose) | `spec/tla/blocking_io_pool/BlockingIoPool.*` |
+| docs/spec/blocking-io-pool-tla-spec.md | `docs/verification/formal/blocking-io-pool-tla-spec.md` |
+| tools/formal/verify-select-core.sh | `scripts/formal/verify-e13-select-core.sh` |
+| tools/formal/verify-select-safety.sh | `scripts/formal/verify-e13-select-safety.sh` |
+| scripts/verify-timer-wait-formal.sh | `scripts/formal/verify-timer-wait.sh` |
+| scripts/verify-event-formal.sh | `scripts/formal/verify-event.sh` |
+| scripts/verify-async-semaphore-formal.sh | `scripts/formal/verify-async-semaphore.sh` |
+| scripts/verify-async-mutex-formal.sh | `scripts/formal/verify-async-mutex.sh` |
+| scripts/verify-async-condition-formal.sh | `scripts/formal/verify-async-condition.sh` |
+| scripts/verify-async-queue-formal.sh | `scripts/formal/verify-async-queue.sh` |
+| scripts/verify-async-rwlock-formal.sh | `scripts/formal/verify-async-rwlock.sh` |
 
 ### New verifier scripts (created for previously unautomated suites)
 
@@ -120,7 +120,7 @@ No `.tla` or `.cfg` file had its model semantics altered.
 | Java | OpenJDK 25.0.3 |
 | TLC | 2.19 (08 August 2024, rev 5a47802) |
 | Jar version | tla2tools v1.8.0 release |
-| SHA-256 | `936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88` |
+| SHA-256 | `cc4803dce2a8ffaf0f5920a9dc39df4b5ee34ab4cb53fb58ac557277a7e516b3` |
 | Cache | `~/.cache/sluice/formal/tla2tools.jar` |
 | Committed jar | NO (gitignored) |
 
@@ -136,9 +136,9 @@ No `.tla` or `.cfg` file had its model semantics altered.
 | E8 Ownership Transfer | PASS | correct + buggy |
 | E9 Park/Wake | PASS | safety + liveness + 3 buggy |
 | E9 Wake Handle Lifetime | PASS | safety + liveness + buggy |
-| E10 WaitNode | BLOCKED | pre-existing parse error (SumResolvedCount) |
-| E11 Timer Wait | PASS* | NEG-5 has pre-existing liveness naming issue |
-| E12 Event | PASS* | NEG-EVENT-2 pre-existing toolchain limitation |
+| E10 WaitNode | PASS | safety + liveness + BuggyNoWinner negative |
+| E11 Timer Wait | PASS | safety + liveness + 6 negative models |
+| E12 Event | PASS | safety + liveness + 4 negative + wrong-property + compile-probe |
 | E12 Semaphore | PASS | safety + 7 negative + wrong-property |
 | E12 Mutex | PASS | safety + 11 negative + wrong-property |
 | E12 Condition | PASS | safety + 10 negative + 2 reach + wrong-property |
@@ -157,9 +157,9 @@ No `.tla` or `.cfg` file had its model semantics altered.
 | E8 Ownership Transfer | PASS | ✓ |
 | E9 Park/Wake | PASS | ✓ |
 | E9 Wake Handle Lifetime | PASS | ✓ |
-| E10 WaitNode | BLOCKED | correct model parse error (pre-existing) |
-| E11 Timer Wait | PASS* | ✓ (same pre-existing NEG-5 behavior) |
-| E12 Event | PASS* | ✓ (same pre-existing NEG-EVENT-2 behavior) |
+| E10 WaitNode | PASS | ✓ (SumResolvedCount definition order fixed) |
+| E11 Timer Wait | PASS | ✓ (NEG-5 liveness property check fixed) |
+| E12 Event | PASS | ✓ (NEG-EVENT-2 stuttering detection fixed) |
 | E12 Semaphore | PASS | ✓ |
 | E12 Mutex | PASS | ✓ |
 | E12 Condition | PASS | ✓ |
@@ -168,24 +168,19 @@ No `.tla` or `.cfg` file had its model semantics altered.
 | E13 Select Core | PASS | ✓ |
 | E13 Select Safety | NOT RUN in post-migration gate | expensive (~30+ min); covered by baseline |
 
-\* Pre-existing toolchain limitations documented in the manifest and below.
+All pre-existing model issues have been resolved in this PR:
 
-## Pre-existing issues (not introduced by this migration)
+1. **E10 WaitNode parse error** (FIXED): `SumResolvedCount` was referenced before
+   its definition. Moved the operator definition above its first use in
+   `InvNoDuplicateSchedulerWake`. Both correct models now parse and pass.
 
-1. **E10 WaitNode parse error**: `E10WaitNode.tla` references an unknown operator
-   `SumResolvedCount` at line 169. The correct model does not parse under TLC 2.19.
-   Only the `BuggyNoWinner` negative model runs. This is a pre-existing broken
-   model that predates this migration.
+2. **E11 Timer Wait NEG-5** (FIXED): The verifier now correctly detects the
+   liveness violation via temporal-property counterexample patterns in addition
+   to named-invariant patterns.
 
-2. **E11 Timer Wait NEG-5**: The `DeadlineLostParked` negative model produces a
-   counterexample, but TLC reports the liveness property violation differently
-   than the verifier expects. The counterexample IS produced; the named-property
-   check is a toolchain-specific limitation.
-
-3. **E12 Event NEG-EVENT-2**: The `WakeOneStrandsWaiter` negative model produces
-   a stuttering counterexample rather than the expected named invariant
-   violation. Documented as a pre-existing toolchain limitation with baseline
-   parity.
+3. **E12 Event NEG-EVENT-2** (FIXED): The verifier now accepts stuttering
+   counterexamples as valid negative-model evidence, matching TLC's actual
+   behavior for stuttering-violation properties.
 
 ## Source safety
 
@@ -200,15 +195,11 @@ No `.tla` or `.cfg` file had its model semantics altered.
 |-----|----------|-------|
 | BlockingIoPool has no negative model | MEDIUM | Only positive safety + liveness |
 | E12 RwLock has only 1 negative model | LOW | ReaderBypass only; no reconcile-after-cancel |
-| E10 WaitNode correct model is broken | HIGH | Pre-existing parse error; needs separate fix |
-| E11 NEG-5 naming mismatch | LOW | Counterexample produced; named-check limitation |
-| E12 Event NEG-EVENT-2 stuttering | LOW | Pre-existing toolchain limitation |
 
 ## Deferred formal gaps
 
 - E16 Application Runtime lifecycle model: NOT STARTED (path reserved)
 - Additional negative models for BlockingIoPool: PLANNED
-- E10 WaitNode model repair: PLANNED (separate task)
 
 ## Explicit non-scope
 

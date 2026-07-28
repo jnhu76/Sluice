@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# verify-async-condition-formal.sh -- reproducible E12-D AsyncCondition TLA+ / TLC
-# formal gate (E12-D-ASYNC-CONDITION-PREPARATION-CORRECTIVE-5), SAFETY ONLY.
+# verify-async-condition.sh -- reproducible E12-D AsyncCondition TLA+ / TLC
+# formal gate, SAFETY ONLY.
+#
+# Source-safe: TLC runs in an isolated mktemp workspace.
 #
 # Runs the correct E12 AsyncCondition safety model and ALL TEN negative models
 # (NEG-C1..NEG-C10) through TLC, asserting each produces its expected result AND
@@ -36,46 +38,49 @@
 #   - the wrong-property gate flags the expected property (defect not specific)
 #   - stale output is reused (a fresh output directory is used per invocation)
 #
-# Requires a tla2tools.jar. By default looks for /tmp/tla2tools.jar (the path
-# the E7-E12 READMEs expect); override with TLA2TOOLS_JAR=/path/to/tla2tools.jar
-# or fetch v1.8.0 from https://github.com/tlaplus/tlaplus/releases.
-#
 # Usage:
-#   scripts/verify-async-condition-formal.sh
-#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-async-condition-formal.sh
+#   scripts/formal/verify-async-condition.sh
+#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/formal/verify-async-condition.sh
 #
 # Exit status: 0 iff every gate produced its expected verdict AND every negative
 # model's expected named property was observed as a violation AND the
 # wrong-property gate did not misfire.
 set -euo pipefail
 
-JAR="${TLA2TOOLS_JAR:-/tmp/tla2tools.jar}"
-if [ ! -f "$JAR" ]; then
-  echo "error: $JAR not found." >&2
-  echo "  fetch: curl -sSL -o /tmp/tla2tools.jar \\" >&2
-  echo "    'https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar'" >&2
-  exit 2
-fi
-
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$here/../.."
+repo="$(cd "$here/../.." && pwd)"
 spec="$repo/spec/tla/e12_async_condition"
-cd "$spec"
+
+# Resolve jar via shared helper (sets TLA2TOOLS_JAR).
+source "$here/resolve-jar.sh"
+JAR="$TLA2TOOLS_JAR"
 
 # C++ compiler for the COMPILE-PROBE authority-seal gate (§1.4).
 CXX_BIN="${CXX:-c++}"
-# Fresh output directory per invocation (stale-output guard).
-outroot="$(mktemp -d -t e12cnd-tlc.XXXXXX)"
+
+if ! command -v java >/dev/null 2>&1; then
+  echo "error: java not found on PATH" >&2; exit 2
+fi
+
+outroot="$(mktemp -d -t sluice-formal.e12-cnd.XXXXXX)"
 cleanup() {
-  find . -maxdepth 1 -name '*TTrace*' -delete
-  rm -rf "$outroot"
+  if [[ -n "$outroot" ]] && [[ "$outroot" == *sluice-formal.e12-cnd.* ]]; then
+    rm -rf -- "$outroot"
+  fi
 }
 trap cleanup EXIT
 
+workdir="$outroot/work"
+mkdir -p "$workdir"
+cp "$spec"/*.tla "$spec"/*.cfg "$workdir/"
+cd "$workdir"
+
 run() {  # run MODEL CFG OUTFILE
   local model="$1" cfg="$2" outfile="$3"
+  local metadir="$outroot/meta-$model"
+  mkdir -p "$metadir"
   java -XX:+UseParallelGC -cp "$JAR" tlc2.TLC -nowarning \
-       -config "$cfg" "$model" >"$outfile" 2>&1
+       -config "$cfg" -cleanup -workers auto -metadir "$metadir" "$model" >"$outfile" 2>&1
   return 0  # tolerate TLC's nonzero exit on counterexample
 }
 
@@ -317,9 +322,6 @@ fi
 echo
 echo "--- TLC runtime version (actual) ---"
 tlc_version
-echo "  TLA+ tools release tag: not associated with a verified release tag"
-echo "    (the jar is a 2026 development build; no v1.8.0 association asserted"
-echo "     without jar-metadata proof)"
 echo
 echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + wrong-property gate + compile-probe) ==="
 exit "$rc"

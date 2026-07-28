@@ -1,6 +1,6 @@
 # E13 Select Formal Safety 实现计划 (PR #18)
 
-> **面向 AI 代理的工作者：** 在 `feat/e13-select-formal-safety` 分支内施工；基线权限 commit 为 `57435a913ad6d679df19a17f17f1c36e711dfc60`（PR #17 合并）。严禁修改、删除、暂存或提交预存未追踪文件 `tests/test_t3_simple.cpp` 与 `tla2tools.jar`。仅允许新增/修改 `docs/spec/e13_select/**`、docs/formal/** (historical path, target not preserved)、`docs/history/reviews/**`、`tools/formal/**`。
+> **面向 AI 代理的工作者：** 在 `feat/e13-select-formal-safety` 分支内施工；基线权限 commit 为 `57435a913ad6d679df19a17f17f1c36e711dfc60`（PR #17 合并）。严禁修改、删除、暂存或提交预存未追踪文件 `tests/test_t3_simple.cpp` 与 `tla2tools.jar`。仅允许新增/修改 `spec/tla/e13_select/`、docs/formal/** (historical path, target not preserved)、`docs/history/reviews/**`、`tools/formal/**`。
 
 **目标：** 在 PR #17 三层正式模型基础上，加入分层 safety invariants、focused negative models、non-vacuity evidence、bounded multi-group non-interference、可重复 source-safe verifier，闭合 E13 Select 的安全基础。不写任何生产 C++。
 

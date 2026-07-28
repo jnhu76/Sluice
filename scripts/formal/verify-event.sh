@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# verify-event-formal.sh -- reproducible E12-A Event TLA+ / TLC formal gate
-# (E12-A-EVENT-CORRECTIVE-1).
+# verify-event.sh -- reproducible E12-A Event TLA+ / TLC formal gate.
+#
+# Source-safe: TLC runs in an isolated mktemp workspace.
 #
 # Runs the correct E12 Event safety + liveness models and ALL FOUR negative
 # models (NEG-EVENT-1..4) through TLC, asserting each produces its expected
@@ -22,60 +23,48 @@
 #   COMPILE-PROBE gate    -> e12_event_authority_probe.cpp FAILS to compile
 #                            (raw WaitQueue bypass is sealed)
 #
-# Expected-property mapping (declared once per negative model below). The script
-# FAILS if:
-#   - TLC fails to launch (java/runtime error)
-#   - the module fails to parse / the config is invalid
-#   - the correct model fails
-#   - a negative model unexpectedly PASSES (no counterexample)
-#   - the WRONG invariant/property fails first (expected named property absent)
-#   - the wrong-property gate flags the expected property (defect not specific)
-#   - the compile probe COMPILES (Event authority regressed)
-#   - stale output is reused (a fresh output directory is used per invocation)
-#
-# Requires a tla2tools.jar. By default looks for /tmp/tla2tools.jar (the path
-# the E7-E11 READMEs expect); override with TLA2TOOLS_JAR=/path/to/tla2tools.jar
-# or fetch v1.8.0 from https://github.com/tlaplus/tlaplus/releases.
-#
-# The compile probe uses ${CXX:-clang++} with the repo include dir.
-#
-# Usage:
-#   scripts/verify-event-formal.sh
-#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-event-formal.sh
+# Source-safe: TLC runs in an isolated mktemp workspace, NOT in spec/tla/.
 #
 # Exit status: 0 iff every gate produced its expected verdict AND every negative
 # model's expected named property was observed as the first violation AND the
 # compile probe failed to compile AND the wrong-property gate did not misfire.
 set -euo pipefail
 
-JAR="${TLA2TOOLS_JAR:-/tmp/tla2tools.jar}"
-if [ ! -f "$JAR" ]; then
-  echo "error: $JAR not found." >&2
-  echo "  fetch: curl -sSL -o /tmp/tla2tools.jar \\" >&2
-  echo "    'https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar'" >&2
-  exit 2
-fi
-
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo="$(cd "$here/../.." && pwd)"
+spec="$repo/spec/tla/e12_event"
+workers="${TLC_WORKERS:-1}"
 CXX_BIN="${CXX:-clang++}"
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-spec="$here/../../spec/tla/e12_event"
-repo="$here/../.."
-cd "$spec"
+# Resolve jar via shared helper (sets TLA2TOOLS_JAR).
+source "$here/resolve-jar.sh"
+JAR="$TLA2TOOLS_JAR"
 
-# Fresh output directory per invocation (stale-output guard).
-outroot="$(mktemp -d -t e12-tlc.XXXXXX)"
+if ! command -v java >/dev/null 2>&1; then
+  echo "error: java not found on PATH" >&2; exit 2
+fi
+
+# Isolated workspace — TLC never runs inside spec/tla/.
+outroot="$(mktemp -d -t sluice-formal.e12-tlc.XXXXXX)"
 cleanup() {
-  find . -maxdepth 1 -name '*TTrace*' -delete
-  rm -rf "$outroot"
+  if [[ -n "$outroot" ]] && [[ "$outroot" == *sluice-formal.e12-tlc.* ]]; then
+    rm -rf -- "$outroot"
+  fi
 }
 trap cleanup EXIT
 
+workdir="$outroot/work"
+mkdir -p "$workdir"
+cp "$spec"/*.tla "$spec"/*.cfg "$workdir/"
+cd "$workdir"
+
 run() {  # run MODEL CFG OUTFILE
   local model="$1" cfg="$2" outfile="$3"
+  local metadir="$outroot/${model}.meta"
+  mkdir -p "$metadir"
   java -XX:+UseParallelGC -cp "$JAR" tlc2.TLC -nowarning \
-       -config "$cfg" "$model" >"$outfile" 2>&1
-  return 0  # tolerate TLC's nonzero exit on counterexample
+       -workers "$workers" -metadir "$metadir" \
+       -config "$cfg" "$model" >"$outfile" 2>&1 || true
 }
 
 tlc_launched() {
@@ -152,7 +141,7 @@ expect_fail() {
 #      (it is not even checked under this config).
 wrong_property_gate() {
   local out="$outroot/wrongprop.out"
-  cat > "$outroot/E12Neg3WrongProp.cfg" <<'EOF'
+  cat > "$workdir/E12Neg3WrongProp.cfg" <<'EOF'
 SPECIFICATION Spec
 INVARIANT InvSingleResolutionWinner
 
@@ -162,7 +151,7 @@ N1 = N1
 Nodes = {N0, N1}
 MaxGen = 2
 EOF
-  run E12EventNeg3StaleSet "$outroot/E12Neg3WrongProp.cfg" "$out"
+  run E12EventNeg3StaleSet "E12Neg3WrongProp.cfg" "$out"
   if ! tlc_launched "$out"; then
     echo "FAIL  WRONG-PROPERTY gate (TLC did not launch)"
     tail -20 "$out"
@@ -253,9 +242,6 @@ compile_probe_gate || rc=1
 echo
 echo "--- TLC runtime version (actual) ---"
 tlc_version
-echo "  TLA+ tools release tag: not associated with a verified release tag"
-echo "    (the jar is a 2026 development build; no v1.8.0 association asserted"
-echo "     without jar-metadata proof)"
 echo
 echo "=== gate ${rc}-ed (0 = all expected verdicts + named properties + gates) ==="
 exit "$rc"

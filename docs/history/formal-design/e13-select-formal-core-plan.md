@@ -49,7 +49,7 @@
 **文件：**
 - 创建：`docs/spec/e13_select/E13SelectEventTimer.tla`
 - 修改：`docs/spec/e13_select/E13Select.tla`
-- 修改：`docs/spec/e13_select/E13Select*.cfg`
+- 修改：`spec/tla/e13_select/E13Select*.cfg`
 
 - [x] 建模 Event identity、arm-to-Event mapping、admission observation 与不可绕过的两阶段 broadcast。
 - [x] 建模 Timer Active gate、node dereference history、winner consume、loser cancel-before-retire、stale skip。

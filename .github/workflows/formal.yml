@@ -3,8 +3,11 @@
 # Two tiers:
 #   PR smoke  : runs on PR touch to spec/tla/**, scripts/formal/**,
 #               docs/verification/formal/**, and this workflow file.
-#               Runs bootstrap + doctor + check + smoke.
+#               Runs bootstrap + doctor + check + smoke in ONE job.
 #   Full      : workflow_dispatch only. Runs bootstrap + doctor + check + all.
+#
+# IMPORTANT: GitHub Actions jobs do NOT share filesystems. Each job that
+# needs the TLC jar must independently: setup-java, restore cache, bootstrap.
 #
 # The full suite includes expensive models (E13 Select core runs ~10 min for
 # the 4-arm root alone). The smoke tier is measured-fast suites only.
@@ -37,39 +40,10 @@ permissions:
   contents: read
 
 jobs:
-  bootstrap:
-    name: Bootstrap TLA+ tools
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Cache tla2tools.jar
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/sluice/formal/
-          key: tla2tools-${{ hashFiles('scripts/formal/tla2tools.lock.json') }}
-
-      - name: Bootstrap
-        run: python3 scripts/formal/bootstrap.py
-
-  check:
-    name: Structural checks
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Verify manifest and structure
-        run: |
-          python3 scripts/formal/verify.py doctor
-          python3 scripts/formal/verify.py check
-
-  smoke:
-    name: PR smoke tier
-    needs: [bootstrap, check]
+  # Combined PR gate: bootstrap + doctor + check + smoke in one job.
+  # Jobs do not share filesystems, so everything runs sequentially here.
+  pr-gate:
+    name: PR formal gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -83,27 +57,38 @@ jobs:
           java-version: "21"
 
       - name: Restore tla2tools.jar cache
+        id: cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/sluice/formal/
           key: tla2tools-${{ hashFiles('scripts/formal/tla2tools.lock.json') }}
 
-      - name: Run smoke tier
+      - name: Bootstrap TLA+ tools
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: python3 scripts/formal/bootstrap.py
+
+      - name: Doctor (strict toolchain verification)
+        run: python3 scripts/formal/verify.py doctor
+
+      - name: Structural checks
+        run: python3 scripts/formal/verify.py check
+
+      - name: PR smoke tier
         run: python3 scripts/formal/verify.py smoke
 
       - name: Upload artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: formal-smoke-${{ github.run_id }}
+          name: formal-pr-gate-${{ github.run_id }}
           path: build/formal/**
           if-no-files-found: ignore
           retention-days: 7
 
+  # Full verification: workflow_dispatch only, mode=all.
   full:
     name: Full verification
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'all'
-    needs: [bootstrap, check]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -117,10 +102,21 @@ jobs:
           java-version: "21"
 
       - name: Restore tla2tools.jar cache
+        id: cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/sluice/formal/
           key: tla2tools-${{ hashFiles('scripts/formal/tla2tools.lock.json') }}
+
+      - name: Bootstrap TLA+ tools
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: python3 scripts/formal/bootstrap.py
+
+      - name: Doctor (strict toolchain verification)
+        run: python3 scripts/formal/verify.py doctor
+
+      - name: Structural checks
+        run: python3 scripts/formal/verify.py check
 
       - name: Run all suites
         run: python3 scripts/formal/verify.py all

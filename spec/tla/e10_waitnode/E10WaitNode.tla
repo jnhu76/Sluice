@@ -162,17 +162,18 @@ InvTerminalNotLinked ==
     \A n \in Nodes :
         (nodeState[n] = "Woken" \/ nodeState[n] = "Cancelled") => ~linked[n]
 
+(* Helper: sum of resolvedCount over all nodes. Domain is fixed Nodes = {N0,N1};
+   a direct sum avoids the broken RECURSIVE SumOver that indexed the constant
+   Nodes instead of the function domain (TLC evaluation error on sub-domains).
+   Defined BEFORE InvNoDuplicateSchedulerWake which references it. *)
+SumResolvedCount ==
+    resolvedCount[N0] + resolvedCount[N1]
+
 (* NoDuplicateSchedulerWake: the number of scheduler-wake intents equals the
    total number of winning resolutions (each winner dispatches exactly once;
    losers dispatch zero times). wakeDispatched = Sum resolvedCount. *)
 InvNoDuplicateSchedulerWake ==
     wakeDispatched = SumResolvedCount
-
-(* Helper: sum of resolvedCount over all nodes. Domain is fixed Nodes = {N0,N1};
-   a direct sum avoids the broken RECURSIVE SumOver that indexed the constant
-   Nodes instead of the function domain (TLC evaluation error on sub-domains). *)
-SumResolvedCount ==
-    resolvedCount[N0] + resolvedCount[N1]
 
 Inv ==
     /\ InvNoDoubleCompletion

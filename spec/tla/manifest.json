@@ -86,7 +86,7 @@
       "reachability_gate_count": 0,
       "owner_docs": ["docs/history/closeout/e10-waitnode-wait-queue.md"],
       "implementation_bindings": [],
-      "notes": "COVERAGE GAP: E10WaitNode.tla has a pre-existing semantic error (unknown operator SumResolvedCount at line 169). The correct model does not parse under TLC 2.19. Only the BuggyNoWinner negative model runs. The correct safety/liveness models are BLOCKED."
+      "notes": "Safety + liveness correct models, BuggyNoWinner negative model expects InvNoDoubleCompletion violation."
     },
     {
       "id": "e11-timer-wait",
@@ -110,7 +110,7 @@
       "reachability_gate_count": 0,
       "owner_docs": ["docs/history/closeout/e12-event.md"],
       "implementation_bindings": [],
-      "notes": "Safety + liveness correct, 4 negative models, wrong-property gate, compile-probe gate. BASELINE: NEG-EVENT-2 has a known toolchain limitation (pre-existing)."
+      "notes": "Safety + liveness correct, 4 negative models, wrong-property gate, compile-probe gate."
     },
     {
       "id": "e12-semaphore",

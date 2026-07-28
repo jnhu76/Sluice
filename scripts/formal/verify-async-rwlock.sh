@@ -1,33 +1,30 @@
 #!/usr/bin/env bash
-# verify-async-rwlock-formal.sh -- E12-F AsyncRwLock TLA+ / TLC formal gate.
+# verify-async-rwlock.sh -- E12-F AsyncRwLock TLA+ / TLC formal gate.
 #
 # Runs the correct E12 RwLock safety model and the negative model through TLC:
 #
 #   E12RwLock (correct)           -> 10 named invariants PASS
 #   E12RwLockNegReaderBypass      -> NoReaderBarging FAILS (reader barging bug)
 #
-# Requires tla2tools.jar. By default uses $repo/tla2tools.jar; override with
-# TLA2TOOLS_JAR=/path/to/tla2tools.jar.
+# Source-safe: TLC runs in an isolated mktemp workspace.
 #
 # Usage:
-#   scripts/verify-async-rwlock-formal.sh
-#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-async-rwlock-formal.sh
+#   scripts/formal/verify-async-rwlock.sh
+#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/formal/verify-async-rwlock.sh
 #
 # Exit status: 0 iff the correct model passes AND the negative model produces
 # a counterexample for the expected property.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$here/../.."
+repo="$(cd "$here/../.." && pwd)"
 spec="$repo/spec/tla/e12_rwlock"
-JAR="${TLA2TOOLS_JAR:-$repo/tla2tools.jar}"
 WORKERS="${TLC_WORKERS:-auto}"
 
-if [ ! -f "$JAR" ]; then
-  echo "error: tla2tools.jar not found at $JAR" >&2
-  echo "  set TLA2TOOLS_JAR=/path/to/tla2tools.jar" >&2
-  exit 2
-fi
+# Resolve jar via shared helper (sets TLA2TOOLS_JAR).
+source "$here/resolve-jar.sh"
+JAR="$TLA2TOOLS_JAR"
+
 if ! command -v java >/dev/null 2>&1; then
   echo "error: java not found on PATH" >&2
   exit 2
@@ -37,11 +34,18 @@ if [ ! -d "$spec" ]; then
   exit 2
 fi
 
-cd "$spec"
-
-outroot="$(mktemp -d -t e12rwlock-tlc.XXXXXX)"
-cleanup() { rm -rf "$outroot"; }
+outroot="$(mktemp -d -t sluice-formal.e12-rwlock.XXXXXX)"
+cleanup() {
+  if [[ -n "$outroot" ]] && [[ "$outroot" == *sluice-formal.e12-rwlock.* ]]; then
+    rm -rf -- "$outroot"
+  fi
+}
 trap cleanup EXIT
+
+workdir="$outroot/work"
+mkdir -p "$workdir"
+cp "$spec"/*.tla "$spec"/*.cfg "$workdir/"
+cd "$workdir"
 
 run() {
   local model="$1" cfg="$2" outfile="$3"
@@ -105,7 +109,7 @@ expect_fail() {
   return 0
 }
 
-echo "=== E12-F AsyncRwLock formal gate (TLC2, jar=$JAR; workers=$WORKERS) ==="
+echo "=== E12-F AsyncRwLock formal gate (TLC2, workers=$WORKERS) ==="
 echo
 rc=0
 

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# verify-timer-wait-formal.sh — reproducible E11 TLA+ / TLC formal gate (M8).
+# verify-timer-wait.sh — reproducible E11 TLA+ / TLC formal gate.
+#
+# Source-safe: TLC runs in an isolated mktemp workspace.
 #
 # Runs the correct E11 safety + liveness models and all six negative models
 # (NEG-1..NEG-6) through TLC, asserting each produces its expected result AND
@@ -15,53 +17,46 @@
 #   NEG-5              -> DeadlineParkLiveness FAILS (liveness)
 #   NEG-6              -> InvDeadlineAdmissionClosure FAILS
 #
-# Expected-property mapping (declared once per negative model below). The script
-# FAILS if:
-#   - TLC fails to launch (java/runtime error)
-#   - the module fails to parse
-#   - the config is invalid
-#   - the WRONG invariant/property fails first (expected named property absent)
-#   - a negative model unexpectedly PASSES (no counterexample)
-#   - stale output is parsed (a fresh output file is used per invocation)
-#
-# Requires a tla2tools.jar. By default looks for /tmp/tla2tools.jar (the path
-# the E7-E10 READMEs expect); override with TLA2TOOLS_JAR=/path/to/tla2tools.jar
-# or fetch v1.8.0 from https://github.com/tlaplus/tlaplus/releases.
-#
-# Usage:
-#   scripts/verify-timer-wait-formal.sh
-#   TLA2TOOLS_JAR=/opt/tla2tools.jar scripts/verify-timer-wait-formal.sh
+# Source-safe: TLC runs in an isolated mktemp workspace, NOT in spec/tla/.
 #
 # Exit status: 0 iff every model produced its expected verdict AND every negative
 # model's expected named property was observed as the first violation.
 set -euo pipefail
 
-JAR="${TLA2TOOLS_JAR:-/tmp/tla2tools.jar}"
-if [ ! -f "$JAR" ]; then
-  echo "error: $JAR not found." >&2
-  echo "  fetch: curl -sSL -o /tmp/tla2tools.jar \\" >&2
-  echo "    'https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar'" >&2
-  exit 2
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo="$(cd "$here/../.." && pwd)"
+spec="$repo/spec/tla/e11_timer_wait"
+workers="${TLC_WORKERS:-1}"
+
+# Resolve jar via shared helper (sets TLA2TOOLS_JAR).
+source "$here/resolve-jar.sh"
+JAR="$TLA2TOOLS_JAR"
+
+if ! command -v java >/dev/null 2>&1; then
+  echo "error: java not found on PATH" >&2; exit 2
 fi
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-spec="$here/../../spec/tla/e11_timer_wait"
-cd "$spec"
-
-# Fresh per-invocation output directory. No stale output is ever parsed: each
-# run() writes to its own timestamped file inside this dir; comparisons read
-# only that file. Cleaned on exit (incl. TLC *_TTrace* trace-exploration files).
-outroot="$(mktemp -d -t e11-tlc.XXXXXX)"
+# Isolated workspace — TLC never runs inside spec/tla/.
+outroot="$(mktemp -d -t sluice-formal.e11-tlc.XXXXXX)"
 cleanup() {
-  find . -maxdepth 1 -name '*TTrace*' -delete 2>/dev/null || true
-  rm -rf "$outroot"
+  if [[ -n "$outroot" ]] && [[ "$outroot" == *sluice-formal.e11-tlc.* ]]; then
+    rm -rf -- "$outroot"
+  fi
 }
 trap cleanup EXIT
 
+workdir="$outroot/work"
+mkdir -p "$workdir"
+cp "$spec"/*.tla "$spec"/*.cfg "$workdir/"
+cd "$workdir"
+
 run() {  # run MODEL CFG OUTFILE  -> prints nothing; writes TLC stdout+stderr to OUTFILE
   local model="$1" cfg="$2" outfile="$3"
+  local metadir="$outroot/${model}.meta"
+  mkdir -p "$metadir"
   java -XX:+UseParallelGC -cp "$JAR" tlc2.TLC -nowarning \
-       -config "$cfg" "$model" >"$outfile" 2>&1
+       -workers "$workers" -metadir "$metadir" \
+       -config "$cfg" "$model" >"$outfile" 2>&1 || true
 }
 
 # A TLC launch failure (java error, module parse failure, config error) leaves
@@ -91,9 +86,7 @@ named_violation() {  # named_violation OUTFILE EXPECTED_PROPERTY
 expect_pass() {  # expect_pass LABEL MODEL CFG OUTFILE_TAG
   local label="$1" model="$2" cfg="$3" tag="${4:-$2}" outfile
   outfile="$outroot/${tag}.out"
-  if ! run "$model" "$cfg" "$outfile"; then
-    : # TLC may exit nonzero on a counterexample; for a PASS model that is a failure
-  fi
+  run "$model" "$cfg" "$outfile"
   if ! tlc_launched "$outfile"; then
     printf 'FAIL  %s: TLC failed to launch / parse error\n' "$label"; return 1
   fi
@@ -112,9 +105,7 @@ expect_pass() {  # expect_pass LABEL MODEL CFG OUTFILE_TAG
 expect_fail() {
   local label="$1" model="$2" cfg="$3" expected="$4" outfile
   outfile="$outroot/${model}.out"
-  if ! run "$model" "$cfg" "$outfile"; then
-    : # nonzero exit is normal for a counterexample
-  fi
+  run "$model" "$cfg" "$outfile"
   if ! tlc_launched "$outfile"; then
     printf 'FAIL  %s: TLC failed to launch / parse error\n' "$label"; return 1
   fi

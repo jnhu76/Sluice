@@ -11,21 +11,19 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 spec="$repo/spec/tla/e10_waitnode"
-jar="${TLA2TOOLS_JAR:-$repo/tla2tools.jar}"
 workers="${TLC_WORKERS:-1}"
 
-if [[ ! -f "$jar" ]]; then
-  echo "error: tla2tools.jar not found at $jar" >&2; exit 2
-fi
+# Resolve jar via shared helper (sets TLA2TOOLS_JAR).
+source "$here/resolve-jar.sh"
+jar="$TLA2TOOLS_JAR"
+
 if ! command -v java >/dev/null 2>&1; then
   echo "error: java not found on PATH" >&2; exit 2
 fi
 
-outroot="$(mktemp -d -t e10-wn.XXXXXX)"
+outroot="$(mktemp -d -t sluice-formal.e10-wn.XXXXXX)"
 cleanup() {
-  if [[ -n "$outroot" ]] \
-     && [[ "$outroot" == /tmp/e10-wn.* \
-           || "$outroot" == "${TMPDIR:-/tmp}"/e10-wn.* ]]; then
+  if [[ -n "$outroot" ]] && [[ "$outroot" == *sluice-formal.e10-wn.* ]]; then
     rm -rf -- "$outroot"
   fi
 }
@@ -71,18 +69,14 @@ expect_fail() {
 
 rc=0
 echo "=== E10 WaitNode formal gate (workers=$workers) ==="
-# BASELINE: E10WaitNode.tla has a pre-existing semantic error (unknown operator
-# `SumResolvedCount` at line 169). The model does not parse under TLC 2.19.
-# This is a pre-existing broken model documented in the migration report.
-# The verifier reports BLOCKED instead of FAIL to distinguish tool-chain
-# failures from model defects.
-if java -XX:+UseParallelGC -cp "$jar" tlc2.TLC -nowarning -workers 1 \
-     -config E10WaitNode.cfg E10WaitNode >/dev/null 2>&1; then
-  expect_pass "E10WaitNode [safety]" E10WaitNode E10WaitNode.cfg safety || rc=1
-  expect_pass "E10WaitNode [liveness]" E10WaitNode E10WaitNodeLiveness.cfg liveness || rc=1
-else
-  echo "BLOCKED E10WaitNode (pre-existing parse error: unknown operator SumResolvedCount)"
-fi
+
+# Run the correct safety model.
+expect_pass "E10WaitNode [safety]" E10WaitNode E10WaitNode.cfg safety || rc=1
+
+# Run the correct liveness model.
+expect_pass "E10WaitNode [liveness]" E10WaitNode E10WaitNodeLiveness.cfg liveness || rc=1
+
+# Run the buggy model — must violate InvNoDoubleCompletion.
 expect_fail "BuggyNoWinner" E10WaitNodeBuggyNoWinner \
   E10WaitNodeBuggyNoWinner.cfg InvNoDoubleCompletion buggy || rc=1
 
