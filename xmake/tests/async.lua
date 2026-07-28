@@ -164,3 +164,7 @@ sluice_production_async_test("wait_queue_unlink_topology_test")
 -- RT-F1 (external-producer wake), RT-F3 (init_fiber failure), RT-F4 (size
 -- parity), RT-F5a (supported-target admission no-op).
 sluice_production_async_test("threaded_evented_parity_test")
+
+-- E16 ApplicationRuntime lifecycle tests.
+-- ADR: docs/adr/ADR-application-runtime.md (Accepted).
+sluice_production_async_test("application_runtime_test")

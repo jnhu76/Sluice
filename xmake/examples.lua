@@ -48,3 +48,21 @@ do
             add_files(p)
     end
 end
+
+-- runtime_acceptance — public-only acceptance consumer for the Application
+-- Runtime (E16). Uses INSTALLED/PUBLIC headers only (no tests/ include path,
+-- no SLUICE_ASYNC_INTERNAL_TESTING, no private source). Exercises
+-- RuntimeBuilder + ApplicationRuntime lifecycle end-to-end.
+do
+    local R = SLUICE_ROOT
+    local p = R .. "examples/runtime_acceptance.cpp"
+    if os.isfile(p) then
+        target("runtime_acceptance")
+            set_kind("binary")
+            set_default(false)
+            set_group("examples")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include")
+            add_files(p)
+    end
+end

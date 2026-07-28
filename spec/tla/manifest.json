@@ -195,6 +195,18 @@
       "owner_docs": ["docs/history/formal-design/e13-select-formal-safety-design.md"],
       "implementation_bindings": [],
       "notes": "Layered formal safety (PR #18). Multi-layer safety aggregates, multi-group non-interference, widened-domain refinement, Contract NEG-C1..C9, Central NEG-S1..S7, Event/Timer/Accounting NEG-E1..E6/T1..T5/A1..A4, MG NEG-MG1, restoration checks, per-law non-vacuity witnesses, PR #17 regression."
+    },
+    {
+      "id": "e16-application-runtime",
+      "spec_dir": "spec/tla/e16_application_runtime",
+      "verifier": "scripts/formal/verify-e16-application-runtime.sh",
+      "tiers": ["smoke"],
+      "positive_gate_count": 3,
+      "negative_gate_count": 4,
+      "reachability_gate_count": 16,
+      "owner_docs": [],
+      "implementation_bindings": [],
+      "notes": "E16 Application Runtime lifecycle. Safety + liveness (Live5) + wide-domain. NEG-E16-1 BoundaryWake (temporal), NEG-E16-2 StopClose, NEG-E16-3 StartupAbort, NEG-E16-4 CloseOwner. R1-R16 reachability witnesses."
     }
   ]
 }
