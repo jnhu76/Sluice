@@ -34,6 +34,7 @@
 #include <new>       // std::bad_alloc (E15-P2-02 test seam)
 #include <stdexcept>
 #include <thread>
+#include <type_traits>  // std::is_nothrow_move_constructible_v (P2-01 commit static_asserts)
 #include <utility>
 #include <vector>
 

@@ -46,7 +46,9 @@
 #include <sluice/result.hpp>
 
 #include <atomic>
+#include <memory>    // std::make_unique
 #include <new>       // std::bad_alloc
+#include <stdexcept> // std::runtime_error
 #include <vector>
 
 using namespace sluice::async;
