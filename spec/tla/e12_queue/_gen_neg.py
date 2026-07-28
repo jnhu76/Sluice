@@ -48,6 +48,30 @@ Items = {{I0, I1, I2}}
 Capacity = 1
 """
 
+# Model B negatives are generated from E12QueueClosed.tla, which declares the
+# NoSnap model-value sentinel (the ghost closedRing "no snapshot yet" state).
+# Their cfg MUST bind NoSnap = NoSnap, or TLC reports an unassigned CONSTANT.
+CFG_B = """\
+SPECIFICATION Spec
+INVARIANT {inv}
+
+CONSTANTS
+P0 = P0
+P1 = P1
+P2 = P2
+C0 = C0
+C1 = C1
+C2 = C2
+I0 = I0
+I1 = I1
+I2 = I2
+PNodes = {{P0, P1, P2}}
+CNodes = {{C0, C1, C2}}
+Items = {{I0, I1, I2}}
+Capacity = 1
+NoSnap = NoSnap
+"""
+
 
 def replace_action(text, name, new_body):
     """Replace the action definition `name == ...` with new_body (which must
@@ -69,7 +93,7 @@ def replace_action(text, name, new_body):
 
 
 def gen(parent_text, parent_mod, modname, header_desc, action_name, defect_body,
-        expected_inv):
+        expected_inv, cfg_template=CFG_A):
     text = parent_text.replace(f"MODULE {parent_mod}", f"MODULE {modname}", 1)
     text = replace_action(text, action_name, defect_body)
     body = text[text.index("EXTENDS"):]
@@ -81,7 +105,7 @@ def gen(parent_text, parent_mod, modname, header_desc, action_name, defect_body,
         f"{expected_inv}.\n*)\n"
     )
     (HERE / f"{modname}.tla").write_text(header + body + "\n")
-    (HERE / f"{modname}.cfg").write_text(CFG_A.format(inv=expected_inv))
+    (HERE / f"{modname}.cfg").write_text(cfg_template.format(inv=expected_inv))
     print(f"{modname}: {action_name} -> {expected_inv}")
 
 
@@ -294,16 +318,19 @@ gen(MODEL_A, "E12Queue", "E12QueueNegPublishBeforeCommit",
 gen(MODEL_B, "E12QueueClosed", "E12QueueNegCommitAfterClose",
     "NEG-QUEUE-5: CommitAfterClose. FastPushCommit drops the queueState = Open "
     "guard, allowing a producer commit into the ring after close linearizes.",
-    "FastPushCommit", NEG_COMMITCLOSE, "NoCommitAfterClose")
+    "FastPushCommit", NEG_COMMITCLOSE, "NoCommitAfterClose",
+    cfg_template=CFG_B)
 
 gen(MODEL_B, "E12QueueClosed", "E12QueueNegCloseDiscardsBuffer",
     "NEG-QUEUE-6: CloseDiscardsBuffer. CloseLinearize clears the ring and "
     "releases all buffered items (discards them) instead of leaving them "
     "drainable.",
-    "CloseLinearize", NEG_DISCARDBUFFER, "NoBufferedItemDiscardOnClose")
+    "CloseLinearize", NEG_DISCARDBUFFER, "NoBufferedItemDiscardOnClose",
+    cfg_template=CFG_B)
 
 gen(MODEL_B, "E12QueueClosed", "E12QueueNegFailedPushLosesItem",
     "NEG-QUEUE-7: FailedPushLosesItem. PushClosed does NOT record the original "
     "item in failedPushItem (records NoItem), so the failed-push result loses "
     "track of the exact original lease.",
-    "PushClosed", NEG_LOSEITEM, "FailedPushRetainsOriginalItem")
+    "PushClosed", NEG_LOSEITEM, "FailedPushRetainsOriginalItem",
+    cfg_template=CFG_B)

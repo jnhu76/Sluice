@@ -142,7 +142,7 @@ No `.tla` or `.cfg` file had its model semantics altered.
 | E12 Semaphore | PASS | safety + 7 negative + wrong-property |
 | E12 Mutex | PASS | safety + 11 negative + wrong-property |
 | E12 Condition | PASS | safety + 10 negative + 2 reach + wrong-property |
-| E12 Queue | PASS | Model A + B + 7 negative + wrong-property |
+| E12 Queue | PASS | Model A + B + 7 negative + wrong-property + 8 reachability scenes |
 | E12 RwLock | PASS | safety + 1 negative |
 | E13 Select Core | PASS | 5 positive + 15 reachability |
 | E13 Select Safety | PASS | 11 positive + 29 negative + 20 reach + restoration |
@@ -163,7 +163,7 @@ No `.tla` or `.cfg` file had its model semantics altered.
 | E12 Semaphore | PASS | ✓ |
 | E12 Mutex | PASS | ✓ |
 | E12 Condition | PASS | ✓ |
-| E12 Queue | PASS | ✓ |
+| E12 Queue | PASS | ✓ (Model B NoSnap sentinel typing fixed; 8 reachability scenes added) |
 | E12 RwLock | PASS | ✓ |
 | E13 Select Core | PASS | ✓ |
 | E13 Select Safety | NOT RUN in post-migration gate | expensive (~30+ min); covered by baseline |
@@ -181,6 +181,22 @@ All pre-existing model issues have been resolved in this PR:
 3. **E12 Event NEG-EVENT-2** (FIXED): The verifier now accepts stuttering
    counterexamples as valid negative-model evidence, matching TLC's actual
    behavior for stuttering-violation properties.
+
+4. **E12 Queue Model B + NEG-QUEUE-6 invariant evaluation failure** (FIXED): the
+   `closedRing` ghost sentinel `NoSnap` was a string, but `closedRing` ranges
+   over `Seq(ItemId)∪{NoSnap}`. When close linearized on an empty ring,
+   `closedRing` became the empty sequence `<<>>`, and the B3/B6 guards
+   `closedRing # NoSnap` compared a sequence against a string — a cross-type
+   equality TLC reports as an INVARIANT EVALUATION ERROR (not a boolean), so B3
+   and B6 were never genuinely evaluated and NEG-QUEUE-6's defect tripped the
+   error instead of the named property. `NoSnap` is now a model-value CONSTANT
+   (the canonical TLA+ sentinel idiom); the evaluation is type-safe, the state
+   space is unchanged (~1.96M distinct states, depth 14), B3/B6 now pass for
+   real, and NEG-QUEUE-6 produces a clean named violation. Eight
+   reachability/non-vacuity scenes (R1..R8) were added, covering the B3/B6
+   drain-on-close topology end-to-end. Root cause, trace, and gates are
+   documented in `spec/tla/e12_queue/README.md` ("Root cause of the prior Model B
+   / NEG-QUEUE-6 failure" and "Reachability / non-vacuity gates").
 
 ## Source safety
 

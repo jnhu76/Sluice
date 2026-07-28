@@ -56,7 +56,16 @@
 *)
 EXTENDS Naturals, Sequences, FiniteSets, TLC
 
-CONSTANTS PNodes, P0, P1, P2, CNodes, C0, C1, C2, Items, I0, I1, I2, Capacity
+\* NoSnap is a MODEL VALUE sentinel for the ghost closedRing "no snapshot yet"
+\* state (HISTORY for B3/B6). It MUST be a model value, not a string, because
+\* closedRing ranges over Seq(ItemId) after the first close: a string sentinel
+\* ("NoSnap") compared against a sequence (e.g. empty ring <<>> at close) is a
+\* cross-type equality that TLC reports as an INVARIANT EVALUATION ERROR rather
+\* than a boolean. Model values "can only be tested for equality with
+\* themselves" and compare cleanly against any other value (always unequal),
+\* which is the canonical TLA+ optional/sentinel idiom. The cfg binds
+\* NoSnap = NoSnap.
+CONSTANTS PNodes, P0, P1, P2, CNodes, C0, C1, C2, Items, I0, I1, I2, Capacity, NoSnap
 
 Location == {"Detached", "ProducerOp", "Ring", "ConsumerOp", "Released"}
 NodeState == {"Detached", "Registered", "Woken", "Closed"}
@@ -71,7 +80,6 @@ ActionKind == {"Init", "FastPush", "PushBlock", "PushClosed", "ProdRegister",
 
 NoItem == "NoItem"
 NoNode == "NoNode"
-NoSnap == "NoSnap"
 
 ASSUME /\ PNodes # {}
        /\ CNodes # {}
@@ -767,5 +775,78 @@ Inv == /\ CapacityBound
        /\ ClosedEmptyConsumerTerminal
        /\ NoBufferedItemDiscardOnClose
        /\ CloseProducerRaceLinearizable
+
+-------------------------------------------------------------------------------
+\* REACHABILITY / NON-VACUITY WITNESSES (scene configs only; NOT part of Inv).
+\* Each NotReach_R<n> is a state predicate that is TRUE except in the target
+\* reachable state R<n>. Checked as an INVARIANT, TLC reports "Invariant
+\* violated" with a counterexample trace that IS the reachability witness for
+\* R<n>. These do not restrict the model (no ASSUME narrows the state space)
+\* and are never checked by the safety config (E12QueueClosed.cfg uses Inv only).
+\* They exist so a positive safety PASS cannot hide a vacuous property whose
+\* load-bearing topology was never reached. See spec/tla/e12_queue/README.md
+\* "Reachability / non-vacuity gates".
+
+\* R1: an item was committed into the ring (FastPush or ProdGrant) -- the
+\*    substrate every FIFO / owner / drain property reasons over.
+Reach_R1 == \E it \in Items : itemLoc[it] = "Ring"
+NotReach_R1 == ~Reach_R1
+
+\* R2: close linearized while the ring was NONEMPTY (closedRing nonempty). This
+\*    is the load-bearing state for B3/B6: a buffered item existed at close.
+Reach_R2 == /\ closedRing # NoSnap
+            /\ Len(closedRing) > 0
+NotReach_R2 == ~Reach_R2
+
+\* R3: after close with a buffered item, the item was drained to a consumer
+\*    operation (drain-on-close is reachable, not just asserted).
+Reach_R3 == /\ closedRing # NoSnap
+            /\ \E it \in Items :
+                  /\ InSeq(closedRing, it)
+                  /\ itemLoc[it] = "ConsumerOp"
+NotReach_R3 == ~Reach_R3
+
+\* R4: a buffered item was fully released by a consumer (ConsumerOp -> Release),
+\*    and consumerDrained records it. This is the load-bearing B3/B6 drain
+\*    topology end-to-end:
+\*      Open -> item committed -> CloseLinearize(nonempty) ->
+\*      item remains drainable -> consumer receives -> ReleaseItem records it.
+Reach_R4 == /\ closedRing # NoSnap
+            /\ \E it \in Items :
+                  /\ InSeq(closedRing, it)
+                  /\ itemLoc[it] = "Released"
+                  /\ it \in consumerDrained
+NotReach_R4 == ~Reach_R4
+
+\* R5: a producer was parked (Suspended) at close time. Exercises the
+\*    ProdClosedGrant / B4 closed-producer path.
+Reach_R5 == /\ queueState = "Closed"
+            /\ \E p \in PNodes :
+                  /\ prodState[p] = "Registered"
+                  /\ prodPhase[p] = "Suspended"
+NotReach_R5 == ~Reach_R5
+
+\* R6: a consumer pop from closed-and-empty produced the Closed terminal
+\*    outcome (B5 / ClosedEmptyConsumerTerminal is reachable).
+Reach_R6 == /\ queueState = "Closed"
+            /\ \E c \in CNodes :
+                  /\ consState[c] = "Closed"
+                  /\ consCompletion[c] = "ClosedOutcome"
+NotReach_R6 == ~Reach_R6
+
+\* R7: a producer commit linearized BEFORE close (the commit won the G+S race)
+\*    -- the item is in the ring while still Open, then close observes it.
+Reach_R7 == /\ queueState = "Open"
+            /\ \E p \in PNodes : prodCompletion[p] = "Committed"
+NotReach_R7 == ~Reach_R7
+
+\* R8: close won BEFORE a producer commit (the producer observed Closed) -- a
+\*    producer reached ClosedOutcome with its original item (PushClosed /
+\*    ProdClosedGrant path), exercising B7's close-wins side.
+Reach_R8 == /\ queueState = "Closed"
+            /\ \E p \in PNodes :
+                  /\ admittedItem[p] # NoItem
+                  /\ prodCompletion[p] = "ClosedOutcome"
+NotReach_R8 == ~Reach_R8
 
 =============================================================================
