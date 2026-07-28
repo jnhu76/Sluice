@@ -68,9 +68,11 @@ only thread the Runtime spawns; it is the only caller of
 `Scheduler::run_live(worker_count, stop_predicate, this)` (`scheduler.hpp:264`),
 re-entering on a loop because `run_live` returns for reasons other than all-work-done.
 
-This is **not** a "zero new seam" layer. The design requires four private PROPOSED
-seams (§8) — none public, none authorizing implementation, none a change to
-Scheduler *drive semantics*.
+This is **not** a "zero new seam" layer. The design requires five private
+PROPOSED foundation seams/prerequisites (§9) — none public, none authorizing
+implementation, none a change to Scheduler *drive semantics*. One (the Group
+transactional admission seam) is a foundation prerequisite that blocks E16
+implementation.
 
 ## 3. Ownership decision
 
@@ -85,6 +87,10 @@ The Runtime **owns**:
   `Group::size()`)
 - a **single dedicated driver thread** (the ONLY thread the Runtime spawns/joins)
 - `lifecycle_mutex` / `runtime_cv` / monotonic `control_epoch`
+- `startup_abort_requested` and `root_cancel_published` (lifecycle-protected
+  booleans; see §6/§7 — P1-01, P1-03)
+- `close_state ∈ {Open, InProgress, Closed}` — the unified terminal-close
+  ownership (§7), replacing the prior `join_state`
 - three lock-free atomic stop-predicate snapshots
   (`driver_exit_requested`, `task_set_terminal_snapshot`, `fatal_snapshot`)
 - a per-Fiber execution-identity tag (set/cleared by the Runtime task wrapper)
@@ -93,7 +99,13 @@ The backend is **injected** (not created internally), enabling deterministic tes
 injection via the existing `AsyncIoContext(unique_ptr<AsyncBackend>)` seam
 (`async_io_context.hpp:121`).
 
-The Runtime is non-copyable and non-movable.
+The Runtime is non-copyable and non-movable. **Because it is non-movable, it
+cannot be returned by value through `Result<T>`** (which moves its value into
+storage, `result.hpp:155-189`, and has no in-place immovable-value facility).
+`RuntimeBuilder::build()` therefore returns **owned indirection**:
+`Result<std::unique_ptr<ApplicationRuntime>>` (P1-02). The stable heap address
+also anchors driver-thread captures, the Fiber-local Runtime identity tag, the
+lifecycle mutex/CV, and private component pointers.
 
 **Scheduler worker threads are NOT owned by the Runtime.** They are transient
 inside each `run_live` invocation (`scheduler.cpp:565-579`). The Runtime joins
@@ -113,20 +125,22 @@ Evidence: `docs/design/e16-application-runtime.md` §8.
 The lifecycle is a one-shot state machine:
 
 ```text
-Constructed ──start()──→ Starting ──commit──→ Running ──request_stop()──→ Stopping
-   │                        │                                                    │
-   │ remembers stop         ├──construct throw──→ StartFailed              drain()──→ Draining
-   │ (stays Constructed)    │                                                    │
-   │                        └──stop wins pre-commit──→ Stopped            join()──→ Stopped
-   │                                                                           (join + close)
+Constructed ──start()──→ Starting ──commit (if !stop_requested)──→ Running ──request_stop()──→ Stopping
+   │                        │                                                       │
+   │ remembers stop         ├──driver spawn throw──→ StartFailed               drain()──→ Draining
+   │ (stays Constructed)    │                                                       │
+   │                        └──stop wins pre-commit (abort path)──→ Stopped   join()/shutdown()──→ Stopped
+   │                                                       (close owner: join + close)
+   │   shutdown() in Constructed/StartFailed → Stopped (direct close, §7)
+   │   shutdown() in any safe state → Stopped (state-dispatched, §7)
    Any state ──invariant violation──→ Fatal (std::terminate)
 ```
 
 | State | Meaning |
 | --- | --- |
 | `Constructed` | Built but not started. Admission closed. No driver. `stop_requested` may be remembered. |
-| `Starting` | `start()` in progress. Driver spawned but waiting at startup barrier. |
-| `Running` | Started. Admission open (unless stop won at commit). Driver active. |
+| `Starting` | `start()` in progress. Driver spawned but waiting at the startup barrier (predicate: `state != Starting OR startup_abort_requested OR fatal`, P1-03). |
+| `Running` | Started. Admission open (only if `!stop_requested` at commit). Driver active. |
 | `Stopping` | `request_stop()` committed. Admission closed. Root cancel published. |
 | `Draining` | `drain()` in progress. |
 | `Stopped` | Driver joined AND all execution resources destroyed. |
@@ -157,15 +171,29 @@ throw (all throwable steps precede `Scheduler::spawn`, `group.hpp:264-282`),
 `admitted_count--` and recompute run under `lifecycle_mutex` before
 `control_epoch++` and dual-wake. On exception the user task body has NOT executed.
 
+**The Runtime reservation+rollback rolls back Runtime admission accounting
+ONLY** (admitted_count, snapshot). **Group internal ownership** (Future/stack/
+Fiber vectors) does NOT roll back today: `Group::async_evented` performs three
+independent vector `push_back`s with no reservation (`group.hpp:278-280`), so a
+later insertion may throw after an earlier succeeded, leaving a malformed partial
+task record (P2-01). **E16 implementation is blocked until `Group::async_evented`
+provides a transactional admission seam** (reservation/commit, strongly
+exception-safe insertion, or aggregate task-record container) — see §9 seam 5
+and design §13.5.
+
 Admission opens **only after** the startup commit AND only if
 `!stop_requested` at commit. Therefore "admission opens then commit fails / stop
 wins" is impossible (commit and admission-open are the same locked compound
-transition).
+transition). An admitted task may continue submitting I/O through its
+`RuntimeTaskContext` even after `request_stop()` closes admission, because
+per-task I/O progress must be drainable; no new I/O may be submitted after the
+task body exits (P1-04, §11).
 
-**No structured child submission** in E16 v1. `TaskFn = void(CancelToken&)`
-gives no child-spawn capability. External capture of `ApplicationRuntime&` by a
-task body is treated as ordinary concurrent external `submit()`. A restricted
-`TaskContext` is a future extension.
+**No structured child submission** in E16 v1. `RuntimeTaskContext` (§11) exposes
+cancellation + I/O submission but **no `spawn`**, so a task cannot spawn
+Runtime-owned child tasks. External capture of `ApplicationRuntime&` by a task
+body is treated as ordinary concurrent external `submit()`. A restricted
+`RuntimeTaskContext::spawn()` is a future extension.
 
 Evidence: `docs/design/e16-application-runtime.md` §13.
 
@@ -174,41 +202,101 @@ Evidence: `docs/design/e16-application-runtime.md` §13.
 The authoritative Runtime root cancellation state is **`root_group.group_token()`**
 (`group.hpp:114`) — the Runtime does NOT create an independent second token.
 `request_stop()` publishes root cancellation via `root_group.group_token().request()`.
-Cancellation is cooperative (matching the existing model, `cancel.hpp:14`): tasks
-observe the token at cancel points (`check_cancel`, `cancel.hpp:147`). Cancellation
-is not an unconditional escape hatch — a task that does not observe cancellation
-can prevent `drain()` from returning (matching `group.hpp:69-76`).
+**In the Running state this publication occurs while `lifecycle_mutex` is held**
+(P1-01), so root cancellation cannot race with the resource close that destroys
+`root_group` (close owner acquires the same mutex). Calling `CancelToken::request()`
+under the mutex is safe: it is `noexcept` (`cancel.hpp:59`), idempotent, performs a
+single atomic `release` store (`cancel.hpp:78-80`), and does not acquire Scheduler
+locks or invoke user code. Cancellation is cooperative (matching the existing
+model, `cancel.hpp:14`): tasks observe the token at cancel points (`check_cancel`,
+`cancel.hpp:147`). Cancellation is not an unconditional escape hatch — a task that
+does not observe cancellation can prevent `drain()` from returning (matching
+`group.hpp:69-76`).
 
-Evidence: `docs/design/e16-application-runtime.md` §14.
+Evidence: `docs/design/e16-application-runtime.md` §14, §15.
 
-## 7. Drain/join decision
+## 7. Drain/join/terminal-close decision
 
-`drain()` and `join()` are **separate, non-conflated** operations.
+`drain()`, `join()`, and `shutdown()` are **separate, non-conflated** operations
+that all funnel terminal close through **one** ownership mechanism.
 
-- `drain()` is legal **only in `Stopping` or `Draining`**; in `Running` it returns
-  `invalid_state` (caller must `request_stop()` first, which atomically closes
-  admission). It waits on `runtime_cv` until **`drain_complete`** is published.
-  `drain_complete` (published by the driver **between** `run_live` invocations) =
-  `task_set_terminal_snapshot && AsyncIoContext::outstanding()==0`. The Scheduler
-  stop predicate reads ONLY three lock-free atomic snapshots
-  (`fatal_snapshot`, `driver_exit_requested`, `task_set_terminal_snapshot`) — it
-  never reads `drain_complete` (circular) and never calls `outstanding()` (lock
-  hazard). At `drain()` return: all admitted task bodies exited AND no
-  outstanding backend op remains.
-- `join()` is the **terminal close operation** and is legal only after
-  `drain_complete`. An elected join owner (join_state NotStarted→InProgress→
-  JoinedAndClosed) joins the driver (transitively proving Scheduler workers
-  joined inside the last `run_live`), snapshots diagnostics, destroys
-  Group→Scheduler→AsyncIoContext/backend (the backend destructor joins backend
-  workers, `threadpool_backend.cpp:23-32`), and publishes `Stopped`. `join()`
-  return ⇒ driver joined AND Scheduler workers joined AND backend destroyed AND
-  backend workers joined AND Runtime == Stopped.
-- Both are idempotent. `shutdown()` composes `request_stop() + drain() + join()`.
-  Concurrent `join()`/`shutdown()` callers all route through one join owner;
-  others wait on `runtime_cv` for `JoinedAndClosed`.
+### Unified terminal-close ownership (P1-05)
+
+There is a single lifecycle close/join ownership mechanism — `close_state ∈
+{Open, InProgress, Closed}` (under `lifecycle_mutex`) — that covers **all**
+paths that destroy Runtime execution resources: `join()`, `shutdown()`, the
+startup-abort close, the StartFailed close, and the Constructed close. The
+prior `join_state` (named for the driver join) is renamed to `close_state` so it
+truthfully covers every close path, not only the driver join. One caller is
+elected close owner (`Open → InProgress`); every other concurrent caller waits
+on `runtime_cv` for `Closed`. No two callers ever destroy resources
+simultaneously.
+
+### Driver state machine and admission wake (P1-07)
+
+The dedicated driver thread runs one state machine:
+`not_started → barrier_wait → in_run_live ↔ between_invocations → drained_wait →
+exiting → exited` (design §16.1b). Because `run_live` may return at
+QUIESCENT / MW-S3-no-wake / stop-predicate-true boundaries
+(`scheduler.cpp:823-918`) without all work done, the driver **parks at each
+invocation boundary** (`between_invocations`, and after `drain_complete` in
+`drained_wait`) on a **persistent CV predicate** checked under `lifecycle_mutex`:
+`driver_exit_requested OR fatal_snapshot OR control_epoch != observed_epoch`.
+
+The persistent predicate — not the notification — is the liveness authority.
+Every control-changing operation (`request_stop()`, **successful `submit()`**,
+admission rollback, terminal-guard `terminal_count++`, startup abort/commit,
+close-owner `driver_exit_requested`) publishes `control_epoch++` and
+`runtime_cv.notify_all()` after releasing `lifecycle_mutex`. **A successful
+`submit()` MUST publish `control_epoch++` + dual-wake on its success path**
+(design §13.1): `Scheduler::spawn()` only notifies a worker `inbox_cv`
+(`scheduler.cpp:419-441`) and does not touch the Runtime CV or epoch, so without
+the submit-side epoch++ + wake an admitted task could strand at the invocation
+boundary. This closes the driver re-entry / boundary-liveness gap (acceptance
+A20).
+
+### drain()
+
+`drain()` is legal **only in `Stopping` or `Draining`**; in `Running` it returns
+`invalid_state` (caller must `request_stop()` first, which atomically closes
+admission). It waits on `runtime_cv` until **`drain_complete`** is published.
+`drain_complete` (published by the driver **between** `run_live` invocations) =
+`task_set_terminal_snapshot && AsyncIoContext::outstanding()==0`. The Scheduler
+stop predicate reads ONLY three lock-free atomic snapshots
+(`fatal_snapshot`, `driver_exit_requested`, `task_set_terminal_snapshot`) — it
+never reads `drain_complete` (circular) and never calls `outstanding()` (lock
+hazard). At `drain()` return: all admitted task bodies exited AND no
+outstanding backend op remains. After publishing `drain_complete`, the driver
+**parks** on `runtime_cv` (under `lifecycle_mutex`) until `driver_exit_requested`
+/ `fatal` / `control_epoch` change — it does not busy-loop and does not exit
+before the close owner requests exit (P2-03).
+
+### join()
+
+`join()` is legal **only after `drain_complete`** and is the post-drain close
+path. The elected close owner (`close_state Open → InProgress`) joins the driver
+(transitively proving Scheduler workers joined inside the last `run_live`),
+snapshots diagnostics, destroys Group→Scheduler→AsyncIoContext/backend (the
+backend destructor joins backend workers, `threadpool_backend.cpp:23-32`), and
+publishes `Stopped`; `close_state → Closed`. `join()` return ⇒ driver joined AND
+Scheduler workers joined AND backend destroyed AND backend workers joined AND
+Runtime == Stopped.
+
+### shutdown() (P1-05)
+
+`shutdown()` is **NOT** a simple `request_stop() + drain() + join()` composition
+— that composition returns `invalid_state` in `Constructed`/`Starting`. It is a
+**state-dispatched** lifecycle operation that elects the close owner and runs
+the state-appropriate close path: Constructed/StartFailed → direct component
+destruction; Starting → record startup_abort, let the start owner rollback+close;
+Running → request_stop+drain+join; Stopping → drain+join; Draining → wait
+drain_complete then join+close; Stopped → idempotent. This is why `shutdown()`
+must be defined as state-dispatched, not as the three-way composition.
+
+All three are idempotent via `close_state == Closed`.
 
 `drain()`/`join()`/`shutdown()` return `invalid_state` when invoked from a task
-owned by the same Runtime (detected via the Fiber-local execution tag, §8).
+owned by the same Runtime (detected via the Fiber-local execution tag, §9).
 `request_stop()` is worker-safe.
 
 Evidence: `docs/design/e16-application-runtime.md` §16, §17.
@@ -235,12 +323,12 @@ Rationale: hidden blocking in a destructor is an anti-pattern (AGENTS.md §7).
 
 Evidence: `docs/design/e16-application-runtime.md` §10, §18.
 
-## 9. Consequences — required private PROPOSED seams
+## 9. Consequences — required private PROPOSED seams/prerequisites
 
-To close the lifecycle authority gaps honestly, the design requires **four
-private PROPOSED seams**. **None is a public API; none authorizes implementation;
-none is a change to Scheduler *drive semantics*.** Production currently has none
-of them.
+To close the lifecycle authority gaps honestly, the design requires **five
+private PROPOSED foundation seams/prerequisites**. **None is a public API; none
+authorizes implementation; none is a change to Scheduler *drive semantics*.**
+Production currently has none of them.
 
 1. **`sluice::app::detail::runtime_lifetime_fail_fast`** — a private Runtime
    fail-fast entry for the destructor. Production currently has NO generic
@@ -260,31 +348,53 @@ of them.
    detection.**
 
 3. **`RuntimeTaskTerminalGuard`** — a `noexcept` RAII guard that publishes
-   `terminal_count++` exactly once even if the user `TaskFn` throws (RAII runs on
-   unwind).
+   `terminal_count++` exactly once even if the user `RuntimeTaskFn` throws (RAII
+   runs on unwind).
 
 4. **`recompute_task_set_terminal_locked()`** — invoked under `lifecycle_mutex`
    on every mutation of `admission_open` / `admitted_count` / `terminal_count`.
 
-Evidence: `docs/design/e16-application-runtime.md` §8, §16, §18, §21.4.
+5. **Group transactional admission seam (P2-01)** — `Group::async_evented` must
+   gain a strongly exception-safe / aggregate task-record insertion before E16
+   admission rollback is correct. Today it performs three independent vector
+   `push_back`s with no reservation (`group.hpp:278-280`); a later insertion may
+   throw after an earlier succeeded, leaving a malformed partial task record.
+   The future implementation must provide a reservation/commit API, a strongly
+   exception-safe insertion, or a single aggregate task-record container inserted
+   atomically. **This is a foundation prerequisite that blocks E16
+   implementation** (design §13.5); it is NOT implemented in A0.
+
+Evidence: `docs/design/e16-application-runtime.md` §8, §13.5, §16, §18, §21.
 
 ## 10. Error-model decision
 
-- Ordinary errors (rejected submit, misuse, wrong-state) → `Result<void>` with
-  `IoError::Code::invalid_state` (`error.hpp:20`, EXISTING).
-- `start()` interrupted by `request_stop()` during Starting → `Result<void>`
-  with `IoError::Code::canceled` (`error.hpp:15`, EXISTING).
-- `start()` on an already-Stopped one-shot Runtime → `invalid_state`.
-- Invariant violations (destructor misuse, quiescence failure) → fail-fast
-  (`std::terminate`), matching the existing fail-fast authority
-  (`fail_fast.cpp:16-62`).
-- `request_stop()` is `noexcept` (idempotent, legal in all non-Fatal states,
-  worker-safe).
-- `start()`, `submit()`, `drain()`, `join()`, `shutdown()` return `Result<void>`.
+The Runtime uses a **mixed model** (P2-02): public methods return `Result<void>`
+for ordinary/expected failures; invariant violations fail-fast. The mapping is
+**deterministic and fixed** (no "implementation-defined"):
+
+| Failure | Result / behavior |
+| --- | --- |
+| Invalid configuration (`build()`) | `Result` with `IoError::invalid_state` (`error.hpp:20`) |
+| Wrong lifecycle state / lifecycle op from a Runtime task | `Result` with `IoError::invalid_state` |
+| `request_stop()` interrupts `start()` during Starting | `start()` returns `Result` with `IoError::canceled` (`error.hpp:15`) |
+| `std::thread` construction throws `std::system_error` (driver spawn) | `start()` returns `Result` with `IoError::backend_error` (`error.hpp:21`), native code preserved in `os_errno` when representable |
+| `Scheduler::init_fiber()` returns false | `submit()` returns `Result` with `IoError::backend_error` |
+| Allocation failure (`std::bad_alloc`) | **propagated as `std::bad_alloc`** — NOT mapped to `invalid_state` (no accepted global no-throw allocation policy; existing code lets `bad_alloc` propagate) |
+| User `RuntimeTaskFn` throws | Swallowed at the Group boundary (`group.hpp:251-256`); terminal guard still fires; NOT returned by `submit()` |
+| Backend I/O result | Existing `Completion<T>`/backend result contract, surfaced through the task-owned Completion |
+| Invariant violation (destructor misuse, quiescence, double-close) | fail-fast (`std::terminate`) — NOT a `Result` |
+
+`start()`, `submit()`, `drain()`, `join()`, `shutdown()` return `Result<void>`.
+`request_stop()` is `noexcept` (idempotent, legal in all non-Fatal states,
+worker-safe). `start()` on an already-Stopped one-shot Runtime → `invalid_state`.
+
+**`std::bad_alloc` is NOT silently mapped to `invalid_state`.** If the project
+later adopts a global no-throw allocation policy, that row would change — but
+that would be an **OPEN HUMAN DECISION that blocks ADR acceptance** until
+resolved, not a silent implementation choice.
 
 **No new error code is invented.** `IoError::Code` has exactly 8 enumerators
-(`error.hpp:14-21`); `canceled` (:15) and `invalid_state` (:20) both exist. The
-term "operation_cancelled" does not appear.
+(`error.hpp:14-21`); `canceled` (:15) and `invalid_state` (:20) both exist.
 
 ## 11. Public-surface direction
 
@@ -294,21 +404,37 @@ term "operation_cancelled" does not appear.
 // PROPOSED — NOT AN EXISTING API
 namespace sluice::async {
 
+// Restricted, non-owning task execution context (P1-04). Valid only during one
+// RuntimeTaskFn invocation; delegates I/O to the Runtime-owned AsyncIoContext.
+class RuntimeTaskContext {
+public:
+    CancelToken& cancel_token() noexcept;
+    Result<void> submit_read     (ReadOp op, Completion<std::size_t>& completion);
+    Result<void> submit_write    (WriteOp op, Completion<std::size_t>& completion);
+    Result<void> submit_sync_data(SyncDataOp op, Completion<void>& completion);
+    Result<void> submit_sync_all (SyncAllOp op, Completion<void>& completion);
+    RuntimeTaskContext(const RuntimeTaskContext&) = delete;
+    RuntimeTaskContext& operator=(const RuntimeTaskContext&) = delete;
+};
+using RuntimeTaskFn = std::function<void(RuntimeTaskContext&)>;
+
 class RuntimeBuilder {
 public:
     RuntimeBuilder& backend(std::unique_ptr<AsyncBackend> b);
     RuntimeBuilder& workers(unsigned n);
-    Result<ApplicationRuntime> build();
+    // P1-02: owned indirection. ApplicationRuntime is non-movable, so it cannot
+    // be returned by value through Result<T> (result.hpp:155-189).
+    Result<std::unique_ptr<ApplicationRuntime>> build();
 };
 
 class ApplicationRuntime {
 public:
     Result<void> start();                    // may return canceled / invalid_state
-    Result<void> submit(TaskFn task);
+    Result<void> submit(RuntimeTaskFn task); // admission-gated; invalid_state if closed
     void request_stop() noexcept;
     Result<void> drain();                    // invalid_state if from a Runtime task or in Running
-    Result<void> join();                     // terminal close owner; invalid_state if from a Runtime task
-    Result<void> shutdown();
+    Result<void> join();                     // post-drain close; invalid_state if from a Runtime task
+    Result<void> shutdown();                 // state-dispatched lifecycle op (§7)
     ~ApplicationRuntime();
 };
 
@@ -316,19 +442,25 @@ public:
 ```
 
 Decisions:
-- Builder collects config; `build()` validates and constructs.
-- `start()` is a separate, fallible transaction (spawns driver).
-- `submit()` returns `Result<void>` (admission rejection via reservation+rollback).
-- `request_stop()` is `noexcept`, worker-safe, legal in all non-Fatal states.
+- Builder collects config; `build()` validates, constructs on the heap, and
+  returns **`Result<std::unique_ptr<ApplicationRuntime>>`** (P1-02).
+- `start()` is a separate, fallible transaction (spawns driver; startup barrier
+  with abort path, P1-03).
+- `submit()` takes a `RuntimeTaskFn(RuntimeTaskContext&)` (P1-04) and returns
+  `Result<void>` (admission rejection via reservation+rollback).
+- `request_stop()` is `noexcept`, worker-safe, legal in all non-Fatal states;
+  publishes root cancellation under `lifecycle_mutex` in Running (P1-01).
 - `drain()`/`join()`/`shutdown()` return `Result<void>`; return `invalid_state`
   when invoked from a task owned by the same Runtime (Fiber-local tag).
+  `shutdown()` is **state-dispatched**, correct in every safe state (P1-05).
 - Non-copyable, non-movable.
 - No direct accessors to `Scheduler`/`Group`/`AsyncIoContext`/`Backend`
-  (direct access weakens lifecycle authority).
+  (direct access weakens lifecycle authority); tasks reach I/O only through
+  `RuntimeTaskContext`.
 - Diagnostics via snapshot (not reference) — components are destroyed at
   `Stopped`.
-- Task function receives `CancelToken&` (matching `Group::async` signature,
-  `group.hpp:89`); no child-spawn capability.
+- Task function receives `RuntimeTaskContext&` (exposes `cancel_token()` + I/O
+  submission; no `spawn`) — resolves Q6.
 
 Evidence: `docs/design/e16-application-runtime.md` §21.
 
@@ -345,16 +477,30 @@ Evidence: `docs/design/e16-application-runtime.md` §21.
   and independently testable.
 - `drain_complete = task terminal AND outstanding()==0` closes the
   "looks-stopped-but-I/O-still-outstanding" trap.
-- Join-owner election gives a clean concurrent-shutdown contract.
+- Unified `close_state` ownership (P1-05) gives a clean concurrent-shutdown
+  contract across join, shutdown, startup-abort, StartFailed, and Constructed.
 - Per-state destructor safety + fail-fast prevents silent resource leaks.
 - Throw-safe terminal guard prevents a thrown task from blocking drain forever.
+- Root cancellation published under `lifecycle_mutex` (P1-01) closes the
+  request_stop-vs-close use-after-free.
+- `RuntimeTaskContext` (P1-04) gives tasks a real I/O capability without
+  exposing internals.
+- The unified driver FSM with a persistent CV predicate + success-admission
+  `control_epoch++`/dual-wake (P1-07) guarantees invocation-boundary liveness:
+  an admitted task is never stranded and the post-drain driver neither spins nor
+  exits prematurely.
 
 ### Negative
 
 - One-shot lifecycle means a new Runtime must be built for each application run.
 - Builder pattern adds API surface.
-- Four new private PROPOSED seams (§9) — honest cost of closing the lifecycle
-  authority gaps; not zero-seam.
+- **Five** new private PROPOSED foundation seams/prerequisites (§9) — honest cost
+  of closing the lifecycle authority gaps; not zero-seam. One of them (the Group
+  transactional admission seam, P2-01) is a foundation prerequisite that blocks
+  E16 implementation.
+- Owned-indirection return type (`unique_ptr`, P1-02) adds one heap allocation
+  and an indirection; accepted because the Runtime is non-movable and the stable
+  address anchors driver captures and the Fiber-local tag.
 - Components are destroyed at `Stopped`, so no post-Stop diagnostics by reference
   (must snapshot before close).
 - No direct access to `Scheduler`/`Group` may frustrate advanced users who want
@@ -402,12 +548,12 @@ Evidence: `docs/design/e16-application-runtime.md` §7.6.
 
 ### Structured child submission
 
-A restricted `TaskContext` with `spawn()`. **Rejected for E16 v1**: adds API
-surface and a structured-concurrency model out of scope for A0. `TaskFn =
-void(CancelToken&)` gives no child-spawn capability; the child-admission
-contract is removed.
+A `RuntimeTaskContext::spawn()`. **Rejected for E16 v1**: adds API surface and a
+structured-concurrency model out of scope for A0. `RuntimeTaskContext` exposes
+cancellation + I/O submission but no `spawn` (P1-04); the child-admission
+contract is removed. A future `spawn()` is a possible extension.
 
-Evidence: `docs/design/e16-application-runtime.md` §13.4.
+Evidence: `docs/design/e16-application-runtime.md` §13.4, §21.5.
 
 ### Ordinary `thread_local` for worker-call detection
 
@@ -427,7 +573,9 @@ Replaced by the Fiber-local execution-identity seam (§9).
   `AsyncIoContext::outstanding()` query (`async_io_context.hpp:149`), and the
   existing `Scheduler::make_wake_handle()` / `run_live(worker_count, stop_fn,
   stop_ctx)` API (`scheduler.hpp:264,909`).
-- The four private PROPOSED seams (§9) are implementation details; none is a
+- The five private PROPOSED seams/prerequisites (§9) are implementation
+  details / prerequisites; none is a public API change. The Group transactional
+  admission seam (P2-01) is a private `Group::async_evented` change, not a
   public API change.
 
 ## 15. Verification obligations
@@ -436,37 +584,57 @@ Replaced by the Fiber-local execution-identity seam (§9).
 
 A real public consumer target covering: construct, start, submit, request_stop,
 drain, join, safe destruction. Must not be a unit-test binary renamed "acceptance."
-Acceptance contracts A1–A12 in `docs/design/e16-application-runtime.md` §22,
+Acceptance contracts A1–A20 in `docs/design/e16-application-runtime.md` §22,
 including: normal lifecycle; submit-after-stop; stop-wins-pre-commit / driver
 spawn failure; outstanding-I/O drain; concurrent join/shutdown owner election;
 destructor misuse; task-throws (terminal guard bridge); outstanding-I/O keeps
-driver alive.
+driver alive; **stop publication vs. close (A13, P1-01); non-movable ownership
+(A14, P1-02); stop-before-commit barrier (A15, P1-03); Runtime task performs I/O
+(A16, P1-04); shutdown in every safe state (A17, P1-05); Group task-record
+insertion failure (A18, P2-01); post-drain driver park (A19, P2-03);
+invocation-boundary liveness on successful admission (A20, P1-07)**.
 
 ### Unit / component testing
 
-Deterministic tests for: every state transition; every illegal operation;
+Deterministic tests (driven by the private phase seams of design §23.11 — no
+wall-clock sleeps) for: every state transition; every illegal operation;
 admission race ordering (incl. `Group::async` throw after reservation);
-startup rollback at every fallible step; stop/drain/join idempotence; task
-exception containment + terminal guard; outstanding-I/O shutdown; driver
-re-entry loop; dual-wake lost-wake race (both directions); concurrent
-join/shutdown owner election; destructor misuse; worker-blocking-call returns
-`invalid_state` via Fiber-local tag.
+startup rollback at every fallible step (incl. stop-before-commit barrier abort,
+P1-03); stop/drain/join/shutdown idempotence; task exception containment +
+terminal guard; outstanding-I/O shutdown; driver re-entry loop;
+**post-drain driver park**; **invocation-boundary liveness on successful
+admission (epoch++ + dual-wake, P1-07)**; dual-wake lost-wake race (both
+directions); concurrent join/shutdown owner election (**one close owner across
+all close paths**); destructor misuse; worker-blocking-call returns
+`invalid_state` via Fiber-local tag; **shutdown state-dispatched close in
+Constructed/Starting/StartFailed**; **`unique_ptr` ownership return**.
 
 ### Mutation testing
 
 Mutations (killing tests in `docs/design/e16-application-runtime.md` §24),
 including: allow submit after admission closes; omit root cancellation
-publication; return from drain with one admitted task alive; forget to join the
+publication; **publish state=Stopping before root cancellation then allow close
+(P1-01)**; return from drain with one admitted task alive; forget to join the
 driver; publish Running before startup committed; omit rollback for stop-pre-commit;
-allow destructor with live work; misclassify a losing concurrent submit as
-admitted; omit reservation rollback on `Group::async` throw; terminal guard not
-noexcept/not exactly-once; omit recompute on rollback; call `outstanding()` in
-the stop predicate; `drain()` legal in Running; no join owner election; resource
-close omitted in join; omit CV notify only; omit WakeHandle notify only;
-admission open before commit; `join()` returns before driver joined; re-entry
-loop omitted; `stop_requested` not checked at commit; `Group::size()` used
-instead of Runtime counts; outstanding-I/O check omitted; Fiber tag stored in
-`thread_local`.
+**omit startup-barrier abort wake / driver enters run_live after stop won
+pre-commit (P1-03)**; allow destructor with live work; misclassify a losing
+concurrent submit as admitted; omit reservation rollback on `Group::async` throw;
+terminal guard not noexcept/not exactly-once; omit recompute on rollback; call
+`outstanding()` in the stop predicate; `drain()` legal in Running; no close owner
+election; resource close omitted in join/close; omit CV notify only; omit
+WakeHandle notify only; admission open before commit; `join()` returns before
+driver joined; re-entry loop omitted; `stop_requested` not checked at commit;
+`Group::size()` used instead of Runtime counts; outstanding-I/O check omitted;
+Fiber tag stored in `thread_local`; **return ApplicationRuntime by value despite
+non-movable type (P1-02)**; **RuntimeTaskContext lacks I/O submission (P1-04)**;
+**shutdown in Constructed calls drain()+join() and returns invalid_state (P1-05)**;
+**two shutdown() callers both destroy components (P1-05)**; **Group
+second/third task-record insertion throws after earlier insertion (P2-01)**;
+**map `std::bad_alloc` to `invalid_state` (P2-02, forbidden)**; **driver
+busy-loops after drain_complete / exits immediately at drain_complete (P2-03)**;
+**successful `submit()` omits `control_epoch++` / Runtime-CV notify (P1-07)**;
+**driver has no `between_invocations` park, or parks on notification timing
+instead of the persistent epoch predicate (P1-07)**.
 
 ### Code quality analysis
 
@@ -481,18 +649,42 @@ invention; no broad unrelated refactor.
 
 ### Formal model
 
-**MODEL_RECOMMENDED.** The lifecycle state machine (8 states, concurrent
-operations, admission reservation, driver re-entry, dual wake, join-owner
-election) merits a small TLA+ state model with a deliberate negative/broken
-model reproducing a known defect (e.g. invocation-boundary lost-wake).
+**MODEL_REQUIRED.** The lifecycle state machine (8 states, concurrent
+operations, admission reservation, driver re-entry, dual wake, unified
+terminal-close owner election) requires a small TLA+ state model with a
+deliberate negative/broken model reproducing a known defect (e.g.
+invocation-boundary lost-wake, or stop-vs-close use-after-free). A formal model
+is a **required ADR-acceptance prerequisite**, not a recommendation (P2-03).
 
-Variables: `runtime_state`, `admission_open`, `stop_requested`, `admitted_count`,
-`terminal_count`, `control_epoch`, `driver_state`, `join_state`, `outstanding_io`,
-`execution_tag_per_fiber`. The repository has demonstrated capacity for this
+**Required before ADR acceptance:**
+```text
+1. A passing E16 Runtime lifecycle TLA+ model.
+2. At least one deliberate buggy/negative model.
+3. A TLC counterexample for a known broken transition.
+4. Final model transitions match the design and ADR.
+```
+
+Variables: `runtime_state`, `admission_open`, `stop_requested`,
+`root_cancel_published`, `startup_abort_requested`, `admitted_count`,
+`terminal_count`, `control_epoch`, `driver_state` ∈ {not_started, barrier_wait,
+in_run_live, between_invocations, drained_wait, exiting, exited}, `close_state`
+∈ {Open, InProgress, Closed}, `resources_alive`, `runtime_task_io_outstanding`,
+`outstanding_io`, `successful_submit_published`, `execution_tag_per_fiber`. Key
+invariants:
+`resources_alive == false ⇒ root_cancel publication cannot access Group`;
+`Stopped ⇒ resources_alive == false ∧ close_state == Closed`;
+`startup_abort_requested ⇒ driver never enters run_live`;
+`successful submit() ⇒ control_epoch++ ∧ dual-wake` (P1-07);
+`driver_state ∈ {between_invocations, drained_wait} ⇒ driver parks on the
+persistent predicate (driver_exit_requested ∨ fatal_snapshot ∨
+control_epoch != observed_epoch) and never busy-re-enters without an epoch
+change` (P1-07/P2-03).
+The repository has demonstrated capacity for this
 (`docs/spec/e7_publication/E7Buggy.tla`, `docs/spec/e9_wake_handle_lifetime/`,
 `docs/spec/e13_select/E13SelectContract.tla`; TLC via `tla2tools.jar`,
 `scripts/verify-e11-formal.sh` et al. with deliberate Buggy/Neg counterexample
-discipline).
+discipline). **ADR acceptance remains blocked until the required model exists and
+passes.**
 
 Evidence: `docs/design/e16-application-runtime.md` §25.
 
@@ -505,17 +697,33 @@ Evidence: `docs/design/e16-application-runtime.md` §25.
 | Q3 | Should the Runtime expose a diagnostics snapshot? | **OPEN HUMAN DECISION** |
 | Q4 | Should `drain()` have a deadline? | **OPEN HUMAN DECISION** |
 | Q5 | Should the Runtime support Threaded mode in addition to Evented? | **OPEN HUMAN DECISION** |
-| Q6 | What is the exact TaskFn signature beyond `void(CancelToken&)`? | **OPEN HUMAN DECISION** |
 
-Q7 (wake-epoch design) and Q8 (cancellation error code) are **resolved** in this
-ADR (§7 control_epoch; §4/§10 `canceled` vs `invalid_state`).
+Q6 (task I/O capability) is **resolved** in this ADR (§11 `RuntimeTaskContext`;
+`RuntimeTaskFn = void(RuntimeTaskContext&)`). Q7 (wake-epoch design) and Q8
+(cancellation error code) are **resolved** in this ADR (§7 control_epoch; §4/§10
+`canceled` vs `invalid_state`).
+
+**No implementation-blocking contract gap may remain open.** The remaining Q1–Q5
+are optional product decisions. Resolved (no longer open):
+- Runtime ownership return type → `Result<unique_ptr<ApplicationRuntime>>` (P1-02)
+- Task I/O capability → `RuntimeTaskContext` (P1-04)
+- stop/start barrier behavior → startup barrier + abort path (P1-03)
+- shutdown behavior by state → state-dispatched (P1-05)
+- terminal-close ownership → unified `close_state` (P1-05)
+- successful-submit wake → epoch++ + dual-wake (P1-07)
+- error mapping for documented failures → fixed table (§10) (P2-02)
+- Group transactional admission prerequisite → listed (§9 seam 5) (P2-01)
+- formal-model requirement → MODEL_REQUIRED (§15) (P2-03)
+- deterministic test seams → design §23.11 (P2-02)
 
 ## 17. Implementation authorization
 
 ```text
 E16 production implementation remains unauthorized.
-Authorization requires an accepted ADR and an independent design review
-with no open P0/P1 or mandatory-contract findings.
+Authorization requires:
+  - an accepted ADR (currently Proposed);
+  - the required TLA+ lifecycle model existing and passing (MODEL_REQUIRED, §15, P2-03);
+  - an independent design review with no open P0/P1 or mandatory-contract findings.
 ```
 
 ## 18. References

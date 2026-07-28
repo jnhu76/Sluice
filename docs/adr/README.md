@@ -60,7 +60,7 @@ Architecture Decision Records for Sluice.
 - **Current authority?** No — proposed, under review.
 - **Decides:** the architecture of the E16 Application Runtime layer — ownership, lifecycle, admission, cancellation, drain/join, destructor, restartability, error model, and public-surface direction.
 - **Design document:** `docs/design/e16-application-runtime.md`
-- **Implementation:** Unauthorized. Requires accepted ADR + independent design review.
+- **Implementation:** Unauthorized. Requires an accepted ADR and an independent design review.
 
 ## Historical notes
 
