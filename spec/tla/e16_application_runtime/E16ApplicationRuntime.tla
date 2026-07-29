@@ -729,11 +729,15 @@ DriverReenterRunLive ==
    ========================================================================= *)
 
 (* DrainBegin: Stopping -> Draining.
-   Requires ~admission_reservation_active: a pending admission reservation
-   must be resolved (committed or rolled back) before drain can begin. *)
+   Production drain() transitions Stopping->Draining without checking any
+   active admission reservation, so a reservation may be unresolved when Draining
+   is entered. The reservation is subsequently resolved by SubmitGroupCommit or
+   SubmitRollback (both enabled in Draining), so accounting still converges and
+   drain_complete remains reachable. The model must NOT add a stronger guard
+   here, or it would exclude the production-reachable stop-vs-submit race and
+   hide the Live3 counterexample. *)
 DrainBegin ==
     /\ runtime_state = "Stopping"
-    /\ ~admission_reservation_active
         /\ runtime_state' = "Draining"
     /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE

@@ -46,9 +46,11 @@ Result<void> RuntimeTaskContext::submit_sync_all(SyncAllOp op, Completion<void>&
     return ctx_->submit_sync_all(op, c);
 }
 
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
 void RuntimeTaskContext::suspend(std::atomic<bool>& flag) {
     sched_->await_ready_flag(flag);
 }
+#endif
 
 // ---------------------------------------------------------------------------
 // RuntimeBuilder
@@ -186,6 +188,24 @@ Result<void> ApplicationRuntime::start() {
     }
 
     // Startup barrier: the driver is at barrier_wait. Commit or abort.
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+    // Test-only commit checkpoint: if enabled (off by default), signal that
+    // the start owner is at the commit checkpoint (immediately before checking
+    // stop_requested_), then park on commit_release_flag_ until the test
+    // releases it. This lets a test inject stop/shutdown between the barrier-
+    // wait wake and the stop_requested_ check, deterministically forcing the
+    // startup-abort path (start() == canceled) instead of a racy either/or
+    // outcome. OFF by default so that tests that do not need the pause (e.g.
+    // the suspend/resume identity test) proceed straight through to commit.
+    if (test_pause_at_commit_checkpoint_.load(std::memory_order::acquire)) {
+        commit_checkpoint_promise_.set_value();
+        commit_release_flag_.store(false, std::memory_order::release);
+        runtime_cv_.notify_all();
+        runtime_cv_.wait(lk, [this] {
+            return commit_release_flag_.load(std::memory_order::acquire);
+        });
+    }
+#endif
     if (stop_requested_) {
         // Stop won the race pre-commit (P1-03 abort path). The start owner is
         // the close owner: signal the driver to abort, wait for it to exit,
@@ -250,7 +270,13 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
             set_current_fiber_tag(this);
 
             // RuntimeTaskContext delegates I/O to io_ctx_.
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+            // Internal-testing build: include Scheduler& so suspend() is
+            // available for Fiber-local identity survival tests (C2-T3).
             RuntimeTaskContext ctx(*io_ctx_, token, *sched_);
+#else
+            RuntimeTaskContext ctx(*io_ctx_, token);
+#endif
 
             // Run user task body; swallow exceptions at this boundary.
             try {

@@ -200,48 +200,82 @@ SLUICE_TEST_CASE(c1_concurrent_shutdown_constructed_one_owner) {
 }
 
 // ---------------------------------------------------------------------------
-// C1-T2b — concurrent shutdown while Starting converges to one close owner.
+// C1-T2b — concurrent stop while Starting converges to one close owner.
 // The load-bearing concurrency case for the startup-abort close path: while
-// the start owner is parked at the startup barrier, an external thread calls
-// shutdown(). Both the start owner (commit-check observes stop_requested) and
-// the shutdown caller (Starting branch) must converge on exactly ONE close
-// owner and destroy the backend exactly once, with no hang and no double close.
+// the start owner is parked at the commit checkpoint, an external thread calls
+// request_stop(). The start owner then observes stop_requested_ and takes the
+// abort path, returning canceled. Both the start owner (commit-check observes
+// stop_requested_) and the shutdown caller (Starting branch) must converge on
+// exactly ONE close owner and destroy the backend exactly once, with no hang
+// and no double close.
 //
-// Deterministic causal seam: the test_driver_barrier_reached() future proves
-// that the driver has reached barrier_wait before shutdown() is called. This
-// guarantees that shutdown() observes the Starting state, not Constructed.
-// start() may return success (if the race is lost and the start thread commits
-// before shutdown acquires the lock) or canceled (if shutdown sets stop_requested
-// before the start thread checks it). Both are valid outcomes; the key invariant
-// is that the backend is destroyed exactly once.
+// Deterministic causal seam (two-phase, forces start() == canceled):
+//   Phase 1: the driver reaches barrier_wait (test_driver_barrier_reached).
+//   Phase 2: the start owner reaches the commit checkpoint
+//            (test_start_owner_at_commit_checkpoint), immediately before
+//            checking stop_requested_. The start owner then parks on a
+//            test-only release flag.
+//   The test calls request_stop() (non-blocking: sets stop_requested_ = true
+//   and returns), then releases the start owner. The start owner observes
+//   stop_requested_ and takes the abort path, returning canceled. This
+//   deterministically proves the startup-abort close path: stop wins the
+//   race, start() returns canceled, backend destroyed exactly once.
+//
+// Why request_stop() (not shutdown()) for the injection: shutdown() blocks
+// until close_state_ == Closed, which cannot happen until the start owner
+// proceeds past the commit checkpoint. Using the blocking shutdown() here
+// would deadlock the test (shutdown() waits for start owner; start owner
+// waits for test release). request_stop() is non-blocking and merely sets
+// stop_requested_, which is exactly the signal the start owner checks at the
+// abort branch.
 // ---------------------------------------------------------------------------
-SLUICE_TEST_CASE(c1_concurrent_shutdown_starting_one_owner) {
+SLUICE_TEST_CASE(c1_concurrent_stop_starting_one_owner) {
     auto pr = build_probe_runtime();
     auto& rt = *pr.rt;
 
-    // Run start() in its own thread. While it is parked at the startup barrier
-    // (driver spawned, awaiting commit), the main thread calls shutdown() which
-    // drives the Starting-abort path. Both converge on one close owner.
+    // Enable the commit checkpoint pause. This is OFF by default so that tests
+    // that do not need the pause (e.g. the suspend/resume identity test) are
+    // not blocked. The start owner will park at the commit checkpoint until
+    // test_release_start_owner_at_commit_checkpoint() is called.
+    rt.test_set_pause_at_commit_checkpoint(true);
+
+    // Run start() in its own thread. It will park at the commit checkpoint
+    // (after the driver barrier wait, before checking stop_requested_).
     std::thread start_thread([&rt] {
         auto sr = rt.start();
-        // start() returns canceled (abort) OR success (if the race was lost).
-        // Both are acceptable terminal outcomes.
-        (void)sr;
+        // Deterministic: stop wins the race, start() MUST return canceled.
+        SLUICE_CHECK(!sr.has_value());
+        SLUICE_CHECK(sr.error().code == IoError::Code::canceled);
     });
 
-    // Wait for the driver barrier signal, proving the Runtime is in Starting
-    // with the driver parked at barrier_wait.
+    // Phase 1: wait for the driver barrier signal, proving the Runtime is in
+    // Starting with the driver parked at barrier_wait.
     auto barrier_future = rt.test_driver_barrier_reached();
     barrier_future.wait();
 
-    // shutdown() from Starting: elects/observes the close, returns success.
-    // The start owner is the close owner; shutdown() only waits for Closed.
-    auto shr = rt.shutdown();
-    SLUICE_CHECK(shr.has_value());
+    // Phase 2: wait for the start owner to reach the commit checkpoint
+    // (immediately before checking stop_requested_). It is now parked on the
+    // test-only release flag.
+    auto commit_future = rt.test_start_owner_at_commit_checkpoint();
+    commit_future.wait();
+
+    // request_stop() from Starting: non-blocking, sets stop_requested_ = true.
+    // The start owner is the close owner; request_stop() returns immediately.
+    rt.request_stop();
+
+    // Release the start owner: it observes stop_requested_ and takes the
+    // abort path (returns canceled).
+    rt.test_release_start_owner_at_commit_checkpoint();
 
     start_thread.join();
 
     // Exactly one close owner destroyed the backend.
+    SLUICE_CHECK(pr.probe->destructor_count.load() == 1);
+
+    // shutdown() is idempotent: the start owner already closed. It observes
+    // close_state_ == Closed and returns success without double-destroying.
+    auto shr = rt.shutdown();
+    SLUICE_CHECK(shr.has_value());
     SLUICE_CHECK(pr.probe->destructor_count.load() == 1);
 
     pr.rt.reset();

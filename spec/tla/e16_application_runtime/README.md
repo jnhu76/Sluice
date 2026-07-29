@@ -115,6 +115,18 @@ java -cp tla2tools.jar tlc2.TLC -workers 4 -config E16ApplicationRuntime.cfg E16
 | NEG-E16-5 | Invariant `Inv25StoppedAfterDrain` violated |
 | NEG-E16-6 | Invariant `Inv7NoPrematureStopped` violated (DirectStoppedWithResources) |
 
+## DrainBegin refinement note (E16-POST-MERGE-CORRECTIVE-1)
+
+Production `drain()` transitions Stopping → Draining unconditionally — it does
+not wait for any in-flight admission reservation to resolve. A reservation made
+by `submit()` may still be pending (admitted_count_ incremented, Group::async not
+yet committed/rolled back) when Draining is entered. The model therefore does
+NOT add a `~admission_reservation_active` guard to `DrainBegin`: doing so would
+make the model stronger than production and exclude the real stop-vs-submit
+race that Live3 must cover. The reservation resolves via SubmitGroupCommit or
+SubmitRollback (both enabled in Draining), so accounting converges and
+drain_complete remains reachable.
+
 ## Production / formal refinement map (E16-POST-MERGE-CORRECTIVE-1)
 
 | Formal action/state                | Production path                           |
