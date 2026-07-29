@@ -1,0 +1,227 @@
+# ISSUE-47-DIAGNOSTIC-1 — manual abnormal-termination classification workflow.
+#
+# DIAGNOSTIC ONLY. This is NOT a required merge check and is intentionally NOT
+# triggered by pull_request / push. It runs only on manual workflow_dispatch to
+# reproduce and classify the abnormal termination of case
+# `mwcoord_serialized_backend_access` reported in issue #47, across many
+# iterations and independent runner shards to obtain different interleavings.
+#
+# It performs NO Scheduler fix, adds NO sleeps/retries/quarantine. Each shard:
+#   * builds the test target ONCE (not per iteration);
+#   * runs the built binary DIRECTLY (via scripts/run_issue47_diag.py, which
+#     uses subprocess directly — never xmake run/xmake test, so the real
+#     process/signal status is preserved);
+#   * uses a unique output directory;
+#   * stops after the first abnormal iteration;
+#   * uploads all evidence (stdout/stderr per iteration, JSONL, summary,
+#     environment report, and a best-effort core/backtrace).
+#
+# See issue #47 §12-§14 and AGENTS.md §9 for the evidence contract.
+name: issue47-diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Build mode: debug | release"
+        type: choice
+        default: debug
+        options: [debug, release]
+      count:
+        description: "Iterations per shard (each shard stops at first abnormal)"
+        type: string
+        default: "1000"
+      shards:
+        description: "Number of independent shards (different runner interleavings)"
+        type: string
+        default: "4"
+      cpu_list:
+        description: "taskset CPU list, e.g. 0,1"
+        type: string
+        default: "0,1"
+      stress:
+        description: "Run a parallel CPU stressor to perturb scheduling"
+        type: boolean
+        default: true
+
+# Cancel superseded manual runs on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  classify:
+    name: shard ${{ matrix.shard }} (${{ inputs.mode }}, stress=${{ inputs.stress }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # Independent jobs obtain different host interleavings (issue #47 §13).
+        shard: [0, 1, 2, 3]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Configure (${{ inputs.mode }}, Clang)
+        run: xmake f -m ${{ inputs.mode }} --toolchain=clang -y
+
+      - name: Build target ONCE
+        # Build the affected test target a single time. The runner re-executes
+        # the binary directly; it does NOT rebuild per iteration (issue #47 §12).
+        run: xmake build multi_worker_coord_test
+
+      - name: Locate built binary
+        id: bin
+        run: |
+          set -euo pipefail
+          bin="build/linux/$(uname -m)/${{ inputs.mode }}/multi_worker_coord_test"
+          if [[ ! -x "$bin" ]]; then
+            # try common fallback shapes
+            for c in "build/linux/x86_64/${{ inputs.mode }}/multi_worker_coord_test" \
+                     "build/linux/amd64/${{ inputs.mode }}/multi_worker_coord_test"; do
+              [[ -x "$c" ]] && bin="$c" && break
+            done
+          fi
+          [[ -x "$bin" ]] || { echo "binary not found at $bin" >&2; exit 1; }
+          echo "path=$bin" >> "$GITHUB_OUTPUT"
+
+      - name: Environment capture (CI-like)
+        # issue #47 §13: record the host/toolchain identity for the evidence report.
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          {
+            echo "git_sha=$(git rev-parse HEAD)"
+            echo "git_branch=$(git rev-parse --abbrev-ref HEAD)"
+            echo "runner_image=$ImageOS/$ImageVersion"
+            echo "uname=$(uname -a)"
+            echo "clang=$(clang --version | head -1)"
+            echo "ldd=$(ldd --version | head -1)"
+            echo "xmake=$(xmake --version 2>/dev/null | head -1)"
+            echo "python=$(python3 --version)"
+            echo "nproc=$(nproc)"
+            echo "taskset=${{ inputs.cpu_list }}"
+            echo "MALLOC_PERTURB_=${MALLOC_PERTURB_:-unset}"
+            echo "--- lscpu ---"; lscpu
+            echo "--- ulimit -a ---"; ulimit -a
+          } > evidence/environment.txt
+          cat evidence/environment.txt
+
+      - name: Enable core dumps (best effort)
+        # issue #47 §14. GitHub-hosted runners typically reject writable
+        # core_pattern, so this is best-effort; CORE_CAPTURE=UNAVAILABLE is a
+        # valid outcome and is reported honestly below.
+        run: |
+          set +e
+          ulimit -c unlimited
+          echo "ulimit -c => $(ulimit -c)"
+          if sudo sh -c 'echo "core.%p.%t" > /proc/sys/kernel/core_pattern' 2>/dev/null; then
+            echo "core_pattern=$(cat /proc/sys/kernel/core_pattern)"
+            echo "CORE_CAPTURE=ENABLED" >> "$GITHUB_ENV"
+          else
+            echo "CORE_CAPTURE=UNAVAILABLE (core_pattern not writable on hosted runner)" | tee -a evidence/environment.txt
+            echo "CORE_CAPTURE=UNAVAILABLE" >> "$GITHUB_ENV"
+          fi
+
+      - name: Optional CPU stressor
+        # issue #47 §13: a parallel CPU hog perturbs scheduling to widen the
+        # race window. It runs for the whole diagnostic window and is killed
+        # at the end of the run step.
+        if: ${{ inputs.stress == 'true' }}
+        run: |
+          # One background burn loop per online CPU. Low priority so it does not
+          # starve the diagnostic itself; it only adds contention.
+          nproc | xargs -I{} sh -c 'for i in $(seq {}); do nice -n 19 bash -c "while true; do :; done" & done'
+          echo "stressor started"
+
+      - name: Run diagnostic runner (direct binary, many iterations)
+        id: run
+        # The runner exits nonzero on the first non-PASS iteration (issue #47
+        # §12). `continue-on-error` lets us still upload the evidence for an
+        # abnormal shard rather than failing the job before artifacts upload.
+        continue-on-error: true
+        env:
+          MALLOC_PERTURB_: "${{ matrix.shard }}"  # perturb allocator per shard
+        run: |
+          set -euo pipefail
+          out="evidence/shard-${{ matrix.shard }}"
+          mkdir -p "$out"
+          python3 scripts/run_issue47_diag.py \
+            --binary "${{ steps.bin.outputs.path }}" \
+            --mode "${{ inputs.mode }}" \
+            --count "${{ inputs.count }}" \
+            --output-dir "$out" \
+            --timeout-seconds 30 \
+            --taskset "${{ inputs.cpu_list }}"
+          echo "result=clean" >> "$GITHUB_OUTPUT"
+
+      - name: Core/backtrace capture (best effort)
+        # issue #47 §14. If a core was produced and gdb is available, capture a
+        # backtrace. If no core (typical on hosted runners), report honestly.
+        if: always()
+        run: |
+          set +e
+          found=0
+          shopt -s nullglob
+          for core in core.* core evidence/core.* /var/lib/apport/coredump/*; do
+            [[ -f "$core" ]] || continue
+            found=1
+            if command -v gdb >/dev/null 2>&1; then
+              gdb -batch -ex "set pagination off" -ex "info threads" \
+                  -ex "thread apply all bt full" \
+                  "${{ steps.bin.outputs.path }}" "$core" \
+                  > "evidence/backtrace-$(basename "$core").txt" 2>&1
+              mv "$core" "evidence/$(basename "$core")"
+            else
+              cp "$core" "evidence/$(basename "$core")" 2>/dev/null
+            fi
+          done
+          if [[ "$found" -eq 0 ]]; then
+            echo "CORE_CAPTURE=${CORE_CAPTURE:-UNAVAILABLE} (no core file produced)" \
+              | tee evidence/core-capture-status.txt
+          else
+            echo "CORE_CAPTURE=core+backtrace captured" | tee evidence/core-capture-status.txt
+          fi
+
+      - name: Stop stressor
+        if: always()
+        run: |
+          set +e
+          pkill -f "while true; do :; done" 2>/dev/null
+          true
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue47-shard-${{ matrix.shard }}-${{ inputs.mode }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Shard result
+        # A shard is "clean" only if the runner reported no abnormal iteration.
+        # An abnormal shard is the DIAGNOSTIC SUCCESS case (we captured the
+        # incident), so it must not fail this job silently — but we upload first.
+        if: always()
+        run: |
+          if [[ "${{ steps.run.outputs.result }}" == "clean" ]]; then
+            echo "::notice::shard ${{ matrix.shard }}: no abnormal iteration (NOT-REPRODUCED for this shard)"
+          else
+            echo "::warning::shard ${{ matrix.shard }}: abnormal iteration captured — inspect uploaded evidence"
+          fi
