@@ -90,11 +90,22 @@ public:
 
     // Transition to running. Lawful from: runnable only. Called by the worker
     // (E4) when it picks the fiber off the ready queue.
-    void make_running() noexcept;
+    //
+    // Returns true ONLY when the transition actually occurred (runnable->running).
+    // Returns false if the fiber was NOT runnable (e.g. already running, done,
+    // or still waiting). The caller MUST check this return value: a false return
+    // means the ticket is invalid and the Scheduler MUST fail-fast before
+    // entering the Fiber context (I47-F3: invalid runnable-ticket guard).
+    bool make_running() noexcept;
 
     // Transition to waiting. Lawful from: running only. Called by the fiber's
     // own entry (E4) when it suspends at an await/cancel point.
-    void make_waiting() noexcept;
+    //
+    // Returns true ONLY when the transition actually occurred (running->waiting).
+    // Returns false if the fiber was NOT running (a contract violation). The
+    // caller MUST check this return value and fail-fast on failure (I47-F2:
+    // unified suspend authority protocol).
+    bool make_waiting() noexcept;
 
     // Transition to done. Lawful from: running. Called by the entry when the
     // task body returns. Terminal and absorbing: no further transitions.

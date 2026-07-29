@@ -942,16 +942,61 @@ void Scheduler::worker_loop(WorkerState* ws) {
 }
 
 void Scheduler::run_next_on(WorkerState* ws, Fiber* fiber) {
+    // I47-F3: invalid runnable-ticket guard. A ticket whose Fiber is NOT
+    // Runnable means the suspend-switch authority protocol was breached (a
+    // thief stole a ticket before the owner saved the Fiber CPU context, or
+    // a duplicate ticket was published). Fail-fast BEFORE entering the Fiber
+    // context — a silent return would discard work and could hang the run.
+    if (!fiber->make_running()) {
+        detail::scheduler_invalid_runnable_ticket_fail_fast();
+    }
     ws->current = fiber;
     running_fiber_count_.fetch_add(1, std::memory_order_acq_rel);
-    fiber->make_running();
     fiber_ctx::Switch s;
     s.old = &ws->sched_ctx;
     s.new_ = &fiber->ctx;
     (void)fiber_ctx::context_switch(&s);
     // Control resumes here when the fiber switches back to ws->sched_ctx.
+    //
+    // I47-F2: clear suspend-switch authority on the SCHEDULER continuation.
+    // At this moment the Fiber CPU context has been saved (the Fiber-side
+    // context_switch stored rsp/rbp/rip into fiber->ctx). The routed runnable
+    // ticket is now safe for migration/steal. This is the correct clear point
+    // — NOT on the resumed Fiber continuation (the old Select path cleared it
+    // there, leaving a window where a thief could steal before the save).
+    //
+    // Use store(false) unconditionally: if the Fiber completed instead of
+    // suspending, suspend_switch_pending is already false (a Fiber that never
+    // suspended never raised it). If it DID suspend, this clears the authority
+    // raised by commit_suspend_locked. An exchange(false) + assert would be
+    // stricter but store(false) is sufficient and cheaper.
+    ws->suspend_switch_pending.store(false, std::memory_order_release);
     ws->current = nullptr;
     running_fiber_count_.fetch_sub(1, std::memory_order_acq_rel);
+}
+
+void Scheduler::commit_suspend_locked(WorkerState* ws, Fiber* fiber) {
+    // I47-F2: unified suspend-switch authority protocol.
+    //
+    // Precondition: global_mtx_ held; fiber is ws->current (Running); wait
+    // registration committed; inline-ready/terminal recheck ruled out return.
+    //
+    // Ordering (closes the suspend-before-switch race for ALL wait paths):
+    //   1. Raise suspend authority BEFORE the Fiber becomes observably Waiting.
+    //   2. Transition Running -> Waiting.
+    //
+    // Because every resolver (wake_ready_completions_locked, wake_wait_one,
+    // cancel_wait, expire_wait, event_set_broadcast, select_publish_locked)
+    // requires global_mtx_ to publish a Runnable ticket, and this function
+    // holds global_mtx_ while raising authority AND transitioning Waiting,
+    // there is NO window in which a resolver can publish before authority is
+    // active. A thief under global_mtx_ sees suspend_switch_pending==true and
+    // refuses the steal until run_next_on clears it (scheduler-side, after the
+    // physical context switch saves the Fiber CPU context).
+    ws->suspend_switch_pending.store(true, std::memory_order_release);
+    if (!fiber->make_waiting()) {
+        detail::scheduler_invalid_suspend_transition_fail_fast();
+    }
 }
 
 void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
@@ -1049,6 +1094,29 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     signal_wake_locked();
 }
 
+WorkerState* Scheduler::owner_for_fiber_locked(Fiber* fiber) {
+    // I47-F1: authoritative owner lookup for a previously-running Fiber.
+    // A Fiber that has run and entered Waiting MUST have a recorded owner.
+    // A missing entry is a fatal Scheduler invariant violation.
+    auto it = fiber_owner_.find(fiber);
+    if (it == fiber_owner_.end() || it->second == nullptr) {
+        detail::scheduler_missing_fiber_owner_fail_fast();
+    }
+    return it->second;
+}
+
+bool Scheduler::publish_waiting_fiber_runnable_locked(Fiber* fiber) {
+    // I47-F1: canonical waiting-Fiber publication. Routes the runnable ticket
+    // to the Fiber's recorded owner Worker (NOT the resolver's g_worker).
+    // The owner lookup is authoritative: a resolver must not change ownership.
+    WorkerState* owner = owner_for_fiber_locked(fiber);
+    if (!fiber->make_runnable()) {
+        return false;  // already runnable/running/done (exactly-once guard)
+    }
+    route_runnable_locked(fiber, owner);
+    return true;
+}
+
 Scheduler::MwState Scheduler::classify_locked() const {
     // Must be called with global_mtx_ held.
     bool any_runnable = !pending_spawn_.empty();
@@ -1083,15 +1151,19 @@ void Scheduler::await_completion_size(Completion<std::size_t>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
     // E7/E8 SuspendFiber refinement obligation: register + readiness recheck +
-    // make_waiting MUST be one atomic transition with respect to the wake path
-    // (wake_ready_completions_locked runs under global_mtx_). Doing make_waiting
-    // before registering (the old shape) left a window in which the wake path
-    // could not see this fiber; doing the recheck outside the lock could miss a
-    // wake that landed between register-release and recheck. Both admitted a
-    // lost wake / permanent park. Mirror the attach_ready_wake idiom: register,
-    // recheck, and make_waiting all under global_mtx_; only context_switch is
-    // outside. If the Completion is already ready under the lock, undo the
-    // speculative registration and continue running (no make_waiting).
+    // commit_suspend_locked MUST be one atomic transition with respect to the
+    // wake path (wake_ready_completions_locked runs under global_mtx_). Doing
+    // make_waiting before registering (the old shape) left a window in which
+    // the wake path could not see this fiber; doing the recheck outside the
+    // lock could miss a wake that landed between register-release and recheck.
+    // Both admitted a lost wake / permanent park.
+    //
+    // I47-F2: commit_suspend_locked raises suspend_switch_pending BEFORE
+    // make_waiting, both under global_mtx_. This closes the suspend-before-
+    // switch race: a resolver that wins after G unlock routes a Runnable
+    // ticket, but a thief sees suspend_switch_pending==true and refuses the
+    // steal until run_next_on clears it (scheduler-side, after the physical
+    // context switch saves the Fiber CPU context).
     {
         LockGuard lk(global_mtx_);
         waiting_size_[static_cast<void*>(&c)] = {me, ws};
@@ -1099,8 +1171,16 @@ void Scheduler::await_completion_size(Completion<std::size_t>& c) {
             waiting_size_.erase(static_cast<void*>(&c));
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+    // I47-F1: generic suspension phase seam. AFTER wait registration committed
+    // + suspend authority raised + Fiber Waiting + global_mtx_ released,
+    // BEFORE the physical context_switch. A coordinator can resolve the wait
+    // and prove the authority window is closed.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -1110,8 +1190,9 @@ void Scheduler::await_completion_size(Completion<std::size_t>& c) {
 void Scheduler::await_completion_void(Completion<void>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
-    // See await_completion_size: register + recheck + make_waiting under the
-    // wake-path lock; only context_switch is outside.
+    // I47-F2: see await_completion_size for the unified suspend protocol.
+    // register + recheck + commit_suspend_locked under global_mtx_; only
+    // context_switch is outside.
     {
         LockGuard lk(global_mtx_);
         waiting_void_[static_cast<void*>(&c)] = {me, ws};
@@ -1119,8 +1200,12 @@ void Scheduler::await_completion_void(Completion<void>& c) {
             waiting_void_.erase(static_cast<void*>(&c));
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -1131,10 +1216,9 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
     if (ready.load(std::memory_order::acquire)) return;
-    // See await_completion_size: register + recheck + make_waiting under
-    // global_mtx_ (the wake_flags lock), only context_switch outside. The old
-    // shape did the recheck and make_waiting outside the lock, racing a wake
-    // that landed between register-release and recheck (lost wake / park).
+    // I47-F2: see await_completion_size for the unified suspend protocol.
+    // register + recheck + commit_suspend_locked under global_mtx_; only
+    // context_switch is outside.
     {
         LockGuard lk(global_mtx_);
         waiting_ready_[&ready] = {me, ws};
@@ -1142,8 +1226,12 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
             waiting_ready_.erase(&ready);
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -1151,12 +1239,12 @@ void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {
 }
 
 void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
-    // E10 WaitQueue suspension seam. Mirrors await_ready_flag's lost-wake-closed
-    // idiom (commit 422036c): register + recheck + make_waiting are ONE atomic
-    // transition w.r.t. the wake path (wake_wait_one / cancel_wait run under
-    // global_mtx_); only context_switch is outside. The queue protocol itself
-    // creates no wake-before-suspend loss — the register_ CAS (under q.mtx_,
-    // taken inside global_mtx_) publishes membership before make_waiting.
+    // E10 WaitQueue suspension seam. I47-F2: unified suspend protocol.
+    // register + recheck + commit_suspend_locked are ONE atomic transition
+    // w.r.t. the wake path (wake_wait_one / cancel_wait run under global_mtx_);
+    // only context_switch is outside. The queue protocol itself creates no
+    // wake-before-suspend loss — the register_ CAS (under q.mtx_, taken inside
+    // global_mtx_) publishes membership before commit_suspend_locked.
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
     // The fiber handle is recorded on the node so the winner resolver can route
@@ -1183,8 +1271,12 @@ void Scheduler::await_wait(WaitQueue& q, WaitNode& node) {
             --waiting_waitq_count_;
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -1215,8 +1307,9 @@ WaitNode* Scheduler::wake_wait_one_locked(WaitQueue& q) {
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
     // succeeded. The node is terminal; make_runnable is the publication guard.
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return won;
 }
@@ -1250,9 +1343,11 @@ bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
     retire_timer_for_node_locked(node);
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
-        return true;
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        if (publish_waiting_fiber_runnable_locked(f)) {
+            return true;
+        }
     }
     return false;
 }
@@ -1305,11 +1400,11 @@ void Scheduler::advance_clock(deadline_t t) {
 }
 
 void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t deadline) {
-    // E11 deadline wait admission. Mirrors await_wait's lost-wake-closed idiom
-    // (commit 422036c) and extends it with: (1) a TimerRegistration control
-    // block bound to this wait epoch, and (2) an already-due-deadline recheck
-    // that resolves Expired immediately through the SAME resolve_ authority
-    // (I5 admission closure — the fiber is never stranded by a due deadline).
+    // E11 deadline wait admission. I47-F2: unified suspend protocol.
+    // Extends await_wait with: (1) a TimerRegistration control block bound to
+    // this wait epoch, and (2) an already-due-deadline recheck that resolves
+    // Expired immediately through the SAME resolve_ authority (I5 admission
+    // closure — the fiber is never stranded by a due deadline).
     //
     // The admission critical section establishes, atomically w.r.t. every
     // resolver (wake_wait_one / cancel_wait / expire_wait / pump_deadlines all
@@ -1320,7 +1415,7 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
     //   4. push R_E into the deadline heap
     //   5. recheck: if node already terminal -> undo + return (defense-in-depth)
     //   6. recheck: if deadline already due  -> resolve Expired + return (I5)
-    //   7. make_waiting()
+    //   7. commit_suspend_locked(ws, me)      (I47-F2: authority + Waiting)
     // Only context_switch is outside the lock.
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
@@ -1379,8 +1474,12 @@ void Scheduler::await_wait_deadline(WaitQueue& q, WaitNode& node, deadline_t dea
             recompute_earliest_deadline_locked();
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -1405,9 +1504,11 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
     if (!q.expire_locked(node)) return false;  // already terminal (loser)
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
-        return true;
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        if (publish_waiting_fiber_runnable_locked(f)) {
+            return true;
+        }
     }
     return false;
 }
@@ -1788,8 +1889,9 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     // from a concurrent path, or null fiber) does NOT undo the cancel. Returning
     // false here would mislead the caller into retrying or thinking the wait is
     // still active (PR#6 review: gemini-code-assist + coderabbitai).
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -1863,8 +1965,12 @@ void Scheduler::await_event_wait(WaitQueue& q, const std::atomic<bool>& set_flag
             --waiting_waitq_count_;
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -1949,8 +2055,12 @@ void Scheduler::await_event_wait_deadline(WaitQueue& q,
             recompute_earliest_deadline_locked();
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -2057,8 +2167,12 @@ void Scheduler::sem_acquire(WaitQueue& waiters,
             --waiting_waitq_count_;
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -2145,8 +2259,12 @@ void Scheduler::sem_acquire_until(WaitQueue& waiters,
             recompute_earliest_deadline_locked();
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -2176,8 +2294,9 @@ bool Scheduler::sem_cancel(WaitQueue& waiters, WaitNode& node) {
     retire_timer_for_node_locked(node);
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -2339,8 +2458,12 @@ void Scheduler::mutex_lock(WaitQueue& waiters, Fiber*& owner, WaitNode& node) {
         sluice_async_test::test_phase(
             *this, sluice_async_test::PhaseTag::mutex_waiter_registered_before_grant);
 #endif
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -2426,8 +2549,12 @@ void Scheduler::mutex_lock_until(WaitQueue& waiters, Fiber*& owner,
             recompute_earliest_deadline_locked();
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -2458,8 +2585,9 @@ bool Scheduler::mutex_cancel(WaitQueue& waiters, WaitNode& node) {
     retire_timer_for_node_locked(node);
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -2501,8 +2629,9 @@ WaitNode* Scheduler::mutex_handoff_one_locked(WaitQueue& waiters, Fiber*& owner)
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
     // succeeded. The node is terminal; make_runnable is the publication guard.
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return won;
 }
@@ -2800,8 +2929,12 @@ void Scheduler::rwlock_read_lock(WaitQueue& waiters,
             node.set_user(nullptr);
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -2875,8 +3008,12 @@ void Scheduler::rwlock_write_lock(WaitQueue& waiters,
             node.set_user(nullptr);
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -3059,8 +3196,12 @@ void Scheduler::rwlock_read_lock_until(WaitQueue& waiters,
             node.set_user(nullptr);
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -3139,8 +3280,12 @@ void Scheduler::rwlock_write_lock_until(WaitQueue& waiters,
             node.set_user(nullptr);
             return;
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -3279,8 +3424,12 @@ void Scheduler::queue_push_admit(detail::QueuePort& port, WaitNode& node,
             if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
             return;  // lease retained; caller returns closed
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -3333,8 +3482,12 @@ void Scheduler::queue_pop_admit(detail::QueuePort& port, WaitNode& node,
             if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
             return;  // closed+empty
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -3414,8 +3567,12 @@ void Scheduler::queue_push_admit_until(detail::QueuePort& port, WaitNode& node,
                 return;  // expired; lease retained
             }
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -3491,8 +3648,12 @@ void Scheduler::queue_pop_admit_until(detail::QueuePort& port, WaitNode& node,
                 return;  // expired; out stays empty
             }
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -3521,8 +3682,9 @@ bool Scheduler::queue_cancel(detail::QueuePort& port, detail::QueueRole role,
     Fiber* f = node.fiber();
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -3551,9 +3713,11 @@ WaitNode* Scheduler::queue_grant_consumer_locked(detail::QueuePort& port)
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     Fiber* f = won->fiber();
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr && f->make_runnable()) {  // publication LAST
         ++port.granted_not_resumed_;  // F.2: published suspended-winner ticket
-        route_runnable_locked(f, g_worker);
+        WorkerState* owner = owner_for_fiber_locked(f);
+        route_runnable_locked(f, owner);
     }
     return won;
 }
@@ -3585,9 +3749,11 @@ WaitNode* Scheduler::queue_grant_producer_locked(detail::QueuePort& port)
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     Fiber* f = won->fiber();
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr && f->make_runnable()) {
         ++port.granted_not_resumed_;  // F.2: published suspended-winner ticket
-        route_runnable_locked(f, g_worker);
+        WorkerState* owner = owner_for_fiber_locked(f);
+        route_runnable_locked(f, owner);
     }
     return won;
 }
@@ -3688,12 +3854,17 @@ WaitOutcome Scheduler::condition_wait_prepare(WaitQueue& cond_waiters,
         }
         // Step 3: commit the calling Fiber to Waiting (inside global_mtx_, so a
         // concurrent resolver's make_runnable is the publication guard).
-        me->make_waiting();
+        // I47-F2: unified suspend protocol.
+        commit_suspend_locked(ws, me);
     }
     // ONLY context_switch is outside global_mtx_ (mirrors await_wait /
     // mutex_lock). The switch-back target is the calling fiber's ctx; it resumes
     // here after the Condition node resolves (Woken/Expired/Cancelled) and the
     // winner's make_runnable+route publishes it.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -3778,8 +3949,12 @@ WaitOutcome Scheduler::condition_wait_prepare_until(WaitQueue& cond_waiters,
         if (cond_node.is_terminal()) {
             return cond_node.outcome();
         }
-        me->make_waiting();
+        commit_suspend_locked(ws, me);
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+        sluice_async_test::PhaseTag::scheduler_suspend_before_physical_switch);
+#endif
     fiber_ctx::Switch s;
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
@@ -3839,8 +4014,9 @@ bool Scheduler::condition_cancel_wait(WaitQueue& cond_waiters, WaitNode& cond_no
     retire_timer_for_node_locked(cond_node);
     Fiber* f = cond_node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -3950,8 +4126,10 @@ std::size_t Scheduler::pump_deadlines_locked() {
                     top->fire_on_resolve_locked(/*timer_won=*/true);
                 }
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
                 if (f != nullptr && f->make_runnable()) {
-                    route_runnable_locked(f, g_worker);
+                    WorkerState* owner = owner_for_fiber_locked(f);
+                    route_runnable_locked(f, owner);
                     ++won;
                 }
             }

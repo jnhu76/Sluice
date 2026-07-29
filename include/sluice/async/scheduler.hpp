@@ -1063,6 +1063,19 @@ private:
     bool wake_ready_flags_locked() SLUICE_REQUIRES(global_mtx_);
     void route_runnable(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
     void route_runnable_locked(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
+
+    // I47-F1: owner-authoritative Fiber lookup. Returns the recorded owner
+    // WorkerState for a Fiber that has already run and suspended. A missing
+    // owner is a fatal Scheduler invariant violation (fail-fast). MUST NOT
+    // fall back to g_worker, pending_spawn_, or an arbitrary resolver Worker.
+    WorkerState* owner_for_fiber_locked(Fiber* fiber) SLUICE_REQUIRES(global_mtx_);
+
+    // I47-F1: canonical waiting-Fiber publication helper. Looks up the Fiber's
+    // recorded owner, transitions Waiting->Runnable (exactly-once guard), and
+    // routes the runnable ticket to the owner's queue. Returns true iff the
+    // transition succeeded and the ticket was published. Preserves winner
+    // resolution, timer retirement, and wait accounting (caller's responsibility).
+    bool publish_waiting_fiber_runnable_locked(Fiber* fiber) SLUICE_REQUIRES(global_mtx_);
     // E12-A: the wake_wait_one body with global_mtx_ already held. Resolves the
     // FIFO head with Woken (wake_one_locked), retires any bound timer, decrements
     // waiting_waitq_count_, and routes the winner runnable. Returns the winning
@@ -1107,6 +1120,30 @@ private:
     // publication/ownership protocols.
     void run_impl(unsigned worker_count, RunMode mode);
     void run_next_on(WorkerState* ws, Fiber* fiber);
+
+    // I47-F2: unified suspend-switch authority protocol. Centralizes the
+    // suspend authority raise + Fiber Running->Waiting transition that EVERY
+    // suspension path MUST perform under global_mtx_ BEFORE releasing it.
+    //
+    // Precondition: global_mtx_ is held; fiber is ws->current (Running); the
+    // wait registration is committed; inline-ready/terminal recheck has ruled
+    // out early return.
+    //
+    // Required ordering (closes the suspend-before-switch race):
+    //   1. ws->suspend_switch_pending.store(true, release)  — raise authority
+    //   2. fiber->make_waiting()                            — Running->Waiting
+    //
+    // Because resolver paths require global_mtx_, no resolver may publish a
+    // Runnable ticket between Waiting publication and suspend authority
+    // publication. A thief observing the routed ticket under global_mtx_ sees
+    // suspend_switch_pending==true and refuses the steal until run_next_on
+    // clears it (scheduler-side, after the physical context switch saves the
+    // Fiber CPU context).
+    //
+    // Fails fast (scheduler_invalid_suspend_transition_fail_fast) if
+    // make_waiting() returns false (impossible protocol state).
+    void commit_suspend_locked(WorkerState* ws, Fiber* fiber)
+        SLUICE_REQUIRES(global_mtx_);
 
     // E8: try to steal one runnable Fiber from another worker's local_runnable
     // to `thief`. Returns true if a Fiber was stolen (and now sits on
@@ -2168,6 +2205,63 @@ public:
         //     claiming the (valid) head reader.
         static void rwlock_death_forge_invalid_batch_member(Scheduler& s,
                                                             AsyncRwLock& rw);
+
+        // ---- I47-F1: Runnable publication owner-domain snapshot ----
+        // Captures the placement of a Fiber's runnable ticket relative to its
+        // recorded owner Worker and a resolver Worker. Used by the owner-domain
+        // regression test to prove whether a woken Fiber is routed to its owner
+        // or incorrectly to the resolver. Follows production lock order:
+        // global_mtx_ -> relevant Worker inbox_mtx.
+        struct RunnablePublicationSnapshot {
+            unsigned fiber_owner_worker_id{static_cast<unsigned>(-1)};
+            bool owner_queue_contains_fiber{false};
+            bool resolver_queue_contains_fiber{false};
+            bool pending_spawn_contains_fiber{false};
+            bool owner_suspend_switch_pending{false};
+            FiberState fiber_state{FiberState::created};
+        };
+
+        static RunnablePublicationSnapshot capture_runnable_publication(
+            Scheduler& s, Fiber& fiber,
+            unsigned owner_worker_id, unsigned resolver_worker_id) {
+            RunnablePublicationSnapshot snap;
+            LockGuard lk(s.global_mtx_);
+            // Owner lookup.
+            auto it = s.fiber_owner_.find(&fiber);
+            if (it != s.fiber_owner_.end() && it->second != nullptr) {
+                snap.fiber_owner_worker_id = it->second->id;
+            }
+            // Fiber state (atomic, no lock needed but read under G for consistency).
+            snap.fiber_state = fiber.state();
+            // Owner suspend authority.
+            if (owner_worker_id < s.workers_.size()) {
+                snap.owner_suspend_switch_pending =
+                    s.workers_[owner_worker_id]->suspend_switch_pending.load(
+                        std::memory_order_acquire);
+            }
+            // Check owner's local_runnable.
+            if (owner_worker_id < s.workers_.size()) {
+                auto& w = *s.workers_[owner_worker_id];
+                std::lock_guard<std::mutex> wlk(w.inbox_mtx);
+                for (auto* f : w.local_runnable) {
+                    if (f == &fiber) { snap.owner_queue_contains_fiber = true; break; }
+                }
+            }
+            // Check resolver's local_runnable.
+            if (resolver_worker_id < s.workers_.size() &&
+                resolver_worker_id != owner_worker_id) {
+                auto& w = *s.workers_[resolver_worker_id];
+                std::lock_guard<std::mutex> wlk(w.inbox_mtx);
+                for (auto* f : w.local_runnable) {
+                    if (f == &fiber) { snap.resolver_queue_contains_fiber = true; break; }
+                }
+            }
+            // Check pending_spawn_.
+            for (auto* f : s.pending_spawn_) {
+                if (f == &fiber) { snap.pending_spawn_contains_fiber = true; break; }
+            }
+            return snap;
+        }
 
         // ---- E14 RT-F3: init_fiber failure injection ----
         // Force the NEXT Scheduler::init_fiber() call to return false,

@@ -2485,3 +2485,161 @@ SLUICE_TEST_CASE(event_set_plus_already_due_deadline_is_woken) {
     sched.advance_clock(1000);
     SLUICE_CHECK_MSG(node.was_woken(), "no later expiry publication (still Woken)");
 }
+
+// ===========================================================================
+// I47-F1 — Owner-domain routing regression
+// ===========================================================================
+
+// ---- event_wake_routes_to_waiter_owner_before_context_save ----------------
+//
+// Deterministic proof of whether a woken Fiber's runnable ticket is published
+// into its recorded owner Worker's queue (correct) or the resolver Worker's
+// queue (defect). Uses the scheduler_suspend_before_physical_switch phase to
+// pause W0 AFTER suspend authority is raised and Fiber is Waiting, but BEFORE
+// the physical context switch. While W0 is paused, W1 resolves the Event and
+// the coordinator inspects queue placement.
+//
+// Expected on CURRENT (buggy) implementation:
+//   owner_queue_contains_fiber == false
+//   resolver_queue_contains_fiber == true
+//
+// Expected AFTER owner-routing fix:
+//   owner_queue_contains_fiber == true
+//   resolver_queue_contains_fiber == false
+SLUICE_TEST_CASE(event_wake_routes_to_waiter_owner_before_context_save) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard ctrl(sched);
+
+    Event ev(sched, /*initially_set=*/false);
+    WaitNode node;
+
+    std::atomic<bool> waiter_entered{false};
+    std::atomic<unsigned> resume_worker{static_cast<unsigned>(-1)};
+    std::atomic<int> waiter_resume_count{0};
+    std::atomic<bool> resolver_go{false};
+    std::atomic<bool> resolver_set_done{false};
+    std::atomic<bool> resolver_may_return{false};
+
+    Fiber waiter, resolver;
+    waiter.set_entry([&](Fiber&) {
+        waiter_entered.store(true, std::memory_order_release);
+        ev.wait(node);
+        resume_worker.store(
+            Scheduler::current_worker_id(),
+            std::memory_order_release);
+        waiter_resume_count.fetch_add(1, std::memory_order_acq_rel);
+    });
+    resolver.set_entry([&](Fiber&) {
+        while (!resolver_go.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+        ev.set();
+        resolver_set_done.store(true, std::memory_order_release);
+        // Keep W1 occupied so it cannot return to its worker loop and consume F
+        // before the coordinator inspects queue placement.
+        while (!resolver_may_return.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+    });
+
+    FiberStack sw, sr;
+    SLUICE_CHECK(sched.init_fiber(waiter, sw.base(), sw.size()));
+    SLUICE_CHECK(sched.init_fiber(resolver, sr.base(), sr.size()));
+    sched.spawn_on(waiter, 0);
+    sched.spawn_on(resolver, 1);
+
+    // 1. Arm the suspend-before-physical-switch phase.
+    sluice_async_test::SuspendSeam::arm(sched);
+
+    // 2. Start Scheduler from a coordinator OS thread.
+    std::thread scheduler_thread([&] {
+        sched.run(2);
+    });
+
+    // 3. Wait until waiter F is paused at the phase:
+    //    W0 suspend flag active, F Waiting, physical switch not completed.
+    sluice_async_test::SuspendSeam::wait_paused(sched);
+
+    // 4. Set resolver_go = true.
+    resolver_go.store(true, std::memory_order_release);
+
+    // 5/6. Wait until resolver_set_done == true (W1 executed Event::set()).
+    SLUICE_CHECK_MSG(
+        spin_wait_pred_guarded([&] {
+            return resolver_set_done.load(std::memory_order_acquire);
+        }),
+        "resolver completed Event::set()");
+
+    // 7. Both Workers unable to consume F:
+    //    W0 remains paused at the phase; W1 remains inside resolver Fiber.
+
+    // 8. Inspect Fiber ownership and runnable-ticket placement.
+    using Snapshot = Scheduler::AsyncTestAccess::RunnablePublicationSnapshot;
+    Snapshot snap = Scheduler::AsyncTestAccess::capture_runnable_publication(
+        sched, waiter, /*owner_worker_id=*/0, /*resolver_worker_id=*/1);
+
+    // --- Record the snapshot for the evidence report ---
+    std::printf("  [I47-F1 snapshot]\n");
+    std::printf("    fiber_owner_worker_id=%u\n", snap.fiber_owner_worker_id);
+    std::printf("    owner_queue_contains_fiber=%s\n",
+                snap.owner_queue_contains_fiber ? "true" : "false");
+    std::printf("    resolver_queue_contains_fiber=%s\n",
+                snap.resolver_queue_contains_fiber ? "true" : "false");
+    std::printf("    pending_spawn_contains_fiber=%s\n",
+                snap.pending_spawn_contains_fiber ? "true" : "false");
+    std::printf("    owner_suspend_switch_pending=%s\n",
+                snap.owner_suspend_switch_pending ? "true" : "false");
+    std::printf("    fiber_state=%u\n",
+                static_cast<unsigned>(snap.fiber_state));
+    std::fflush(stdout);
+
+    // Capture pre-cleanup assertion state (assertions AFTER cleanup to avoid
+    // dangling scheduler thread on early return from SLUICE_CHECK_MSG).
+    const int pre_resume_count = waiter_resume_count.load(std::memory_order_acquire);
+
+    // 9. Release W0 phase. W0 will complete the physical context switch (saving
+    // the fiber's CPU context). We must wait for that to finish before allowing
+    // W1 to consume the fiber (otherwise W1 resumes a fiber whose context has
+    // not been saved — the exact crash this bug causes in production).
+    sluice_async_test::SuspendSeam::release(sched);
+
+    // Wait for W0's suspend_switch_pending to clear (proves physical switch done).
+    // Use the snapshot accessor to observe the flag.
+    SLUICE_CHECK_MSG(
+        spin_wait_pred_guarded([&] {
+            Snapshot s2 = Scheduler::AsyncTestAccess::capture_runnable_publication(
+                sched, waiter, 0, 1);
+            return !s2.owner_suspend_switch_pending;
+        }),
+        "W0 completed physical context switch");
+
+    // Now safe to let W1's resolver return (W1 may then consume the fiber).
+    resolver_may_return.store(true, std::memory_order_release);
+
+    // 10. Join Scheduler and validate the final Event outcome.
+    scheduler_thread.join();
+
+    // --- Assertions: the CORRECT owner-domain routing ---
+    SLUICE_CHECK_MSG(snap.fiber_owner_worker_id == 0,
+                     "fiber owner is W0");
+    SLUICE_CHECK_MSG(snap.owner_queue_contains_fiber,
+                     "runnable ticket in OWNER (W0) queue");
+    SLUICE_CHECK_MSG(!snap.resolver_queue_contains_fiber,
+                     "runnable ticket NOT in resolver (W1) queue");
+    SLUICE_CHECK_MSG(!snap.pending_spawn_contains_fiber,
+                     "runnable ticket NOT in pending_spawn");
+    SLUICE_CHECK_MSG(snap.owner_suspend_switch_pending,
+                     "W0 suspend authority active");
+    SLUICE_CHECK_MSG(snap.fiber_state == FiberState::runnable,
+                     "fiber is Runnable");
+    SLUICE_CHECK_MSG(pre_resume_count == 0,
+                     "waiter had NOT resumed before physical switch");
+
+    SLUICE_CHECK_MSG(waiter_resume_count.load(std::memory_order_acquire) == 1,
+                     "waiter resumed exactly once");
+    SLUICE_CHECK_MSG(node.was_woken(), "Event outcome is Woken");
+    SLUICE_CHECK_MSG(sched.waiting_count() == 0, "no unresolved waits remain");
+}

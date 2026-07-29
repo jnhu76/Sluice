@@ -303,6 +303,30 @@ struct AsyncConditionSeam {
     }
 };
 
+// ---- I47-F1: generic suspend-before-physical-switch seam ----
+// The scheduler_suspend_before_physical_switch phase: fired AFTER wait
+// registration committed + suspend authority raised + Fiber Waiting +
+// global_mtx_ released, BEFORE the physical context_switch. A coordinator
+// thread can resolve the wait (Event::set) and inspect queue placement.
+struct SuspendSeam {
+    static void arm(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(
+            s, PhaseTag::scheduler_suspend_before_physical_switch);
+    }
+    static void wait_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(
+            s, PhaseTag::scheduler_suspend_before_physical_switch);
+    }
+    static bool is_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(
+            s, PhaseTag::scheduler_suspend_before_physical_switch);
+    }
+    static void release(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(
+            s, PhaseTag::scheduler_suspend_before_physical_switch);
+    }
+};
+
 // ---- ASYNC-MUTEX-NOTHROW acquisition fail-fast seam ----
 // (ASYNC-MUTEX-NOTHROW-PRODUCTION-IMPLEMENTATION-1 §E/F)
 //
