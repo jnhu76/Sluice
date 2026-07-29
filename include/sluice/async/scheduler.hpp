@@ -42,6 +42,7 @@ namespace sluice::async {
 
 class Event;
 class SelectResult;  // P5: full definition lives in select.hpp (included by select.cpp)
+class ApplicationRuntime;  // C2: friend grant for the Fiber identity write seam.
 
 namespace detail {
 class SelectGroup;
@@ -938,23 +939,32 @@ public:
         return w ? w->id : static_cast<unsigned>(-1);
     }
 
-    // E16 P0-1: read the execution-identity tag from the current Fiber (or
-    // nullptr if not inside a Fiber body). Unlike thread_local, this tag
-    // survives Fiber suspend/resume. The ApplicationRuntime task wrapper
-    // stores its `this` pointer here to detect worker-call detection.
+    // E16 P0-1 / C2: READ the execution-identity tag from the current Fiber
+    // (or nullptr if not inside a Fiber body). Unlike thread_local, this tag
+    // survives Fiber suspend/resume. The ApplicationRuntime task wrapper stores
+    // its `this` pointer here to detect worker-call detection. The read path is
+    // public for narrow introspection (is_runtime_task).
     static void* current_fiber_execution_tag() {
         WorkerState* w = current_worker();
         return w ? w->current ? w->current->execution_tag() : nullptr : nullptr;
     }
 
-    // E16 P0-1: write the execution-identity tag on the current Fiber.
-    // Safe to call only from within a Fiber body (g_worker must be valid).
+private:
+    // C2: WRITE authority for the Fiber execution-identity tag. This is the
+    // ONLY public-reachable write path, and it is private: callable solely by
+    // ApplicationRuntime (the friend grant above), which sets/restores the tag
+    // around user task code. Ordinary application code cannot reach it, so it
+    // cannot clear, replace, or forge the Runtime identity to bypass
+    // is_runtime_task() self-close detection. Do NOT make this public.
+    friend class ApplicationRuntime;
     static void set_current_fiber_execution_tag(void* tag) {
         WorkerState* w = current_worker();
         if (w && w->current) {
             w->current->set_execution_tag(tag);
         }
     }
+
+public:
 
     // E8 diagnostic (§12): the CURRENT execution owner of `f`, or nullptr if
     // `f` has not been spawned/assigned. Test/DEBUG only — do not make

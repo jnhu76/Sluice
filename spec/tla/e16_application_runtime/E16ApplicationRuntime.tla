@@ -234,7 +234,7 @@ StartupCommit ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
+                   task_io_submitted, task_io_complete, drain_completed_once>>
 
 (* StartupSpawnFailure: driver spawn throws -> StartFailed. *)
 StartupSpawnFailure ==
@@ -433,17 +433,35 @@ SubmitReserve(t) ==
                    task_committed, task_terminated, task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* SubmitGroupCommit: Group admission succeeds. Publish epoch + dual-wake.
-   The commit is gated on admission_open: a reservation made while Running
-   must not commit after stop has closed admission (the task would otherwise
-   be admitted-but-never-terminatable during Draining, breaking
-   PublishDrainComplete's admitted_count = terminal_count requirement --
-   E16-Live3 hole). A reservation stranded by admission close is released by
-   SubmitRollback instead. *)
+
+   ADR §5 / production `ApplicationRuntime::submit()` (application_runtime.cpp):
+   the ADMISSION RESERVATION (admission_open checked TRUE + admitted_count++
+   under lifecycle_mutex) is the linearization point of stop-vs-submit.
+   submit() then RELEASES lifecycle_mutex and calls root_group_->async(...);
+   its success path does NOT re-check admission_open. Therefore the production-
+   reachable ordering
+
+       SubmitReserve -> RequestStopRunning (closes admission) -> SubmitGroupCommit
+            -> TaskBodyExit -> PublishDrainComplete
+
+   is legal: the reservation won the race while Running, so the task is
+   genuinely admitted and MUST be allowed to commit and terminate. The model
+   must NOT gate SubmitGroupCommit on admission_open, or it over-approximates
+   production and hides this path (E16-POST-MERGE-CORRECTIVE-2: the previous
+   admission_open guard excluded the post-stop-commit race and made Live3
+   under-cover the real production ordering). Accounting still converges
+   because the committed task runs TaskBodyExit -> terminal_count++ under
+   PublishDrainComplete's admitted_count = terminal_count check.
+
+   The guard set admission_reservation_active /\ task_admitted[t] /\
+   ~task_committed[t] restricts the commit to exactly one legitimately
+   PENDING reservation per task; it is sufficient without admission_open.
+   A reservation that instead resolves to failure takes SubmitRollback
+   (also enabled in Stopping/Draining), so both outcomes remain modeled. *)
 SubmitGroupCommit(t) ==
     /\ admission_reservation_active
     /\ task_admitted[t]
     /\ ~task_committed[t]
-    /\ admission_open
         /\ admission_reservation_active' = FALSE
     /\ task_committed' = [task_committed EXCEPT ![t] = TRUE]
     /\ successful_submit_published' = TRUE
@@ -665,10 +683,16 @@ DriverEnterBoundaryWait ==
     /\ control_epoch = observed_epoch
     /\ UNCHANGED vars
 
-(* DriverObserveEpoch: driver observes new epoch, re-evaluates. *)
+(* DriverObserveEpoch: driver observes new epoch, re-evaluates.
+   Guarded by ~successful_submit_published: if a submit is pending, the
+   driver must re-enter run_live (DriverReenterRunLive) instead of just
+   syncing epochs, otherwise Inv14 (successful_submit_published implies
+   epoch changed) can be violated when both epochs settle to the same
+   value with a published submit still pending. *)
 DriverObserveEpoch ==
     /\ driver_state = "between_invocations"
     /\ control_epoch # observed_epoch
+    /\ ~successful_submit_published
     /\ observed_epoch' = control_epoch
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
                    root_cancel_published, startup_abort_requested,
@@ -722,7 +746,14 @@ DriverReenterRunLive ==
    Drain
    ========================================================================= *)
 
-(* DrainBegin: Stopping -> Draining. *)
+(* DrainBegin: Stopping -> Draining.
+   Production drain() transitions Stopping->Draining without checking any
+   active admission reservation, so a reservation may be unresolved when Draining
+   is entered. The reservation is subsequently resolved by SubmitGroupCommit or
+   SubmitRollback (both enabled in Draining), so accounting still converges and
+   drain_complete remains reachable. The model must NOT add a stronger guard
+   here, or it would exclude the production-reachable stop-vs-submit race and
+   hide the Live3 counterexample. *)
 DrainBegin ==
     /\ runtime_state = "Stopping"
         /\ runtime_state' = "Draining"
@@ -767,7 +798,7 @@ PublishDrainComplete ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
+                   task_io_submitted, task_io_complete, drain_required>>
 
 (* EnterDrainedWait: driver parks after drain_complete. *)
 EnterDrainedWait ==
@@ -802,7 +833,7 @@ CloseOwnerElect(c) ==
     /\ c \in Callers
     /\ stop_requested \/ startup_abort_requested \/ runtime_state = "Fatal"
     /\ runtime_state = "Fatal" \/ outstanding_io = 0
-    /\ (drain_required => drain_complete)
+    /\ (drain_required => drain_complete) \/ runtime_state = "Fatal"
     /\ close_state' = "InProgress"
     /\ close_owner' = c
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
@@ -1229,7 +1260,19 @@ Inv4AccountingBounds ==
     /\ 0 <= group_future_terminal_count
     /\ group_future_terminal_count <= terminal_count
 
-(* E16-Inv5: Task terminal snapshot authority *)
+(* E16-Inv5 (C4 RECLASSIFIED): TerminalSnapshot is a DERIVED refinement
+   definition, NOT an independent safety invariant. It is defined as the same
+   expression as task_set_terminal_snapshot (itself a derived operator at the
+   top of this module), so asserting Inv5TerminalSnapshot ==
+   task_set_terminal_snapshot = <its own definition> is tautological — it can
+   never be falsified by an incorrect transition and provides no independent
+   safety evidence. Per the corrective property-classification rule, a property
+   counts as a TLC state invariant only if it checks independent modeled state
+   and can be falsified. Inv5 is retained here as documentation of the derived
+   snapshot definition but is EXCLUDED from the combined Inv and from
+   E16ApplicationRuntime.cfg. task_set_terminal_snapshot itself remains the
+   authoritative derived value used by Inv6DrainComplete and the modeled driver
+   stop-predicate. *)
 Inv5TerminalSnapshot ==
     task_set_terminal_snapshot = (~admission_open /\ admitted_count = terminal_count)
 
@@ -1301,7 +1344,17 @@ Inv16BoundaryParkAuthority ==
    requires epoch change) *)
 Inv17NoBusyLoop == TRUE
 
-(* E16-Inv18: Post-drain driver does not exit early *)
+(* E16-Inv18 (C4 RECLASSIFIED): PostDrainNoEarlyExit was a current-state
+   expression of the form (drained_wait /\ ~exit_req /\ ~fatal) => #exited,
+   which checks a same-state predicate, NOT a next-state transition. A drained
+   state cannot simultaneously be exited, so it is unfalsifiable as a state
+   invariant and provides no transition evidence. The obligation is now
+   expressed as the ACTION-LEVEL temporal property Live6PostDrainExitCaused
+   below: any transition from drained_wait to exited must be caused by
+   driver_exit_requested or fatal_snapshot. Inv18 is retained as documentation
+   but EXCLUDED from the combined Inv and from E16ApplicationRuntime.cfg; the
+   load-bearing check is the temporal property, run under PROPERTIES in the
+   liveness configuration. *)
 Inv18PostDrainNoEarlyExit ==
     (driver_state = "drained_wait"
      /\ ~driver_exit_requested /\ ~fatal_snapshot)
@@ -1352,7 +1405,7 @@ Inv ==
     /\ Inv2AdmissionAuthority
     /\ Inv3StopClosesAdmission
     /\ Inv4AccountingBounds
-    /\ Inv5TerminalSnapshot
+    (* Inv5TerminalSnapshot EXCLUDED (C4): tautological derived definition. *)
     /\ Inv6DrainComplete
     /\ Inv7NoPrematureStopped
     /\ Inv8ResourceHierarchy
@@ -1362,7 +1415,9 @@ Inv ==
     /\ Inv12CloseOwnerUniqueness
     /\ Inv13CloseMonotonicity
     /\ Inv14SubmitPublication
-    /\ Inv18PostDrainNoEarlyExit
+    (* Inv18PostDrainNoEarlyExit EXCLUDED (C4): current-state predicate, not a
+       transition check. The load-bearing obligation is the action-level
+       temporal property Live6PostDrainExitCaused (run under PROPERTIES). *)
     /\ Inv19DriverExitBeforeDestruction
     /\ Inv20RejectedNeverExecutes
     /\ Inv21TaskIOLifetime
@@ -1401,6 +1456,7 @@ FairSpec ==
     /\ WF_vars(DriverExit)
     /\ WF_vars(PublishDrainComplete)
     /\ WF_vars(EnterDrainedWait)
+    /\ \A t \in Tasks : WF_vars(SubmitRollback(t))
     /\ WF_vars(StartupAbortJoin)
     /\ WF_vars(StartupAbortClose)
     /\ WF_vars(RequestDriverExit)
@@ -1455,16 +1511,28 @@ Live5DriverExits ==
     [](driver_exit_requested /\ driver_state \in {"between_invocations","drained_wait","barrier_wait"}
       => <>(driver_state = "exited"))
 
-(* E16-Live6: Post-drain park is stable (safety/liveness pair) *)
-Live6PostDrainStable ==
-    [](driver_state = "drained_wait" /\ ~driver_exit_requested /\ ~fatal_snapshot
-      => driver_state = "drained_wait")
+(* E16-Live6 (C4): the post-drain driver does not exit early. This is an
+   ACTION-LEVEL temporal property (not a state invariant): any transition
+   FROM drained_wait TO exited must be CAUSED by driver_exit_requested or
+   fatal_snapshot in the successor state. This is falsifiable by an incorrect
+   transition (a spontaneous drained_wait->exited step with neither cause) and
+   therefore provides independent transition evidence, unlike the previous
+   current-state Live6PostDrainStable (a same-state tautology).
+
+   Written as an action invariant [][A]_vars: at every step, either there is
+   no uncaused drained_wait->exited transition OR the successor carried an exit
+   request / fatal fault (or the state stutters, which trivially satisfies A
+   since a stuttered drained_wait does not jump to exited). *)
+Live6PostDrainExitCaused ==
+    [][~(driver_state = "drained_wait" /\ driver_state' = "exited")
+       \/ driver_exit_requested' \/ fatal_snapshot']_vars
 
 LifeProps ==
     /\ Live1AdmissionObserved
     /\ Live2StopBeforeCommit
     /\ Live3DrainCompletes
     /\ Live5DriverExits
+    /\ Live6PostDrainExitCaused
 
 (* =========================================================================
    REACHABILITY / NON-VACUITY (Section 13)
@@ -1496,5 +1564,23 @@ NotReach_R17 ==
 NotReach_R18 ==
     ~(startup_abort_requested /\ driver_spawned /\ ~run_live_entered
       /\ ~drain_required /\ runtime_state = "Stopped" /\ ~drain_completed_once)
+
+(* R19: post-stop admission commit (E16-POST-MERGE-CORRECTIVE-2). Production
+   submit() reserves under lifecycle_mutex (its linearization point), then
+   RELEASES the lock and calls root_group_->async(...); its success path
+   never re-checks admission_open. So the real, reachable ordering is
+   SubmitReserve -> RequestStopRunning (closes admission) -> SubmitGroupCommit,
+   yielding a task whose reservation was made while Running but whose Group
+   admission committed AFTER stop closed admission (in Stopping/Draining).
+   This witness proves that state is REACHABLE in the corrected model:
+   admission is closed (admission_open = FALSE), a task is committed
+   (task_committed[t] for some t), and the runtime is in Draining with
+   drain_complete not yet published. Previously the admission_open guard on
+   SubmitGroupCommit excluded this path; the model now covers it. *)
+NotReach_R19 ==
+    ~(~admission_open
+      /\ runtime_state = "Draining"
+      /\ \E t \in Tasks : task_committed[t]
+      /\ ~drain_complete)
 
 =============================================================================

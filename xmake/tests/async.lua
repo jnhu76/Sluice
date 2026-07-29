@@ -168,3 +168,19 @@ sluice_production_async_test("threaded_evented_parity_test")
 -- E16 ApplicationRuntime lifecycle tests.
 -- ADR: docs/adr/ADR-application-runtime.md (Accepted).
 sluice_production_async_test("application_runtime_test")
+
+-- E16-POST-MERGE-CORRECTIVE-1 — terminal resource destruction regressions (C1).
+-- Proves every Stopped transition first destroys Runtime-owned components via a
+-- destructor-probe backend: Constructed direct close, startup-abort close,
+-- normal-join close (exactly once), and concurrent-Constructed close-owner
+-- election. Uses sluice_async_internal_testing for the driver barrier seam.
+sluice_internal_async_test("application_runtime_resource_test")
+
+-- E16-POST-MERGE-CORRECTIVE-1 — Fiber-local Runtime identity authority (C2).
+-- Proves a Runtime-owned task cannot self-close (drain/join/shutdown return
+-- invalid_state via the Fiber-local tag), identity is preserved across
+-- concurrent tasks, and an external thread is correctly NOT recognized as a
+-- Runtime task. The private-setter authority (no public execution-tag setter)
+-- is enforced by scripts/verify-async-identity-negative-compile.sh. Uses
+-- sluice_async_internal_testing for the Fiber suspend/resume seam.
+sluice_internal_async_test("application_runtime_identity_test")

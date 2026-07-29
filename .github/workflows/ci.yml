@@ -78,6 +78,16 @@ jobs:
         # synchronization primitives compiles-away (not just missing headers).
         run: bash scripts/verify-async-api-negative-compile.sh
 
+      - name: Identity-authority negative-compile (E16-C2-T4)
+        # Verifies that the Fiber-local Runtime execution-identity WRITE path
+        # (Fiber::set_execution_tag, Scheduler::set_current_fiber_execution_tag)
+        # is unreachable from ordinary (non-friend) application code — a
+        # STRUCTURAL authority proof at the installed-header level. Previously
+        # this script existed but was not wired into CI, so the claim "public
+        # setter authority enforced by a negative-compile gate" was not actually
+        # exercised by the merge gate.
+        run: bash scripts/verify-async-identity-negative-compile.sh
+
       - name: Build and run acceptance consumers
         # Proves the public async-foundation surface is usable from consumers
         # that see only the installed public headers. Build AND execute: a

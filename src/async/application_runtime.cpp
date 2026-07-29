@@ -46,6 +46,12 @@ Result<void> RuntimeTaskContext::submit_sync_all(SyncAllOp op, Completion<void>&
     return ctx_->submit_sync_all(op, c);
 }
 
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+void RuntimeTaskContext::suspend(std::atomic<bool>& flag) {
+    sched_->await_ready_flag(flag);
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // RuntimeBuilder
 // ---------------------------------------------------------------------------
@@ -116,12 +122,31 @@ ApplicationRuntime::~ApplicationRuntime() {
 Result<void> ApplicationRuntime::start() {
     std::unique_lock lk(lifecycle_mtx_);
 
-    if (state_ != State::Constructed) {
+    // Reject if not Constructed OR if a close is in flight / already done. The
+    // close_state_ guard closes the Constructed-race window: a concurrent
+    // shutdown() that observed Constructed and elected itself close owner
+    // (Open -> InProgress) releases lifecycle_mtx_ between the election and
+    // close_resources()'s Stopped publication. During that window state_ is
+    // still Constructed but close_state_ is InProgress — without this check,
+    // start() would proceed to spawn the driver over already-moved resources
+    // (UAF). This makes start()/shutdown() races on the Constructed->Starting
+    // boundary converge instead of corrupting state.
+    if (state_ != State::Constructed || close_state_ != CloseState::Open) {
         return make_unexpected_void(IoError{IoError::Code::invalid_state});
     }
 
-    // Remember stop_requested: if stop was called before start, return canceled.
+    // Remember stop_requested: if stop was called before start, the runtime
+    // must still tear down its already-constructed components (Group/Scheduler/
+    // AsyncIoContext/backend) before reporting canceled. The start owner is the
+    // close owner here (no driver was spawned): elect close owner and funnel
+    // through the UNIFIED close_resources() authority (C1) so component
+    // destruction completes before Stopped is published. Without this, stop-
+    // before-start would publish no Stopped at all and leave resources alive
+    // until ~ApplicationRuntime.
     if (stop_requested_) {
+        close_state_ = CloseState::InProgress;
+        lk.unlock();
+        close_resources();
         return make_unexpected_void(IoError{IoError::Code::canceled});
     }
 
@@ -145,31 +170,57 @@ Result<void> ApplicationRuntime::start() {
     });
 
     // If the driver already exited (abort won before barrier was observed),
-    // complete the abort path directly.
+    // complete the abort path. The start owner is the close owner: join the
+    // driver, then funnel through the UNIFIED close_resources() authority (C1)
+    // so component destruction completes before Stopped is published. A
+    // concurrent shutdown() waiter that observed Starting observes the final
+    // Closed publication from close_resources() (E16-CORR-ABORT-2: there is
+    // exactly one close owner — the start owner here, shutdown() only waits).
     if (driver_state_ == DriverState::exited) {
-        state_ = State::Stopped;
-        close_state_ = CloseState::Closed;
+        // Elect close owner so a concurrent shutdown() waiter does not also
+        // attempt to close.
+        close_state_ = CloseState::InProgress;
         runtime_cv_.notify_all();
         lk.unlock();
         if (driver_thread_.joinable()) driver_thread_.join();
+        close_resources();
         return make_unexpected_void(IoError{IoError::Code::canceled});
     }
 
     // Startup barrier: the driver is at barrier_wait. Commit or abort.
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+    // Test-only commit checkpoint: if enabled (off by default), signal that
+    // the start owner is at the commit checkpoint (immediately before checking
+    // stop_requested_), then park on commit_release_flag_ until the test
+    // releases it. This lets a test inject stop/shutdown between the barrier-
+    // wait wake and the stop_requested_ check, deterministically forcing the
+    // startup-abort path (start() == canceled) instead of a racy either/or
+    // outcome. OFF by default so that tests that do not need the pause (e.g.
+    // the suspend/resume identity test) proceed straight through to commit.
+    if (test_pause_at_commit_checkpoint_.load(std::memory_order::acquire)) {
+        commit_checkpoint_promise_.set_value();
+        commit_release_flag_.store(false, std::memory_order::release);
+        runtime_cv_.notify_all();
+        runtime_cv_.wait(lk, [this] {
+            return commit_release_flag_.load(std::memory_order::acquire);
+        });
+    }
+#endif
     if (stop_requested_) {
-        // Stop won the race pre-commit (P1-03 abort path).
+        // Stop won the race pre-commit (P1-03 abort path). The start owner is
+        // the close owner: signal the driver to abort, wait for it to exit,
+        // join, then close via the UNIFIED close_resources() authority (C1).
         startup_abort_requested_ = true;
+        close_state_ = CloseState::InProgress;
         control_epoch_++;
         runtime_cv_.notify_all();
         // Wait for driver to exit.
         runtime_cv_.wait(lk, [this] {
             return driver_state_ == DriverState::exited;
         });
-        state_ = State::Stopped;
-        close_state_ = CloseState::Closed;
-        runtime_cv_.notify_all();
         lk.unlock();
         if (driver_thread_.joinable()) driver_thread_.join();
+        close_resources();
         return make_unexpected_void(IoError{IoError::Code::canceled});
     }
 
@@ -219,7 +270,13 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
             set_current_fiber_tag(this);
 
             // RuntimeTaskContext delegates I/O to io_ctx_.
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+            // Internal-testing build: include Scheduler& so suspend() is
+            // available for Fiber-local identity survival tests (C2-T3).
+            RuntimeTaskContext ctx(*io_ctx_, token, *sched_);
+#else
             RuntimeTaskContext ctx(*io_ctx_, token);
+#endif
 
             // Run user task body; swallow exceptions at this boundary.
             try {
@@ -400,11 +457,21 @@ Result<void> ApplicationRuntime::shutdown() {
     switch (state_) {
     case State::Constructed:
     case State::StartFailed: {
-        // Direct close: no driver, no tasks.
+        // Direct close: no driver, no tasks. Elect this caller as the SOLE
+        // close owner (Open -> InProgress), then funnel through the UNIFIED
+        // close_resources() authority (C1): component destruction happens
+        // before Stopped publication, exactly once, outside lifecycle_mtx_.
+        // close_resources() publishes State::Stopped / CloseState::Closed as
+        // the single terminal authority. A concurrent caller that lost the
+        // election waits here for Closed. No driver exists in these states,
+        // so no join is required.
+        if (close_state_ == CloseState::InProgress) {
+            runtime_cv_.wait(lk, [this] { return close_state_ == CloseState::Closed; });
+            return {};
+        }
         close_state_ = CloseState::InProgress;
-        state_ = State::Stopped;
-        close_state_ = CloseState::Closed;
-        runtime_cv_.notify_all();
+        lk.unlock();
+        close_resources();
         return {};
     }
 
@@ -476,6 +543,9 @@ void ApplicationRuntime::driver_main() {
 
     // Signal that we've reached the startup barrier.
     driver_state_ = DriverState::barrier_wait;
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+    barrier_promise_.set_value();
+#endif
     runtime_cv_.notify_all();
 
     // Park at startup barrier until commit or abort (P1-03).
