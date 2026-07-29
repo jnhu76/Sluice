@@ -27,3 +27,10 @@ sluice_one_file_target("binary", "bench", "pool_throughput_bench", "bench",
 -- async_writes_bench (sluice-CORE-022) needs the async runtime lib too.
 sluice_one_file_target("binary", "bench", "async_writes_bench", "bench",
                       {"sluice_core", "sluice_bench_common", "sluice_async"})
+
+-- M1-A Runtime I/O wait comparison benchmark (brief §13). Measures the public
+-- RuntimeTaskContext::await_completion overhead against the low-level
+-- Scheduler::await_completion_* baseline (NOT exposed to apps), using
+-- FakeAsyncBackend to isolate framework overhead. Links sluice_async.
+sluice_one_file_target("binary", "bench", "bench_runtime_io_wait", "bench",
+                      {"sluice_core", "sluice_async"})
