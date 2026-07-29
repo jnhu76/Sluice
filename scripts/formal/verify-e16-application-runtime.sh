@@ -10,7 +10,7 @@
 #   BuggyCloseOwner                         -> AtMostOneCloseOwner violated
 #   BuggyCloseOwnerBeforeDrain              -> Inv25StoppedAfterDrain violated
 #   BuggyDirectStopped (NEG-E16-6)          -> Inv7NoPrematureStopped violated
-#   R2,R3,R11-R15,R17,R18 reachability      -> NotReach_* violated (reachable)
+#   R2,R3,R11-R15,R17,R18,R19 reachability   -> NotReach_* violated (reachable)
 #
 # Source-safe: TLC runs in an isolated mktemp workspace.
 set -euo pipefail
@@ -143,9 +143,9 @@ expect_fail "NEG-E16-6 DirectStoppedWithResources" \
   E16ApplicationRuntimeBuggyDirectStopped \
   E16ApplicationRuntimeBuggyDirectStopped.cfg Inv7NoPrematureStopped neg6 || rc=1
 
-# --- Reachability scenes (R2,R3,R11-R15,R17,R18) ---
+# --- Reachability scenes (R2,R3,R11-R15,R17,R18,R19) ---
 echo "--- Reachability scenes ---"
-for i in 2 3 11 12 13 14 15 17 18; do
+for i in 2 3 11 12 13 14 15 17 18 19; do
   # Generate a per-scene cfg with only the target NotReach invariant
   scene_cfg="$workdir/E16ApplicationRuntime.reach_r$i.cfg"
   cat > "$scene_cfg" <<EOF

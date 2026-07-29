@@ -25,7 +25,13 @@
 # concurrent tasks) live in tests/application_runtime_identity_test.cpp.
 set -euo pipefail
 
-repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}/..")" 2>/dev/null && pwd || cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# Resolve the repository root. `dirname` must be applied to BASH_SOURCE itself
+# BEFORE appending "/..": the earlier form `dirname "${BASH_SOURCE[0]}/.."`
+# leaves the "/.." as the final component, so dirname returns the script path
+# unchanged (the script FILE), `cd <scriptfile>` fails, and `repo_root` becomes
+# empty — producing a probe path like "/tests/..." that never exists. Match the
+# form used by scripts/verify-async-api-negative-compile.sh.
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 # The probe source. If you rename it, update this single line.
 probe="$repo_root/tests/async_identity_negative_compile_probe.cpp"

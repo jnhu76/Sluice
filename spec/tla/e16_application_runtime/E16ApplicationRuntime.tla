@@ -433,17 +433,35 @@ SubmitReserve(t) ==
                    task_committed, task_terminated, task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* SubmitGroupCommit: Group admission succeeds. Publish epoch + dual-wake.
-   The commit is gated on admission_open: a reservation made while Running
-   must not commit after stop has closed admission (the task would otherwise
-   be admitted-but-never-terminatable during Draining, breaking
-   PublishDrainComplete's admitted_count = terminal_count requirement --
-   E16-Live3 hole). A reservation stranded by admission close is released by
-   SubmitRollback instead. *)
+
+   ADR §5 / production `ApplicationRuntime::submit()` (application_runtime.cpp):
+   the ADMISSION RESERVATION (admission_open checked TRUE + admitted_count++
+   under lifecycle_mutex) is the linearization point of stop-vs-submit.
+   submit() then RELEASES lifecycle_mutex and calls root_group_->async(...);
+   its success path does NOT re-check admission_open. Therefore the production-
+   reachable ordering
+
+       SubmitReserve -> RequestStopRunning (closes admission) -> SubmitGroupCommit
+            -> TaskBodyExit -> PublishDrainComplete
+
+   is legal: the reservation won the race while Running, so the task is
+   genuinely admitted and MUST be allowed to commit and terminate. The model
+   must NOT gate SubmitGroupCommit on admission_open, or it over-approximates
+   production and hides this path (E16-POST-MERGE-CORRECTIVE-2: the previous
+   admission_open guard excluded the post-stop-commit race and made Live3
+   under-cover the real production ordering). Accounting still converges
+   because the committed task runs TaskBodyExit -> terminal_count++ under
+   PublishDrainComplete's admitted_count = terminal_count check.
+
+   The guard set admission_reservation_active /\ task_admitted[t] /\
+   ~task_committed[t] restricts the commit to exactly one legitimately
+   PENDING reservation per task; it is sufficient without admission_open.
+   A reservation that instead resolves to failure takes SubmitRollback
+   (also enabled in Stopping/Draining), so both outcomes remain modeled. *)
 SubmitGroupCommit(t) ==
     /\ admission_reservation_active
     /\ task_admitted[t]
     /\ ~task_committed[t]
-    /\ admission_open
         /\ admission_reservation_active' = FALSE
     /\ task_committed' = [task_committed EXCEPT ![t] = TRUE]
     /\ successful_submit_published' = TRUE
@@ -1546,5 +1564,23 @@ NotReach_R17 ==
 NotReach_R18 ==
     ~(startup_abort_requested /\ driver_spawned /\ ~run_live_entered
       /\ ~drain_required /\ runtime_state = "Stopped" /\ ~drain_completed_once)
+
+(* R19: post-stop admission commit (E16-POST-MERGE-CORRECTIVE-2). Production
+   submit() reserves under lifecycle_mutex (its linearization point), then
+   RELEASES the lock and calls root_group_->async(...); its success path
+   never re-checks admission_open. So the real, reachable ordering is
+   SubmitReserve -> RequestStopRunning (closes admission) -> SubmitGroupCommit,
+   yielding a task whose reservation was made while Running but whose Group
+   admission committed AFTER stop closed admission (in Stopping/Draining).
+   This witness proves that state is REACHABLE in the corrected model:
+   admission is closed (admission_open = FALSE), a task is committed
+   (task_committed[t] for some t), and the runtime is in Draining with
+   drain_complete not yet published. Previously the admission_open guard on
+   SubmitGroupCommit excluded this path; the model now covers it. *)
+NotReach_R19 ==
+    ~(~admission_open
+      /\ runtime_state = "Draining"
+      /\ \E t \in Tasks : task_committed[t]
+      /\ ~drain_complete)
 
 =============================================================================

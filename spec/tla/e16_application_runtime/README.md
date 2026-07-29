@@ -88,7 +88,27 @@ structural-only; they remain defined in the module as documentation:
 Each `NotReach_Ri` invariant asserts a state is unreachable; TLC violates it,
 proving the state IS reachable in the correct model.
 
-- **R2, R3, R11, R12, R13, R14, R15, R17, R18:** REACH.
+- **R2, R3, R11, R12, R13, R14, R15, R17, R18, R19:** REACH.
+
+### R19 — post-stop admission commit (E16-POST-MERGE-CORRECTIVE-2)
+
+Production `submit()` reserves admission under `lifecycle_mutex` (the
+linearization point of stop-vs-submit, ADR §5), then RELEASES the lock and
+calls `root_group_->async(...)`; its success path does NOT re-check
+`admission_open` (`application_runtime.cpp`). So the reachable ordering is
+
+```
+SubmitReserve -> RequestStopRunning (closes admission) -> SubmitGroupCommit
+     -> TaskBodyExit -> PublishDrainComplete
+```
+
+The task's reservation won the race while `Running`, so it is genuinely
+admitted and must be allowed to commit and terminate even after admission
+closed. The previous `admission_open` guard on `SubmitGroupCommit` excluded
+this path and over-approximated production (making Live3 under-cover the real
+stop-vs-submit race). R19 witnesses that the corrected model reaches the
+post-stop-commit state: `~admission_open /\ runtime_state = "Draining" /\
+\E t: task_committed[t] /\ ~drain_complete`.
 
 ## Running
 
@@ -124,8 +144,25 @@ yet committed/rolled back) when Draining is entered. The model therefore does
 NOT add a `~admission_reservation_active` guard to `DrainBegin`: doing so would
 make the model stronger than production and exclude the real stop-vs-submit
 race that Live3 must cover. The reservation resolves via SubmitGroupCommit or
-SubmitRollback (both enabled in Draining), so accounting converges and
-drain_complete remains reachable.
+SubmitRollback (both enabled in Stopping/Draining — see the SubmitGroupCommit
+note below), so accounting converges and drain_complete remains reachable.
+
+## SubmitGroupCommit refinement note (E16-POST-MERGE-CORRECTIVE-2)
+
+`SubmitGroupCommit` is NOT gated on `admission_open`. ADR §5 and production
+`ApplicationRuntime::submit()` define the admission RESERVATION
+(`admission_open` checked TRUE + `admitted_count++` under `lifecycle_mutex`)
+as the linearization point of stop-vs-submit. `submit()` then releases
+`lifecycle_mutex` and calls `root_group_->async(...)`; its success path never
+re-checks `admission_open`. A reservation that won the race while `Running`
+must therefore be permitted to commit even after `request_stop()` closed
+admission (the task is genuinely admitted and must terminate so accounting
+converges). The previous `admission_open` guard on `SubmitGroupCommit`
+excluded this production-reachable post-stop-commit path and over-approximated
+production. The remaining guards — `admission_reservation_active /\
+task_admitted[t] /\ ~task_committed[t]` — restrict the commit to exactly one
+legitimately pending reservation per task, which is sufficient. R19 witnesses
+the corrected reachability.
 
 ## Production / formal refinement map (E16-POST-MERGE-CORRECTIVE-1)
 

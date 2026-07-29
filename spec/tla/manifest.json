@@ -273,10 +273,10 @@
       ],
       "positive_gate_count": 3,
       "negative_gate_count": 6,
-      "reachability_gate_count": 8,
+      "reachability_gate_count": 10,
       "owner_docs": [],
       "implementation_bindings": [],
-      "notes": "E16 Application Runtime lifecycle. Saturated epoch token (E0/E1). Safety + liveness (Live1/Live2/Live3/Live5/Live6) + wide-domain. NEG-E16-1 BoundaryWake (temporal), NEG-E16-2 StopClose, NEG-E16-3 StartupAbort, NEG-E16-4 CloseOwner, NEG-E16-5 EarlyCloseBeforeDrain, NEG-E16-6 DirectStoppedWithResources. R2,R3,R11-R15,R18 reachability witnesses REACH. R17 is EXECUTED (C3 corrective) but currently NOT-REACH due to a pre-existing latent model defect (StartupCommit drain_required conflict makes Running/Draining unreachable); reported explicitly by the verifier. See spec/tla/e16_application_runtime/README.md."
+      "notes": "E16 Application Runtime lifecycle. Saturated epoch token (E0/E1). Safety + liveness (Live1/Live2/Live3/Live5/Live6) + wide-domain. NEG-E16-1 BoundaryWake (temporal), NEG-E16-2 StopClose, NEG-E16-3 StartupAbort, NEG-E16-4 CloseOwner, NEG-E16-5 EarlyCloseBeforeDrain, NEG-E16-6 DirectStoppedWithResources. Reachability witnesses R2,R3,R11-R15,R17,R18,R19 all REACH (10 scenes). R17 REACH after the C3 corrective unblocked the Running/Draining path (the previous 'NOT-REACH / latent model defect' note was stale; the verifier already reached it). R19 (E16-POST-MERGE-CORRECTIVE-2) witnesses the production-reachable post-stop admission-commit path enabled by removing the admission_open guard on SubmitGroupCommit. See spec/tla/e16_application_runtime/README.md."
     }
   ]
 }
