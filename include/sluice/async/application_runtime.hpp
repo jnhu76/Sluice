@@ -44,6 +44,14 @@ class ApplicationRuntime;
 // RuntimeTaskContext (P1-04): restricted, non-owning task execution context.
 // Valid only during one RuntimeTaskFn invocation; delegates I/O to the
 // Runtime-owned AsyncIoContext. No spawn capability in E16 v1.
+//
+// M1-A (docs/design/m1-runtime-io-await-race.md): added a cooperative
+// Completion wait (await_completion) so a task can suspend until a submitted,
+// caller-owned Completion reaches a terminal result. This is the application-
+// discovered Runtime I/O wait gap (M1-API-GAP-1). The capability is backed by
+// the already-audited Scheduler::await_completion_* primitive (E6-T2/E10/E11
+// regression-proven against ThreadPoolBackend); the Scheduler* is PRIVATE and
+// set only by ApplicationRuntime (friend), never escaping to task code.
 // ---------------------------------------------------------------------------
 class RuntimeTaskContext {
 public:
@@ -53,6 +61,29 @@ public:
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
+
+    // M1-A: cooperatively await a submitted, outstanding Completion. Returns
+    // inline (no suspend) if the Completion is already ready; otherwise
+    // suspends the calling Fiber exactly once and resumes exactly once when
+    // the Completion reaches a terminal result. The result remains in the
+    // Completion — read it via c.result() after this returns, then c.reset()
+    // before reuse (L7/L9 lifecycle).
+    //
+    // Preconditions:
+    //   - `c` is outstanding against THIS Runtime's AsyncIoContext (a prior
+    //     submit_* on this context marked it outstanding). Awaiting an idle
+    //     Completion is a caller contract violation (Debug asserts; Release
+    //     documents). Mirrors the underlying Scheduler primitive precondition
+    //     and Completion::result() L9 policy.
+    //   - called only from within a Runtime task (the RuntimeTaskContext&
+    //     lifetime is the task invocation). The context is non-owning and
+    //     valid only during that invocation.
+    //
+    // Authority: delegates to the private Scheduler*; the pointer never
+    // escapes. submit-time errors stay synchronous (from submit_*); completion
+    // errors stay terminal results in the Completion.
+    void await_completion(Completion<std::size_t>& c);
+    void await_completion(Completion<void>& c);
 
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
     // Suspend the current Fiber until `flag` becomes true. Uses the Scheduler's
@@ -71,23 +102,19 @@ public:
 private:
     friend class ApplicationRuntime;
 
-#ifdef SLUICE_ASYNC_INTERNAL_TESTING
-    // Internal-testing constructor: includes Scheduler& so suspend() can call
-    // await_ready_flag. The production constructor (below) omits the Scheduler
-    // parameter so the production object layout has no scheduler_ pointer.
+    // M1-A: the Scheduler* is now part of the PRODUCTION object layout so the
+    // cooperative Completion wait can delegate to await_completion_*. Only
+    // ApplicationRuntime (friend) constructs the context; the pointer never
+    // escapes and task code cannot retrieve it. The internal-testing
+    // constructor previously carried the Scheduler for the test-only suspend();
+    // both builds now share the same layout (sched_ is no longer test-only).
     RuntimeTaskContext(AsyncIoContext& ctx, CancelToken& token,
                        Scheduler& sched) noexcept
         : ctx_(&ctx), token_(&token), sched_(&sched) {}
-#else
-    RuntimeTaskContext(AsyncIoContext& ctx, CancelToken& token) noexcept
-        : ctx_(&ctx), token_(&token) {}
-#endif
 
     AsyncIoContext* ctx_;
     CancelToken* token_;
-#ifdef SLUICE_ASYNC_INTERNAL_TESTING
     Scheduler* sched_;
-#endif
 };
 
 // The task function signature. Receives a RuntimeTaskContext& for I/O and

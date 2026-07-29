@@ -46,6 +46,19 @@ Result<void> RuntimeTaskContext::submit_sync_all(SyncAllOp op, Completion<void>&
     return ctx_->submit_sync_all(op, c);
 }
 
+// M1-A: cooperative Completion wait. Delegates to the already-audited
+// Scheduler::await_completion_* primitive (one suspend + one resume per
+// unresolved await; already-ready returns inline under the Scheduler's
+// registration critical section). The Scheduler* is private; task code never
+// sees raw Scheduler authority. See docs/design/m1-runtime-io-await-race.md.
+void RuntimeTaskContext::await_completion(Completion<std::size_t>& c) {
+    sched_->await_completion_size(c);
+}
+
+void RuntimeTaskContext::await_completion(Completion<void>& c) {
+    sched_->await_completion_void(c);
+}
+
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
 void RuntimeTaskContext::suspend(std::atomic<bool>& flag) {
     sched_->await_ready_flag(flag);
@@ -269,14 +282,11 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
             auto* prev_tag = current_fiber_tag();
             set_current_fiber_tag(this);
 
-            // RuntimeTaskContext delegates I/O to io_ctx_.
-#ifdef SLUICE_ASYNC_INTERNAL_TESTING
-            // Internal-testing build: include Scheduler& so suspend() is
-            // available for Fiber-local identity survival tests (C2-T3).
+            // RuntimeTaskContext delegates I/O to io_ctx_ and the cooperative
+            // Completion wait to sched_ (M1-A). The Scheduler* is private to
+            // the context and never escapes to task code. Both production and
+            // internal-testing builds share the same constructor signature.
             RuntimeTaskContext ctx(*io_ctx_, token, *sched_);
-#else
-            RuntimeTaskContext ctx(*io_ctx_, token);
-#endif
 
             // Run user task body; swallow exceptions at this boundary.
             try {

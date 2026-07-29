@@ -169,6 +169,12 @@ sluice_production_async_test("threaded_evented_parity_test")
 -- ADR: docs/adr/ADR-application-runtime.md (Accepted).
 sluice_production_async_test("application_runtime_test")
 
+-- M1-A Runtime cooperative Completion-wait tests (Candidate A, winner).
+-- Design: docs/design/m1-runtime-io-await-race.md. Public-only: exercises
+-- RuntimeTaskContext::await_completion against FakeAsyncBackend (deterministic)
+-- and ThreadPoolBackend (real-file suspend/resume). No internal-testing macro.
+sluice_production_async_test("runtime_wait_test")
+
 -- E16-POST-MERGE-CORRECTIVE-1 — terminal resource destruction regressions (C1).
 -- Proves every Stopped transition first destroys Runtime-owned components via a
 -- destructor-probe backend: Constructed direct close, startup-abort close,
