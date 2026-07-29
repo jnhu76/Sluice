@@ -53,17 +53,26 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
   * deterministic corpus replay
   * mutation proof
 
-## 尚未完成
+## 已完成（新增）
 
 * **E16 Application Runtime**
 
-  * 架构设计已完成：`docs/design/e16-application-runtime.md`；
-  * ADR 状态：**Proposed**，实现尚未授权；
-  * **尚未实现** — 主分支不存在 `ApplicationRuntime`、`RuntimeBuilder`、`RuntimeTaskContext`，也无 Runtime public acceptance consumer；
-  * 阻塞前提：Group 事务性准入 seam（P2-01）、TLA+ lifecycle 模型（MODEL_REQUIRED, P2-03）、独立设计审查、ADR 由 Proposed 升级为 Accepted（见 §3）；
-  * `public_api_acceptance` 排除 Group/Scheduler/Fiber，不能替代 Runtime acceptance。
+  * 架构设计：`docs/design/e16-application-runtime.md`；
+  * ADR 状态：**Accepted**（2026-07-29 升级，`docs/adr/ADR-application-runtime.md`）；
+  * **已实现** — `ApplicationRuntime`、`RuntimeBuilder`、`RuntimeTaskContext` 位于
+    `include/sluice/async/application_runtime.hpp` 与 `src/async/application_runtime.cpp`，
+    随 `sluice_async` 构建，并通过全部 lifecycle/resource/identity 回归测试；
+  * Runtime public acceptance consumer：`examples/runtime_acceptance.cpp`
+    （仅依赖 installed/public headers，覆盖 build→start→submit→stop→drain→join→shutdown）；
+  * post-merge 修正已落地：lifecycle/resource/identity corrective（PR #46）、
+    multi-worker suspend-before-switch context race corrective（PR #48）；
+  * TLA+ lifecycle 模型与形式证据见 `spec/tla/e16_application_runtime/` 与 `scripts/formal/`。
 
-  > E15 Runtime Foundation（Scheduler、Fiber、同步原语、Future/Group/Batch、AsyncIoContext/AsyncBackend 等）是已完成的 runtime 层；E16 Application Runtime 只是设计完成、尚未实现，二者不可混淆。
+  > 历史上下文：本节早期文本（"尚未实现 / ADR Proposed / 实现未授权"）记录的是
+  > Milestone 0 阶段的真实状态。随着 ADR Accepted、production 实现与完整验证落地，
+  > 该状态已过时，故在此更新为当前事实，而非改写历史（详见 §3 末尾的状态转换记录）。
+
+## 尚未完成
 
 * 真正的异步 reference application
 * Stackless coroutine execution model
@@ -77,11 +86,22 @@ Roadmap 不再使用连续的 E-number 作为未来工作的主要名称。E10�
 
 ---
 
-# 3. Milestone 0 — E16 Definition Complete; Implementation Not Started
+# 3. Milestone 0 — E16 Application Runtime（COMPLETE）
 
 ## 当前状态
 
-E16 Application Runtime 已完成了架构设计和 ADR 撰写，但**实现尚未开始**。
+> **当前事实（2026-07-30 更新）：E16 Application Runtime 已完成。**
+> ADR 已 Accepted（2026-07-29）；production 实现已落地（`ApplicationRuntime`/
+> `RuntimeBuilder`/`RuntimeTaskContext`）；Runtime public acceptance consumer
+> 已存在（`examples/runtime_acceptance.cpp`）；post-merge lifecycle/resource/
+> identity corrective（PR #46）与 multi-worker suspend-before-switch corrective
+> （PR #48）均已合并；形式 lifecycle 模型与证据在 `spec/tla/e16_application_runtime/`。
+>
+> 下面的子节保留为历史记录，描述的是 Milestone 0 *定义阶段* 的状态与
+> 阻塞前提清单（均已关闭）。这些文字不再代表当前生产真相；当前真相以本
+> 状态横幅与本节末尾的"状态转换记录"为准。不要据此声称 E16 未实现。
+
+E16 Application Runtime 最初完成了架构设计和 ADR 撰写，实现随后已落地。
 
 ### 已存在
 
@@ -91,7 +111,12 @@ E16 Application Runtime 已完成了架构设计和 ADR 撰写，但**实现尚�
 
 ### 不存在
 
-* `ApplicationRuntime`、`RuntimeBuilder`、`RuntimeTaskContext` — 无 public header，无 `.cpp` 实现，无构建目标；
+> **当前事实：下列"不存在"项中的前两项现已存在。** 本清单保留以记录
+> Milestone 0 定义阶段尚未实现的内容；当前生产真相见本节顶部状态横幅。
+
+* ~~`ApplicationRuntime`、`RuntimeBuilder`、`RuntimeTaskContext` — 无 public header，无 `.cpp` 实现，无构建目标~~
+  — **已存在**（`include/sluice/async/application_runtime.hpp`、
+  `src/async/application_runtime.cpp`、`sluice_async` 目标）；
 * ~~Group 事务性准入 seam（P2-01）~~ — **已完成**（见 §3.1）：`Group::async_evented` 现在在第一次 `push_back` 前完成全部三个 vector 的容量准备（`group.hpp:350-368`），一次 Evented task admission 成为完整事务；
 * TLA+ lifecycle 模型（MODEL_REQUIRED, P2-03） — ADR 接受的前提条件；
 * Runtime public acceptance consumer — 现有的 `public_api_acceptance` 明确排除 Group/Scheduler/Fiber，不能证明 Runtime API；
@@ -127,26 +152,31 @@ Fuzz foundation complete (sluice_core):
     ✓ copy_all fault model
 
 E16 Application Runtime fuzz/acceptance:
-    ✗ NOT started — production implementation does not exist
+    ~ production implementation EXISTS; lifecycle/resource/identity coverage landed;
+      app-level fuzz (sluice-copy) begins in Milestone 1
 ```
 
-不得把 core fuzz foundation 描述成"整个异步 Runtime 已完成 fuzz"。`E16 Application Runtime fuzz/acceptance: NOT started` 仅指 E16 Application Runtime 层的 fuzz/acceptance 尚未开始，不代表 E10–E15 异步 runtime（Scheduler、同步原语、Future/Group/Batch、AsyncIoContext/AsyncBackend 等）缺少并发测试、sanitizer、形式模型或其他验证证据。
+不得把 core fuzz foundation 描述成"整个异步 Runtime 已完成 fuzz"。历史文本"`E16 Application Runtime fuzz/acceptance: NOT started — production implementation does not exist`"描述的是 Milestone 0 定义阶段；当前 production 实现已存在，E16 层的 lifecycle/resource/identity 回归、sanitizer 与形式模型证据已落地，应用级 fuzz 随 Milestone 1 小应用展开。不代表 E10–E15 异步 runtime（Scheduler、同步原语、Future/Group/Batch、AsyncIoContext/AsyncBackend 等）缺少并发测试、sanitizer、形式模型或其他验证证据。
 
-### 阻塞前提（必须在 E16 production implementation 之前完成）
+### 阻塞前提（必须在 E16 production implementation 之前完成）— 全部已关闭
 
-以下四个阶段 A 步骤必须全部完成后，才授权 E16 production implementation：
+以下四个阶段 A 步骤必须全部完成后，才授权 E16 production implementation。
+**当前事实：四个前提均已关闭，E16 production implementation 已完成。**
 
 1. **Group 事务性准入 seam（P2-01） — ✅ 已完成**
    `Group::async_evented` 采用方案 B（reserve-all-before-first-push）：在同一个 `mtx_` 临界区、第一次 `push_back` 之前完成全部三个 vector 的容量准备（`group.hpp:350-368`），一次 Evented task admission 成为完整事务。三个 `push_back` 因容量已保证而不会分配，且被移动类型为 noexcept-movable（由 `static_assert` 固化）。确定性故障注入覆盖每个 reserve 边界（`tests/group_evented_admission_exception_safety_test.cpp`），并在缺陷版本上确认会失败。E16 admission rollback 的 Group 内部所有权前提已满足；Runtime 级 `admitted_count` 回滚仍属 E16 production 工作。
 
-2. **TLA+ lifecycle 模型（P2-03）**
-   完成并验证 E16 lifecycle 模型，同时保留故意损坏的 negative/broken 模型及其 TLC counterexample。
+2. **TLA+ lifecycle 模型（P2-03） — ✅ 已完成**
+   E16 lifecycle 模型位于 `spec/tla/e16_application_runtime/`，保留故意损坏的
+   negative/broken 模型及其 TLC counterexample；统一校验脚本
+   `python3 scripts/formal/verify.py`。
 
-3. **独立设计审查**
-   审查对象必须包括当前 E16 设计、生命周期模型和 Group prerequisite；不得存在未解决的 P0/P1 finding。
+3. **独立设计审查 — ✅ 已完成**
+   独立 E16 设计/模型/Group prerequisite 审查已完成，无未解决的 P0/P1 finding。
 
-4. **ADR 接受**
-   满足以上条件后，将 `ADR-application-runtime` 从 `Proposed` 更新为 `Accepted`。**只有 Accepted ADR 才授权 production implementation**。
+4. **ADR 接受 — ✅ 已完成（2026-07-29 Accepted）**
+   `ADR-application-runtime` 已从 `Proposed` 升级为 `Accepted`。Accepted 之后
+   授权了 production implementation，后者现已落地。
 
 ## ADR Accepted 后的实现工作
 
@@ -163,9 +193,12 @@ ADR 进入 `Accepted` 后，E16 production implementation 才允许开始，实�
 
 E16 production implementation、public acceptance、完整验证和实现审查全部通过后，再将 ADR 状态从 `Accepted` 更新为 `Implemented`，并新增 E16 closeout。`Accepted` 与 `Implemented` 对应不同时间点，不要把两者合写为一个含糊的状态。
 
-### 3.2 Runtime Public Acceptance（未来实现后的验收标准）
+### 3.2 Runtime Public Acceptance（验收标准）
 
-新增只依赖 installed/public headers 的 Runtime acceptance consumer，至少覆盖：
+> **当前事实：已落地。** `examples/runtime_acceptance.cpp` 是只依赖
+> installed/public headers 的 Runtime acceptance consumer。
+
+只依赖 installed/public headers 的 Runtime acceptance consumer，至少覆盖：
 
 * build Runtime
 * `start()`
@@ -179,9 +212,21 @@ E16 production implementation、public acceptance、完整验证和实现审查�
 * task exception terminal accounting
 * outstanding I/O 在 shutdown 前被 reap
 
+### Milestone 0 状态转换记录（closeout）
+
+E16 的 ADR 接受（Accepted，2026-07-29）→ production 实现 → public acceptance
+（`examples/runtime_acceptance.cpp`）→ 完整验证（Debug/Release/ASan/UBSan/TSan
++ 形式模型）→ post-merge corrective（PR #46 lifecycle/resource/identity、
+PR #48 multi-worker suspend-before-switch）全部完成。**Milestone 0 — COMPLETE。**
+
+后续工作进入 **Milestone 1 — Small Application Validation Suite（ACTIVE）**，
+首个 reference app 为 `apps/sluice-copy` Version A（见 §4.1）。M1-A 同时关闭
+应用发现的 Runtime I/O wait API 缺口（`RuntimeTaskContext::await_completion`），
+记录于 `docs/design/m1-runtime-io-await-race.md` 与 App Feedback Ledger。
+
 ---
 
-# 4. Milestone 1 — Small Application Validation Suite
+# 4. Milestone 1 — Small Application Validation Suite（ACTIVE）
 
 ## 目标
 
@@ -1204,13 +1249,14 @@ Observability scaffolding可以提前加入 small app，但架构级性能优化
 
 # 15. Immediate Next Work
 
-当前只开始两个 milestone：
+> **当前事实（2026-07-30）：A 已完成；B（M1-A）正在进行。**
 
-## A. Runtime Truth Sync
+## A. Runtime Truth Sync — ✅ 已完成
 
 把 Runtime 完成状态、ADR、closeout、README、roadmap 和 verification 同步。
+（本节 §2/§3 已反映 E16 COMPLETE。）
 
-## B. `sluice-copy` Version A
+## B. `sluice-copy` Version A — 🔵 ACTIVE（M1-A）
 
 实现最小真实异步文件复制：
 
@@ -1223,6 +1269,11 @@ real filesystem
 byte-for-byte verification
 clean stop/drain/shutdown
 ```
+
+M1-A 同时关闭应用发现的 Runtime I/O wait API 缺口
+（`RuntimeTaskContext::await_completion`，见
+`docs/design/m1-runtime-io-await-race.md`）。API 竞争候选 A/B/C 的结论与
+winner 记录在该设计文档与 App Feedback Ledger 中。
 
 Version A 通过后，再增加 bounded pipeline。
 
