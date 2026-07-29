@@ -1229,7 +1229,19 @@ Inv4AccountingBounds ==
     /\ 0 <= group_future_terminal_count
     /\ group_future_terminal_count <= terminal_count
 
-(* E16-Inv5: Task terminal snapshot authority *)
+(* E16-Inv5 (C4 RECLASSIFIED): TerminalSnapshot is a DERIVED refinement
+   definition, NOT an independent safety invariant. It is defined as the same
+   expression as task_set_terminal_snapshot (itself a derived operator at the
+   top of this module), so asserting Inv5TerminalSnapshot ==
+   task_set_terminal_snapshot = <its own definition> is tautological — it can
+   never be falsified by an incorrect transition and provides no independent
+   safety evidence. Per the corrective property-classification rule, a property
+   counts as a TLC state invariant only if it checks independent modeled state
+   and can be falsified. Inv5 is retained here as documentation of the derived
+   snapshot definition but is EXCLUDED from the combined Inv and from
+   E16ApplicationRuntime.cfg. task_set_terminal_snapshot itself remains the
+   authoritative derived value used by Inv6DrainComplete and the modeled driver
+   stop-predicate. *)
 Inv5TerminalSnapshot ==
     task_set_terminal_snapshot = (~admission_open /\ admitted_count = terminal_count)
 
@@ -1301,7 +1313,17 @@ Inv16BoundaryParkAuthority ==
    requires epoch change) *)
 Inv17NoBusyLoop == TRUE
 
-(* E16-Inv18: Post-drain driver does not exit early *)
+(* E16-Inv18 (C4 RECLASSIFIED): PostDrainNoEarlyExit was a current-state
+   expression of the form (drained_wait /\ ~exit_req /\ ~fatal) => #exited,
+   which checks a same-state predicate, NOT a next-state transition. A drained
+   state cannot simultaneously be exited, so it is unfalsifiable as a state
+   invariant and provides no transition evidence. The obligation is now
+   expressed as the ACTION-LEVEL temporal property Live6PostDrainExitCaused
+   below: any transition from drained_wait to exited must be caused by
+   driver_exit_requested or fatal_snapshot. Inv18 is retained as documentation
+   but EXCLUDED from the combined Inv and from E16ApplicationRuntime.cfg; the
+   load-bearing check is the temporal property, run under PROPERTIES in the
+   liveness configuration. *)
 Inv18PostDrainNoEarlyExit ==
     (driver_state = "drained_wait"
      /\ ~driver_exit_requested /\ ~fatal_snapshot)
@@ -1352,7 +1374,7 @@ Inv ==
     /\ Inv2AdmissionAuthority
     /\ Inv3StopClosesAdmission
     /\ Inv4AccountingBounds
-    /\ Inv5TerminalSnapshot
+    (* Inv5TerminalSnapshot EXCLUDED (C4): tautological derived definition. *)
     /\ Inv6DrainComplete
     /\ Inv7NoPrematureStopped
     /\ Inv8ResourceHierarchy
@@ -1362,7 +1384,9 @@ Inv ==
     /\ Inv12CloseOwnerUniqueness
     /\ Inv13CloseMonotonicity
     /\ Inv14SubmitPublication
-    /\ Inv18PostDrainNoEarlyExit
+    (* Inv18PostDrainNoEarlyExit EXCLUDED (C4): current-state predicate, not a
+       transition check. The load-bearing obligation is the action-level
+       temporal property Live6PostDrainExitCaused (run under PROPERTIES). *)
     /\ Inv19DriverExitBeforeDestruction
     /\ Inv20RejectedNeverExecutes
     /\ Inv21TaskIOLifetime
@@ -1455,16 +1479,28 @@ Live5DriverExits ==
     [](driver_exit_requested /\ driver_state \in {"between_invocations","drained_wait","barrier_wait"}
       => <>(driver_state = "exited"))
 
-(* E16-Live6: Post-drain park is stable (safety/liveness pair) *)
-Live6PostDrainStable ==
-    [](driver_state = "drained_wait" /\ ~driver_exit_requested /\ ~fatal_snapshot
-      => driver_state = "drained_wait")
+(* E16-Live6 (C4): the post-drain driver does not exit early. This is an
+   ACTION-LEVEL temporal property (not a state invariant): any transition
+   FROM drained_wait TO exited must be CAUSED by driver_exit_requested or
+   fatal_snapshot in the successor state. This is falsifiable by an incorrect
+   transition (a spontaneous drained_wait->exited step with neither cause) and
+   therefore provides independent transition evidence, unlike the previous
+   current-state Live6PostDrainStable (a same-state tautology).
+
+   Written as an action invariant [][A]_vars: at every step, either there is
+   no uncaused drained_wait->exited transition OR the successor carried an exit
+   request / fatal fault (or the state stutters, which trivially satisfies A
+   since a stuttered drained_wait does not jump to exited). *)
+Live6PostDrainExitCaused ==
+    [][~(driver_state = "drained_wait" /\ driver_state' = "exited")
+       \/ driver_exit_requested' \/ fatal_snapshot']_vars
 
 LifeProps ==
     /\ Live1AdmissionObserved
     /\ Live2StopBeforeCommit
     /\ Live3DrainCompletes
     /\ Live5DriverExits
+    /\ Live6PostDrainExitCaused
 
 (* =========================================================================
    REACHABILITY / NON-VACUITY (Section 13)
