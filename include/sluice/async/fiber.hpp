@@ -111,7 +111,7 @@ public:
     CancelToken& cancel_token() noexcept { return token_; }
     CancelState& cancel_state() noexcept { return cstate_; }
 
-    // ---- Execution-identity tag (E16 P0-1) ----
+    // ---- Execution-identity tag (E16 P0-1 / C2) ----
     //
     // An opaque tag stored IN Fiber state (not thread_local). The Application
     // Runtime task wrapper sets this to `this` (the Runtime*) around user task
@@ -119,10 +119,19 @@ public:
     // Runtime-owned task. Unlike a thread_local guard, this tag survives Fiber
     // suspend/resume and is correct under Fiber multiplexing (one OS worker
     // runs many Fibers; a TLS guard does not follow Fiber context switches).
+    //
+    // Authority (C2): the tag is READ-public (narrow introspection) but the
+    // WRITE path is private. Only the Scheduler may set it (via its private
+    // set_current_fiber_execution_tag, in turn callable only by
+    // ApplicationRuntime). This prevents ordinary application task code from
+    // clearing, replacing, or forging the Runtime identity tag to bypass
+    // is_runtime_task() self-close detection. Do NOT add a public setter.
     void* execution_tag() const noexcept { return execution_tag_; }
-    void set_execution_tag(void* tag) noexcept { execution_tag_ = tag; }
 
 private:
+    friend class Scheduler;  // C2: sole write authority for execution_tag_.
+    void set_execution_tag(void* tag) noexcept { execution_tag_ = tag; }
+
     std::atomic<FiberState> state_{FiberState::created};
     Entry entry_{};
     CancelToken token_{};

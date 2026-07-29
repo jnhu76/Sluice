@@ -175,3 +175,12 @@ sluice_production_async_test("application_runtime_test")
 -- normal-join close (exactly once), and concurrent-Constructed close-owner
 -- election. Links production sluice_async (the close authority under test).
 sluice_production_async_test("application_runtime_resource_test")
+
+-- E16-POST-MERGE-CORRECTIVE-1 — Fiber-local Runtime identity authority (C2).
+-- Proves a Runtime-owned task cannot self-close (drain/join/shutdown return
+-- invalid_state via the Fiber-local tag), identity is preserved across
+-- concurrent tasks, and an external thread is correctly NOT recognized as a
+-- Runtime task. The private-setter authority (no public execution-tag setter)
+-- is enforced by scripts/verify-async-identity-negative-compile.sh. Links
+-- production sluice_async.
+sluice_production_async_test("application_runtime_identity_test")
