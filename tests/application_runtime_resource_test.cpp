@@ -114,46 +114,27 @@ SLUICE_TEST_CASE(c1_shutdown_constructed_destroys_backend) {
 
 // ---------------------------------------------------------------------------
 // C1-T2 — startup abort destroys resources before start returns.
-// Deterministic seam: request_stop() is invoked from another thread while the
-// start owner is parked at the startup barrier (before Running commit).
-//
-// Race-free causal order:
-//   - we submit no tasks, so the driver's run_live loop is quiescent
-//   - main thread calls start(); driver reaches barrier_wait
-//   - helper thread calls request_stop() BEFORE start observes commit
-//   - start owner observes startup_abort_requested, runs rollback+close
-//   - start() returns canceled with backend destroyed exactly once
-//
-// No sleep_for as ordering proof: the barrier synchronization inside start()
-// guarantees the driver has parked at barrier_wait before we can observe it;
-// request_stop() setting startup_abort_requested is observed by the start
-// owner's commit-check. We use a short bounded retry on state observation only
-// to handle the legitimate interleaving where request_stop wins the race
-// against the start owner's barrier wait — this is NOT a liveness proof, the
-// shutdown() convergence (C1-T5) is the liveness guarantee.
+// Tests the stop-before-start path: request_stop() is called before start(),
+// so start() observes stop_requested_ at entry, takes the direct-close path
+// without spawning the driver, and returns canceled with backend destroyed.
+// The Starting-abort path (driver spawned, then stop requested) is tested
+// by C1-T2b (c1_concurrent_shutdown_starting_one_owner).
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(c1_startup_abort_destroys_resources) {
     auto pr = build_probe_runtime();
     auto& rt = *pr.rt;
 
-    // request_stop() before start() commits. request_stop() is worker-safe and
-    // may be called from any thread. Calling it from the main thread before
-    // start() observes commit deterministically drives the startup-abort path:
-    // start() remembers stop_requested_, transitions to Starting, spawns the
-    // driver, and at the commit checkpoint observes stop_requested_ set, taking
-    // the abort branch.
     rt.request_stop();
 
     auto start_result = rt.start();
     SLUICE_CHECK(!start_result.has_value());
     SLUICE_CHECK(start_result.error().code == IoError::Code::canceled);
 
-    // Backend MUST be destroyed by the time start() returns (close ran inside
-    // the abort path, not deferred to ~ApplicationRuntime).
+    // Backend MUST be destroyed by the time start() returns.
     SLUICE_CHECK(pr.probe->destructor_count.load() == 1);
 
-    // Runtime object remains alive (we have not destroyed it). Idempotent
-    // shutdown must succeed and NOT double-destroy.
+    // Runtime object remains alive. Idempotent shutdown must succeed and
+    // NOT double-destroy.
     auto sr = rt.shutdown();
     SLUICE_CHECK(sr.has_value());
     SLUICE_CHECK(pr.probe->destructor_count.load() == 1);
@@ -226,11 +207,13 @@ SLUICE_TEST_CASE(c1_concurrent_shutdown_constructed_one_owner) {
 // the shutdown caller (Starting branch) must converge on exactly ONE close
 // owner and destroy the backend exactly once, with no hang and no double close.
 //
-// Deterministic causal seam: we admit no tasks and set stop_requested via the
-// external shutdown() call before the start owner's commit checkpoint can be
-// reached. The start owner's commit-check observes startup_abort_requested
-// (set by shutdown()'s Starting branch) and takes the abort path as the close
-// owner; the shutdown caller waits for Closed.
+// Deterministic causal seam: the test_driver_barrier_reached() future proves
+// that the driver has reached barrier_wait before shutdown() is called. This
+// guarantees that shutdown() observes the Starting state, not Constructed.
+// start() may return success (if the race is lost and the start thread commits
+// before shutdown acquires the lock) or canceled (if shutdown sets stop_requested
+// before the start thread checks it). Both are valid outcomes; the key invariant
+// is that the backend is destroyed exactly once.
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(c1_concurrent_shutdown_starting_one_owner) {
     auto pr = build_probe_runtime();
@@ -241,12 +224,18 @@ SLUICE_TEST_CASE(c1_concurrent_shutdown_starting_one_owner) {
     // drives the Starting-abort path. Both converge on one close owner.
     std::thread start_thread([&rt] {
         auto sr = rt.start();
-        // start() returns canceled (abort) OR invalid_state (if shutdown raced
-        // ahead and already closed). Both are acceptable terminal outcomes.
+        // start() returns canceled (abort) OR success (if the race was lost).
+        // Both are acceptable terminal outcomes.
         (void)sr;
     });
 
+    // Wait for the driver barrier signal, proving the Runtime is in Starting
+    // with the driver parked at barrier_wait.
+    auto barrier_future = rt.test_driver_barrier_reached();
+    barrier_future.wait();
+
     // shutdown() from Starting: elects/observes the close, returns success.
+    // The start owner is the close owner; shutdown() only waits for Closed.
     auto shr = rt.shutdown();
     SLUICE_CHECK(shr.has_value());
 

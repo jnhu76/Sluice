@@ -234,7 +234,7 @@ StartupCommit ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
+                   task_io_submitted, task_io_complete, drain_completed_once>>
 
 (* StartupSpawnFailure: driver spawn throws -> StartFailed. *)
 StartupSpawnFailure ==
@@ -665,10 +665,16 @@ DriverEnterBoundaryWait ==
     /\ control_epoch = observed_epoch
     /\ UNCHANGED vars
 
-(* DriverObserveEpoch: driver observes new epoch, re-evaluates. *)
+(* DriverObserveEpoch: driver observes new epoch, re-evaluates.
+   Guarded by ~successful_submit_published: if a submit is pending, the
+   driver must re-enter run_live (DriverReenterRunLive) instead of just
+   syncing epochs, otherwise Inv14 (successful_submit_published implies
+   epoch changed) can be violated when both epochs settle to the same
+   value with a published submit still pending. *)
 DriverObserveEpoch ==
     /\ driver_state = "between_invocations"
     /\ control_epoch # observed_epoch
+    /\ ~successful_submit_published
     /\ observed_epoch' = control_epoch
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
                    root_cancel_published, startup_abort_requested,
@@ -722,9 +728,12 @@ DriverReenterRunLive ==
    Drain
    ========================================================================= *)
 
-(* DrainBegin: Stopping -> Draining. *)
+(* DrainBegin: Stopping -> Draining.
+   Requires ~admission_reservation_active: a pending admission reservation
+   must be resolved (committed or rolled back) before drain can begin. *)
 DrainBegin ==
     /\ runtime_state = "Stopping"
+    /\ ~admission_reservation_active
         /\ runtime_state' = "Draining"
     /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
@@ -767,7 +776,7 @@ PublishDrainComplete ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
+                   task_io_submitted, task_io_complete, drain_required>>
 
 (* EnterDrainedWait: driver parks after drain_complete. *)
 EnterDrainedWait ==
@@ -802,7 +811,7 @@ CloseOwnerElect(c) ==
     /\ c \in Callers
     /\ stop_requested \/ startup_abort_requested \/ runtime_state = "Fatal"
     /\ runtime_state = "Fatal" \/ outstanding_io = 0
-    /\ (drain_required => drain_complete)
+    /\ (drain_required => drain_complete) \/ runtime_state = "Fatal"
     /\ close_state' = "InProgress"
     /\ close_owner' = c
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
@@ -1425,6 +1434,7 @@ FairSpec ==
     /\ WF_vars(DriverExit)
     /\ WF_vars(PublishDrainComplete)
     /\ WF_vars(EnterDrainedWait)
+    /\ \A t \in Tasks : WF_vars(SubmitRollback(t))
     /\ WF_vars(StartupAbortJoin)
     /\ WF_vars(StartupAbortClose)
     /\ WF_vars(RequestDriverExit)

@@ -83,28 +83,12 @@ structural-only; they remain defined in the module as documentation:
   `driver_exit_requested'` or `fatal_snapshot'` (`[][A]_vars`). Replaces the
   tautological current-state `Live6PostDrainStable`.
 
-> Note (E16-POST-MERGE-CORRECTIVE-1): on the current model `runtime_state =
-> "Running"` (and therefore `"Draining"` and `drained_wait`) is NOT reachable
-> due to a pre-existing latent model defect (StartupCommit has a conflicting
-> assignment: `drain_required' = TRUE` AND `drain_required` in its UNCHANGED
-> list, making the commit transition unsatisfiable while drain_required is
-> FALSE). Live6 and the drain-related invariants are therefore currently
-> vacuously satisfied over the reachable subspace; correcting the model to
-> reach the full Running->Drain->close lifecycle is tracked as a separate
-> follow-up (it surfaced further latent issues: a Fatal deadlock and an Inv14
-> publication gap).
-
 ## Reachability witnesses
 
 Each `NotReach_Ri` invariant asserts a state is unreachable; TLC violates it,
 proving the state IS reachable in the correct model.
 
-- **R2, R3, R11, R12, R13, R14, R15, R18:** REACH.
-- **R17 (drain required, close owner blocked):** EXECUTED by the verifier
-  (E16-POST-MERGE-CORRECTIVE-1 C3 corrective — it was documented but omitted
-  from the loop on merged master). On the current model R17's Draining state
-  is NOT reachable due to the latent StartupCommit defect noted above; the
-  verifier runs R17 and reports its result explicitly rather than masking it.
+- **R2, R3, R11, R12, R13, R14, R15, R17, R18:** REACH.
 
 ## Running
 

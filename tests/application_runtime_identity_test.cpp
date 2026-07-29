@@ -160,4 +160,67 @@ SLUICE_TEST_CASE(c2_external_thread_not_runtime_task) {
     SLUICE_CHECK(rt->join().has_value());
 }
 
+// ---------------------------------------------------------------------------
+// C2-T3 — Fiber-local identity survives Fiber suspend/resume.
+//
+// Proves the execution tag is Fiber-local (not thread_local) by creating a
+// real Fiber suspension boundary: task A suspends via ctx.suspend(), the
+// worker switches to task B, task B signals the resume flag, and task A
+// resumes and checks that its Runtime identity is still recognized.
+//
+// A thread_local tag would be overwritten by task B's entry, so when task A
+// resumes it would see task B's tag (or nullptr) and the identity check would
+// fail. The Fiber-local tag stored in Fiber::execution_tag_ follows the Fiber
+// across context switches, so task A retains its identity.
+//
+// Deterministic causal order (no sleep_for):
+//   - Task A is submitted first and runs first (single worker FIFO).
+//   - Task A calls ctx.suspend(resume_flag) with resume_flag = false, so the
+//     Fiber suspends and the worker picks up the next task.
+//   - Task B runs, sets resume_flag = true, returns.
+//   - The Scheduler's ready-flag mechanism detects the flag change and resumes
+//     task A's Fiber.
+//   - Task A resumes and calls shutdown() -> invalid_state (identity preserved).
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(c2_identity_preserved_across_suspend_resume) {
+    auto rt = build_identity_runtime();
+    SLUICE_CHECK(rt->start().has_value());
+
+    // The resume flag: initialized false so task A suspends on it.
+    std::atomic<bool> resume_flag{false};
+    std::atomic<bool> task_a_resumed{false};
+    std::atomic<bool> task_b_ran{false};
+
+    // Submit task A (first). It will suspend and then check identity.
+    SLUICE_CHECK(rt->submit([&](RuntimeTaskContext& ctx) {
+        // Suspend the Fiber. Since resume_flag is false, the Fiber suspends
+        // and the worker switches to the next task.
+        ctx.suspend(resume_flag);
+
+        // After resumption: the Runtime identity MUST be preserved.
+        // shutdown() called from a Runtime task returns invalid_state.
+        auto sr = rt->shutdown();
+        if (!sr.has_value() && sr.error().code == IoError::Code::invalid_state) {
+            task_a_resumed.store(true, std::memory_order::release);
+        }
+    }).has_value());
+
+    // Submit task B (second). It will run when task A's Fiber suspends.
+    SLUICE_CHECK(rt->submit([&](RuntimeTaskContext& ctx) {
+        (void)ctx;
+        // Signal task A to resume.
+        resume_flag.store(true, std::memory_order::release);
+        task_b_ran.store(true, std::memory_order::release);
+    }).has_value());
+
+    // Drive the lifecycle from the owning thread.
+    rt->request_stop();
+    SLUICE_CHECK(rt->drain().has_value());
+    SLUICE_CHECK(rt->join().has_value());
+
+    // Both tasks must have run.
+    SLUICE_CHECK(task_a_resumed.load(std::memory_order::acquire));
+    SLUICE_CHECK(task_b_ran.load(std::memory_order::acquire));
+}
+
 SLUICE_MAIN()

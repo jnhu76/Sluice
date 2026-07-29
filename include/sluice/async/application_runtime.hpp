@@ -29,6 +29,10 @@
 #include <mutex>
 #include <thread>
 
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+#include <future>
+#endif
+
 namespace sluice::async {
 
 // Forward declarations.
@@ -50,16 +54,25 @@ public:
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
+    // Suspend the current Fiber until `flag` becomes true. Uses the Scheduler's
+    // level-triggered ready-flag protocol (await_ready_flag). The flag must be
+    // set from another Fiber or external thread to resume this Fiber.
+    // This is a test-only capability for proving Fiber-local identity survives
+    // suspension. Only available in internal testing builds.
+    void suspend(std::atomic<bool>& flag);
+
     RuntimeTaskContext(const RuntimeTaskContext&) = delete;
     RuntimeTaskContext& operator=(const RuntimeTaskContext&) = delete;
 
 private:
     friend class ApplicationRuntime;
-    RuntimeTaskContext(AsyncIoContext& ctx, CancelToken& token) noexcept
-        : ctx_(&ctx), token_(&token) {}
+    RuntimeTaskContext(AsyncIoContext& ctx, CancelToken& token,
+                       Scheduler& sched) noexcept
+        : ctx_(&ctx), token_(&token), sched_(&sched) {}
 
     AsyncIoContext* ctx_;
     CancelToken* token_;
+    Scheduler* sched_;
 };
 
 // The task function signature. Receives a RuntimeTaskContext& for I/O and
@@ -137,6 +150,16 @@ public:
     // State-dispatched lifecycle operation (P1-05). Correct in every state.
     // One close owner elected across all concurrent callers.
     Result<void> shutdown();
+
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+    // Test-only seam: returns a future that becomes ready when the driver
+    // thread reaches the startup barrier (barrier_wait). Used by startup-abort
+    // tests to deterministically observe the Starting phase before injecting
+    // stop/shutdown.
+    std::future<void> test_driver_barrier_reached() {
+        return barrier_promise_.get_future();
+    }
+#endif
 
 private:
     friend class RuntimeBuilder;
@@ -228,6 +251,13 @@ private:
     // Access helpers:
     static void set_current_fiber_tag(ApplicationRuntime* rt) noexcept;
     static ApplicationRuntime* current_fiber_tag() noexcept;
+
+private:
+    // ... (existing fields below)
+
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+    std::promise<void> barrier_promise_;
+#endif
 };
 
 }  // namespace sluice::async

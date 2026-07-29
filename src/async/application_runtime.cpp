@@ -46,6 +46,10 @@ Result<void> RuntimeTaskContext::submit_sync_all(SyncAllOp op, Completion<void>&
     return ctx_->submit_sync_all(op, c);
 }
 
+void RuntimeTaskContext::suspend(std::atomic<bool>& flag) {
+    sched_->await_ready_flag(flag);
+}
+
 // ---------------------------------------------------------------------------
 // RuntimeBuilder
 // ---------------------------------------------------------------------------
@@ -246,7 +250,7 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
             set_current_fiber_tag(this);
 
             // RuntimeTaskContext delegates I/O to io_ctx_.
-            RuntimeTaskContext ctx(*io_ctx_, token);
+            RuntimeTaskContext ctx(*io_ctx_, token, *sched_);
 
             // Run user task body; swallow exceptions at this boundary.
             try {
@@ -513,6 +517,9 @@ void ApplicationRuntime::driver_main() {
 
     // Signal that we've reached the startup barrier.
     driver_state_ = DriverState::barrier_wait;
+#ifdef SLUICE_ASYNC_INTERNAL_TESTING
+    barrier_promise_.set_value();
+#endif
     runtime_cv_.notify_all();
 
     // Park at startup barrier until commit or abort (P1-03).
