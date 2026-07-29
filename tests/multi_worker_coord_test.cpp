@@ -19,6 +19,9 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <exception>
 #include <vector>
 
 #include <fcntl.h>
@@ -30,6 +33,103 @@ using namespace sluice::async;
 using sluice::AsyncStats;
 using sluice::IoError;
 using sluice::Result;
+
+// ---------------------------------------------------------------------------
+// ISSUE-47-DIAGNOSTIC-1 — abnormal-termination classification (DIAGNOSTIC ONLY).
+//
+// This entire block is a test-only diagnostic seam that activates ONLY when the
+// environment variable SLUICE_ISSUE47_DIAG=1 is set. Its sole purpose is to
+// classify an observed abnormal termination of case
+// `mwcoord_serialized_backend_access` into the categories defined in issue #47
+// (C1 early run return / C2 SLUICE_CHECK + teardown fail-fast / C3 std::terminate
+// / C4 signal / C5 unhandled exception / C6 other). It is NOT a Scheduler fix:
+// it adds NO production behavior change and NO sleeps. When the variable is
+// absent, every macro below expands to nothing and the test behaves exactly as
+// before.
+//
+// Why the early-exit seam exists: a confirmed failure-masking mechanism is
+// `SLUICE_CHECK(ops_done==N)` failure -> `return;` -> local `Scheduler`/
+// `AsyncIoContext` destruction -> `~AsyncIoContext` sees outstanding()!=0 ->
+// `async_context_outstanding_fail_fast()` -> `std::terminate` -> default
+// handler -> `std::abort()` -> SIGABRT, so the harness never reaches
+// report_and_exit() and the original "ops_done != N" failure is hidden. The
+// diagnostic early-exit calls std::_Exit(90/91/92) BEFORE local destructors run
+// so the incomplete run result is preserved rather than overwritten by teardown
+// fail-fast. std::_Exit is acceptable ONLY in diagnostic mode for this purpose.
+namespace i47_diag {
+
+// Whether diagnostic mode is active for this process (read once at case entry).
+inline bool enabled() {
+    const char* v = std::getenv("SLUICE_ISSUE47_DIAG");
+    return v && v[0] == '1';
+}
+
+// Write a fixed string to stderr using the async-signal-safe ::write, with no
+// allocation and no locks. Used by the terminate handler (which must not
+// allocate/format/touch Scheduler state).
+inline void write_err_raw(const char* s, std::size_t n) {
+    ssize_t off = 0;
+    while (static_cast<std::size_t>(off) < n) {
+        ssize_t w = ::write(STDERR_FILENO, s + off, n - static_cast<std::size_t>(off));
+        if (w <= 0) break;
+        off += w;
+    }
+}
+
+// Diagnostic breadcrumb: stable iteration-independent phase ID (+ optional
+// fiber index) written to stderr and flushed immediately. Uses stdio (NOT the
+// terminate handler) so it MAY format, but it never touches Scheduler locks.
+inline void phase(const char* id, int fiber_idx = -1) {
+    if (fiber_idx >= 0) {
+        std::fprintf(stderr, "[I47] %s fiber=%d\n", id, fiber_idx);
+    } else {
+        std::fprintf(stderr, "[I47] %s\n", id);
+    }
+    std::fflush(stderr);
+}
+
+// Map a FiberState to a short stable token for the snapshot line.
+inline const char* fiber_state_token(sluice::async::FiberState s) {
+    switch (s) {
+        case sluice::async::FiberState::created:  return "created";
+        case sluice::async::FiberState::runnable: return "runnable";
+        case sluice::async::FiberState::running:  return "running";
+        case sluice::async::FiberState::waiting:  return "waiting";
+        case sluice::async::FiberState::done:     return "done";
+    }
+    return "unknown";
+}
+
+// The std::terminate handler installed in diagnostic mode. It emits a fixed
+// I47-T00 marker and immediately aborts (SIGABRT). This distinguishes
+// `std::terminate -> I47-T00 then SIGABRT` from a direct signal crash (no
+// marker). It performs NO allocation, takes NO locks, and does NOT touch any
+// Scheduler/backend object (which may be mid-destruction).
+inline void terminate_handler() {
+    static const char kMarker[] = "[I47] I47-T00 std::terminate-invoked\n";
+    write_err_raw(kMarker, sizeof(kMarker) - 1);
+    std::abort();
+}
+
+// Reserved diagnostic process-exit codes (distinct from harness codes):
+//   0  PASS, 1 NORMAL_HARNESS_FAILURE (harness's own contract)
+//   90 EARLY_RUN_RETURN_WITH_LIVE_WORK       (ops_done<N or outstanding!=0)
+//   91 RUN_RETURNED_WITH_NO_OUTSTANDING_BUT_INCOMPLETE_FIBERS
+//   92 CONCURRENT_BACKEND_ACCESS_OBSERVED    (serialized-access invariant broke)
+inline void early_exit(int code) {
+    std::fflush(stdout);
+    std::fflush(stderr);
+    std::_Exit(code);
+}
+
+}  // namespace i47_diag
+
+// Breadcrumb macro (no-op when diagnostic mode is off). Reads the env once per
+// call is avoided by caching in a local; here we just call enabled() — getenv
+// is cheap and this is test-only diagnostic code.
+#define I47_PHASE(id) do { if (::i47_diag::enabled()) ::i47_diag::phase(id); } while (0)
+#define I47_PHASE_F(id, idx) \
+    do { if (::i47_diag::enabled()) ::i47_diag::phase(id, idx); } while (0)
 
 namespace {
 struct FiberStack {
@@ -111,12 +211,31 @@ private:
 SLUICE_TEST_CASE(mwcoord_serialized_backend_access) {
     if constexpr (!fiber_ctx::supported) return;
 
+    // ISSUE-47-DIAGNOSTIC-1: when SLUICE_ISSUE47_DIAG=1, install the terminate
+    // marker handler so a std::terminate (e.g. from AsyncIoContext teardown
+    // fail-fast with outstanding work) is recorded as I47-T00 + SIGABRT rather
+    // than a silent signal exit. Diagnostic ONLY — normal runs are unchanged.
+    const bool i47_on = ::i47_diag::enabled();
+    if (i47_on) std::set_terminate(::i47_diag::terminate_handler);
+    I47_PHASE("I47-P00 case-enter");
+
     auto fake = std::make_unique<FakeAsyncBackend>();
-    fake->auto_bytes(4);  // every submit completes with 4 bytes on the next poll
+    // ISSUE-47-DIAGNOSTIC-1 apparatus self-test (issue #47 §11): when
+    // SLUICE_I47_FORCE_EARLY=1 AND diagnostic mode is on, do NOT auto-complete.
+    // This deterministically forces outstanding()!=0 after run(2) returns, so
+    // the early-exit seam (90 EARLY_RUN_RETURN_WITH_LIVE_WORK) is exercised on
+    // the REAL test binary — proving teardown fail-fast is bypassed. Diagnostic
+    // ONLY; normal/diag runs without this var keep auto_bytes(4).
+    const char* force_early = std::getenv("SLUICE_I47_FORCE_EARLY");
+    bool force_early_on = i47_on && force_early && force_early[0] == '1';
+    if (!force_early_on) {
+        fake->auto_bytes(4);  // every submit completes with 4 bytes on next poll
+    }
     auto probe = std::make_unique<ConcurrencyProbeBackend>(std::move(fake));
     ConcurrencyProbeBackend* probe_ptr = probe.get();
     AsyncIoContext ctx(std::move(probe));
     Scheduler sched(ctx);
+    I47_PHASE("I47-P01 objects-constructed");
 
     std::atomic<int> ops_done{0};
     constexpr int N = 6;
@@ -124,20 +243,103 @@ SLUICE_TEST_CASE(mwcoord_serialized_backend_access) {
     std::vector<FiberStack> stacks(N);
     std::vector<Completion<std::size_t>> comps(N);
     std::byte buf[4]{};
+    I47_PHASE("I47-P02 fibers-initialized");
 
     for (int i = 0; i < N; ++i) {
         fibers[i].set_entry([&, i](Fiber&) {
+            I47_PHASE_F("I47-P05 fiber-submit-enter", i);
             (void)ctx.submit_read(ReadOp{-1, buf, 4, 0}, comps[i]);
+            I47_PHASE_F("I47-P06 fiber-submit-return", i);
+            I47_PHASE_F("I47-P07 fiber-await-enter", i);
             sched.await_completion_size(comps[i]);
+            I47_PHASE_F("I47-P08 fiber-await-return", i);
             ops_done.fetch_add(1, std::memory_order_acq_rel);
+            I47_PHASE_F("I47-P09 fiber-op-done", i);
         });
         sched.init_fiber(fibers[i], stacks[i].base(), stacks[i].size());
         sched.spawn(fibers[i]);
     }
+    I47_PHASE("I47-P03 fibers-spawned");
+    I47_PHASE("I47-P04 before-run");
+
     sched.run(2);
+    I47_PHASE("I47-P10 run-returned");
+
+    // ISSUE-47-DIAGNOSTIC-1: post-run snapshot BEFORE any SLUICE_CHECK. Uses
+    // only existing public/introspection accessors; values that cannot be
+    // inspected safely print UNAVAILABLE. No new production accessor added.
+    if (i47_on) {
+        int od = ops_done.load(std::memory_order_acquire);
+        std::size_t outstanding = ctx.outstanding();
+        std::size_t waiting = sched.waiting_count();
+        std::size_t waiting_ready = sched.waiting_ready_count();
+        std::size_t runnable = sched.runnable_count();
+        bool concurrent = probe_ptr->concurrent_access();
+        std::fprintf(stderr, "[I47] I47-SNAPSHOT\n");
+        std::fprintf(stderr, "[I47] ops_done=%d\n", od);
+        std::fprintf(stderr, "[I47] outstanding=%zu\n", outstanding);
+        std::fprintf(stderr, "[I47] waiting=%zu\n", waiting);
+        std::fprintf(stderr, "[I47] waiting_ready=%zu\n", waiting_ready);
+        std::fprintf(stderr, "[I47] runnable=%zu\n", runnable);
+        std::fprintf(stderr, "[I47] concurrent_access=%d\n", concurrent ? 1 : 0);
+        std::fprintf(stderr, "[I47] fiber_states=[");
+        for (int i = 0; i < N; ++i) {
+            std::fprintf(stderr, "%s%s", i ? "," : "",
+                         ::i47_diag::fiber_state_token(fibers[i].state()));
+        }
+        std::fprintf(stderr, "]\n");
+        std::fprintf(stderr, "[I47] completion_ready=[");
+        for (int i = 0; i < N; ++i) {
+            std::fprintf(stderr, "%s%d", i ? "," : "",
+                         comps[i].ready() ? 1 : 0);
+        }
+        std::fprintf(stderr, "]\n");
+        std::fflush(stderr);
+        I47_PHASE("I47-P11 snapshot-complete");
+    }
+
+    I47_PHASE("I47-P12 checks-begin");
+
+    // ISSUE-47-DIAGNOSTIC-1: prevent teardown fail-fast from MASKING the
+    // original result. If the run returned with live work (ops_done<N or
+    // outstanding!=0) or concurrent backend access was observed, classify and
+    // exit with a reserved code via std::_Exit BEFORE local destructors run.
+    // This is a process-exit classification seam, NOT a test fix. Diagnostic
+    // mode only. The reserved codes are documented in i47_diag above.
+    if (i47_on) {
+        int od = ops_done.load(std::memory_order_acquire);
+        std::size_t outstanding = ctx.outstanding();
+        if (probe_ptr->concurrent_access()) {
+            std::fprintf(stderr, "[I47] I47-CLASS CONCURRENT_BACKEND_ACCESS_OBSERVED\n");
+            ::i47_diag::early_exit(92);
+        }
+        if (od != N || outstanding != 0) {
+            // Distinguish the two sub-shapes: live outstanding op vs. no
+            // outstanding but fibers not all done.
+            bool all_done = true;
+            for (int i = 0; i < N; ++i) {
+                if (fibers[i].state() != FiberState::done) { all_done = false; break; }
+            }
+            if (outstanding != 0) {
+                std::fprintf(stderr,
+                    "[I47] I47-CLASS EARLY_RUN_RETURN_WITH_LIVE_WORK "
+                    "(ops_done=%d/%d outstanding=%zu)\n", od, N, outstanding);
+                ::i47_diag::early_exit(90);
+            } else if (!all_done) {
+                std::fprintf(stderr,
+                    "[I47] I47-CLASS RUN_RETURNED_WITH_NO_OUTSTANDING_BUT_INCOMPLETE_FIBERS "
+                    "(ops_done=%d/%d)\n", od, N);
+                ::i47_diag::early_exit(91);
+            }
+            // ops_done != N but outstanding==0 and all fibers done: an unusual
+            // shape (ops_done counter lost an increment). Let it fall through
+            // to the normal SLUICE_CHECK so the harness records the failure.
+        }
+    }
 
     SLUICE_CHECK(ops_done.load() == N);
     SLUICE_CHECK(!probe_ptr->concurrent_access());  // serialized: max 1 concurrent
+    I47_PHASE("I47-P13 case-exit");
 }
 
 // ---- E7-T8: true global quiescence ---------------------------------------
