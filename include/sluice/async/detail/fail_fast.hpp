@@ -148,4 +148,14 @@ bool evented_admission_check() noexcept;
 // Same contract as the other fail-fast entries.
 [[noreturn]] void scheduler_invalid_suspend_transition_fail_fast() noexcept;
 
+// I47-F1: missing Fiber owner fail-fast. Called from owner_for_fiber_locked
+// when a previously-running Fiber has no recorded owner in fiber_owner_. A
+// Fiber that has run and entered Waiting MUST have an owner entry (set at
+// spawn/spawn_on/steal). A missing entry is a fatal Scheduler invariant
+// violation: routing would fall back to an arbitrary Worker, breaking the
+// suspend-switch authority guarantee.
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void scheduler_missing_fiber_owner_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

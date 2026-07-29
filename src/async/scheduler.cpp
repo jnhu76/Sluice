@@ -1094,6 +1094,29 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     signal_wake_locked();
 }
 
+WorkerState* Scheduler::owner_for_fiber_locked(Fiber* fiber) {
+    // I47-F1: authoritative owner lookup for a previously-running Fiber.
+    // A Fiber that has run and entered Waiting MUST have a recorded owner.
+    // A missing entry is a fatal Scheduler invariant violation.
+    auto it = fiber_owner_.find(fiber);
+    if (it == fiber_owner_.end() || it->second == nullptr) {
+        detail::scheduler_missing_fiber_owner_fail_fast();
+    }
+    return it->second;
+}
+
+bool Scheduler::publish_waiting_fiber_runnable_locked(Fiber* fiber) {
+    // I47-F1: canonical waiting-Fiber publication. Routes the runnable ticket
+    // to the Fiber's recorded owner Worker (NOT the resolver's g_worker).
+    // The owner lookup is authoritative: a resolver must not change ownership.
+    WorkerState* owner = owner_for_fiber_locked(fiber);
+    if (!fiber->make_runnable()) {
+        return false;  // already runnable/running/done (exactly-once guard)
+    }
+    route_runnable_locked(fiber, owner);
+    return true;
+}
+
 Scheduler::MwState Scheduler::classify_locked() const {
     // Must be called with global_mtx_ held.
     bool any_runnable = !pending_spawn_.empty();
@@ -1284,8 +1307,9 @@ WaitNode* Scheduler::wake_wait_one_locked(WaitQueue& q) {
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
     // succeeded. The node is terminal; make_runnable is the publication guard.
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return won;
 }
@@ -1319,9 +1343,11 @@ bool Scheduler::cancel_wait(WaitQueue& q, WaitNode& node) {
     retire_timer_for_node_locked(node);
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
-        return true;
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        if (publish_waiting_fiber_runnable_locked(f)) {
+            return true;
+        }
     }
     return false;
 }
@@ -1478,9 +1504,11 @@ bool Scheduler::expire_wait(WaitQueue& q, WaitNode& node) {
     if (!q.expire_locked(node)) return false;  // already terminal (loser)
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
-        return true;
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        if (publish_waiting_fiber_runnable_locked(f)) {
+            return true;
+        }
     }
     return false;
 }
@@ -1861,8 +1889,9 @@ bool Scheduler::event_cancel_wait(WaitQueue& q, WaitNode& node) {
     // from a concurrent path, or null fiber) does NOT undo the cancel. Returning
     // false here would mislead the caller into retrying or thinking the wait is
     // still active (PR#6 review: gemini-code-assist + coderabbitai).
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -2265,8 +2294,9 @@ bool Scheduler::sem_cancel(WaitQueue& waiters, WaitNode& node) {
     retire_timer_for_node_locked(node);
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -2555,8 +2585,9 @@ bool Scheduler::mutex_cancel(WaitQueue& waiters, WaitNode& node) {
     retire_timer_for_node_locked(node);
     Fiber* f = node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -2598,8 +2629,9 @@ WaitNode* Scheduler::mutex_handoff_one_locked(WaitQueue& waiters, Fiber*& owner)
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     // E7-T2 exactly-once: publish a runnable ticket ONLY if waiting->runnable
     // succeeded. The node is terminal; make_runnable is the publication guard.
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return won;
 }
@@ -3650,8 +3682,9 @@ bool Scheduler::queue_cancel(detail::QueuePort& port, detail::QueueRole role,
     Fiber* f = node.fiber();
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -3680,9 +3713,11 @@ WaitNode* Scheduler::queue_grant_consumer_locked(detail::QueuePort& port)
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     Fiber* f = won->fiber();
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr && f->make_runnable()) {  // publication LAST
         ++port.granted_not_resumed_;  // F.2: published suspended-winner ticket
-        route_runnable_locked(f, g_worker);
+        WorkerState* owner = owner_for_fiber_locked(f);
+        route_runnable_locked(f, owner);
     }
     return won;
 }
@@ -3714,9 +3749,11 @@ WaitNode* Scheduler::queue_grant_producer_locked(detail::QueuePort& port)
     if (port.active_wait_associations_ > 0) --port.active_wait_associations_;
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
     Fiber* f = won->fiber();
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
     if (f != nullptr && f->make_runnable()) {
         ++port.granted_not_resumed_;  // F.2: published suspended-winner ticket
-        route_runnable_locked(f, g_worker);
+        WorkerState* owner = owner_for_fiber_locked(f);
+        route_runnable_locked(f, owner);
     }
     return won;
 }
@@ -3977,8 +4014,9 @@ bool Scheduler::condition_cancel_wait(WaitQueue& cond_waiters, WaitNode& cond_no
     retire_timer_for_node_locked(cond_node);
     Fiber* f = cond_node.fiber();
     if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, g_worker);
+    // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
+    if (f != nullptr) {
+        publish_waiting_fiber_runnable_locked(f);
     }
     return true;
 }
@@ -4088,8 +4126,10 @@ std::size_t Scheduler::pump_deadlines_locked() {
                     top->fire_on_resolve_locked(/*timer_won=*/true);
                 }
                 if (waiting_waitq_count_ > 0) --waiting_waitq_count_;
+                // I47-F1: route to the Fiber's recorded owner (NOT g_worker).
                 if (f != nullptr && f->make_runnable()) {
-                    route_runnable_locked(f, g_worker);
+                    WorkerState* owner = owner_for_fiber_locked(f);
+                    route_runnable_locked(f, owner);
                     ++won;
                 }
             }

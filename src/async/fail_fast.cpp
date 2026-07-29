@@ -74,6 +74,10 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+[[noreturn]] void scheduler_missing_fiber_owner_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.
