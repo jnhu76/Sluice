@@ -116,12 +116,31 @@ ApplicationRuntime::~ApplicationRuntime() {
 Result<void> ApplicationRuntime::start() {
     std::unique_lock lk(lifecycle_mtx_);
 
-    if (state_ != State::Constructed) {
+    // Reject if not Constructed OR if a close is in flight / already done. The
+    // close_state_ guard closes the Constructed-race window: a concurrent
+    // shutdown() that observed Constructed and elected itself close owner
+    // (Open -> InProgress) releases lifecycle_mtx_ between the election and
+    // close_resources()'s Stopped publication. During that window state_ is
+    // still Constructed but close_state_ is InProgress — without this check,
+    // start() would proceed to spawn the driver over already-moved resources
+    // (UAF). This makes start()/shutdown() races on the Constructed->Starting
+    // boundary converge instead of corrupting state.
+    if (state_ != State::Constructed || close_state_ != CloseState::Open) {
         return make_unexpected_void(IoError{IoError::Code::invalid_state});
     }
 
-    // Remember stop_requested: if stop was called before start, return canceled.
+    // Remember stop_requested: if stop was called before start, the runtime
+    // must still tear down its already-constructed components (Group/Scheduler/
+    // AsyncIoContext/backend) before reporting canceled. The start owner is the
+    // close owner here (no driver was spawned): elect close owner and funnel
+    // through the UNIFIED close_resources() authority (C1) so component
+    // destruction completes before Stopped is published. Without this, stop-
+    // before-start would publish no Stopped at all and leave resources alive
+    // until ~ApplicationRuntime.
     if (stop_requested_) {
+        close_state_ = CloseState::InProgress;
+        lk.unlock();
+        close_resources();
         return make_unexpected_void(IoError{IoError::Code::canceled});
     }
 
@@ -145,31 +164,39 @@ Result<void> ApplicationRuntime::start() {
     });
 
     // If the driver already exited (abort won before barrier was observed),
-    // complete the abort path directly.
+    // complete the abort path. The start owner is the close owner: join the
+    // driver, then funnel through the UNIFIED close_resources() authority (C1)
+    // so component destruction completes before Stopped is published. A
+    // concurrent shutdown() waiter that observed Starting observes the final
+    // Closed publication from close_resources() (E16-CORR-ABORT-2: there is
+    // exactly one close owner — the start owner here, shutdown() only waits).
     if (driver_state_ == DriverState::exited) {
-        state_ = State::Stopped;
-        close_state_ = CloseState::Closed;
+        // Elect close owner so a concurrent shutdown() waiter does not also
+        // attempt to close.
+        close_state_ = CloseState::InProgress;
         runtime_cv_.notify_all();
         lk.unlock();
         if (driver_thread_.joinable()) driver_thread_.join();
+        close_resources();
         return make_unexpected_void(IoError{IoError::Code::canceled});
     }
 
     // Startup barrier: the driver is at barrier_wait. Commit or abort.
     if (stop_requested_) {
-        // Stop won the race pre-commit (P1-03 abort path).
+        // Stop won the race pre-commit (P1-03 abort path). The start owner is
+        // the close owner: signal the driver to abort, wait for it to exit,
+        // join, then close via the UNIFIED close_resources() authority (C1).
         startup_abort_requested_ = true;
+        close_state_ = CloseState::InProgress;
         control_epoch_++;
         runtime_cv_.notify_all();
         // Wait for driver to exit.
         runtime_cv_.wait(lk, [this] {
             return driver_state_ == DriverState::exited;
         });
-        state_ = State::Stopped;
-        close_state_ = CloseState::Closed;
-        runtime_cv_.notify_all();
         lk.unlock();
         if (driver_thread_.joinable()) driver_thread_.join();
+        close_resources();
         return make_unexpected_void(IoError{IoError::Code::canceled});
     }
 
@@ -400,11 +427,21 @@ Result<void> ApplicationRuntime::shutdown() {
     switch (state_) {
     case State::Constructed:
     case State::StartFailed: {
-        // Direct close: no driver, no tasks.
+        // Direct close: no driver, no tasks. Elect this caller as the SOLE
+        // close owner (Open -> InProgress), then funnel through the UNIFIED
+        // close_resources() authority (C1): component destruction happens
+        // before Stopped publication, exactly once, outside lifecycle_mtx_.
+        // close_resources() publishes State::Stopped / CloseState::Closed as
+        // the single terminal authority. A concurrent caller that lost the
+        // election waits here for Closed. No driver exists in these states,
+        // so no join is required.
+        if (close_state_ == CloseState::InProgress) {
+            runtime_cv_.wait(lk, [this] { return close_state_ == CloseState::Closed; });
+            return {};
+        }
         close_state_ = CloseState::InProgress;
-        state_ = State::Stopped;
-        close_state_ = CloseState::Closed;
-        runtime_cv_.notify_all();
+        lk.unlock();
+        close_resources();
         return {};
     }
 

@@ -168,3 +168,10 @@ sluice_production_async_test("threaded_evented_parity_test")
 -- E16 ApplicationRuntime lifecycle tests.
 -- ADR: docs/adr/ADR-application-runtime.md (Accepted).
 sluice_production_async_test("application_runtime_test")
+
+-- E16-POST-MERGE-CORRECTIVE-1 — terminal resource destruction regressions (C1).
+-- Proves every Stopped transition first destroys Runtime-owned components via a
+-- destructor-probe backend: Constructed direct close, startup-abort close,
+-- normal-join close (exactly once), and concurrent-Constructed close-owner
+-- election. Links production sluice_async (the close authority under test).
+sluice_production_async_test("application_runtime_resource_test")
