@@ -17,12 +17,13 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 spec="$repo/spec/tla/e16_application_runtime"
-jar="${TLA2TOOLS_JAR:-$repo/tla2tools.jar}"
 workers="${TLC_WORKERS:-1}"
 
-if [[ ! -f "$jar" ]]; then
-  echo "error: tla2tools.jar not found at $jar" >&2; exit 2
-fi
+# Resolve jar via shared helper (sets TLA2TOOLS_JAR). Does NOT fall back to
+# the repo-root jar, which is not checksum-verified; use bootstrap.py instead.
+source "$here/resolve-jar.sh"
+jar="$TLA2TOOLS_JAR"
+
 if ! command -v java >/dev/null 2>&1; then
   echo "error: java not found on PATH" >&2; exit 2
 fi
@@ -133,9 +134,13 @@ expect_fail "NEG-E16-4 CloseOwner" \
   E16ApplicationRuntimeBuggyCloseOwner \
   E16ApplicationRuntimeBuggyCloseOwner.cfg AtMostOneCloseOwner neg4 || rc=1
 
-# --- Reachability scenes (R1-R16) ---
+expect_fail "NEG-E16-5 EarlyCloseBeforeDrain" \
+  E16ApplicationRuntimeBuggyCloseOwnerBeforeDrain \
+  E16ApplicationRuntimeBuggyCloseOwnerBeforeDrain.cfg Inv25StoppedAfterDrain neg5 || rc=1
+
+# --- Reachability scenes (R2,R3,R11-R15,R18) ---
 echo "--- Reachability scenes ---"
-for i in $(seq 1 16); do
+for i in 2 3 11 12 13 14 15 18; do
   # Generate a per-scene cfg with only the target NotReach invariant
   scene_cfg="$workdir/E16ApplicationRuntime.reach_r$i.cfg"
   cat > "$scene_cfg" <<EOF
@@ -146,7 +151,8 @@ CONSTANTS
     Tasks = {T0, T1}
     Callers = {C0, C1}
     MaxIO = 2
-    MaxEpoch = 8
+    E0 = E0
+    E1 = E1
     NONE = NONE
     T0 = T0
     T1 = T1

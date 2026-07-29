@@ -18,14 +18,17 @@
 *)
 EXTENDS Naturals, FiniteSets, TLC
 
-CONSTANTS Tasks, Callers, MaxIO, MaxEpoch, NONE, T0, T1, C0, C1
+CONSTANTS Tasks, Callers, MaxIO, E0, E1, NONE, T0, T1, C0, C1
 
 ASSUME
     /\ Tasks = {T0, T1}
     /\ Callers = {C0, C1}
     /\ MaxIO \in 2..3
-    /\ MaxEpoch \in Nat \ {0}
     /\ NONE \notin Tasks \cup Callers
+    /\ E0 # E1
+
+Epochs == {E0, E1}
+NextEpoch(e) == IF e = E0 THEN E1 ELSE E0
 
 VARIABLES
     runtime_state,          \* {Constructed,Starting,Running,Stopping,Draining,Stopped,StartFailed,Fatal}
@@ -38,9 +41,11 @@ VARIABLES
     group_future_terminal_count, \* 0..Len(Tasks)
     outstanding_io,         \* 0..MaxIO
     runtime_task_io_open,   \* BOOLEAN (per-task I/O capability)
-    drain_complete,         \* BOOLEAN
-    control_epoch,          \* 0..MaxEpoch (bounded)
-    observed_epoch,         \* 0..MaxEpoch (driver's last observed)
+    drain_complete,         \* BOOLEAN (monotonic in this model, also serves as history)
+    drain_required,         \* BOOLEAN (monotonic: set TRUE on StartupCommit, never reset)
+    drain_completed_once,   \* BOOLEAN (monotonic: set TRUE on PublishDrainComplete, never reset)
+    control_epoch,          \* Epochs (saturated change token, E0..E1)
+    observed_epoch,         \* Epochs (driver's last observed)
     runtime_cv_signal,      \* BOOLEAN (abstract CV notification)
     scheduler_wake_signal,  \* BOOLEAN (abstract wake handle)
     driver_state,           \* {not_started,barrier_wait,in_run_live,between_invocations,drained_wait,exiting,exited}
@@ -66,7 +71,8 @@ VARIABLES
 vars == <<runtime_state, admission_open, stop_requested, root_cancel_published,
           startup_abort_requested, admitted_count, terminal_count,
           group_future_terminal_count, outstanding_io, runtime_task_io_open,
-          drain_complete, control_epoch,
+          drain_complete, drain_required, drain_completed_once,
+          control_epoch,
           observed_epoch, runtime_cv_signal, scheduler_wake_signal,
           driver_state, driver_spawned, driver_joined, run_live_entered,
           driver_exit_requested, close_state, close_owner, resources_alive,
@@ -90,8 +96,10 @@ Init ==
     /\ outstanding_io = 0
     /\ runtime_task_io_open = FALSE
     /\ drain_complete = FALSE
-    /\ control_epoch = 0
-    /\ observed_epoch = 0
+    /\ drain_required = FALSE
+    /\ drain_completed_once = FALSE
+    /\ control_epoch = E0
+    /\ observed_epoch = E0
     /\ runtime_cv_signal = FALSE
     /\ scheduler_wake_signal = FALSE
     /\ driver_state = "not_started"
@@ -119,8 +127,16 @@ Init ==
 task_set_terminal_snapshot ==
     (~admission_open /\ admitted_count = terminal_count)
 
-(* Epoch bound guard: all epoch-incrementing actions require this. *)
-epoch_can_bump == control_epoch < MaxEpoch
+(* PublishedEpoch: saturated change-token publication.
+   When control_epoch == observed_epoch (no unobserved change), toggle the
+   token to signal a new event. When they already differ (there is already
+   an unobserved change), keep the token -- coalescing is safe because the
+   CV/signal abstracts the "at least one pending wake" condition and the
+   driver re-evaluates the full predicate. *)
+PublishedEpoch ==
+    IF control_epoch = observed_epoch
+    THEN NextEpoch(control_epoch)
+    ELSE control_epoch
 
 (* =========================================================================
    Build (already constructed in Init; Build is identity for the model)
@@ -151,7 +167,7 @@ StartBegin ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* StartBeginStopRemembered: start() when stop_requested=TRUE in Constructed
    returns canceled, state remains Constructed. *)
@@ -160,10 +176,17 @@ StartBeginStopRemembered ==
     /\ stop_requested
     /\ UNCHANGED vars
 
-(* DriverSpawn: Starting -> spawn driver thread, driver enters barrier. *)
+(* DriverSpawn: Starting -> spawn driver thread, driver enters barrier.
+   Suppressed once a startup abort is requested: the start transaction is
+   being rolled back, so we must not bring up a driver thread that the abort
+   path would then have to join while it sits at the barrier. Without this
+   guard, StartupAbortJoin's ~driver_spawned arm can fire and then DriverSpawn
+   races in afterward, leaving a live driver at "barrier_wait" while the abort
+   close destroys the scheduler (violates Inv19DriverExitBeforeDestruction). *)
 DriverSpawn ==
     /\ runtime_state = "Starting"
     /\ ~driver_spawned
+    /\ ~startup_abort_requested
     /\ close_state = "Open"
     /\ driver_spawned' = TRUE
     /\ driver_state' = "barrier_wait"
@@ -180,7 +203,7 @@ DriverSpawn ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* DriverEnterBarrier: driver at barrier waits for startup decision.
    Modeled as observation (no state change beyond driver_state). *)
@@ -194,10 +217,10 @@ StartupCommit ==
     /\ driver_spawned
     /\ ~stop_requested
     /\ ~startup_abort_requested
-    /\ epoch_can_bump
     /\ runtime_state' = "Running"
     /\ admission_open' = TRUE
-    /\ control_epoch' = control_epoch + 1
+    /\ drain_required' = TRUE
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ scheduler_wake_signal' = TRUE
     /\ UNCHANGED <<stop_requested, root_cancel_published,
@@ -211,7 +234,7 @@ StartupCommit ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* StartupSpawnFailure: driver spawn throws -> StartFailed. *)
 StartupSpawnFailure ==
@@ -230,7 +253,7 @@ StartupSpawnFailure ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* =========================================================================
    request_stop variants
@@ -253,16 +276,15 @@ RequestStopConstructed ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* RequestStopStarting: record stop + startup abort, wake barrier. *)
 RequestStopStarting ==
     /\ runtime_state = "Starting"
     /\ ~stop_requested
-    /\ epoch_can_bump
-    /\ stop_requested' = TRUE
+        /\ stop_requested' = TRUE
     /\ startup_abort_requested' = TRUE
-    /\ control_epoch' = control_epoch + 1
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ UNCHANGED <<runtime_state, admission_open, root_cancel_published,
                    admitted_count, terminal_count,
@@ -276,18 +298,17 @@ RequestStopStarting ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* RequestStopRunning: compound commit under lifecycle_mutex. *)
 RequestStopRunning ==
     /\ runtime_state = "Running"
     /\ ~stop_requested
-    /\ epoch_can_bump
-    /\ stop_requested' = TRUE
+        /\ stop_requested' = TRUE
     /\ admission_open' = FALSE
     /\ root_cancel_published' = TRUE
     /\ runtime_state' = "Stopping"
-    /\ control_epoch' = control_epoch + 1
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ scheduler_wake_signal' = TRUE
     /\ UNCHANGED <<startup_abort_requested, admitted_count, terminal_count,
@@ -300,7 +321,7 @@ RequestStopRunning ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* RequestStopIdempotent: already stopped or stop already requested. *)
 RequestStopIdempotent ==
@@ -336,13 +357,13 @@ DriverObserveStartupAbort ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* StartupAbortJoin: start owner joins driver after abort. *)
 StartupAbortJoin ==
     /\ runtime_state = "Starting"
     /\ startup_abort_requested
-    /\ driver_state = "exited"
+    /\ (driver_state = "exited" \/ ~driver_spawned)
     /\ ~driver_joined
     /\ driver_joined' = TRUE
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
@@ -358,7 +379,7 @@ StartupAbortJoin ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* StartupAbortClose: close resources after abort join. *)
 StartupAbortClose ==
@@ -383,7 +404,7 @@ StartupAbortClose ==
                    run_live_entered, driver_exit_requested,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* =========================================================================
    Admission protocol
@@ -409,17 +430,24 @@ SubmitReserve(t) ==
                    close_state, close_owner, resources_alive,
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, fatal_snapshot,
-                   task_committed, task_terminated, task_io_submitted, task_io_complete>>
+                   task_committed, task_terminated, task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
-(* SubmitGroupCommit: Group admission succeeds. Publish epoch + dual-wake. *)
+(* SubmitGroupCommit: Group admission succeeds. Publish epoch + dual-wake.
+   The commit is gated on admission_open: a reservation made while Running
+   must not commit after stop has closed admission (the task would otherwise
+   be admitted-but-never-terminatable during Draining, breaking
+   PublishDrainComplete's admitted_count = terminal_count requirement --
+   E16-Live3 hole). A reservation stranded by admission close is released by
+   SubmitRollback instead. *)
 SubmitGroupCommit(t) ==
     /\ admission_reservation_active
     /\ task_admitted[t]
-    /\ epoch_can_bump
-    /\ admission_reservation_active' = FALSE
+    /\ ~task_committed[t]
+    /\ admission_open
+        /\ admission_reservation_active' = FALSE
     /\ task_committed' = [task_committed EXCEPT ![t] = TRUE]
     /\ successful_submit_published' = TRUE
-    /\ control_epoch' = control_epoch + 1
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ scheduler_wake_signal' = TRUE
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
@@ -433,18 +461,17 @@ SubmitGroupCommit(t) ==
                    close_state, close_owner, resources_alive,
                    group_alive, scheduler_alive, io_context_alive,
                    fatal_snapshot, task_admitted, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* SubmitRollback: Group admission fails after reservation. *)
 SubmitRollback(t) ==
     /\ admission_reservation_active
     /\ task_admitted[t]
     /\ ~task_committed[t]
-    /\ epoch_can_bump
-    /\ admission_reservation_active' = FALSE
+        /\ admission_reservation_active' = FALSE
     /\ admitted_count' = admitted_count - 1
     /\ task_admitted' = [task_admitted EXCEPT ![t] = FALSE]
-    /\ control_epoch' = control_epoch + 1
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ scheduler_wake_signal' = TRUE
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
@@ -457,7 +484,7 @@ SubmitRollback(t) ==
                    close_state, close_owner, resources_alive,
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, fatal_snapshot,
-                   task_committed, task_terminated, task_io_submitted, task_io_complete>>
+                   task_committed, task_terminated, task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* SubmitSuccessPublish: full publication complete (alias for observability). *)
 SubmitSuccessPublish ==
@@ -472,12 +499,10 @@ SubmitSuccessPublish ==
 TaskBodyExit(t) ==
     /\ task_committed[t]
     /\ ~task_terminated[t]
-    /\ driver_state = "in_run_live"
-    /\ epoch_can_bump
-    /\ task_terminated' = [task_terminated EXCEPT ![t] = TRUE]
+        /\ task_terminated' = [task_terminated EXCEPT ![t] = TRUE]
     /\ terminal_count' = terminal_count + 1
     /\ runtime_task_io_open' = FALSE
-    /\ control_epoch' = control_epoch + 1
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ scheduler_wake_signal' = TRUE
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
@@ -490,7 +515,7 @@ TaskBodyExit(t) ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* GroupFuturePublish: Group Future becomes terminal after task exit. *)
 GroupFuturePublish(t) ==
@@ -510,7 +535,7 @@ GroupFuturePublish(t) ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* SubmitTaskIO: task submits I/O while body active. *)
 SubmitTaskIO(t) ==
@@ -536,7 +561,7 @@ SubmitTaskIO(t) ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_complete>>
+                   task_io_complete, drain_required, drain_completed_once>>
 
 (* CompleteTaskIO: backend completes I/O (still outstanding until reaped). *)
 CompleteTaskIO(t) ==
@@ -556,14 +581,13 @@ CompleteTaskIO(t) ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted>>
+                   task_io_submitted, drain_required, drain_completed_once>>
 
 (* ReapTaskIO: Scheduler reaps completed I/O, outstanding decrements. *)
 ReapTaskIO(t) ==
     /\ task_io_submitted[t]
     /\ task_io_complete[t]
     /\ outstanding_io > 0
-    /\ driver_state = "in_run_live"
     /\ outstanding_io' = outstanding_io - 1
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
                    root_cancel_published, startup_abort_requested,
@@ -578,7 +602,7 @@ ReapTaskIO(t) ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* =========================================================================
    Driver loop
@@ -604,13 +628,20 @@ DriverEnterRunLive ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
-(* DriverRunLiveReturn: run_live returns (invocation boundary). *)
+(* DriverRunLiveReturn: run_live returns (invocation boundary).
+   Returning to the boundary consumes the pending admission-wake signal: the
+   run_live invocation is precisely the driver's observation of the published
+   submit, so the flag is cleared here. Without this a task can be committed
+   and terminated while successful_submit_published stays TRUE, leaving the
+   driver parked at the boundary with no enabled action reaching Live1's
+   disjunction (E16-Live1 liveness hole). *)
 DriverRunLiveReturn ==
     /\ driver_state = "in_run_live"
     /\ driver_state' = "between_invocations"
     /\ observed_epoch' = control_epoch
+    /\ successful_submit_published' = FALSE
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
                    root_cancel_published, startup_abort_requested,
                    admitted_count, terminal_count,
@@ -621,10 +652,10 @@ DriverRunLiveReturn ==
                    driver_spawned, driver_joined, run_live_entered,
                    driver_exit_requested, close_state, close_owner,
                    resources_alive, group_alive, scheduler_alive,
-                   io_context_alive, successful_submit_published,
+                   io_context_alive,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* DriverEnterBoundaryWait: driver parks at boundary on CV predicate. *)
 DriverEnterBoundaryWait ==
@@ -652,14 +683,23 @@ DriverObserveEpoch ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
-(* DriverReenterRunLive: driver re-enters run_live after epoch change
-   or when there are committed but non-terminated tasks to process. *)
+(* DriverReenterRunLive: driver re-enters run_live after an epoch change, when
+   there are committed-but-non-terminated tasks to process, when a successful
+   admission wake is still pending (successful_submit_published), or when
+   completed-but-unreaped task I/O is outstanding. The pending-wake and
+   unreaped-IO disjuncts are required for E16-Live1 / E16-Live3: once a submit
+   is published (or an IO completes) the driver must take a run_live
+   invocation -- the run LiveReturn clears the flag / the in_run_live state
+   lets ReapTaskIO fire -- so the wake/IO is never stranded at the boundary
+   with all tasks terminated and epochs synchronized. *)
 DriverReenterRunLive ==
     /\ driver_state = "between_invocations"
-    /\ (control_epoch # observed_epoch \/
-        \E t \in Tasks : task_committed[t] /\ ~task_terminated[t])
+    /\ (control_epoch # observed_epoch
+        \/ (\E t \in Tasks : task_committed[t] /\ ~task_terminated[t])
+        \/ successful_submit_published
+        \/ (\E t \in Tasks : task_io_submitted[t] /\ task_io_complete[t] /\ outstanding_io > 0))
     /\ ~driver_exit_requested
     /\ ~fatal_snapshot
     /\ driver_state' = "in_run_live"
@@ -676,7 +716,7 @@ DriverReenterRunLive ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* =========================================================================
    Drain
@@ -685,9 +725,8 @@ DriverReenterRunLive ==
 (* DrainBegin: Stopping -> Draining. *)
 DrainBegin ==
     /\ runtime_state = "Stopping"
-    /\ epoch_can_bump
-    /\ runtime_state' = "Draining"
-    /\ control_epoch' = control_epoch + 1
+        /\ runtime_state' = "Draining"
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ UNCHANGED <<admission_open, stop_requested, root_cancel_published,
                    startup_abort_requested, admitted_count, terminal_count,
@@ -701,7 +740,7 @@ DrainBegin ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* PublishDrainComplete: driver publishes drain_complete at boundary. *)
 PublishDrainComplete ==
@@ -712,9 +751,9 @@ PublishDrainComplete ==
     /\ group_future_terminal_count = admitted_count
     /\ outstanding_io = 0
     /\ ~drain_complete
-    /\ epoch_can_bump
     /\ drain_complete' = TRUE
-    /\ control_epoch' = control_epoch + 1
+    /\ drain_completed_once' = TRUE
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
                    root_cancel_published, startup_abort_requested,
@@ -728,7 +767,7 @@ PublishDrainComplete ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* EnterDrainedWait: driver parks after drain_complete. *)
 EnterDrainedWait ==
@@ -749,7 +788,7 @@ EnterDrainedWait ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* =========================================================================
    Close owner / join
@@ -763,6 +802,7 @@ CloseOwnerElect(c) ==
     /\ c \in Callers
     /\ stop_requested \/ startup_abort_requested \/ runtime_state = "Fatal"
     /\ runtime_state = "Fatal" \/ outstanding_io = 0
+    /\ (drain_required => drain_complete)
     /\ close_state' = "InProgress"
     /\ close_owner' = c
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
@@ -778,20 +818,27 @@ CloseOwnerElect(c) ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* CloseWaiterObserveInProgress: other caller sees InProgress, waits. *)
 CloseWaiterObserveInProgress ==
     /\ close_state = "InProgress"
     /\ UNCHANGED vars
 
-(* RequestDriverExit: close owner requests driver exit. *)
+(* RequestDriverExit: close owner requests driver exit.
+   The normal path runs under close_state = "InProgress" (after owner
+   election). The startup-abort path is special: the start owner drives the
+   abort close directly from close_state = "Open" because startup never
+   committed and there is no elected close owner yet, but it still must ask
+   the (already-spawned) driver to exit so StartupAbortJoin can proceed.
+   Without this arm the driver can park at "drained_wait" with no enabled
+   exit request, deadlocking the startup-abort close (E16-Live2 hole). *)
 RequestDriverExit ==
-    /\ close_state = "InProgress"
+    /\ (close_state = "InProgress"
+        \/ (close_state = "Open" /\ startup_abort_requested))
     /\ ~driver_exit_requested
-    /\ epoch_can_bump
-    /\ driver_exit_requested' = TRUE
-    /\ control_epoch' = control_epoch + 1
+        /\ driver_exit_requested' = TRUE
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ UNCHANGED <<runtime_state, admission_open, stop_requested,
                    root_cancel_published, startup_abort_requested,
@@ -806,7 +853,7 @@ RequestDriverExit ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* DriverExit: driver observes exit request and exits. *)
 DriverExit ==
@@ -826,7 +873,7 @@ DriverExit ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* JoinDriver: close owner joins the driver thread.
    If driver was never spawned, join is trivially satisfied. *)
@@ -848,7 +895,7 @@ JoinDriver ==
                    io_context_alive, successful_submit_published,
                    admission_reservation_active, fatal_snapshot,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* DestroyGroup: destroy root Group. *)
 DestroyGroup ==
@@ -869,7 +916,7 @@ DestroyGroup ==
                    scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* DestroyScheduler: destroy Scheduler (after Group). *)
 DestroyScheduler ==
@@ -890,7 +937,7 @@ DestroyScheduler ==
                    group_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* DestroyIoContext: destroy AsyncIoContext (after Scheduler). *)
 DestroyIoContext ==
@@ -913,7 +960,7 @@ DestroyIoContext ==
                    group_alive, scheduler_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* PublishStopped: publish terminal state after all resources destroyed.
    If runtime was Fatal, it remains Fatal; otherwise transitions to Stopped. *)
@@ -935,7 +982,7 @@ PublishStopped ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* CloseWaiterReturn: waiter observes Closed and returns. *)
 CloseWaiterReturn ==
@@ -968,16 +1015,15 @@ ShutdownConstructed ==
                    run_live_entered, driver_exit_requested,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* ShutdownStarting: delegate to startup abort path. *)
 ShutdownStarting ==
     /\ runtime_state = "Starting"
     /\ ~startup_abort_requested
-    /\ epoch_can_bump
-    /\ startup_abort_requested' = TRUE
+        /\ startup_abort_requested' = TRUE
     /\ stop_requested' = TRUE
-    /\ control_epoch' = control_epoch + 1
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ UNCHANGED <<runtime_state, admission_open, root_cancel_published,
                    admitted_count, terminal_count,
@@ -991,18 +1037,17 @@ ShutdownStarting ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* ShutdownRunning: request_stop + drain + join path. *)
 ShutdownRunning ==
     /\ runtime_state = "Running"
     /\ ~stop_requested
-    /\ epoch_can_bump
-    /\ stop_requested' = TRUE
+        /\ stop_requested' = TRUE
     /\ admission_open' = FALSE
     /\ root_cancel_published' = TRUE
     /\ runtime_state' = "Stopping"
-    /\ control_epoch' = control_epoch + 1
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ scheduler_wake_signal' = TRUE
     /\ UNCHANGED <<startup_abort_requested, admitted_count, terminal_count,
@@ -1015,14 +1060,13 @@ ShutdownRunning ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* ShutdownStopping: proceed to drain. *)
 ShutdownStopping ==
     /\ runtime_state = "Stopping"
-    /\ epoch_can_bump
-    /\ runtime_state' = "Draining"
-    /\ control_epoch' = control_epoch + 1
+        /\ runtime_state' = "Draining"
+    /\ control_epoch' = PublishedEpoch
     /\ runtime_cv_signal' = TRUE
     /\ UNCHANGED <<admission_open, stop_requested, root_cancel_published,
                    startup_abort_requested, admitted_count, terminal_count,
@@ -1036,7 +1080,7 @@ ShutdownStopping ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* ShutdownDraining: wait for drain_complete. *)
 ShutdownDraining ==
@@ -1066,7 +1110,7 @@ ShutdownStartFailed ==
                    run_live_entered, driver_exit_requested,
                    successful_submit_published, admission_reservation_active,
                    fatal_snapshot, task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* ShutdownStopped: idempotent. *)
 ShutdownStopped ==
@@ -1093,7 +1137,7 @@ FatalTransition ==
                    group_alive, scheduler_alive, io_context_alive,
                    successful_submit_published, admission_reservation_active,
                    task_admitted, task_committed, task_terminated,
-                   task_io_submitted, task_io_complete>>
+                   task_io_submitted, task_io_complete, drain_required, drain_completed_once>>
 
 (* =========================================================================
    Next
@@ -1236,7 +1280,7 @@ Inv13CloseMonotonicity ==
 
 (* E16-Inv14: Successful submit boundary publication *)
 Inv14SubmitPublication ==
-    successful_submit_published => (control_epoch > 0)
+    successful_submit_published => (control_epoch # E0 \/ observed_epoch # E0)
 
 (* E16-Inv15: Rollback completeness (structural; encoded in SubmitRollback) *)
 Inv15RollbackComplete ==
@@ -1290,6 +1334,18 @@ Inv23JoinReturn ==
 (* E16-Inv24: Shutdown is state-dispatched (structural) *)
 Inv24ShutdownDispatched == TRUE
 
+(* E16-Inv25: Runtime that ever published Running (drain_required) must
+   have drained before Stopped. This prevents the close owner from
+   short-circuiting the drain phase: if the system was ever Running, it
+   must publish drain_complete before reaching Stopped. The guard uses
+   drain_required (set TRUE on StartupCommit) rather than driver_spawned,
+   because a startup-abort path can spawn the driver without ever reaching
+   Running (drain_required = FALSE), and that path is legitimately allowed
+   to close without drain. *)
+Inv25StoppedAfterDrain ==
+    (runtime_state = "Stopped" /\ drain_required) =>
+    drain_completed_once
+
 (* Combined invariant *)
 Inv ==
     /\ Inv1Typing
@@ -1312,6 +1368,7 @@ Inv ==
     /\ Inv21TaskIOLifetime
     /\ Inv22SafeDestructor
     /\ Inv23JoinReturn
+    /\ Inv25StoppedAfterDrain
 
 (* =========================================================================
    LIVENESS (Section 11)
@@ -1366,12 +1423,25 @@ Live1AdmissionObserved ==
             \/ runtime_state = "Fatal" \/ driver_state = "drained_wait"
             \/ driver_state = "exited"))
 
-(* E16-Live2: Stop-before-commit completes rollback *)
+(* E16-Live2: Stop-before-commit reaches a terminal/safe state.
+   A startup abort reaches "Stopped" via the start owner's rollback close,
+   OR reaches "StartFailed" when the (fallible) driver spawn fails and rolls
+   back, OR reaches "Fatal" via the modeled fail-fast transition. Per ADR §4,
+   StartFailed is a safe, caller-driven-termination state ("shutdown() in
+   Constructed/StartFailed -> Stopped, direct close") and FatalTransition is
+   enabled from any non-terminal state; both are terminal-ish, so admitting
+   them (matching the Live3 pattern: drain_complete \/ Fatal) is ADR-faithful
+   and does not weaken safety. Requiring only Stopped was unsatisfiable in
+   the presence of the modeled spawn-failure and fault paths. *)
 Live2StopBeforeCommit ==
     [](runtime_state = "Starting" /\ startup_abort_requested
-      => <>(runtime_state = "Stopped"))
+      => <>(runtime_state \in {"Stopped", "StartFailed", "Fatal"}))
 
-(* E16-Live3: Draining completes when work and I/O terminate *)
+(* E16-Live3: Draining completes when work and I/O terminate.
+   Note: Stopped is NOT a valid escape for Live3 -- if the system reaches
+   Draining, it must publish drain_complete (or hit Fatal). The
+   Inv25StoppedAfterDrain invariant separately ensures that a Runtime that
+   ever ran the driver must have drained before reaching Stopped. *)
 Live3DrainCompletes ==
     [](runtime_state = "Draining"
       => <>(drain_complete \/ runtime_state = "Fatal"))
@@ -1416,5 +1486,15 @@ NotReach_R13 == ~(runtime_state = "Stopped" /\ ~driver_spawned)
 NotReach_R14 == ~(runtime_state = "Stopped" /\ close_state = "Closed")
 NotReach_R15 == ~(startup_abort_requested /\ runtime_state = "Starting")
 NotReach_R16 == ~(\E t \in Tasks : task_terminated[t] /\ group_future_terminal_count > 0)
+
+(* R17: drain required but not complete, close owner blocked *)
+NotReach_R17 ==
+    ~(runtime_state = "Draining" /\ close_state = "Open"
+      /\ ~drain_complete /\ drain_required)
+
+(* R18: startup abort before Running commit reaches Stopped without drain *)
+NotReach_R18 ==
+    ~(startup_abort_requested /\ driver_spawned /\ ~run_live_entered
+      /\ ~drain_required /\ runtime_state = "Stopped" /\ ~drain_completed_once)
 
 =============================================================================

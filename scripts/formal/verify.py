@@ -103,6 +103,20 @@ def cmd_doctor(manifest: dict) -> int:
         print(f"FAIL  {e}")
         rc = 1
 
+    # Repo-root tla2tools.jar contamination guard.
+    # resolve-jar.sh no longer falls back to the repo-root jar, and it is
+    # gitignored, but a stale untracked copy here is the historical root cause
+    # of silent version drift (e.g. a v2.19 jar masking the locked v1.8.0).
+    # Flag its presence so it gets removed rather than silently shipped.
+    repo_jar = REPO_ROOT / "tla2tools.jar"
+    if repo_jar.is_file():
+        print(
+            f"WARN  repo-root tla2tools.jar present: {repo_jar}\n"
+            f"      this untracked jar can shadow the locked cache jar; remove it\n"
+            f"      (rm tla2tools.jar; use bootstrap.py to populate the cache)"
+        )
+        rc = 1
+
     # Manifest schema
     required_keys = {"schema_version", "toolchain", "suites"}
     missing = required_keys - set(manifest.keys())

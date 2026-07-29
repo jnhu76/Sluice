@@ -98,10 +98,10 @@ private:
 //
 // Thread safety: all public methods are safe to call from any thread except
 // drain()/join()/shutdown() which return invalid_state when called from a task
-// owned by this Runtime (detected via a thread-local execution tag; v1 seam —
-// correct for E16 v1 Evented mode where each task body runs to completion
-// within a single Fiber scheduling slice; a Fiber-local tag will replace this
-// for full multiplexing safety).
+// owned by this Runtime (detected via a Fiber-local execution tag stored in the
+// current Fiber's execution_tag_ field). Unlike thread_local, a Fiber-local tag
+// survives Fiber suspend/resume and is correct under multiplexing (one OS
+// worker runs many Fibers; a TLS guard does not follow Fiber context switches).
 // ---------------------------------------------------------------------------
 class ApplicationRuntime {
 public:
@@ -184,7 +184,7 @@ private:
     bool is_runtime_task() const noexcept;
 
     // --- Owned components (destroyed at close) ---
-    AsyncIoContext io_ctx_;
+    std::unique_ptr<AsyncIoContext> io_ctx_;
     std::unique_ptr<Scheduler> sched_;
     std::unique_ptr<Group> root_group_;
     SchedulerWakeHandle wake_handle_;
@@ -220,8 +220,14 @@ private:
     bool driver_spawned_{false};
 
     // --- Fiber-local execution identity (P1-04 worker-call detection) ---
-    // Tag value is `this`; stored as thread_local (v1 seam; see class comment).
-    static thread_local ApplicationRuntime* current_runtime_tls_;
+    // Tag value is `this`; stored in the current Fiber's execution_tag_ field
+    // so it survives Fiber suspend/resume and is correct under multiplexing.
+    // Unlike thread_local, a Fiber-local tag follows the Fiber across context
+    // switches, not the OS thread.
+    //
+    // Access helpers:
+    static void set_current_fiber_tag(ApplicationRuntime* rt) noexcept;
+    static ApplicationRuntime* current_fiber_tag() noexcept;
 };
 
 }  // namespace sluice::async

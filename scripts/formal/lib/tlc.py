@@ -183,12 +183,18 @@ def tlc_deadlocked(output: str) -> bool:
 
 
 def named_violation(output: str, name: str) -> bool:
+    """Return True when TLC reports a violation of the named property.
+
+    TLC's emitted phrasing depends on the property kind and toolchain version
+    (lock pins tla2tools v1.8.0 / 2026.07.18):
+      - safety invariant : "Invariant <Name> is violated"
+      - temporal property: "Temporal property <Name> was violated"
+    """
     import re
 
     patterns = [
         rf"Invariant {re.escape(name)} is violated",
         rf"Temporal property {re.escape(name)} was violated",
-        rf"Property {re.escape(name)} is violated",
     ]
     return any(re.search(p, output) for p in patterns)
 

@@ -14,14 +14,19 @@ namespace sluice::async {
 
 // ---------------------------------------------------------------------------
 // Fiber-local execution identity (P1-04).
-// NOTE: The ADR specifies a Fiber-local tag stored IN Fiber state (not TLS)
-// for soundness under Fiber multiplexing. This TLS implementation is the
-// initial production seam; it is correct for E16 v1 because the Runtime's
-// driver uses Evented mode where each task body runs to completion within a
-// single Fiber scheduling slice (no mid-body migration). A future Fiber-local
-// tag field will replace this for full multiplexing safety.
+// The tag is stored IN Fiber state (Fiber::execution_tag_), not thread_local,
+// so it survives Fiber suspend/resume and is correct under multiplexing.
+// These helpers access the current Fiber's tag via the Scheduler's public
+// introspection API (Scheduler::current_fiber_execution_tag()).
 // ---------------------------------------------------------------------------
-thread_local ApplicationRuntime* ApplicationRuntime::current_runtime_tls_ = nullptr;
+void ApplicationRuntime::set_current_fiber_tag(ApplicationRuntime* rt) noexcept {
+    Scheduler::set_current_fiber_execution_tag(rt);
+}
+
+ApplicationRuntime* ApplicationRuntime::current_fiber_tag() noexcept {
+    return static_cast<ApplicationRuntime*>(
+        Scheduler::current_fiber_execution_tag());
+}
 
 // ---------------------------------------------------------------------------
 // RuntimeTaskContext
@@ -74,10 +79,10 @@ Result<std::unique_ptr<ApplicationRuntime>> RuntimeBuilder::build() {
 // ---------------------------------------------------------------------------
 ApplicationRuntime::ApplicationRuntime(std::unique_ptr<AsyncBackend> backend,
                                        unsigned workers)
-    : io_ctx_(std::move(backend))
+    : io_ctx_(std::make_unique<AsyncIoContext>(std::move(backend)))
     , worker_count_(workers) {
     // Construct Scheduler borrowing io_ctx_.
-    sched_ = std::make_unique<Scheduler>(io_ctx_);
+    sched_ = std::make_unique<Scheduler>(*io_ctx_);
     // Construct root Group in Evented mode (borrows Scheduler).
     root_group_ = std::make_unique<Group>(*sched_);
     // Acquire a wake handle for external-wake capability.
@@ -103,6 +108,7 @@ ApplicationRuntime::~ApplicationRuntime() {
     // Destroy in reverse construction order: Group → Scheduler → IoContext.
     // unique_ptrs handle this automatically via member declaration order
     // (reverse of declaration): root_group_ destroyed before sched_ before io_ctx_.
+    // In Stopped state these are already null (destroyed by close_resources()).
 }
 
 // ---------------------------------------------------------------------------
@@ -206,13 +212,15 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
     // Submit to root group. Wrap the user task with terminal guard + context.
     try {
         root_group_->async([this, task = std::move(task)](CancelToken& token) mutable {
-            // Set execution identity for worker-call detection.
-            // Save/restore for nested or interleaved runtime safety.
-            auto* prev_runtime = current_runtime_tls_;
-            current_runtime_tls_ = this;
+            // Set Fiber-local execution identity for worker-call detection.
+            // Save/restore the previous tag for nested or interleaved Runtime
+            // safety. The tag is stored in the Fiber (not thread_local), so it
+            // survives Fiber suspend/resume and is correct under multiplexing.
+            auto* prev_tag = current_fiber_tag();
+            set_current_fiber_tag(this);
 
             // RuntimeTaskContext delegates I/O to io_ctx_.
-            RuntimeTaskContext ctx(io_ctx_, token);
+            RuntimeTaskContext ctx(*io_ctx_, token);
 
             // Run user task body; swallow exceptions at this boundary.
             try {
@@ -232,7 +240,7 @@ Result<void> ApplicationRuntime::submit(RuntimeTaskFn task) {
             wake_handle_.notify();
 
             // Restore previous execution identity.
-            current_runtime_tls_ = prev_runtime;
+            set_current_fiber_tag(prev_tag);
         });
     } catch (...) {
         // Group::async threw (e.g. bad_alloc from vector reserve).
@@ -512,7 +520,7 @@ void ApplicationRuntime::driver_main() {
         // between task completions) must NOT set drain_complete_ because
         // future submissions are still legal and would see a stale true.
         if (task_set_terminal_snapshot_.load(std::memory_order::acquire) &&
-            io_ctx_.outstanding() == 0 &&
+            io_ctx_->outstanding() == 0 &&
             (state_ == State::Stopping || state_ == State::Draining)) {
             drain_complete_ = true;
             runtime_cv_.notify_all();
@@ -598,16 +606,21 @@ void ApplicationRuntime::close_resources() {
     admission_closed_snapshot_.store(true, std::memory_order::release);
     root_group_.reset();
     sched_.reset();
-    // io_ctx_ is a value member destroyed in ~ApplicationRuntime. The Stopped
-    // state guarantees the driver thread is joined and no code path will use
-    // io_ctx_ after this point (Group and Scheduler are null).
+    // Destroy the AsyncIoContext (and its backend) now. The driver thread is
+    // joined and no code path will use io_ctx_ after this point. This makes
+    // Stopped truly mean "all execution resources destroyed" (P0-2), matching
+    // the ADR and the formal model.
+    io_ctx_.reset();
     state_ = State::Stopped;
     close_state_ = CloseState::Closed;
     runtime_cv_.notify_all();
 }
 
 bool ApplicationRuntime::is_runtime_task() const noexcept {
-    return current_runtime_tls_ == this;
+    // Reads the current Fiber's execution tag. If called from outside a worker
+    // thread (e.g. user thread calling drain()), current_worker() returns null
+    // and current_fiber_tag() returns nullptr ≠ this, correctly returning false.
+    return current_fiber_tag() == this;
 }
 
 }  // namespace sluice::async
