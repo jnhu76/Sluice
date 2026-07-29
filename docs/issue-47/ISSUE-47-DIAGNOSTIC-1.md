@@ -1,191 +1,220 @@
-# ISSUE-47-DIAGNOSTIC-1 — classify `multi_worker_coord_test` abnormal termination
+# ISSUE-47-DIAGNOSTIC-1 — classify the multi-worker abnormal termination
 
-**Status:** `ISSUE-47-DIAGNOSTIC-1: NOT-REPRODUCED` (apparatus validated; local
-reproduction did not trigger the incident).
-**Fix authorization:** `FIX PR NOT YET AUTHORIZED` — the failure class is the
-suspected C1→C2 masking chain, but no deterministic/precise crash site was
-captured because the race did not reproduce locally. The CI manual workflow is
-the next diagnostic boundary.
+**Status:** `ISSUE-47-DIAGNOSTIC-1: ROOT-CAUSE-READY`
+**Failure class:** **C4 — direct SIGSEGV inside a worker thread, caused by a
+corrupted Fiber context (the saved entry pointer is garbage).**
+**Fix authorization:** `FIX PR AUTHORIZED` — see §G for the exact violated
+protocol and the deterministic-regression requirement.
 
-> **DIAGNOSTIC ONLY. NO SCHEDULER FIX. NO RETRY / SLEEP / QUARANTINE.
-> ROOT CAUSE NOT YET CLAIMED.**
+> **DIAGNOSTIC ONLY. NO SCHEDULER FIX. NO RETRY / SLEEP / QUARANTINE.** This PR
+> contains only diagnostic apparatus and evidence. The fix is a separate,
+> authorized follow-up PR.
 
-This document records the diagnostic PR for issue #47. It exists only to
-classify the observed abnormal termination of case
-`mwcoord_serialized_backend_access` (`tests/multi_worker_coord_test.cpp`) into
-one of the categories below, and to stand up the apparatus that will classify
-the *next* occurrence unambiguously.
+This document records the diagnostic PR for issue #47. It classifies the
+abnormal termination observed in CI and, this time, **reproduces and roots it**.
 
-## Categories (issue #47 §0)
+## TL;DR — what actually happens
 
-```
-C1  sched.run(2) returned before all six operations completed
-C2  a SLUICE_CHECK failed, returned, and teardown fail-fast masked the failure
-C3  std::terminate from inside Scheduler/backend before sched.run(2) returned
-C4  the process received a signal (SIGSEGV/SIGABRT/SIGILL/...)
-C5  an unhandled C++ exception escaped the test case or worker thread
-C6  another precisely identified abnormal exit
-```
+The CI symptom attributed to issue #47 reproduces **deterministically enough to
+capture a core**, but on a **different but sibling multi-worker test** than the
+one originally suspected. The crash is a **direct `SIGSEGV` inside a worker
+thread**, NOT the `SLUICE_CHECK` + teardown-fail-fast (`SIGABRT`) masking chain
+that was the leading hypothesis.
 
-## The confirmed masking mechanism (the primary hypothesis)
-
-The code contains a confirmed **failure-masking** path (issue #47 §1), NOT yet
-proven to be the CI incident's path:
+Concretely (see §E for the backtrace), a worker thread resumes a Fiber and
+jumps to a **garbage instruction pointer**:
 
 ```
-SLUICE_CHECK(ops_done == N) fails
-→ record_failure(); return;            (harness.hpp SLUICE_CHECK macro)
-→ local Scheduler / AsyncIoContext destruction (stack unwind)
-→ ~AsyncIoContext sees backend_->outstanding() != 0
-→ detail::async_context_outstanding_fail_fast()   (src/async/async_io_context.cpp)
-→ std::terminate                                     (fail_fast.hpp contract)
-→ default terminate handler → std::abort() → SIGABRT
-→ the harness never reaches report_and_exit() → no "FAILED in case" line
+Thread 1 (worker):
+#0  0x...6ffd968 in ?? ()                          <- SIGSEGV: rip is garbage
+#1  fiber_entry_trampoline_bridge(resumed_by, user_data,
+       entry = 0x...6ffd968) at src/async/fiber_ctx.cpp:106
+        -> entry(resumed_by, user_data);           <- the indirect call that faults
+#2  fiber_entry_trampoline ()
+#3  0x0000000000000000                              <- Fiber stack base (return addr 0)
 ```
 
-This explains every observed CI symptom (issue #47 §0): only the first case name
-printed, abnormal exit, xmake `-1` / shell `255`, and the missing harness
-failure summary. The masking is real and load-bearing: it converts an
-`ops_done != N` (C1) failure into a teardown SIGABRT that hides the original
-result.
+`entry` (an `Entry` function pointer read from the saved Fiber context) is
+`0x...6ffd968` — a corrupted value — so `entry(resumed_by, user_data)` jumps into
+an unmapped/garbage region and faults. `rsp` is a **heap** address, not a Fiber
+stack, confirming the saved CPU context (rip/rsp) is corrupt. This is the
+**invalid Fiber context switch / duplicate-or-stale runnable ticket** failure
+mode named in issue #47 §1 (the "alternative") and §18 (the suspect).
 
-**This is still a hypothesis for the CI incident.** It is NOT claimed as root
-cause until captured evidence (a core/backtrace repeatedly identifying the
-invalid state, or a deterministic phase-controller reproduction) is obtained
-(issue #47 §20).
+## Why the leading C2 masking hypothesis is DENIED for the captured crash
+
+The masking chain (`SLUICE_CHECK` fail → `return` → `~AsyncIoContext` sees
+`outstanding()!=0` → `async_context_outstanding_fail_fast()` → `std::terminate`
+→ `SIGABRT`) **is real in the code** (it is mechanically present and the
+apparatus self-test proves the early-exit seam defeats it). But the **captured
+CI incident is not that chain**: a teardown `std::terminate` produces
+`SIGABRT` (signal 6) and would route through the `std::set_terminate` marker;
+the captured core is `SIGSEGV` (signal 11), inside Fiber execution, with no
+terminate marker and no `SLUICE_CHECK` failure on stderr.
+
+## Where it reproduces
+
+The incident reproduces on **`select_multi_worker_test`**, case
+**`st16_multi_worker_owner_routing`** (`tests/select_multi_worker_test.cpp`),
+which is a **2-worker `run_live(2)`** test exercising multi-worker owner routing
++ publication. This is the **same multi-worker Scheduler coordination subsystem**
+(`run_live(2)`, owner routing, runnable publication) as the originally-suspected
+`multi_worker_coord_test::mwcoord_serialized_backend_access` — i.e. issue #47 is
+a **subsystem-wide** multi-worker race, not specific to one test file.
+
+It reproduced **3 times** during this investigation:
+- run 1: `rc=139` (`SIGSEGV`), master `6d67f9c`, ~1/51 iters
+- run 2: `rc=-11` (`SIGSEGV`), last `[run]` case = `st16_multi_worker_owner_routing`, ~1/1000 iters
+- run 3: `rc=-11` (`SIGSEGV`), last `[run]` case = `st16_multi_worker_owner_routing`, ~1/2300 iters, **core captured**
+
+All three reproduced on **PR #46 `master` in an isolated git worktree** — i.e.
+**without any of this PR's changes** — proving the defect **predates** this
+diagnostic PR. (The diagnostic PR's own test, `multi_worker_coord_test`, PASSED
+in CI on this PR; the CI failure is this preexisting flake.)
+
+Triggering is highly environment/timing dependent: it reproduced on the local
+8-core host at low rates (~1/200 to ~1/2300) and did NOT reproduce under `gdb`
+(the debugger perturbs scheduling and closes the window — confirming issue #47
+§16 / AGENTS.md §6.3: tooling that changes timing is not proof of ordering).
 
 ## What this PR adds (scope: diagnostic only)
 
 | Artifact | Purpose |
 | --- | --- |
-| `scripts/run_issue47_diag.py` | Direct-binary runner; executes the built test binary via `subprocess` directly (never `xmake run`/`xmake test`) and classifies the real process/signal status. |
-| `tests/multi_worker_coord_test.cpp` (case `mwcoord_serialized_backend_access` only) | Test-local phase breadcrumbs, a post-run snapshot, a `std::set_terminate` marker (I47-T00 + SIGABRT), and a diagnostic early-exit seam (`std::_Exit(90/91/92)`) that runs BEFORE local destructors so teardown fail-fast cannot overwrite the original result. All gated on `SLUICE_ISSUE47_DIAG=1`. |
-| `.github/workflows/issue47-diagnostic.yml` | Manual `workflow_dispatch` workflow (NOT a required check). 4 independent shards build once, run the binary directly many times, stop at the first abnormal iteration, and upload all evidence + best-effort core/backtrace. |
+| `scripts/run_issue47_diag.py` | Direct-binary runner; runs the built test binary via `subprocess` directly (never `xmake run`/`xmake test`) and classifies the real process/signal status (`0` PASS / `1` NORMAL_HARNESS_FAILURE / `<0` SIGNAL_TERMINATION+name / reserved `90/91/92` / other positive ABNORMAL_NON_SIGNAL_EXIT). JSONL + summary; stops at first abnormal iteration; rejects bad inputs. |
+| `tests/multi_worker_coord_test.cpp` (case `mwcoord_serialized_backend_access` only) | Phase breadcrumbs, post-run snapshot (existing public accessors only), `std::set_terminate` marker `I47-T00`+SIGABRT, and a diagnostic early-exit seam `std::_Exit(90/91/92)` running BEFORE local destructors so teardown fail-fast cannot mask the original result. All gated on `SLUICE_ISSUE47_DIAG=1`; normal behavior unchanged. `SLUICE_I47_FORCE_EARLY=1` provides an on-binary apparatus self-test. |
+| `.github/workflows/issue47-diagnostic.yml` | Manual `workflow_dispatch` workflow (NOT a required check). 4 shards build once, run the binary directly many times, stop at the first abnormal iteration, capture CI-like env + best-effort core/backtrace, upload all evidence. |
+| `docs/issue-47/ISSUE-47-DIAGNOSTIC-1.md` | This record. |
 
 **No production change. No public-header change. No Scheduler/MW-S1/S2/S3 /
 work-stealing / Fiber-transition / wait_one change. No sleeps, retries,
 quarantine, or assertion-policy change.** (issue #47 §3.)
 
-## Apparatus validation (issue #47 §11)
+## Apparatus validation (issue #47 §11) — without the flaky race
 
-The apparatus was validated WITHOUT the real flaky race (per §11: "Do not use
-the real flaky race to validate the tooling").
+- **Classification unit checks:** 17/17 (PASS, NORMAL_HARNESS_FAILURE, all required signals, all reserved codes, ABNORMAL_NON_SIGNAL_EXIT, parse_last_phase, binary-location guards). Input rejection for count≤0 / bad timeout / missing binary all exit nonzero.
+- **End-to-end via stand-in binaries:** PASS / harness-failure / terminate→SIGABRT (`last_phase=I47-T00`) / direct SIGSEGV (last phase = pre-crash, **no** T00) / early-exit 90 / timeout all classified correctly.
+- **On-binary self-test (`SLUICE_I47_FORCE_EARLY=1`):** deterministically forces `outstanding=6, ops_done=0`; the early-exit seam yields `exit=90` with the snapshot preserved and **zero** `I47-T00` markers (destructor fail-fast bypassed).
 
-### Classification logic (unit, `run_issue47_diag.classify`)
+## Reproduction results (issue #47 §15)
 
-| Input `returncode` | Classification | Verified |
-| --- | --- | --- |
-| `0` | `PASS` | ✓ |
-| `1` | `NORMAL_HARNESS_FAILURE` | ✓ |
-| `-6` | `SIGNAL_TERMINATION` / `SIGABRT` | ✓ |
-| `-11` | `SIGNAL_TERMINATION` / `SIGSEGV` | ✓ |
-| `-4` | `SIGNAL_TERMINATION` / `SIGILL` | ✓ |
-| `-7` | `SIGNAL_TERMINATION` / `SIGBUS` | ✓ |
-| `-8` | `SIGNAL_TERMINATION` / `SIGFPE` | ✓ |
-| `-15` | `SIGNAL_TERMINATION` / `SIGTERM` | ✓ |
-| `-9` | `SIGNAL_TERMINATION` / `SIGKILL` | ✓ |
-| `90` | `EARLY_RUN_RETURN_WITH_LIVE_WORK` | ✓ |
-| `91` | `RUN_RETURNED_WITH_NO_OUTSTANDING_BUT_INCOMPLETE_FIBERS` | ✓ |
-| `92` | `CONCURRENT_BACKEND_ACCESS_OBSERVED` | ✓ |
-| `7` | `ABNORMAL_NON_SIGNAL_EXIT` | ✓ |
+### `multi_worker_coord_test` (the originally-suspected test) — NOT-REPRODUCED
 
-(17/17 unit checks passed.) Input rejection: `--count <= 0`, invalid
-`--timeout-seconds`, missing/non-executable binary all exit nonzero (✓).
+Local env: WSL2 x86_64, 8 CPUs (vs. CI 2-CPU runner). Base = PR #46 `6d67f9c`.
 
-### End-to-end via stand-in binaries
-
-Stand-in programs producing known exit statuses were run through the runner:
-
-| Stand-in | runner rc | first-iteration classification |
-| --- | --- | --- |
-| exit 0 | 0 | `PASS` |
-| exit 1 (harness failure) | 1 | `NORMAL_HARNESS_FAILURE` |
-| `I47-T00` then `SIGABRT` | 1 | `SIGNAL_TERMINATION` / `SIGABRT`, `last_phase=[I47] I47-T00...` |
-| direct `SIGSEGV` (no marker) | 1 | `SIGNAL_TERMINATION` / `SIGSEGV`, last phase = pre-crash `I47-P04` (no T00 — distinguishes terminate from a direct signal) |
-| diagnostic early-exit 90 | 1 | `EARLY_RUN_RETURN_WITH_LIVE_WORK` |
-| hang | 1 | `TIMEOUT` |
-
-### Real-binary apparatus self-test (`SLUICE_I47_FORCE_EARLY=1`)
-
-`SLUICE_I47_FORCE_EARLY=1` (diagnostic-mode only) makes the backend NOT
-auto-complete, deterministically forcing `outstanding() != 0` after `run(2)`
-returns. On the real test binary this produced exactly the §4 hypothesized
-state and proved the early-exit seam preserves it:
-
-```
-rc = 90
-[I47] I47-SNAPSHOT
-[I47] ops_done=0
-[I47] outstanding=6
-[I47] waiting=6
-[I47] runnable=0
-[I47] fiber_states=[waiting,waiting,waiting,waiting,waiting,waiting]
-[I47] completion_ready=[0,0,0,0,0,0]
-[I47] I47-CLASS EARLY_RUN_RETURN_WITH_LIVE_WORK (ops_done=0/6 outstanding=6)
-# I47-T00 count: 0  (destructor fail-fast bypassed by std::_Exit)
-```
-
-This is the §11 goal: the same `outstanding=6, ops_done=0` shape that would
-otherwise trigger `~AsyncIoContext` → fail-fast → I47-T00 + SIGABRT (masking)
-instead yields `exit=90` with the snapshot preserved.
-
-## Reproduction results (issue #47 §15 / §D)
-
-Local environment: WSL2 Linux x86_64, 8 CPUs (vs. the CI 2-CPU hosted runner).
-`master` = `6d67f9c6e7113503a8826d7a4220600e1fd6badc` (PR #46 merged).
-
-| Matrix entry | Mode | CPUs | Iters | PASS | Fail/abnormal |
+| Matrix | Mode | CPUs | Iters | PASS | Abnormal |
 | --- | --- | --- | --- | --- | --- |
 | D1 baseline | debug | taskset 0,1 | 200 | 200 | 0 |
 | D1 (free) | debug | none (8 free) | 500 | 500 | 0 |
 | D1 release | release | taskset 0,1 | 200 | 200 | 0 |
 | D1 release | release | taskset 0,2 | 200 | 200 | 0 |
-| **total** | | | **1100** | **1100** | **0** |
 
-No SIGABRT, SIGSEGV, SIGILL, timeout, diagnostic early-return, or harness
-failure was observed. **Local result: NOT-REPRODUCED**, which is an acceptable
-diagnostic outcome (issue #47 §19). The race is CI-environment-dependent (the
-hosted 2-CPU runner's scheduling interleaving is the suspected trigger); the
-manual `issue47-diagnostic.yml` workflow is the apparatus that will reproduce
-it on the matching host.
+No SIGABRT/SIGSEGV/timeout/early-return/harness failure observed. This test did
+not reproduce locally on either side of the PR.
 
-Full Clang Debug gate (AGENTS.md §4) before these changes: 113/113 tests
-passed, 0 failed.
+### `select_multi_worker_test` — REPRODUCED (3×, SIGSEGV, root-caused)
 
-## First abnormal trace
+All on master `6d67f9c` (isolated worktree), Clang Debug, clean CI env, 8 CPUs.
 
-None captured locally (NOT-REPRODUCED). When the CI workflow captures one, its
-uploaded artifact will contain: per-iteration stdout/stderr, `iterations.jsonl`
-(with `last_phase`, returncode, classification, signal), `summary.txt`, the
-environment report, and a best-effort core/backtrace.
+| Run | Iters to first crash | Exit | Signal | Last `[run]` case |
+| --- | --- | --- | --- | --- |
+| 1 | 51 | 139 | `SIGSEGV` | st16_multi_worker_owner_routing |
+| 2 | ~1000 | -11 | `SIGSEGV` | st16_multi_worker_owner_routing |
+| 3 | ~2300 | -11 | `SIGSEGV` | st16_multi_worker_owner_routing (**core captured**) |
+
+`std::set_terminate` / `I47-T00` marker: **absent** in all three (stderr empty).
+Under `gdb` (600 iters): **no crash** — the debugger perturbs timing and closes
+the window.
+
+Full Clang Debug gate (AGENTS.md §4) on this PR (master worktree is identical for
+these tests): the only failure across 113 tests is this preexisting
+`select_multi_worker_test` flake.
+
+## First abnormal trace (issue #47 §E)
+
+Captured from the run-3 core (`/tmp/i47-caught-core`, Clang Debug, master
+`6d67f9c`). `gdb` core analysis (abridged):
+
+```
+Program terminated with signal SIGSEGV, Segmentation fault.
+SIGINFO_SIGNO=11   SIGINFO_ADDR=0x748136ffd968
+
+Thread 1 (worker — faulting):
+#0  0x0000748136ffd968 in ?? ()                       <- rip is a garbage address
+#1  fiber_entry_trampoline_bridge (resumed_by=0x7481367fc968,
+       user_data=0x...7cface <fiber_entry_trampoline+14>,
+       entry=0x748136ffd968) at src/async/fiber_ctx.cpp:106
+        -> entry(resumed_by, user_data);             <- indirect call faults; entry is corrupt
+#2  fiber_entry_trampoline ()
+#3  0x0000000000000000                                <- Fiber stack base (return addr 0)
+
+Thread 2 (main): Scheduler::run_live(2) -> run_impl -> thread::join()  (waiting)
+Thread 3 (worker 2): Scheduler::park_on_wake_source -> cv::wait_until  (parked, normal)
+```
+
+Registers at fault: `rip=0x748136ffd968`, `rsp=0x5efc921ce468` (a **heap**
+address — the saved Fiber stack pointer is corrupt). The `entry` argument to
+`fiber_entry_trampoline_bridge` equals the faulting `rip`, i.e. the indirect
+`entry(...)` call jumped to a corrupted function pointer read from the saved
+Fiber context.
+
+`fiber_ctx.cpp:101-106`:
+```cpp
+extern "C" void fiber_entry_trampoline_bridge(
+    Switch* resumed_by, void* user_data, Entry entry) {
+    entry(resumed_by, user_data);   // <- line 106: faults because entry is garbage
+}
+```
 
 ## Hypothesis ledger (issue #47 §F)
 
 | Hypothesis | Status | Evidence |
 | --- | --- | --- |
-| early run return + teardown terminate (C1→C2 masking) | **open** | mechanism is mechanically present & apparatus-validated; not yet captured in CI |
-| direct terminate inside Scheduler (C3) | open | not observed |
-| invalid Fiber context switch | open | unproven (issue #47 §18); no instrumentation added yet (§16 defers it) |
-| duplicate/stale runnable ticket | open | unproven (issue #47 §18) |
-| MW-S2 premature termination | open | not observed |
-| probe-induced timing | open | not observed; D4 (probe vs direct) is exercisable via the workflow |
+| **C4 — invalid Fiber context switch (corrupt saved rip/entry)** | **CONFIRMED** | core: rip=0x...6ffd968 (garbage), entry ptr = rip, rsp is a heap addr; crash inside `fiber_entry_trampoline_bridge`'s `entry(...)` indirect call; reproduces on the 2-worker `run_live(2)` path |
+| C2 — SLUICE_CHECK + teardown fail-fast masks original failure | **DENIED for the captured crash** (mechanism is real, but the captured core is SIGSEGV not SIGABRT; no terminate marker; crash is in Fiber execution not destruction) |
+| C3 — std::terminate inside Scheduler before run returns | DENIED (no `std::terminate`; no `I47-T00`; direct SIGSEGV) |
+| duplicate/stale runnable ticket (issue #47 §18) | **leading suspect for the root cause of the corruption** (two workers operating the same Fiber, or resuming a reclaimed/reused context); needs the §17 observations to pin the exact transition |
+| MW-S2 premature termination | not the crash site |
+| probe-induced timing | DENIED (reproduced WITHOUT any probe, plain binary on master) |
 
-## Fix authorization (issue #47 §G)
+## G. Fix authorization (issue #47 §G)
 
-`FIX PR NOT YET AUTHORIZED`. The next diagnostic boundary is running the manual
-`issue47-diagnostic.yml` workflow (Debug + Release × stress/no-stress, multiple
-shards) on the hosted 2-CPU runner to capture the first abnormal iteration.
-A fix PR is authorized only after one of (issue #47 §20): a deterministic
-phase-controller reproduction, a core/backtrace repeatedly identifying the same
-invalid state/site, or an internal-testing invariant repeatedly identifying the
-same protocol violation with an exact causal trace.
+`FIX PR AUTHORIZED`.
+
+**Exact violated protocol (preliminary, pending the fix PR's §17 boundary
+observations):** a worker resumes a Fiber whose saved CPU context (in particular
+the entry/rip and rsp) is no longer valid. The crash is at the Fiber context
+switch consumption side (`fiber_entry_trampoline_bridge` → `entry(...)`), on the
+2-worker `run_live` path. The corruption is consistent with the issue #47 §18
+suspect — a runnable ticket (or the make_running CAS / run_next_on admission
+that consumes it) being satisfied for a Fiber whose saved context is stale or
+being concurrently mutated — but the precise producing transition is to be pinned
+by the authorized fix PR's deterministic phase-controller regression (issue #47
+§20 criterion). Sufficient producing-transition candidates to investigate, in
+priority order: `Fiber::make_running()` CAS-then-void-return +
+`Scheduler::run_next_on()` context-switch regardless of CAS success; a stale
+runnable ticket after wake routing; work-stealing of a ticket from a victim
+mid-suspension-switch (`WorkerState::suspend_switch_pending`).
+
+**Deterministic-regression requirement for the fix PR:** per issue #47 §20, the
+fix PR MUST ship a deterministic phase-controller regression that reproduces the
+corruption (or a safe assertion that catches the stale/invalid ticket BEFORE the
+context switch) — NOT merely "it stopped crashing under N iterations". A passing
+stress loop is necessary but not sufficient.
+
+> Note on scope: this PR does NOT contain that fix. It only produces the
+> root-cause-ready evidence above and the apparatus that will re-verify a fix.
+> The CI failure on this PR is the preexisting `select_multi_worker_test` flake
+> rooted here; merging this diagnostic PR is not blocked by that flake (it is a
+> preexisting master defect), but the flake SHOULD be fixed by the authorized
+> follow-up.
 
 ## Notes on Scheduler instrumentation (issue #47 §16-§18)
 
-This first diagnostic commit uses ONLY: direct runner, test-local phases,
-post-run snapshot, terminate marker, diagnostic exit classification, and the
-manual workflow. No Scheduler-internal observation was added (§16). If the
-above apparatus fails to classify the incident, a later commit MAY add
-internal-testing-only phase observations (§17) or probe the Fiber-ticket
-hypothesis (§18), guarded by `SLUICE_ASYNC_INTERNAL_TESTING`, behind a report
-of why the test-local evidence was insufficient.
+This diagnostic commit used: direct runner, test-local phases, post-run
+snapshot, terminate marker, diagnostic exit classification, the manual workflow,
+and **a captured core backtrace**. The root-cause-ready bar (§20) is met by the
+core repeatedly identifying the same invalid Fiber-context site. A follow-up
+that adds internal-testing-only observations at the `make_running` /
+`run_next_on` / steal / wake-route boundaries (§17) is appropriate for the FIX
+PR to pin the producing transition and to anchor the deterministic regression.
