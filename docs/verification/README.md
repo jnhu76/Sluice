@@ -72,9 +72,15 @@ Validate default stub/off path. When liburing available, also configure with
    installed headers are usable end-to-end:
    - `xmake build public_api_acceptance && xmake run public_api_acceptance`
    - `xmake build async_foundation_quickstart && xmake run async_foundation_quickstart`
-   - Future: E16 application acceptance consumer
+   - E16 application acceptance consumer:
+     `xmake build runtime_acceptance && xmake run runtime_acceptance`
+   - M1-A reference application (public-only consumer):
+     `xmake build sluice-copy` (and run as a production binary)
 2. **Unit / Component Testing** — `xmake build -g test && xmake test -v`
-   (per-slice test binaries in `tests/`).
+   (per-slice test binaries in `tests/`). M1-A added:
+   `runtime_wait_test` (Runtime cooperative Completion wait),
+   `sluice_copy_integration_test` (real-file copy),
+   `sluice_copy_fault_test` (FakeAsyncBackend fault injection).
 3. **Mutation Testing** — manual targeted mutation evidence was completed for
    E15; automated repository-wide mutation tooling is planned.
 4. **Code Quality Analysis** — `clang-tidy`, `.clang-format`, `.clang-tidy`.
