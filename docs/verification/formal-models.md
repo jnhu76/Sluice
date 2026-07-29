@@ -30,6 +30,7 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 | e12-rwlock | E12 RwLock | `spec/tla/e12_rwlock/` | `scripts/formal/verify-async-rwlock.sh` |
 | e13-select-core | E13 Select Core | `spec/tla/e13_select/` | `scripts/formal/verify-e13-select-core.sh` |
 | e13-select-safety | E13 Select Safety | `spec/tla/e13_select/` | `scripts/formal/verify-e13-select-safety.sh` |
+| e16-application-runtime | E16 Application Runtime | `spec/tla/e16_application_runtime/` | `scripts/formal/verify-e16-application-runtime.sh` |
 
 ## Requirements
 

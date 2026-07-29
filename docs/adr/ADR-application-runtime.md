@@ -1,8 +1,8 @@
 # ADR: Application Runtime Architecture
 
 ```text
-Status: Proposed
-Date: 2026-07-27
+Status: Accepted
+Date: 2026-07-29
 Baseline SHA: ba7eb62563ca7c8af19e264ddb05a5a88a2fd7a7
 Supersedes: none
 Superseded by: none
@@ -727,11 +727,14 @@ are optional product decisions. Resolved (no longer open):
 ## 17. Implementation authorization
 
 ```text
-E16 production implementation remains unauthorized.
-Authorization requires:
-  - an accepted ADR (currently Proposed);
-  - the required TLA+ lifecycle model existing and passing (MODEL_REQUIRED, §15, P2-03);
-  - an independent design review with no open P0/P1 or mandatory-contract findings.
+E16 production implementation is authorized.
+Prerequisites satisfied:
+  - ADR accepted (2026-07-29);
+  - TLA+ lifecycle model passing (spec/tla/e16_application_runtime/):
+    safety (Inv1-Inv23), liveness (Live5), wide-domain, 4 negative CEX,
+    16 reachability witnesses;
+  - verifier: scripts/formal/verify-e16-application-runtime.sh;
+  - manifest entry: spec/tla/manifest.json (e16-application-runtime).
 ```
 
 ## 18. References

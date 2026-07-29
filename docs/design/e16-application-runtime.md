@@ -2444,11 +2444,12 @@ If authorized, implementation would proceed in order:
 ## 28. Implementation authorization status
 
 ```text
-E16 production implementation remains unauthorized.
-Authorization requires:
-  - an accepted ADR (currently Proposed);
-  - the required TLA+ lifecycle model existing and passing (MODEL_REQUIRED, P2-03);
-  - an independent design review with no open P0/P1 or mandatory-contract findings.
+E16 production implementation is authorized (ADR Accepted 2026-07-29).
+Prerequisites satisfied:
+  - ADR accepted: docs/adr/ADR-application-runtime.md;
+  - TLA+ lifecycle model passing: spec/tla/e16_application_runtime/;
+  - verifier: scripts/formal/verify-e16-application-runtime.sh;
+  - manifest entry: spec/tla/manifest.json (e16-application-runtime).
 ```
 
 ## 29. Evidence index

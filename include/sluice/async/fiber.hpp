@@ -111,11 +111,23 @@ public:
     CancelToken& cancel_token() noexcept { return token_; }
     CancelState& cancel_state() noexcept { return cstate_; }
 
+    // ---- Execution-identity tag (E16 P0-1) ----
+    //
+    // An opaque tag stored IN Fiber state (not thread_local). The Application
+    // Runtime task wrapper sets this to `this` (the Runtime*) around user task
+    // code so that is_runtime_task() can detect lifecycle calls from inside a
+    // Runtime-owned task. Unlike a thread_local guard, this tag survives Fiber
+    // suspend/resume and is correct under Fiber multiplexing (one OS worker
+    // runs many Fibers; a TLS guard does not follow Fiber context switches).
+    void* execution_tag() const noexcept { return execution_tag_; }
+    void set_execution_tag(void* tag) noexcept { execution_tag_ = tag; }
+
 private:
     std::atomic<FiberState> state_{FiberState::created};
     Entry entry_{};
     CancelToken token_{};
     CancelState cstate_{};
+    void* execution_tag_{nullptr};
 public:
     // The fiber's saved CPU context (sp/fp/pc). Filled by fiber_ctx::init_context
     // before the first run; updated by context_switch each time the fiber

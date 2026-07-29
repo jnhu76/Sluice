@@ -1348,3 +1348,65 @@ All stats structs are caller-owned, default-initialized to zero, and attached vi
 | `VectorStats` | read_vec/write_vec calls, bytes, fallback counts |
 | `SyncStats` | sync_data/sync_all calls and errors |
 | `UringStats` | Experimental io_uring queue/submit/completion counts |
+
+---
+
+## Application Runtime (E16)
+
+Builder-constructed, one-shot, injected-backend application lifecycle layer.
+Owns `AsyncIoContext`, `Scheduler`, root `Group`, root cancellation, and a
+single dedicated driver thread. ADR: `docs/adr/ADR-application-runtime.md`.
+
+### `sluice::async::RuntimeBuilder`
+
+```cpp
+class RuntimeBuilder {
+public:
+    RuntimeBuilder& backend(std::unique_ptr<AsyncBackend> b);
+    RuntimeBuilder& workers(unsigned n);
+    Result<std::unique_ptr<ApplicationRuntime>> build();
+};
+```
+
+### `sluice::async::ApplicationRuntime`
+
+Non-copyable, non-movable. Constructed on the heap via `RuntimeBuilder::build()`.
+
+```cpp
+class ApplicationRuntime {
+public:
+    Result<void> start();
+    Result<void> submit(RuntimeTaskFn task);
+    void request_stop() noexcept;
+    Result<void> drain();
+    Result<void> join();
+    Result<void> shutdown();
+    ~ApplicationRuntime();
+};
+```
+
+| Method | Legal states | Returns on illegal state |
+|--------|-------------|-------------------------|
+| `start()` | Constructed | `invalid_state` (or `canceled` if stop remembered) |
+| `submit()` | Running (admission open) | `invalid_state` |
+| `request_stop()` | Any (idempotent, noexcept) | — |
+| `drain()` | Stopping, Draining | `invalid_state` (also from a Runtime task) |
+| `join()` | After drain_complete | `invalid_state` (also from a Runtime task) |
+| `shutdown()` | Any (state-dispatched) | `invalid_state` from a Runtime task |
+
+### `sluice::async::RuntimeTaskContext`
+
+Restricted, non-owning task execution context. Valid only during one
+`RuntimeTaskFn` invocation.
+
+```cpp
+class RuntimeTaskContext {
+public:
+    CancelToken& cancel_token() noexcept;
+    Result<void> submit_read(ReadOp op, Completion<std::size_t>& c);
+    Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
+    Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
+    Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
+};
+using RuntimeTaskFn = std::function<void(RuntimeTaskContext&)>;
+```

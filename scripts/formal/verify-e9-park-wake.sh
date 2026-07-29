@@ -13,12 +13,13 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 spec="$repo/spec/tla/e9_park_wake"
-jar="${TLA2TOOLS_JAR:-$repo/tla2tools.jar}"
 workers="${TLC_WORKERS:-1}"
 
-if [[ ! -f "$jar" ]]; then
-  echo "error: tla2tools.jar not found at $jar" >&2; exit 2
-fi
+# Resolve jar via shared helper (sets TLA2TOOLS_JAR). Does NOT fall back to
+# the repo-root jar, which is not checksum-verified; use bootstrap.py instead.
+source "$here/resolve-jar.sh"
+jar="$TLA2TOOLS_JAR"
+
 if ! command -v java >/dev/null 2>&1; then
   echo "error: java not found on PATH" >&2; exit 2
 fi

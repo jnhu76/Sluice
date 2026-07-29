@@ -938,6 +938,24 @@ public:
         return w ? w->id : static_cast<unsigned>(-1);
     }
 
+    // E16 P0-1: read the execution-identity tag from the current Fiber (or
+    // nullptr if not inside a Fiber body). Unlike thread_local, this tag
+    // survives Fiber suspend/resume. The ApplicationRuntime task wrapper
+    // stores its `this` pointer here to detect worker-call detection.
+    static void* current_fiber_execution_tag() {
+        WorkerState* w = current_worker();
+        return w ? w->current ? w->current->execution_tag() : nullptr : nullptr;
+    }
+
+    // E16 P0-1: write the execution-identity tag on the current Fiber.
+    // Safe to call only from within a Fiber body (g_worker must be valid).
+    static void set_current_fiber_execution_tag(void* tag) {
+        WorkerState* w = current_worker();
+        if (w && w->current) {
+            w->current->set_execution_tag(tag);
+        }
+    }
+
     // E8 diagnostic (§12): the CURRENT execution owner of `f`, or nullptr if
     // `f` has not been spawned/assigned. Test/DEBUG only — do not make
     // runtime policy depend on this. Returns the WorkerState* that owns `f`
