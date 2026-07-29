@@ -138,7 +138,7 @@ expect_fail "NEG-E16-5 EarlyCloseBeforeDrain" \
   E16ApplicationRuntimeBuggyCloseOwnerBeforeDrain \
   E16ApplicationRuntimeBuggyCloseOwnerBeforeDrain.cfg Inv25StoppedAfterDrain neg5 || rc=1
 
-# --- Reachability scenes (R2,R3,R11-R15,R18) ---
+# --- Reachability scenes (R2,R3,R11-R15,R17,R18) ---
 echo "--- Reachability scenes ---"
 for i in 2 3 11 12 13 14 15 18; do
   # Generate a per-scene cfg with only the target NotReach invariant

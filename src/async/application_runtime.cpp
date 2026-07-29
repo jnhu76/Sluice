@@ -105,10 +105,9 @@ ApplicationRuntime::~ApplicationRuntime() {
     if (driver_thread_.joinable()) {
         driver_thread_.join();
     }
-    // Destroy in reverse construction order: Group → Scheduler → IoContext.
-    // unique_ptrs handle this automatically via member declaration order
-    // (reverse of declaration): root_group_ destroyed before sched_ before io_ctx_.
-    // In Stopped state these are already null (destroyed by close_resources()).
+    // Remaining members (root_group_, sched_, io_ctx_) are already null
+    // if close_resources() was called; otherwise they destroy normally in
+    // reverse declaration order via ~unique_ptr.
 }
 
 // ---------------------------------------------------------------------------
@@ -598,22 +597,35 @@ void ApplicationRuntime::recompute_task_set_terminal_locked() {
 }
 
 void ApplicationRuntime::close_resources() {
-    // Destroy in reverse order: Group → Scheduler → IoContext.
-    // The backend destructor joins backend workers.
-    std::lock_guard lk(lifecycle_mtx_);
-    // Close admission so no new tasks can be submitted post-close (P0-1 fix).
-    admission_open_ = false;
-    admission_closed_snapshot_.store(true, std::memory_order::release);
-    root_group_.reset();
-    sched_.reset();
-    // Destroy the AsyncIoContext (and its backend) now. The driver thread is
-    // joined and no code path will use io_ctx_ after this point. This makes
-    // Stopped truly mean "all execution resources destroyed" (P0-2), matching
-    // the ADR and the formal model.
-    io_ctx_.reset();
-    state_ = State::Stopped;
-    close_state_ = CloseState::Closed;
-    runtime_cv_.notify_all();
+    // Transfer ownership of Group, Scheduler, and IoContext to local variables
+    // under the lock, then destroy them OUTSIDE the lock. The Group and
+    // Scheduler destructors may join workers or trigger completion paths that
+    // acquire lifecycle_mtx_ — holding the mutex during destruction would
+    // self-deadlock (review finding).
+    std::unique_ptr<Group> group;
+    std::unique_ptr<Scheduler> sched;
+    std::unique_ptr<AsyncIoContext> io_ctx;
+    {
+        std::lock_guard lk(lifecycle_mtx_);
+        // Close admission so no new tasks can be submitted post-close.
+        admission_open_ = false;
+        admission_closed_snapshot_.store(true, std::memory_order::release);
+        group = std::move(root_group_);
+        sched = std::move(sched_);
+        io_ctx = std::move(io_ctx_);
+    }
+    // Destroy outside the lock (reverse construction order: Group → Scheduler
+    // → IoContext). The backend destructor joins backend workers here.
+    group.reset();
+    sched.reset();
+    io_ctx.reset();
+    // Re-acquire to publish Stopped / Closed and wake waiters.
+    {
+        std::lock_guard lk(lifecycle_mtx_);
+        state_ = State::Stopped;
+        close_state_ = CloseState::Closed;
+        runtime_cv_.notify_all();
+    }
 }
 
 bool ApplicationRuntime::is_runtime_task() const noexcept {
