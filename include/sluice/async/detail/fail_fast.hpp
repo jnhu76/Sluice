@@ -128,4 +128,24 @@ inline void require_evented_supported(bool supported) noexcept {
 // targets on x86_64. Defined out-of-line in fail_fast.cpp.
 bool evented_admission_check() noexcept;
 
+// I47-F3: invalid runnable-ticket consumption fail-fast. Called from
+// run_next_on when make_running() fails (the Fiber is NOT in Runnable state).
+// A worker that consumes a ticket whose Fiber is not Runnable would enter an
+// invalid context (rsp/rbp/rip not saved). This is process-fatal: the
+// invariant violation means the suspend-switch authority protocol was breached.
+//
+// Same contract as the other fail-fast entries: [[noreturn]] noexcept, no
+// allocation / locking / I/O / dynamic string, no state recovery, ultimately
+// std::terminate(). No parameter (the operation is known only to the caller).
+[[noreturn]] void scheduler_invalid_runnable_ticket_fail_fast() noexcept;
+
+// I47-F2: invalid suspend transition fail-fast. Called from
+// commit_suspend_locked when make_waiting() fails (the Fiber is NOT Running).
+// A Fiber that cannot transition Running->Waiting is in an impossible protocol
+// state: the caller believed it was the current Running Fiber, but the state
+// machine disagrees. Process-fatal.
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void scheduler_invalid_suspend_transition_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

@@ -21,21 +21,25 @@ bool Fiber::make_runnable() noexcept {
                                           std::memory_order::acq_rel);
 }
 
-void Fiber::make_running() noexcept {
-    // Lawful from runnable only. A CAS documents the transition; if it fails
-    // (e.g. a concurrent wakeup raced the fiber to waiting), the worker must
-    // not run it. E4's scheduler treats a failed CAS as "lost the race, put it
-    // back / pick another".
+bool Fiber::make_running() noexcept {
+    // Lawful from runnable only. Returns true ONLY when the transition actually
+    // occurred (runnable->running). I47-F3: the caller (run_next_on) MUST check
+    // this return value and fail-fast on failure — a silent no-op would allow
+    // context-switching into an invalid Fiber context.
     FiberState expected = FiberState::runnable;
-    (void)state_.compare_exchange_strong(expected, FiberState::running,
-                                         std::memory_order::acq_rel);
+    return state_.compare_exchange_strong(expected, FiberState::running,
+                                          std::memory_order::acq_rel);
 }
 
-void Fiber::make_waiting() noexcept {
+bool Fiber::make_waiting() noexcept {
     // Lawful from running only (the fiber's own entry suspends itself).
+    // Returns true ONLY when the transition actually occurred (running->waiting).
+    // I47-F2: the caller (commit_suspend_locked) MUST check this return value
+    // and fail-fast on failure — a silent no-op would strand the Fiber in an
+    // inconsistent state.
     FiberState expected = FiberState::running;
-    (void)state_.compare_exchange_strong(expected, FiberState::waiting,
-                                         std::memory_order::acq_rel);
+    return state_.compare_exchange_strong(expected, FiberState::waiting,
+                                          std::memory_order::acq_rel);
 }
 
 void Fiber::make_done() noexcept {

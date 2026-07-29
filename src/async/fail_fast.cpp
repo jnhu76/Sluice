@@ -61,6 +61,19 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// I47-F3: invalid runnable-ticket consumption. run_next_on consumed a ticket
+// whose Fiber was NOT Runnable (make_running failed). A thief or owner resumed
+// a Fiber whose CPU context was not saved. Process-fatal invariant violation.
+[[noreturn]] void scheduler_invalid_runnable_ticket_fail_fast() noexcept {
+    std::terminate();
+}
+
+// I47-F2: invalid suspend transition. commit_suspend_locked attempted
+// make_waiting on a Fiber that was NOT Running. Impossible protocol state.
+[[noreturn]] void scheduler_invalid_suspend_transition_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

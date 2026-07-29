@@ -1161,26 +1161,25 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
         // Preconditions (task §9): phase==Selecting, winner==kNoWinner, every
         // arm Registered, caller==current Fiber, caller_owner==g_worker. All
         // established by the registration transaction above (phase Selecting,
-        // no winner, every arm Registered, caller captured at admission). The
-        // lost-wake closure (task §9.1): make_waiting + phase Armed +
-        // waiting_select_count_++ all under the SAME G critical section, so a
-        // resolver that wins after G unlock but before context_switch sees the
-        // committed Waiting state and queues the caller exactly once.
-        caller->make_waiting();
+        // no winner, every arm Registered, caller captured at admission).
+        //
+        // I47-F2: unified suspend protocol. commit_suspend_locked raises
+        // suspend_switch_pending BEFORE make_waiting, both under global_mtx_.
+        // This closes the publication-before-protection window that the old
+        // P1-1 corrective left open (it raised authority AFTER G release).
+        // A resolver that wins after G unlock routes a Runnable ticket, but a
+        // thief sees suspend_switch_pending==true and refuses the steal until
+        // run_next_on clears it (scheduler-side, after the physical context
+        // switch saves the Fiber CPU context).
+        //
+        // The lost-wake closure (task §9.1): commit_suspend_locked + phase
+        // Armed + waiting_select_count_++ all under the SAME G critical section,
+        // so a resolver that wins after G unlock but before context_switch sees
+        // the committed Waiting state and queues the caller exactly once.
+        commit_suspend_locked(caller_owner, caller);
         group.set_phase(detail::GroupPhase::armed);
         ++waiting_select_count_;
     }  // ---- global_mtx_ released here ----
-
-    // P1-1 corrective (P6-C1 §9.1a): raise the suspend-switch execution
-    // authority. A resolver that wins after this point commits the caller
-    // Runnable under G and routes it onto caller_owner->local_runnable. Until
-    // the physical context_switch below saves the caller's CPU context, that
-    // routed ticket is NOT safe for a thief worker to resume (its ctx is
-    // stale). try_steal observes suspend_switch_pending and refuses the steal.
-    // Set BEFORE the seam so a multi-worker test observer parked at the seam
-    // also sees the raised authority. release store pairs with try_steal's
-    // acquire load under global_mtx_.
-    caller_owner->suspend_switch_pending.store(true, std::memory_order_release);
 
     // (P6 §9) select_suspend_before_switch seam: AFTER G is released,
     // BEFORE the physical context_switch. A coordinator thread can resolve the
@@ -1199,15 +1198,12 @@ SelectResult Scheduler::select_admit(detail::SelectCaseDescriptor* descs,
     s.new_ = &caller_owner->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
     // ---- Control resumes here when a resolver publishes + routes the caller ----
-
-    // P1-1 corrective (P6-C1 §9.1b): the physical context_switch has returned
-    // control to the scheduler continuation, so the caller's CPU context is now
-    // saved. Drop the suspend authority UNCONDITIONALLY (the switch completed
-    // regardless of whether a resolver raced it). This must run BEFORE the
-    // resume validation block reacquires G, and BEFORE any subsequent suspend
-    // cycle of this worker would re-raise it. A future steal of this fiber (on
-    // a later suspend cycle) is no longer blocked.
-    caller_owner->suspend_switch_pending.store(false, std::memory_order_release);
+    //
+    // I47-F2: suspend_switch_pending is cleared by run_next_on on the SCHEDULER
+    // continuation (after the physical context switch saves the Fiber CPU
+    // context). The old P1-1 corrective cleared it HERE on the Fiber
+    // continuation, which left a window where a thief could steal before the
+    // save. That clear is now REMOVED — run_next_on is the single clear point.
 
     // (P6 §10) Resume + ConsumeResult path. Reacquire global_mtx_ and validate
     // the published result before reading it.

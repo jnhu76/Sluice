@@ -145,6 +145,15 @@ enum class PhaseTag : unsigned char {
     // via the synthetic failure-injection seam; absent in production.
     select_rollback_aborted,
 
+    // I47-F1: generic suspension phase seam. Fired AFTER wait registration is
+    // committed + suspend authority raised + Fiber state Waiting + global_mtx_
+    // released, BEFORE the physical Fiber->Scheduler context_switch. Available
+    // on ALL suspension paths (Completion, ready flag, WaitQueue, deadline).
+    // A coordinator thread can resolve the wait (Event::set / wake) and prove
+    // the suspend-before-switch authority window is closed: a thief cannot
+    // steal the routed ticket while suspend_switch_pending is active.
+    scheduler_suspend_before_physical_switch,
+
     count
 };
 

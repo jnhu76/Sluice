@@ -1108,6 +1108,30 @@ private:
     void run_impl(unsigned worker_count, RunMode mode);
     void run_next_on(WorkerState* ws, Fiber* fiber);
 
+    // I47-F2: unified suspend-switch authority protocol. Centralizes the
+    // suspend authority raise + Fiber Running->Waiting transition that EVERY
+    // suspension path MUST perform under global_mtx_ BEFORE releasing it.
+    //
+    // Precondition: global_mtx_ is held; fiber is ws->current (Running); the
+    // wait registration is committed; inline-ready/terminal recheck has ruled
+    // out early return.
+    //
+    // Required ordering (closes the suspend-before-switch race):
+    //   1. ws->suspend_switch_pending.store(true, release)  — raise authority
+    //   2. fiber->make_waiting()                            — Running->Waiting
+    //
+    // Because resolver paths require global_mtx_, no resolver may publish a
+    // Runnable ticket between Waiting publication and suspend authority
+    // publication. A thief observing the routed ticket under global_mtx_ sees
+    // suspend_switch_pending==true and refuses the steal until run_next_on
+    // clears it (scheduler-side, after the physical context switch saves the
+    // Fiber CPU context).
+    //
+    // Fails fast (scheduler_invalid_suspend_transition_fail_fast) if
+    // make_waiting() returns false (impossible protocol state).
+    void commit_suspend_locked(WorkerState* ws, Fiber* fiber)
+        SLUICE_REQUIRES(global_mtx_);
+
     // E8: try to steal one runnable Fiber from another worker's local_runnable
     // to `thief`. Returns true if a Fiber was stolen (and now sits on
     // thief->local_runnable with ownership transferred). Called WITHOUT

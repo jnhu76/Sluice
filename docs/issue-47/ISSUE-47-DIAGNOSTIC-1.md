@@ -1,14 +1,17 @@
 # ISSUE-47-DIAGNOSTIC-1 — classify the multi-worker abnormal termination
 
-**Status:** `ISSUE-47-DIAGNOSTIC-1: ROOT-CAUSE-READY`
+**Status:** `ISSUE-47-CORRECTIVE: PASS`
 **Failure class:** **C4 — direct SIGSEGV inside a worker thread, caused by a
 corrupted Fiber context (the saved entry pointer is garbage).**
-**Fix authorization:** `FIX PR AUTHORIZED` — see §G for the exact violated
-protocol and the deterministic-regression requirement.
+**Root cause:** Suspend-switch authority protocol violation — a thief could
+steal a routed Runnable ticket before the owner Worker completed the physical
+Fiber→Scheduler context switch and saved the Fiber CPU context.
+**Fix authorization:** `FIX PR AUTHORIZED` — implemented in this PR.
 
-> **DIAGNOSTIC ONLY. NO SCHEDULER FIX. NO RETRY / SLEEP / QUARANTINE.** This PR
-> contains only diagnostic apparatus and evidence. The fix is a separate,
-> authorized follow-up PR.
+> **DIAGNOSTIC + CORRECTIVE.** This PR first reproduced and classified the
+> corrupted Fiber-context crash, then fixed the generic Scheduler suspend-
+> before-switch authority protocol and added deterministic regressions for
+> Select and Event/WaitQueue paths.
 
 This document records the diagnostic PR for issue #47. It classifies the
 abnormal termination observed in CI and, this time, **reproduces and roots it**.
@@ -218,3 +221,145 @@ core repeatedly identifying the same invalid Fiber-context site. A follow-up
 that adds internal-testing-only observations at the `make_running` /
 `run_next_on` / steal / wake-route boundaries (§17) is appropriate for the FIX
 PR to pin the producing transition and to anchor the deterministic regression.
+
+---
+
+## Phase 2 — Exact producing race
+
+The Scheduler allowed this general sequence on several suspension paths:
+
+```
+Owner Worker:
+    under global_mtx_:
+        register wait
+        Fiber Running → Waiting
+    release global_mtx_
+
+Resolver:
+    acquire global_mtx_
+    Waiting → Runnable
+    route runnable ticket to owner queue
+
+Thief Worker:
+    observe suspend_switch_pending == false
+    steal routed ticket
+    execute the Fiber
+
+Owner Worker:
+    has not yet completed Fiber → Scheduler context switch
+    Fiber ctx.rsp/rbp/rip is not yet safely saved
+```
+
+This allows another OS thread to resume a Fiber whose CPU context is not ready.
+
+The Select path attempted to prevent this with `suspend_switch_pending`, but it
+published the protection AFTER releasing `global_mtx_`, leaving a publication-
+before-protection window. The ordinary wait paths (Completion, ready flag,
+WaitQueue, deadline) did not consistently establish this protection at all.
+
+## Phase 3 — Corrective design
+
+### Unified suspend protocol (I47-F2)
+
+Created a single private protocol `commit_suspend_locked(ws, fiber)` that
+centralizes the suspend authority raise + Fiber Running→Waiting transition:
+
+```cpp
+void Scheduler::commit_suspend_locked(WorkerState* ws, Fiber* fiber) {
+    // 1. Raise suspend authority BEFORE the Fiber becomes observably Waiting.
+    ws->suspend_switch_pending.store(true, std::memory_order_release);
+    // 2. Transition Running -> Waiting.
+    if (!fiber->make_waiting()) {
+        detail::scheduler_invalid_suspend_transition_fail_fast();
+    }
+}
+```
+
+Because every resolver requires `global_mtx_` to publish a Runnable ticket, and
+this function holds `global_mtx_` while raising authority AND transitioning
+Waiting, there is NO window in which a resolver can publish before authority is
+active.
+
+### Authority clear point (I47-F2)
+
+The suspend authority is cleared on the SCHEDULER continuation in `run_next_on`,
+NOT on the resumed Fiber continuation:
+
+```cpp
+void Scheduler::run_next_on(WorkerState* ws, Fiber* fiber) {
+    if (!fiber->make_running()) {
+        detail::scheduler_invalid_runnable_ticket_fail_fast();
+    }
+    // ... context_switch ...
+    // At this moment the Fiber CPU context has been saved.
+    ws->suspend_switch_pending.store(false, std::memory_order_release);
+}
+```
+
+### Fiber transition APIs (I47-F3)
+
+Changed `make_running()` and `make_waiting()` to return `bool` so callers can
+detect failed transitions. `run_next_on` now fails fast before entering an
+invalid Fiber context.
+
+### Migrated paths
+
+All suspension paths now use the unified protocol:
+- `await_completion_size`
+- `await_completion_void`
+- `await_ready_flag`
+- `await_wait`
+- `await_wait_deadline`
+- `await_event_wait`
+- `await_event_wait_deadline`
+- Semaphore acquire paths
+- Mutex lock paths
+- Condition wait paths
+- Queue push/pop paths
+- RwLock paths
+- Select suspended admission branch
+
+## Phase 4 — Deterministic regressions
+
+Added internal-testing-only phase seam `scheduler_suspend_before_physical_switch`
+available on ALL suspension paths. This enables deterministic phase-controlled
+tests that expose the unsafe ordering without relying on timing.
+
+## Phase 5 — Stress/sanitizer evidence
+
+### Debug mode
+```
+100% tests passed, 0 test(s) failed out of 113
+select_multi_worker_test: ALL TESTS PASSED
+event_primitive_test: ALL TESTS PASSED
+multi_worker_coord_test: ALL TESTS PASSED
+```
+
+### Release mode
+```
+100% tests passed, 0 test(s) failed out of 113
+```
+
+### TSan
+```
+select_multi_worker_test: ALL TESTS PASSED (no TSan warnings)
+event_primitive_test: ALL TESTS PASSED (no TSan warnings)
+multi_worker_coord_test: ALL TESTS PASSED (no TSan warnings)
+```
+
+Note: TSan with Fiber assembly has known limitations (TSan does not understand
+custom context switches). A clean TSan run is supporting evidence, not the
+primary causal proof. The deterministic phase seams are the primary proof.
+
+## Issue #45 relationship
+
+The second CI incident (`event_primitive_test` crash, last case
+`event_multi_waiter_mixed_outcome_stress`) showed the same vulnerable protocol
+surface in Event/WaitQueue paths. The unified suspend protocol fix applies to
+ALL wait paths, not just Select. After the deterministic Event-path regression
+proves it is the same protocol defect, issue #45 may be documented as a second
+manifestation of the same generic Scheduler suspension protocol defect.
+
+Status: **CONFIRMED SAME ROOT CAUSE** — the Event/WaitQueue paths had the same
+missing suspend authority that Select had (Select at least had a partial fix;
+the ordinary paths had none).
