@@ -1,4 +1,4 @@
-"""Sluice overnight test runner – data models.
+"""Sluice hardening test runner – data models.
 
 Pure-data types used throughout the runner.  No side effects, no I/O.
 """
@@ -67,7 +67,7 @@ VERDICT_EXIT: dict[Verdict, int] = {
 class Config:
     """Immutable runner configuration, populated from CLI + env vars."""
 
-    mode: str  # "overnight" | "smoke" | "selftest"
+    mode: str  # "hardening" | "smoke" | "selftest"
     hours: float
     phase_timeout_seconds: int
     fuzz_seconds_override: Optional[int]
@@ -102,7 +102,7 @@ class CommandSpec:
     def header_lines(self, head_sha: str, dirty: bool) -> List[str]:
         """Return the log header lines for this command."""
         lines: List[str] = []
-        lines.append("## sluice overnight command log")
+        lines.append("## sluice hardening command log")
         if self.synthetic:
             lines.append("synthetic=yes")
         lines.append(f"phase={self.phase}")
@@ -148,7 +148,7 @@ class CommandSpec:
         if sanitizer_signature:
             lines.append(f"santizer_signature={sanitizer_signature}")
         if self.synthetic:
-            lines.append("synthetic=yes (no overnight HOLD)")
+            lines.append("synthetic=yes (no hardening HOLD)")
         return lines
 
 

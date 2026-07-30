@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for the overnight runner - pure logic only.
+"""Unit tests for the hardening runner - pure logic only.
 
 These tests do NOT require xmake, clang, or any real Sluice build.
 They verify data models, classification, deadline calculation, verdict
@@ -13,19 +13,21 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from typing import List
+from unittest import mock
 
 # Ensure the package is importable.
 _SCRIPT_DIR = Path(__file__).resolve().parent.parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from overnight.model import (
+from hardening.model import (
     Classification,
     CommandResult,
     CommandSpec,
@@ -35,8 +37,12 @@ from overnight.model import (
     Verdict,
     VERDICT_EXIT,
 )
-from overnight.process import scan_sanitizer, classify_with_sanitizer
-from overnight.reporting import (
+from hardening.process import (
+    scan_sanitizer,
+    classify_with_sanitizer,
+    run_command,
+)
+from hardening.reporting import (
     write_events_jsonl,
     write_failures_jsonl,
     write_summary_txt,
@@ -45,10 +51,14 @@ from overnight.reporting import (
     write_preflight_json,
     write_environment_json,
 )
-from overnight.preflight import PreflightCheck, PreflightResult
-from overnight.cli import parse_args
-from overnight.phases import (
+from hardening.preflight import PreflightCheck, PreflightResult
+from hardening.cli import parse_args
+from hardening.phases import (
     PhaseContext,
+    TargetCacheError,
+    parse_target_list,
+    refresh_target_cache,
+    soak_next_consec_fail,
     _strip_ansi,
     _is_valid_target_token,
     _is_fuzz_artifact,
@@ -67,7 +77,7 @@ class TestConfigParsing(unittest.TestCase):
 
     def test_default_config(self):
         config = parse_args([])
-        self.assertEqual(config.mode, "overnight")
+        self.assertEqual(config.mode, "hardening")
         self.assertEqual(config.hours, 8.0)
         self.assertEqual(config.phase_timeout_seconds, 1200)
         self.assertIsNone(config.fuzz_seconds_override)
@@ -88,56 +98,56 @@ class TestConfigParsing(unittest.TestCase):
         self.assertEqual(config.hours_source, "cli")
 
     def test_hours_env(self):
-        os.environ["SLUICE_OVERNIGHT_HOURS"] = "3"
+        os.environ["SLUICE_HARDENING_HOURS"] = "3"
         try:
             config = parse_args([])
             self.assertEqual(config.hours, 3.0)
             self.assertEqual(config.hours_source, "env")
         finally:
-            del os.environ["SLUICE_OVERNIGHT_HOURS"]
+            del os.environ["SLUICE_HARDENING_HOURS"]
 
     def test_hours_cli_overrides_env(self):
-        os.environ["SLUICE_OVERNIGHT_HOURS"] = "3"
+        os.environ["SLUICE_HARDENING_HOURS"] = "3"
         try:
             config = parse_args(["--hours", "6"])
             self.assertEqual(config.hours, 6.0)
             self.assertEqual(config.hours_source, "cli")
         finally:
-            del os.environ["SLUICE_OVERNIGHT_HOURS"]
+            del os.environ["SLUICE_HARDENING_HOURS"]
 
     def test_phase_timeout_env(self):
-        os.environ["SLUICE_PHASE_TIMEOUT"] = "300"
+        os.environ["SLUICE_HARDENING_PHASE_TIMEOUT"] = "300"
         try:
             config = parse_args([])
             self.assertEqual(config.phase_timeout_seconds, 300)
         finally:
-            del os.environ["SLUICE_PHASE_TIMEOUT"]
+            del os.environ["SLUICE_HARDENING_PHASE_TIMEOUT"]
 
     def test_fuzz_override_env(self):
-        os.environ["SLUICE_FUZZ_SECONDS"] = "120"
+        os.environ["SLUICE_HARDENING_FUZZ_SECONDS"] = "120"
         try:
             config = parse_args([])
             self.assertEqual(config.fuzz_seconds_override, 120)
         finally:
-            del os.environ["SLUICE_FUZZ_SECONDS"]
+            del os.environ["SLUICE_HARDENING_FUZZ_SECONDS"]
 
     def test_keep_going_env(self):
-        os.environ["SLUICE_KEEP_GOING"] = "0"
+        os.environ["SLUICE_HARDENING_KEEP_GOING"] = "0"
         try:
             config = parse_args([])
             self.assertFalse(config.keep_going)
         finally:
-            del os.environ["SLUICE_KEEP_GOING"]
+            del os.environ["SLUICE_HARDENING_KEEP_GOING"]
 
     def test_keep_going_env_invalid(self):
-        os.environ["SLUICE_KEEP_GOING"] = "2"
+        os.environ["SLUICE_HARDENING_KEEP_GOING"] = "2"
         try:
             parse_args([])
             self.fail("Expected ValueError")
         except ValueError:
             pass
         finally:
-            del os.environ["SLUICE_KEEP_GOING"]
+            del os.environ["SLUICE_HARDENING_KEEP_GOING"]
 
     def test_negative_hours_raises(self):
         with self.assertRaises(ValueError):
@@ -296,6 +306,35 @@ class TestSanitizerScanning(unittest.TestCase):
         cls, sig = classify_with_sanitizer(77, "some output", None, False)
         self.assertEqual(cls, Classification.SKIP)
 
+    def test_kind_none_does_not_scan(self):
+        # A plain debug/baseline command (kind=None) must NOT be classified
+        # SANITIZER_FAIL just because its output contains broad text such as
+        # "runtime error:" — that text is common in ordinary application logs.
+        self.assertIsNone(
+            scan_sanitizer("runtime error: application message", None)
+        )
+        self.assertIsNone(
+            scan_sanitizer("ERROR: AddressSanitizer: heap-use-after-free", None)
+        )
+
+    def test_kind_none_classify_is_pass(self):
+        cls, sig = classify_with_sanitizer(
+            0, "runtime error: application message", None, False
+        )
+        self.assertEqual(cls, Classification.PASS)
+        self.assertIsNone(sig)
+
+    def test_unknown_kind_raises(self):
+        # An unrecognized non-empty kind is a programming error; fail loud
+        # rather than silently disabling scanning (which could mask a real
+        # sanitizer failure as a PASS).
+        with self.assertRaises(ValueError):
+            scan_sanitizer("WARNING: ThreadSanitizer", "msan")
+
+    def test_empty_log_returns_none(self):
+        self.assertIsNone(scan_sanitizer("", "tsan"))
+        self.assertIsNone(scan_sanitizer("", None))
+
 
 # ======================================================================
 # Verdict calculation tests
@@ -318,7 +357,7 @@ class TestVerdictCalculation(unittest.TestCase):
 
     def _make_ctx(self, **kwargs) -> PhaseContext:
         defaults = dict(
-            config=Config(mode="overnight", hours=8,
+            config=Config(mode="hardening", hours=8,
                           phase_timeout_seconds=1200,
                           fuzz_seconds_override=None, keep_going=True),
             project_root=Path("/tmp"), run_dir=Path("/tmp"),
@@ -331,21 +370,21 @@ class TestVerdictCalculation(unittest.TestCase):
         return PhaseContext(**defaults)
 
     def test_preflight_failure_is_environment_error(self):
-        from overnight_local import calculate_verdict
+        from hardening import calculate_verdict
         preflight = self._make_preflight(passed=False)
         ctx = self._make_ctx()
         verdict = calculate_verdict(ctx, preflight)
         self.assertEqual(verdict, Verdict.ENVIRONMENT_ERROR)
 
     def test_sticky_hold_is_hold(self):
-        from overnight_local import calculate_verdict
+        from hardening import calculate_verdict
         preflight = self._make_preflight()
         ctx = self._make_ctx(sticky_hold=True)
         verdict = calculate_verdict(ctx, preflight)
         self.assertEqual(verdict, Verdict.HOLD)
 
     def test_all_pass_is_pass(self):
-        from overnight_local import calculate_verdict
+        from hardening import calculate_verdict
         preflight = self._make_preflight()
         ctx = self._make_ctx()
         ctx.results.append(CommandResult(
@@ -363,7 +402,7 @@ class TestVerdictCalculation(unittest.TestCase):
         self.assertEqual(verdict, Verdict.PASS)
 
     def test_no_tsan_is_incomplete(self):
-        from overnight_local import calculate_verdict
+        from hardening import calculate_verdict
         preflight = self._make_preflight()
         ctx = self._make_ctx()
         ctx.stats["asanubsan"] = PhaseStats(executed=1, passed=1)
@@ -372,7 +411,7 @@ class TestVerdictCalculation(unittest.TestCase):
         self.assertEqual(verdict, Verdict.INCOMPLETE)
 
     def test_no_asan_is_incomplete(self):
-        from overnight_local import calculate_verdict
+        from hardening import calculate_verdict
         preflight = self._make_preflight()
         ctx = self._make_ctx()
         ctx.results.append(CommandResult(
@@ -452,7 +491,7 @@ class TestReporting(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.run_dir = Path(self.tmp.name)
-        self.config = Config(mode="overnight", hours=8,
+        self.config = Config(mode="hardening", hours=8,
                              phase_timeout_seconds=1200,
                              fuzz_seconds_override=None, keep_going=True)
         self.preflight = PreflightResult()
@@ -541,7 +580,7 @@ class TestReporting(unittest.TestCase):
     def test_environment_json(self):
         write_environment_json(self.run_dir, self.config, self.preflight)
         data = json.loads((self.run_dir / "environment.json").read_text())
-        self.assertEqual(data["config"]["mode"], "overnight")
+        self.assertEqual(data["config"]["mode"], "hardening")
 
 
 # ======================================================================
@@ -605,12 +644,12 @@ class TestKeepGoing(unittest.TestCase):
         self.assertTrue(config.keep_going)
 
     def test_keep_going_env_0(self):
-        os.environ["SLUICE_KEEP_GOING"] = "0"
+        os.environ["SLUICE_HARDENING_KEEP_GOING"] = "0"
         try:
             config = parse_args([])
             self.assertFalse(config.keep_going)
         finally:
-            del os.environ["SLUICE_KEEP_GOING"]
+            del os.environ["SLUICE_HARDENING_KEEP_GOING"]
 
 
 # ======================================================================
@@ -689,6 +728,320 @@ class TestExitCodeConsistency(unittest.TestCase):
         self.assertEqual(VERDICT_EXIT[Verdict.ENVIRONMENT_ERROR], 2)
         self.assertEqual(VERDICT_EXIT[Verdict.RUNNER_ERROR], 3)
         self.assertEqual(VERDICT_EXIT[Verdict.INCOMPLETE], 4)
+
+
+# ======================================================================
+# Real run_command timeout integration tests
+# ======================================================================
+
+class TestRunCommandTimeout(unittest.TestCase):
+    """Exercise the real ``run_command`` process lifecycle.
+
+    These spawn actual child processes (the current Python interpreter) and
+    assert the runner's authoritative ``timed_out`` / ``term_sent`` /
+    ``kill_sent`` fields plus bounded wall-clock duration.  They are the
+    regression guard for the silent-child timeout bug: a blocking read on the
+    child's output pipe used to stall the timeout whenever the child printed
+    nothing.
+    """
+
+    def _spec(self, log_path: Path, command: List[str], timeout: float) -> CommandSpec:
+        return CommandSpec(
+            phase="test", iteration="1", target="timeout", mode="debug",
+            command=command, timeout_seconds=timeout, log_path=log_path,
+        )
+
+    def test_silent_process_times_out_with_term_no_kill(self):
+        # A child that prints nothing and sleeps well past the timeout.  It
+        # honors the default SIGTERM action, so TERM alone ends it: no KILL.
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "silent.log"
+            spec = self._spec(
+                log_path,
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+                timeout=1.0,
+            )
+            start = time.monotonic()
+            r = run_command(spec, "abc123", False)
+            elapsed = time.monotonic() - start
+
+            self.assertEqual(r.classification, Classification.TIMEOUT)
+            self.assertTrue(r.timed_out)
+            self.assertTrue(r.term_sent)
+            self.assertFalse(r.kill_sent)
+            # Must be bounded by the timeout, not the child's 30s sleep.
+            self.assertLess(elapsed, 5.0)
+            self.assertLess(r.duration_seconds, 5.0)
+
+            # The footer must record the same authoritative actions.
+            text = log_path.read_text()
+            self.assertIn("classification=TIMEOUT", text)
+            self.assertIn("timed_out=1", text)
+            self.assertIn("term_sent=1", text)
+            self.assertIn("kill_sent=0", text)
+
+    def test_term_ignored_process_escalates_to_kill(self):
+        # A child that ignores SIGTERM must be escalated to SIGKILL after the
+        # grace period.  Patch the grace period short so the test stays fast.
+        code = (
+            "import signal, time\n"
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            "time.sleep(60)\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "ignore.log"
+            spec = self._spec(log_path, [sys.executable, "-c", code], timeout=1.0)
+            grace = 0.5
+            with mock.patch("hardening.process.KILL_AFTER_SECONDS", grace):
+                start = time.monotonic()
+                r = run_command(spec, "abc123", False)
+                elapsed = time.monotonic() - start
+
+            self.assertEqual(r.classification, Classification.TIMEOUT)
+            self.assertTrue(r.timed_out)
+            self.assertTrue(r.term_sent)
+            self.assertTrue(r.kill_sent)
+            # SIGKILL => negative signal exit code on POSIX.
+            self.assertEqual(r.exit_code, -9)
+            # Total ≈ timeout(1.0) + grace(0.5); allow generous slack but
+            # prove it is bounded (not the child's 60s sleep).
+            self.assertGreaterEqual(elapsed, 1.0 + grace - 0.2)
+            self.assertLess(elapsed, 5.0)
+
+            text = log_path.read_text()
+            self.assertIn("kill_sent=1", text)
+
+    def test_fast_process_passes_without_signals(self):
+        # A child that exits promptly must PASS with no timeout signals and a
+        # log containing its real stdout between header and footer.  The token
+        # is assembled at runtime so it cannot also appear in the header's
+        # command= line (which would defeat the ordering assertions below).
+        token = "output_token_123"
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "fast.log"
+            spec = self._spec(
+                log_path,
+                [sys.executable, "-c", "print('output_'+'token_123')"],
+                timeout=10.0,
+            )
+            r = run_command(spec, "abc123", False)
+            self.assertEqual(r.classification, Classification.PASS)
+            self.assertEqual(r.exit_code, 0)
+            self.assertFalse(r.timed_out)
+            self.assertFalse(r.term_sent)
+            self.assertFalse(r.kill_sent)
+
+            text = log_path.read_text()
+            self.assertIn(token, text)
+            self.assertIn("----- output -----", text)
+            self.assertIn("----- end output -----", text)
+            # Header must precede child output, footer must follow it.
+            self.assertLess(
+                text.index("----- output -----"),
+                text.index(token),
+            )
+            self.assertLess(
+                text.index(token),
+                text.index("----- end output -----"),
+            )
+
+    def test_spawn_failure_is_runner_error(self):
+        # A nonexistent executable is an infrastructure fault, not a test
+        # failure: it must classify as RUNNER_ERROR.
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "spawn.log"
+            spec = self._spec(
+                log_path,
+                ["/nonexistent/definitely-not-a-real-binary-xyz"],
+                timeout=5.0,
+            )
+            r = run_command(spec, "abc123", False)
+            self.assertEqual(r.classification, Classification.RUNNER_ERROR)
+            self.assertIsNone(r.exit_code)
+
+
+# ======================================================================
+# Target list parsing regression tests
+# ======================================================================
+
+class TestParseTargetList(unittest.TestCase):
+    """Regression guard for multi-column, ANSI-colored ``xmake show`` output.
+
+    The old parser validated each *line* as a single target, so real
+    multi-column output (several targets per line) was rejected wholesale and
+    the cache came back empty — silently fabricating SKIPs.
+    """
+
+    def test_exact_multicolumn_ansi_sample(self):
+        sample = (
+            "\x1b[0mtarget_a\x1b[0m    target_b    target-c\n"
+            "target.d    target_e\x1b[0m\n"
+        )
+        self.assertEqual(
+            parse_target_list(sample),
+            {"target_a", "target_b", "target-c", "target.d", "target_e"},
+        )
+
+    def test_empty_output(self):
+        self.assertEqual(parse_target_list(""), set())
+
+    def test_ansi_only_output(self):
+        self.assertEqual(parse_target_list("\x1b[0m\x1b[31m\x1b[0m\n"), set())
+
+    def test_three_column_line(self):
+        self.assertEqual(
+            parse_target_list("alpha   beta   gamma\n"),
+            {"alpha", "beta", "gamma"},
+        )
+
+    def test_illegal_tokens_ignored(self):
+        # Tokens with spaces (already split), slashes, or other invalid chars
+        # are dropped; valid neighbors on the same line survive.
+        out = "good_target   /bad/path   also-good\n"
+        self.assertEqual(parse_target_list(out), {"good_target", "also-good"})
+
+    def test_dedup_across_lines(self):
+        out = "dup_target   other\ndup_target   third\n"
+        self.assertEqual(parse_target_list(out), {"dup_target", "other", "third"})
+
+    def test_single_column_still_works(self):
+        out = "sluice_core\nsluice_async\nmulti_worker_test\n"
+        self.assertEqual(
+            parse_target_list(out),
+            {"sluice_core", "sluice_async", "multi_worker_test"},
+        )
+
+
+# ======================================================================
+# Debug-soak consecutive-failure logic tests
+# ======================================================================
+
+class TestSoakConsecFail(unittest.TestCase):
+    """Pure-logic tests for ``soak_next_consec_fail``.
+
+    A sticky failure (HOLD forever) is tracked by the caller; this function
+    only counts *consecutive unrecovered* failures to decide whether to stop
+    the soak loop early.  A failure whose retries all pass is recovered for
+    counting purposes but stays sticky.
+    """
+
+    P = Classification.PASS
+    F = Classification.FAIL
+    T = Classification.TIMEOUT
+    S = Classification.SANITIZER_FAIL
+    SKIP = Classification.SKIP
+
+    def test_pass_resets_to_zero(self):
+        self.assertEqual(soak_next_consec_fail(self.P, [], 5), 0)
+
+    def test_unrecovered_failure_increments(self):
+        # Failure reproduced by a retry (retry also failed) => unrecovered.
+        self.assertEqual(soak_next_consec_fail(self.F, [self.F], 0), 1)
+        self.assertEqual(soak_next_consec_fail(self.T, [self.T], 2), 3)
+
+    def test_failure_with_no_retries_increments(self):
+        self.assertEqual(soak_next_consec_fail(self.F, [], 1), 2)
+
+    def test_recovered_failure_resets_but_stays_sticky(self):
+        # All retries passed => not reproduced => count resets to 0.  (The
+        # sticky HOLD is the caller's responsibility and is not modeled here.)
+        self.assertEqual(soak_next_consec_fail(self.F, [self.P, self.P], 4), 0)
+
+    def test_mixed_retries_still_unrecovered(self):
+        # At least one retry failed => reproduced => unrecovered.
+        self.assertEqual(soak_next_consec_fail(self.F, [self.P, self.F], 0), 1)
+
+    def test_non_failure_kind_leaves_count_unchanged(self):
+        self.assertEqual(soak_next_consec_fail(self.SKIP, [], 3), 3)
+
+    def test_sanitizer_fail_counts(self):
+        self.assertEqual(soak_next_consec_fail(self.S, [self.S], 0), 1)
+
+
+# ======================================================================
+# Target cache infrastructure-failure tests
+# ======================================================================
+
+class TestTargetCacheError(unittest.TestCase):
+    """A target-snapshot failure must surface as TargetCacheError (=>
+    RUNNER_ERROR), never as a silent empty cache."""
+
+    def _ctx(self, run_dir: Path) -> PhaseContext:
+        return PhaseContext(
+            config=Config(mode="hardening", hours=8,
+                          phase_timeout_seconds=1200,
+                          fuzz_seconds_override=None, keep_going=True),
+            project_root=Path("/tmp"), run_dir=run_dir,
+            head_sha="x", head_short="x", worktree_dirty=False,
+            nproc=1, global_deadline=time.monotonic() + 3600,
+            final_debug_reserved=1200, sticky_hold=False,
+            baseline_ok=True, final_debug_ok=True,
+        )
+
+    def test_nonzero_exit_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            ctx = self._ctx(run_dir)
+            fake = subprocess.CompletedProcess(
+                args=["xmake", "show", "-l", "targets"],
+                returncode=1, stdout="", stderr="boom: configure failed",
+            )
+            with mock.patch("hardening.phases.subprocess.run", return_value=fake):
+                with self.assertRaises(TargetCacheError) as cm:
+                    refresh_target_cache(ctx, "tsan")
+            msg = str(cm.exception)
+            self.assertIn("mode=tsan", msg)
+            self.assertIn("returncode=1", msg)
+            self.assertIn("boom: configure failed", msg)
+            # Detail is persisted to the per-mode target file.
+            detail = (run_dir / "tsan-targets.txt").read_text()
+            self.assertIn("target snapshot failed", detail)
+            # The cache must NOT have been populated.
+            self.assertNotIn("tsan", ctx.target_cache)
+
+    def test_zero_parsed_targets_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            ctx = self._ctx(run_dir)
+            fake = subprocess.CompletedProcess(
+                args=["xmake", "show", "-l", "targets"],
+                returncode=0, stdout="\x1b[0m\n", stderr="",
+            )
+            with mock.patch("hardening.phases.subprocess.run", return_value=fake):
+                with self.assertRaises(TargetCacheError) as cm:
+                    refresh_target_cache(ctx, "asanubsan")
+            self.assertIn("parsed zero targets", str(cm.exception))
+            self.assertNotIn("asanubsan", ctx.target_cache)
+
+    def test_timeout_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            ctx = self._ctx(run_dir)
+            with mock.patch(
+                "hardening.phases.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(
+                    cmd=["xmake", "show", "-l", "targets"], timeout=60
+                ),
+            ):
+                with self.assertRaises(TargetCacheError) as cm:
+                    refresh_target_cache(ctx, "debug")
+            self.assertIn("timed out", str(cm.exception))
+
+    def test_success_populates_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            ctx = self._ctx(run_dir)
+            fake = subprocess.CompletedProcess(
+                args=["xmake", "show", "-l", "targets"],
+                returncode=0,
+                stdout="\x1b[0msluice_core\x1b[0m   sluice_async\n",
+                stderr="",
+            )
+            with mock.patch("hardening.phases.subprocess.run", return_value=fake):
+                targets = refresh_target_cache(ctx, "debug")
+            self.assertEqual(targets, {"sluice_core", "sluice_async"})
+            self.assertEqual(ctx.target_cache["debug"], targets)
+            self.assertEqual(ctx._current_cache_mode, "debug")
 
 
 if __name__ == "__main__":

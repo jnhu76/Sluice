@@ -346,7 +346,7 @@ def run_preflight(project_root: Path) -> PreflightResult:
         ))
 
     # -- 5. Filesystem --------------------------------------------------------
-    for subdir in ["overnight-artifacts", ".nightly-corpus"]:
+    for subdir in ["hardening-artifacts", ".hardening-corpus"]:
         d = project_root / subdir
         try:
             d.mkdir(parents=True, exist_ok=True)

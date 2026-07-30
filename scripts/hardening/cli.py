@@ -19,20 +19,20 @@ def parse_args(argv: Optional[List[str]] = None) -> Config:
     Priority: CLI > environment variable > default.
     """
     parser = argparse.ArgumentParser(
-        prog="overnight-local",
-        description="Sluice local overnight correctness gate (Linux + Clang).",
+        prog="hardening-local",
+        description="Sluice local hardening correctness gate (Linux + Clang).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Modes:
   (default)  Full ~8h gate (Debug soak, TSan, ASan+UBSan, libFuzzer, Final Debug).
   --smoke    One pass of every phase; each fuzz target ~10s.
-  --self-test  Controlled synthetic failures; never produces an overnight HOLD.
+  --self-test  Controlled synthetic failures; never produces an hardening HOLD.
 
 Environment overrides (CLI wins):
-  SLUICE_OVERNIGHT_HOURS   total budget hours (default 8)
-  SLUICE_PHASE_TIMEOUT     per-command timeout seconds (default 1200)
-  SLUICE_FUZZ_SECONDS      override total fuzz budget seconds
-  SLUICE_KEEP_GOING        0 = stop after current command (default 1)
+  SLUICE_HARDENING_HOURS   total budget hours (default 8)
+  SLUICE_HARDENING_PHASE_TIMEOUT     per-command timeout seconds (default 1200)
+  SLUICE_HARDENING_FUZZ_SECONDS      override total fuzz budget seconds
+  SLUICE_HARDENING_KEEP_GOING        0 = stop after current command (default 1)
 
 Verdicts:
   PASS       exit 0   All gates passed.
@@ -52,7 +52,7 @@ Verdicts:
         "--hours",
         type=float,
         default=None,
-        help="Total budget in hours (default 8, env SLUICE_OVERNIGHT_HOURS).",
+        help="Total budget in hours (default 8, env SLUICE_HARDENING_HOURS).",
     )
     parser.add_argument(
         "--self-test",
@@ -64,7 +64,7 @@ Verdicts:
     args = parser.parse_args(argv)
 
     # Determine mode.
-    mode = "overnight"
+    mode = "hardening"
     if args.smoke:
         mode = "smoke"
     if args.self_test:
@@ -76,49 +76,49 @@ Verdicts:
     if args.hours is not None:
         hours = _validate_hours(args.hours, "--hours")
         hours_source = "cli"
-    elif "SLUICE_OVERNIGHT_HOURS" in os.environ:
+    elif "SLUICE_HARDENING_HOURS" in os.environ:
         hours = _validate_hours(
-            float(os.environ["SLUICE_OVERNIGHT_HOURS"]),
-            "SLUICE_OVERNIGHT_HOURS",
+            float(os.environ["SLUICE_HARDENING_HOURS"]),
+            "SLUICE_HARDENING_HOURS",
         )
         hours_source = "env"
 
     # Phase timeout: env > default.
     phase_timeout: int = 1200
     timeout_source = "default"
-    if "SLUICE_PHASE_TIMEOUT" in os.environ:
+    if "SLUICE_HARDENING_PHASE_TIMEOUT" in os.environ:
         phase_timeout = _validate_positive_int(
-            os.environ["SLUICE_PHASE_TIMEOUT"], "SLUICE_PHASE_TIMEOUT"
+            os.environ["SLUICE_HARDENING_PHASE_TIMEOUT"], "SLUICE_HARDENING_PHASE_TIMEOUT"
         )
         timeout_source = "env"
 
     # Fuzz seconds override: env > default.
     fuzz_override: Optional[int] = None
     fuzz_source = "default"
-    if "SLUICE_FUZZ_SECONDS" in os.environ:
+    if "SLUICE_HARDENING_FUZZ_SECONDS" in os.environ:
         fuzz_override = _validate_non_negative_int(
-            os.environ["SLUICE_FUZZ_SECONDS"], "SLUICE_FUZZ_SECONDS"
+            os.environ["SLUICE_HARDENING_FUZZ_SECONDS"], "SLUICE_HARDENING_FUZZ_SECONDS"
         )
         fuzz_source = "env"
 
     # Keep going: env > default.
     keep_going = True
     keep_going_source = "default"
-    if "SLUICE_KEEP_GOING" in os.environ:
-        val = os.environ["SLUICE_KEEP_GOING"].strip()
+    if "SLUICE_HARDENING_KEEP_GOING" in os.environ:
+        val = os.environ["SLUICE_HARDENING_KEEP_GOING"].strip()
         if val == "0":
             keep_going = False
         elif val == "1":
             keep_going = True
         else:
             raise ValueError(
-                f"SLUICE_KEEP_GOING must be 0 or 1, got: {val!r}"
+                f"SLUICE_HARDENING_KEEP_GOING must be 0 or 1, got: {val!r}"
             )
         keep_going_source = "env"
 
     # Smoke mode adjustments.
     if mode == "smoke":
-        if args.hours is None and "SLUICE_OVERNIGHT_HOURS" not in os.environ:
+        if args.hours is None and "SLUICE_HARDENING_HOURS" not in os.environ:
             hours = 1.0
             hours_source = "smoke-default"
         if fuzz_override is None:

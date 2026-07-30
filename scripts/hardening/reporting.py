@@ -1,4 +1,4 @@
-"""Structured output (JSON / JSONL / text summaries) for the overnight runner.
+"""Structured output (JSON / JSONL / text summaries) for the hardening runner.
 
 All output is written to the artifact directory for the current run.
 """
@@ -61,7 +61,7 @@ def write_preflight_txt(run_dir: Path, preflight: PreflightResult) -> None:
     """Write human-readable preflight report."""
     path = run_dir / "preflight.txt"
     lines: List[str] = []
-    lines.append("## Sluice overnight preflight report")
+    lines.append("## Sluice hardening preflight report")
     lines.append(f"HEAD: {preflight.head_short} ({preflight.head_sha})")
     lines.append(f"Worktree dirty: {'yes' if preflight.worktree_dirty else 'no'}")
     lines.append(f"CPU cores: {preflight.nproc}")
@@ -167,6 +167,7 @@ def write_summary_txt(
     phase_stats: Dict[str, PhaseStats],
     fuzz_results: List[FuzzCorpusSnapshot],
     interrupted: bool,
+    runner_error: Optional[str] = None,
 ) -> None:
     """Write human-readable summary.txt."""
     dur_s = finished_at - started_at
@@ -178,7 +179,7 @@ def write_summary_txt(
     finish_dt = datetime.datetime.fromtimestamp(finished_at, tz=datetime.timezone.utc)
 
     lines: List[str] = []
-    lines.append(f"SLUICE OVERNIGHT: {verdict.value}")
+    lines.append(f"SLUICE HARDENING: {verdict.value}")
     lines.append("")
     lines.append(f"HEAD: {preflight.head_short}")
     lines.append(f"Started: {start_dt.isoformat()}")
@@ -189,6 +190,11 @@ def write_summary_txt(
     lines.append(f"Budget hours: {config.hours}")
     if interrupted:
         lines.append("Interrupted: yes")
+    if runner_error:
+        lines.append("")
+        lines.append("Runner error (infrastructure failure):")
+        for ln in runner_error.splitlines():
+            lines.append(f"  {ln}")
     lines.append("")
 
     # Phase stats.
@@ -245,6 +251,7 @@ def write_summary_json(
     phase_stats: Dict[str, PhaseStats],
     fuzz_results: List[FuzzCorpusSnapshot],
     interrupted: bool,
+    runner_error: Optional[str] = None,
 ) -> None:
     """Write structured summary.json."""
     dur_s = finished_at - started_at
@@ -315,6 +322,7 @@ def write_summary_json(
         "fuzz_results": fuzz_results_json,
         "failures": failures_refs,
         "interrupted": interrupted,
+        "runner_error": runner_error,
         "artifact_directory": str(run_dir),
     }
 
@@ -338,13 +346,14 @@ def write_all_outputs(
     phase_stats: Dict[str, PhaseStats],
     fuzz_results: List[FuzzCorpusSnapshot],
     interrupted: bool,
+    runner_error: Optional[str] = None,
 ) -> None:
     """Write all output files (summary, events, failures)."""
     write_events_jsonl(run_dir, results)
     write_failures_jsonl(run_dir, failures)
     write_summary_txt(run_dir, verdict, config, preflight,
                       started_at, finished_at, results, failures,
-                      phase_stats, fuzz_results, interrupted)
+                      phase_stats, fuzz_results, interrupted, runner_error)
     write_summary_json(run_dir, verdict, config, preflight,
                        started_at, finished_at, results, failures,
-                       phase_stats, fuzz_results, interrupted)
+                       phase_stats, fuzz_results, interrupted, runner_error)

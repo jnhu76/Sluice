@@ -1,10 +1,10 @@
-# Local overnight correctness gate
+# Local hardening correctness gate
 
-`scripts/overnight-local.sh` (thin shell wrapper) → `scripts/overnight_local.py` (Python stdlib implementation).
+`scripts/hardening.sh` (thin shell wrapper) → `scripts/hardening.py` (Python stdlib implementation).
 
 ## What it is
 
-The overnight gate moves the expensive, repeatable verification that GitHub Actions
+The hardening gate moves the expensive, repeatable verification that GitHub Actions
 deliberately does **not** run — long Debug soaks, the TSan hot set, ASan+UBSan, and
 libFuzzer campaigns — onto a developer Linux/Clang machine. It is **not** a
 replacement for the PR merge gate (`.github/workflows/ci.yml`), the deterministic
@@ -23,33 +23,33 @@ and fuzz harnesses; it introduces no new framework and changes no production cod
 
 ```bash
 # Default: the full ~8h gate.
-./scripts/overnight-local.sh
+./scripts/hardening.sh
 
 # Prove the runner wiring end-to-end (NOT a correctness gate). Each phase runs
 # once; each fuzz target runs ~10s. Use this after editing the runner.
-./scripts/overnight-local.sh --smoke
+./scripts/hardening.sh --smoke
 
 # A shorter window.
-./scripts/overnight-local.sh --hours 6
+./scripts/hardening.sh --hours 6
 
 # Controlled self-test: proves TIMEOUT classification, TERM→KILL escalation,
 # environment propagation, sanitizer detection, fuzz artifact detection, and
 # that one failure does not abort the runner. Uses SYNTHETIC failures; never
-# produces an overnight HOLD.
-./scripts/overnight-local.sh --self-test
+# produces an hardening HOLD.
+./scripts/hardening.sh --self-test
 
-./scripts/overnight-local.sh --help
+./scripts/hardening.sh --help
 ```
 
 ### Environment overrides (CLI args win where applicable)
 
 | Variable                 | Default | Meaning                                                        |
 |--------------------------|---------|----------------------------------------------------------------|
-| `SLUICE_OVERNIGHT_HOURS` | `8`     | Total budget in hours.                                         |
-| `SLUICE_PHASE_TIMEOUT`   | `1200`  | Per-command timeout, seconds (each external command).          |
-| `SLUICE_FUZZ_SECONDS`    | split   | Override the **total** fuzz budget (divided across targets).   |
-| `SLUICE_KEEP_GOING`      | `1`     | `0` = stop after the current command, but still write summary + logs. |
-| `SLUICE_PYTHON`           | `python3` | Python interpreter path for the runner.                      |
+| `SLUICE_HARDENING_HOURS` | `8`     | Total budget in hours.                                         |
+| `SLUICE_HARDENING_PHASE_TIMEOUT`   | `1200`  | Per-command timeout, seconds (each external command).          |
+| `SLUICE_HARDENING_FUZZ_SECONDS`    | split   | Override the **total** fuzz budget (divided across targets).   |
+| `SLUICE_HARDENING_KEEP_GOING`      | `1`     | `0` = stop after the current command, but still write summary + logs. |
+| `SLUICE_HARDENING_PYTHON`           | `python3` | Python interpreter path for the runner.                      |
 
 > **The runner reconfigures xmake several times** (debug → tsan → asanubsan →
 > debug for fuzz → debug for Final Debug). That is expected. Preflight verifies
@@ -91,7 +91,7 @@ evidence but can never turn a HOLD into a PASS.
 | `RUNNER_ERROR`      | 3    | Internal runner failure (log write failure, unhandled exception, process management error). |
 | `INCOMPLETE`        | 4    | No real failure, but a required evidence family did not execute (budget/platform/environment). |
 
-Read the verdict from the first line of `summary.txt`: `SLUICE OVERNIGHT: PASS`
+Read the verdict from the first line of `summary.txt`: `SLUICE HARDENING: PASS`
 / `HOLD` / `INCOMPLETE`.
 
 ## Distinction: test failures vs. runner/environment failures
@@ -105,7 +105,7 @@ Read the verdict from the first line of `summary.txt`: `SLUICE OVERNIGHT: PASS`
 
 ## Artifacts
 
-Each run writes to `overnight-artifacts/<YYYYMMDD-HHMMSS>-<short-sha>/`
+Each run writes to `hardening-artifacts/<YYYYMMDD-HHMMSS>-<short-sha>/`
 (gitignored):
 
 - `summary.txt` — human-readable verdict and counts.
@@ -121,13 +121,13 @@ Each run writes to `overnight-artifacts/<YYYYMMDD-HHMMSS>-<short-sha>/`
 - `debug-soak/`, `tsan/`, `asanubsan/`, `fuzz/` — per-command logs.
 - `fuzz/<target>.corpus-stats.json` — corpus before/after file+byte counts.
 
-The persistent per-target fuzz corpus lives under `.nightly-corpus/` (gitignored,
+The persistent per-target fuzz corpus lives under `.hardening-corpus/` (gitignored,
 seeded from `fuzz/corpus/`, never cleared).
 
 ## Single-instance lock
 
-The runner uses `fcntl.flock()` on `.overnight-local.lock` in the project root.
-If another overnight run is already active, the new instance exits immediately
+The runner uses `fcntl.flock()` on `.hardening.lock` in the project root.
+If another hardening run is already active, the new instance exits immediately
 with `ENVIRONMENT_ERROR`. The lock is released automatically when the runner
 exits (including on crash).
 
@@ -150,19 +150,19 @@ exits (including on crash).
 
 ```bash
 python3 -m unittest discover -v
-python3 -m unittest scripts.tests.test_overnight_runner -v
+python3 -m unittest scripts.tests.test_hardening_runner -v
 ```
 
 ## Running self-test
 
 ```bash
-./scripts/overnight-local.sh --self-test
+./scripts/hardening.sh --self-test
 ```
 
 ## Running smoke test
 
 ```bash
-./scripts/overnight-local.sh --smoke
+./scripts/hardening.sh --smoke
 ```
 
 ## What this runner does not do

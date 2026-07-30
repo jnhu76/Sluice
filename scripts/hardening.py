@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Sluice overnight test runner — Python standard library implementation.
+"""Sluice hardening test runner — Python standard library implementation.
 
 Usage:
-    python3 scripts/overnight_local.py
-    python3 scripts/overnight_local.py --smoke
-    python3 scripts/overnight_local.py --self-test
-    python3 scripts/overnight_local.py --hours 6
-    python3 scripts/overnight_local.py --help
+    python3 scripts/hardening.py
+    python3 scripts/hardening.py --smoke
+    python3 scripts/hardening.py --self-test
+    python3 scripts/hardening.py --hours 6
+    python3 scripts/hardening.py --help
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
-from overnight.model import (
+from hardening.model import (
     Classification,
     CommandResult,
     CommandSpec,
@@ -45,11 +45,14 @@ from overnight.model import (
     EXIT_RUNNER_ERROR,
     EXIT_INCOMPLETE,
 )
-from overnight.preflight import PreflightCheck, PreflightResult, run_preflight
-from overnight.process import run_command
-from overnight.phases import (
+from hardening.preflight import PreflightCheck, PreflightResult, run_preflight
+from hardening.process import run_command
+from hardening.phases import (
     PhaseContext,
     PhaseOutcome,
+    TargetCacheError,
+    calculate_verdict,
+    _synthetic_cmd,
     refresh_target_cache,
     target_exists,
     phase_baseline,
@@ -60,25 +63,25 @@ from overnight.phases import (
     phase_final_debug,
     TSAN_HOT_SET,
 )
-from overnight.reporting import (
+from hardening.reporting import (
     write_all_outputs,
     write_preflight_txt,
     write_preflight_json,
     write_environment_json,
 )
-from overnight.cli import parse_args
+from hardening.cli import parse_args
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Single-instance lock
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_LOCK_FILE = ".overnight-local.lock"
+_LOCK_FILE = ".hardening.lock"
 _lock_fd: Optional[int] = None
 
 
 def _acquire_lock(project_root: Path) -> None:
-    """Acquire a non-blocking exclusive lock on ``.overnight-local.lock``.
+    """Acquire a non-blocking exclusive lock on ``.hardening.lock``.
 
     Raises ``RuntimeError`` if another runner is already running.
     """
@@ -95,7 +98,7 @@ def _acquire_lock(project_root: Path) -> None:
                 pass
             _lock_fd = None
         raise RuntimeError(
-            f"Another overnight runner is running (lock: {lock_path}). "
+            f"Another hardening runner is running (lock: {lock_path}). "
             f"Use a different worktree or wait for it to finish."
         )
 
@@ -119,16 +122,17 @@ def _setup_run_dir(
     project_root: Path,
     head_short: str,
     preflight: PreflightResult,
+    config: Config,
 ) -> Path:
     """Create the artifact directory for this run."""
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_dir = project_root / "overnight-artifacts" / f"{stamp}-{head_short}"
+    run_dir = project_root / "hardening-artifacts" / f"{stamp}-{head_short}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Write preflight and environment.
     write_preflight_txt(run_dir, preflight)
     write_preflight_json(run_dir, preflight)
-    write_environment_json(run_dir, config, preflight)  # noqa: F821 – set in main
+    write_environment_json(run_dir, config, preflight)
 
     # Write worktree diffs.
     if preflight.worktree_diff:
@@ -137,58 +141,6 @@ def _setup_run_dir(
         (run_dir / "worktree-cached.diff").write_text(preflight.worktree_cached_diff)
 
     return run_dir
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Verdict calculation
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def calculate_verdict(
-    ctx: PhaseContext,
-    preflight: PreflightResult,
-) -> Verdict:
-    """Determine the final verdict based on all evidence.
-
-    See prompt §15 for the detailed rules.
-    """
-    # Preflight failures are fatal.
-    if not preflight.passed:
-        return Verdict.ENVIRONMENT_ERROR
-
-    # Sticky hold from any test failure.
-    if ctx.sticky_hold:
-        return Verdict.HOLD
-
-    # Check for incomplete evidence families.
-    incomplete_reasons: List[str] = []
-
-    if not ctx.baseline_ok:
-        incomplete_reasons.append("baseline did not complete")
-
-    # Count critical TSan targets that actually executed.
-    tsan_critical_executed = 0
-    for r in ctx.results:
-        if r.phase == "tsan" and r.target in TSAN_HOT_SET:
-            if r.classification != Classification.SKIP:
-                tsan_critical_executed += 1
-    if tsan_critical_executed == 0:
-        incomplete_reasons.append("no critical TSan target executed")
-
-    asan_stats = ctx.stats.get("asanubsan")
-    if not asan_stats or asan_stats.executed == 0:
-        incomplete_reasons.append("ASan+UBSan full suite not executed")
-
-    fuzz_stats = ctx.stats.get("fuzz")
-    if not fuzz_stats or fuzz_stats.executed == 0:
-        incomplete_reasons.append("no fuzz target executed")
-
-    if not ctx.final_debug_ok:
-        incomplete_reasons.append("final debug not completed")
-
-    if incomplete_reasons:
-        return Verdict.INCOMPLETE
-
-    return Verdict.PASS
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -205,6 +157,7 @@ def finalize(
     config: Config,
     preflight: PreflightResult,
     interrupted: bool,
+    runner_error: Optional[str] = None,
 ) -> int:
     """Write all outputs and return the exit code.
 
@@ -230,6 +183,7 @@ def finalize(
             phase_stats=ctx.stats,
             fuzz_results=ctx.fuzz_results,
             interrupted=interrupted,
+            runner_error=runner_error,
         )
 
         # Print summary to stderr.
@@ -252,6 +206,7 @@ def self_test(config: Config, project_root: Path) -> int:
     temporary directories.
     """
     print("[self-test] running self-test...", file=sys.stderr)
+    self_test_start = time.monotonic()
 
     # We need a minimal preflight to proceed.
     preflight = PreflightResult()
@@ -262,7 +217,7 @@ def self_test(config: Config, project_root: Path) -> int:
 
     # Create a temporary run directory.
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_dir = project_root / "overnight-artifacts" / f"selftest-{stamp}"
+    run_dir = project_root / "hardening-artifacts" / f"selftest-{stamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     ctx = PhaseContext(
@@ -300,33 +255,57 @@ def self_test(config: Config, project_root: Path) -> int:
         print(f"[self-test]   FAIL: expected PASS got {r2.classification.value}", file=sys.stderr)
         all_pass = False
 
-    # ── Test 2: timeout + TERM ─────────────────────────────────────────────
-    print("[self-test] test 2: timeout + TERM", file=sys.stderr)
+    # ── Test 2: silent process times out ON TIME (TERM, no KILL) ───────────
+    print("[self-test] test 2: silent timeout fires on time (TERM, no KILL)",
+          file=sys.stderr)
     r3 = _synthetic_cmd(ctx, "selftest", "3", "sleep-timeout", "debug",
                         ["sleep", "30"], timeout_s=2)
-    if r3.classification == Classification.TIMEOUT and r3.term_sent:
-        print("[self-test]   sleep 30 with 2s timeout -> TIMEOUT+TERM: OK", file=sys.stderr)
+    t2_ok = (
+        r3.classification == Classification.TIMEOUT
+        and r3.timed_out is True
+        and r3.term_sent is True
+        and r3.kill_sent is False
+        and r3.duration_seconds < 5
+    )
+    if t2_ok:
+        print(f"[self-test]   sleep 30 @2s -> TIMEOUT, timed_out, TERM, no KILL, "
+              f"dur={r3.duration_seconds:.2f}s (<5s): OK", file=sys.stderr)
     else:
-        print(f"[self-test]   FAIL: expected TIMEOUT+TERM got "
-              f"cls={r3.classification.value} term={r3.term_sent} kill={r3.kill_sent}",
-              file=sys.stderr)
+        print(f"[self-test]   FAIL: cls={r3.classification.value} "
+              f"timed_out={r3.timed_out} term={r3.term_sent} kill={r3.kill_sent} "
+              f"dur={r3.duration_seconds:.2f}s "
+              f"(expected TIMEOUT/True/True/False, dur<5s)", file=sys.stderr)
         all_pass = False
 
-    # ── Test 3: TERM ignored → KILL ────────────────────────────────────────
-    print("[self-test] test 3: TERM ignored -> KILL", file=sys.stderr)
+    # ── Test 3: TERM ignored → KILL after grace ────────────────────────────
+    print("[self-test] test 3: TERM ignored -> KILL after grace", file=sys.stderr)
     # A Python script that ignores SIGTERM.
     kill_script = textwrap.dedent("""\
         import signal, time
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         time.sleep(60)
     """)
+    from hardening.process import KILL_AFTER_SECONDS
+    t3_timeout = 2
     r4 = _synthetic_cmd(ctx, "selftest", "4", "sigterm-ignored", "debug",
-                        [sys.executable, "-c", kill_script], timeout_s=3)
-    if r4.classification == Classification.TIMEOUT and r4.term_sent and r4.kill_sent:
-        print("[self-test]   SIGTERM-ignored process -> TIMEOUT+TERM+KILL: OK", file=sys.stderr)
+                        [sys.executable, "-c", kill_script], timeout_s=t3_timeout)
+    t3_expect = t3_timeout + KILL_AFTER_SECONDS
+    t3_ok = (
+        r4.classification == Classification.TIMEOUT
+        and r4.timed_out is True
+        and r4.term_sent is True
+        and r4.kill_sent is True
+        and (t3_expect - 1.0) <= r4.duration_seconds < (t3_expect + 8.0)
+    )
+    if t3_ok:
+        print(f"[self-test]   SIGTERM-ignored -> TIMEOUT+TERM+KILL, "
+              f"dur={r4.duration_seconds:.2f}s (~{t3_expect:.0f}s): OK",
+              file=sys.stderr)
     else:
-        print(f"[self-test]   FAIL: expected TIMEOUT+TERM+KILL got "
-              f"cls={r4.classification.value} term={r4.term_sent} kill={r4.kill_sent}",
+        print(f"[self-test]   FAIL: cls={r4.classification.value} "
+              f"timed_out={r4.timed_out} term={r4.term_sent} kill={r4.kill_sent} "
+              f"dur={r4.duration_seconds:.2f}s "
+              f"(expected TIMEOUT/True/True/True, dur~{t3_expect:.0f}s)",
               file=sys.stderr)
         all_pass = False
 
@@ -425,7 +404,7 @@ def self_test(config: Config, project_root: Path) -> int:
     _synthetic_cmd(clean_ctx, "selftest", "7", "true-cmd", "debug",
                    ["true"], timeout_s=5)
 
-    from overnight.reporting import write_summary_txt
+    from hardening.reporting import write_summary_txt
     write_summary_txt(
         run_dir=run_dir,
         verdict=Verdict.PASS,
@@ -449,7 +428,7 @@ def self_test(config: Config, project_root: Path) -> int:
     # ── Test 8: target cache invalidation ──────────────────────────────────
     print("[self-test] test 8: target cache invalidation", file=sys.stderr)
     # Simulate two cache refreshes with different modes.
-    from overnight.phases import refresh_target_cache
+    from hardening.phases import refresh_target_cache
     ctx2 = PhaseContext(
         config=config,
         project_root=project_root,
@@ -465,15 +444,38 @@ def self_test(config: Config, project_root: Path) -> int:
         final_debug_ok=True,
     )
     # First refresh (debug).
-    t1 = refresh_target_cache(ctx2, "debug")
-    # Second refresh (tsan) – should invalidate debug cache.
-    t2 = refresh_target_cache(ctx2, "tsan")
-    # Verify the cache mode changed.
-    if ctx2._current_cache_mode == "tsan":
-        print("[self-test]   target cache invalidated on mode change: OK", file=sys.stderr)
-    else:
-        print(f"[self-test]   FAIL: cache mode expected tsan got {ctx2._current_cache_mode}",
+    try:
+        t1 = refresh_target_cache(ctx2, "debug")
+        # Second refresh (tsan) – should invalidate the debug cache.
+        t2 = refresh_target_cache(ctx2, "tsan")
+    except TargetCacheError as e:
+        print(f"[self-test]   FAIL: target cache refresh raised TargetCacheError:\n{e}",
               file=sys.stderr)
+        all_pass = False
+        t1 = t2 = set()
+    # Verify the cache mode changed AND that real targets were parsed (this
+    # repository has many; zero means the snapshot silently broke).
+    if ctx2._current_cache_mode == "tsan" and len(t1) > 0 and len(t2) > 0:
+        print(f"[self-test]   target cache invalidated on mode change "
+              f"(debug={len(t1)} tsan={len(t2)} targets): OK", file=sys.stderr)
+    else:
+        print(f"[self-test]   FAIL: cache mode={ctx2._current_cache_mode} "
+              f"debug_targets={len(t1)} tsan_targets={len(t2)} "
+              f"(expected mode=tsan, both >0)", file=sys.stderr)
+        all_pass = False
+
+    # ── Test 9: total elapsed regression check ─────────────────────────────
+    # A healthy self-test completes well under 30s. The historical bug (a
+    # blocking os.read on the child's output pipe) made the timeout tests wait
+    # for each child's natural lifetime, pushing the total to ~90s while still
+    # reporting PASS. This guard makes that regression fail loudly.
+    total_elapsed = time.monotonic() - self_test_start
+    if total_elapsed < 30.0:
+        print(f"[self-test] test 9: total elapsed {total_elapsed:.2f}s (<30s): OK",
+              file=sys.stderr)
+    else:
+        print(f"[self-test] test 9: FAIL: total elapsed {total_elapsed:.2f}s "
+              f"(>=30s); timeout enforcement has regressed", file=sys.stderr)
         all_pass = False
 
     # ── Final ──────────────────────────────────────────────────────────────
@@ -485,38 +487,6 @@ def self_test(config: Config, project_root: Path) -> int:
         return EXIT_HOLD
 
 
-def _synthetic_cmd(
-    ctx: PhaseContext,
-    phase: str,
-    iteration: str,
-    target: str,
-    mode: str,
-    command: List[str],
-    timeout_s: float = 10,
-    env: Optional[Dict[str, str]] = None,
-) -> CommandResult:
-    """Run a synthetic command (no sticky hold, no failure tracking)."""
-    log_dir = ctx.run_dir / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"{phase}-{iteration}-{target}.log"
-
-    spec = CommandSpec(
-        phase=phase,
-        iteration=iteration,
-        target=target,
-        mode=mode,
-        command=command,
-        timeout_seconds=timeout_s,
-        log_path=log_path,
-        environment=env or {},
-        sanitizer_kind=None,
-        synthetic=True,
-    )
-    result = run_command(spec, ctx.head_sha, ctx.worktree_dirty)
-    ctx.results.append(result)
-    return result
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -525,7 +495,7 @@ config: Optional[Config] = None
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    """Entry point for the overnight runner.
+    """Entry point for the hardening runner.
 
     Returns an exit code per the Verdict enum.
     """
@@ -554,8 +524,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not preflight.passed:
         print("[preflight] FATAL: preflight checks failed", file=sys.stderr)
         # Write what we can.
-        write_preflight_txt(project_root / "overnight-artifacts", preflight)
-        write_preflight_json(project_root / "overnight-artifacts", preflight)
+        write_preflight_txt(project_root / "hardening-artifacts", preflight)
+        write_preflight_json(project_root / "hardening-artifacts", preflight)
         return VERDICT_EXIT[Verdict.ENVIRONMENT_ERROR]
 
     # ── Self-test mode ───────────────────────────────────────────────────────
@@ -570,7 +540,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return VERDICT_EXIT[Verdict.ENVIRONMENT_ERROR]
 
     # ── Run directory ────────────────────────────────────────────────────────
-    run_dir = _setup_run_dir(project_root, preflight.head_short, preflight)
+    run_dir = _setup_run_dir(project_root, preflight.head_short, preflight, config)
 
     # ── Budget and deadline ──────────────────────────────────────────────────
     deadline_seconds = config.hours * 3600
@@ -607,6 +577,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     signal.signal(signal.SIGTERM, _handle_interrupt)
 
     verdict = Verdict.RUNNER_ERROR  # Default if something goes wrong.
+    runner_error: Optional[str] = None
 
     try:
         # ── Phase A: Baseline ───────────────────────────────────────────────
@@ -674,9 +645,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         if ctx.sticky_hold:
             verdict = Verdict.HOLD
 
+    except TargetCacheError as exc:
+        # An infrastructure failure enumerating build targets. This must NOT be
+        # disguised as "targets absent" (which would fabricate SKIP/INCOMPLETE);
+        # it is a hard RUNNER_ERROR. The detail was already persisted to the
+        # <mode>-targets.txt snapshot by refresh_target_cache; also record it in
+        # run.log and the summary.
+        runner_error = str(exc)
+        print(f"[runner] TARGET CACHE ERROR (infrastructure failure):\n{exc}",
+              file=sys.stderr)
+        try:
+            with open(run_dir / "run.log", "a") as f:
+                f.write(f"[runner] TARGET CACHE ERROR:\n{exc}\n")
+        except OSError:
+            pass
+        verdict = Verdict.RUNNER_ERROR
+
     except BaseException as exc:
         print(f"[runner] UNHANDLED EXCEPTION: {exc}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
+        runner_error = f"{type(exc).__name__}: {exc}"
         verdict = Verdict.RUNNER_ERROR
 
     finally:
@@ -688,6 +676,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             config=config,
             preflight=preflight,
             interrupted=interrupted,
+            runner_error=runner_error,
         )
         _release_lock()
 

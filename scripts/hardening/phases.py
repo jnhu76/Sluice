@@ -1,4 +1,4 @@
-"""Phase implementations for the overnight test runner.
+"""Phase implementations for the hardening test runner.
 
 Each phase is a function that takes a ``PhaseContext`` and returns a
 ``PhaseOutcome``.  Phases are self-contained and may reconfigure xmake
@@ -8,6 +8,8 @@ as needed.
 from __future__ import annotations
 
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import time
@@ -24,6 +26,7 @@ from .model import (
     PhaseStats,
     Verdict,
 )
+from .preflight import PreflightResult
 from .process import run_command
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -144,42 +147,142 @@ class PhaseOutcome:
 # Target cache helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
+class TargetCacheError(RuntimeError):
+    """Raised when the target snapshot (``xmake show -l targets``) cannot be
+    obtained or parsed.
+
+    This is an infrastructure failure.  It MUST surface as ``RUNNER_ERROR``
+    rather than being silently turned into an empty target cache: an empty
+    cache would make every TSan/ASan/fuzz target appear absent, fabricating
+    bogus SKIPs and a false INCOMPLETE verdict.
+    """
+
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_TARGET_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.+-]+$")
+
+
 def _strip_ansi(s: str) -> str:
-    import re
-    return re.compile(r"\x1b\[[0-9;]*m").sub("", s)
+    return _ANSI_RE.sub("", s)
 
 
 def _is_valid_target_token(s: str) -> bool:
-    import re
-    return bool(re.match(r"^[A-Za-z0-9_.+-]+$", s))
+    return bool(_TARGET_TOKEN_RE.match(s))
+
+
+def parse_target_list(output: str) -> Set[str]:
+    """Parse ``xmake show -l targets`` output into a set of target names.
+
+    Real xmake output may place several targets on one line separated by
+    whitespace (multi-column layout) and may embed ANSI color codes.  Each
+    line is first stripped of ANSI escapes, then split on whitespace, and
+    each token is validated independently; invalid tokens are ignored and
+    duplicates are collapsed by the set.
+    """
+    targets: Set[str] = set()
+    for line in output.splitlines():
+        clean_line = _strip_ansi(line)
+        for token in clean_line.split():
+            if _is_valid_target_token(token):
+                targets.add(token)
+    return targets
+
+
+def _truncate_for_log(s: object, limit: int = 2000) -> str:
+    """Render *s* (str or bytes, possibly None) as a bounded log string."""
+    if s is None:
+        return "<none>"
+    if isinstance(s, bytes):
+        s = s.decode("utf-8", errors="replace")
+    if not isinstance(s, str):
+        s = str(s)
+    if len(s) <= limit:
+        return s
+    return s[:limit] + f"\n...<truncated {len(s) - limit} chars>"
+
+
+def _target_cache_failure(
+    out_file: Path,
+    mode: str,
+    command: List[str],
+    returncode: Optional[int],
+    stdout: object,
+    stderr: object,
+    exception: Optional[BaseException],
+    note: Optional[str] = None,
+) -> TargetCacheError:
+    """Build a ``TargetCacheError``, persisting full detail to *out_file*.
+
+    The message carries everything needed to diagnose the failure: command,
+    return code, stdout, stderr, the exception (if any), and the mode.
+    """
+    lines = [
+        f"target snapshot failed (mode={mode})",
+        f"command={shlex.join(command)}",
+        f"returncode={returncode}",
+    ]
+    if note:
+        lines.append(f"note={note}")
+    if exception is not None:
+        lines.append(f"exception={type(exception).__name__}: {exception}")
+    lines.append("----- stdout -----")
+    lines.append(_truncate_for_log(stdout))
+    lines.append("----- stderr -----")
+    lines.append(_truncate_for_log(stderr))
+    message = "\n".join(lines)
+    try:
+        out_file.write_text(message + "\n")
+    except OSError:
+        pass
+    return TargetCacheError(message)
 
 
 def refresh_target_cache(ctx: PhaseContext, mode: str) -> Set[str]:
-    """Run ``xmake show -l targets`` and parse the output.
+    """Run ``xmake show -l targets`` and parse the output into the cache.
 
     Invalidates any previous cache for this mode.
+
+    Raises ``TargetCacheError`` on any infrastructure failure: non-zero exit,
+    timeout, spawn/OS error, or zero parsed targets.  Never silently returns
+    an empty set (see ``TargetCacheError``).
     """
     ctx._current_cache_mode = mode
     out_file = ctx.run_dir / f"{mode}-targets.txt"
+    command = ["xmake", "show", "-l", "targets"]
+
     try:
-        r = subprocess.run(
-            ["xmake", "show", "-l", "targets"],
-            capture_output=True, text=True, timeout=60,
+        r = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired as e:
+        raise _target_cache_failure(
+            out_file, mode, command, returncode=None,
+            stdout=getattr(e, "stdout", None), stderr=getattr(e, "stderr", None),
+            exception=e, note="xmake show timed out",
+        ) from e
+    except (FileNotFoundError, OSError) as e:
+        raise _target_cache_failure(
+            out_file, mode, command, returncode=None, stdout=None, stderr=None,
+            exception=e, note="failed to execute xmake",
+        ) from e
+
+    if r.returncode != 0:
+        raise _target_cache_failure(
+            out_file, mode, command, returncode=r.returncode,
+            stdout=r.stdout, stderr=r.stderr, exception=None,
+            note="xmake show exited non-zero",
         )
-        targets: Set[str] = set()
-        for line in r.stdout.splitlines():
-            clean = _strip_ansi(line).strip()
-            if clean and _is_valid_target_token(clean):
-                targets.add(clean)
-        sorted_targets = sorted(targets)
-        out_file.write_text("\n".join(sorted_targets) + "\n")
-        ctx.target_cache[mode] = targets
-        return targets
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
-        # Write empty cache.
-        out_file.write_text("")
-        ctx.target_cache[mode] = set()
-        return set()
+
+    targets = parse_target_list(r.stdout)
+    if not targets:
+        raise _target_cache_failure(
+            out_file, mode, command, returncode=r.returncode,
+            stdout=r.stdout, stderr=r.stderr, exception=None,
+            note="parsed zero targets (expected many in this repository)",
+        )
+
+    sorted_targets = sorted(targets)
+    out_file.write_text("\n".join(sorted_targets) + "\n")
+    ctx.target_cache[mode] = targets
+    return targets
 
 
 def target_exists(ctx: PhaseContext, name: str) -> bool:
@@ -383,6 +486,49 @@ def phase_baseline(ctx: PhaseContext) -> PhaseOutcome:
 # Phase B -- Debug soak
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Classifications that count as a reproduced soak failure when they survive
+# (are not recovered by) the reproduction retries.
+_SOAK_FAILURE_KINDS = (
+    Classification.FAIL,
+    Classification.TIMEOUT,
+    Classification.SANITIZER_FAIL,
+)
+
+
+def soak_next_consec_fail(
+    initial: Classification,
+    retries: List[Classification],
+    prev: int,
+) -> int:
+    """Compute the next "consecutive unrecovered failures" count for debug-soak.
+
+    This deliberately separates two concepts:
+
+    *   A *sticky* test failure — recorded via ``sticky_hold`` by the caller and
+        never cleared here.  A failure that happened once is a HOLD forever,
+        even if every retry passes.
+    *   A *consecutive unrecovered failure* — counted here, and used only to
+        decide whether to stop repeating the soak loop early.
+
+    Rules:
+
+    *   initial ``PASS`` → reset to 0.
+    *   initial failure reproduced by at least one retry (a retry also failed),
+        or with no retries at all → unrecovered → ``prev + 1``.
+    *   initial failure whose retries all passed → not reproduced → reset to 0.
+        The original failure remains sticky; this does not wash it away.
+    *   initial classification that is not a soak failure kind (e.g. SKIP) →
+        leave the count unchanged.
+    """
+    if initial == Classification.PASS:
+        return 0
+    if initial not in _SOAK_FAILURE_KINDS:
+        return prev
+    if retries and all(c == Classification.PASS for c in retries):
+        return 0
+    return prev + 1
+
+
 def phase_debug_soak(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
     """Repeat the full ``xmake test -v`` suite for up to *budget_seconds*."""
     if not ctx.baseline_ok:
@@ -411,30 +557,28 @@ def phase_debug_soak(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
                  ["xmake", "test", "-v"],
                  log_subdir="debug-soak")
 
-        if r.classification == Classification.PASS:
-            consec_fail = 0
-        elif r.classification == Classification.TIMEOUT:
-            consec_fail += 1
-            ctx.sticky_hold = True
-            # Retries
-            for retry in range(1, 3):
-                rr = _cmd(ctx, "debug-soak", f"{iter_count}-retry{retry}",
-                          "full-suite", "debug", ["xmake", "test", "-v"],
-                          log_subdir="debug-soak")
-                _log(ctx, f"[debug-soak] iteration {iter_count} retry {retry}: "
-                     f"{rr.classification.value}")
-        elif r.classification in (Classification.FAIL, Classification.SANITIZER_FAIL):
-            consec_fail += 1
+        # Any real failure is sticky (a HOLD forever). Retries are recorded as
+        # reproduction evidence; they determine only whether the failure counts
+        # as "unrecovered" for the early-stop heuristic, never whether it stays
+        # sticky.
+        retries: List[Classification] = []
+        if r.classification in _SOAK_FAILURE_KINDS:
             ctx.sticky_hold = True
             for retry in range(1, 3):
                 rr = _cmd(ctx, "debug-soak", f"{iter_count}-retry{retry}",
                           "full-suite", "debug", ["xmake", "test", "-v"],
                           log_subdir="debug-soak")
+                retries.append(rr.classification)
                 _log(ctx, f"[debug-soak] iteration {iter_count} retry {retry}: "
                      f"{rr.classification.value}")
 
+        consec_fail = soak_next_consec_fail(r.classification, retries, consec_fail)
+
         if consec_fail >= 3:
-            _log(ctx, "[debug-soak] 3 consecutive failures; stopping soak")
+            # Stop only this repeating soak loop. TSan, ASan, fuzz, and Final
+            # Debug are independent phases and still run.
+            _log(ctx, "[debug-soak] 3 consecutive unrecovered failures; "
+                 "stopping soak loop")
             break
 
     stats = ctx.get_or_create_stats("debug-soak")
@@ -688,8 +832,8 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
     _log(ctx, f"[fuzz] targets={n} total_budget={total_budget:.0f}s "
          f"per-target={per_target}s")
 
-    nightly_root = ctx.project_root / ".nightly-corpus"
-    nightly_root.mkdir(parents=True, exist_ok=True)
+    hardening_root = ctx.project_root / ".hardening-corpus"
+    hardening_root.mkdir(parents=True, exist_ok=True)
     dict_path = ctx.project_root / "fuzz" / "dictionaries" / "wal_record.dict"
     fuzz_subdir = ctx.run_dir / "fuzz"
     fuzz_subdir.mkdir(parents=True, exist_ok=True)
@@ -700,7 +844,7 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
             break
 
         # Persistent corpus.
-        work_corpus = nightly_root / tgt
+        work_corpus = hardening_root / tgt
         work_corpus.mkdir(parents=True, exist_ok=True)
 
         # Seed from committed corpus if empty.
@@ -838,3 +982,86 @@ def phase_final_debug(ctx: PhaseContext) -> PhaseOutcome:
         ctx.sticky_hold = True
 
     return PhaseOutcome("final-debug", passed=ctx.final_debug_ok)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Verdict calculation
+# =============================================================================
+
+
+def calculate_verdict(
+    ctx: PhaseContext,
+    preflight: PreflightResult,
+) -> Verdict:
+    """Determine the final verdict based on all evidence."""
+    if not preflight.passed:
+        return Verdict.ENVIRONMENT_ERROR
+
+    if ctx.sticky_hold:
+        return Verdict.HOLD
+
+    incomplete_reasons: List[str] = []
+
+    if not ctx.baseline_ok:
+        incomplete_reasons.append("baseline did not complete")
+
+    tsan_critical_executed = 0
+    for r in ctx.results:
+        if r.phase == "tsan" and r.target in TSAN_HOT_SET:
+            if r.classification != Classification.SKIP:
+                tsan_critical_executed += 1
+    if tsan_critical_executed == 0:
+        incomplete_reasons.append("no critical TSan target executed")
+
+    asan_stats = ctx.stats.get("asanubsan")
+    if not asan_stats or asan_stats.executed == 0:
+        incomplete_reasons.append("ASan+UBSan full suite not executed")
+
+    fuzz_stats = ctx.stats.get("fuzz")
+    if not fuzz_stats or fuzz_stats.executed == 0:
+        incomplete_reasons.append("no fuzz target executed")
+
+    if not ctx.final_debug_ok:
+        incomplete_reasons.append("final debug not completed")
+
+    if incomplete_reasons:
+        return Verdict.INCOMPLETE
+
+    return Verdict.PASS
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Synthetic command helper (used by self-test)
+# =============================================================================
+
+
+def _synthetic_cmd(
+    ctx: PhaseContext,
+    phase: str,
+    iteration: str,
+    target: str,
+    mode: str,
+    command: List[str],
+    timeout_s: float = 10,
+    env: Optional[Dict[str, str]] = None,
+) -> CommandResult:
+    """Run a synthetic command (no sticky hold, no failure tracking)."""
+    log_dir = ctx.run_dir / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / f"{phase}-{iteration}-{target}.log"
+
+    spec = CommandSpec(
+        phase=phase,
+        iteration=iteration,
+        target=target,
+        mode=mode,
+        command=command,
+        timeout_seconds=timeout_s,
+        log_path=log_path,
+        environment=env or {},
+        sanitizer_kind=None,
+        synthetic=True,
+    )
+    result = run_command(spec, ctx.head_sha, ctx.worktree_dirty)
+    ctx.results.append(result)
+    return result

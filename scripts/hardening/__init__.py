@@ -1,6 +1,6 @@
-"""Sluice overnight test runner - Python standard library implementation.
+"""Sluice hardening test runner - Python standard library implementation.
 
-This package replaces the original Bash overnight-local.sh with a
+This package replaces the original Bash hardening.sh with a
 structured Python implementation.  It has zero third-party dependencies.
 """
 
@@ -24,7 +24,11 @@ from .process import run_command
 from .phases import (
     PhaseContext,
     PhaseOutcome,
+    TargetCacheError,
+    calculate_verdict,
+    parse_target_list,
     refresh_target_cache,
+    soak_next_consec_fail,
     target_exists,
     phase_baseline,
     phase_debug_soak,
@@ -55,8 +59,11 @@ __all__ = [
     "PhaseOutcome",
     "PhaseStats",
     "PreflightResult",
+    "TargetCacheError",
     "Verdict",
     "VERDICT_EXIT",
+    "calculate_verdict",
+    "parse_target_list",
     "phase_asanubsan",
     "phase_baseline",
     "phase_debug_soak",
@@ -66,6 +73,7 @@ __all__ = [
     "refresh_target_cache",
     "run_command",
     "run_preflight",
+    "soak_next_consec_fail",
     "target_exists",
     "write_all_outputs",
     "write_environment_json",
