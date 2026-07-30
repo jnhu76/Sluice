@@ -72,9 +72,9 @@ public:
     // Preconditions:
     //   - `c` is outstanding against THIS Runtime's AsyncIoContext (a prior
     //     submit_* on this context marked it outstanding). Awaiting an idle
-    //     Completion is a caller contract violation (Debug asserts; Release
-    //     documents). Mirrors the underlying Scheduler primitive precondition
-    //     and Completion::result() L9 policy.
+    //     Completion is a caller contract violation: Debug asserts; Release
+    //     documents. This matches the underlying Scheduler primitive
+    //     precondition and Completion::result() L9 policy.
     //   - called only from within a Runtime task (the RuntimeTaskContext&
     //     lifetime is the task invocation). The context is non-owning and
     //     valid only during that invocation.

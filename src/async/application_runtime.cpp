@@ -51,11 +51,23 @@ Result<void> RuntimeTaskContext::submit_sync_all(SyncAllOp op, Completion<void>&
 // unresolved await; already-ready returns inline under the Scheduler's
 // registration critical section). The Scheduler* is private; task code never
 // sees raw Scheduler authority. See docs/design/m1-runtime-io-await-race.md.
+//
+// Precondition: `c` must be outstanding (a prior submit_* marked it so). The
+// underlying Scheduler primitive has no idle check of its own: it registers
+// the Fiber for wake and, if the Completion is idle, nothing will ever
+// complete it and the Fiber parks permanently. Enforce the documented
+// "Debug asserts; Release documents" contract here (M1-A Known limitations).
 void RuntimeTaskContext::await_completion(Completion<std::size_t>& c) {
+    assert(!c.idle() &&
+           "await_completion requires a submitted or ready Completion "
+           "(idle-await is a caller contract violation: M1-A)");
     sched_->await_completion_size(c);
 }
 
 void RuntimeTaskContext::await_completion(Completion<void>& c) {
+    assert(!c.idle() &&
+           "await_completion requires a submitted or ready Completion "
+           "(idle-await is a caller contract violation: M1-A)");
     sched_->await_completion_void(c);
 }
 

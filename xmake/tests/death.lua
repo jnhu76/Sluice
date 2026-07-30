@@ -102,3 +102,7 @@ do
             add_tests("async_io_context_death_test")
     end
 end
+
+-- runtime_wait_death_test — M1-A RuntimeTaskContext::await_completion
+-- idle-await contract violation (Debug assertion). POSIX-only.
+sluice_internal_async_test("runtime_wait_death_test", {platform_gate = {"linux", "macosx"}})
