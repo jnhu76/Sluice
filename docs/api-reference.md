@@ -861,6 +861,15 @@ public:
 };
 ```
 
+Worker topology is established at each run entry under the Scheduler
+coordination lock. WorkerState storage grows monotonically and remains
+address-stable; an invocation uses an immutable snapshot of its first
+`worker_count` workers. `spawn()` before or between run invocations is deferred
+to `pending_spawn_`, then assigned among the next invocation's participating
+workers. During an active invocation, `spawn()` routes only among that
+invocation's participants; after termination is published, new work is
+deferred to the next invocation rather than routed to an exiting worker.
+
 **Installed runtime substrate (not direct user API).** The following are
 public in the installed header due to encapsulation boundaries but are NOT
 part of the supported user contract. They are used internally by the async

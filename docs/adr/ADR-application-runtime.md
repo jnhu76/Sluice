@@ -241,6 +241,12 @@ QUIESCENT / MW-S3-no-wake / stop-predicate-true boundaries
 invocation boundary** (`between_invocations`, and after `drain_complete` in
 `drained_wait`) on a **persistent CV predicate** checked under `lifecycle_mutex`:
 `driver_exit_requested OR fatal_snapshot OR control_epoch != observed_epoch`.
+`observed_epoch` is the value captured before entering the current
+`run_live()` invocation. On return, the driver compares it with
+`control_epoch` before updating it; a change that raced with Scheduler
+termination causes immediate re-entry. Overwriting the entry value first would
+lose the only wake for work deferred at the Scheduler's terminal topology
+boundary.
 
 The persistent predicate — not the notification — is the liveness authority.
 Every control-changing operation (`request_stop()`, **successful `submit()`**,

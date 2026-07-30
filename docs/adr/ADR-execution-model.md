@@ -411,6 +411,44 @@ Each Scheduler worker has its own scheduler context and current-Fiber slot.
 There is no Scheduler-global current Fiber in E7.
 ```
 
+#### 9.2.2.1 Worker-topology authority (issue #50 corrective)
+
+`Scheduler::workers_` owns address-stable `WorkerState` pointees, but its
+container structure is shared coordination state. Every structural operation
+(`size`, `empty`, indexing, iteration, growth, and publication of a new entry)
+is serialized by `Scheduler::global_mtx_`.
+
+At the start of a run invocation, the Scheduler grows the topology
+monotonically under `global_mtx_` and captures an immutable run-local snapshot
+of exactly the first `worker_count` stable `WorkerState*` values. Worker
+threads, MW classification, termination notification, and work stealing use
+that snapshot after the lock is released; they do not inspect the `workers_`
+container structure. Requesting fewer workers in a later invocation does not
+destroy or relocate retained WorkerStates, but only the first requested
+workers participate.
+
+`spawn()` and the test-only `spawn_on()` inspect the published participating
+topology under `global_mtx_`. With no active run they place work in
+`pending_spawn_`; the next invocation assigns that work among its first-N
+snapshot. During an active run they route only among that invocation's
+participants. Once termination is published under `global_mtx_`, later
+submissions are likewise deferred instead of being routed to workers that are
+already exiting or joined. Run setup clears termination before publishing its
+participant count, and run teardown withdraws that count under the same lock.
+
+A `WorkerState*` copied while holding `global_mtx_` may be used after unlock
+only because the pointee remains alive until Scheduler destruction and the
+specific pointee field has its own synchronization authority. The lock order
+remains:
+
+```text
+Scheduler::global_mtx_ -> WorkerState::inbox_mtx
+```
+
+Topology establishment does not hold `global_mtx_` while creating or joining
+OS threads, executing Fibers, switching contexts, polling/blocking in the
+backend, or parking on condition variables.
+
 ### 9.2.3 Conservative pinned-Fiber contract
 
 E7 uses a conservative non-migrating contract:
