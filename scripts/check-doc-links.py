@@ -152,6 +152,9 @@ ENVIRONMENT_CONDITIONAL_PREFIXES = {
     ".mimocode",
     "states",
     "build",
+    "hardening-artifacts",
+    "failures",
+    "fuzz",
 }
 
 
