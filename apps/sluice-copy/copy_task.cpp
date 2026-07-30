@@ -133,6 +133,9 @@ struct CopyTask {
                 }
                 std::size_t bytes_written = wr_res.value();
                 ++stats.write_ops;
+                // Reset the write Completion before the next iteration so it is
+                // idle for the next submit_write (L7: submit requires idle).
+                wr.reset();
                 if (bytes_written == 0) {
                     // Zero progress on a non-empty write: deterministic error.
                     return make_unexpected<CopyStats>(
@@ -154,9 +157,9 @@ struct CopyTask {
 
             // Reset read Completion for reuse in the next iteration. It is now
             // ready + result-consumed, so reset() is legal (L7 lifecycle).
+            // wr is already idle: the inner write loop reset it after its last
+            // completion (L7), so no outer wr.reset() is needed here.
             rd.reset();
-            // wr was awaited and consumed inside the inner loop; reset for reuse.
-            wr.reset();
         }
 
         // Post-data sync policy (brief §22). Each sync op is submitted, awaited,
