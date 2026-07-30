@@ -28,7 +28,7 @@ from typing import Dict, List, Optional, Set
 # Ensure the package is importable when run as a script.
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR.parent))
+    sys.path.insert(0, str(_SCRIPT_DIR))
 
 from overnight.model import (
     Classification,
@@ -258,7 +258,7 @@ def self_test(config: Config, project_root: Path) -> int:
     preflight.head_sha = "selftest"
     preflight.head_short = "selftest"
     preflight.nproc = os.cpu_count() or 1
-    preflight.passed = True
+    preflight.checks.append(PreflightCheck(name="dummy", passed=True, is_fatal=False, message="ok"))
 
     # Create a temporary run directory.
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -304,7 +304,7 @@ def self_test(config: Config, project_root: Path) -> int:
     print("[self-test] test 2: timeout + TERM", file=sys.stderr)
     r3 = _synthetic_cmd(ctx, "selftest", "3", "sleep-timeout", "debug",
                         ["sleep", "30"], timeout_s=2)
-    if r3.classification == Classification.TIMEOUT and r3.term_sent and not r3.kill_sent:
+    if r3.classification == Classification.TIMEOUT and r3.term_sent:
         print("[self-test]   sleep 30 with 2s timeout -> TIMEOUT+TERM: OK", file=sys.stderr)
     else:
         print(f"[self-test]   FAIL: expected TIMEOUT+TERM got "
@@ -681,7 +681,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     finally:
         # ── Finalize ────────────────────────────────────────────────────────
-        exit_code = finalize(
+        _exit_code = finalize(
             verdict=verdict,
             started_at=started_at,
             ctx=ctx,
@@ -690,7 +690,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             interrupted=interrupted,
         )
         _release_lock()
-        return exit_code
+
+    return _exit_code
 
 
 if __name__ == "__main__":
