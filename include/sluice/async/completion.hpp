@@ -87,14 +87,24 @@ public:
     Completion& operator=(Completion&&) = delete;
 
     // --- query ---
-    bool ready() const noexcept { return state_ == State::ready; }
-    bool outstanding() const noexcept { return state_ == State::outstanding; }
-    bool idle() const noexcept { return state_ == State::idle; }
+    // Synchronization note: state_ is std::atomic so that the release-store in
+    // complete_with() (driver/reaper side, under AsyncIoContext::access_mtx_)
+    // publishes storage_/reap_seq_ to a Fiber that resumes and reads
+    // ready()/result() with NO lock held, potentially on a different worker
+    // (Fibers migrate W1-suspend -> W0-resume). This acquire/release only
+    // establishes ready/result publication across that handoff; it does NOT make
+    // the Completion safe for arbitrary concurrent submit/reset/result from
+    // multiple threads. The lifecycle (idle->outstanding->ready->reset) is still
+    // single-owner and non-reentrant: mark_outstanding/complete_with/reset each
+    // require the documented prior state, asserted in Debug.
+    bool ready() const noexcept { return state_.load(std::memory_order::acquire) == State::ready; }
+    bool outstanding() const noexcept { return state_.load(std::memory_order::acquire) == State::outstanding; }
+    bool idle() const noexcept { return state_.load(std::memory_order::acquire) == State::idle; }
 
     // ADR L9: result() before ready is a contract violation. Debug asserts;
     // release returns invalid_state rather than stale/garbage.
     Result<T> result() const {
-        if (state_ != State::ready) {
+        if (state_.load(std::memory_order::acquire) != State::ready) {
             assert(false && "Completion::result() called before ready (L9)");
             return make_unexpected<T>(IoError{IoError::Code::invalid_state});
         }
@@ -105,9 +115,9 @@ public:
     // ready, but documented as not-for-callers) ---
     // Mark outstanding: called by submit_* just before handing to the backend.
     void mark_outstanding() {
-        assert(state_ == State::idle &&
+        assert(state_.load(std::memory_order::acquire) == State::idle &&
                "submit into a non-idle Completion (L8)");
-        state_ = State::outstanding;
+        state_.store(State::outstanding, std::memory_order::release);
         storage_ = Storage{};  // clear any prior result
         reap_seq_ = 0;
     }
@@ -115,15 +125,15 @@ public:
     // E15-P1-04: stamps a monotonic reap sequence so Batch::next() can order
     // completions by actual backend reap order (ADR §6 O2).
     void complete_with(Result<T> res) {
-        assert(state_ == State::outstanding &&
+        assert(state_.load(std::memory_order::acquire) == State::outstanding &&
                "complete on a non-outstanding Completion (double-completion?)");
         storage_.set(std::move(res));
         reap_seq_ = detail::next_reap_seq();
-        state_ = State::ready;
+        state_.store(State::ready, std::memory_order::release);
     }
     // Return to idle so the Completion can be reused for a new op.
     void reset() {
-        state_ = State::idle;
+        state_.store(State::idle, std::memory_order::release);
         storage_ = Storage{};
         reap_seq_ = 0;
     }
@@ -136,7 +146,7 @@ private:
     std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
     enum class State : std::uint8_t { idle, outstanding, ready };
-    State state_ = State::idle;
+    std::atomic<State> state_{State::idle};
     std::uint64_t reap_seq_ = 0;
 
     // Storage for the terminal result. Holds either a T or an IoError. The
@@ -180,12 +190,12 @@ public:
     Completion(Completion&&) = delete;
     Completion& operator=(Completion&&) = delete;
 
-    bool ready() const noexcept { return state_ == State::ready; }
-    bool outstanding() const noexcept { return state_ == State::outstanding; }
-    bool idle() const noexcept { return state_ == State::idle; }
+    bool ready() const noexcept { return state_.load(std::memory_order::acquire) == State::ready; }
+    bool outstanding() const noexcept { return state_.load(std::memory_order::acquire) == State::outstanding; }
+    bool idle() const noexcept { return state_.load(std::memory_order::acquire) == State::idle; }
 
     Result<void> result() const {
-        if (state_ != State::ready) {
+        if (state_.load(std::memory_order::acquire) != State::ready) {
             assert(false && "Completion::result() called before ready (L9)");
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
@@ -194,21 +204,21 @@ public:
     }
 
     void mark_outstanding() {
-        assert(state_ == State::idle && "submit into a non-idle Completion (L8)");
-        state_ = State::outstanding;
+        assert(state_.load(std::memory_order::acquire) == State::idle && "submit into a non-idle Completion (L8)");
+        state_.store(State::outstanding, std::memory_order::release);
         has_error_ = false;
         reap_seq_ = 0;
     }
     void complete_with(Result<void> res) {
-        assert(state_ == State::outstanding &&
+        assert(state_.load(std::memory_order::acquire) == State::outstanding &&
                "complete on a non-outstanding Completion (double-completion?)");
         if (!res.has_value()) { error_ = res.error(); has_error_ = true; }
         else { has_error_ = false; }
         reap_seq_ = detail::next_reap_seq();
-        state_ = State::ready;
+        state_.store(State::ready, std::memory_order::release);
     }
     void reset() {
-        state_ = State::idle;
+        state_.store(State::idle, std::memory_order::release);
         has_error_ = false;
         reap_seq_ = 0;
     }
@@ -218,7 +228,7 @@ private:
     std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
     enum class State : std::uint8_t { idle, outstanding, ready };
-    State state_ = State::idle;
+    std::atomic<State> state_{State::idle};
     bool has_error_ = false;
     IoError error_{IoError::Code::backend_error};
     std::uint64_t reap_seq_ = 0;
