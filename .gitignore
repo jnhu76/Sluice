@@ -48,3 +48,10 @@ __pycache__/
 # seeds live under fuzz/corpus/ and are tracked)
 fuzz/artifacts/
 crash-*
+
+# Local hardening gate artifacts (scripts/hardening.sh) and its
+# persistent per-target fuzz corpus growth. Runs are reproducible but bulky;
+# keep them local, never tracked.
+/hardening-artifacts/
+/.hardening-corpus/
+/.hardening.lock
