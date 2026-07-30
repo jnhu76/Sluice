@@ -594,6 +594,10 @@ void ApplicationRuntime::driver_main() {
             runtime_cv_.notify_all();
 
             // Post-drain park (P2-03): wait until exit requested or epoch change.
+            // All admitted tasks are terminal, admission is closed, and no I/O
+            // remains, so control changes observed during the completed run no
+            // longer carry a Scheduler re-entry obligation.
+            observed_epoch_ = control_epoch_;
             driver_state_ = DriverState::drained_wait;
             runtime_cv_.wait(lk, [this] {
                 return driver_exit_requested_ ||
