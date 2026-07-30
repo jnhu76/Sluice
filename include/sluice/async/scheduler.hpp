@@ -1113,7 +1113,17 @@ private:
     static void rwlock_timer_expire_reconcile(void* owner_ctx,
                                               bool timer_won) noexcept;
 
-    void worker_loop(WorkerState* ws);
+    using WorkerSnapshot = std::vector<WorkerState*>;
+
+    // Issue #50 worker-topology authority. Grow the Scheduler-owned topology
+    // monotonically and capture exactly the first worker_count stable pointees
+    // participating in this invocation. The vector structure is touched only
+    // under global_mtx_; captured WorkerState* values remain valid for the
+    // Scheduler lifetime and may be used after the lock is released.
+    void ensure_workers_locked(unsigned worker_count, WorkerSnapshot& run_workers)
+        SLUICE_REQUIRES(global_mtx_);
+
+    void worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers);
     // E9-CORRECTIVE: one internal run implementation parameterized by
     // RunMode. The worker loop reads run_mode_ to select the idle action
     // (ADR §9.4.0). Drain and Live share the SAME loop, classifier, and
@@ -1151,7 +1161,7 @@ private:
     // global_mtx_ held; acquires it internally. Steal is MOVE + OWNER
     // TRANSFER — it never calls make_runnable (the fiber is already Runnable)
     // and never publishes a second ticket. See ADR §9.3 + the TLA+ model.
-    bool try_steal(WorkerState* thief);
+    bool try_steal(WorkerState* thief, const WorkerSnapshot& run_workers);
 
     // Classify global MW state. Must be called with global_mtx_ held.
     // Uses the AUTHORITATIVE backend outstanding count (ctx_.outstanding()),
@@ -1160,7 +1170,7 @@ private:
     // exist with no outstanding backend op (MW-S3). ctx_.outstanding()
     // acquires access_mtx_ internally; global_mtx_→access_mtx_ is the
     // accepted lock order.
-    MwState classify_locked() const SLUICE_REQUIRES(global_mtx_);
+    MwState classify_locked(const WorkerSnapshot& run_workers) const SLUICE_REQUIRES(global_mtx_);
 
     // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the deterministic causal pause
     // seams (E7 admission, E9 park candidate/commit, E12 event set-store/
@@ -1229,9 +1239,14 @@ private:
     std::deque<Fiber*> pending_spawn_ SLUICE_GUARDED_BY(global_mtx_){};
     unsigned next_spawn_worker_ SLUICE_GUARDED_BY(global_mtx_) = 0;
 
-    // Worker state storage. Owned by the Scheduler (address-stable for the
-    // Scheduler's lifetime — wait registrations and inboxes reference these).
-    std::vector<std::unique_ptr<WorkerState>> workers_;
+    // Worker topology authority:
+    //   - the workers_ vector structure is protected by global_mtx_;
+    //   - each published WorkerState pointee is address-stable until Scheduler
+    //     destruction (wait registrations and inboxes retain these pointers);
+    //   - a pointer captured under global_mtx_ may be used after unlock only
+    //     through the pointee field's existing authority;
+    //   - lock order remains global_mtx_ -> WorkerState::inbox_mtx.
+    std::vector<std::unique_ptr<WorkerState>> workers_ SLUICE_GUARDED_BY(global_mtx_);
 
     // Run coordination state.
     std::atomic<unsigned> active_worker_count_{0};
@@ -1833,6 +1848,17 @@ public:
         }
         static deadline_t clock_now(const Scheduler& s) noexcept {
             return s.clock_.load(std::memory_order::acquire);
+        }
+
+        // Issue #50 deterministic topology judge. Tests call this while the
+        // topology-mutation phase is paused: a true result proves mutation is
+        // not running under the shared Scheduler coordination authority.
+        static bool worker_topology_lock_available(Scheduler& s) noexcept {
+            if (!s.global_mtx_.try_lock()) {
+                return false;
+            }
+            s.global_mtx_.unlock();
+            return true;
         }
 
         // Register a test deadline from a non-worker thread (the coordinator).

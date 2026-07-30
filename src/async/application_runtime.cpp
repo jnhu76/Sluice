@@ -574,7 +574,6 @@ void ApplicationRuntime::driver_main() {
         // Returned from run_live: park at invocation boundary.
         lk.lock();
         driver_state_ = DriverState::between_invocations;
-        observed_epoch_ = control_epoch_;
 
         // Check exit conditions.
         if (driver_exit_requested_ || fatal_snapshot_.load(std::memory_order::acquire)) {
@@ -610,6 +609,18 @@ void ApplicationRuntime::driver_main() {
             }
 
             // Epoch changed: re-enter run_live.
+            observed_epoch_ = control_epoch_;
+            driver_state_ = DriverState::in_run_live;
+            lk.unlock();
+            continue;
+        }
+
+        // A submit/stop/terminal publication may race with the tail of
+        // run_live after Scheduler termination was published. Do not overwrite
+        // the entry epoch before checking it: pending Scheduler work already
+        // has its wake encoded in this difference and requires immediate
+        // re-entry, not a wait for a second control event.
+        if (control_epoch_ != observed_epoch_) {
             observed_epoch_ = control_epoch_;
             driver_state_ = DriverState::in_run_live;
             lk.unlock();

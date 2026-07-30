@@ -8,6 +8,16 @@ local R = SLUICE_ROOT
 -- quiescence, MW-S3. Gated to x86_64.
 sluice_internal_async_test("multi_worker_coord_test")
 
+-- Issue #50: deterministic worker-topology authority judge. Pauses run_impl
+-- at topology mutation and proves global_mtx_ excludes a concurrent spawn
+-- reader, then verifies the admitted Fiber executes exactly once.
+sluice_internal_async_test("scheduler_worker_topology_race_test")
+
+-- Issue #50 ApplicationRuntime regression. Drives the real Runtime submit /
+-- stop / drain / join path while its Scheduler is paused at initial topology
+-- publication, proving every admitted task reaches terminal execution.
+sluice_internal_async_test("application_runtime_worker_topology_test")
+
 -- E15-P2-02 Group::async_threaded exception-safety regression. Uses the
 -- test_set_tasks_throw_on_nth() seam (only available under
 -- SLUICE_ASYNC_INTERNAL_TESTING) to force tasks_ push_back to throw, proving

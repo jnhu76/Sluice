@@ -205,6 +205,11 @@ public:
         commit_release_flag_.store(true, std::memory_order::release);
         runtime_cv_.notify_all();
     }
+
+    // Issue #50 deterministic Scheduler topology regression. The returned
+    // reference remains owned by this Runtime and is valid only before terminal
+    // close. Absent from the installed production build.
+    Scheduler& test_scheduler_for_worker_topology() noexcept { return *sched_; }
 #endif
 
 private:

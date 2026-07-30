@@ -420,14 +420,21 @@ void Scheduler::spawn(Fiber& fiber) noexcept {
     // E7-T2 exactly-once: publish a runnable ticket ONLY if the created->runnable
     // transition succeeded. (spawn's source state is always 'created', so this
     // only fails if spawn is called twice — defensive.)
-    if (!fiber.make_runnable()) return;
+    if (!fiber.make_runnable())
+        return;
     // Round-robin assignment to worker local queues so that Fibers distribute
-    // across workers (required for E7-T1/T2 concurrency tests). If no workers
-    // exist yet (pre-run), use pending_spawn_ which will be distributed when
-    // run() creates workers.
+    // across this invocation's published participants (required for E7-T1/T2
+    // concurrency tests). With no active run, use pending_spawn_; the next
+    // run() assigns those tickets across its first-N snapshot.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+                                  sluice_async_test::PhaseTag::worker_topology_reader_attempt);
+#endif
     LockGuard lk(global_mtx_);
-    if (!workers_.empty()) {
-        unsigned target = next_spawn_worker_++ % static_cast<unsigned>(workers_.size());
+    const unsigned participant_count = active_worker_count_.load(std::memory_order_acquire);
+    if (participant_count != 0 &&
+        !global_terminate_.load(std::memory_order_acquire)) {
+        unsigned target = next_spawn_worker_++ % participant_count;
         std::lock_guard<std::mutex> wlk(workers_[target]->inbox_mtx);
         workers_[target]->local_runnable.push_back(&fiber);
         // E8: record the initial runnable owner (ADR §9.3.5.1 ownerRecord;
@@ -446,12 +453,20 @@ void Scheduler::spawn_on(Fiber& fiber, unsigned worker_id) noexcept {
     // local_runnable. No-op if the make_runnable PUBLISH fails (created->
     // runnable didn't happen). Records the owner as worker_id. Narrow
     // deterministic-test hook (see header).
-    if (!fiber.make_runnable()) return;
+    if (!fiber.make_runnable())
+        return;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+                                  sluice_async_test::PhaseTag::worker_topology_reader_attempt);
+#endif
     LockGuard lk(global_mtx_);
-    if (worker_id >= workers_.size()) {
-        // Workers not created yet — fall back to pending_spawn_; the run()
-        // distribute will assign round-robin (test must call spawn_on after
-        // workers exist, i.e. from inside a Fiber body during a run).
+    const unsigned participant_count = active_worker_count_.load(std::memory_order_acquire);
+    if (participant_count == 0 ||
+        global_terminate_.load(std::memory_order_acquire) ||
+        worker_id >= participant_count) {
+        // No active run, or the requested WorkerState is retained but does not
+        // participate in this invocation. Defer owner assignment to the next
+        // run's first-N topology.
         pending_spawn_.push_back(&fiber);
         return;
     }
@@ -493,59 +508,53 @@ void Scheduler::run_live(unsigned worker_count, bool (*stop_fn)(void*), void* st
 }
 
 void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
-    if (worker_count == 0) worker_count = 1;
-    run_mode_ = mode;  // stable for the duration of this run invocation
+    if (worker_count == 0)
+        worker_count = 1;
+    run_mode_ = mode; // stable for the duration of this run invocation
 
-    // WorkerState is address-stable across run() calls (wait registrations may
-    // hold WorkerState* pointers between calls — E7-ABORT-6 lifetime). Grow or
-    // shrink as needed, but never destroy/recreate existing workers within
-    // the Scheduler's lifetime.
-    while (workers_.size() < worker_count) {
-        workers_.push_back(std::make_unique<WorkerState>());
-        workers_.back()->id = static_cast<unsigned>(workers_.size() - 1);
-    }
-    // Ensure worker IDs are correct.
-    for (unsigned i = 0; i < workers_.size(); ++i) {
-        workers_[i]->id = i;
-    }
-
-    // Reset each worker's saved scheduler context (sched_ctx) to a pristine
-    // state before the run. A prior run() may have left sched_ctx holding a
-    // resume-pointer and rsp/rbp that were valid only on that run's thread —
-    // e.g. run(1) runs inline on the caller's thread, so workers_[0]->sched_ctx
-    // would point into the caller's (now-unwound) stack. Each worker re-saves
-    // sched_ctx on its first run_next_on() before any Fiber can switch back to
-    // it, so a stale value is never read in the well-formed path; zeroing here
-    // is a defense-in-depth that also makes a misuse fail loudly (jump to 0)
-    // instead of silently into recycled stack memory.
-    for (auto& w : workers_) {
-        fiber_ctx::reset_context(w->sched_ctx);
-    }
-
-    // Distribute any pending_spawn_ across workers round-robin.
+    WorkerSnapshot run_workers;
+    run_workers.reserve(worker_count);
     {
         LockGuard lk(global_mtx_);
-        unsigned w = 0;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        sluice_async_test::test_phase(*this, sluice_async_test::PhaseTag::worker_topology_mutation);
+#endif
+        ensure_workers_locked(worker_count, run_workers);
+
+        // Reset only this invocation's participants. A prior run() may have
+        // left sched_ctx holding native-stack pointers valid only for that
+        // invocation. Each worker re-saves sched_ctx before a Fiber resumes.
+        for (WorkerState* worker : run_workers) {
+            fiber_ctx::reset_context(worker->sched_ctx);
+        }
+
+        // Move the pre-run domain into the now-published first-N topology
+        // without exposing a partially established WorkerState to spawn().
+        unsigned target = 0;
         while (!pending_spawn_.empty()) {
-            auto* f = pending_spawn_.front();
+            Fiber* fiber = pending_spawn_.front();
             pending_spawn_.pop_front();
-            auto* tgt = workers_[w % worker_count].get();
-            std::lock_guard<std::mutex> wlk(tgt->inbox_mtx);
-            tgt->local_runnable.push_back(f);
-            // E8: record the initial runnable owner for pre-run spawns.
-            fiber_owner_[f] = tgt;
-            tgt->inbox_cv.notify_one();
-            ++w;
+            WorkerState* worker = run_workers[target % worker_count];
+            std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
+            worker->local_runnable.push_back(fiber);
+            fiber_owner_[fiber] = worker;
+            worker->inbox_cv.notify_one();
+            ++target;
         }
         next_spawn_worker_ = 0;
         admission_ = AdmissionState::none;
         admission_owner_ = static_cast<unsigned>(-1);
+        running_fiber_count_.store(0, std::memory_order_release);
+        idle_workers_.store(0, std::memory_order_release);
+        global_terminate_.store(false, std::memory_order_release);
+        in_coordinated_run_ = true;
+        active_worker_count_.store(worker_count, std::memory_order_release);
     }
-    in_coordinated_run_ = true;
-    active_worker_count_.store(worker_count, std::memory_order_release);
-    running_fiber_count_.store(0, std::memory_order_release);
-    idle_workers_.store(0, std::memory_order_release);
-    global_terminate_.store(false, std::memory_order_release);
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(*this,
+                                  sluice_async_test::PhaseTag::worker_topology_ready_before_start);
+#endif
     // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: the test-controlled causal seam
     // state (E7 admission, E9 park, E12 event) no longer lives on Scheduler; it
     // is driven by the internal-testing controller and persists across the
@@ -554,36 +563,58 @@ void Scheduler::run_impl(unsigned worker_count, RunMode mode) {
     if (worker_count == 1) {
         // Single-worker fast path: run inline (no thread spawn). This preserves
         // the E4-E6 behavior exactly — run_until_idle on the caller's thread.
-        g_worker = workers_[0].get();
-        workers_[0]->owner_scheduler = this;  // E13 P5 caller-validation identity
-        workers_[0]->active.store(true, std::memory_order_release);
-        worker_loop(workers_[0].get());
-        workers_[0]->active.store(false, std::memory_order_release);
+        WorkerState* worker = run_workers[0];
+        g_worker = worker;
+        worker->owner_scheduler = this; // E13 P5 caller-validation identity
+        worker->active.store(true, std::memory_order_release);
+        worker_loop(worker, run_workers);
+        worker->active.store(false, std::memory_order_release);
         g_worker = nullptr;
     } else {
-        // Multi-worker: spawn OS threads, each running worker_loop.
+        // Multi-worker: spawn OS threads from the immutable invocation snapshot.
         std::vector<std::thread> threads;
         threads.reserve(worker_count);
-        for (unsigned i = 0; i < worker_count; ++i) {
-            threads.emplace_back([this, i] {
-                g_worker = workers_[i].get();
-                workers_[i]->owner_scheduler = this;  // E13 P5 caller-validation identity
-                workers_[i]->active.store(true, std::memory_order_release);
-                worker_loop(workers_[i].get());
-                workers_[i]->active.store(false, std::memory_order_release);
+        for (WorkerState* worker : run_workers) {
+            threads.emplace_back([this, worker, &run_workers] {
+                g_worker = worker;
+                worker->owner_scheduler = this; // E13 P5 caller-validation identity
+                worker->active.store(true, std::memory_order_release);
+                worker_loop(worker, run_workers);
+                worker->active.store(false, std::memory_order_release);
                 g_worker = nullptr;
             });
         }
-        for (auto& t : threads) {
-            if (t.joinable()) t.join();
+        for (auto& thread : threads) {
+            if (thread.joinable())
+                thread.join();
         }
     }
 
-    in_coordinated_run_ = false;
-    active_worker_count_.store(0, std::memory_order_release);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    sluice_async_test::test_phase(
+        *this, sluice_async_test::PhaseTag::worker_topology_joined_before_unpublish);
+#endif
+    {
+        LockGuard lk(global_mtx_);
+        in_coordinated_run_ = false;
+        active_worker_count_.store(0, std::memory_order_release);
+    }
 }
 
-void Scheduler::worker_loop(WorkerState* ws) {
+void Scheduler::ensure_workers_locked(unsigned worker_count, WorkerSnapshot& run_workers) {
+    // WorkerState is address-stable across run() calls (wait registrations may
+    // hold WorkerState* pointers between calls — E7-ABORT-6 lifetime). Grow as
+    // needed, but never shrink or destroy/recreate an existing pointee.
+    while (workers_.size() < worker_count) {
+        workers_.push_back(std::make_unique<WorkerState>());
+        workers_.back()->id = static_cast<unsigned>(workers_.size() - 1);
+    }
+    for (unsigned i = 0; i < worker_count; ++i) {
+        run_workers.push_back(workers_[i].get());
+    }
+}
+
+void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) {
     // E7-C fixup: coordinated loop with explicit MW state classification
     // (ADR §9.2.6) and two-phase MW-S2 admission.
     //
@@ -623,9 +654,9 @@ void Scheduler::worker_loop(WorkerState* ws) {
         // runnable ticket now sits on ws->local_runnable owned by ws, so
         // loop back and pop it. try_steal is a no-op if there is only one
         // worker or no other worker has runnable work.
-        if (!f && workers_.size() > 1) {
-            if (try_steal(ws)) {
-                continue;  // stolen ticket is on ws->local_runnable; pop next iteration
+        if (!f && run_workers.size() > 1) {
+            if (try_steal(ws, run_workers)) {
+                continue; // stolen ticket is on ws->local_runnable; pop next iteration
             }
         }
 
@@ -647,7 +678,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
             (void)wake_ready_completions_locked();
             (void)wake_ready_flags_locked();
             (void)pump_deadlines_locked();
-            state = classify_locked();
+            state = classify_locked(run_workers);
         }
 
         // If drain produced routed work, the owning worker will pick it up
@@ -661,7 +692,8 @@ void Scheduler::worker_loop(WorkerState* ws) {
             // core. Fall through to park on inbox_cv; the owning worker will
             // notify when it routes work here, or the 1ms timeout re-checks.
             idle_workers_.store(0, std::memory_order_release);
-            if (global_terminate_.load(std::memory_order_acquire)) break;
+            if (global_terminate_.load(std::memory_order_acquire))
+                break;
             // Fall through to park (no continue).
         }
 
@@ -677,9 +709,8 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 LockGuard lk(global_mtx_);
                 // Re-classify under the lock — state may have changed since
                 // the unlocked classify above.
-                if (classify_locked() == MwState::mw_s2 &&
-                    admission_ == AdmissionState::none &&
-                    ws->id == 0) {
+                if (classify_locked(run_workers) == MwState::mw_s2 &&
+                    admission_ == AdmissionState::none && ws->id == 0) {
                     admission_ = AdmissionState::candidate;
                     admission_owner_ = ws->id;
                     elected = true;
@@ -696,15 +727,14 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 // function that looks up controller state by Scheduler*.
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                 sluice_async_test::test_phase(*this,
-                    sluice_async_test::PhaseTag::mw_admission_phase_b);
+                                              sluice_async_test::PhaseTag::mw_admission_phase_b);
 #endif
 
                 bool phase_b_committed = false;
                 {
                     LockGuard lk(global_mtx_);
                     // Demoted by a concurrent route? Then abandon admission.
-                    if (admission_ != AdmissionState::candidate ||
-                        admission_owner_ != ws->id) {
+                    if (admission_ != AdmissionState::candidate || admission_owner_ != ws->id) {
                         // Another path cancelled us. Loop.
                         continue;
                     }
@@ -712,7 +742,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
                     (void)wake_ready_completions_locked();
                     (void)wake_ready_flags_locked();
                     (void)pump_deadlines_locked();
-                    MwState s2 = classify_locked();
+                    MwState s2 = classify_locked(run_workers);
                     if (s2 != MwState::mw_s2) {
                         // State changed (MW-S1 via routed work, or MW-S3 via
                         // outstanding drop). Cancel candidate; do NOT enter wait_one.
@@ -740,15 +770,48 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 // outside the lock is safe because only the committed worker can
                 // change admission_ from committed (the state machine invariant).
                 if (phase_b_committed) {
-                // E9 MIXED-WAKE domain split.
-                if (ws->park_domain == WorkerState::ParkDomain::Scheduler) {
-                    // External-wake-capable wait registered: park on the wake
-                    // source (NOT backend wait_one). The wake set includes
-                    // external-ready publication. A wake here means a producer
-                    // signaled (external ready or routed work) — treat it as
-                    // progress and re-drain.
-                    ws->park_domain = WorkerState::ParkDomain::None;  // reset before park
-                    park_on_wake_source(ws);
+                    // E9 MIXED-WAKE domain split.
+                    if (ws->park_domain == WorkerState::ParkDomain::Scheduler) {
+                        // External-wake-capable wait registered: park on the wake
+                        // source (NOT backend wait_one). The wake set includes
+                        // external-ready publication. A wake here means a producer
+                        // signaled (external ready or routed work) — treat it as
+                        // progress and re-drain.
+                        ws->park_domain = WorkerState::ParkDomain::None; // reset before park
+                        park_on_wake_source(ws);
+                        // Phase D: reacquire global_mtx_, clear admission, drain.
+                        {
+                            LockGuard lk(global_mtx_);
+                            admission_ = AdmissionState::none;
+                            admission_owner_ = static_cast<unsigned>(-1);
+                            (void)wake_ready_completions_locked();
+                            (void)wake_ready_flags_locked();
+                            (void)pump_deadlines_locked();
+                        }
+                        // A wake on the Scheduler domain means a wake-relevant
+                        // publication happened; treat as progress (re-loop). We do
+                        // NOT terminate on a wake-source return (unlike the backend
+                        // no-progress path), because the whole point is that
+                        // external wake must be observable independent of backend
+                        // timing.
+                        idle_workers_.store(0, std::memory_order_release);
+                        continue;
+                    }
+
+                    // BACKEND domain: the E7 path. Backend progress only.
+                    ws->park_domain = WorkerState::ParkDomain::Backend;
+                    auto wr = ctx_.wait_one();
+                    ws->park_domain = WorkerState::ParkDomain::None;
+                    // E6/E7 reap semantics: wait_one()==0 means the backend made
+                    // no progress this call. For FakeAsyncBackend this happens
+                    // when nothing is staged; for real backends it means "no op
+                    // became ready". Per ADR §9.2.6 / E6, this is the legitimate
+                    // "no Scheduler-driven progress" boundary: the coordinated
+                    // run terminates (like MW-S3), preserving E4/E5 caller-driven
+                    // semantics. A reap>0 yields ready Completions which the next
+                    // loop-top drain will route.
+                    bool made_progress = wr.has_value() && wr.value() > 0;
+
                     // Phase D: reacquire global_mtx_, clear admission, drain.
                     {
                         LockGuard lk(global_mtx_);
@@ -758,63 +821,37 @@ void Scheduler::worker_loop(WorkerState* ws) {
                         (void)wake_ready_flags_locked();
                         (void)pump_deadlines_locked();
                     }
-                    // A wake on the Scheduler domain means a wake-relevant
-                    // publication happened; treat as progress (re-loop). We do
-                    // NOT terminate on a wake-source return (unlike the backend
-                    // no-progress path), because the whole point is that
-                    // external wake must be observable independent of backend
-                    // timing.
+
+                    if (!made_progress) {
+                        LockGuard lk(global_mtx_);
+                        // A concurrent route may have published work after the
+                        // Phase-D drain. Reclassify under the same authority
+                        // used by spawn() before publishing termination.
+                        if (classify_locked(run_workers) == MwState::mw_s1) {
+                            continue;
+                        }
+                        // No backend progress: terminate this coordinated run. The
+                        // run may be re-entered by the caller after staging work
+                        // (E4/E5 model). MW-S2 with outstanding-but-uncompletable
+                        // ops is treated as a no-progress boundary, NOT busy-spin.
+                        global_terminate_.store(true, std::memory_order_release);
+                        for (WorkerState* worker : run_workers) {
+                            std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
+                            worker->inbox_cv.notify_all();
+                        }
+                        // E9: wake any Worker parked on the wake source.
+                        signal_wake_locked();
+                        // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: release any paused
+                        // admission seam via the controller (test variant only).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                        sluice_async_test::release_all_phases(*this);
+#endif
+                        break;
+                    }
                     idle_workers_.store(0, std::memory_order_release);
                     continue;
                 }
-
-                // BACKEND domain: the E7 path. Backend progress only.
-                ws->park_domain = WorkerState::ParkDomain::Backend;
-                auto wr = ctx_.wait_one();
-                ws->park_domain = WorkerState::ParkDomain::None;
-                // E6/E7 reap semantics: wait_one()==0 means the backend made
-                // no progress this call. For FakeAsyncBackend this happens
-                // when nothing is staged; for real backends it means "no op
-                // became ready". Per ADR §9.2.6 / E6, this is the legitimate
-                // "no Scheduler-driven progress" boundary: the coordinated
-                // run terminates (like MW-S3), preserving E4/E5 caller-driven
-                // semantics. A reap>0 yields ready Completions which the next
-                // loop-top drain will route.
-                bool made_progress = wr.has_value() && wr.value() > 0;
-
-                // Phase D: reacquire global_mtx_, clear admission, drain.
-                {
-                    LockGuard lk(global_mtx_);
-                    admission_ = AdmissionState::none;
-                    admission_owner_ = static_cast<unsigned>(-1);
-                    (void)wake_ready_completions_locked();
-                    (void)wake_ready_flags_locked();
-                    (void)pump_deadlines_locked();
-                }
-
-                if (!made_progress) {
-                    // No backend progress: terminate this coordinated run. The
-                    // run may be re-entered by the caller after staging work
-                    // (E4/E5 model). MW-S2 with outstanding-but-uncompletable
-                    // ops is treated as a no-progress boundary, NOT busy-spin.
-                    global_terminate_.store(true, std::memory_order_release);
-                    for (auto& w : workers_) {
-                        std::lock_guard<std::mutex> wlk(w->inbox_mtx);
-                        w->inbox_cv.notify_all();
-                    }
-                    // E9: wake any Worker parked on the wake source.
-                    signal_wake_locked();
-                    // ASYNC-TEST-SEAM-AUTHORITY-CORRECTIVE-1: release any paused
-                    // admission seam via the controller (test variant only).
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                    sluice_async_test::release_all_phases(*this);
-#endif
-                    break;
-                }
-                idle_workers_.store(0, std::memory_order_release);
-                continue;
-            }
-        }  // if (elected)
+            } // if (elected)
 
             // Not elected and not committed: another worker is the candidate/
             // committed participant. Fall through to idle parking.
@@ -828,7 +865,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
             // Cancel any stale admission if we're terminating — wait_one is
             // undefined past run end. (admission_ should already be none here
             // for non-elected workers.)
-            MwState final_state = classify_locked();
+            MwState final_state = classify_locked(run_workers);
             // If real work appeared (MW-S1) or backend still outstanding (S2),
             // do not terminate.
             if (final_state == MwState::mw_s1 || final_state == MwState::mw_s2) {
@@ -846,8 +883,7 @@ void Scheduler::worker_loop(WorkerState* ws) {
                 //   Drain + MW-S3                         -> RETURN STALLED
                 //   Live  + MW-S3 without external wake   -> RETURN STALLED
                 //   Live  + MW-S3 + stop predicate true   -> RETURN (E14-F1)
-                if (final_state == MwState::mw_s3_unresolved &&
-                    run_mode_ == RunMode::live &&
+                if (final_state == MwState::mw_s3_unresolved && run_mode_ == RunMode::live &&
                     external_wake_possible_locked()) {
                     // E14-F1: check the invocation stop predicate BEFORE
                     // deciding to park. If the caller (e.g. Group::await)
@@ -859,13 +895,13 @@ void Scheduler::worker_loop(WorkerState* ws) {
                         // path (same as Drain MW-S3). The run returns to the
                         // caller; unrelated registrations remain for later.
                         unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
-                        if (prev + 1 >= workers_.size()) {
-                            MwState still = classify_locked();
+                        if (prev + 1 >= run_workers.size()) {
+                            MwState still = classify_locked(run_workers);
                             if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
                                 global_terminate_.store(true, std::memory_order_release);
-                                for (auto& w : workers_) {
-                                    std::lock_guard<std::mutex> wlk(w->inbox_mtx);
-                                    w->inbox_cv.notify_all();
+                                for (WorkerState* worker : run_workers) {
+                                    std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
+                                    worker->inbox_cv.notify_all();
                                 }
                                 signal_wake_locked();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -885,9 +921,9 @@ void Scheduler::worker_loop(WorkerState* ws) {
                     }
                 } else {
                     unsigned prev = idle_workers_.fetch_add(1, std::memory_order_acq_rel);
-                    if (prev + 1 >= workers_.size()) {
+                    if (prev + 1 >= run_workers.size()) {
                         // All workers idle. Final re-check (global_mtx_ held).
-                        MwState still = classify_locked();
+                        MwState still = classify_locked(run_workers);
                         if (still == MwState::mw_s3_unresolved || still == MwState::quiescent) {
                             // Physical run termination. MW-S3 retains wait
                             // registrations logically; only quiescent is true
@@ -896,9 +932,9 @@ void Scheduler::worker_loop(WorkerState* ws) {
                             // Live it is reached only for MW-S3 without an
                             // effective wake source, or true quiescence.
                             global_terminate_.store(true, std::memory_order_release);
-                            for (auto& w : workers_) {
-                                std::lock_guard<std::mutex> wlk(w->inbox_mtx);
-                                w->inbox_cv.notify_all();
+                            for (WorkerState* worker : run_workers) {
+                                std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
+                                worker->inbox_cv.notify_all();
                             }
                             // E9: wake any Worker parked on the wake source.
                             signal_wake_locked();
@@ -1111,38 +1147,43 @@ bool Scheduler::publish_waiting_fiber_runnable_locked(Fiber* fiber) {
     // The owner lookup is authoritative: a resolver must not change ownership.
     WorkerState* owner = owner_for_fiber_locked(fiber);
     if (!fiber->make_runnable()) {
-        return false;  // already runnable/running/done (exactly-once guard)
+        return false; // already runnable/running/done (exactly-once guard)
     }
     route_runnable_locked(fiber, owner);
     return true;
 }
 
-Scheduler::MwState Scheduler::classify_locked() const {
+Scheduler::MwState Scheduler::classify_locked(const WorkerSnapshot& run_workers) const {
     // Must be called with global_mtx_ held.
     bool any_runnable = !pending_spawn_.empty();
     std::size_t per_worker_runnable = 0;
     if (!any_runnable) {
-        for (auto& w : workers_) {
-            std::lock_guard<std::mutex> wlk(w->inbox_mtx);
-            per_worker_runnable += w->local_runnable.size();
-            if (!w->local_runnable.empty()) { any_runnable = true; break; }
+        for (WorkerState* worker : run_workers) {
+            std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
+            per_worker_runnable += worker->local_runnable.size();
+            if (!worker->local_runnable.empty()) {
+                any_runnable = true;
+                break;
+            }
         }
     }
-    (void)per_worker_runnable;  // accumulated for diagnostics; silence unused warning
-    const bool any_running =
-        running_fiber_count_.load(std::memory_order_acquire) > 0;
-    if (any_runnable || any_running) return MwState::mw_s1;
+    (void)per_worker_runnable; // accumulated for diagnostics; silence unused warning
+    const bool any_running = running_fiber_count_.load(std::memory_order_acquire) > 0;
+    if (any_runnable || any_running)
+        return MwState::mw_s1;
 
     // No executable Fiber. Backend outstanding count is the source of truth
     // for MW-S2 vs MW-S3. ctx_.outstanding() acquires access_mtx_ internally;
     // global_mtx_→access_mtx_ is the accepted lock order.
     const bool any_outstanding = ctx_.outstanding() > 0;
-    if (any_outstanding) return MwState::mw_s2;
+    if (any_outstanding)
+        return MwState::mw_s2;
 
-    const bool any_wait =
-        !waiting_size_.empty() || !waiting_void_.empty() || !waiting_ready_.empty() ||
-        waiting_waitq_count_ > 0 || waiting_select_count_ > 0;
-    if (any_wait) return MwState::mw_s3_unresolved;
+    const bool any_wait = !waiting_size_.empty() || !waiting_void_.empty() ||
+                          !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
+                          waiting_select_count_ > 0;
+    if (any_wait)
+        return MwState::mw_s3_unresolved;
 
     return MwState::quiescent;
 }
@@ -4366,10 +4407,8 @@ void Scheduler::attach_ready_wake(const std::atomic<bool>& ready,
 
 std::size_t Scheduler::runnable_count() const {
     std::size_t total = 0;
-    {
-        LockGuard lk(global_mtx_);
-        total += pending_spawn_.size();
-    }
+    LockGuard lk(global_mtx_);
+    total += pending_spawn_.size();
     for (auto& w : workers_) {
         std::lock_guard<std::mutex> wlk(w->inbox_mtx);
         total += w->local_runnable.size();
@@ -4377,7 +4416,7 @@ std::size_t Scheduler::runnable_count() const {
     return total;
 }
 
-bool Scheduler::try_steal(WorkerState* thief) {
+bool Scheduler::try_steal(WorkerState* thief, const WorkerSnapshot& run_workers) {
     // E8 StealRunnable (ADR §9.3.4): MOVE one runnable ticket from a victim's
     // local_runnable to thief->local_runnable AND TRANSFER owner victim->thief,
     // as one atomic transition under global_mtx_. NEVER calls make_runnable
@@ -4391,14 +4430,15 @@ bool Scheduler::try_steal(WorkerState* thief) {
     // push-to-thief sequence happens under global_mtx_, which is the same
     // domain that reads owner/ticket state (E8-0 audit O8). No IN_TRANSIT
     // state is observable.
-    if (workers_.size() <= 1) return false;  // nothing to steal from
+    if (run_workers.size() <= 1)
+        return false; // nothing to steal from
 
     LockGuard lk(global_mtx_);
     // Round-robin victim starting point keyed on thief id to spread load.
-    unsigned n = static_cast<unsigned>(workers_.size());
+    unsigned n = static_cast<unsigned>(run_workers.size());
     for (unsigned k = 1; k < n; ++k) {
         unsigned vidx = (thief->id + k) % n;
-        WorkerState* victim = workers_[vidx].get();
+        WorkerState* victim = run_workers[vidx];
         // P1-1 corrective (P6-C1 §9.2): refuse to steal ANY ticket from a victim
         // that is mid-suspend-context-switch. A resolver may have routed a
         // Runnable ticket onto this victim's local_runnable AFTER the victim
