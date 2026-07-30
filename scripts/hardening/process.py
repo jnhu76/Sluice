@@ -27,6 +27,7 @@ import os
 import re
 import signal
 import subprocess
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -168,6 +169,7 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
     child_env.update(spec.environment)
 
     started_at = _now()
+    start_mono = time.monotonic()
 
     # Open the log file and write + flush the header *before* the child
     # inherits the fd, so the header always precedes the child's output.
@@ -175,7 +177,8 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
     try:
         log_file = open(spec.log_path, "ab")
     except OSError as e:
-        return _runner_error_result(spec, started_at, f"log open failed: {e}")
+        return _runner_error_result(
+            spec, started_at, f"log open failed: {e}", start_mono=start_mono)
 
     try:
         try:
@@ -184,8 +187,7 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
             log_file.flush()
         except OSError as e:
             return _runner_error_result(
-                spec, started_at, f"log header write failed: {e}"
-            )
+                spec, started_at, f"log header write failed: {e}", start_mono=start_mono)
 
         # Start the subprocess with output directed at the log file.
         try:
@@ -197,7 +199,7 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
                 start_new_session=True,
             )
         except OSError as e:  # FileNotFoundError, PermissionError, ...
-            return _runner_error_result(spec, started_at, f"spawn failed: {e}")
+            return _runner_error_result(spec, started_at, f"spawn failed: {e}", start_mono=start_mono)
 
         # From here the child MUST always be reaped, on every path.
         try:
@@ -221,8 +223,8 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
             pass
 
     finished_at = _now()
+    duration = time.monotonic() - start_mono
     end_epoch = int(finished_at.timestamp())
-    duration = (finished_at - started_at).total_seconds()
 
     # Read back the command's real output for sanitizer classification.  The
     # footer has not been written yet, so the file is header + output.
@@ -329,7 +331,8 @@ def _now() -> datetime.datetime:
 
 
 def _runner_error_result(
-    spec: CommandSpec, started_at: datetime.datetime, message: str
+    spec: CommandSpec, started_at: datetime.datetime, message: str,
+    start_mono: float = 0.0,
 ) -> CommandResult:
     """Build a RUNNER_ERROR result for an infrastructure failure.
 
@@ -337,7 +340,7 @@ def _runner_error_result(
     artifact directory.
     """
     finished_at = _now()
-    duration = (finished_at - started_at).total_seconds()
+    duration = time.monotonic() - start_mono if start_mono > 0 else 0.0
     try:
         with open(spec.log_path, "ab") as f:
             f.write(

@@ -158,7 +158,7 @@ class TargetCacheError(RuntimeError):
     """
 
 
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+_ANSI_RE = re.compile(r"\x1b\[[0-9;<=>?]*[a-zA-Z]")
 _TARGET_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.+-]+$")
 
 
@@ -250,6 +250,10 @@ def refresh_target_cache(ctx: PhaseContext, mode: str) -> Set[str]:
     out_file = ctx.run_dir / f"{mode}-targets.txt"
     command = ["xmake", "show", "-l", "targets"]
 
+    # Clear any stale cache entry for this mode before the refresh, so a
+    # failure leaves no misleading cached state.
+    ctx.target_cache.pop(mode, None)
+
     try:
         r = subprocess.run(command, capture_output=True, text=True, timeout=60)
     except subprocess.TimeoutExpired as e:
@@ -280,7 +284,14 @@ def refresh_target_cache(ctx: PhaseContext, mode: str) -> Set[str]:
         )
 
     sorted_targets = sorted(targets)
-    out_file.write_text("\n".join(sorted_targets) + "\n")
+    try:
+        out_file.write_text("\n".join(sorted_targets) + "\n")
+    except OSError as e:
+        raise _target_cache_failure(
+            out_file, mode, command, returncode=r.returncode,
+            stdout=r.stdout, stderr=r.stderr, exception=e,
+            note=f"failed to write target snapshot: {e}",
+        ) from e
     ctx.target_cache[mode] = targets
     return targets
 
