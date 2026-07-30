@@ -40,6 +40,18 @@ namespace sluice_async_test {
 // Adding a tag requires adding the corresponding call site; removing a call
 // site requires removing the tag (the controller asserts on unknown tags).
 enum class PhaseTag : unsigned char {
+    // Issue #50: run_impl paused at worker-topology mutation. The corrected
+    // implementation reaches this while holding global_mtx_.
+    worker_topology_mutation,
+    // Issue #50: spawn reached the topology-reader attempt boundary,
+    // immediately before acquiring global_mtx_.
+    worker_topology_reader_attempt,
+    // Issue #50: topology setup is complete and run_impl is paused before
+    // starting any worker loop. Reached with global_mtx_ released.
+    worker_topology_ready_before_start,
+    // Issue #50: every worker loop has joined, but the active topology has not
+    // yet been unpublished. Reached with global_mtx_ released.
+    worker_topology_joined_before_unpublish,
     // E7-T11: worker paused at MW-S2 Phase-B commit boundary.
     mw_admission_phase_b,
     // E9-CORRECTIVE: worker paused at ParkCandidate boundary (pre-physical-wait).

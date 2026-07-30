@@ -15,9 +15,11 @@
 
 #include <sluice/async/scheduler.hpp>
 
-#include <mutex>
 #include <iterator>
+#include <memory>
+#include <mutex>
 #include <unordered_map>
+#include <vector>
 
 namespace sluice_async_test {
 
@@ -27,7 +29,14 @@ namespace {
 // (test setup/teardown). test_phase performs a find() (no insertion).
 // Guarded by registry_mtx.
 std::mutex registry_mtx;
-std::unordered_map<sluice::async::Scheduler*, SchedulerController> registry;
+std::unordered_map<sluice::async::Scheduler*, std::unique_ptr<SchedulerController>> registry;
+
+// Unregistration removes lookup authority immediately, but an in-flight
+// test_phase may still hold the raw pointer returned while registry_mtx was
+// locked. Retain removed controllers until process teardown, after every test
+// thread has joined, so their mutex/CV storage cannot be destroyed underneath
+// that lease.
+std::vector<std::unique_ptr<SchedulerController>> retired_controllers;
 
 // Look up the controller for `s` WITHOUT allocating. Returns nullptr if not
 // registered. Called on the phase hot path.
@@ -37,7 +46,7 @@ SchedulerController* find_controller(sluice::async::Scheduler& s) noexcept {
     // released before any phase-state block.
     std::lock_guard<std::mutex> lk(registry_mtx);
     auto it = registry.find(&s);
-    return it == registry.end() ? nullptr : &it->second;
+    return it == registry.end() ? nullptr : it->second.get();
 }
 
 PhaseState& phase_of(SchedulerController& c, PhaseTag tag) noexcept {
@@ -91,6 +100,13 @@ void release_all_phases(sluice::async::Scheduler& s) noexcept {
     if (c == nullptr) return;
     // Disarm every phase so any paused worker observes termination.
     for (std::size_t i = 0; i < std::size(c->phases); ++i) {
+        // This phase is reached only after every worker has joined. It cannot
+        // strand a worker during termination, and preserving its armed state
+        // lets the coordinator inspect the post-join publication boundary.
+        if (i == static_cast<std::size_t>(
+                     PhaseTag::worker_topology_joined_before_unpublish)) {
+            continue;
+        }
         PhaseState& p = c->phases[i];
         {
             std::lock_guard<std::mutex> lk(p.mtx);
@@ -103,12 +119,15 @@ void release_all_phases(sluice::async::Scheduler& s) noexcept {
 void register_controller(sluice::async::Scheduler& s) noexcept {
     std::lock_guard<std::mutex> lk(registry_mtx);
     // emplace: if already present, leave the existing entry (idempotent).
-    registry.try_emplace(&s);
+    registry.try_emplace(&s, std::make_unique<SchedulerController>());
 }
 
 void unregister_controller(sluice::async::Scheduler& s) noexcept {
     std::lock_guard<std::mutex> lk(registry_mtx);
-    registry.erase(&s);
+    auto node = registry.extract(&s);
+    if (!node.empty()) {
+        retired_controllers.push_back(std::move(node.mapped()));
+    }
 }
 
 void arm(sluice::async::Scheduler& s, PhaseTag tag) noexcept {

@@ -42,8 +42,46 @@ struct ControllerGuard {
     ~ControllerGuard() noexcept { unregister_controller(s_); }
     ControllerGuard(const ControllerGuard&) = delete;
     ControllerGuard& operator=(const ControllerGuard&) = delete;
+
 private:
     sluice::async::Scheduler& s_;
+};
+
+// ---- Issue #50 worker-topology authority seam ----
+struct WorkerTopologySeam {
+    static void arm_mutation(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::worker_topology_mutation);
+    }
+    static void wait_mutation_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::worker_topology_mutation);
+    }
+    static void release_mutation(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::worker_topology_mutation);
+    }
+    static void wait_reader_attempt(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_reached(s, PhaseTag::worker_topology_reader_attempt);
+    }
+    static void arm_ready_before_start(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::worker_topology_ready_before_start);
+    }
+    static void wait_ready_before_start_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::worker_topology_ready_before_start);
+    }
+    static void release_ready_before_start(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::worker_topology_ready_before_start);
+    }
+    static void arm_joined_before_unpublish(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::worker_topology_joined_before_unpublish);
+    }
+    static void wait_joined_before_unpublish_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::worker_topology_joined_before_unpublish);
+    }
+    static void release_joined_before_unpublish(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::worker_topology_joined_before_unpublish);
+    }
+    static bool topology_lock_available(sluice::async::Scheduler& s) noexcept {
+        return sluice::async::Scheduler::AsyncTestAccess::worker_topology_lock_available(s);
+    }
 };
 
 // ---- E7 admission seam (was SchedulerTestHooks) ----

@@ -1091,19 +1091,25 @@ in_run_live
     │ run_live returns at an invocation boundary
     ▼
 between_invocations                            (the load-bearing boundary state)
-    │ snapshot observed_epoch = control_epoch
-    │ wait on runtime_cv (under lifecycle_mutex) until the PERSISTENT predicate:
-    │     driver_exit_requested
-    │     OR fatal_snapshot
-    │     OR control_epoch != observed_epoch
-    │ on wake, re-evaluate (still under the mutex) and dispatch:
+    │ retain observed_epoch from before the completed run_live invocation
+    │ re-evaluate under lifecycle_mutex and dispatch:
     │     if driver_exit_requested:            → exiting
     │     if fatal_snapshot:                   → exiting (then Fatal)
     │     if task_set_terminal_snapshot && outstanding()==0:
     │         publish drain_complete
+    │         snapshot observed_epoch = control_epoch
     │         signal runtime_cv                (wake drain() callers)
     │         → drained_wait
-    │     else (new/remaining work):           → in_run_live   (re-enter run_live)
+    │     if control_epoch != observed_epoch:
+    │         snapshot observed_epoch = control_epoch
+    │         → in_run_live                    (re-enter immediately)
+    │     else wait on runtime_cv for the PERSISTENT predicate:
+    │         driver_exit_requested
+    │         OR fatal_snapshot
+    │         OR control_epoch != observed_epoch
+    │     on wake with a new epoch:
+    │         snapshot observed_epoch = control_epoch
+    │         → in_run_live
     ▼
 drained_wait                                   (post-drain park; P2-03)
     │ snapshot observed_epoch = control_epoch
