@@ -869,6 +869,11 @@ to `pending_spawn_`, then assigned among the next invocation's participating
 workers. During an active invocation, `spawn()` routes only among that
 invocation's participants; after termination is published, new work is
 deferred to the next invocation rather than routed to an exiting worker.
+When a suspended Fiber survives a Drain STALLED boundary, its recorded owner
+may belong to a retained WorkerState outside a later smaller invocation.
+Runnable publication then rebinds the Fiber to one of the later invocation's
+participants under the Scheduler coordination lock, or defers the ticket until
+the next invocation if no worker can accept it.
 
 **Installed runtime substrate (not direct user API).** The following are
 public in the installed header due to encapsulation boundaries but are NOT

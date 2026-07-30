@@ -41,7 +41,6 @@
 #include <sluice/async/wait_queue.hpp>
 
 #include <atomic>
-#include <chrono>
 #include <cstddef>
 #include <thread>
 
@@ -687,7 +686,8 @@ SLUICE_TEST_CASE(wq_destruction_invariant) {
 // ws->current captured by the Scheduler integration authority (I2).
 // =============================================================================
 SLUICE_TEST_CASE(wq_race_stress_exactly_one_winner) {
-    if constexpr (!fiber_ctx::supported) return;
+    if constexpr (!fiber_ctx::supported)
+        return;
 
     constexpr int kIters = 20000;
     std::atomic<int> woken_count{0};
@@ -700,16 +700,12 @@ SLUICE_TEST_CASE(wq_race_stress_exactly_one_winner) {
 
         WaitQueue q;
         WaitNode n;
-        std::atomic<bool> registered{false};
         std::atomic<bool> go{false};
         std::atomic<int> wins{0};
 
         // Waiter fiber: the sole registrant via the production path.
         Fiber fwait;
-        fwait.set_entry([&](Fiber&) {
-            registered.store(true, std::memory_order_release);
-            sched.await_wait(q, n);
-        });
+        fwait.set_entry([&](Fiber&) { sched.await_wait(q, n); });
         FiberStack sw;
         SLUICE_CHECK(sched.init_fiber(fwait, sw.base(), sw.size()));
         sched.spawn(fwait);
@@ -720,25 +716,23 @@ SLUICE_TEST_CASE(wq_race_stress_exactly_one_winner) {
         // genuinely contend on the SAME node.
         std::thread runner([&] { sched.run_live(1); });
 
-        // TEST SYNCHRONIZATION ONLY: wait until await_wait has made the node
-        // registration-visible. registered is set BEFORE await_wait's internal
-        // register_ CAS, so we additionally spin until the queue is non-empty by
-        // probing wake_wait_one's return (a false means empty/lost, not a win).
-        // Production resolvers are NOT required to retry.
-        while (!registered.load(std::memory_order_acquire)) {
+        // TEST SYNCHRONIZATION ONLY: wait for Scheduler-owned registration
+        // evidence. A flag set before await_wait() plus a sleep can release both
+        // resolvers before the node is linked; both then lose and run_live()
+        // remains resident forever.
+        while (sched.waiting_count() != 1) {
             std::this_thread::yield();
         }
-        // Give the worker a beat to reach the park decision, then release the
-        // resolvers to race.
-        std::this_thread::sleep_for(std::chrono::microseconds(20));
 
         std::thread waker([&] {
             while (!go.load(std::memory_order_acquire)) {}
-            if (sched.wake_wait_one(q)) wins.fetch_add(1, std::memory_order_acq_rel);
+            if (sched.wake_wait_one(q))
+                wins.fetch_add(1, std::memory_order_acq_rel);
         });
         std::thread canceller([&] {
             while (!go.load(std::memory_order_acquire)) {}
-            if (sched.cancel_wait(q, n)) wins.fetch_add(1, std::memory_order_acq_rel);
+            if (sched.cancel_wait(q, n))
+                wins.fetch_add(1, std::memory_order_acq_rel);
         });
 
         go.store(true, std::memory_order_release);
@@ -747,10 +741,13 @@ SLUICE_TEST_CASE(wq_race_stress_exactly_one_winner) {
         runner.join();
 
         // Exactly one winner per node.
-        if (wins.load() != 1) double_win.fetch_add(1, std::memory_order_acq_rel);
+        if (wins.load() != 1)
+            double_win.fetch_add(1, std::memory_order_acq_rel);
         SLUICE_CHECK_MSG(n.is_terminal(), "node is terminal after the race");
-        if (n.was_woken()) woken_count.fetch_add(1, std::memory_order_acq_rel);
-        else if (n.was_cancelled()) cancelled_count.fetch_add(1, std::memory_order_acq_rel);
+        if (n.was_woken())
+            woken_count.fetch_add(1, std::memory_order_acq_rel);
+        else if (n.was_cancelled())
+            cancelled_count.fetch_add(1, std::memory_order_acq_rel);
     }
 
     const int total = woken_count.load() + cancelled_count.load();

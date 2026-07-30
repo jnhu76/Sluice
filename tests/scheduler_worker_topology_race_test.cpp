@@ -20,7 +20,7 @@ namespace {
 
 struct FiberStack {
     static constexpr std::size_t kBytes = 64 * 1024;
-    alignas(16) std::vector<std::byte> bytes{kBytes};
+    std::vector<std::byte> bytes = std::vector<std::byte>(kBytes);
 
     std::byte* base() noexcept { return bytes.data(); }
     std::size_t size() const noexcept { return bytes.size(); }
@@ -200,6 +200,66 @@ SLUICE_TEST_CASE(spawn_on_uses_published_participating_topology) {
     SLUICE_CHECK(run_concurrent_growth_case(1, true));
     SLUICE_CHECK(run_concurrent_growth_case(2, true));
     SLUICE_CHECK(run_concurrent_growth_case(4, true));
+}
+
+SLUICE_TEST_CASE(shrinking_reentry_routes_waiter_from_inactive_owner) {
+    if constexpr (!fiber_ctx::supported)
+        return;
+
+    AsyncIoContext ctx(std::make_unique<FakeAsyncBackend>());
+    Scheduler sched(ctx);
+    sluice_async_test::ControllerGuard controller(sched);
+
+    std::atomic<bool> release_blockers{false};
+    std::atomic<bool> ready{false};
+    std::atomic<unsigned> resumed{0};
+    FiberBatch batch(4);
+    for (unsigned i = 0; i < 3; ++i) {
+        batch.fibers[i].set_entry([&, i](Fiber&) {
+            while (!release_blockers.load(std::memory_order_acquire)) {
+                std::this_thread::yield();
+            }
+            batch.executions[i].fetch_add(1, std::memory_order_acq_rel);
+        });
+    }
+    batch.fibers[3].set_entry([&](Fiber&) {
+        sched.await_ready_flag(ready);
+        resumed.fetch_add(1, std::memory_order_acq_rel);
+    });
+    for (std::size_t i = 0; i < batch.fibers.size(); ++i) {
+        SLUICE_CHECK(
+            sched.init_fiber(batch.fibers[i], batch.stacks[i].base(), batch.stacks[i].size()));
+    }
+
+    sluice_async_test::WorkerTopologySeam::arm_ready_before_start(sched);
+    sluice_async_test::SuspendSeam::arm(sched);
+    std::thread first_run([&] { sched.run(4); });
+    sluice_async_test::WorkerTopologySeam::wait_ready_before_start_paused(sched);
+    for (unsigned i = 0; i < 4; ++i) {
+        sched.spawn_on(batch.fibers[i], i);
+    }
+    sluice_async_test::WorkerTopologySeam::release_ready_before_start(sched);
+    sluice_async_test::SuspendSeam::wait_paused(sched);
+    sluice_async_test::SuspendSeam::release(sched);
+    release_blockers.store(true, std::memory_order_release);
+    first_run.join();
+
+    SLUICE_CHECK(batch.fibers[3].state() == FiberState::waiting);
+    SLUICE_CHECK(sched.waiting_ready_count() == 1);
+
+    ready.store(true, std::memory_order_release);
+    sched.run(2);
+    const bool resumed_with_two =
+        resumed.load(std::memory_order_acquire) == 1 && batch.fibers[3].state() == FiberState::done;
+    if (!resumed_with_two) {
+        // Failure cleanup for the pre-fix route: the runnable ticket remains
+        // on retained Worker 3, outside the run(2) participant snapshot.
+        sched.run(4);
+    }
+
+    SLUICE_CHECK_MSG(resumed_with_two,
+                     "a waiter owned by retained Worker 3 must migrate into the next run(2)");
+    SLUICE_CHECK(sched.waiting_ready_count() == 0);
 }
 
 SLUICE_TEST_CASE(spawn_after_workers_join_is_deferred_to_next_run) {

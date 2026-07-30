@@ -1104,6 +1104,15 @@ bool Scheduler::wake_ready_flags_locked() {
 
 void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
     // Must be called with global_mtx_ held.
+    const unsigned participant_count = active_worker_count_.load(std::memory_order_acquire);
+    if (participant_count == 0) {
+        // No worker can accept this ticket. Preserve it for the next
+        // invocation, whose setup will assign a participating owner.
+        pending_spawn_.push_back(f);
+        signal_wake_locked();
+        return;
+    }
+
     // Clear the terminate signal: new work was routed, so the run is NOT over.
     // A worker that was about to exit must re-check its inbox (late-drain).
     global_terminate_.store(false, std::memory_order_release);
@@ -1118,15 +1127,25 @@ void Scheduler::route_runnable_locked(Fiber* f, WorkerState* owner) {
         admission_ = AdmissionState::none;
         admission_owner_ = static_cast<unsigned>(-1);
     }
-    if (owner) {
-        std::lock_guard<std::mutex> lk(owner->inbox_mtx);
-        owner->local_runnable.push_back(f);
-        owner->inbox_cv.notify_one();
-    } else {
-        pending_spawn_.push_back(f);
+
+    WorkerState* target = owner;
+    if (target == nullptr || target->id >= participant_count ||
+        workers_[target->id].get() != target) {
+        const unsigned target_id = next_spawn_worker_++ % participant_count;
+        target = workers_[target_id].get();
+        fiber_owner_[f] = target;
     }
+    {
+        std::lock_guard<std::mutex> lk(target->inbox_mtx);
+        target->local_runnable.push_back(f);
+        target->inbox_cv.notify_one();
+    }
+
     // E9: signal the wake source so a Worker parked on the SCHEDULER domain
     // (park_on_wake_source) resumes. Refinement map: TLA+ PublishRunnable.
+    // The inbox lock must already be released: the park predicate holds
+    // wake_mtx_ before it inspects the inbox, so holding inbox_mtx here would
+    // invert that order.
     signal_wake_locked();
 }
 
@@ -1156,18 +1175,15 @@ bool Scheduler::publish_waiting_fiber_runnable_locked(Fiber* fiber) {
 Scheduler::MwState Scheduler::classify_locked(const WorkerSnapshot& run_workers) const {
     // Must be called with global_mtx_ held.
     bool any_runnable = !pending_spawn_.empty();
-    std::size_t per_worker_runnable = 0;
     if (!any_runnable) {
         for (WorkerState* worker : run_workers) {
             std::lock_guard<std::mutex> wlk(worker->inbox_mtx);
-            per_worker_runnable += worker->local_runnable.size();
             if (!worker->local_runnable.empty()) {
                 any_runnable = true;
                 break;
             }
         }
     }
-    (void)per_worker_runnable; // accumulated for diagnostics; silence unused warning
     const bool any_running = running_fiber_count_.load(std::memory_order_acquire) > 0;
     if (any_runnable || any_running)
         return MwState::mw_s1;

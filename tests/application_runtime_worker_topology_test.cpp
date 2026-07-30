@@ -4,6 +4,7 @@
 
 #include <sluice/async/application_runtime.hpp>
 #include <sluice/async/fake_backend.hpp>
+#include <sluice/async/fiber_ctx.hpp>
 
 #include <atomic>
 #include <cstddef>
@@ -104,6 +105,9 @@ bool run_runtime_post_join_submit_case() {
 } // namespace
 
 SLUICE_TEST_CASE(runtime_initial_topology_growth_concurrent_submit_drains) {
+    if constexpr (!fiber_ctx::supported)
+        return;
+
     SLUICE_CHECK(run_runtime_topology_case(1, 1));
     SLUICE_CHECK(run_runtime_topology_case(1, 8));
     SLUICE_CHECK(run_runtime_topology_case(2, 8));
@@ -111,6 +115,9 @@ SLUICE_TEST_CASE(runtime_initial_topology_growth_concurrent_submit_drains) {
 }
 
 SLUICE_TEST_CASE(runtime_post_join_submit_reenters_without_losing_epoch) {
+    if constexpr (!fiber_ctx::supported)
+        return;
+
     SLUICE_CHECK(run_runtime_post_join_submit_case());
 }
 

@@ -1072,9 +1072,12 @@ private:
 
     // I47-F1: canonical waiting-Fiber publication helper. Looks up the Fiber's
     // recorded owner, transitions Waiting->Runnable (exactly-once guard), and
-    // routes the runnable ticket to the owner's queue. Returns true iff the
-    // transition succeeded and the ticket was published. Preserves winner
-    // resolution, timer retirement, and wait accounting (caller's responsibility).
+    // routes the runnable ticket through the current topology. A retained owner
+    // outside this invocation's first-N participants is rebound under
+    // global_mtx_; with no accepting invocation the ticket is deferred. Returns
+    // true iff the transition succeeded and the ticket was published. Preserves
+    // winner resolution, timer retirement, and wait accounting (caller's
+    // responsibility).
     bool publish_waiting_fiber_runnable_locked(Fiber* fiber) SLUICE_REQUIRES(global_mtx_);
     // E12-A: the wake_wait_one body with global_mtx_ already held. Resolves the
     // FIFO head with Woken (wake_one_locked), retires any bound timer, decrements

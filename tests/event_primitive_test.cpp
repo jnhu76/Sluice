@@ -1934,21 +1934,20 @@ SLUICE_TEST_CASE(event_cancel_wins_before_set_leaves_cancelled) {
 //     Worker) and releases global_mtx_. The reset then completes.
 // No timing inference: the seam is the causal block observation.
 SLUICE_TEST_CASE(event_causal_set_drain_blocks_reset) {
-    if constexpr (!fiber_ctx::supported) return;
+    if constexpr (!fiber_ctx::supported)
+        return;
 
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
-    sluice_async_test::ControllerGuard ctrl(sched);  // event seam registry
+    sluice_async_test::ControllerGuard ctrl(sched); // event seam registry
 
     Event ev(sched, /*initially_set=*/false);
     WaitNode n_old;
-    std::atomic<bool> old_registered{false};
     std::atomic<bool> reset_attempted{false}, reset_completed{false};
 
     Fiber f_old;
     f_old.set_entry([&](Fiber&) {
-        old_registered.store(true, std::memory_order_release);
-        ev.wait(n_old);  // Registered + Suspended on UNSET
+        ev.wait(n_old); // Registered + Suspended on UNSET
     });
 
     FiberStack s_old;
@@ -1965,23 +1964,27 @@ SLUICE_TEST_CASE(event_causal_set_drain_blocks_reset) {
         // Spin until S1 has paused mid-drain (mechanical observation).
         spin_wait_pred([&] { return EventHooks::is_set_paused(sched); });
         reset_attempted.store(true, std::memory_order_release);
-        ev.reset();  // blocks on global_mtx_ until S1 releases
+        ev.reset(); // blocks on global_mtx_ until S1 releases
         reset_completed.store(true, std::memory_order_release);
     });
 
     // S1 (external thread): set() stores SET, pauses mid-drain holding global_mtx_.
     std::thread s1_thread([&] {
-        spin_wait(old_registered);
-        ev.set();  // stores SET, pauses mid-drain under global_mtx_
+        // Wait for the Scheduler-owned registration itself. A flag published
+        // immediately before ev.wait() is not registration evidence: S1 could
+        // otherwise drain an empty queue, reset could complete, and Wold could
+        // then register against UNSET and strand run_live().
+        spin_wait_pred([&] { return sched.waiting_count() == 1; });
+        ev.set(); // stores SET, pauses mid-drain under global_mtx_
     });
 
     // Coordinator (main thread): wait until S1 has paused, then mechanically
     // observe the reset contender is blocked. run_live(1) parks the Worker on
     // Wold; we drive the seam coordination from here.
     //
-    // We must let the Worker reach MW-S3 + park first. Spin on old_registered,
-    // then run a Live run in a SEPARATE coordinator thread so THIS thread can
-    // perform seam coordination while the run is resident.
+    // We must let the Worker reach MW-S3 + park first. The S1 thread observes
+    // the Scheduler-owned registration, while the Live run executes in a
+    // SEPARATE coordinator thread so THIS thread can perform seam coordination.
     std::thread run_thread([&] { sched.run_live(1); });
 
     // Wait for S1 to reach the paused mid-drain state.

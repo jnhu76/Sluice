@@ -436,6 +436,14 @@ submissions are likewise deferred instead of being routed to workers that are
 already exiting or joined. Run setup clears termination before publishing its
 participant count, and run teardown withdraws that count under the same lock.
 
+A suspended Fiber may retain its recorded owner across a Drain STALLED
+boundary. If a later invocation uses fewer workers and that owner is outside
+the later first-N snapshot, runnable publication rebinds the Fiber to a
+participating Worker under `global_mtx_` before enqueuing its ticket. If no
+invocation can accept the ticket, publication defers it to `pending_spawn_`;
+the next run setup assigns both the ticket and its owner together. A resolver
+never routes to its own Worker merely because it won resolution.
+
 A `WorkerState*` copied while holding `global_mtx_` may be used after unlock
 only because the pointee remains alive until Scheduler destruction and the
 specific pointee field has its own synchronization authority. The lock order
