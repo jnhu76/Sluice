@@ -54,3 +54,4 @@ crash-*
 # keep them local, never tracked.
 /overnight-artifacts/
 /.nightly-corpus/
+/.overnight-local.lock
