@@ -98,6 +98,7 @@ bool copy_matches(std::size_t file_size, std::size_t buffer_size,
 
     auto got = read_all(dst.fd);
     if (got.size() != expected.size()) return false;
+    if (expected.empty()) return true;
     return std::memcmp(got.data(), expected.data(), expected.size()) == 0;
 }
 
