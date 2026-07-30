@@ -37,10 +37,12 @@ using sluice::Result;
 // ===========================================================================
 #if !defined(NDEBUG)
 
-// I1 — await_completion on a default-constructed (idle) Completion<std::size_t>.
-// The assert fires immediately; the process must terminate via the fail-fast
-// boundary.
-void child_i1_idle_await_size() {
+// Templated helper for idle-await death cases. Creates a Runtime, submits a
+// task that call await_completion on a default-constructed (idle) Completion<T>,
+// and verifies the assert fires. T is the Completion value type (std::size_t
+// or void). Shared by I1 and I2.
+template <class T>
+void child_idle_await() {
     auto* raw = new FakeAsyncBackend();
     auto rt = RuntimeBuilder{}
         .backend(std::unique_ptr<AsyncBackend>(raw))
@@ -54,7 +56,7 @@ void child_i1_idle_await_size() {
 
     std::atomic<bool> barrier{false};
     auto sub_r = rt->submit([&](RuntimeTaskContext& ctx) {
-        Completion<std::size_t> c;  // default-idle
+        Completion<T> c;  // default-idle
         barrier.store(true, std::memory_order::release);
         ctx.await_completion(c);  // assert fires here; never returns
         std::_Exit(sluice_death_test::kUnexpectedReturnExit);
@@ -76,36 +78,11 @@ void child_i1_idle_await_size() {
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
+// I1 — await_completion on a default-constructed (idle) Completion<std::size_t>.
+void child_i1_idle_await_size() { child_idle_await<std::size_t>(); }
+
 // I2 — await_completion on a default-constructed (idle) Completion<void>.
-void child_i2_idle_await_void() {
-    auto* raw = new FakeAsyncBackend();
-    auto rt = RuntimeBuilder{}
-        .backend(std::unique_ptr<AsyncBackend>(raw))
-        .workers(1)
-        .build()
-        .value();
-    auto sr = rt->start();
-    if (!sr.has_value()) {
-        std::_Exit(sluice_death_test::kChildTestFailExit);
-    }
-
-    std::atomic<bool> barrier{false};
-    auto sub_r = rt->submit([&](RuntimeTaskContext& ctx) {
-        Completion<void> c;  // default-idle
-        barrier.store(true, std::memory_order::release);
-        ctx.await_completion(c);  // assert fires here; never returns
-        std::_Exit(sluice_death_test::kUnexpectedReturnExit);
-    });
-    if (!sub_r.has_value()) {
-        std::_Exit(sluice_death_test::kChildTestFailExit);
-    }
-
-    while (!barrier.load(std::memory_order::acquire)) {
-        // spin
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
-}
+void child_i2_idle_await_void() { child_idle_await<void>(); }
 
 #endif  // !defined(NDEBUG)
 
