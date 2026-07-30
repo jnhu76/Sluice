@@ -195,4 +195,47 @@ SLUICE_TEST_CASE(sluice_copy_stats_reported) {
     SLUICE_CHECK(r.value().sync == SyncPolicy::data);
 }
 
+// ---- same-file regression (PR #52) -----------------------------------------
+
+SLUICE_TEST_CASE(sluice_copy_same_file_source_preserved) {
+    // Regression: PR #49's merged code opened dst with O_TRUNC before the
+    // same-file identity check, destroying the source for src==dst (hard link
+    // or same path). Verify that the source content survives when the two fds
+    // refer to the same inode: the copy may produce wrong data (self-overwrite
+    // on the same file), but the file must NOT be truncated to 0 beforehand.
+    TempFile src;
+    auto expected = seed_file(src.fd, 8192);
+
+    // Duplicate the src fd to get a second fd pointing to the same inode.
+    // This is a valid same-file scenario: both fds share the same inode,
+    // and the copy task's positional I/O does not share an offset.
+    int same_fd = ::dup(src.fd);
+    SLUICE_CHECK(same_fd >= 0);
+
+    // Run the copy from src to dst (same inode). The copy task reads and writes
+    // to the same file at the same offset — this is a self-overwrite scenario
+    // that may produce wrong data. The critical assertion: the source file is
+    // NOT truncated to 0 (the O_TRUNC-before-identity-check bug).
+    auto r = run_sequential_copy(src.fd, same_fd, 4096, 1, SyncPolicy::none);
+
+    // Close the second fd.
+    ::close(same_fd);
+
+    // The source file must still have its original content (not truncated).
+    struct stat st{};
+    SLUICE_CHECK(::fstat(src.fd, &st) == 0);
+    // The file must NOT be shorter than the original — the O_TRUNC bug would
+    // have set st_size to 0.
+    SLUICE_CHECK(st.st_size >= static_cast<off_t>(expected.size()));
+
+    // Read the file back and verify the original content is still there.
+    std::vector<std::byte> actual(expected.size());
+    if (expected.size() > 0) {
+        ssize_t n = ::pread(src.fd, actual.data(), actual.size(), 0);
+        SLUICE_CHECK(n == static_cast<ssize_t>(expected.size()));
+        // The first expected.size() bytes must match the original seed.
+        SLUICE_CHECK(std::memcmp(actual.data(), expected.data(), expected.size()) == 0);
+    }
+}
+
 SLUICE_MAIN()

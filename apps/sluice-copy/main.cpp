@@ -129,15 +129,6 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-// Same-file detection via device + inode (brief §21). Returns true if the two
-// open descriptors refer to the same file.
-bool same_file(int fd1, int fd2) {
-    struct stat s1{}, s2{};
-    if (::fstat(fd1, &s1) != 0) return false;
-    if (::fstat(fd2, &s2) != 0) return false;
-    return s1.st_dev == s2.st_dev && s1.st_ino == s2.st_ino;
-}
-
 const char* code_name(IoError::Code c) {
     switch (c) {
     case IoError::Code::eof: return "eof";
@@ -170,8 +161,9 @@ int main(int argc, char** argv) {
     }
     ScopedFd src_guard(src_fd);
 
-    // Open destination: write, create, truncate, with explicit 0644 perms.
-    int dst_fd = ::open(args.dst.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    // Open destination: write, create (NO O_TRUNC — must not truncate before
+    // same-file check). Truncation happens after identity verification.
+    int dst_fd = ::open(args.dst.c_str(), O_WRONLY | O_CREAT, 0644);
     if (dst_fd < 0) {
         std::fprintf(stderr, "%s: cannot open destination '%s': %s\n", argv[0],
                      args.dst.c_str(), std::strerror(errno));
@@ -180,10 +172,25 @@ int main(int argc, char** argv) {
     ScopedFd dst_guard(dst_fd);
 
     // Reject source == destination by filesystem identity, not path string.
-    if (same_file(src_fd, dst_fd)) {
+    // fstat both fds BEFORE any truncation so the source is preserved if they
+    // refer to the same inode (hard link or same pathname).
+    struct stat src_stat{}, dst_stat{};
+    if (::fstat(src_fd, &src_stat) != 0 || ::fstat(dst_fd, &dst_stat) != 0) {
+        std::fprintf(stderr, "%s: cannot stat source or destination: %s\n",
+                     argv[0], std::strerror(errno));
+        return 2;
+    }
+    if (src_stat.st_dev == dst_stat.st_dev && src_stat.st_ino == dst_stat.st_ino) {
         std::fprintf(stderr, "%s: source and destination refer to the same file\n",
                      argv[0]);
         return 1;
+    }
+
+    // Truncate the destination now that we know it is a different file.
+    if (::ftruncate(dst_fd, 0) != 0) {
+        std::fprintf(stderr, "%s: cannot truncate destination '%s': %s\n",
+                     argv[0], args.dst.c_str(), std::strerror(errno));
+        return 2;
     }
 
     auto result = sluice_copy::run_sequential_copy(src_fd, dst_fd,
