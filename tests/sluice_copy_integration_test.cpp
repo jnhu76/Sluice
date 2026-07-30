@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <string>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
 
@@ -48,6 +49,92 @@ struct TempFile {
     TempFile(const TempFile&) = delete;
     TempFile& operator=(const TempFile&) = delete;
 };
+
+// Path to the sluice-copy CLI binary. Built by xmake; the test runs from the
+// repo root so the path is relative to it.
+static constexpr const char* kSluiceCopyBinary = "./sluice-copy";
+
+// RAII temp file with a REAL path on disk (NOT auto-unlinked on creation).
+// The file stays accessible by path until destruction, so the CLI binary can
+// open it. The fd is closed and the backing file is unlinked in ~dtor.
+struct TempFileWithPath {
+    int fd;
+    std::string path;
+    TempFileWithPath() {
+        char p[] = "/tmp/sluice_copy_cli_test_XXXXXX";
+        fd = ::mkstemp(p);
+        SLUICE_CHECK(fd >= 0);
+        path = p;
+        // Do NOT unlink p — the file remains on disk so the CLI binary can
+        // open it by path. The backing file is unlinked in ~dtor.
+    }
+    ~TempFileWithPath() {
+        if (fd >= 0) ::close(fd);
+        if (!path.empty()) ::unlink(path.c_str());
+    }
+    TempFileWithPath(const TempFileWithPath&) = delete;
+    TempFileWithPath& operator=(const TempFileWithPath&) = delete;
+};
+
+// Run the sluice-copy CLI binary with given src and dst paths. Returns exit
+// code and captured stderr output. Uses fork/exec/waitpid (POSIX).
+struct CliResult {
+    int exit_code;
+    std::string stderr_out;
+};
+
+CliResult run_sluice_copy_cli(const std::string& src, const std::string& dst) {
+    int stderr_pipe[2];
+    if (::pipe(stderr_pipe) != 0) {
+        ::sluice_test::record_failure(__FILE__, __LINE__, "pipe");
+        return {-1, ""};
+    }
+
+    pid_t pid = ::fork();
+    if (pid < 0) {
+        ::close(stderr_pipe[0]);
+        ::close(stderr_pipe[1]);
+        ::sluice_test::record_failure(__FILE__, __LINE__, "fork");
+        return {-1, ""};
+    }
+
+    if (pid == 0) {
+        // Child: exec sluice-copy. Redirect stderr to the pipe.
+        ::close(stderr_pipe[0]);
+        ::dup2(stderr_pipe[1], STDERR_FILENO);
+        ::close(stderr_pipe[1]);
+        ::execl(kSluiceCopyBinary, kSluiceCopyBinary,
+                src.c_str(), dst.c_str(), nullptr);
+        // exec failed — write error to stderr (which goes to pipe) and exit.
+        std::fprintf(stderr, "exec sluice-copy failed: %s\n", std::strerror(errno));
+        std::fflush(stderr);
+        ::_Exit(127);
+    }
+
+    // Parent: read stderr from the pipe.
+    ::close(stderr_pipe[1]);
+    std::string stderr_out;
+    char buf[4096];
+    ssize_t n;
+    while ((n = ::read(stderr_pipe[0], buf, sizeof(buf))) > 0) {
+        stderr_out.append(buf, static_cast<std::size_t>(n));
+    }
+    ::close(stderr_pipe[0]);
+
+    int status;
+    if (::waitpid(pid, &status, 0) != pid) {
+        ::sluice_test::record_failure(__FILE__, __LINE__, "waitpid");
+        return {-1, stderr_out};
+    }
+
+    int exit_code = -1;
+    if (WIFEXITED(status)) {
+        exit_code = WEXITSTATUS(status);
+    } else if (WIFSIGNALED(status)) {
+        exit_code = -WTERMSIG(status);
+    }
+    return {exit_code, stderr_out};
+}
 
 // Write `n` deterministic bytes to fd at offset 0 and return a heap copy the
 // test can compare against. Records a failure (does not abort the helper) on a
@@ -195,47 +282,67 @@ SLUICE_TEST_CASE(sluice_copy_stats_reported) {
     SLUICE_CHECK(r.value().sync == SyncPolicy::data);
 }
 
-// ---- same-file regression (PR #52) -----------------------------------------
+// ---- same-file CLI regression (PR #53, Fixes #52) --------------------------
+//
+// These tests exec the actual sluice-copy binary so they exercise the
+// main.cpp identity check (open flags, fstat, inode comparison, ftruncate
+// ordering). The old O_TRUNC-before-identity-check bug would have destroyed
+// the source content before detecting src==dst; these tests verify that:
+//   - exit code is 1 (same-file rejection)
+//   - stderr mentions "same file"
+//   - the source file's content is still intact
 
-SLUICE_TEST_CASE(sluice_copy_same_file_source_preserved) {
-    // Regression: PR #49's merged code opened dst with O_TRUNC before the
-    // same-file identity check, destroying the source for src==dst (hard link
-    // or same path). Verify that the source content survives when the two fds
-    // refer to the same inode: the copy may produce wrong data (self-overwrite
-    // on the same file), but the file must NOT be truncated to 0 beforehand.
-    TempFile src;
-    auto expected = seed_file(src.fd, 8192);
+SLUICE_TEST_CASE(sluice_copy_cli_same_path_rejected) {
+    TempFileWithPath src;
+    auto expected = seed_file(src.fd, 4096);
 
-    // Duplicate the src fd to get a second fd pointing to the same inode.
-    // This is a valid same-file scenario: both fds share the same inode,
-    // and the copy task's positional I/O does not share an offset.
-    int same_fd = ::dup(src.fd);
-    SLUICE_CHECK(same_fd >= 0);
+    // Run sluice-copy with the same path for both src and dst.
+    auto r = run_sluice_copy_cli(src.path, src.path);
 
-    // Run the copy from src to dst (same inode). The copy task reads and writes
-    // to the same file at the same offset — this is a self-overwrite scenario
-    // that may produce wrong data. The critical assertion: the source file is
-    // NOT truncated to 0 (the O_TRUNC-before-identity-check bug).
-    auto r = run_sequential_copy(src.fd, same_fd, 4096, 1, SyncPolicy::none);
-
-    // Close the second fd.
-    ::close(same_fd);
-
-    // The source file must still have its original content (not truncated).
+    // Must reject with exit code 1.
+    SLUICE_CHECK(r.exit_code == 1);
+    // Stderr must mention "same file".
+    SLUICE_CHECK(r.stderr_out.find("same file") != std::string::npos);
+    // Source content must still be intact (not truncated).
     struct stat st{};
     SLUICE_CHECK(::fstat(src.fd, &st) == 0);
-    // The file must NOT be shorter than the original — the O_TRUNC bug would
-    // have set st_size to 0.
     SLUICE_CHECK(st.st_size >= static_cast<off_t>(expected.size()));
-
-    // Read the file back and verify the original content is still there.
     std::vector<std::byte> actual(expected.size());
-    if (expected.size() > 0) {
-        ssize_t n = ::pread(src.fd, actual.data(), actual.size(), 0);
-        SLUICE_CHECK(n == static_cast<ssize_t>(expected.size()));
-        // The first expected.size() bytes must match the original seed.
-        SLUICE_CHECK(std::memcmp(actual.data(), expected.data(), expected.size()) == 0);
-    }
+    ssize_t n = ::pread(src.fd, actual.data(), actual.size(), 0);
+    SLUICE_CHECK(n == static_cast<ssize_t>(expected.size()));
+    SLUICE_CHECK(std::memcmp(actual.data(), expected.data(), expected.size()) == 0);
+}
+
+SLUICE_TEST_CASE(sluice_copy_cli_hard_link_rejected) {
+    TempFileWithPath src;
+    auto expected = seed_file(src.fd, 4096);
+
+    // Create a hard link to the source file.
+    std::string link_path = src.path + ".link";
+    // Remove any stale link from a prior failed run.
+    ::unlink(link_path.c_str());
+    SLUICE_CHECK(::link(src.path.c_str(), link_path.c_str()) == 0);
+
+    // Run sluice-copy with src = original path, dst = hard link path.
+    auto r = run_sluice_copy_cli(src.path, link_path);
+
+    // Must reject with exit code 1.
+    SLUICE_CHECK(r.exit_code == 1);
+    // Stderr must mention "same file".
+    SLUICE_CHECK(r.stderr_out.find("same file") != std::string::npos);
+    // Source content must still be intact.
+    struct stat st{};
+    SLUICE_CHECK(::fstat(src.fd, &st) == 0);
+    SLUICE_CHECK(st.st_size >= static_cast<off_t>(expected.size()));
+    std::vector<std::byte> actual(expected.size());
+    ssize_t n = ::pread(src.fd, actual.data(), actual.size(), 0);
+    SLUICE_CHECK(n == static_cast<ssize_t>(expected.size()));
+    SLUICE_CHECK(std::memcmp(actual.data(), expected.data(), expected.size()) == 0);
+
+    // Clean up the hard link. The TempFileWithPath destructor closes fd and
+    // unlinks the original path; the file's data survives until the last link
+    // (the hard link) is removed.
+    ::unlink(link_path.c_str());
 }
 
 SLUICE_MAIN()
