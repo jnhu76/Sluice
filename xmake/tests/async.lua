@@ -188,7 +188,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
+            add_deps("sluice_core", "sluice_async", "sluice-copy")
             add_includedirs(R .. "include", app_dir)
             add_files(test_src, app_dir .. "/copy_task.cpp")
             add_tests("sluice_copy_integration_test")
