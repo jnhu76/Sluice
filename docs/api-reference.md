@@ -1421,6 +1421,36 @@ public:
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
+
+    // M1-A: cooperative Completion wait.
+    void await_completion(Completion<std::size_t>& c);
+    void await_completion(Completion<void>& c);
 };
 using RuntimeTaskFn = std::function<void(RuntimeTaskContext&)>;
 ```
+
+#### `await_completion`
+
+Cooperatively await a submitted, outstanding `Completion`. Returns inline (no
+suspend) if the `Completion` is already ready; otherwise suspends the calling
+Fiber exactly once and resumes exactly once when the `Completion` reaches a
+terminal result. The result stays in the `Completion` — read it via
+`c.result()` after this returns, then `c.reset()` before reuse (`Completion`
+L7/L9 lifecycle).
+
+Backed by the already-audited `Scheduler::await_completion_*` primitive; the
+`Scheduler*` is private and never escapes to task code.
+
+Preconditions:
+- `c` is outstanding against THIS Runtime's `AsyncIoContext` (a prior
+  `submit_*` on this context marked it outstanding). Awaiting an idle
+  `Completion` is a caller contract violation (Debug asserts; Release
+  documents).
+- called only from within a Runtime task (the `RuntimeTaskContext&` lifetime is
+  the task invocation).
+
+Authority: submit-time errors stay synchronous (from `submit_*`); completion
+errors stay terminal results in the `Completion`. Zero per-op allocation, zero
+extra copies, one suspend + one resume per unresolved await, supports multiple
+simultaneously outstanding `Completion`s. See
+`docs/design/m1-runtime-io-await-race.md`.

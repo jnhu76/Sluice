@@ -73,6 +73,7 @@ includes("xmake/tests/death.lua")
 includes("xmake/examples.lua")
 includes("xmake/benchmarks.lua")
 includes("xmake/fuzz.lua")
+includes("xmake/apps.lua")
 
 -- ---------------------------------------------------------------------------
 -- Quick reference — sanitizer / test commands:

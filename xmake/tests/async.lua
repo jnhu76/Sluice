@@ -169,6 +169,50 @@ sluice_production_async_test("threaded_evented_parity_test")
 -- ADR: docs/adr/ADR-application-runtime.md (Accepted).
 sluice_production_async_test("application_runtime_test")
 
+-- M1-A Runtime cooperative Completion-wait tests (Candidate A, winner).
+-- Design: docs/design/m1-runtime-io-await-race.md. Public-only: exercises
+-- RuntimeTaskContext::await_completion against FakeAsyncBackend (deterministic)
+-- and ThreadPoolBackend (real-file suspend/resume). No internal-testing macro.
+sluice_production_async_test("runtime_wait_test")
+
+-- M1-A sluice-copy integration tests (brief §24). Real temporary files +
+-- ThreadPoolBackend; drives the same copy_task code the CLI uses (compiled
+-- into this target) via its public header. Public headers only; no
+-- internal-testing macro.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_integration_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/copy_task.cpp") then
+        target("sluice_copy_integration_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(test_src, app_dir .. "/copy_task.cpp")
+            add_tests("sluice_copy_integration_test")
+    end
+end
+
+-- M1-A sluice-copy deterministic fault tests (brief §25). Drives the SAME
+-- copy_task code against FakeAsyncBackend for short/zero/error injection.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_fault_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/copy_task.cpp") then
+        target("sluice_copy_fault_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(test_src, app_dir .. "/copy_task.cpp")
+            add_tests("sluice_copy_fault_test")
+    end
+end
+
 -- E16-POST-MERGE-CORRECTIVE-1 — terminal resource destruction regressions (C1).
 -- Proves every Stopped transition first destroys Runtime-owned components via a
 -- destructor-probe backend: Constructed direct close, startup-abort close,
