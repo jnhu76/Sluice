@@ -48,3 +48,9 @@ __pycache__/
 # seeds live under fuzz/corpus/ and are tracked)
 fuzz/artifacts/
 crash-*
+
+# Local overnight gate artifacts (scripts/overnight-local.sh) and its
+# persistent per-target fuzz corpus growth. Runs are reproducible but bulky;
+# keep them local, never tracked.
+/overnight-artifacts/
+/.nightly-corpus/
