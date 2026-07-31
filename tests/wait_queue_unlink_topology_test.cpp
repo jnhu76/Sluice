@@ -104,15 +104,13 @@ SLUICE_TEST_CASE(wqtopo_c5_scheduler_integrated_topology) {
 
         WaitQueue q;
         WaitNode a, b, c;
-        std::atomic<int> registered{0};   // pre-await entry count (TEST SYNC)
         std::atomic<bool> go{false};
 
-        // The three waiters: each registers via the production path. registered
-        // is bumped BEFORE await_wait's internal CAS, so it is a conservative
-        // (early) signal; the resolver closes the residual race by retrying.
+        // The three waiters: each registers via the production path. The
+        // coordinator waits for sched.waiting_count() == 3 (a mechanical proof
+        // of real registration) before starting the resolvers — see below.
         Fiber fa, fb, fc;
         auto wait_body = [&](WaitNode& node) {
-            registered.fetch_add(1, std::memory_order_acq_rel);
             sched.await_wait(q, node);
         };
         fa.set_entry([&](Fiber&) { wait_body(a); });
@@ -131,20 +129,42 @@ SLUICE_TEST_CASE(wqtopo_c5_scheduler_integrated_topology) {
         // the external resolvers race. run_live keeps the run resident (parked)
         // because waiting_waitq_count_ > 0 makes external_wake_possible_locked()
         // true, so the external resolution is observable.
+        //
+        // WQTOPO-FLAKY-FIX (scope guard): a plain std::thread whose .join() sits
+        // AFTER several SLUICE_CHECK_MSG calls is a terminate hazard. If any of
+        // those checks fails, the harness records the failure and returns from
+        // the case function; the still-joinable `runner` is then destroyed,
+        // which std::terminate()s the process ("terminate called without an
+        // active exception", exit -1, NO harness FAILED block). The soak saw
+        // exactly this once (debug-soak iter 405-retry2). The runner is now
+        // owned by a scope guard that joins it on every exit path (including
+        // check-failure returns), so a flaky check can never strand a joinable
+        // thread. The guard is the LAST object constructed before the checks, so
+        // it is the FIRST destroyed on return — runner joins before the
+        // Scheduler/WaitQueue/WaitNodes go away.
         std::thread runner([&] { sched.run_live(1); });
+        struct runner_join_guard {
+            std::thread& t;
+            ~runner_join_guard() {
+                if (t.joinable()) t.join();
+            }
+        } guard{runner};
 
-        // ---- TEST SYNCHRONIZATION ONLY ----
-        // Wait until all three await_wait calls have made the nodes registration-
-        // visible. registered is bumped BEFORE await_wait's register_ CAS, so we
-        // additionally retry the resolvers (below) until they win — closing the
-        // residual visibility window. Production resolvers are NOT required to
-        // retry; this retry is test synchronization only.
-        while (registered.load(std::memory_order_acquire) < 3) {
+        // ---- TEST SYNCHRONIZATION (mechanical, not guessed) ----
+        // Wait until all three WaitNodes are ACTUALLY registered in the
+        // Scheduler wait maps. The old code waited on `registered < 3`, but that
+        // counter is bumped BEFORE await_wait's internal register_ CAS — so
+        // `registered == 3` only proves three fibers ENTERED await_wait, not
+        // that three nodes are in the WaitQueue. Combined with a guessed
+        // sleep_for(30us), the resolvers could start (and burn their 100000-
+        // retry budget) before real registration, which is the root cause of the
+        // intermittent unresolved-node state. waiting_count() reads the true
+        // registered-node total under global_mtx_ (IdleBackend leaves the other
+        // maps empty), so waiting_count() == 3 is a MECHANICAL proof that A, B,
+        // C are all registered. No sleep_for is needed for causal synchronization.
+        while (sched.waiting_count() != 3) {
             std::this_thread::yield();
         }
-        // Let the worker reach MW-S3 + the park decision so the resolvers
-        // genuinely contend on a resident run (not a STALLED one).
-        std::this_thread::sleep_for(std::chrono::microseconds(30));
 
         // ---- Concurrent contenders (genuine contention) ----
         std::atomic<bool> a_done{false}, b_done{false};
