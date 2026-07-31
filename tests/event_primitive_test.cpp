@@ -2409,16 +2409,47 @@ SLUICE_TEST_CASE(event_parked_live_worker_awakened_by_external_set) {
     // watchdog is JOINED (not detached) so it cannot outlive the test and UAF
     // the stack locals. The timeout is ONLY a failure guard -- the park phase is
     // observed mechanically, not via the timeout.
+    //
+    // T32-FLAKY-FIX: the watchdog MUST distinguish a genuine timeout (external
+    // setter did not complete within the bound) from a cooperative stop exit.
+    // When the external setter succeeds quickly, run_live + ext.join complete on
+    // the main thread and request_stop() is issued BEFORE the watchdog thread is
+    // first scheduled. In that case the while(!stop_requested) loop body never
+    // executes and control falls through. The fall-through MUST re-check the
+    // success condition: if the waiter already resumed (entries == 2) the
+    // external setter path provably succeeded, so the watchdog MUST NOT fire.
+    // Firing on a cooperative stop would make a genuinely successful external
+    // wake look like a timeout (the soak flaky: 28 spurious watchdog_fired).
+    //
+    // watchdog_fired is set ONLY when the bound actually elapsed (timed_out)
+    // AND entries < 2 — i.e. the external setter did not complete the wake in
+    // time. A cooperative stop with entries < 2 cannot produce a spurious fire:
+    // in this test, request_stop() is issued only after run_live() returns,
+    // and run_live() returns only once the wait is resolved (entries == 2 via
+    // the external set, or the watchdog's own set() after a genuine timeout).
     std::jthread watchdog([&](std::stop_token st) {
         constexpr auto kBound = std::chrono::seconds(10);
         auto deadline = std::chrono::steady_clock::now() + kBound;
+        bool timed_out = false;
         while (!st.stop_requested()) {
             if (entries.load(std::memory_order_acquire) >= 2) return;  // success
-            if (std::chrono::steady_clock::now() >= deadline) break;
+            if (std::chrono::steady_clock::now() >= deadline) {
+                timed_out = true;
+                break;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            if (st.stop_requested()) return;
+            if (st.stop_requested()) break;
         }
-        // Timeout: release any armed gate + drive set() so the run terminates.
+        // If the waiter already resumed, the external setter path succeeded;
+        // this exit is a cooperative stop, NOT a timeout. Do not fire.
+        if (entries.load(std::memory_order_acquire) >= 2) return;
+        // A cooperative stop with entries < 2 is not a genuine timeout — do not
+        // fire (see the contract note above: this branch is unreachable in the
+        // current test flow, but the guard keeps the semantics precise).
+        if (!timed_out) return;
+        // Genuine timeout: the bound elapsed and the external setter did not
+        // complete the wake. Release any armed gate + drive set() so the Live
+        // run terminates and the watchdog can join.
         watchdog_fired.store(true, std::memory_order_release);
         EventHooks::release_park_commit(sched);
         ev.set();
@@ -2435,7 +2466,8 @@ SLUICE_TEST_CASE(event_parked_live_worker_awakened_by_external_set) {
     watchdog.join();
 
     SLUICE_CHECK_MSG(!watchdog_fired.load(),
-                     "T32: watchdog did NOT fire (test completed within the bound)");
+                     "T32: watchdog fired (external setter did not wake the "
+                     "parked worker within the bound)");
     SLUICE_CHECK_MSG(park_observed.load(), "T32: Worker mechanically reached the park boundary");
     SLUICE_CHECK_MSG(entries.load() == 2, "T32: waiter resumed via external set()");
     SLUICE_CHECK_MSG(node.was_woken(), "T32: waiter resolved Woken");

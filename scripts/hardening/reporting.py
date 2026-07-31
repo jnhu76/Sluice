@@ -21,6 +21,7 @@ from .model import (
     Verdict,
     VERDICT_EXIT,
 )
+from .failure_detail import aggregate_failures
 from .preflight import PreflightResult
 
 
@@ -224,6 +225,44 @@ def write_summary_txt(
 
     # Failures.
     lines.append("")
+    # Aggregated failure groups (best-effort diagnostic extraction). Surfaced
+    # BEFORE the per-occurrence list so a reader can see the distinct failures
+    # without scanning every log. The raw per-occurrence list follows. This is
+    # an index layer; the raw logs remain authoritative evidence.
+    groups, total_occ = aggregate_failures(failures) if failures else ([], 0)
+    if groups:
+        lines.append(f"Distinct failures: {len(groups)}")
+        lines.append(f"Total failure occurrences: {total_occ}")
+        lines.append("")
+        for i, g in enumerate(groups, 1):
+            loc = (f"{g.source_file}:{g.source_line}"
+                   if g.source_file else "?")
+            lines.append(f"{i}. {g.binary or '?'}/"
+                         f"{g.case or g.abnormal_signature or '?'}")
+            lines.append(f"   occurrences: {g.occurrences}")
+            if g.expression:
+                lines.append(f"   assertion: {loc}")
+                lines.append(f"              {g.expression}")
+            elif g.abnormal_signature:
+                lines.append(f"   abnormal: {g.abnormal_signature}")
+            if g.message:
+                lines.append(f"   message: {g.message}")
+            if g.exit_semantics and g.exit_semantics != "normal":
+                lines.append(f"   exit: {g.exit_semantics}")
+            if g.xmake_summary:
+                lines.append(f"   xmake: {g.xmake_summary}")
+            lines.append(f"   phases: {', '.join(g.phases)}")
+            if g.iterations:
+                lines.append(f"   first: iteration {g.iterations[0]}")
+                lines.append(f"   last: iteration {g.iterations[-1]}")
+            if g.retry_total:
+                lines.append(f"   retries reproduced: {g.retry_reproduced}/"
+                             f"{g.retry_total}")
+            if g.sample_logs:
+                lines.append("   sample logs:")
+                for s in g.sample_logs:
+                    lines.append(f"     {s}")
+            lines.append("")
     lines.append("Failures:")
     if failures:
         for f in failures:
@@ -292,8 +331,16 @@ def write_summary_json(
             "log_path": str(f.log_path),
         })
 
+    # Aggregated failure groups (best-effort diagnostic extraction). Each group
+    # clusters occurrences by a content fingerprint (binary + case + file:line +
+    # expression), so a reader or model can consume the distinct failures
+    # directly from summary.json without scanning every raw log. The raw
+    # `failures` list is preserved unchanged. schema_version bumped to 3.
+    groups, total_occ = aggregate_failures(failures) if failures else ([], 0)
+    failure_groups_json = [g.to_dict() for g in groups]
+
     data = {
-        "schema_version": 2,
+        "schema_version": 3,
         "verdict": verdict.value,
         "exit_code": VERDICT_EXIT.get(verdict, 1),
         "mode": config.mode,
@@ -320,6 +367,9 @@ def write_summary_json(
         },
         "phase_stats": phase_stats_json,
         "fuzz_results": fuzz_results_json,
+        "distinct_failures": len(groups),
+        "total_failure_occurrences": total_occ,
+        "failure_groups": failure_groups_json,
         "failures": failures_refs,
         "interrupted": interrupted,
         "runner_error": runner_error,
@@ -327,6 +377,90 @@ def write_summary_json(
     }
 
     path = run_dir / "summary.json"
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# High-level writer
+# ═══════════════════════════════════════════════════════════════════════════════
+# Failure summary (standalone, machine + human readable)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def write_failure_summary_txt(run_dir: Path, failures: List[CommandResult]) -> None:
+    """Write a standalone failure-summary.txt focused on distinct failures.
+
+    So a human or model can read the distinct failure groups directly without
+    scanning every raw log. Empty when there are no failures.
+    """
+    path = run_dir / "failure-summary.txt"
+    groups, total_occ = aggregate_failures(failures) if failures else ([], 0)
+    lines: List[str] = []
+    lines.append("SLUICE HARDENING FAILURE SUMMARY")
+    lines.append("=" * 60)
+    lines.append(f"Distinct failures: {len(groups)}")
+    lines.append(f"Total failure occurrences: {total_occ}")
+    lines.append("")
+    if not groups:
+        lines.append("(no failures)")
+        path.write_text("\n".join(lines) + "\n")
+        return
+    for i, g in enumerate(groups, 1):
+        loc = f"{g.source_file}:{g.source_line}" if g.source_file else "?"
+        lines.append(f"--- {i}. {g.binary or '?'}/"
+                     f"{g.case or g.abnormal_signature or '?'} "
+                     f"({g.occurrences} occurrence(s)) ---")
+        if g.expression:
+            lines.append(f"  assertion:  {loc}")
+            lines.append(f"              {g.expression}")
+        elif g.abnormal_signature:
+            lines.append(f"  abnormal:   {g.abnormal_signature}")
+        if g.message:
+            lines.append(f"  message:    {g.message}")
+        if g.exit_semantics and g.exit_semantics != "normal":
+            lines.append(f"  exit:       {g.exit_semantics}")
+        if g.xmake_summary:
+            lines.append(f"  xmake:      {g.xmake_summary}")
+        lines.append(f"  framework:  {g.framework or 'n/a'} "
+                     f"(parse: {g.parse_status})")
+        lines.append(f"  phases:     {', '.join(g.phases)}")
+        if g.iterations:
+            if len(g.iterations) <= 12:
+                lines.append(f"  iterations: {', '.join(g.iterations)}")
+            else:
+                lines.append(f"  iterations: {', '.join(g.iterations[:6])}, ... , "
+                             f"{', '.join(g.iterations[-3:])}")
+        if g.retry_total:
+            lines.append(f"  retries:    {g.retry_reproduced}/{g.retry_total} "
+                         f"reproduced")
+        if g.sample_logs:
+            lines.append("  sample logs:")
+            for s in g.sample_logs:
+                lines.append(f"    {s}")
+        lines.append("")
+        lines.append(f"  FINGERPRINT: {g.fingerprint}")
+        lines.append("")
+    lines.append("=" * 60)
+    lines.append("NOTE: clustering is content-based (binary + case + file:line + "
+                 "expression).")
+    lines.append("exit 255 with an xmake test-failure summary is annotated as "
+                 "'xmake test failure")
+    lines.append("exit'; it is never reclassified to PASS. The raw logs remain "
+                 "authoritative.")
+    path.write_text("\n".join(lines) + "\n")
+
+
+def write_failure_summary_json(
+    run_dir: Path, failures: List[CommandResult]
+) -> None:
+    """Write a standalone failure-summary.json (schema-stable, machine-readable)."""
+    path = run_dir / "failure-summary.json"
+    groups, total_occ = aggregate_failures(failures) if failures else ([], 0)
+    data = {
+        "schema_version": 1,
+        "distinct_failures": len(groups),
+        "total_failure_occurrences": total_occ,
+        "failure_groups": [g.to_dict() for g in groups],
+    }
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
@@ -348,7 +482,7 @@ def write_all_outputs(
     interrupted: bool,
     runner_error: Optional[str] = None,
 ) -> None:
-    """Write all output files (summary, events, failures)."""
+    """Write all output files (summary, events, failures, failure-summary)."""
     write_events_jsonl(run_dir, results)
     write_failures_jsonl(run_dir, failures)
     write_summary_txt(run_dir, verdict, config, preflight,
@@ -357,3 +491,5 @@ def write_all_outputs(
     write_summary_json(run_dir, verdict, config, preflight,
                        started_at, finished_at, results, failures,
                        phase_stats, fuzz_results, interrupted, runner_error)
+    write_failure_summary_txt(run_dir, failures)
+    write_failure_summary_json(run_dir, failures)
