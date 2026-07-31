@@ -228,3 +228,55 @@ sluice_internal_async_test("application_runtime_resource_test")
 -- is enforced by scripts/verify-async-identity-negative-compile.sh. Uses
 -- sluice_async_internal_testing for the Fiber suspend/resume seam.
 sluice_internal_async_test("application_runtime_identity_test")
+
+-- ScriptedAsyncBackend self-tests (sluice-copy Version B test infrastructure).
+-- Proves the deterministic, scriptable backend itself is correct before using
+-- it to test higher-level components. Links sluice_async (production).
+do
+    local R = SLUICE_ROOT
+    local test_src = R .. "tests/scripted_backend_test.cpp"
+    local support_src = R .. "tests/support/scripted_async_backend.cpp"
+    if os.isfile(test_src) and os.isfile(support_src) then
+        target("scripted_backend_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(test_src, support_src)
+            add_tests("scripted_backend_test")
+    end
+end
+
+-- sluice-copy Version B pipeline contract tests.
+-- These tests describe the expected behavior of the pipelined copy (Version B).
+-- They are written against the CURRENT production code (Version A) and the
+-- ScriptedAsyncBackend test infrastructure.
+--
+-- STATUS: NOT in the default `xmake test` group. Run manually:
+--   xmake run sluice_copy_pipeline_contract_test
+--
+-- Expected result: FAIL (red) — the majority of contracts require Version B
+-- which is not yet implemented. A few contracts (depth=1, write-zero-error)
+-- that Version A already satisfies may PASS.
+--
+-- When Version B is complete and SLUICE_HAS_PIPELINED_COPY is defined, add
+-- this target to the test group and remove this note.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_pipeline_contract_test.cpp"
+    local support_src = R .. "tests/support/scripted_async_backend.cpp"
+    if os.isfile(test_src) and os.isfile(support_src) and
+       os.isfile(app_dir .. "/copy_task.cpp") then
+        target("sluice_copy_pipeline_contract_test")
+            set_kind("binary")
+            set_default(false)
+            -- Intentionally NOT in the "test" group — this is expected to fail
+            -- until Version B is implemented. Run manually.
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "tests", app_dir)
+            add_files(test_src, support_src, app_dir .. "/copy_task.cpp")
+            -- No add_tests() — not in the default test run.
+    end
+end
