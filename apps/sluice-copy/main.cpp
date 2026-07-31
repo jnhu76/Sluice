@@ -1,17 +1,25 @@
-// sluice-copy — reference async file copy application (M1-A, Version A).
+// sluice-copy — reference async file copy application.
 //
 // CLI:
 //   sluice-copy [options] <source> <destination>
 // Options:
 //   --buffer-size <bytes>   per-chunk read/write buffer (default 1 MiB)
+//   --pipeline-depth <n>    read-ahead slots (default 1 = Version A sequential;
+//                           >1 enables the bounded reusable-buffer pipeline,
+//                           Version B, with up to n outstanding reads and an
+//                           ordered single writer)
 //   --workers <count>       Runtime worker count (default 1)
 //   --sync none|data|all    durability policy after copy (default none)
 //   --help                  show usage
 //
 // Backend: ThreadPoolBackend (real file I/O). No FakeAsyncBackend in app code.
 //
-// Version A limitation: on mid-copy failure the destination may be left
-// partial. Atomic temp-file + rename is a Version C feature.
+// Memory upper bound is approximately buffer_size * pipeline_depth. The outer
+// call is still blocking (the copy completes before the CLI returns); the
+// pipeline is internal. Not zero-copy; writes are not parallel.
+//
+// Limitation: on mid-copy failure the destination may be left partial.
+// Atomic temp-file + rename is a Version C feature.
 //
 // Exit codes: 0 = success, 1 = usage error, 2 = I/O error, 3 = canceled.
 #include "copy_task.hpp"
@@ -48,6 +56,7 @@ struct CliArgs {
     std::string src;
     std::string dst;
     std::size_t buffer_size = 1 << 20;  // 1 MiB default
+    std::size_t pipeline_depth = 1;     // Version A default; >1 enables Version B
     unsigned workers = 1;
     SyncPolicy sync = SyncPolicy::none;
     bool help = false;
@@ -57,6 +66,8 @@ int usage(const char* prog) {
     std::fprintf(stderr,
         "usage: %s [options] <source> <destination>\n"
         "  --buffer-size <bytes>   per-chunk buffer (default 1 MiB)\n"
+        "  --pipeline-depth <n>    read-ahead slots (default 1; >1 enables the\n"
+        "                          bounded reusable-buffer pipeline, Version B)\n"
         "  --workers <count>       runtime workers (default 1)\n"
         "  --sync none|data|all    durability after copy (default none)\n"
         "  --help                  show this help\n",
@@ -109,6 +120,9 @@ int parse_args(int argc, char** argv, CliArgs& args) {
         } else if (a == "--buffer-size") {
             const char* v = next("--buffer-size");
             if (!v || !parse_size(v, args.buffer_size)) return usage(argv[0]);
+        } else if (a == "--pipeline-depth") {
+            const char* v = next("--pipeline-depth");
+            if (!v || !parse_size(v, args.pipeline_depth)) return usage(argv[0]);
         } else if (a == "--workers") {
             const char* v = next("--workers");
             if (!v || !parse_workers(v, args.workers)) return usage(argv[0]);
@@ -193,9 +207,10 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    auto result = sluice_copy::run_sequential_copy(src_fd, dst_fd,
-                                                   args.buffer_size, args.workers,
-                                                   args.sync);
+    auto result = sluice_copy::run_pipelined_copy(src_fd, dst_fd,
+                                                   args.buffer_size,
+                                                   args.pipeline_depth,
+                                                   args.workers, args.sync);
     if (!result.has_value()) {
         IoError e = result.error();
         std::fprintf(stderr, "%s: copy failed: %s%s%s\n", argv[0], code_name(e.code),
@@ -206,13 +221,14 @@ int main(int argc, char** argv) {
 
     CopyStats s = result.value();
     std::printf("%s: copied %llu bytes (read_ops=%llu write_ops=%llu "
-                "short_writes=%llu sync=%s)\n",
+                "short_writes=%llu sync=%s pipeline_depth=%llu)\n",
                 argv[0],
                 static_cast<unsigned long long>(s.bytes_copied),
                 static_cast<unsigned long long>(s.read_ops),
                 static_cast<unsigned long long>(s.write_ops),
                 static_cast<unsigned long long>(s.short_writes),
                 s.sync == SyncPolicy::data ? "data" :
-                s.sync == SyncPolicy::all ? "all" : "none");
+                s.sync == SyncPolicy::all ? "all" : "none",
+                static_cast<unsigned long long>(args.pipeline_depth));
     return 0;
 }
