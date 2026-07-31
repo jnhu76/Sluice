@@ -42,6 +42,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -78,11 +79,25 @@ struct PendingOpView {
     void* completion_identity;  // address of the Completion object
 };
 
+// --- BackendControlState -----------------------------------------------------
+// Shared control block that outlives the backend object. The test thread holds
+// a shared_ptr to this state; when the backend is destroyed by another thread
+// (e.g. inside a Runtime), the test can still observe `destroyed` safely.
+struct BackendControlState {
+    std::atomic<bool> destroyed{false};
+    // Snapshot of pending+staged count at destruction time (for diagnostics).
+    std::atomic<std::size_t> final_outstanding{0};
+};
+
 // --- ScriptedAsyncBackend ----------------------------------------------------
 class ScriptedAsyncBackend : public AsyncBackend {
 public:
     ScriptedAsyncBackend();
     ~ScriptedAsyncBackend() override;
+
+    // Access the shared control state (test thread). The returned shared_ptr
+    // remains valid after the backend is destroyed.
+    std::shared_ptr<BackendControlState> control_state() const;
 
     // --- AsyncBackend interface (called by Runtime worker/driver) ---
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override;
@@ -228,6 +243,9 @@ private:
 
     // Shutdown flag.
     bool shutdown_{false};
+
+    // Shared control state (outlives the backend via shared_ptr).
+    std::shared_ptr<BackendControlState> control_;
 
     // For expect_no_pending: stores the failure message if check fails.
     // We can't include the test harness here, so we use a callback approach.

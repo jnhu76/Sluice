@@ -23,23 +23,35 @@ namespace sluice::async {
 // Construction / destruction
 // ---------------------------------------------------------------------------
 
-ScriptedAsyncBackend::ScriptedAsyncBackend() = default;
+ScriptedAsyncBackend::ScriptedAsyncBackend()
+    : control_(std::make_shared<BackendControlState>()) {}
 
 ScriptedAsyncBackend::~ScriptedAsyncBackend() {
-    // Debug-assert that there are no pending operations. In a test, this
-    // catches the case where production code failed to drain pending ops.
-    // We do NOT silently cancel them — that would mask bugs.
+    // Debug-assert that there are no pending operations AND no staged results.
+    // In a test, this catches the case where production code failed to drain
+    // pending ops or where completions were staged but never polled.
     //
     // Use a simple assert; the test harness can also call expect_no_pending()
     // before destruction for a more descriptive failure.
     std::lock_guard<std::mutex> lk(mtx_);
     shutdown_ = true;
     cv_.notify_all();
+    // Record final state in the shared control block so the test thread can
+    // observe destruction and diagnose outstanding leaks.
+    std::size_t outstanding = pending_size_.size() + pending_void_.size() +
+                              staged_size_.size() + staged_void_.size();
+    control_->final_outstanding.store(outstanding, std::memory_order::relaxed);
+    control_->destroyed.store(true, std::memory_order::release);
     // We intentionally do NOT complete pending ops here. If the test doesn't
     // drain, the assert fires. This is a debug-only check; in Release, the
     // test would typically call expect_no_pending() explicitly.
     assert(pending_size_.empty() && pending_void_.empty() &&
-           "ScriptedAsyncBackend destroyed with pending operations");
+           staged_size_.empty() && staged_void_.empty() &&
+           "ScriptedAsyncBackend destroyed with pending/staged operations");
+}
+
+std::shared_ptr<BackendControlState> ScriptedAsyncBackend::control_state() const {
+    return control_;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +86,11 @@ Result<void> ScriptedAsyncBackend::submit_read(ReadOp op,
     // Update max statistics.
     std::size_t total = pending_size_.size() + pending_void_.size();
     if (total > max_total_) max_total_ = total;
-    std::size_t reads = pending_size_.size();
+    // Count ONLY read ops for max_reads_ (pending_size_ holds both reads and
+    // writes, so we must filter by kind).
+    std::size_t reads = 0;
+    for (auto& [id, op] : pending_size_)
+        if (op.kind == OpKind::read) ++reads;
     if (reads > max_reads_) max_reads_ = reads;
 
     cv_.notify_all();
@@ -263,9 +279,13 @@ void ScriptedAsyncBackend::cancel(Completion<void>& c) {
 // ---------------------------------------------------------------------------
 
 std::size_t ScriptedAsyncBackend::outstanding() const noexcept {
-    // snapshot under lock for consistency
+    // snapshot under lock for consistency.
+    // Outstanding includes BOTH pending operations (awaiting test completion)
+    // AND staged results (awaiting poll). A Completion is outstanding until
+    // poll()/wait_one() calls complete_with() on it.
     std::lock_guard<std::mutex> lk(mtx_);
-    return pending_size_.size() + pending_void_.size();
+    return pending_size_.size() + pending_void_.size() +
+           staged_size_.size() + staged_void_.size();
 }
 
 // ---------------------------------------------------------------------------
@@ -534,10 +554,12 @@ bool ScriptedAsyncBackend::wait_until_pending_for(
 
 void ScriptedAsyncBackend::expect_no_pending() {
     std::lock_guard<std::mutex> lk(mtx_);
-    if (pending_size_.empty() && pending_void_.empty()) return;
+    if (pending_size_.empty() && pending_void_.empty() &&
+        staged_size_.empty() && staged_void_.empty())
+        return;
 
     // Build a descriptive failure message.
-    std::string msg = "ScriptedAsyncBackend has pending operations:";
+    std::string msg = "ScriptedAsyncBackend has pending/staged operations:";
     for (auto& [id, op] : pending_size_) {
         msg += "\n  size op " + std::to_string(id) + " " +
                std::string(to_string(op.kind)) + " fd=" +
@@ -549,6 +571,12 @@ void ScriptedAsyncBackend::expect_no_pending() {
         msg += "\n  void op " + std::to_string(id) + " " +
                std::string(to_string(op.kind)) + " fd=" +
                std::to_string(op.fd);
+    }
+    if (!staged_size_.empty()) {
+        msg += "\n  staged_size results: " + std::to_string(staged_size_.size());
+    }
+    if (!staged_void_.empty()) {
+        msg += "\n  staged_void results: " + std::to_string(staged_void_.size());
     }
 
     // Throw to make the test fail. The test harness will catch this.

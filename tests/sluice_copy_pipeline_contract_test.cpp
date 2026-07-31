@@ -33,9 +33,11 @@
 #include <sluice/result.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <fcntl.h>
+#include <memory>
 #include <optional>
 #include <thread>
 #include <unistd.h>
@@ -102,10 +104,14 @@ void seed_file(int fd, std::size_t n) {
     }
 }
 
-void drain_all(ScriptedAsyncBackend* raw) {
+void drain_all(ScriptedAsyncBackend* raw,
+               const std::shared_ptr<BackendControlState>& ctrl) {
     while (raw->pending_count() > 0) {
+        // If the backend has been destroyed by the Runtime thread, stop.
+        if (ctrl->destroyed.load(std::memory_order::acquire)) return;
         auto ops = raw->pending_operations();
         for (auto& op : ops) {
+            if (ctrl->destroyed.load(std::memory_order::acquire)) return;
             switch (op.kind) {
             case OpKind::read:
                 raw->complete_eof(op.id);
@@ -142,6 +148,7 @@ SLUICE_TEST_CASE(contract_depth_1_single_outstanding_read) {
 
     auto backend = std::make_unique<ScriptedAsyncBackend>();
     auto* raw = backend.get();
+    auto ctrl = raw->control_state();
 
     std::optional<Result<CopyStats>> copy_result;
     std::atomic<bool> copy_done{false};
@@ -155,12 +162,20 @@ SLUICE_TEST_CASE(contract_depth_1_single_outstanding_read) {
 
     // Drive the copy through 3 chunks.
     for (int chunk = 0; chunk < 3; ++chunk) {
-        raw->wait_until_pending(1);
+        if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
+            drain_all(raw, ctrl);
+            copy_thread.join();
+            SLUICE_FAIL("timeout waiting for pending op in chunk");
+        }
         std::uint64_t rid = find_op(raw, OpKind::read);
         SLUICE_CHECK(rid != 0);
         raw->complete_bytes(rid, 4096);
 
-        raw->wait_until_pending(1);
+        if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
+            drain_all(raw, ctrl);
+            copy_thread.join();
+            SLUICE_FAIL("timeout waiting for write op in chunk");
+        }
         std::uint64_t wid = find_op(raw, OpKind::write);
         SLUICE_CHECK(wid != 0);
         raw->complete_bytes(wid, 4096);
@@ -171,8 +186,11 @@ SLUICE_TEST_CASE(contract_depth_1_single_outstanding_read) {
     std::size_t max_total = raw->max_outstanding_total();
 
     // Complete the EOF read (triggers copy task completion).
-    raw->wait_until_pending(1);
-    drain_all(raw);
+    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
+        copy_thread.join();
+        SLUICE_FAIL("timeout waiting for EOF read");
+    }
+    drain_all(raw, ctrl);
 
     // Stats must be read before join because backend dies with Runtime.
     copy_thread.join();
@@ -194,6 +212,7 @@ SLUICE_TEST_CASE(contract_depth_gt_1_multiple_outstanding_reads) {
 
     auto backend = std::make_unique<ScriptedAsyncBackend>();
     auto* raw = backend.get();
+    auto ctrl = raw->control_state();
 
     std::optional<Result<CopyStats>> copy_result;
     std::atomic<bool> copy_done{false};
@@ -205,15 +224,19 @@ SLUICE_TEST_CASE(contract_depth_gt_1_multiple_outstanding_reads) {
         copy_done.store(true, std::memory_order::release);
     });
 
-    // Wait for the first read to appear.
-    raw->wait_until_pending(1);
+    // Wait for the first read to appear (bounded).
+    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
+        drain_all(raw, ctrl);
+        copy_thread.join();
+        SLUICE_FAIL("timeout waiting for first read");
+    }
 
     // Read stats BEFORE completing any operations.
     std::size_t max_reads = raw->max_outstanding_reads();
 
     // PRIMARY RED-LIGHT assertion. Must drain and join before check because
     // SLUICE_CHECK_MSG returns early.
-    drain_all(raw);
+    drain_all(raw, ctrl);
     copy_thread.join();
 
     SLUICE_CHECK_MSG(max_reads >= 2,
@@ -227,7 +250,7 @@ SLUICE_TEST_CASE(contract_depth_gt_1_multiple_outstanding_reads) {
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_out_of_order_read_in_order_write) {
-    // TODO: When Version B is implemented.
+    SLUICE_FAIL("contract body not implemented");
 }
 #else
 SLUICE_TEST_CASE(contract_out_of_order_read_not_implemented) {
@@ -237,7 +260,7 @@ SLUICE_TEST_CASE(contract_out_of_order_read_not_implemented) {
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_slot_lifecycle) {
-    // TODO: When Version B is implemented.
+    SLUICE_FAIL("contract body not implemented");
 }
 #else
 SLUICE_TEST_CASE(contract_slot_lifecycle_not_implemented) {
@@ -247,7 +270,7 @@ SLUICE_TEST_CASE(contract_slot_lifecycle_not_implemented) {
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_short_read_retry) {
-    // TODO: When Version B is implemented.
+    SLUICE_FAIL("contract body not implemented");
 }
 #else
 SLUICE_TEST_CASE(contract_short_read_retry_not_implemented) {
@@ -257,7 +280,7 @@ SLUICE_TEST_CASE(contract_short_read_retry_not_implemented) {
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_partial_write_advance) {
-    // TODO: When Version B is implemented.
+    SLUICE_FAIL("contract body not implemented");
 }
 #else
 SLUICE_TEST_CASE(contract_partial_write_advance_not_implemented) {
@@ -267,7 +290,7 @@ SLUICE_TEST_CASE(contract_partial_write_advance_not_implemented) {
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_eof_drain) {
-    // TODO: When Version B is implemented.
+    SLUICE_FAIL("contract body not implemented");
 }
 #else
 SLUICE_TEST_CASE(contract_eof_drain_not_implemented) {
@@ -277,7 +300,7 @@ SLUICE_TEST_CASE(contract_eof_drain_not_implemented) {
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_read_error_drain) {
-    // TODO: When Version B is implemented.
+    SLUICE_FAIL("contract body not implemented");
 }
 #else
 SLUICE_TEST_CASE(contract_read_error_drain_not_implemented) {
@@ -287,7 +310,7 @@ SLUICE_TEST_CASE(contract_read_error_drain_not_implemented) {
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_write_error_drain) {
-    // TODO: When Version B is implemented.
+    SLUICE_FAIL("contract body not implemented");
 }
 #else
 SLUICE_TEST_CASE(contract_write_error_drain_not_implemented) {
@@ -297,7 +320,7 @@ SLUICE_TEST_CASE(contract_write_error_drain_not_implemented) {
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_submit_failure_drain) {
-    // TODO: When Version B is implemented.
+    SLUICE_FAIL("contract body not implemented");
 }
 #else
 SLUICE_TEST_CASE(contract_submit_failure_drain_not_implemented) {
@@ -307,7 +330,7 @@ SLUICE_TEST_CASE(contract_submit_failure_drain_not_implemented) {
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_bounded_memory) {
-    // TODO: When Version B is implemented.
+    SLUICE_FAIL("contract body not implemented");
 }
 #else
 SLUICE_TEST_CASE(contract_bounded_memory_not_implemented) {
@@ -325,6 +348,7 @@ SLUICE_TEST_CASE(contract_write_zero_is_error) {
 
     auto backend = std::make_unique<ScriptedAsyncBackend>();
     auto* raw = backend.get();
+    auto ctrl = raw->control_state();
 
     std::optional<Result<CopyStats>> copy_result;
     std::atomic<bool> copy_done{false};
@@ -337,19 +361,27 @@ SLUICE_TEST_CASE(contract_write_zero_is_error) {
     });
 
     // Complete the first read.
-    raw->wait_until_pending(1);
+    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
+        drain_all(raw, ctrl);
+        copy_thread.join();
+        SLUICE_FAIL("timeout waiting for read");
+    }
     std::uint64_t rid = find_op(raw, OpKind::read);
     SLUICE_CHECK(rid != 0);
     raw->complete_bytes(rid, 16);
 
     // Complete the write with 0 bytes (invalid).
-    raw->wait_until_pending(1);
+    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
+        drain_all(raw, ctrl);
+        copy_thread.join();
+        SLUICE_FAIL("timeout waiting for write");
+    }
     std::uint64_t wid = find_op(raw, OpKind::write);
     SLUICE_CHECK(wid != 0);
     raw->complete_bytes(wid, 0);
 
     // Drain any remaining ops (error path should stop submitting).
-    drain_all(raw);
+    drain_all(raw, ctrl);
     copy_thread.join();
 
     SLUICE_CHECK(copy_result.has_value());
@@ -367,6 +399,7 @@ SLUICE_TEST_CASE(contract_write_submit_failure_propagates) {
 
     auto backend = std::make_unique<ScriptedAsyncBackend>();
     auto* raw = backend.get();
+    auto ctrl = raw->control_state();
 
     std::optional<Result<CopyStats>> copy_result;
     std::atomic<bool> copy_done{false};
@@ -378,14 +411,22 @@ SLUICE_TEST_CASE(contract_write_submit_failure_propagates) {
         copy_done.store(true, std::memory_order::release);
     });
 
-    // Complete the first read.
-    raw->wait_until_pending(1);
+    // Wait for the first read to appear.
+    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
+        drain_all(raw, ctrl);
+        copy_thread.join();
+        SLUICE_FAIL("timeout waiting for read");
+    }
     std::uint64_t rid = find_op(raw, OpKind::read);
     SLUICE_CHECK(rid != 0);
-    raw->complete_bytes(rid, 16);
 
-    // Inject a write submit failure.
+    // ARM the write submit failure BEFORE completing the read. This ensures
+    // the failure is in place before the Runtime thread has a chance to poll
+    // the read completion and submit the write.
     raw->fail_next_submit(OpKind::write, IoError{IoError::Code::no_space});
+
+    // Now complete the read, allowing the Runtime to proceed to submit write.
+    raw->complete_bytes(rid, 16);
 
     copy_thread.join();
     SLUICE_CHECK(copy_result.has_value());

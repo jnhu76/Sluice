@@ -577,4 +577,81 @@ SLUICE_TEST_CASE(scripted_captured_write_bytes) {
     SLUICE_CHECK(threw);
 }
 
+// ---------------------------------------------------------------------------
+// Slice 16: outstanding() includes staged completions
+// ---------------------------------------------------------------------------
+
+SLUICE_TEST_CASE(scripted_outstanding_includes_staged) {
+    auto backend = std::make_unique<ScriptedAsyncBackend>();
+    auto* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+
+    std::byte buf[8]{};
+    Completion<std::size_t> c;
+    Cleanup cleanup{raw, &ctx};
+
+    (void)ctx.submit_read(ReadOp{0, buf, 8, 0}, c);
+    SLUICE_CHECK(raw->outstanding() == 1);
+
+    // Stage the completion (moves from pending to staged).
+    raw->complete_bytes(1, 8);
+
+    // Outstanding MUST still be 1: the Completion has not been made ready yet.
+    // It is staged but not polled — still outstanding per the lifecycle contract.
+    SLUICE_CHECK(raw->outstanding() == 1);
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(c.outstanding());
+
+    // After poll, the Completion becomes ready and outstanding drops to 0.
+    SLUICE_CHECK(ctx.poll() == 1);
+    SLUICE_CHECK(raw->outstanding() == 0);
+    SLUICE_CHECK(c.ready());
+}
+
+SLUICE_TEST_CASE(scripted_outstanding_staged_void) {
+    auto backend = std::make_unique<ScriptedAsyncBackend>();
+    auto* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+
+    Completion<void> c;
+    Cleanup cleanup{raw, &ctx};
+
+    (void)ctx.submit_sync_data(SyncDataOp{0}, c);
+    SLUICE_CHECK(raw->outstanding() == 1);
+
+    raw->complete_sync_success(1);
+    // Staged but not polled: still outstanding.
+    SLUICE_CHECK(raw->outstanding() == 1);
+    SLUICE_CHECK(!c.ready());
+
+    SLUICE_CHECK(ctx.poll() == 1);
+    SLUICE_CHECK(raw->outstanding() == 0);
+    SLUICE_CHECK(c.ready());
+}
+
+// ---------------------------------------------------------------------------
+// Slice 17: max_outstanding_reads counts only reads (not writes)
+// ---------------------------------------------------------------------------
+
+SLUICE_TEST_CASE(scripted_max_reads_excludes_writes) {
+    auto backend = std::make_unique<ScriptedAsyncBackend>();
+    auto* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+
+    std::byte buf[3][8]{};
+    Completion<std::size_t> c1, c2, c3;
+    Cleanup cleanup{raw, &ctx};
+
+    // Submit 1 read + 2 writes.
+    (void)ctx.submit_read(ReadOp{0, buf[0], 8, 0}, c1);
+    (void)ctx.submit_write(WriteOp{0, buf[1], 8, 0}, c2);
+    (void)ctx.submit_write(WriteOp{0, buf[2], 8, 4096}, c3);
+
+    // max_outstanding_reads must be 1 (only the read), NOT 3.
+    SLUICE_CHECK(raw->pending_read_count() == 1);
+    SLUICE_CHECK(raw->pending_write_count() == 2);
+    SLUICE_CHECK(raw->max_outstanding_reads() == 1);
+    SLUICE_CHECK(raw->max_outstanding_total() == 3);
+}
+
 SLUICE_MAIN()
