@@ -233,6 +233,27 @@ do
     end
 end
 
+-- sluice-copy Version B deterministic pipeline stress test (real files +
+-- ThreadPoolBackend). Randomized-but-deterministic matrix driven by
+-- --seed/--iterations; a failure reproduces exactly with the same seed.
+-- Defaults tuned for the default test group and sanitizer gates; the nightly
+-- hardening run passes larger --iterations values.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_pipeline_stress_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/copy_task.cpp") then
+        target("sluice_copy_pipeline_stress_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(test_src, app_dir .. "/copy_task.cpp")
+            add_tests("sluice_copy_pipeline_stress_test")
+    end
+end
+
 -- E16-POST-MERGE-CORRECTIVE-1 — terminal resource destruction regressions (C1).
 -- Proves every Stopped transition first destroys Runtime-owned components via a
 -- destructor-probe backend: Constructed direct close, startup-abort close,
