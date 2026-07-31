@@ -986,18 +986,11 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
         after_artifacts = set(_list_fuzz_artifacts(artifact_dir))
         new_artifacts = sorted(after_artifacts - base_artifacts)
 
-        fuzz_snap = FuzzCorpusSnapshot(
-            target=tgt,
-            before_files=before_files,
-            before_bytes=before_bytes,
-            after_files=after_files,
-            after_bytes=after_bytes,
-            new_artifacts=new_artifacts,
-            classification=r.classification,
-        )
-        ctx.fuzz_results.append(fuzz_snap)
-
-        # Determine verdict and build end banner.
+        # Determine verdict and build end banner FIRST.  The new-artifact
+        # branch may rewrite r.classification (e.g. PASS -> FUZZ_CRASH) and
+        # set sticky_hold; the corpus snapshot recorded below must capture
+        # the *final* classification so ctx.fuzz_results (and the summary.json
+        # derived from it) agrees with the per-target banner and verdict.
         raw_exit = r.exit_code if r.exit_code is not None else "?"
         elapsed_str = _human_dur(int(r.duration_seconds))
         corpus_summary = f"corpus: {before_files}→{after_files} files ({before_bytes}→{after_bytes} bytes)"
@@ -1024,6 +1017,18 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
             _log(ctx, f"[fuzz] {tgt}: {r.classification.value} ({elapsed_str}, "
                  f"exit={raw_exit}), "
                  f"{corpus_summary}")
+
+        # Record the corpus snapshot with the post-verdict classification.
+        fuzz_snap = FuzzCorpusSnapshot(
+            target=tgt,
+            before_files=before_files,
+            before_bytes=before_bytes,
+            after_files=after_files,
+            after_bytes=after_bytes,
+            new_artifacts=new_artifacts,
+            classification=r.classification,
+        )
+        ctx.fuzz_results.append(fuzz_snap)
 
         # Next target indicator.
         if target_index < n:

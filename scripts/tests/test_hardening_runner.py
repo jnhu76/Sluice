@@ -1044,5 +1044,84 @@ class TestTargetCacheError(unittest.TestCase):
             self.assertEqual(ctx._current_cache_mode, "debug")
 
 
+# ======================================================================
+# Fuzz corpus snapshot classification ordering
+# ======================================================================
+
+class TestFuzzSnapshotClassification(unittest.TestCase):
+    """The FuzzCorpusSnapshot recorded in ctx.fuzz_results must reflect the
+    *final* classification after the new-artifact verdict rewrites it.
+
+    Regression for a bug where fuzz_snap was constructed and appended BEFORE
+    the verdict block could change r.classification from PASS to FUZZ_CRASH,
+    so the structured fuzz_results record (and the summary.json derived from
+    it) showed PASS for a target that actually crashed.
+    """
+
+    def _ctx(self, run_dir: Path) -> PhaseContext:
+        ctx = PhaseContext(
+            config=Config(mode="hardening", hours=8,
+                          phase_timeout_seconds=1200,
+                          fuzz_seconds_override=None, keep_going=True),
+            project_root=run_dir, run_dir=run_dir,
+            head_sha="x", head_short="x", worktree_dirty=False,
+            nproc=1, global_deadline=time.monotonic() + 3600,
+            final_debug_reserved=1200, sticky_hold=False,
+            baseline_ok=True, final_debug_ok=True,
+        )
+        # Pretend the debug target cache contains one fuzz target so that
+        # phase_fuzz's `existing` list is non-empty.
+        ctx.target_cache["debug"] = {"wal_read_record_fuzz"}
+        ctx._current_cache_mode = "debug"
+        return ctx
+
+    def _pass_result(self, phase: str, target: str) -> CommandResult:
+        return CommandResult(
+            phase=phase, iteration="1", target=target, mode="debug",
+            command=["xmake", "run", target, "--", "corpus"],
+            classification=Classification.PASS, exit_code=0,
+            duration_seconds=0.0, log_path=Path("/tmp/dummy.log"),
+            sanitizer_signature=None, timed_out=False,
+            term_sent=False, kill_sent=False,
+            started_at="", finished_at="",
+        )
+
+    def test_new_artifact_records_fuzz_crash_in_snapshot(self):
+        from hardening.phases import phase_fuzz
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            ctx = self._ctx(run_dir)
+
+            # Stub run_command so configure/build/fuzz all "pass" without
+            # invoking xmake.  The crash signal is conveyed by a real
+            # artifact file appearing under the per-target artifact dir,
+            # created here as a side effect of the (faked) fuzz run so that
+            # the post-run _list_fuzz_artifacts enumeration sees it while
+            # the pre-run baseline does not.
+            def _fake_run_command(spec, *args, **kwargs):
+                # Simulate the fuzz target producing a crash artifact.
+                if spec.phase == "fuzz" and spec.target == "wal_read_record_fuzz":
+                    art_dir = run_dir / "fuzz" / spec.target
+                    art_dir.mkdir(parents=True, exist_ok=True)
+                    (art_dir / "crash-abc").write_bytes(b"x")
+                return self._pass_result(spec.phase, spec.target)
+
+            with mock.patch("hardening.phases.run_command",
+                            side_effect=_fake_run_command), \
+                 mock.patch("hardening.phases.refresh_target_cache",
+                            side_effect=lambda c, m: c.target_cache.get(m, set())):
+                phase_fuzz(ctx, budget_seconds=60.0)
+
+            self.assertEqual(len(ctx.fuzz_results), 1)
+            snap = ctx.fuzz_results[0]
+            self.assertEqual(snap.target, "wal_read_record_fuzz")
+            self.assertGreaterEqual(len(snap.new_artifacts), 1)
+            # The key assertion: the snapshot classification must be the
+            # post-verdict FUZZ_CRASH, not the pre-verdict PASS.
+            self.assertEqual(snap.classification, Classification.FUZZ_CRASH)
+            # And sticky_hold must have been set by the verdict.
+            self.assertTrue(ctx.sticky_hold)
+
+
 if __name__ == "__main__":
     unittest.main()
