@@ -1,8 +1,8 @@
 """Subprocess execution with group-level timeout, TERM -> KILL escalation,
-and sanitizer log scanning.
+sanitizer log scanning, and optional long-command heartbeat.
 
 This is the only module that spawns OS processes.  All external commands
-go through `run_command()`.
+go through ``run_command()``.
 
 Timeout architecture
 --------------------
@@ -18,18 +18,39 @@ file-directed output, ``wait(timeout=...)`` is the sole authority on
 timing, and the authoritative ``timed_out`` / ``term_sent`` / ``kill_sent``
 fields describe actions the runner actually took (never inferred from an
 exit code such as 124 or 137).
+
+Heartbeat
+---------
+When ``heartbeat_seconds > 0``, the timeout loop is driven by two
+deadlines: the command timeout and the next heartbeat time.  ``wait()`` is
+called with ``min(deadline, next_heartbeat) - now``, so the deadline is
+always checked *before* any heartbeat emission.  Once the deadline is
+reached the TERM → KILL escalation proceeds immediately; the heartbeat
+path is never on the critical timing path.
+
+Heartbeat I/O is decoupled from the timeout thread via a queue + daemon
+writer thread.  The timeout thread builds a snapshot (fast: stat, tail
+read, parse) and enqueues it non-blockingly; the writer thread performs
+all actual I/O (stderr, run.log, JSONL).  A full queue silently drops the
+heartbeat — timeout correctness always takes priority over a heartbeat
+being written.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import datetime
+import json
 import os
+import queue
 import re
 import signal
 import subprocess
+import sys
+import threading
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .model import (
     Classification,
@@ -42,6 +63,21 @@ from .model import (
 # ═══════════════════════════════════════════════════════════════════════════════
 
 KILL_AFTER_SECONDS = 10.0
+
+# Heartbeat: maximum bytes to read from the command log tail for libFuzzer
+# status extraction.  Bounded; runs in the writer thread, isolated from the
+# timeout authority (see _tail_read_log).
+_TAIL_READ_BYTES = 64 * 1024
+
+# Best-effort libFuzzer status-line parser.  Matches the standard
+# ``#<N>\t<tag>  cov:... ft:... corp:... exec/s:... rss:...`` line.
+# The tag is INITED, NEW, REDUCE, pulse, or DONE.  All fields are parsed
+# from a *single* line; cross-line splicing is rejected.
+_LIBFUZZER_STATUS_RE = re.compile(
+    r"#(?P<count>\d+)\s+"
+    r"(?P<tag>INITED|NEW|REDUCE|pulse|DONE)\s+"
+    r"(?P<rest>.*)"
+)
 
 # Sanitizer signature patterns (must not match runner log header).
 _TSAN_PATTERNS = [
@@ -58,6 +94,391 @@ _UBSAN_PATTERNS = [
     re.compile(r"runtime error:"),
     re.compile(r"SUMMARY: UndefinedBehaviorSanitizer"),
 ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Heartbeat emitter
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _tail_read_log(log_path: Path, max_bytes: int = _TAIL_READ_BYTES) -> str:
+    """Read at most *max_bytes* from the tail of *log_path*.
+
+    Bounded and isolated from the timeout thread: this runs in the heartbeat
+    writer thread, so even if a pathological filesystem stalls the read it
+    cannot delay the per-command timeout or the TERM → KILL escalation
+    (which are driven purely by ``wait(timeout=...)``).  Tolerates missing,
+    truncated, and partial-UTF-8 content.
+    """
+    try:
+        size = log_path.stat().st_size
+    except OSError:
+        return ""
+    if size == 0:
+        return ""
+    read_size = min(max_bytes, size)
+    try:
+        with open(log_path, "rb") as f:
+            if size > read_size:
+                f.seek(size - read_size)
+            return f.read(read_size).decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _parse_libfuzzer_status(
+    log_path: Path,
+) -> Optional[Dict[str, Any]]:
+    """Best-effort parse the *latest* libFuzzer status line from *log_path*.
+
+    Scans from the last line backwards so the newest status is returned.
+    Only the first (latest) matching line is parsed; all fields come from
+    that single line — no cross-line splicing.
+    """
+    tail = _tail_read_log(log_path)
+    if not tail:
+        return None
+    # Scan lines from the end backwards; take the first (latest) match.
+    for line in reversed(tail.splitlines()):
+        m = _LIBFUZZER_STATUS_RE.search(line)
+        if not m:
+            continue
+        rest = m.group("rest")
+        d: Dict[str, Any] = {
+            "count": int(m.group("count")),
+            "tag": m.group("tag"),
+        }
+        # Parse each field from the *same* rest string.
+        for field, field_re in [
+            ("exec_s", r"exec/s:\s*(\d+)"),
+            ("rss", r"rss:\s*(\d+)Mb"),
+            ("cov", r"cov:\s*(\d+)"),
+            ("ft", r"ft:\s*(\d+)"),
+            ("lim", r"lim:\s*(\d+)"),
+        ]:
+            fm = re.search(field_re, rest)
+            if fm:
+                d[field] = int(fm.group(1))
+        # corpus: "count/size" — e.g. "corp: 171/19Kb", "corp: 400/3Mb"
+        cm = re.search(r"corp:\s*(\d+)/(\d+)([KMGT]?[Bb])", rest)
+        if cm:
+            d["corpus_count"] = int(cm.group(1))
+            d["corpus_size"] = int(cm.group(2))
+            unit = cm.group(3).upper()
+            if unit.startswith("T"):
+                d["corpus_size"] *= 1024 * 1024 * 1024 * 1024
+            elif unit.startswith("G"):
+                d["corpus_size"] *= 1024 * 1024 * 1024
+            elif unit.startswith("M"):
+                d["corpus_size"] *= 1024 * 1024
+            elif unit.startswith("K"):
+                d["corpus_size"] *= 1024
+            # "B" or "b" alone → bytes, no scaling.
+        return d
+    return None
+
+
+@dataclasses.dataclass
+class HeartbeatTick:
+    """Lightweight tick emitted by the timeout thread.
+
+    Contains only the minimum data that can be produced without I/O.
+    The writer thread uses this tick to build the full snapshot.
+
+    ``alive_at_capture`` records whether the child was still alive at the
+    instant the timeout thread built this tick (checked via ``proc.poll()``
+    immediately before enqueueing).  The writer thread emits exactly this
+    value rather than a hardcoded ``alive=yes``, so a tick built just after
+    the child exited can report ``alive=no`` instead of lying.  In the normal
+    path the timeout thread never enqueues a tick for an exited child (it
+    returns the real exit code instead), so this field is the honest record
+    of the observation, not a second liveness check.
+    """
+
+    pid: int
+    ts: float  # time.time() wall-clock at tick build time
+    alive_at_capture: bool = True
+
+
+@dataclasses.dataclass
+class HeartbeatSnapshot:
+    """Pre-computed heartbeat data, ready for I/O by the writer thread.
+
+    Built entirely in the writer thread so the timeout thread never
+    blocks on a slow pipe or filesystem.
+    """
+
+    phase: str
+    iteration: str
+    target: str
+    pid: int
+    elapsed: float
+    timeout: float
+    remaining: float
+    log_size: int
+    log_delta: int
+    ts: str
+    is_fuzz: bool
+    alive_at_capture: bool = True
+    log_path: str = ""  # command log path for diagnostics
+    fuzzer_status: Optional[Dict[str, Any]] = None
+    global_remaining: Optional[float] = None
+
+
+class HeartbeatEmitter:
+    """Emit periodic heartbeat lines for a single long-running command.
+
+    One instance per command.  Tracks log size for delta reporting.
+
+    I/O is performed by a daemon writer thread fed by a ``queue.Queue``
+    (maxsize=1) of lightweight ``HeartbeatTick`` objects.  The timeout
+    thread produces a ``HeartbeatTick`` (no I/O) and enqueues it non-
+    blockingly; if the writer thread is still busy the heartbeat is
+    silently dropped.  This guarantees that timeout correctness
+    (TERM → KILL) is never delayed by heartbeat I/O.
+    """
+
+    def __init__(
+        self,
+        phase: str,
+        iteration: str,
+        target: str,
+        pid: int,
+        start_mono: float,
+        timeout_seconds: float,
+        log_path: Path,
+        run_log_path: Optional[Path] = None,
+        heartbeats_jsonl_path: Optional[Path] = None,
+        global_remaining_fn: Optional[Callable[[], float]] = None,
+        is_fuzz: bool = False,
+    ):
+        self._phase = phase
+        self._iteration = iteration
+        self._target = target
+        self._pid = pid
+        self._start_mono = start_mono
+        self._timeout_seconds = timeout_seconds
+        self._log_path = log_path
+        self._run_log_path = run_log_path
+        self._heartbeats_jsonl_path = heartbeats_jsonl_path
+        self._global_remaining_fn = global_remaining_fn
+        self._is_fuzz = is_fuzz
+        self._last_log_size = 0
+
+        # Queue + daemon writer thread.  The queue holds HeartbeatTick
+        # objects (lightweight, no I/O).  The writer thread builds the
+        # full HeartbeatSnapshot and performs all I/O.
+        self._queue: queue.Queue[Optional[HeartbeatTick]] = queue.Queue(maxsize=1)
+        self._writer_thread = threading.Thread(
+            target=self._writer_loop, daemon=True, name="heartbeat-writer"
+        )
+        self._writer_thread.start()
+
+    def _build_snapshot(self, tick: HeartbeatTick) -> HeartbeatSnapshot:
+        """Compute a heartbeat snapshot from a lightweight tick.
+
+        Performs stat and bounded tail-read on the command log in the
+        writer thread so the timeout thread never blocks on I/O.
+        """
+        now = time.monotonic()
+        elapsed = now - self._start_mono
+        remaining = max(0.0, self._timeout_seconds - elapsed)
+        ts = datetime.datetime.fromtimestamp(
+            tick.ts, tz=datetime.timezone.utc
+        ).isoformat()
+
+        try:
+            cur_size = self._log_path.stat().st_size
+        except OSError:
+            cur_size = 0
+        delta = max(0, cur_size - self._last_log_size)
+        self._last_log_size = cur_size
+
+        fuzzer_status: Optional[Dict[str, Any]] = None
+        if self._is_fuzz:
+            fuzzer_status = _parse_libfuzzer_status(self._log_path)
+
+        global_remaining: Optional[float] = None
+        if self._global_remaining_fn is not None:
+            try:
+                global_remaining = self._global_remaining_fn()
+            except Exception:
+                pass
+
+        return HeartbeatSnapshot(
+            phase=self._phase,
+            iteration=self._iteration,
+            target=self._target,
+            pid=tick.pid,
+            elapsed=elapsed,
+            timeout=self._timeout_seconds,
+            remaining=remaining,
+            log_size=cur_size,
+            log_delta=delta,
+            ts=ts,
+            is_fuzz=self._is_fuzz,
+            alive_at_capture=tick.alive_at_capture,
+            log_path=str(self._log_path),
+            fuzzer_status=fuzzer_status,
+            global_remaining=global_remaining,
+        )
+
+    def emit(self, alive_at_capture: bool = True) -> None:
+        """Enqueue a heartbeat tick for the writer thread (non-blocking).
+
+        Produces only a lightweight HeartbeatTick (no I/O).  If the queue
+        is full the heartbeat is silently dropped; timeout correctness
+        always takes priority over heartbeat delivery.
+
+        *alive_at_capture* records whether the child was still alive at the
+        instant the caller decided to emit.  ``run_command()`` checks
+        ``proc.poll()`` immediately before calling this and passes the
+        result here, so the tick (and the eventual output) truthfully
+        reports what was observed rather than assuming ``alive=yes``.
+        """
+        tick = HeartbeatTick(
+            pid=self._pid, ts=time.time(), alive_at_capture=alive_at_capture
+        )
+        try:
+            self._queue.put_nowait(tick)
+        except queue.Full:
+            pass  # writer thread busy; drop, don't block
+
+    def shutdown(self, timeout: float = 5.0) -> None:
+        """Signal the writer thread to finish and wait for it to drain.
+
+        Args:
+            timeout: Maximum seconds to wait for the writer thread to drain
+                      and join.  On exception/cancel paths, callers should
+                      use a short timeout (e.g. 0.25) so the child kill
+                      path is not delayed.
+        """
+        # Put the sentinel.  If the queue is full the writer is busy;
+        # poll briefly to let it drain naturally so we don't discard a
+        # pending snapshot.
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                self._queue.put_nowait(None)
+                break
+            except queue.Full:
+                time.sleep(0.05)
+        else:
+            # Timeout: force-drain and retry (last resort).
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._queue.put_nowait(None)
+            except queue.Full:
+                pass
+        # Wait for the writer to finish (up to timeout).  The writer is a
+        # daemon thread; if it's stuck on I/O it will be terminated when
+        # the process exits.
+        self._writer_thread.join(timeout=timeout)
+
+    def _writer_loop(self) -> None:
+        """Daemon thread: read ticks from the queue, build snapshots, write."""
+        while True:
+            tick = self._queue.get()
+            if tick is None:  # sentinel
+                break
+            try:
+                snap = self._build_snapshot(tick)
+            except Exception:
+                continue  # snapshot build failed; skip this beat
+            try:
+                self._write_snapshot(snap)
+            except Exception:
+                pass  # I/O failure in writer thread; skip, don't crash
+
+    def _write_snapshot(self, snap: HeartbeatSnapshot) -> None:
+        """Perform all I/O for one heartbeat snapshot.
+
+        Each sink is wrapped individually so one failure doesn't block
+        the others.
+        """
+        # Build stderr line.
+        # ``alive=yes|no`` reflects the observation captured at tick-build
+        # time in the timeout thread (see HeartbeatTick), NOT a fresh poll
+        # here.  In the normal path the timeout thread never enqueues a tick
+        # for an already-exited child, so this is honest about what was seen.
+        fields: List[str] = [
+            f"ts={snap.ts}",
+            f"phase={snap.phase}",
+            f"target={snap.target}",
+            f"iteration={snap.iteration}",
+            f"elapsed={snap.elapsed:.0f}s",
+            f"timeout={snap.timeout:.0f}s",
+            f"remaining={snap.remaining:.0f}s",
+            f"pid={snap.pid}",
+            f"alive={'yes' if snap.alive_at_capture else 'no'}",
+            f"log_size={snap.log_size}",
+            f"log_delta={snap.log_delta}",
+        ]
+        if snap.global_remaining is not None:
+            fields.append(f"global_remaining={snap.global_remaining:.0f}s")
+        if snap.is_fuzz:
+            if snap.fuzzer_status is not None:
+                fs = snap.fuzzer_status
+                fields.append(
+                    f"fuzzer_status=#{fs['count']} {fs['tag']} "
+                    f"exec/s={fs.get('exec_s', '?')} "
+                    f"cov={fs.get('cov', '?')} "
+                    f"ft={fs.get('ft', '?')} "
+                    f"rss={fs.get('rss', '?')}Mb"
+                )
+                if "corpus_count" in fs:
+                    fields.append(f"corpus={fs['corpus_count']}/{fs['corpus_size']}")
+            else:
+                fields.append("fuzzer_status=unavailable")
+        # Command log path (always included).
+        fields.append(f"log_path={snap.log_path}")
+
+        line = "[heartbeat] " + " ".join(fields)
+
+        # stderr — guarded.
+        try:
+            print(line, file=sys.stderr)
+        except Exception:
+            pass
+
+        # run.log — guarded.
+        if self._run_log_path is not None:
+            try:
+                with open(self._run_log_path, "a") as f:
+                    f.write(line + "\n")
+            except OSError:
+                pass
+
+        # heartbeats.jsonl — guarded.
+        if self._heartbeats_jsonl_path is not None:
+            try:
+                rec: Dict[str, Any] = {
+                    "ts": snap.ts,
+                    "phase": snap.phase,
+                    "iteration": snap.iteration,
+                    "target": snap.target,
+                    "pid": snap.pid,
+                    "elapsed": round(snap.elapsed, 1),
+                    "timeout": snap.timeout,
+                    "remaining": round(snap.remaining, 1),
+                    "alive": snap.alive_at_capture,
+                    "log_size": snap.log_size,
+                    "log_delta": snap.log_delta,
+                    "command_log_path": snap.log_path,
+                }
+                if snap.global_remaining is not None:
+                    rec["global_remaining"] = round(snap.global_remaining, 1)
+                if snap.is_fuzz:
+                    if snap.fuzzer_status is not None:
+                        rec["fuzzer_status"] = snap.fuzzer_status
+                    else:
+                        rec["fuzzer_status"] = "unavailable"
+                with open(self._heartbeats_jsonl_path, "a") as f:
+                    f.write(json.dumps(rec, sort_keys=True) + "\n")
+            except Exception:
+                pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -144,7 +565,12 @@ def classify_with_sanitizer(
 # Core runner
 # =============================================================================
 
-def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
+def run_command(
+    spec: CommandSpec,
+    head_sha: str,
+    dirty: bool,
+    global_remaining_fn: Optional[Callable[[], float]] = None,
+) -> CommandResult:
     """Execute *spec* and return a fully populated ``CommandResult``.
 
     *   The child process is started in a new session (``start_new_session=True``)
@@ -203,9 +629,36 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
 
         # From here the child MUST always be reaped, on every path.
         try:
-            exit_code, timed_out, term_sent, kill_sent = _run_with_timeout(
-                proc, spec.timeout_seconds
-            )
+            # Heartbeat: build an emitter for long-running commands.
+            heartbeater: Optional[HeartbeatEmitter] = None
+            if spec.heartbeat_seconds > 0:
+                is_fuzz = spec.phase == "fuzz" and spec.target not in (
+                    "configure", "build-fuzz-group")
+                heartbeater = HeartbeatEmitter(
+                    phase=spec.phase,
+                    iteration=spec.iteration,
+                    target=spec.target,
+                    pid=proc.pid,
+                    start_mono=start_mono,
+                    timeout_seconds=spec.timeout_seconds,
+                    log_path=spec.log_path,
+                    run_log_path=spec.run_log_path,
+                    is_fuzz=is_fuzz,
+                    heartbeats_jsonl_path=spec.heartbeats_path,
+                    global_remaining_fn=global_remaining_fn,
+                )
+            try:
+                exit_code, timed_out, term_sent, kill_sent = _run_with_timeout(
+                    proc, spec.timeout_seconds, heartbeater, spec.heartbeat_seconds
+                )
+            finally:
+                # On the normal path, shutdown the heartbeater with a
+                # generous timeout so the last heartbeat can flush.
+                # On exception paths (KeyboardInterrupt, runner error)
+                # the child must be killed first; we use a short timeout
+                # here and let the except block below handle the rest.
+                if heartbeater is not None:
+                    heartbeater.shutdown(timeout=0.25)
         except BaseException:
             # KeyboardInterrupt or any runner-internal error: tear down the
             # whole process group and reap before propagating, so no orphaned
@@ -274,18 +727,72 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
 
 
 def _run_with_timeout(
-    proc: "subprocess.Popen", timeout_seconds: float
+    proc: "subprocess.Popen",
+    timeout_seconds: float,
+    heartbeater: "Optional[HeartbeatEmitter]" = None,
+    heartbeat_seconds: int = 0,
 ) -> tuple[Optional[int], bool, bool, bool]:
     """Wait for *proc*, enforcing TERM -> KILL escalation on timeout.
 
     Returns ``(exit_code, timed_out, term_sent, kill_sent)``.  The boolean
     fields record the actions this runner actually took.
+
+    When *heartbeater* is provided and *heartbeat_seconds* > 0, the wait is
+    driven by two deadlines:
+
+    *   **command deadline** (``start + timeout_seconds``) — the authority.
+    *   **next heartbeat** (``start + heartbeat_seconds``, then incremented).
+
+    ``wait()`` is called with ``min(deadline, next_heartbeat) - now`` so the
+    deadline is always checked *before* any heartbeat emission.  Once the
+    deadline is reached the TERM → KILL escalation proceeds immediately; the
+    heartbeat path is never on the critical timing path.
+
+    Heartbeat emission is a non-blocking queue put; a full queue silently
+    drops the heartbeat.  The timeout thread never blocks on I/O.
     """
-    try:
-        exit_code = proc.wait(timeout=timeout_seconds)
-        return exit_code, False, False, False
-    except subprocess.TimeoutExpired:
-        pass
+    if heartbeater is not None and heartbeat_seconds > 0:
+        start = time.monotonic()
+        deadline = start + timeout_seconds
+        next_heartbeat = start + heartbeat_seconds
+
+        while True:
+            now = time.monotonic()
+            if now >= deadline:
+                break
+            wait_until = min(deadline, next_heartbeat)
+            try:
+                exit_code = proc.wait(timeout=max(0.0, wait_until - now))
+                return exit_code, False, False, False
+            except subprocess.TimeoutExpired:
+                now = time.monotonic()
+                # Deadline always takes priority.
+                if now >= deadline:
+                    break
+                if now >= next_heartbeat:
+                    # The child may have exited in the window between
+                    # wait()'s TimeoutExpired and here.  Reap it if so and
+                    # return the real exit code instead of emitting a
+                    # heartbeat that would lie ``alive=yes`` about a child
+                    # that is already gone.  poll() is non-blocking.
+                    exit_code = proc.poll()
+                    if exit_code is not None:
+                        return exit_code, False, False, False
+                    # Still alive: enqueue a tick recording that observation.
+                    heartbeater.emit(alive_at_capture=True)
+                    # Advance to next heartbeat slot.  If the emit took so
+                    # long that we missed the next slot, skip to the
+                    # current slot to avoid a burst of catch-up emissions.
+                    next_heartbeat += heartbeat_seconds
+                    if next_heartbeat <= now:
+                        next_heartbeat = now + heartbeat_seconds
+        # Fall through to TERM escalation.
+    else:
+        try:
+            exit_code = proc.wait(timeout=timeout_seconds)
+            return exit_code, False, False, False
+        except subprocess.TimeoutExpired:
+            pass
 
     # Per-command timeout exceeded: TERM the whole group.
     _kill_process_group(proc.pid, signal.SIGTERM)

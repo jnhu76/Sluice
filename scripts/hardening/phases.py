@@ -7,6 +7,7 @@ as needed.
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 import shlex
@@ -28,6 +29,18 @@ from .model import (
 )
 from .preflight import PreflightResult
 from .process import run_command
+
+
+def _human_dur(s: int) -> str:
+    """Format a duration in seconds as a human-readable string."""
+    m, s = divmod(s, 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}h{m:02d}m{s:02d}s"
+    elif m:
+        return f"{m}m{s:02d}s"
+    return f"{s}s"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Target constants  (mirror the Bash definitions)
@@ -75,6 +88,21 @@ FUZZ_MAXLEN: Dict[str, int] = {
     "wal_read_record_fuzz": 1048576,
     "wal_roundtrip_fuzz": 262144,
     "copy_all_fault_fuzz": 8192,
+}
+
+# Per-target libFuzzer dictionary.  None means no dictionary.
+# wal_read_record_fuzz:  MATCH — input is a WAL frame (magic u32 + length u32
+#   + payload + checksum u32, LE); the WAL dict tokens build those fields.
+# wal_roundtrip_fuzz:    PARTIAL_MATCH — input is bare payload; dict tokens
+#   are generic bytes (useful for boundary payloads), but WAL semantics are
+#   inert here since the harness produces the frame, not the input.
+# copy_all_fault_fuzz:   MISMATCH — input is a CopyConfig header + opaque
+#   payload (fuzz/support/copy_model.hpp); no WAL field exists, so the WAL
+#   dict is wasteful and semantically misleading.
+FUZZ_DICTS: Dict[str, Optional[str]] = {
+    "wal_read_record_fuzz": "wal_record.dict",
+    "wal_roundtrip_fuzz": "wal_record.dict",
+    "copy_all_fault_fuzz": None,
 }
 
 ACCEPTANCE_CONSUMERS: List[str] = [
@@ -353,9 +381,13 @@ def _cmd(
         environment=child_env,
         sanitizer_kind=sanitizer_kind,
         synthetic=synthetic,
+        heartbeat_seconds=ctx.config.heartbeat_seconds,
+        heartbeats_path=ctx.run_dir / "heartbeats.jsonl",
+        run_log_path=ctx.run_dir / "run.log",
     )
 
-    result = run_command(spec, ctx.head_sha, ctx.worktree_dirty)
+    result = run_command(spec, ctx.head_sha, ctx.worktree_dirty,
+                         global_remaining_fn=ctx.remaining_seconds)
     ctx.results.append(result)
 
     # Update stats.
@@ -805,6 +837,35 @@ def _committed_corpus_dir(project_root: Path, target: str) -> Path:
     return project_root / rel
 
 
+def build_fuzz_argv(
+    target: str,
+    corpus: str,
+    artifact_dir: str,
+    per_target: int,
+    maxlen: int,
+    dict_path: Optional[str] = None,
+    rss_limit_mb: int = 1024,
+    timeout: int = 120,
+) -> List[str]:
+    """Build the libFuzzer argv for a single fuzz target.
+
+    This is a pure function extracted so both ``phase_fuzz()`` and
+    unit tests can exercise the same argv construction.
+    """
+    argv = [
+        "xmake", "run", target, "--",
+        corpus,
+        f"-max_total_time={per_target}",
+        f"-artifact_prefix={artifact_dir}",
+        f"-rss_limit_mb={rss_limit_mb}",
+        f"-max_len={maxlen}",
+        f"-timeout={timeout}",
+    ]
+    if dict_path is not None:
+        argv.append(f"-dict={dict_path}")
+    return argv
+
+
 def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
     """Configure Debug (fuzz build), build fuzz group, and run each fuzz target."""
     _log(ctx, "[fuzz] configuring clang debug (fuzz build)")
@@ -845,11 +906,12 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
 
     hardening_root = ctx.project_root / ".hardening-corpus"
     hardening_root.mkdir(parents=True, exist_ok=True)
-    dict_path = ctx.project_root / "fuzz" / "dictionaries" / "wal_record.dict"
     fuzz_subdir = ctx.run_dir / "fuzz"
     fuzz_subdir.mkdir(parents=True, exist_ok=True)
 
+    target_index = 0
     for tgt in existing:
+        target_index += 1
         if ctx.remaining_seconds() < per_target:
             _log(ctx, f"[fuzz] not enough time for {tgt}; stopping")
             break
@@ -875,17 +937,21 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
         before_bytes = _corpus_file_bytes(work_corpus)
 
         maxlen = FUZZ_MAXLEN.get(tgt, 1048576)
-        fuzz_args = [
-            "xmake", "run", tgt, "--",
-            str(work_corpus),
-            f"-max_total_time={per_target}",
-            f"-artifact_prefix={artifact_dir}/",
-            "-rss_limit_mb=1024",
-            f"-max_len={maxlen}",
-            "-timeout=120",
-        ]
-        if dict_path.is_file():
-            fuzz_args.append(f"-dict={dict_path}")
+        # Per-target dictionary (see FUZZ_DICTS above).
+        dict_name = FUZZ_DICTS.get(tgt)
+        dict_path: Optional[str] = None
+        if dict_name is not None:
+            dp = ctx.project_root / "fuzz" / "dictionaries" / dict_name
+            if dp.is_file():
+                dict_path = str(dp)
+        fuzz_args = build_fuzz_argv(
+            target=tgt,
+            corpus=str(work_corpus),
+            artifact_dir=str(artifact_dir) + "/",
+            per_target=per_target,
+            maxlen=maxlen,
+            dict_path=dict_path,
+        )
 
         fuzz_env = {
             "ASAN_OPTIONS": "halt_on_error=1:detect_leaks=1",
@@ -894,9 +960,19 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
 
         # Wrapper timeout = per-target + 180s grace.
         wrapper_timeout = per_target + 180
-        _log(ctx, f"[fuzz] {tgt}: {per_target}s (wrapper timeout {wrapper_timeout}s)")
 
-        r = _cmd(ctx, "fuzz", "0", tgt, "debug", fuzz_args,
+        # Banner: phase index (5/6), expected finish, wrapper timeout, log path.
+        now_ts = datetime.datetime.now(datetime.timezone.utc)
+        expected_finish = now_ts + datetime.timedelta(seconds=per_target)
+        hard_timeout = now_ts + datetime.timedelta(seconds=wrapper_timeout)
+        _log(ctx, f"[fuzz] [phase 5/6] target {target_index}/{n}: {tgt} "
+             f"(budget={_human_dur(per_target)}, "
+             f"expected {expected_finish.strftime('%H:%M:%S')}Z, "
+             f"wrapper={_human_dur(wrapper_timeout)}, "
+             f"hard {hard_timeout.strftime('%H:%M:%S')}Z)")
+        _log(ctx, f"[fuzz]   corpus={work_corpus} artifact={artifact_dir}")
+
+        r = _cmd(ctx, "fuzz", str(target_index), tgt, "debug", fuzz_args,
                  timeout_s=float(wrapper_timeout),
                  sanitizer_kind="asan",
                  env=fuzz_env,
@@ -910,6 +986,39 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
         after_artifacts = set(_list_fuzz_artifacts(artifact_dir))
         new_artifacts = sorted(after_artifacts - base_artifacts)
 
+        # Determine verdict and build end banner FIRST.  The new-artifact
+        # branch may rewrite r.classification (e.g. PASS -> FUZZ_CRASH) and
+        # set sticky_hold; the corpus snapshot recorded below must capture
+        # the *final* classification so ctx.fuzz_results (and the summary.json
+        # derived from it) agrees with the per-target banner and verdict.
+        raw_exit = r.exit_code if r.exit_code is not None else "?"
+        elapsed_str = _human_dur(int(r.duration_seconds))
+        corpus_summary = f"corpus: {before_files}→{after_files} files ({before_bytes}→{after_bytes} bytes)"
+
+        if new_artifacts:
+            if r.classification == Classification.PASS:
+                r.classification = Classification.FUZZ_CRASH
+            ctx.sticky_hold = True
+            _log(ctx, f"[fuzz] {tgt}: FUZZ_CRASH ({elapsed_str}, "
+                 f"exit={raw_exit}), "
+                 f"{corpus_summary}, "
+                 f"new artifacts={len(new_artifacts)}")
+        elif r.classification == Classification.PASS:
+            _log(ctx, f"[fuzz] {tgt}: PASS ({elapsed_str}, "
+                 f"exit={raw_exit}), "
+                 f"{corpus_summary}")
+        elif r.classification == Classification.TIMEOUT:
+            ctx.sticky_hold = True
+            _log(ctx, f"[fuzz] {tgt}: TIMEOUT ({elapsed_str}, "
+                 f"exit={raw_exit}), "
+                 f"{corpus_summary}")
+        elif r.classification in (Classification.SANITIZER_FAIL, Classification.FAIL):
+            ctx.sticky_hold = True
+            _log(ctx, f"[fuzz] {tgt}: {r.classification.value} ({elapsed_str}, "
+                 f"exit={raw_exit}), "
+                 f"{corpus_summary}")
+
+        # Record the corpus snapshot with the post-verdict classification.
         fuzz_snap = FuzzCorpusSnapshot(
             target=tgt,
             before_files=before_files,
@@ -921,20 +1030,12 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
         )
         ctx.fuzz_results.append(fuzz_snap)
 
-        # Determine verdict.
-        if new_artifacts:
-            if r.classification == Classification.PASS:
-                r.classification = Classification.FUZZ_CRASH
-            ctx.sticky_hold = True
-            _log(ctx, f"[fuzz] {tgt}: FUZZ_CRASH (new artifacts={len(new_artifacts)})")
-        elif r.classification == Classification.PASS:
-            _log(ctx, f"[fuzz] {tgt}: PASS")
-        elif r.classification == Classification.TIMEOUT:
-            ctx.sticky_hold = True
-            _log(ctx, f"[fuzz] {tgt}: TIMEOUT")
-        elif r.classification in (Classification.SANITIZER_FAIL, Classification.FAIL):
-            ctx.sticky_hold = True
-            _log(ctx, f"[fuzz] {tgt}: {r.classification.value}")
+        # Next target / phase indicator.
+        if target_index < n:
+            next_tgt = existing[target_index]
+            _log(ctx, f"[fuzz]   next: {next_tgt} ({target_index + 1}/{n})")
+        else:
+            _log(ctx, "[fuzz]   next_phase=final-debug")
 
         # Write corpus stats.
         stats_path = fuzz_subdir / f"{tgt}.corpus-stats.txt"

@@ -72,12 +72,18 @@ class Config:
     phase_timeout_seconds: int
     fuzz_seconds_override: Optional[int]
     keep_going: bool
+    # Heartbeat interval for long-running commands (seconds). 0 disables.
+    # See process.run_command: while a child runs, a heartbeat line is emitted
+    # every `heartbeat_seconds` to stderr/run.log/heartbeats.jsonl so a silent
+    # fuzz campaign or soak iteration cannot look hung. Default 60.
+    heartbeat_seconds: int = 60
 
     # Source tracking for diagnostics
     hours_source: str = "default"
     timeout_source: str = "default"
     fuzz_source: str = "default"
     keep_going_source: str = "default"
+    heartbeat_source: str = "default"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -98,6 +104,15 @@ class CommandSpec:
     environment: Dict[str, str] = field(default_factory=dict)
     sanitizer_kind: Optional[str] = None  # "tsan" | "asan" | None
     synthetic: bool = False
+    # Heartbeat interval (seconds) while this command runs. 0 disables. The
+    # runner emits a heartbeat line every interval to stderr/run.log plus
+    # heartbeats.jsonl (when heartbeats_path is set) so a silent long command
+    # cannot appear hung. See process.run_command.
+    heartbeat_seconds: int = 0
+    # Optional path to the per-run heartbeats.jsonl (None => no JSONL output).
+    heartbeats_path: Optional[Path] = None
+    # Optional path to the run log for heartbeat appending (None => no run.log write).
+    run_log_path: Optional[Path] = None
 
     def header_lines(self, head_sha: str, dirty: bool) -> List[str]:
         """Return the log header lines for this command."""
