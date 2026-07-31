@@ -24,10 +24,13 @@
 #include <sluice/error.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <memory>
 #include <mutex>
 #include <unistd.h>
 #include <vector>
@@ -110,10 +113,40 @@ SLUICE_TEST_CASE(pipeline_integration_edge_sizes_per_depth) {
 
 // ---------------------------------------------------------------------------
 // Multiple buffer sizes at depth>1, including small buffers that force many
-// rounds of slot reuse.
+// rounds of slot reuse. ThreadPoolBackend spawns one OS thread per op, so the
+// full workload (buf=1 over N=100003 bytes == ~200k thread spawns per depth)
+// takes ~48s in Debug and several minutes under ASan/TSan. Instrumented
+// builds therefore default to a smaller prime; SLUICE_PIPELINE_BUFSTRESS_N
+// overrides in any build. The byte-for-byte assertions are identical at any
+// scale, and Debug/Release always run the full 100003-byte workload.
 // ---------------------------------------------------------------------------
+#if defined(__has_feature)
+#  if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#    define SLUICE_PIT_SANITIZED 1
+#  endif
+#endif
+#if !defined(SLUICE_PIT_SANITIZED) && \
+    (defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__))
+#  define SLUICE_PIT_SANITIZED 1
+#endif
+
+std::size_t stress_n() {
+    const char* s = std::getenv("SLUICE_PIPELINE_BUFSTRESS_N");
+    if (s == nullptr || *s == '\0') {
+#ifdef SLUICE_PIT_SANITIZED
+        return 1009;  // prime-ish, not a buffer multiple
+#else
+        return 100003;  // prime-ish, not a buffer multiple
+#endif
+    }
+    char* end = nullptr;
+    unsigned long long v = std::strtoull(s, &end, 10);
+    if (end == s || v == 0) return 100003;
+    return static_cast<std::size_t>(v);
+}
+
 SLUICE_TEST_CASE(pipeline_integration_buffer_sizes) {
-    constexpr std::size_t N = 100003;  // prime-ish, not a buffer multiple
+    const std::size_t N = stress_n();  // prime-ish, not a buffer multiple
     for (std::size_t buf : {1u, 7u, 512u, 4096u, 65536u}) {
         for (std::size_t depth : {2u, 4u}) {
             TempFile src, dst;
@@ -160,29 +193,30 @@ SLUICE_TEST_CASE(pipeline_integration_multi_worker) {
 // AsyncBackend decorator that delegates every call to a real ThreadPoolBackend
 // while counting the peak number of simultaneously-outstanding reads it has
 // been asked to submit (submit_read before the matching completion is reaped).
+//
+// Lifetime: the copy entry point takes OWNERSHIP of the injected backend
+// (copy_task.hpp: "the caller supplies the AsyncBackend" — it is destroyed when
+// run_pipelined_copy_with_backend returns). Querying the probe object after the
+// call would be a use-after-free, so the peak is published into a shared
+// atomic cell owned by the test; the probe itself may die with the copy.
 // ---------------------------------------------------------------------------
 namespace {
 
 class ReadConcurrencyProbe : public sluice::async::AsyncBackend {
 public:
-    explicit ReadConcurrencyProbe(std::unique_ptr<AsyncBackend> inner)
-        : inner_(std::move(inner)) {}
-
-    std::size_t peak_outstanding_reads() const {
-        std::lock_guard<std::mutex> lk(mtx_);
-        return peak_reads_;
-    }
+    ReadConcurrencyProbe(std::unique_ptr<AsyncBackend> inner,
+                         std::shared_ptr<std::atomic<std::size_t>> peak)
+        : inner_(std::move(inner)), peak_(std::move(peak)) {}
 
     Result<void> submit_read(sluice::async::ReadOp op,
                              sluice::async::Completion<std::size_t>& c) override {
         {
             std::lock_guard<std::mutex> lk(mtx_);
             ++live_reads_;
-            if (live_reads_ > peak_reads_) peak_reads_ = live_reads_;
+            if (live_reads_ > peak_->load()) peak_->store(live_reads_);
         }
-        // Wrap the completion so we can decrement live_reads_ when it becomes
-        // ready. We intercept by polling is harder; instead, track via a
-        // side-channel: record the completion pointer and let poll() reap.
+        // Track the completion so we can decrement live_reads_ when it becomes
+        // ready; poll()/wait_one() reap any now-ready tracked reads.
         live_read_completions_.push_back(&c);
         return inner_->submit_read(op, c);
     }
@@ -234,9 +268,9 @@ private:
     }
 
     std::unique_ptr<AsyncBackend> inner_;
-    mutable std::mutex mtx_;
+    std::shared_ptr<std::atomic<std::size_t>> peak_;
+    std::mutex mtx_;
     std::size_t live_reads_ = 0;
-    std::size_t peak_reads_ = 0;
     std::vector<sluice::async::Completion<std::size_t>*> live_read_completions_;
 };
 
@@ -248,9 +282,10 @@ SLUICE_TEST_CASE(pipeline_integration_real_multi_outstanding_reads) {
     TempFile src, dst;
     seed_file(src.fd, N);
 
+    auto peak = std::make_shared<std::atomic<std::size_t>>(0);
     auto inner = std::make_unique<sluice::async::ThreadPoolBackend>();
-    auto* probe = new ReadConcurrencyProbe(std::move(inner));
-    std::unique_ptr<sluice::async::AsyncBackend> backend(probe);
+    std::unique_ptr<sluice::async::AsyncBackend> backend(
+        new ReadConcurrencyProbe(std::move(inner), peak));
 
     auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/4, 1,
                                              SyncPolicy::none, std::move(backend));
@@ -260,7 +295,7 @@ SLUICE_TEST_CASE(pipeline_integration_real_multi_outstanding_reads) {
     // The real backend saw >= 2 reads outstanding simultaneously. (peak may not
     // reach the full depth on small/fast files, but must exceed the depth=1
     // baseline of 1 to prove read-ahead is real.)
-    SLUICE_CHECK_MSG(probe->peak_outstanding_reads() >= 2,
+    SLUICE_CHECK_MSG(peak->load() >= 2,
                      "ThreadPoolBackend never saw >= 2 concurrent reads; "
                      "Version B read-ahead is not producing real concurrency");
 }
@@ -275,16 +310,17 @@ SLUICE_TEST_CASE(pipeline_integration_depth1_single_read) {
     TempFile src, dst;
     seed_file(src.fd, N);
 
+    auto peak = std::make_shared<std::atomic<std::size_t>>(0);
     auto inner = std::make_unique<sluice::async::ThreadPoolBackend>();
-    auto* probe = new ReadConcurrencyProbe(std::move(inner));
-    std::unique_ptr<sluice::async::AsyncBackend> backend(probe);
+    std::unique_ptr<sluice::async::AsyncBackend> backend(
+        new ReadConcurrencyProbe(std::move(inner), peak));
 
     auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/1, 1,
                                              SyncPolicy::none, std::move(backend));
     SLUICE_CHECK(r.has_value());
     SLUICE_CHECK(r.value().bytes_copied == N);
     SLUICE_CHECK(files_equal(src.fd, dst.fd, N));
-    SLUICE_CHECK_MSG(probe->peak_outstanding_reads() == 1,
+    SLUICE_CHECK_MSG(peak->load() == 1,
                      "depth=1 must keep at most 1 read outstanding");
 }
 

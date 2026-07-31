@@ -196,7 +196,17 @@ struct CopyScenario {
     bool joined = false;
     // The copy task publishes its terminal outcome here (from the copy thread).
     std::optional<Result<CopyStats>> copy_result;
+    // Publication channel: the copy thread writes copy_result THEN sets this
+    // flag (release); the driver thread polls the flag (acquire) BEFORE reading
+    // copy_result, so the optional is never torn/read while being written.
+    // Reads of copy_result after join() are synchronized by the join itself.
+    std::atomic<bool> copy_published{false};
 
+    // Called from the copy thread; publishes the terminal outcome exactly once.
+    void publish(Result<CopyStats> r) {
+        copy_result = std::move(r);
+        copy_published.store(true, std::memory_order_release);
+    }
 
     CopyScenario() = default;
     ~CopyScenario() { drain_and_join(); }
@@ -214,7 +224,7 @@ struct CopyScenario {
     void drain_and_join() {
         if (joined) return;
         auto deadline = std::chrono::steady_clock::now() + kWaitFor * 3;
-        while (!copy_result.has_value() &&
+        while (!copy_published.load(std::memory_order_acquire) &&
                std::chrono::steady_clock::now() < deadline) {
             drain_all(controller);  // complete every currently-pending op
             // Give the copy thread a short window to publish or submit new ops.
@@ -257,7 +267,7 @@ SLUICE_TEST_CASE(contract_depth_1_single_outstanding_read) {
     sc.copy_thread = std::thread([&]() mutable {
         auto r = run_sequential_copy_with_backend(
             src.fd, dst.fd, 4096, 1, SyncPolicy::none, std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // Drive the copy through 3 chunks.
@@ -305,7 +315,7 @@ SLUICE_TEST_CASE(contract_depth_gt_1_multiple_outstanding_reads) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/4,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // Wait for >= 2 reads to be outstanding simultaneously: the primary proof
@@ -361,7 +371,7 @@ SLUICE_TEST_CASE(contract_out_of_order_read_in_order_write) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/2,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // Wait for BOTH reads to be outstanding (proves read-ahead of depth>=2).
@@ -440,7 +450,7 @@ SLUICE_TEST_CASE(contract_slot_lifecycle) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/1,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     std::uint64_t r0 = wait_for_op(sc.controller, OpKind::read);
@@ -509,7 +519,7 @@ SLUICE_TEST_CASE(contract_short_read_retry) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/1,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // First read returns 4 bytes (short).
@@ -569,7 +579,7 @@ SLUICE_TEST_CASE(contract_partial_write_advance) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/1,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     std::uint64_t r0 = wait_for_op(sc.controller, OpKind::read);
@@ -633,7 +643,7 @@ SLUICE_TEST_CASE(contract_eof_drain) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/2,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // Complete chunk-0 read (full), then chunk-1 read (EOF at offset B).
@@ -687,7 +697,7 @@ SLUICE_TEST_CASE(contract_read_error_drain) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/2,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     SLUICE_CHECK_MSG(wait_for_op_count(sc.controller, OpKind::read, 2) >= 2,
@@ -731,7 +741,7 @@ SLUICE_TEST_CASE(contract_write_error_drain) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/2,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // Complete both reads.
@@ -782,7 +792,7 @@ SLUICE_TEST_CASE(contract_submit_failure_drain) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/2,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     std::uint64_t r0 = wait_for_op_at(sc.controller, OpKind::read, 0);
@@ -828,7 +838,7 @@ SLUICE_TEST_CASE(contract_bounded_memory) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/3,
                                                  1, SyncPolicy::none,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // Let the read window fill, observing distinct buffers and read count.
@@ -880,7 +890,7 @@ SLUICE_TEST_CASE(contract_write_zero_is_error) {
     sc.copy_thread = std::thread([&]() mutable {
         auto r = run_sequential_copy_with_backend(
             src.fd, dst.fd, 16, 1, SyncPolicy::none, std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // Complete the first read.
@@ -917,7 +927,7 @@ SLUICE_TEST_CASE(contract_write_submit_failure_propagates) {
     sc.copy_thread = std::thread([&]() mutable {
         auto r = run_sequential_copy_with_backend(
             src.fd, dst.fd, 16, 1, SyncPolicy::none, std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // Wait for the first read to appear.
@@ -979,7 +989,7 @@ SLUICE_TEST_CASE(contract_sync_after_all_writes) {
         auto r = run_pipelined_copy_with_backend(src.fd, dst.fd, B, /*depth=*/2,
                                                  1, SyncPolicy::data,
                                                  std::move(pair.backend));
-        sc.copy_result = r;
+        sc.publish(std::move(r));
     });
 
     // Drive all chunks to completion (read + write each), including the EOF.
