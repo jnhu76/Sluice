@@ -8,11 +8,17 @@
 #   the spawned executable's argv.  We confirm this empirically by reading the
 #   real process's ``/proc/<pid>/cmdline`` — NOT by trusting argv construction.
 #
-#   That forwarded ``--`` is harmless for libFuzzer: libFuzzer treats a bare
-#   ``--`` as the standard option-terminator and then parses the corpus path
-#   and flags that follow it correctly (same behavior as invoking the binary
-#   directly without ``--``).  This probe documents the presence of ``--`` AND
-#   proves the harmless end-to-end behavior.
+#   That forwarded ``--`` is harmless for libFuzzer.  libFuzzer's own argument
+#   parser (compiler-rt/lib/fuzzer/FuzzerDriver.cpp, ParseOneFlag) does NOT
+#   treat ``--`` as an option terminator.  Any argument whose first char is
+#   ``-`` and whose second char is also ``-`` (i.e. ``--``-prefixed, including a
+#   bare ``--``) is *silently ignored* (it prints one INFO line
+#   "libFuzzer ignores flags that start with '--'" per process and skips that
+#   argv element).  It does not terminate option parsing, nor become a
+#   positional/corpus path.  Consequently the corpus dir and ``-flag=value``
+#   arguments that follow a forwarded ``--`` are still parsed exactly as if the
+#   ``--`` were absent.  This probe documents the presence of ``--`` AND proves
+#   the harmless end-to-end behavior (the flags after ``--`` are honored).
 #
 # Steps:
 #   1. Build a fuzz target (wal_read_record_fuzz).
@@ -21,14 +27,16 @@
 #   3. Discover the actual fuzzer descendant PID: xmake spawns the binary as
 #      a child of the current session.  The kernel's ``comm`` field is
 #      truncated to 15 chars (so ``wal_read_record_fuzz`` → ``wal_read_record``),
-#      so we scan ``/proc/*/comm`` for a prefix match and then confirm the
-#      candidate's ``/proc/<pid>/cmdline`` references our binary path.
+#      so we scan ``/proc/*/comm`` for a prefix match, confirm the candidate's
+#      ``/proc/<pid>/cmdline`` references our binary path, AND confirm the
+#      candidate belongs to THIS probe's session (so we never grab an
+#      unrelated fuzzer from another run — see step 3).
 #   4. Read ``/proc/<fuzzer_pid>/cmdline`` — the true NUL-separated argv as
 #      the kernel recorded it for the executable.
 #   5. Assert (a) the argv was captured; (b) the corpus path and the
-#      ``-max_total_time`` flag are both present AFTER the ``--`` (i.e. they
-#      survived the separator and reached libFuzzer as intended); and
-#      (c) the probe run completed with exit 0 (end-to-end harmless).
+#      ``-max_total_time`` flag are both present (they survived the ignored
+#      ``--`` and reached libFuzzer as intended); and (c) a clean, bounded
+#      ``-runs=0`` invocation completes with exit 0 (end-to-end harmless).
 #   6. Stop the probe process group.  A missing capture is a FAILURE (the
 #      script never exits 0 without having observed the real argv).
 #
@@ -37,7 +45,7 @@
 #
 #   --keep   preserve the artifact directory (default: auto-clean on PASS)
 #
-# Requires: xmake with clang toolchain, Linux /proc.
+# Requires: xmake with clang toolchain, Linux /proc, timeout(1).
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -77,14 +85,14 @@ fi
 FUZZ_BASENAME="$(basename "$FUZZ_BIN")"
 
 # ── Step 2: launch xmake run in the background ─────────────────────────────
-# Start the wrapper in its own session so we can kill the whole tree later
-# regardless of xmake's exit.  Output goes to the log; we never block on it.
-# -max_total_time gives the discovery loop a comfortable window.
+# Start the wrapper in its own session (setsid) so every descendant — xmake
+# and the fuzzer it spawns — shares PROBE_PGID as its session id.  Step 3 uses
+# that session id to prove a discovered PID belongs to THIS probe and not to
+# an unrelated fuzzer left over from another run.
 PROBE_BUDGET=20
 echo "--- step 2: launch xmake run (background probe, ${PROBE_BUDGET}s) ---" \
     | tee -a "$CMDLOG"
 set +e
-# setsid + & : new session, detached.
 setsid bash -c "xmake run ${FUZZ_BASENAME} -- \
     '${PROBE_CORPUS}' -max_total_time=${PROBE_BUDGET}" \
     >> "$CMDLOG" 2>&1 &
@@ -103,11 +111,17 @@ cleanup() {
 trap cleanup EXIT
 
 # ── Step 3: discover the real fuzzer PID ───────────────────────────────────
-# The kernel truncates ``comm`` to 15 chars, so ``wal_read_record_fuzz``
-# appears as ``wal_read_record``.  We scan /proc/*/comm for a basename prefix
-# match, then confirm via cmdline that the PID is actually running our binary
-# (avoids grabbing an unrelated process whose comm happens to share a prefix).
-echo "--- step 3: discover fuzzer PID via /proc scan ---" | tee -a "$CMDLOG"
+# Discovery requires ALL of:
+#   - ``comm`` matches the basename, or its first 15 chars (kernel truncation);
+#   - ``cmdline`` references our exact binary path (not a same-named binary);
+#   - the PID's session id == PROBE_PGID (it is OUR probe's descendant, not a
+#     stray fuzzer from another run/test).
+#
+# ``/proc/<pid>/stat`` field 5 is the process group id, field 6 is the session
+# id.  Under setsid, the session leader's pid == session id == PROBE_PGID, and
+# every descendant inherits that session id.  We read field 6 (session).
+echo "--- step 3: discover fuzzer PID via /proc scan (comm + cmdline + session) ---" \
+    | tee -a "$CMDLOG"
 FUZZER_PID=""
 # comm prefix = first 15 chars of the basename (kernel limit).
 COMM_PREFIX="${FUZZ_BASENAME:0:15}"
@@ -124,10 +138,23 @@ while [ "$(date +%s)" -lt "$DISCOVER_DEADLINE" ]; do
         pid_dir="$(dirname "$comm_path")"
         cand="${pid_dir#/proc/}"
         cl_path="${pid_dir}/cmdline"
-        [ -r "$cl_path" ] || continue
+        stat_path="${pid_dir}/stat"
+        [ -r "$cl_path" ] && [ -r "$stat_path" ] || continue
+
+        # Session-id check: field 6 of /proc/<pid>/stat.  Field 2 (comm) may
+        # contain spaces and parens, so split on the LAST ')' and take the
+        # 4th token after it: state(1) ppid(2) pgrp(3) session(4).
+        sess_id="$(awk -F')' '{n=split($2, t, " "); print t[4]}' \
+                    "$stat_path" 2>/dev/null || true)"
+        if [ "$sess_id" != "$PROBE_PGID" ]; then
+            continue  # not our probe's session — ignore even if name matches
+        fi
+
         # Confirm this PID's argv actually references our binary path.
         if tr '\0' ' ' < "$cl_path" 2>/dev/null | grep -qF "$FUZZ_BIN"; then
             FUZZER_PID="$cand"
+            echo "matched: pid=$cand session=$sess_id (=probe pgid)" \
+                | tee -a "$CMDLOG"
             break
         fi
     done
@@ -141,7 +168,8 @@ while [ "$(date +%s)" -lt "$DISCOVER_DEADLINE" ]; do
     sleep 0.05
 done
 
-echo "fuzzer_pid=${FUZZER_PID:-<none>}" | tee -a "$CMDLOG" | tee -a "$SUMMARY"
+echo "fuzzer_pid=${FUZZER_PID:-<none>} probe_session=${PROBE_PGID}" \
+    | tee -a "$CMDLOG" | tee -a "$SUMMARY"
 
 # ── Step 4: read /proc/<pid>/cmdline ───────────────────────────────────────
 echo "--- step 4: read /proc/<fuzzer_pid>/cmdline ---" | tee -a "$CMDLOG"
@@ -178,8 +206,8 @@ FAIL=0
 
 # (a) A standalone '--' element is present (documents xmake's forwarding
 #     behavior honestly).  If this ever becomes false, xmake changed its
-#     '--' handling and this probe + the harmless-behavior reasoning below
-#     must be revisited — so we assert it, not just observe it.
+#     '--' handling and this probe + the harmless-behavior reasoning in the
+#     header must be revisited — so we assert it, not just observe it.
 if grep -Fxq -- '--' "$CMDLINE_TXT"; then
     echo "note: standalone '--' IS present in fuzzer argv (xmake forwards it)" \
         | tee -a "$SUMMARY"
@@ -188,54 +216,49 @@ else
         | tee -a "$SUMMARY"
 fi
 
-# (b) The corpus path and -max_total_time flag survived past the separator
-#     and reached libFuzzer.  We locate the separator's position (if any)
-#     and require both to appear at or after it.
-SEPARATOR_LINE="$(grep -nFx -- '--' "$CMDLINE_TXT" | head -1 | cut -d: -f1 || true)"
-if [ -n "$SEPARATOR_LINE" ]; then
-    # Slice the argv from the separator onward (1-indexed line numbers).
-    AFTER_SEP="$(tail -n +"$((SEPARATOR_LINE + 1))" "$CMDLINE_TXT")"
-else
-    AFTER_SEP="$(cat "$CMDLINE_TXT")"
-fi
-if printf '%s\n' "$AFTER_SEP" | grep -Fxq -- "${PROBE_CORPUS}"; then
+# (b) The corpus path and -max_total_time flag are present in the argv.
+#     libFuzzer ignores the bare '--' (see header), so these must still appear
+#     and be parsed — we verify they reached the binary at all.
+if grep -Fxq -- "${PROBE_CORPUS}" "$CMDLINE_TXT"; then
     echo "ok: corpus path present in fuzzer argv" | tee -a "$SUMMARY"
 else
-    echo "FAIL: corpus path '${PROBE_CORPUS}' not found after '--' in argv" \
+    echo "FAIL: corpus path '${PROBE_CORPUS}' not found in fuzzer argv" \
         | tee -a "$SUMMARY"
     FAIL=1
 fi
-if printf '%s\n' "$AFTER_SEP" | grep -Fxq -- "-max_total_time=${PROBE_BUDGET}"; then
+if grep -Fxq -- "-max_total_time=${PROBE_BUDGET}" "$CMDLINE_TXT"; then
     echo "ok: -max_total_time flag present in fuzzer argv" | tee -a "$SUMMARY"
 else
-    echo "FAIL: -max_total_time=${PROBE_BUDGET} flag not found after '--'" \
+    echo "FAIL: -max_total_time=${PROBE_BUDGET} flag not found in fuzzer argv" \
         | tee -a "$SUMMARY"
     FAIL=1
 fi
 
-# (c) Let the probe finish naturally (or be killed by cleanup).  We already
-#     killed it via cleanup on EXIT; instead, wait briefly for a clean exit
-#     to capture the real exit code as end-to-end harmlessness evidence.
-# Re-run a SHORT deterministic invocation to capture exit code cleanly
-# (the background probe was for argv capture only; -max_total_time makes its
-# exit code non-deterministic, so we use -runs=0 here).
-echo "--- step 5c: clean end-to-end run (-runs=0) for exit code ---" \
+# (c) Bounded clean end-to-end run: proves the forwarded '--' is harmless in
+#     practice (flags after it are honored, exit 0).  Wrapped in `timeout`
+#     so a hung/rogue fuzzer cannot stall the probe indefinitely.
+echo "--- step 5c: bounded clean end-to-end run (-runs=0, timeout guard) ---" \
     | tee -a "$CMDLOG"
 CLEAN_CORPUS="${ARTIFACT_DIR}/clean-corpus"
 mkdir -p "$CLEAN_CORPUS"
+CLEAN_HARD_TIMEOUT=60
 set +e
-xmake run "${FUZZ_BASENAME}" -- "${CLEAN_CORPUS}" -runs=0 \
-    >> "$CMDLOG" 2>&1
+timeout "${CLEAN_HARD_TIMEOUT}" xmake run "${FUZZ_BASENAME}" -- \
+    "${CLEAN_CORPUS}" -runs=0 >> "$CMDLOG" 2>&1
 CLEAN_EXIT=$?
 set -e
 echo "clean_run_exit=${CLEAN_EXIT}" | tee -a "$SUMMARY"
-if [ "$CLEAN_EXIT" -ne 0 ]; then
+if [ "$CLEAN_EXIT" -eq 124 ]; then
+    echo "FAIL: clean run exceeded ${CLEAN_HARD_TIMEOUT}s timeout (hung?)" \
+        | tee -a "$SUMMARY"
+    FAIL=1
+elif [ "$CLEAN_EXIT" -ne 0 ]; then
     echo "FAIL: clean end-to-end run exited non-zero (${CLEAN_EXIT})" \
         | tee -a "$SUMMARY"
     FAIL=1
 else
-    echo "ok: clean end-to-end run exited 0 (separator is harmless)" \
-        | tee -a "$SUMMARY"
+    echo "ok: clean end-to-end run exited 0 within ${CLEAN_HARD_TIMEOUT}s " \
+         "(forwarded '--' is harmless: flags after it honored)" | tee -a "$SUMMARY"
 fi
 
 echo "" | tee -a "$SUMMARY"

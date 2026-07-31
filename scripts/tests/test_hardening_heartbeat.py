@@ -691,11 +691,21 @@ class TestFuzzTargetConfig(unittest.TestCase):
         self.assertNotIn("-dict=", " ".join(argv))
 
     def test_fuzz_argv_separator_position(self) -> None:
-        """Verify the ``--`` separator is at the correct position.
+        """Verify exactly ONE ``--`` separator sits at the correct position.
 
-        xmake run semantics: everything before ``--`` is an xmake arg,
-        everything after ``--`` is passed to the executable.  The fuzzer
-        binary must receive only libFuzzer flags, not ``--`` itself.
+        This checks argv *construction* (build_fuzz_argv), not runtime
+        delivery.  xmake run's actual semantics: everything after ``--`` is
+        passed to the executable, and xmake ALSO forwards the ``--`` element
+        itself into the spawned binary's argv (verified at runtime by
+        scripts/verify-fuzz-argv-separator.sh via /proc/<pid>/cmdline).  So
+        what we assert here is that construction emits the separator exactly
+        once and that no second ``--`` leaks into the fuzzer-args portion —
+        i.e. there is one separator, at the documented position.
+
+        Runtime note: libFuzzer silently ignores any ``--``-prefixed argument
+        (including a bare ``--``); see FuzzerDriver.cpp ParseOneFlag.  It is
+        NOT an option terminator, so flags/corpus after the forwarded ``--``
+        are still parsed normally.  The forwarded ``--`` is therefore harmless.
         """
         argv = build_fuzz_argv(
             target="copy_all_fault_fuzz",
