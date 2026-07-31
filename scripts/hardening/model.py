@@ -67,7 +67,7 @@ VERDICT_EXIT: dict[Verdict, int] = {
 class Config:
     """Immutable runner configuration, populated from CLI + env vars."""
 
-    mode: str  # "hardening" | "smoke" | "selftest"
+    mode: str  # "hardening" | "smoke" | "version-b" | "selftest"
     hours: float
     phase_timeout_seconds: int
     fuzz_seconds_override: Optional[int]

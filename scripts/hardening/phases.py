@@ -78,6 +78,36 @@ ASAN_HOT_SET: List[str] = [
     "sluice_copy_integration_test",
 ]
 
+# Version B pipeline nightly gate targets (Phase 9). The Debug rounds alternate
+# deterministic stress (rotating seeds), contract/depth regressions, real-file
+# integration, fault-injection error drains, and scripted-backend controller
+# tests; the TSan/ASan+UBSan passes run the same core set.
+VERSION_B_SET: List[str] = [
+    "scripted_backend_test",
+    "sluice_copy_pipeline_contract_test",
+    "sluice_copy_pipeline_integration_test",
+    "sluice_copy_pipeline_stress_test",
+    "sluice_copy_integration_test",
+    "sluice_copy_fault_test",
+]
+
+VERSION_B_TSAN_SET: List[str] = VERSION_B_SET + [
+    "runtime_wait_test",
+    "threadpool_backend_test",
+]
+
+# Seeds for the deterministic stress rounds; each reproduces its workload
+# exactly (stress test contract: `--seed` determinism).
+VERSION_B_STRESS_SEEDS: List[str] = [
+    "0x5A17CE",
+    "0xC0FFEE",
+    "0xDECAFBAD",
+    "0x12345678",
+    "0xFEEDFACE",
+    "0x20260731",
+]
+VERSION_B_STRESS_ITERATIONS = "200"
+
 FUZZ_TARGETS: List[str] = [
     "wal_read_record_fuzz",
     "wal_roundtrip_fuzz",
@@ -788,6 +818,245 @@ def phase_asanubsan(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Version B pipeline nightly gate (Phase 9)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _version_b_stress_cmd(round_no: int) -> List[str]:
+    """Stress-round command with a rotating deterministic seed."""
+    seed = VERSION_B_STRESS_SEEDS[round_no % len(VERSION_B_STRESS_SEEDS)]
+    return [
+        "xmake", "run", "sluice_copy_pipeline_stress_test",
+        "--seed", seed, "--iterations", VERSION_B_STRESS_ITERATIONS,
+    ]
+
+
+def phase_version_b_debug_soak(ctx: PhaseContext,
+                               budget_seconds: float) -> PhaseOutcome:
+    """Repeated Version B Debug rounds.
+
+    Each round alternates the evidence families the nightly gate must cover:
+    deterministic stress (rotating seeds), depth regressions + error drains
+    (the 16-contract suite), real-file integration (full 100003-byte tiny-
+    buffer workload in Debug), fault-injection error drains, and scripted-
+    backend controller tests. Failures are sticky; the loop only stops early
+    on 3 consecutive unrecovered failures or an exhausted budget.
+    """
+    if not ctx.baseline_ok:
+        _log(ctx, "[version-b-soak][SKIP] baseline build failed")
+        return PhaseOutcome("version-b-soak", passed=True)
+
+    per_cmd = float(ctx.config.phase_timeout_seconds)
+    start_mono = time.monotonic()
+    round_no = 0
+    consec_fail = 0
+
+    _log(ctx, f"[version-b-soak] budget={budget_seconds:.0f}s "
+         f"per-cmd={per_cmd:.0f}s")
+
+    while time.monotonic() - start_mono < budget_seconds:
+        if ctx.remaining_seconds() < per_cmd:
+            _log(ctx, "[version-b-soak] insufficient remaining time; stopping")
+            break
+        if not ctx.config.keep_going and round_no > 0:
+            _log(ctx, "[version-b-soak] KEEP_GOING=0; stopping")
+            break
+
+        round_no += 1
+        _log(ctx, f"[version-b-soak] round {round_no}")
+
+        round_cmds = [
+            ("stress", _version_b_stress_cmd(round_no)),
+            ("depth-regressions", ["xmake", "run",
+                                   "sluice_copy_pipeline_contract_test"]),
+            ("integration", ["xmake", "run",
+                             "sluice_copy_pipeline_integration_test"]),
+            ("error-drains", ["xmake", "run", "sluice_copy_fault_test"]),
+            ("scripted-controller", ["xmake", "run", "scripted_backend_test"]),
+        ]
+        for name, cmd in round_cmds:
+            if ctx.remaining_seconds() < per_cmd:
+                break
+            if time.monotonic() - start_mono >= budget_seconds:
+                break
+            r = _cmd(ctx, "version-b-soak", f"{round_no}-{name}", name, "debug",
+                     cmd, log_subdir="version-b-soak")
+            if r.classification in _SOAK_FAILURE_KINDS:
+                ctx.sticky_hold = True
+                consec_fail += 1
+            else:
+                consec_fail = 0
+
+        if consec_fail >= 3:
+            _log(ctx, "[version-b-soak] 3 consecutive unrecovered failures; "
+                 "stopping soak loop")
+            break
+
+    stats = ctx.get_or_create_stats("version-b-soak")
+    _log(ctx, f"[version-b-soak] done (rounds={round_no} exec={stats.executed} "
+         f"pass={stats.passed} fail={stats.failed} "
+         f"timeout={stats.timed_out})")
+    return PhaseOutcome("version-b-soak", passed=True)
+
+
+def phase_version_b_tsan(ctx: PhaseContext,
+                         budget_seconds: float) -> PhaseOutcome:
+    """Configure TSan and run the Version B target set under TSan."""
+    _log(ctx, "[version-b-tsan] configuring clang tsan")
+
+    r = _cmd(ctx, "version-b-tsan", "0", "configure", "tsan",
+             ["xmake", "f", "-c", "-m", "tsan", "--toolchain=clang", "-y"])
+    if r.classification != Classification.PASS:
+        _log(ctx, "[version-b-tsan][FAIL] configure; skipping phase")
+        ctx.sticky_hold = True
+        return PhaseOutcome("version-b-tsan", passed=False)
+
+    refresh_target_cache(ctx, "tsan")
+
+    r = _cmd(ctx, "version-b-tsan", "0", "build-test-group", "tsan",
+             ["xmake", "build", "-g", "test"])
+    if r.classification != Classification.PASS:
+        _log(ctx, "[version-b-tsan][FAIL] build -g test; skipping phase")
+        ctx.sticky_hold = True
+        return PhaseOutcome("version-b-tsan", passed=False)
+
+    per_cmd = float(ctx.config.phase_timeout_seconds)
+    tsan_env = {"TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1"}
+    start_mono = time.monotonic()
+    pass_no = 0
+    critical_exec = 0
+
+    _log(ctx, f"[version-b-tsan] budget={budget_seconds:.0f}s "
+         f"per-cmd={per_cmd:.0f}s targets={len(VERSION_B_TSAN_SET)}")
+
+    while time.monotonic() - start_mono < budget_seconds:
+        if ctx.remaining_seconds() < per_cmd:
+            break
+        if not ctx.config.keep_going and pass_no > 0:
+            _log(ctx, "[version-b-tsan] KEEP_GOING=0; stopping")
+            break
+
+        pass_no += 1
+        for tgt in VERSION_B_TSAN_SET:
+            if ctx.remaining_seconds() < per_cmd:
+                break
+            if time.monotonic() - start_mono >= budget_seconds:
+                break
+
+            if not target_exists(ctx, tgt):
+                _log(ctx, f"[version-b-tsan][SKIP] pass {pass_no}: {tgt} "
+                     "(absent)")
+                continue
+
+            _log(ctx, f"[version-b-tsan] pass {pass_no}: {tgt}")
+            r = _cmd(ctx, "version-b-tsan", str(pass_no), tgt, "tsan",
+                     ["xmake", "run", tgt],
+                     sanitizer_kind="tsan",
+                     env=tsan_env,
+                     log_subdir="version-b-tsan")
+
+            if r.classification == Classification.PASS:
+                critical_exec += 1
+            elif r.classification in (Classification.SANITIZER_FAIL,
+                                      Classification.FAIL,
+                                      Classification.TIMEOUT):
+                critical_exec += 1
+                ctx.sticky_hold = True
+
+            if not ctx.config.keep_going:
+                break
+
+    stats = ctx.get_or_create_stats("version-b-tsan")
+    _log(ctx, f"[version-b-tsan] done (passes={pass_no} "
+         f"exec={stats.executed} pass={stats.passed} fail={stats.failed} "
+         f"timeout={stats.timed_out} skip={stats.skipped} "
+         f"san={stats.sanitizer_fail} critical={critical_exec})")
+    return PhaseOutcome("version-b-tsan", passed=True)
+
+
+def phase_version_b_asanubsan(ctx: PhaseContext,
+                              budget_seconds: float) -> PhaseOutcome:
+    """Configure ASan+UBSan, run the full suite once, then hot-set passes."""
+    _log(ctx, "[version-b-asanubsan] configuring clang asanubsan")
+
+    r = _cmd(ctx, "version-b-asanubsan", "0", "configure", "asanubsan",
+             ["xmake", "f", "-c", "-m", "asanubsan", "--toolchain=clang", "-y"])
+    if r.classification != Classification.PASS:
+        _log(ctx, "[version-b-asanubsan][FAIL] configure; skipping phase")
+        ctx.sticky_hold = True
+        return PhaseOutcome("version-b-asanubsan", passed=False)
+
+    refresh_target_cache(ctx, "asanubsan")
+
+    r = _cmd(ctx, "version-b-asanubsan", "0", "build-test-group", "asanubsan",
+             ["xmake", "build", "-g", "test"])
+    if r.classification != Classification.PASS:
+        _log(ctx, "[version-b-asanubsan][FAIL] build -g test; skipping phase")
+        ctx.sticky_hold = True
+        return PhaseOutcome("version-b-asanubsan", passed=False)
+
+    asan_env = {
+        "ASAN_OPTIONS": "halt_on_error=1:detect_leaks=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
+    }
+
+    # Full suite once. The integration tiny-buffer stress auto-scales down on
+    # instrumented builds, so this completes in reasonable time.
+    _log(ctx, "[version-b-asanubsan] full suite")
+    full = _cmd(ctx, "version-b-asanubsan", "0", "full-suite", "asanubsan",
+                ["xmake", "test", "-v"],
+                sanitizer_kind="asan",
+                env=asan_env,
+                log_subdir="version-b-asanubsan")
+    if full.classification in (Classification.SANITIZER_FAIL, Classification.FAIL,
+                               Classification.TIMEOUT):
+        ctx.sticky_hold = True
+
+    per_cmd = float(ctx.config.phase_timeout_seconds)
+    start_mono = time.monotonic()
+    pass_no = 0
+
+    while time.monotonic() - start_mono < budget_seconds:
+        if ctx.remaining_seconds() < per_cmd:
+            break
+        if not ctx.config.keep_going and pass_no > 0:
+            _log(ctx, "[version-b-asanubsan] KEEP_GOING=0; stopping")
+            break
+
+        pass_no += 1
+        for tgt in VERSION_B_SET:
+            if ctx.remaining_seconds() < per_cmd:
+                break
+            if time.monotonic() - start_mono >= budget_seconds:
+                break
+
+            if not target_exists(ctx, tgt):
+                _log(ctx, f"[version-b-asanubsan][SKIP] pass {pass_no}: "
+                     f"{tgt} (absent)")
+                continue
+
+            _log(ctx, f"[version-b-asanubsan] pass {pass_no}: {tgt}")
+            r = _cmd(ctx, "version-b-asanubsan", str(pass_no), tgt,
+                     "asanubsan", ["xmake", "run", tgt],
+                     sanitizer_kind="asan",
+                     env=asan_env,
+                     log_subdir="version-b-asanubsan")
+
+            if r.classification in (Classification.SANITIZER_FAIL,
+                                    Classification.FAIL,
+                                    Classification.TIMEOUT):
+                ctx.sticky_hold = True
+
+            if not ctx.config.keep_going:
+                break
+
+    stats = ctx.get_or_create_stats("version-b-asanubsan")
+    _log(ctx, f"[version-b-asanubsan] done (passes={pass_no} "
+         f"exec={stats.executed} pass={stats.passed} skip={stats.skipped} "
+         f"san={stats.sanitizer_fail})")
+    return PhaseOutcome("version-b-asanubsan", passed=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Phase E -- Fuzz
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1132,6 +1401,48 @@ def calculate_verdict(
     fuzz_stats = ctx.stats.get("fuzz")
     if not fuzz_stats or fuzz_stats.executed == 0:
         incomplete_reasons.append("no fuzz target executed")
+
+    if not ctx.final_debug_ok:
+        incomplete_reasons.append("final debug not completed")
+
+    if incomplete_reasons:
+        return Verdict.INCOMPLETE
+
+    return Verdict.PASS
+
+
+def version_b_calculate_verdict(
+    ctx: PhaseContext,
+    preflight: PreflightResult,
+) -> Verdict:
+    """Version B gate verdict: baseline, soak rounds, TSan and ASan+UBSan
+    evidence families, and final Debug must all have executed."""
+    if not preflight.passed:
+        return Verdict.ENVIRONMENT_ERROR
+
+    if ctx.sticky_hold:
+        return Verdict.HOLD
+
+    incomplete_reasons: List[str] = []
+
+    if not ctx.baseline_ok:
+        incomplete_reasons.append("baseline did not complete")
+
+    soak_stats = ctx.stats.get("version-b-soak")
+    if not soak_stats or soak_stats.executed == 0:
+        incomplete_reasons.append("Version B debug soak executed no commands")
+
+    tsan_critical_executed = 0
+    for r in ctx.results:
+        if r.phase == "version-b-tsan" and r.target in VERSION_B_TSAN_SET:
+            if r.classification != Classification.SKIP:
+                tsan_critical_executed += 1
+    if tsan_critical_executed == 0:
+        incomplete_reasons.append("no critical Version B TSan target executed")
+
+    asan_stats = ctx.stats.get("version-b-asanubsan")
+    if not asan_stats or asan_stats.executed == 0:
+        incomplete_reasons.append("Version B ASan+UBSan pass not executed")
 
     if not ctx.final_debug_ok:
         incomplete_reasons.append("final debug not completed")

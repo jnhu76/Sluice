@@ -203,7 +203,8 @@ def write_summary_txt(
     # Phase stats.
     lines.append("Phase summary:")
     for phase_name in ["baseline", "debug-soak", "tsan", "asanubsan", "fuzz",
-                        "final"]:
+                       "final", "version-b-soak", "version-b-tsan",
+                       "version-b-asanubsan"]:
         stats = phase_stats.get(phase_name)
         if stats:
             lines.append(f"  {phase_name}: exec={stats.executed} "
