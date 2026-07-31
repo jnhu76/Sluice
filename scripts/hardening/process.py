@@ -173,12 +173,23 @@ def _parse_libfuzzer_status(
 
 
 @dataclasses.dataclass
+class HeartbeatTick:
+    """Lightweight tick emitted by the timeout thread.
+
+    Contains only the minimum data that can be produced without I/O.
+    The writer thread uses this tick to build the full snapshot.
+    """
+
+    pid: int
+    ts: float  # time.monotonic() from the timeout thread
+
+
+@dataclasses.dataclass
 class HeartbeatSnapshot:
     """Pre-computed heartbeat data, ready for I/O by the writer thread.
 
-    Building a snapshot is fast (stat, bounded tail read, regex).  All
-    actual I/O is deferred to the writer thread so the timeout thread
-    never blocks on a slow pipe or filesystem.
+    Built entirely in the writer thread so the timeout thread never
+    blocks on a slow pipe or filesystem.
     """
 
     phase: str
@@ -192,6 +203,7 @@ class HeartbeatSnapshot:
     log_delta: int
     ts: str
     is_fuzz: bool
+    log_path: str = ""  # command log path for diagnostics
     fuzzer_status: Optional[Dict[str, Any]] = None
     global_remaining: Optional[float] = None
 
@@ -202,10 +214,11 @@ class HeartbeatEmitter:
     One instance per command.  Tracks log size for delta reporting.
 
     I/O is performed by a daemon writer thread fed by a ``queue.Queue``
-    (maxsize=1).  The timeout thread builds a ``HeartbeatSnapshot`` and
-    enqueues it non-blockingly; if the writer thread is still busy the
-    heartbeat is silently dropped.  This guarantees that timeout
-    correctness (TERM → KILL) is never delayed by heartbeat I/O.
+    (maxsize=1) of lightweight ``HeartbeatTick`` objects.  The timeout
+    thread produces a ``HeartbeatTick`` (no I/O) and enqueues it non-
+    blockingly; if the writer thread is still busy the heartbeat is
+    silently dropped.  This guarantees that timeout correctness
+    (TERM → KILL) is never delayed by heartbeat I/O.
     """
 
     def __init__(
@@ -235,24 +248,27 @@ class HeartbeatEmitter:
         self._is_fuzz = is_fuzz
         self._last_log_size = 0
 
-        # Queue + daemon writer thread.
-        self._queue: queue.Queue[Optional[HeartbeatSnapshot]] = queue.Queue(maxsize=1)
+        # Queue + daemon writer thread.  The queue holds HeartbeatTick
+        # objects (lightweight, no I/O).  The writer thread builds the
+        # full HeartbeatSnapshot and performs all I/O.
+        self._queue: queue.Queue[Optional[HeartbeatTick]] = queue.Queue(maxsize=1)
         self._writer_thread = threading.Thread(
             target=self._writer_loop, daemon=True, name="heartbeat-writer"
         )
         self._writer_thread.start()
 
-    def build_snapshot(self) -> HeartbeatSnapshot:
-        """Compute a heartbeat snapshot (fast, no I/O writes).
+    def _build_snapshot(self, tick: HeartbeatTick) -> HeartbeatSnapshot:
+        """Compute a heartbeat snapshot from a lightweight tick.
 
-        May perform stat and bounded tail-read on the command log; these
-        are local operations that do not block on pipes or remote
-        filesystems.
+        Performs stat and bounded tail-read on the command log in the
+        writer thread so the timeout thread never blocks on I/O.
         """
         now = time.monotonic()
         elapsed = now - self._start_mono
         remaining = max(0.0, self._timeout_seconds - elapsed)
-        ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        ts = datetime.datetime.fromtimestamp(
+            tick.ts, tz=datetime.timezone.utc
+        ).isoformat()
 
         try:
             cur_size = self._log_path.stat().st_size
@@ -276,7 +292,7 @@ class HeartbeatEmitter:
             phase=self._phase,
             iteration=self._iteration,
             target=self._target,
-            pid=self._pid,
+            pid=tick.pid,
             elapsed=elapsed,
             timeout=self._timeout_seconds,
             remaining=remaining,
@@ -284,31 +300,37 @@ class HeartbeatEmitter:
             log_delta=delta,
             ts=ts,
             is_fuzz=self._is_fuzz,
+            log_path=str(self._log_path),
             fuzzer_status=fuzzer_status,
             global_remaining=global_remaining,
         )
 
     def emit(self) -> None:
-        """Enqueue a heartbeat for the writer thread (non-blocking).
+        """Enqueue a heartbeat tick for the writer thread (non-blocking).
 
-        If the queue is full the heartbeat is silently dropped; timeout
-        correctness always takes priority over heartbeat delivery.
+        Produces only a lightweight HeartbeatTick (no I/O).  If the queue
+        is full the heartbeat is silently dropped; timeout correctness
+        always takes priority over heartbeat delivery.
         """
+        tick = HeartbeatTick(pid=self._pid, ts=time.time())
         try:
-            snap = self.build_snapshot()
-        except Exception:
-            return  # snapshot computation failed; skip this beat
-        try:
-            self._queue.put_nowait(snap)
+            self._queue.put_nowait(tick)
         except queue.Full:
             pass  # writer thread busy; drop, don't block
 
-    def shutdown(self) -> None:
-        """Signal the writer thread to finish and wait for it to drain."""
+    def shutdown(self, timeout: float = 5.0) -> None:
+        """Signal the writer thread to finish and wait for it to drain.
+
+        Args:
+            timeout: Maximum seconds to wait for the writer thread to drain
+                      and join.  On exception/cancel paths, callers should
+                      use a short timeout (e.g. 0.25) so the child kill
+                      path is not delayed.
+        """
         # Put the sentinel.  If the queue is full the writer is busy;
         # poll briefly to let it drain naturally so we don't discard a
         # pending snapshot.
-        deadline = time.monotonic() + 5.0
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
                 self._queue.put_nowait(None)
@@ -325,17 +347,21 @@ class HeartbeatEmitter:
                 self._queue.put_nowait(None)
             except queue.Full:
                 pass
-        # Wait for the writer to finish (up to 5 s).  The writer is a
+        # Wait for the writer to finish (up to timeout).  The writer is a
         # daemon thread; if it's stuck on I/O it will be terminated when
         # the process exits.
-        self._writer_thread.join(timeout=5.0)
+        self._writer_thread.join(timeout=timeout)
 
     def _writer_loop(self) -> None:
-        """Daemon thread: read snapshots from the queue and write them."""
+        """Daemon thread: read ticks from the queue, build snapshots, write."""
         while True:
-            snap = self._queue.get()
-            if snap is None:  # sentinel
+            tick = self._queue.get()
+            if tick is None:  # sentinel
                 break
+            try:
+                snap = self._build_snapshot(tick)
+            except Exception:
+                continue  # snapshot build failed; skip this beat
             try:
                 self._write_snapshot(snap)
             except Exception:
@@ -368,12 +394,17 @@ class HeartbeatEmitter:
                 fs = snap.fuzzer_status
                 fields.append(
                     f"fuzzer_status=#{fs['count']} {fs['tag']} "
-                    f"exec/s={fs.get('exec_s', '?')} rss={fs.get('rss', '?')}Mb"
+                    f"exec/s={fs.get('exec_s', '?')} "
+                    f"cov={fs.get('cov', '?')} "
+                    f"ft={fs.get('ft', '?')} "
+                    f"rss={fs.get('rss', '?')}Mb"
                 )
                 if "corpus_count" in fs:
                     fields.append(f"corpus={fs['corpus_count']}/{fs['corpus_size']}")
             else:
                 fields.append("fuzzer_status=unavailable")
+        # Command log path (always included).
+        fields.append(f"log_path={snap.log_path}")
 
         line = "[heartbeat] " + " ".join(fields)
 
@@ -591,8 +622,13 @@ def run_command(
                     proc, spec.timeout_seconds, heartbeater, spec.heartbeat_seconds
                 )
             finally:
+                # On the normal path, shutdown the heartbeater with a
+                # generous timeout so the last heartbeat can flush.
+                # On exception paths (KeyboardInterrupt, runner error)
+                # the child must be killed first; we use a short timeout
+                # here and let the except block below handle the rest.
                 if heartbeater is not None:
-                    heartbeater.shutdown()
+                    heartbeater.shutdown(timeout=0.25)
         except BaseException:
             # KeyboardInterrupt or any runner-internal error: tear down the
             # whole process group and reap before propagating, so no orphaned

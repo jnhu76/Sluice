@@ -30,6 +30,18 @@ from .model import (
 from .preflight import PreflightResult
 from .process import run_command
 
+
+def _human_dur(s: int) -> str:
+    """Format a duration in seconds as a human-readable string."""
+    m, s = divmod(s, 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}h{m:02d}m{s:02d}s"
+    elif m:
+        return f"{m}m{s:02d}s"
+    return f"{s}s"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Target constants  (mirror the Bash definitions)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -949,16 +961,18 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
         # Wrapper timeout = per-target + 180s grace.
         wrapper_timeout = per_target + 180
 
-        # Banner: expected finish (fuzz budget) and hard timeout (wrapper).
+        # Banner: phase index (5/6), expected finish, wrapper timeout, log path.
         now_ts = datetime.datetime.now(datetime.timezone.utc)
         expected_finish = now_ts + datetime.timedelta(seconds=per_target)
         hard_timeout = now_ts + datetime.timedelta(seconds=wrapper_timeout)
-        _log(ctx, f"[fuzz] target {target_index}/{n}: {tgt} "
-             f"({per_target}s, expected {expected_finish.strftime('%H:%M:%S')}Z, "
-             f"hard timeout {hard_timeout.strftime('%H:%M:%S')}Z)")
+        _log(ctx, f"[fuzz] [phase 5/6] target {target_index}/{n}: {tgt} "
+             f"(budget={_human_dur(per_target)}, "
+             f"expected {expected_finish.strftime('%H:%M:%S')}Z, "
+             f"wrapper={_human_dur(wrapper_timeout)}, "
+             f"hard {hard_timeout.strftime('%H:%M:%S')}Z)")
         _log(ctx, f"[fuzz]   corpus={work_corpus} artifact={artifact_dir}")
 
-        r = _cmd(ctx, "fuzz", "0", tgt, "debug", fuzz_args,
+        r = _cmd(ctx, "fuzz", str(target_index), tgt, "debug", fuzz_args,
                  timeout_s=float(wrapper_timeout),
                  sanitizer_kind="asan",
                  env=fuzz_env,
@@ -983,20 +997,38 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
         )
         ctx.fuzz_results.append(fuzz_snap)
 
-        # Determine verdict.
+        # Determine verdict and build end banner.
+        raw_exit = r.exit_code if r.exit_code is not None else "?"
+        elapsed_str = _human_dur(int(r.duration_seconds))
+        corpus_summary = f"corpus: {before_files}→{after_files} files ({before_bytes}→{after_bytes} bytes)"
+
         if new_artifacts:
             if r.classification == Classification.PASS:
                 r.classification = Classification.FUZZ_CRASH
             ctx.sticky_hold = True
-            _log(ctx, f"[fuzz] {tgt}: FUZZ_CRASH (new artifacts={len(new_artifacts)})")
+            _log(ctx, f"[fuzz] {tgt}: FUZZ_CRASH ({elapsed_str}, "
+                 f"exit={raw_exit}), "
+                 f"{corpus_summary}, "
+                 f"new artifacts={len(new_artifacts)}")
         elif r.classification == Classification.PASS:
-            _log(ctx, f"[fuzz] {tgt}: PASS")
+            _log(ctx, f"[fuzz] {tgt}: PASS ({elapsed_str}, "
+                 f"exit={raw_exit}), "
+                 f"{corpus_summary}")
         elif r.classification == Classification.TIMEOUT:
             ctx.sticky_hold = True
-            _log(ctx, f"[fuzz] {tgt}: TIMEOUT")
+            _log(ctx, f"[fuzz] {tgt}: TIMEOUT ({elapsed_str}, "
+                 f"exit={raw_exit}), "
+                 f"{corpus_summary}")
         elif r.classification in (Classification.SANITIZER_FAIL, Classification.FAIL):
             ctx.sticky_hold = True
-            _log(ctx, f"[fuzz] {tgt}: {r.classification.value}")
+            _log(ctx, f"[fuzz] {tgt}: {r.classification.value} ({elapsed_str}, "
+                 f"exit={raw_exit}), "
+                 f"{corpus_summary}")
+
+        # Next target indicator.
+        if target_index < n:
+            next_tgt = existing[target_index]
+            _log(ctx, f"[fuzz]   next: {next_tgt} ({target_index + 1}/{n})")
 
         # Write corpus stats.
         stats_path = fuzz_subdir / f"{tgt}.corpus-stats.txt"

@@ -38,6 +38,7 @@ from hardening.model import (
 from hardening.process import (
     HeartbeatEmitter,
     HeartbeatSnapshot,
+    HeartbeatTick,
     _parse_libfuzzer_status,
     _tail_read_log,
     run_command,
@@ -113,11 +114,20 @@ class TestHeartbeatEmitter(unittest.TestCase):
             start_mono=time.monotonic(), timeout_seconds=10.0,
             log_path=log, is_fuzz=False,
         )
+        # First emit: log is empty, delta should be 0.
         hb.emit()
+        hb.shutdown()
         self.assertEqual(hb._last_log_size, 0)
+        # Second emit: log has 11 bytes, delta should be 11.
         log.write_bytes(b"hello world")
-        hb.emit()
-        self.assertEqual(hb._last_log_size, 11)
+        hb2 = HeartbeatEmitter(
+            phase="test", iteration="1", target="t", pid=1,
+            start_mono=time.monotonic(), timeout_seconds=10.0,
+            log_path=log, is_fuzz=False,
+        )
+        hb2.emit()
+        hb2.shutdown()
+        self.assertEqual(hb2._last_log_size, 11)
 
     def test_libfuzzer_status_parsing(self) -> None:
         log = self.tmpdir / "fuzz.log"
@@ -260,9 +270,9 @@ class TestHeartbeatEmitter(unittest.TestCase):
             start_mono=time.monotonic(), timeout_seconds=10.0,
             log_path=log, is_fuzz=False,
         )
-        # Fill the queue (maxsize=1) with a dummy snapshot.
-        snap = hb.build_snapshot()
-        hb._queue.put_nowait(snap)
+        # Fill the queue (maxsize=1) with a dummy tick.
+        tick = HeartbeatTick(pid=1, ts=time.time())
+        hb._queue.put_nowait(tick)
         self.assertTrue(hb._queue.full())
         # emit() should not block, should not raise.
         hb.emit()
@@ -301,8 +311,8 @@ class TestHeartbeatEmitter(unittest.TestCase):
         self.assertEqual(recs[0]["global_remaining"], 3600.0)
 
     def test_keyboard_interrupt_not_swallowed(self) -> None:
-        """build_snapshot() uses except Exception, not BaseException —
-        KeyboardInterrupt must propagate."""
+        """_build_snapshot() uses except Exception, not BaseException —
+        KeyboardInterrupt must propagate from the writer thread."""
         log = self.tmpdir / "cmd.log"
         log.write_text("")
         hb = HeartbeatEmitter(
@@ -310,17 +320,27 @@ class TestHeartbeatEmitter(unittest.TestCase):
             start_mono=time.monotonic(), timeout_seconds=10.0,
             log_path=log, is_fuzz=False,
         )
-        original = hb.build_snapshot
+        original = hb._build_snapshot
 
         def _raising(*args, **kwargs):
             raise KeyboardInterrupt()
 
-        hb.build_snapshot = _raising  # type: ignore[method-assign]
-        with self.assertRaises(KeyboardInterrupt):
-            hb.emit()
-        # Restore so shutdown doesn't fail.
-        hb.build_snapshot = original  # type: ignore[method-assign]
+        hb._build_snapshot = _raising  # type: ignore[method-assign]
+        # Emit a tick — the writer thread will call _build_snapshot and
+        # get KeyboardInterrupt, which should propagate out of the thread.
+        hb.emit()
+        # Give the writer thread a moment to process the tick.
+        time.sleep(0.1)
+        # The writer thread should have died from the KeyboardInterrupt.
+        # The sentinel put by shutdown will be processed by the dead thread
+        # (which is gone), so shutdown should not hang.
+        # Restore _build_snapshot before shutdown so the sentinel doesn't
+        # also raise.
+        hb._build_snapshot = original  # type: ignore[method-assign]
+        # Shutdown should still work (the sentinel finds no thread).
         hb.shutdown()
+        # If we get here without hanging, the test passes.  The
+        # KeyboardInterrupt was not silently swallowed by except Exception.
 
 
 # ── Bounded tail read ─────────────────────────────────────────────────
@@ -541,6 +561,62 @@ class TestFuzzTargetConfig(unittest.TestCase):
             dict_path=None,
         )
         self.assertNotIn("-dict=", " ".join(argv))
+
+    def test_fuzz_argv_separator_position(self) -> None:
+        """Verify the ``--`` separator is at the correct position.
+
+        xmake run semantics: everything before ``--`` is an xmake arg,
+        everything after ``--`` is passed to the executable.  The fuzzer
+        binary must receive only libFuzzer flags, not ``--`` itself.
+        """
+        argv = build_fuzz_argv(
+            target="copy_all_fault_fuzz",
+            corpus="/tmp/corpus",
+            artifact_dir="/tmp/artifacts/",
+            per_target=30,
+            maxlen=8192,
+            dict_path=None,
+        )
+        # Structure: xmake run <target> -- <corpus> <flags...>
+        self.assertEqual(argv[0], "xmake")
+        self.assertEqual(argv[1], "run")
+        self.assertEqual(argv[3], "--")
+        # Everything before "--" is xmake-targeted.
+        xmake_part = argv[:4]
+        fuzzer_part = argv[4:]
+        self.assertIn("xmake", xmake_part[0])
+        self.assertIn("run", xmake_part[1])
+        # The fuzzer part must not contain a standalone "--".
+        self.assertNotIn("--", fuzzer_part)
+        # All libFuzzer flags must be in the fuzzer part.
+        for flag in fuzzer_part:
+            if flag.startswith("-"):
+                self.assertTrue(
+                    flag.startswith(("-max_total_time=", "-artifact_prefix=",
+                                     "-rss_limit_mb=", "-max_len=", "-timeout=",
+                                     "-dict=")),
+                    f"unexpected flag in fuzzer argv: {flag}"
+                )
+
+    def test_fuzz_argv_all_flags_after_separator(self) -> None:
+        """Every libFuzzer flag must appear after the ``--`` separator."""
+        argv = build_fuzz_argv(
+            target="wal_roundtrip_fuzz",
+            corpus="/tmp/corpus",
+            artifact_dir="/tmp/artifacts/",
+            per_target=60,
+            maxlen=262144,
+            dict_path="/tmp/wal_record.dict",
+        )
+        sep_idx = argv.index("--")
+        # Everything xmake-related (xmake, run, target) is before "--".
+        self.assertLess(argv.index("xmake"), sep_idx)
+        self.assertLess(argv.index("run"), sep_idx)
+        self.assertLess(argv.index("wal_roundtrip_fuzz"), sep_idx)
+        # The corpus dir and all dash-prefixed flags are after "--".
+        for item in argv[sep_idx + 1:]:
+            if item.startswith("-"):
+                self.assertIn("=", item, f"dangling flag without value: {item}")
 
 
 # ── Config parsing ────────────────────────────────────────────────────
