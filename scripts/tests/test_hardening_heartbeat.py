@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import signal
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -35,11 +37,12 @@ from hardening.model import (
 )
 from hardening.process import (
     HeartbeatEmitter,
+    HeartbeatSnapshot,
     _parse_libfuzzer_status,
     _tail_read_log,
     run_command,
 )
-from hardening.phases import FUZZ_DICTS, FUZZ_MAXLEN
+from hardening.phases import FUZZ_DICTS, FUZZ_MAXLEN, build_fuzz_argv
 
 
 # ── helpers ──────────────────────────────────────────────────────────
@@ -55,6 +58,16 @@ def _spec(log_path: Path, command: List[str], timeout: float,
         heartbeats_path=heartbeats_path,
         run_log_path=run_log_path,
     )
+
+
+def _read_jsonl(path: Path) -> List[dict]:
+    """Read a JSONL file, returning parsed records (empty list if missing)."""
+    if not path.exists():
+        return []
+    text = path.read_text().strip()
+    if not text:
+        return []
+    return [json.loads(l) for l in text.split("\n") if l]
 
 
 # ── HeartbeatEmitter pure-logic tests ─────────────────────────────────
@@ -75,7 +88,9 @@ class TestHeartbeatEmitter(unittest.TestCase):
         )
         time.sleep(0.1)
         hb.emit()
-        recs = [json.loads(l) for l in hb_jsonl.read_text().strip().split("\n") if l]
+        # Give the writer thread a moment to flush.
+        hb.shutdown()
+        recs = _read_jsonl(hb_jsonl)
         self.assertEqual(len(recs), 1)
         r = recs[0]
         self.assertEqual(r["phase"], "test")
@@ -122,6 +137,28 @@ class TestHeartbeatEmitter(unittest.TestCase):
         self.assertEqual(status["ft"], 7835)
         self.assertEqual(status["corpus_count"], 171)
         self.assertEqual(status["corpus_size"], 19 * 1024)
+
+    def test_corpus_size_mb(self) -> None:
+        log = self.tmpdir / "corpus_mb.log"
+        log.write_text("#1\tINITED corp: 400/3Mb exec/s: 100 rss: 10Mb\n")
+        status = _parse_libfuzzer_status(log)
+        self.assertIsNotNone(status)
+        self.assertEqual(status["corpus_count"], 400)
+        self.assertEqual(status["corpus_size"], 3 * 1024 * 1024)
+
+    def test_corpus_size_kb(self) -> None:
+        log = self.tmpdir / "corpus_kb.log"
+        log.write_text("#1\tINITED corp: 12/900Kb exec/s: 100 rss: 10Mb\n")
+        status = _parse_libfuzzer_status(log)
+        self.assertIsNotNone(status)
+        self.assertEqual(status["corpus_size"], 900 * 1024)
+
+    def test_corpus_size_bytes(self) -> None:
+        log = self.tmpdir / "corpus_b.log"
+        log.write_text("#1\tINITED corp: 12/42b exec/s: 100 rss: 10Mb\n")
+        status = _parse_libfuzzer_status(log)
+        self.assertIsNotNone(status)
+        self.assertEqual(status["corpus_size"], 42)
 
     def test_latest_status_line_returned(self) -> None:
         """When multiple status lines exist, return the LAST (latest)."""
@@ -177,7 +214,8 @@ class TestHeartbeatEmitter(unittest.TestCase):
             log_path=log, heartbeats_jsonl_path=hb_jsonl, is_fuzz=True,
         )
         hb.emit()
-        recs = [json.loads(l) for l in hb_jsonl.read_text().strip().split("\n") if l]
+        hb.shutdown()
+        recs = _read_jsonl(hb_jsonl)
         self.assertEqual(len(recs), 1)
         self.assertIn("fuzzer_status", recs[0])
 
@@ -192,12 +230,13 @@ class TestHeartbeatEmitter(unittest.TestCase):
             log_path=log, heartbeats_jsonl_path=hb_jsonl, is_fuzz=False,
         )
         hb.emit()
-        recs = [json.loads(l) for l in hb_jsonl.read_text().strip().split("\n") if l]
+        hb.shutdown()
+        recs = _read_jsonl(hb_jsonl)
         self.assertEqual(len(recs), 1)
         self.assertNotIn("fuzzer_status", recs[0])
 
     def test_emit_survives_broken_stderr(self) -> None:
-        """emit() must not raise even if sys.stderr.write() fails."""
+        """emit() must not raise even if stderr write fails."""
         log = self.tmpdir / "cmd.log"
         log.write_text("")
         hb = HeartbeatEmitter(
@@ -205,9 +244,29 @@ class TestHeartbeatEmitter(unittest.TestCase):
             start_mono=time.monotonic(), timeout_seconds=10.0,
             log_path=log, is_fuzz=False,
         )
+        # The writer thread does the actual stderr write; mock it there.
         with mock.patch("sys.stderr.write", side_effect=BrokenPipeError):
-            # Must not raise.
             hb.emit()
+            # Give the writer thread a moment.
+            hb.shutdown()
+        # Must not raise.
+
+    def test_emit_survives_blocking_stderr_queue_full(self) -> None:
+        """emit() is non-blocking: a full queue drops the heartbeat."""
+        log = self.tmpdir / "cmd.log"
+        log.write_text("")
+        hb = HeartbeatEmitter(
+            phase="test", iteration="1", target="t", pid=1,
+            start_mono=time.monotonic(), timeout_seconds=10.0,
+            log_path=log, is_fuzz=False,
+        )
+        # Fill the queue (maxsize=1) with a dummy snapshot.
+        snap = hb.build_snapshot()
+        hb._queue.put_nowait(snap)
+        self.assertTrue(hb._queue.full())
+        # emit() should not block, should not raise.
+        hb.emit()
+        hb.shutdown()
 
     def test_run_log_writing(self) -> None:
         """Heartbeat lines are appended to run_log_path."""
@@ -220,6 +279,7 @@ class TestHeartbeatEmitter(unittest.TestCase):
             log_path=log, run_log_path=run_log, is_fuzz=False,
         )
         hb.emit()
+        hb.shutdown()
         content = run_log.read_text()
         self.assertIn("[heartbeat]", content)
         self.assertIn("phase=test", content)
@@ -236,8 +296,31 @@ class TestHeartbeatEmitter(unittest.TestCase):
             global_remaining_fn=lambda: 3600.0, is_fuzz=False,
         )
         hb.emit()
-        recs = [json.loads(l) for l in hb_jsonl.read_text().strip().split("\n") if l]
+        hb.shutdown()
+        recs = _read_jsonl(hb_jsonl)
         self.assertEqual(recs[0]["global_remaining"], 3600.0)
+
+    def test_keyboard_interrupt_not_swallowed(self) -> None:
+        """build_snapshot() uses except Exception, not BaseException —
+        KeyboardInterrupt must propagate."""
+        log = self.tmpdir / "cmd.log"
+        log.write_text("")
+        hb = HeartbeatEmitter(
+            phase="test", iteration="1", target="t", pid=1,
+            start_mono=time.monotonic(), timeout_seconds=10.0,
+            log_path=log, is_fuzz=False,
+        )
+        original = hb.build_snapshot
+
+        def _raising(*args, **kwargs):
+            raise KeyboardInterrupt()
+
+        hb.build_snapshot = _raising  # type: ignore[method-assign]
+        with self.assertRaises(KeyboardInterrupt):
+            hb.emit()
+        # Restore so shutdown doesn't fail.
+        hb.build_snapshot = original  # type: ignore[method-assign]
+        hb.shutdown()
 
 
 # ── Bounded tail read ─────────────────────────────────────────────────
@@ -285,7 +368,6 @@ class TestHeartbeatProcessLifecycle(unittest.TestCase):
             )
             r = run_command(spec, "abc123", False)
             self.assertEqual(r.classification, Classification.PASS)
-            # Child exits in 2s < 3s interval → 0 heartbeats.
             recs = _read_jsonl(hb_jsonl)
             self.assertEqual(len(recs), 0,
                              "0 heartbeats: child exits before first 3s interval")
@@ -305,8 +387,6 @@ class TestHeartbeatProcessLifecycle(unittest.TestCase):
             r = run_command(spec, "abc123", False)
             self.assertEqual(r.classification, Classification.PASS)
             recs = _read_jsonl(hb_jsonl)
-            # 5s child with 2s interval → at least 2 (at 2s, 4s), possibly 3
-            # if the third beat fires just before exit.
             self.assertGreaterEqual(len(recs), 2,
                                     ">=2 heartbeats at 2s intervals during 5s sleep")
             self.assertLessEqual(len(recs), 3)
@@ -325,7 +405,6 @@ class TestHeartbeatProcessLifecycle(unittest.TestCase):
             )
             r = run_command(spec, "abc123", False)
             self.assertEqual(r.classification, Classification.PASS)
-            # heartbeat_seconds=0 → no emitter created → no JSONL writes.
             recs = _read_jsonl(hb_jsonl)
             self.assertEqual(len(recs), 0)
 
@@ -346,8 +425,6 @@ class TestHeartbeatProcessLifecycle(unittest.TestCase):
             elapsed = time.monotonic() - start
             self.assertEqual(r.classification, Classification.TIMEOUT)
             self.assertTrue(r.timed_out)
-            # TERM → KILL escalation: 1s timeout + 10s grace + KILL.
-            # Should complete well under 15s.
             self.assertLess(elapsed, 15.0)
 
     def test_heartbeat_does_not_reintroduce_blocking_pipe(self) -> None:
@@ -392,23 +469,33 @@ class TestHeartbeatProcessLifecycle(unittest.TestCase):
             self.assertTrue(r.kill_sent)
             self.assertLess(elapsed, 5.0)
 
-    def test_heartbeat_exception_does_not_kill_test(self) -> None:
-        """A heartbeat that raises must not affect the test outcome."""
+    def test_timeout_not_delayed_by_blocking_writer(self) -> None:
+        """Timeout must fire on schedule even if the writer thread blocks.
+
+        We simulate a blocking writer by patching _write_snapshot to sleep.
+        """
         with tempfile.TemporaryDirectory() as tmp:
-            log_path = Path(tmp) / "silent.log"
+            log_path = Path(tmp) / "timeout.log"
             hb_jsonl = Path(tmp) / "hb.jsonl"
             spec = _spec(
                 log_path,
-                [sys.executable, "-c", "import time; time.sleep(3); print('done')"],
-                timeout=10.0,
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+                timeout=1.0,
                 heartbeat_seconds=1,
                 heartbeats_path=hb_jsonl,
             )
-            # Make emit() raise every time.
-            with mock.patch.object(HeartbeatEmitter, "emit", side_effect=RuntimeError("boom")):
+            # Make _write_snapshot sleep 5s — if the timeout thread waited
+            # for it, the timeout would be delayed by 5s+.
+            with mock.patch.object(HeartbeatEmitter, "_write_snapshot",
+                                   lambda self, snap: time.sleep(5)):
+                start = time.monotonic()
                 r = run_command(spec, "abc123", False)
-            # Child must still complete normally.
-            self.assertEqual(r.classification, Classification.PASS)
+                elapsed = time.monotonic() - start
+            self.assertEqual(r.classification, Classification.TIMEOUT)
+            self.assertTrue(r.timed_out)
+            # Timeout should fire within ~1s + TERM/KILL escalation, not
+            # be delayed by the 5s writer sleep.
+            self.assertLess(elapsed, 15.0)
 
 
 # ── Per-target fuzz config ────────────────────────────────────────────
@@ -425,24 +512,19 @@ class TestFuzzTargetConfig(unittest.TestCase):
         self.assertEqual(FUZZ_MAXLEN["copy_all_fault_fuzz"], 8192)
 
     def test_fuzz_command_argv_construction(self) -> None:
-        """Verify fuzz command argv is constructed correctly.
-
-        Extracted as a pure function so the test is independent of xmake.
-        """
-        argv = _build_fuzz_argv(
+        """Verify fuzz command argv via production build_fuzz_argv()."""
+        argv = build_fuzz_argv(
             target="wal_read_record_fuzz",
             corpus="/tmp/corpus",
-            artifact_dir="/tmp/artifacts",
+            artifact_dir="/tmp/artifacts/",
             per_target=30,
             maxlen=1048576,
             dict_path="/tmp/wal_record.dict",
         )
-        # Must contain xmake run wrapper.
         self.assertEqual(argv[0], "xmake")
         self.assertEqual(argv[1], "run")
         self.assertEqual(argv[2], "wal_read_record_fuzz")
         self.assertEqual(argv[3], "--")
-        # After -- are the libFuzzer args.
         self.assertIn("/tmp/corpus", argv)
         self.assertIn("-max_total_time=30", argv)
         self.assertIn("-artifact_prefix=/tmp/artifacts/", argv)
@@ -450,10 +532,10 @@ class TestFuzzTargetConfig(unittest.TestCase):
         self.assertIn("-dict=/tmp/wal_record.dict", argv)
 
     def test_fuzz_command_no_dict_when_none(self) -> None:
-        argv = _build_fuzz_argv(
+        argv = build_fuzz_argv(
             target="copy_all_fault_fuzz",
             corpus="/tmp/corpus",
-            artifact_dir="/tmp/artifacts",
+            artifact_dir="/tmp/artifacts/",
             per_target=10,
             maxlen=8192,
             dict_path=None,
@@ -485,41 +567,6 @@ class TestHeartbeatConfig(unittest.TestCase):
         from hardening.cli import parse_args
         with self.assertRaises((ValueError, SystemExit)):
             parse_args(["--heartbeat-seconds", "-1"])
-
-
-# ── Helpers ───────────────────────────────────────────────────────────
-
-def _read_jsonl(path: Path) -> List[dict]:
-    """Read a JSONL file, returning parsed records (empty list if missing)."""
-    if not path.exists():
-        return []
-    text = path.read_text().strip()
-    if not text:
-        return []
-    return [json.loads(l) for l in text.split("\n") if l]
-
-
-def _build_fuzz_argv(
-    target: str,
-    corpus: str,
-    artifact_dir: str,
-    per_target: int,
-    maxlen: int,
-    dict_path: Optional[str] = None,
-) -> List[str]:
-    """Build the fuzz command argv (pure function, testable)."""
-    argv = [
-        "xmake", "run", target, "--",
-        corpus,
-        f"-max_total_time={per_target}",
-        f"-artifact_prefix={artifact_dir}/",
-        "-rss_limit_mb=1024",
-        f"-max_len={maxlen}",
-        "-timeout=120",
-    ]
-    if dict_path is not None:
-        argv.append(f"-dict={dict_path}")
-    return argv
 
 
 if __name__ == "__main__":

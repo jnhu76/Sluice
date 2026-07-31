@@ -24,24 +24,30 @@ Heartbeat
 When ``heartbeat_seconds > 0``, the timeout loop is driven by two
 deadlines: the command timeout and the next heartbeat time.  ``wait()`` is
 called with ``min(deadline, next_heartbeat) - now``, so the deadline is
-always checked *before* any heartbeat emission.  If the deadline has passed
-the TERM → KILL escalation proceeds immediately; the heartbeat path is
-never on the critical timing path.
+always checked *before* any heartbeat emission.  Once the deadline is
+reached the TERM → KILL escalation proceeds immediately; the heartbeat
+path is never on the critical timing path.
 
-The heartbeat emitter writes to stderr, the run log, and (optionally) a
-JSONL file.  Every emission path is guarded against exceptions; a heartbeat
-failure must never kill or delay the command under test.
+Heartbeat I/O is decoupled from the timeout thread via a queue + daemon
+writer thread.  The timeout thread builds a snapshot (fast: stat, tail
+read, parse) and enqueues it non-blockingly; the writer thread performs
+all actual I/O (stderr, run.log, JSONL).  A full queue silently drops the
+heartbeat — timeout correctness always takes priority over a heartbeat
+being written.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import json
 import os
+import queue
 import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -147,15 +153,47 @@ def _parse_libfuzzer_status(
             fm = re.search(field_re, rest)
             if fm:
                 d[field] = int(fm.group(1))
-        # corpus: "count/size" — e.g. "corp: 171/19Kb"
-        cm = re.search(r"corp:\s*(\d+)/(\d+)([Kk]?[Bb]?)", rest)
+        # corpus: "count/size" — e.g. "corp: 171/19Kb", "corp: 400/3Mb"
+        cm = re.search(r"corp:\s*(\d+)/(\d+)([KMGT]?[Bb])", rest)
         if cm:
             d["corpus_count"] = int(cm.group(1))
             d["corpus_size"] = int(cm.group(2))
-            if cm.group(3).lower().startswith("k"):
+            unit = cm.group(3).upper()
+            if unit.startswith("T"):
+                d["corpus_size"] *= 1024 * 1024 * 1024 * 1024
+            elif unit.startswith("G"):
+                d["corpus_size"] *= 1024 * 1024 * 1024
+            elif unit.startswith("M"):
+                d["corpus_size"] *= 1024 * 1024
+            elif unit.startswith("K"):
                 d["corpus_size"] *= 1024
+            # "B" or "b" alone → bytes, no scaling.
         return d
     return None
+
+
+@dataclasses.dataclass
+class HeartbeatSnapshot:
+    """Pre-computed heartbeat data, ready for I/O by the writer thread.
+
+    Building a snapshot is fast (stat, bounded tail read, regex).  All
+    actual I/O is deferred to the writer thread so the timeout thread
+    never blocks on a slow pipe or filesystem.
+    """
+
+    phase: str
+    iteration: str
+    target: str
+    pid: int
+    elapsed: float
+    timeout: float
+    remaining: float
+    log_size: int
+    log_delta: int
+    ts: str
+    is_fuzz: bool
+    fuzzer_status: Optional[Dict[str, Any]] = None
+    global_remaining: Optional[float] = None
 
 
 class HeartbeatEmitter:
@@ -163,8 +201,11 @@ class HeartbeatEmitter:
 
     One instance per command.  Tracks log size for delta reporting.
 
-    All emission paths are guarded against exceptions; a heartbeat failure
-    must never escape and kill or delay the command under test.
+    I/O is performed by a daemon writer thread fed by a ``queue.Queue``
+    (maxsize=1).  The timeout thread builds a ``HeartbeatSnapshot`` and
+    enqueues it non-blockingly; if the writer thread is still busy the
+    heartbeat is silently dropped.  This guarantees that timeout
+    correctness (TERM → KILL) is never delayed by heartbeat I/O.
     """
 
     def __init__(
@@ -194,26 +235,25 @@ class HeartbeatEmitter:
         self._is_fuzz = is_fuzz
         self._last_log_size = 0
 
-    def emit(self) -> None:
-        """Write one heartbeat line to stderr, run.log, and heartbeats.jsonl.
+        # Queue + daemon writer thread.
+        self._queue: queue.Queue[Optional[HeartbeatSnapshot]] = queue.Queue(maxsize=1)
+        self._writer_thread = threading.Thread(
+            target=self._writer_loop, daemon=True, name="heartbeat-writer"
+        )
+        self._writer_thread.start()
 
-        Every I/O path is wrapped individually; a single broken pipe or
-        filesystem error must not prevent the other outputs.
+    def build_snapshot(self) -> HeartbeatSnapshot:
+        """Compute a heartbeat snapshot (fast, no I/O writes).
+
+        May perform stat and bounded tail-read on the command log; these
+        are local operations that do not block on pipes or remote
+        filesystems.
         """
-        try:
-            self._emit_impl()
-        except BaseException:
-            # Absorb everything: heartbeat is diagnostic, never fatal.
-            pass
-
-    def _emit_impl(self) -> None:
         now = time.monotonic()
         elapsed = now - self._start_mono
         remaining = max(0.0, self._timeout_seconds - elapsed)
-        alive = True  # we only emit while the child is alive
         ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-        # Log size delta.
         try:
             cur_size = self._log_path.stat().st_size
         except OSError:
@@ -221,35 +261,111 @@ class HeartbeatEmitter:
         delta = max(0, cur_size - self._last_log_size)
         self._last_log_size = cur_size
 
-        # Fuzzer status (only for fuzz commands).
         fuzzer_status: Optional[Dict[str, Any]] = None
         if self._is_fuzz:
             fuzzer_status = _parse_libfuzzer_status(self._log_path)
 
-        # Build fields.
-        fields: List[str] = [
-            f"ts={ts}",
-            f"phase={self._phase}",
-            f"target={self._target}",
-            f"iteration={self._iteration}",
-            f"elapsed={elapsed:.0f}s",
-            f"timeout={self._timeout_seconds:.0f}s",
-            f"remaining={remaining:.0f}s",
-            f"pid={self._pid}",
-            "alive=yes",
-            f"log_size={cur_size}",
-            f"log_delta={delta}",
-        ]
+        global_remaining: Optional[float] = None
         if self._global_remaining_fn is not None:
             try:
-                gr = self._global_remaining_fn()
-                if gr is not None:
-                    fields.append(f"global_remaining={gr:.0f}s")
-            except BaseException:
+                global_remaining = self._global_remaining_fn()
+            except Exception:
                 pass
-        if self._is_fuzz:
-            if fuzzer_status is not None:
-                fs = fuzzer_status
+
+        return HeartbeatSnapshot(
+            phase=self._phase,
+            iteration=self._iteration,
+            target=self._target,
+            pid=self._pid,
+            elapsed=elapsed,
+            timeout=self._timeout_seconds,
+            remaining=remaining,
+            log_size=cur_size,
+            log_delta=delta,
+            ts=ts,
+            is_fuzz=self._is_fuzz,
+            fuzzer_status=fuzzer_status,
+            global_remaining=global_remaining,
+        )
+
+    def emit(self) -> None:
+        """Enqueue a heartbeat for the writer thread (non-blocking).
+
+        If the queue is full the heartbeat is silently dropped; timeout
+        correctness always takes priority over heartbeat delivery.
+        """
+        try:
+            snap = self.build_snapshot()
+        except Exception:
+            return  # snapshot computation failed; skip this beat
+        try:
+            self._queue.put_nowait(snap)
+        except queue.Full:
+            pass  # writer thread busy; drop, don't block
+
+    def shutdown(self) -> None:
+        """Signal the writer thread to finish and wait for it to drain."""
+        # Put the sentinel.  If the queue is full the writer is busy;
+        # poll briefly to let it drain naturally so we don't discard a
+        # pending snapshot.
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            try:
+                self._queue.put_nowait(None)
+                break
+            except queue.Full:
+                time.sleep(0.05)
+        else:
+            # Timeout: force-drain and retry (last resort).
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._queue.put_nowait(None)
+            except queue.Full:
+                pass
+        # Wait for the writer to finish (up to 5 s).  The writer is a
+        # daemon thread; if it's stuck on I/O it will be terminated when
+        # the process exits.
+        self._writer_thread.join(timeout=5.0)
+
+    def _writer_loop(self) -> None:
+        """Daemon thread: read snapshots from the queue and write them."""
+        while True:
+            snap = self._queue.get()
+            if snap is None:  # sentinel
+                break
+            try:
+                self._write_snapshot(snap)
+            except Exception:
+                pass  # I/O failure in writer thread; skip, don't crash
+
+    def _write_snapshot(self, snap: HeartbeatSnapshot) -> None:
+        """Perform all I/O for one heartbeat snapshot.
+
+        Each sink is wrapped individually so one failure doesn't block
+        the others.
+        """
+        # Build stderr line.
+        fields: List[str] = [
+            f"ts={snap.ts}",
+            f"phase={snap.phase}",
+            f"target={snap.target}",
+            f"iteration={snap.iteration}",
+            f"elapsed={snap.elapsed:.0f}s",
+            f"timeout={snap.timeout:.0f}s",
+            f"remaining={snap.remaining:.0f}s",
+            f"pid={snap.pid}",
+            "alive=yes",
+            f"log_size={snap.log_size}",
+            f"log_delta={snap.log_delta}",
+        ]
+        if snap.global_remaining is not None:
+            fields.append(f"global_remaining={snap.global_remaining:.0f}s")
+        if snap.is_fuzz:
+            if snap.fuzzer_status is not None:
+                fs = snap.fuzzer_status
                 fields.append(
                     f"fuzzer_status=#{fs['count']} {fs['tag']} "
                     f"exec/s={fs.get('exec_s', '?')} rss={fs.get('rss', '?')}Mb"
@@ -258,14 +374,13 @@ class HeartbeatEmitter:
                     fields.append(f"corpus={fs['corpus_count']}/{fs['corpus_size']}")
             else:
                 fields.append("fuzzer_status=unavailable")
-        # Non-fuzz commands: no fuzzer_status field at all.
 
         line = "[heartbeat] " + " ".join(fields)
 
-        # stderr (console) — guarded.
+        # stderr — guarded.
         try:
             print(line, file=sys.stderr)
-        except BaseException:
+        except Exception:
             pass
 
         # run.log — guarded.
@@ -276,37 +391,32 @@ class HeartbeatEmitter:
             except OSError:
                 pass
 
-        # heartbeats.jsonl (append-only, one JSON object per line) — guarded.
+        # heartbeats.jsonl — guarded.
         if self._heartbeats_jsonl_path is not None:
             try:
                 rec: Dict[str, Any] = {
-                    "ts": ts,
-                    "phase": self._phase,
-                    "iteration": self._iteration,
-                    "target": self._target,
-                    "pid": self._pid,
-                    "elapsed": round(elapsed, 1),
-                    "timeout": self._timeout_seconds,
-                    "remaining": round(remaining, 1),
-                    "alive": alive,
-                    "log_size": cur_size,
-                    "log_delta": delta,
+                    "ts": snap.ts,
+                    "phase": snap.phase,
+                    "iteration": snap.iteration,
+                    "target": snap.target,
+                    "pid": snap.pid,
+                    "elapsed": round(snap.elapsed, 1),
+                    "timeout": snap.timeout,
+                    "remaining": round(snap.remaining, 1),
+                    "alive": True,
+                    "log_size": snap.log_size,
+                    "log_delta": snap.log_delta,
                 }
-                if self._global_remaining_fn is not None:
-                    try:
-                        gr = self._global_remaining_fn()
-                        if gr is not None:
-                            rec["global_remaining"] = round(gr, 1)
-                    except BaseException:
-                        pass
-                if self._is_fuzz:
-                    if fuzzer_status is not None:
-                        rec["fuzzer_status"] = fuzzer_status
+                if snap.global_remaining is not None:
+                    rec["global_remaining"] = round(snap.global_remaining, 1)
+                if snap.is_fuzz:
+                    if snap.fuzzer_status is not None:
+                        rec["fuzzer_status"] = snap.fuzzer_status
                     else:
                         rec["fuzzer_status"] = "unavailable"
                 with open(self._heartbeats_jsonl_path, "a") as f:
                     f.write(json.dumps(rec, sort_keys=True) + "\n")
-            except OSError:
+            except Exception:
                 pass
 
 
@@ -476,9 +586,13 @@ def run_command(
                     heartbeats_jsonl_path=spec.heartbeats_path,
                     global_remaining_fn=global_remaining_fn,
                 )
-            exit_code, timed_out, term_sent, kill_sent = _run_with_timeout(
-                proc, spec.timeout_seconds, heartbeater, spec.heartbeat_seconds
-            )
+            try:
+                exit_code, timed_out, term_sent, kill_sent = _run_with_timeout(
+                    proc, spec.timeout_seconds, heartbeater, spec.heartbeat_seconds
+                )
+            finally:
+                if heartbeater is not None:
+                    heartbeater.shutdown()
         except BaseException:
             # KeyboardInterrupt or any runner-internal error: tear down the
             # whole process group and reap before propagating, so no orphaned
@@ -568,8 +682,8 @@ def _run_with_timeout(
     deadline is reached the TERM → KILL escalation proceeds immediately; the
     heartbeat path is never on the critical timing path.
 
-    Heartbeat exceptions are absorbed; they never delay the deadline or
-    alter the TERM → KILL escalation.
+    Heartbeat emission is a non-blocking queue put; a full queue silently
+    drops the heartbeat.  The timeout thread never blocks on I/O.
     """
     if heartbeater is not None and heartbeat_seconds > 0:
         start = time.monotonic()
@@ -590,12 +704,8 @@ def _run_with_timeout(
                 if now >= deadline:
                     break
                 if now >= next_heartbeat:
-                    # Emit heartbeat; absorb any exception so it never
-                    # delays or kills the command under test.
-                    try:
-                        heartbeater.emit()
-                    except BaseException:
-                        pass
+                    # Non-blocking enqueue; never raises, never blocks.
+                    heartbeater.emit()
                     # Advance to next heartbeat slot.  If the emit took so
                     # long that we missed the next slot, skip to the
                     # current slot to avoid a burst of catch-up emissions.

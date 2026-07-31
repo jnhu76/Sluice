@@ -825,6 +825,35 @@ def _committed_corpus_dir(project_root: Path, target: str) -> Path:
     return project_root / rel
 
 
+def build_fuzz_argv(
+    target: str,
+    corpus: str,
+    artifact_dir: str,
+    per_target: int,
+    maxlen: int,
+    dict_path: Optional[str] = None,
+    rss_limit_mb: int = 1024,
+    timeout: int = 120,
+) -> List[str]:
+    """Build the libFuzzer argv for a single fuzz target.
+
+    This is a pure function extracted so both ``phase_fuzz()`` and
+    unit tests can exercise the same argv construction.
+    """
+    argv = [
+        "xmake", "run", target, "--",
+        corpus,
+        f"-max_total_time={per_target}",
+        f"-artifact_prefix={artifact_dir}",
+        f"-rss_limit_mb={rss_limit_mb}",
+        f"-max_len={maxlen}",
+        f"-timeout={timeout}",
+    ]
+    if dict_path is not None:
+        argv.append(f"-dict={dict_path}")
+    return argv
+
+
 def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
     """Configure Debug (fuzz build), build fuzz group, and run each fuzz target."""
     _log(ctx, "[fuzz] configuring clang debug (fuzz build)")
@@ -896,21 +925,21 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
         before_bytes = _corpus_file_bytes(work_corpus)
 
         maxlen = FUZZ_MAXLEN.get(tgt, 1048576)
-        fuzz_args = [
-            "xmake", "run", tgt, "--",
-            str(work_corpus),
-            f"-max_total_time={per_target}",
-            f"-artifact_prefix={artifact_dir}/",
-            "-rss_limit_mb=1024",
-            f"-max_len={maxlen}",
-            "-timeout=120",
-        ]
         # Per-target dictionary (see FUZZ_DICTS above).
         dict_name = FUZZ_DICTS.get(tgt)
+        dict_path: Optional[str] = None
         if dict_name is not None:
-            dict_path = ctx.project_root / "fuzz" / "dictionaries" / dict_name
-            if dict_path.is_file():
-                fuzz_args.append(f"-dict={dict_path}")
+            dp = ctx.project_root / "fuzz" / "dictionaries" / dict_name
+            if dp.is_file():
+                dict_path = str(dp)
+        fuzz_args = build_fuzz_argv(
+            target=tgt,
+            corpus=str(work_corpus),
+            artifact_dir=str(artifact_dir) + "/",
+            per_target=per_target,
+            maxlen=maxlen,
+            dict_path=dict_path,
+        )
 
         fuzz_env = {
             "ASAN_OPTIONS": "halt_on_error=1:detect_leaks=1",
