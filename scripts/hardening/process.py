@@ -21,13 +21,16 @@ exit code such as 124 or 137).
 
 Heartbeat
 ---------
-When ``heartbeat_seconds > 0``, the initial wait is sliced into intervals
-of at most ``heartbeat_seconds``.  After each slice the runner emits a
-heartbeat line to stderr, the run log, and (optionally) a JSONL file.  The
-heartbeat includes the command's elapsed time, remaining timeout, log size
-delta, and — for fuzz commands — a best-effort libFuzzer status line.  The
-heartbeat is a progress signal; it never reclassifies the command, never
-changes the timeout, and never delays the TERM → KILL escalation.
+When ``heartbeat_seconds > 0``, the timeout loop is driven by two
+deadlines: the command timeout and the next heartbeat time.  ``wait()`` is
+called with ``min(deadline, next_heartbeat) - now``, so the deadline is
+always checked *before* any heartbeat emission.  If the deadline has passed
+the TERM → KILL escalation proceeds immediately; the heartbeat path is
+never on the critical timing path.
+
+The heartbeat emitter writes to stderr, the run log, and (optionally) a
+JSONL file.  Every emission path is guarded against exceptions; a heartbeat
+failure must never kill or delay the command under test.
 """
 
 from __future__ import annotations
@@ -41,7 +44,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .model import (
     Classification,
@@ -61,16 +64,12 @@ _TAIL_READ_BYTES = 64 * 1024
 
 # Best-effort libFuzzer status-line parser.  Matches the standard
 # ``#<N>\t<tag>  cov:... ft:... corp:... exec/s:... rss:...`` line.
-# The tag is INITED, NEW, REDUCE, pulse, or DONE.  Captures the run count,
-# tag, exec/s, and RSS.  Other fields are parsed only when present.
+# The tag is INITED, NEW, REDUCE, pulse, or DONE.  All fields are parsed
+# from a *single* line; cross-line splicing is rejected.
 _LIBFUZZER_STATUS_RE = re.compile(
     r"#(?P<count>\d+)\s+"
     r"(?P<tag>INITED|NEW|REDUCE|pulse|DONE)\s+"
-    r".*?"
-    r"exec/s:\s*(?P<exec_s>\d+)\s+"
-    r".*?"
-    r"rss:\s*(?P<rss>\d+)Mb",
-    re.DOTALL,
+    r"(?P<rest>.*)"
 )
 
 # Sanitizer signature patterns (must not match runner log header).
@@ -118,46 +117,54 @@ def _tail_read_log(log_path: Path, max_bytes: int = _TAIL_READ_BYTES) -> str:
 def _parse_libfuzzer_status(
     log_path: Path,
 ) -> Optional[Dict[str, Any]]:
-    """Best-effort parse the latest libFuzzer status line from *log_path*.
+    """Best-effort parse the *latest* libFuzzer status line from *log_path*.
 
-    Returns a dict with keys count, tag, exec_s, rss, and optionally cov, ft,
-    corpus_count, corpus_size, lim, or None if parsing fails.
+    Scans from the last line backwards so the newest status is returned.
+    Only the first (latest) matching line is parsed; all fields come from
+    that single line — no cross-line splicing.
     """
     tail = _tail_read_log(log_path)
     if not tail:
         return None
-    m = _LIBFUZZER_STATUS_RE.search(tail)
-    if not m:
-        return None
-    d: Dict[str, Any] = {
-        "count": int(m.group("count")),
-        "tag": m.group("tag"),
-        "exec_s": int(m.group("exec_s")),
-        "rss": int(m.group("rss")),
-    }
-    # Optional fields: cov, ft, corpus, lim
-    for opt_field, opt_re in [
-        ("cov", r"cov:\s*(\d+)"),
-        ("ft", r"ft:\s*(\d+)"),
-        ("lim", r"lim:\s*(\d+)"),
-    ]:
-        om = re.search(opt_re, tail)
-        if om:
-            d[opt_field] = int(om.group(1))
-    # corpus: "count/size" — e.g. "corp: 171/19Kb"
-    cm = re.search(r"corp:\s*(\d+)/(\d+)([Kk]?[Bb]?)", tail)
-    if cm:
-        d["corpus_count"] = int(cm.group(1))
-        d["corpus_size"] = int(cm.group(2))
-        if cm.group(3).lower().startswith("k"):
-            d["corpus_size"] *= 1024
-    return d
+    # Scan lines from the end backwards; take the first (latest) match.
+    for line in reversed(tail.splitlines()):
+        m = _LIBFUZZER_STATUS_RE.search(line)
+        if not m:
+            continue
+        rest = m.group("rest")
+        d: Dict[str, Any] = {
+            "count": int(m.group("count")),
+            "tag": m.group("tag"),
+        }
+        # Parse each field from the *same* rest string.
+        for field, field_re in [
+            ("exec_s", r"exec/s:\s*(\d+)"),
+            ("rss", r"rss:\s*(\d+)Mb"),
+            ("cov", r"cov:\s*(\d+)"),
+            ("ft", r"ft:\s*(\d+)"),
+            ("lim", r"lim:\s*(\d+)"),
+        ]:
+            fm = re.search(field_re, rest)
+            if fm:
+                d[field] = int(fm.group(1))
+        # corpus: "count/size" — e.g. "corp: 171/19Kb"
+        cm = re.search(r"corp:\s*(\d+)/(\d+)([Kk]?[Bb]?)", rest)
+        if cm:
+            d["corpus_count"] = int(cm.group(1))
+            d["corpus_size"] = int(cm.group(2))
+            if cm.group(3).lower().startswith("k"):
+                d["corpus_size"] *= 1024
+        return d
+    return None
 
 
 class HeartbeatEmitter:
     """Emit periodic heartbeat lines for a single long-running command.
 
     One instance per command.  Tracks log size for delta reporting.
+
+    All emission paths are guarded against exceptions; a heartbeat failure
+    must never escape and kill or delay the command under test.
     """
 
     def __init__(
@@ -171,7 +178,7 @@ class HeartbeatEmitter:
         log_path: Path,
         run_log_path: Optional[Path] = None,
         heartbeats_jsonl_path: Optional[Path] = None,
-        global_remaining_fn: Optional[callable] = None,  # type: ignore
+        global_remaining_fn: Optional[Callable[[], float]] = None,
         is_fuzz: bool = False,
     ):
         self._phase = phase
@@ -188,11 +195,23 @@ class HeartbeatEmitter:
         self._last_log_size = 0
 
     def emit(self) -> None:
-        """Write one heartbeat line to stderr, run.log, and heartbeats.jsonl."""
+        """Write one heartbeat line to stderr, run.log, and heartbeats.jsonl.
+
+        Every I/O path is wrapped individually; a single broken pipe or
+        filesystem error must not prevent the other outputs.
+        """
+        try:
+            self._emit_impl()
+        except BaseException:
+            # Absorb everything: heartbeat is diagnostic, never fatal.
+            pass
+
+    def _emit_impl(self) -> None:
         now = time.monotonic()
         elapsed = now - self._start_mono
         remaining = max(0.0, self._timeout_seconds - elapsed)
         alive = True  # we only emit while the child is alive
+        ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
         # Log size delta.
         try:
@@ -202,13 +221,14 @@ class HeartbeatEmitter:
         delta = max(0, cur_size - self._last_log_size)
         self._last_log_size = cur_size
 
-        # Fuzzer status.
+        # Fuzzer status (only for fuzz commands).
         fuzzer_status: Optional[Dict[str, Any]] = None
         if self._is_fuzz:
             fuzzer_status = _parse_libfuzzer_status(self._log_path)
 
         # Build fields.
         fields: List[str] = [
+            f"ts={ts}",
             f"phase={self._phase}",
             f"target={self._target}",
             f"iteration={self._iteration}",
@@ -221,26 +241,34 @@ class HeartbeatEmitter:
             f"log_delta={delta}",
         ]
         if self._global_remaining_fn is not None:
-            gr = self._global_remaining_fn()
-            if gr is not None:
-                fields.append(f"global_remaining={gr:.0f}s")
-        if fuzzer_status is not None:
-            fs = fuzzer_status
-            fields.append(
-                f"fuzzer_status=#{fs['count']} {fs['tag']} "
-                f"exec/s={fs['exec_s']} rss={fs['rss']}Mb"
-            )
-            if "corpus_count" in fs:
-                fields.append(f"corpus={fs['corpus_count']}/{fs['corpus_size']}")
-        else:
-            fields.append("fuzzer_status=unavailable")
+            try:
+                gr = self._global_remaining_fn()
+                if gr is not None:
+                    fields.append(f"global_remaining={gr:.0f}s")
+            except BaseException:
+                pass
+        if self._is_fuzz:
+            if fuzzer_status is not None:
+                fs = fuzzer_status
+                fields.append(
+                    f"fuzzer_status=#{fs['count']} {fs['tag']} "
+                    f"exec/s={fs.get('exec_s', '?')} rss={fs.get('rss', '?')}Mb"
+                )
+                if "corpus_count" in fs:
+                    fields.append(f"corpus={fs['corpus_count']}/{fs['corpus_size']}")
+            else:
+                fields.append("fuzzer_status=unavailable")
+        # Non-fuzz commands: no fuzzer_status field at all.
 
         line = "[heartbeat] " + " ".join(fields)
 
-        # stderr (console).
-        print(line, file=sys.stderr)
+        # stderr (console) — guarded.
+        try:
+            print(line, file=sys.stderr)
+        except BaseException:
+            pass
 
-        # run.log.
+        # run.log — guarded.
         if self._run_log_path is not None:
             try:
                 with open(self._run_log_path, "a") as f:
@@ -248,10 +276,11 @@ class HeartbeatEmitter:
             except OSError:
                 pass
 
-        # heartbeats.jsonl (append-only, one JSON object per line).
+        # heartbeats.jsonl (append-only, one JSON object per line) — guarded.
         if self._heartbeats_jsonl_path is not None:
             try:
                 rec: Dict[str, Any] = {
+                    "ts": ts,
                     "phase": self._phase,
                     "iteration": self._iteration,
                     "target": self._target,
@@ -264,13 +293,17 @@ class HeartbeatEmitter:
                     "log_delta": delta,
                 }
                 if self._global_remaining_fn is not None:
-                    gr = self._global_remaining_fn()
-                    if gr is not None:
-                        rec["global_remaining"] = round(gr, 1)
-                if fuzzer_status is not None:
-                    rec["fuzzer_status"] = fuzzer_status
-                else:
-                    rec["fuzzer_status"] = "unavailable"
+                    try:
+                        gr = self._global_remaining_fn()
+                        if gr is not None:
+                            rec["global_remaining"] = round(gr, 1)
+                    except BaseException:
+                        pass
+                if self._is_fuzz:
+                    if fuzzer_status is not None:
+                        rec["fuzzer_status"] = fuzzer_status
+                    else:
+                        rec["fuzzer_status"] = "unavailable"
                 with open(self._heartbeats_jsonl_path, "a") as f:
                     f.write(json.dumps(rec, sort_keys=True) + "\n")
             except OSError:
@@ -361,7 +394,12 @@ def classify_with_sanitizer(
 # Core runner
 # =============================================================================
 
-def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
+def run_command(
+    spec: CommandSpec,
+    head_sha: str,
+    dirty: bool,
+    global_remaining_fn: Optional[Callable[[], float]] = None,
+) -> CommandResult:
     """Execute *spec* and return a fully populated ``CommandResult``.
 
     *   The child process is started in a new session (``start_new_session=True``)
@@ -433,11 +471,13 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
                     start_mono=start_mono,
                     timeout_seconds=spec.timeout_seconds,
                     log_path=spec.log_path,
+                    run_log_path=spec.run_log_path,
                     is_fuzz=is_fuzz,
                     heartbeats_jsonl_path=spec.heartbeats_path,
+                    global_remaining_fn=global_remaining_fn,
                 )
             exit_code, timed_out, term_sent, kill_sent = _run_with_timeout(
-                proc, spec.timeout_seconds, heartbeater
+                proc, spec.timeout_seconds, heartbeater, spec.heartbeat_seconds
             )
         except BaseException:
             # KeyboardInterrupt or any runner-internal error: tear down the
@@ -510,32 +550,59 @@ def _run_with_timeout(
     proc: "subprocess.Popen",
     timeout_seconds: float,
     heartbeater: "Optional[HeartbeatEmitter]" = None,
+    heartbeat_seconds: int = 0,
 ) -> tuple[Optional[int], bool, bool, bool]:
     """Wait for *proc*, enforcing TERM -> KILL escalation on timeout.
 
     Returns ``(exit_code, timed_out, term_sent, kill_sent)``.  The boolean
     fields record the actions this runner actually took.
 
-    When *heartbeater* is provided, the initial wait deadline is sliced into
-    intervals of at most 1 second.  After each slice the emitter is called
-    to signal progress.  The heartbeat processing never delays the TERM ->
-    KILL escalation: once the deadline is reached the original fast path is
-    used.
+    When *heartbeater* is provided and *heartbeat_seconds* > 0, the wait is
+    driven by two deadlines:
+
+    *   **command deadline** (``start + timeout_seconds``) — the authority.
+    *   **next heartbeat** (``start + heartbeat_seconds``, then incremented).
+
+    ``wait()`` is called with ``min(deadline, next_heartbeat) - now`` so the
+    deadline is always checked *before* any heartbeat emission.  Once the
+    deadline is reached the TERM → KILL escalation proceeds immediately; the
+    heartbeat path is never on the critical timing path.
+
+    Heartbeat exceptions are absorbed; they never delay the deadline or
+    alter the TERM → KILL escalation.
     """
-    if heartbeater is not None:
-        # Heartbeat-enabled wait: slice the deadline into short intervals.
-        deadline = time.monotonic() + timeout_seconds
-        while time.monotonic() < deadline:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
+    if heartbeater is not None and heartbeat_seconds > 0:
+        start = time.monotonic()
+        deadline = start + timeout_seconds
+        next_heartbeat = start + heartbeat_seconds
+
+        while True:
+            now = time.monotonic()
+            if now >= deadline:
                 break
-            slice_t = min(1.0, remaining)
+            wait_until = min(deadline, next_heartbeat)
             try:
-                exit_code = proc.wait(timeout=slice_t)
+                exit_code = proc.wait(timeout=max(0.0, wait_until - now))
                 return exit_code, False, False, False
             except subprocess.TimeoutExpired:
-                heartbeater.emit()
-        # Fall through to TERM escalation (same as original).
+                now = time.monotonic()
+                # Deadline always takes priority.
+                if now >= deadline:
+                    break
+                if now >= next_heartbeat:
+                    # Emit heartbeat; absorb any exception so it never
+                    # delays or kills the command under test.
+                    try:
+                        heartbeater.emit()
+                    except BaseException:
+                        pass
+                    # Advance to next heartbeat slot.  If the emit took so
+                    # long that we missed the next slot, skip to the
+                    # current slot to avoid a burst of catch-up emissions.
+                    next_heartbeat += heartbeat_seconds
+                    if next_heartbeat <= now:
+                        next_heartbeat = now + heartbeat_seconds
+        # Fall through to TERM escalation.
     else:
         try:
             exit_code = proc.wait(timeout=timeout_seconds)

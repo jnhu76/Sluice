@@ -111,6 +111,8 @@ class CommandSpec:
     heartbeat_seconds: int = 0
     # Optional path to the per-run heartbeats.jsonl (None => no JSONL output).
     heartbeats_path: Optional[Path] = None
+    # Optional path to the run log for heartbeat appending (None => no run.log write).
+    run_log_path: Optional[Path] = None
 
     def header_lines(self, head_sha: str, dirty: bool) -> List[str]:
         """Return the log header lines for this command."""

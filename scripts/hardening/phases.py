@@ -371,9 +371,11 @@ def _cmd(
         synthetic=synthetic,
         heartbeat_seconds=ctx.config.heartbeat_seconds,
         heartbeats_path=ctx.run_dir / "heartbeats.jsonl",
+        run_log_path=ctx.run_dir / "run.log",
     )
 
-    result = run_command(spec, ctx.head_sha, ctx.worktree_dirty)
+    result = run_command(spec, ctx.head_sha, ctx.worktree_dirty,
+                         global_remaining_fn=ctx.remaining_seconds)
     ctx.results.append(result)
 
     # Update stats.
@@ -918,12 +920,13 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
         # Wrapper timeout = per-target + 180s grace.
         wrapper_timeout = per_target + 180
 
-        # Improved banner: target k/n, ETA, corpus/artifact paths.
-        eta_ts = datetime.datetime.now(datetime.timezone.utc) + \
-                 datetime.timedelta(seconds=wrapper_timeout)
+        # Banner: expected finish (fuzz budget) and hard timeout (wrapper).
+        now_ts = datetime.datetime.now(datetime.timezone.utc)
+        expected_finish = now_ts + datetime.timedelta(seconds=per_target)
+        hard_timeout = now_ts + datetime.timedelta(seconds=wrapper_timeout)
         _log(ctx, f"[fuzz] target {target_index}/{n}: {tgt} "
-             f"({per_target}s, wrapper timeout {wrapper_timeout}s, "
-             f"ETA {eta_ts.strftime('%H:%M:%S')}Z)")
+             f"({per_target}s, expected {expected_finish.strftime('%H:%M:%S')}Z, "
+             f"hard timeout {hard_timeout.strftime('%H:%M:%S')}Z)")
         _log(ctx, f"[fuzz]   corpus={work_corpus} artifact={artifact_dir}")
 
         r = _cmd(ctx, "fuzz", "0", tgt, "debug", fuzz_args,
