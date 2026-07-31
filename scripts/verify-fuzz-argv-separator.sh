@@ -100,8 +100,11 @@ PROBE_PGID=$!
 set -e
 
 cleanup() {
-    # Kill the whole probe session if it is still alive.  Best-effort.
-    if kill -0 -- "$PROBE_PGID" 2>/dev/null; then
+    # Kill the whole probe session if any member is still alive.  Check the
+    # PROCESS GROUP (negative pid), not just the session leader: if the
+    # leader exited first while a descendant (e.g. the fuzzer) is still
+    # alive, a leader-only check would wrongly skip cleanup.
+    if kill -0 -- -"$PROBE_PGID" 2>/dev/null; then
         kill -- -"$PROBE_PGID" 2>/dev/null || true
         # Give it a moment, then SIGKILL the group if still around.
         sleep 0.5
@@ -162,7 +165,9 @@ while [ "$(date +%s)" -lt "$DISCOVER_DEADLINE" ]; do
         break
     fi
     # Probe session gone entirely (fuzzer exited early) → stop scanning.
-    if ! kill -0 -- "$PROBE_PGID" 2>/dev/null; then
+    # Check the process group (negative pid), not just the leader, so a
+    # descendant still running keeps us scanning.
+    if ! kill -0 -- -"$PROBE_PGID" 2>/dev/null; then
         break
     fi
     sleep 0.05
@@ -236,20 +241,27 @@ fi
 
 # (c) Bounded clean end-to-end run: proves the forwarded '--' is harmless in
 #     practice (flags after it are honored, exit 0).  Wrapped in `timeout`
-#     so a hung/rogue fuzzer cannot stall the probe indefinitely.
+#     with an explicit TERM→KILL escalation (--kill-after): on timeout it
+#     sends SIGTERM, then SIGKILL 5s later if the process is still alive, so
+#     a child that ignores TERM cannot stall the probe indefinitely.
 echo "--- step 5c: bounded clean end-to-end run (-runs=0, timeout guard) ---" \
     | tee -a "$CMDLOG"
 CLEAN_CORPUS="${ARTIFACT_DIR}/clean-corpus"
 mkdir -p "$CLEAN_CORPUS"
 CLEAN_HARD_TIMEOUT=60
+CLEAN_KILL_AFTER=5
 set +e
-timeout "${CLEAN_HARD_TIMEOUT}" xmake run "${FUZZ_BASENAME}" -- \
+timeout --signal=TERM --kill-after="${CLEAN_KILL_AFTER}" \
+    "${CLEAN_HARD_TIMEOUT}" xmake run "${FUZZ_BASENAME}" -- \
     "${CLEAN_CORPUS}" -runs=0 >> "$CMDLOG" 2>&1
 CLEAN_EXIT=$?
 set -e
 echo "clean_run_exit=${CLEAN_EXIT}" | tee -a "$SUMMARY"
-if [ "$CLEAN_EXIT" -eq 124 ]; then
-    echo "FAIL: clean run exceeded ${CLEAN_HARD_TIMEOUT}s timeout (hung?)" \
+# timeout exit codes: 124 = timed out (SIGTERM sent), 137 = SIGKILL'd after
+# --kill-after grace (process ignored TERM).  Both are bounded-time failures.
+if [ "$CLEAN_EXIT" -eq 124 ] || [ "$CLEAN_EXIT" -eq 137 ]; then
+    echo "FAIL: clean run hit the ${CLEAN_HARD_TIMEOUT}s hard timeout" \
+         "(exit ${CLEAN_EXIT}: TERM ignored → KILL after ${CLEAN_KILL_AFTER}s)" \
         | tee -a "$SUMMARY"
     FAIL=1
 elif [ "$CLEAN_EXIT" -ne 0 ]; then
