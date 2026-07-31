@@ -1030,10 +1030,12 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
         )
         ctx.fuzz_results.append(fuzz_snap)
 
-        # Next target indicator.
+        # Next target / phase indicator.
         if target_index < n:
             next_tgt = existing[target_index]
             _log(ctx, f"[fuzz]   next: {next_tgt} ({target_index + 1}/{n})")
+        else:
+            _log(ctx, "[fuzz]   next_phase=final-debug")
 
         # Write corpus stats.
         stats_path = fuzz_subdir / f"{tgt}.corpus-stats.txt"

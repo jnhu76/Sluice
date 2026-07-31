@@ -16,6 +16,7 @@ import json
 import os
 import queue
 import signal
+import subprocess
 import sys
 import tempfile
 import threading
@@ -105,6 +106,75 @@ class TestHeartbeatEmitter(unittest.TestCase):
         self.assertIn("log_delta", r)
         # Non-fuzz: no fuzzer_status field at all.
         self.assertNotIn("fuzzer_status", r)
+
+    def test_jsonl_includes_command_log_path(self) -> None:
+        """JSONL records the command log path for diagnostics."""
+        log = self.tmpdir / "cmd.log"
+        log.write_text("")
+        hb_jsonl = self.tmpdir / "hb.jsonl"
+        hb = HeartbeatEmitter(
+            phase="test", iteration="1", target="t", pid=1,
+            start_mono=time.monotonic(), timeout_seconds=10.0,
+            log_path=log, heartbeats_jsonl_path=hb_jsonl, is_fuzz=False,
+        )
+        hb.emit()
+        hb.shutdown()
+        recs = _read_jsonl(hb_jsonl)
+        self.assertEqual(len(recs), 1)
+        self.assertEqual(recs[0]["command_log_path"], str(log))
+
+    def test_emit_alive_at_capture_propagates_to_stderr(self) -> None:
+        """emit(alive_at_capture=False) → stderr shows alive=no, not alive=yes.
+
+        Regression: the writer used to hardcode ``alive=yes``.  Now the tick
+        carries the observation captured at emit time and the writer emits
+        exactly that value, so a tick built just after the child exited can
+        report ``alive=no`` instead of lying.
+        """
+        log = self.tmpdir / "cmd.log"
+        log.write_text("")
+        run_log = self.tmpdir / "run.log"
+        hb = HeartbeatEmitter(
+            phase="test", iteration="1", target="t", pid=1,
+            start_mono=time.monotonic(), timeout_seconds=10.0,
+            log_path=log, run_log_path=run_log, is_fuzz=False,
+        )
+        hb.emit(alive_at_capture=False)
+        hb.shutdown()
+        content = run_log.read_text()
+        self.assertIn("alive=no", content)
+        self.assertNotIn("alive=yes", content)
+
+    def test_emit_alive_at_capture_propagates_to_jsonl(self) -> None:
+        """emit(alive_at_capture=False) → JSONL alive=false."""
+        log = self.tmpdir / "cmd.log"
+        log.write_text("")
+        hb_jsonl = self.tmpdir / "hb.jsonl"
+        hb = HeartbeatEmitter(
+            phase="test", iteration="1", target="t", pid=1,
+            start_mono=time.monotonic(), timeout_seconds=10.0,
+            log_path=log, heartbeats_jsonl_path=hb_jsonl, is_fuzz=False,
+        )
+        hb.emit(alive_at_capture=False)
+        hb.shutdown()
+        recs = _read_jsonl(hb_jsonl)
+        self.assertEqual(len(recs), 1)
+        self.assertIs(recs[0]["alive"], False)
+
+    def test_emit_default_alive_at_capture_is_true(self) -> None:
+        """Default emit() (no arg) records alive_at_capture=True."""
+        log = self.tmpdir / "cmd.log"
+        log.write_text("")
+        hb_jsonl = self.tmpdir / "hb.jsonl"
+        hb = HeartbeatEmitter(
+            phase="test", iteration="1", target="t", pid=1,
+            start_mono=time.monotonic(), timeout_seconds=10.0,
+            log_path=log, heartbeats_jsonl_path=hb_jsonl, is_fuzz=False,
+        )
+        hb.emit()  # default
+        hb.shutdown()
+        recs = _read_jsonl(hb_jsonl)
+        self.assertIs(recs[0]["alive"], True)
 
     def test_log_size_delta(self) -> None:
         log = self.tmpdir / "cmd.log"
@@ -516,6 +586,64 @@ class TestHeartbeatProcessLifecycle(unittest.TestCase):
             # Timeout should fire within ~1s + TERM/KILL escalation, not
             # be delayed by the 5s writer sleep.
             self.assertLess(elapsed, 15.0)
+
+    def test_child_exiting_at_heartbeat_boundary_no_false_alive(self) -> None:
+        """A child that exits in the heartbeat window must not get alive=yes.
+
+        Regression for the race: after ``wait()`` raises TimeoutExpired the
+        runner used to unconditionally ``heartbeater.emit()`` without
+        re-checking liveness, so a child that exited in that window could be
+        reported ``alive=yes``.  The fix adds ``proc.poll()`` before emit:
+        if the child already exited, the runner returns the real exit code
+        and emits nothing.
+
+        Deterministic test: we drive ``_run_with_timeout`` with a fake proc
+        whose ``wait()`` raises TimeoutExpired on the first call (so the
+        loop reaches the heartbeat branch) but whose ``poll()`` immediately
+        returns a real exit code (child already reaped).  We then assert:
+
+          * ``emit()`` is NEVER called (no lying heartbeat), and
+          * the runner returns the real exit code with timed_out=False.
+
+        This isolates the post-TimeoutExpired poll() short-circuit without
+        relying on OS scheduling of the exact exit moment.
+        """
+        from hardening.process import _run_with_timeout
+
+        class FakeProc:
+            """Mimics the Popen attributes _run_with_timeout uses."""
+            def __init__(self, pid: int, exit_code: int):
+                self.pid = pid
+                self._exit_code = exit_code
+                self._wait_calls = 0
+
+            def wait(self, timeout=None):
+                self._wait_calls += 1
+                # First wait() in the heartbeat loop: pretend still running.
+                raise subprocess.TimeoutExpired(cmd=["fake"], timeout=timeout)
+
+            def poll(self):
+                # Child already exited — the race window the fix targets.
+                return self._exit_code
+
+        class RecordingHeartbeater:
+            def __init__(self):
+                self.emit_calls = 0
+
+            def emit(self, alive_at_capture: bool = True) -> None:
+                self.emit_calls += 1
+
+        hb = RecordingHeartbeater()
+        proc = FakeProc(pid=4242, exit_code=0)
+        exit_code, timed_out, term_sent, kill_sent = _run_with_timeout(
+            proc, timeout_seconds=5.0, heartbeater=hb,  # type: ignore[arg-type]
+            heartbeat_seconds=1)
+        # The fix: poll() returned 0 → runner returns it, emits no heartbeat.
+        self.assertEqual(exit_code, 0)
+        self.assertFalse(timed_out)
+        self.assertEqual(hb.emit_calls, 0,
+                         "emit() must not be called when poll() shows the "
+                         "child already exited (would lie alive=yes)")
 
 
 # ── Per-target fuzz config ────────────────────────────────────────────

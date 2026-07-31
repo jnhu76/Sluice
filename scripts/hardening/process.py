@@ -65,7 +65,8 @@ from .model import (
 KILL_AFTER_SECONDS = 10.0
 
 # Heartbeat: maximum bytes to read from the command log tail for libFuzzer
-# status extraction.  Must be bounded; never blocks.
+# status extraction.  Bounded; runs in the writer thread, isolated from the
+# timeout authority (see _tail_read_log).
 _TAIL_READ_BYTES = 64 * 1024
 
 # Best-effort libFuzzer status-line parser.  Matches the standard
@@ -102,7 +103,11 @@ _UBSAN_PATTERNS = [
 def _tail_read_log(log_path: Path, max_bytes: int = _TAIL_READ_BYTES) -> str:
     """Read at most *max_bytes* from the tail of *log_path*.
 
-    Bounded, never blocks, tolerates missing/truncated/partial-UTF-8.
+    Bounded and isolated from the timeout thread: this runs in the heartbeat
+    writer thread, so even if a pathological filesystem stalls the read it
+    cannot delay the per-command timeout or the TERM → KILL escalation
+    (which are driven purely by ``wait(timeout=...)``).  Tolerates missing,
+    truncated, and partial-UTF-8 content.
     """
     try:
         size = log_path.stat().st_size
@@ -178,10 +183,20 @@ class HeartbeatTick:
 
     Contains only the minimum data that can be produced without I/O.
     The writer thread uses this tick to build the full snapshot.
+
+    ``alive_at_capture`` records whether the child was still alive at the
+    instant the timeout thread built this tick (checked via ``proc.poll()``
+    immediately before enqueueing).  The writer thread emits exactly this
+    value rather than a hardcoded ``alive=yes``, so a tick built just after
+    the child exited can report ``alive=no`` instead of lying.  In the normal
+    path the timeout thread never enqueues a tick for an exited child (it
+    returns the real exit code instead), so this field is the honest record
+    of the observation, not a second liveness check.
     """
 
     pid: int
-    ts: float  # time.monotonic() from the timeout thread
+    ts: float  # time.time() wall-clock at tick build time
+    alive_at_capture: bool = True
 
 
 @dataclasses.dataclass
@@ -203,6 +218,7 @@ class HeartbeatSnapshot:
     log_delta: int
     ts: str
     is_fuzz: bool
+    alive_at_capture: bool = True
     log_path: str = ""  # command log path for diagnostics
     fuzzer_status: Optional[Dict[str, Any]] = None
     global_remaining: Optional[float] = None
@@ -300,19 +316,28 @@ class HeartbeatEmitter:
             log_delta=delta,
             ts=ts,
             is_fuzz=self._is_fuzz,
+            alive_at_capture=tick.alive_at_capture,
             log_path=str(self._log_path),
             fuzzer_status=fuzzer_status,
             global_remaining=global_remaining,
         )
 
-    def emit(self) -> None:
+    def emit(self, alive_at_capture: bool = True) -> None:
         """Enqueue a heartbeat tick for the writer thread (non-blocking).
 
         Produces only a lightweight HeartbeatTick (no I/O).  If the queue
         is full the heartbeat is silently dropped; timeout correctness
         always takes priority over heartbeat delivery.
+
+        *alive_at_capture* records whether the child was still alive at the
+        instant the caller decided to emit.  ``run_command()`` checks
+        ``proc.poll()`` immediately before calling this and passes the
+        result here, so the tick (and the eventual output) truthfully
+        reports what was observed rather than assuming ``alive=yes``.
         """
-        tick = HeartbeatTick(pid=self._pid, ts=time.time())
+        tick = HeartbeatTick(
+            pid=self._pid, ts=time.time(), alive_at_capture=alive_at_capture
+        )
         try:
             self._queue.put_nowait(tick)
         except queue.Full:
@@ -374,6 +399,10 @@ class HeartbeatEmitter:
         the others.
         """
         # Build stderr line.
+        # ``alive=yes|no`` reflects the observation captured at tick-build
+        # time in the timeout thread (see HeartbeatTick), NOT a fresh poll
+        # here.  In the normal path the timeout thread never enqueues a tick
+        # for an already-exited child, so this is honest about what was seen.
         fields: List[str] = [
             f"ts={snap.ts}",
             f"phase={snap.phase}",
@@ -383,7 +412,7 @@ class HeartbeatEmitter:
             f"timeout={snap.timeout:.0f}s",
             f"remaining={snap.remaining:.0f}s",
             f"pid={snap.pid}",
-            "alive=yes",
+            f"alive={'yes' if snap.alive_at_capture else 'no'}",
             f"log_size={snap.log_size}",
             f"log_delta={snap.log_delta}",
         ]
@@ -434,9 +463,10 @@ class HeartbeatEmitter:
                     "elapsed": round(snap.elapsed, 1),
                     "timeout": snap.timeout,
                     "remaining": round(snap.remaining, 1),
-                    "alive": True,
+                    "alive": snap.alive_at_capture,
                     "log_size": snap.log_size,
                     "log_delta": snap.log_delta,
+                    "command_log_path": snap.log_path,
                 }
                 if snap.global_remaining is not None:
                     rec["global_remaining"] = round(snap.global_remaining, 1)
@@ -740,8 +770,16 @@ def _run_with_timeout(
                 if now >= deadline:
                     break
                 if now >= next_heartbeat:
-                    # Non-blocking enqueue; never raises, never blocks.
-                    heartbeater.emit()
+                    # The child may have exited in the window between
+                    # wait()'s TimeoutExpired and here.  Reap it if so and
+                    # return the real exit code instead of emitting a
+                    # heartbeat that would lie ``alive=yes`` about a child
+                    # that is already gone.  poll() is non-blocking.
+                    exit_code = proc.poll()
+                    if exit_code is not None:
+                        return exit_code, False, False, False
+                    # Still alive: enqueue a tick recording that observation.
+                    heartbeater.emit(alive_at_capture=True)
                     # Advance to next heartbeat slot.  If the emit took so
                     # long that we missed the next slot, skip to the
                     # current slot to avoid a burst of catch-up emissions.
