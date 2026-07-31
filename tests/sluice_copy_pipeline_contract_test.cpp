@@ -1,26 +1,26 @@
 // sluice-copy Version B pipeline contract tests.
 //
 // These tests describe the expected behavior of the pipelined copy (Version B).
-// They are written against the CURRENT production code (Version A) and the
-// ScriptedAsyncBackend test infrastructure.
+// They drive the copy task via the public run_*_copy* entry points against the
+// ScriptedAsyncBackend + controller test infrastructure.
 //
-// LIFETIME NOTE: The backend is owned by the Runtime (inside the copy thread).
-// The test thread MUST read all backend stats BEFORE completing the last
-// operation that causes the copy task to publish its result. After the copy
-// task publishes, the copy thread destroys the Runtime (and backend).
+// LIFETIME MODEL (Phase 0): the backend is owned by the copy thread's Runtime
+// (a unique_ptr). The test thread drives EVERYTHING through a
+// ScriptedBackendController that shares state with the backend. The controller
+// outlives the backend; after the backend is destroyed, waiting returns
+// WaitStatus::closed and completion control throws ScriptedBackendClosed —
+// there is NEVER a cross-thread raw-pointer dereference (no TOCTOU window).
 //
-// IMPORTANT: SLUICE_CHECK macros return early from the test function. Any
-// running std::thread must be joined before the function returns. Use the
-// ScopedThread RAII wrapper to ensure proper cleanup.
+// The CopyScenario RAII harness joins the copy thread, drains pending ops via
+// the controller before any assertion can early-return, and never detaches.
 //
-// Expected results:
-//   - Contracts that Version A already satisfies → PASS (green)
-//   - Contracts that require Version B → FAIL (red, expected)
-//   - Contracts that require a future API → compile-guarded
+// RED-LIGHT principle: Version-B-only contracts are written as real scenarios
+// that fail for the intended reason (e.g. max_outstanding_reads == 1) until
+// Version B is implemented. Once SLUICE_HAS_PIPELINED_COPY is defined at build
+// time, the full contract bodies run against the Version B implementation.
 //
 // TEST TARGET: sluice_copy_pipeline_contract_test
-// STATUS: NOT in the default `xmake test` group. Run manually:
-//   xmake run sluice_copy_pipeline_contract_test
+// STATUS: NOT in the default `xmake test` group until Version B is complete.
 
 #include "harness.hpp"
 
@@ -50,35 +50,9 @@ using sluice::Result;
 
 namespace {
 
-// RAII helper that joins the thread on destruction (or can be joined early).
-// Prevents std::terminate when a test returns early due to SLUICE_CHECK.
-struct ScopedThread {
-    std::thread t;
-    bool joined = false;
-
-    template <typename F>
-    explicit ScopedThread(F&& f) : t(std::forward<F>(f)) {}
-
-    ~ScopedThread() {
-        if (!joined && t.joinable()) {
-            // Drain the backend before joining to unblock the copy thread.
-            // We can't access the backend here, so we just detach as a last
-            // resort. Actually, we must join. The caller must ensure the
-            // backend is drained before this destructor runs.
-            t.join();
-        }
-    }
-
-    void join() {
-        if (!joined && t.joinable()) {
-            t.join();
-            joined = true;
-        }
-    }
-
-    ScopedThread(const ScopedThread&) = delete;
-    ScopedThread& operator=(const ScopedThread&) = delete;
-};
+// Test timeout guard: bounded waits so a buggy copy cannot hang the test
+// forever. A timeout here means a TEST FAILURE, not normal scheduling.
+constexpr auto kWaitFor = std::chrono::seconds(5);
 
 struct TempFile {
     int fd;
@@ -104,96 +78,130 @@ void seed_file(int fd, std::size_t n) {
     }
 }
 
-void drain_all(ScriptedAsyncBackend* raw,
-               const std::shared_ptr<BackendControlState>& ctrl) {
-    while (raw->pending_count() > 0) {
-        // If the backend has been destroyed by the Runtime thread, stop.
-        if (ctrl->destroyed.load(std::memory_order::acquire)) return;
-        auto ops = raw->pending_operations();
-        for (auto& op : ops) {
-            if (ctrl->destroyed.load(std::memory_order::acquire)) return;
-            switch (op.kind) {
-            case OpKind::read:
-                raw->complete_eof(op.id);
-                break;
-            case OpKind::write:
-                raw->complete_bytes(op.id, op.length);
-                break;
-            case OpKind::sync_data:
-            case OpKind::sync_all:
-                raw->complete_sync_success(op.id);
-                break;
-            }
-        }
+// Compare two files byte-for-byte (full content, not just size).
+// Used by Phase-1 file-content contracts.
+[[maybe_unused]] bool files_equal(int a, int b, std::size_t n) {
+    std::vector<std::byte> da(n), db(n);
+    if (n == 0) return true;
+    ssize_t ra = ::pread(a, da.data(), n, 0);
+    ssize_t rb = ::pread(b, db.data(), n, 0);
+    if (ra != static_cast<ssize_t>(n) || rb != static_cast<ssize_t>(n))
+        return false;
+    return std::memcmp(da.data(), db.data(), n) == 0;
+}
+
+// Find the operation id of a given kind currently outstanding.
+std::uint64_t find_op(ScriptedBackendController& ctrl, OpKind kind) {
+    auto ops = ctrl.pending_operations();
+    for (auto& op : ops)
+        if (op.kind == kind) return op.id;
+    return 0;
+}
+
+// Wait until a (genuinely new) op of `kind` is outstanding, bounded.
+//
+// Rationale: `outstanding` = pending + staged. After the test completes an op,
+// that op remains outstanding (stage=staged) until the Runtime driver polls it.
+// A bare "wait until outstanding >= N" can therefore return immediately on the
+// just-staged op instead of a new one. Waiting for a specific KIND makes the
+// scenario deterministic: we want the next read / the next write, not the
+// previous op's staged result. Returns the op id, or 0 on timeout/close.
+std::uint64_t wait_for_op(ScriptedBackendController& ctrl, OpKind kind) {
+    auto deadline = std::chrono::steady_clock::now() + kWaitFor;
+    for (;;) {
+        if (std::uint64_t id = find_op(ctrl, kind); id != 0) return id;
+        auto ws = ctrl.wait_until_pending_for(1, std::chrono::milliseconds(50));
+        if (ws == WaitStatus::closed) return 0;
+        if (std::chrono::steady_clock::now() >= deadline) return 0;
     }
 }
 
-std::uint64_t find_op(ScriptedAsyncBackend* raw, OpKind kind) {
-    auto ops = raw->pending_operations();
-    for (auto& op : ops) {
-        if (op.kind == kind) return op.id;
-    }
-    return 0;
+// Best-effort drain of every outstanding op so the copy thread can reach a
+// terminal result and publish. Safe to call repeatedly; no-op after close.
+void drain_all(ScriptedBackendController& ctrl) {
+    ctrl.complete_all_for_cleanup();
 }
+
+// ---------------------------------------------------------------------------
+// CopyScenario — unified thread-driven scenario harness.
+//
+// Owns the controller (shared state with the backend). The copy runs on
+// copy_thread; the test thread drives the controller. On destruction (or
+// drain_and_join) the harness drains pending ops via the controller and joins
+// the thread — no detached threads, no raw backend pointer, no hang on an
+// early-return assertion.
+// ---------------------------------------------------------------------------
+struct CopyScenario {
+    ScriptedBackendController controller;
+    std::thread copy_thread;
+    bool joined = false;
+
+    CopyScenario() = default;
+    ~CopyScenario() { drain_and_join(); }
+
+    void drain_and_join() {
+        if (joined) return;
+        // Best-effort drain so the copy task can publish and the thread exits.
+        // If the copy already errored and stopped submitting, this is a no-op.
+        drain_all(controller);
+        if (copy_thread.joinable()) copy_thread.join();
+        joined = true;
+    }
+
+    // Wait until >= min ops outstanding, bounded. Returns true if met.
+    bool wait_pending(std::size_t min_count) {
+        return controller.wait_until_pending_for(min_count, kWaitFor) ==
+               WaitStatus::ready;
+    }
+
+    // Finish: drain + join. After this, `result` reflects the terminal outcome.
+    void finish() { drain_and_join(); }
+
+    CopyScenario(const CopyScenario&) = delete;
+    CopyScenario& operator=(const CopyScenario&) = delete;
+};
 
 }  // namespace
 
 // ===========================================================================
-// Contract 1: depth=1 — single outstanding read (SHOULD PASS with Version A)
+// Contract 1: depth=1 — single outstanding read (Version A: PASS)
 // ===========================================================================
 
 SLUICE_TEST_CASE(contract_depth_1_single_outstanding_read) {
     TempFile src, dst;
     seed_file(src.fd, 4096 * 3);
 
-    auto backend = std::make_unique<ScriptedAsyncBackend>();
-    auto* raw = backend.get();
-    auto ctrl = raw->control_state();
+    auto pair = make_scripted_backend();
+    CopyScenario sc;
+    sc.controller = pair.controller;
 
     std::optional<Result<CopyStats>> copy_result;
-    std::atomic<bool> copy_done{false};
 
-    ScopedThread copy_thread([&, be = std::move(backend)]() mutable {
+    sc.copy_thread = std::thread([&]() mutable {
         auto r = run_sequential_copy_with_backend(
-            src.fd, dst.fd, 4096, 1, SyncPolicy::none, std::move(be));
+            src.fd, dst.fd, 4096, 1, SyncPolicy::none, std::move(pair.backend));
         copy_result = r;
-        copy_done.store(true, std::memory_order::release);
     });
 
     // Drive the copy through 3 chunks.
     for (int chunk = 0; chunk < 3; ++chunk) {
-        if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
-            drain_all(raw, ctrl);
-            copy_thread.join();
-            SLUICE_FAIL("timeout waiting for pending op in chunk");
-        }
-        std::uint64_t rid = find_op(raw, OpKind::read);
-        SLUICE_CHECK(rid != 0);
-        raw->complete_bytes(rid, 4096);
+        std::uint64_t rid = wait_for_op(sc.controller, OpKind::read);
+        SLUICE_CHECK_MSG(rid != 0, "timeout waiting for read op in chunk");
+        sc.controller.complete_bytes(rid, 4096);
 
-        if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
-            drain_all(raw, ctrl);
-            copy_thread.join();
-            SLUICE_FAIL("timeout waiting for write op in chunk");
-        }
-        std::uint64_t wid = find_op(raw, OpKind::write);
-        SLUICE_CHECK(wid != 0);
-        raw->complete_bytes(wid, 4096);
+        std::uint64_t wid = wait_for_op(sc.controller, OpKind::write);
+        SLUICE_CHECK_MSG(wid != 0, "timeout waiting for write op in chunk");
+        sc.controller.complete_bytes(wid, 4096);
     }
 
     // Read stats BEFORE completing the EOF read.
-    std::size_t max_reads = raw->max_outstanding_reads();
-    std::size_t max_total = raw->max_outstanding_total();
+    std::size_t max_reads = sc.controller.max_outstanding_reads();
+    std::size_t max_total = sc.controller.max_outstanding_total();
 
     // Complete the EOF read (triggers copy task completion).
-    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
-        copy_thread.join();
-        SLUICE_FAIL("timeout waiting for EOF read");
-    }
-    drain_all(raw, ctrl);
-
-    // Stats must be read before join because backend dies with Runtime.
-    copy_thread.join();
+    std::uint64_t eof_rid = wait_for_op(sc.controller, OpKind::read);
+    SLUICE_CHECK_MSG(eof_rid != 0, "timeout waiting for EOF read");
+    sc.finish();
 
     SLUICE_CHECK(copy_result.has_value());
     SLUICE_CHECK(copy_result->has_value());
@@ -203,50 +211,49 @@ SLUICE_TEST_CASE(contract_depth_1_single_outstanding_read) {
 }
 
 // ===========================================================================
-// Contract 2: depth>1 — multiple outstanding reads (EXPECTED FAIL)
+// Contract 2: depth>1 — multiple outstanding reads (Version B RED until impl)
 // ===========================================================================
 
 SLUICE_TEST_CASE(contract_depth_gt_1_multiple_outstanding_reads) {
     TempFile src, dst;
     seed_file(src.fd, 12);
 
-    auto backend = std::make_unique<ScriptedAsyncBackend>();
-    auto* raw = backend.get();
-    auto ctrl = raw->control_state();
+    auto pair = make_scripted_backend();
+    CopyScenario sc;
+    sc.controller = pair.controller;
 
     std::optional<Result<CopyStats>> copy_result;
-    std::atomic<bool> copy_done{false};
 
-    ScopedThread copy_thread([&, be = std::move(backend)]() mutable {
+    sc.copy_thread = std::thread([&]() mutable {
         auto r = run_sequential_copy_with_backend(
-            src.fd, dst.fd, 4, 1, SyncPolicy::none, std::move(be));
+            src.fd, dst.fd, 4, 1, SyncPolicy::none, std::move(pair.backend));
         copy_result = r;
-        copy_done.store(true, std::memory_order::release);
     });
 
     // Wait for the first read to appear (bounded).
-    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
-        drain_all(raw, ctrl);
-        copy_thread.join();
+    if (wait_for_op(sc.controller, OpKind::read) == 0)
         SLUICE_FAIL("timeout waiting for first read");
-    }
 
     // Read stats BEFORE completing any operations.
-    std::size_t max_reads = raw->max_outstanding_reads();
+    std::size_t max_reads = sc.controller.max_outstanding_reads();
 
-    // PRIMARY RED-LIGHT assertion. Must drain and join before check because
-    // SLUICE_CHECK_MSG returns early.
-    drain_all(raw, ctrl);
-    copy_thread.join();
+    sc.finish();
 
+    // PRIMARY RED-LIGHT assertion. Version A submits exactly one read at a time,
+    // so max_reads == 1. Version B with pipeline_depth>1 must reach >= 2.
     SLUICE_CHECK_MSG(max_reads >= 2,
                      "Version B pipeline not implemented: "
                      "max_outstanding_reads == 1, expected >= 2");
 }
 
 // ===========================================================================
-// Contract 3–6, 8–12: guarded (require SLUICE_HAS_PIPELINED_COPY)
+// Contracts 3–6, 8–12: guarded (require SLUICE_HAS_PIPELINED_COPY)
 // ===========================================================================
+//
+// These bodies require the Version B API (run_pipelined_copy_with_backend). They
+// compile ONLY when SLUICE_HAS_PIPELINED_COPY is defined at build time. Until
+// then the `*_not_implemented` placeholders provide a clear red signal that is
+// NOT the same as a data race / UAF / deadlock.
 
 #if SLUICE_HAS_PIPELINED_COPY
 SLUICE_TEST_CASE(contract_out_of_order_read_in_order_write) {
@@ -339,50 +346,37 @@ SLUICE_TEST_CASE(contract_bounded_memory_not_implemented) {
 #endif
 
 // ===========================================================================
-// Contract 7: write returns 0 on non-empty write → error
+// Contract 7: write returns 0 on non-empty write → error (Version A: PASS)
 // ===========================================================================
 
 SLUICE_TEST_CASE(contract_write_zero_is_error) {
     TempFile src, dst;
     seed_file(src.fd, 16);
 
-    auto backend = std::make_unique<ScriptedAsyncBackend>();
-    auto* raw = backend.get();
-    auto ctrl = raw->control_state();
+    auto pair = make_scripted_backend();
+    CopyScenario sc;
+    sc.controller = pair.controller;
 
     std::optional<Result<CopyStats>> copy_result;
-    std::atomic<bool> copy_done{false};
 
-    ScopedThread copy_thread([&, be = std::move(backend)]() mutable {
+    sc.copy_thread = std::thread([&]() mutable {
         auto r = run_sequential_copy_with_backend(
-            src.fd, dst.fd, 16, 1, SyncPolicy::none, std::move(be));
+            src.fd, dst.fd, 16, 1, SyncPolicy::none, std::move(pair.backend));
         copy_result = r;
-        copy_done.store(true, std::memory_order::release);
     });
 
     // Complete the first read.
-    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
-        drain_all(raw, ctrl);
-        copy_thread.join();
-        SLUICE_FAIL("timeout waiting for read");
-    }
-    std::uint64_t rid = find_op(raw, OpKind::read);
-    SLUICE_CHECK(rid != 0);
-    raw->complete_bytes(rid, 16);
+    std::uint64_t rid = wait_for_op(sc.controller, OpKind::read);
+    SLUICE_CHECK_MSG(rid != 0, "timeout waiting for read");
+    sc.controller.complete_bytes(rid, 16);
 
     // Complete the write with 0 bytes (invalid).
-    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
-        drain_all(raw, ctrl);
-        copy_thread.join();
-        SLUICE_FAIL("timeout waiting for write");
-    }
-    std::uint64_t wid = find_op(raw, OpKind::write);
-    SLUICE_CHECK(wid != 0);
-    raw->complete_bytes(wid, 0);
+    std::uint64_t wid = wait_for_op(sc.controller, OpKind::write);
+    SLUICE_CHECK_MSG(wid != 0, "timeout waiting for write");
+    sc.controller.complete_bytes(wid, 0);
 
     // Drain any remaining ops (error path should stop submitting).
-    drain_all(raw, ctrl);
-    copy_thread.join();
+    sc.finish();
 
     SLUICE_CHECK(copy_result.has_value());
     SLUICE_CHECK(!copy_result->has_value());
@@ -390,66 +384,59 @@ SLUICE_TEST_CASE(contract_write_zero_is_error) {
 }
 
 // ===========================================================================
-// Contract 13: write submit failure propagates
+// Contract 13: write submit failure propagates (Version A: PASS)
 // ===========================================================================
 
 SLUICE_TEST_CASE(contract_write_submit_failure_propagates) {
     TempFile src, dst;
     seed_file(src.fd, 16);
 
-    auto backend = std::make_unique<ScriptedAsyncBackend>();
-    auto* raw = backend.get();
-    auto ctrl = raw->control_state();
+    auto pair = make_scripted_backend();
+    CopyScenario sc;
+    sc.controller = pair.controller;
 
     std::optional<Result<CopyStats>> copy_result;
-    std::atomic<bool> copy_done{false};
 
-    ScopedThread copy_thread([&, be = std::move(backend)]() mutable {
+    sc.copy_thread = std::thread([&]() mutable {
         auto r = run_sequential_copy_with_backend(
-            src.fd, dst.fd, 16, 1, SyncPolicy::none, std::move(be));
+            src.fd, dst.fd, 16, 1, SyncPolicy::none, std::move(pair.backend));
         copy_result = r;
-        copy_done.store(true, std::memory_order::release);
     });
 
     // Wait for the first read to appear.
-    if (!raw->wait_until_pending_for(1, std::chrono::seconds(5))) {
-        drain_all(raw, ctrl);
-        copy_thread.join();
-        SLUICE_FAIL("timeout waiting for read");
-    }
-    std::uint64_t rid = find_op(raw, OpKind::read);
-    SLUICE_CHECK(rid != 0);
+    std::uint64_t rid = wait_for_op(sc.controller, OpKind::read);
+    SLUICE_CHECK_MSG(rid != 0, "timeout waiting for read");
 
     // ARM the write submit failure BEFORE completing the read. This ensures
-    // the failure is in place before the Runtime thread has a chance to poll
-    // the read completion and submit the write.
-    raw->fail_next_submit(OpKind::write, IoError{IoError::Code::no_space});
+    // the failure is in place before the Runtime thread polls the read
+    // completion and submits the write.
+    sc.controller.fail_next_submit(OpKind::write, IoError{IoError::Code::no_space});
 
     // Now complete the read, allowing the Runtime to proceed to submit write.
-    raw->complete_bytes(rid, 16);
+    sc.controller.complete_bytes(rid, 16);
 
-    copy_thread.join();
+    sc.finish();
+
     SLUICE_CHECK(copy_result.has_value());
     SLUICE_CHECK(!copy_result->has_value());
     SLUICE_CHECK(copy_result->error().code == IoError::Code::no_space);
 }
 
 // ===========================================================================
-// Contract 14: read submit failure propagates
+// Contract 14: read submit failure propagates (Version A: PASS)
 // ===========================================================================
 
 SLUICE_TEST_CASE(contract_read_submit_failure_propagates) {
     TempFile src, dst;
     seed_file(src.fd, 16);
 
-    auto backend = std::make_unique<ScriptedAsyncBackend>();
-    auto* raw = backend.get();
-
-    raw->fail_next_submit(OpKind::read, IoError{IoError::Code::backend_error});
+    auto pair = make_scripted_backend();
+    pair.controller.fail_next_submit(OpKind::read,
+                                     IoError{IoError::Code::backend_error});
 
     auto r = run_sequential_copy_with_backend(src.fd, dst.fd, 16, 1,
-                                               SyncPolicy::none,
-                                               std::move(backend));
+                                              SyncPolicy::none,
+                                              std::move(pair.backend));
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == IoError::Code::backend_error);
 }

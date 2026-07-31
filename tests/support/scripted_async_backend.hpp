@@ -25,9 +25,24 @@
 // completing. captured_write_bytes() returns a copy of the write buffer data
 // (valid only while the operation is pending).
 //
-// Thread safety: all public methods acquire a std::mutex. The condition variable
-// is signaled when a pending operation appears or a staged result is available.
-// TSan must pass on all tests using this backend.
+// --- Control-plane lifetime model (Phase 0) -------------------------------
+//
+// The backend object is owned by a Runtime/copy thread (a unique_ptr). The test
+// thread must NEVER hold or dereference a backend raw pointer across threads:
+// checking `destroyed` then calling a method is a TOCTOU window.
+//
+// Instead the test thread drives everything through a `ScriptedBackendController`
+// that shares a `shared_ptr<ScriptedBackendSharedState>` with the backend. The
+// shared state outlives the backend object. When the backend is destroyed by the
+// Runtime thread it only marks the shared state `closed`; it does NOT destroy the
+// shared state. Controller methods, after the backend is closed, return an
+// explicit `closed` result (or throw a clearly-named test error) and never touch
+// the destroyed backend object.
+//
+// Thread safety: all shared-state methods acquire the shared-state mutex. The
+// condition variable is signaled when a pending operation appears, a staged
+// result is available, or the backend transitions to closed. TSan must pass on
+// all tests using this backend.
 
 #pragma once
 
@@ -45,7 +60,9 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace sluice::async {
@@ -79,25 +96,132 @@ struct PendingOpView {
     void* completion_identity;  // address of the Completion object
 };
 
-// --- BackendControlState -----------------------------------------------------
-// Shared control block that outlives the backend object. The test thread holds
-// a shared_ptr to this state; when the backend is destroyed by another thread
-// (e.g. inside a Runtime), the test can still observe `destroyed` safely.
-struct BackendControlState {
-    std::atomic<bool> destroyed{false};
-    // Snapshot of pending+staged count at destruction time (for diagnostics).
-    std::atomic<std::size_t> final_outstanding{0};
+// Per-op lifecycle stage used for accurate outstanding accounting.
+enum class OpStage : std::uint8_t {
+    pending,   // submitted, awaiting test-thread completion control
+    staged,    // test thread staged a result; awaiting poll()/wait_one()
+};
+
+// Result of a bounded wait for pending operations.
+enum class WaitStatus {
+    ready,    // pending count >= requested count
+    timeout,  // bounded wait elapsed before the requested count arrived
+    closed,   // the backend was destroyed (closed) while waiting
+};
+
+// Thrown by control methods when an op is not found / already completed / wrong
+// kind. Test harnesses catch std::runtime_error.
+struct ScriptedBackendError : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+// Thrown when a control method is invoked after the backend has been closed
+// (destroyed). Lets tests distinguish "used after close" from generic errors.
+struct ScriptedBackendClosed : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+// --- ScriptedBackendSharedState ---------------------------------------------
+// Shared control block. Outlives the backend object via shared_ptr: the test
+// thread holds a shared_ptr to this state; the backend holds another. When the
+// backend is destroyed (Runtime thread) it only sets `closed` and notifies
+// waiters — it never destroys the shared state.
+//
+// All access goes through a single mutex (mtx). The condition variable is
+// notified on: pending add, staged result, backend close.
+class ScriptedBackendSharedState {
+public:
+    ScriptedBackendSharedState() = default;
+
+    ScriptedBackendSharedState(const ScriptedBackendSharedState&) = delete;
+    ScriptedBackendSharedState& operator=(const ScriptedBackendSharedState&) = delete;
+
+    mutable std::mutex mtx;
+    std::condition_variable cv;
+
+    bool closed = false;  // set under mtx by the backend destructor; never cleared
+
+    // --- Pending operations (caller holds mtx) ---
+    struct PendingSizeOp {
+        std::uint64_t id;
+        OpKind kind;  // read or write
+        OpStage stage = OpStage::pending;  // pending -> staged
+        int fd;
+        std::uint64_t offset;
+        std::size_t length;
+        std::byte* buffer;
+        Completion<std::size_t>* completion;
+    };
+
+    struct PendingVoidOp {
+        std::uint64_t id;
+        OpKind kind;  // sync_data or sync_all
+        OpStage stage = OpStage::pending;
+        int fd;
+        Completion<void>* completion;
+    };
+
+    // Pending AND staged operations, keyed by operation ID. An operation remains
+    // in these maps (with stage=pending or stage=staged) until poll()/wait_one()
+    // applies its result; only then is it erased. This keeps
+    // outstanding() == pending + staged exactly and preserves diagnostics.
+    std::map<std::uint64_t, PendingSizeOp> size_ops;
+    std::map<std::uint64_t, PendingVoidOp> void_ops;
+
+    // Staged results to be applied by poll(). A pointer to the matching op
+    // stays in the size_ops/void_ops map (stage=staged) until poll applies it.
+    struct StagedSizeResult {
+        Completion<std::size_t>* completion;
+        Result<std::size_t> result;
+    };
+    struct StagedVoidResult {
+        Completion<void>* completion;
+        Result<void> result;
+    };
+    std::vector<StagedSizeResult> staged_size;
+    std::vector<StagedVoidResult> staged_void;
+
+    // Monotonic operation ID counter.
+    std::uint64_t next_id = 1;
+
+    // Outstanding statistics (peak over pending+staged).
+    std::size_t max_reads = 0;
+    std::size_t max_total = 0;
+
+    // Submit failure injection state.
+    std::optional<std::uint64_t> fail_submit_num;
+    IoError fail_submit_num_error{IoError::Code::backend_error};
+    std::optional<OpKind> fail_next_kind;
+    IoError fail_next_kind_error{IoError::Code::backend_error};
+
+    // Submit counter (for fail_submit_number).
+    std::uint64_t submit_count = 0;
+
+    // Shutdown flag observed by wait_one().
+    bool shutdown = false;
+
+    // Snapshot of outstanding count at destruction (for diagnostics).
+    std::size_t final_outstanding = 0;
 };
 
 // --- ScriptedAsyncBackend ----------------------------------------------------
+// The AsyncBackend implementation. Owns a shared_ptr to SharedState; delegates
+// submit/poll/wait_one/cancel/outstanding to the shared state. The destructor
+// marks the shared state closed (under its mutex) and notifies waiters; it never
+// destroys the shared state (the controller may still hold a reference).
 class ScriptedAsyncBackend : public AsyncBackend {
 public:
-    ScriptedAsyncBackend();
+    explicit ScriptedAsyncBackend(std::shared_ptr<ScriptedBackendSharedState> state);
     ~ScriptedAsyncBackend() override;
 
-    // Access the shared control state (test thread). The returned shared_ptr
-    // remains valid after the backend is destroyed.
-    std::shared_ptr<BackendControlState> control_state() const;
+    ScriptedAsyncBackend(const ScriptedAsyncBackend&) = delete;
+    ScriptedAsyncBackend& operator=(const ScriptedAsyncBackend&) = delete;
+
+    // The shared control state (test thread). The returned shared_ptr remains
+    // valid after the backend is destroyed.
+    std::shared_ptr<ScriptedBackendSharedState> shared_state() const noexcept {
+        return state_;
+    }
 
     // --- AsyncBackend interface (called by Runtime worker/driver) ---
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override;
@@ -113,144 +237,126 @@ public:
 
     std::size_t outstanding() const noexcept override;
 
-    // --- Pending inspection (test thread) ---
-    std::size_t pending_count();
-    std::size_t pending_read_count();
-    std::size_t pending_write_count();
-    std::size_t pending_sync_count();
+private:
+    std::shared_ptr<ScriptedBackendSharedState> state_;
+
+    // Internal poll (caller holds state_->mtx).
+    static std::size_t poll_locked(ScriptedBackendSharedState& s);
+
+    // Shared submit bookkeeping (caller holds mtx). Validates submit-failure
+    // injection; returns the assigned op id and sets `injected` on failure.
+    template <class PendingT>
+    static void assign_outstanding_stats(ScriptedBackendSharedState& s);
+};
+
+// --- ScriptedBackendController ----------------------------------------------
+// The test-thread control surface. Holds a shared_ptr to the same SharedState
+// as the backend; all control operations go through the shared state's mutex.
+// After the backend is closed (destroyed), inspection/statistics methods still
+// return their last-observed values safely (the data lives in the shared state),
+// while completion-control methods throw ScriptedBackendClosed so the test does
+// not silently drive a dead backend.
+//
+// The controller is safe to construct BEFORE the backend exists and to use
+// AFTER the backend is destroyed.
+class ScriptedBackendController {
+public:
+    ScriptedBackendController() = default;
+    explicit ScriptedBackendController(std::shared_ptr<ScriptedBackendSharedState> state)
+        : state_(std::move(state)) {}
+
+    bool valid() const noexcept { return state_ != nullptr; }
+    bool closed() const;  // true once the backend has been destroyed
+
+    // --- Pending inspection ---
+    std::size_t pending_count();        // pending + staged (everything outstanding)
+    std::size_t pending_read_count();   // read ops pending + staged
+    std::size_t pending_write_count();  // write ops pending + staged
+    std::size_t pending_sync_count();   // sync ops pending + staged
     std::size_t max_outstanding_reads();
     std::size_t max_outstanding_total();
     std::vector<PendingOpView> pending_operations();
 
-    // Find a pending read/write by offset. Returns the operation ID if found.
+    // Find a pending/staged read/write by offset. Returns the operation ID.
     std::optional<std::uint64_t> find_read_by_offset(std::uint64_t offset);
     std::optional<std::uint64_t> find_write_by_offset(std::uint64_t offset);
 
     // --- Completion control (test thread) ---
+    //
+    // These throw ScriptedBackendError for op-not-found / wrong-kind / double
+    // completion / out-of-range bytes, and ScriptedBackendClosed if the backend
+    // is already destroyed.
 
-    // Complete a read/write operation with a byte count. n may be less than
-    // the requested length (short completion). n must be <= requested length.
+    // Complete a read/write operation with a byte count. n may be less than the
+    // requested length (short completion). n must be <= requested length.
     void complete_bytes(std::uint64_t op_id, std::size_t n);
 
-    // Complete a read operation with EOF (0 bytes).
+    // Complete a read operation with EOF (0 bytes). Only valid for reads.
     void complete_eof(std::uint64_t op_id);
 
     // Complete a read/write operation with an error.
     void complete_error(std::uint64_t op_id, IoError error);
 
-    // Complete a sync operation with success.
+    // Complete a sync operation with success. Only valid for sync ops.
     void complete_sync_success(std::uint64_t op_id);
 
-    // Complete a sync operation with an error.
+    // Complete a sync operation with an error. Only valid for sync ops.
     void complete_sync_error(std::uint64_t op_id, IoError error);
 
     // Complete a read operation: copy `len` bytes of `data` into the read
-    // buffer, then complete with `len` bytes. Validates that the target is a
-    // read op and that len <= requested length.
+    // buffer, then complete with `len` bytes. Validates read kind + length.
     void complete_read_with_data(std::uint64_t op_id, const std::byte* data,
                                  std::size_t len);
 
     // Capture the bytes currently in a pending write operation's buffer.
-    // Returns a copy of the buffer contents. The operation must be pending.
+    // Returns a copy. The operation must be outstanding.
     std::vector<std::byte> captured_write_bytes(std::uint64_t op_id);
 
     // --- Submit failure injection (test thread) ---
-
-    // Make the next submit of the given kind fail with the given error.
-    // Only affects one submit; resets after the failure is consumed.
     void fail_next_submit(OpKind kind, IoError error);
-
-    // Make the Nth submit (overall, across all kinds) fail with the given
-    // error. Only affects one submit; resets after the failure is consumed.
     void fail_submit_number(std::uint64_t n, IoError error);
 
     // --- Waiting (test thread) ---
+    //
+    // wait_until_pending: block until >= min_count ops are outstanding OR the
+    // backend is closed. Closed is surfaced as WaitStatus::closed (NOT ready),
+    // so a test never mistakes "backend gone" for "ops arrived".
 
-    // Block until at least `min_count` operations are pending.
-    void wait_until_pending(std::size_t min_count);
-
-    // Block until at least `min_count` operations are pending, or `timeout`
-    // elapses. Returns true if the condition was met, false on timeout.
-    bool wait_until_pending_for(std::size_t min_count,
-                                std::chrono::milliseconds timeout);
+    // Unbounded wait (no timeout). Returns ready or closed.
+    WaitStatus wait_until_pending(std::size_t min_count);
+    // Bounded wait. Returns ready/timeout/closed.
+    WaitStatus wait_until_pending_for(std::size_t min_count,
+                                      std::chrono::milliseconds timeout);
 
     // --- Drain verification (test thread) ---
+    //
+    // Assert that nothing is outstanding (pending + staged + unconsumed-staged
+    // results all empty). Throws ScriptedBackendError with diagnostics if not.
+    void expect_no_outstanding();
 
-    // Assert that no operations are pending. Records a test failure (via the
-    // test harness) if any are pending. Does NOT throw or terminate.
-    void expect_no_pending();
+    // Convenience: best-effort complete-everything-pending (used by RAII
+    // cleanup). Safe to call after close (no-op). Reads/syncs completed with
+    // their requested length/EOF; writes with their length.
+    void complete_all_for_cleanup();
 
 private:
-    // --- Internal pending operation representation ---
-    struct PendingSizeOp {
-        std::uint64_t id;
-        OpKind kind;  // read or write
-        int fd;
-        std::uint64_t offset;
-        std::size_t length;
-        std::byte* buffer;
-        Completion<std::size_t>* completion;
-    };
+    std::shared_ptr<ScriptedBackendSharedState> state_;
 
-    struct PendingVoidOp {
-        std::uint64_t id;
-        OpKind kind;  // sync_data or sync_all
-        int fd;
-        Completion<void>* completion;
-    };
-
-    // Staged results to be applied by poll().
-    struct StagedSizeResult {
-        Completion<std::size_t>* completion;
-        Result<std::size_t> result;
-    };
-
-    struct StagedVoidResult {
-        Completion<void>* completion;
-        Result<void> result;
-    };
-
-    // Internal helpers (caller must hold mtx_).
-    std::size_t poll_locked();
-    std::uint64_t next_id_locked();
-
-    mutable std::mutex mtx_;
-    std::condition_variable cv_;
-
-    // Pending operations, keyed by operation ID.
-    std::map<std::uint64_t, PendingSizeOp> pending_size_;
-    std::map<std::uint64_t, PendingVoidOp> pending_void_;
-
-    // Staged completions (populated by complete_*, consumed by poll).
-    std::vector<StagedSizeResult> staged_size_;
-    std::vector<StagedVoidResult> staged_void_;
-
-    // Monotonic operation ID counter.
-    std::uint64_t next_id_{1};
-
-    // Outstanding statistics.
-    std::size_t max_reads_{0};
-    std::size_t max_total_{0};
-
-    // Submit failure injection state.
-    std::optional<std::uint64_t> fail_submit_num_;
-    IoError fail_submit_num_error_{IoError::Code::backend_error};
-    std::optional<OpKind> fail_next_kind_;
-    IoError fail_next_kind_error_{IoError::Code::backend_error};
-
-    // Submit counter (for fail_submit_number).
-    std::uint64_t submit_count_{0};
-
-    // Shutdown flag.
-    bool shutdown_{false};
-
-    // Shared control state (outlives the backend via shared_ptr).
-    std::shared_ptr<BackendControlState> control_;
-
-    // For expect_no_pending: stores the failure message if check fails.
-    // We can't include the test harness here, so we use a callback approach.
-    // Instead, expect_no_pending records failures via a simple mechanism.
-    mutable std::vector<std::string> pending_failures_;
+    void require_open_locked(const char* fn) const;
 };
+
+// --- Factory -----------------------------------------------------------------
+// Create a backend + controller pair sharing the same control state.
+struct ScriptedBackendPair {
+    std::unique_ptr<ScriptedAsyncBackend> backend;
+    ScriptedBackendController controller;
+};
+
+inline ScriptedBackendPair make_scripted_backend() {
+    auto state = std::make_shared<ScriptedBackendSharedState>();
+    auto backend = std::make_unique<ScriptedAsyncBackend>(state);
+    ScriptedBackendController controller(state);
+    return {std::move(backend), std::move(controller)};
+}
 
 }  // namespace sluice::async
