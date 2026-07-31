@@ -225,19 +225,25 @@ def parse_failure_detail(log_path: Path, command: str = "") -> TestFailureDetail
         return detail
 
     # No harness block: look for process-level abnormal termination.
+    # Order matters: a failed production assertion (`assert`/`__assert_fail`)
+    # normally also emits "Aborted (core dumped)" in the same log, so the more
+    # specific _PROD_ASSERT_RE must be probed BEFORE the generic _ABORT_RE —
+    # otherwise the file/line/expression would be dropped from the fingerprint
+    # and distinct assertions would collapse into one "process_abort_or_signal"
+    # group. Reuse a single search result instead of searching twice.
+    pa = _PROD_ASSERT_RE.search(txt)
     if _TERMINATE_RE.search(txt):
         detail.abnormal_signature = "terminate_called_without_active_exception"
         detail.parse_status = "process_terminate"
-    elif _ABORT_RE.search(txt):
-        detail.abnormal_signature = "process_abort_or_signal"
-        detail.parse_status = "process_abort"
-    elif _PROD_ASSERT_RE.search(txt):
-        pa = _PROD_ASSERT_RE.search(txt)
+    elif pa:
         detail.abnormal_signature = f"production_assert: {pa.group('expr')[:80]}"
         detail.source_file = pa.group("file").strip()
         detail.source_line = int(pa.group("line"))
         detail.expression = pa.group("expr").strip()
         detail.parse_status = "process_assert"
+    elif _ABORT_RE.search(txt):
+        detail.abnormal_signature = "process_abort_or_signal"
+        detail.parse_status = "process_abort"
 
     # Capture the failing binary even for abnormal terminations.
     if not bins:
@@ -302,12 +308,6 @@ class FailureGroup:
         }
 
 
-def _base_iteration(iteration: str) -> str:
-    """Strip a "-retry<k>" suffix to get the base soak iteration."""
-    m = re.match(r"^(?P<n>\d+)(?:-retry(?P<r>\d+))?$", iteration)
-    return m.group("n") if (m and m.group("r")) else iteration
-
-
 def aggregate_failures(
     failures: List[Any],
 ) -> tuple[List[FailureGroup], int]:
@@ -323,7 +323,8 @@ def aggregate_failures(
         cmd = " ".join(getattr(fr, "command", [])) if isinstance(
             getattr(fr, "command", None), list) else str(
             getattr(fr, "command", ""))
-        detail = parse_failure_detail(getattr(fr, "log_path"), cmd)
+        detail = parse_failure_detail(
+            Path(getattr(fr, "log_path", "") or ""), cmd)
         # Override exit_semantics with the real exit code if available.
         detail.exit_semantics = classify_exit_semantics(
             getattr(fr, "exit_code", None),
@@ -333,7 +334,6 @@ def aggregate_failures(
             cmd, detail)
         fp = detail.fingerprint
         is_retry = "-retry" in str(getattr(fr, "iteration", ""))
-        bi = _base_iteration(str(getattr(fr, "iteration", "")))
 
         if fp not in groups:
             groups[fp] = FailureGroup(

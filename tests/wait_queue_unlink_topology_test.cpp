@@ -136,19 +136,33 @@ SLUICE_TEST_CASE(wqtopo_c5_scheduler_integrated_topology) {
         // the case function; the still-joinable `runner` is then destroyed,
         // which std::terminate()s the process ("terminate called without an
         // active exception", exit -1, NO harness FAILED block). The soak saw
-        // exactly this once (debug-soak iter 405-retry2). The runner is now
-        // owned by a scope guard that joins it on every exit path (including
-        // check-failure returns), so a flaky check can never strand a joinable
-        // thread. The guard is the LAST object constructed before the checks, so
-        // it is the FIRST destroyed on return — runner joins before the
-        // Scheduler/WaitQueue/WaitNodes go away.
+        // exactly this once (debug-soak iter 405-retry2).
+        //
+        // The guard also closes a subtler hang: run_live(1) parks while any wait
+        // remains registered (waiting_count > 0). If a SLUICE_CHECK_MSG fails
+        // BEFORE C is resolved (e.g. an A/B topology check at the C-survives
+        // assertion), the function returns with C still Registered, so a bare
+        // join would block forever — turning an assertion failure into a hung
+        // test. The guard therefore DRAINS every outstanding wait via the public
+        // wake seam before joining: it loops wake_wait_one(q) until
+        // waiting_count()==0, which lets run_live return. Only then does it
+        // join. The drain is a best-effort cleanup (retry-bounded, like the
+        // production resolvers above); it must not itself hang.
         std::thread runner([&] { sched.run_live(1); });
         struct runner_join_guard {
             std::thread& t;
+            Scheduler& s;
+            WaitQueue& q;
             ~runner_join_guard() {
-                if (t.joinable()) t.join();
+                if (!t.joinable()) return;  // run_live already returned normally
+                // Drain any still-registered wait so run_live can return.
+                for (int i = 0; i < 100000 && s.waiting_count() != 0; ++i) {
+                    if (s.wake_wait_one(q)) continue;
+                    std::this_thread::yield();
+                }
+                t.join();
             }
-        } guard{runner};
+        } guard{runner, sched, q};
 
         // ---- TEST SYNCHRONIZATION (mechanical, not guessed) ----
         // Wait until all three WaitNodes are ACTUALLY registered in the

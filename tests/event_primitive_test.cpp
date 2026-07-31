@@ -2420,8 +2420,13 @@ SLUICE_TEST_CASE(event_parked_live_worker_awakened_by_external_set) {
     // external setter path provably succeeded, so the watchdog MUST NOT fire.
     // Firing on a cooperative stop would make a genuinely successful external
     // wake look like a timeout (the soak flaky: 28 spurious watchdog_fired).
-    // The only condition that sets watchdog_fired is now: the bound elapsed AND
-    // entries < 2 (the external setter did not complete the wake in time).
+    //
+    // watchdog_fired is set ONLY when the bound actually elapsed (timed_out)
+    // AND entries < 2 — i.e. the external setter did not complete the wake in
+    // time. A cooperative stop with entries < 2 cannot produce a spurious fire:
+    // in this test, request_stop() is issued only after run_live() returns,
+    // and run_live() returns only once the wait is resolved (entries == 2 via
+    // the external set, or the watchdog's own set() after a genuine timeout).
     std::jthread watchdog([&](std::stop_token st) {
         constexpr auto kBound = std::chrono::seconds(10);
         auto deadline = std::chrono::steady_clock::now() + kBound;
@@ -2438,13 +2443,13 @@ SLUICE_TEST_CASE(event_parked_live_worker_awakened_by_external_set) {
         // If the waiter already resumed, the external setter path succeeded;
         // this exit is a cooperative stop, NOT a timeout. Do not fire.
         if (entries.load(std::memory_order_acquire) >= 2) return;
-        // Genuine timeout (or stop with no success): the bound elapsed and the
-        // external setter did not complete the wake. Release any armed gate +
-        // drive set() so the Live run terminates and the watchdog can join.
-        // (timed_out may be false only if stop was requested before the bound
-        // elapsed yet entries < 2; in either case the success condition failed
-        // and the rescue is needed to avoid a hang.)
-        (void)timed_out;
+        // A cooperative stop with entries < 2 is not a genuine timeout — do not
+        // fire (see the contract note above: this branch is unreachable in the
+        // current test flow, but the guard keeps the semantics precise).
+        if (!timed_out) return;
+        // Genuine timeout: the bound elapsed and the external setter did not
+        // complete the wake. Release any armed gate + drive set() so the Live
+        // run terminates and the watchdog can join.
         watchdog_fired.store(true, std::memory_order_release);
         EventHooks::release_park_commit(sched);
         ev.set();
