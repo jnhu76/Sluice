@@ -208,8 +208,28 @@ do
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs(R .. "include", app_dir)
+        add_files(test_src, app_dir .. "/copy_task.cpp")
+        add_tests("sluice_copy_fault_test")
+    end
+end
+
+-- sluice-copy Version B pipeline integration tests (real files +
+-- ThreadPoolBackend). Proves byte-for-byte correctness across sizes/depths/
+-- buffers and that depth>1 yields >= 2 concurrent reads against the real
+-- backend (content checks the scripted contract test cannot).
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_pipeline_integration_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/copy_task.cpp") then
+        target("sluice_copy_pipeline_integration_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
             add_files(test_src, app_dir .. "/copy_task.cpp")
-            add_tests("sluice_copy_fault_test")
+            add_tests("sluice_copy_pipeline_integration_test")
     end
 end
 
@@ -272,13 +292,13 @@ do
         target("sluice_copy_pipeline_contract_test")
             set_kind("binary")
             set_default(false)
+            set_group("test")
             -- Version B is implemented; SLUICE_HAS_PIPELINED_COPY turns the
-            -- guarded contract bodies on. Still opt-in (not in the default test
-            -- group) until Phase 4 promotes it.
+            -- guarded contract bodies on. Now part of the default test group.
             add_defines("SLUICE_HAS_PIPELINED_COPY=1")
             add_deps("sluice_core", "sluice_async")
             add_includedirs(R .. "include", R .. "tests", app_dir)
             add_files(test_src, support_src, app_dir .. "/copy_task.cpp")
-            -- No add_tests() — not in the default test run yet.
+            add_tests("sluice_copy_pipeline_contract_test")
     end
 end
