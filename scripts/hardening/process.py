@@ -1,8 +1,8 @@
 """Subprocess execution with group-level timeout, TERM -> KILL escalation,
-and sanitizer log scanning.
+sanitizer log scanning, and optional long-command heartbeat.
 
 This is the only module that spawns OS processes.  All external commands
-go through `run_command()`.
+go through ``run_command()``.
 
 Timeout architecture
 --------------------
@@ -18,18 +18,30 @@ file-directed output, ``wait(timeout=...)`` is the sole authority on
 timing, and the authoritative ``timed_out`` / ``term_sent`` / ``kill_sent``
 fields describe actions the runner actually took (never inferred from an
 exit code such as 124 or 137).
+
+Heartbeat
+---------
+When ``heartbeat_seconds > 0``, the initial wait is sliced into intervals
+of at most ``heartbeat_seconds``.  After each slice the runner emits a
+heartbeat line to stderr, the run log, and (optionally) a JSONL file.  The
+heartbeat includes the command's elapsed time, remaining timeout, log size
+delta, and — for fuzz commands — a best-effort libFuzzer status line.  The
+heartbeat is a progress signal; it never reclassifies the command, never
+changes the timeout, and never delays the TERM → KILL escalation.
 """
 
 from __future__ import annotations
 
 import datetime
+import json
 import os
 import re
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .model import (
     Classification,
@@ -42,6 +54,24 @@ from .model import (
 # ═══════════════════════════════════════════════════════════════════════════════
 
 KILL_AFTER_SECONDS = 10.0
+
+# Heartbeat: maximum bytes to read from the command log tail for libFuzzer
+# status extraction.  Must be bounded; never blocks.
+_TAIL_READ_BYTES = 64 * 1024
+
+# Best-effort libFuzzer status-line parser.  Matches the standard
+# ``#<N>\t<tag>  cov:... ft:... corp:... exec/s:... rss:...`` line.
+# The tag is INITED, NEW, REDUCE, pulse, or DONE.  Captures the run count,
+# tag, exec/s, and RSS.  Other fields are parsed only when present.
+_LIBFUZZER_STATUS_RE = re.compile(
+    r"#(?P<count>\d+)\s+"
+    r"(?P<tag>INITED|NEW|REDUCE|pulse|DONE)\s+"
+    r".*?"
+    r"exec/s:\s*(?P<exec_s>\d+)\s+"
+    r".*?"
+    r"rss:\s*(?P<rss>\d+)Mb",
+    re.DOTALL,
+)
 
 # Sanitizer signature patterns (must not match runner log header).
 _TSAN_PATTERNS = [
@@ -58,6 +88,193 @@ _UBSAN_PATTERNS = [
     re.compile(r"runtime error:"),
     re.compile(r"SUMMARY: UndefinedBehaviorSanitizer"),
 ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Heartbeat emitter
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _tail_read_log(log_path: Path, max_bytes: int = _TAIL_READ_BYTES) -> str:
+    """Read at most *max_bytes* from the tail of *log_path*.
+
+    Bounded, never blocks, tolerates missing/truncated/partial-UTF-8.
+    """
+    try:
+        size = log_path.stat().st_size
+    except OSError:
+        return ""
+    if size == 0:
+        return ""
+    read_size = min(max_bytes, size)
+    try:
+        with open(log_path, "rb") as f:
+            if size > read_size:
+                f.seek(size - read_size)
+            return f.read(read_size).decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _parse_libfuzzer_status(
+    log_path: Path,
+) -> Optional[Dict[str, Any]]:
+    """Best-effort parse the latest libFuzzer status line from *log_path*.
+
+    Returns a dict with keys count, tag, exec_s, rss, and optionally cov, ft,
+    corpus_count, corpus_size, lim, or None if parsing fails.
+    """
+    tail = _tail_read_log(log_path)
+    if not tail:
+        return None
+    m = _LIBFUZZER_STATUS_RE.search(tail)
+    if not m:
+        return None
+    d: Dict[str, Any] = {
+        "count": int(m.group("count")),
+        "tag": m.group("tag"),
+        "exec_s": int(m.group("exec_s")),
+        "rss": int(m.group("rss")),
+    }
+    # Optional fields: cov, ft, corpus, lim
+    for opt_field, opt_re in [
+        ("cov", r"cov:\s*(\d+)"),
+        ("ft", r"ft:\s*(\d+)"),
+        ("lim", r"lim:\s*(\d+)"),
+    ]:
+        om = re.search(opt_re, tail)
+        if om:
+            d[opt_field] = int(om.group(1))
+    # corpus: "count/size" — e.g. "corp: 171/19Kb"
+    cm = re.search(r"corp:\s*(\d+)/(\d+)([Kk]?[Bb]?)", tail)
+    if cm:
+        d["corpus_count"] = int(cm.group(1))
+        d["corpus_size"] = int(cm.group(2))
+        if cm.group(3).lower().startswith("k"):
+            d["corpus_size"] *= 1024
+    return d
+
+
+class HeartbeatEmitter:
+    """Emit periodic heartbeat lines for a single long-running command.
+
+    One instance per command.  Tracks log size for delta reporting.
+    """
+
+    def __init__(
+        self,
+        phase: str,
+        iteration: str,
+        target: str,
+        pid: int,
+        start_mono: float,
+        timeout_seconds: float,
+        log_path: Path,
+        run_log_path: Optional[Path] = None,
+        heartbeats_jsonl_path: Optional[Path] = None,
+        global_remaining_fn: Optional[callable] = None,  # type: ignore
+        is_fuzz: bool = False,
+    ):
+        self._phase = phase
+        self._iteration = iteration
+        self._target = target
+        self._pid = pid
+        self._start_mono = start_mono
+        self._timeout_seconds = timeout_seconds
+        self._log_path = log_path
+        self._run_log_path = run_log_path
+        self._heartbeats_jsonl_path = heartbeats_jsonl_path
+        self._global_remaining_fn = global_remaining_fn
+        self._is_fuzz = is_fuzz
+        self._last_log_size = 0
+
+    def emit(self) -> None:
+        """Write one heartbeat line to stderr, run.log, and heartbeats.jsonl."""
+        now = time.monotonic()
+        elapsed = now - self._start_mono
+        remaining = max(0.0, self._timeout_seconds - elapsed)
+        alive = True  # we only emit while the child is alive
+
+        # Log size delta.
+        try:
+            cur_size = self._log_path.stat().st_size
+        except OSError:
+            cur_size = 0
+        delta = max(0, cur_size - self._last_log_size)
+        self._last_log_size = cur_size
+
+        # Fuzzer status.
+        fuzzer_status: Optional[Dict[str, Any]] = None
+        if self._is_fuzz:
+            fuzzer_status = _parse_libfuzzer_status(self._log_path)
+
+        # Build fields.
+        fields: List[str] = [
+            f"phase={self._phase}",
+            f"target={self._target}",
+            f"iteration={self._iteration}",
+            f"elapsed={elapsed:.0f}s",
+            f"timeout={self._timeout_seconds:.0f}s",
+            f"remaining={remaining:.0f}s",
+            f"pid={self._pid}",
+            "alive=yes",
+            f"log_size={cur_size}",
+            f"log_delta={delta}",
+        ]
+        if self._global_remaining_fn is not None:
+            gr = self._global_remaining_fn()
+            if gr is not None:
+                fields.append(f"global_remaining={gr:.0f}s")
+        if fuzzer_status is not None:
+            fs = fuzzer_status
+            fields.append(
+                f"fuzzer_status=#{fs['count']} {fs['tag']} "
+                f"exec/s={fs['exec_s']} rss={fs['rss']}Mb"
+            )
+            if "corpus_count" in fs:
+                fields.append(f"corpus={fs['corpus_count']}/{fs['corpus_size']}")
+        else:
+            fields.append("fuzzer_status=unavailable")
+
+        line = "[heartbeat] " + " ".join(fields)
+
+        # stderr (console).
+        print(line, file=sys.stderr)
+
+        # run.log.
+        if self._run_log_path is not None:
+            try:
+                with open(self._run_log_path, "a") as f:
+                    f.write(line + "\n")
+            except OSError:
+                pass
+
+        # heartbeats.jsonl (append-only, one JSON object per line).
+        if self._heartbeats_jsonl_path is not None:
+            try:
+                rec: Dict[str, Any] = {
+                    "phase": self._phase,
+                    "iteration": self._iteration,
+                    "target": self._target,
+                    "pid": self._pid,
+                    "elapsed": round(elapsed, 1),
+                    "timeout": self._timeout_seconds,
+                    "remaining": round(remaining, 1),
+                    "alive": alive,
+                    "log_size": cur_size,
+                    "log_delta": delta,
+                }
+                if self._global_remaining_fn is not None:
+                    gr = self._global_remaining_fn()
+                    if gr is not None:
+                        rec["global_remaining"] = round(gr, 1)
+                if fuzzer_status is not None:
+                    rec["fuzzer_status"] = fuzzer_status
+                else:
+                    rec["fuzzer_status"] = "unavailable"
+                with open(self._heartbeats_jsonl_path, "a") as f:
+                    f.write(json.dumps(rec, sort_keys=True) + "\n")
+            except OSError:
+                pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -203,8 +420,24 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
 
         # From here the child MUST always be reaped, on every path.
         try:
+            # Heartbeat: build an emitter for long-running commands.
+            heartbeater: Optional[HeartbeatEmitter] = None
+            if spec.heartbeat_seconds > 0:
+                is_fuzz = spec.phase == "fuzz" and spec.target not in (
+                    "configure", "build-fuzz-group")
+                heartbeater = HeartbeatEmitter(
+                    phase=spec.phase,
+                    iteration=spec.iteration,
+                    target=spec.target,
+                    pid=proc.pid,
+                    start_mono=start_mono,
+                    timeout_seconds=spec.timeout_seconds,
+                    log_path=spec.log_path,
+                    is_fuzz=is_fuzz,
+                    heartbeats_jsonl_path=spec.heartbeats_path,
+                )
             exit_code, timed_out, term_sent, kill_sent = _run_with_timeout(
-                proc, spec.timeout_seconds
+                proc, spec.timeout_seconds, heartbeater
             )
         except BaseException:
             # KeyboardInterrupt or any runner-internal error: tear down the
@@ -274,18 +507,41 @@ def run_command(spec: CommandSpec, head_sha: str, dirty: bool) -> CommandResult:
 
 
 def _run_with_timeout(
-    proc: "subprocess.Popen", timeout_seconds: float
+    proc: "subprocess.Popen",
+    timeout_seconds: float,
+    heartbeater: "Optional[HeartbeatEmitter]" = None,
 ) -> tuple[Optional[int], bool, bool, bool]:
     """Wait for *proc*, enforcing TERM -> KILL escalation on timeout.
 
     Returns ``(exit_code, timed_out, term_sent, kill_sent)``.  The boolean
     fields record the actions this runner actually took.
+
+    When *heartbeater* is provided, the initial wait deadline is sliced into
+    intervals of at most 1 second.  After each slice the emitter is called
+    to signal progress.  The heartbeat processing never delays the TERM ->
+    KILL escalation: once the deadline is reached the original fast path is
+    used.
     """
-    try:
-        exit_code = proc.wait(timeout=timeout_seconds)
-        return exit_code, False, False, False
-    except subprocess.TimeoutExpired:
-        pass
+    if heartbeater is not None:
+        # Heartbeat-enabled wait: slice the deadline into short intervals.
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            slice_t = min(1.0, remaining)
+            try:
+                exit_code = proc.wait(timeout=slice_t)
+                return exit_code, False, False, False
+            except subprocess.TimeoutExpired:
+                heartbeater.emit()
+        # Fall through to TERM escalation (same as original).
+    else:
+        try:
+            exit_code = proc.wait(timeout=timeout_seconds)
+            return exit_code, False, False, False
+        except subprocess.TimeoutExpired:
+            pass
 
     # Per-command timeout exceeded: TERM the whole group.
     _kill_process_group(proc.pid, signal.SIGTERM)

@@ -7,6 +7,7 @@ as needed.
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 import shlex
@@ -75,6 +76,21 @@ FUZZ_MAXLEN: Dict[str, int] = {
     "wal_read_record_fuzz": 1048576,
     "wal_roundtrip_fuzz": 262144,
     "copy_all_fault_fuzz": 8192,
+}
+
+# Per-target libFuzzer dictionary.  None means no dictionary.
+# wal_read_record_fuzz:  MATCH — input is a WAL frame (magic u32 + length u32
+#   + payload + checksum u32, LE); the WAL dict tokens build those fields.
+# wal_roundtrip_fuzz:    PARTIAL_MATCH — input is bare payload; dict tokens
+#   are generic bytes (useful for boundary payloads), but WAL semantics are
+#   inert here since the harness produces the frame, not the input.
+# copy_all_fault_fuzz:   MISMATCH — input is a CopyConfig header + opaque
+#   payload (fuzz/support/copy_model.hpp); no WAL field exists, so the WAL
+#   dict is wasteful and semantically misleading.
+FUZZ_DICTS: Dict[str, Optional[str]] = {
+    "wal_read_record_fuzz": "wal_record.dict",
+    "wal_roundtrip_fuzz": "wal_record.dict",
+    "copy_all_fault_fuzz": None,
 }
 
 ACCEPTANCE_CONSUMERS: List[str] = [
@@ -353,6 +369,8 @@ def _cmd(
         environment=child_env,
         sanitizer_kind=sanitizer_kind,
         synthetic=synthetic,
+        heartbeat_seconds=ctx.config.heartbeat_seconds,
+        heartbeats_path=ctx.run_dir / "heartbeats.jsonl",
     )
 
     result = run_command(spec, ctx.head_sha, ctx.worktree_dirty)
@@ -845,11 +863,12 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
 
     hardening_root = ctx.project_root / ".hardening-corpus"
     hardening_root.mkdir(parents=True, exist_ok=True)
-    dict_path = ctx.project_root / "fuzz" / "dictionaries" / "wal_record.dict"
     fuzz_subdir = ctx.run_dir / "fuzz"
     fuzz_subdir.mkdir(parents=True, exist_ok=True)
 
+    target_index = 0
     for tgt in existing:
+        target_index += 1
         if ctx.remaining_seconds() < per_target:
             _log(ctx, f"[fuzz] not enough time for {tgt}; stopping")
             break
@@ -884,8 +903,12 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
             f"-max_len={maxlen}",
             "-timeout=120",
         ]
-        if dict_path.is_file():
-            fuzz_args.append(f"-dict={dict_path}")
+        # Per-target dictionary (see FUZZ_DICTS above).
+        dict_name = FUZZ_DICTS.get(tgt)
+        if dict_name is not None:
+            dict_path = ctx.project_root / "fuzz" / "dictionaries" / dict_name
+            if dict_path.is_file():
+                fuzz_args.append(f"-dict={dict_path}")
 
         fuzz_env = {
             "ASAN_OPTIONS": "halt_on_error=1:detect_leaks=1",
@@ -894,7 +917,14 @@ def phase_fuzz(ctx: PhaseContext, budget_seconds: float) -> PhaseOutcome:
 
         # Wrapper timeout = per-target + 180s grace.
         wrapper_timeout = per_target + 180
-        _log(ctx, f"[fuzz] {tgt}: {per_target}s (wrapper timeout {wrapper_timeout}s)")
+
+        # Improved banner: target k/n, ETA, corpus/artifact paths.
+        eta_ts = datetime.datetime.now(datetime.timezone.utc) + \
+                 datetime.timedelta(seconds=wrapper_timeout)
+        _log(ctx, f"[fuzz] target {target_index}/{n}: {tgt} "
+             f"({per_target}s, wrapper timeout {wrapper_timeout}s, "
+             f"ETA {eta_ts.strftime('%H:%M:%S')}Z)")
+        _log(ctx, f"[fuzz]   corpus={work_corpus} artifact={artifact_dir}")
 
         r = _cmd(ctx, "fuzz", "0", tgt, "debug", fuzz_args,
                  timeout_s=float(wrapper_timeout),

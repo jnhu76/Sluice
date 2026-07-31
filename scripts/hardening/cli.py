@@ -33,6 +33,7 @@ Environment overrides (CLI wins):
   SLUICE_HARDENING_PHASE_TIMEOUT     per-command timeout seconds (default 1200)
   SLUICE_HARDENING_FUZZ_SECONDS      override total fuzz budget seconds
   SLUICE_HARDENING_KEEP_GOING        0 = stop after current command (default 1)
+  SLUICE_HARDENING_HEARTBEAT_SECONDS  long-command heartbeat interval (default 60, 0 disables)
 
 Verdicts:
   PASS       exit 0   All gates passed.
@@ -59,6 +60,13 @@ Verdicts:
         action="store_true",
         dest="self_test",
         help="Controlled synthetic failures; proves runner wiring.",
+    )
+    parser.add_argument(
+        "--heartbeat-seconds",
+        type=int,
+        default=None,
+        help="Heartbeat interval for long-running commands in seconds "
+             "(default 60, 0 disables; env SLUICE_HARDENING_HEARTBEAT_SECONDS).",
     )
 
     args = parser.parse_args(argv)
@@ -101,6 +109,20 @@ Verdicts:
         )
         fuzz_source = "env"
 
+    # Heartbeat seconds: CLI > env > default 60. 0 disables heartbeats.
+    heartbeat: int = 60
+    heartbeat_source = "default"
+    if args.heartbeat_seconds is not None:
+        # argparse already coerced to int; validate range (non-negative finite).
+        heartbeat = _validate_non_negative_int(
+            str(args.heartbeat_seconds), "--heartbeat-seconds")
+        heartbeat_source = "cli"
+    elif "SLUICE_HARDENING_HEARTBEAT_SECONDS" in os.environ:
+        heartbeat = _validate_non_negative_int(
+            os.environ["SLUICE_HARDENING_HEARTBEAT_SECONDS"],
+            "SLUICE_HARDENING_HEARTBEAT_SECONDS")
+        heartbeat_source = "env"
+
     # Keep going: env > default.
     keep_going = True
     keep_going_source = "default"
@@ -131,10 +153,12 @@ Verdicts:
         phase_timeout_seconds=phase_timeout,
         fuzz_seconds_override=fuzz_override,
         keep_going=keep_going,
+        heartbeat_seconds=heartbeat,
         hours_source=hours_source,
         timeout_source=timeout_source,
         fuzz_source=fuzz_source,
         keep_going_source=keep_going_source,
+        heartbeat_source=heartbeat_source,
     )
 
 
