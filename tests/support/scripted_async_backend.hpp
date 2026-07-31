@@ -85,6 +85,12 @@ inline const char* to_string(OpKind k) {
     return "unknown";
 }
 
+// Per-op lifecycle stage used for accurate outstanding accounting.
+enum class OpStage : std::uint8_t {
+    pending,   // submitted, awaiting test-thread completion control
+    staged,    // test thread staged a result; awaiting poll()/wait_one()
+};
+
 // --- PendingOpView (read-only snapshot for test inspection) ------------------
 struct PendingOpView {
     std::uint64_t id;
@@ -94,12 +100,7 @@ struct PendingOpView {
     std::size_t length;
     void* buffer;               // non-owning; valid only while pending
     void* completion_identity;  // address of the Completion object
-};
-
-// Per-op lifecycle stage used for accurate outstanding accounting.
-enum class OpStage : std::uint8_t {
-    pending,   // submitted, awaiting test-thread completion control
-    staged,    // test thread staged a result; awaiting poll()/wait_one()
+    OpStage stage;              // pending (awaiting control) or staged (awaiting poll)
 };
 
 // Result of a bounded wait for pending operations.

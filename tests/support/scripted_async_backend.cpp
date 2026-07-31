@@ -376,10 +376,10 @@ std::vector<PendingOpView> ScriptedBackendController::pending_operations() {
     out.reserve(state_->size_ops.size() + state_->void_ops.size());
     for (auto& [id, op] : state_->size_ops)
         out.push_back(PendingOpView{op.id, op.kind, op.fd, op.offset, op.length,
-                                    op.buffer, op.completion});
+                                    op.buffer, op.completion, op.stage});
     for (auto& [id, op] : state_->void_ops)
         out.push_back(PendingOpView{op.id, op.kind, op.fd, 0, 0, nullptr,
-                                    op.completion});
+                                    op.completion, op.stage});
     return out;
 }
 

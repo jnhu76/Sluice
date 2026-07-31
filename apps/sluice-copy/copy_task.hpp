@@ -66,4 +66,50 @@ sluice::Result<CopyStats> run_sequential_copy_with_backend(
     int src_fd, int dst_fd, std::size_t buffer_size, unsigned workers,
     SyncPolicy sync, std::unique_ptr<sluice::async::AsyncBackend> backend);
 
+// ---------------------------------------------------------------------------
+// Version B — bounded reusable-buffer pipeline (multiple outstanding reads,
+// single ordered writer). Documented behavior:
+//
+//   * `pipeline_depth` fixed logical chunks (slots) are read ahead in parallel,
+//     so up to `pipeline_depth` reads may be outstanding at once. The first
+//     version allows at most ONE write outstanding (writes are submitted in
+//     strict ascending file-offset order; reads may complete out of order).
+//   * Each slot covers a fixed interval [chunk_offset, chunk_offset +
+//     buffer_size). A short read (0 < n < remaining) is retried within the same
+//     slot until the buffer is filled or EOF is reached — the global offset is
+//     never advanced past an unread region.
+//   * A partial write advances `written` within the slot and retries; a write
+//     that returns 0 with data remaining is a deterministic backend error.
+//   * On EOF, submission of new reads stops, the last partial slot is written,
+//     and every already-submitted read is drained (awaited + consumed + reset)
+//     before the task returns.
+//   * On any submit/completion error, the first meaningful error is saved, new
+//     submission stops, and already-successfully-submitted operations are
+//     drained; secondary errors during cleanup never overwrite the primary
+//     error.
+//   * Memory upper bound is approximately `buffer_size * pipeline_depth`
+//     (one buffer per slot) plus the read/write Completions. This is NOT
+//     zero-copy and does NOT issue multiple parallel writes.
+//
+// The outermost call still blocks until the copy completes (the Runtime task
+// publishes its terminal outcome); no CopyHandle / future / new public async
+// surface is introduced. `pipeline_depth == 1` reproduces Version A's
+// one-read-at-a-time behavior.
+//
+// `pipeline_depth` must be >= 1. `buffer_size` must be > 0. The product
+// `buffer_size * pipeline_depth` must not overflow `std::size_t`.
+sluice::Result<CopyStats> run_pipelined_copy(int src_fd, int dst_fd,
+                                             std::size_t buffer_size,
+                                             std::size_t pipeline_depth,
+                                             unsigned workers,
+                                             SyncPolicy sync);
+
+// Backend-injecting variant for deterministic fault/contract tests. Same
+// algorithm and lifecycle as run_pipelined_copy, but the caller supplies the
+// AsyncBackend (the abstract type keeps the app target production-clean).
+sluice::Result<CopyStats> run_pipelined_copy_with_backend(
+    int src_fd, int dst_fd, std::size_t buffer_size,
+    std::size_t pipeline_depth, unsigned workers, SyncPolicy sync,
+    std::unique_ptr<sluice::async::AsyncBackend> backend);
+
 }  // namespace sluice_copy

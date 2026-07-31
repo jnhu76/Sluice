@@ -272,11 +272,13 @@ do
         target("sluice_copy_pipeline_contract_test")
             set_kind("binary")
             set_default(false)
-            -- Intentionally NOT in the "test" group — this is expected to fail
-            -- until Version B is implemented. Run manually.
+            -- Version B is implemented; SLUICE_HAS_PIPELINED_COPY turns the
+            -- guarded contract bodies on. Still opt-in (not in the default test
+            -- group) until Phase 4 promotes it.
+            add_defines("SLUICE_HAS_PIPELINED_COPY=1")
             add_deps("sluice_core", "sluice_async")
             add_includedirs(R .. "include", R .. "tests", app_dir)
             add_files(test_src, support_src, app_dir .. "/copy_task.cpp")
-            -- No add_tests() — not in the default test run.
+            -- No add_tests() — not in the default test run yet.
     end
 end
