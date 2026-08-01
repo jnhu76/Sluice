@@ -29,10 +29,37 @@ together in a reference backend, then migrated to production backends.
 
 ---
 
-## Phase 0 — Fact and Classification Correction (This PR)
+## Phase 0A — Audit and Governance Baseline (#60)
+
+**Goal:** Establish the governance framework: as-built documentation,
+constitution, compliance gate, findings, divergence registry, conformance
+map, and this roadmap. No behavioral change. No new abstraction.
+
+**Status:** Complete in PR #60.
+
+### Deliverables (all in #60)
+
+- As-built async architecture documented.
+- Architecture constitution with AC-N rules.
+- Design compliance gate checklist.
+- Current architecture findings (P0/P1/P2/P3).
+- Divergence registry (DIV-01..DIV-13).
+- Zig I/O conformance map (18 items).
+- This remediation roadmap.
+- CI formal verification wiring.
+
+### Exit criteria
+
+- [x] All governance documents landed.
+- [x] verify-architecture-docs.py passes.
+- [x] check-doc-links.py passes.
+
+---
+
+## Phase 0B — Contract Alignment Corrective (Follow-up PRs)
 
 **Goal:** Eliminate documentation/implementation authority conflicts and
-classification errors. No behavioral change. No new abstraction.
+classification errors identified during audit. Small focused PRs.
 
 **Findings addressed:** P1-01, P1-02, P1-03, P1-05, P3-01, P3-02, P3-03.
 
@@ -66,7 +93,7 @@ classification errors. No behavioral change. No new abstraction.
 
 ### Dependencies
 
-None. This phase is pure documentation and comment correction.
+- Phase 0A complete (governance framework exists).
 
 ### Exit criteria
 
@@ -120,20 +147,31 @@ P1-04, P1-06, P1-07, P1-10, P2-03, P2-05, DIV-02, DIV-12, DIV-13.
    RequestSlot → Completion is 1:1 while outstanding.
    Completion → RequestSlot back-reference enables provenance check at await.
 
-5. **Admission transaction (4-phase).**
+5. **Admission transaction (5-phase).**
    ```text
    reserve   → allocate slot, queue position, SQE (not visible to executor)
    prepare   → fill operation, Completion binding, generation
    commit    → atomic bind Completion ↔ RequestKey; state reserved → pending
-   publish   → make visible to worker/kernel (MUST be noexcept/alloc-free)
+                 submit_* returns success from this point
+   enqueue   → make visible to backend driver (MUST be noexcept/alloc-free)
+                 intrusive queue push or pending_sqes append
+   dispatch  → worker dequeue OR io_uring_submit()
+                 MAY fail, MAY partially succeed (prefix acceptance)
+                 failure → terminal error completion for affected requests
    ```
    Linearization point is commit. Failure before commit → rollback to free.
-   Failure after publish is impossible by construction (publish is noexcept).
+   After commit, the request is accepted and MUST NOT be lost; dispatch
+   failure is reported as a terminal error completion, not a lost request.
+   `io_uring_submit()` is fallible; the noexcept guarantee applies only to
+   the enqueue step (userspace visibility), not kernel acceptance.
 
 6. **Request state machine.**
    ```text
-   free → reserved → pending → executing/kernel-owned → backend-ready → reaped → free
+   free → reserved → pending → enqueued → dispatched/kernel-owned → backend-ready → reaped → free
    ```
+   For blocking workers, enqueued → dispatched is worker dequeue.
+   For io_uring, enqueued → dispatched is io_uring_submit() acceptance.
+   Dispatch failure transitions directly to terminal-error (reapable).
 
 7. **Backend-ready result and identity-bearing reap.**
    Backend provides ready request identities upward (not just count).
@@ -148,16 +186,41 @@ P1-04, P1-06, P1-07, P1-10, P2-03, P2-05, DIV-02, DIV-12, DIV-13.
    Cancel targets RequestKey (slot + generation), not raw address.
    Returns disposition (requested / already_terminal / not_found / not_supported).
 
-10. **Resource capacity.**
+10. **Caller acquisition of RequestKey.**
+    Decide how callers obtain the identity needed for cancel:
+    - A: `submit_*` returns `Result<RequestHandle>` (handle holds RequestKey).
+    - B: Completion exposes opaque `request_key()` while outstanding.
+    - C: Public cancel accepts `Completion&`; context internally resolves
+      and validates generation (no user-visible RequestKey).
+    Leaning: C for API compatibility, with internal RequestKey extraction
+    from Completion's unforgeable binding. Users never manually construct
+    slot + generation + context id.
+
+11. **fd/buffer borrow lifetime.**
+    Borrow interval is part of the unified request contract:
+    ```text
+    borrow begins: commit (successful submit linearization)
+    borrow ends:   Completion reaches terminal ready state through reap
+    ```
+    Guarantees within the borrow interval:
+    - WriteOp source: byte-stable (no mutation).
+    - ReadOp destination: exclusive (no other writer).
+    - fd: not closed or reused.
+    - Cancel intent does NOT release resources.
+    - Wait cancellation does NOT cancel the operation or release buffer.
+    - Kernel dispatch failure releases borrow ONLY after terminal error
+      is published and reaped.
+
+12. **Resource capacity.**
     Bounded slot arena. Full → synchronous would_block.
     Per-backend or per-context capacity (decide).
 
-11. **Shutdown / drain.**
+13. **Shutdown / drain.**
     Destruction requires quiescent state (outstanding == 0).
     Terminating accepted requests is an EXPLICIT drain/shutdown operation,
     NOT implicit in destruction. Preserve current L11 fail-fast contract.
 
-12. **AsyncBackend public-vs-internal (DIV-13).**
+14. **AsyncBackend public-vs-internal (DIV-13).**
     Decide: truly internal (selector/config API) or formally public
     (backend author contract + conformance suite). This decision gates
     the authority mechanism.
@@ -171,7 +234,7 @@ P1-04, P1-06, P1-07, P1-10, P2-03, P2-05, DIV-02, DIV-12, DIV-13.
 
 ### Dependencies
 
-- Phase 0 complete (authority model is unambiguous).
+- Phase 0B complete (authority model is unambiguous).
 
 ### Risks
 
@@ -186,8 +249,8 @@ P1-04, P1-06, P1-07, P1-10, P2-03, P2-05, DIV-02, DIV-12, DIV-13.
 
 ### Exit criteria
 
-- [ ] ADR or design doc accepted covering all 12 points above.
-- [ ] RequestSlot state machine defined with 4-phase admission.
+- [ ] ADR or design doc accepted covering all 14 points above.
+- [ ] RequestSlot state machine defined with 5-phase admission.
 - [ ] Capacity model decided.
 - [ ] DIV-02 resolved (operation storage permanent or transitional).
 - [ ] DIV-13 resolved (backend public or internal).
@@ -222,10 +285,12 @@ P1-04 (contract proof), P1-07 (reap proof).
 
 3. **Implement identity-bearing reap.**
    FakeBackend and SyncBackend provide ready identities (not just count).
-   Remove Scheduler O(N) scan for these backends.
+   Validate ordering, identity, and exactly-once via independent test sink.
+   Do NOT modify Scheduler in this phase.
 
 4. **Implement transactional admission.**
-   4-phase (reserve → prepare → commit → publish). Rollback on failure.
+   5-phase (reserve → prepare → commit → enqueue → dispatch). Rollback on
+   failure before commit. Dispatch failure → terminal error completion.
    Capacity exhaustion → synchronous would_block.
 
 5. **Implement allocation-free terminal publication.**
@@ -279,7 +344,7 @@ design), tests target that explicit API, not implicit destructor behavior.
 - [ ] FakeBackend passes full conformance suite.
 - [ ] SyncBackend passes full conformance suite (or moved to test-only).
 - [ ] No allocation on accepted-op terminal path.
-- [ ] Transactional submit proven (4-phase rollback works).
+- [ ] Transactional submit proven (5-phase rollback works).
 - [ ] Identity-bearing reap proven.
 - [ ] Negative-compile gate in CI.
 - [ ] Conformance suite is backend-agnostic (parameterized).
@@ -291,11 +356,11 @@ design), tests target that explicit API, not implicit destructor behavior.
 
 ---
 
-## Phase 3 — Backend Migration
+## Phase 3 — Backend Migration + Scheduler Integration
 
 **Goal:** Bring UringAsyncBackend and ThreadPoolBackend into conformance with
-the Phase 1 contract, validated by the Phase 2 conformance suite. Integrate
-identity-bearing reap into the Scheduler.
+the Phase 1 contract, validated by the Phase 2 conformance suite. Then
+perform the UNIFIED Scheduler integration for all backends at once.
 
 ### Work items
 
@@ -303,16 +368,20 @@ identity-bearing reap into the Scheduler.
    Replace current multi-container identity with unified RequestSlot.
    SQE user_data = RequestSlot index + generation. CQE → same RequestSlot.
    Fix non-atomic mark-then-allocate (P0-02 uring instance).
+   Implement fallible dispatch: io_uring_submit() partial prefix acceptance
+   → terminal error for unaccepted SQEs.
 
 2. **ThreadPoolBackend interim conformance.**
    Apply transactional admission to current per-op model. Fix P1-04
    (spawn failure → synchronous error, not asyncized). Full replacement
    deferred to Phase 6.
 
-3. **Scheduler integration.**
+3. **Unified Scheduler integration (all backends at once).**
+   Migrate or adapt ALL backends to identity-bearing reap first, then:
    Scheduler receives ready identities from reap (not O(N) scan).
    Remove waiting_completion_ full-map scan.
    Batch uses identity events (remove global reap_seq).
+   No mixed-mode where some backends use new reap and others scan.
 
 4. **Run conformance suite against all backends.**
 

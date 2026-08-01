@@ -132,8 +132,11 @@ contract.
 - Every backend documents its "accepted → terminal" path.
 - The terminal publication path (ready-queue push, CQE, inline complete) has a
   bounded or pre-allocated resource requirement.
-- Shutdown joins or drains all accepted operations before returning.
-- Test: submit N ops, destroy backend, verify all N reach terminal.
+- Explicit shutdown/drain terminates or reaps every accepted operation before
+  destruction is permitted. Destruction with outstanding operations is a
+  contract violation (fail-fast), not an implicit drain.
+- Test: submit N ops → close admission → explicit drain/reap → verify
+  outstanding == 0 → destroy cleanly.
 
 **Allowed exceptions:**
 - Cancellation may be best-effort (op completes with real result); this is
@@ -142,7 +145,7 @@ contract.
 **Common violations:**
 - Worker thread fails to spawn and error path itself allocates (double fault).
 - Ready deque `push_back` throws `bad_alloc` in the worker — result lost.
-- Destructor joins threads but never drains their results.
+- Explicit shutdown reports success while accepted requests remain non-terminal.
 
 **Review questions:**
 1. After submit succeeds, is there ANY path where the Completion stays

@@ -334,40 +334,53 @@ for capacity pressure vs. lifecycle errors.
 
 ## P0-03: Completion Mutation Authority Is Forgeable
 
-**Finding:** `Completion<T>` exposes `mark_outstanding()`, `complete_with()`,
-and `reset()` as public methods. Any application code can forge state
-transitions. The "backend-only" comment is not an authority boundary. Debug
-assertions are not an authority boundary. Release builds have NO protection.
+**Finding:** Two distinct defects:
+
+**A. Publication authority leak:**
+`Completion<T>` exposes `mark_outstanding()` and `complete_with()` as public
+methods. Any application code can forge publication state transitions. The
+"backend-only" comment is not an authority boundary. Debug assertions are not
+an authority boundary. Release builds have NO protection.
+
+**B. Caller lifecycle validation defect:**
+`reset()` is correctly caller-accessible (AC-13), but permits
+idle/outstanding → idle without runtime state check. A caller resetting an
+outstanding Completion is a contract violation that goes undetected.
 
 **Evidence:**
 - `include/sluice/async/completion.hpp`: all three methods are `public`.
 - `mark_outstanding()` is load-assert-store, NOT atomic CAS.
-- `reset()` does not check outstanding state.
+- `reset()` does not reject outstanding state (should trap).
 - Destructor is default (does not fail-fast on outstanding).
-- Tests call `c.mark_outstanding(); c.complete_with(...); c.reset();` directly.
+- Tests call `c.mark_outstanding(); c.complete_with(...);` directly
+  (publication forgery). Tests calling `ready → reset` are legitimate.
 - Two different AsyncIoContext instances can both submit to the same
   Completion concurrently (access_mtx_ is per-context, not per-Completion).
 
 **Attack scenario:**
 ```cpp
 ctx.submit_read(op, c);  // backend holds &c
-c.reset();               // caller forges idle
+c.reset();               // caller resets outstanding (undetected violation)
 ctx.submit_write(op2, c); // second backend also holds &c
 // Both backends will eventually complete_with → double publication,
 // stale result overwrite, or use-after-free if c is destroyed.
 ```
 
-**Violated constitution rule:** AC-13 (unforgeable state authority).
+**Violated constitution rule:** AC-13 (unforgeable publication authority;
+state-checked caller lifecycle).
 
 **Semantic consequence:** Use-after-free, double completion, permanent
-Completion/backend state divergence. The type system provides zero protection.
+Completion/backend state divergence. The type system provides zero protection
+for publication; runtime provides zero protection for outstanding reset.
 
 **Currently regression-tested:** No negative-compile test prevents caller
-mutation. Tests actively USE the public mutators.
+calls to publication mutators. Tests actively USE them. No death test for
+outstanding reset.
 
 **Recommended next action:** Phase 1 (Completion authority hardening) —
-friend/capability pattern; negative-compile gate; Release fail-fast on
-invalid transitions; outstanding destructor check.
+friend/capability pattern for publication mutators; negative-compile gate;
+Release fail-fast on invalid transitions; outstanding reset → trap;
+outstanding destructor check.
 
 **Do not fix in this audit PR.**
 
@@ -396,7 +409,8 @@ may hit a new operation. Stale waiter may never wake.
 
 **Currently regression-tested:** No generation/ABA test exists.
 
-**Recommended next action:** Phase 2 (RequestKey/RequestSlot design) —
+**Recommended next action:** Phase 1 ADR + Phase 2 implementation
+(RequestKey/RequestSlot design) —
 add generation counter; cancel targets generation; Scheduler registration
 includes generation.
 
@@ -465,7 +479,7 @@ not express whether it is single-driver or concurrent-capable), AC-9
 **Currently regression-tested:** Scheduler avoids this via single-admission
 rules, but L1 public API has no such protection for direct users.
 
-**Recommended next action:** Phase 5 (wait/cancel concurrency redesign) —
+**Recommended next action:** Phase 4 (wait/cancel concurrency redesign) —
 split capabilities or use interruptible wait; document single-driver
 contract if that is the intent.
 
@@ -499,7 +513,7 @@ protocols on a void-return fire-and-forget API.
 **Currently regression-tested:** Tests verify eventual Completion state but
 not cancel disposition reporting.
 
-**Recommended next action:** Phase 5 — redesign cancel to return
+**Recommended next action:** Phase 4 — redesign cancel to return
 `Result<CancelDisposition>` targeting a RequestKey.
 
 **Do not fix in this audit PR.**
@@ -601,7 +615,7 @@ from thread stacks.
 **Currently regression-tested:** No resource-bound test. No test verifies
 behavior under thread creation failure (beyond bad_alloc → op error).
 
-**Recommended next action:** Phase 3 roadmap — design persistent blocking-I/O
+**Recommended next action:** Phase 6 roadmap — design persistent blocking-I/O
 offload workers with bounded capacity.
 
 **Do not fix in this audit PR.**
@@ -632,7 +646,7 @@ resources), but it is historical-growth memory retention with no reclamation.
 
 **Currently regression-tested:** No.
 
-**Recommended next action:** Phase 3 roadmap — vector compaction or slot reuse.
+**Recommended next action:** Phase 6 roadmap — vector compaction or slot reuse.
 
 **Do not fix in this audit PR.**
 
@@ -692,7 +706,7 @@ and require benchmark evidence to quantify precisely.
 **Currently regression-tested:** Deterministic causal tests verify liveness but
 do not measure latency.
 
-**Recommended next action:** Phase 2 roadmap — backend wake integration may
+**Recommended next action:** Phase 5 roadmap — backend wake integration may
 allow reducing or eliminating the 2ms interval for backend-only waits.
 
 **Do not fix in this audit PR.**

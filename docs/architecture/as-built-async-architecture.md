@@ -106,8 +106,9 @@ wait_one()
 **Key properties:**
 - One `std::thread` per submitted operation (thread-per-op, NOT thread-per-task)
 - `workers_` vector grows with cumulative ops (reaped slots become non-joinable
-  placeholders, never reclaimed) — **bounded memory growth, P2**
-- `std::function` type erasure per op (heap allocation for the work lambda)
+  placeholders, never reclaimed) — **unbounded retained container growth, P2**
+- `std::function` type erasure per op (potential heap allocation depending on
+  small-object optimization)
 - `std::deque` for ready queues (dynamic allocation on push)
 - No capacity limit on outstanding ops (unbounded)
 - No queue-full error (never returns `would_block`)
