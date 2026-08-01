@@ -208,8 +208,49 @@ do
             set_group("test")
             add_deps("sluice_core", "sluice_async")
             add_includedirs(R .. "include", app_dir)
+        add_files(test_src, app_dir .. "/copy_task.cpp")
+        add_tests("sluice_copy_fault_test")
+    end
+end
+
+-- sluice-copy Version B pipeline integration tests (real files +
+-- ThreadPoolBackend). Proves byte-for-byte correctness across sizes/depths/
+-- buffers and that depth>1 yields >= 2 concurrent reads against the real
+-- backend (content checks the scripted contract test cannot).
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_pipeline_integration_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/copy_task.cpp") then
+        target("sluice_copy_pipeline_integration_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
             add_files(test_src, app_dir .. "/copy_task.cpp")
-            add_tests("sluice_copy_fault_test")
+            add_tests("sluice_copy_pipeline_integration_test")
+    end
+end
+
+-- sluice-copy Version B deterministic pipeline stress test (real files +
+-- ThreadPoolBackend). Randomized-but-deterministic matrix driven by
+-- --seed/--iterations; a failure reproduces exactly with the same seed.
+-- Defaults tuned for the default test group and sanitizer gates; the nightly
+-- hardening run passes larger --iterations values.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_pipeline_stress_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/copy_task.cpp") then
+        target("sluice_copy_pipeline_stress_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(test_src, app_dir .. "/copy_task.cpp")
+            add_tests("sluice_copy_pipeline_stress_test")
     end
 end
 
@@ -228,3 +269,93 @@ sluice_internal_async_test("application_runtime_resource_test")
 -- is enforced by scripts/verify-async-identity-negative-compile.sh. Uses
 -- sluice_async_internal_testing for the Fiber suspend/resume seam.
 sluice_internal_async_test("application_runtime_identity_test")
+
+-- ScriptedAsyncBackend self-tests (sluice-copy Version B test infrastructure).
+-- Proves the deterministic, scriptable backend itself is correct before using
+-- it to test higher-level components. Links sluice_async (production).
+do
+    local R = SLUICE_ROOT
+    local test_src = R .. "tests/scripted_backend_test.cpp"
+    local support_src = R .. "tests/support/scripted_async_backend.cpp"
+    if os.isfile(test_src) and os.isfile(support_src) then
+        target("scripted_backend_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(test_src, support_src)
+            add_tests("scripted_backend_test")
+    end
+end
+
+-- sluice-copy Version B pipeline contract tests.
+-- These tests describe the expected behavior of the pipelined copy (Version B).
+-- They drive the copy task via the public run_*_copy* entry points against the
+-- ScriptedAsyncBackend + controller test infrastructure.
+--
+-- SLUICE_HAS_PIPELINED_COPY turns the guarded Version-B contract bodies on.
+-- The target IS part of the default test group (add_tests below); the old
+-- "NOT in the default group / expected FAIL" note was stale once Version B
+-- landed. The harness also carries the bounded-failure watchdog: a scenario
+-- whose copy thread never publishes terminates the binary with diagnostics
+-- instead of hanging the suite forever.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_pipeline_contract_test.cpp"
+    local support_src = R .. "tests/support/scripted_async_backend.cpp"
+    if os.isfile(test_src) and os.isfile(support_src) and
+       os.isfile(app_dir .. "/copy_task.cpp") then
+        target("sluice_copy_pipeline_contract_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            -- Version B is implemented; SLUICE_HAS_PIPELINED_COPY turns the
+            -- guarded contract bodies on. Now part of the default test group.
+            add_defines("SLUICE_HAS_PIPELINED_COPY=1")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "tests", app_dir)
+            add_files(test_src, support_src, app_dir .. "/copy_task.cpp")
+            add_tests("sluice_copy_pipeline_contract_test")
+    end
+end
+
+-- sluice-copy CLI argument parsing tests. Strict unsigned decimal parsing,
+-- worker caps (no silent narrowing, app-level kMaxWorkers), and argument
+-- validation — the same app code the CLI binary runs, compiled into the test
+-- target (same pattern as copy_task.cpp in the other sluice-copy tests).
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_cli_parse_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/cli_parse.cpp") then
+        target("sluice_copy_cli_parse_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(test_src, app_dir .. "/cli_parse.cpp")
+            add_tests("sluice_copy_cli_parse_test")
+    end
+end
+
+-- sluice-copy file-domain tests. The Version B regular-file input domain:
+-- invalid sources are rejected BEFORE the destination is created or touched;
+-- destinations must be regular files; same-file identity is rejected.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_file_domain_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/file_domain.cpp") then
+        target("sluice_copy_file_domain_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(test_src, app_dir .. "/file_domain.cpp")
+            add_tests("sluice_copy_file_domain_test")
+    end
+end

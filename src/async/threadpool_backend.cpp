@@ -2,9 +2,11 @@
 //
 // Each submitted op spawns a worker thread that performs the blocking syscall
 // (pread/pwrite/fdatasync/fsync) and pushes a terminal Result into the ready
-// queue. poll() drains the queue; wait_one() blocks on the cv. The backend owns
-// its worker threads and joins them in the destructor, so it outlives any in-
-// flight worker — the captured `this` in worker lambdas stays valid.
+// queue. poll() drains the queue; wait_one() blocks on the cv. Each reaped
+// entry's worker is joined immediately outside the lock, keeping unjoined
+// pthread resources bounded by outstanding ops. The destructor joins any
+// remaining in-flight workers, so it outlives any worker — the captured
+// `this` in worker lambdas stays valid.
 #include <sluice/async/threadpool_backend.hpp>
 
 #include <sluice/detail/io_validation.hpp>
@@ -67,37 +69,84 @@ bool ThreadPoolBackend::accepting_new_work() const {
 void ThreadPoolBackend::enqueue_size(Completion<std::size_t>& c,
                                      std::function<Result<std::size_t>()> work) {
     c.mark_outstanding();
-    {
+    Completion<std::size_t>* cp = &c;
+    std::size_t worker_idx = kNoWorker;
+    try {
+        // workers_ is touched by the reaper (poll) and the test seam, so its
+        // mutation must be under mtx_ like every other shared member. The
+        // worker pushes the terminal result together with its own index so the
+        // reaper can join exactly this thread after draining the result. If
+        // the spawn throws, the lock is released during unwind BEFORE the
+        // catch runs, so fail_spawn_* can re-lock (std::mutex is not
+        // recursive).
         std::lock_guard<std::mutex> lk(mtx_);
         ++outstanding_;
+        worker_idx = workers_.size();
+        workers_.emplace_back([this, cp, worker_idx, work = std::move(work)] {
+            Result<std::size_t> r = work();
+            {
+                std::lock_guard<std::mutex> lk(mtx_);
+                ready_size_.push_back(ReadySize{cp, std::move(r), worker_idx});
+            }
+            cv_.notify_one();
+        });
+    } catch (const std::bad_alloc&) {
+        fail_spawn_size(cp, IoError{IoError::Code::no_space});
+    } catch (const std::system_error& e) {
+        IoError err{IoError::Code::backend_error};
+        if (e.code().value() > 0) err.os_errno = e.code().value();
+        fail_spawn_size(cp, err);
+    } catch (...) {
+        fail_spawn_size(cp, IoError{IoError::Code::backend_error});
     }
-    Completion<std::size_t>* cp = &c;
-    workers_.emplace_back([this, cp, work = std::move(work)] {
-        Result<std::size_t> r = work();
-        {
-            std::lock_guard<std::mutex> lk(mtx_);
-            ready_size_.push_back(ReadySize{cp, std::move(r)});
-        }
-        cv_.notify_one();
-    });
 }
 
 void ThreadPoolBackend::enqueue_void(Completion<void>& c,
                                      std::function<Result<void>()> work) {
     c.mark_outstanding();
-    {
+    Completion<void>* cp = &c;
+    std::size_t worker_idx = kNoWorker;
+    try {
         std::lock_guard<std::mutex> lk(mtx_);
         ++outstanding_;
+        worker_idx = workers_.size();
+        workers_.emplace_back([this, cp, worker_idx, work = std::move(work)] {
+            Result<void> r = work();
+            {
+                std::lock_guard<std::mutex> lk(mtx_);
+                ready_void_.push_back(ReadyVoid{cp, std::move(r), worker_idx});
+            }
+            cv_.notify_one();
+        });
+    } catch (const std::bad_alloc&) {
+        fail_spawn_void(cp, IoError{IoError::Code::no_space});
+    } catch (const std::system_error& e) {
+        IoError err{IoError::Code::backend_error};
+        if (e.code().value() > 0) err.os_errno = e.code().value();
+        fail_spawn_void(cp, err);
+    } catch (...) {
+        fail_spawn_void(cp, IoError{IoError::Code::backend_error});
     }
-    Completion<void>* cp = &c;
-    workers_.emplace_back([this, cp, work = std::move(work)] {
-        Result<void> r = work();
-        {
-            std::lock_guard<std::mutex> lk(mtx_);
-            ready_void_.push_back(ReadyVoid{cp, std::move(r)});
-        }
-        cv_.notify_one();
-    });
+}
+
+void ThreadPoolBackend::fail_spawn_size(Completion<std::size_t>* c,
+                                        const IoError& err) {
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        ready_size_.push_back(ReadySize{c, make_unexpected<std::size_t>(err),
+                                        kNoWorker});
+    }
+    cv_.notify_one();
+}
+
+void ThreadPoolBackend::fail_spawn_void(Completion<void>* c,
+                                        const IoError& err) {
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        ready_void_.push_back(ReadyVoid{c, make_unexpected<void>(err),
+                                        kNoWorker});
+    }
+    cv_.notify_one();
 }
 
 void ThreadPoolBackend::shutting_down_for_test() {
@@ -141,7 +190,6 @@ Result<void> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
 }
 
 std::size_t ThreadPoolBackend::poll() {
-    std::size_t n = 0;
     std::deque<ReadySize> rs;
     std::deque<ReadyVoid> rv;
     {
@@ -149,19 +197,65 @@ std::size_t ThreadPoolBackend::poll() {
         rs.swap(ready_size_);
         rv.swap(ready_void_);
     }
-    for (auto& e : rs) {
+
+    // Reap each entry individually: complete the op, decrement outstanding_,
+    // take the worker out, then join OUTSIDE mtx_. This avoids any dynamic
+    // allocation between consuming a ready entry and committing its state
+    // transition (the old to_join.reserve() could throw std::bad_alloc after
+    // completions were published but before outstanding_ was decremented,
+    // leaving a half-committed state that would hang wait_one()). join()
+    // blocks the caller until thread teardown finishes; holding mtx_ across
+    // it would stall every other submit and worker publication. A drained
+    // worker has already pushed its result (that is how it got here) and
+    // holds no lock afterwards, so join() returns promptly. Each worker is
+    // moved out exactly once (its slot becomes a non-joinable placeholder).
+    // Spawn-failure entries carry kNoWorker and have nothing to join.
+    std::size_t n = 0;
+
+    auto reap_size = [this](ReadySize& e) {
         e.c->complete_with(std::move(e.r));
+        std::thread worker;
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            --outstanding_;
+            if (e.worker != kNoWorker)
+                worker = take_worker_for_join_locked(e.worker);
+        }
+        if (worker.joinable())
+            worker.join();
+    };
+    auto reap_void = [this](ReadyVoid& e) {
+        e.c->complete_with(std::move(e.r));
+        std::thread worker;
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            --outstanding_;
+            if (e.worker != kNoWorker)
+                worker = take_worker_for_join_locked(e.worker);
+        }
+        if (worker.joinable())
+            worker.join();
+    };
+
+    for (auto& e : rs) {
+        reap_size(e);
         ++n;
     }
     for (auto& e : rv) {
-        e.c->complete_with(std::move(e.r));
+        reap_void(e);
         ++n;
     }
-    if (n) {
-        std::lock_guard<std::mutex> lk(mtx_);
-        outstanding_ -= n;
-    }
     return n;
+}
+
+std::thread ThreadPoolBackend::take_worker_for_join_locked(std::size_t index) {
+    // Caller holds mtx_. Defensive range/joinability validation: the index
+    // comes from the worker's own spawn record (workers_ only ever grows, so
+    // it stays valid), and a slot is taken at most once.
+    if (index >= workers_.size()) return {};
+    std::thread& w = workers_[index];
+    if (!w.joinable()) return {};
+    return std::move(w);
 }
 
 Result<std::size_t> ThreadPoolBackend::wait_one() {

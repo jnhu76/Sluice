@@ -1,9 +1,16 @@
-# sluice-copy — reference async file copy (M1-A, Version A)
+# sluice-copy — reference async file copy
 
-The first real Sluice reference application: a sequential **asynchronous**
-positional file copy driven by `ApplicationRuntime` + `ThreadPoolBackend`. It
-exists under `apps/` (not `examples/`) because it proves several public APIs
-compose into a real program, using installed/public headers only.
+A Sluice reference application: an **asynchronous** positional file copy driven
+by `ApplicationRuntime` + `ThreadPoolBackend`. It exists under `apps/` (not
+`examples/`) because it proves several public APIs compose into a real program,
+using installed/public headers only.
+
+Two copy modes share one implementation:
+
+- **Version A** (`--pipeline-depth 1`, the default): one read outstanding at a
+  time. Sequential async positional copy.
+- **Version B** (`--pipeline-depth N`, N > 1): a bounded reusable-buffer
+  pipeline — up to N reads outstanding at once with a single ordered writer.
 
 ## Build & run
 
@@ -17,13 +24,49 @@ xmake run sluice-copy [options] <source> <destination>
 ```text
 sluice-copy [options] <source> <destination>
 
-  --buffer-size <bytes>   per-chunk read/write buffer (default 1 MiB)
-  --workers <count>       ApplicationRuntime worker count (default 1)
-  --sync none|data|all    durability policy applied after copy (default none)
-  --help                  show this help
+  --buffer-size <bytes>    per-chunk read/write buffer (default 1 MiB)
+  --pipeline-depth <n>     read-ahead slots (default 1)
+                           1   = Version A (sequential)
+                           >1  = Version B bounded pipeline (multiple
+                                 outstanding reads, ordered single writer)
+  --workers <count>        ApplicationRuntime worker count (default 1)
+  --sync none|data|all     durability policy applied after copy (default none)
+  --help                   show this help
 ```
 
-Defaults: 1 MiB buffer, 1 worker, sync=none.
+Defaults: 1 MiB buffer, depth 1, 1 worker, sync=none.
+
+### Resource limits
+
+The CLI and the public copy entry points (`run_pipelined_copy*` in
+`copy_task.hpp`) enforce fixed, explainable app-level limits — the memory
+upper bound of the pipeline is approximately `buffer_size * pipeline_depth`,
+and the TOTAL pipeline allocation is the primary constraint:
+
+| limit                    | value  | meaning                                      |
+| ------------------------ | ------ | -------------------------------------------- |
+| `kMaxWorkers`            | 64     | Runtime worker threads (OS threads)          |
+| `kMaxBufferSize`         | 64 MiB | per-slot read/write buffer                   |
+| `kMaxPipelineDepth`      | 64     | number of pipeline slots                     |
+| `kMaxPipelineBytes`      | 512 MiB | total `buffer_size * pipeline_depth` budget |
+
+Values beyond a limit are a usage error (exit 1) on the CLI and
+`invalid_state` from the public entry points, checked before any allocation.
+This is a reference copy app, not an arbitrary thread/allocator factory.
+
+### Input domain: regular files only
+
+Both source and destination must be **regular files**. The Version B pipeline
+needs a seekable, finite-length source that eventually reaches EOF and a
+truncatable, positional destination; FIFOs, sockets, and character devices
+(e.g. `/dev/zero`) do not fit that domain. The source's type is checked via
+`fstat` immediately after opening and **before** the destination is created,
+so a rejected source never creates a new destination and never truncates an
+existing one. Source == destination (same device + inode, including hard
+links) is rejected before any truncation.
+
+Note: `open(source, O_RDONLY)` itself may block for a FIFO with no writer —
+that happens before the type check can run.
 
 ## Exit codes
 
@@ -36,53 +79,101 @@ Defaults: 1 MiB buffer, 1 worker, sync=none.
 
 ## Rejections
 
-The CLI rejects: missing/extra operands, zero buffer size, invalid worker
-count, unknown sync policy, and source==destination. Same-file detection uses
-filesystem identity (device + inode via `fstat`) rather than path-string
-equality.
+The CLI rejects: missing/extra operands, zero buffer size, zero pipeline
+depth, invalid worker count, unknown sync policy, source==destination,
+non-regular sources/destinations, and any value beyond the resource limits
+above. Integer parsing is strict: negative numbers, signs, trailing junk
+(`123abc`, `1MiB`), and values that overflow `size_t` are usage errors — no
+silent narrowing or truncation.
 
-## Algorithm (Version A — sequential)
+## Algorithm
+
+Both versions are one Runtime task. The outer call blocks until the copy
+publishes its terminal outcome; there is no new public async surface
+(no `CopyHandle`/future). Version A is Version B with `pipeline_depth == 1`.
+
+### Version B — bounded reusable-buffer pipeline
 
 ```
-offset = 0
-loop:
+allocate pipeline_depth slots, each owning:
+    a fixed buffer (buffer_size), a read Completion, a write Completion
+    (address-stable for the operation lifetime — L7)
+submit up to pipeline_depth initial reads (slots at offsets 0, B, 2B, ...)
+loop until all data copied and all EOF reads drained:
     observe cooperative cancellation boundary
-    submit positional read          (RuntimeTaskContext::submit_read)
-    cooperatively await Completion  (RuntimeTaskContext::await_completion)
-    inspect terminal result
-    if EOF (bytes_read == 0): break
-    while consumed < bytes_read:
-        observe cancellation boundary
-        submit positional write for remaining bytes
-        cooperatively await Completion
-        inspect terminal result
-        if zero progress: return deterministic error
-        consumed += bytes_written
-    offset += bytes_read            (overflow checked)
-    reset Completions (only after ready + result consumption)
+    reap the LOWEST-offset outstanding read (other slots' reads stay
+        outstanding -> real read/write overlap)
+        short read (0 < n < remaining): resubmit within the same slot at
+            offset+filled until filled or EOF (the global offset never
+            skips an unread region)
+        EOF (n == 0): mark the slot at EOF; do not write an empty slot
+    write every read_done slot in STRICTLY ASCENDING chunk-offset order
+    (min-offset read_done slot selected each round; at most one write
+        outstanding in this version):
+        partial write (0 < n < remaining): retry within the slot at
+            offset+written
+        zero write with data remaining: deterministic backend_error
+        after a slot is fully written, retire it (EOF) or recycle it to the
+            next chunk offset (depth chunks ahead) and submit a fresh read,
+            keeping the read window full
+on EOF seen: stop submitting new reads; keep writing slots that have data;
+    drain every already-submitted read
+on any error: save the FIRST meaningful error; stop submitting; drain every
+    already-successfully-submitted op; secondary/canceled results never
+    overwrite the primary error; submit-failed ops (never entered the
+    backend) are not awaited
 after data copy:
     sync none:  nothing
     sync data:  submit_sync_data + await + inspect
     sync all:   submit_sync_all  + await + inspect
 ```
 
-### Correctness properties
+### Correctness properties (both versions)
 
-- partial reads supported (positional read may return < requested);
+- multiple outstanding reads when `pipeline_depth > 1` (Version B);
+- writes are submitted in ascending file-offset order regardless of read
+  completion order (out-of-order reads never reorder writes);
+- a slot's buffer is never reused for a new read before its write completes;
+- partial reads supported (positional read may return < requested), retried
+  within the same slot;
 - partial writes supported, including multiple short writes per chunk;
 - zero write progress on a non-empty write is a deterministic error, not an
   infinite retry;
-- offset overflow is checked;
+- offset overflow and `buffer_size * pipeline_depth` overflow are checked;
 - read / write / sync errors propagate through the app-owned result slot;
+- a backend op-dispatch failure (e.g. a worker-thread spawn failure under
+  resource exhaustion) surfaces as an `IoError::backend_error` result: the
+  copy task translates ANY task-body exception into an error, so a copy can
+  never hang waiting for a result that was silently swallowed;
 - cancellation is observed at the cooperative boundaries between operations
   (the copy does NOT claim to interrupt a kernel op already in flight);
 - every outstanding operation reaches a terminal state before the task exits;
 - outstanding I/O is reaped before Runtime close (`drain()` requires it).
 
-## Known Version-A limitation
+## Memory and concurrency model (Version B)
 
-**On a mid-copy failure the destination may be left partial.** Version A does
-not use a temporary file + rename. Atomic safe output is a Version C feature.
+- Memory upper bound is approximately `buffer_size * pipeline_depth` (one fixed
+  buffer per slot) plus the read/write Completions.
+- This is **not** zero-copy: each slot buffer is read into and written from.
+- Writes are **not** parallel: at most one write is outstanding at a time.
+  Parallelism is across reads (read-ahead) and between a read and the
+  in-flight write.
+- The pipeline is internal; the outermost call still blocks until completion.
+
+## Known limitation
+
+**On a mid-copy failure the destination may be left partial or truncated.**
+sluice-copy does not use a temporary file + rename. Safe, atomic output is a
+Version C feature.
+
+### Durability scope (`--sync`)
+
+`sync=all` (and `sync=data`) apply `fsync` / `fdatasync` to the **destination
+file descriptor only**. They do NOT fsync the parent directory, so a crash
+after the copy may still lose the directory entry (or the rename) — directory
+entry durability, safe creation, and temp-file + rename are Version C
+features. This app does not preserve ACLs, ownership, xattrs, or other
+metadata beyond the file contents.
 
 ## What this app proves
 
@@ -92,14 +183,50 @@ not use a temporary file + rename. Atomic safe output is a Version C feature.
   `docs/design/m1-runtime-io-await-race.md`);
 - positional async read/write with partial-I/O handling works end-to-end on a
   real filesystem through `ThreadPoolBackend`;
+- a bounded, reusable-buffer pipeline with multiple outstanding reads and an
+  ordered single writer composes correctly on top of the same Runtime task
+  surface (Version B), with strict Completion lifetime discipline;
 - the Runtime's stop/drain/shutdown semantics are usable for a run-to-
   completion workload.
 
 ## Not implemented in this slice
 
-- bounded pipeline (Version B);
-- multiple reusable buffers (Version B);
-- temporary-file safe output (Version C);
+- temporary-file safe output, parent-directory fsync, atomic replacement
+  (Version C);
+- safe creation / permission preservation for new destinations, metadata
+  preservation (ACL/owner/xattr);
+- a symlink policy for the final path component (the destination is opened
+  normally; O_NOFOLLOW / symlink handling is a Version C / security-mode
+  decision, not enforced here);
 - progress display;
 - directory traversal (see `sluice-mirror-mini`, a later app);
-- io_uring production backend.
+- io_uring production backend;
+- multiple parallel writes (Version B v1 keeps at most one write outstanding).
+
+## Test targets
+
+The Version B test family (all in the default `xmake test` group):
+
+- `scripted_backend_test` — the deterministic test backend itself
+  (cancel idempotency, staged accounting, controller lifetime);
+- `sluice_copy_pipeline_contract_test` — pipeline contracts against the
+  scripted backend (read-ahead, write order, short reads/writes, drains,
+  bounded memory across multiple slot-reuse rounds, allocation failure,
+  bounded-failure watchdog);
+- `sluice_copy_pipeline_integration_test` — real files + ThreadPoolBackend
+  (exact destination size, multi-round reuse, multi-worker, sync policies,
+  real concurrency probe). The buffer-size matrix derives each case size
+  from buffer/depth and the slot-reuse rounds (a few hundred ops in the
+  default group); `SLUICE_PIPELINE_BUFSTRESS_N=<n>` re-opts a run into the
+  explicit large workload (`100003` in the Version B nightly gate), and
+  honors only a fully-valid positive integer — anything else falls back to
+  the small matrix size;
+- `sluice_copy_pipeline_stress_test` — deterministic randomized matrix
+  (`--seed` / `--iterations`);
+- `sluice_copy_integration_test` / `sluice_copy_fault_test` — Version A
+  integration and fault injection;
+- `sluice_copy_cli_parse_test` / `sluice_copy_file_domain_test` — CLI parsing
+  and the regular-file input domain;
+- hardening `python3 scripts/hardening.py --version-b` — the Version B
+  nightly gate (Debug soak rounds, required TSan and ASan+UBSan target sets,
+  final Debug).

@@ -6,6 +6,7 @@ Usage:
     python3 scripts/hardening.py --smoke
     python3 scripts/hardening.py --self-test
     python3 scripts/hardening.py --hours 6
+    python3 scripts/hardening.py --version-b
     python3 scripts/hardening.py --help
 """
 
@@ -61,6 +62,10 @@ from hardening.phases import (
     phase_asanubsan,
     phase_fuzz,
     phase_final_debug,
+    phase_version_b_debug_soak,
+    phase_version_b_tsan,
+    phase_version_b_asanubsan,
+    version_b_calculate_verdict,
     TSAN_HOT_SET,
 )
 from hardening.reporting import (
@@ -600,6 +605,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             tsan_b = min(pool - soak_b, 600)
             asan_b = min(pool - soak_b - tsan_b, 300)
             fuzz_b = max(0.0, pool - soak_b - tsan_b - asan_b)
+        elif config.mode == "version-b":
+            # Version B nightly split: soak 45%, tsan 25%, asan 20%,
+            # leftover stays in the soak rounds.
+            soak_b = pool * 0.45
+            tsan_b = pool * 0.25
+            asan_b = pool * 0.20
+            soak_b += max(0.0, pool - soak_b - tsan_b - asan_b)
+            fuzz_b = 0.0
         else:
             # Normal split: soak 25%, tsan 25%, asan 12.5%, fuzz = rest.
             soak_b = pool * 0.25
@@ -614,28 +627,40 @@ def main(argv: Optional[List[str]] = None) -> int:
               f"asan={asan_b:.0f}s fuzz={fuzz_b:.0f}s",
               file=sys.stderr)
 
-        # ── Phase B: Debug soak ─────────────────────────────────────────────
-        if not interrupted:
-            phase_debug_soak(ctx, soak_b)
+        if config.mode == "version-b":
+            # ── Version B nightly gate ────────────────────────────────────────
+            if not interrupted:
+                phase_version_b_debug_soak(ctx, soak_b)
+            if not interrupted:
+                phase_version_b_tsan(ctx, tsan_b)
+            if not interrupted:
+                phase_version_b_asanubsan(ctx, asan_b)
+            if not interrupted:
+                phase_final_debug(ctx)
+            verdict = version_b_calculate_verdict(ctx, preflight)
+        else:
+            # ── Phase B: Debug soak ────────────────────────────────────────
+            if not interrupted:
+                phase_debug_soak(ctx, soak_b)
 
-        # ── Phase C: TSan ───────────────────────────────────────────────────
-        if not interrupted:
-            phase_tsan(ctx, tsan_b)
+            # ── Phase C: TSan ─────────────────────────────────────────────
+            if not interrupted:
+                phase_tsan(ctx, tsan_b)
 
-        # ── Phase D: ASan+UBSan ─────────────────────────────────────────────
-        if not interrupted:
-            phase_asanubsan(ctx, asan_b)
+            # ── Phase D: ASan+UBSan ───────────────────────────────────────
+            if not interrupted:
+                phase_asanubsan(ctx, asan_b)
 
-        # ── Phase E: Fuzz ───────────────────────────────────────────────────
-        if not interrupted:
-            phase_fuzz(ctx, fuzz_b)
+            # ── Phase E: Fuzz ─────────────────────────────────────────────
+            if not interrupted:
+                phase_fuzz(ctx, fuzz_b)
 
-        # ── Phase F: Final Debug ────────────────────────────────────────────
-        if not interrupted:
-            phase_final_debug(ctx)
+            # ── Phase F: Final Debug ──────────────────────────────────────
+            if not interrupted:
+                phase_final_debug(ctx)
 
-        # ── Verdict ─────────────────────────────────────────────────────────
-        verdict = calculate_verdict(ctx, preflight)
+            # ── Verdict ───────────────────────────────────────────────────
+            verdict = calculate_verdict(ctx, preflight)
 
     except KeyboardInterrupt:
         interrupted = True

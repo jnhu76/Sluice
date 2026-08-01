@@ -26,10 +26,16 @@ def parse_args(argv: Optional[List[str]] = None) -> Config:
 Modes:
   (default)  Full ~8h gate (Debug soak, TSan, ASan+UBSan, libFuzzer, Final Debug).
   --smoke    One pass of every phase; each fuzz target ~10s.
+  --version-b  Version B pipeline overnight gate: repeated Debug rounds
+               (deterministic stress with rotating seeds, depth regressions,
+               real-file integration, fault-injection error drains, scripted
+               controller), then TSan and ASan+UBSan passes over the Version B
+               targets, then Final Debug. Default 6h budget.
   --self-test  Controlled synthetic failures; never produces an hardening HOLD.
 
 Environment overrides (CLI wins):
   SLUICE_HARDENING_HOURS   total budget hours (default 8)
+  SLUICE_VERSION_B_NIGHTLY_SECONDS  Version B budget in seconds (default 6h)
   SLUICE_HARDENING_PHASE_TIMEOUT     per-command timeout seconds (default 1200)
   SLUICE_HARDENING_FUZZ_SECONDS      override total fuzz budget seconds
   SLUICE_HARDENING_KEEP_GOING        0 = stop after current command (default 1)
@@ -56,6 +62,12 @@ Verdicts:
         help="Total budget in hours (default 8, env SLUICE_HARDENING_HOURS).",
     )
     parser.add_argument(
+        "--version-b",
+        action="store_true",
+        help="Version B pipeline overnight gate (default 6h; env "
+             "SLUICE_VERSION_B_NIGHTLY_SECONDS overrides in seconds).",
+    )
+    parser.add_argument(
         "--self-test",
         action="store_true",
         dest="self_test",
@@ -75,15 +87,26 @@ Verdicts:
     mode = "hardening"
     if args.smoke:
         mode = "smoke"
+    if args.version_b:
+        mode = "version-b"
     if args.self_test:
         mode = "selftest"
 
-    # Hours: CLI > env > default.
+    # Hours: CLI > (version-b env) > generic env > mode default.
     hours: float = 8.0
     hours_source = "default"
+    if mode == "version-b":
+        hours = 6.0
+        hours_source = "version-b-default"
     if args.hours is not None:
         hours = _validate_hours(args.hours, "--hours")
         hours_source = "cli"
+    elif mode == "version-b" and "SLUICE_VERSION_B_NIGHTLY_SECONDS" in os.environ:
+        hours = _validate_hours(
+            float(os.environ["SLUICE_VERSION_B_NIGHTLY_SECONDS"]) / 3600.0,
+            "SLUICE_VERSION_B_NIGHTLY_SECONDS",
+        )
+        hours_source = "env"
     elif "SLUICE_HARDENING_HOURS" in os.environ:
         hours = _validate_hours(
             float(os.environ["SLUICE_HARDENING_HOURS"]),

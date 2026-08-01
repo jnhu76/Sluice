@@ -239,3 +239,12 @@ sluice_internal_async_test("threaded_evented_internal_test")
 -- destructible and reusable. The production sluice_async build compiles the seam
 -- out. Gated to x86_64 (fiber_ctx::supported) at runtime.
 sluice_internal_async_test("group_evented_admission_exception_safety_test")
+
+-- threadpool_backend_reap_test — ThreadPoolBackend worker-reaping regression
+-- (Version B CI gate, 2026-08-01). Proves poll()/wait_one() join each worker
+-- as its result is reaped: the unreaped-worker count (via the
+-- SLUICE_ASYNC_INTERNAL_TESTING-only unjoined_workers_for_test() seam) stays
+-- bounded by outstanding ops instead of growing with total ops. Pre-fix, a
+-- 100k-op copy accumulated ~100k unjoined zombie threads, hit the runner's
+-- task-count limit, and failed with backend_error (spawn EAGAIN).
+sluice_internal_async_test("threadpool_backend_reap_test")
