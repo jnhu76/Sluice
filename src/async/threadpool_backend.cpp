@@ -2,9 +2,11 @@
 //
 // Each submitted op spawns a worker thread that performs the blocking syscall
 // (pread/pwrite/fdatasync/fsync) and pushes a terminal Result into the ready
-// queue. poll() drains the queue; wait_one() blocks on the cv. The backend owns
-// its worker threads and joins them in the destructor, so it outlives any in-
-// flight worker — the captured `this` in worker lambdas stays valid.
+// queue. poll() drains the queue; wait_one() blocks on the cv. Each reaped
+// entry's worker is joined immediately outside the lock, keeping unjoined
+// pthread resources bounded by outstanding ops. The destructor joins any
+// remaining in-flight workers, so it outlives any worker — the captured
+// `this` in worker lambdas stays valid.
 #include <sluice/async/threadpool_backend.hpp>
 
 #include <sluice/detail/io_validation.hpp>
@@ -188,7 +190,6 @@ Result<void> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
 }
 
 std::size_t ThreadPoolBackend::poll() {
-    std::size_t n = 0;
     std::deque<ReadySize> rs;
     std::deque<ReadyVoid> rv;
     {
@@ -196,42 +197,53 @@ std::size_t ThreadPoolBackend::poll() {
         rs.swap(ready_size_);
         rv.swap(ready_void_);
     }
-    for (auto& e : rs) {
+
+    // Reap each entry individually: complete the op, decrement outstanding_,
+    // take the worker out, then join OUTSIDE mtx_. This avoids any dynamic
+    // allocation between consuming a ready entry and committing its state
+    // transition (the old to_join.reserve() could throw std::bad_alloc after
+    // completions were published but before outstanding_ was decremented,
+    // leaving a half-committed state that would hang wait_one()). join()
+    // blocks the caller until thread teardown finishes; holding mtx_ across
+    // it would stall every other submit and worker publication. A drained
+    // worker has already pushed its result (that is how it got here) and
+    // holds no lock afterwards, so join() returns promptly. Each worker is
+    // moved out exactly once (its slot becomes a non-joinable placeholder).
+    // Spawn-failure entries carry kNoWorker and have nothing to join.
+    std::size_t n = 0;
+
+    auto reap_size = [this](ReadySize& e) {
         e.c->complete_with(std::move(e.r));
+        std::thread worker;
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            --outstanding_;
+            if (e.worker != kNoWorker)
+                worker = take_worker_for_join_locked(e.worker);
+        }
+        if (worker.joinable())
+            worker.join();
+    };
+    auto reap_void = [this](ReadyVoid& e) {
+        e.c->complete_with(std::move(e.r));
+        std::thread worker;
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            --outstanding_;
+            if (e.worker != kNoWorker)
+                worker = take_worker_for_join_locked(e.worker);
+        }
+        if (worker.joinable())
+            worker.join();
+    };
+
+    for (auto& e : rs) {
+        reap_size(e);
         ++n;
     }
     for (auto& e : rv) {
-        e.c->complete_with(std::move(e.r));
+        reap_void(e);
         ++n;
-    }
-    if (n) {
-        // Reap: move the drained workers out of workers_ and join them
-        // OUTSIDE mtx_. join() blocks the caller until thread teardown
-        // finishes; holding mtx_ across it would stall every other submit and
-        // worker publication and widen the critical section into a lock-
-        // ordering hazard. A drained worker has already pushed its result
-        // (that is how it got here) and holds no lock afterwards, so join()
-        // returns as soon as it finishes exiting — no meaningful blocking, no
-        // deadlock. Each worker is moved out exactly once (its slot becomes a
-        // non-joinable placeholder), which keeps the number of unreaped
-        // (zombie) kernel threads bounded by the number of outstanding ops
-        // instead of growing with the total op count (the Version B CI
-        // thread-exhaustion failure). Spawn-failure entries carry kNoWorker
-        // and have nothing to join. The capacity is reserved before the lock
-        // so push_back below cannot throw while holding it.
-        std::vector<std::thread> to_join;
-        to_join.reserve(rs.size() + rv.size());
-        {
-            std::lock_guard<std::mutex> lk(mtx_);
-            outstanding_ -= n;
-            for (auto& e : rs)
-                if (e.worker != kNoWorker)
-                    to_join.push_back(take_worker_for_join_locked(e.worker));
-            for (auto& e : rv)
-                if (e.worker != kNoWorker)
-                    to_join.push_back(take_worker_for_join_locked(e.worker));
-        }
-        for (auto& t : to_join) t.join();
     }
     return n;
 }

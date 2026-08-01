@@ -162,8 +162,10 @@ SLUICE_TEST_CASE(pipeline_integration_edge_sizes_per_depth) {
 // N=100003 made buf=1 spawn ~100k chunks x (1 read + 1 write) x 2 depths ~=
 // 400k OS thread lifecycles in Debug: a de-facto thread soak that took ~48s
 // locally, minutes on shared runners (looking like a hang), and exhausted
-// kernel task limits on CI. The default matrix now stays in the hundreds of
-// ops while preserving every coverage property below.
+// platform-dependent thread resources on CI. The default matrix now stays in
+// the hundreds of data chunk read/write operations (actual backend submissions
+// are slightly higher due to EOF-discovery reads) while preserving every
+// coverage property below.
 //
 // SLUICE_PIPELINE_BUFSTRESS_N re-opts a run into the explicit large workload
 // (Version B nightly / manual stress). It is honored ONLY when it is a

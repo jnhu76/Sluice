@@ -2,19 +2,17 @@
 //
 // Root cause: ThreadPoolBackend spawns one worker thread per op and joined
 // workers ONLY in the destructor. A high-op-count copy (buf=1, N=100003 ->
-// ~200k ops per depth) therefore accumulated ~200k unreaped (zombie) kernel
-// threads. On kernels that count unreaped threads against task limits
-// (RLIMIT_NPROC / threads-max decrement only at release_task/join — standard
-// Linux kernels such as the GitHub runner's), thread creation eventually
-// fails with EAGAIN, std::thread throws std::system_error, and the
-// spawn-failure path resolves the op as backend_error: the copy fails
-// mid-run (sluice_copy_pipeline_integration_test / pipeline_integration_
-// buffer_sizes, 2 x "pipelined copy returned an error"). Locally the WSL2
-// kernel does not count unreaped threads, so the workload passes — the bug
-// only surfaced on the CI runner.
+// ~200k ops per depth) therefore accumulated ~200k unjoined pthreads.
+// Unjoined pthreads retain implementation-managed resources, and the sheer
+// volume of thread create/exit/reclaim cycles has extreme overhead. On
+// resource-constrained CI runners this led to thread creation failure
+// (pthread_create EAGAIN from platform-dependent resource exhaustion) or
+// abnormal runtime growth. The cancelled CI runs do not provide sufficient
+// evidence to attribute the failure to a specific mechanism (RLIMIT_NPROC,
+// threads-max, or pid_max) or to a WSL2-vs-runner kernel difference.
 //
 // Fix under test: poll()/wait_one() join each worker as its result is
-// reaped, so the number of unreaped workers stays bounded by the number of
+// reaped, so the number of unjoined workers stays bounded by the number of
 // outstanding ops instead of growing with the total op count.
 //
 // The seam: unjoined_workers_for_test() (SLUICE_ASYNC_INTERNAL_TESTING only)
@@ -101,10 +99,10 @@ SLUICE_TEST_CASE(tp_reap_unjoined_workers_bounded_after_full_reap) {
     // Submit and fully drain in interleaved batches of kBatch. After EVERY
     // batch drain the unjoined-worker count must already be back to zero: an
     // implementation that only joins at destruction — or only after the
-    // final drain — leaves kBatch zombies after the first batch and grows
-    // linearly with the op count (the kernel task-limit exhaustion that
-    // broke CI). Small batches bound live threads to kBatch, so the proof is
-    // deterministic without exhausting Linux thread limits or waiting on a
+    // final drain — leaves kBatch unjoined threads after the first batch and
+    // grows linearly with the op count (the resource accumulation that broke
+    // CI). Small batches bound live threads to kBatch, so the proof is
+    // deterministic without exhausting platform thread limits or waiting on a
     // timeout.
     for (std::size_t i = 0; i < kOperations; ++i) {
         auto r = backend.submit_read(ReadOp{fd, bufs.data() + i, 1, 0}, cs[i]);
@@ -130,11 +128,11 @@ SLUICE_TEST_CASE(tp_reap_unjoined_workers_bounded_after_full_reap) {
     }
 
     // THE REGRESSION, restated at the end: no worker may remain unreaped.
-    // Pre-fix this is OPS (4096 unjoined zombies); post-fix poll() joined
+    // Pre-fix this equals OPS (4096 unjoined threads); post-fix poll() joined
     // every reaped worker as it drained.
     SLUICE_CHECK_MSG(backend.unjoined_workers_for_test() == 0,
-                     "reaped ops left unjoined worker threads behind (zombie "
-                     "accumulation under kernel task limits)");
+                     "reaped ops left unjoined worker threads behind (unjoined "
+                     "pthread resource accumulation)");
     ::close(fd);
 }
 

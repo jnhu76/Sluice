@@ -11,13 +11,14 @@
 // result into a ready queue. poll() drains the ready queue (marking
 // Completions ready) and JOINS the worker that produced each drained result;
 // wait_one() blocks on a condition variable until >=1 ready and then polls.
-// Joining at reap time keeps the number of unreaped (zombie) kernel threads
-// bounded by the number of outstanding ops instead of growing with the total
-// op count — a high-op-count copy (e.g. ~200k ops per buffer-size round) must
-// not accumulate ~200k unreaped threads, which exhausts kernel task-count
-// limits (RLIMIT_NPROC / threads-max) on standard Linux kernels. The
-// destructor joins any remaining in-flight workers, so the captured `this`
-// stays valid for every worker (workers never outlive the backend).
+// Joining at reap time keeps the number of unjoined pthread resources bounded
+// by the number of outstanding ops instead of growing with the total op
+// count. Accumulated unjoined pthreads retain implementation-managed resources
+// and, combined with the high overhead of hundreds of thousands of thread
+// create/exit/reclaim cycles, can exhaust platform-dependent thread limits or
+// cause extreme runtime on resource-constrained CI runners. The destructor
+// joins any remaining in-flight workers, so the captured `this` stays valid
+// for every worker (workers never outlive the backend).
 //
 // Buffer lifetime (L1-L3c): the worker reads/writes the caller's buffer; the
 // caller MUST keep it alive + address-stable until the Completion is ready
@@ -46,6 +47,14 @@
 //
 // No new dependency (std::thread/mutex/condition_variable only — ADR §11 D4).
 // State is instance-owned (no globals, gate item 6).
+//
+// Remaining risk: workers_ handle storage grows linearly with the cumulative
+// number of submitted operations over the backend's lifetime (reaped slots
+// become non-joinable placeholders but are never reclaimed). This is bounded
+// memory growth (sizeof(std::thread) per historical op), not a thread or
+// kernel-resource leak, but a long-lived backend with millions of ops will
+// accumulate a large vector. A free-list or fixed-size persistent worker pool
+// would eliminate this; tracked as a follow-up.
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
@@ -97,7 +106,7 @@ public:
     // Test-only: count of spawned worker threads that have not yet been
     // joined (reaped) by poll()/wait_one(). A method-only seam — no member
     // data, so production object layout is unchanged. Regression for the
-    // Version B CI failure: unreaped workers must stay bounded by outstanding
+    // Version B CI failure: unjoined workers must stay bounded by outstanding
     // ops, not grow with total ops.
     std::size_t unjoined_workers_for_test() const {
         std::lock_guard<std::mutex> lk(mtx_);

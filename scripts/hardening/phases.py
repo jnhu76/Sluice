@@ -131,12 +131,17 @@ VERSION_B_STRESS_ITERATIONS = "200"
 # Version B nightly integration stress size (SLUICE_PIPELINE_BUFSTRESS_N).
 # The integration test's default buffer matrix is SMALL (each case size is
 # derived from buffer/depth and the slot-reuse rounds, staying in the
-# hundreds of ops — the pre-fix uniform N=100003 made the default CI test a
-# ~400k-thread soak). The nightly Debug soak opts back into the explicit
-# full 100003-byte tiny-buffer workload through this variable; the TSan and
-# ASan+UBSan passes keep the small default (heavy sanitizer coverage comes
-# from sluice_copy_pipeline_stress_test).
+# hundreds of data chunk read/write ops — the pre-fix uniform N=100003 made
+# the default CI test a ~400k-thread soak). The nightly Debug soak opts into
+# the full 100003-byte tiny-buffer workload ONLY on the first round and every
+# FULL_N_INTERVAL-th round thereafter; intermediate rounds use a reduced
+# size that still exercises multi-round slot reuse without burning hundreds
+# of thousands of thread lifecycles per round. The TSan and ASan+UBSan
+# passes keep the small default (heavy sanitizer coverage comes from
+# sluice_copy_pipeline_stress_test).
 VERSION_B_INTEGRATION_STRESS_N = "100003"
+VERSION_B_INTEGRATION_SOAK_N = "10007"
+VERSION_B_FULL_N_INTERVAL = 10
 
 FUZZ_TARGETS: List[str] = [
     "wal_read_record_fuzz",
@@ -866,12 +871,12 @@ def phase_version_b_debug_soak(ctx: PhaseContext,
 
     Each round alternates the evidence families the nightly gate must cover:
     deterministic stress (rotating seeds), depth regressions + error drains
-    (the 16-contract suite), real-file integration (the full 100003-byte
-    tiny-buffer workload, opt-in via SLUICE_PIPELINE_BUFSTRESS_N — the
-    integration test's default matrix is small), fault-injection error
-    drains, and scripted-backend controller tests. Failures are sticky; the
-    loop only stops early on 3 consecutive unrecovered failures or an
-    exhausted budget.
+    (the 16-contract suite), real-file integration (full 100003-byte tiny-
+    buffer workload on round 1 and every FULL_N_INTERVAL-th round; reduced
+    N=10007 on intermediate rounds to avoid burning ~400k thread lifecycles
+    per round), fault-injection error drains, and scripted-backend controller
+    tests. Failures are sticky; the loop only stops early on 3 consecutive
+    unrecovered failures or an exhausted budget.
     """
     if not ctx.baseline_ok:
         _log(ctx, "[version-b-soak][SKIP] baseline build failed")
@@ -896,13 +901,21 @@ def phase_version_b_debug_soak(ctx: PhaseContext,
         round_no += 1
         _log(ctx, f"[version-b-soak] round {round_no}")
 
+        # Full N=100003 on round 1 and every FULL_N_INTERVAL-th round;
+        # intermediate rounds use a reduced size that still exercises multi-
+        # round slot reuse without burning ~400k thread lifecycles per round.
+        is_full_n = (round_no == 1 or
+                     round_no % VERSION_B_FULL_N_INTERVAL == 0)
+        integration_n = (VERSION_B_INTEGRATION_STRESS_N if is_full_n
+                         else VERSION_B_INTEGRATION_SOAK_N)
+
         round_cmds = [
             ("stress", _version_b_stress_cmd(round_no), None),
             ("depth-regressions",
              ["xmake", "run", "sluice_copy_pipeline_contract_test"], None),
             ("integration",
              ["xmake", "run", "sluice_copy_pipeline_integration_test"],
-             {"SLUICE_PIPELINE_BUFSTRESS_N": VERSION_B_INTEGRATION_STRESS_N}),
+             {"SLUICE_PIPELINE_BUFSTRESS_N": integration_n}),
             ("error-drains", ["xmake", "run", "sluice_copy_fault_test"], None),
             ("scripted-controller",
              ["xmake", "run", "scripted_backend_test"], None),
@@ -913,10 +926,9 @@ def phase_version_b_debug_soak(ctx: PhaseContext,
             if time.monotonic() - start_mono >= budget_seconds:
                 break
             if name == "integration":
-                # Log the stress scale actually in effect, so a nightly that
-                # silently runs the small default matrix cannot look covered.
-                _log(ctx, "[version-b-soak] integration round: "
-                     f"Version B buffer stress N={VERSION_B_INTEGRATION_STRESS_N}")
+                _log(ctx, f"[version-b-soak] integration round {round_no}: "
+                     f"N={integration_n}"
+                     f"{' (full)' if is_full_n else ' (reduced)'}")
             r = _cmd(ctx, "version-b-soak", f"{round_no}-{name}", name, "debug",
                      cmd, env=env, log_subdir="version-b-soak")
             if r.classification in _SOAK_FAILURE_KINDS:
