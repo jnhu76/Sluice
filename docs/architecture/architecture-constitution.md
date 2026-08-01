@@ -50,11 +50,11 @@ admission to reap. It MUST be possible to answer: where is the operation, who
 owns it, what state is it in, which Completion does it relate to, and who can
 terminate it.
 
-**Rationale:** Zig `Operation.Storage` gives each op a caller-owned reusable
-slot with a 4-state intrusive list. Sluice separates `Completion<T>` (caller-
-owned, 3-state) from backend-internal per-op records. The separation is
-approved (Batch header), but the backend-internal identity MUST still be
-auditable — not merely an implicit lambda capture or deque position.
+**Rationale:** Sluice separates `Completion<T>` (caller-owned, 3-state) from
+backend-internal per-op records. Whether this separation remains permanent is
+unresolved under DIV-02 (status: Pending decision). Regardless of the final
+storage model, the backend-internal identity MUST still be auditable — not
+merely an implicit lambda capture or deque position.
 
 **Required evidence:**
 - Each backend documents how an accepted op is tracked from submit to reap.
@@ -341,10 +341,12 @@ designated. The interface comment, implementation, and ADR MUST agree. If they
 disagree, the discrepancy MUST be flagged as `U — Unresolved` and resolved by
 ADR before the next release. Silent divergence is forbidden.
 
-**Rationale:** Current P1 finding: `async_io_context.hpp` says "marking the
-Completion via mark_outstanding() is the context's job, not the backend's," but
-`ThreadPoolBackend::enqueue_size` also calls `c.mark_outstanding()`. This is a
-direct authority conflict that makes the contract untrustworthy.
+**Rationale:** Current P1 finding: `async_io_context.hpp` designates context
+as the marking authority ("marking the Completion via mark_outstanding() is the
+context's job, not the backend's"), while every backend implementation performs
+the transition internally. The conflict is documentation-versus-implementation,
+not an as-built double transition — the context never calls mark_outstanding().
+This makes the contract untrustworthy for readers who rely on header comments.
 
 **Required evidence:**
 - Each state transition (idle→outstanding, outstanding→ready) names its
@@ -436,47 +438,66 @@ auditable and prevents accidental accumulation.
 
 ---
 
-## AC-13. Unforgeable State Authority
+## AC-13. Unforgeable Publication Authority; State-Checked Caller Lifecycle
 
-**Rule:** Caller-visible objects whose internal state transitions are
-backend/system-controlled MUST enforce that authority structurally (via type
-system, capability token, or access-control pattern). A comment saying
-"backend-only" is NOT an authority boundary. Debug assertions are NOT an
-authority boundary. Release builds MUST also detect or structurally prevent
-invalid transitions.
+**Rule:** Internal publication transitions (`mark_outstanding`, `complete_with`)
+MUST be structurally unforgeable by ordinary application code (via type system,
+capability token, or access-control pattern). Caller lifecycle transitions
+(`reset` / `rearm`) remain caller-accessible but MUST be state-checked:
+`ready → idle` only. A comment saying "backend-only" is NOT an authority
+boundary. Debug assertions are NOT an authority boundary. Release builds MUST
+also detect or structurally prevent invalid transitions.
 
-**Rationale:** Current `Completion<T>` exposes `mark_outstanding()`,
-`complete_with()`, and `reset()` as public methods. Any application code can
-forge state transitions: reset an outstanding Completion, double-complete,
-or mark outstanding without a backend. Tests already use these as public API,
-solidifying the authority leak. This enables use-after-free (backend holds
-pointer to reset/destroyed Completion), double publication, and permanent
-state divergence between Completion and backend outstanding count.
+**Authority separation:**
+```text
+Backend/system authority (structurally forbidden to callers):
+  mark_outstanding()     idle → outstanding
+  complete_with()        outstanding → ready
+
+Caller lifecycle authority (permitted, state-checked):
+  reset() / rearm()      ready → idle ONLY
+                         idle → invalid_state error
+                         outstanding → invalid_state error / fail-fast
+```
+
+**Rationale:** Current `Completion<T>` exposes `mark_outstanding()` and
+`complete_with()` as public methods. Any application code can forge publication
+transitions: double-complete, or mark outstanding without a backend. Tests
+already use these as public API, solidifying the authority leak. This enables
+use-after-free (backend holds pointer to reset/destroyed Completion), double
+publication, and permanent state divergence. However, `reset()` is the caller's
+reuse interface — the Completion contract requires callers to reset after
+reading the result. Making reset backend-only would destroy the caller-owned
+reusable model.
 
 **Required evidence:**
-- `mark_outstanding()`, `complete_with()`, `reset()` are NOT callable from
-  ordinary application code (negative-compile proof).
+- `mark_outstanding()` and `complete_with()` are NOT callable from ordinary
+  application code (negative-compile proof).
+- `reset()` IS callable by the caller but ONLY succeeds from ready state.
+  Reset on idle returns `invalid_state`; reset on outstanding is a checked
+  contract violation (fail-fast in Release).
 - Destruction of an outstanding Completion is a checked contract violation
   in BOTH Debug and Release.
-- No test uses backend-only mutators as if they were public caller API.
+- No test uses backend-only publication mutators as if they were public API.
 - Two different contexts cannot both mark the same Completion outstanding
   (structural exclusion, not comment convention).
 
 **Allowed exceptions:**
-- During the corrective Phase 1, temporary public access is allowed if
-  tracked and guarded by a negative-compile deadline.
+- During the corrective phase, temporary public access is allowed if tracked
+  and guarded by a negative-compile deadline.
 - Test-only access via friend or `SLUICE_ASYNC_INTERNAL_TESTING` guard.
 
 **Common violations:**
 - Public `mark_outstanding()` with only an assert(idle) guard.
-- `reset()` that does not check outstanding state.
+- `reset()` that silently succeeds from outstanding state.
 - Default destructor that does not fail-fast on outstanding.
 - Tests calling `c.complete_with(...)` directly as "convenience."
 
 **Review questions:**
-1. Can application code forge this state transition?
+1. Can application code forge a publication transition?
 2. If yes, what is the worst-case consequence?
 3. Is the boundary structural or merely conventional?
+4. Does reset enforce ready→idle only?
 
 ---
 

@@ -41,7 +41,7 @@ Status values:
 | Benefit | Simpler caller contract (only Completion to manage); backend freedom in internal tracking. |
 | Cost | Backend per-op heap allocation (std::function, deque entry, thread); no zero-allocation accepted-op path in ThreadPoolBackend; no stable queryable operation identity beyond the Completion pointer. |
 | Current evidence | `completion.hpp:1-238`; `batch.hpp:9-22` (documents scope deferral, not permanent decision); `threadpool_backend.cpp:85` (per-op thread + function). |
-| Revisit trigger | Phase 1 roadmap (Explicit Operation Ownership design). This is the primary decision point. Must be resolved by ADR before the next release. |
+| Revisit trigger | Phase 1 roadmap (Explicit I/O Request Contract ADR). This is the primary decision point. Must be resolved by ADR before the next release. |
 
 ---
 
@@ -53,11 +53,11 @@ Status values:
 | Status | Corrective planned |
 | Introduced by | Implementation (no founding ADR for this specific model) |
 | Governing ADR | ADR-execution-model §9.1 P2 (mentions blocking offload but does not approve per-op thread model) |
-| Reason | Zig `Threaded` = thread-per-TASK (execution strategy). Sluice `ThreadPoolBackend` = thread-per-OP (blocking I/O offload for the Evented scheduler). These are different concepts at different layers. The naming is misleading and the per-op thread model has known resource issues (unbounded, expensive). Corrective action planned in Phase 3 roadmap. |
-| Benefit | Evented scheduler workers remain free during blocking I/O; simple correct implementation. |
+| Reason | Zig `Threaded` = thread-per-TASK (execution strategy). Sluice `ThreadPoolBackend` = thread-per-OP (blocking I/O offload for the Evented scheduler). These are different concepts at different layers. The naming is misleading and the per-op thread model has known resource issues (unbounded, expensive). Corrective action planned in Phase 6 roadmap. |
+| Benefit | Evented scheduler workers remain free during blocking I/O; simple functional prototype under normal resource availability. |
 | Cost | Thread creation per op (expensive); unbounded thread count; misleading name suggests a bounded pool; violates AC-7 (bounded resources). |
 | Current evidence | `threadpool_backend.hpp:8-9` ("one worker thread per outstanding op"); `group.hpp:49-51` (Threaded mode = thread-per-task). |
-| Revisit trigger | Phase 3 roadmap (portable blocking-I/O offload design with persistent workers and bounded capacity). Naming correction at that time. |
+| Revisit trigger | Phase 6 roadmap (persistent blocking-I/O offload design with bounded capacity). Naming correction at that time. |
 
 ---
 
@@ -73,7 +73,7 @@ Status values:
 | Benefit | No upward lock coupling; backend remains a simple leaf; Scheduler retains routing authority. |
 | Cost | Up to 2ms observation latency in MIXED-WAKE mode; no instant backend→Fiber resume. |
 | Current evidence | ADR §9.4.7.1 (2ms is protocol authority for MIXED-WAKE); `scheduler.hpp` worker loop (poll → wake_ready_completions_locked). |
-| Revisit trigger | Phase 2 roadmap (unified progress/wake); if latency-sensitive workloads require sub-ms backend wake. |
+| Revisit trigger | Phase 5 roadmap (backend progress signal / unified wake); if latency-sensitive workloads require sub-ms backend wake. |
 
 ---
 
@@ -89,7 +89,7 @@ Status values:
 | Benefit | Avoids split-brain between backend cv and scheduler cv; single park point for mixed waits. |
 | Cost | 2ms worst-case latency for backend completion in MIXED-WAKE; periodic CPU wake even if no progress. |
 | Current evidence | ADR §9.4.7.1; scheduler worker loop implementation. |
-| Revisit trigger | If backend wake integration is designed (Phase 2); if 2ms latency is unacceptable for a workload. |
+| Revisit trigger | If backend wake integration is designed (Phase 5); if 2ms latency is unacceptable for a workload. |
 
 ---
 
@@ -201,7 +201,7 @@ Status values:
 | Benefit | (None — this is not a benefit, it is an absence of constraint.) |
 | Cost | Unbounded thread creation; OOM under load; no graceful degradation; violates AC-7. |
 | Current evidence | `threadpool_backend.hpp:51-57` (documented risk); no capacity parameter; no `would_block` error. |
-| Revisit trigger | Phase 1 roadmap (bounded capacity design). This is the highest-priority corrective. |
+| Revisit trigger | Phase 1 roadmap (bounded capacity design within unified request contract). This is the highest-priority corrective. |
 
 ---
 

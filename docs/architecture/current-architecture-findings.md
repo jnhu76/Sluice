@@ -215,10 +215,15 @@ designated reap authority (poll/wait_one drain).
 
 **Violated constitution rule:** AC-5 (single Completion publication authority).
 
-**Semantic consequence:** If a concurrent poll() is draining entries while
-cancel() is called, the Completion may be completed twice (race). In the
-current single-threaded usage pattern this is masked, but the authority
-violation is structural.
+**Semantic consequence:** Bypasses the unified reap/publication authority.
+Completion ordering and statistics may be inconsistent. Backend conformance
+is non-uniform (ThreadPoolBackend defers to poll; SyncBackend does not). If
+external code directly instantiates SyncBackend (bypassing AsyncIoContext's
+access_mtx_), the interface itself provides no thread-safety guarantee.
+Note: when accessed normally through AsyncIoContext, cancel() and poll() are
+serialized by access_mtx_, so a proven double-completion race does NOT exist
+on the normal path. The violation is structural authority bypass, not a
+demonstrated concurrent race.
 
 **Currently regression-tested:** No concurrent cancel + poll test for
 SyncBackend.
@@ -248,10 +253,16 @@ asynchronously with an error — a semantic that does not exist in the
 documented contract.
 
 **Evidence:**
-- `src/async/threadpool_backend.cpp:93-99` (catch handler):
+- `src/async/threadpool_backend.cpp:93-101` (catch handlers):
   ```cpp
+  } catch (const std::bad_alloc&) {
+      fail_spawn_size(cp, IoError{IoError::Code::no_space});
+  } catch (const std::system_error& e) {
+      IoError err{IoError::Code::backend_error};
+      if (e.code().value() > 0) err.os_errno = e.code().value();
+      fail_spawn_size(cp, err);
   } catch (...) {
-      fail_spawn_size(cp, worker_idx);
+      fail_spawn_size(cp, IoError{IoError::Code::backend_error});
   }
   ```
 - `fail_spawn_size` pushes to `ready_size_` with an error result.
@@ -551,10 +562,12 @@ two fundamentally different events.
 submit is NOT a completion), AC-15 (completion identity — rejected ops
 should not enter the completion stream).
 
-**Semantic consequence:** Callers must know the reap_seq==0 convention to
-distinguish rejection from completion. The two events have different
-recovery semantics (rejection: may retry immediately; completion: operation
-executed and failed).
+**Semantic consequence:** The public BatchResult does not preserve outcome
+origin, so callers cannot distinguish admission rejection (operation never
+executed) from execution failure (operation ran and failed). This matters for
+retry logic, write idempotency, durability operations, and metrics. The
+`reap_seq == 0` discriminator is a Batch-internal encoding not visible to
+callers through the public result type.
 
 **Currently regression-tested:** Tests verify error propagation but do not
 test the semantic distinction.
@@ -610,10 +623,12 @@ Over a long-running process, this vector grows O(total_ops_submitted).
 **Violated constitution rule:** AC-7 (no container may grow by historical
 total without reclamation).
 
-**Semantic consequence:** Memory leak proportional to total I/O operations over
-the backend's lifetime. A long-running Runtime with millions of ops accumulates
-millions of `std::thread` objects (each ~8-16 bytes after join, plus vector
-capacity).
+**Semantic consequence:** Retained memory grows with cumulative submissions
+and is reclaimed only when the backend is destroyed. A long-running Runtime
+with millions of ops accumulates millions of `std::thread` objects (each
+~8-16 bytes after join, plus vector capacity). This is unbounded retained
+container storage, not a strict resource leak (joined threads release OS
+resources), but it is historical-growth memory retention with no reclamation.
 
 **Currently regression-tested:** No.
 
@@ -625,10 +640,13 @@ capacity).
 
 ## P2-03: Hot-Path Heap Allocation (std::function + deque)
 
-**Finding:** Every accepted operation allocates:
-1. A `std::function` (heap, type-erased lambda) — `threadpool_backend.cpp:85`
-2. A `std::thread` (kernel + heap) — same line
-3. A deque node on ready push — `threadpool_backend.cpp:89`
+**Finding:** Every accepted operation traverses multiple potentially
+allocating hot-path operations:
+1. A `std::function` (type-erased lambda — may use small-object optimization
+   for small captures, but heap allocation for larger ones)
+2. A `std::thread` (kernel + heap — always allocates)
+3. A deque node on ready push (`deque::push_back` allocates new blocks
+   periodically, not on every call)
 
 All three are on the I/O submission/completion hot path.
 
@@ -666,8 +684,10 @@ this mode, and causes periodic CPU wakes even when no progress occurred.
 This IS justified and documented, but the cost is real.
 
 **Semantic consequence:** Workloads with frequent small I/O in MIXED-WAKE mode
-pay 2ms p99 latency tax. CPU wakes 500 times/second per parked worker even
-when idle.
+pay up to one observation interval (~2ms upper bound) of additional latency per
+backend completion, and may cause periodic timed wakeups while this mode
+remains active. Actual latency impact and wakeup frequency depend on workload
+and require benchmark evidence to quantify precisely.
 
 **Currently regression-tested:** Deterministic causal tests verify liveness but
 do not measure latency.
@@ -758,24 +778,24 @@ with subsystem prefix in documentation.
 
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
-| P0-01 | P0 | Worker OOM → terminate | Open issue needed |
-| P0-02 | P0 | Cross-backend transactional submit | Phase 4 roadmap (root cause) |
-| P0-03 | P0 | Completion mutation authority forgeable | Phase 1 (authority hardening) |
+| P0-01 | P0 | Worker OOM → terminate | Phase 1 ADR + Phase 2 impl |
+| P0-02 | P0 | Cross-backend transactional submit | Phase 1 ADR + Phase 2/3 impl |
+| P0-03 | P0 | Completion publication authority forgeable | Phase 1 ADR + Phase 2 impl |
 | P1-01 | P1 | mark_outstanding stale comment | Comment correction needed |
 | P1-02 | P1 | Backend-ready vs completion-ready | Documentation needed |
-| P1-03 | P1 | SyncBackend cancel bypasses reap | Phase 4 corrective |
-| P1-04 | P1 | Spawn failure incorrectly asyncized | Phase 4 roadmap |
-| P1-05 | P1 | queue_full_retries semantic conflation | Phase 0/4 error vocabulary |
-| P1-06 | P1 | No request generation (ABA) | Phase 2 (RequestKey) |
-| P1-07 | P1 | Reap API discards completion identity | Phase 3 (reap redesign) |
-| P1-08 | P1 | wait_one holds lock, blocks cancel | Phase 5 (wait/cancel) |
-| P1-09 | P1 | Cancel API not explicit | Phase 5 (wait/cancel) |
-| P1-10 | P1 | Runtime await no provenance check | Phase 1/2 |
-| P2-01 | P2 | Per-op thread creation | Phase 7 roadmap |
-| P2-02 | P2 | workers_ monotonic growth | Phase 7 roadmap |
-| P2-03 | P2 | Hot-path allocation | Phase 4/7 roadmap |
-| P2-04 | P2 | 2ms MIXED-WAKE latency | Phase 6 roadmap |
-| P2-05 | P2 | Batch conflates rejection with completion | Phase 3 |
+| P1-03 | P1 | SyncBackend cancel bypasses reap | Phase 3 (backend migration) |
+| P1-04 | P1 | Spawn failure incorrectly asyncized | Phase 3 (backend migration) |
+| P1-05 | P1 | queue_full_retries semantic conflation | Phase 0/1 error vocabulary |
+| P1-06 | P1 | No request generation (ABA) | Phase 1 (unified ADR) |
+| P1-07 | P1 | Reap API discards completion identity | Phase 1 ADR + Phase 2 impl |
+| P1-08 | P1 | wait_one holds lock, blocks cancel | Phase 4 (wait/cancel) |
+| P1-09 | P1 | Cancel API not explicit | Phase 4 (wait/cancel) |
+| P1-10 | P1 | Runtime await no provenance check | Phase 1 ADR + Phase 2 impl |
+| P2-01 | P2 | Per-op thread creation | Phase 6 (persistent workers) |
+| P2-02 | P2 | workers_ monotonic growth | Phase 6 (persistent workers) |
+| P2-03 | P2 | Hot-path allocation | Phase 1 design / Phase 6 |
+| P2-04 | P2 | 2ms MIXED-WAKE latency | Phase 5 (wake) |
+| P2-05 | P2 | Batch conflates rejection with completion | Phase 1 ADR + Phase 2 |
 | P3-01 | P3 | ThreadPoolBackend naming | Phase 0 rename |
 | P3-02 | P3 | Stale header comment | Small corrective PR |
 | P3-03 | P3 | "workers" ambiguity | Phase 0 audit |

@@ -116,20 +116,37 @@ wait_one()
 
 ```text
 submit_*(op, c)
-→ c.mark_outstanding() (backend-side)
-→ register_op: comp_to_op.emplace, ops.emplace, pending_sqes.push_back
-→ io_uring_get_sqe() → prepare pread/pwrite/fsync
-→ io_uring_submit()
+→ check impl_, fatal_error, c.idle()
+→ checked_uring_length(op.len)
+→ get_sqe_with_pressure()         ← acquire SQE slot (may fail: ring full)
+→ io_uring_prep_read/write/fsync  ← fill SQE (unsubmitted)
+→ io_uring_sqe_set_data(sqe, id) ← set user_data = monotonic op id
+→ register_op(impl, id, c, OpRec)
+    → c.mark_outstanding()        ← BACKEND marks (inside register_op)
+    → comp_to_op.emplace(comp_key, id)
+    → ops.emplace(id, rec)
+    → pending_sqes.push_back({operation, id})
+    → next_id = id + 1
+→ return {}
+
+NOTE: No io_uring_submit() here. SQEs accumulate in pending_sqes.
+Submission to kernel occurs later in poll()/wait_one() via submit_pending().
 
 poll()
+→ submit_pending() (flush pending_sqes to kernel)
 → io_uring_peek_batch_cqe()
-→ for each CQE: lookup Completion*, complete_with(result)
+→ for each CQE: lookup OpRec by id, complete_with(result)
 → return count
 
 wait_one()
-→ io_uring_submit_and_wait(1)
+→ submit_pending() + io_uring_submit_and_wait(1)
 → (then drain CQEs as poll)
 ```
+
+**Transactional admission note:** The SQE is acquired and prepared BEFORE
+mark_outstanding. If register_op container allocations fail (comp_to_op,
+ops, pending_sqes), the SQE has already been written but not submitted.
+This is a non-atomic mark-then-allocate sequence (see P0-02).
 
 ### 2.4 FakeAsyncBackend
 
