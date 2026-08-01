@@ -128,6 +128,16 @@ VERSION_B_STRESS_SEEDS: List[str] = [
 ]
 VERSION_B_STRESS_ITERATIONS = "200"
 
+# Version B nightly integration stress size (SLUICE_PIPELINE_BUFSTRESS_N).
+# The integration test's default buffer matrix is SMALL (each case size is
+# derived from buffer/depth and the slot-reuse rounds, staying in the
+# hundreds of ops — the pre-fix uniform N=100003 made the default CI test a
+# ~400k-thread soak). The nightly Debug soak opts back into the explicit
+# full 100003-byte tiny-buffer workload through this variable; the TSan and
+# ASan+UBSan passes keep the small default (heavy sanitizer coverage comes
+# from sluice_copy_pipeline_stress_test).
+VERSION_B_INTEGRATION_STRESS_N = "100003"
+
 FUZZ_TARGETS: List[str] = [
     "wal_read_record_fuzz",
     "wal_roundtrip_fuzz",
@@ -856,10 +866,12 @@ def phase_version_b_debug_soak(ctx: PhaseContext,
 
     Each round alternates the evidence families the nightly gate must cover:
     deterministic stress (rotating seeds), depth regressions + error drains
-    (the 16-contract suite), real-file integration (full 100003-byte tiny-
-    buffer workload in Debug), fault-injection error drains, and scripted-
-    backend controller tests. Failures are sticky; the loop only stops early
-    on 3 consecutive unrecovered failures or an exhausted budget.
+    (the 16-contract suite), real-file integration (the full 100003-byte
+    tiny-buffer workload, opt-in via SLUICE_PIPELINE_BUFSTRESS_N — the
+    integration test's default matrix is small), fault-injection error
+    drains, and scripted-backend controller tests. Failures are sticky; the
+    loop only stops early on 3 consecutive unrecovered failures or an
+    exhausted budget.
     """
     if not ctx.baseline_ok:
         _log(ctx, "[version-b-soak][SKIP] baseline build failed")
@@ -885,21 +897,28 @@ def phase_version_b_debug_soak(ctx: PhaseContext,
         _log(ctx, f"[version-b-soak] round {round_no}")
 
         round_cmds = [
-            ("stress", _version_b_stress_cmd(round_no)),
-            ("depth-regressions", ["xmake", "run",
-                                   "sluice_copy_pipeline_contract_test"]),
-            ("integration", ["xmake", "run",
-                             "sluice_copy_pipeline_integration_test"]),
-            ("error-drains", ["xmake", "run", "sluice_copy_fault_test"]),
-            ("scripted-controller", ["xmake", "run", "scripted_backend_test"]),
+            ("stress", _version_b_stress_cmd(round_no), None),
+            ("depth-regressions",
+             ["xmake", "run", "sluice_copy_pipeline_contract_test"], None),
+            ("integration",
+             ["xmake", "run", "sluice_copy_pipeline_integration_test"],
+             {"SLUICE_PIPELINE_BUFSTRESS_N": VERSION_B_INTEGRATION_STRESS_N}),
+            ("error-drains", ["xmake", "run", "sluice_copy_fault_test"], None),
+            ("scripted-controller",
+             ["xmake", "run", "scripted_backend_test"], None),
         ]
-        for name, cmd in round_cmds:
+        for name, cmd, env in round_cmds:
             if ctx.remaining_seconds() < per_cmd:
                 break
             if time.monotonic() - start_mono >= budget_seconds:
                 break
+            if name == "integration":
+                # Log the stress scale actually in effect, so a nightly that
+                # silently runs the small default matrix cannot look covered.
+                _log(ctx, "[version-b-soak] integration round: "
+                     f"Version B buffer stress N={VERSION_B_INTEGRATION_STRESS_N}")
             r = _cmd(ctx, "version-b-soak", f"{round_no}-{name}", name, "debug",
-                     cmd, log_subdir="version-b-soak")
+                     cmd, env=env, log_subdir="version-b-soak")
             if r.classification in _SOAK_FAILURE_KINDS:
                 ctx.sticky_hold = True
                 consec_fail += 1
@@ -947,6 +966,9 @@ def phase_version_b_tsan(ctx: PhaseContext,
 
     _log(ctx, f"[version-b-tsan] budget={budget_seconds:.0f}s "
          f"per-cmd={per_cmd:.0f}s targets={len(VERSION_B_TSAN_SET)}")
+    _log(ctx, "[version-b-tsan] integration buffer matrix at the small "
+         "default scale; heavy workload coverage via "
+         "sluice_copy_pipeline_stress_test")
 
     while time.monotonic() - start_mono < budget_seconds:
         if ctx.remaining_seconds() < per_cmd:
@@ -1019,8 +1041,10 @@ def phase_version_b_asanubsan(ctx: PhaseContext,
         "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1",
     }
 
-    # Full suite once. The integration tiny-buffer stress auto-scales down on
-    # instrumented builds, so this completes in reasonable time.
+    # Full suite once. The integration buffer matrix is small by default
+    # (per-case size from buffer/depth x slot-reuse rounds; the nightly Debug
+    # soak opts into the full 100003-byte workload explicitly), so this
+    # completes in reasonable time.
     _log(ctx, "[version-b-asanubsan] full suite")
     full = _cmd(ctx, "version-b-asanubsan", "0", "full-suite", "asanubsan",
                 ["xmake", "test", "-v"],
