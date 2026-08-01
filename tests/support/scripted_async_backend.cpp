@@ -35,7 +35,7 @@ namespace {
 // Count reads among outstanding size ops (pending + staged).
 std::size_t count_reads_locked(const ScriptedBackendSharedState& s) {
     std::size_t n = 0;
-    for (auto& [id, op] : const_cast<ScriptedBackendSharedState&>(s).size_ops)
+    for (const auto& [id, op] : s.size_ops)
         if (op.kind == OpKind::read) ++n;
     return n;
 }
@@ -271,8 +271,12 @@ void ScriptedAsyncBackend::cancel(Completion<std::size_t>& c) {
     std::lock_guard<std::mutex> lk(state_->mtx);
     for (auto& [id, op] : state_->size_ops) {
         if (op.completion == &c) {
-            // Stage a canceled result (and mark the op staged so the next poll
-            // erases it). The op stays in size_ops (stage=staged) until poll.
+            // Idempotent cancel: only a still-PENDING op may be staged with a
+            // canceled result. If a result is already staged (stage == staged,
+            // e.g. from an earlier cancel or a test completion), a second
+            // cancel must be a no-op — staging twice would complete_with the
+            // same Completion twice (a terminal-result contract violation).
+            if (op.stage != OpStage::pending) return;
             op.stage = OpStage::staged;
             state_->staged_size.push_back(
                 {&c, make_unexpected<std::size_t>(
@@ -288,6 +292,9 @@ void ScriptedAsyncBackend::cancel(Completion<void>& c) {
     std::lock_guard<std::mutex> lk(state_->mtx);
     for (auto& [id, op] : state_->void_ops) {
         if (op.completion == &c) {
+            // Idempotent: see the size-op cancel above (exactly-once terminal
+            // result per Completion).
+            if (op.stage != OpStage::pending) return;
             op.stage = OpStage::staged;
             state_->staged_void.push_back(
                 {&c, make_unexpected<void>(

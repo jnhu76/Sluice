@@ -782,4 +782,130 @@ SLUICE_TEST_CASE(scripted_max_reads_excludes_writes) {
     SLUICE_CHECK(ctrl.max_outstanding_total() == 3);
 }
 
+// ---------------------------------------------------------------------------
+// Slice 18: cancel is idempotent (exactly-once terminal result).
+//
+// The Runtime may call cancel() more than once for the same outstanding
+// Completion (e.g. a defensive cleanup path). Staging a canceled result on
+// every call would complete_with() the same Completion twice — a terminal-
+// result contract violation. Only the FIRST cancel on a still-pending op may
+// stage; later cancels are no-ops.
+// ---------------------------------------------------------------------------
+
+SLUICE_TEST_CASE(scripted_double_cancel_size_op_is_idempotent) {
+    auto pair = make_scripted_backend();
+    AsyncIoContext ctx(std::move(pair.backend));
+    auto& ctrl = pair.controller;
+
+    std::byte buf[8]{};
+    Completion<std::size_t> c;
+    Cleanup cleanup{&ctrl, &ctx};
+
+    (void)ctx.submit_read(ReadOp{0, buf, 8, 0}, c);
+    SLUICE_CHECK(ctrl.pending_count() == 1);
+
+    // Cancel twice BEFORE any poll.
+    ctx.cancel(c);
+    ctx.cancel(c);
+
+    // A single poll applies exactly ONE canceled result.
+    SLUICE_CHECK(ctx.poll() == 1);
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(!c.result().has_value());
+    SLUICE_CHECK(c.result().error().code == IoError::Code::canceled);
+    SLUICE_CHECK(ctrl.pending_count() == 0);
+
+    // A second poll applies nothing more (no duplicate terminal result).
+    SLUICE_CHECK(ctx.poll() == 0);
+    SLUICE_CHECK(ctrl.pending_count() == 0);
+}
+
+SLUICE_TEST_CASE(scripted_double_cancel_void_op_is_idempotent) {
+    auto pair = make_scripted_backend();
+    AsyncIoContext ctx(std::move(pair.backend));
+    auto& ctrl = pair.controller;
+
+    Completion<void> c;
+    Cleanup cleanup{&ctrl, &ctx};
+
+    (void)ctx.submit_sync_data(SyncDataOp{0}, c);
+    SLUICE_CHECK(ctrl.pending_count() == 1);
+
+    ctx.cancel(c);
+    ctx.cancel(c);
+
+    SLUICE_CHECK(ctx.poll() == 1);
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(!c.result().has_value());
+    SLUICE_CHECK(c.result().error().code == IoError::Code::canceled);
+    SLUICE_CHECK(ctrl.pending_count() == 0);
+    SLUICE_CHECK(ctx.poll() == 0);
+}
+
+SLUICE_TEST_CASE(scripted_cancel_after_complete_is_noop) {
+    auto pair = make_scripted_backend();
+    AsyncIoContext ctx(std::move(pair.backend));
+    auto& ctrl = pair.controller;
+
+    std::byte buf[8]{};
+    Completion<std::size_t> c;
+    Cleanup cleanup{&ctrl, &ctx};
+
+    (void)ctx.submit_read(ReadOp{0, buf, 8, 0}, c);
+
+    // Complete via the controller first (normal terminal result).
+    ctrl.complete_bytes(1, 8);
+    SLUICE_CHECK(ctx.poll() == 1);
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(c.result().value() == 8);
+    SLUICE_CHECK(ctrl.pending_count() == 0);
+
+    // A late cancel must be a no-op: the op is already terminal and no longer
+    // in the outstanding map. It must NOT stage a second result.
+    ctx.cancel(c);
+    SLUICE_CHECK(ctx.poll() == 0);
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(c.result().value() == 8);  // original result preserved
+    SLUICE_CHECK(ctrl.pending_count() == 0);
+}
+
+SLUICE_TEST_CASE(scripted_cancel_never_submitted_is_noop) {
+    auto pair = make_scripted_backend();
+    AsyncIoContext ctx(std::move(pair.backend));
+    auto& ctrl = pair.controller;
+
+    Completion<std::size_t> c;
+    Cleanup cleanup{&ctrl, &ctx};
+
+    // The Completion was never submitted: cancel must be a silent no-op and
+    // must not make the Completion ready.
+    ctx.cancel(c);
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(c.idle());
+    SLUICE_CHECK(ctx.poll() == 0);
+    SLUICE_CHECK(ctrl.pending_count() == 0);
+}
+
+SLUICE_TEST_CASE(scripted_cancel_then_teardown_clean) {
+    auto pair = make_scripted_backend();
+    AsyncIoContext ctx(std::move(pair.backend));
+    auto& ctrl = pair.controller;
+
+    std::byte buf[8]{};
+    Completion<std::size_t> c;
+    Cleanup cleanup{&ctrl, &ctx};
+
+    (void)ctx.submit_read(ReadOp{0, buf, 8, 0}, c);
+    ctx.cancel(c);
+    ctx.cancel(c);  // idempotent
+    SLUICE_CHECK(ctx.poll() == 1);
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(!c.result().has_value());
+
+    // Nothing outstanding at teardown: the context destructor (and the
+    // backend destructor's Debug invariant) must not fail-fast.
+    SLUICE_CHECK(ctrl.pending_count() == 0);
+    ctrl.expect_no_outstanding();
+}
+
 SLUICE_MAIN()

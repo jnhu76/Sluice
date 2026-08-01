@@ -291,18 +291,15 @@ end
 
 -- sluice-copy Version B pipeline contract tests.
 -- These tests describe the expected behavior of the pipelined copy (Version B).
--- They are written against the CURRENT production code (Version A) and the
--- ScriptedAsyncBackend test infrastructure.
+-- They drive the copy task via the public run_*_copy* entry points against the
+-- ScriptedAsyncBackend + controller test infrastructure.
 --
--- STATUS: NOT in the default `xmake test` group. Run manually:
---   xmake run sluice_copy_pipeline_contract_test
---
--- Expected result: FAIL (red) — the majority of contracts require Version B
--- which is not yet implemented. A few contracts (depth=1, write-zero-error)
--- that Version A already satisfies may PASS.
---
--- When Version B is complete and SLUICE_HAS_PIPELINED_COPY is defined, add
--- this target to the test group and remove this note.
+-- SLUICE_HAS_PIPELINED_COPY turns the guarded Version-B contract bodies on.
+-- The target IS part of the default test group (add_tests below); the old
+-- "NOT in the default group / expected FAIL" note was stale once Version B
+-- landed. The harness also carries the bounded-failure watchdog: a scenario
+-- whose copy thread never publishes terminates the binary with diagnostics
+-- instead of hanging the suite forever.
 do
     local R = SLUICE_ROOT
     local app_dir = R .. "apps/sluice-copy"
@@ -321,5 +318,44 @@ do
             add_includedirs(R .. "include", R .. "tests", app_dir)
             add_files(test_src, support_src, app_dir .. "/copy_task.cpp")
             add_tests("sluice_copy_pipeline_contract_test")
+    end
+end
+
+-- sluice-copy CLI argument parsing tests. Strict unsigned decimal parsing,
+-- worker caps (no silent narrowing, app-level kMaxWorkers), and argument
+-- validation — the same app code the CLI binary runs, compiled into the test
+-- target (same pattern as copy_task.cpp in the other sluice-copy tests).
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_cli_parse_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/cli_parse.cpp") then
+        target("sluice_copy_cli_parse_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(test_src, app_dir .. "/cli_parse.cpp")
+            add_tests("sluice_copy_cli_parse_test")
+    end
+end
+
+-- sluice-copy file-domain tests. The Version B regular-file input domain:
+-- invalid sources are rejected BEFORE the destination is created or touched;
+-- destinations must be regular files; same-file identity is rejected.
+do
+    local R = SLUICE_ROOT
+    local app_dir = R .. "apps/sluice-copy"
+    local test_src = R .. "tests/sluice_copy_file_domain_test.cpp"
+    if os.isfile(test_src) and os.isfile(app_dir .. "/file_domain.cpp") then
+        target("sluice_copy_file_domain_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", app_dir)
+            add_files(test_src, app_dir .. "/file_domain.cpp")
+            add_tests("sluice_copy_file_domain_test")
     end
 end

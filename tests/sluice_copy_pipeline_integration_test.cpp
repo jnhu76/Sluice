@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <memory>
 #include <mutex>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
 
@@ -81,17 +82,55 @@ bool files_equal(int a, int b, std::size_t n) {
     return std::memcmp(da.data(), db.data(), n) == 0;
 }
 
-// Copy src->dst at the given buffer/depth/workers/sync and verify byte-equality
-// plus the reported byte count.
+// Copy src->dst at the given buffer/depth/workers/sync and verify the copy
+// EXACTLY:
+//   - the destination is truncated first (mirroring the CLI), so a pre-existing
+//     longer destination cannot hide a stale tail;
+//   - fstat both fds: dst_size must equal src_size == total (a byte-compare of
+//     the first `total` bytes alone would MISS an extra tail in the dst);
+//   - the reported bytes_copied must equal total;
+//   - all bytes must be identical.
 void check_copy(int src, int dst, std::size_t total, std::size_t buf,
                 std::size_t depth, unsigned workers, SyncPolicy sync) {
+    // Mirror the CLI contract: the destination is truncated before the copy.
+    SLUICE_CHECK(::ftruncate(dst, 0) == 0);
+
     auto r = run_pipelined_copy(src, dst, buf, depth, workers, sync);
     SLUICE_CHECK_MSG(r.has_value(), "pipelined copy returned an error");
     SLUICE_CHECK(r.value().bytes_copied == total);
+
+    struct stat sst{}, dstt{};
+    SLUICE_CHECK(::fstat(src, &sst) == 0);
+    SLUICE_CHECK(::fstat(dst, &dstt) == 0);
+    SLUICE_CHECK_MSG(sst.st_size == static_cast<off_t>(total),
+                     "source size mismatch");
+    SLUICE_CHECK_MSG(dstt.st_size == static_cast<off_t>(total),
+                     "destination size is not exactly the source size "
+                     "(stale tail or lost data)");
     SLUICE_CHECK(files_equal(src, dst, total));
 }
 
 }  // namespace
+
+// ---------------------------------------------------------------------------
+// A destination that was originally LONGER than the source must end up with
+// the exact source size. This proves truncate + pipeline write leaves no
+// residual tail (the old byte-compare of the first `total` bytes could not
+// catch a stale tail).
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(pipeline_integration_destination_originally_longer) {
+    constexpr std::size_t SRC_N = 100;
+    TempFile src, dst;
+    seed_file(src.fd, SRC_N);
+    seed_file(dst.fd, 4096);  // destination pre-existing and much longer
+
+    // The CLI truncates the destination before the copy (mirrored by
+    // check_copy); the pipeline must then leave it at EXACTLY SRC_N bytes.
+    check_copy(src.fd, dst.fd, SRC_N, 4096, /*depth=*/3, 1, SyncPolicy::none);
+    struct stat dstt{};
+    SLUICE_CHECK(::fstat(dst.fd, &dstt) == 0);
+    SLUICE_CHECK(dstt.st_size == static_cast<off_t>(SRC_N));
+}
 
 // ---------------------------------------------------------------------------
 // Edge sizes at a fixed depth, across depths: 0,1,B-1,B,B+1,depth*B,depth*B+1
@@ -205,20 +244,34 @@ namespace {
 class ReadConcurrencyProbe : public sluice::async::AsyncBackend {
 public:
     ReadConcurrencyProbe(std::unique_ptr<AsyncBackend> inner,
-                         std::shared_ptr<std::atomic<std::size_t>> peak)
-        : inner_(std::move(inner)), peak_(std::move(peak)) {}
+                         std::shared_ptr<std::atomic<std::size_t>> peak,
+                         std::size_t capacity = kTrackedCapacity)
+        : inner_(std::move(inner)), peak_(std::move(peak)) {
+        // Pre-reserve the tracking vector so push_back() can never throw
+        // AFTER the inner backend has accepted a submit (a throw there would
+        // leave the op untracked while the backend runs it — a lost-write to
+        // the probe's accounting). The pipeline is bounded by its depth, which
+        // is far below this fixed capacity.
+        live_read_completions_.reserve(capacity);
+    }
 
     Result<void> submit_read(sluice::async::ReadOp op,
                              sluice::async::Completion<std::size_t>& c) override {
+        // 1. Ask the INNER backend FIRST: a submit that fails must never be
+        //    counted as live (it never became outstanding in the backend).
+        auto r = inner_->submit_read(op, c);
+        if (!r.has_value()) return r;
+        // 2. Only a successfully-submitted op enters the tracking set, and all
+        //    accounting state changes happen under the same mutex. The vector
+        //    capacity was pre-reserved in the constructor, so push_back cannot
+        //    throw after the backend accepted the op.
         {
             std::lock_guard<std::mutex> lk(mtx_);
+            live_read_completions_.push_back(&c);
             ++live_reads_;
             if (live_reads_ > peak_->load()) peak_->store(live_reads_);
         }
-        // Track the completion so we can decrement live_reads_ when it becomes
-        // ready; poll()/wait_one() reap any now-ready tracked reads.
-        live_read_completions_.push_back(&c);
-        return inner_->submit_read(op, c);
+        return {};
     }
     Result<void> submit_write(sluice::async::WriteOp op,
                               sluice::async::Completion<std::size_t>& c) override {
@@ -252,7 +305,19 @@ public:
         return inner_->outstanding();
     }
 
+    // Test-only accessors (the probe is test-local).
+    std::size_t live_reads() {
+        std::lock_guard<std::mutex> lk(mtx_);
+        return live_reads_;
+    }
+    std::size_t tracked_count() {
+        std::lock_guard<std::mutex> lk(mtx_);
+        return live_read_completions_.size();
+    }
+
 private:
+    static constexpr std::size_t kTrackedCapacity = 1024;
+
     // Decrement live_reads_ for any tracked read completion that is now ready.
     void reap_ready_reads() {
         std::lock_guard<std::mutex> lk(mtx_);
@@ -274,7 +339,102 @@ private:
     std::vector<sluice::async::Completion<std::size_t>*> live_read_completions_;
 };
 
+// Minimal inner backend for the probe accounting tests: accepts or rejects
+// submit_read on demand and records the accepted Completions so the test can
+// complete them directly. All other methods are never reached by the probe
+// unit tests.
+class ProbeStubBackend : public sluice::async::AsyncBackend {
+public:
+    bool fail_reads = false;
+    int reads_submitted = 0;
+    std::vector<sluice::async::Completion<std::size_t>*> completions;
+
+    Result<void> submit_read(sluice::async::ReadOp op,
+                             sluice::async::Completion<std::size_t>& c) override {
+        if (fail_reads)
+            return make_unexpected<void>(IoError{IoError::Code::backend_error});
+        c.mark_outstanding();
+        completions.push_back(&c);
+        ++reads_submitted;
+        return {};
+    }
+    Result<void> submit_write(sluice::async::WriteOp op,
+                              sluice::async::Completion<std::size_t>& c) override {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    Result<void> submit_sync_data(sluice::async::SyncDataOp op,
+                                  sluice::async::Completion<void>& c) override {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    Result<void> submit_sync_all(sluice::async::SyncAllOp op,
+                                 sluice::async::Completion<void>& c) override {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    std::size_t poll() override { return 0; }
+    Result<std::size_t> wait_one() override { return Result<std::size_t>{0}; }
+    void cancel(sluice::async::Completion<std::size_t>&) override {}
+    void cancel(sluice::async::Completion<void>&) override {}
+    std::size_t outstanding() const noexcept override { return 0; }
+};
+
 }  // namespace
+
+// ---------------------------------------------------------------------------
+// Probe accounting (Section 9): a FAILED inner submit_read must not be counted
+// as live/outstanding, must not touch the peak, and must not stay in the
+// tracking set. A SUCCESSFUL submit is tracked under the mutex and reaped when
+// the Completion becomes ready.
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(probe_accounting_failed_submit_not_counted) {
+    auto peak = std::make_shared<std::atomic<std::size_t>>(0);
+    auto stub = std::make_unique<ProbeStubBackend>();
+    stub->fail_reads = true;
+    auto* stub_raw = stub.get();
+    ReadConcurrencyProbe probe(std::move(stub), peak);
+
+    std::byte buf[16]{};
+    sluice::async::Completion<std::size_t> c;
+    auto r = probe.submit_read(sluice::async::ReadOp{0, buf, 16, 0}, c);
+
+    // The failure is propagated verbatim...
+    SLUICE_CHECK(!r.has_value());
+    SLUICE_CHECK(r.error().code == IoError::Code::backend_error);
+    // ...and NOTHING was counted: the op never became outstanding in the
+    // inner backend, so the probe must not record it.
+    SLUICE_CHECK(probe.live_reads() == 0);
+    SLUICE_CHECK(probe.tracked_count() == 0);
+    SLUICE_CHECK(peak->load() == 0);
+    SLUICE_CHECK(c.idle());
+    SLUICE_CHECK(stub_raw->reads_submitted == 0);
+}
+
+SLUICE_TEST_CASE(probe_accounting_success_tracked_and_reaped) {
+    auto peak = std::make_shared<std::atomic<std::size_t>>(0);
+    auto stub = std::make_unique<ProbeStubBackend>();
+    auto* stub_raw = stub.get();
+    ReadConcurrencyProbe probe(std::move(stub), peak);
+
+    std::byte buf[16]{};
+    sluice::async::Completion<std::size_t> c;
+    auto r = probe.submit_read(sluice::async::ReadOp{0, buf, 16, 0}, c);
+
+    // The successful submit IS counted (one live read), and the peak moves.
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(stub_raw->reads_submitted == 1);
+    SLUICE_CHECK(probe.live_reads() == 1);
+    SLUICE_CHECK(probe.tracked_count() == 1);
+    SLUICE_CHECK(peak->load() == 1);
+
+    // Complete the read directly (the stub never completes it itself); the
+    // probe's poll() reaps now-ready tracked reads and decrements the count.
+    c.complete_with(Result<std::size_t>{16});
+    SLUICE_CHECK(c.ready());
+    probe.poll();
+    SLUICE_CHECK(probe.live_reads() == 0);
+    SLUICE_CHECK(probe.tracked_count() == 0);
+    // The peak stays at the observed maximum.
+    SLUICE_CHECK(peak->load() == 1);
+}
 
 SLUICE_TEST_CASE(pipeline_integration_real_multi_outstanding_reads) {
     constexpr std::size_t B = 4096;

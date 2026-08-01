@@ -147,7 +147,9 @@ void dispatch_child(const std::string& name) {
 
 int run_parent() {
     int failures = 0;
-    const auto must_term = [&](const char* name) {
+    // must_term is only invoked under !defined(NDEBUG); [[maybe_unused]] keeps
+    // the Release (NDEBUG) build warning-clean (-Werror).
+    [[maybe_unused]] const auto must_term = [&](const char* name) {
         auto r = sluice_death_test::run_death_case(name);
         if (!sluice_death_test::expect_terminated_via_fail_fast(r)) ++failures;
     };
