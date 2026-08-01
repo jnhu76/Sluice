@@ -1279,7 +1279,10 @@ public:
 ### `sluice::async::ThreadPoolBackend`
 
 Portable real backend. One `std::thread` per outstanding op. Always buildable;
-no external dependency. Construct directly; there is no factory function.
+no external dependency. Construct directly; there is no factory function. Workers
+are joined as their results are reaped (poll/wait_one), so the number of unreaped
+worker threads stays bounded by the number of outstanding ops; the destructor
+joins any remaining in-flight workers.
 
 ```cpp
 class ThreadPoolBackend : public AsyncBackend {

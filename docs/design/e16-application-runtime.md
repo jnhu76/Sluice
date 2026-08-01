@@ -205,7 +205,7 @@ The E16 Application Runtime exists to close these gaps.
 | `AsyncIoContext` | `include/sluice/async/async_io_context.hpp:118` | Public L1. Owns backend (unique_ptr). Routes submit/poll/wait_one/cancel. Move-only. |
 | `Completion<T>` | `include/sluice/async/completion.hpp:70` | Caller-owned op state. idle→outstanding→ready. Non-movable. |
 | `Batch` | `include/sluice/async/batch.hpp:69` | Grouped completions driver over AsyncIoContext. |
-| `ThreadPoolBackend` | `include/sluice/async/threadpool_backend.hpp:55` | Portable real backend. One thread per op; workers joined in destructor. |
+| `ThreadPoolBackend` | `include/sluice/async/threadpool_backend.hpp:55` | Portable real backend. One thread per op; workers joined at reap (poll) so unreaped threads stay bounded; destructor joins in-flight. |
 | `SchedulerWakeHandle` | `include/sluice/async/scheduler.hpp:95` | External wake handle. notify() safe across Scheduler destruction. |
 | `EventedWaitPolicy` | `include/sluice/async/evented_wait_policy.hpp:42` | Evented Future wait via Scheduler. Borrows Scheduler. |
 | `BlockingIoPool` | `bench/support/blocking_io_pool.cpp` | Bounded OS-thread helper. Not the async runtime. |
@@ -217,7 +217,7 @@ The E16 Application Runtime exists to close these gaps.
 | **Existing role** | Multi-worker Evented scheduler | Task state machine | Unordered task set | Single-task awaitable | Cancel request state | L1 op routing | Op state machine | Portable backend |
 | **Construction** | `explicit Scheduler(AsyncIoContext&)` — borrows ctx (`scheduler.hpp:213`) | `Fiber()` or `Fiber(Entry)` (`fiber.hpp:64-65`) | `Group()` or `Group(Scheduler&)` (`group.hpp:61,78`) | `Future()` or `Future(WaitPolicy&)` (`future.hpp:53-54`) | `CancelToken()` (`cancel.hpp:49`) | `explicit AsyncIoContext(unique_ptr<AsyncBackend>, AsyncStats*)` (`async_io_context.hpp:121`) | `Completion()` (`completion.hpp:79`) | `ThreadPoolBackend()` (`threadpool_backend.hpp:57`) |
 | **Owner today** | Caller (stack/heap) | Caller/Group | Caller | Caller/Group (shared_ptr) | Caller/Future/Group | Caller | Caller | AsyncIoContext (unique_ptr) |
-| **Threads** | Creates/joins workers INSIDE blocking run()/run_live() (`scheduler.cpp:565-579`); worker std::thread objects are run_impl locals, NOT separately ownable | None | Threaded: std::thread/task; Evented: none | None | None | None (backend may) | None | Spawns per-op threads; joined in DESTRUCTOR (`threadpool_backend.hpp:101`; `threadpool_backend.cpp:23-32`) |
+| **Threads** | Creates/joins workers INSIDE blocking run()/run_live() (`scheduler.cpp:565-579`); worker std::thread objects are run_impl locals, NOT separately ownable | None | Threaded: std::thread/task; Evented: none | None | None | None (backend may) | None | Spawns per-op threads; joined at POLL REAP + destructor for in-flight (`threadpool_backend.hpp`; `threadpool_backend.cpp:23-32,210-221`) |
 | **Drive model** | Caller calls blocking `run()`/`run_live()` | Scheduler drives state machine | Caller calls `await()`/`cancel()` | WaitPolicy drives physical wait | Consumer observes | Caller/batch drives | Backend marks ready | AsyncIoContext drives |
 | **Shutdown support** | `global_terminate_` atomic; workers joined in run (`scheduler.cpp:142,565-579`) | make_done (`fiber.hpp:101`) | `cancel()` requests+awaits (`group.hpp:125-128`); destructor drains (Threaded) / fail-fast (Evented) (`group.cpp:110-144`) | `cancel()` requests+awaits (`future.hpp:113-116`) | `request()` idempotent (`cancel.hpp:59`) | Destructor fail-fast if outstanding (`async_io_context.cpp:30-41`) | `reset()` (`completion.hpp:125-129`) | `destroying_` gate (`threadpool_backend.hpp:103`); destructor joins workers (`threadpool_backend.cpp:23-32`) |
 | **Outstanding-work contract** | Destruction asserts quiescence: no ACTIVE Select, active_deadline_count_==0, waiting_select_count_==0 (`scheduler.cpp:165-196`) | done is absorbing (`fiber.hpp` state machine) | Evented destructor fail-fast if pending futures (`group.cpp:117-122`) | ready is absorbing (`future.hpp:119-121`) | None | Destruction fail-fast if outstanding Completions (`async_io_context.cpp:30-41`) | Must not destroy while outstanding (`completion.hpp:17-18`) | `outstanding_` decrements at POLL REAP, not syscall completion (`threadpool_backend.cpp:160-163`); destructor joins all workers |
@@ -2500,7 +2500,7 @@ Prerequisites satisfied:
 | ThreadPoolBackend class/ctor | `threadpool_backend.hpp:55,57` |
 | ThreadPoolBackend outstanding() takes mtx_ | `threadpool_backend.hpp:71`; `threadpool_backend.cpp:183-186` |
 | ThreadPoolBackend destroying_ gate | `threadpool_backend.hpp:103` |
-| ThreadPoolBackend workers joined in destructor | `threadpool_backend.hpp:101`; `threadpool_backend.cpp:23-32` |
+| ThreadPoolBackend workers joined at poll reap + in-flight at destructor | `threadpool_backend.hpp`; `threadpool_backend.cpp:23-32,210-221` |
 | outstanding_ decrements at poll reap | `threadpool_backend.cpp:160-163` |
 | ThreadPoolBackend shutting_down_for_test | `threadpool_backend.hpp:78` |
 | fail_fast routes through std::terminate | `fail_fast.cpp:16-62` |

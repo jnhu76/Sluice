@@ -67,17 +67,24 @@ bool ThreadPoolBackend::accepting_new_work() const {
 void ThreadPoolBackend::enqueue_size(Completion<std::size_t>& c,
                                      std::function<Result<std::size_t>()> work) {
     c.mark_outstanding();
-    {
+    Completion<std::size_t>* cp = &c;
+    std::size_t worker_idx = kNoWorker;
+    try {
+        // workers_ is touched by the reaper (poll) and the test seam, so its
+        // mutation must be under mtx_ like every other shared member. The
+        // worker pushes the terminal result together with its own index so the
+        // reaper can join exactly this thread after draining the result. If
+        // the spawn throws, the lock is released during unwind BEFORE the
+        // catch runs, so fail_spawn_* can re-lock (std::mutex is not
+        // recursive).
         std::lock_guard<std::mutex> lk(mtx_);
         ++outstanding_;
-    }
-    Completion<std::size_t>* cp = &c;
-    try {
-        workers_.emplace_back([this, cp, work = std::move(work)] {
+        worker_idx = workers_.size();
+        workers_.emplace_back([this, cp, worker_idx, work = std::move(work)] {
             Result<std::size_t> r = work();
             {
                 std::lock_guard<std::mutex> lk(mtx_);
-                ready_size_.push_back(ReadySize{cp, std::move(r)});
+                ready_size_.push_back(ReadySize{cp, std::move(r), worker_idx});
             }
             cv_.notify_one();
         });
@@ -95,17 +102,17 @@ void ThreadPoolBackend::enqueue_size(Completion<std::size_t>& c,
 void ThreadPoolBackend::enqueue_void(Completion<void>& c,
                                      std::function<Result<void>()> work) {
     c.mark_outstanding();
-    {
+    Completion<void>* cp = &c;
+    std::size_t worker_idx = kNoWorker;
+    try {
         std::lock_guard<std::mutex> lk(mtx_);
         ++outstanding_;
-    }
-    Completion<void>* cp = &c;
-    try {
-        workers_.emplace_back([this, cp, work = std::move(work)] {
+        worker_idx = workers_.size();
+        workers_.emplace_back([this, cp, worker_idx, work = std::move(work)] {
             Result<void> r = work();
             {
                 std::lock_guard<std::mutex> lk(mtx_);
-                ready_void_.push_back(ReadyVoid{cp, std::move(r)});
+                ready_void_.push_back(ReadyVoid{cp, std::move(r), worker_idx});
             }
             cv_.notify_one();
         });
@@ -124,7 +131,8 @@ void ThreadPoolBackend::fail_spawn_size(Completion<std::size_t>* c,
                                         const IoError& err) {
     {
         std::lock_guard<std::mutex> lk(mtx_);
-        ready_size_.push_back(ReadySize{c, make_unexpected<std::size_t>(err)});
+        ready_size_.push_back(ReadySize{c, make_unexpected<std::size_t>(err),
+                                        kNoWorker});
     }
     cv_.notify_one();
 }
@@ -133,7 +141,8 @@ void ThreadPoolBackend::fail_spawn_void(Completion<void>* c,
                                         const IoError& err) {
     {
         std::lock_guard<std::mutex> lk(mtx_);
-        ready_void_.push_back(ReadyVoid{c, make_unexpected<void>(err)});
+        ready_void_.push_back(ReadyVoid{c, make_unexpected<void>(err),
+                                        kNoWorker});
     }
     cv_.notify_one();
 }
@@ -198,6 +207,18 @@ std::size_t ThreadPoolBackend::poll() {
     if (n) {
         std::lock_guard<std::mutex> lk(mtx_);
         outstanding_ -= n;
+        // Reap: join exactly the workers whose results were drained above. A
+        // drained worker has already pushed its result (that is how it got
+        // here) and holds no lock afterwards, so join() returns as soon as it
+        // finishes exiting — no meaningful blocking, no deadlock. This keeps
+        // the number of unreaped (zombie) kernel threads bounded by the number
+        // of outstanding ops instead of growing with the total op count (the
+        // Version B CI thread-exhaustion failure). Spawn-failure entries carry
+        // kNoWorker and have nothing to join.
+        for (auto& e : rs)
+            if (e.worker != kNoWorker) workers_[e.worker].join();
+        for (auto& e : rv)
+            if (e.worker != kNoWorker) workers_[e.worker].join();
     }
     return n;
 }

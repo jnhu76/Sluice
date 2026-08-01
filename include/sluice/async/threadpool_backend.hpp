@@ -7,9 +7,17 @@
 //
 // Threading model: one worker thread per outstanding op (simple, correct; the
 // high-concurrency path is UringAsyncBackend, job 020B). Each submitted op
-// spawns a detached worker that performs the blocking syscall and pushes a
-// terminal result into a ready queue. poll() drains the ready queue (marking
-// Completions ready); wait_one() blocks on a condition variable until >=1 ready.
+// spawns a worker that performs the blocking syscall and pushes a terminal
+// result into a ready queue. poll() drains the ready queue (marking
+// Completions ready) and JOINS the worker that produced each drained result;
+// wait_one() blocks on a condition variable until >=1 ready and then polls.
+// Joining at reap time keeps the number of unreaped (zombie) kernel threads
+// bounded by the number of outstanding ops instead of growing with the total
+// op count — a high-op-count copy (e.g. ~200k ops per buffer-size round) must
+// not accumulate ~200k unreaped threads, which exhausts kernel task-count
+// limits (RLIMIT_NPROC / threads-max) on standard Linux kernels. The
+// destructor joins any remaining in-flight workers, so the captured `this`
+// stays valid for every worker (workers never outlive the backend).
 //
 // Buffer lifetime (L1-L3c): the worker reads/writes the caller's buffer; the
 // caller MUST keep it alive + address-stable until the Completion is ready
@@ -85,11 +93,41 @@ public:
     // it as internal; production code never calls it.
     void shutting_down_for_test();
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Test-only: count of spawned worker threads that have not yet been
+    // joined (reaped) by poll()/wait_one(). A method-only seam — no member
+    // data, so production object layout is unchanged. Regression for the
+    // Version B CI failure: unreaped workers must stay bounded by outstanding
+    // ops, not grow with total ops.
+    std::size_t unjoined_workers_for_test() const {
+        std::lock_guard<std::mutex> lk(mtx_);
+        std::size_t n = 0;
+        for (const auto& w : workers_)
+            if (w.joinable())
+                ++n;
+        return n;
+    }
+#endif
+
 private:
     // A pending op's ready form. The work callable runs on a worker thread; on
-    // return it pushes a terminal result into the matching ready_ deque.
-    struct ReadySize { Completion<std::size_t>* c; Result<std::size_t> r; };
-    struct ReadyVoid { Completion<void>* c; Result<void> r; };
+    // return it pushes a terminal result into the matching ready_ deque. `worker`
+    // is the index of the std::thread object in workers_ that produced this
+    // result, so the reaper can join exactly that worker once the result is
+    // drained; spawn-failure entries (no thread was created) carry kNoWorker.
+    struct ReadySize {
+        Completion<std::size_t>* c;
+        Result<std::size_t> r;
+        std::size_t worker;
+    };
+    struct ReadyVoid {
+        Completion<void>* c;
+        Result<void> r;
+        std::size_t worker;
+    };
+
+    // Sentinel worker index: the op never spawned a thread (spawn failure).
+    static constexpr std::size_t kNoWorker = static_cast<std::size_t>(-1);
 
     // Enqueue a job: record outstanding + spawn worker. Caller has already
     // verified accepting_new_work() and c.idle().
