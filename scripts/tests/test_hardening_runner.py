@@ -66,6 +66,9 @@ from hardening.phases import (
     _corpus_file_count,
     _corpus_file_bytes,
     TSAN_HOT_SET,
+    VERSION_B_REQUIRED_SOAK_COMMANDS,
+    VERSION_B_REQUIRED_TSAN_TARGETS,
+    VERSION_B_REQUIRED_ASANUBSAN_TARGETS,
 )
 
 
@@ -426,6 +429,169 @@ class TestVerdictCalculation(unittest.TestCase):
         ctx.stats["fuzz"] = PhaseStats(executed=1, passed=1)
         verdict = calculate_verdict(ctx, preflight)
         self.assertEqual(verdict, Verdict.INCOMPLETE)
+
+
+# ======================================================================
+# Version B verdict calculation tests
+# ======================================================================
+
+class TestVersionBVerdictCalculation(unittest.TestCase):
+    """The Version B gate must demand COMPLETE required-evidence sets.
+
+    A PASS requires every required soak command, every required TSan target
+    (executed non-SKIP and passed), every required ASan+UBSan target, the
+    baseline, and final Debug. Missing / skipped / never-passed evidence is
+    INCOMPLETE; any sticky failure is HOLD.
+    """
+
+    def _make_preflight(self, passed: bool = True) -> PreflightResult:
+        p = PreflightResult()
+        if passed:
+            p.checks.append(PreflightCheck(
+                name="dummy", passed=True, is_fatal=False, message="ok",
+            ))
+        else:
+            p.checks.append(PreflightCheck(
+                name="tool-xmake", passed=False, is_fatal=True,
+                message="xmake not found",
+            ))
+        return p
+
+    def _make_ctx(self, **kwargs) -> PhaseContext:
+        defaults = dict(
+            config=Config(mode="version-b", hours=6,
+                          phase_timeout_seconds=1200,
+                          fuzz_seconds_override=None, keep_going=True),
+            project_root=Path("/tmp"), run_dir=Path("/tmp"),
+            head_sha="x", head_short="x", worktree_dirty=False,
+            nproc=1, global_deadline=time.monotonic() + 3600,
+            final_debug_reserved=1200, sticky_hold=False,
+            baseline_ok=True, final_debug_ok=True,
+        )
+        defaults.update(kwargs)
+        return PhaseContext(**defaults)
+
+    def _result(self, phase: str, target: str,
+                classification=Classification.PASS) -> CommandResult:
+        return CommandResult(
+            phase=phase, iteration="1", target=target, mode="debug",
+            command=["xmake", "run", target],
+            classification=classification, exit_code=0,
+            duration_seconds=1, log_path=Path("/tmp/test.log"),
+            sanitizer_signature=None, timed_out=False,
+            term_sent=False, kill_sent=False,
+            started_at="x", finished_at="x",
+        )
+
+    def _fill_full_evidence(self, ctx: PhaseContext) -> None:
+        """Populate every required evidence family with a PASS."""
+        for cmd in VERSION_B_REQUIRED_SOAK_COMMANDS:
+            ctx.results.append(self._result("version-b-soak", cmd))
+        for tgt in VERSION_B_REQUIRED_TSAN_TARGETS:
+            ctx.results.append(self._result("version-b-tsan", tgt))
+        for tgt in VERSION_B_REQUIRED_ASANUBSAN_TARGETS:
+            ctx.results.append(self._result("version-b-asanubsan", tgt))
+        ctx.stats["version-b-soak"] = PhaseStats(
+            executed=len(VERSION_B_REQUIRED_SOAK_COMMANDS),
+            passed=len(VERSION_B_REQUIRED_SOAK_COMMANDS))
+        ctx.stats["version-b-tsan"] = PhaseStats(
+            executed=len(VERSION_B_REQUIRED_TSAN_TARGETS),
+            passed=len(VERSION_B_REQUIRED_TSAN_TARGETS))
+        ctx.stats["version-b-asanubsan"] = PhaseStats(
+            executed=len(VERSION_B_REQUIRED_ASANUBSAN_TARGETS),
+            passed=len(VERSION_B_REQUIRED_ASANUBSAN_TARGETS))
+
+    def _verdict(self, ctx: PhaseContext, preflight: PreflightResult):
+        from hardening.phases import version_b_calculate_verdict
+        return version_b_calculate_verdict(ctx, preflight)
+
+    def test_all_required_evidence_passes(self):
+        ctx = self._make_ctx()
+        self._fill_full_evidence(ctx)
+        self.assertEqual(self._verdict(ctx, self._make_preflight()), Verdict.PASS)
+
+    def test_tsan_partial_set_not_pass(self):
+        # 7 of the 8 required TSan targets ran; one is missing entirely.
+        ctx = self._make_ctx()
+        self._fill_full_evidence(ctx)
+        missing = VERSION_B_REQUIRED_TSAN_TARGETS[-1]
+        ctx.results = [r for r in ctx.results
+                       if not (r.phase == "version-b-tsan" and r.target == missing)]
+        self.assertEqual(self._verdict(ctx, self._make_preflight()),
+                         Verdict.INCOMPLETE)
+
+    def test_tsan_all_skip_not_pass(self):
+        # Every required TSan target only SKIPped: not executed evidence.
+        ctx = self._make_ctx()
+        self._fill_full_evidence(ctx)
+        for r in ctx.results:
+            if r.phase == "version-b-tsan":
+                r.classification = Classification.SKIP
+        self.assertEqual(self._verdict(ctx, self._make_preflight()),
+                         Verdict.INCOMPLETE)
+
+    def test_tsan_missing_target_not_pass(self):
+        # No TSan target ran at all.
+        ctx = self._make_ctx()
+        self._fill_full_evidence(ctx)
+        ctx.results = [r for r in ctx.results if r.phase != "version-b-tsan"]
+        self.assertEqual(self._verdict(ctx, self._make_preflight()),
+                         Verdict.INCOMPLETE)
+
+    def test_sticky_hold_wins_over_later_pass(self):
+        # A required target failed in an earlier pass (sticky_hold), even
+        # though a later pass passed: still HOLD, never PASS.
+        ctx = self._make_ctx(sticky_hold=True)
+        self._fill_full_evidence(ctx)
+        self.assertEqual(self._verdict(ctx, self._make_preflight()), Verdict.HOLD)
+
+    def test_asan_only_non_required_targets_not_pass(self):
+        # The ASan phase ran, but only the full suite / unrelated targets.
+        ctx = self._make_ctx()
+        self._fill_full_evidence(ctx)
+        for r in ctx.results:
+            if r.phase == "version-b-asanubsan":
+                r.target = "full-suite"
+        self.assertEqual(self._verdict(ctx, self._make_preflight()),
+                         Verdict.INCOMPLETE)
+
+    def test_asan_missing_one_required_target_not_pass(self):
+        ctx = self._make_ctx()
+        self._fill_full_evidence(ctx)
+        missing = VERSION_B_REQUIRED_ASANUBSAN_TARGETS[-1]
+        ctx.results = [r for r in ctx.results
+                       if not (r.phase == "version-b-asanubsan"
+                               and r.target == missing)]
+        self.assertEqual(self._verdict(ctx, self._make_preflight()),
+                         Verdict.INCOMPLETE)
+
+    def test_soak_missing_one_command_not_pass(self):
+        ctx = self._make_ctx()
+        self._fill_full_evidence(ctx)
+        ctx.results = [r for r in ctx.results
+                       if not (r.phase == "version-b-soak"
+                               and r.target == "stress")]
+        self.assertEqual(self._verdict(ctx, self._make_preflight()),
+                         Verdict.INCOMPLETE)
+
+    def test_final_debug_missing_incomplete(self):
+        ctx = self._make_ctx(final_debug_ok=False)
+        self._fill_full_evidence(ctx)
+        self.assertEqual(self._verdict(ctx, self._make_preflight()),
+                         Verdict.INCOMPLETE)
+
+    def test_baseline_missing_incomplete(self):
+        ctx = self._make_ctx(baseline_ok=False)
+        self._fill_full_evidence(ctx)
+        self.assertEqual(self._verdict(ctx, self._make_preflight()),
+                         Verdict.INCOMPLETE)
+
+    def test_preflight_failure_is_environment_error(self):
+        ctx = self._make_ctx()
+        self._fill_full_evidence(ctx)
+        self.assertEqual(
+            self._verdict(ctx, self._make_preflight(passed=False)),
+            Verdict.ENVIRONMENT_ERROR)
 
 
 # ======================================================================

@@ -96,6 +96,26 @@ VERSION_B_TSAN_SET: List[str] = VERSION_B_SET + [
     "threadpool_backend_test",
 ]
 
+# Version B nightly gate REQUIRED-evidence sets. A PASS verdict demands that
+# EVERY entry here executed and passed at least once in the corresponding
+# phase. Missing evidence (a target never run, only skipped, or never passed)
+# is INCOMPLETE — never PASS. These sets exist so a budget cutoff or a
+# mid-pass interruption cannot masquerade as a completed gate.
+#
+# The soak commands are the five round commands of phase_version_b_debug_soak;
+# one complete round (each command passed at least once) is the minimum
+# required evidence. Each pass through VERSION_B_TSAN_SET / VERSION_B_SET in
+# the TSan / ASan+UBSan phases must cover every target.
+VERSION_B_REQUIRED_SOAK_COMMANDS: List[str] = [
+    "stress",
+    "depth-regressions",
+    "integration",
+    "error-drains",
+    "scripted-controller",
+]
+VERSION_B_REQUIRED_TSAN_TARGETS: List[str] = VERSION_B_TSAN_SET
+VERSION_B_REQUIRED_ASANUBSAN_TARGETS: List[str] = VERSION_B_SET
+
 # Seeds for the deterministic stress rounds; each reproduces its workload
 # exactly (stress test contract: `--seed` determinism).
 VERSION_B_STRESS_SEEDS: List[str] = [
@@ -1411,12 +1431,47 @@ def calculate_verdict(
     return Verdict.PASS
 
 
+def _count_passes(ctx: PhaseContext, phase: str, target: str) -> int:
+    """Count PASS results for one (phase, target) pair."""
+    return sum(
+        1
+        for r in ctx.results
+        if r.phase == phase and r.target == target
+        and r.classification == Classification.PASS
+    )
+
+
+def _any_executed_non_skip(ctx: PhaseContext, phase: str, target: str) -> bool:
+    """True if the (phase, target) pair has at least one non-SKIP result."""
+    return any(
+        r.phase == phase and r.target == target
+        and r.classification != Classification.SKIP
+        for r in ctx.results
+    )
+
+
 def version_b_calculate_verdict(
     ctx: PhaseContext,
     preflight: PreflightResult,
 ) -> Verdict:
-    """Version B gate verdict: baseline, soak rounds, TSan and ASan+UBSan
-    evidence families, and final Debug must all have executed."""
+    """Version B gate verdict.
+
+    PASS requires COMPLETE evidence, not just "some command ran":
+
+      1. preflight passed;
+      2. baseline completed;
+      3. no sticky failure (any failure/timeout/sanitizer fail is HOLD);
+      4. every required Version B Debug soak command executed and passed at
+         least once (>= 1 complete soak round);
+      5. every required TSan target executed at least once (non-SKIP) and
+         passed at least once;
+      6. every required ASan+UBSan target executed at least once and passed
+         at least once;
+      7. final Debug completed.
+
+    Any required target that is missing, only-skipped, or never passed yields
+    INCOMPLETE — never PASS.
+    """
     if not preflight.passed:
         return Verdict.ENVIRONMENT_ERROR
 
@@ -1428,21 +1483,38 @@ def version_b_calculate_verdict(
     if not ctx.baseline_ok:
         incomplete_reasons.append("baseline did not complete")
 
+    # Version B debug soak: each required round command must have passed at
+    # least once (>= 1 complete round). A soak that only ran one command
+    # family is not evidence of a full round.
     soak_stats = ctx.stats.get("version-b-soak")
     if not soak_stats or soak_stats.executed == 0:
         incomplete_reasons.append("Version B debug soak executed no commands")
+    for cmd in VERSION_B_REQUIRED_SOAK_COMMANDS:
+        if _count_passes(ctx, "version-b-soak", cmd) == 0:
+            incomplete_reasons.append(
+                f"Version B debug soak required command '{cmd}' never passed"
+            )
 
-    tsan_critical_executed = 0
-    for r in ctx.results:
-        if r.phase == "version-b-tsan" and r.target in VERSION_B_TSAN_SET:
-            if r.classification != Classification.SKIP:
-                tsan_critical_executed += 1
-    if tsan_critical_executed == 0:
-        incomplete_reasons.append("no critical Version B TSan target executed")
+    # TSan: EVERY required target must have executed (non-SKIP) and passed at
+    # least once.
+    for tgt in VERSION_B_REQUIRED_TSAN_TARGETS:
+        if not _any_executed_non_skip(ctx, "version-b-tsan", tgt):
+            incomplete_reasons.append(
+                f"required Version B TSan target {tgt} never executed"
+            )
+        elif _count_passes(ctx, "version-b-tsan", tgt) == 0:
+            incomplete_reasons.append(
+                f"required Version B TSan target {tgt} never passed"
+            )
 
-    asan_stats = ctx.stats.get("version-b-asanubsan")
-    if not asan_stats or asan_stats.executed == 0:
-        incomplete_reasons.append("Version B ASan+UBSan pass not executed")
+    # ASan+UBSan: EVERY required target must have executed and passed at
+    # least once. (A pass that only ran the full suite or unrelated targets
+    # is not evidence for the required set.)
+    for tgt in VERSION_B_REQUIRED_ASANUBSAN_TARGETS:
+        if _count_passes(ctx, "version-b-asanubsan", tgt) == 0:
+            incomplete_reasons.append(
+                f"required Version B ASan+UBSan target {tgt} never passed"
+            )
 
     if not ctx.final_debug_ok:
         incomplete_reasons.append("final debug not completed")

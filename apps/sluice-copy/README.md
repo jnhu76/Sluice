@@ -36,6 +36,38 @@ sluice-copy [options] <source> <destination>
 
 Defaults: 1 MiB buffer, depth 1, 1 worker, sync=none.
 
+### Resource limits
+
+The CLI and the public copy entry points (`run_pipelined_copy*` in
+`copy_task.hpp`) enforce fixed, explainable app-level limits — the memory
+upper bound of the pipeline is approximately `buffer_size * pipeline_depth`,
+and the TOTAL pipeline allocation is the primary constraint:
+
+| limit                    | value  | meaning                                      |
+| ------------------------ | ------ | -------------------------------------------- |
+| `kMaxWorkers`            | 64     | Runtime worker threads (OS threads)          |
+| `kMaxBufferSize`         | 64 MiB | per-slot read/write buffer                   |
+| `kMaxPipelineDepth`      | 64     | number of pipeline slots                     |
+| `kMaxPipelineBytes`      | 512 MiB | total `buffer_size * pipeline_depth` budget |
+
+Values beyond a limit are a usage error (exit 1) on the CLI and
+`invalid_state` from the public entry points, checked before any allocation.
+This is a reference copy app, not an arbitrary thread/allocator factory.
+
+### Input domain: regular files only
+
+Both source and destination must be **regular files**. The Version B pipeline
+needs a seekable, finite-length source that eventually reaches EOF and a
+truncatable, positional destination; FIFOs, sockets, and character devices
+(e.g. `/dev/zero`) do not fit that domain. The source's type is checked via
+`fstat` immediately after opening and **before** the destination is created,
+so a rejected source never creates a new destination and never truncates an
+existing one. Source == destination (same device + inode, including hard
+links) is rejected before any truncation.
+
+Note: `open(source, O_RDONLY)` itself may block for a FIFO with no writer —
+that happens before the type check can run.
+
 ## Exit codes
 
 | code | meaning        |
@@ -47,13 +79,12 @@ Defaults: 1 MiB buffer, depth 1, 1 worker, sync=none.
 
 ## Rejections
 
-The CLI rejects: missing/extra operands, zero buffer size, zero pipeline depth,
-invalid worker count, unknown sync policy, and source==destination. Same-file
-detection uses filesystem identity (device + inode via `fstat`) rather than
-path-string equality.
-
-A `buffer_size * pipeline_depth` product that overflows `size_t` is also
-rejected (it would exceed the memory upper bound).
+The CLI rejects: missing/extra operands, zero buffer size, zero pipeline
+depth, invalid worker count, unknown sync policy, source==destination,
+non-regular sources/destinations, and any value beyond the resource limits
+above. Integer parsing is strict: negative numbers, signs, trailing junk
+(`123abc`, `1MiB`), and values that overflow `size_t` are usage errors — no
+silent narrowing or truncation.
 
 ## Algorithm
 
@@ -110,6 +141,10 @@ after data copy:
   infinite retry;
 - offset overflow and `buffer_size * pipeline_depth` overflow are checked;
 - read / write / sync errors propagate through the app-owned result slot;
+- a backend op-dispatch failure (e.g. a worker-thread spawn failure under
+  resource exhaustion) surfaces as an `IoError::backend_error` result: the
+  copy task translates ANY task-body exception into an error, so a copy can
+  never hang waiting for a result that was silently swallowed;
 - cancellation is observed at the cooperative boundaries between operations
   (the copy does NOT claim to interrupt a kernel op already in flight);
 - every outstanding operation reaches a terminal state before the task exits;
@@ -127,8 +162,18 @@ after data copy:
 
 ## Known limitation
 
-**On a mid-copy failure the destination may be left partial.** sluice-copy does
-not use a temporary file + rename. Atomic safe output is a Version C feature.
+**On a mid-copy failure the destination may be left partial or truncated.**
+sluice-copy does not use a temporary file + rename. Safe, atomic output is a
+Version C feature.
+
+### Durability scope (`--sync`)
+
+`sync=all` (and `sync=data`) apply `fsync` / `fdatasync` to the **destination
+file descriptor only**. They do NOT fsync the parent directory, so a crash
+after the copy may still lose the directory entry (or the rename) — directory
+entry durability, safe creation, and temp-file + rename are Version C
+features. This app does not preserve ACLs, ownership, xattrs, or other
+metadata beyond the file contents.
 
 ## What this app proves
 
@@ -146,8 +191,37 @@ not use a temporary file + rename. Atomic safe output is a Version C feature.
 
 ## Not implemented in this slice
 
-- temporary-file safe output (Version C);
+- temporary-file safe output, parent-directory fsync, atomic replacement
+  (Version C);
+- safe creation / permission preservation for new destinations, metadata
+  preservation (ACL/owner/xattr);
+- a symlink policy for the final path component (the destination is opened
+  normally; O_NOFOLLOW / symlink handling is a Version C / security-mode
+  decision, not enforced here);
 - progress display;
 - directory traversal (see `sluice-mirror-mini`, a later app);
 - io_uring production backend;
 - multiple parallel writes (Version B v1 keeps at most one write outstanding).
+
+## Test targets
+
+The Version B test family (all in the default `xmake test` group):
+
+- `scripted_backend_test` — the deterministic test backend itself
+  (cancel idempotency, staged accounting, controller lifetime);
+- `sluice_copy_pipeline_contract_test` — pipeline contracts against the
+  scripted backend (read-ahead, write order, short reads/writes, drains,
+  bounded memory across multiple slot-reuse rounds, allocation failure,
+  bounded-failure watchdog);
+- `sluice_copy_pipeline_integration_test` — real files + ThreadPoolBackend
+  (exact destination size, multi-round reuse, multi-worker, sync policies,
+  real concurrency probe);
+- `sluice_copy_pipeline_stress_test` — deterministic randomized matrix
+  (`--seed` / `--iterations`);
+- `sluice_copy_integration_test` / `sluice_copy_fault_test` — Version A
+  integration and fault injection;
+- `sluice_copy_cli_parse_test` / `sluice_copy_file_domain_test` — CLI parsing
+  and the regular-file input domain;
+- hardening `python3 scripts/hardening.py --version-b` — the Version B
+  nightly gate (Debug soak rounds, required TSan and ASan+UBSan target sets,
+  final Debug).
