@@ -321,6 +321,251 @@ for capacity pressure vs. lifecycle errors.
 
 ---
 
+## P0-03: Completion Mutation Authority Is Forgeable
+
+**Finding:** `Completion<T>` exposes `mark_outstanding()`, `complete_with()`,
+and `reset()` as public methods. Any application code can forge state
+transitions. The "backend-only" comment is not an authority boundary. Debug
+assertions are not an authority boundary. Release builds have NO protection.
+
+**Evidence:**
+- `include/sluice/async/completion.hpp`: all three methods are `public`.
+- `mark_outstanding()` is load-assert-store, NOT atomic CAS.
+- `reset()` does not check outstanding state.
+- Destructor is default (does not fail-fast on outstanding).
+- Tests call `c.mark_outstanding(); c.complete_with(...); c.reset();` directly.
+- Two different AsyncIoContext instances can both submit to the same
+  Completion concurrently (access_mtx_ is per-context, not per-Completion).
+
+**Attack scenario:**
+```cpp
+ctx.submit_read(op, c);  // backend holds &c
+c.reset();               // caller forges idle
+ctx.submit_write(op2, c); // second backend also holds &c
+// Both backends will eventually complete_with → double publication,
+// stale result overwrite, or use-after-free if c is destroyed.
+```
+
+**Violated constitution rule:** AC-13 (unforgeable state authority).
+
+**Semantic consequence:** Use-after-free, double completion, permanent
+Completion/backend state divergence. The type system provides zero protection.
+
+**Currently regression-tested:** No negative-compile test prevents caller
+mutation. Tests actively USE the public mutators.
+
+**Recommended next action:** Phase 1 (Completion authority hardening) —
+friend/capability pattern; negative-compile gate; Release fail-fast on
+invalid transitions; outstanding destructor check.
+
+**Do not fix in this audit PR.**
+
+---
+
+## P1-06: No Request Generation — ABA on Completion Reuse
+
+**Finding:** Completion address is the sole logical identity for an operation
+across all async phases. Completions can be reset and reused. The same address
+may represent different operations at different times (classic ABA). No
+generation counter exists.
+
+**Evidence:**
+- Backend maps keyed by `Completion*` (threadpool ready queue, uring
+  comp_to_op map, Scheduler waiting_completion_ map).
+- `reset()` returns Completion to idle; same address can be resubmitted.
+- Cancel targets `Completion&` with no generation check.
+- Scheduler waiter map: `waiting_size_[&c] = {fiber, worker}` — if
+  Completion is reused, stale waiter registration points to new operation.
+
+**Violated constitution rule:** AC-14 (request provenance and generation).
+
+**Semantic consequence:** Delayed events (cancel, CQE, shutdown cleanup)
+cannot distinguish which generation of a request they target. Stale cancel
+may hit a new operation. Stale waiter may never wake.
+
+**Currently regression-tested:** No generation/ABA test exists.
+
+**Recommended next action:** Phase 2 (RequestKey/RequestSlot design) —
+add generation counter; cancel targets generation; Scheduler registration
+includes generation.
+
+**Do not fix in this audit PR.**
+
+---
+
+## P1-07: Reap API Discards Completion Identity
+
+**Finding:** `poll()`/`wait_one()` return only a count. The backend KNOWS
+which operations completed, but this identity is discarded at the L0/L1
+boundary. Higher layers must recover it by O(N) scanning.
+
+**Evidence:**
+- `AsyncIoContext::poll()` returns `std::size_t` (count).
+- Scheduler: after `ctx_.poll()`, scans entire `waiting_completion_` map
+  checking `c.ready()` on each entry — O(N) per progress iteration.
+- Batch: after `wait_one()`, scans all slots checking `ready()`.
+- `Completion::reap_seq_` + process-wide static `next_reap_seq()` exist
+  solely to let Batch reconstruct completion order that the backend already
+  knew.
+
+**Violated constitution rule:** AC-15 (completion identity preservation).
+
+**Semantic consequence:** O(N) overhead per progress cycle; hidden global
+static state in Completion; Scheduler and Batch do redundant work.
+
+**Currently regression-tested:** N/A (design issue, not a bug per se).
+
+**Recommended next action:** Phase 3 (reap contract redesign) — backend
+provides `reap_ready(ReadySink&)` or equivalent; remove global reap_seq;
+Scheduler uses identity-bearing reap.
+
+**Do not fix in this audit PR.**
+
+---
+
+## P1-08: wait_one() Holds Context Lock, Blocks Cancel and Submit
+
+**Finding:** `AsyncIoContext::wait_one()` holds `access_mtx_` for the entire
+duration of the backend blocking wait. During this time, `submit_*`,
+`cancel()`, `poll()`, and `outstanding()` are ALL blocked on the same mutex.
+
+**Evidence:**
+- `src/async/async_io_context.cpp:133-138`:
+  ```cpp
+  Result<std::size_t> AsyncIoContext::wait_one() {
+      std::lock_guard<std::mutex> lk(access_mtx_);
+      auto r = backend_->wait_one(); // may block indefinitely
+      ...
+  }
+  ```
+- All other methods (`submit_*`, `cancel`, `poll`, `outstanding`) also
+  acquire `access_mtx_`.
+
+**Violated constitution rule:** AC-1 (explicit capability — the context does
+not express whether it is single-driver or concurrent-capable), AC-9
+(cancel cannot reach the backend while wait_one holds the lock).
+
+**Semantic consequence:**
+1. Cancel cannot interrupt a blocking wait (it cannot acquire the lock).
+2. "Submit does not block" is false in shared-context scenarios.
+3. The API does not express whether AsyncIoContext is single-driver or
+   concurrent-submit capable.
+
+**Currently regression-tested:** Scheduler avoids this via single-admission
+rules, but L1 public API has no such protection for direct users.
+
+**Recommended next action:** Phase 5 (wait/cancel concurrency redesign) —
+split capabilities or use interruptible wait; document single-driver
+contract if that is the intent.
+
+**Do not fix in this audit PR.**
+
+---
+
+## P1-09: Cancel API Is Not Explicit
+
+**Finding:** `void cancel(Completion&)` provides no information about what
+happened. It does not distinguish: request found and cancel submitted,
+request already terminal, request not found, cancel not supported, target
+belongs to another context.
+
+**Evidence:**
+- `async_io_context.hpp`: `void cancel(Completion<std::size_t>& c)` — void
+  return.
+- ThreadPoolBackend cancel: best-effort, op completes with real result.
+- SyncBackend cancel: directly completes with cancelled (bypasses reap).
+- UringBackend cancel: may or may not produce a cancel CQE.
+- No disposition enum; no Result return; no request identity beyond address.
+
+**Violated constitution rule:** AC-9 (layered cancellation — each cancel API
+MUST state possible outcomes), AC-14 (cancel should target request identity,
+not reusable address).
+
+**Semantic consequence:** Caller cannot distinguish "cancel accepted" from
+"nothing happened" from "already done." Cannot build reliable cancellation
+protocols on a void-return fire-and-forget API.
+
+**Currently regression-tested:** Tests verify eventual Completion state but
+not cancel disposition reporting.
+
+**Recommended next action:** Phase 5 — redesign cancel to return
+`Result<CancelDisposition>` targeting a RequestKey.
+
+**Do not fix in this audit PR.**
+
+---
+
+## P1-10: Runtime await Has No Request Provenance Check
+
+**Finding:** `RuntimeTaskContext::await_completion()` only checks
+`assert(!c.idle())` (vanishes in Release). It cannot distinguish:
+- Completion submitted via THIS Runtime's context;
+- Completion submitted via ANOTHER context;
+- Completion manually mark_outstanding'd by the caller;
+- Completion already reset/resubmitted.
+
+**Evidence:**
+- `application_runtime.hpp`: await checks only idle state via assert.
+- Scheduler registers waiter by raw `Completion*` in waiting map.
+- If wrong-context Completion is awaited: current Scheduler polls its own
+  backend, the real operation is on another backend → permanent hang.
+- If idle Completion is awaited in Release: registered in waiting map,
+  no backend will complete it → Fiber permanently parked.
+- Second Fiber awaiting same Completion overwrites first waiter in map
+  (`waiting_size_[&c] = ...`) → first Fiber never wakes.
+
+**Violated constitution rule:** AC-14 (request provenance), AC-13
+(structural authority — idle check is assert-only).
+
+**Semantic consequence:** Permanent Fiber hang (unrecoverable) for
+wrong-context or idle Completions in Release. Silent waiter loss for
+multi-waiter on same Completion.
+
+**Currently regression-tested:** No test for wrong-context await. No test
+for multi-waiter on same Completion. No Release-mode idle-await test.
+
+**Recommended next action:** Phase 1/2 — provenance token binding
+Completion to submitting context; Release fail-fast on idle await; explicit
+single-waiter or multi-waiter policy.
+
+**Do not fix in this audit PR.**
+
+---
+
+## P2-05: Batch Conflates Submit Rejection with Terminal Completion
+
+**Finding:** When Batch submit fails, it fabricates a ready result in the
+slot (with `reap_seq == 0`) and returns it via `next()` as if it were a
+completion. This conflates admission rejection with terminal completion —
+two fundamentally different events.
+
+**Evidence:**
+- `batch.hpp`: on submit failure, slot is marked ready with error result
+  and reap_seq = 0.
+- `next()` returns both rejected and completed slots in the same iteration.
+- `reap_seq == 0` is the implicit discriminator (internal encoding, not
+  explicit semantic).
+- No `BatchOutcomeKind` enum distinguishes rejected vs. completed.
+
+**Violated constitution rule:** AC-3 (transactional submission — failed
+submit is NOT a completion), AC-15 (completion identity — rejected ops
+should not enter the completion stream).
+
+**Semantic consequence:** Callers must know the reap_seq==0 convention to
+distinguish rejection from completion. The two events have different
+recovery semantics (rejection: may retry immediately; completion: operation
+executed and failed).
+
+**Currently regression-tested:** Tests verify error propagation but do not
+test the semantic distinction.
+
+**Recommended next action:** Phase 3 — add explicit `BatchOutcomeKind`
+(rejected/completed); do not mix rejections into the completion stream.
+
+**Do not fix in this audit PR.**
+
+---
+
 ## P2-01: Per-Op Thread Creation (Unbounded)
 
 **Finding:** ThreadPoolBackend spawns one `std::thread` per submitted operation.
@@ -514,16 +759,23 @@ with subsystem prefix in documentation.
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
 | P0-01 | P0 | Worker OOM → terminate | Open issue needed |
-| P0-02 | P0 | Cross-backend transactional submit | Phase 1 roadmap (root cause) |
-| P1-01 | P1 | mark_outstanding authority | Comment correction needed |
+| P0-02 | P0 | Cross-backend transactional submit | Phase 4 roadmap (root cause) |
+| P0-03 | P0 | Completion mutation authority forgeable | Phase 1 (authority hardening) |
+| P1-01 | P1 | mark_outstanding stale comment | Comment correction needed |
 | P1-02 | P1 | Backend-ready vs completion-ready | Documentation needed |
-| P1-03 | P1 | SyncBackend cancel bypasses reap | Phase 0/3 corrective |
-| P1-04 | P1 | Spawn failure incorrectly asyncized | Phase 1/3 roadmap |
-| P1-05 | P1 | queue_full_retries semantic conflation | Phase 0/1 error vocabulary |
-| P2-01 | P2 | Per-op thread creation | Phase 3 roadmap |
-| P2-02 | P2 | workers_ monotonic growth | Phase 3 roadmap |
-| P2-03 | P2 | Hot-path allocation | Phase 1/3 roadmap |
-| P2-04 | P2 | 2ms MIXED-WAKE latency | Phase 2 roadmap |
+| P1-03 | P1 | SyncBackend cancel bypasses reap | Phase 4 corrective |
+| P1-04 | P1 | Spawn failure incorrectly asyncized | Phase 4 roadmap |
+| P1-05 | P1 | queue_full_retries semantic conflation | Phase 0/4 error vocabulary |
+| P1-06 | P1 | No request generation (ABA) | Phase 2 (RequestKey) |
+| P1-07 | P1 | Reap API discards completion identity | Phase 3 (reap redesign) |
+| P1-08 | P1 | wait_one holds lock, blocks cancel | Phase 5 (wait/cancel) |
+| P1-09 | P1 | Cancel API not explicit | Phase 5 (wait/cancel) |
+| P1-10 | P1 | Runtime await no provenance check | Phase 1/2 |
+| P2-01 | P2 | Per-op thread creation | Phase 7 roadmap |
+| P2-02 | P2 | workers_ monotonic growth | Phase 7 roadmap |
+| P2-03 | P2 | Hot-path allocation | Phase 4/7 roadmap |
+| P2-04 | P2 | 2ms MIXED-WAKE latency | Phase 6 roadmap |
+| P2-05 | P2 | Batch conflates rejection with completion | Phase 3 |
 | P3-01 | P3 | ThreadPoolBackend naming | Phase 0 rename |
 | P3-02 | P3 | Stale header comment | Small corrective PR |
 | P3-03 | P3 | "workers" ambiguity | Phase 0 audit |

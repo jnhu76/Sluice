@@ -205,6 +205,22 @@ Status values:
 
 ---
 
+## DIV-13: AsyncBackend Is a Public Extension Point, Not Internal Seam
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-13 |
+| Status | Pending decision |
+| Introduced by | Implementation (ADR claims L0 internal, but header is public and RuntimeBuilder accepts arbitrary subclass) |
+| Governing ADR | None — ADR-async-io-model §4 says "never public-facing" but does not enforce it structurally |
+| Reason | `AsyncBackend` is defined in a public installed header (`async_io_context.hpp`). `RuntimeBuilder::backend()` accepts `std::unique_ptr<AsyncBackend>`. Any user can subclass it. Custom backends MUST call Completion public mutators. This forces Completion authority public (see P0-03). The ADR claim of "internal seam" is contradicted by the actual API surface. |
+| Benefit | (If public:) extensibility for custom backends (e.g., network, GPU, test harness). (If internal:) Completion mutators can be private; simpler authority model. |
+| Cost | (If public:) requires a backend author contract, conformance suite, ABI/versioning, negative-compile authority, failure boundary. (If internal:) no custom backends possible; RuntimeBuilder must accept a selector/config instead. |
+| Current evidence | `async_io_context.hpp:52-115` (public abstract class); `application_runtime.hpp` builder API; tests subclass AsyncBackend (FakeBackend). |
+| Revisit trigger | Phase 1 (Completion authority hardening) MUST resolve this first: if mutators become private, AsyncBackend cannot remain a public extension point without a capability-access mechanism. Decision blocks Phase 1 design. |
+
+---
+
 ## Summary
 
 | ID | Status | Area |
@@ -221,3 +237,4 @@ Status values:
 | DIV-10 | Accepted | Syscall cancellation |
 | DIV-11 | Accepted | Cancel protection |
 | DIV-12 | Corrective planned | Resource bounds |
+| DIV-13 | Pending decision | Backend extension point |

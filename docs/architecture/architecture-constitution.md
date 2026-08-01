@@ -433,3 +433,127 @@ auditable and prevents accidental accumulation.
 1. Does this change alter the Zig conformance map?
 2. If it diverges, is the divergence registered?
 3. What is the revisit trigger for this decision?
+
+---
+
+## AC-13. Unforgeable State Authority
+
+**Rule:** Caller-visible objects whose internal state transitions are
+backend/system-controlled MUST enforce that authority structurally (via type
+system, capability token, or access-control pattern). A comment saying
+"backend-only" is NOT an authority boundary. Debug assertions are NOT an
+authority boundary. Release builds MUST also detect or structurally prevent
+invalid transitions.
+
+**Rationale:** Current `Completion<T>` exposes `mark_outstanding()`,
+`complete_with()`, and `reset()` as public methods. Any application code can
+forge state transitions: reset an outstanding Completion, double-complete,
+or mark outstanding without a backend. Tests already use these as public API,
+solidifying the authority leak. This enables use-after-free (backend holds
+pointer to reset/destroyed Completion), double publication, and permanent
+state divergence between Completion and backend outstanding count.
+
+**Required evidence:**
+- `mark_outstanding()`, `complete_with()`, `reset()` are NOT callable from
+  ordinary application code (negative-compile proof).
+- Destruction of an outstanding Completion is a checked contract violation
+  in BOTH Debug and Release.
+- No test uses backend-only mutators as if they were public caller API.
+- Two different contexts cannot both mark the same Completion outstanding
+  (structural exclusion, not comment convention).
+
+**Allowed exceptions:**
+- During the corrective Phase 1, temporary public access is allowed if
+  tracked and guarded by a negative-compile deadline.
+- Test-only access via friend or `SLUICE_ASYNC_INTERNAL_TESTING` guard.
+
+**Common violations:**
+- Public `mark_outstanding()` with only an assert(idle) guard.
+- `reset()` that does not check outstanding state.
+- Default destructor that does not fail-fast on outstanding.
+- Tests calling `c.complete_with(...)` directly as "convenience."
+
+**Review questions:**
+1. Can application code forge this state transition?
+2. If yes, what is the worst-case consequence?
+3. Is the boundary structural or merely conventional?
+
+---
+
+## AC-14. Request Provenance and Generation
+
+**Rule:** Every accepted operation MUST have a stable identity that includes:
+context/backend provenance, a monotonically increasing generation (or
+equivalent ABA guard), operation kind, Completion binding, and resource/buffer
+binding. A raw pointer (e.g., `Completion*`) MUST NOT be the sole logical
+identity across asynchronous phases.
+
+**Rationale:** Completion address is currently the only backend identity for
+an operation. But Completions can be reset and reused. The same address may
+represent different operations at different times (classic ABA). Any delayed
+event (backend result, cancel request, cancel CQE, Scheduler waiter, Batch
+reap, shutdown cleanup) that references only `&c` cannot distinguish which
+generation of the request it targets. Uring internally uses op-id but the
+public cancellation and Scheduler registration still target Completion address.
+
+**Required evidence:**
+- Each accepted op has a generation or epoch that monotonically increases
+  per Completion reuse.
+- Cancel targets a specific generation, not just an address.
+- Scheduler wait registration records provenance (which context/backend).
+- Cross-context Completion submission is structurally prevented or detected.
+
+**Allowed exceptions:**
+- Internal backend scratch may use raw pointers for hot-path optimization,
+  but the logical identity MUST include generation.
+- Test-only backends may simplify if documented.
+
+**Common violations:**
+- Using `Completion*` as map key with no generation guard.
+- Cancel that targets an address that may have been reused.
+- Scheduler waiter map keyed by raw pointer with no context check.
+- `await_completion` that only asserts `!c.idle()` (vanishes in Release).
+
+**Review questions:**
+1. If this Completion is reset and resubmitted, can a delayed event tell?
+2. Can a Completion from context A be awaited on context B's Scheduler?
+3. What happens if two Fibers await the same Completion?
+
+---
+
+## AC-15. Completion Identity Preservation Across Reap
+
+**Rule:** When a backend knows WHICH operations completed (it always does),
+that identity MUST NOT be discarded at the L0/L1 boundary. The reap interface
+MUST provide completed operation identities to higher layers. Higher layers
+MUST NOT be forced to recover completion identity by scanning all outstanding
+Completions.
+
+**Rationale:** Current `poll()`/`wait_one()` return only a count. The
+Scheduler then scans its entire `waiting_completion_` map checking
+`c.ready()` on each — O(N) work to recover information the backend already
+had. Batch similarly scans all slots and uses a process-wide global
+`reap_seq` to reconstruct completion order. This global sequence is hidden
+static state that Completion is forced to carry for Batch's benefit.
+
+**Required evidence:**
+- Backend provides a reap-ready iteration or callback that yields completed
+  request identities (not just a count).
+- Scheduler does NOT scan all registered Completions to find ready ones.
+- No process-wide global ordering state embedded in per-Completion objects.
+- Batch obtains completion order from the reap interface, not from scanning.
+
+**Allowed exceptions:**
+- Small-scale test backends (≤8 outstanding) may use scan if documented.
+- During corrective phases, scan is acceptable if tracked with a removal
+  deadline.
+
+**Common violations:**
+- `poll()` returns `size_t` count; caller scans everything.
+- Global atomic `next_reap_seq()` embedded in Completion for Batch ordering.
+- Scheduler O(N) scan of waiting map on every progress iteration.
+
+**Review questions:**
+1. After `poll()` returns, does the caller know WHO completed?
+2. If not, how does it find out? Is that O(1) or O(N)?
+3. Is there hidden global state used to reconstruct ordering?
