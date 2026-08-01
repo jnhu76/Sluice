@@ -72,14 +72,24 @@ void ThreadPoolBackend::enqueue_size(Completion<std::size_t>& c,
         ++outstanding_;
     }
     Completion<std::size_t>* cp = &c;
-    workers_.emplace_back([this, cp, work = std::move(work)] {
-        Result<std::size_t> r = work();
-        {
-            std::lock_guard<std::mutex> lk(mtx_);
-            ready_size_.push_back(ReadySize{cp, std::move(r)});
-        }
-        cv_.notify_one();
-    });
+    try {
+        workers_.emplace_back([this, cp, work = std::move(work)] {
+            Result<std::size_t> r = work();
+            {
+                std::lock_guard<std::mutex> lk(mtx_);
+                ready_size_.push_back(ReadySize{cp, std::move(r)});
+            }
+            cv_.notify_one();
+        });
+    } catch (const std::bad_alloc&) {
+        fail_spawn_size(cp, IoError{IoError::Code::no_space});
+    } catch (const std::system_error& e) {
+        IoError err{IoError::Code::backend_error};
+        if (e.code().value() > 0) err.os_errno = e.code().value();
+        fail_spawn_size(cp, err);
+    } catch (...) {
+        fail_spawn_size(cp, IoError{IoError::Code::backend_error});
+    }
 }
 
 void ThreadPoolBackend::enqueue_void(Completion<void>& c,
@@ -90,14 +100,42 @@ void ThreadPoolBackend::enqueue_void(Completion<void>& c,
         ++outstanding_;
     }
     Completion<void>* cp = &c;
-    workers_.emplace_back([this, cp, work = std::move(work)] {
-        Result<void> r = work();
-        {
-            std::lock_guard<std::mutex> lk(mtx_);
-            ready_void_.push_back(ReadyVoid{cp, std::move(r)});
-        }
-        cv_.notify_one();
-    });
+    try {
+        workers_.emplace_back([this, cp, work = std::move(work)] {
+            Result<void> r = work();
+            {
+                std::lock_guard<std::mutex> lk(mtx_);
+                ready_void_.push_back(ReadyVoid{cp, std::move(r)});
+            }
+            cv_.notify_one();
+        });
+    } catch (const std::bad_alloc&) {
+        fail_spawn_void(cp, IoError{IoError::Code::no_space});
+    } catch (const std::system_error& e) {
+        IoError err{IoError::Code::backend_error};
+        if (e.code().value() > 0) err.os_errno = e.code().value();
+        fail_spawn_void(cp, err);
+    } catch (...) {
+        fail_spawn_void(cp, IoError{IoError::Code::backend_error});
+    }
+}
+
+void ThreadPoolBackend::fail_spawn_size(Completion<std::size_t>* c,
+                                        const IoError& err) {
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        ready_size_.push_back(ReadySize{c, make_unexpected<std::size_t>(err)});
+    }
+    cv_.notify_one();
+}
+
+void ThreadPoolBackend::fail_spawn_void(Completion<void>* c,
+                                        const IoError& err) {
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        ready_void_.push_back(ReadyVoid{c, make_unexpected<void>(err)});
+    }
+    cv_.notify_one();
 }
 
 void ThreadPoolBackend::shutting_down_for_test() {
