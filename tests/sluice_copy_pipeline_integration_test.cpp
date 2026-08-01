@@ -25,13 +25,17 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <string>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
@@ -152,47 +156,185 @@ SLUICE_TEST_CASE(pipeline_integration_edge_sizes_per_depth) {
 
 // ---------------------------------------------------------------------------
 // Multiple buffer sizes at depth>1, including small buffers that force many
-// rounds of slot reuse. ThreadPoolBackend spawns one OS thread per op, so the
-// full workload (buf=1 over N=100003 bytes == ~200k thread spawns per depth)
-// takes ~48s in Debug and several minutes under ASan/TSan. Instrumented
-// builds therefore default to a smaller prime; SLUICE_PIPELINE_BUFSTRESS_N
-// overrides in any build. The byte-for-byte assertions are identical at any
-// scale, and Debug/Release always run the full 100003-byte workload.
+// rounds of slot reuse. The workload is derived PER CASE from the buffer
+// size, the pipeline depth, and the number of slot-reuse rounds to cover —
+// NOT a single fixed byte count shared by every buffer. The previous uniform
+// N=100003 made buf=1 spawn ~100k chunks x (1 read + 1 write) x 2 depths ~=
+// 400k OS thread lifecycles in Debug: a de-facto thread soak that took ~48s
+// locally, minutes on shared runners (looking like a hang), and exhausted
+// kernel task limits on CI. The default matrix now stays in the hundreds of
+// ops while preserving every coverage property below.
+//
+// SLUICE_PIPELINE_BUFSTRESS_N re-opts a run into the explicit large workload
+// (Version B nightly / manual stress). It is honored ONLY when it is a
+// present, fully-valid positive decimal integer that fits size_t; any other
+// value (absent, empty, zero, junk, trailing junk, sign, overflow) falls
+// back to the small per-case matrix size, so an invalid override can never
+// accidentally amplify a workload (the pre-fix parser fell back to 100003
+// even in sanitizer builds).
 // ---------------------------------------------------------------------------
-#if defined(__has_feature)
-#  if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
-#    define SLUICE_PIT_SANITIZED 1
-#  endif
-#endif
-#if !defined(SLUICE_PIT_SANITIZED) && \
-    (defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__))
-#  define SLUICE_PIT_SANITIZED 1
-#endif
+namespace {
 
-std::size_t stress_n() {
-    const char* s = std::getenv("SLUICE_PIPELINE_BUFSTRESS_N");
-    if (s == nullptr || *s == '\0') {
-#ifdef SLUICE_PIT_SANITIZED
-        return 1009;  // prime-ish, not a buffer multiple
-#else
-        return 100003;  // prime-ish, not a buffer multiple
-#endif
-    }
-    char* end = nullptr;
-    unsigned long long v = std::strtoull(s, &end, 10);
-    if (end == s || v == 0) return 100003;
-    return static_cast<std::size_t>(v);
+constexpr std::size_t kBufferMatrixReuseRounds = 8;
+
+// Byte count for one buffer/depth case: pipeline_depth * reuse-rounds + 1
+// full chunks, plus a partial final chunk when buffer_size > 1. The `+1`
+// chunk guarantees the file spans more than one full pipeline window (multi-
+// round slot reuse); the tail proves the last buffer is drained short. The
+// constants are tiny by design, so the arithmetic cannot overflow.
+std::size_t buffer_matrix_case_size(std::size_t buffer_size,
+                                    std::size_t pipeline_depth) {
+    const std::size_t chunks =
+        pipeline_depth * kBufferMatrixReuseRounds + 1;
+    const std::size_t tail = buffer_size > 1 ? buffer_size / 2 : 0;
+    return buffer_size * chunks + tail;
 }
 
-SLUICE_TEST_CASE(pipeline_integration_buffer_sizes) {
-    const std::size_t N = stress_n();  // prime-ish, not a buffer multiple
-    for (std::size_t buf : {1u, 7u, 512u, 4096u, 65536u}) {
-        for (std::size_t depth : {2u, 4u}) {
-            TempFile src, dst;
-            seed_file(src.fd, N);
-            check_copy(src.fd, dst.fd, N, buf, depth, 1, SyncPolicy::none);
+// Strict override parser (see the comment above). Returns the override only
+// when the variable exists and is a fully-valid positive decimal integer
+// that fits size_t; nullopt otherwise, so the caller falls back to its
+// scenario default.
+std::optional<std::size_t> stress_override_n() {
+    const char* s = std::getenv("SLUICE_PIPELINE_BUFSTRESS_N");
+    if (s == nullptr || *s == '\0' || *s == '+') return std::nullopt;
+    std::size_t v = 0;
+    bool any_digit = false;
+    for (const char* p = s; *p != '\0'; ++p) {
+        if (*p < '0' || *p > '9') return std::nullopt;  // junk / trailing junk
+        const std::size_t d = static_cast<std::size_t>(*p - '0');
+        if (v > (SIZE_MAX - d) / 10) return std::nullopt;  // overflow
+        v = v * 10 + d;
+        any_digit = true;
+    }
+    return (any_digit && v > 0) ? std::optional<std::size_t>{v}
+                                : std::nullopt;
+}
+
+// RAII set/unset of a process env var, restoring the previous value on scope
+// exit. The harness runs every case in one process, so a leaked variable
+// would pollute later cases.
+class ScopedEnvVar {
+public:
+    ScopedEnvVar(const char* name, const char* value) : name_(name) {
+        const char* prev = std::getenv(name);
+        had_prev_ = prev != nullptr;
+        if (had_prev_) prev_ = prev;
+        if (value == nullptr) {
+            ::unsetenv(name);
+        } else {
+            ::setenv(name, value, 1);
         }
     }
+    ~ScopedEnvVar() {
+        if (had_prev_) {
+            ::setenv(name_.c_str(), prev_.c_str(), 1);
+        } else {
+            ::unsetenv(name_.c_str());
+        }
+    }
+    ScopedEnvVar(const ScopedEnvVar&) = delete;
+    ScopedEnvVar& operator=(const ScopedEnvVar&) = delete;
+
+private:
+    std::string name_;
+    bool had_prev_ = false;
+    std::string prev_;
+};
+
+}  // namespace
+
+SLUICE_TEST_CASE(pipeline_integration_buffer_sizes) {
+    const auto override_n = stress_override_n();
+
+    for (std::size_t buf : {1u, 7u, 512u, 4096u, 65536u}) {
+        for (std::size_t depth : {2u, 4u}) {
+            const std::size_t n =
+                override_n.value_or(buffer_matrix_case_size(buf, depth));
+
+            // Self-check the DEFAULT case size only (an explicit override is
+            // the caller's chosen scale, not subject to the matrix coverage
+            // contract): the file must span > 4 full pipeline windows
+            // (multi-round slot reuse) and, for buf > 1, must end with a
+            // partial final chunk. These verify the test input, not the
+            // production copy.
+            if (!override_n.has_value()) {
+                SLUICE_CHECK_MSG(n > buf * depth * 4,
+                                 "case too small for multi-round slot reuse");
+                SLUICE_CHECK_MSG(buf == 1 || n % buf != 0,
+                                 "case size has no partial final chunk");
+            }
+
+            // Case-level progress diagnostics: at most two lines per
+            // combination, so a slow run shows exactly which buf/depth is
+            // in flight (the harness prints/flushes per-case stdout).
+            const auto t0 = std::chrono::steady_clock::now();
+            std::printf("pipeline buffer case begin: buf=%zu depth=%zu n=%zu\n",
+                        buf, depth, n);
+            std::fflush(stdout);
+
+            TempFile src, dst;
+            seed_file(src.fd, n);
+            check_copy(src.fd, dst.fd, n, buf, depth, 1, SyncPolicy::none);
+
+            const auto ms =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - t0)
+                    .count();
+            std::printf("pipeline buffer case done:  buf=%zu depth=%zu n=%zu "
+                        "elapsed_ms=%lld\n",
+                        buf, depth, n, static_cast<long long>(ms));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The override parser contract (see stress_override_n): only a present,
+// fully-valid positive decimal integer that fits size_t is honored. Absent,
+// empty, zero, junk, trailing junk, sign, and overflow must all yield
+// nullopt — an invalid override must never accidentally escalate a workload.
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(pipeline_stress_override_parsing) {
+    constexpr const char* kVar = "SLUICE_PIPELINE_BUFSTRESS_N";
+
+    { ScopedEnvVar env(kVar, nullptr);  // unset
+      SLUICE_CHECK(!stress_override_n().has_value()); }
+    { ScopedEnvVar env(kVar, "");  // empty
+      SLUICE_CHECK(!stress_override_n().has_value()); }
+    { ScopedEnvVar env(kVar, "0");  // zero
+      SLUICE_CHECK(!stress_override_n().has_value()); }
+    { ScopedEnvVar env(kVar, "00");  // zero with padding
+      SLUICE_CHECK(!stress_override_n().has_value()); }
+    { ScopedEnvVar env(kVar, "abc");  // non-numeric
+      SLUICE_CHECK(!stress_override_n().has_value()); }
+    { ScopedEnvVar env(kVar, "100abc");  // trailing junk
+      SLUICE_CHECK(!stress_override_n().has_value()); }
+    { ScopedEnvVar env(kVar, "-100");  // sign
+      SLUICE_CHECK(!stress_override_n().has_value()); }
+    { ScopedEnvVar env(kVar, "+100");  // sign
+      SLUICE_CHECK(!stress_override_n().has_value()); }
+    { ScopedEnvVar env(kVar, " 100");  // leading whitespace
+      SLUICE_CHECK(!stress_override_n().has_value()); }
+
+    { ScopedEnvVar env(kVar, "1");
+      SLUICE_CHECK(stress_override_n().has_value());
+      SLUICE_CHECK(stress_override_n().value() == 1); }
+    { ScopedEnvVar env(kVar, "100003");
+      SLUICE_CHECK(stress_override_n().has_value());
+      SLUICE_CHECK(stress_override_n().value() == 100003); }
+
+    // SIZE_MAX itself is valid; SIZE_MAX + 1 must be rejected (no silent
+    // truncation). "+1" is an increment of the final digit for every byte-
+    // multiple size_t width (2^32-1 = 4294967295, 2^64-1 =
+    // 18446744073709551615 — both end in 5), so the strings are computed
+    // portably from SIZE_MAX.
+    const std::string max_str = std::to_string(SIZE_MAX);
+    std::string overflow_str = max_str;
+    overflow_str.back() = static_cast<char>(overflow_str.back() + 1);
+    { ScopedEnvVar env(kVar, max_str.c_str());
+      SLUICE_CHECK(stress_override_n().has_value());
+      SLUICE_CHECK(stress_override_n().value() == SIZE_MAX); }
+    { ScopedEnvVar env(kVar, overflow_str.c_str());
+      SLUICE_CHECK(!stress_override_n().has_value()); }
 }
 
 // ---------------------------------------------------------------------------

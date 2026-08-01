@@ -215,7 +215,12 @@ The Version B test family (all in the default `xmake test` group):
   bounded-failure watchdog);
 - `sluice_copy_pipeline_integration_test` — real files + ThreadPoolBackend
   (exact destination size, multi-round reuse, multi-worker, sync policies,
-  real concurrency probe);
+  real concurrency probe). The buffer-size matrix derives each case size
+  from buffer/depth and the slot-reuse rounds (a few hundred ops in the
+  default group); `SLUICE_PIPELINE_BUFSTRESS_N=<n>` re-opts a run into the
+  explicit large workload (`100003` in the Version B nightly gate), and
+  honors only a fully-valid positive integer — anything else falls back to
+  the small matrix size;
 - `sluice_copy_pipeline_stress_test` — deterministic randomized matrix
   (`--seed` / `--iterations`);
 - `sluice_copy_integration_test` / `sluice_copy_fault_test` — Version A
