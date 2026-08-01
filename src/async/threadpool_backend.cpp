@@ -205,22 +205,45 @@ std::size_t ThreadPoolBackend::poll() {
         ++n;
     }
     if (n) {
-        std::lock_guard<std::mutex> lk(mtx_);
-        outstanding_ -= n;
-        // Reap: join exactly the workers whose results were drained above. A
-        // drained worker has already pushed its result (that is how it got
-        // here) and holds no lock afterwards, so join() returns as soon as it
-        // finishes exiting — no meaningful blocking, no deadlock. This keeps
-        // the number of unreaped (zombie) kernel threads bounded by the number
-        // of outstanding ops instead of growing with the total op count (the
-        // Version B CI thread-exhaustion failure). Spawn-failure entries carry
-        // kNoWorker and have nothing to join.
-        for (auto& e : rs)
-            if (e.worker != kNoWorker) workers_[e.worker].join();
-        for (auto& e : rv)
-            if (e.worker != kNoWorker) workers_[e.worker].join();
+        // Reap: move the drained workers out of workers_ and join them
+        // OUTSIDE mtx_. join() blocks the caller until thread teardown
+        // finishes; holding mtx_ across it would stall every other submit and
+        // worker publication and widen the critical section into a lock-
+        // ordering hazard. A drained worker has already pushed its result
+        // (that is how it got here) and holds no lock afterwards, so join()
+        // returns as soon as it finishes exiting — no meaningful blocking, no
+        // deadlock. Each worker is moved out exactly once (its slot becomes a
+        // non-joinable placeholder), which keeps the number of unreaped
+        // (zombie) kernel threads bounded by the number of outstanding ops
+        // instead of growing with the total op count (the Version B CI
+        // thread-exhaustion failure). Spawn-failure entries carry kNoWorker
+        // and have nothing to join. The capacity is reserved before the lock
+        // so push_back below cannot throw while holding it.
+        std::vector<std::thread> to_join;
+        to_join.reserve(rs.size() + rv.size());
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            outstanding_ -= n;
+            for (auto& e : rs)
+                if (e.worker != kNoWorker)
+                    to_join.push_back(take_worker_for_join_locked(e.worker));
+            for (auto& e : rv)
+                if (e.worker != kNoWorker)
+                    to_join.push_back(take_worker_for_join_locked(e.worker));
+        }
+        for (auto& t : to_join) t.join();
     }
     return n;
+}
+
+std::thread ThreadPoolBackend::take_worker_for_join_locked(std::size_t index) {
+    // Caller holds mtx_. Defensive range/joinability validation: the index
+    // comes from the worker's own spawn record (workers_ only ever grows, so
+    // it stays valid), and a slot is taken at most once.
+    if (index >= workers_.size()) return {};
+    std::thread& w = workers_[index];
+    if (!w.joinable()) return {};
+    return std::move(w);
 }
 
 Result<std::size_t> ThreadPoolBackend::wait_one() {

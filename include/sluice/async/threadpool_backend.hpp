@@ -149,6 +149,16 @@ private:
     // destructor's write (CP.20).
     bool accepting_new_work() const;
 
+    // Take the worker thread at `index` out of workers_ so the caller can
+    // join it OUTSIDE mtx_ (joining inside the lock would stall every other
+    // submit and worker publication for the whole thread teardown and invites
+    // lock-ordering bugs). MUST be called with mtx_ held. Returns a non-
+    // joinable thread when the index is out of range or the slot was already
+    // taken — each worker is moved out exactly once, right after its result
+    // is reaped. The moved-out slot becomes a non-joinable placeholder, so
+    // vector indices stay stable and the destructor's join loop skips it.
+    std::thread take_worker_for_join_locked(std::size_t index);
+
     mutable std::mutex mtx_;
     std::condition_variable cv_;
     std::deque<ReadySize> ready_size_;

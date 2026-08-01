@@ -18,8 +18,13 @@
 // outstanding ops instead of growing with the total op count.
 //
 // The seam: unjoined_workers_for_test() (SLUICE_ASYNC_INTERNAL_TESTING only)
-// counts workers_ entries that have not been joined. Pre-fix this equals the
-// total op count after a full submit/reap cycle; post-fix it must be zero.
+// counts workers_ entries that have not been joined. The proof is checked
+// MID-RUN: submits and full drains are interleaved in small batches, and
+// after EVERY batch drain the unjoined count must already be zero. Pre-fix
+// this equals the batch size after the first drain and grows linearly with
+// the op count; post-fix it is zero after every batch. The end-of-run check
+// alone cannot tell "joined as we go" from "joined once everything was
+// drained", so the batched mid-stream checks are the regression.
 #include "harness.hpp"
 
 #include <sluice/async/completion.hpp>
@@ -60,6 +65,22 @@ private:
     static inline long counter_ = 0;
 };
 
+// Drain every currently-ready result through the real reaper (wait_one ->
+// poll) and return how many results were drained. wait_one() blocks until at
+// least one result is ready, so the loop ends exactly when nothing remains
+// outstanding — no sleeps, no timeouts. An error result (ThreadPoolBackend
+// never produces one) breaks the loop; the caller's exact-count check then
+// fails loudly instead of hanging.
+std::size_t drain_all_ready(ThreadPoolBackend& backend) {
+    std::size_t reaped = 0;
+    while (backend.outstanding() > 0) {
+        auto wr = backend.wait_one();
+        if (!wr.has_value()) break;
+        reaped += wr.value();
+    }
+    return reaped;
+}
+
 }  // namespace
 
 SLUICE_TEST_CASE(tp_reap_unjoined_workers_bounded_after_full_reap) {
@@ -69,28 +90,37 @@ SLUICE_TEST_CASE(tp_reap_unjoined_workers_bounded_after_full_reap) {
     const std::byte seed[1] = {std::byte{0x5a}};
     SLUICE_CHECK(::write(fd, seed, 1) == 1);
 
-    constexpr std::size_t OPS = 4096;
+    constexpr std::size_t kOperations = 4096;
+    constexpr std::size_t kBatch = 64;
     ThreadPoolBackend backend;
-    std::vector<Completion<std::size_t>> cs(OPS);
+    std::vector<Completion<std::size_t>> cs(kOperations);
     // One byte per op: concurrent workers write their own slot (the caller
     // contract forbids sharing a buffer across outstanding ops).
-    std::vector<std::byte> bufs(OPS);
+    std::vector<std::byte> bufs(kOperations);
 
-    for (std::size_t i = 0; i < OPS; ++i) {
+    // Submit and fully drain in interleaved batches of kBatch. After EVERY
+    // batch drain the unjoined-worker count must already be back to zero: an
+    // implementation that only joins at destruction — or only after the
+    // final drain — leaves kBatch zombies after the first batch and grows
+    // linearly with the op count (the kernel task-limit exhaustion that
+    // broke CI). Small batches bound live threads to kBatch, so the proof is
+    // deterministic without exhausting Linux thread limits or waiting on a
+    // timeout.
+    for (std::size_t i = 0; i < kOperations; ++i) {
         auto r = backend.submit_read(ReadOp{fd, bufs.data() + i, 1, 0}, cs[i]);
         SLUICE_CHECK(r.has_value());
-    }
 
-    // Reap everything through the real reaper (wait_one -> poll). Each reaped
-    // result must join its worker post-fix; pre-fix every worker stays
-    // unjoined until the destructor.
-    std::size_t reaped = 0;
-    while (backend.outstanding() > 0) {
-        auto wr = backend.wait_one();
-        SLUICE_CHECK(wr.has_value());
-        reaped += wr.value();
+        if ((i + 1) % kBatch == 0) {
+            std::size_t reaped = drain_all_ready(backend);
+            SLUICE_CHECK_MSG(reaped == kBatch,
+                             "batch drain reaped the wrong number of ops");
+            SLUICE_CHECK_MSG(backend.unjoined_workers_for_test() == 0,
+                             "reaped ops left unjoined workers behind mid-run "
+                             "(worker handles grow linearly with submits)");
+        }
     }
-    SLUICE_CHECK(reaped == OPS);
+    SLUICE_CHECK_MSG(backend.outstanding() == 0,
+                     "ops remained outstanding after the final drain");
 
     // Every completion carries the real result (1 byte at offset 0).
     for (auto& c : cs) {
@@ -99,9 +129,9 @@ SLUICE_TEST_CASE(tp_reap_unjoined_workers_bounded_after_full_reap) {
         SLUICE_CHECK(c.result().value() == 1);
     }
 
-    // THE REGRESSION: no worker may remain unreaped after its result was
-    // reaped. Pre-fix this is OPS (4096 unjoined zombies); post-fix poll()
-    // joined every reaped worker.
+    // THE REGRESSION, restated at the end: no worker may remain unreaped.
+    // Pre-fix this is OPS (4096 unjoined zombies); post-fix poll() joined
+    // every reaped worker as it drained.
     SLUICE_CHECK_MSG(backend.unjoined_workers_for_test() == 0,
                      "reaped ops left unjoined worker threads behind (zombie "
                      "accumulation under kernel task limits)");
@@ -113,20 +143,25 @@ SLUICE_TEST_CASE(tp_reap_void_ops_bounded_too) {
     int fd = ::open(tp.path().c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
     SLUICE_CHECK(fd >= 0);
 
-    constexpr std::size_t OPS = 256;
+    constexpr std::size_t kOperations = 256;
+    constexpr std::size_t kBatch = 64;
     ThreadPoolBackend backend;
-    std::vector<Completion<void>> cs(OPS);
-    for (std::size_t i = 0; i < OPS; ++i) {
+    std::vector<Completion<void>> cs(kOperations);
+    for (std::size_t i = 0; i < kOperations; ++i) {
         auto r = backend.submit_sync_data(SyncDataOp{fd}, cs[i]);
         SLUICE_CHECK(r.has_value());
+
+        if ((i + 1) % kBatch == 0) {
+            std::size_t reaped = drain_all_ready(backend);
+            SLUICE_CHECK_MSG(reaped == kBatch,
+                             "batch drain reaped the wrong number of ops");
+            SLUICE_CHECK_MSG(backend.unjoined_workers_for_test() == 0,
+                             "reaped void ops left unjoined workers behind "
+                             "mid-run");
+        }
     }
-    std::size_t reaped = 0;
-    while (backend.outstanding() > 0) {
-        auto wr = backend.wait_one();
-        SLUICE_CHECK(wr.has_value());
-        reaped += wr.value();
-    }
-    SLUICE_CHECK(reaped == OPS);
+    SLUICE_CHECK_MSG(backend.outstanding() == 0,
+                     "void ops remained outstanding after the final drain");
     for (auto& c : cs) {
         SLUICE_CHECK(c.ready());
         SLUICE_CHECK(c.result().has_value());
