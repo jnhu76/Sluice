@@ -19,6 +19,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <system_error>
 #include <vector>
 
 namespace sluice_copy {
@@ -94,7 +95,30 @@ struct PipelinedCopyTask {
     std::condition_variable& done_cv;
 
     void operator()(RuntimeTaskContext& ctx) {
-        Result<CopyStats> result = run_body(ctx);
+        // App-level exception boundary. The Runtime swallows exceptions thrown
+        // by the user task at its task boundary (Group boundary contract), so
+        // an uncaught exception would kill the task SILENTLY: `done` would
+        // never be published and the caller's done_cv wait would hang forever.
+        // Translate any task-body exception into an IoError result instead.
+        // Real triggers: an op-dispatch failure from a backend that throws
+        // (ThreadPoolBackend::enqueue_* now resolves spawn failures as op
+        // errors, but other backends may still throw), or an allocation
+        // failure inside the Scheduler's await/registration internals.
+        Result<CopyStats> result = [&]() -> Result<CopyStats> {
+            try {
+                return run_body(ctx);
+            } catch (const std::bad_alloc&) {
+                return make_unexpected<CopyStats>(
+                    IoError{IoError::Code::no_space});
+            } catch (const std::system_error& e) {
+                IoError err{IoError::Code::backend_error};
+                if (e.code().value() > 0) err.os_errno = e.code().value();
+                return make_unexpected<CopyStats>(err);
+            } catch (...) {
+                return make_unexpected<CopyStats>(
+                    IoError{IoError::Code::backend_error});
+            }
+        }();
         publish(std::move(result));
     }
 
@@ -403,24 +427,65 @@ Result<CopyStats> run_pipelined_copy_with_backend(
     int src_fd, int dst_fd, std::size_t buffer_size,
     std::size_t pipeline_depth, unsigned workers, SyncPolicy sync,
     std::unique_ptr<AsyncBackend> backend) {
-    // Argument validation. Reject zero/empty inputs and the product overflow
-    // (the memory upper bound is ~ buffer_size * pipeline_depth).
+    // ---- Argument validation (BEFORE any allocation or Runtime build). ----
+    // This is the public entry point: the CLI, tests, and backend-injected
+    // callers all defend here, not just the CLI. Reject zero/empty inputs,
+    // the product overflow (memory upper bound ~ buffer_size * pipeline_depth),
+    // and the app-level resource limits. Overflow is checked BEFORE the total
+    // byte cap; the total cap is the primary constraint.
     if (buffer_size == 0 || pipeline_depth == 0 || workers == 0 || !backend) {
+        return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
+    }
+    if (buffer_size > kMaxBufferSize || pipeline_depth > kMaxPipelineDepth ||
+        workers > kMaxWorkers) {
         return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
     }
     if (buffer_size > std::numeric_limits<std::size_t>::max() / pipeline_depth) {
         return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
     }
+    if (buffer_size * pipeline_depth > kMaxPipelineBytes) {
+        return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
+    }
+
+    // ---- Build ALL pipeline slots BEFORE the Runtime is built/started. ----
+    // An allocation failure here cannot strand a started Runtime: slots are
+    // allocated first, and std::bad_alloc is translated to IoError::no_space
+    // so no exception escapes the public Result<T> boundary.
+    std::vector<std::unique_ptr<PipelineSlot>> slots;
+    try {
+        slots.reserve(pipeline_depth);
+        for (std::size_t i = 0; i < pipeline_depth; ++i) {
+            auto s = std::make_unique<PipelineSlot>(buffer_size);
+            s->chunk_offset = static_cast<std::uint64_t>(i) * buffer_size;
+            slots.push_back(std::move(s));
+        }
+    } catch (const std::bad_alloc&) {
+        return make_unexpected<CopyStats>(IoError{IoError::Code::no_space});
+    }
 
     RuntimeBuilder builder;
     builder.backend(std::move(backend));
     builder.workers(workers);
-    auto build_r = builder.build();
-    if (!build_r.has_value()) return make_unexpected<CopyStats>(build_r.error());
-    auto rt = std::move(build_r.value());
 
-    auto start_r = rt->start();
-    if (!start_r.has_value()) return make_unexpected<CopyStats>(start_r.error());
+    // RuntimeBuilder::build() allocates the Runtime on the heap (raw new +
+    // make_unique members) and can throw std::bad_alloc; ApplicationRuntime
+    // start() catches std::system_error internally, but the thread spawn can
+    // still throw other allocation errors. Translate any of those into
+    // IoError instead of letting the exception cross the public boundary.
+    // shutdown() is documented correct in every Runtime state (P1-05), so a
+    // partially-started Runtime is always cleaned up before we report.
+    std::unique_ptr<ApplicationRuntime> rt;
+    try {
+        auto build_r = builder.build();
+        if (!build_r.has_value()) return make_unexpected<CopyStats>(build_r.error());
+        rt = std::move(build_r.value());
+
+        auto start_r = rt->start();
+        if (!start_r.has_value()) return make_unexpected<CopyStats>(start_r.error());
+    } catch (const std::bad_alloc&) {
+        if (rt) (void)rt->shutdown();  // best-effort: correct in every state
+        return make_unexpected<CopyStats>(IoError{IoError::Code::no_space});
+    }
 
     // App-owned result slot + completion signal (brief §23). Lifetime exceeds
     // the task. The Runtime Worker NEVER blocks on this slot. The optional is
@@ -433,18 +498,11 @@ Result<CopyStats> run_pipelined_copy_with_backend(
     std::optional<Result<CopyStats>> out;
     std::atomic<bool> done{false};
 
-    // Build the pipeline slots. Slots are offset-ordered (slot i covers
-    // i*buffer_size + k*depth*buffer_size for round k), so processing them in
-    // vector order yields ascending write offsets. Each slot owns a fixed
-    // buffer and address-stable Completions (L7).
-    std::vector<std::unique_ptr<PipelineSlot>> slots;
-    slots.reserve(pipeline_depth);
-    for (std::size_t i = 0; i < pipeline_depth; ++i) {
-        auto s = std::make_unique<PipelineSlot>(buffer_size);
-        s->chunk_offset = static_cast<std::uint64_t>(i) * buffer_size;
-        slots.push_back(std::move(s));
-    }
-
+    // Slots are offset-ordered (slot i covers i*buffer_size + k*depth*buffer_size
+    // for round k), so processing them in vector order yields ascending write
+    // offsets. Each slot owns a fixed buffer and address-stable Completions
+    // (L7). All slots were allocated and validated above, BEFORE the Runtime
+    // started, so no exception can occur here.
     PipelinedCopyTask task{src_fd,        dst_fd,      buffer_size,
                            pipeline_depth, sync,        std::move(slots),
                            {},            mtx,         out,

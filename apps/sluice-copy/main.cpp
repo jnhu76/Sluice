@@ -14,15 +14,22 @@
 //
 // Backend: ThreadPoolBackend (real file I/O). No FakeAsyncBackend in app code.
 //
-// Memory upper bound is approximately buffer_size * pipeline_depth. The outer
-// call is still blocking (the copy completes before the CLI returns); the
-// pipeline is internal. Not zero-copy; writes are not parallel.
+// Memory upper bound is approximately buffer_size * pipeline_depth, capped by
+// the app-level limits in copy_task.hpp (kMaxBufferSize/kMaxPipelineDepth/
+// kMaxPipelineBytes/kMaxWorkers). The outer call is still blocking (the copy
+// completes before the CLI returns); the pipeline is internal. Not zero-copy;
+// writes are not parallel.
 //
-// Limitation: on mid-copy failure the destination may be left partial.
-// Atomic temp-file + rename is a Version C feature.
+// Input domain: both source and destination must be REGULAR files (the
+// pipeline requires a seekable, finite-length source and a truncatable,
+// positional destination). The source is validated before the destination is
+// created or touched; on a mid-copy failure the destination may be left
+// partial. Atomic temp-file + rename is a Version C feature.
 //
 // Exit codes: 0 = success, 1 = usage error, 2 = I/O error, 3 = canceled.
+#include "cli_parse.hpp"
 #include "copy_task.hpp"
+#include "file_domain.hpp"
 
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/error.hpp>
@@ -30,11 +37,9 @@
 
 #include <cerrno>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <string>
-#include <sys/stat.h>
 #include <unistd.h>
 
 namespace {
@@ -42,6 +47,8 @@ namespace {
 using sluice::IoError;
 using sluice_copy::CopyStats;
 using sluice_copy::SyncPolicy;
+using sluice_copy::cli::CliArgs;
+using sluice_copy::cli::parse_args;
 
 // App-local RAII file descriptor (brief §21: do NOT promote to core).
 struct ScopedFd {
@@ -52,109 +59,6 @@ struct ScopedFd {
     ScopedFd& operator=(const ScopedFd&) = delete;
 };
 
-struct CliArgs {
-    std::string src;
-    std::string dst;
-    std::size_t buffer_size = 1 << 20;  // 1 MiB default
-    std::size_t pipeline_depth = 1;     // Version A default; >1 enables Version B
-    unsigned workers = 1;
-    SyncPolicy sync = SyncPolicy::none;
-    bool help = false;
-};
-
-int usage(const char* prog) {
-    std::fprintf(stderr,
-        "usage: %s [options] <source> <destination>\n"
-        "  --buffer-size <bytes>   per-chunk buffer (default 1 MiB)\n"
-        "  --pipeline-depth <n>    read-ahead slots (default 1; >1 enables the\n"
-        "                          bounded reusable-buffer pipeline, Version B)\n"
-        "  --workers <count>       runtime workers (default 1)\n"
-        "  --sync none|data|all    durability after copy (default none)\n"
-        "  --help                  show this help\n",
-        prog);
-    return 1;
-}
-
-bool parse_size(const char* s, std::size_t& out) {
-    if (!s || !*s) return false;
-    errno = 0;
-    char* end = nullptr;
-    unsigned long long v = std::strtoull(s, &end, 10);
-    if (errno != 0 || end == s || *end != '\0') return false;
-    if (v == 0) return false;
-    out = static_cast<std::size_t>(v);
-    return true;
-}
-
-bool parse_workers(const char* s, unsigned& out) {
-    std::size_t v = 0;
-    if (!parse_size(s, v)) return false;
-    if (v == 0) return false;
-    out = static_cast<unsigned>(v);
-    return true;
-}
-
-bool parse_sync(const char* s, SyncPolicy& out) {
-    if (!s) return false;
-    if (std::strcmp(s, "none") == 0) { out = SyncPolicy::none; return true; }
-    if (std::strcmp(s, "data") == 0) { out = SyncPolicy::data; return true; }
-    if (std::strcmp(s, "all") == 0) { out = SyncPolicy::all; return true; }
-    return false;
-}
-
-// Returns 0 on success (fills args), or a non-zero exit code on usage error.
-int parse_args(int argc, char** argv, CliArgs& args) {
-    int positionals = 0;
-    for (int i = 1; i < argc; ++i) {
-        std::string a = argv[i];
-        auto next = [&](const char* opt) -> const char* {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "%s: missing value for %s\n", argv[0], opt);
-                return nullptr;
-            }
-            return argv[++i];
-        };
-        if (a == "--help") {
-            args.help = true;
-            return 0;
-        } else if (a == "--buffer-size") {
-            const char* v = next("--buffer-size");
-            if (!v || !parse_size(v, args.buffer_size)) return usage(argv[0]);
-        } else if (a == "--pipeline-depth") {
-            const char* v = next("--pipeline-depth");
-            if (!v || !parse_size(v, args.pipeline_depth)) return usage(argv[0]);
-        } else if (a == "--workers") {
-            const char* v = next("--workers");
-            if (!v || !parse_workers(v, args.workers)) return usage(argv[0]);
-        } else if (a == "--sync") {
-            const char* v = next("--sync");
-            if (!v || !parse_sync(v, args.sync)) return usage(argv[0]);
-        } else if (a.size() > 2 && a[0] == '-' && a[1] == '-') {
-            std::fprintf(stderr, "%s: unknown option %s\n", argv[0], a.c_str());
-            return usage(argv[0]);
-        } else {
-            if (positionals == 0) args.src = a;
-            else if (positionals == 1) args.dst = a;
-            else { std::fprintf(stderr, "%s: extra operand %s\n", argv[0], a.c_str()); return usage(argv[0]); }
-            ++positionals;
-        }
-    }
-    if (positionals != 2) return usage(argv[0]);
-    return 0;
-}
-
-const char* code_name(IoError::Code c) {
-    switch (c) {
-    case IoError::Code::eof: return "eof";
-    case IoError::Code::canceled: return "canceled";
-    case IoError::Code::no_space: return "no_space";
-    case IoError::Code::permission_denied: return "permission_denied";
-    case IoError::Code::invalid_state: return "invalid_state";
-    case IoError::Code::backend_error: return "backend_error";
-    default: return "io_error";
-    }
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -162,58 +66,45 @@ int main(int argc, char** argv) {
     int rc = parse_args(argc, argv, args);
     if (rc != 0) return rc;
     if (args.help) {
-        usage(argv[0]);
+        sluice_copy::cli::usage(argv[0]);
         return 0;
     }
 
-    // Open source read-only.
-    int src_fd = ::open(args.src.c_str(), O_RDONLY);
-    if (src_fd < 0) {
-        std::fprintf(stderr, "%s: cannot open source '%s': %s\n", argv[0],
-                     args.src.c_str(), std::strerror(errno));
-        return 2;
+    // Open + validate the input domain (see file_domain.hpp). The source's
+    // regular-file check runs BEFORE the destination is created, so a
+    // non-regular source (FIFO, char device, directory) never creates a new
+    // destination and never truncates an existing one.
+    sluice_copy::OpenCopyOutcome oc =
+        sluice_copy::open_copy_files(args.src, args.dst);
+    if (oc.failure != sluice_copy::OpenCopyFailure::none) {
+        std::fprintf(stderr, "%s: %s", argv[0],
+                     sluice_copy::open_copy_failure_message(oc.failure));
+        if (oc.error.os_errno != 0) {
+            std::fprintf(stderr, ": %s", std::strerror(oc.error.os_errno));
+        }
+        std::fprintf(stderr, "\n");
+        return (oc.failure == sluice_copy::OpenCopyFailure::same_file) ? 1 : 2;
     }
-    ScopedFd src_guard(src_fd);
+    ScopedFd src_guard(oc.src_fd);
+    ScopedFd dst_guard(oc.dst_fd);
 
-    // Open destination: write, create (NO O_TRUNC — must not truncate before
-    // same-file check). Truncation happens after identity verification.
-    int dst_fd = ::open(args.dst.c_str(), O_WRONLY | O_CREAT, 0644);
-    if (dst_fd < 0) {
-        std::fprintf(stderr, "%s: cannot open destination '%s': %s\n", argv[0],
-                     args.dst.c_str(), std::strerror(errno));
-        return 2;
-    }
-    ScopedFd dst_guard(dst_fd);
-
-    // Reject source == destination by filesystem identity, not path string.
-    // fstat both fds BEFORE any truncation so the source is preserved if they
-    // refer to the same inode (hard link or same pathname).
-    struct stat src_stat{}, dst_stat{};
-    if (::fstat(src_fd, &src_stat) != 0 || ::fstat(dst_fd, &dst_stat) != 0) {
-        std::fprintf(stderr, "%s: cannot stat source or destination: %s\n",
-                     argv[0], std::strerror(errno));
-        return 2;
-    }
-    if (src_stat.st_dev == dst_stat.st_dev && src_stat.st_ino == dst_stat.st_ino) {
-        std::fprintf(stderr, "%s: source and destination refer to the same file\n",
-                     argv[0]);
-        return 1;
-    }
-
-    // Truncate the destination now that we know it is a different file.
-    if (::ftruncate(dst_fd, 0) != 0) {
+    // Truncate the destination now that we know it is a different, regular
+    // file. On a mid-copy failure the destination may be left partial (this
+    // app does not use temp-file + rename; that is Version C).
+    if (::ftruncate(oc.dst_fd, 0) != 0) {
         std::fprintf(stderr, "%s: cannot truncate destination '%s': %s\n",
                      argv[0], args.dst.c_str(), std::strerror(errno));
         return 2;
     }
 
-    auto result = sluice_copy::run_pipelined_copy(src_fd, dst_fd,
+    auto result = sluice_copy::run_pipelined_copy(oc.src_fd, oc.dst_fd,
                                                    args.buffer_size,
                                                    args.pipeline_depth,
                                                    args.workers, args.sync);
     if (!result.has_value()) {
         IoError e = result.error();
-        std::fprintf(stderr, "%s: copy failed: %s%s%s\n", argv[0], code_name(e.code),
+        std::fprintf(stderr, "%s: copy failed: %s%s%s\n", argv[0],
+                     sluice_copy::cli::code_name(e.code),
                      e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "");
         // Canceled exit code vs I/O error.
         return (e.code == IoError::Code::canceled) ? 3 : 2;

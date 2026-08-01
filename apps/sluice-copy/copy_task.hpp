@@ -30,6 +30,22 @@ enum class SyncPolicy {
     all,   // fsync via submit_sync_all
 };
 
+// ---------------------------------------------------------------------------
+// Version B resource limits (app-level, fixed and explainable).
+//
+// The primary constraint is the TOTAL pipeline allocation:
+// `buffer_size * pipeline_depth` must not exceed kMaxPipelineBytes. The
+// per-slot buffer cap and the depth cap exist so that neither factor alone can
+// be extreme; slot metadata and the read/write Completions add only
+// O(pipeline_depth) memory on top of the buffer total. These caps are enforced
+// by the public copy entry points (not only the CLI) and apply to every
+// backend-injected test entry as well. They are deliberately fixed values for
+// a reference app: a copy tool is not an arbitrary thread/allocator factory.
+constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;      // 64 MiB per slot
+constexpr std::size_t kMaxPipelineDepth = 64;                 // 64 slots
+constexpr std::size_t kMaxPipelineBytes = 512 * 1024 * 1024;  // 512 MiB total
+constexpr unsigned kMaxWorkers = 64;  // Runtime worker threads (OS threads)
+
 // Result statistics published by the copy task (brief §23). The Runtime runs
 // void tasks, so the result is published through an app-owned slot whose
 // lifetime exceeds the task.
@@ -96,8 +112,13 @@ sluice::Result<CopyStats> run_sequential_copy_with_backend(
 // surface is introduced. `pipeline_depth == 1` reproduces Version A's
 // one-read-at-a-time behavior.
 //
-// `pipeline_depth` must be >= 1. `buffer_size` must be > 0. The product
-// `buffer_size * pipeline_depth` must not overflow `std::size_t`.
+// `pipeline_depth` must be >= 1. `buffer_size` must be > 0. `workers` must be
+// >= 1. The product `buffer_size * pipeline_depth` must not overflow
+// `std::size_t`, and all of the resource limits above must hold:
+// `buffer_size <= kMaxBufferSize`, `pipeline_depth <= kMaxPipelineDepth`,
+// `buffer_size * pipeline_depth <= kMaxPipelineBytes`, `workers <= kMaxWorkers`.
+// Violations return `IoError::Code::invalid_state` synchronously, BEFORE the
+// Runtime is built or any slot memory is allocated.
 sluice::Result<CopyStats> run_pipelined_copy(int src_fd, int dst_fd,
                                              std::size_t buffer_size,
                                              std::size_t pipeline_depth,
