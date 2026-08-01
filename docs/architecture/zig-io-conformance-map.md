@@ -18,11 +18,11 @@ Classification key:
 |---|---|---|---|---|---|
 | `Io` (userdata + vtable) | Lightweight copyable capability; any holder can submit ops | `AsyncIoContext` (move-only, owning, mutex-serialized) | **I** | ADR-async-io-model §3 A6; `async_io_context.hpp:118-158` | Sluice context is an owner, not a borrowed capability. Runtime injects it. Acceptable for the current single-runtime model; a lightweight façade is deferred. |
 | `Operation` (tagged union) | Explicit op descriptor with typed result | `ReadOp/WriteOp/SyncDataOp/SyncAllOp` structs | **F** | `async_io_context.hpp:32-49`; ADR §3 | Same semantic: explicit positional ops, typed results. C++ uses separate structs instead of a tagged union. |
-| `Operation.Storage` (caller-owned reusable slot with 4-state intrusive list) | Caller allocates storage; backend uses it for submission→pending→completion lifecycle; no backend allocation per-op | `Completion<T>` (caller-owned, 3-state: idle→outstanding→ready) + backend-internal records (deque entries, thread handles, map entries) | **I** | `completion.hpp:1-238`; `batch.hpp:9-22` explains why no native Operation.Storage | Sluice separates the caller-visible Completion from backend-internal per-op state. Zig unifies them. The Batch header explicitly documents this as a deliberate narrowing. Backend per-op state is NOT caller-owned. |
-| `Pending.Userdata` (7×usize backend scratch per op) | Backend-private per-op scratch in caller-provided storage | ThreadPoolBackend: `std::function` + `std::thread` + deque entry; Uring: SQE userdata + internal map | **I** | `threadpool_backend.hpp:127-136`; ADR §4 | Sluice backends use heap-allocated containers rather than fixed inline scratch. Accepted for portability; cost is per-op allocation. |
+| `Operation.Storage` (caller-owned reusable slot with 4-state intrusive list) | Caller allocates storage; backend uses it for submission→pending→completion lifecycle; no backend allocation per-op | `Completion<T>` (caller-owned, 3-state: idle→outstanding→ready) + backend-internal records (deque entries, thread handles, map entries) | **U** | `completion.hpp:1-238`; `batch.hpp:9-22` documents a Batch-scope decision to defer native Operation.Storage | Sluice separates the caller-visible Completion from backend-internal per-op state. The Batch header documents a local scope decision (minimize changes for that batch of work), NOT a permanent architecture-wide approval. Phase 1 roadmap will re-evaluate operation storage. Cannot classify as Intentional without a governing ADR. |
+| `Pending.Userdata` (7×usize backend scratch per op) | Backend-private per-op scratch in caller-provided storage | ThreadPoolBackend: `std::function` + `std::thread` + deque entry; Uring: SQE userdata + internal map | **A** | `threadpool_backend.hpp:127-136`; no ADR approves per-op heap allocation as permanent model | Sluice backends use heap-allocated containers rather than fixed inline scratch. No explicit design decision approved this; it emerged during implementation for portability. Cost is per-op allocation on the hot path. Phase 1 roadmap will evaluate alternatives. |
 | `operate` (blocking-shaped I/O on current task) | Submit + await on the current concurrency unit; returns result inline | `op_helpers::read_all/write_all` (poll-loop) or `RuntimeTaskContext::submit_* + await_completion` (Fiber suspend) | **F** | `op_helpers.hpp:1-64`; `application_runtime.hpp:60-86` | Both paths preserve blocking-shaped semantics. The Runtime path is the Evented equivalent; op_helpers is the Threaded equivalent. |
-| `Batch` (caller storage + concurrent await + intrusive lists) | N ops submitted together; await ≥1; iterate in completion order; cancel as a whole | `Batch` class (driver over AsyncIoContext; `vector<unique_ptr<Slot>>`) | **F** | `batch.hpp:1-137` | Semantic contract preserved (submit N, await ≥1, iterate reap order, cancel). Implementation is a driver over per-op submit, not a native backend batchAwait vtable. Documented as deliberate narrowing. |
-| `Threaded` (thread-per-task execution strategy) | Each async task gets a dedicated OS thread; blocking waits are natural | `Group()` default mode (thread-per-task via `std::thread`) + `ThreadPoolBackend` (thread-per-op for I/O offload) | **I** | `group.hpp:49-51`; ADR-execution-model §2 | Zig Threaded = thread-per-TASK. Sluice Group Threaded = thread-per-task (faithful). But ThreadPoolBackend = thread-per-OP (blocking I/O offload), which is a different concept. The naming conflates these. See divergence registry. |
+| `Batch` (caller storage + concurrent await + intrusive lists) | N ops submitted together; await ≥1; iterate in completion order; cancel as a whole | `Batch` class (driver over AsyncIoContext; `vector<unique_ptr<Slot>>`) | **I** | `batch.hpp:1-137` | Semantic contract preserved (submit N, await ≥1, iterate reap order, cancel). Implementation is a driver over per-op submit, NOT a native backend batchAwait vtable. Documented as deliberate narrowing in Batch header. The mechanism diverges from Zig (no native batch vtable entry) but the caller-visible semantics are equivalent. |
+| `Threaded` (thread-per-task execution strategy) | Each async task gets a dedicated OS thread; blocking waits are natural | `Group()` default mode (thread-per-task via `std::thread`) + `ThreadPoolBackend` (thread-per-op for blocking-I/O offload) | **I** | `group.hpp:49-51`; ADR-execution-model §2 | Zig Threaded = thread-per-TASK. Sluice Group Threaded = thread-per-task (faithful). ThreadPoolBackend = thread-per-OP (blocking-I/O offload), which is a DIFFERENT concept at a different layer. ThreadPoolBackend is NOT an implementation of Zig Threaded; it is a blocking-I/O offload mechanism for the Evented scheduler. The naming conflates these. See divergence registry DIV-03. |
 | `Evented` / `Uring` (scheduler + fiber + ring) | Suspend task/fiber on wait; scheduler worker remains free; kernel ring for I/O | `Scheduler` + `Fiber` + `UringAsyncBackend` (gated) | **F** | ADR-execution-model §2; `scheduler.hpp:212-265` | Core semantic preserved: Fiber suspends, worker is free, backend completes, task resumes. Uring is one backend; ThreadPoolBackend also valid as P2 offload (ADR §9.1). |
 | Completion wake (backend-owned wake integration) | Backend completion directly makes the waiting task runnable via the Io vtable | Scheduler polling bridge: `poll()`/`wait_one()` → `wake_ready_completions_locked()` → route Fiber | **I** | ADR §9.4.1 P3 (decoupled wake domains); ADR §9.4.12 (BACKEND-WAKE-SEAM-GAP) | Sluice backend does NOT directly wake the Scheduler. The Scheduler observes backend readiness via polling. Explicitly accepted as P3; P5 (interruptible backend wait) deferred. |
 | Cancellation region (`CancelProtection`) | Structured cancel protection: protected/unprotected regions; `recancel`; `swapCancelProtection` | `CancelToken` (cooperative, single-shot) + `check_cancel`; no protection regions | **M** | ADR-async-io-model §7 X6 (deferred to job 021); `cancel.hpp` | Structured cancellation (protection regions, recancel) not implemented. Current model is minimal best-effort. |
@@ -39,12 +39,12 @@ Classification key:
 
 | Class | Count | Key areas |
 |-------|-------|-----------|
-| F (Faithful) | 8 | Operation, operate, Batch, Evented, futex/sync, Group, Select, completion wake (partially) |
-| I (Intentional) | 5 | Io capability shape, Operation.Storage split, Pending.Userdata, Threaded naming, completion wake bridge |
-| A (Accidental) | 1 | Resource bounds (unbounded ThreadPoolBackend) |
+| F (Faithful) | 7 | Operation, operate, Evented, futex/sync, Group, Select, completion wake (partially) |
+| I (Intentional) | 5 | Io capability shape, Batch (driver adaptation), Threaded naming, completion wake bridge, SyncDataOp/SyncAllOp |
+| A (Accidental) | 2 | Resource bounds (unbounded ThreadPoolBackend), Pending.Userdata heap model |
 | M (Missing) | 3 | CancelProtection, registered buffers, signal-based syscall cancel |
 | O (Obsolete) | 0 | — |
-| U (Unresolved) | 0 | — |
+| U (Unresolved) | 1 | Operation.Storage separation (pending Phase 1 decision) |
 
 ---
 
@@ -59,10 +59,20 @@ Classification key:
    wake) is an explicit, documented, accepted decision (E9 P3). It is classified
    **I** despite being a significant structural difference from Zig.
 
-3. **Operation.Storage** unification is the most impactful missing structural
-   concept. In Zig, the caller owns the full lifecycle storage (unused→
-   submission→pending→completion) and the backend uses inline `Pending.Userdata`
-   scratch. In Sluice, the caller owns only the Completion; the backend
-   allocates its own per-op state. This is documented as deliberate (Batch
-   header) but has performance consequences (per-op heap allocation in
-   ThreadPoolBackend).
+3. **Operation.Storage** separation is classified **U** (Unresolved), not
+   Intentional. The Batch header documents a local scope decision to defer
+   native operation storage for that batch of work. This does NOT constitute
+   architecture-wide approval of permanent Completion/storage separation.
+   Phase 1 roadmap will re-evaluate. Do not treat the current model as
+   approved.
+
+4. **Pending.Userdata** heap model is classified **A** (Accidental Drift).
+   No ADR or design document explicitly approved per-op heap allocation as
+   the permanent backend scratch model. It emerged for portability during
+   implementation. Phase 1 will evaluate alternatives (caller-owned storage,
+   bounded arena, intrusive structures).
+
+5. **ThreadPoolBackend** is a blocking-I/O offload mechanism (thread-per-op),
+   NOT an implementation of Zig's `Threaded` execution strategy (thread-per-
+   task). Group Threaded mode is the faithful Zig Threaded equivalent.
+   Conflating these leads to incorrect capacity reasoning.

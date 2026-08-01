@@ -17,7 +17,7 @@ implementation begins. No phase may skip the design compliance gate.
 **Goal:** Eliminate documentation/implementation authority conflicts. No
 behavioral change. No new abstraction.
 
-**Findings addressed:** P1-01, P1-02, P3-01, P3-02, P3-03.
+**Findings addressed:** P1-01, P1-02, P1-03, P1-05, P3-01, P3-02, P3-03.
 
 ### Work items
 
@@ -31,20 +31,33 @@ behavioral change. No new abstraction.
    completion-ready (Completion::complete_with called by poll/wait_one). Add to
    as-built doc and ADR-async-io-model.
 
-3. **Qualify "worker" terminology.**
+3. **Register SyncBackend cancel authority bypass.**
+   `SyncBackend::cancel()` calls `complete_with()` directly, bypassing
+   poll/wait_one reap. Either defer completion to poll, or document as
+   accepted test-only violation with explicit justification.
+
+4. **Separate error vocabulary.**
+   `queue_full_retries` conflates lifecycle violation (invalid_state) with
+   capacity pressure. Rename or split the stat. Define distinct error codes:
+   invalid_state (lifecycle), would_block (capacity), no_space (OOM),
+   backend_error (fatal).
+
+5. **Qualify "worker" terminology.**
    Audit all documentation uses of "worker" and prefix with subsystem:
    "scheduler worker," "offload thread," "pool worker."
 
-4. **Evaluate ThreadPoolBackend naming.**
+6. **Evaluate ThreadPoolBackend naming.**
    The name implies a bounded pool. Options: rename (breaking), add doc
-   qualifier, or defer to Phase 3 when the implementation changes.
+   qualifier, or defer to Phase 5 when the implementation changes.
 
 ### Decision required
 
 - Is `mark_outstanding` authority definitively the backend's? (Evidence says
   yes, but an explicit ADR statement is needed.)
 - Is the two-phase model (backend-ready → completion-ready) the permanent
-  contract, or an implementation detail that may change in Phase 2?
+  contract, or an implementation detail that may change in Phase 4?
+- Is SyncBackend a test-only backend (AC-5 exception acceptable) or must it
+  conform fully?
 
 ### Dependencies
 
@@ -64,6 +77,8 @@ None. This phase is pure documentation and comment correction.
 
 - [ ] Header comment matches implementation for mark_outstanding.
 - [ ] Two-phase completion model documented in ADR.
+- [ ] SyncBackend cancel authority registered (P1-03 resolved or accepted).
+- [ ] Error vocabulary separation designed (P1-05).
 - [ ] All "worker" references qualified in architecture docs.
 - [ ] Naming decision recorded (rename now or defer).
 
@@ -75,24 +90,29 @@ None. This phase is pure documentation and comment correction.
 
 ---
 
-## Phase 1 — Explicit Operation Ownership and Submission Transaction
+## Phase 1 — Explicit I/O Foundation ADR (Design Only)
 
 **Goal:** Design (not implement) an explicit accepted-operation ownership model
 that makes the submission transaction auditable and the operation identity
 queryable.
 
-**Findings addressed:** P0-01 (root cause), P2-03, DIV-02, DIV-12.
+**Findings addressed:** P0-01 (root cause), P0-02 (root cause), P1-04, P2-03,
+DIV-02, DIV-12.
 
 ### Work items
 
 1. **Define the submission linearization point.**
-   At what exact instruction does "submit succeeded" become true? Current:
-   after `workers_.emplace_back()` returns without throwing. Document this.
+   At what exact instruction does "submit succeeded" become true? The
+   linearization point MUST be: reserved → pending transition. Failure
+   MUST return to: free + Completion idle.
 
-2. **Evaluate caller-owned operation storage.**
-   Zig's `Operation.Storage` eliminates backend allocation. Is a Sluice
-   equivalent feasible? What would the caller-facing API look like? Does
-   `Completion<T>` absorb this role, or is a new `OperationSlot` needed?
+2. **Define RequestSlot state machine.**
+   ```text
+   free → reserved → pending → executing/kernel-owned → backend-ready → reaped → free
+   ```
+   Decide: caller-owned (Zig-faithful, method A) or backend-owned bounded
+   arena (Sluice-native, method B). Initial recommendation: method B
+   (preserve existing Completion API, migrate incrementally).
 
 3. **Define bounded capacity and queue-full semantics.**
    What is the maximum outstanding operation count? What error is returned
@@ -107,12 +127,18 @@ queryable.
    The ready-queue push (P0-01 root cause) must not allocate. Options:
    intrusive list, pre-allocated ring, or caller-provided completion slot.
 
+6. **Define unified transactional admission contract.**
+   All backends MUST conform to: either allocation-free submit, or
+   mark_outstanding AFTER resource acquisition (rollback-free by
+   construction). No backend may leave Completion outstanding on failure.
+
 ### Decision required
 
 - Does Sluice adopt caller-owned operation storage (Zig-faithful), or keep
   Completion-only with bounded backend allocation?
 - What is the capacity model: per-backend, per-context, or per-runtime?
 - Is queue-full a synchronous error or a suspension point?
+- What is the RequestSlot owner: caller or context/backend?
 
 ### Dependencies
 
@@ -135,20 +161,131 @@ queryable.
 ### Exit criteria
 
 - [ ] ADR or design doc accepted for operation ownership model.
-- [ ] Submission linearization point defined and documented.
+- [ ] RequestSlot state machine defined with linearization point.
 - [ ] Capacity model decided (bounded N with error code).
 - [ ] Terminal publication path is allocation-free by design.
-- [ ] Conformance map updated (DIV-02 status change if applicable).
+- [ ] Unified transactional admission contract specified.
+- [ ] Conformance map updated (DIV-02 status change).
 
 ### Out of scope
 
 - Implementing the design (this phase produces the design only).
-- Changing the Scheduler wake model (Phase 2).
-- Changing thread management (Phase 3).
+- Changing the Scheduler wake model (Phase 4).
+- Changing thread management (Phase 5).
 
 ---
 
-## Phase 2 — Unified Progress/Wake Integration
+## Phase 2 — FakeBackend as Reference Backend
+
+**Goal:** Implement the Phase 1 contract in FakeBackend FIRST, proving the
+unified model before touching production backends.
+
+**Findings addressed:** P0-02 (proof of fix), P1-04 (contract proof).
+
+### Rationale
+
+FakeBackend is the ideal reference because it:
+- Has no kernel dependency;
+- Has no real threads;
+- Allows deterministic control of completion order;
+- Can inject queue full, OOM, cancel, and shutdown scenarios.
+
+It should prove:
+- Transactional submit (rollback on failure);
+- Capacity exhaustion (synchronous would_block);
+- Stable request identity (queryable state);
+- Backend-ready vs. completion-ready separation;
+- Exactly-once publication;
+- Allocation-free accepted-op terminal path.
+
+### Work items
+
+1. **Implement RequestSlot in FakeBackend.**
+   Bounded slot arena with the Phase 1 state machine.
+
+2. **Implement transactional admission.**
+   mark_outstanding only after slot reservation succeeds. On failure,
+   Completion stays idle, submit returns error synchronously.
+
+3. **Implement capacity exhaustion.**
+   Configurable capacity; submit at capacity returns would_block.
+
+4. **Implement allocation-free terminal publication.**
+   Ready entries use intrusive linkage or pre-allocated pool.
+
+5. **Build conformance test suite.**
+   A backend-agnostic test suite that verifies the contract. This suite
+   will later constrain ALL backends.
+
+### Dependencies
+
+- Phase 1 design accepted.
+
+### Tests
+
+- OOM injection at every allocation point.
+- Capacity exhaustion test.
+- Concurrent submit + cancel + poll.
+- Exactly-once publication under all failure modes.
+- Shutdown with outstanding ops.
+
+### Exit criteria
+
+- [ ] FakeBackend passes full conformance suite.
+- [ ] No allocation on accepted-op terminal path.
+- [ ] Transactional submit proven (rollback works).
+- [ ] Conformance suite is backend-agnostic (parameterized).
+
+### Out of scope
+
+- Changing ThreadPoolBackend, UringBackend, or SyncBackend yet.
+- Scheduler wake changes.
+
+---
+
+## Phase 3 — Migrate Synthetic and Uring Backends
+
+**Goal:** Bring SyncBackend and UringAsyncBackend into conformance with the
+Phase 1 contract, validated by the Phase 2 conformance suite.
+
+### Work items
+
+1. **SyncBackend decision.**
+   - Is it still needed?
+   - Should it move to test support only?
+   - Should it be renamed `SyntheticPollBackend`?
+   - Must cancel defer completion to poll()? (Fixes P1-03.)
+
+2. **UringBackend migration.**
+   Replace current multi-container identity:
+   ```text
+   Completion* + comp_to_op map + ops map + pending_sqes deque
+   ```
+   With unified RequestSlot:
+   ```text
+   RequestSlot index + generation → SQE user_data → CQE → same RequestSlot
+   ```
+
+3. **Run conformance suite against both.**
+
+### Dependencies
+
+- Phase 2 complete (conformance suite exists).
+
+### Exit criteria
+
+- [ ] SyncBackend conforms or is moved to test-only with documented exception.
+- [ ] UringBackend passes conformance suite.
+- [ ] P1-03 resolved (SyncBackend cancel).
+
+### Out of scope
+
+- ThreadPoolBackend (Phase 5).
+- Wake integration (Phase 4).
+
+---
+
+## Phase 4 — Backend Progress Wake
 
 **Goal:** Design a backend-readiness wake capability that reduces or eliminates
 the 2ms observation interval for backend-only waits, while preserving the
@@ -163,8 +300,12 @@ decoupled lock ordering.
    result is ready, WITHOUT acquiring global_mtx_? What lock ordering is safe?
 
 2. **Define the wake bridge contract.**
-   If a wake signal is added, what is the API? A callback? A condition
-   variable pointer injected at construction? An eventfd?
+   A narrow capability (e.g., `ProgressSignal::notify()`) that can ONLY:
+   - Update persistent wake state;
+   - Notify;
+   - NOT acquire Scheduler global lock;
+   - NOT route Fiber;
+   - NOT call Completion.
 
 3. **Evaluate MIXED-WAKE simplification.**
    If backend wake is instant, does MIXED-WAKE mode still need the 2ms
@@ -176,8 +317,8 @@ decoupled lock ordering.
    lock order via ADR.
 
 5. **Unify across backends.**
-   ThreadPoolBackend, UringAsyncBackend, FakeAsyncBackend, and SyncBackend
-   must all conform to the same wake contract (even if some are no-ops).
+   All backends must conform to the same wake contract (even if some are
+   no-ops).
 
 ### Decision required
 
@@ -218,13 +359,13 @@ decoupled lock ordering.
 
 ### Out of scope
 
-- Implementing persistent workers (Phase 3).
+- Implementing persistent workers (Phase 5).
 - Changing Completion publication authority (remains poll/wait_one).
 - Adding coroutine or P2300 integration.
 
 ---
 
-## Phase 3 — Portable Blocking-I/O Offload
+## Phase 5 — BlockingOffloadBackend (Persistent Workers)
 
 **Goal:** Design and implement a bounded, reusable blocking-I/O offload
 mechanism to replace per-op thread creation.
@@ -270,7 +411,8 @@ mechanism to replace per-op thread creation.
 ### Dependencies
 
 - Phase 1 design implemented (operation storage, bounded capacity).
-- Phase 2 wake bridge available (so offload completion wakes Scheduler
+- Phase 2 conformance suite available.
+- Phase 4 wake bridge available (so offload completion wakes Scheduler
   instantly).
 
 ### Risks
@@ -287,7 +429,7 @@ mechanism to replace per-op thread creation.
 - Shutdown: submit N, immediately destroy → verify all N reach terminal.
 - TSan: concurrent submit + poll + cancel + shutdown.
 - Benchmark: compare per-op thread vs. persistent pool (latency, throughput).
-- Backend conformance: new implementation passes all existing conformance tests.
+- Backend conformance: new implementation passes Phase 2 conformance suite.
 
 ### Exit criteria
 
@@ -302,36 +444,39 @@ mechanism to replace per-op thread creation.
 
 ### Out of scope
 
-- io_uring backend changes (separate concern).
-- Scheduler internal changes (Phase 2 handles wake).
+- io_uring backend changes (Phase 3 handles Uring).
+- Scheduler internal changes (Phase 4 handles wake).
 - Public API changes beyond capacity configuration.
 
 ---
 
-## Phase 4 — Strategy Cleanup and Capability Façade
+## Phase 6 — Runtime Integration and Strategy Cleanup
 
-**Goal:** Evaluate whether to formally define a Threaded execution strategy,
-provide a lightweight Io capability façade, and clean up remaining naming and
-layering issues.
+**Goal:** Evaluate Runtime simplification, provide a lightweight Io capability
+façade, and clean up remaining naming and layering issues.
 
 **Findings addressed:** DIV-01, DIV-03 (naming), AC-8 (long-term).
 
 ### Work items
 
-1. **Evaluate lightweight Io capability façade.**
+1. **Evaluate RuntimeTaskContext simplification.**
+   Is it just Io capability + task capabilities? Can the Scheduler stop
+   scanning Completion maps? Can the wake path be simplified?
+
+2. **Evaluate lightweight Io capability façade.**
    Should Sluice provide a copyable, non-owning `IoRef` or `IoCapability`
    that delegates to `AsyncIoContext`? This would move toward Zig's model
    without breaking the owning context.
 
-2. **Formalize Threaded strategy.**
+3. **Formalize Threaded strategy.**
    Group Threaded mode is thread-per-task. Is this a first-class execution
    strategy with its own ADR, or an implementation detail of Group?
 
-3. **Separate naming definitively.**
-   If Phase 3 renamed the backend, ensure all documentation, tests, and
+4. **Separate naming definitively.**
+   If Phase 5 renamed the backend, ensure all documentation, tests, and
    comments use consistent terminology.
 
-4. **Evaluate owning Runtime vs. capability injection.**
+5. **Evaluate owning Runtime vs. capability injection.**
    Is ApplicationRuntime the permanent top-level owner, or should the design
    allow standalone Scheduler + AsyncIoContext without Runtime?
 
@@ -343,7 +488,7 @@ layering issues.
 
 ### Dependencies
 
-- Phases 0-3 complete.
+- Phases 0-5 complete.
 - Usage patterns from real applications (sluice-copy, benchmarks).
 
 ### Risks
@@ -375,15 +520,22 @@ layering issues.
 ```text
 Phase 0 (authority correction)
     ↓
-Phase 1 (operation ownership design)
+Phase 1 (operation ownership design — ADR only)
     ↓
-Phase 2 (wake integration design)
+Phase 2 (FakeBackend reference implementation)
     ↓
-Phase 3 (blocking-I/O offload implementation)
+Phase 3 (migrate Sync + Uring backends)
     ↓
-Phase 4 (strategy cleanup)
+Phase 4 (backend progress wake)
+    ↓
+Phase 5 (BlockingOffloadBackend — persistent workers)
+    ↓
+Phase 6 (Runtime integration + strategy cleanup)
 ```
 
-Phases 1 and 2 may overlap in design work, but Phase 3 implementation depends
-on both being decided. Phase 4 is independent of Phase 3 implementation details
-but benefits from Phase 3 being complete.
+Phases 3 and 4 may overlap. Phase 5 depends on Phases 2 (conformance suite),
+3 (Uring pattern), and 4 (wake bridge). Phase 6 is independent of Phase 5
+implementation details but benefits from Phase 5 being complete.
+
+**Key principle:** Do NOT rewrite Runtime first. Bottom-layer operation
+ownership must stabilize before Runtime integration can simplify.

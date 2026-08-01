@@ -75,7 +75,10 @@ def check_divergence_fields() -> None:
     if not entries:
         fail("DIVERGENCE: no DIV-NN entry headings found")
         return
-    required_fields = ["ID", "Status", "Reason", "Revisit trigger"]
+    required_fields = [
+        "ID", "Status", "Reason", "Revisit trigger",
+        "Governing ADR", "Benefit", "Cost", "Current evidence",
+    ]
     for entry_id in entries:
         # Extract the section for this entry (until next ## or end)
         pattern = rf"^## {re.escape(entry_id)}:.*?(?=^## |\Z)"
@@ -87,6 +90,19 @@ def check_divergence_fields() -> None:
         for field in required_fields:
             if field not in section:
                 fail(f"DIVERGENCE: {entry_id} missing required field: {field}")
+        # Approved entries MUST have a governing authority (not "None")
+        status_match = re.search(r"\|\s*Status\s*\|\s*(.+?)\s*\|", section)
+        adr_match = re.search(r"\|\s*Governing ADR\s*\|\s*(.+?)\s*\|", section)
+        if status_match and adr_match:
+            status = status_match.group(1).strip()
+            adr = adr_match.group(1).strip()
+            if status == "Approved" and (
+                not adr or adr.lower().startswith("none")
+            ):
+                fail(
+                    f"DIVERGENCE: {entry_id} has status 'Approved' but no "
+                    f"governing ADR or design authority"
+                )
 
 
 def check_pr_template() -> None:

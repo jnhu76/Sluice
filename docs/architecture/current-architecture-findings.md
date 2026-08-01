@@ -136,6 +136,191 @@ Add to as-built doc and ADR.
 
 ---
 
+## P0-02: Cross-Backend Transactional Submit Defect (No Unified Admission Contract)
+
+**Finding:** ALL backends lack a unified transactional admission contract. The
+mark_outstanding → resource-acquisition sequence is not atomic in any backend.
+If any allocation between mark_outstanding and backend acceptance fails, the
+Completion is left outstanding with no path to terminal.
+
+**Evidence (per backend):**
+
+- **FakeAsyncBackend** (`fake_backend.hpp:221-228`):
+  ```cpp
+  c.mark_outstanding();
+  ready_size_.push_back(&c);    // can throw bad_alloc
+  pending_size_.push_back(op.len); // can throw bad_alloc
+  ```
+  Either push_back failure leaves Completion outstanding with incomplete
+  backend records.
+
+- **SyncBackend** (`sync_backend.hpp:40-41`):
+  ```cpp
+  c.mark_outstanding();
+  entries_.push_back(Entry{op, &c}); // can throw bad_alloc
+  ```
+  Allocation failure leaves Completion outstanding with no entry to poll.
+
+- **UringAsyncBackend** (`uring_backend.cpp:484+`):
+  ```cpp
+  c.mark_outstanding();
+  comp_to_op.emplace(...);   // can throw
+  ops.emplace(...);          // can throw
+  pending_sqes.push_back(...); // can throw
+  ```
+  Multiple allocation points; any failure leaves partial submission state.
+
+- **ThreadPoolBackend** — see P0-01 (worker OOM) and P1-04 (spawn failure).
+
+**Violated constitution rule:** AC-3 (transactional submission — failed submit
+MUST leave Completion idle), AC-4 (accepted operation must terminate).
+
+**Semantic consequence:** The root problem is not any single backend's OOM
+path — it is the absence of a unified transactional admission contract across
+the L0 backend family. Each backend independently attempts mark-then-allocate
+with no rollback.
+
+**Currently regression-tested:** No. No OOM injection test exists for any
+backend's submit path between mark_outstanding and acceptance.
+
+**Recommended next action:** Phase 1 roadmap — design unified transactional
+admission: either allocation-free submit path, or mark_outstanding AFTER
+resource acquisition succeeds (rollback-free by construction).
+
+**Do not fix in this audit PR.**
+
+---
+
+## P1-03: SyncBackend cancel() Bypasses Reap Authority
+
+**Finding:** `SyncBackend::cancel()` calls `c.complete_with()` directly,
+bypassing the poll()/wait_one() reap path. The interface contract (AC-5)
+requires that Completion publication to ready happens ONLY through the
+designated reap authority (poll/wait_one drain).
+
+**Evidence:**
+- `include/sluice/async/sync_backend.hpp:87`:
+  ```cpp
+  void cancel(Completion<std::size_t>& c) override {
+      auto it = std::find_if(entries_.begin(), entries_.end(), ...);
+      if (it != entries_.end()) {
+          c.complete_with(make_unexpected<std::size_t>(...)); // DIRECT
+          entries_.erase(it);
+      }
+  }
+  ```
+- Same pattern at line 95 for void Completions.
+- Contrast with ThreadPoolBackend where cancel does NOT call complete_with;
+  the op completes with its real result via poll().
+
+**Violated constitution rule:** AC-5 (single Completion publication authority).
+
+**Semantic consequence:** If a concurrent poll() is draining entries while
+cancel() is called, the Completion may be completed twice (race). In the
+current single-threaded usage pattern this is masked, but the authority
+violation is structural.
+
+**Currently regression-tested:** No concurrent cancel + poll test for
+SyncBackend.
+
+**Recommended next action:** Either:
+1. Defer cancel completion to poll() (mark entry as cancelled, let poll drain
+   complete it), or
+2. Document SyncBackend as a test-only synthetic backend where the AC-5
+   violation is accepted with explicit justification.
+
+**Do not fix in this audit PR.**
+
+---
+
+## P1-04: ThreadPoolBackend Spawn Failure Incorrectly Asyncized
+
+**Finding:** When `std::thread` construction throws in
+`ThreadPoolBackend::enqueue_size`, the catch handler (`fail_spawn_size`)
+pushes an error entry to the ready queue and the Completion is eventually
+completed with an error via poll(). However, `submit_read()` still returns
+SUCCESS to the caller.
+
+This violates the public contract: submit-time errors (queue full, invalid
+operation, Completion non-idle) should be returned synchronously. The caller
+sees `submit_read()` return `{}` (success) but the operation will "complete"
+asynchronously with an error — a semantic that does not exist in the
+documented contract.
+
+**Evidence:**
+- `src/async/threadpool_backend.cpp:93-99` (catch handler):
+  ```cpp
+  } catch (...) {
+      fail_spawn_size(cp, worker_idx);
+  }
+  ```
+- `fail_spawn_size` pushes to `ready_size_` with an error result.
+- `submit_read()` returns `{}` (success) regardless.
+
+**Violated constitution rule:** AC-3 (transactional submission — failed submit
+MUST leave Completion idle and return error synchronously).
+
+**Semantic consequence:** The caller cannot distinguish "submit succeeded, op
+will complete" from "submit failed, error will appear asynchronously." This
+breaks the submit return-value contract.
+
+**Currently regression-tested:** No test injects thread-creation failure.
+
+**Recommended next action:** Phase 1/3 roadmap — if thread creation fails,
+roll back mark_outstanding and return a synchronous error. Alternatively,
+pre-allocate thread resources before marking outstanding.
+
+**Do not fix in this audit PR.**
+
+---
+
+## P1-05: queue_full_retries Conflates Lifecycle Violation with Capacity Pressure
+
+**Finding:** `AsyncIoContext::tally_submit()` counts
+`IoError::Code::invalid_state` into `AsyncStats::queue_full_retries`. But
+`invalid_state` means "submit into a non-idle Completion" — a caller
+lifecycle violation. This is semantically distinct from capacity pressure
+(queue full, ring depth exhausted, OOM).
+
+**Evidence:**
+- `src/async/async_io_context.cpp:87-88`:
+  ```cpp
+  } else if (r.error().code == IoError::Code::invalid_state) {
+      ++s->queue_full_retries;
+  }
+  ```
+- Code comment (line 73-81) acknowledges `invalid_state` represents "submit
+  into a non-idle Completion" but still counts it as `queue_full_retries`.
+
+**Violated constitution rule:** AC-10 (documentation–interface–implementation
+alignment — the stat name misrepresents what is counted).
+
+**Semantic consequence:** Observability is broken. Even if bounded request
+slots are added (Phase 1), operators cannot distinguish:
+- Caller reusing a Completion (lifecycle bug)
+- Backend queue full (capacity pressure, retryable)
+- Ring depth exhausted (Uring-specific)
+- OOM (resource exhaustion)
+- Backend fatal (unrecoverable)
+
+Correct error vocabulary requires at minimum:
+```text
+invalid_state     → Completion lifecycle error (caller bug, not retryable)
+would_block       → capacity full (retryable)
+no_space          → cannot allocate required resources
+backend_error     → backend unrecoverable
+```
+
+**Currently regression-tested:** No test verifies stat categorization.
+
+**Recommended next action:** Phase 0/1 — rename the stat or split into
+`lifecycle_violations` and `capacity_rejects`. Introduce distinct error codes
+for capacity pressure vs. lifecycle errors.
+
+**Do not fix in this audit PR.**
+
+---
+
 ## P2-01: Per-Op Thread Creation (Unbounded)
 
 **Finding:** ThreadPoolBackend spawns one `std::thread` per submitted operation.
@@ -329,8 +514,12 @@ with subsystem prefix in documentation.
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
 | P0-01 | P0 | Worker OOM → terminate | Open issue needed |
+| P0-02 | P0 | Cross-backend transactional submit | Phase 1 roadmap (root cause) |
 | P1-01 | P1 | mark_outstanding authority | Comment correction needed |
 | P1-02 | P1 | Backend-ready vs completion-ready | Documentation needed |
+| P1-03 | P1 | SyncBackend cancel bypasses reap | Phase 0/3 corrective |
+| P1-04 | P1 | Spawn failure incorrectly asyncized | Phase 1/3 roadmap |
+| P1-05 | P1 | queue_full_retries semantic conflation | Phase 0/1 error vocabulary |
 | P2-01 | P2 | Per-op thread creation | Phase 3 roadmap |
 | P2-02 | P2 | workers_ monotonic growth | Phase 3 roadmap |
 | P2-03 | P2 | Hot-path allocation | Phase 1/3 roadmap |

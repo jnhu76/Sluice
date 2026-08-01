@@ -44,22 +44,26 @@ ApplicationRuntime (E16)
 caller
 → AsyncIoContext::submit_*(op, Completion&)
     → lock access_mtx_
-    → verify Completion is idle (L8)
-    → Completion::mark_outstanding()     ← CONTEXT is marking authority
     → backend_->submit_*(op, c)
-        → (backend records op, returns Result<void>)
-    → on backend error: Completion stays outstanding, error is synchronous
+        → backend checks Completion is idle
+        → backend calls Completion::mark_outstanding()  ← BACKEND is marking authority
+        → backend records op (returns Result<void>)
+    → tally_submit(stats_, result)
+    → update_max_outstanding(stats_)
     → unlock access_mtx_
 → return Result<void>
 ```
 
-**Authority note:** The header comment on `AsyncBackend::submit_read` states
-"marking the Completion via mark_outstanding() is the context's job, not the
-backend's." The implementation in `async_io_context.cpp` confirms:
-`c.mark_outstanding()` is called by `AsyncIoContext` BEFORE delegating to the
-backend. However, `ThreadPoolBackend::enqueue_size` ALSO calls
-`c.mark_outstanding()` (line 71 of `threadpool_backend.cpp`). This is a
-**P1 authority conflict** — see findings document.
+**Authority note:** `AsyncIoContext` does NOT check idle state and does NOT
+call `mark_outstanding()`. It only serializes backend access (access_mtx_),
+forwards the call, and tallies statistics. ALL backends (ThreadPool, Uring,
+Fake, Sync) individually check `c.idle()` and call `c.mark_outstanding()`
+inside their own `submit_*` implementations.
+
+The header comment on `AsyncBackend::submit_read` (`async_io_context.hpp:68-70`)
+incorrectly states "marking the Completion via mark_outstanding() is the
+context's job, not the backend's." This is a **P1 stale comment** — see
+findings document P1-01. The implementation truth is: backend marks.
 
 ### 2.2 ThreadPoolBackend
 
@@ -67,7 +71,7 @@ backend. However, `ThreadPoolBackend::enqueue_size` ALSO calls
 submit_*(op, c)
 → accepting_new_work()? (mtx_ guarded destroying_ flag)
 → enqueue_size/void(c, work_lambda)
-    → c.mark_outstanding()           ← BACKEND also marks (conflict, see above)
+    → c.mark_outstanding()           ← BACKEND marks (correct authority)
     → lock mtx_
     → ++outstanding_
     → workers_.emplace_back(worker_lambda)
@@ -112,10 +116,10 @@ wait_one()
 
 ```text
 submit_*(op, c)
-→ c.mark_outstanding() (context-side)
+→ c.mark_outstanding() (backend-side)
+→ register_op: comp_to_op.emplace, ops.emplace, pending_sqes.push_back
 → io_uring_get_sqe() → prepare pread/pwrite/fsync
 → io_uring_submit()
-→ record in internal map (Completion* → SQE userdata)
 
 poll()
 → io_uring_peek_batch_cqe()
@@ -131,8 +135,8 @@ wait_one()
 
 ```text
 submit_*(op, c)
-→ c.mark_outstanding() (context-side)
-→ stage the op in an internal queue
+→ c.mark_outstanding() (backend-side)
+→ ready_size_/pending_size_ push (stage for test-controlled completion)
 
 poll()
 → complete staged ops on demand (test-controlled)
@@ -145,14 +149,27 @@ wait_one()
 
 ```text
 submit_*(op, c)
-→ c.mark_outstanding() (context-side)
-→ execute syscall synchronously
-→ c.complete_with(result) immediately
-→ (Completion is ready before submit returns)
+→ c.mark_outstanding() (backend-side)
+→ entries_.push_back(Entry{op, &c})   ← synthetic entry buffered
+→ (NO real syscall; NO inline completion)
 
 poll() / wait_one()
-→ no-op (all ops already completed at submit time)
+→ for each buffered entry: c.complete_with(synthetic_result)
+→ entries_.clear()
+→ return count
+
+cancel(c)
+→ find entry in entries_
+→ c.complete_with(cancelled) DIRECTLY  ← bypasses reap authority (see findings P1-03)
+→ entries_.erase(it)
 ```
+
+**Key properties:**
+- Synthetic backend for early async foundation testing (job 017)
+- Does NOT execute real syscalls; ReadOps complete with their full `len`
+- Completion happens at poll()/wait_one() time, NOT at submit time
+- `cancel()` calls `complete_with()` directly, bypassing the poll/wait_one
+  reap authority — this is an **authority conflict** (see findings P1-03)
 
 ---
 
@@ -340,7 +357,7 @@ wake_mtx_ (Scheduler park/wake)
 
 | Authority | As-built owner | Evidence |
 |-----------|---------------|----------|
-| Completion mark_outstanding | AsyncIoContext (documented) BUT ThreadPoolBackend also calls it | `async_io_context.hpp:69-70`, `threadpool_backend.cpp:71` |
+| Completion mark_outstanding | Each backend (inside submit_*) | `threadpool_backend.cpp:71`, `uring_backend.cpp:484`, `fake_backend.hpp:221,228`, `sync_backend.hpp:40,46,52,58`. Context does NOT call it (grep `async_io_context.cpp` = 0 matches). Header comment at `async_io_context.hpp:68-70` is STALE (P1-01). |
 | Completion complete_with | Backend (via poll/wait_one reap) | `threadpool_backend.cpp:160-163` |
 | Completion publication to ready | poll()/wait_one() ONLY (A3/O1) | ADR-async-io-model §6 |
 | Backend admission gate | ThreadPoolBackend::accepting_new_work() | `threadpool_backend.hpp:159` |

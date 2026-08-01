@@ -34,14 +34,14 @@ Status values:
 | Field | Value |
 |-------|-------|
 | ID | DIV-02 |
-| Status | Approved |
-| Introduced by | Batch header design; ADR-async-io-model §4 |
-| Governing ADR | ADR-async-io-model |
-| Reason | Zig unifies caller storage (Operation.Storage: unused→submission→pending→completion) with backend scratch (Pending.Userdata). Sluice separates caller-visible Completion from backend-internal per-op state. This simplifies the public API at the cost of backend allocation. |
+| Status | Pending decision |
+| Introduced by | Implementation (Batch header documents a local scope deferral, not architecture-wide approval) |
+| Governing ADR | None — no ADR approves permanent separation. ADR-async-io-model §4 describes the backend interface but does not rule on caller-owned operation storage. |
+| Reason | Zig unifies caller storage (Operation.Storage: unused→submission→pending→completion) with backend scratch (Pending.Userdata). Sluice separates caller-visible Completion from backend-internal per-op state. The Batch header documents a scope decision to defer native Operation.Storage for that batch of work — this is NOT an architecture-wide permanent approval. |
 | Benefit | Simpler caller contract (only Completion to manage); backend freedom in internal tracking. |
-| Cost | Backend per-op heap allocation (std::function, deque entry, thread); no zero-allocation accepted-op path in ThreadPoolBackend. |
-| Current evidence | `completion.hpp:1-238`; `batch.hpp:9-22` (documents deliberate narrowing); `threadpool_backend.cpp:85` (per-op thread + function). |
-| Revisit trigger | If per-op allocation becomes a measured bottleneck; if caller-owned operation storage is designed (Phase 1 roadmap). |
+| Cost | Backend per-op heap allocation (std::function, deque entry, thread); no zero-allocation accepted-op path in ThreadPoolBackend; no stable queryable operation identity beyond the Completion pointer. |
+| Current evidence | `completion.hpp:1-238`; `batch.hpp:9-22` (documents scope deferral, not permanent decision); `threadpool_backend.cpp:85` (per-op thread + function). |
+| Revisit trigger | Phase 1 roadmap (Explicit Operation Ownership design). This is the primary decision point. Must be resolved by ADR before the next release. |
 
 ---
 
@@ -50,14 +50,14 @@ Status values:
 | Field | Value |
 |-------|-------|
 | ID | DIV-03 |
-| Status | Accepted |
+| Status | Corrective planned |
 | Introduced by | Implementation (no founding ADR for this specific model) |
-| Governing ADR | ADR-execution-model §9.1 P2 (mentions blocking offload) |
-| Reason | Zig `Threaded` = thread-per-TASK (execution strategy). Sluice `ThreadPoolBackend` = thread-per-OP (blocking I/O offload for the Evented scheduler). These are different concepts at different layers. The naming is misleading but the architecture is sound: Group provides thread-per-task; ThreadPoolBackend provides I/O offload. |
+| Governing ADR | ADR-execution-model §9.1 P2 (mentions blocking offload but does not approve per-op thread model) |
+| Reason | Zig `Threaded` = thread-per-TASK (execution strategy). Sluice `ThreadPoolBackend` = thread-per-OP (blocking I/O offload for the Evented scheduler). These are different concepts at different layers. The naming is misleading and the per-op thread model has known resource issues (unbounded, expensive). Corrective action planned in Phase 3 roadmap. |
 | Benefit | Evented scheduler workers remain free during blocking I/O; simple correct implementation. |
-| Cost | Thread creation per op (expensive); unbounded thread count; misleading name suggests a bounded pool. |
+| Cost | Thread creation per op (expensive); unbounded thread count; misleading name suggests a bounded pool; violates AC-7 (bounded resources). |
 | Current evidence | `threadpool_backend.hpp:8-9` ("one worker thread per outstanding op"); `group.hpp:49-51` (Threaded mode = thread-per-task). |
-| Revisit trigger | Phase 3 roadmap (portable blocking-I/O offload design); naming correction in Phase 0. |
+| Revisit trigger | Phase 3 roadmap (portable blocking-I/O offload design with persistent workers and bounded capacity). Naming correction at that time. |
 
 ---
 
@@ -210,8 +210,8 @@ Status values:
 | ID | Status | Area |
 |----|--------|------|
 | DIV-01 | Approved | Context shape |
-| DIV-02 | Approved | Operation storage |
-| DIV-03 | Accepted | Backend execution model |
+| DIV-02 | Pending decision | Operation storage |
+| DIV-03 | Corrective planned | Backend execution model |
 | DIV-04 | Approved | Wake integration |
 | DIV-05 | Approved | Observation interval |
 | DIV-06 | Approved | Durability ops |

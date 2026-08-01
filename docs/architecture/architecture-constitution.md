@@ -63,7 +63,8 @@ auditable — not merely an implicit lambda capture or deque position.
 - No operation exists only as a closure with no queryable identity.
 
 **Allowed exceptions:**
-- `SyncBackend` completes inline; identity is trivially the Completion itself.
+- `SyncBackend` completes at poll time with synthetic results; identity is
+  trivially the Completion pointer in the buffered entry vector.
 - `FakeAsyncBackend` test staging may use simplified tracking.
 
 **Common violations:**
@@ -167,13 +168,16 @@ cancel path call `complete_with()` directly MUST be approved by ADR.
 
 **Required evidence:**
 - Grep for `complete_with` — all call sites are in `poll()`/`wait_one()` drain
-  loops (or `SyncBackend` inline, which is the trivial case).
+  loops.
 - No worker lambda, timer callback, or cancel handler calls `complete_with`.
 - Test: concurrent submit + cancel + poll; verify exactly-once.
 
 **Allowed exceptions:**
-- `SyncBackend` completes inline at submit time (documented, trivial).
 - Future ADR may introduce a direct-wake path with explicit exactly-once CAS.
+
+**Known current violation:**
+- `SyncBackend::cancel()` calls `complete_with()` directly (bypassing
+  poll/wait_one reap). This is tracked as P1-03 in findings.
 
 **Common violations:**
 - Adding a "fast path" that completes the Completion in the worker thread.
