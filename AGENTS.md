@@ -275,6 +275,24 @@ test before editing. The comments and tests encode specific laws such as fresh-p
 queue-identity-safe cancellation, owner-before-publication, rollback ordering, stale-registration
 handling, and exactly-once publication. Do not reconstruct these laws from memory.
 
+### 8.1 Architecture compliance gate
+
+Any change affecting async I/O ownership, operation lifecycle, Completion publication, Scheduler
+wake/progress, backend submission, cancellation, resource capacity, or Runtime ownership MUST:
+
+1. Read `docs/architecture/architecture-constitution.md` and identify which AC-N rules apply.
+2. Complete the gate checklist in `docs/architecture/design-compliance-gate.md`.
+3. Classify Zig conformance or divergence (`docs/architecture/zig-io-conformance-map.md`).
+4. Provide an explicit state machine and wake/resource model in the design document.
+5. Land or update an ADR/design BEFORE production implementation.
+6. Record any new intentional divergence in `docs/architecture/divergence-registry.md`.
+
+Passing tests is necessary but not sufficient for architecture compliance. A change that passes all
+tests but violates an AC-N rule or introduces unregistered divergence is non-compliant.
+
+For new designs, use `docs/templates/architecture-design-template.md`. For the current as-built
+architecture, see `docs/architecture/as-built-async-architecture.md`.
+
 ## 9. Formal models and protocol evidence
 
 Formal models under `spec/tla/` (per-suite directory) supplement implementation tests; they do not prove that

@@ -6,8 +6,8 @@
   "rev": "30cc360",
   "release_date": "2026-07-18",
   "official_url": "https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar",
-  "sha256": "cc4803dce2a8ffaf0f5920a9dc39df4b5ee34ab4cb53fb58ac557277a7e516b3",
+  "sha256": "e22f8ffb4bacdea0a871f444dd94fe5fb0d8013b3388ae39e82e26f852c735d5",
   "cache_filename": "tla2tools.jar",
-  "verified": "2026-07-28",
-  "note": "TLC2 Version 2026.07.18.145032 (rev: 30cc360). Checksum computed from the official GitHub release asset."
+  "verified": "2026-08-02",
+  "note": "TLC2 Version 2026.07.18.145032 (rev: 30cc360). v1.8.0 is a rolling pre-release rebuilt on each master commit; checksum updated 2026-08-02 from CI download."
 }
