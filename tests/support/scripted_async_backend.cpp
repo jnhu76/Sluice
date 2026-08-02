@@ -54,13 +54,13 @@ std::size_t apply_staged_locked(ScriptedBackendSharedState& s) {
     std::size_t n = 0;
 
     for (auto& res : s.staged_size) {
-        res.completion->complete_with(std::move(res.result));
+        ScriptedAsyncBackend::publish_completion(*res.completion, std::move(res.result));
         ++n;
     }
     s.staged_size.clear();
 
     for (auto& res : s.staged_void) {
-        res.completion->complete_with(std::move(res.result));
+        ScriptedAsyncBackend::publish_completion(*res.completion, std::move(res.result));
         ++n;
     }
     s.staged_void.clear();
@@ -158,7 +158,8 @@ Result<void> ScriptedAsyncBackend::submit_read(ReadOp op,
     if (!c.idle())
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
 
-    c.mark_outstanding();
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     std::uint64_t id = state_->next_id++;
     state_->size_ops[id] = ScriptedBackendSharedState::PendingSizeOp{
         id, OpKind::read, OpStage::pending, op.fd, op.offset, op.len, op.dst, &c};
@@ -178,7 +179,8 @@ Result<void> ScriptedAsyncBackend::submit_write(WriteOp op,
     if (!c.idle())
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
 
-    c.mark_outstanding();
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     std::uint64_t id = state_->next_id++;
     // src is const std::byte*; store as std::byte* for captured_write_bytes.
     // The backend only reads from it while the op is outstanding.
@@ -201,7 +203,8 @@ Result<void> ScriptedAsyncBackend::submit_sync_data(SyncDataOp op,
     if (!c.idle())
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
 
-    c.mark_outstanding();
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     std::uint64_t id = state_->next_id++;
     state_->void_ops[id] =
         ScriptedBackendSharedState::PendingVoidOp{id, OpKind::sync_data,
@@ -222,7 +225,8 @@ Result<void> ScriptedAsyncBackend::submit_sync_all(SyncAllOp op,
     if (!c.idle())
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
 
-    c.mark_outstanding();
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     std::uint64_t id = state_->next_id++;
     state_->void_ops[id] =
         ScriptedBackendSharedState::PendingVoidOp{id, OpKind::sync_all,

@@ -86,7 +86,7 @@ public:
     // --- AsyncBackend interface ---
     Result<void> submit_read(ReadOp, Completion<std::size_t>& c) override {
         if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        c.mark_outstanding();
+        try_claim(c);
         captures_.push_back({&c, false});
         ++outstanding_;
         apply_auto_stage(captures_.size() - 1, c);
@@ -94,7 +94,7 @@ public:
     }
     Result<void> submit_write(WriteOp, Completion<std::size_t>& c) override {
         if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        c.mark_outstanding();
+        try_claim(c);
         captures_.push_back({&c, false});
         ++outstanding_;
         apply_auto_stage(captures_.size() - 1, c);
@@ -102,7 +102,7 @@ public:
     }
     Result<void> submit_sync_data(SyncDataOp, Completion<void>& c) override {
         if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        c.mark_outstanding();
+        try_claim(c);
         captures_.push_back({&c, true});
         ++outstanding_;
         apply_auto_stage(captures_.size() - 1, c);
@@ -110,7 +110,7 @@ public:
     }
     Result<void> submit_sync_all(SyncAllOp, Completion<void>& c) override {
         if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        c.mark_outstanding();
+        try_claim(c);
         captures_.push_back({&c, true});
         ++outstanding_;
         apply_auto_stage(captures_.size() - 1, c);
@@ -126,16 +126,16 @@ public:
                 auto* c = static_cast<Completion<std::size_t>*>(e.c);
                 auto eit = size_err_.find(c);
                 if (eit != size_err_.end()) {
-                    c->complete_with(make_unexpected<std::size_t>(eit->second));
+                    publish(*c, make_unexpected<std::size_t>(eit->second));
                     size_err_.erase(eit);
                 } else {
                     auto it = size_bytes_.find(c);
-                    c->complete_with(Result<std::size_t>{it->second});
+                    publish(*c, Result<std::size_t>{it->second});
                     size_bytes_.erase(it);
                 }
             } else {
                 auto* c = static_cast<Completion<void>*>(e.c);
-                c->complete_with(Result<void>{});
+                publish(*c, Result<void>{});
             }
             --outstanding_;
             ++n;

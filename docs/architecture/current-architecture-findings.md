@@ -236,6 +236,13 @@ SyncBackend.
 
 **Do not fix in this audit PR.**
 
+**RESOLVED (ADR-explicit-io-completion-authority, branch
+fix/explicit-io-completion-authority):** SyncBackend::cancel() now marks the
+entry as cancelled; publication happens through the unified reap path
+(poll/wait_one) via the protected `publish()` helper. The direct
+`complete_with()` call has been removed. Regression-tested in
+`async_completion_test` (cancel_outstanding_op_completes_canceled).
+
 ---
 
 ## P1-04: ThreadPoolBackend Spawn Failure Incorrectly Asyncized
@@ -383,6 +390,20 @@ Release fail-fast on invalid transitions; outstanding reset → trap;
 outstanding destructor check.
 
 **Do not fix in this audit PR.**
+
+**RESOLVED (ADR-explicit-io-completion-authority, branch
+fix/explicit-io-completion-authority):**
+- Part A: `mark_outstanding()` and `complete_with()` removed from public API.
+  Publication mutators are now private (friend AsyncBackend). Derived backends
+  use protected `try_claim()`/`publish()` helpers. Negative-compile gate:
+  `scripts/verify-completion-authority-negative-compile.sh`.
+- Part B: `reset()` now fail-fasts (std::terminate) on outstanding state.
+  Destructor fail-fasts on outstanding. Both enforced in Debug AND Release.
+  Death tests: `completion_authority_death_test`.
+- CAS-based claim: `try_claim_for_backend()` uses atomic
+  compare_exchange_strong (exactly-once under concurrent submission).
+- Residual: P0-02 transactional admission gap (SQE failure after claim) is
+  explicitly documented in the ADR as a known limitation for Phase 2.
 
 ---
 

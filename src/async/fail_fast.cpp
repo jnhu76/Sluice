@@ -78,6 +78,13 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// Completion publication authority fail-fast. A Completion state transition
+// violated the authority model (reset on non-ready, destroy outstanding,
+// double-publish). Process-fatal in BOTH Debug and Release.
+[[noreturn]] void completion_authority_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

@@ -6,6 +6,7 @@
 // 020B). These tests are the foundation floor: if they fail, every later async
 // test is meaningless.
 #include "harness.hpp"
+#include "support/probe_backend.hpp"
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
@@ -28,11 +29,12 @@ SLUICE_TEST_CASE(completion_starts_idle) {
 }
 
 SLUICE_TEST_CASE(completion_mark_outstanding_then_complete_with_value) {
+    ProbeBackend pb;
     Completion<std::size_t> c;
-    c.mark_outstanding();
+    SLUICE_CHECK(pb.claim(c));
     SLUICE_CHECK(c.outstanding());
     SLUICE_CHECK(!c.ready());
-    c.complete_with(Result<std::size_t>{std::size_t{42}});
+    pb.publish_completion(c, Result<std::size_t>{std::size_t{42}});
     SLUICE_CHECK(c.ready());
     auto r = c.result();
     SLUICE_CHECK(r.has_value());
@@ -40,9 +42,10 @@ SLUICE_TEST_CASE(completion_mark_outstanding_then_complete_with_value) {
 }
 
 SLUICE_TEST_CASE(completion_complete_with_error_surfaces_via_result) {
+    ProbeBackend pb;
     Completion<std::size_t> c;
-    c.mark_outstanding();
-    c.complete_with(make_unexpected<std::size_t>(sluice::IoError{sluice::IoError::Code::eof}));
+    SLUICE_CHECK(pb.claim(c));
+    pb.publish_completion(c, make_unexpected<std::size_t>(sluice::IoError{sluice::IoError::Code::eof}));
     SLUICE_CHECK(c.ready());
     auto r = c.result();
     SLUICE_CHECK(!r.has_value());
@@ -50,15 +53,16 @@ SLUICE_TEST_CASE(completion_complete_with_error_surfaces_via_result) {
 }
 
 SLUICE_TEST_CASE(completion_reset_returns_to_idle_and_reusable) {
+    ProbeBackend pb;
     Completion<std::size_t> c;
-    c.mark_outstanding();
-    c.complete_with(Result<std::size_t>{std::size_t{7}});
+    SLUICE_CHECK(pb.claim(c));
+    pb.publish_completion(c, Result<std::size_t>{std::size_t{7}});
     SLUICE_CHECK(c.ready());
     c.reset();
     SLUICE_CHECK(c.idle());
     // Reusable for a new op.
-    c.mark_outstanding();
-    c.complete_with(Result<std::size_t>{std::size_t{99}});
+    SLUICE_CHECK(pb.claim(c));
+    pb.publish_completion(c, Result<std::size_t>{std::size_t{99}});
     SLUICE_CHECK(c.result().value() == 99);
 }
 
@@ -189,6 +193,10 @@ SLUICE_TEST_CASE(cancel_outstanding_op_completes_canceled) {
     Completion<std::size_t> c;
     SLUICE_CHECK(ctx.submit_read(ReadOp{0, b, 8, 0}, c).has_value());
     ctx.cancel(c);
+    // ADR-explicit-io-completion-authority §8: cancel marks the entry;
+    // publication happens through the unified reap path (poll/wait_one).
+    SLUICE_CHECK(c.outstanding());
+    ctx.poll();
     SLUICE_CHECK(c.ready());
     auto r = c.result();
     SLUICE_CHECK(!r.has_value());

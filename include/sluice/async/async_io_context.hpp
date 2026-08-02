@@ -65,10 +65,10 @@ public:
     void attach_stats(AsyncStats* s) { stats_ = s; }
 
     // Hand an op to the backend against the caller-owned Completion. The backend
-    // records the op outstanding (marking the Completion via mark_outstanding()
-    // is the context's job, not the backend's, so the state machine stays in one
-    // place). Returns Result<void>: submit-time errors (queue full, invalid op,
-    // Completion not idle — L8) are synchronous (ADR E5).
+    // claims the Completion via try_claim() (ADR-explicit-io-completion-authority:
+    // the backend is the claiming authority). Returns Result<void>: submit-time
+    // errors (queue full, invalid op, Completion not idle — L8) are synchronous
+    // (ADR E5).
     virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
@@ -93,6 +93,20 @@ public:
 protected:
     AsyncBackend() = default;
     AsyncStats* stats_ = nullptr;
+
+    // ADR-explicit-io-completion-authority §9: protected publication helpers.
+    // Derived backends use these to claim/publish Completions. Ordinary
+    // application code cannot access them (protected + Completion friendship
+    // is granted to AsyncBackend only, not inherited by non-backend code).
+    template <class T>
+    static bool try_claim(Completion<T>& c) noexcept {
+        return c.try_claim_for_backend();
+    }
+
+    template <class T>
+    static void publish(Completion<T>& c, Result<T>&& result) noexcept {
+        c.publish_from_reap(std::move(result));
+    }
 };
 
 // The public L1 foundation (parallels the blocking IoContext). Owns a backend;

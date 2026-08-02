@@ -1,44 +1,50 @@
-// sluice::async::Completion<T> (sluice-CORE-017, ADR §3/§5).
+// sluice::async::Completion<T> — caller-owned operation state.
 //
 // A single outstanding operation's state, CALLER-OWNED so allocation is
 // decoupled from submit (mirrors Zig std.Io Completion). The runtime NEVER
 // allocates a Completion (L4); the caller constructs one and passes it by
 // reference to submit_*.
 //
-// Lifecycle (ADR §5 L7–L11) — the rules that prevent use-after-free:
+// Authority model (ADR-explicit-io-completion-authority):
+//
+//   Publication mutators (claim/publish) are PRIVATE. Only AsyncBackend
+//   (via friend) can access them. Derived backends use the protected
+//   AsyncBackend::try_claim / AsyncBackend::publish static helpers.
+//   Ordinary application code CANNOT forge publication transitions.
+//
+// Lifecycle:
 //
 //   L7.  A Completion is ADDRESS-STABLE while outstanding. It MUST NOT be moved,
 //        destroyed, or reused (re-submitted) until it is ready. (This type is
 //        non-copyable and non-movable to make that a compile-time guarantee.)
-//   L8.  Submitting into a not-ready Completion returns IoError::invalid_state
+//   L8.  Submitting into a not-idle Completion returns IoError::invalid_state
 //        synchronously from submit_* (does not silently overwrite).
-//   L9.   result() before ready is a contract violation: debug-mode assertion;
-//         release-mode returns IoError::invalid_state (never returns stale data).
-//   L11.  Destroying an AsyncIoContext with outstanding Completions is a contract
-//         violation (handled in AsyncIoContext, not here).
+//   L9.  result() before ready is a contract violation: debug-mode assertion;
+//        release-mode returns IoError::invalid_state (never returns stale data).
+//   L11. Destroying an AsyncIoContext with outstanding Completions is a contract
+//        violation (handled in AsyncIoContext, not here).
 //
-// State machine:
-//   idle ──submit_*──> outstanding ──poll/wait_one──> ready
-//    ▲                                                    │
-//    └──────────────────reset()──────────────────────────┘
+// State machine (ADR-explicit-io-completion-authority §5):
+//
+//   idle ──backend try_claim (CAS)──> outstanding ──reap publish──> ready
+//    ▲                                                                    │
+//    └────────────────────────caller reset()──────────────────────────────┘
+//
+// Forbidden transitions (fail-fast in Debug AND Release):
+//   idle → ready, ready → outstanding, outstanding → idle,
+//   double publish, double claim, reset on outstanding, destroy outstanding.
 //
 // `ready()` true means the op has a terminal result (success/error/canceled)
 // available via `result()`. Exactly-once: once ready, the backend never mutates
 // it again. reset() returns it to idle so it can be reused for a new op.
 //
-// E15-P1-04 reap sequence: every successful complete_with() stamps the
-// Completion with a monotonic reap sequence number (next_reap_seq(), see
-// below). This is the narrowest mechanism that lets Batch::next() surface
-// completions in actual backend reap order (ADR §6 O2) WITHOUT a new
-// AsyncBackend vtable entry: any backend that calls complete_with (which is
-// the only path to ready per A3/O1) publishes the order for free. The field
-// is read by Batch; ordinary callers ignore it. reset() zeroes it so the
-// Completion is reusable. Synchronization matches the existing `state_`
-// field: writes occur under AsyncIoContext::access_mtx_ (E7-C) during
-// poll()/wait_one(); Batch reads it after the same lock has been released by
-// await_one's wait_one() call.
+// E15-P1-04 reap sequence: every successful publish stamps the Completion with
+// a monotonic reap sequence number (next_reap_seq()). This lets Batch::next()
+// surface completions in actual backend reap order (ADR §6 O2). The field is
+// read by Batch; ordinary callers ignore it. reset() zeroes it.
 #pragma once
 
+#include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -49,18 +55,17 @@
 
 namespace sluice::async {
 
+// Forward declaration for friend.
+class AsyncBackend;
+
 namespace detail {
 // E15-P1-04: process-wide monotonic reap counter, used by Completion::
-// complete_with() to stamp a reap sequence on every reaped Completion. Order
-// reflects the actual sequence in which backends call complete_with() under
+// publish_from_reap() to stamp a reap sequence on every reaped Completion.
+// Order reflects the actual sequence in which backends publish under
 // AsyncIoContext::access_mtx_ (ADR E7-C); Batch::next() consumes it to surface
 // completions in true reap order (ADR §6 O2). Relaxed ordering is sufficient:
 // the only writer/readers are serialized through the context's access mutex
 // (writes) and the Batch's await_one -> next happens-before chain (reads).
-//
-// F-02 closeout: moved into detail to signal this is an internal mechanism,
-// not part of the public API surface. Completion::complete_with() (the sole
-// production consumer) calls it inline.
 inline std::uint64_t next_reap_seq() noexcept {
     static std::atomic<std::uint64_t> counter{0};
     return ++counter;
@@ -73,11 +78,23 @@ class Completion {
     // by Batch::next(). It is not part of the public caller-facing API.
     friend class Batch;
 
+    // ADR-explicit-io-completion-authority §2: publication authority.
+    // Only AsyncBackend (and its protected static helpers) may claim/publish.
+    friend class AsyncBackend;
+
 public:
     using value_type = T;
 
     Completion() = default;
-    ~Completion() = default;
+
+    // ADR §8: destruction of an outstanding Completion is a contract violation.
+    // Fail-fast in BOTH Debug and Release. The destructor does NOT attempt
+    // implicit cancel or drain.
+    ~Completion() noexcept {
+        if (state_.load(std::memory_order::acquire) == State::outstanding) {
+            detail::completion_authority_fail_fast();
+        }
+    }
 
     // Non-copyable AND non-movable (L7): an outstanding Completion's address is
     // the backend's handle to it. Move/copy would invalidate that pointer.
@@ -86,17 +103,7 @@ public:
     Completion(Completion&&) = delete;
     Completion& operator=(Completion&&) = delete;
 
-    // --- query ---
-    // Synchronization note: state_ is std::atomic so that the release-store in
-    // complete_with() (driver/reaper side, under AsyncIoContext::access_mtx_)
-    // publishes storage_/reap_seq_ to a Fiber that resumes and reads
-    // ready()/result() with NO lock held, potentially on a different worker
-    // (Fibers migrate W1-suspend -> W0-resume). This acquire/release only
-    // establishes ready/result publication across that handoff; it does NOT make
-    // the Completion safe for arbitrary concurrent submit/reset/result from
-    // multiple threads. The lifecycle (idle->outstanding->ready->reset) is still
-    // single-owner and non-reentrant: mark_outstanding/complete_with/reset each
-    // require the documented prior state, asserted in Debug.
+    // --- query (caller-accessible) ---
     bool ready() const noexcept { return state_.load(std::memory_order::acquire) == State::ready; }
     bool outstanding() const noexcept { return state_.load(std::memory_order::acquire) == State::outstanding; }
     bool idle() const noexcept { return state_.load(std::memory_order::acquire) == State::idle; }
@@ -111,47 +118,66 @@ public:
         return storage_.as_result();
     }
 
-    // --- backend-only mutators (public so AsyncBackend subclasses can mark
-    // ready, but documented as not-for-callers) ---
-    // Mark outstanding: called by submit_* just before handing to the backend.
-    void mark_outstanding() {
-        assert(state_.load(std::memory_order::acquire) == State::idle &&
-               "submit into a non-idle Completion (L8)");
-        state_.store(State::outstanding, std::memory_order::release);
-        storage_ = Storage{};  // clear any prior result
-        reap_seq_ = 0;
-    }
-    // Mark ready with a value (success path) or an error (failure path).
-    // E15-P1-04: stamps a monotonic reap sequence so Batch::next() can order
-    // completions by actual backend reap order (ADR §6 O2).
-    void complete_with(Result<T> res) {
-        assert(state_.load(std::memory_order::acquire) == State::outstanding &&
-               "complete on a non-outstanding Completion (double-completion?)");
-        storage_.set(std::move(res));
-        reap_seq_ = detail::next_reap_seq();
-        state_.store(State::ready, std::memory_order::release);
-    }
-    // Return to idle so the Completion can be reused for a new op.
-    void reset() {
+    // --- caller lifecycle (state-checked) ---
+    // ADR §7: reset is caller-accessible from ready state (normal reuse) or
+    // idle state (defensive no-op, e.g. op_helpers one_step first iteration).
+    // reset from outstanding is a contract violation → fail-fast.
+    void reset() noexcept {
+        State s = state_.load(std::memory_order::acquire);
+        if (s == State::outstanding) {
+            detail::completion_authority_fail_fast();
+        }
+        if (s == State::idle) return;  // already idle, nothing to do
         state_.store(State::idle, std::memory_order::release);
         storage_ = Storage{};
         reap_seq_ = 0;
     }
 
 private:
-    // E15-P1-04: monotonic reap sequence stamped by complete_with(). 0 means
-    // "never reaped" (idle or outstanding); a non-zero value orders ready
-    // Completions by their actual reap moment. Batch::next() consumes this
-    // via the friend grant above; ordinary callers never need it.
+    // --- backend-only publication mutators (ADR §2, §6, §9) ---
+    // These are PRIVATE. AsyncBackend accesses them via friend and exposes
+    // protected static helpers (try_claim / publish) to derived backends.
+
+    // Claim: atomic CAS idle → outstanding. Returns true if this caller won
+    // the claim; false if the Completion was not idle (another backend/context
+    // already claimed it, or it is outstanding/ready). ADR §6: exactly one
+    // claim succeeds under concurrent submission.
+    bool try_claim_for_backend() noexcept {
+        State expected = State::idle;
+        if (!state_.compare_exchange_strong(
+                expected, State::outstanding,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
+            return false;
+        }
+        storage_ = Storage{};  // clear any prior result
+        reap_seq_ = 0;
+        return true;
+    }
+
+    // Publish: transition outstanding → ready with a terminal result.
+    // ADR §7: exactly once, single winner, release publication.
+    // Fail-fast if not outstanding (double-publish or invalid state).
+    void publish_from_reap(Result<T> res) noexcept {
+        State s = state_.load(std::memory_order::acquire);
+        if (s != State::outstanding) {
+            detail::completion_authority_fail_fast();
+        }
+        storage_.set(std::move(res));
+        reap_seq_ = detail::next_reap_seq();
+        state_.store(State::ready, std::memory_order::release);
+    }
+
+    // E15-P1-04: monotonic reap sequence stamped by publish_from_reap().
+    // 0 means "never reaped" (idle or outstanding); a non-zero value orders
+    // ready Completions by their actual reap moment.
     std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
     enum class State : std::uint8_t { idle, outstanding, ready };
     std::atomic<State> state_{State::idle};
     std::uint64_t reap_seq_ = 0;
 
-    // Storage for the terminal result. Holds either a T or an IoError. The
-    // partial specialization on void (below) gives Completion<void> a value-less
-    // storage so the same state machine works for sync ops.
+    // Storage for the terminal result. Holds either a T or an IoError.
     struct Storage;
     Storage storage_;
 };
@@ -179,12 +205,19 @@ struct Completion<T>::Storage {
 template <>
 class Completion<void> {
     friend class Batch;
+    friend class AsyncBackend;
 
 public:
     using value_type = void;
 
     Completion() = default;
-    ~Completion() = default;
+
+    ~Completion() noexcept {
+        if (state_.load(std::memory_order::acquire) == State::outstanding) {
+            detail::completion_authority_fail_fast();
+        }
+    }
+
     Completion(const Completion&) = delete;
     Completion& operator=(const Completion&) = delete;
     Completion(Completion&&) = delete;
@@ -203,28 +236,42 @@ public:
         return {};
     }
 
-    void mark_outstanding() {
-        assert(state_.load(std::memory_order::acquire) == State::idle && "submit into a non-idle Completion (L8)");
-        state_.store(State::outstanding, std::memory_order::release);
-        has_error_ = false;
-        reap_seq_ = 0;
-    }
-    void complete_with(Result<void> res) {
-        assert(state_.load(std::memory_order::acquire) == State::outstanding &&
-               "complete on a non-outstanding Completion (double-completion?)");
-        if (!res.has_value()) { error_ = res.error(); has_error_ = true; }
-        else { has_error_ = false; }
-        reap_seq_ = detail::next_reap_seq();
-        state_.store(State::ready, std::memory_order::release);
-    }
-    void reset() {
+    void reset() noexcept {
+        State s = state_.load(std::memory_order::acquire);
+        if (s == State::outstanding) {
+            detail::completion_authority_fail_fast();
+        }
+        if (s == State::idle) return;  // already idle, nothing to do
         state_.store(State::idle, std::memory_order::release);
         has_error_ = false;
         reap_seq_ = 0;
     }
 
 private:
-    // F-02: see Completion<T>::reap_seq().
+    bool try_claim_for_backend() noexcept {
+        State expected = State::idle;
+        if (!state_.compare_exchange_strong(
+                expected, State::outstanding,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
+            return false;
+        }
+        has_error_ = false;
+        reap_seq_ = 0;
+        return true;
+    }
+
+    void publish_from_reap(Result<void> res) noexcept {
+        State s = state_.load(std::memory_order::acquire);
+        if (s != State::outstanding) {
+            detail::completion_authority_fail_fast();
+        }
+        if (!res.has_value()) { error_ = res.error(); has_error_ = true; }
+        else { has_error_ = false; }
+        reap_seq_ = detail::next_reap_seq();
+        state_.store(State::ready, std::memory_order::release);
+    }
+
     std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
     enum class State : std::uint8_t { idle, outstanding, ready };

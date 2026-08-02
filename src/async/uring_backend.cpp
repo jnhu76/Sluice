@@ -211,9 +211,9 @@ struct UringAsyncBackend::Impl {
                              ? static_cast<void*>(rec.void_c)
                              : static_cast<void*>(rec.size_c);
         if (rec.is_void) {
-            rec.void_c->complete_with(make_unexpected<void>(error));
+            UringAsyncBackend::publish(*rec.void_c, make_unexpected<void>(error));
         } else {
-            rec.size_c->complete_with(
+            UringAsyncBackend::publish(*rec.size_c,
                 make_unexpected<std::size_t>(error));
         }
         bump(stats, &AsyncStats::completion_errors);
@@ -345,22 +345,22 @@ struct UringAsyncBackend::Impl {
             if (res < 0) {
                 IoError e = sluice::from_errno_value(-res);
                 bool canceled = (e.code == IoError::Code::canceled);
-                rec.void_c->complete_with(make_unexpected<void>(e));
+                UringAsyncBackend::publish(*rec.void_c, make_unexpected<void>(e));
                 if (canceled) bump(stats, &AsyncStats::canceled_ops);
                 else bump(stats, &AsyncStats::completion_errors);
             } else {
-                rec.void_c->complete_with(Result<void>{});
+                UringAsyncBackend::publish(*rec.void_c, Result<void>{});
             }
         } else {
             if (res < 0) {
                 IoError e = sluice::from_errno_value(-res);
                 bool canceled = (e.code == IoError::Code::canceled);
-                rec.size_c->complete_with(make_unexpected<std::size_t>(e));
+                UringAsyncBackend::publish(*rec.size_c, make_unexpected<std::size_t>(e));
                 if (canceled) bump(stats, &AsyncStats::canceled_ops);
                 else bump(stats, &AsyncStats::completion_errors);
             } else {
                 std::size_t got = static_cast<std::size_t>(res);
-                rec.size_c->complete_with(Result<std::size_t>{got});
+                UringAsyncBackend::publish(*rec.size_c, Result<std::size_t>{got});
                 if (got < rec.requested) bump(stats, &AsyncStats::short_completions);
             }
         }
@@ -481,7 +481,8 @@ namespace {
 // ops/next_id/comp_to_op members, which Impl provides.
 template <class ImplLike, class C>
 __u64 register_op(ImplLike& impl, __u64 id, C& c, OpRec rec) {
-    c.mark_outstanding();
+    // ADR-explicit-io-completion-authority: claim is performed by the caller
+    // (submit_*) via try_claim before reaching here.
     void* comp_key = rec.is_void
                          ? static_cast<void*>(rec.void_c)
                          : static_cast<void*>(rec.size_c);
@@ -522,6 +523,11 @@ Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& 
     __u64 id = impl_->next_id;
     ::io_uring_prep_read(sqe, op.fd, op.dst, native_length.value(), op.offset);
     ::io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(static_cast<std::uintptr_t>(id)));
+    // ADR-explicit-io-completion-authority: claim at the same point the old
+    // mark_outstanding lived (after validation). TODO(P0-02): transactional
+    // admission gap remains if SQE acquisition fails after claim.
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     register_op(*impl_, id, c,
                 OpRec{&c, nullptr, /*is_void=*/false, op.len, false, 0});
     return {};
@@ -552,6 +558,9 @@ Result<void> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>
     __u64 id = impl_->next_id;
     ::io_uring_prep_write(sqe, op.fd, op.src, native_length.value(), op.offset);
     ::io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(static_cast<std::uintptr_t>(id)));
+    // ADR-explicit-io-completion-authority: claim (see submit_read comment).
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     register_op(*impl_, id, c,
                 OpRec{&c, nullptr, /*is_void=*/false, op.len, false, 0});
     return {};
@@ -579,6 +588,9 @@ Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>
     __u64 id = impl_->next_id;
     ::io_uring_prep_fsync(sqe, op.fd, IORING_FSYNC_DATASYNC);
     ::io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(static_cast<std::uintptr_t>(id)));
+    // ADR-explicit-io-completion-authority: claim (see submit_read comment).
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     register_op(*impl_, id, c,
                 OpRec{nullptr, &c, /*is_void=*/true, 0, false, 0});
     return {};
@@ -606,6 +618,9 @@ Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
     __u64 id = impl_->next_id;
     ::io_uring_prep_fsync(sqe, op.fd, 0);  // 0 => full fsync (sync_all)
     ::io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(static_cast<std::uintptr_t>(id)));
+    // ADR-explicit-io-completion-authority: claim (see submit_read comment).
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     register_op(*impl_, id, c,
                 OpRec{nullptr, &c, /*is_void=*/true, 0, false, 0});
     return {};
