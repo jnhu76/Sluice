@@ -3,11 +3,16 @@
 **Purpose:** Every intentional or pending divergence from the Zig source-derived
 model is registered here. Unregistered divergence is architectural drift.
 
-**Baseline:** `d299fc0` (master). Entries derived from code audit and ADR review.
+**Baseline:** `b20bcc7` (master, including PR #60 and PR #61). Entries are
+derived from code audit and ADR review. Proposed target designs are labeled;
+they are not implementation evidence.
 
 Status values:
 - **Approved** — governed by an ADR or explicit design decision
 - **Accepted** — documented and acknowledged, no ADR yet but no action needed
+- **Accepted transitional divergence** — the migration stance is approved as a
+  bounded exception with a revisit trigger; implementation is not implied, and
+  a linked Proposed ADR remains non-binding until accepted
 - **Pending decision** — evidence insufficient or contradictory; needs resolution
 - **Corrective planned** — accidental drift with a remediation plan
 
@@ -29,19 +34,19 @@ Status values:
 
 ---
 
-## DIV-02: Completion Separated from Operation Storage
+## DIV-02: Backend-Owned RequestSlot Separated from Caller-Owned Completion
 
 | Field | Value |
 |-------|-------|
 | ID | DIV-02 |
-| Status | Pending decision |
-| Introduced by | Implementation (Batch header documents a local scope deferral, not architecture-wide approval) |
-| Governing ADR | None — no ADR approves permanent separation. ADR-async-io-model §4 describes the backend interface but does not rule on caller-owned operation storage. |
-| Reason | Zig unifies caller storage (Operation.Storage: unused→submission→pending→completion) with backend scratch (Pending.Userdata). Sluice separates caller-visible Completion from backend-internal per-op state. The Batch header documents a scope decision to defer native Operation.Storage for that batch of work — this is NOT an architecture-wide permanent approval. |
-| Benefit | Simpler caller contract (only Completion to manage); backend freedom in internal tracking. |
-| Cost | Backend per-op heap allocation (std::function, deque entry, thread); no zero-allocation accepted-op path in ThreadPoolBackend; no stable queryable operation identity beyond the Completion pointer. |
-| Current evidence | `completion.hpp:1-238`; `batch.hpp:9-22` (documents scope deferral, not permanent decision); `threadpool_backend.cpp:85` (per-op thread + function). |
-| Revisit trigger | Phase 1 roadmap (Explicit I/O Request Contract ADR). This is the primary decision point. Must be resolved by ADR before the next release. |
+| Status | Accepted transitional divergence |
+| Introduced by | Existing Completion/backend-record separation; formalized as a transitional C++ adaptation by the Proposed explicit request contract |
+| Governing ADR | ADR-explicit-io-request-contract (Proposed; Decision 2) |
+| Reason | Zig places operation lifecycle and backend scratch in caller-owned `Operation.Storage`. Sluice will preserve caller-owned `Completion<T>` while the context/backend owns a bounded arena of `RequestSlot` objects identified by context, slot, and generation. This stages migration without making the current pointer/container implementation acceptable. |
+| Benefit | Preserves public submit signatures and avoids one-step Runtime/Batch/copy-pipeline migration while still enabling stable identity, bounded admission, and an allocation-independent accepted terminal path. |
+| Cost | Context/backend memory scales with configured capacity; caller cannot supply storage directly; current backends remain non-conforming until migrated. |
+| Current evidence | Current code: `completion.hpp`, backend-specific containers, and no RequestSlot arena. Target decision: ADR-explicit-io-request-contract Decisions 1–5. No production implementation exists yet. |
+| Revisit trigger | Re-evaluate when benchmarks or backend ABI evidence show caller-owned storage materially reduces per-request overhead and the public API migration cost for Runtime, Batch, and copy pipelines is controlled. |
 
 ---
 
@@ -53,11 +58,11 @@ Status values:
 | Status | Corrective planned |
 | Introduced by | Implementation (no founding ADR for this specific model) |
 | Governing ADR | ADR-execution-model §9.1 P2 (mentions blocking offload but does not approve per-op thread model) |
-| Reason | Zig `Threaded` = thread-per-TASK (execution strategy). Sluice `ThreadPoolBackend` = thread-per-OP (blocking I/O offload for the Evented scheduler). These are different concepts at different layers. The naming is misleading and the per-op thread model has known resource issues (unbounded, expensive). Corrective action planned in Phase 6 roadmap. |
+| Reason | Zig `Threaded` = thread-per-TASK (execution strategy). Sluice `ThreadPoolBackend` = thread-per-OP (blocking I/O offload for the Evented scheduler). These are different concepts at different layers. The naming is misleading and the per-op thread model has known resource issues (unbounded, expensive). Corrective action is Phase E of the current roadmap. |
 | Benefit | Evented scheduler workers remain free during blocking I/O; simple functional prototype under normal resource availability. |
 | Cost | Thread creation per op (expensive); unbounded thread count; misleading name suggests a bounded pool; violates AC-7 (bounded resources). |
 | Current evidence | `threadpool_backend.hpp:8-9` ("one worker thread per outstanding op"); `group.hpp:49-51` (Threaded mode = thread-per-task). |
-| Revisit trigger | Phase 6 roadmap (persistent blocking-I/O offload design with bounded capacity). Naming correction at that time. |
+| Revisit trigger | Phase E roadmap (persistent blocking-I/O offload design with bounded capacity). Naming correction at that time. |
 
 ---
 
@@ -73,7 +78,7 @@ Status values:
 | Benefit | No upward lock coupling; backend remains a simple leaf; Scheduler retains routing authority. |
 | Cost | Up to 2ms observation latency in MIXED-WAKE mode; no instant backend→Fiber resume. |
 | Current evidence | ADR §9.4.7.1 (2ms is protocol authority for MIXED-WAKE); `scheduler.hpp` worker loop (poll → wake_ready_completions_locked). |
-| Revisit trigger | Phase 5 roadmap (backend progress signal / unified wake); if latency-sensitive workloads require sub-ms backend wake. |
+| Revisit trigger | Phase G roadmap (backend progress signal / unified wake); if latency-sensitive workloads require sub-ms backend wake. |
 
 ---
 
@@ -89,7 +94,7 @@ Status values:
 | Benefit | Avoids split-brain between backend cv and scheduler cv; single park point for mixed waits. |
 | Cost | 2ms worst-case latency for backend completion in MIXED-WAKE; periodic CPU wake even if no progress. |
 | Current evidence | ADR §9.4.7.1; scheduler worker loop implementation. |
-| Revisit trigger | If backend wake integration is designed (Phase 5); if 2ms latency is unacceptable for a workload. |
+| Revisit trigger | If backend wake integration is designed (Phase G); if 2ms latency is unacceptable for a workload. |
 
 ---
 
@@ -196,12 +201,12 @@ Status values:
 | ID | DIV-12 |
 | Status | Corrective planned |
 | Introduced by | Implementation drift (no ADR approves unbounded thread creation) |
-| Governing ADR | None — this is accidental |
+| Governing ADR | ADR-explicit-io-request-contract (Proposed target); correction remains unimplemented |
 | Reason | ThreadPoolBackend accepts unlimited concurrent ops with no capacity limit, no queue-full error, and no backpressure. Zig `Threaded` has `async_limit`/`concurrent_limit`. No Sluice ADR approves unbounded resource growth. |
 | Benefit | (None — this is not a benefit, it is an absence of constraint.) |
 | Cost | Unbounded thread creation; OOM under load; no graceful degradation; violates AC-7. |
 | Current evidence | `threadpool_backend.hpp:51-57` (documented risk); no capacity parameter; no `would_block` error. |
-| Revisit trigger | Phase 1 roadmap (bounded capacity design within unified request contract). This is the highest-priority corrective. |
+| Revisit trigger | Phase E roadmap after bounded RequestSlot reference lifecycle and conformance framework exist. |
 
 ---
 
@@ -226,7 +231,7 @@ Status values:
 | ID | Status | Area |
 |----|--------|------|
 | DIV-01 | Approved | Context shape |
-| DIV-02 | Pending decision | Operation storage |
+| DIV-02 | Accepted transitional divergence | Operation storage ownership |
 | DIV-03 | Corrective planned | Backend execution model |
 | DIV-04 | Approved | Wake integration |
 | DIV-05 | Approved | Observation interval |

@@ -4,7 +4,8 @@
 All designs, implementations, and reviews MUST satisfy these rules.
 Violations require an approved ADR or an entry in the divergence registry.
 
-**Baseline:** `d299fc0` (master). Derived from as-built code audit, not ADR aspiration.
+**Baseline:** `b20bcc7` (master, including PR #60 and PR #61). Derived from
+as-built code audit; proposed target contracts are labeled as such.
 
 ---
 
@@ -50,22 +51,28 @@ admission to reap. It MUST be possible to answer: where is the operation, who
 owns it, what state is it in, which Completion does it relate to, and who can
 terminate it.
 
-**Rationale:** Sluice separates `Completion<T>` (caller-owned, 3-state) from
-backend-internal per-op records. Whether this separation remains permanent is
-unresolved under DIV-02 (status: Pending decision). Regardless of the final
-storage model, the backend-internal identity MUST still be auditable — not
-merely an implicit lambda capture or deque position.
+**Rationale:** Sluice separates caller-owned `Completion<T>` from per-request
+storage. DIV-02 now accepts a transitional C++ adaptation in which the
+context/backend owns a bounded `RequestSlot` arena. The proposed
+ADR-explicit-io-request-contract fixes logical identity as
+`(ContextIdentity, SlotIndex, Generation)`. The current implementation has not
+yet migrated and therefore remains non-conforming where it relies only on
+`Completion*`, lambda capture, or container position.
 
 **Required evidence:**
 - Each backend documents how an accepted op is tracked from submit to reap.
-- The relationship between `Completion*` and backend-internal state is 1:1 and
-  verifiable.
+- The relationship between RequestKey, RequestSlot, Completion, operation, and
+  borrowed resources is 1:1 and verifiable.
+- Slot reuse changes generation before the next accepted request becomes
+  visible; stale identity cannot affect the new occupant.
 - No operation exists only as a closure with no queryable identity.
 
 **Allowed exceptions:**
-- `SyncBackend` completes at poll time with synthetic results; identity is
-  trivially the Completion pointer in the buffered entry vector.
-- `FakeAsyncBackend` test staging may use simplified tracking.
+- During the explicitly staged migration, Fake and Sync/Synthetic may retain
+  pointer-based tracking only while the roadmap names the removal phase and
+  tests do not claim generation/provenance conformance.
+- A raw pointer may remain a validated locating optimization after migration;
+  it is never the sole logical identity.
 
 **Common violations:**
 - Relying on deque index as identity (invalidated by concurrent drain).
@@ -86,12 +93,22 @@ resources needed to complete the operation, the Completion is outstanding, and
 a reliable completion-or-failure path exists. A failed `submit_*` MUST leave the
 Completion idle, outstanding unchanged, and no background work in progress.
 
+The target admission transaction is `reserve -> prepare -> commit/accept ->
+enqueue -> dispatch`. Commit is successful-submit linearization. Enqueue is
+allocation-free and non-throwing. A dispatch failure after commit is a terminal
+result only after the backend proves that no worker, userspace submission entry,
+kernel request, or future completion event can still execute or reference the
+request. Transient pressure and partial submission retain the request for retry;
+neither is a retroactive rejection.
+
 **Rationale:** The caller uses the submit return value to decide control flow.
 If submit succeeds but the operation later vanishes (e.g., allocation failure
 after the backend's claim), the caller cannot recover. Zig's `operate` is
 inherently transactional because the caller owns the storage.
 
 **Required evidence:**
+- Reserve obtains every userspace resource required by the accepted terminal
+  path before commit; prepare remains invisible to progress engines.
 - Code path from `submit_*` entry to backend acceptance is allocation-free OR
   allocation failure is caught and rolled back to idle.
 - No sequence: `try_claim` → allocate → fail → "compensate" with an error
@@ -101,6 +118,10 @@ inherently transactional because the caller owns the storage.
   `register_op` container allocation AFTER the SQE is prepared is still
   non-transactional — explicitly tracked as P0-02 (open), deferred to the
   RequestSlot PR.
+- An io_uring mapping acquires/fills SQEs after commit. A partial submit keeps
+  its unsubmitted suffix bound and enqueued until allocation-free retry or an
+  ownership-safe permanent failure; it does not publish a terminal result while
+  an SQE can still be submitted.
 - Test: inject `bad_alloc` at each allocation point; verify Completion returns
   to idle.
 
@@ -135,8 +156,9 @@ contract.
 
 **Required evidence:**
 - Every backend documents its "accepted → terminal" path.
-- The terminal publication path (ready-queue push, CQE, inline complete) has a
-  bounded or pre-allocated resource requirement.
+- Terminal result storage and ready linkage are bounded or pre-allocated before
+  acceptance; workers/CQE handlers stop at backend-ready and reap publishes the
+  Completion.
 - Explicit shutdown/drain terminates or reaps every accepted operation before
   destruction is permitted. Destruction with outstanding operations is a
   contract violation (fail-fast), not an implicit drain.
@@ -535,6 +557,10 @@ transition.
   violation (fail-fast in Release).
 - Destruction of an outstanding/publishing/resetting Completion is a checked
   contract violation in BOTH Debug and Release.
+- Once the Proposed RequestSlot contract is implemented, `reset()` and
+  destruction of a ready Completion must additionally perform the same
+  allocation-free, non-blocking release of the bound slot. Destroying ready
+  remains allowed; it discards terminal storage but does not cancel or drain I/O.
 - No test uses backend-only publication mutators as if they were public API.
 - Two different contexts cannot both claim the same Completion outstanding
   (structural exclusion via claim CAS, not comment convention).
@@ -572,11 +598,11 @@ proves non-backend code cannot publish.
 
 ## AC-14. Request Provenance and Generation
 
-**Rule:** Every accepted operation MUST have a stable identity that includes:
-context/backend provenance, a monotonically increasing generation (or
-equivalent ABA guard), operation kind, Completion binding, and resource/buffer
-binding. A raw pointer (e.g., `Completion*`) MUST NOT be the sole logical
-identity across asynchronous phases.
+**Rule:** Every accepted operation MUST have a stable identity that includes
+context/backend provenance, reusable-slot identity, a monotonically increasing
+per-slot generation (or equivalent ABA guard), operation kind, Completion
+binding, and resource/buffer binding. A raw pointer (e.g., `Completion*`) MUST
+NOT be the sole logical identity across asynchronous phases.
 
 **Rationale:** Completion address is currently the only backend identity for
 an operation. But Completions can be reset and reused. The same address may
@@ -587,8 +613,8 @@ generation of the request it targets. Uring internally uses op-id but the
 public cancellation and Scheduler registration still target Completion address.
 
 **Required evidence:**
-- Each accepted op has a generation or epoch that monotonically increases
-  per Completion reuse.
+- Each accepted op has a generation or epoch that monotonically increases per
+  RequestSlot reuse and is bound opaquely to the outstanding Completion.
 - Cancel targets a specific generation, not just an address.
 - Scheduler wait registration records provenance (which context/backend).
 - Cross-context Completion submission is structurally prevented or detected.
@@ -618,6 +644,11 @@ that identity MUST NOT be discarded at the L0/L1 boundary. The reap interface
 MUST provide completed operation identities to higher layers. Higher layers
 MUST NOT be forced to recover completion identity by scanning all outstanding
 Completions.
+
+An identity-bearing event is semantically equivalent to
+`ReadyEvent{RequestKey, CompletionBase*, OperationKind}`. Exact C++ syntax is a
+lower-level design choice; returning only a count is not sufficient as the
+authoritative integration contract.
 
 **Rationale:** Current `poll()`/`wait_one()` return only a count. The
 Scheduler then scans its entire `waiting_completion_` map checking
