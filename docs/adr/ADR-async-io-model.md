@@ -15,6 +15,17 @@ boundary, and what is explicitly deferred.
 - Preconditions before any code: `docs/history/implementation-plans/async-readiness-gate.md` (016E).
 - Implementation split: `docs/history/implementation-plans/async-next-jobs.md` (016F).
 
+**Proposed partial supersession:**
+[ADR-explicit-io-request-contract](ADR-explicit-io-request-contract.md), if
+accepted, supersedes this ADR's request identity/backend-record assumptions,
+submit admission boundary, count/global-sequence reap authority, cancellation
+targeting, and cancellation-related borrow-release wording. It does not
+supersede the file-only scope, explicit Completion API shape, positional I/O,
+durability operations, `Result<T>` error transport, execution model, or Runtime
+ownership. Until that Proposed ADR is accepted and implemented, this document
+continues to describe the accepted public/as-built model where not already
+superseded by ADR-explicit-io-completion-authority.
+
 This ADR makes **one** recommendation. It introduces **no dependency** without
 explicit evaluation (§11). It makes **no universal performance claim**.
 
@@ -215,7 +226,9 @@ use-after-free if left implicit.**
 L1. A buffer passed to submit_read/submit_write is BORROWED for the lifetime of
     the outstanding op, not just the submit call.
 L2. "Outstanding" spans from successful submit to the moment poll()/wait_one()
-    marks the Completion ready (or the op is cancelled, §7).
+    marks the Completion ready. A cancel request alone never ends the borrow;
+    only reaped terminal publication does. The Proposed explicit request
+    contract makes this wording authoritative across all cancel races.
 L3. (refined below in L3a/L3b) — what the caller may/may not do with the buffer
     while outstanding, split by op direction.
 L4. Completion<T> is caller-owned; the runtime never allocates a Completion.
@@ -308,7 +321,9 @@ O2. Within one reap, completions are surfaced in the order their backends
     matches the backend's true reap order regardless of slot submission order.
     No new AsyncBackend vtable entry is required: any backend that calls
     publish (the only path to ready per A3/O1) publishes the order for
-    free.
+    free. The Proposed explicit request contract replaces this global sequence
+    as an integration authority with identity-bearing reap; `reap_seq` then
+    becomes removable or diagnostic only.
 O3. Per-backend completion order:
       Fake       = submit order (deterministic; test-controllable on demand)
       ThreadPool = unspecified (worker-thread race)

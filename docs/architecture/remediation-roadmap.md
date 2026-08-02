@@ -1,574 +1,341 @@
 # Remediation Roadmap
 
-**Purpose:** Ordered sequence of design and implementation work derived from
-the architecture audit findings. This roadmap does NOT prescribe solutions — it
-prescribes the order in which decisions must be made.
+**Purpose:** Order the design and implementation work derived from the async
+architecture audit. A phase may not claim completion without its named evidence.
 
-**Baseline:** `d299fc0`. Derived from `current-architecture-findings.md`,
-`zig-io-conformance-map.md`, and `divergence-registry.md`.
+**Baseline:** `b20bcc7` (master, including PR #60 and PR #61). This roadmap is
+governed by the current findings, divergence registry, Zig conformance map, and
+the Proposed
+[Unified Explicit I/O Request Contract](../adr/ADR-explicit-io-request-contract.md).
 
-**Principle:** Each phase produces a design decision (ADR or design doc) BEFORE
-implementation begins. No phase may skip the design compliance gate.
-
-**Core ordering principle (round-2/3 review):** The remediation main line is:
+**Ordering rule:** Stabilize bottom-layer request identity, admission, and reap
+before higher-layer Scheduler/Batch/wake migration. Do not make a persistent
+thread pool or Runtime rewrite the center of the request contract.
 
 ```text
-unforgeable Completion authority
-→ stable Request identity / provenance / generation
-→ identity-preserving reap
-→ transactional backend admission
-→ wait/cancel concurrency
-→ wake integration
-→ blocking offload optimization
+unforgeable Completion authority                         complete (#61)
+    -> explicit request identity + bounded reference lifecycle
+    -> backend-agnostic conformance
+    -> production backend migration
+    -> Scheduler/Batch identity consumption
+    -> backend-ready wake integration
 ```
 
-**Key structural insight (round-3):** Request identity, admission transaction,
-and reap contract are NOT three independent protocols. They are one request
-lifecycle. They must be designed in a single unified ADR, then implemented
-together in a reference backend, then migrated to production backends.
+## Completed governance prerequisites
 
----
+### Phase 0A — audit and governance baseline (#60)
 
-## Phase 0A — Audit and Governance Baseline (#60)
+**Status:** Complete.
 
-**Goal:** Establish the governance framework: as-built documentation,
-constitution, compliance gate, findings, divergence registry, conformance
-map, and this roadmap. No behavioral change. No new abstraction.
+- As-built architecture, Constitution, compliance gate, findings, divergence
+  registry, conformance map, roadmap, and documentation verification landed.
+- Architecture and documentation validation passed in PR #60.
 
-**Status:** Complete in PR #60.
+### Phase 0B — Completion authority corrective (#61)
 
-### Deliverables (all in #60)
+**Status:** Completion-authority portion complete; unrelated vocabulary,
+identity, capacity, and backend work remains in the phases below.
 
-- As-built async architecture documented.
-- Architecture constitution with AC-N rules.
-- Design compliance gate checklist.
-- Current architecture findings (P0/P1/P2/P3).
-- Divergence registry (DIV-01..DIV-13).
-- Zig I/O conformance map (18 items).
-- This remediation roadmap.
-- CI formal verification wiring.
+PR #61 established:
 
-### Exit criteria
+- private Completion publication mutators;
+- protected backend `try_claim` / `publish` / pre-accept rollback capability;
+- CAS-based claim and single-winner publish;
+- Release fail-fast lifecycle boundaries;
+- reap-only Sync/Synthetic cancellation publication; and
+- a CI negative-compile authority gate.
 
-- [x] All governance documents landed.
-- [x] verify-architecture-docs.py passes.
-- [x] check-doc-links.py passes.
+This prerequisite does not resolve P0-01, residual P0-02, P1-02, P1-04 through
+P1-10, P2-01 through P2-05, DIV-02 implementation, or DIV-12.
 
----
+## Phase A — unified request-contract ADR
 
-## Phase 0B — Contract Alignment Corrective (Follow-up PRs)
-
-**Goal:** Eliminate documentation/implementation authority conflicts and
-classification errors identified during audit. Small focused PRs.
-
-**Findings addressed:** P1-01, P1-02, P1-03, P1-05, P3-01, P3-02, P3-03.
-
-> **Status (post-PR #61):** items 1 and 3 are RESOLVED by
-> ADR-explicit-io-completion-authority / PR #61. The legacy public
-> `mark_outstanding()` / `complete_with()` API was removed; the backend is the
-> claim authority (protected `try_claim()` CAS); `SyncBackend::cancel()` now
-> records cancel intent and the reap path (`poll()`/`wait_one()`) publishes the
-> terminal canceled result. Item 2 (two-phase model) is reflected in the
-> as-built doc and AC-5 using the current `try_claim` / `publish` /
-> `publish_from_reap` terminology. The work items below are retained as the
-> original Phase 0B plan.
-
-### Work items
-
-1. **Correct mark_outstanding authority documentation.**
-   The header comment says context marks; implementation shows backend marks.
-   Decision: confirm backend is the marking authority; update
-   `async_io_context.hpp:68-70` comment.
-
-2. **Document the two-phase completion model.**
-   Name the states explicitly: backend-ready (result in backend structure) vs.
-   completion-ready (Completion::complete_with called by poll/wait_one). Add to
-   as-built doc and ADR-async-io-model.
-
-3. **Register SyncBackend cancel authority bypass.**
-   `SyncBackend::cancel()` calls `complete_with()` directly, bypassing
-   poll/wait_one reap. Either defer completion to poll, or document as
-   accepted test-only violation with explicit justification.
-
-4. **Separate error vocabulary.**
-   `queue_full_retries` conflates lifecycle violation (invalid_state) with
-   capacity pressure. Rename or split the stat.
-
-5. **Qualify "worker" terminology.**
-   Audit all documentation uses of "worker" and prefix with subsystem.
-
-6. **Evaluate ThreadPoolBackend naming.**
-   The name implies a bounded pool. Defer to Phase 6 when implementation
-   changes.
-
-### Dependencies
-
-- Phase 0A complete (governance framework exists).
-
-### Exit criteria
-
-- [ ] Header comment matches implementation for mark_outstanding.
-- [ ] Two-phase completion model documented in ADR.
-- [ ] SyncBackend cancel authority registered (P1-03 resolved or accepted).
-- [ ] Error vocabulary separation designed (P1-05).
-- [ ] All "worker" references qualified in architecture docs.
-- [ ] Naming decision recorded (rename now or defer).
-
-### Out of scope
-
-- Changing who calls mark_outstanding (implementation is correct).
-- Modifying any production logic.
-- Introducing new types or abstractions.
-
----
-
-## Phase 1 — Explicit I/O Request Contract (Unified ADR)
-
-**Goal:** Design (not implement) a unified request lifecycle contract that
-resolves authority, identity, admission, reap, and waiter questions as ONE
-coherent model. These cannot be separate protocols.
-
-**Findings addressed:** P0-03, P0-01 (root cause), P0-02 (root cause),
-P1-04, P1-06, P1-07, P1-10, P2-03, P2-05, DIV-02, DIV-12, DIV-13.
-
-### The unified contract must decide
-
-1. **Completion publication authority.**
-   mark_outstanding / complete_with are backend-only (AC-13).
-   reset is caller-accessible but state-checked (ready→idle; idle→no-op;
-   outstanding→fail-fast; see ADR-explicit-io-completion-authority).
-   Negative-compile gate for publication mutators.
-   CAS-based claim + single-winner publish (exactly-once).
-   Release fail-fast on invalid transitions and outstanding destruction.
-
-2. **Operation descriptor and request identity.**
-   ```text
-   RequestKey:
-       slot index (bounded arena position)
-       generation (monotonic per-slot reuse counter)
-       backend/context identity (provenance)
-   ```
-   Raw pointer may be a locating optimization but NOT sole logical identity.
-
-3. **Provenance and generation.**
-   Each accepted request binds: context identity, operation kind, fd, buffer,
-   offset, Completion reference. ABA prevention via generation.
-
-4. **Completion binding.**
-   RequestSlot → Completion is 1:1 while outstanding.
-   Completion → RequestSlot back-reference enables provenance check at await.
-
-5. **Admission transaction (5-phase).**
-   ```text
-   reserve   → allocate slot, queue position, SQE (not visible to executor)
-   prepare   → fill operation, Completion binding, generation
-   commit    → atomic bind Completion ↔ RequestKey; state reserved → pending
-                 submit_* returns success from this point
-   enqueue   → make visible to backend driver (MUST be noexcept/alloc-free)
-                 intrusive queue push or pending_sqes append
-   dispatch  → worker dequeue OR io_uring_submit()
-                 MAY fail, MAY partially succeed (prefix acceptance)
-                 failure → terminal error completion for affected requests
-   ```
-   Linearization point is commit. Failure before commit → rollback to free.
-   After commit, the request is accepted and MUST NOT be lost; dispatch
-   failure is reported as a terminal error completion, not a lost request.
-   `io_uring_submit()` is fallible; the noexcept guarantee applies only to
-   the enqueue step (userspace visibility), not kernel acceptance.
-
-6. **Request state machine.**
-   ```text
-   free → reserved → pending → enqueued → dispatched/kernel-owned → backend-ready → reaped → free
-   ```
-   For blocking workers, enqueued → dispatched is worker dequeue.
-   For io_uring, enqueued → dispatched is io_uring_submit() acceptance.
-   Dispatch failure transitions directly to terminal-error (reapable).
-
-7. **Backend-ready result and identity-bearing reap.**
-   Backend provides ready request identities upward (not just count).
-   Scheduler and Batch receive identity events, not scan all Completions.
-   Remove global reap_seq.
-
-8. **Waiter cardinality.**
-   Explicit: single-waiter or multi-waiter with registration tokens.
-   Current map-overwrite behavior is forbidden.
-
-9. **Cancel targeting.**
-   Cancel targets RequestKey (slot + generation), not raw address.
-   Returns disposition (requested / already_terminal / not_found / not_supported).
-
-10. **Caller acquisition of RequestKey.**
-    Decide how callers obtain the identity needed for cancel:
-    - A: `submit_*` returns `Result<RequestHandle>` (handle holds RequestKey).
-    - B: Completion exposes opaque `request_key()` while outstanding.
-    - C: Public cancel accepts `Completion&`; context internally resolves
-      and validates generation (no user-visible RequestKey).
-    Leaning: C for API compatibility, with internal RequestKey extraction
-    from Completion's unforgeable binding. Users never manually construct
-    slot + generation + context id.
-
-11. **fd/buffer borrow lifetime.**
-    Borrow interval is part of the unified request contract:
-    ```text
-    borrow begins: commit (successful submit linearization)
-    borrow ends:   Completion reaches terminal ready state through reap
-    ```
-    Guarantees within the borrow interval:
-    - WriteOp source: byte-stable (no mutation).
-    - ReadOp destination: exclusive (no other writer).
-    - fd: not closed or reused.
-    - Cancel intent does NOT release resources.
-    - Wait cancellation does NOT cancel the operation or release buffer.
-    - Kernel dispatch failure releases borrow ONLY after terminal error
-      is published and reaped.
-
-12. **Resource capacity.**
-    Bounded slot arena. Full → synchronous would_block.
-    Per-backend or per-context capacity (decide).
-
-13. **Shutdown / drain.**
-    Destruction requires quiescent state (outstanding == 0).
-    Terminating accepted requests is an EXPLICIT drain/shutdown operation,
-    NOT implicit in destruction. Preserve current L11 fail-fast contract.
-
-14. **AsyncBackend public-vs-internal (DIV-13).**
-    Decide: truly internal (selector/config API) or formally public
-    (backend author contract + conformance suite). This decision gates
-    the authority mechanism.
-
-### Decision required
-
-- Caller-owned storage (Zig-faithful) or backend-owned bounded arena?
-- Is AsyncBackend a public extension point?
-- Single-waiter or multi-waiter?
-- Capacity model: per-backend, per-context, or per-runtime?
-
-### Dependencies
-
-- Phase 0B complete (authority model is unambiguous).
-
-### Risks
-
-- Large design surface; may require multiple design iterations.
-- DIV-13 decision has cascading impact on authority mechanism.
-- Bounded capacity may break existing tests assuming unlimited submit.
-
-### Tests
-
-- Design-phase: no implementation tests yet.
-- Post-implementation: see Phase 2.
-
-### Exit criteria
-
-- [ ] ADR or design doc accepted covering all 14 points above.
-- [ ] RequestSlot state machine defined with 5-phase admission.
-- [ ] Capacity model decided.
-- [ ] DIV-02 resolved (operation storage permanent or transitional).
-- [ ] DIV-13 resolved (backend public or internal).
-- [ ] Conformance map updated.
-
-### Out of scope
-
-- Implementing the design (Phase 2).
-- Changing Scheduler wake model (Phase 5).
-- Changing thread management (Phase 6).
-
----
-
-## Phase 2 — Reference Implementation + Conformance Suite
-
-**Goal:** Implement the Phase 1 contract in FakeBackend and SyncBackend FIRST,
-proving the unified model before touching production backends. Build the
-backend-agnostic conformance suite.
-
-**Findings addressed:** P0-02 (proof of fix), P0-03 (enforcement),
-P1-04 (contract proof), P1-07 (reap proof).
-
-### Work items
-
-1. **Implement CompletionAccess / authority mechanism.**
-   Publication mutators no longer public. Negative-compile gate in CI.
-   Test-only access via SLUICE_ASYNC_INTERNAL_TESTING.
-
-2. **Implement RequestKey / minimal RequestSlot.**
-   Bounded slot arena with Phase 1 state machine. Generation counter.
-   Provenance stamp.
-
-3. **Implement identity-bearing reap.**
-   FakeBackend and SyncBackend provide ready identities (not just count).
-   Validate ordering, identity, and exactly-once via independent test sink.
-   Do NOT modify Scheduler in this phase.
-
-4. **Implement transactional admission.**
-   5-phase (reserve → prepare → commit → enqueue → dispatch). Rollback on
-   failure before commit. Dispatch failure → terminal error completion.
-   Capacity exhaustion → synchronous would_block.
-
-5. **Implement allocation-free terminal publication.**
-   Ready entries use intrusive linkage or pre-allocated pool.
-
-6. **Build conformance test suite.**
-   Backend-agnostic parameterized suite verifying:
-   - Transactional submit (rollback on failure)
-   - Capacity exhaustion (synchronous error)
-   - Exactly-once publication
-   - Identity-bearing reap
-   - Allocation-free accepted-op terminal path
-   - Shutdown: explicit drain → quiescent → destroy (NOT destroy-with-outstanding)
-   - Negative-compile: caller cannot call publication mutators
-
-7. **Migrate existing tests.**
-   Tests using public mutators → test-only access path.
-
-### Destruction / drain contract
-
-Tests MUST follow the explicit drain pattern:
-```text
-submit N ops
-→ explicit drain/reap until outstanding == 0
-→ destroy backend/context
-```
-
-Tests MUST NOT test "destroy with outstanding → all terminal" because the
-current contract is: destruction with outstanding = contract violation =
-std::terminate. If a future `shutdown(ShutdownMode)` API is added (Phase 1
-design), tests target that explicit API, not implicit destructor behavior.
-
-### Dependencies
-
-- Phase 1 design accepted.
-
-### Tests
-
-- OOM injection at every allocation point; verify no terminate.
-- Capacity exhaustion: submit to full → would_block.
-- Concurrent submit + cancel + poll under TSan.
-- Exactly-once publication under all failure modes.
-- Explicit drain → quiescent → destroy: verify clean shutdown.
-- Negative-compile: caller cannot call the publication mutators (`try_claim` /
-  `publish` / `rollback_claim_before_accept` / `reap_seq`), and a value type
-  violating the `Completion<T>` noexcept contract cannot instantiate
-  `Completion<T>`.
-- Death test: destroy outstanding → trap.
-- Death test: reset on outstanding → trap.
-- ABA test: reuse Completion, stale cancel → rejected (generation mismatch).
-
-### Exit criteria
-
-- [ ] FakeBackend passes full conformance suite.
-- [ ] SyncBackend passes full conformance suite (or moved to test-only).
-- [ ] No allocation on accepted-op terminal path.
-- [ ] Transactional submit proven (5-phase rollback works).
-- [ ] Identity-bearing reap proven.
-- [ ] Negative-compile gate in CI.
-- [ ] Conformance suite is backend-agnostic (parameterized).
-
-### Out of scope
-
-- UringBackend, ThreadPoolBackend migration (Phase 3).
-- Scheduler wake changes (Phase 5).
-
----
-
-## Phase 3 — Backend Migration + Scheduler Integration
-
-**Goal:** Bring UringAsyncBackend and ThreadPoolBackend into conformance with
-the Phase 1 contract, validated by the Phase 2 conformance suite. Then
-perform the UNIFIED Scheduler integration for all backends at once.
-
-### Work items
-
-1. **UringBackend migration.**
-   Replace current multi-container identity with unified RequestSlot.
-   SQE user_data = RequestSlot index + generation. CQE → same RequestSlot.
-   Fix non-atomic mark-then-allocate (P0-02 uring instance).
-   Implement fallible dispatch: io_uring_submit() partial prefix acceptance
-   → terminal error for unaccepted SQEs.
-
-2. **ThreadPoolBackend interim conformance.**
-   Apply transactional admission to current per-op model. Fix P1-04
-   (spawn failure → synchronous error, not asyncized). Full replacement
-   deferred to Phase 6.
-
-3. **Unified Scheduler integration (all backends at once).**
-   Migrate or adapt ALL backends to identity-bearing reap first, then:
-   Scheduler receives ready identities from reap (not O(N) scan).
-   Remove waiting_completion_ full-map scan.
-   Batch uses identity events (remove global reap_seq).
-   No mixed-mode where some backends use new reap and others scan.
-
-4. **Run conformance suite against all backends.**
-
-### Dependencies
-
-- Phase 2 complete (conformance suite exists, reference proven).
-
-### Exit criteria
-
-- [ ] UringBackend passes conformance suite.
-- [ ] ThreadPoolBackend passes conformance suite (interim model).
-- [ ] Scheduler uses identity-bearing reap (no full scan).
-- [ ] Batch does not use global reap_seq.
-- [ ] P1-04 resolved (spawn failure synchronous).
-- [ ] P0-02 resolved for all backends.
-
-### Out of scope
-
-- Persistent workers (Phase 6).
-- Wake integration (Phase 5).
-- Wait/cancel redesign (Phase 4).
-
----
-
-## Phase 4 — Wait/Cancel Concurrency Redesign
-
-**Goal:** Resolve the wait_one lock-holding problem, make cancel explicit,
-and enforce provenance at await boundaries.
-
-**Findings addressed:** P1-08, P1-09, P1-10.
-
-### Work items
-
-1. **Resolve wait_one lock holding.**
-   Document AsyncIoContext as single-driver OR split locks.
-
-2. **Design cancel interrupt channel.**
-   Cancel must reach backend without waiting for wait_one to release lock.
-
-3. **Redesign cancel API.**
-   `Result<CancelDisposition> request_cancel(RequestKey)`.
-
-4. **Enforce await provenance.**
-   Release fail-fast on wrong-context or idle Completion.
-
-5. **Define waiter cardinality.**
-   Explicit policy. Silent overwrite forbidden.
-
-6. **Fix idle-await Release hang.**
-   Fail-fast, not permanent park.
-
-### Dependencies
-
-- Phase 2 (RequestKey for cancel targeting).
-- Phase 3 (backends conform).
-
-### Exit criteria
-
-- [ ] wait_one does not block cancel (or single-driver documented).
-- [ ] Cancel returns disposition targeting RequestKey.
-- [ ] Await provenance enforced in Release.
-- [ ] Waiter cardinality policy enforced.
-- [ ] No permanent hang for idle/wrong-context await.
-
-### Out of scope
-
-- Wake integration (Phase 5).
-- Persistent workers (Phase 6).
-
----
-
-## Phase 5 — Backend → Scheduler Progress Signal
-
-**Goal:** Design a narrow backend-readiness wake capability that reduces or
-eliminates the 2ms observation interval, while preserving decoupled lock
-ordering.
-
-**Findings addressed:** P2-04, DIV-04, DIV-05.
-
-### Work items
-
-1. **Evaluate backend → Scheduler wake signal.**
-2. **Define the wake bridge contract** (narrow capability: notify only).
-3. **Evaluate MIXED-WAKE simplification.**
-4. **Preserve decoupled domains** (no backend_mtx → global_mtx ordering).
-5. **Unify across backends.**
-
-### Dependencies
-
-- Phase 3 complete (backends conform; operation identity stable).
-
-### Exit criteria
-
-- [ ] Wake bridge contract documented and ADR-approved.
-- [ ] Lock ordering preserved or explicitly changed via ADR.
-- [ ] All backends conform to the wake contract.
-- [ ] 2ms role reclassified (defense-in-depth or removed).
-- [ ] DIV-04/DIV-05 updated.
-
-### Out of scope
-
-- Persistent workers (Phase 6).
-- Coroutine/P2300 integration.
-
----
-
-## Phase 6 — Persistent Blocking-I/O Workers
-
-**Goal:** Design and implement a bounded, reusable blocking-I/O offload
-mechanism to replace per-op thread creation.
-
-**Findings addressed:** P2-01, P2-02, P2-03, DIV-03, DIV-12.
-
-### Work items
-
-1. **Evaluate persistent worker models.**
-2. **Define queue capacity and backpressure.**
-3. **Define worker lifecycle.**
-4. **Define allocation-free accepted-op path.**
-5. **Define cancellation of queued vs. running requests.**
-6. **Shutdown drain** (explicit drain → quiescent → destroy).
-
-### Destruction / drain contract
-
-Same as Phase 2: destruction requires quiescent state. Worker shutdown is an
-explicit operation (close admission → drain queue → join workers → destroy).
-NOT implicit in destructor.
-
-### Dependencies
-
-- Phase 3 complete (conformance suite, transactional admission).
-- Phase 5 complete (wake bridge for instant completion notification).
-
-### Exit criteria
-
-- [ ] Bounded capacity with documented default and maximum.
-- [ ] Queue-full returns synchronous error.
-- [ ] No per-op thread creation on the hot path.
-- [ ] No per-op heap allocation on the hot path.
-- [ ] workers_ equivalent does not grow monotonically.
-- [ ] All backends pass conformance suite.
-- [ ] Benchmark evidence of improvement (or documented tradeoff).
-- [ ] DIV-03 and DIV-12 resolved.
-
-### Out of scope
-
-- io_uring backend changes (Phase 3 handles Uring).
-- Scheduler internal changes (Phase 5 handles wake).
-
----
-
-## Phase Dependency Graph
+**Change:**
 
 ```text
-Phase 0 (fact & classification correction — this PR)
-    ↓
-Phase 1 (Explicit I/O Request Contract — unified ADR)
-    ↓
-Phase 2 (reference implementation + conformance suite)
-    ↓
-Phase 3 (backend migration: Uring + ThreadPool + Scheduler)
-    ↓
-Phase 4 (wait/cancel concurrency redesign)
-    ↓
-Phase 5 (backend → Scheduler progress signal)
-    ↓
-Phase 6 (persistent blocking-I/O workers)
+docs(adr): define unified Explicit I/O Request Contract
 ```
 
-Phases 4 and 5 may overlap. Phase 6 depends on Phases 3 (conformance suite)
-and 5 (wake bridge).
+**Status:** Proposed by `ADR-explicit-io-request-contract.md`; awaiting Accepted
+review. Documentation-only—no production behavior is changed.
 
-**Key principle:** Do NOT rewrite Runtime first. Bottom-layer authority and
-identity must stabilize before higher-layer integration can simplify.
-Request identity, admission, and reap are ONE lifecycle — designed together,
-implemented together, migrated together.
+**Decisions made:**
+
+- descriptors remain separate from `(context, slot, generation)` request identity;
+- caller owns Completion; context/backend owns a bounded RequestSlot arena;
+- Completion uses a private `idle -> binding -> outstanding` protocol so one
+  CAS winner atomically installs key, provenance, and release capability;
+- reserve/prepare/commit/enqueue/dispatch form one admission transaction;
+- commit is successful-submit linearization;
+- backend-ready and Completion-ready are distinct;
+- reap synchronously carries pointer-free identity and an optional stable waiter
+  token/routing lease through a non-escaping ReadySink;
+- borrow lasts from commit through Completion-ready publication;
+- RequestSlot owns one waiter registration/token while Scheduler owns Fiber
+  routing; a second waiter is synchronous `invalid_state`;
+- cancel targets RequestKey and returns an explicit disposition;
+- request capacity full is synchronous `would_block`;
+- accepted terminal progress does not depend on new unbounded allocation;
+- close admission/drain/reset/release precede quiescent destruction; slot
+  release is allocation-free, uses only a leaf bounded synchronization domain,
+  and waits for no asynchronous progress; and
+- public AsyncBackend authors are trusted and must pass conformance.
+
+**Exit criteria:**
+
+- [x] Proposed ADR covers state, resources, failure, wake, lifecycle, Zig
+  classification, alternatives, and backend mappings.
+- [x] DIV-02 Proposed target decision and revisit trigger recorded without
+  claiming acceptance.
+- [x] Conformance map distinguishes selected target from current implementation.
+- [x] Architecture Gate 0–4 completed without claiming future tests passed.
+- [ ] Maintainer review accepts the ADR.
+
+**Out of scope:** Any C++ implementation or public API change.
+
+## Phase B — bounded reference request lifecycle
+
+**Recommended next change:**
+
+```text
+feat(async): add bounded RequestKey / RequestSlot reference lifecycle
+```
+
+**Scope—only:**
+
+- internal `RequestKey` and context identity;
+- bounded construction-time RequestSlot arena;
+- complete reference state machine and five-stage admission;
+- private Completion `binding` transient plus the shared allocation-free
+  reset/ready-destruction release handshake;
+- RequestSlot-owned single-waiter registration state with fake stable tokens
+  and delivery leases;
+- FakeAsyncBackend migration;
+- Sync/Synthetic migration and explicit reference-backend positioning;
+- synchronous non-escaping identity-bearing `ReadySink`; and
+- focused conformance cases needed to prove the reference lifecycle.
+
+**Must prove:**
+
+- full arena returns `would_block` with idle Completion;
+- every pre-commit failure rolls back with no borrow or background work;
+- two contexts racing one Completion have one `idle -> binding` winner, and no
+  path observes or overwrites a half-initialized binding;
+- every ownership-safe, irrevocable post-commit dispatch failure becomes one
+  reaped terminal error, while transient/partial dispatch remains enqueued;
+- slot reuse increments generation and stale keys cannot act;
+- backend-ready result storage and linkage require no new allocation;
+- Completion-ready alone ends the fd/buffer borrow;
+- duplicate waiter registration is rejected without overwriting the first;
+- reap and waiter cancellation race to consume a token/routing lease exactly once;
+- reap closes registration, takes any delivery, and publishes Completion-ready
+  in the shared slot-lifecycle domain, so no waiter can register into a
+  lost-wake window and release/reuse cannot overtake old-generation reap;
+- the delivery lease pins the Scheduler routing record until the winning sink or
+  cancellation path routes and acknowledges it; Phase B proves fake transfer,
+  while Phase F proves actual Scheduler cancel/drain/shutdown lifetime;
+- reset/destruction with a still-registered waiter fails fast, while reset,
+  destruction, and slot reuse during synchronous ReadySink delivery cannot
+  dangle a Completion/slot pointer or lose the extracted waiter delivery;
+- close admission rejects new work while progress/reap/cancel remain legal; and
+- ready reset and ready Completion destruction both release the slot without
+  allocation, cancellation, drain, I/O/Scheduler/backend-progress waiting, user
+  callbacks, or upward lock acquisition; and
+- all slots are released before clean destruction.
+
+**Required gates:** Clang Debug and Release; ASan/UBSan for slot/buffer lifetime;
+TSan for any concurrent arena/cancel/reap path; negative-compile and death tests;
+architecture documentation validation.
+
+**Dependencies:** Phase A Accepted. Completion authority from #61.
+
+**Out of scope:** Scheduler, Batch, Runtime wake, Uring, persistent workers,
+public RequestHandle, and public submit-signature changes.
+
+## Phase C — backend conformance framework
+
+**Change:**
+
+```text
+test(async): enforce explicit request lifecycle across backends
+```
+
+Build a backend-agnostic suite rather than backend-specific happy-path copies.
+The framework must cover:
+
+- capacity, high-water, and capacity-reject accounting;
+- rejection vs accepted completion;
+- every state transition and invalid transition;
+- generation/provenance and stale cancel/wait/reap events;
+- pending, running, kernel-style, backend-ready, and completion-ready cancel cases;
+- cancel winner vs ordinary result and dispatch/shutdown terminal candidates;
+- exactly one backend-ready winner and one Completion publication;
+- identity-bearing reap order without global sequence authority;
+- injected allocation/startup/dispatch failure;
+- accepted-terminal path under allocator failure;
+- borrow lifetime and fd identity obligations;
+- single-waiter enforcement and waiter-cancel/I/O independence;
+- close admission, graceful drain, reset/release, clean destruction, and
+  fail-fast non-quiescent destruction; and
+- public-backend negative compile and conformance entry requirements.
+
+Gate 4 items in the ADR remain pending until command-backed tests exist. Fake
+and Sync/Synthetic are the first passing instances; this phase must not mark
+Uring or blocking offload conforming before their migrations.
+
+**Dependencies:** Phase B reference types and ReadySink. It may be developed in
+the same implementation PR only if the review surface remains reference-only;
+the logical dependency remains B -> C.
+
+## Phase D — Uring migration
+
+**Change:**
+
+```text
+refactor(async): migrate UringBackend to RequestSlot identity
+```
+
+**Work:**
+
+- map RequestKey to SQE `user_data` and CQE back to the same validated slot;
+- reserve RequestSlot and bounded userspace dispatch-queue bookkeeping before
+  commit, then acquire/fill SQEs only during post-commit dispatch;
+- remove Completion reverse maps and parallel identity reconstruction where
+  RequestSlot suffices;
+- keep a partial `io_uring_submit` suffix bound and enqueued for allocation-free
+  retry rather than terminalizing it;
+- store dispatch failure in the same slot only after proving that no SQE,
+  kernel request, or future CQE can still reference the request;
+- target cancel SQEs by key/generation and reject stale CQEs;
+- keep ring queue depth distinct from request capacity; and
+- pass the Phase C suite on both default stub/off and real liburing paths where
+  available.
+
+**Dependencies:** Phase C. No Scheduler dependency.
+
+**Out of scope:** Scheduler identity consumption and wake bridge.
+
+## Phase E — bounded portable blocking offload
+
+**Change:**
+
+```text
+refactor(async): replace per-op threads with bounded blocking-I/O workers
+```
+
+**Work:**
+
+- replace thread-per-operation with a fixed persistent worker set;
+- use explicit operation kinds/parameters rather than arbitrary `std::function`
+  as the core request;
+- use a bounded, pre-reserved pending queue over RequestSlots;
+- have workers perform only syscall work and backend-ready publication;
+- make reap the only Completion-ready publication path;
+- define queued removal and running-syscall best-effort cancellation;
+- close admission, drain the queue/running work, join workers, then destroy; and
+- add benchmark evidence before claiming performance improvement.
+
+**Exit criteria:** Phase C suite passes; no per-op thread creation; no unbounded
+hot-path allocation; worker/storage bounds and defaults documented; P0-01,
+P1-04, P2-01, P2-02, P2-03, DIV-03, and DIV-12 receive command-backed resolution
+evidence.
+
+**Dependencies:** Phase C. It does not depend on Scheduler wake.
+
+## Phase F — Scheduler and Batch consume identity-bearing reap
+
+**Change:**
+
+```text
+refactor(runtime): consume identity-bearing reap events
+```
+
+**Work:**
+
+- migrate all selected backends to identity-bearing reap before switching the
+  common Scheduler path; do not run a mixed scan/event authority indefinitely;
+- route a ReadyEvent/RequestKey to the one registered waiter while preserving
+  Scheduler-owned runnable routing;
+- remove O(N) `Completion::ready()` scans from completion progress;
+- enforce context provenance and synchronous duplicate-waiter `invalid_state`;
+- make waiter cancellation remove only the waiter, not cancel the I/O;
+- make Batch distinguish `rejected` from `accepted_and_completed` explicitly;
+- remove or demote process-global `reap_seq` from ordering authority; and
+- preserve Runtime ownership and current shutdown sequencing unless a separate
+  approved design changes them.
+
+The exact `wait_one`/cancel concurrency lock design must be completed before
+changing L1 synchronization. The request contract fixes target identity and
+disposition, but does not authorize an incidental lock redesign.
+
+**Dependencies:** Phases C, D, and E for the backends selected into the unified
+production path. No wake-bridge dependency.
+
+## Phase G — backend-ready progress wake integration
+
+**Change:**
+
+```text
+feat(runtime): bridge backend-ready progress to Scheduler wake
+```
+
+Design a narrow progress-notification capability after stable identity events
+exist. It must:
+
+- preserve Scheduler as the only Fiber-routing authority;
+- avoid backend-lock -> Scheduler-global-lock inversion;
+- define notification coalescing and lost-wake prevention;
+- state whether the 2ms mixed-wake interval is removed or retained only as
+  defense in depth;
+- work consistently across Fake, Sync/Synthetic, Uring, and blocking offload;
+  and
+- use causal/barrier tests rather than sleeps as correctness proof.
+
+**Dependencies:** Phase F identity consumption. This is the only phase that may
+reclassify DIV-04/DIV-05.
+
+## Dependency graph
+
+```text
+0A governance (#60)
+    -> 0B Completion authority (#61)
+        -> A proposed request-contract ADR
+            -> B bounded reference lifecycle
+                -> C conformance framework
+                    -> D Uring migration
+                    -> E blocking-offload migration
+                        -> F Scheduler/Batch identity consumption
+                            -> G backend-ready wake integration
+```
+
+D and E can be prepared independently after C, but F must not switch the common
+integration contract until the backends it supports are identity-bearing. B/C
+must not depend on Scheduler. E must not be pulled forward merely because the
+current type is named `ThreadPoolBackend`.
+
+## Findings-to-phase summary
+
+| Finding/divergence | Target phase |
+|---|---|
+| P0-01, P1-04, P2-01, P2-02, P2-03, DIV-03, DIV-12 | E, after B/C |
+| residual P0-02 | B/C reference; D/E production backends |
+| P1-02, P1-06, P1-07 | B/C, then D/E/F |
+| P1-05 | B/C vocabulary and metrics |
+| P1-08, P1-09, P1-10 | B/C target semantics; focused lock design and F integration |
+| P2-05 | F |
+| P2-04, DIV-04, DIV-05 | G |
+| DIV-02 target ownership | A; implementation B–E; revisit only on measured trigger |
+| DIV-13 public backend conformance | C, enforced for D/E and future backends |
+
+## Global rules for every implementation phase
+
+- Apply the Architecture Constitution and complete the compliance gate before
+  production implementation.
+- Preserve synchronous public Reader/Writer semantics and target boundaries.
+- Add failure evidence that can fail on the pre-fix implementation.
+- Do not mark a finding resolved because only the ADR or reference backend
+  exists.
+- Do not claim real-liburing, sanitizer, TSan, formal-model, or benchmark
+  evidence that was not run.
+- Update the as-built architecture only after code lands; keep future designs in
+  ADR/roadmap language until then.

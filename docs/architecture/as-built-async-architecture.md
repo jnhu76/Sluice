@@ -1,8 +1,15 @@
 # As-Built Async Architecture
 
 **Authority:** This document describes what the code *actually does* at commit
-`d299fc0` (master, post-PR #59). Where ADRs and implementation disagree, this
-document records the implementation truth and flags the discrepancy.
+`b20bcc7` (master, including PR #60 and PR #61). Where ADRs and implementation
+disagree, this document records the implementation truth and flags the
+discrepancy.
+
+**Target-design boundary:**
+[ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
+is Proposed. Its `RequestKey`, bounded `RequestSlot`, identity-bearing reap,
+capacity, cancel disposition, and close-admission lifecycle are **not** present
+in this as-built baseline.
 
 ---
 
@@ -16,7 +23,7 @@ ApplicationRuntime (E16)
 │       ├── ThreadPoolBackend   (per-op thread, portable fallback)
 │       ├── UringAsyncBackend   (gated, liburing)
 │       ├── FakeAsyncBackend    (deterministic test vehicle)
-│       └── SyncBackend         (completes at poll time)
+│       └── SyncBackend         (synthetic/reference; completes at poll time)
 ├── Scheduler (E7–E13, borrows AsyncIoContext)
 │   ├── global_mtx_ (coordination domain)
 │   ├── WorkerState[] (per-worker execution state)
@@ -68,8 +75,9 @@ corrected by PR #61 to name the backend as the claim authority.
 ```text
 submit_*(op, c)
 → accepting_new_work()? (mtx_ guarded destroying_ flag)
-→ enqueue_size/void(c, work_lambda)
-    → try_claim(c)                    ← BACKEND is claim authority (CAS; on failure return invalid_state)
+→ validate/normalize operation parameters
+→ try_claim(c)                        ← BACKEND claim authority (CAS; failure is invalid_state)
+→ enqueue_size/void(c, work_lambda)   ← claim already won
     → lock mtx_
     → ++outstanding_
     → workers_.emplace_back(worker_lambda)
@@ -88,17 +96,18 @@ submit_*(op, c)
 
 poll()
 → lock mtx_
-→ drain ready_size_ + ready_void_
-    → for each: publish(c, result); --outstanding_    ← reap publication (single-winner CAS)
-→ collect worker indices to join
+→ swap ready_size_ + ready_void_ into local deques
 → unlock mtx_
-→ join each collected worker thread (OUTSIDE lock)
+→ for each local entry:
+    → publish(c, result)               ← reap publication (single-winner CAS)
+    → lock mtx_; --outstanding_; move matching worker out; unlock
+    → join that worker (OUTSIDE lock)
 → return count
 
 wait_one()
 → lock mtx_
-→ cv_.wait(lk, [&]{ return !ready_*.empty() || destroying_; })
-→ (then same drain as poll)
+→ cv_.wait(lk, [&]{ return !ready_*.empty(); })
+→ unlock; call poll() for the same per-entry publish/decrement/take/join path
 ```
 
 **Key properties:**
@@ -385,6 +394,9 @@ wake_mtx_ (Scheduler park/wake)
 | Completion publish (outstanding → ready) | Backend reap path, via protected `AsyncBackend::publish()` (single-winner CAS through `publishing` transient) | ADR-explicit-io-completion-authority §7; publish confined to `poll()`/`wait_one()` drain. |
 | Completion rollback (outstanding → idle) | Backend, via `AsyncBackend::rollback_claim_before_accept()` (pre-acceptance only) | ADR-explicit-io-completion-authority §10; io_uring SQE-acquisition-after-claim gap. |
 | Completion publication to ready | poll()/wait_one() ONLY (A3/O1) | ADR-async-io-model §6 |
+| Request identity | Completion pointer and backend-specific records; no common context/slot/generation key | `completion.hpp`; backend sources; P1-06 remains open. The Proposed request-contract ADR is target design only. |
+| Request capacity | No common bounded RequestSlot arena | ThreadPool is unbounded; ring depth is not request capacity; Fake/Sync have no configured capacity. |
+| Identity-bearing reap | Not implemented; poll/wait_one return a count | Scheduler and Batch recover identity by scanning/reap sequence; P1-07 remains open. |
 | Backend admission gate | ThreadPoolBackend::accepting_new_work() | `threadpool_backend.hpp:159` |
 | Scheduler wake (external) | SchedulerWakeHandle::notify() | `scheduler.hpp:107` |
 | Scheduler wake (internal) | route_runnable_locked → wake epoch | E9 ADR §9.4.4 |

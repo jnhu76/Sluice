@@ -1,7 +1,8 @@
 # Current Architecture Findings
 
-**Baseline:** `d299fc0` (master). All findings are evidence-backed from code
-inspection at this commit. No finding is based on speculation.
+**Baseline:** `b20bcc7` (master, including PR #60 and PR #61). Findings retain
+their original audit evidence where useful and include explicit resolved notes
+for PR #61. No target contract is treated as implementation evidence.
 
 Severity:
 - **P0** — correctness/liveness: accepted op may be permanently lost or process
@@ -11,6 +12,28 @@ Severity:
 - **P2** — bounded-resource/performance structure: unbounded growth, hot-path
   allocation, excessive overhead
 - **P3** — naming/documentation: misleading names, stale comments
+
+## Proposed request-contract impact (not resolution evidence)
+
+[ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
+now supplies a concrete target for the remaining request-lifecycle findings.
+Because the ADR is Proposed and this task changes no production code, every
+open finding below remains open.
+
+| Open finding | Target decision | Required follow-up evidence |
+|---|---|---|
+| P0-01, P2-03 | Pre-reserved result/ready linkage; no post-accept unbounded-allocation dependency | Phase B/C OOM and terminal-path conformance, then Phase E blocking-offload migration |
+| P0-02, P1-04 | Five-stage admission; pre-commit failure rejects, post-commit dispatch failure completes | Phase B/C injected failure tests; Phase D/E backend migration |
+| P1-02, P1-07 | Distinct backend-ready/completion-ready plus synchronous pointer-free `ReadyEvent`/`ReadySink` delivery | Phase B/C reset/reuse-during-sink proof, Phase F Scheduler/Batch consumption |
+| P1-05 | `invalid_state`, `would_block`, and `no_space` are distinct; capacity rejects have their own metric | Phase B implementation and stats contract tests |
+| P1-06, P1-10 | `(context, slot, generation)` identity, private Completion `binding` transient, RequestSlot-owned stable waiter token/routing lease | Phase B/C cross-context binding/generation/fake-lease tests; Phase F Runtime/Scheduler lifetime and routing |
+| P1-08, P1-09 | RequestKey-targeted cancellation and explicit disposition; exact wait/cancel lock design remains open | Phase C contract tests plus a focused later concurrency design before L1 lock changes |
+| P2-05 | Batch outcome origin distinguishes rejection from accepted completion | Phase F Batch migration |
+| P2-01, P2-02 | Fixed persistent blocking workers and bounded queue | Phase E implementation and benchmark evidence |
+| P2-04 | Backend-ready progress signal remains a separate wake contract | Phase G wake design and causal tests |
+
+The Proposed ADR is decision evidence only. It does not make an unchecked box,
+missing regression, or current backend defect resolved.
 
 ---
 
@@ -60,54 +83,27 @@ worker-internal push_back path.
 
 ---
 
-## P1-01: mark_outstanding() Authority Conflict
+## P1-01: Completion Claim Authority — Resolved by PR #61
 
-**Finding:** The `AsyncBackend` header comment states "marking the Completion
-via mark_outstanding() is the context's job, not the backend's." In reality,
-ALL backends call `c.mark_outstanding()` themselves, and `AsyncIoContext` does
-NOT call it.
+**Current fact:** The backend is the explicit claim authority. Derived backends
+use protected `AsyncBackend::try_claim()`, which performs an atomic
+`idle -> outstanding` CAS. `AsyncIoContext` serializes/routes submission but does
+not claim the Completion. Claim failure returns synchronous `invalid_state`
+without backend tracking or outstanding-count mutation.
 
-**Evidence:**
-- `include/sluice/async/async_io_context.hpp:68-70`:
-  ```
-  // records the op outstanding (marking the Completion via mark_outstanding()
-  // is the context's job, not the backend's)
-  ```
-- `src/async/async_io_context.cpp`: grep for `mark_outstanding` → 0 matches.
-- `src/async/threadpool_backend.cpp:71,106`: `c.mark_outstanding()`
-- `src/async/uring_backend.cpp:484`: `c.mark_outstanding()`
-- `include/sluice/async/fake_backend.hpp:221,228`: `c.mark_outstanding()`
-- `include/sluice/async/sync_backend.hpp:40,46,52,58`: `c.mark_outstanding()`
+**Current evidence:**
+- `include/sluice/async/async_io_context.hpp` names the backend as claim authority;
+- `include/sluice/async/completion.hpp` keeps the claim mutator private and friends
+  only `AsyncBackend`;
+- `include/sluice/async/async_io_context.hpp` exposes protected
+  `AsyncBackend::try_claim()` to trusted derived backends; and
+- `tests/completion_authority_death_test.cpp` proves concurrent claims have one
+  winner.
 
-**Violated constitution rule:** AC-10 (documentation–interface–implementation
-authority alignment).
-
-**Semantic consequence:** A future implementer reading the header comment will
-add `mark_outstanding()` in the context, causing a double-mark (assertion
-failure in Debug, undefined state transition in Release). The contract is
-untrustworthy.
-
-**Currently regression-tested:** No test verifies WHO marks outstanding. The
-behavior is correct today (backend marks, context doesn't), but the
-documentation invites a future break.
-
-**Recommended next action:** Correct the header comment to state: "marking the
-Completion via mark_outstanding() is the backend's job, performed inside
-submit_* before returning success." Update the as-built doc authority table.
-
-**Do not fix in this audit PR** (comment-only fix is borderline; recommend
-separate small PR to keep audit PR documentation-only).
-
-**RESOLVED — ADR-explicit-io-completion-authority / PR #61:**
-- the legacy public `mark_outstanding()` was removed;
-- the backend is the explicit claim authority;
-- derived backends use the protected `AsyncBackend::try_claim()` helper, which
-  performs an atomic `idle → outstanding` CAS;
-- claim failure returns synchronous `invalid_state` without tracking mutation
-  or an outstanding increment;
-- `AsyncIoContext` routes the call but does NOT claim the Completion;
-- the stale `async_io_context.hpp` comment was corrected to name the backend as
-  the claim authority.
+**Historical PR #60 finding (not current behavior):** the public header formerly
+named context-side `mark_outstanding()` authority while backends performed the
+mutation. PR #61 removed that public mutator and corrected the comment. There is
+no remaining P1-01 implementation action.
 
 ---
 
@@ -116,13 +112,16 @@ separate small PR to keep audit PR documentation-only).
 **Finding:** The current design conflates "backend has a result available"
 (backend-ready) with "Completion has transitioned to ready" (completion-ready).
 In ThreadPoolBackend, the worker pushes to `ready_size_` (backend-ready), and
-`poll()` calls `complete_with()` (completion-ready). But the documentation does
-not consistently distinguish these two states, and the `outstanding()` counter
+`poll()` calls protected `publish()` (completion-ready). But the current
+common API does not consistently distinguish these two states, and the
+`outstanding()` counter
 is decremented at poll time, not at backend-ready time.
 
 **Evidence:**
-- `threadpool_backend.cpp:89`: worker pushes to `ready_size_` (backend-ready)
-- `threadpool_backend.cpp:160-163` (poll drain): `c->complete_with(r); --outstanding_`
+- `src/async/threadpool_backend.cpp:86-93`: worker pushes to `ready_size_`
+  (backend-ready)
+- `src/async/threadpool_backend.cpp:225-248`: `poll()` publishes each local ready
+  entry, decrements `outstanding_`, takes its worker, and joins outside the lock.
 - ADR-async-io-model §6 A3: "poll()/wait_one() is the sole Completion
   publication authority" — this is correct but the two-phase nature is not
   named.
@@ -138,10 +137,10 @@ contract. The two-phase model needs explicit documentation to prevent this.
 **Currently regression-tested:** Backend conformance tests verify
 exactly-once completion but do not test the intermediate backend-ready state.
 
-**Recommended next action:** Document the two-phase model explicitly:
-1. Backend-ready: result available in backend-internal structure.
-2. Completion-ready: `complete_with()` called by poll/wait_one.
-Add to as-built doc and ADR.
+**Recommended next action:** Phase B/C must implement and test the two states and
+the synchronous pointer-free ReadySink selected by the Proposed request-contract
+ADR, including reset/reuse during callback delivery; Phase F migrates
+Scheduler/Batch consumption. The ADR decision alone is not resolution evidence.
 
 **Do not fix in this audit PR.**
 
@@ -149,37 +148,42 @@ Add to as-built doc and ADR.
 
 ## P0-02: Cross-Backend Transactional Submit Defect (No Unified Admission Contract)
 
-**Finding:** ALL backends lack a unified transactional admission contract. The
-mark_outstanding → resource-acquisition sequence is not atomic in any backend.
-If any allocation between mark_outstanding and backend acceptance fails, the
-Completion is left outstanding with no path to terminal.
+**Current finding:** PR #61 made claim authority atomic and added a narrow
+pre-accept rollback capability, but the backend family still lacks one bounded
+reserve/prepare/commit/enqueue/dispatch transaction. Fake and Sync allocate
+tracking containers after `try_claim()`. ThreadPool performs task/thread/ready
+storage work after claim. Uring prepares an SQE before fallible registration of
+the operation in all parallel maps and `pending_sqes`.
 
-**Evidence (per backend):**
+**Current evidence (per backend):**
 
-- **FakeAsyncBackend** (`fake_backend.hpp:221-228`):
+- **FakeAsyncBackend** (`include/sluice/async/fake_backend.hpp`):
   ```cpp
-  c.mark_outstanding();
+  if (!try_claim(c)) ...;
   ready_size_.push_back(&c);    // can throw bad_alloc
   pending_size_.push_back(op.len); // can throw bad_alloc
   ```
   Either push_back failure leaves Completion outstanding with incomplete
   backend records.
 
-- **SyncBackend** (`sync_backend.hpp:40-41`):
+- **SyncBackend** (`include/sluice/async/sync_backend.hpp`):
   ```cpp
-  c.mark_outstanding();
-  entries_.push_back(Entry{op, &c}); // can throw bad_alloc
+  if (!try_claim(c)) ...;
+  entries_.push_back(Entry{op, &c, false}); // can throw bad_alloc
   ```
   Allocation failure leaves Completion outstanding with no entry to poll.
 
-- **UringAsyncBackend** (`uring_backend.cpp:484+`):
+- **UringAsyncBackend** (`src/async/uring_backend.cpp:499+`): claim happens
+  before SQE acquisition. A null SQE rolls the claim back, but after an SQE is
+  prepared `register_op()` still performs fallible insertions:
   ```cpp
-  c.mark_outstanding();
-  comp_to_op.emplace(...);   // can throw
-  ops.emplace(...);          // can throw
-  pending_sqes.push_back(...); // can throw
+  io_uring_prep_read(sqe, ...);
+  comp_to_op.emplace(...);      // can throw
+  ops.emplace(...);             // can throw
+  pending_sqes.push_back(...);  // can throw
   ```
-  Multiple allocation points; any failure leaves partial submission state.
+  An exception can leave a claimed Completion, a live prepared SQE, and partial
+  identity maps with no safe rollback.
 
 - **ThreadPoolBackend** — see P0-01 (worker OOM) and P1-04 (spawn failure).
 
@@ -187,87 +191,56 @@ Completion is left outstanding with no path to terminal.
 MUST leave Completion idle), AC-4 (accepted operation must terminate).
 
 **Semantic consequence:** The root problem is not any single backend's OOM
-path — it is the absence of a unified transactional admission contract across
-the L0 backend family. Each backend independently attempts mark-then-allocate
-with no rollback.
+path. After claim, an allocation can strand identity; for Uring, a prepared
+userspace SQE can also outlive attempted compensation and later execute against
+released request resources.
 
-**Currently regression-tested:** No. No OOM injection test exists for any
-backend's submit path between mark_outstanding and acceptance.
+**Currently regression-tested:** PR #61 tests claim races and null-SQE rollback.
+There is no cross-backend OOM/admission suite, and the post-SQE `register_op()`
+allocation window remains untested and open.
 
-**Recommended next action:** Phase 1 roadmap — design unified transactional
-admission: either allocation-free submit path, or mark_outstanding AFTER
-resource acquisition succeeds (rollback-free by construction).
+**Recommended next action:** Phases B/C — implement and prove the five-stage
+transactional admission selected by the Proposed request-contract ADR. Phase D
+must acquire/fill SQEs after commit, retain partial-submit suffixes for retry,
+and forbid terminal publication or slot reuse until no SQE/kernel/CQE reference
+can remain. Migrate blocking offload in Phase E.
 
 **Do not fix in this audit PR.**
 
 ---
 
-## P1-03: SyncBackend cancel() Bypasses Reap Authority
+## P1-03: SyncBackend Cancellation Publication — Resolved by PR #61
 
-**Finding:** `SyncBackend::cancel()` calls `c.complete_with()` directly,
-bypassing the poll()/wait_one() reap path. The interface contract (AC-5)
-requires that Completion publication to ready happens ONLY through the
-designated reap authority (poll/wait_one drain).
+**Current fact:** `SyncBackend::cancel()` only marks the matching buffered entry
+as canceled. `poll()`/`wait_one()` later derive the canceled terminal result and
+publish it through protected `AsyncBackend::publish()`; cancellation does not
+make the Completion ready inline.
 
-**Evidence:**
-- `include/sluice/async/sync_backend.hpp:87`:
-  ```cpp
-  void cancel(Completion<std::size_t>& c) override {
-      auto it = std::find_if(entries_.begin(), entries_.end(), ...);
-      if (it != entries_.end()) {
-          c.complete_with(make_unexpected<std::size_t>(...)); // DIRECT
-          entries_.erase(it);
-      }
-  }
-  ```
-- Same pattern at line 95 for void Completions.
-- Contrast with ThreadPoolBackend where cancel does NOT call complete_with;
-  the op completes with its real result via poll().
+**Current evidence:** `include/sluice/async/sync_backend.hpp` and
+`tests/async_completion_test.cpp`
+(`cancel_outstanding_op_completes_canceled`).
 
-**Violated constitution rule:** AC-5 (single Completion publication authority).
-
-**Semantic consequence:** Bypasses the unified reap/publication authority.
-Completion ordering and statistics may be inconsistent. Backend conformance
-is non-uniform (ThreadPoolBackend defers to poll; SyncBackend does not). If
-external code directly instantiates SyncBackend (bypassing AsyncIoContext's
-access_mtx_), the interface itself provides no thread-safety guarantee.
-Note: when accessed normally through AsyncIoContext, cancel() and poll() are
-serialized by access_mtx_, so a proven double-completion race does NOT exist
-on the normal path. The violation is structural authority bypass, not a
-demonstrated concurrent race.
-
-**Currently regression-tested:** No concurrent cancel + poll test for
-SyncBackend.
-
-**Recommended next action:** Either:
-1. Defer cancel completion to poll() (mark entry as cancelled, let poll drain
-   complete it), or
-2. Document SyncBackend as a test-only synthetic backend where the AC-5
-   violation is accepted with explicit justification.
-
-**Do not fix in this audit PR.**
-
-**RESOLVED (ADR-explicit-io-completion-authority / PR #61):** SyncBackend::cancel()
-now marks the entry as cancelled; publication happens through the unified reap
-path (poll/wait_one) via the protected `publish()` helper. The direct
-`complete_with()` call has been removed. Regression-tested in
-`async_completion_test` (cancel_outstanding_op_completes_canceled).
+**Historical PR #60 finding (not current behavior):** SyncBackend formerly
+published cancellation directly. PR #61 moved that transition into the reap
+path. There is no remaining P1-03 implementation action; the separate lack of
+an explicit cancel disposition remains P1-09.
 
 ---
 
-## P1-04: ThreadPoolBackend Spawn Failure Incorrectly Asyncized
+## P1-04: ThreadPoolBackend Spawn Failure Has No Explicit Admission Boundary
 
 **Finding:** When `std::thread` construction throws in
 `ThreadPoolBackend::enqueue_size`, the catch handler (`fail_spawn_size`)
 pushes an error entry to the ready queue and the Completion is eventually
-completed with an error via poll(). However, `submit_read()` still returns
-SUCCESS to the caller.
+completed with an error via poll(); `submit_read()` returns success. The code
+has already claimed the Completion, but no explicit commit separates rejection
+from an accepted dispatch failure and no terminal ready entry was reserved.
 
-This violates the public contract: submit-time errors (queue full, invalid
-operation, Completion non-idle) should be returned synchronously. The caller
-sees `submit_read()` return `{}` (success) but the operation will "complete"
-asynchronously with an error — a semantic that does not exist in the
-documented contract.
+Under the Proposed request contract, thread creation would be post-commit
+dispatch and an ownership-safe spawn failure would correctly become an accepted
+terminal error. The current implementation is still non-conforming because the
+commit boundary is implicit and `fail_spawn_size()` / `fail_spawn_void()` may
+allocate while trying to preserve terminality.
 
 **Evidence:**
 - `src/async/threadpool_backend.cpp:93-101` (catch handlers):
@@ -285,18 +258,19 @@ documented contract.
 - `fail_spawn_size` pushes to `ready_size_` with an error result.
 - `submit_read()` returns `{}` (success) regardless.
 
-**Violated constitution rule:** AC-3 (transactional submission — failed submit
-MUST leave Completion idle and return error synchronously).
+**Violated constitution rule:** AC-3 (no explicit transactional admission),
+AC-4 (terminal error staging can allocate), and AC-7 (unbounded per-op spawn).
 
-**Semantic consequence:** The caller cannot distinguish "submit succeeded, op
-will complete" from "submit failed, error will appear asynchronously." This
-breaks the submit return-value contract.
+**Semantic consequence:** The accepted/rejected classification depends on the
+incidental location of `try_claim()`, while OOM in the compensating ready-queue
+push can still terminate or strand the accepted request.
 
 **Currently regression-tested:** No test injects thread-creation failure.
 
-**Recommended next action:** Phase 1/3 roadmap — if thread creation fails,
-roll back mark_outstanding and return a synchronous error. Alternatively,
-pre-allocate thread resources before marking outstanding.
+**Recommended next action:** Phase E — replace per-op spawning with bounded
+persistent workers under the five-stage admission contract. Reserve queue and
+terminal linkage before commit; reject earlier failures synchronously and make
+ownership-safe failures after commit terminal.
 
 **Do not fix in this audit PR.**
 
@@ -324,7 +298,7 @@ lifecycle violation. This is semantically distinct from capacity pressure
 alignment — the stat name misrepresents what is counted).
 
 **Semantic consequence:** Observability is broken. Even if bounded request
-slots are added (Phase 1), operators cannot distinguish:
+slots are added (Phase B), operators cannot distinguish:
 - Caller reusing a Completion (lifecycle bug)
 - Backend queue full (capacity pressure, retryable)
 - Ring depth exhausted (Uring-specific)
@@ -341,7 +315,7 @@ backend_error     → backend unrecoverable
 
 **Currently regression-tested:** No test verifies stat categorization.
 
-**Recommended next action:** Phase 0/1 — rename the stat or split into
+**Recommended next action:** Phase B/C — rename the stat or split into
 `lifecycle_violations` and `capacity_rejects`. Introduce distinct error codes
 for capacity pressure vs. lifecycle errors.
 
@@ -349,82 +323,30 @@ for capacity pressure vs. lifecycle errors.
 
 ---
 
-## P0-03: Completion Mutation Authority Is Forgeable
+## P0-03: Completion Publication Authority — Resolved by PR #61
 
-**Finding:** Two distinct defects:
+**Current fact:** Completion publication mutators are private. `AsyncBackend`
+alone is friended and exposes protected `try_claim()`/`publish()`/
+`rollback_claim_before_accept()` capabilities to trusted backend authors.
+Claim and publication use CAS winner transitions; invalid reset or destruction
+while outstanding/publishing/resetting fail-fast in Debug and Release. Destroying
+idle or ready remains allowed.
 
-**A. Publication authority leak:**
-`Completion<T>` exposes `mark_outstanding()` and `complete_with()` as public
-methods. Any application code can forge publication state transitions. The
-"backend-only" comment is not an authority boundary. Debug assertions are not
-an authority boundary. Release builds have NO protection.
+**Current evidence:**
+- `include/sluice/async/completion.hpp` and
+  `include/sluice/async/async_io_context.hpp`;
+- `scripts/verify-completion-authority-negative-compile.sh`, wired into CI; and
+- `tests/completion_authority_death_test.cpp` for invalid lifecycle, concurrent
+  claim, and concurrent publication cases.
 
-**B. Caller lifecycle validation defect:**
-`reset()` is correctly caller-accessible (AC-13), but permits
-idle/outstanding → idle without runtime state check. A caller resetting an
-outstanding Completion is a contract violation that goes undetected.
+**Historical PR #60 finding (not current behavior):** publication and claim
+mutators were public, claim was not a CAS, and outstanding reset/destruction was
+not Release fail-fast. PR #61 closed those authority and lifecycle defects.
 
-**Evidence:**
-- `include/sluice/async/completion.hpp`: all three methods are `public`.
-- `mark_outstanding()` is load-assert-store, NOT atomic CAS.
-- `reset()` does not reject outstanding state (should trap).
-- Destructor is default (does not fail-fast on outstanding).
-- Tests call `c.mark_outstanding(); c.complete_with(...);` directly
-  (publication forgery). Tests calling `ready → reset` are legitimate.
-- Two different AsyncIoContext instances can both submit to the same
-  Completion concurrently (access_mtx_ is per-context, not per-Completion).
-
-**Attack scenario:**
-```cpp
-ctx.submit_read(op, c);  // backend holds &c
-c.reset();               // caller resets outstanding (undetected violation)
-ctx.submit_write(op2, c); // second backend also holds &c
-// Both backends will eventually complete_with → double publication,
-// stale result overwrite, or use-after-free if c is destroyed.
-```
-
-**Violated constitution rule:** AC-13 (unforgeable publication authority;
-state-checked caller lifecycle).
-
-**Semantic consequence:** Use-after-free, double completion, permanent
-Completion/backend state divergence. The type system provides zero protection
-for publication; runtime provides zero protection for outstanding reset.
-
-**Currently regression-tested:** No negative-compile test prevents caller
-calls to publication mutators. Tests actively USE them. No death test for
-outstanding reset.
-
-**Recommended next action:** Phase 1 (Completion authority hardening) —
-friend/capability pattern for publication mutators; negative-compile gate;
-Release fail-fast on invalid transitions; outstanding reset → trap;
-outstanding destructor check.
-
-**Do not fix in this audit PR.**
-
-**RESOLVED (ADR-explicit-io-completion-authority / PR #61):**
-- Part A: `mark_outstanding()` and `complete_with()` removed from public API.
-  Publication mutators are now private (friend AsyncBackend). Derived backends
-  use protected `try_claim()`/`publish()`/`rollback_claim_before_accept()`
-  helpers. Negative-compile gate:
-  `scripts/verify-completion-authority-negative-compile.sh` (wired into CI).
-- Part B: `reset()` now fail-fasts (std::terminate) on outstanding/publishing/
-  resetting. Destructor fail-fasts on outstanding/publishing/resetting. Both
-  enforced in Debug AND Release. Death tests: `completion_authority_death_test`.
-  `reset()` from idle is a registered idempotent no-op (AC-13 amended;
-  op_helpers depends on it).
-- CAS-based claim: `try_claim_for_backend()` uses atomic
-  compare_exchange_strong (exactly-once under concurrent submission).
-- Single-winner publish: `publish_from_reap()` CASes `outstanding → publishing`
-  (transient state) before building the result, so a concurrent publisher
-  loses the CAS and fail-fasts instead of racing the storage write.
-  Death test: two-thread concurrent publish → loser fail-fasts. Concurrency
-  test: two-thread concurrent claim → exactly one wins.
-- Transactional submit (P0-02 partial): io_uring claims BEFORE SQE acquisition;
-  a failed (null) SQE acquisition rolls the claim back via
-  `rollback_claim_before_accept()` (null-SQE branch only — no untracked SQE on
-  that path). Residual: `register_op` container allocation after SQE prep can
-  still throw with an SQE already prepared — the untracked-SQE risk remains,
-  explicitly deferred to the RequestSlot PR.
+**Residual tracked elsewhere:** P0-02 remains open because backend admission
+containers can still allocate after claim; Uring can prepare an SQE before
+fallible `register_op()` bookkeeping. That is not a remaining publication
+authority leak.
 
 ---
 
@@ -451,8 +373,7 @@ may hit a new operation. Stale waiter may never wake.
 
 **Currently regression-tested:** No generation/ABA test exists.
 
-**Recommended next action:** Phase 1 ADR + Phase 2 implementation
-(RequestKey/RequestSlot design) —
+**Recommended next action:** Phase B/C RequestKey/RequestSlot implementation —
 add generation counter; cancel targets generation; Scheduler registration
 includes generation.
 
@@ -482,7 +403,7 @@ static state in Completion; Scheduler and Batch do redundant work.
 
 **Currently regression-tested:** N/A (design issue, not a bug per se).
 
-**Recommended next action:** Phase 3 (reap contract redesign) — backend
+**Recommended next action:** Phase B/C reference reap, then Phase F integration — backend
 provides `reap_ready(ReadySink&)` or equivalent; remove global reap_seq;
 Scheduler uses identity-bearing reap.
 
@@ -521,7 +442,7 @@ not express whether it is single-driver or concurrent-capable), AC-9
 **Currently regression-tested:** Scheduler avoids this via single-admission
 rules, but L1 public API has no such protection for direct users.
 
-**Recommended next action:** Phase 4 (wait/cancel concurrency redesign) —
+**Recommended next action:** Focused wait/cancel concurrency design before Phase F —
 split capabilities or use interruptible wait; document single-driver
 contract if that is the intent.
 
@@ -540,7 +461,7 @@ belongs to another context.
 - `async_io_context.hpp`: `void cancel(Completion<std::size_t>& c)` — void
   return.
 - ThreadPoolBackend cancel: best-effort, op completes with real result.
-- SyncBackend cancel: directly completes with cancelled (bypasses reap).
+- SyncBackend cancel: records a cancel bit; the next reap publishes canceled.
 - UringBackend cancel: may or may not produce a cancel CQE.
 - No disposition enum; no Result return; no request identity beyond address.
 
@@ -555,7 +476,8 @@ protocols on a void-return fire-and-forget API.
 **Currently regression-tested:** Tests verify eventual Completion state but
 not cancel disposition reporting.
 
-**Recommended next action:** Phase 4 — redesign cancel to return
+**Recommended next action:** Phase B/C internal mechanics plus a focused API
+review before a public change — redesign cancel to return
 `Result<CancelDisposition>` targeting a RequestKey.
 
 **Do not fix in this audit PR.**
@@ -568,7 +490,6 @@ not cancel disposition reporting.
 `assert(!c.idle())` (vanishes in Release). It cannot distinguish:
 - Completion submitted via THIS Runtime's context;
 - Completion submitted via ANOTHER context;
-- Completion manually mark_outstanding'd by the caller;
 - Completion already reset/resubmitted.
 
 **Evidence:**
@@ -591,9 +512,9 @@ multi-waiter on same Completion.
 **Currently regression-tested:** No test for wrong-context await. No test
 for multi-waiter on same Completion. No Release-mode idle-await test.
 
-**Recommended next action:** Phase 1/2 — provenance token binding
-Completion to submitting context; Release fail-fast on idle await; explicit
-single-waiter or multi-waiter policy.
+**Recommended next action:** Phase B/C proves the Completion
+`idle -> binding -> outstanding` protocol plus RequestSlot-owned opaque waiter
+tokens and duplicate rejection, followed by Phase F Runtime/Scheduler routing.
 
 **Do not fix in this audit PR.**
 
@@ -628,7 +549,7 @@ callers through the public result type.
 **Currently regression-tested:** Tests verify error propagation but do not
 test the semantic distinction.
 
-**Recommended next action:** Phase 3 — add explicit `BatchOutcomeKind`
+**Recommended next action:** Phase F — add explicit `BatchOutcomeKind`
 (rejected/completed); do not mix rejections into the completion stream.
 
 **Do not fix in this audit PR.**
@@ -657,7 +578,7 @@ from thread stacks.
 **Currently regression-tested:** No resource-bound test. No test verifies
 behavior under thread creation failure (beyond bad_alloc → op error).
 
-**Recommended next action:** Phase 6 roadmap — design persistent blocking-I/O
+**Recommended next action:** Phase E roadmap — design persistent blocking-I/O
 offload workers with bounded capacity.
 
 **Do not fix in this audit PR.**
@@ -688,7 +609,8 @@ resources), but it is historical-growth memory retention with no reclamation.
 
 **Currently regression-tested:** No.
 
-**Recommended next action:** Phase 6 roadmap — vector compaction or slot reuse.
+**Recommended next action:** Phase E roadmap — persistent workers and bounded
+RequestSlot reuse remove the historical per-op vector model.
 
 **Do not fix in this audit PR.**
 
@@ -719,7 +641,7 @@ sustained load; allocation failure on hot path (see P0-01).
 
 **Currently regression-tested:** No allocation-count or allocation-free test.
 
-**Recommended next action:** Phase 1/3 roadmap — evaluate pre-allocated request
+**Recommended next action:** Phase B/C reference and Phase D/E backends — use pre-allocated request
 slots and intrusive ready list.
 
 **Do not fix in this audit PR.**
@@ -748,7 +670,7 @@ and require benchmark evidence to quantify precisely.
 **Currently regression-tested:** Deterministic causal tests verify liveness but
 do not measure latency.
 
-**Recommended next action:** Phase 5 roadmap — backend wake integration may
+**Recommended next action:** Phase G roadmap — backend wake integration may
 allow reducing or eliminating the 2ms interval for backend-only waits.
 
 **Do not fix in this audit PR.**
@@ -775,30 +697,20 @@ name implies a pool manages it.
 
 **Currently regression-tested:** N/A (naming issue).
 
-**Recommended next action:** Phase 0 — rename to `PerOpThreadBackend` or
-`BlockingOffloadBackend` (requires ADR for public name change).
+**Recommended next action:** Phase E — select the production blocking-offload
+name as part of the public migration (a public rename requires API review).
 
 **Do not fix in this audit PR.**
 
 ---
 
-## P3-02: Header Comment Stale Authority Description
+## P3-02: Header Claim-Authority Comment — Resolved by PR #61
 
-**Finding:** `async_io_context.hpp:68-70` contains a stale comment claiming
-context-side mark_outstanding authority. This is documented in P1-01 but the
-comment itself is a P3 documentation defect.
+**Current fact:** `include/sluice/async/async_io_context.hpp` names the backend
+as Completion claim authority and exposes the protected `try_claim()` capability.
 
-**Evidence:** See P1-01.
-
-**Violated constitution rule:** AC-10.
-
-**Semantic consequence:** Misleads implementers.
-
-**Currently regression-tested:** N/A.
-
-**Recommended next action:** Fix comment in a small corrective PR.
-
-**Do not fix in this audit PR.**
+**Historical PR #60 finding (not current behavior):** the header formerly named
+context-side claim authority. PR #61 corrected it; no follow-up remains.
 
 ---
 
@@ -823,7 +735,7 @@ domains.
 
 **Currently regression-tested:** N/A.
 
-**Recommended next action:** Phase 0 — audit all "worker" references and qualify
+**Recommended next action:** Phases E/G — audit all "worker" references and qualify
 with subsystem prefix in documentation.
 
 **Do not fix in this audit PR.**
@@ -834,24 +746,24 @@ with subsystem prefix in documentation.
 
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
-| P0-01 | P0 | Worker OOM → terminate | Phase 1 ADR + Phase 2 impl |
-| P0-02 | P0 | Cross-backend transactional submit | Phase 1 ADR + Phase 2/3 impl (open: register_op allocation after claim) |
-| P0-03 | P0 | Completion publication authority forgeable | RESOLVED — ADR-explicit-io-completion-authority / PR #61 |
-| P1-01 | P1 | mark_outstanding stale comment | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (backend is claim authority) |
-| P1-02 | P1 | Backend-ready vs completion-ready | Documentation needed |
-| P1-03 | P1 | SyncBackend cancel bypasses reap | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (cancel records intent; reap publishes) |
-| P1-04 | P1 | Spawn failure incorrectly asyncized | Phase 3 (backend migration) |
-| P1-05 | P1 | queue_full_retries semantic conflation | Phase 0/1 error vocabulary |
-| P1-06 | P1 | No request generation (ABA) | Phase 1 (unified ADR) |
-| P1-07 | P1 | Reap API discards completion identity | Phase 1 ADR + Phase 2 impl |
-| P1-08 | P1 | wait_one holds lock, blocks cancel | Phase 4 (wait/cancel) |
-| P1-09 | P1 | Cancel API not explicit | Phase 4 (wait/cancel) |
-| P1-10 | P1 | Runtime await no provenance check | Phase 1 ADR + Phase 2 impl |
-| P2-01 | P2 | Per-op thread creation | Phase 6 (persistent workers) |
-| P2-02 | P2 | workers_ monotonic growth | Phase 6 (persistent workers) |
-| P2-03 | P2 | Hot-path allocation | Phase 1 design / Phase 6 |
-| P2-04 | P2 | 2ms MIXED-WAKE latency | Phase 5 (wake) |
-| P2-05 | P2 | Batch conflates rejection with completion | Phase 1 ADR + Phase 2 |
-| P3-01 | P3 | ThreadPoolBackend naming | Phase 0 rename |
-| P3-02 | P3 | Stale header comment | Small corrective PR |
-| P3-03 | P3 | "workers" ambiguity | Phase 0 audit |
+| P0-01 | P0 | Worker OOM → terminate | Phase A target + Phase B/C proof + Phase E implementation |
+| P0-02 | P0 | Cross-backend transactional submit | Phase A target + Phase B/C reference + Phase D/E migration (open: register_op allocation after claim) |
+| P0-03 | P0 | Completion publication authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 |
+| P1-01 | P1 | Completion claim authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (backend is claim authority) |
+| P1-02 | P1 | Backend-ready vs completion-ready | Phase A target defined; Phase B/C/F implementation evidence pending |
+| P1-03 | P1 | SyncBackend cancel publication | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (cancel records intent; reap publishes) |
+| P1-04 | P1 | Spawn failure lacks explicit admission boundary | Phase E backend migration |
+| P1-05 | P1 | queue_full_retries semantic conflation | Phase B/C vocabulary and metrics |
+| P1-06 | P1 | No request generation (ABA) | Phase B/C, then D/E/F |
+| P1-07 | P1 | Reap API discards completion identity | Phase B/C reference, Phase F integration |
+| P1-08 | P1 | wait_one holds lock, blocks cancel | Focused concurrency design before Phase F L1 integration |
+| P1-09 | P1 | Cancel API not explicit | Phase B/C target mechanics, focused API review before public change |
+| P1-10 | P1 | Runtime await no provenance check | Phase B/C identity, Phase F enforcement |
+| P2-01 | P2 | Per-op thread creation | Phase E persistent workers |
+| P2-02 | P2 | workers_ monotonic growth | Phase E persistent workers |
+| P2-03 | P2 | Hot-path allocation | Phase B/C reference, Phase E backend |
+| P2-04 | P2 | 2ms MIXED-WAKE latency | Phase G wake integration |
+| P2-05 | P2 | Batch conflates rejection with completion | Phase F Batch integration |
+| P3-01 | P3 | ThreadPoolBackend naming | Phase E naming correction |
+| P3-02 | P3 | Header claim-authority comment | RESOLVED — PR #61 corrected backend claim authority |
+| P3-03 | P3 | "workers" ambiguity | Phase E/G documentation audit |
