@@ -6,6 +6,14 @@
 **Findings addressed:** P0-03, P1-01, P1-03
 **Findings NOT resolved:** P0-02, P1-06, P1-07, P1-10
 
+**Proposed future partial supersession:** If
+[ADR-explicit-io-request-contract](ADR-explicit-io-request-contract.md) is accepted, its private
+`idle -> binding -> outstanding` protocol supersedes only the direct claim transition and
+pre-accept rollback details in Sections 2.2, 5, 9, and 10 of this ADR. This ADR's private/protected
+access boundary, backend-only authority, reap-only publication, fail-fast invalid transitions, and
+idle/ready destruction permissions remain authoritative. While the request-contract ADR is
+Proposed, the sections below continue to describe the accepted, implemented contract from PR #61.
+
 ---
 
 ## 1. Context

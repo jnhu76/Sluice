@@ -52,12 +52,11 @@ owns it, what state is it in, which Completion does it relate to, and who can
 terminate it.
 
 **Rationale:** Sluice separates caller-owned `Completion<T>` from per-request
-storage. DIV-02 now accepts a transitional C++ adaptation in which the
-context/backend owns a bounded `RequestSlot` arena. The proposed
-ADR-explicit-io-request-contract fixes logical identity as
-`(ContextIdentity, SlotIndex, Generation)`. The current implementation has not
-yet migrated and therefore remains non-conforming where it relies only on
-`Completion*`, lambda capture, or container position.
+storage. The Proposed ADR-explicit-io-request-contract selects a transitional
+C++ adaptation in which the context/backend owns a bounded `RequestSlot` arena
+and fixes logical identity as `(ContextIdentity, SlotIndex, Generation)`.
+DIV-02 records that proposal as pending acceptance; neither document makes the
+current pointer/container implementation conforming.
 
 **Required evidence:**
 - Each backend documents how an accepted op is tracked from submit to reap.
@@ -557,13 +556,26 @@ transition.
   violation (fail-fast in Release).
 - Destruction of an outstanding/publishing/resetting Completion is a checked
   contract violation in BOTH Debug and Release.
-- Once the Proposed RequestSlot contract is implemented, `reset()` and
-  destruction of a ready Completion must additionally perform the same
-  allocation-free, non-blocking release of the bound slot. Destroying ready
-  remains allowed; it discards terminal storage but does not cancel or drain I/O.
+- If the Proposed RequestSlot contract is accepted and implemented, Completion
+  claim gains a private `idle → binding → outstanding` protocol. The first CAS
+  elects one context; only its winner initializes the private RequestKey,
+  context provenance, and slot-release capability. Acquire observation of
+  `outstanding` sees the complete binding. Cancel and waiter registration do
+  not read fields while `binding`; reset/destruction in `binding` fail fast.
+- Under that proposal, `reset()` and destruction of a ready Completion also
+  perform the same allocation-free release of the bound slot. Release does not
+  wait for I/O, workers, cancellation, drain, backend progress, or Scheduler
+  activity. It may use a bounded internal critical section in the leaf
+  slot-lifecycle domain shared with waiter registration and reap-ready
+  publication, but calls no user code, ReadySink, Scheduler, or backend progress
+  path. Release cannot reuse the slot until old-generation reap has left that
+  domain and requires registration to be closed with no stored token/lease.
+  Destroying ready remains allowed; it discards terminal storage but does not
+  cancel or drain I/O.
 - No test uses backend-only publication mutators as if they were public API.
-- Two different contexts cannot both claim the same Completion outstanding
-  (structural exclusion via claim CAS, not comment convention).
+- Two different contexts cannot both bind the same Completion: the private
+  `idle -> binding` CAS is the structural cross-context exclusion point, not a
+  context-local lock or comment convention.
 
 **Allowed exceptions:**
 - During the corrective phase, temporary public access is allowed if tracked
@@ -616,7 +628,12 @@ public cancellation and Scheduler registration still target Completion address.
 - Each accepted op has a generation or epoch that monotonically increases per
   RequestSlot reuse and is bound opaquely to the outstanding Completion.
 - Cancel targets a specific generation, not just an address.
-- Scheduler wait registration records provenance (which context/backend).
+- RequestSlot owns single-waiter registration state, a stable value token, and
+  the token's routing lease; Scheduler owns the referenced Fiber/runnable
+  routing record. The lease prevents cancel/drain/shutdown from retiring or
+  reusing that record until exactly one winning delivery path acknowledges it.
+  Registration records provenance and a second waiter cannot overwrite the
+  first.
 - Cross-context Completion submission is structurally prevented or detected.
 
 **Allowed exceptions:**
@@ -645,10 +662,19 @@ MUST provide completed operation identities to higher layers. Higher layers
 MUST NOT be forced to recover completion identity by scanning all outstanding
 Completions.
 
-An identity-bearing event is semantically equivalent to
-`ReadyEvent{RequestKey, CompletionBase*, OperationKind}`. Exact C++ syntax is a
-lower-level design choice; returning only a count is not sufficient as the
-authoritative integration contract.
+The Proposed request contract selects a synchronous, callback-scoped event
+semantically equivalent to
+`ReadyEvent{RequestKey, OperationKind, OptionalWaiterDelivery}`. A waiter
+delivery contains a stable Scheduler identity/slot/generation token plus a
+move-only routing lease; it is not a raw Fiber pointer. The event deliberately
+contains no `Completion*` or `RequestSlot*`: under the same leaf slot-lifecycle
+domain used by release/reuse, reap closes registration, takes any delivery, and
+publishes ready before releasing that domain. It then invokes the sink with no
+backend/slot lock held. The sink may copy value identity and must consume or
+acknowledge the routing lease before returning, but cannot retain the event
+reference or reacquire mutable slot storage. Exact C++ syntax is a lower-level
+design choice; returning only a count is not sufficient as the authoritative
+integration contract.
 
 **Rationale:** Current `poll()`/`wait_one()` return only a count. The
 Scheduler then scans its entire `waiting_completion_` map checking
@@ -660,6 +686,12 @@ static state that Completion is forced to carry for Batch's benefit.
 **Required evidence:**
 - Backend provides a reap-ready iteration or callback that yields completed
   request identities (not just a count).
+- Ready delivery cannot outlive a referenced Completion/slot without an
+  explicit event lease/ack design; the Proposed contract avoids that ownership
+  by synchronous pointer-free delivery.
+- A Scheduler routing record referenced by a waiter delivery remains pinned
+  through sink/cancel acknowledgement; fake-token evidence is not proof of the
+  actual Scheduler cancel/drain/shutdown integration.
 - Scheduler does NOT scan all registered Completions to find ready ones.
 - No process-wide global ordering state embedded in per-Completion objects.
 - Batch obtains completion order from the reap interface, not from scanning.

@@ -4,9 +4,10 @@
 `zig/lib/std/Io.zig` and the local `Io/{Threaded,Uring,Kqueue,Dispatch,fiber}.zig`
 reference files.
 
-The classification records the selected architecture target. A row explicitly
-states when current production code has not yet migrated; a target decision is
-not implementation evidence.
+The primary matrix classifies the **current accepted architecture and
+implementation**, not a Proposed target. Proposed decisions that would change a
+classification are listed separately in “Proposed target deltas”; they are
+neither current conformance nor implementation evidence.
 
 Classification key:
 - **F** — Faithful: core semantic preserved, C++ expression differs
@@ -24,8 +25,8 @@ Classification key:
 |---|---|---|---|---|---|
 | `Io` (userdata + vtable) | Lightweight copyable capability; any holder can submit ops | `AsyncIoContext` (move-only, owning, mutex-serialized) | **I** | ADR-async-io-model §3 A6; `async_io_context.hpp:118-158` | Sluice context is an owner, not a borrowed capability. Runtime injects it. Acceptable for the current single-runtime model; a lightweight façade is deferred. |
 | `Operation` (tagged union) | Explicit op descriptor with typed result | `ReadOp/WriteOp/SyncDataOp/SyncAllOp` structs | **F** | `async_io_context.hpp:32-49`; ADR §3 | Same semantic: explicit positional ops, typed results. C++ uses separate structs instead of a tagged union. |
-| `Operation.Storage` (caller-owned reusable slot with intrusive lifecycle lists) | Caller allocates stable bounded storage for submission→pending→completion and identity-preserving reuse | Target: caller-owned Completion bound to context/backend-owned bounded `RequestSlot(context, slot, generation)`; current code still uses backend-specific dynamic records | **I** | ADR-explicit-io-request-contract Decisions 1–5; DIV-02 | Intentional **transitional C++ adaptation**: core stable/bounded storage semantics are restored with different ownership to preserve API. Current backends are not conforming until Phases B–E migrate them. Caller-owned storage retains an explicit revisit trigger. |
-| `Pending.Userdata` (7×usize backend scratch per op) | Backend-private bounded scratch in stable operation storage | Target RequestSlot has fixed/pre-reserved backend scratch; current ThreadPool uses `std::function`/thread/deque and Uring uses maps/deques | **A** | Current code: threadpool/uring sources; target: ADR-explicit-io-request-contract Decision 3 | Exact Zig scratch ABI is not required, but current hot-path heap mechanics remain accidental drift. The target is decided; implementation and per-backend layout evidence are pending. |
+| `Operation.Storage` (caller-owned reusable slot with intrusive lifecycle lists) | Caller allocates stable bounded storage for submission→pending→completion and identity-preserving reuse | Accepted API structure keeps Completion caller-owned and submission machinery context/backend-owned; current per-request records remain backend-specific, dynamic, and identity-fragmented | **A** | ADR-async-io-model caller/Completion ownership; current backend sources; P1-06; DIV-02 is pending | **A** applies to the missing stable bounded request record and fragmented identity, not to the accepted caller/Completion ownership split. The Proposed contract selects a transitional storage target, shown below. |
+| `Pending.Userdata` (7×usize backend scratch per op) | Backend-private bounded scratch in stable operation storage | Current ThreadPool uses `std::function`/thread/deque and Uring uses maps/deques rather than common bounded per-request scratch | **A** | Current threadpool/uring sources | Current hot-path heap mechanics remain accidental drift. The Proposed RequestSlot scratch target is non-binding and unimplemented. |
 | `operate` (blocking-shaped I/O on current task) | Submit + await on the current concurrency unit; returns result inline | `op_helpers::read_all/write_all` (poll-loop) or `RuntimeTaskContext::submit_* + await_completion` (Fiber suspend) | **F** | `op_helpers.hpp:1-64`; `application_runtime.hpp:60-86` | Both paths preserve blocking-shaped semantics. The Runtime path is the Evented equivalent; op_helpers is the Threaded equivalent. |
 | `Batch` (caller storage + concurrent await + intrusive lists) | N ops submitted together; await ≥1; iterate in completion order; cancel as a whole | `Batch` class (driver over AsyncIoContext; `vector<unique_ptr<Slot>>`) | **I** | `batch.hpp:1-137` | Semantic contract preserved (submit N, await ≥1, iterate reap order, cancel). Implementation is a driver over per-op submit, NOT a native backend batchAwait vtable. Documented as deliberate narrowing in Batch header. The mechanism diverges from Zig (no native batch vtable entry) but the caller-visible semantics are equivalent. |
 | `Threaded` (thread-per-task execution strategy) | Each async task gets a dedicated OS thread; blocking waits are natural | `Group()` default mode (thread-per-task via `std::thread`) + `ThreadPoolBackend` (thread-per-op for blocking-I/O offload) | **I** | `group.hpp:49-51`; ADR-execution-model §2 | Zig Threaded = thread-per-TASK. Sluice Group Threaded = thread-per-task (faithful). ThreadPoolBackend = thread-per-OP (blocking-I/O offload), which is a DIFFERENT concept at a different layer. ThreadPoolBackend is NOT an implementation of Zig Threaded; it is a blocking-I/O offload mechanism for the Evented scheduler. The naming conflates these. See divergence registry DIV-03. |
@@ -34,7 +35,7 @@ Classification key:
 | Durability ops (`fileSync` / direct vtable method) | Durability as a property of write ops or explicit Io call | `SyncDataOp`/`SyncAllOp` as first-class async operations with own Completion | **I** | ADR-async-io-model §3; `async_io_context.hpp:32-49` | Zig models durability inline; Sluice makes it a schedulable, cancellable, observable operation. Semantic enrichment, not loss. See DIV-06. |
 | Cancellation region (`CancelProtection`) | Structured cancel protection: protected/unprotected regions; `recancel`; `swapCancelProtection` | `CancelToken` (cooperative, single-shot) + `check_cancel`; no protection regions | **M** | ADR-async-io-model §7 X6 (deferred to job 021); `cancel.hpp` | Structured cancellation (protection regions, recancel) not implemented. Current model is minimal best-effort. |
 | Futex / sync capabilities (Io-aware waits) | `futexWait`, `futexWake`, Mutex, Condition, Event, Semaphore, RwLock — all Io-aware (suspend fiber, not thread) | E10–E12 primitives: `AsyncMutex`, `Event`, `AsyncCondition`, `AsyncQueue`, `Semaphore`, `AsyncRwLock` via `WaitQueue`/`WaitNode` + Scheduler | **F** | `scheduler.hpp:276-500`; ADR-execution-model §9 frontier E10-E12 | Full set implemented. All suspend the Fiber (not the OS thread) under Evented. Threaded fallback uses Future/WaitPolicy. |
-| Resource bounds (`Io.Limit`, `async_limit`, `concurrent_limit`) | Explicit concurrency limits and observable admission pressure | Target: bounded context/backend `request_capacity` with `would_block`; current ThreadPool is unbounded and other backends have no common request capacity | **A** | Current code: backend headers; target: ADR-explicit-io-request-contract Decision 13; DIV-12 | The correction is specified but unimplemented. `request_capacity`, pipeline depth, Runtime workers, blocking workers, and uring queue depth are explicitly distinct. |
+| Resource bounds (`Io.Limit`, `async_limit`, `concurrent_limit`) | Explicit concurrency limits and observable admission pressure | ThreadPool is unbounded and other backends have no common request capacity or configured full result | **A** | Current backend headers; DIV-12 | The Proposed contract selects bounded `request_capacity` with `would_block`, but that correction is neither accepted nor implemented. |
 | `Group` (cancel-propagation boundary; swallows Cancel) | Unordered task set; await/cancel as a whole; tasks swallow `error.Canceled` | `Group` class (Threaded + Evented modes) | **F** | `group.hpp:1-258` | Semantic preserved: cancel-propagation boundary, tasks swallow exceptions, await waits for all. |
 | `Select` (multi-wait winner protocol) | Wait on multiple sources; exactly-once winner | E13 `select()` template + `SelectGroup`/`SelectPort`/`SelectArmSlot` | **F** | `scheduler.hpp:16`; `select_fwd.hpp`; E13 spec | Implemented with exactly-once winner CAS. |
 | Registered buffers / files | Kernel-pinned buffers for zero-copy io_uring | Not implemented | **M** | ADR-async-io-model §5 (deferred); §14 | Explicitly deferred pending lifetime contract. |
@@ -48,11 +49,25 @@ Classification key:
 | Class | Count | Key areas |
 |-------|-------|-----------|
 | F (Faithful) | 5 | Operation, operate, futex/sync, Group, Select |
-| I (Intentional) | 8 | Io capability shape, transitional Operation.Storage ownership, Batch driver, Threaded naming, Evented topology, completion wake bridge, SyncDataOp/SyncAllOp, AsyncBackend extension point |
-| A (Accidental) | 2 | Resource bounds (unbounded ThreadPoolBackend), Pending.Userdata heap model |
+| I (Intentional) | 7 | Io capability shape, Batch driver, Threaded naming, Evented topology, completion wake bridge, SyncDataOp/SyncAllOp, AsyncBackend extension point |
+| A (Accidental) | 3 | Operation.Storage ownership/identity, resource bounds (unbounded ThreadPoolBackend), Pending.Userdata heap model |
 | M (Missing) | 3 | CancelProtection, registered buffers, signal-based syscall cancel |
 | O (Obsolete) | 0 | — |
 | U (Unresolved) | 0 | — |
+
+---
+
+## Proposed Target Deltas
+
+These rows show what acceptance and later implementation of
+ADR-explicit-io-request-contract would change. They are intentionally excluded
+from the current summary counts above.
+
+| Concept | Current class | Proposed target class | Decision status | Implementation status |
+|---|---:|---:|---|---|
+| `Operation.Storage` ownership and identity | **A** | **I** | Proposed transitional C++ adaptation; DIV-02 pending acceptance | Unimplemented; Phases B–E |
+| `Pending.Userdata` bounded per-request scratch | **A** | **I** | Proposed exact-layout adaptation with bounded semantic requirement | Unimplemented; per-backend evidence pending |
+| Resource bounds | **A** | **F** | Proposed faithful restoration of explicit bounded admission pressure | Unimplemented; Phases B–E |
 
 ---
 
@@ -67,10 +82,13 @@ Classification key:
    wake) is an explicit, documented, accepted decision (E9 P3). It is classified
    **I** despite being a significant structural difference from Zig.
 
-3. **Operation.Storage** ownership is now classified **I** as an accepted
-   transitional adaptation under DIV-02: caller-owned Completion plus a
-   backend/context-owned bounded RequestSlot arena. This classification approves
-   the target ownership decision, not today's pointer/container mechanics.
+3. **Operation.Storage** remains current class **A** for the absence of common
+   stable bounded request storage and identity. Caller-owned Completion and
+   context/backend submission machinery are already accepted API structure;
+   they are not accidental. The Proposed ADR and pending DIV-02 entry select
+   target class **I** for the specific backend/context-owned bounded RequestSlot
+   adaptation. Acceptance would approve that target; implementation evidence
+   would still be required separately.
 
 4. **Pending.Userdata** heap mechanics remain **A** (Accidental Drift). The
    target bounded RequestSlot scratch and intrusive/pre-reserved linkage are

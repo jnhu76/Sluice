@@ -18,8 +18,8 @@ Architecture Decision Records for Sluice.
 |-----|-------|--------|-----------|------------|---------------|
 | [ADR-024S](ADR-024S-sync-runtime-contract.md) | Sync Runtime Contract | **Accepted** | Synchronous core | — | — |
 | [ADR-async-io-model](ADR-async-io-model.md) | Async I/O model | **Accepted** | Async runtime | — | — |
-| [ADR-explicit-io-completion-authority](ADR-explicit-io-completion-authority.md) | Completion Publication Authority | **Accepted** | Async I/O foundation | selected portions of ADR-async-io-model | — |
-| [ADR-explicit-io-request-contract](ADR-explicit-io-request-contract.md) | Unified Explicit I/O Request Contract | **Proposed** | Async I/O request lifecycle | selected portions of ADR-async-io-model | — |
+| [ADR-explicit-io-completion-authority](ADR-explicit-io-completion-authority.md) | Completion Publication Authority | **Accepted** | Async I/O foundation | selected portions of ADR-async-io-model | Proposed ADR-explicit-io-request-contract, claim/rollback details only if accepted |
+| [ADR-explicit-io-request-contract](ADR-explicit-io-request-contract.md) | Unified Explicit I/O Request Contract | **Proposed** | Async I/O request lifecycle | selected portions of ADR-async-io-model and, if accepted, Completion Authority claim/rollback details | — |
 | [ADR-execution-model](ADR-execution-model.md) | Dual Threaded/Evented Execution Model | **Accepted** | Async runtime | — | — |
 | [ADR-application-runtime](ADR-application-runtime.md) | Application Runtime Architecture | **Accepted** | Async runtime (E16) | — | — |
 
@@ -52,6 +52,8 @@ Architecture Decision Records for Sluice.
 - **Subsystem:** Async I/O foundation
 - **Supersedes:** conflicting publication-authority and caller-lifecycle
   portions of ADR-async-io-model
+- **Superseded by:** Proposed ADR-explicit-io-request-contract for the direct
+  claim transition and pre-accept rollback details only, if that ADR is accepted
 - **Current authority?** Yes — private publication mutators, backend claim,
   reap-only publication, and fail-fast invalid transitions landed in PR #61.
 
@@ -60,11 +62,14 @@ Architecture Decision Records for Sluice.
 - **Status:** Proposed
 - **Subsystem:** Async I/O request lifecycle
 - **Supersedes:** when accepted, selected request identity, admission, reap,
-  cancellation-target, and borrow-release portions of ADR-async-io-model
+  cancellation-target, and borrow-release portions of ADR-async-io-model, plus
+  the direct claim transition and pre-accept rollback details of
+  ADR-explicit-io-completion-authority
 - **Current authority?** No — ready for Accepted review; no RequestKey,
   RequestSlot arena, identity-bearing reap, or public API change is implemented.
 - **Next implementation:** bounded RequestKey/RequestSlot reference lifecycle
-  limited to Fake, Sync/Synthetic, ReadySink, and conformance tests.
+  limited to Completion binding, Fake, Sync/Synthetic, synchronous ReadySink,
+  fake stable waiter tokens/leases, and conformance tests.
 
 ### ADR-execution-model (E0): Dual Threaded/Evented Execution Model
 

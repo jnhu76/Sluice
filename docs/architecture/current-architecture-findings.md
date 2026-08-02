@@ -24,9 +24,9 @@ open finding below remains open.
 |---|---|---|
 | P0-01, P2-03 | Pre-reserved result/ready linkage; no post-accept unbounded-allocation dependency | Phase B/C OOM and terminal-path conformance, then Phase E blocking-offload migration |
 | P0-02, P1-04 | Five-stage admission; pre-commit failure rejects, post-commit dispatch failure completes | Phase B/C injected failure tests; Phase D/E backend migration |
-| P1-02, P1-07 | Distinct backend-ready/completion-ready plus identity-bearing `ReadyEvent`/`ReadySink` | Phase B/C reference proof, Phase F Scheduler/Batch consumption |
+| P1-02, P1-07 | Distinct backend-ready/completion-ready plus synchronous pointer-free `ReadyEvent`/`ReadySink` delivery | Phase B/C reset/reuse-during-sink proof, Phase F Scheduler/Batch consumption |
 | P1-05 | `invalid_state`, `would_block`, and `no_space` are distinct; capacity rejects have their own metric | Phase B implementation and stats contract tests |
-| P1-06, P1-10 | `(context, slot, generation)` identity, private Completion binding, single waiter | Phase B/C generation/provenance tests; Phase F Runtime/Scheduler enforcement |
+| P1-06, P1-10 | `(context, slot, generation)` identity, private Completion `binding` transient, RequestSlot-owned stable waiter token/routing lease | Phase B/C cross-context binding/generation/fake-lease tests; Phase F Runtime/Scheduler lifetime and routing |
 | P1-08, P1-09 | RequestKey-targeted cancellation and explicit disposition; exact wait/cancel lock design remains open | Phase C contract tests plus a focused later concurrency design before L1 lock changes |
 | P2-05 | Batch outcome origin distinguishes rejection from accepted completion | Phase F Batch migration |
 | P2-01, P2-02 | Fixed persistent blocking workers and bounded queue | Phase E implementation and benchmark evidence |
@@ -138,9 +138,9 @@ contract. The two-phase model needs explicit documentation to prevent this.
 exactly-once completion but do not test the intermediate backend-ready state.
 
 **Recommended next action:** Phase B/C must implement and test the two states and
-identity-bearing ReadySink selected by the Proposed request-contract ADR; Phase
-F migrates Scheduler/Batch consumption. The ADR decision alone is not resolution
-evidence.
+the synchronous pointer-free ReadySink selected by the Proposed request-contract
+ADR, including reset/reuse during callback delivery; Phase F migrates
+Scheduler/Batch consumption. The ADR decision alone is not resolution evidence.
 
 **Do not fix in this audit PR.**
 
@@ -512,8 +512,9 @@ multi-waiter on same Completion.
 **Currently regression-tested:** No test for wrong-context await. No test
 for multi-waiter on same Completion. No Release-mode idle-await test.
 
-**Recommended next action:** Phase B/C provenance binding and single-waiter
-proof, followed by Phase F Runtime/Scheduler enforcement.
+**Recommended next action:** Phase B/C proves the Completion
+`idle -> binding -> outstanding` protocol plus RequestSlot-owned opaque waiter
+tokens and duplicate rejection, followed by Phase F Runtime/Scheduler routing.
 
 **Do not fix in this audit PR.**
 

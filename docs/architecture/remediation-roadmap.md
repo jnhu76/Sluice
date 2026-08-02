@@ -63,23 +63,30 @@ review. Documentation-only—no production behavior is changed.
 
 - descriptors remain separate from `(context, slot, generation)` request identity;
 - caller owns Completion; context/backend owns a bounded RequestSlot arena;
+- Completion uses a private `idle -> binding -> outstanding` protocol so one
+  CAS winner atomically installs key, provenance, and release capability;
 - reserve/prepare/commit/enqueue/dispatch form one admission transaction;
 - commit is successful-submit linearization;
 - backend-ready and Completion-ready are distinct;
-- reap carries identity;
+- reap synchronously carries pointer-free identity and an optional stable waiter
+  token/routing lease through a non-escaping ReadySink;
 - borrow lasts from commit through Completion-ready publication;
-- one waiter per request; a second is synchronous `invalid_state`;
+- RequestSlot owns one waiter registration/token while Scheduler owns Fiber
+  routing; a second waiter is synchronous `invalid_state`;
 - cancel targets RequestKey and returns an explicit disposition;
 - request capacity full is synchronous `would_block`;
 - accepted terminal progress does not depend on new unbounded allocation;
-- close admission/drain/reset/release precede quiescent destruction; and
+- close admission/drain/reset/release precede quiescent destruction; slot
+  release is allocation-free, uses only a leaf bounded synchronization domain,
+  and waits for no asynchronous progress; and
 - public AsyncBackend authors are trusted and must pass conformance.
 
 **Exit criteria:**
 
 - [x] Proposed ADR covers state, resources, failure, wake, lifecycle, Zig
   classification, alternatives, and backend mappings.
-- [x] DIV-02 target decision and revisit trigger recorded.
+- [x] DIV-02 Proposed target decision and revisit trigger recorded without
+  claiming acceptance.
 - [x] Conformance map distinguishes selected target from current implementation.
 - [x] Architecture Gate 0–4 completed without claiming future tests passed.
 - [ ] Maintainer review accepts the ADR.
@@ -99,26 +106,41 @@ feat(async): add bounded RequestKey / RequestSlot reference lifecycle
 - internal `RequestKey` and context identity;
 - bounded construction-time RequestSlot arena;
 - complete reference state machine and five-stage admission;
-- private Completion binding plus the shared non-blocking reset/ready-destruction
-  release handshake;
+- private Completion `binding` transient plus the shared allocation-free
+  reset/ready-destruction release handshake;
+- RequestSlot-owned single-waiter registration state with fake stable tokens
+  and delivery leases;
 - FakeAsyncBackend migration;
 - Sync/Synthetic migration and explicit reference-backend positioning;
-- independent identity-bearing `ReadySink`; and
+- synchronous non-escaping identity-bearing `ReadySink`; and
 - focused conformance cases needed to prove the reference lifecycle.
 
 **Must prove:**
 
 - full arena returns `would_block` with idle Completion;
 - every pre-commit failure rolls back with no borrow or background work;
+- two contexts racing one Completion have one `idle -> binding` winner, and no
+  path observes or overwrites a half-initialized binding;
 - every ownership-safe, irrevocable post-commit dispatch failure becomes one
   reaped terminal error, while transient/partial dispatch remains enqueued;
 - slot reuse increments generation and stale keys cannot act;
 - backend-ready result storage and linkage require no new allocation;
 - Completion-ready alone ends the fd/buffer borrow;
 - duplicate waiter registration is rejected without overwriting the first;
+- reap and waiter cancellation race to consume a token/routing lease exactly once;
+- reap closes registration, takes any delivery, and publishes Completion-ready
+  in the shared slot-lifecycle domain, so no waiter can register into a
+  lost-wake window and release/reuse cannot overtake old-generation reap;
+- the delivery lease pins the Scheduler routing record until the winning sink or
+  cancellation path routes and acknowledges it; Phase B proves fake transfer,
+  while Phase F proves actual Scheduler cancel/drain/shutdown lifetime;
+- reset/destruction with a still-registered waiter fails fast, while reset,
+  destruction, and slot reuse during synchronous ReadySink delivery cannot
+  dangle a Completion/slot pointer or lose the extracted waiter delivery;
 - close admission rejects new work while progress/reap/cancel remain legal; and
 - ready reset and ready Completion destruction both release the slot without
-  allocation, cancellation, drain, or blocking; and
+  allocation, cancellation, drain, I/O/Scheduler/backend-progress waiting, user
+  callbacks, or upward lock acquisition; and
 - all slots are released before clean destruction.
 
 **Required gates:** Clang Debug and Release; ASan/UBSan for slot/buffer lifetime;

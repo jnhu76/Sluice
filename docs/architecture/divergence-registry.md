@@ -10,9 +10,9 @@ they are not implementation evidence.
 Status values:
 - **Approved** — governed by an ADR or explicit design decision
 - **Accepted** — documented and acknowledged, no ADR yet but no action needed
-- **Accepted transitional divergence** — the migration stance is approved as a
-  bounded exception with a revisit trigger; implementation is not implied, and
-  a linked Proposed ADR remains non-binding until accepted
+- **Proposed transitional decision** — a Proposed ADR selects a bounded
+  exception and revisit trigger, but the divergence remains non-binding until
+  that ADR is accepted
 - **Pending decision** — evidence insufficient or contradictory; needs resolution
 - **Corrective planned** — accidental drift with a remediation plan
 
@@ -39,10 +39,10 @@ Status values:
 | Field | Value |
 |-------|-------|
 | ID | DIV-02 |
-| Status | Accepted transitional divergence |
+| Status | Proposed transitional decision |
 | Introduced by | Existing Completion/backend-record separation; formalized as a transitional C++ adaptation by the Proposed explicit request contract |
 | Governing ADR | ADR-explicit-io-request-contract (Proposed; Decision 2) |
-| Reason | Zig places operation lifecycle and backend scratch in caller-owned `Operation.Storage`. Sluice will preserve caller-owned `Completion<T>` while the context/backend owns a bounded arena of `RequestSlot` objects identified by context, slot, and generation. This stages migration without making the current pointer/container implementation acceptable. |
+| Reason | Zig places operation lifecycle and backend scratch in caller-owned `Operation.Storage`. The Proposed request contract selects preserving caller-owned `Completion<T>` while the context/backend owns a bounded arena of `RequestSlot` objects identified by context, slot, and generation. If accepted, this stages migration without making the current pointer/container implementation acceptable. |
 | Benefit | Preserves public submit signatures and avoids one-step Runtime/Batch/copy-pipeline migration while still enabling stable identity, bounded admission, and an allocation-independent accepted terminal path. |
 | Cost | Context/backend memory scales with configured capacity; caller cannot supply storage directly; current backends remain non-conforming until migrated. |
 | Current evidence | Current code: `completion.hpp`, backend-specific containers, and no RequestSlot arena. Target decision: ADR-explicit-io-request-contract Decisions 1–5. No production implementation exists yet. |
@@ -231,7 +231,7 @@ Status values:
 | ID | Status | Area |
 |----|--------|------|
 | DIV-01 | Approved | Context shape |
-| DIV-02 | Accepted transitional divergence | Operation storage ownership |
+| DIV-02 | Proposed transitional decision | Operation storage ownership |
 | DIV-03 | Corrective planned | Backend execution model |
 | DIV-04 | Approved | Wake integration |
 | DIV-05 | Approved | Observation interval |

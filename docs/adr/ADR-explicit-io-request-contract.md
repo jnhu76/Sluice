@@ -21,7 +21,15 @@ On acceptance, this ADR supersedes only the following portions of
 - lifecycle wording that treats `Completion` readiness alone as the complete request-storage
   lifecycle.
 
-It does **not** supersede:
+On acceptance, it also supersedes only these details of
+[ADR-explicit-io-completion-authority](ADR-explicit-io-completion-authority.md):
+
+- the direct backend claim transition `idle -> outstanding`, replacing it with the private
+  `idle -> binding -> outstanding` transition; and
+- the protected `try_claim` / `rollback_claim_before_accept` state details needed to implement
+  that two-stage claim. The access-control boundary and backend-only authority remain unchanged.
+
+It does **not** supersede the remaining decisions of:
 
 - [ADR-explicit-io-completion-authority](ADR-explicit-io-completion-authority.md), including private
   publication mutators, backend claim authority, reap-only publication, and fail-fast invalid
@@ -53,8 +61,10 @@ The operation descriptors (`ReadOp`, `WriteOp`, `SyncDataOp`, and `SyncAllOp`) c
 
 The caller continues to own `Completion<T>`. The context/backend owns a construction-time,
 bounded arena of reusable `RequestSlot` objects. A successful submit atomically binds one
-`Completion` to one `RequestKey`. The binding remains opaque and unforgeable to ordinary callers.
-The slot carries all per-request state needed to reach exactly one terminal result without a new
+`Completion` to one `RequestKey` through a private `idle -> binding -> outstanding` protocol. The
+`idle -> binding` CAS is the cross-context winner election; only its winner may initialize the
+opaque binding, and a release-store to `outstanding` is the commit/accept linearization point. The
+slot carries all per-request state needed to reach exactly one terminal result without a new
 unbounded allocation after acceptance.
 
 Submission is one five-stage transaction:
@@ -237,7 +247,7 @@ owns Completion<T>             owns bounded RequestSlot arena
 owns fd and borrowed buffer    owns request lifecycle and backend scratch
 ```
 
-This is an **Accepted transitional divergence** from Zig's caller-owned `Operation.Storage`:
+This ADR **proposes a transitional divergence** from Zig's caller-owned `Operation.Storage`:
 
 - it preserves current public submit signatures;
 - it avoids forcing Runtime, Batch, and copy-pipeline migration into the reference-core PR;
@@ -265,7 +275,8 @@ complete and audit its request:
 - an unforgeable `CompletionBase*` binding plus the result type/kind needed for safe publication;
 - terminal `Result` storage reserved before acceptance;
 - fixed or pre-reserved backend scratch;
-- single-waiter registration metadata or a Scheduler-owned waiter key;
+- single-waiter registration state, a stable opaque token, and its routing lease; the Scheduler
+  owns the referenced Fiber/runnable routing record, not the slot;
 - cancellation intent/state;
 - ready/pending queue linkage or an identity into a pre-reserved bounded queue;
 - fd identity; and
@@ -274,6 +285,15 @@ complete and audit its request:
 The slot borrows the user's buffer; it does not copy buffer contents. Operation-specific inline
 storage may be a union. Backend scratch must have a statically bounded or construction-time-bounded
 representation sufficient for the accepted terminal path.
+
+Each context/backend pair has one logical **leaf slot-lifecycle synchronization domain**. In the
+reference implementation it is the same mutex/domain used for slot admission. It serializes waiter
+registration, reap's registration-close/token-take/Completion-ready publication, reset/destructor
+release, generation increment, and publication of the slot back to the free arena. In particular,
+release/reuse cannot enter this domain until the old generation's reap critical section has left
+it. A later implementation may replace the mutex with provably equivalent atomics, but it may not
+split these transitions into independently racing domains. No code holding this domain calls
+ReadySink, Scheduler, user code, or backend progress.
 
 ## Decision 4: unified state machine
 
@@ -316,19 +336,19 @@ Backends may merge physical representations—for example a synthetic backend ma
 |---|---|---|---|---|
 | `free -> reserved` | Backend/context admission authority under its arena lock or equivalent atomic free-list operation | No request-time allocation; arena/startup allocation completed before submission | Failure is synchronous `would_block` for capacity; construction/startup failure is separately `no_space`; Completion remains idle | None |
 | `reserved -> prepared` | Admission authority; slot remains invisible to progress engines | No resource needed after commit may be newly unbounded; bounded preparation may use already reserved scratch | Validation/preparation failure rolls back to `free`, increments no accepted count, and returns synchronously | None |
-| `prepared -> pending` | Backend claim authority; one coordinated context/admission lock domain plus Completion CAS establishes both bindings | No | This is commit. Failure rolls back all pre-accept state and leaves Completion idle | None |
+| `prepared -> pending` | Backend claim authority; the Completion `idle -> binding` CAS elects one context, which initializes both bindings under its context/admission domain and release-stores `outstanding` | No | The final release-store is commit. Failure before it rolls back all pre-accept state and leaves Completion idle | None |
 | `pending -> enqueued` | Backend queue authority publishes pre-reserved linkage with release ordering | No; operation is `noexcept` | Cannot reject or lose the accepted request; unexpected inability is an invariant failure, not an ordinary retry/rejection path | Progress engine may be notified, but no Scheduler/Fiber routing occurs |
 | `enqueued -> running/kernel-owned` | Blocking worker dequeue or kernel submission accounting | No terminal-path dependency on allocation | Transient pressure or partial kernel submission leaves the unsubmitted request enqueued. Only an irrevocable dispatch failure with proof that no userspace/kernel execution reference remains may become a terminal error. | Backend progress notification only if the failure makes a request backend-ready |
 | accepted state `-> backend-ready` | First successful terminal-winner transition under slot CAS/lock | No | Winner stores exactly one terminal result; losers do nothing | Publish backend-ready progress through the backend's domain; Scheduler wake ABI is deferred |
-| `backend-ready -> completion-ready` | Designated `poll`/`wait_one`/reap authority validates key/binding, publishes through `AsyncBackend::publish` semantics, and decrements accepted-outstanding | No; the sink uses pre-reserved storage | Publication failure is an invariant violation; it cannot be converted to a second result | Emit identity-bearing ready event; Scheduler later routes the unique waiter |
-| `completion-ready -> free` | Caller `reset()` or destruction of a ready Completion performs a non-blocking context/backend slot-release handshake; representation is an implementation detail | No | Invalid/stale/double release fails safely and cannot affect a later generation | None; generation increments before reuse becomes visible |
+| `backend-ready -> completion-ready` | Designated `poll`/`wait_one`/reap authority validates key/binding, closes waiter registration and takes any token/lease under the shared leaf slot-lifecycle domain, publishes through `AsyncBackend::publish` semantics before releasing that domain, and decrements accepted-outstanding | No; the synchronous sink uses pre-reserved storage | Publication or sink-delivery failure is an invariant violation; it cannot be converted to a second result | After leaving the domain, deliver one by-value identity event synchronously before reap returns; the sink consumes the extracted delivery lease |
+| `completion-ready -> free` | Caller `reset()` or destruction of a ready Completion acquires that same slot-lifecycle domain after reap has left it; waiter registration must be closed with no stored token/lease | No | Invalid/stale/double release or an open/registered waiter state fails fast and cannot affect a later generation | Generation increments and release publishes the slot to the free arena before reuse becomes visible |
 
 `completion-ready` ends fd/buffer borrowing, but the slot remains bound until caller reset or
 destruction of the ready Completion completes the slot-release handshake. `result()` may be read
 without releasing the slot. Ready Completion destruction remains allowed, as selected by the
 Completion Authority ADR, and discards the result while releasing the slot without canceling,
-draining, allocating, or blocking. Quiescent backend/context destruction therefore requires all
-slots to be free, not merely an absence of kernel work.
+draining, allocating, or waiting for I/O or Scheduler progress. Quiescent backend/context
+destruction therefore requires all slots to be free, not merely an absence of kernel work.
 
 ## Decision 5: five-stage admission transaction
 
@@ -353,8 +373,37 @@ lifecycle/provenance misuse returns `invalid_state`; unsupported operation capab
 
 ### Commit / accept
 
-Commit is the successful `submit_*` linearization point. A single coordinated lock/atomic domain
-must make the following logically indivisible to observers:
+Commit is the successful `submit_*` linearization point. Different contexts have different
+admission locks, so a context lock alone cannot establish the Completion side of the binding. The
+Completion therefore has a private `binding` transient in addition to the lifecycle states selected
+by the Completion Authority ADR:
+
+```text
+idle
+  | backend-only CAS elects one submitting context
+  v
+binding
+  | binding payload and slot commit are complete; release-store
+  v
+outstanding
+```
+
+The winning submit performs this protocol while retaining its own context/admission lock:
+
+1. reserve and prepare its candidate `RequestSlot`;
+2. CAS the Completion from `idle` to `binding`; a competing context that loses this CAS cannot
+   write any Completion binding field and rolls back only its own candidate slot;
+3. initialize the Completion's private `RequestKey`, `ContextIdentity`, and slot-release
+   capability while `binding` remains exclusively owned by the winner;
+4. change the winning slot from `prepared` to `pending`, increment accepted-outstanding
+   accounting, and stage the fd/buffer borrow; and
+5. release-store the Completion from `binding` to `outstanding` before releasing the context lock.
+
+Step 5 is the commit/accept linearization point. Its acquire observers see the fully initialized
+binding and committed slot. Acceptance accounting is not independently published outside the
+context lock before Step 5; the fd/buffer borrow also begins logically at this linearization point,
+not while its metadata is merely staged. Together the steps make the following logically
+indivisible to observers:
 
 ```text
 Completion <-> RequestKey binding
@@ -364,9 +413,14 @@ accepted-outstanding accounting increment
 fd/buffer borrow begins
 ```
 
-The Completion CAS remains the publication-authority mechanism selected by PR #61. Implementations
-may sequence private writes under the admission lock, but no partial binding may escape: if the
-claim fails, every prepared slot field is rolled back before the lock is released.
+Steps 2–5 must not contain a recoverable operation after the winner has begun installing the
+binding. If any pre-linearization invariant failure is represented as rollback, it clears the
+winner's private binding fields, reverses slot/accounting/borrow staging, returns the slot to
+`free`, and release-stores `binding -> idle` before releasing the context lock. No observer may
+read binding payload while the Completion is `binding`: cancel and waiter registration/await
+return synchronous `invalid_state`, while reset and destruction fail fast in Debug and Release.
+`idle()` and `ready()` both report false, and `result()` remains invalid. This is the only protocol
+that authorizes writing the Completion-side `RequestKey`; losing contexts cannot overwrite it.
 
 ### Enqueue
 
@@ -412,10 +466,12 @@ Result<void> submit_sync_all(SyncAllOp, Completion<void>&);
 ```
 
 On success, the Completion privately binds the opaque `RequestKey`, `ContextIdentity`, and the
-non-blocking release capability needed by `reset()` or ready destruction. Ordinary callers cannot
-forge, replace, or inspect fields needed to authorize publication or release. A compatibility
-cancellation API may continue to accept `Completion&`; the context must resolve and validate its
-private key before asking the backend to cancel.
+allocation-free slot-release capability needed by `reset()` or ready destruction. Only the winner
+of the `idle -> binding` CAS may initialize those fields, and acquire observation of `outstanding`
+is required before any backend, cancel, or waiter path reads them. Ordinary callers cannot forge,
+replace, or inspect fields needed to authorize publication or release. A compatibility cancellation
+API may continue to accept `Completion&`; the context must resolve and validate its private key
+before asking the backend to cancel.
 
 No public `RequestHandle` is introduced. If callers later need independent request identity after
 Completion reset, a public handle requires a separate ADR/API PR.
@@ -455,12 +511,36 @@ an identity-preserving semantic equivalent of:
 ```cpp
 struct ReadyEvent {
     RequestKey key;
-    CompletionBase* completion;
     OperationKind kind;
+    OptionalWaiterDelivery waiter; // stable value token + Scheduler routing lease
 };
 
-void reap_ready(ReadySink& sink);
+void reap_ready(SynchronousReadySink& sink);
 ```
+
+This ADR selects the **synchronous ReadySink** ownership model. For each backend-ready request,
+reap:
+
+1. validates the `RequestKey` and Completion binding;
+2. enters the shared slot-lifecycle domain, closes further registration, and atomically takes an
+   optional registered waiter delivery (token plus routing lease);
+3. publishes the terminal result and release-stores the Completion as ready before leaving that
+   slot-lifecycle domain; and
+4. releases every slot/admission/backend-progress lock, then invokes the sink with a by-value event
+   before the reap call returns.
+
+The callback-scoped `ReadyEvent` does not contain a `Completion*` and must not carry a
+`RequestSlot*`. Reap holds no backend or slot lock while calling the sink. The sink handler is
+`noexcept`, allocation-independent, and invoked exactly once for each Completion-ready publication;
+it must not retain the event reference, call user code, wait for I/O, or use the key to reacquire
+mutable slot storage. It may copy the by-value key/kind and consume the move-only waiter delivery
+through pre-reserved routing state. Consequently a caller that observes ready may reset or destroy
+the Completion and release/reuse the slot while the synchronous sink finishes: the sink has no
+pointer that can dangle, and the extracted waiter delivery pins only its Scheduler routing record,
+not the slot generation. Sink delivery is part of reap and cannot be deferred as a queued
+`ReadyEvent` without a new ADR that introduces an explicit event lease/ack protocol. `RoutingLease`
+pins only the Scheduler routing record; it is not a lease on ReadyEvent, Completion, RequestSlot,
+or context.
 
 This freezes semantics, not syntax. Reap must preserve identity and backend-known order. A
 count-returning `poll()` may remain as a compatibility wrapper, but Scheduler must eventually
@@ -470,14 +550,75 @@ outcome origin and ready identity rather than reconstructing order with the proc
 
 ## Decision 10: waiter cardinality
 
-An accepted request supports at most one registered waiter. A second registration returns a
-synchronous `invalid_state`; it never silently overwrites the first registration and is not a
-Release-only hang or fail-fast shortcut. Batch/select are higher-level compositions and do not
-turn one request into a multi-waiter request.
+`RequestSlot` owns the waiter registration state and, while registered, one opaque
+`WaiterDelivery`. Scheduler owns the Fiber/runnable routing record referenced by that delivery and
+remains the only authority that routes it. The slot never stores, invokes, or routes a Fiber
+directly.
+
+Conceptually, a waiter delivery contains:
+
+```text
+WaiterToken = (SchedulerIdentity, RegistrationSlot, RegistrationGeneration)
+RoutingLease = move-only authority that pins that Scheduler routing record
+```
+
+The token is a stable value handle, never a raw Fiber/runnable pointer. Before registration, the
+Scheduler reserves the routing record and creates the token/lease without making terminal delivery
+depend on a later allocation. Successful slot registration transfers the lease into RequestSlot.
+Duplicate, invalid, or already-ready registration does not transfer the candidate lease; Scheduler
+reclaims it or completes inline as appropriate.
+Reap and waiter cancellation race to move the token/lease out exactly once; the loser neither
+routes nor retires the record. The winning path must consume/acknowledge the lease after routing.
+Scheduler cancellation, drain, and shutdown cannot destroy or reuse the routing record while a
+slot or synchronous ReadySink owns its lease.
+
+The registration state machine is:
+
+```text
+registration_open(no_waiter)
+  | register(token, RequestKey)
+  v
+registration_open(registered(token, lease))
+  | reap closes registration,        | waiter cancellation takes delivery
+  | takes delivery, publishes ready   v
+  v                                  registration_open(no_waiter)
+registration_closed(no_waiter)
+  + completion route
+
+registration_open(no_waiter)
+  | reap closes registration and publishes ready
+  v
+registration_closed(no_waiter)
+```
+
+Here `no_waiter` means no registration or lease remains stored in RequestSlot; an extracted
+Scheduler delivery lease may still be in the synchronous sink or cancellation winner and is
+independent of slot release/reuse.
+
+Registration and either token-taking transition serialize in the shared slot-lifecycle domain.
+Reap holds that domain from closing registration through the Completion-ready release-store,
+so no waiter can install a token in between token extraction and ready publication. If registration
+wins, reap takes and synchronously delivers that token. If reap wins, registration acquires the
+domain only after ready is visible and returns immediately without installing a token. A second
+registration while `registration_open(registered(token, lease))` returns synchronous `invalid_state`
+without overwriting or consuming the first token. Batch/select are higher-level compositions and do
+not turn one request into a multi-waiter request.
 
 Wait cancellation removes or disables only that waiter registration. It does not cancel the I/O,
 does not choose a terminal result, and does not end the fd/buffer borrow. Operation cancellation is
-an explicit separate action.
+an explicit separate action. A waiter-cancellation winner owns the moved delivery until it routes
+the cancellation outcome and acknowledges the lease. A reap winner moves the delivery into the
+callback-scoped ReadyEvent; ReadySink routes or otherwise resolves it and acknowledges the lease
+before returning. Both winning paths leave the slot-lifecycle domain before calling Scheduler.
+Phase B proves the abstract transfer and exactly-once rules with fake stable tokens/leases and no
+Scheduler modification. Phase F implements and proves actual Scheduler record lifetime,
+cancellation, drain, and shutdown integration; Phase B alone is not that evidence.
+
+Slot release requires `registration_closed(no_waiter)`. Reset or destruction that encounters open
+registration or a stored token/lease is a contract violation and fails fast in Debug and Release; it
+never silently discards the waiter or increments generation. Once reap or waiter cancellation has
+taken the delivery, routing no longer depends on the slot. The owner of an actual wait must still keep
+the Completion alive and stable until that wait has resumed or otherwise stopped using it.
 
 ## Decision 11: cancellation target and disposition
 
@@ -575,9 +716,25 @@ Backend/context destruction remains quiescent and fail-fast:
 
 Completion destruction preserves the accepted Completion Authority contract: destroying an idle
 or ready Completion is allowed, while destroying an outstanding/publishing/resetting Completion
-fails fast. A ready Completion destructor must perform the same allocation-free, non-blocking slot
-release as `reset()` before its address becomes invalid. This is terminal-storage cleanup, not an
-implicit I/O cancel or drain.
+fails fast. The proposed `binding` transient is also fail-fast for reset and destruction. A ready
+Completion destructor must perform the same allocation-free slot release as `reset()` before its
+address becomes invalid. This is terminal-storage cleanup, not an implicit I/O cancel or drain.
+
+Here, “does not block” is not a lock-free guarantee. Slot release:
+
+- is allocation-free and must not wait for I/O progress, worker completion, cancellation, drain,
+  backend progress, or Scheduler activity;
+- may perform one bounded internal synchronization operation under the same leaf slot-lifecycle
+  domain used by waiter registration and reap-ready publication;
+- does not call user code, invoke a ReadySink, enter Scheduler, or acquire a backend progress lock;
+- verifies waiter registration is closed with no stored token/lease, clears the Completion binding,
+  increments generation, decrements slot-in-use, and makes the slot reusable in that domain; and
+- relies on the lifecycle rule that the context/backend remains alive until every bound slot is
+  released; the release capability does not make context destruction race-safe.
+
+The slot-lifecycle domain is a leaf in the lock order: code holding it cannot call upward into
+Scheduler or backend progress. Mutex contention for this bounded critical section is permitted;
+waiting for an asynchronous actor or condition is not.
 
 The required explicit lifecycle is:
 
@@ -665,10 +822,14 @@ that replacement.
 
 ## Scheduler and Batch migration target
 
-Scheduler will consume `ReadyEvent`/`RequestKey`, validate the unique waiter registration, and
-retain sole authority to route the corresponding Fiber. Backends never route Fibers. The mechanism
-that signals backend-ready progress into Scheduler wake belongs to the later wake-integration PR;
-this ADR adds no new lock edge or polling assumption.
+Scheduler will supply a stable value token and routing lease at registration and consume the
+delivery taken by reap or waiter cancellation. RequestSlot validates the unique registration;
+Scheduler retains sole authority to map the token/epoch to and route the corresponding Fiber, and
+the lease prevents early record retirement or reuse. Backends never route Fibers. The
+synchronous ReadySink receives no Completion or slot pointer, is invoked without backend/slot
+locks held, and invokes no user code. The
+mechanism that signals backend-ready progress into Scheduler wake belongs to the later
+wake-integration PR; this ADR adds no new lock edge or polling assumption.
 
 Batch must represent whether an outcome originated from synchronous admission rejection or from an
 accepted terminal completion. It must not encode this distinction as `reap_seq == 0`. Once
@@ -679,8 +840,9 @@ non-authoritative diagnostics.
 
 1. **I1 — Stable identity.** Every accepted request has exactly one
    `(ContextIdentity, SlotIndex, Generation)` key.
-2. **I2 — Single binding.** One outstanding/non-idle Completion is bound to exactly one current
-   RequestKey, and one in-use slot is bound to exactly one Completion.
+2. **I2 — Single binding.** The `idle -> binding` CAS elects exactly one context. Only its winner
+   installs one current RequestKey; acquire observation of `outstanding` sees that complete
+   binding, and one in-use slot is bound to exactly one Completion.
 3. **I3 — Transactional rejection.** A failed submit leaves Completion idle, no accepted slot, no
    borrow, no outstanding-count increment, and no background execution.
 4. **I4 — Accepted terminality.** A successful submit eventually yields exactly one terminal
@@ -701,20 +863,27 @@ non-authoritative diagnostics.
     rejected synchronously without changing the first.
 14. **I14 — Admission/result separation.** A rejection is never fabricated as an accepted async
     completion, and a post-commit error is never retroactively reported as rejection.
+15. **I15 — No half-binding observation.** Cancel, await/registration, reset, destruction, and
+    publication cannot read or act on binding payload while Completion state is `binding`.
+16. **I16 — Non-escaping ready delivery.** Reap closes waiter registration, takes any stable
+    token/routing lease, and publishes ready in the shared slot-lifecycle domain. It then
+    synchronously delivers a by-value event with no Completion/slot pointer; slot release or
+    generation reuse cannot dangle the event, lose a token installed in the publication window, or
+    retire the Scheduler routing record before sink acknowledgement.
 
 ## Linearization points
 
 | Event | Authority and atomic/lock domain | Observable consequence | Wake obligation |
 |---|---|---|---|
-| submit accepted | Backend admission authority; coordinated slot/admission lock plus Completion CAS | Binding becomes current, slot is pending, borrow and accepted-outstanding accounting begin, submit may return success | None until progress engine/backend-ready |
+| submit accepted | Backend admission authority; Completion `idle -> binding` CAS elects one context, which commits its slot/accounting and release-stores `binding -> outstanding` under its slot/admission lock | The release-store is the linearization point; acquire observers see the complete binding, pending slot, borrow, and accepted-outstanding accounting; submit may return success | None until progress engine/backend-ready |
 | submit rejected | Admission authority before commit; same lock domain completes rollback | Completion is idle, slot free, no borrow/execution; submit returns an error | None |
 | cancel requested | Backend cancellation authority validates RequestKey then atomically records intent or queues pre-reserved cancel work | Returns `requested` unless terminal/absent/unsupported; no promise that canceled wins | Notify backend progress engine only if needed |
 | terminal winner selected | Slot state CAS/lock changing an accepted state to backend-ready | Exactly one terminal result becomes immutable | Backend-ready progress notification; no direct Fiber routing |
 | backend-ready publication | Same terminal transition plus release publication of ready linkage | Reap can observe stable key/result | Backend domain signal; Scheduler bridge deferred |
-| Completion-ready publication | Designated reap authority under backend/context reap domain plus Completion publish CAS | Caller may observe result; fd/buffer borrow ends; accepted-outstanding decrements; ReadyEvent is delivered | Scheduler may route the registered waiter using the event |
-| waiter registration | Scheduler registration authority validates bound key under Scheduler global/registration lock | One waiter owns the current request wait registration | If already completion-ready, enqueue that waiter once |
-| waiter cancellation | Scheduler registration authority removes/disarms the matching waiter token/key | Wait ends/cancels; I/O and borrow remain active | Wake only the canceled waiter as required by Scheduler semantics |
-| slot release/generation increment | Caller reset or ready-Completion destructor invokes the non-blocking context release capability under the slot/admission domain | Completion binding clears, slot-in-use decrements, slot becomes free, old key becomes stale before reuse | Capacity waiter/observer may be notified; no Fiber routing implied |
+| Completion-ready publication | Designated reap authority validates key/binding, closes registration and takes any waiter delivery lease under the shared leaf slot-lifecycle domain, publishes ready before releasing that domain, then synchronously invokes ReadySink | Caller may observe result; fd/buffer borrow ends; accepted-outstanding decrements; callback-scoped event has no Completion/slot pointer | Sink consumes the extracted lease before reap returns; no later slot lookup |
+| waiter registration | RequestSlot registration authority validates the acquire-observed bound key and stores one Scheduler-supplied stable token/routing lease only while registration is open | Slot state is `registration_open(registered(token, lease))`; a second registration is `invalid_state`; closed registration observes ready without storing | If already completion-ready, return ready without registering |
+| waiter cancellation | RequestSlot registration authority moves out the matching token/lease under the same domain; Scheduler owns routing and lease acknowledgement | Wait ends/cancels; I/O and borrow remain active; the losing path cannot retire the routing record | Route only the canceled waiter and acknowledge its lease as required by Scheduler semantics |
+| slot release/generation increment | Caller reset or ready-Completion destructor acquires the same leaf slot-lifecycle domain after reap leaves it; requires closed waiter registration with no stored token/lease | Completion binding clears, generation increments, slot-in-use decrements, and only then is the slot published free; the old key is stale before reuse | Capacity observer may be notified within the bounded domain; no user code, Scheduler, backend-progress lock, or Fiber routing |
 | admission closure | Context lifecycle authority atomically closes the admission flag under lifecycle/admission domain | Later submit is synchronous `invalid_state`; accepted requests remain drainable | Wake any admission waiters if such an API is later introduced |
 
 ## Zig conformance and divergence classification
@@ -727,8 +896,8 @@ source-derived reference, not copied as an ABI.
 |---|---|---|
 | Explicit typed operation descriptor | Faithful semantic preservation | Separate C++ structs preserve the tagged-operation purpose. |
 | Stable reusable request storage and identity-bearing completion | Faithful semantic restoration | Bounded slot/generation identity restores the core property, with different ownership. |
-| Caller-owned `Operation.Storage` | Intentional transitional C++ adaptation | Backend/context owns the first arena to preserve API and stage migration; DIV-02 records the revisit trigger. |
-| `Pending.Userdata` inline scratch ABI | Intentional C++ adaptation | Logical bounded scratch is required; exact fixed-word Zig layout is not. |
+| Caller-owned `Operation.Storage` | Proposed transitional C++ adaptation | If accepted, backend/context owns the first arena to preserve API and stage migration; DIV-02 records the pending decision and revisit trigger. |
+| `Pending.Userdata` inline scratch ABI | Proposed C++ adaptation | If accepted, logical bounded scratch is required; exact fixed-word Zig layout is not. |
 | Threaded task model | Permanent structural divergence at this layer | Sluice blocking offload is an I/O mechanism, not Zig's task execution strategy. |
 | Integrated Evented scheduler/backend wake | Accepted divergence plus deferred capability | Sluice keeps Scheduler routing separate; identity-bearing progress comes first, wake bridge later. |
 | Structured cancel-protection regions | Deferred capability | This request contract does not add them. |
@@ -780,8 +949,9 @@ The sequence has no reverse dependency on Scheduler, Runtime, or a persistent wo
 1. **Phase A — this ADR:** `docs(adr): define unified Explicit I/O Request Contract`.
 2. **Phase B — reference core:**
    `feat(async): add bounded RequestKey / RequestSlot reference lifecycle`; implement only
-   RequestKey, arena/slot state machine, Fake, Sync/Synthetic, an independent ReadySink, and the
-   initial conformance tests. Do not modify Scheduler.
+   RequestKey, the Completion `binding` transient, arena/slot and waiter-token state machines,
+   Fake, Sync/Synthetic, a synchronous non-escaping ReadySink, and the initial conformance tests.
+   Use fake stable waiter tokens/leases; do not modify Scheduler.
 3. **Phase C — conformance framework:**
    `test(async): enforce explicit request lifecycle across backends`; cover capacity, rejection,
    generation, cancel, dispatch failure, exactly-once, shutdown, and identity-bearing reap.
@@ -791,7 +961,8 @@ The sequence has no reverse dependency on Scheduler, Runtime, or a persistent wo
    `refactor(async): replace per-op threads with bounded blocking-I/O workers`.
 6. **Phase F — Scheduler/Batch integration:**
    `refactor(runtime): consume identity-bearing reap events`; remove O(N) Completion scanning,
-   global reap ordering authority, and waiter overwrite.
+   global reap ordering authority, and waiter overwrite; implement the real Scheduler routing-record
+   token/lease lifecycle across completion, waiter cancel, drain, and shutdown.
 7. **Phase G — wake integration:**
    `feat(runtime): bridge backend-ready progress to Scheduler wake` without giving the backend
    Fiber-routing authority.
@@ -828,7 +999,8 @@ and completion-ready are distinct; slot release invalidates the generation befor
 ### Gate 3 — wake and progress
 
 - Backend-ready publishes a stable key/result into pre-reserved ready linkage.
-- Reap alone makes Completion ready and emits identity to its consumer.
+- Reap alone makes Completion ready, takes any waiter token/routing lease, and synchronously emits
+  a by-value identity event with no Completion/slot pointer.
 - Scheduler remains the only Fiber-routing authority.
 - This ADR introduces no backend-to-Scheduler lock edge and promises no new polling interval.
 - The final backend-ready progress signal/wake interface is Phase G work.
@@ -841,6 +1013,8 @@ The implementation/conformance PRs must add evidence for:
 - capacity-full rejection with unchanged Completion;
 - injected failure at reserve, prepare, commit boundary, and dispatch, plus proof that enqueue is
   allocation-free and cannot produce an ordinary recoverable failure;
+- two-context contention for one Completion, proving that only the `idle -> binding` CAS winner
+  installs binding payload and that no operation observes a half binding;
 - OOM/failure after commit without loss, hang, or worker exception escape;
 - identity-bearing completion order and exact RequestKey preservation;
 - generation reuse and stale submit/cancel/CQE/waiter attempts;
@@ -849,10 +1023,19 @@ The implementation/conformance PRs must add evidence for:
   terminal publication or slot reuse;
 - exactly one terminal winner and one Completion publication;
 - duplicate waiter synchronous `invalid_state` and wait-cancel/I/O independence;
+- synchronous ReadySink delivery with reset/destruction and generation reuse during the callback,
+  proving the event carries no dangling Completion/slot pointer and the extracted token/lease is
+  not lost;
+- waiter cancel/reap/shutdown races proving the delivery lease pins the Scheduler routing record
+  through exactly one route and acknowledgement (Phase F for the real Scheduler);
+- exactly one `noexcept`, allocation-independent sink callback per Completion-ready publication;
+- fail-fast reset/destruction if slot waiter state is still `registered`;
 - borrow lifetime through backend-ready, cancel, dispatch failure, and reap;
 - graceful close/drain, rejection after admission close, quiescent destroy, and death on non-free
   destroy;
-- allocation-free slot release on both ready `reset()` and allowed ready Completion destruction;
+- allocation-free slot release on both ready `reset()` and allowed ready Completion destruction,
+  with no wait for I/O/Scheduler/backend progress, no upward lock acquisition, and proof that the
+  shared slot-lifecycle domain prevents release/reuse from overtaking old-generation reap;
 - backend-agnostic conformance for Fake, Sync/Synthetic, Uring, and blocking offload;
 - negative compile proof that ordinary callers cannot claim/publish/rollback or forge a binding;
 - Release coverage for fail-fast contracts; and
@@ -867,8 +1050,8 @@ No Gate 4 item is marked passed by this documentation-only ADR.
 - Portable interruption of a running blocking syscall.
 - The final backend-ready-to-Scheduler wake capability and lock-free/lock-order details.
 - Whether a public `RequestHandle` is needed independently of Completion.
-- The representation of the fixed non-blocking Completion reset/ready-destruction release
-  capability and any completion-ready tombstone.
+- The representation of the fixed Completion reset/ready-destruction release capability and any
+  completion-ready tombstone, within Decision 15's allocation and synchronization constraints.
 - How context identity is generated and retained without creating process-global lifetime hazards.
 
 ## Next PR
@@ -880,6 +1063,7 @@ feat(async): add bounded RequestKey / RequestSlot reference lifecycle
 ```
 
 Its scope is limited to `RequestKey`, the bounded `RequestSlot` arena, FakeAsyncBackend,
-Sync/Synthetic backend, an independent `ReadySink`, and conformance tests. It must not jump to the
+the Completion `binding` transient, Sync/Synthetic backend, a synchronous non-escaping
+`ReadySink`, fake stable waiter tokens/leases, and conformance tests. It must not jump to the
 persistent blocking worker pool, Scheduler integration, Batch migration, Runtime wake integration,
 or public `RequestHandle` work.
