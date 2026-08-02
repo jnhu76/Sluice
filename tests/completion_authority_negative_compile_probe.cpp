@@ -13,7 +13,11 @@
 // Without any NEG_* macro, this file compiles cleanly (positive control): it
 // exercises only the public caller-facing API (idle/outstanding/ready/result/
 // reset), and it also instantiates Completion<NothrowValue> as a positive
-// compile-time check that a value type satisfying all four traits is accepted.
+// compile-time check that a value type satisfying every Completion<T> trait
+// (nothrow default-constructible, copy-constructible, nothrow move-assignable,
+// nothrow destructible) is accepted. The full claim -> publish -> result()
+// round-trip for a NothrowValue is exercised at runtime in
+// async_completion_test.cpp (where a backend is available to drive it).
 #include <sluice/async/completion.hpp>
 #include <sluice/result.hpp>
 
@@ -25,10 +29,14 @@ using sluice::Result;
 
 // A value type that satisfies every Completion<T> trait (positive compile
 // case). Keep this small: it exists to prove the contract is satisfiable and
-// that a conforming type instantiates cleanly.
+// that a conforming type instantiates cleanly. It is deliberately NOT move-
+// only: result() returns the stored result by value, so T must be
+// copy-constructible (ADR-explicit-io-completion-authority §4).
 struct NothrowValue {
     int v = 0;
     NothrowValue() noexcept = default;
+    NothrowValue(const NothrowValue&) noexcept = default;
+    NothrowValue& operator=(const NothrowValue&) noexcept = default;
     NothrowValue(NothrowValue&&) noexcept = default;
     NothrowValue& operator=(NothrowValue&&) noexcept = default;
     ~NothrowValue() noexcept = default;
@@ -101,11 +109,16 @@ void neg_reap_seq_private() {
 #if defined(NEG_THROWING_COMPLETION_VALUE)
 // A value type whose move-assignment may throw violates the Completion<T>
 // noexcept value-type contract. Instantiating Completion<ThrowingMoveValue>
-// must fail to compile via the static_assert traits in completion.hpp.
+// must fail to compile via the static_assert traits in completion.hpp. It is
+// copy-constructible and nothrow move-constructible so that ONLY the
+// move-assignable trait fails (no unrelated deleted-copy-constructor noise),
+// and its throwing move-assign operator returns *this so the compile failure
+// is attributable to the static_assert, not to -Wreturn-type.
 struct ThrowingMoveValue {
     ThrowingMoveValue() noexcept = default;
+    ThrowingMoveValue(const ThrowingMoveValue&) noexcept = default;
     ThrowingMoveValue(ThrowingMoveValue&&) noexcept = default;
-    ThrowingMoveValue& operator=(ThrowingMoveValue&&) noexcept(false) {}  // throws
+    ThrowingMoveValue& operator=(ThrowingMoveValue&&) noexcept(false) { return *this; }  // throws
     ~ThrowingMoveValue() noexcept = default;
 };
 void neg_throwing_completion_value() {

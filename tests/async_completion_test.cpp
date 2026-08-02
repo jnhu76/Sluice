@@ -19,6 +19,20 @@
 using namespace sluice::async;
 using sluice::Result;
 
+// A value type satisfying every Completion<T> trait (ADR §4: nothrow default-
+// constructible, copy-constructible, nothrow move-assignable, nothrow
+// destructible). Deliberately NOT move-only: result() returns the stored
+// result by value, so T must be copy-constructible.
+struct NothrowValue {
+    int v = 0;
+    NothrowValue() noexcept = default;
+    NothrowValue(const NothrowValue&) noexcept = default;
+    NothrowValue& operator=(const NothrowValue&) noexcept = default;
+    NothrowValue(NothrowValue&&) noexcept = default;
+    NothrowValue& operator=(NothrowValue&&) noexcept = default;
+    ~NothrowValue() noexcept = default;
+};
+
 // ---- Slice 1: Completion<T> lifecycle --------------------------------------
 
 SLUICE_TEST_CASE(completion_starts_idle) {
@@ -64,6 +78,38 @@ SLUICE_TEST_CASE(completion_reset_returns_to_idle_and_reusable) {
     SLUICE_CHECK(pb.claim(c));
     pb.publish_completion(c, Result<std::size_t>{std::size_t{99}});
     SLUICE_CHECK(c.result().value() == 99);
+}
+
+// Value-type contract (ADR §4): a copy-constructible nothrow value type
+// round-trips the FULL public lifecycle — claim -> publish -> result() — so
+// result()'s by-value (copy-out) return path is exercised with a real value,
+// not just instantiated (the negative-compile probe only proves instantiation).
+SLUICE_TEST_CASE(completion_nothrow_value_full_lifecycle) {
+    ProbeBackend pb;
+    Completion<NothrowValue> c;
+    SLUICE_CHECK(pb.claim(c));
+    SLUICE_CHECK(c.outstanding());
+
+    NothrowValue val;
+    val.v = 42;
+    pb.publish_completion(c, Result<NothrowValue>{std::move(val)});
+    SLUICE_CHECK(c.ready());
+    auto r = c.result();
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(r.value().v == 42);
+    // result() copies the value out; the Completion keeps its copy until
+    // reset() (still ready, not cleared).
+    SLUICE_CHECK(c.ready());
+    c.reset();
+    SLUICE_CHECK(c.idle());
+
+    // Reusable for a second op with a different value.
+    NothrowValue val2;
+    val2.v = 7;
+    SLUICE_CHECK(pb.claim(c));
+    pb.publish_completion(c, Result<NothrowValue>{std::move(val2)});
+    SLUICE_CHECK(c.result().value().v == 7);
+    c.reset();
 }
 
 // ---- Slice 2: result() before ready is a contract violation (L9) -----------

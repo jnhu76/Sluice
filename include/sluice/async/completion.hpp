@@ -6,13 +6,13 @@
 // reference to submit_*.
 //
 // Completion<T> is an asynchronous terminal-publication cell. Its stored value
-// type T MUST support the non-throwing lifecycle operations required by the
-// reap/reset path: nothrow default construction (the idle Storage is value-
-// initialized), nothrow move construction and move assignment (the reap path
-// moves the terminal Result<T> into storage; result() moves it out), and
-// nothrow destruction (storage is torn down inside the noexcept reset()). These
-// requirements are compile-enforced below; Completion<void> carries no value
-// and does not impose them.
+// type T MUST support the operations required by the reap/result path: nothrow
+// default construction (the idle Storage is value-initialized), nothrow move
+// assignment (the reap path assigns the terminal value into storage), copy
+// construction (result() returns the stored result BY VALUE — it does not move
+// it out), and nothrow destruction (storage is torn down inside the noexcept
+// reset()). These requirements are compile-enforced below; Completion<void>
+// carries no value and does not impose them.
 //
 // Authority model (ADR-explicit-io-completion-authority):
 //
@@ -42,8 +42,9 @@
 //    ▲                                                                    │
 //    └───────────────caller reset() (ready → resetting → idle)────────────┘
 //
-// Internal transients (never caller-visible lifecycle states; query methods
-// report them as outstanding):
+// Internal transients (never caller-visible lifecycle states): query methods
+// report `publishing` as outstanding (op not yet reaped); `resetting` reports
+// as neither idle nor ready (prior result still being cleared):
 //
 //   outstanding ──publish CAS──> publishing ──build result──> ready
 //   ready ──reset CAS──> resetting ──clear result──> idle
@@ -119,17 +120,22 @@ class Completion {
 public:
     using value_type = T;
 
-    // Compile-enforced value-type contract (header docblock). Each trait below
-    // corresponds to a real operation the noexcept reap/reset path performs on
-    // a T; a throwing T would escape the noexcept boundary via std::terminate
-    // without being a deliberate Completion-authority fail-fast.
+    // Compile-enforced value-type contract (header docblock). Each nothrow
+    // trait below corresponds to a real operation the noexcept reap/reset path
+    // performs on a T; a throwing T would escape the noexcept boundary via
+    // std::terminate without being a deliberate Completion-authority fail-fast.
+    // Copy construction is required by the (non-noexcept) result() return path.
     static_assert(std::is_nothrow_default_constructible_v<T>,
                   "Completion<T> requires a nothrow default-constructible "
                   "value type (idle storage is value-initialized)");
-    static_assert(std::is_nothrow_move_constructible_v<T>,
-                  "Completion<T> requires a nothrow move-constructible value "
-                  "type (reap moves the terminal Result<T> into storage; "
-                  "result() moves it out)");
+    // result() returns the stored result by value: Storage::as_result() copies
+    // the value into the returned Result<T> (it never moves it out — the
+    // caller receives a copy and the Completion keeps its value until reset).
+    // Deliberately NOT a nothrow trait: result() is not noexcept, so a throwing
+    // copy propagates to the caller like any ordinary return.
+    static_assert(std::is_copy_constructible_v<T>,
+                  "Completion<T> requires a copy-constructible value type "
+                  "(result() returns the stored result by value)");
     static_assert(std::is_nothrow_move_assignable_v<T>,
                   "Completion<T> requires a nothrow move-assignable value type "
                   "(publish_from_reap assigns the terminal value into storage)");
@@ -161,9 +167,10 @@ public:
 
     // --- query (caller-accessible) ---
     bool ready() const noexcept { return state_.load(std::memory_order::acquire) == State::ready; }
-    // publishing and resetting are internal transients: the op is neither idle
-    // nor ready, so report it as outstanding (not yet reaped for publishing;
-    // not reusable for resetting).
+    // publishing is an internal publication transient: the op is not yet ready,
+    // so it still reports as outstanding. resetting is a caller-lifecycle
+    // transient: the prior result is being cleared, so it reports as neither
+    // idle nor ready (not outstanding) — the Completion is not yet reusable.
     bool outstanding() const noexcept {
         State s = state_.load(std::memory_order::acquire);
         return s == State::outstanding || s == State::publishing;
@@ -308,6 +315,10 @@ struct Completion<T>::Storage {
         if (r.has_value()) { value = std::move(r.value()); has_value = true; has_error = false; }
         else { error = r.error(); has_error = true; has_value = false; }
     }
+    // Returns the stored result BY VALUE: the stored `value` is copied into
+    // the returned Result<T> (never moved out — the Completion keeps its copy
+    // until reset()). T copy-constructibility is enforced by the Completion<T>
+    // static_asserts.
     Result<T> as_result() const {
         if (has_value) return value;
         return make_unexpected<T>(error);

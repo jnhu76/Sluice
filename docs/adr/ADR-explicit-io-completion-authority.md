@@ -118,22 +118,29 @@ methods report both as not-idle/not-ready (`publishing` as outstanding,
 ### Value-type contract (Completion<T>)
 
 `Completion<T>` is an asynchronous terminal-publication cell. Its stored value
-type T MUST support the non-throwing lifecycle operations the reap/reset path
-performs. These are compile-enforced by `static_assert` on the template:
+type T MUST support the operations the reap/result path performs. These are
+compile-enforced by `static_assert` on the template:
 
 ```text
 is_nothrow_default_constructible_v<T>  (idle storage is value-initialized)
-is_nothrow_move_constructible_v<T>     (result() moves the value out)
+is_copy_constructible_v<T>             (result() returns the stored result by value)
 is_nothrow_move_assignable_v<T>        (publish_from_reap assigns the value in)
 is_nothrow_destructible_v<T>           (reset tears storage down, noexcept)
 ```
 
+`result()` returns the stored result BY VALUE — it copies it out; it does NOT
+move it out (the Completion keeps its copy until `reset()`). The copy trait is
+deliberately NOT a nothrow trait: `result()` is not `noexcept`, so a throwing
+copy propagates to the caller like any ordinary return. The `noexcept` reap/
+reset path is covered by the default-construction, move-assignment, and
+destruction traits.
+
 `Completion<void>` carries no value, so these traits do not apply; its
 bool/IoError publication path is noexcept by construction. A type that fails a
 trait fails to instantiate `Completion<T>` at compile time (negative-compile
-gate: `NEG_THROWING_COMPLETION_VALUE`). This is NOT a deliberate fail-fast — a
-throwing T must never escape the `noexcept` reap/reset boundary via
-`std::terminate`.
+gate: `NEG_THROWING_COMPLETION_VALUE`): a throwing T must never escape the
+`noexcept` reap/reset boundary via `std::terminate`, and a non-copyable T
+cannot satisfy `result()`'s by-value return.
 
 ---
 

@@ -1140,10 +1140,11 @@ mutators (`try_claim`, `publish`, `rollback_claim_before_accept`) are PRIVATE
 not `noexcept`; `reset()` is `noexcept`.
 
 `Completion<T>` is an asynchronous terminal-publication cell; its value type `T`
-must be nothrow default-constructible, nothrow move-constructible, nothrow
+must be nothrow default-constructible, copy-constructible, nothrow
 move-assignable, and nothrow destructible (compile-enforced by `static_assert`
-on the template — these cover the `noexcept` reap/reset path). `Completion<void>`
-carries no value, so these traits do not apply.
+on the template). `result()` returns the stored result by value — it copies it
+out, it does not move it out; the Completion keeps its copy until `reset()`.
+`Completion<void>` carries no value, so these traits do not apply.
 
 ```cpp
 template <class T>

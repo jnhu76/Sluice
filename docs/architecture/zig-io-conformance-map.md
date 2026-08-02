@@ -33,7 +33,7 @@ Classification key:
 | `Select` (multi-wait winner protocol) | Wait on multiple sources; exactly-once winner | E13 `select()` template + `SelectGroup`/`SelectPort`/`SelectArmSlot` | **F** | `scheduler.hpp:16`; `select_fwd.hpp`; E13 spec | Implemented with exactly-once winner CAS. |
 | Registered buffers / files | Kernel-pinned buffers for zero-copy io_uring | Not implemented | **M** | ADR-async-io-model §5 (deferred); §14 | Explicitly deferred pending lifetime contract. |
 | Signal-based blocking syscall cancellation | `pthread_kill`/`tgkill` to interrupt blocking I/O | Not implemented | **M** | `threadpool_backend.hpp:29-33` | Portable cancel of in-flight blocking syscall deferred. Cancel is best-effort (op completes with real result). |
-| `AsyncBackend` (L0 internal seam) | Backend implementations are library-internal; caller never subclasses or sees backend internals | `AsyncBackend` abstract class in PUBLIC installed header; `RuntimeBuilder::backend()` accepts `unique_ptr<AsyncBackend>`; any user can subclass | **U** | `async_io_context.hpp:52-115`; `application_runtime.hpp` builder API | ADR claims L0 is "never public-facing" but the type is a public extension point. Users CAN and MUST subclass it to provide custom backends. This forces Completion mutators public (backend subclasses need them). Must decide: truly internal (selector/config API) or formally public (backend author contract). See DIV-13. |
+| `AsyncBackend` (L0 internal seam) | Backend implementations are library-internal; caller never subclasses or sees backend internals | Public `AsyncBackend` extension point with trusted backend-author contract. `Completion` mutation stays private; derived backends receive protected `try_claim` / `publish` / `rollback_claim_before_accept` capabilities | **I** | ADR-explicit-io-completion-authority §3; DIV-13 (Accepted); `completion.hpp` (private mutators + friend AsyncBackend); `scripts/verify-completion-authority-negative-compile.sh` | Custom/test backends remain injectable without exposing mutation APIs to ordinary callers. Backend subclasses enter the trusted computing base and must pass a future backend conformance suite. |
 
 ---
 
@@ -42,11 +42,11 @@ Classification key:
 | Class | Count | Key areas |
 |-------|-------|-----------|
 | F (Faithful) | 5 | Operation, operate, futex/sync, Group, Select |
-| I (Intentional) | 6 | Io capability shape, Batch (driver adaptation), Threaded naming, Evented (execution F / backend I / wake I), completion wake bridge, SyncDataOp/SyncAllOp |
+| I (Intentional) | 7 | Io capability shape, Batch (driver adaptation), Threaded naming, Evented (execution F / backend I / wake I), completion wake bridge, SyncDataOp/SyncAllOp, AsyncBackend public extension point |
 | A (Accidental) | 2 | Resource bounds (unbounded ThreadPoolBackend), Pending.Userdata heap model |
 | M (Missing) | 3 | CancelProtection, registered buffers, signal-based syscall cancel |
 | O (Obsolete) | 0 | — |
-| U (Unresolved) | 2 | Operation.Storage separation, AsyncBackend public-vs-internal |
+| U (Unresolved) | 1 | Operation.Storage separation |
 
 ---
 
@@ -85,8 +85,11 @@ Classification key:
    integrated Io vtable) is an intentional structural divergence. The
    coarse single-F classification masked these differences.
 
-7. **AsyncBackend** is classified **U** (Unresolved). The ADR claims it is
-   an internal seam, but it is a public installed header that users subclass.
-   This contradiction forces Completion mutators public and prevents
-   structural authority enforcement. Must be resolved by explicit decision:
-   truly internal (Choice A) or formally public extension point (Choice B).
+7. **AsyncBackend** is classified **I** (Intentional Divergence), not **U**.
+   DIV-13 is Accepted: the ADR claim that L0 is an internal seam is superseded
+   by the public extension point decision (ADR-explicit-io-completion-authority
+   §3). Publication mutators stay private on `Completion<T>`; derived backends
+   receive the protected `try_claim` / `publish` / `rollback_claim_before_accept`
+   helpers as the sanctioned backend-author capability. Ordinary non-backend
+   callers still cannot forge publication (negative-compile gate). A backend
+   conformance suite is a follow-up requirement.
