@@ -7,10 +7,13 @@
 //
 // Authority model (ADR-explicit-io-completion-authority):
 //
-//   Publication mutators (claim/publish) are PRIVATE. Only AsyncBackend
-//   (via friend) can access them. Derived backends use the protected
-//   AsyncBackend::try_claim / AsyncBackend::publish static helpers.
-//   Ordinary application code CANNOT forge publication transitions.
+//   Publication mutators (claim/publish/rollback) are PRIVATE. Only
+//   AsyncBackend (via friend) can access them. Derived backends use the
+//   protected AsyncBackend::try_claim / AsyncBackend::publish /
+//   AsyncBackend::rollback_claim_before_accept static helpers. Ordinary
+//   non-backend application code cannot forge publication transitions; code
+//   that deliberately derives AsyncBackend enters a trusted backend-author
+//   role and is granted publication capability (ADR §3).
 //
 // Lifecycle:
 //
@@ -26,13 +29,23 @@
 //
 // State machine (ADR-explicit-io-completion-authority §5):
 //
-//   idle ──backend try_claim (CAS)──> outstanding ──reap publish──> ready
+//   idle ──backend try_claim (CAS)──> outstanding ──reap publish (CAS)──> ready
 //    ▲                                                                    │
-//    └────────────────────────caller reset()──────────────────────────────┘
+//    └───────────────caller reset() (ready → idle; idle → no-op)──────────┘
+//
+// Internal transient (never a caller-visible lifecycle state; query methods
+// report it as outstanding):
+//
+//   outstanding ──publish CAS──> publishing ──build result──> ready
+//
+// publishing makes the winner's storage_/reap_seq_ write exclusive: a
+// concurrent publisher loses the CAS and fail-fasts instead of racing a
+// half-built result.
 //
 // Forbidden transitions (fail-fast in Debug AND Release):
-//   idle → ready, ready → outstanding, outstanding → idle,
-//   double publish, double claim, reset on outstanding, destroy outstanding.
+//   idle → ready, ready → outstanding, outstanding → idle (caller reset),
+//   publishing → reset, double publish, double claim, reset on
+//   outstanding/publishing, destroy outstanding/publishing.
 //
 // `ready()` true means the op has a terminal result (success/error/canceled)
 // available via `result()`. Exactly-once: once ready, the backend never mutates
@@ -87,11 +100,12 @@ public:
 
     Completion() = default;
 
-    // ADR §8: destruction of an outstanding Completion is a contract violation.
-    // Fail-fast in BOTH Debug and Release. The destructor does NOT attempt
-    // implicit cancel or drain.
+    // ADR §8: destruction of an outstanding/publishing Completion is a contract
+    // violation. Fail-fast in BOTH Debug and Release. The destructor does NOT
+    // attempt implicit cancel or drain.
     ~Completion() noexcept {
-        if (state_.load(std::memory_order::acquire) == State::outstanding) {
+        State s = state_.load(std::memory_order::acquire);
+        if (s == State::outstanding || s == State::publishing) {
             detail::completion_authority_fail_fast();
         }
     }
@@ -105,7 +119,12 @@ public:
 
     // --- query (caller-accessible) ---
     bool ready() const noexcept { return state_.load(std::memory_order::acquire) == State::ready; }
-    bool outstanding() const noexcept { return state_.load(std::memory_order::acquire) == State::outstanding; }
+    // publishing is a transient mid-publish state: the op is neither idle nor
+    // ready, so report it as outstanding (not yet reaped).
+    bool outstanding() const noexcept {
+        State s = state_.load(std::memory_order::acquire);
+        return s == State::outstanding || s == State::publishing;
+    }
     bool idle() const noexcept { return state_.load(std::memory_order::acquire) == State::idle; }
 
     // ADR L9: result() before ready is a contract violation. Debug asserts;
@@ -119,24 +138,28 @@ public:
     }
 
     // --- caller lifecycle (state-checked) ---
-    // ADR §7: reset is caller-accessible from ready state (normal reuse) or
-    // idle state (defensive no-op, e.g. op_helpers one_step first iteration).
-    // reset from outstanding is a contract violation → fail-fast.
+    // ADR §5 / AC-13 (as amended): reset() is caller-accessible. It succeeds
+    // from ready (normal reuse); from idle it is an idempotent no-op (defensive
+    // first-iteration reset in op_helpers one_step/sync_step). reset from
+    // outstanding or publishing is a contract violation → fail-fast. This
+    // caller-lifecycle decision (idle → no-op, NOT fail-fast) is registered in
+    // AC-13; it is a deliberate divergence from the "ready → idle ONLY" reading.
     void reset() noexcept {
         State s = state_.load(std::memory_order::acquire);
-        if (s == State::outstanding) {
+        if (s == State::outstanding || s == State::publishing) {
             detail::completion_authority_fail_fast();
         }
-        if (s == State::idle) return;  // already idle, nothing to do
+        if (s == State::idle) return;  // idempotent no-op (defensive)
         state_.store(State::idle, std::memory_order::release);
         storage_ = Storage{};
         reap_seq_ = 0;
     }
 
 private:
-    // --- backend-only publication mutators (ADR §2, §6, §9) ---
+    // --- backend-only publication mutators (ADR §2, §6, §9, §10) ---
     // These are PRIVATE. AsyncBackend accesses them via friend and exposes
-    // protected static helpers (try_claim / publish) to derived backends.
+    // protected static helpers (try_claim / publish / rollback_claim_before_accept)
+    // to derived backends.
 
     // Claim: atomic CAS idle → outstanding. Returns true if this caller won
     // the claim; false if the Completion was not idle (another backend/context
@@ -155,12 +178,35 @@ private:
         return true;
     }
 
-    // Publish: transition outstanding → ready with a terminal result.
-    // ADR §7: exactly once, single winner, release publication.
-    // Fail-fast if not outstanding (double-publish or invalid state).
+    // ADR §10 (P0-02 bridge): roll back a claim that was won but NOT accepted
+    // into backend tracking — no register/enqueue/dispatch happened and submit
+    // has not returned success; the operation is still entirely userspace-owned
+    // (e.g. io_uring SQE acquisition failed after a successful claim). Restores
+    // outstanding → idle. Contract: call ONLY immediately after this backend's
+    // own successful try_claim_for_backend() and before any tracking step.
+    // Fails fast if the Completion is not outstanding (misuse of the rollback
+    // authority).
+    void rollback_claim_before_accept() noexcept {
+        State expected = State::outstanding;
+        if (!state_.compare_exchange_strong(
+                expected, State::idle,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
+            detail::completion_authority_fail_fast();
+        }
+    }
+
+    // Publish: single-winner CAS outstanding → publishing, then build the
+    // terminal result and store ready with release. Exactly one publisher wins
+    // the CAS; a concurrent publisher (or a publish from idle/ready) fails it
+    // and fail-fasts — the transient publishing state guarantees the winner's
+    // storage_/reap_seq_ writes are exclusive and never raced.
     void publish_from_reap(Result<T> res) noexcept {
-        State s = state_.load(std::memory_order::acquire);
-        if (s != State::outstanding) {
+        State expected = State::outstanding;
+        if (!state_.compare_exchange_strong(
+                expected, State::publishing,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
             detail::completion_authority_fail_fast();
         }
         storage_.set(std::move(res));
@@ -173,7 +219,7 @@ private:
     // ready Completions by their actual reap moment.
     std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
-    enum class State : std::uint8_t { idle, outstanding, ready };
+    enum class State : std::uint8_t { idle, outstanding, publishing, ready };
     std::atomic<State> state_{State::idle};
     std::uint64_t reap_seq_ = 0;
 
@@ -213,7 +259,8 @@ public:
     Completion() = default;
 
     ~Completion() noexcept {
-        if (state_.load(std::memory_order::acquire) == State::outstanding) {
+        State s = state_.load(std::memory_order::acquire);
+        if (s == State::outstanding || s == State::publishing) {
             detail::completion_authority_fail_fast();
         }
     }
@@ -224,7 +271,10 @@ public:
     Completion& operator=(Completion&&) = delete;
 
     bool ready() const noexcept { return state_.load(std::memory_order::acquire) == State::ready; }
-    bool outstanding() const noexcept { return state_.load(std::memory_order::acquire) == State::outstanding; }
+    bool outstanding() const noexcept {
+        State s = state_.load(std::memory_order::acquire);
+        return s == State::outstanding || s == State::publishing;
+    }
     bool idle() const noexcept { return state_.load(std::memory_order::acquire) == State::idle; }
 
     Result<void> result() const {
@@ -238,10 +288,10 @@ public:
 
     void reset() noexcept {
         State s = state_.load(std::memory_order::acquire);
-        if (s == State::outstanding) {
+        if (s == State::outstanding || s == State::publishing) {
             detail::completion_authority_fail_fast();
         }
-        if (s == State::idle) return;  // already idle, nothing to do
+        if (s == State::idle) return;  // idempotent no-op (defensive)
         state_.store(State::idle, std::memory_order::release);
         has_error_ = false;
         reap_seq_ = 0;
@@ -261,9 +311,22 @@ private:
         return true;
     }
 
+    void rollback_claim_before_accept() noexcept {
+        State expected = State::outstanding;
+        if (!state_.compare_exchange_strong(
+                expected, State::idle,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
+            detail::completion_authority_fail_fast();
+        }
+    }
+
     void publish_from_reap(Result<void> res) noexcept {
-        State s = state_.load(std::memory_order::acquire);
-        if (s != State::outstanding) {
+        State expected = State::outstanding;
+        if (!state_.compare_exchange_strong(
+                expected, State::publishing,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
             detail::completion_authority_fail_fast();
         }
         if (!res.has_value()) { error_ = res.error(); has_error_ = true; }
@@ -274,7 +337,7 @@ private:
 
     std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
-    enum class State : std::uint8_t { idle, outstanding, ready };
+    enum class State : std::uint8_t { idle, outstanding, publishing, ready };
     std::atomic<State> state_{State::idle};
     bool has_error_ = false;
     IoError error_{IoError::Code::backend_error};

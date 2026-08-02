@@ -79,8 +79,9 @@ namespace sluice::async::detail {
 }
 
 // Completion publication authority fail-fast. A Completion state transition
-// violated the authority model (reset on non-ready, destroy outstanding,
-// double-publish). Process-fatal in BOTH Debug and Release.
+// violated the authority model (reset on outstanding/publishing, destroy
+// outstanding/publishing, losing publish CAS, rollback on a non-outstanding
+// Completion). Process-fatal in BOTH Debug and Release.
 [[noreturn]] void completion_authority_fail_fast() noexcept {
     std::terminate();
 }

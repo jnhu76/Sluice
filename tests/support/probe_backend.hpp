@@ -37,6 +37,14 @@ public:
         publish(c, std::move(r));
     }
 
+    // Roll back a claim that was won but not accepted into backend tracking
+    // (ADR §10 / P0-02 bridge): outstanding → idle. Test twin of the io_uring
+    // SQE-acquisition-failure path.
+    template <class T>
+    void rollback_claim(Completion<T>& c) noexcept {
+        rollback_claim_before_accept(c);
+    }
+
     // --- AsyncBackend interface (all stubs — no real I/O) ---
     Result<void> submit_read(ReadOp, Completion<std::size_t>&) override {
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});

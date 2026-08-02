@@ -125,9 +125,10 @@ P1-04, P1-06, P1-07, P1-10, P2-03, P2-05, DIV-02, DIV-12, DIV-13.
 
 1. **Completion publication authority.**
    mark_outstanding / complete_with are backend-only (AC-13).
-   reset is caller-accessible but state-checked (ready→idle only).
+   reset is caller-accessible but state-checked (ready→idle; idle→no-op;
+   outstanding→fail-fast; see ADR-explicit-io-completion-authority).
    Negative-compile gate for publication mutators.
-   CAS-based mark_outstanding (exactly-once).
+   CAS-based claim + single-winner publish (exactly-once).
    Release fail-fast on invalid transitions and outstanding destruction.
 
 2. **Operation descriptor and request identity.**

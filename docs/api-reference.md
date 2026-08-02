@@ -1134,27 +1134,27 @@ inline constexpr std::size_t kSelectMaxArms = 8;
 ### `sluice::async::Completion<T>`
 
 Single outstanding operation's state (E17). Caller-owned, address-stable,
-non-copyable, non-movable. `result()` / `reset()` / `complete_with()` /
-`mark_outstanding()` are **not** `noexcept`.
+non-copyable, non-movable (ADR-explicit-io-completion-authority). Publication
+mutators (`try_claim`, `publish`, `rollback_claim_before_accept`) are PRIVATE
+— ordinary non-backend callers cannot forge state transitions. `result()` is
+not `noexcept`; `reset()` is `noexcept`.
 
 ```cpp
 template <class T>
 class Completion {
 public:
     Completion() = default;
-    ~Completion() = default;
+    ~Completion();                      // fail-fast if outstanding/publishing
     Completion(const Completion&) = delete;
     Completion& operator=(const Completion&) = delete;
     Completion(Completion&&) = delete;
     Completion& operator=(Completion&&) = delete;
 
     bool ready() const noexcept;
-    bool outstanding() const noexcept;
+    bool outstanding() const noexcept;  // true for outstanding or transient publishing
     bool idle() const noexcept;
     Result<T> result() const;           // valid only when ready
-    void mark_outstanding();
-    void complete_with(Result<T> res);
-    void reset();
+    void reset() noexcept;              // ready → idle; idle → no-op; outstanding → fail-fast
 };
 ```
 
@@ -1163,9 +1163,12 @@ part of the public `Completion` surface.
 
 ### `sluice::async::AsyncBackend`
 
-Internal backend boundary (ADR §4). `AsyncIoContext` delegates to it. Concrete
-backends implement `submit_*` / `poll` / `wait_one`. `wait_one()` returns
-`Result<std::size_t>`; `cancel()` has two overloads.
+Public backend extension point (ADR §4). `AsyncIoContext` delegates to it.
+Concrete backends implement `submit_*` / `poll` / `wait_one`. `wait_one()`
+returns `Result<std::size_t>`; `cancel()` has two overloads. Any class that
+derives `AsyncBackend` is a trusted backend-author: it inherits the protected
+`try_claim()` / `publish()` / `rollback_claim_before_accept()` helpers, the
+only sanctioned way to claim a `Completion` and publish a terminal result.
 
 ```cpp
 class AsyncBackend {
@@ -1188,6 +1191,11 @@ public:
     virtual void cancel(Completion<void>& c);
 
     virtual std::size_t outstanding() const noexcept = 0;
+
+protected:
+    template <class T> static bool try_claim(Completion<T>& c) noexcept;
+    template <class T> static void publish(Completion<T>& c, Result<T>&& result) noexcept;
+    template <class T> static void rollback_claim_before_accept(Completion<T>& c) noexcept;
 };
 ```
 

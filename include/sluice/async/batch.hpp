@@ -100,7 +100,7 @@ public:
     // Zig Batch.next (Io.zig:551).
     //
     // E15-P1-04: ordering is by the monotonic reap sequence stamped on each
-    // Completion by complete_with() at backend reap time (ADR §6 O2). This
+    // Completion by publish_from_reap() at backend reap time (ADR §6 O2). This
     // preserves the backend's true reap order across slot 0/1/2... regardless
     // of submission order: a backend that reaps slot 1 before slot 0 yields
     // next() returning slot 1 first, then slot 0. Submit-time failures

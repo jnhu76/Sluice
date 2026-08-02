@@ -5,8 +5,12 @@
 //   1. reset-outstanding: reset() on an outstanding Completion
 //   2. destroy-outstanding: destroying an outstanding Completion
 //   3. double-publish: publishing to a Completion that is already ready
+//   4. concurrent-publish: two threads publishing one outstanding Completion —
+//      exactly one wins the publish CAS, the loser MUST fail-fast (no
+//      concurrent storage write)
 //
-// Also includes a control case (valid lifecycle) that must exit 0.
+// Also includes a control case (valid lifecycle + idle-reset no-op) that must
+// exit 0, and a two-thread concurrent-claim test (exactly one wins).
 //
 // POSIX only (fork/exec/waitpid). Gated to linux/macOS.
 #include "harness.hpp"
@@ -19,8 +23,11 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/result.hpp>
 
+#include <atomic>
+#include <barrier>
 #include <cstddef>
 #include <cstdlib>
+#include <thread>
 
 using namespace sluice::async;
 using sluice::Result;
@@ -72,6 +79,11 @@ void child_control_valid_lifecycle() {
     ProbeBackend pb;
     Completion<std::size_t> c;
 
+    // AC-13 (as amended): reset() from idle is an IDEMPOTENT NO-OP, not a
+    // fail-fast. op_helpers relies on the defensive first-iteration reset.
+    c.reset();
+    if (!c.idle()) std::_Exit(sluice_death_test::kChildTestFailExit);
+
     // idle → outstanding → ready → idle → outstanding → ready
     if (!pb.claim(c)) std::_Exit(sluice_death_test::kChildTestFailExit);
     pb.publish_completion(c, Result<std::size_t>{std::size_t{1}});
@@ -85,6 +97,34 @@ void child_control_valid_lifecycle() {
     c.reset();
     // Clean destroy (idle).
     std::_Exit(0);
+}
+
+// ---- Child case: two threads publish the same outstanding Completion
+// concurrently. Exactly one wins the publish CAS (single-winner); the loser
+// MUST fail-fast (std::terminate → exit 86). A load-then-store publish would
+// let both threads race storage_, so this death test is the runtime proof that
+// the CAS publishing state exists. Barrier-released, no sleeps.
+void child_concurrent_publish() {
+    sluice_death_test::install_deterministic_terminate_handler();
+
+    ProbeBackend pb;
+    Completion<std::size_t> c;
+    if (!pb.claim(c)) std::_Exit(sluice_death_test::kChildTestFailExit);
+    // c is outstanding. Release both threads at the same instant.
+    std::barrier sync{2};
+    std::thread a([&] {
+        sync.arrive_and_wait();
+        pb.publish_completion(c, Result<std::size_t>{std::size_t{1}});
+    });
+    std::thread b([&] {
+        sync.arrive_and_wait();
+        pb.publish_completion(c, Result<std::size_t>{std::size_t{2}});
+    });
+    a.join();
+    b.join();
+    // Only reachable if BOTH publishes "succeeded" — impossible: the publish
+    // CAS is single-winner, so exactly one thread always loses and fail-fasts.
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
 // ---- Parent-side test cases -------------------------------------------------
@@ -114,7 +154,14 @@ SLUICE_TEST_CASE(completion_death_control_valid_lifecycle) {
     auto r = sluice_death_test::run_death_case("control");
     SLUICE_CHECK_MSG(
         sluice_death_test::expect_normal_exit_zero(r),
-        "Control: valid Completion lifecycle must exit 0");
+        "Control: valid Completion lifecycle (incl. idle-reset no-op) must exit 0");
+}
+
+SLUICE_TEST_CASE(completion_death_concurrent_publish_fail_fast) {
+    auto r = sluice_death_test::run_death_case("concurrent-publish");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "two threads publishing one outstanding Completion: the loser must fail-fast (exit 86)");
 }
 
 // ---- Non-death regression: double-claim returns false (no fail-fast) --------
@@ -131,6 +178,48 @@ SLUICE_TEST_CASE(completion_double_claim_returns_false) {
     pb.publish_completion(c, Result<std::size_t>{std::size_t{0}});
 }
 
+// ---- Non-death regression: claim rollback (ADR §10) restores idle -----------
+// The io_uring backend claims BEFORE acquiring an SQE and rolls the claim back
+// if SQE acquisition fails; the Completion must be fully reusable afterwards.
+SLUICE_TEST_CASE(completion_claim_rollback_returns_to_idle) {
+    ProbeBackend pb;
+    Completion<std::size_t> c;
+    SLUICE_CHECK(pb.claim(c));
+    SLUICE_CHECK(c.outstanding());
+    pb.rollback_claim(c);
+    SLUICE_CHECK(c.idle());
+    // Fully reusable: can claim again and complete normally.
+    SLUICE_CHECK(pb.claim(c));
+    pb.publish_completion(c, Result<std::size_t>{std::size_t{7}});
+    SLUICE_CHECK(c.result().value() == 7);
+    c.reset();
+}
+
+// ---- Non-death concurrency regression: two threads claim the same Completion
+// concurrently — exactly one wins (ADR §6), never a double claim. Barrier-
+// released; no sleeps.
+SLUICE_TEST_CASE(completion_concurrent_claim_exactly_one_wins) {
+    ProbeBackend pb;
+    Completion<std::size_t> c;
+    std::atomic<int> winners{0};
+    std::barrier sync{2};
+    std::thread a([&] {
+        sync.arrive_and_wait();
+        if (pb.claim(c)) winners.fetch_add(1, std::memory_order_relaxed);
+    });
+    std::thread b([&] {
+        sync.arrive_and_wait();
+        if (pb.claim(c)) winners.fetch_add(1, std::memory_order_relaxed);
+    });
+    a.join();
+    b.join();
+    SLUICE_CHECK_MSG(winners.load(std::memory_order_relaxed) == 1,
+                     "exactly one concurrent claim may succeed (CAS single-winner)");
+    SLUICE_CHECK(c.outstanding());
+    // Clean up: publish so destructor doesn't fail-fast.
+    pb.publish_completion(c, Result<std::size_t>{std::size_t{0}});
+}
+
 // Child dispatch entry point.
 int main(int argc, char** argv) {
     std::string child_case = sluice_death_test::parse_child_case(argc, argv);
@@ -141,6 +230,8 @@ int main(int argc, char** argv) {
             child_destroy_outstanding();
         } else if (child_case == "double-publish") {
             child_double_publish();
+        } else if (child_case == "concurrent-publish") {
+            child_concurrent_publish();
         } else if (child_case == "control") {
             child_control_valid_lifecycle();
         } else {

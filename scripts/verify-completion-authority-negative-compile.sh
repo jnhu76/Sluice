@@ -4,8 +4,8 @@
 # ADR-explicit-io-completion-authority — negative-compile gate.
 #
 # Verifies that the Completion<T> publication authority is compile-enforced:
-# ordinary application code cannot call mark_outstanding(), complete_with(),
-# try_claim_for_backend(), publish_from_reap(), or reap_seq().
+# ordinary application code cannot call try_claim_for_backend(),
+# publish_from_reap(), rollback_claim_before_accept(), or reap_seq().
 #
 # Each NEG_<KIND> macro in the probe source selects one forbidden usage; the
 # script asserts that compiling the probe with that macro defined FAILS with a
@@ -46,6 +46,7 @@ negative_macros=(
   NEG_COMPLETE_WITH
   NEG_TRY_CLAIM_PRIVATE
   NEG_PUBLISH_PRIVATE
+  NEG_ROLLBACK_PRIVATE
   NEG_REAP_SEQ_PRIVATE
 )
 

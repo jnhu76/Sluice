@@ -60,6 +60,14 @@ void neg_publish_private() {
 }
 #endif
 
+#if defined(NEG_ROLLBACK_PRIVATE)
+// rollback_claim_before_accept() is private (friend AsyncBackend only).
+void neg_rollback_private() {
+    Completion<std::size_t> c;
+    c.rollback_claim_before_accept();  // ERROR: 'rollback_claim_before_accept' is private
+}
+#endif
+
 #if defined(NEG_REAP_SEQ_PRIVATE)
 // reap_seq() is private (friend Batch only).
 void neg_reap_seq_private() {

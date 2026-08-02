@@ -453,15 +453,25 @@ also detect or structurally prevent invalid transitions.
 
 **Authority separation:**
 ```text
-Backend/system authority (structurally forbidden to callers):
-  mark_outstanding()     idle → outstanding
-  complete_with()        outstanding → ready
+Backend/system authority (structurally forbidden to ordinary callers):
+  claim                      idle → outstanding   (CAS, exactly-once)
+  publish                    outstanding → ready  (CAS via transient publishing,
+                                                   exactly-once, single winner)
+  rollback_claim_before_accept  outstanding → idle (backend-only, pre-tracking)
 
 Caller lifecycle authority (permitted, state-checked):
-  reset() / rearm()      ready → idle ONLY
-                         idle → invalid_state error
+  reset() / rearm()      ready → idle (success)
+                         idle → no-op (idempotent; registered decision)
                          outstanding → invalid_state error / fail-fast
 ```
+
+**Caller-lifecycle decision (registered, ADR-explicit-io-completion-authority):**
+`reset()` from `idle` is an **idempotent no-op**, NOT an error and NOT a
+fail-fast. `op_helpers` (`one_step` / `sync_step`) reset before their first
+submit, when the Completion is already idle; fail-fast on idle would break
+that legitimate reuse pattern. This amends the earlier "ready → idle ONLY"
+reading of this rule. Reset from `outstanding`/`publishing` remains a checked
+contract violation (fail-fast).
 
 **Rationale:** Current `Completion<T>` exposes `mark_outstanding()` and
 `complete_with()` as public methods. Any application code can forge publication
@@ -476,14 +486,14 @@ reusable model.
 **Required evidence:**
 - `mark_outstanding()` and `complete_with()` are NOT callable from ordinary
   application code (negative-compile proof).
-- `reset()` IS callable by the caller but ONLY succeeds from ready state.
-  Reset on idle returns `invalid_state`; reset on outstanding is a checked
+- `reset()` IS callable by the caller. It succeeds from ready state; from idle
+  it is an idempotent no-op; reset on outstanding/publishing is a checked
   contract violation (fail-fast in Release).
 - Destruction of an outstanding Completion is a checked contract violation
   in BOTH Debug and Release.
 - No test uses backend-only publication mutators as if they were public API.
 - Two different contexts cannot both mark the same Completion outstanding
-  (structural exclusion, not comment convention).
+  (structural exclusion via claim CAS, not comment convention).
 
 **Allowed exceptions:**
 - During the corrective phase, temporary public access is allowed if tracked
@@ -500,7 +510,8 @@ reusable model.
 1. Can application code forge a publication transition?
 2. If yes, what is the worst-case consequence?
 3. Is the boundary structural or merely conventional?
-4. Does reset enforce ready→idle only?
+4. Does reset enforce ready→idle with an idle→no-op, outstanding→fail-fast
+   contract (AC-13 as amended)?
 
 ---
 

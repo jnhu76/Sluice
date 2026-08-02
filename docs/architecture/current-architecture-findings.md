@@ -395,15 +395,25 @@ outstanding destructor check.
 fix/explicit-io-completion-authority):**
 - Part A: `mark_outstanding()` and `complete_with()` removed from public API.
   Publication mutators are now private (friend AsyncBackend). Derived backends
-  use protected `try_claim()`/`publish()` helpers. Negative-compile gate:
-  `scripts/verify-completion-authority-negative-compile.sh`.
-- Part B: `reset()` now fail-fasts (std::terminate) on outstanding state.
-  Destructor fail-fasts on outstanding. Both enforced in Debug AND Release.
-  Death tests: `completion_authority_death_test`.
+  use protected `try_claim()`/`publish()`/`rollback_claim_before_accept()`
+  helpers. Negative-compile gate:
+  `scripts/verify-completion-authority-negative-compile.sh` (wired into CI).
+- Part B: `reset()` now fail-fasts (std::terminate) on outstanding/publishing.
+  Destructor fail-fasts on outstanding/publishing. Both enforced in Debug AND
+  Release. Death tests: `completion_authority_death_test`. `reset()` from idle
+  is a registered idempotent no-op (AC-13 amended; op_helpers depends on it).
 - CAS-based claim: `try_claim_for_backend()` uses atomic
   compare_exchange_strong (exactly-once under concurrent submission).
-- Residual: P0-02 transactional admission gap (SQE failure after claim) is
-  explicitly documented in the ADR as a known limitation for Phase 2.
+- Single-winner publish: `publish_from_reap()` CASes `outstanding → publishing`
+  (transient state) before building the result, so a concurrent publisher
+  loses the CAS and fail-fasts instead of racing the storage write.
+  Death test: two-thread concurrent publish → loser fail-fasts. Concurrency
+  test: two-thread concurrent claim → exactly one wins.
+- Transactional submit (P0-02 partial): io_uring claims BEFORE SQE acquisition;
+  a failed SQE acquisition rolls the claim back via
+  `rollback_claim_before_accept()` (no untracked SQE can run I/O after a
+  failed submit). Residual: `register_op` container allocation after SQE prep
+  is still non-transactional — explicitly deferred to the RequestSlot PR.
 
 ---
 

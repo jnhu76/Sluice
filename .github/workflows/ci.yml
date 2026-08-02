@@ -88,6 +88,18 @@ jobs:
         # exercised by the merge gate.
         run: bash scripts/verify-async-identity-negative-compile.sh
 
+      - name: Completion-authority negative-compile (P0-03)
+        # ADR-explicit-io-completion-authority — proves the publication
+        # mutators (try_claim_for_backend, publish_from_reap,
+        # rollback_claim_before_accept, reap_seq) are structurally unreachable
+        # from ordinary application code. This is the merge-gate evidence that
+        # P0-03 stays resolved: without it, a future commit could silently
+        # re-expose the mutators and still merge.
+        # CXX is pinned to clang++ to match the required Linux Clang Debug gate.
+        env:
+          CXX: clang++
+        run: bash scripts/verify-completion-authority-negative-compile.sh
+
       - name: Build and run acceptance consumers
         # Proves the public async-foundation surface is usable from consumers
         # that see only the installed public headers. Build AND execute: a
