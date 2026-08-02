@@ -98,6 +98,17 @@ submit_* before returning success." Update the as-built doc authority table.
 **Do not fix in this audit PR** (comment-only fix is borderline; recommend
 separate small PR to keep audit PR documentation-only).
 
+**RESOLVED — ADR-explicit-io-completion-authority / PR #61:**
+- the legacy public `mark_outstanding()` was removed;
+- the backend is the explicit claim authority;
+- derived backends use the protected `AsyncBackend::try_claim()` helper, which
+  performs an atomic `idle → outstanding` CAS;
+- claim failure returns synchronous `invalid_state` without tracking mutation
+  or an outstanding increment;
+- `AsyncIoContext` routes the call but does NOT claim the Completion;
+- the stale `async_io_context.hpp` comment was corrected to name the backend as
+  the claim authority.
+
 ---
 
 ## P1-02: No Unified Backend-Ready vs. Completion-Ready Distinction
@@ -236,10 +247,9 @@ SyncBackend.
 
 **Do not fix in this audit PR.**
 
-**RESOLVED (ADR-explicit-io-completion-authority, branch
-fix/explicit-io-completion-authority):** SyncBackend::cancel() now marks the
-entry as cancelled; publication happens through the unified reap path
-(poll/wait_one) via the protected `publish()` helper. The direct
+**RESOLVED (ADR-explicit-io-completion-authority / PR #61):** SyncBackend::cancel()
+now marks the entry as cancelled; publication happens through the unified reap
+path (poll/wait_one) via the protected `publish()` helper. The direct
 `complete_with()` call has been removed. Regression-tested in
 `async_completion_test` (cancel_outstanding_op_completes_canceled).
 
@@ -391,8 +401,7 @@ outstanding destructor check.
 
 **Do not fix in this audit PR.**
 
-**RESOLVED (ADR-explicit-io-completion-authority, branch
-fix/explicit-io-completion-authority):**
+**RESOLVED (ADR-explicit-io-completion-authority / PR #61):**
 - Part A: `mark_outstanding()` and `complete_with()` removed from public API.
   Publication mutators are now private (friend AsyncBackend). Derived backends
   use protected `try_claim()`/`publish()`/`rollback_claim_before_accept()`
@@ -824,11 +833,11 @@ with subsystem prefix in documentation.
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
 | P0-01 | P0 | Worker OOM → terminate | Phase 1 ADR + Phase 2 impl |
-| P0-02 | P0 | Cross-backend transactional submit | Phase 1 ADR + Phase 2/3 impl |
-| P0-03 | P0 | Completion publication authority forgeable | Phase 1 ADR + Phase 2 impl |
-| P1-01 | P1 | mark_outstanding stale comment | Comment correction needed |
+| P0-02 | P0 | Cross-backend transactional submit | Phase 1 ADR + Phase 2/3 impl (open: register_op allocation after claim) |
+| P0-03 | P0 | Completion publication authority forgeable | RESOLVED — ADR-explicit-io-completion-authority / PR #61 |
+| P1-01 | P1 | mark_outstanding stale comment | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (backend is claim authority) |
 | P1-02 | P1 | Backend-ready vs completion-ready | Documentation needed |
-| P1-03 | P1 | SyncBackend cancel bypasses reap | Phase 3 (backend migration) |
+| P1-03 | P1 | SyncBackend cancel bypasses reap | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (cancel records intent; reap publishes) |
 | P1-04 | P1 | Spawn failure incorrectly asyncized | Phase 3 (backend migration) |
 | P1-05 | P1 | queue_full_retries semantic conflation | Phase 0/1 error vocabulary |
 | P1-06 | P1 | No request generation (ABA) | Phase 1 (unified ADR) |

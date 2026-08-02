@@ -1139,12 +1139,18 @@ mutators (`try_claim`, `publish`, `rollback_claim_before_accept`) are PRIVATE
 — ordinary non-backend callers cannot forge state transitions. `result()` is
 not `noexcept`; `reset()` is `noexcept`.
 
+`Completion<T>` is an asynchronous terminal-publication cell; its value type `T`
+must be nothrow default-constructible, nothrow move-constructible, nothrow
+move-assignable, and nothrow destructible (compile-enforced by `static_assert`
+on the template — these cover the `noexcept` reap/reset path). `Completion<void>`
+carries no value, so these traits do not apply.
+
 ```cpp
 template <class T>
 class Completion {
 public:
     Completion() = default;
-    ~Completion();                      // fail-fast if outstanding/publishing
+    ~Completion();                      // fail-fast if outstanding/publishing/resetting
     Completion(const Completion&) = delete;
     Completion& operator=(const Completion&) = delete;
     Completion(Completion&&) = delete;
@@ -1154,7 +1160,8 @@ public:
     bool outstanding() const noexcept;  // true for outstanding or transient publishing
     bool idle() const noexcept;
     Result<T> result() const;           // valid only when ready
-    void reset() noexcept;              // ready → idle; idle → no-op; outstanding → fail-fast
+    void reset() noexcept;              // ready → resetting → idle; idle → no-op;
+                                        // outstanding/publishing/resetting → fail-fast
 };
 ```
 

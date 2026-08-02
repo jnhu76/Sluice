@@ -63,6 +63,16 @@ classification errors identified during audit. Small focused PRs.
 
 **Findings addressed:** P1-01, P1-02, P1-03, P1-05, P3-01, P3-02, P3-03.
 
+> **Status (post-PR #61):** items 1 and 3 are RESOLVED by
+> ADR-explicit-io-completion-authority / PR #61. The legacy public
+> `mark_outstanding()` / `complete_with()` API was removed; the backend is the
+> claim authority (protected `try_claim()` CAS); `SyncBackend::cancel()` now
+> records cancel intent and the reap path (`poll()`/`wait_one()`) publishes the
+> terminal canceled result. Item 2 (two-phase model) is reflected in the
+> as-built doc and AC-5 using the current `try_claim` / `publish` /
+> `publish_from_reap` terminology. The work items below are retained as the
+> original Phase 0B plan.
+
 ### Work items
 
 1. **Correct mark_outstanding authority documentation.**
@@ -335,7 +345,10 @@ design), tests target that explicit API, not implicit destructor behavior.
 - Concurrent submit + cancel + poll under TSan.
 - Exactly-once publication under all failure modes.
 - Explicit drain → quiescent → destroy: verify clean shutdown.
-- Negative-compile: caller cannot call mark_outstanding/complete_with.
+- Negative-compile: caller cannot call the publication mutators (`try_claim` /
+  `publish` / `rollback_claim_before_accept` / `reap_seq`), and a value type
+  violating the `Completion<T>` noexcept contract cannot instantiate
+  `Completion<T>`.
 - Death test: destroy outstanding → trap.
 - Death test: reset on outstanding → trap.
 - ABA test: reuse Completion, stale cancel → rejected (generation mismatch).

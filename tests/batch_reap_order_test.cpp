@@ -84,33 +84,37 @@ public:
     void set_next_wait_one_error(IoError e) { next_wait_err_ = e; }
 
     // --- AsyncBackend interface ---
+    // ADR-explicit-io-completion-authority: try_claim is the single claim
+    // authority (atomic idle → outstanding CAS). The TOCTOU c.idle() precheck
+    // is intentionally NOT used: claim failure must return synchronous
+    // invalid_state with no tracking mutation and no outstanding increment.
     Result<void> submit_read(ReadOp, Completion<std::size_t>& c) override {
-        if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        try_claim(c);
+        if (!try_claim(c))
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         captures_.push_back({&c, false});
         ++outstanding_;
         apply_auto_stage(captures_.size() - 1, c);
         return {};
     }
     Result<void> submit_write(WriteOp, Completion<std::size_t>& c) override {
-        if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        try_claim(c);
+        if (!try_claim(c))
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         captures_.push_back({&c, false});
         ++outstanding_;
         apply_auto_stage(captures_.size() - 1, c);
         return {};
     }
     Result<void> submit_sync_data(SyncDataOp, Completion<void>& c) override {
-        if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        try_claim(c);
+        if (!try_claim(c))
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         captures_.push_back({&c, true});
         ++outstanding_;
         apply_auto_stage(captures_.size() - 1, c);
         return {};
     }
     Result<void> submit_sync_all(SyncAllOp, Completion<void>& c) override {
-        if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        try_claim(c);
+        if (!try_claim(c))
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         captures_.push_back({&c, true});
         ++outstanding_;
         apply_auto_stage(captures_.size() - 1, c);

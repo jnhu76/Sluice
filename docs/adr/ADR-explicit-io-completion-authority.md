@@ -1,9 +1,9 @@
 # ADR: Completion Publication Authority
 
 **Status:** Accepted
-**Authority:** Corrective alignment with AC-5, AC-13, AC-14
+**Authority:** Corrective alignment with AC-3, AC-5, AC-10, AC-13, AC-14
 **Scope:** Completion publication authority hardening (Explicit I/O Phase 1)
-**Findings addressed:** P0-03, P1-03, partial P1-01
+**Findings addressed:** P0-03, P1-01, P1-03
 **Findings NOT resolved:** P0-02, P1-06, P1-07, P1-10
 
 ---
@@ -105,11 +105,35 @@ ready        — terminal result available via result()
 Internal transient states (not exposed publicly):
 
 ```text
-publishing   — CAS won, result under construction (atomic transient)
+publishing   — CAS won, result under construction (publication transient)
+resetting    — reset CAS won, prior result being cleared (caller-lifecycle transient)
 ```
 
-The transient state is an implementation detail of the atomic publish sequence
-and does NOT create a new public lifecycle burden.
+`publishing` makes the winner's storage write exclusive. `resetting` prevents a
+new claim from observing `idle` before prior-result cleanup (storage_ /
+reap_seq_) is complete. Neither transient is a public lifecycle state; query
+methods report both as not-idle/not-ready (`publishing` as outstanding,
+`resetting` as not-outstanding).
+
+### Value-type contract (Completion<T>)
+
+`Completion<T>` is an asynchronous terminal-publication cell. Its stored value
+type T MUST support the non-throwing lifecycle operations the reap/reset path
+performs. These are compile-enforced by `static_assert` on the template:
+
+```text
+is_nothrow_default_constructible_v<T>  (idle storage is value-initialized)
+is_nothrow_move_constructible_v<T>     (result() moves the value out)
+is_nothrow_move_assignable_v<T>        (publish_from_reap assigns the value in)
+is_nothrow_destructible_v<T>           (reset tears storage down, noexcept)
+```
+
+`Completion<void>` carries no value, so these traits do not apply; its
+bool/IoError publication path is noexcept by construction. A type that fails a
+trait fails to instantiate `Completion<T>` at compile time (negative-compile
+gate: `NEG_THROWING_COMPLETION_VALUE`). This is NOT a deliberate fail-fast — a
+throwing T must never escape the `noexcept` reap/reset boundary via
+`std::terminate`.
 
 ---
 
@@ -120,10 +144,10 @@ idle
   └─ backend try_claim (CAS) ─→ outstanding
 
 outstanding
-  └─ reap publish (CAS + release store) ─→ ready
+  └─ reap publish (CAS → publishing; build result; release store) ─→ ready
 
 ready
-  └─ caller reset ─→ idle
+  └─ caller reset (CAS → resetting; clear result; release store) ─→ idle
 ```
 
 ### Forbidden transitions (fail-fast in Debug AND Release)
@@ -131,22 +155,32 @@ ready
 ```text
 idle → ready              (cannot skip outstanding)
 ready → outstanding       (cannot re-claim without reset)
-outstanding → idle        (cannot skip ready; reset on outstanding = violation)
+outstanding → idle        (caller reset skips ready; reset on outstanding = violation)
 publishing → reset        (cannot reset mid-publication)
 double publish            (exactly-once invariant)
 double claim              (exactly-once invariant)
+reset on resetting        (reset authority already held)
 ```
 
 ### Reset semantics
 
-`reset()` remains caller-accessible but is state-checked:
+`reset()` remains caller-accessible but is state-checked, and routes the
+`ready → idle` reuse through an internal `resetting` transient:
 
 ```text
-reset from ready       → idle (success)
+reset from ready       → resetting → idle (success; cleanup completes before idle is published)
 reset from idle        → no-op (idempotent; defensive first-iteration reset)
 reset from outstanding → fail-fast (contract violation)
 reset from publishing  → fail-fast (contract violation)
+reset from resetting   → fail-fast (reset authority already held)
 ```
+
+The `resetting` transient is structural, not advisory: reset CASes
+`ready → resetting`, clears storage_/reap_seq_, then release-stores `idle`. A
+new `try_claim` can only observe `idle` AFTER cleanup has happened, so a fresh
+operation can never observe a half-cleaned prior result. `try_claim` itself does
+NOT clear storage — cleanup belongs to the reset authority, and re-clearing on
+claim would race a backend that has already published `outstanding`.
 
 The `idle → no-op` is a deliberate caller-lifecycle decision, registered in
 AC-13 (amended). `op_helpers` `one_step` / `sync_step` reset before their
@@ -155,6 +189,11 @@ break that legitimate reuse pattern. An earlier draft of this ADR treated idle
 reset as a fail-fast; this ADR and the implementation choose the idempotent
 no-op instead. It is NOT a death-test requirement.
 
+Concurrency boundary: claim-vs-claim and publish-vs-publish are atomically
+arbitrated (CAS single-winner). reset-vs-new-claim is structurally serialized
+through the `resetting` transient. The caller MUST NOT race `result()` or
+object destruction with reset/publication — those are caller-lifecycle errors.
+
 ### Destruction semantics
 
 ```text
@@ -162,6 +201,7 @@ destroy idle           → allowed
 destroy ready          → allowed
 destroy outstanding    → fail-fast (Debug AND Release)
 destroy publishing     → fail-fast (Debug AND Release)
+destroy resetting      → fail-fast (Debug AND Release)
 ```
 
 The destructor does NOT attempt implicit cancel or drain.
@@ -190,7 +230,11 @@ bool try_claim_for_backend() noexcept {
 }
 ```
 
-The old pattern (load → assert idle → store outstanding) is removed.
+The claim does NOT clear storage_/reap_seq_: cleanup belongs to the reset
+authority (§5). By the time `idle` is observable, a previous reset has already
+cleared the result, so re-clearing on claim would both duplicate that work and
+race a backend that has already published `outstanding`. The old pattern
+(load → assert idle → store outstanding) is removed.
 
 ---
 
@@ -219,11 +263,15 @@ void publish_from_reap(Result<T>&& result) noexcept {
             std::memory_order::acquire)) {
         detail::completion_authority_fail_fast();
     }
-    storage_.set(std::move(result));
+    storage_.set(std::move(result));   // noexcept: enforced by Completion<T> traits
     reap_seq_ = detail::next_reap_seq();
     state_.store(State::ready, std::memory_order::release);
 }
 ```
+
+`publish_from_reap` and `Storage::set` take `Result<T>&&` (not by value) to
+avoid a redundant move-construction of the Result into the parameter; the
+`noexcept` is justified by the `Completion<T>` value-type traits (§4).
 
 Readers use matching acquire semantics (already present in `ready()` /
 `result()`). Query methods report the transient `publishing` state as
@@ -369,11 +417,15 @@ generates a TODO comment, not code.
 ## 12. Test Strategy
 
 1. **Negative-compile gate:** ordinary non-backend code cannot call the
-   publication mutators or `reap_seq()` (including the rollback helper).
-2. **Lifecycle test:** idle → claim → outstanding → publish → ready → reset → idle.
+   publication mutators or `reap_seq()` (including the rollback helper); AND a
+   value type violating the `Completion<T>` noexcept value-type contract cannot
+   instantiate `Completion<T>` (`NEG_THROWING_COMPLETION_VALUE`).
+2. **Lifecycle test:** idle → claim → outstanding → publish → ready →
+   (resetting) → reset → idle.
 3. **Invalid reset death test:** reset outstanding → fail-fast; idle reset is
    an idempotent no-op (control case, NOT a death requirement).
-4. **Outstanding destruction death test:** destroy outstanding → fail-fast.
+4. **Outstanding destruction death test:** destroy outstanding/publishing/
+   resetting → fail-fast.
 5. **Concurrent claim race:** two threads claim the same Completion
    (barrier-released); exactly one wins.
 6. **Concurrent publication death test:** two threads publish one outstanding

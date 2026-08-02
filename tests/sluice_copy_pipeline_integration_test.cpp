@@ -505,7 +505,11 @@ public:
                              sluice::async::Completion<std::size_t>& c) override {
         if (fail_reads)
             return make_unexpected<void>(IoError{IoError::Code::backend_error});
-        try_claim(c);
+        // ADR-explicit-io-completion-authority: try_claim is the claim
+        // authority. Claim failure must not touch tracking or counters and must
+        // return synchronous invalid_state.
+        if (!try_claim(c))
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         completions.push_back(&c);
         ++reads_submitted;
         return {};

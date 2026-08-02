@@ -5,20 +5,38 @@
 // Each NEG_<KIND> macro selects ONE forbidden usage that ordinary application
 // code must NOT be able to compile. The verify script compiles this file with
 // exactly one NEG_* macro defined at a time and asserts the compile FAILS with
-// a private-access or no-member diagnostic.
+// a specific diagnostic:
+//   - access-control cases: a private-access / no-member diagnostic;
+//   - NEG_THROWING_COMPLETION_VALUE: a static_assert failure (a value type
+//     that violates the Completion<T> noexcept value-type contract).
 //
 // Without any NEG_* macro, this file compiles cleanly (positive control): it
 // exercises only the public caller-facing API (idle/outstanding/ready/result/
-// reset).
+// reset), and it also instantiates Completion<NothrowValue> as a positive
+// compile-time check that a value type satisfying all four traits is accepted.
 #include <sluice/async/completion.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
+#include <utility>
 
 using namespace sluice::async;
 using sluice::Result;
 
-// Positive control: public API only. Always compiles.
+// A value type that satisfies every Completion<T> trait (positive compile
+// case). Keep this small: it exists to prove the contract is satisfiable and
+// that a conforming type instantiates cleanly.
+struct NothrowValue {
+    int v = 0;
+    NothrowValue() noexcept = default;
+    NothrowValue(NothrowValue&&) noexcept = default;
+    NothrowValue& operator=(NothrowValue&&) noexcept = default;
+    ~NothrowValue() noexcept = default;
+};
+
+// Positive control: public API only. Always compiles. Also instantiates
+// Completion<NothrowValue> so the value-type contract has a positive compile
+// witness (not only negative cases).
 void positive_control() {
     Completion<std::size_t> c;
     (void)c.idle();
@@ -26,6 +44,10 @@ void positive_control() {
     (void)c.ready();
     // reset from idle is a no-op (defensive).
     c.reset();
+
+    Completion<NothrowValue> cv;
+    (void)cv.idle();
+    cv.reset();
 }
 
 #if defined(NEG_MARK_OUTSTANDING)
@@ -73,6 +95,23 @@ void neg_rollback_private() {
 void neg_reap_seq_private() {
     Completion<std::size_t> c;
     (void)c.reap_seq();  // ERROR: 'reap_seq' is private
+}
+#endif
+
+#if defined(NEG_THROWING_COMPLETION_VALUE)
+// A value type whose move-assignment may throw violates the Completion<T>
+// noexcept value-type contract. Instantiating Completion<ThrowingMoveValue>
+// must fail to compile via the static_assert traits in completion.hpp.
+struct ThrowingMoveValue {
+    ThrowingMoveValue() noexcept = default;
+    ThrowingMoveValue(ThrowingMoveValue&&) noexcept = default;
+    ThrowingMoveValue& operator=(ThrowingMoveValue&&) noexcept(false) {}  // throws
+    ~ThrowingMoveValue() noexcept = default;
+};
+void neg_throwing_completion_value() {
+    // ERROR: static_assert in Completion<T> (nothrow move-assignable trait).
+    Completion<ThrowingMoveValue> c;
+    (void)c;
 }
 #endif
 
