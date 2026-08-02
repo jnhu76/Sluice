@@ -275,6 +275,7 @@ complete and audit its request:
 - an unforgeable `CompletionBase*` binding plus the result type/kind needed for safe publication;
 - terminal `Result` storage reserved before acceptance;
 - fixed or pre-reserved backend scratch;
+- an identity-bound enqueue-in-flight pin acquired at commit and acknowledged by the submit path;
 - single-waiter registration state, a stable opaque token, and its routing lease; the Scheduler
   owns the referenced Fiber/runnable routing record, not the slot;
 - cancellation intent/state;
@@ -295,6 +296,12 @@ it. A later implementation may replace the mutex with provably equivalent atomic
 split these transitions into independently racing domains. No code holding this domain calls
 ReadySink, Scheduler, user code, or backend progress.
 
+The enqueue-in-flight bit belongs to the same atomic state word or slot-state arbitration domain as
+`pending`, `enqueued`, and terminal-winner transitions. It is not a separately allocated object or
+a new upward lock edge. Reap acquire-checks that bit before entering Completion-ready publication;
+slot release and generation reuse therefore cannot overtake an old submit path that still owns its
+enqueue acknowledgement.
+
 ## Decision 4: unified state machine
 
 ```text
@@ -308,13 +315,14 @@ prepared
   | commit / accept
   v
 pending
-  | enqueue
-  v
-enqueued
-  | dispatch
-  v
-running / kernel-owned
-  | first terminal winner stores result
+  | enqueue arbitration wins           | pending cancellation wins
+  v                                    |
+enqueued                               |
+  | dispatch                           |
+  v                                    |
+running / kernel-owned                 |
+  | first terminal winner stores result |
+  +------------------------------------+
   v
 backend-ready
   | reap publication
@@ -330,18 +338,40 @@ Backends may merge physical representations—for example a synthetic backend ma
 `backend-ready`—but the semantic boundaries `accepted`, `dispatched`, `backend-ready`, and
 `completion-ready` remain observable and testable.
 
+`pending -> enqueued` and `pending -> backend-ready(canceled)` are competing transitions under one
+slot-state arbitration domain. If enqueue wins, cancellation continues from `enqueued` under the
+ordinary terminal-winner rules. If pending cancellation wins, it stores the canceled result,
+publishes the pre-reserved backend-ready linkage, and performs the backend-ready progress signal.
+The submit thread then observes that legitimate terminal state and completes enqueue as an
+allocation-free no-op: it does not add pending linkage, fail fast, execute the operation, or publish
+a second terminal result. The same no-op rule applies if another explicitly permitted terminal
+winner moves `pending` to `backend-ready` first. Submit still returns success because commit already
+accepted the request.
+
+Commit sets an identity-bound **enqueue-in-flight pin** before publishing Completion
+`outstanding`. A pending terminal winner does not clear that pin. Whether enqueue wins or observes
+a legitimate `backend-ready` state, its final RequestSlot access release-clears the pin and then it
+returns using only local state. Reap may observe the stable backend-ready result/linkage while the
+pin is set, but it must leave that linkage unconsumed and must not publish Completion-ready. The
+backend-ready condition is level-triggered until eligible reap consumes it; an implementation that
+uses edge notifications must re-arm the same logical readiness when enqueue acknowledges the pin.
+That re-arm is not a second terminal result or a second ready linkage. Consequently Completion
+reset/destruction and generation reuse cannot occur before the original submit has stopped touching
+the slot. This is an internal backend-to-reap eligibility rule, not the deferred Phase G
+backend-to-Scheduler wake ABI.
+
 ### Transition table
 
 | Transition | Authority and synchronization domain | Allocation allowed | Failure semantics | Wake obligation |
 |---|---|---|---|---|
 | `free -> reserved` | Backend/context admission authority under its arena lock or equivalent atomic free-list operation | No request-time allocation; arena/startup allocation completed before submission | Failure is synchronous `would_block` for capacity; construction/startup failure is separately `no_space`; Completion remains idle | None |
 | `reserved -> prepared` | Admission authority; slot remains invisible to progress engines | No resource needed after commit may be newly unbounded; bounded preparation may use already reserved scratch | Validation/preparation failure rolls back to `free`, increments no accepted count, and returns synchronously | None |
-| `prepared -> pending` | Backend claim authority; the Completion `idle -> binding` CAS elects one context, which initializes both bindings under its context/admission domain and release-stores `outstanding` | No | The final release-store is commit. Failure before it rolls back all pre-accept state and leaves Completion idle | None |
-| `pending -> enqueued` | Backend queue authority publishes pre-reserved linkage with release ordering | No; operation is `noexcept` | Cannot reject or lose the accepted request; unexpected inability is an invariant failure, not an ordinary retry/rejection path | Progress engine may be notified, but no Scheduler/Fiber routing occurs |
+| `prepared -> pending` | Backend claim authority; the Completion `idle -> binding` CAS elects one context, which initializes both bindings and the enqueue-in-flight pin under its context/admission domain and release-stores `outstanding` | No | The final release-store is commit. Failure before it rolls back all pre-accept state and leaves Completion idle | None |
+| `pending -> enqueued` | Backend queue authority arbitrates with pending terminal winners under the same slot-state CAS/lock and publishes pre-reserved linkage with release ordering only if enqueue wins; either valid outcome ends with the submit path acknowledging its pin | No; operation is `noexcept` | Cannot reject or lose the accepted request. Observing `backend-ready` after a legitimate terminal winner, including pending cancellation, is a successful no-op; enqueue must not link, fail fast, or republish. Only an unknown/illegal state is an invariant failure | If enqueue wins, the progress engine may be notified without Scheduler/Fiber routing. If a terminal path already won, that winner owns the logical readiness; pin acknowledgement preserves or re-arms it when required |
 | `enqueued -> running/kernel-owned` | Blocking worker dequeue or kernel submission accounting | No terminal-path dependency on allocation | Transient pressure or partial kernel submission leaves the unsubmitted request enqueued. Only an irrevocable dispatch failure with proof that no userspace/kernel execution reference remains may become a terminal error. | Backend progress notification only if the failure makes a request backend-ready |
 | accepted state `-> backend-ready` | First successful terminal-winner transition under slot CAS/lock | No | Winner stores exactly one terminal result; losers do nothing | Publish backend-ready progress through the backend's domain; Scheduler wake ABI is deferred |
-| `backend-ready -> completion-ready` | Designated `poll`/`wait_one`/reap authority validates key/binding, closes waiter registration and takes any token/lease under the shared leaf slot-lifecycle domain, publishes through `AsyncBackend::publish` semantics before releasing that domain, and decrements accepted-outstanding | No; the synchronous sink uses pre-reserved storage | Publication or sink-delivery failure is an invariant violation; it cannot be converted to a second result | After leaving the domain, deliver one by-value identity event synchronously before reap returns; the sink consumes the extracted delivery lease |
-| `completion-ready -> free` | Caller `reset()` or destruction of a ready Completion acquires that same slot-lifecycle domain after reap has left it; waiter registration must be closed with no stored token/lease | No | Invalid/stale/double release or an open/registered waiter state fails fast and cannot affect a later generation | Generation increments and release publishes the slot to the free arena before reuse becomes visible |
+| `backend-ready -> completion-ready` | After acquire-observing an acknowledged enqueue pin, designated `poll`/`wait_one`/reap authority validates key/binding and, under the shared leaf slot-lifecycle domain, closes registration, takes any token/lease, installs the terminal result, marks the slot completion-ready, decrements accepted-outstanding, and stages borrow end before the final release-store of Completion ready | No; the synchronous sink uses pre-reserved storage | A still-pinned request remains backend-ready and reap-ineligible without consuming its linkage. Publication or sink-delivery failure after eligibility is an invariant violation; it cannot be converted to a second result | After leaving the domain, deliver one by-value identity event synchronously before reap returns; the sink consumes the extracted delivery lease |
+| `completion-ready -> free` | Caller `reset()` or destruction of a ready Completion acquires that same slot-lifecycle domain after reap has left it; enqueue pin must be acknowledged and waiter registration must be closed with no stored token/lease | No | Invalid/stale/double release, a live enqueue pin, or an open/registered waiter state fails fast and cannot affect a later generation | Generation increments and release publishes the slot to the free arena before reuse becomes visible |
 
 `completion-ready` ends fd/buffer borrowing, but the slot remains bound until caller reset or
 destruction of the ready Completion completes the slot-release handshake. `result()` may be read
@@ -395,8 +425,8 @@ The winning submit performs this protocol while retaining its own context/admiss
    write any Completion binding field and rolls back only its own candidate slot;
 3. initialize the Completion's private `RequestKey`, `ContextIdentity`, and slot-release
    capability while `binding` remains exclusively owned by the winner;
-4. change the winning slot from `prepared` to `pending`, increment accepted-outstanding
-   accounting, and stage the fd/buffer borrow; and
+4. change the winning slot from `prepared` to `pending`, establish its enqueue-in-flight pin,
+   increment accepted-outstanding accounting, and stage the fd/buffer borrow; and
 5. release-store the Completion from `binding` to `outstanding` before releasing the context lock.
 
 Step 5 is the commit/accept linearization point. Its acquire observers see the fully initialized
@@ -411,11 +441,12 @@ Completion idle -> outstanding
 RequestSlot prepared -> pending
 accepted-outstanding accounting increment
 fd/buffer borrow begins
+enqueue-in-flight pin begins
 ```
 
 Steps 2–5 must not contain a recoverable operation after the winner has begun installing the
 binding. If any pre-linearization invariant failure is represented as rollback, it clears the
-winner's private binding fields, reverses slot/accounting/borrow staging, returns the slot to
+winner's private binding fields, reverses slot/accounting/borrow/pin staging, returns the slot to
 `free`, and release-stores `binding -> idle` before releasing the context lock. No observer may
 read binding payload while the Completion is `binding`: cancel and waiter registration/await
 return synchronous `invalid_state`, while reset and destruction fail fast in Debug and Release.
@@ -427,6 +458,24 @@ that authorizes writing the Completion-side `RequestKey`; losing contexts cannot
 Enqueue makes the accepted request visible to the progress engine. It must be allocation-free,
 `noexcept`, and incapable of dropping the request. Typical mechanisms are intrusive linkage,
 publishing a slot index into a preallocated ring, or changing a persistent queue state.
+
+Enqueue attempts `pending -> enqueued` in the same slot-state arbitration domain used by pending
+terminal winners. It has exactly two valid outcomes: it wins and publishes the pre-reserved pending
+linkage, or it observes `backend-ready` from a legitimate prior terminal winner and completes as a
+successful no-op. Pending cancellation is the required race case. In the second outcome enqueue
+must not link, fail fast, or publish another terminal result/linkage; the terminal winner already
+owns the logical readiness. After either outcome, enqueue release-acknowledges its identity-bound
+pin as its last slot access. If terminal readiness was observed, that acknowledgement preserves or
+re-arms progress so an earlier ineligible reap attempt cannot lose the wake. Any other state is an
+invariant violation. The `submit_*` call returns success in both valid outcomes because the request
+crossed commit before this race.
+
+The post-commit segment through pin acknowledgement is a bounded, allocation-free, `noexcept`
+obligation of the submit call. It invokes no user code and does not wait for worker, kernel,
+cancellation, reap, Scheduler, or other asynchronous progress. If an edge notification needs
+re-arming, enqueue records that decision while acknowledging the pin, leaves the slot-state domain,
+and notifies using only stable context/backend state; the acknowledgement remains its final slot
+access.
 
 ### Dispatch
 
@@ -521,13 +570,25 @@ void reap_ready(SynchronousReadySink& sink);
 This ADR selects the **synchronous ReadySink** ownership model. For each backend-ready request,
 reap:
 
-1. validates the `RequestKey` and Completion binding;
-2. enters the shared slot-lifecycle domain, closes further registration, and atomically takes an
+1. acquire-checks that the identity-bound enqueue-in-flight pin is acknowledged; if not, it leaves
+   the backend-ready linkage and level-triggered progress condition intact and publishes nothing;
+2. validates the `RequestKey` and Completion binding;
+3. enters the shared slot-lifecycle domain, closes further registration, and atomically takes an
    optional registered waiter delivery (token plus routing lease);
-3. publishes the terminal result and release-stores the Completion as ready before leaving that
-   slot-lifecycle domain; and
-4. releases every slot/admission/backend-progress lock, then invokes the sink with a by-value event
+4. installs the terminal result while it is still private, marks the RequestSlot
+   `completion-ready`, decrements accepted-outstanding, and stages the fd/buffer borrow end;
+5. as the final publication step in that domain, release-stores the Completion as ready; and
+6. releases every slot/admission/backend-progress lock, then invokes the sink with a by-value event
    before the reap call returns.
+
+The release-store in Step 5 is the sole Completion-ready linearization point. Every acquire
+observer of ready therefore also observes the immutable terminal result, closed registration with
+no stored waiter delivery, completion-ready slot state, accepted-outstanding decrement, and ended
+borrow. Those bookkeeping changes are made under the same domain and are not independently
+observable as a completed reap transition before the ready publication. Public statistics and
+drain/quiescence decisions that read accepted-outstanding must also synchronize through this
+domain; an unsynchronized counter sample is not lifecycle authority. Reset/destruction may contend
+briefly for the domain after observing ready, but it cannot overtake the reap critical section.
 
 The callback-scoped `ReadyEvent` does not contain a `Completion*` and must not carry a
 `RequestSlot*`. Reap holds no backend or slot lock while calling the sink. The sink handler is
@@ -614,11 +675,12 @@ Phase B proves the abstract transfer and exactly-once rules with fake stable tok
 Scheduler modification. Phase F implements and proves actual Scheduler record lifetime,
 cancellation, drain, and shutdown integration; Phase B alone is not that evidence.
 
-Slot release requires `registration_closed(no_waiter)`. Reset or destruction that encounters open
-registration or a stored token/lease is a contract violation and fails fast in Debug and Release; it
-never silently discards the waiter or increments generation. Once reap or waiter cancellation has
-taken the delivery, routing no longer depends on the slot. The owner of an actual wait must still keep
-the Completion alive and stable until that wait has resumed or otherwise stopped using it.
+Slot release requires an acknowledged enqueue pin and `registration_closed(no_waiter)`. Reset or
+destruction that encounters a live pin, open registration, or a stored token/lease is a contract
+violation and fails fast in Debug and Release; it never silently discards the waiter or increments
+generation. Once reap or waiter cancellation has taken the delivery, routing no longer depends on
+the slot. The owner of an actual wait must still keep the Completion alive and stable until that
+wait has resumed or otherwise stopped using it.
 
 ## Decision 11: cancellation target and disposition
 
@@ -636,8 +698,13 @@ enum class CancelDisposition {
 
 Required behavior:
 
-- **pending/enqueued:** the backend may remove the request using its pre-reserved linkage and make
-  `canceled` the terminal result;
+- **pending:** cancellation may directly win `pending -> backend-ready(canceled)` in the same
+  slot-state arbitration domain as enqueue. The winner stores the result, publishes the
+  pre-reserved ready linkage, and establishes the level-triggered backend-ready progress condition.
+  The enqueue pin remains live, so reap cannot publish Completion-ready until a later enqueue
+  observation performs its successful no-op and acknowledges the pin;
+- **enqueued:** the backend may remove or neutralize the request using its pre-reserved linkage and
+  make `canceled` the terminal result before dispatch wins;
 - **running blocking syscall:** cancellation records intent and attempts only supported interruption;
   if the syscall later succeeds or fails, the common terminal-winner rule decides the result;
 - **kernel-owned io_uring:** the backend may submit a cancel SQE; original CQE, effective cancel,
@@ -648,8 +715,9 @@ Required behavior:
 - **unknown/stale generation:** return `not_found` and never act on a reused slot; and
 - **backend cannot cancel this operation:** return `not_supported` without changing terminality.
 
-`requested` means cancel intent was recorded or a cancellation attempt was initiated; it does not
-promise that `canceled` will win.
+`requested` means the cancellation authority accepted the request: for `pending`, cancellation may
+already have won and stored `canceled`; for later states, intent may only have been recorded or an
+attempt initiated, so the disposition does not promise that `canceled` will win.
 
 ## Decision 12: terminal winner
 
@@ -657,6 +725,11 @@ The first event that successfully transitions the `RequestSlot` into `backend-re
 candidates are ordinary success, ordinary error, effective cancel, a post-commit dispatch failure
 after execution ownership is proven absent, and an explicitly designed shutdown terminal event.
 The transition uses one slot lock/CAS domain.
+
+The pending enqueue/cancel race uses that same state arbitration: a cancel winner owns terminal
+publication and makes enqueue a no-op, while an enqueue winner transfers the race to the enqueued
+cancellation rules. Neither outcome can leave both pending linkage and backend-ready linkage live.
+Terminal victory does not clear the enqueue pin or authorize reap to overtake its acknowledgement.
 
 Losers do not publish, overwrite result storage, unlink on their own, decrement accounting twice,
 or mutate generation. A cancel SQE result is evidence about the cancellation attempt, not an
@@ -870,20 +943,31 @@ non-authoritative diagnostics.
     synchronously delivers a by-value event with no Completion/slot pointer; slot release or
     generation reuse cannot dangle the event, lose a token installed in the publication window, or
     retire the Scheduler routing record before sink acknowledgement.
+17. **I17 — Enqueue/cancel arbitration.** Pending enqueue and cancellation share one slot-state
+    winner domain. A cancellation winner makes enqueue an allocation-free no-op, so a request can
+    never have both pending linkage and backend-ready linkage or execute after pending cancellation.
+18. **I18 — Final ready publication.** The Completion-ready release-store occurs after terminal
+    result installation, registration closure/token extraction, slot-state update,
+    accepted-outstanding decrement, and borrow-end staging. An acquire observer of ready sees all
+    of those effects.
+19. **I19 — Submit pin before reuse.** Commit establishes an identity-bound enqueue-in-flight pin.
+    Reap cannot publish Completion-ready, and reset/destruction cannot release or reuse the slot,
+    until enqueue/no-op acknowledges that pin as the old submit path's final slot access.
 
 ## Linearization points
 
 | Event | Authority and atomic/lock domain | Observable consequence | Wake obligation |
 |---|---|---|---|
-| submit accepted | Backend admission authority; Completion `idle -> binding` CAS elects one context, which commits its slot/accounting and release-stores `binding -> outstanding` under its slot/admission lock | The release-store is the linearization point; acquire observers see the complete binding, pending slot, borrow, and accepted-outstanding accounting; submit may return success | None until progress engine/backend-ready |
+| submit accepted | Backend admission authority; Completion `idle -> binding` CAS elects one context, which commits its slot/accounting/enqueue pin and release-stores `binding -> outstanding` under its slot/admission lock | The release-store is the linearization point; acquire observers see the complete binding, pending slot, borrow, accepted-outstanding accounting, and live enqueue pin; submit may return success | None until progress engine/backend-ready |
 | submit rejected | Admission authority before commit; same lock domain completes rollback | Completion is idle, slot free, no borrow/execution; submit returns an error | None |
-| cancel requested | Backend cancellation authority validates RequestKey then atomically records intent or queues pre-reserved cancel work | Returns `requested` unless terminal/absent/unsupported; no promise that canceled wins | Notify backend progress engine only if needed |
+| cancel requested | Backend cancellation authority validates RequestKey, then atomically records intent, queues pre-reserved cancel work, or wins the pending terminal transition | Returns `requested` unless terminal/absent/unsupported; pending cancellation may already have won, while other states make no promise that canceled wins | A pending terminal winner establishes one logical level-ready condition; enqueue acknowledgement re-arms an edge implementation if required |
 | terminal winner selected | Slot state CAS/lock changing an accepted state to backend-ready | Exactly one terminal result becomes immutable | Backend-ready progress notification; no direct Fiber routing |
-| backend-ready publication | Same terminal transition plus release publication of ready linkage | Reap can observe stable key/result | Backend domain signal; Scheduler bridge deferred |
-| Completion-ready publication | Designated reap authority validates key/binding, closes registration and takes any waiter delivery lease under the shared leaf slot-lifecycle domain, publishes ready before releasing that domain, then synchronously invokes ReadySink | Caller may observe result; fd/buffer borrow ends; accepted-outstanding decrements; callback-scoped event has no Completion/slot pointer | Sink consumes the extracted lease before reap returns; no later slot lookup |
+| backend-ready publication | Same terminal transition plus release publication of ready linkage | Reap can observe stable key/result, but cannot consume or publish it while the enqueue pin remains live | Backend level-ready condition remains asserted through pin acknowledgement; Scheduler bridge deferred |
+| enqueue acknowledged | Submit path release-clears its identity-bound pin after publishing pending linkage or confirming a terminal no-op; this is its last slot access | The old submit no longer blocks eligible reap, Completion-ready publication, or eventual generation reuse | Preserve level readiness or re-arm an edge notification if a terminal winner preceded acknowledgement |
+| Completion-ready publication | After acquire-observing the enqueue acknowledgement, designated reap authority validates key/binding and, under the shared leaf slot-lifecycle domain, closes registration, extracts waiter delivery, installs result, marks the slot completion-ready, decrements accepted-outstanding, and stages borrow end; the final Completion-ready release-store is the linearization point, followed outside the domain by synchronous ReadySink invocation | An acquire observer sees the result and all prior bookkeeping; fd/buffer borrow is ended, the request is absent from accepted-outstanding, registration is closed, and the callback-scoped event has no Completion/slot pointer | Sink consumes the extracted lease before reap returns; no later slot lookup |
 | waiter registration | RequestSlot registration authority validates the acquire-observed bound key and stores one Scheduler-supplied stable token/routing lease only while registration is open | Slot state is `registration_open(registered(token, lease))`; a second registration is `invalid_state`; closed registration observes ready without storing | If already completion-ready, return ready without registering |
 | waiter cancellation | RequestSlot registration authority moves out the matching token/lease under the same domain; Scheduler owns routing and lease acknowledgement | Wait ends/cancels; I/O and borrow remain active; the losing path cannot retire the routing record | Route only the canceled waiter and acknowledge its lease as required by Scheduler semantics |
-| slot release/generation increment | Caller reset or ready-Completion destructor acquires the same leaf slot-lifecycle domain after reap leaves it; requires closed waiter registration with no stored token/lease | Completion binding clears, generation increments, slot-in-use decrements, and only then is the slot published free; the old key is stale before reuse | Capacity observer may be notified within the bounded domain; no user code, Scheduler, backend-progress lock, or Fiber routing |
+| slot release/generation increment | Caller reset or ready-Completion destructor acquires the same leaf slot-lifecycle domain after reap leaves it; requires acknowledged enqueue pin and closed waiter registration with no stored token/lease | Completion binding clears, generation increments, slot-in-use decrements, and only then is the slot published free; the old key is stale before reuse | Capacity observer may be notified within the bounded domain; no user code, Scheduler, backend-progress lock, or Fiber routing |
 | admission closure | Context lifecycle authority atomically closes the admission flag under lifecycle/admission domain | Later submit is synchronous `invalid_state`; accepted requests remain drainable | Wake any admission waiters if such an API is later introduced |
 
 ## Zig conformance and divergence classification
@@ -949,9 +1033,9 @@ The sequence has no reverse dependency on Scheduler, Runtime, or a persistent wo
 1. **Phase A — this ADR:** `docs(adr): define unified Explicit I/O Request Contract`.
 2. **Phase B — reference core:**
    `feat(async): add bounded RequestKey / RequestSlot reference lifecycle`; implement only
-   RequestKey, the Completion `binding` transient, arena/slot and waiter-token state machines,
-   Fake, Sync/Synthetic, a synchronous non-escaping ReadySink, and the initial conformance tests.
-   Use fake stable waiter tokens/leases; do not modify Scheduler.
+   RequestKey, the Completion `binding` transient, the enqueue-in-flight pin/ack, arena/slot and
+   waiter-token state machines, Fake, Sync/Synthetic, a synchronous non-escaping ReadySink, and the
+   initial conformance tests. Use fake stable waiter tokens/leases; do not modify Scheduler.
 3. **Phase C — conformance framework:**
    `test(async): enforce explicit request lifecycle across backends`; cover capacity, rejection,
    generation, cancel, dispatch failure, exactly-once, shutdown, and identity-bearing reap.
@@ -999,6 +1083,9 @@ and completion-ready are distinct; slot release invalidates the generation befor
 ### Gate 3 — wake and progress
 
 - Backend-ready publishes a stable key/result into pre-reserved ready linkage.
+- A live enqueue pin makes that linkage temporarily reap-ineligible without consuming its
+  level-triggered progress condition; acknowledgement makes it eligible and re-arms edge-based
+  notification when necessary.
 - Reap alone makes Completion ready, takes any waiter token/routing lease, and synchronously emits
   a by-value identity event with no Completion/slot pointer.
 - Scheduler remains the only Fiber-routing authority.
@@ -1013,12 +1100,18 @@ The implementation/conformance PRs must add evidence for:
 - capacity-full rejection with unchanged Completion;
 - injected failure at reserve, prepare, commit boundary, and dispatch, plus proof that enqueue is
   allocation-free and cannot produce an ordinary recoverable failure;
+- a deterministic commit/enqueue pause in which pending cancellation wins, an intervening reap
+  publishes nothing, Completion remains non-ready, and slot release/reuse remains unavailable;
+  resumed enqueue then acknowledges the pin as a no-op without linking or fail-fast, and subsequent
+  reap proves submit remains successful, the operation is never dispatched, no old submit access
+  reaches a new generation, progress is not lost, and exactly one backend-ready result/linkage and
+  Completion publication occur;
 - two-context contention for one Completion, proving that only the `idle -> binding` CAS winner
   installs binding payload and that no operation observes a half binding;
 - OOM/failure after commit without loss, hang, or worker exception escape;
 - identity-bearing completion order and exact RequestKey preservation;
 - generation reuse and stale submit/cancel/CQE/waiter attempts;
-- cancel races for pending, blocking-running, kernel-owned, and backend-ready states;
+- cancel races for pending, enqueued, blocking-running, kernel-owned, and backend-ready states;
 - io_uring SQE pressure, partial-submit suffix retry, and proof that no stale SQE/CQE can outlive
   terminal publication or slot reuse;
 - exactly one terminal winner and one Completion publication;
@@ -1029,6 +1122,9 @@ The implementation/conformance PRs must add evidence for:
 - waiter cancel/reap/shutdown races proving the delivery lease pins the Scheduler routing record
   through exactly one route and acknowledgement (Phase F for the real Scheduler);
 - exactly one `noexcept`, allocation-independent sink callback per Completion-ready publication;
+- acquire observation of Completion ready proving that terminal result installation, registration
+  closure/token extraction, completion-ready slot state, accepted-outstanding decrement, and
+  borrow end are already visible;
 - fail-fast reset/destruction if slot waiter state is still `registered`;
 - borrow lifetime through backend-ready, cancel, dispatch failure, and reap;
 - graceful close/drain, rejection after admission close, quiescent destroy, and death on non-free
