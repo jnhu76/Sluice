@@ -144,8 +144,8 @@ wait_one()
 ```
 
 **Transactional admission note (ADR §10):** the backend claims BEFORE
-acquiring the SQE and rolls the claim back if SQE acquisition fails (no
-untracked SQE can run I/O after a failed submit). P0-02 REMAINS: `register_op`
+acquiring the SQE and rolls the claim back if SQE acquisition fails (null-SQE
+branch only — no untracked SQE on that path). P0-02 REMAINS: `register_op`
 container allocations (comp_to_op, ops, pending_sqes) happen AFTER the SQE is
 prepared and are still non-transactional — deferred to the RequestSlot PR.
 

@@ -216,8 +216,13 @@ SLUICE_TEST_CASE(completion_concurrent_claim_exactly_one_wins) {
     SLUICE_CHECK_MSG(winners.load(std::memory_order_relaxed) == 1,
                      "exactly one concurrent claim may succeed (CAS single-winner)");
     SLUICE_CHECK(c.outstanding());
-    // Clean up: publish so destructor doesn't fail-fast.
-    pb.publish_completion(c, Result<std::size_t>{std::size_t{0}});
+    // Clean up: publish so the destructor doesn't fail-fast. Guard on the
+    // winners count: if the claim was lost (regression, winners == 0) the
+    // Completion is still idle and publishing would itself fail-fast,
+    // masking the SLUICE_CHECK_MSG above.
+    if (winners.load(std::memory_order_relaxed) == 1) {
+        pb.publish_completion(c, Result<std::size_t>{std::size_t{0}});
+    }
 }
 
 // Child dispatch entry point.

@@ -383,11 +383,12 @@ validate → try_claim (CAS) → get_sqe → [get_sqe failure] rollback_claim_be
                           → prep → register_op
 ```
 
-The SQE-acquisition-after-claim gap — which could leave an UNTRACKED SQE in
-the ring after a failed submit, letting I/O run in the background with no
-OpRec — is CLOSED: the io_uring backend claims before acquiring the SQE, and a
-failed SQE acquisition rolls the claim back. The loser of a concurrent claim
-never acquires an SQE.
+The null-SQE claim-rollback gap is CLOSED: the io_uring backend claims BEFORE
+acquiring the SQE, so the loser of a concurrent claim never acquires an SQE,
+and a failed (null) SQE acquisition after a won claim rolls the claim back
+instead of leaving an outstanding, untracked Completion. This closes ONLY the
+null-SQE branch — an SQE that has already been prepared still runs in the
+background if a later step fails (the register_op allocation window below).
 
 P0-02 REMAINS: `register_op` container allocation can throw after the SQE is
 prepared, and ThreadPoolBackend's worker spawn can throw after claim (that
