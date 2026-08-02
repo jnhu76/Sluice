@@ -7,6 +7,29 @@ local R = SLUICE_ROOT
 -- measurement) and sluice_async (Completion/AsyncIoContext/backends).
 sluice_production_async_test("async_completion_test")
 
+-- Phase B reference lifecycle — bounded RequestSlot arena unit tests. The arena
+-- is an internal detail:: type but its capacity/reserve/release/generation
+-- contract is a deliberate test seam (design: docs/design/phase-b-request-slot-
+-- reference.md). Links sluice_async for the detail/ headers (header-only so far).
+sluice_production_async_test("request_arena_test")
+
+-- Phase B reference lifecycle — Completion binding transient tests (idle ->
+-- binding -> outstanding). Drives the two-stage claim directly via ProbeBackend.
+sluice_production_async_test("completion_binding_test")
+
+-- Phase B reference lifecycle — Scheme B proof (pending cancel wins before
+-- enqueue; enqueue observes backend_ready -> successful no-op; reap-ineligible
+-- while the enqueue pin is live; exactly-one terminal winner; generation reuse).
+sluice_production_async_test("request_lifecycle_scheme_b_test")
+
+-- Phase B reference backend migration regression (commit 4). Proves
+-- FakeAsyncBackend + SyncBackend are actually driven by the bounded RequestArena
+-- + five-stage admission + the synchronous identity-bearing ReadySink, by
+-- asserting the OBSERVABLE consequences (slot_in_use lifecycle, capacity
+-- rejections, exactly-once sink deliveries, generation-on-reuse). Without these
+-- the migration would be indistinguishable from a no-op rename.
+sluice_production_async_test("reference_backend_arena_lifecycle_test")
+
 -- AsyncIoContext lifecycle / move-semantics tests (E15-P1-03 / E15-P2-06). The
 -- SAFE move paths (idle-to-idle, source-with-outstanding transfer, self move,
 -- chained moves, moved-from destruction) are exercised here; the FAIL-FAST

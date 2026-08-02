@@ -95,7 +95,8 @@ review. Documentation-only—no production behavior is changed.
 
 ## Phase B — bounded reference request lifecycle
 
-**Recommended next change:**
+**Status:** IMPLEMENTED (working-tree change on branch
+`feat/bounded-request-slot-reference`, awaiting user review/commit).
 
 ```text
 feat(async): add bounded RequestKey / RequestSlot reference lifecycle

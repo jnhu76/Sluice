@@ -403,3 +403,39 @@ wake_mtx_ (Scheduler park/wake)
 | Runtime admission | ApplicationRuntime::submit() admission gate | `application_runtime.hpp:177` |
 | Root cancellation | Group::group_token() (Runtime-owned Group) | ADR-application-runtime §3 |
 | Fiber execution identity | Fiber::execution_tag_ (Fiber-local, not TLS) | `application_runtime.hpp:326-331` |
+
+---
+
+## 9. Phase B reference-layer delta (post-baseline)
+
+> This section records a DELTA over the `b20bcc7` baseline above. It is added by
+> the Phase B working-tree change (branch `feat/bounded-request-slot-reference`,
+> ADR-explicit-io-request-contract **Accepted**) and reflects what the reference
+> backends now actually do. The baseline sections (1–8) are left unchanged so
+> the pre-Phase-B state remains readable; this section is the authoritative
+> description of the reference-layer lifecycle as implemented.
+
+The Phase B change adds a bounded `detail::RequestArena` shared by
+`FakeAsyncBackend` and `SyncBackend` and migrates them onto the five-stage
+admission (reserve → prepare → commit → enqueue → dispatch/reap) defined by
+ADR-explicit-io-request-contract. The public submit/cancel/complete surface is
+unchanged (ADR Decision 7); the `RequestKey` is bound privately during commit.
+
+As-built authority changes at the reference layer (production backends
+Uring/ThreadPool remain at the baseline until Phase D/E):
+
+| Authority | Phase B reference-layer owner | Evidence |
+|-----------|-------------------------------|----------|
+| Request identity | `detail::RequestKey{ContextIdentity, SlotIndex, Generation}` in the bounded arena | `request_key.hpp`, `request_slot.hpp` (under `include/sluice/async/detail/`); cancel/reap/register re-validate generation under the leaf mutex (I6) |
+| Request capacity | `detail::RequestArena` with construction-time `request_capacity`; full → `would_block`; `capacity_rejections` counter | `request_arena.hpp` (under `include/sluice/async/detail/`); `SyncBackend(request_capacity)`, `FakeAsyncBackend(request_capacity)` |
+| Completion claim (reference backends) | Two-stage binding: `begin_binding` (idle → binding CAS) + `commit_binding` (binding → outstanding release-store = submit-success LP) | `completion.hpp` (private binding mutators); `async_io_context.hpp` (protected helpers). Legacy `try_claim` retained for Uring/ThreadPool. |
+| Terminal winner | `RequestArena::record_terminal` / `cancel` — exactly-once; losers no-op (I10) | `request_arena.hpp`; proven by `request_lifecycle_scheme_b_test.cpp` |
+| Enqueue-in-flight pin | Set at commit; cleared by enqueue/acknowledge as the submit path's final slot access; reap acquire-checks it (reap-ineligible while live) (I17/I19) | `request_slot.hpp`, `request_arena.hpp` |
+| Identity-bearing reap | `RequestArena::reap(sink, publish)` delivers a by-value `ReadyEvent{RequestKey, OperationKind, OptionalWaiterDelivery}` to a `SynchronousReadySink` after releasing the leaf mutex (I11/I16) | `ready_sink.hpp`, `reference_ready_sink.hpp` (under `include/sluice/async/detail/`) |
+| Slot release / generation++ | `RequestArena::release` — fail-fast (Debug AND Release) on live pin or open registration; generation increments before the slot is visible to a new release | `request_arena.hpp`; `request_arena_death_test.cpp` |
+
+Findings closed at the reference layer: P0-02, P1-02, P1-05, P1-06, P1-07,
+P1-09 (arena), P1-10, P2-03. See `current-architecture-findings.md` summary
+table and `phase-b-compliance-gate.md` for the evidence ledger. Production-
+backend migration (Uring/ThreadPool) remains open for Phase D/E; Scheduler/
+Batch/Runtime integration for Phase F/G.

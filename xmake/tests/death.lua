@@ -124,3 +124,22 @@ do
             add_tests("completion_authority_death_test")
     end
 end
+
+-- request_arena_death_test — Phase B RequestArena release fail-fast boundary
+-- (ADR-explicit-io-request-contract Decision 15 / AC-13 :566-572). Proves
+-- release() while the enqueue-in-flight pin is live OR while a waiter is still
+-- registered terminates (exit 86) in BOTH Debug and Release, plus a control
+-- (valid release after reap exits 0). POSIX-only.
+do
+    local p = R .. "tests/request_arena_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("request_arena_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(p)
+            add_tests("request_arena_death_test")
+    end
+end

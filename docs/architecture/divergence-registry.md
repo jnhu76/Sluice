@@ -39,13 +39,13 @@ Status values:
 | Field | Value |
 |-------|-------|
 | ID | DIV-02 |
-| Status | Proposed transitional decision |
-| Introduced by | Existing Completion/backend-record separation; formalized as a transitional C++ adaptation by the Proposed explicit request contract |
-| Governing ADR | ADR-explicit-io-request-contract (Proposed; Decision 2) |
-| Reason | Zig places operation lifecycle and backend scratch in caller-owned `Operation.Storage`. The Proposed request contract selects preserving caller-owned `Completion<T>` while the context/backend owns a bounded arena of `RequestSlot` objects identified by context, slot, and generation. If accepted, this stages migration without making the current pointer/container implementation acceptable. |
+| Status | Active transitional decision (Phase B) |
+| Introduced by | Existing Completion/backend-record separation; formalized as a transitional C++ adaptation by the explicit request contract |
+| Governing ADR | ADR-explicit-io-request-contract (Accepted; Decision 2) |
+| Reason | Zig places operation lifecycle and backend scratch in caller-owned `Operation.Storage`. The accepted request contract selects preserving caller-owned `Completion<T>` while the context/backend owns a bounded arena of `RequestSlot` objects identified by context, slot, and generation. This stages migration without making the prior pointer/container implementation acceptable. |
 | Benefit | Preserves public submit signatures and avoids one-step Runtime/Batch/copy-pipeline migration while still enabling stable identity, bounded admission, and an allocation-independent accepted terminal path. |
-| Cost | Context/backend memory scales with configured capacity; caller cannot supply storage directly; current backends remain non-conforming until migrated. |
-| Current evidence | Current code: `completion.hpp`, backend-specific containers, and no RequestSlot arena. Target decision: ADR-explicit-io-request-contract Decisions 1–5. No production implementation exists yet. |
+| Cost | Context/backend memory scales with configured capacity; caller cannot supply storage directly; non-reference backends (Uring/ThreadPool) remain non-conforming until their respective phases. |
+| Current evidence | Phase B activates the transitional backend-owned `RequestSlot` arena for the reference backends (FakeAsyncBackend, SyncBackend) only. `UringAsyncBackend` and `ThreadPoolBackend` retain their pointer/container tracking until Phases D/E. The shared `sluice::async::detail::RequestArena` provides one logical capacity per context/backend pair (ADR Decision 2; no two independently oversubscribable stores). |
 | Revisit trigger | Re-evaluate when benchmarks or backend ABI evidence show caller-owned storage materially reduces per-request overhead and the public API migration cost for Runtime, Batch, and copy pipelines is controlled. |
 
 ---

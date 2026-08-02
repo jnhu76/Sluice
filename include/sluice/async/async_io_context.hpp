@@ -111,6 +111,28 @@ protected:
         return c.try_claim_for_backend();
     }
 
+    // Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5): the
+    // accepted request lifecycle splits the claim into a private two-stage
+    // binding so the winning backend can install RequestKey/context/release
+    // capability before the Completion becomes observable as outstanding.
+    // Migrated reference backends (Fake, Sync) use this protocol; the legacy
+    // single-step try_claim above remains for the not-yet-migrated backends
+    // (Uring, ThreadPool) which are out of Phase B's scope. The two paths share
+    // the same private-access boundary (friend AsyncBackend); they do not race
+    // because a given Completion is driven by exactly one backend.
+    template <class T>
+    static bool begin_binding(Completion<T>& c) noexcept {
+        return c.begin_binding_for_backend();
+    }
+    template <class T>
+    static void commit_binding(Completion<T>& c) noexcept {
+        c.commit_binding_to_outstanding();
+    }
+    template <class T>
+    static void rollback_binding_before_accept(Completion<T>& c) noexcept {
+        c.rollback_binding_before_accept();
+    }
+
     template <class T>
     static void publish(Completion<T>& c, Result<T>&& result) noexcept {
         c.publish_from_reap(std::move(result));

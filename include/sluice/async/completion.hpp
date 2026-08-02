@@ -152,6 +152,14 @@ public:
     // consistent fail-fast line.)
     ~Completion() noexcept {
         State s = state_.load(std::memory_order::acquire);
+        if (s == State::binding) {
+            // Phase B (ADR Decision 5 / I15): destroying a Completion while it is
+            // in the private `binding` transient observes a half-installed
+            // RequestKey/context/release-capability payload. Only the backend
+            // that won the idle -> binding CAS may finish the binding; a
+            // destructor cannot. Fail-fast in BOTH Debug and Release.
+            detail::completion_binding_destruction_fail_fast();
+        }
         if (s == State::outstanding || s == State::publishing ||
             s == State::resetting) {
             detail::completion_authority_fail_fast();
@@ -171,6 +179,10 @@ public:
     // so it still reports as outstanding. resetting is a caller-lifecycle
     // transient: the prior result is being cleared, so it reports as neither
     // idle nor ready (not outstanding) — the Completion is not yet reusable.
+    // `binding` (Phase B) is a PRIVATE backend publication window between idle
+    // and outstanding: it is neither idle, ready, nor outstanding, so cancel /
+    // await / waiter-registration paths that gate on outstanding() observe it
+    // as not-yet-accepted and reject synchronously (I15).
     bool outstanding() const noexcept {
         State s = state_.load(std::memory_order::acquire);
         return s == State::outstanding || s == State::publishing;
@@ -199,6 +211,11 @@ public:
     void reset() noexcept {
         State s = state_.load(std::memory_order::acquire);
         if (s == State::idle) return;  // idempotent no-op (defensive)
+        if (s == State::binding) {
+            // Phase B (ADR Decision 5 / I15): reset() during the private binding
+            // transient would observe/tear down a half-installed payload.
+            detail::completion_binding_reset_fail_fast();
+        }
         if (s != State::ready) {
             // outstanding / publishing / resetting: contract violation.
             detail::completion_authority_fail_fast();
@@ -242,6 +259,50 @@ private:
             expected, State::outstanding,
             std::memory_order::acq_rel,
             std::memory_order::acquire);
+    }
+
+    // --- Phase B binding protocol (ADR-explicit-io-request-contract, Accepted,
+    //     Decision 5 / I2 / I15). The accepted request lifecycle splits the
+    //     single idle -> outstanding CAS into a private two-stage claim so the
+    //     winning backend can install RequestKey / ContextIdentity / slot-release
+    //     capability before the Completion becomes observable as outstanding.
+    //
+    //   1. begin_binding_for_backend(): idle -> binding CAS. Exactly one
+    //      submitting context wins (the winner of this CAS). Losers return
+    //      false and roll back ONLY their own candidate slot; they cannot read
+    //      or write the winner's binding payload. While in `binding` the
+    //      Completion is NOT observable as outstanding (outstanding()==false),
+    //      so cancel / await / waiter-registration reject synchronously.
+    //   2. (winner only) install private binding fields (RequestKey, etc.).
+    //   3. commit_binding_to_outstanding(): binding -> outstanding RELEASE-STORE.
+    //      This is the SUBMIT-SUCCESS LINEARIZATION POINT. An acquire observer
+    //      of `outstanding` sees the fully-installed binding.
+    //
+    // A winner that fails between begin and commit calls
+    // rollback_binding_before_accept() (binding -> idle), restoring the
+    // Completion to fully reusable idle state with no published binding.
+    bool begin_binding_for_backend() noexcept {
+        State expected = State::idle;
+        return state_.compare_exchange_strong(
+            expected, State::binding,
+            std::memory_order::acq_rel,
+            std::memory_order::acquire);
+    }
+    void commit_binding_to_outstanding() noexcept {
+        // The winner's binding payload writes happen-before this release-store
+        // (program order + release). An acquire-load observer of `outstanding`
+        // therefore sees the full binding (I2).
+        state_.store(State::outstanding, std::memory_order::release);
+    }
+    void rollback_binding_before_accept() noexcept {
+        State expected = State::binding;
+        if (!state_.compare_exchange_strong(
+                expected, State::idle,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
+            // Not in binding — misuse of the binding rollback authority.
+            detail::completion_authority_fail_fast();
+        }
     }
 
     // ADR §10 (P0-02 bridge): roll back a claim that was won but NOT accepted
@@ -290,7 +351,7 @@ private:
     std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
     enum class State : std::uint8_t {
-        idle, outstanding, publishing, ready, resetting
+        idle, binding, outstanding, publishing, ready, resetting
     };
     std::atomic<State> state_{State::idle};
     std::uint64_t reap_seq_ = 0;
@@ -341,6 +402,11 @@ public:
 
     ~Completion() noexcept {
         State s = state_.load(std::memory_order::acquire);
+        if (s == State::binding) {
+            // Phase B (ADR Decision 5 / I15): the binding transient is an
+            // exclusive publication window; a destructor cannot finish it.
+            detail::completion_binding_destruction_fail_fast();
+        }
         if (s == State::outstanding || s == State::publishing ||
             s == State::resetting) {
             detail::completion_authority_fail_fast();
@@ -353,6 +419,8 @@ public:
     Completion& operator=(Completion&&) = delete;
 
     bool ready() const noexcept { return state_.load(std::memory_order::acquire) == State::ready; }
+    // `binding` (Phase B) reports as neither idle, ready, nor outstanding (see
+    // the Completion<T> template's outstanding() note).
     bool outstanding() const noexcept {
         State s = state_.load(std::memory_order::acquire);
         return s == State::outstanding || s == State::publishing;
@@ -371,6 +439,11 @@ public:
     void reset() noexcept {
         State s = state_.load(std::memory_order::acquire);
         if (s == State::idle) return;  // idempotent no-op (defensive)
+        if (s == State::binding) {
+            // Phase B (ADR Decision 5 / I15): reset during binding observes a
+            // half-installed payload.
+            detail::completion_binding_reset_fail_fast();
+        }
         if (s != State::ready) {
             detail::completion_authority_fail_fast();
         }
@@ -393,6 +466,27 @@ private:
             expected, State::outstanding,
             std::memory_order::acq_rel,
             std::memory_order::acquire);
+    }
+
+    // Phase B binding protocol — see the Completion<T> template's note.
+    bool begin_binding_for_backend() noexcept {
+        State expected = State::idle;
+        return state_.compare_exchange_strong(
+            expected, State::binding,
+            std::memory_order::acq_rel,
+            std::memory_order::acquire);
+    }
+    void commit_binding_to_outstanding() noexcept {
+        state_.store(State::outstanding, std::memory_order::release);
+    }
+    void rollback_binding_before_accept() noexcept {
+        State expected = State::binding;
+        if (!state_.compare_exchange_strong(
+                expected, State::idle,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
+            detail::completion_authority_fail_fast();
+        }
     }
 
     void rollback_claim_before_accept() noexcept {
@@ -422,7 +516,7 @@ private:
     std::uint64_t reap_seq() const noexcept { return reap_seq_; }
 
     enum class State : std::uint8_t {
-        idle, outstanding, publishing, ready, resetting
+        idle, binding, outstanding, publishing, ready, resetting
     };
     std::atomic<State> state_{State::idle};
     bool has_error_ = false;

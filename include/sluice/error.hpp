@@ -19,6 +19,16 @@ struct IoError {
         permission_denied,
         invalid_state,
         backend_error,
+        // ADR-explicit-io-request-contract (Accepted) Decision 6: the request lifecycle
+        // distinguishes admission rejection, stale-key lookup, and capability refusal from
+        // one another and from configured-capacity would_block, lifecycle invalid_state,
+        // and genuine-init no_space. These three codes name those distinct cases.
+        //   invalid_argument — malformed operation descriptor (prepare-stage rejection)
+        //   not_found        — stale/unknown RequestKey (cancel/reap lookup after release)
+        //   not_supported    — backend/platform does not provide the op or cancel capability
+        invalid_argument,
+        not_found,
+        not_supported,
     };
 
     Code code;
@@ -46,6 +56,12 @@ inline constexpr std::string_view to_string(IoError::Code c) {
         return "invalid_state";
     case IoError::Code::backend_error:
         return "backend_error";
+    case IoError::Code::invalid_argument:
+        return "invalid_argument";
+    case IoError::Code::not_found:
+        return "not_found";
+    case IoError::Code::not_supported:
+        return "not_supported";
     }
     return "unknown";
 }

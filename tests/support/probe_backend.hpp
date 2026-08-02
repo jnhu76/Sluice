@@ -45,6 +45,24 @@ public:
         rollback_claim_before_accept(c);
     }
 
+    // Phase B binding protocol test twins (ADR-explicit-io-request-contract,
+    // Accepted, Decision 5). Expose begin/commit/rollback-binding so the
+    // lifecycle tests can drive the two-stage claim directly without a full
+    // submit/poll cycle. The base-class helpers are reached via AsyncBackend::
+    // qualification because these wrapper methods share the same names.
+    template <class T>
+    bool begin_binding(Completion<T>& c) noexcept {
+        return AsyncBackend::begin_binding(c);
+    }
+    template <class T>
+    void commit_binding(Completion<T>& c) noexcept {
+        AsyncBackend::commit_binding(c);
+    }
+    template <class T>
+    void rollback_binding(Completion<T>& c) noexcept {
+        AsyncBackend::rollback_binding_before_accept(c);
+    }
+
     // --- AsyncBackend interface (all stubs — no real I/O) ---
     Result<void> submit_read(ReadOp, Completion<std::size_t>&) override {
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});

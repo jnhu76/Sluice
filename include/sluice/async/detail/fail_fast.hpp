@@ -172,4 +172,34 @@ bool evented_admission_check() noexcept;
 // Same contract as the other fail-fast entries.
 [[noreturn]] void completion_authority_fail_fast() noexcept;
 
+// Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5): the Completion
+// claim path gains a private `binding` transient between `idle` and `outstanding`.
+// Only the backend that wins the idle → binding CAS may install the binding
+// payload (RequestKey, ContextIdentity, slot-release capability); a second
+// submitting context, a cancel path, a waiter-registration path, reset, and the
+// destructor MUST NOT observe or act on a half-installed binding (I15). These
+// entries fire on the binding-state violations:
+//   - completion_binding_destruction_fail_fast: ~Completion while state==binding
+//   - completion_binding_reset_fail_fast:       reset() while state==binding
+// They are distinct from completion_authority_fail_fast so the failure site is
+// attributable to the binding transient specifically. Detected in BOTH Debug and
+// Release.
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void completion_binding_destruction_fail_fast() noexcept;
+[[noreturn]] void completion_binding_reset_fail_fast() noexcept;
+
+// Phase B (ADR Decision 15 / AC-13 :566-572): slot release (via Completion reset
+// or ready-Completion destruction) is allocation-free and acquires the leaf
+// slot-lifecycle domain after reap has left it. Release is a contract violation
+// (fail-fast in BOTH Debug and Release) when the slot is not in a releasable
+// state — specifically when the enqueue-in-flight pin is still live, or the
+// waiter registration is still open, or a stored waiter token/routing-lease has
+// not been consumed. None of those may be silently discarded to make teardown
+// pass. (Commit 2 declares the entry; commit 3 wires it into the release path
+// once the pin and waiter-registration fields exist on the slot.)
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void request_slot_release_invariant_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

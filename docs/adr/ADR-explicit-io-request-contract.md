@@ -1,10 +1,42 @@
 # ADR: Unified Explicit I/O Request Contract
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-02
 **Scope:** `sluice_async` request identity, admission, completion, cancellation, capacity,
 and lifecycle contracts
 **Baseline:** `b20bcc7` (`master`, including PR #60 and PR #61)
+**Accepted at:** Phase B implementation (`feat(async): add bounded RequestKey / RequestSlot
+reference lifecycle`), branch `feat/bounded-request-slot-reference`, working-tree change
+awaiting the user's review/commit.
+
+## Acceptance
+
+This ADR was merged in its complete, normative form via PR #62 (commits `818b8d6`,
+`3e80535`, `88f2d03`; merge `503e3fb` on `master`). The full Decision 1–16 text, the I1–I19
+formal invariants, the linearization-points table, the architecture compliance gate
+(Gate 0–4), and the rejected-alternatives analysis (Alternatives A–G) are all part of the
+accepted record. With Phase B implementation beginning against it, the ADR is promoted from
+`Proposed` to `Accepted` and becomes binding authority (AGENTS.md §2 tier 2).
+
+On acceptance, the supersessions listed below take effect exactly as written — and only
+those listed portions are superseded. In particular:
+
+- The `idle -> binding -> outstanding` two-stage backend claim (Decision 5) now supersedes
+  the direct `idle -> outstanding` claim described in ADR-explicit-io-completion-authority
+  §§2.2/5/9/10. The access-control boundary, backend-only authority, reap-only publication,
+  fail-fast invalid transitions, and idle/ready destruction permission of that ADR remain
+  authoritative.
+- The reference lifecycle's pending-cancellation-wins + enqueue-no-op + enqueue-in-flight-pin
+  protocol (Decision 4, I17, I19) is the selected arbitration scheme. The rejected
+  "record-intent-and-terminalize-after-enqueue" alternative (one of Alternatives A–G) is NOT
+  implemented.
+
+Acceptance does not assert that the C++ implementation already conforms — it does not. It
+asserts that this document is the contract the implementation must now satisfy, and that
+divergence from it requires a superseding ADR or closeout note rather than a silent choice
+(AGENTS.md §2). Phase B's scope fence (Decision "Next PR" / roadmap Phase B) is binding: it
+must not jump to Uring migration, blocking-offload, Scheduler integration, Batch migration,
+Runtime wake integration, or a public `RequestHandle`.
 
 ## Authority and relationship to existing decisions
 
@@ -1107,7 +1139,7 @@ The implementation/conformance PRs must add evidence for:
   reaches a new generation, progress is not lost, and exactly one backend-ready result/linkage and
   Completion publication occur;
 - two-context contention for one Completion, proving that only the `idle -> binding` CAS winner
-  installs binding payload and that no operation observes a half binding;
+  installs binding payload and that no operation observe a half binding;
 - OOM/failure after commit without loss, hang, or worker exception escape;
 - identity-bearing completion order and exact RequestKey preservation;
 - generation reuse and stale submit/cancel/CQE/waiter attempts;
@@ -1138,6 +1170,38 @@ The implementation/conformance PRs must add evidence for:
 - TSan coverage for submit/cancel/reap/slot-reuse concurrency when implementation changes land.
 
 No Gate 4 item is marked passed by this documentation-only ADR.
+
+#### Phase B reference-layer evidence (working tree, branch `feat/bounded-request-slot-reference`)
+
+The Phase B implementation closes the reference-layer portion of Gate 4 (Fake/Sync backends +
+the bounded `RequestArena` + the `Completion` binding transient + the enqueue-in-flight pin +
+the `SynchronousReadySink`). The production-backend rows (io_uring SQE pressure, blocking offload)
+remain open for Phase D/E. Evidence map:
+
+| Obligation | Evidence |
+|---|---|
+| state transitions / capacity-full / generation-on-release / stale-key rejection / distinct counters / allocation-independent terminal | `tests/request_arena_test.cpp` (5 cases); `tests/request_lifecycle_scheme_b_test.cpp` |
+| `idle -> binding -> outstanding` two-stage claim; rollback; concurrent exactly-one-winner | `tests/completion_binding_test.cpp` (3 cases) |
+| destroy/reset-in-binding fail-fast (Debug AND Release) | `tests/completion_authority_death_test.cpp` |
+| the 19-step Scheme-B trace (pending cancel wins; enqueue no-op; reap-ineligible while pinned; exactly-one terminal; generation++; stale not_found) | `tests/request_lifecycle_scheme_b_test.cpp :: pending_cancel_wins_before_enqueue_then_enqueue_noop` |
+| exactly-one terminal winner among pending-cancel / dispatch-error / ordinary | `:: exactly_one_terminal_winner` |
+| ReadyEvent survives reset/reuse during the sink callback (no dangling pointer) | `:: ready_sink_event_survives_reset_during_callback` |
+| duplicate-waiter `invalid_state`; wait-cancel/I/O independence; lease exactly-once | `:: waiter_registration_cardinality`, `:: reap_wins_lease_over_wait_cancel` |
+| cancel disposition per state (pending/enqueued/backend_ready/free/reserved/prepared) | `:: cancel_races_per_state` |
+| generation reuse rejects stale submit/cancel/reap/register/release | `:: generation_reuse_stale_attempts` |
+| acquire observer sees all effects (I18) | `:: acquire_observer_of_ready_sees_all_effects` |
+| close_admission rejects new reserve; existing reapable still reaps | `:: close_admission_rejects_new_but_existing_reapable` |
+| allocation-free slot release (1000-cycle convergence; generation advanced 1000×) | `:: allocation_free_slot_release_proof` |
+| genuine concurrent submit ‖ cancel/reap (TSan, 0 data races) | `:: concurrent_submit_cancel_enqueue` |
+| release-with-live-pin / release-with-registered-waiter fail-fast (Debug AND Release) | `tests/request_arena_death_test.cpp` (2 death + 1 control) |
+| Fake/Sync migrate onto the arena; observable slot lifecycle + capacity rejections + exactly-once deliveries | `tests/reference_backend_arena_lifecycle_test.cpp` (6 cases) |
+| ordinary caller cannot forge a binding / claim / publish / reap_seq | `scripts/verify-completion-authority-negative-compile.sh` (10/10) |
+| ordinary caller cannot mutate slot state/generation/pin/terminal/registration | `scripts/verify-request-arena-negative-compile.sh` (5/5) |
+
+Gate results (command + count): Clang Debug 132/132; Clang Release 132/132; ASan/UBSan 132/132
+clean; TSan 132/132 with 0 data races (including the genuine two-thread concurrent case). Full
+evidence ledger: `docs/architecture/phase-b-compliance-gate.md`.
+
 
 ## Open risks and deferred decisions
 

@@ -86,6 +86,31 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5 / I15): the
+// private `binding` transient is an exclusive publication window — only the
+// backend that won the idle -> binding CAS may install the RequestKey/context/
+// release-capability payload. Destroying or resetting a Completion while it is
+// in `binding` observes a half-installed payload, so both are contract
+// violations detected in BOTH Debug and Release. Distinct entries (rather than
+// reusing completion_authority_fail_fast) keep the failure site attributable to
+// the binding transient specifically.
+[[noreturn]] void completion_binding_destruction_fail_fast() noexcept {
+    std::terminate();
+}
+[[noreturn]] void completion_binding_reset_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (ADR Decision 15 / AC-13 :566-572): slot release via reset/destroy is
+// allocation-free and acquires the leaf slot-lifecycle domain after reap has
+// left it. Releasing a slot whose enqueue-in-flight pin is still live, whose
+// waiter registration is still open, or that still holds a stored waiter
+// token/routing-lease is a contract violation — none of those may be silently
+// discarded to make teardown pass. Detected in BOTH Debug and Release.
+[[noreturn]] void request_slot_release_invariant_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

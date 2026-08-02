@@ -69,6 +69,11 @@ negative_cases=(
   "NEG_ROLLBACK_PRIVATE:private|no member|not accessible|inaccessible"
   "NEG_REAP_SEQ_PRIVATE:private|no member|not accessible|inaccessible"
   "NEG_THROWING_COMPLETION_VALUE:static assertion|static_assert|nothrow|nothrow_move_assignable"
+  # Phase B binding-protocol authority (ADR-explicit-io-request-contract Decision 5):
+  # ordinary application code cannot forge a binding / commit one / roll one back.
+  "NEG_BEGIN_BINDING_PRIVATE:private|no member|not accessible|inaccessible"
+  "NEG_COMMIT_BINDING_PRIVATE:private|no member|not accessible|inaccessible"
+  "NEG_ROLLBACK_BINDING_PRIVATE:private|no member|not accessible|inaccessible"
 )
 
 echo "=== ADR-explicit-io-completion-authority negative-compile gate ==="
