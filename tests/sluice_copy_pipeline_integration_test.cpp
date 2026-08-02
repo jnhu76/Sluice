@@ -493,11 +493,23 @@ public:
     int reads_submitted = 0;
     std::vector<sluice::async::Completion<std::size_t>*> completions;
 
+    // ADR-explicit-io-completion-authority: publication bridge for test code
+    // that needs to complete a Completion directly (outside poll/reap).
+    template <class T>
+    static void publish_completion(sluice::async::Completion<T>& c,
+                                   sluice::Result<T>&& r) noexcept {
+        publish(c, std::move(r));
+    }
+
     Result<void> submit_read(sluice::async::ReadOp op,
                              sluice::async::Completion<std::size_t>& c) override {
         if (fail_reads)
             return make_unexpected<void>(IoError{IoError::Code::backend_error});
-        c.mark_outstanding();
+        // ADR-explicit-io-completion-authority: try_claim is the claim
+        // authority. Claim failure must not touch tracking or counters and must
+        // return synchronous invalid_state.
+        if (!try_claim(c))
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         completions.push_back(&c);
         ++reads_submitted;
         return {};
@@ -571,7 +583,7 @@ SLUICE_TEST_CASE(probe_accounting_success_tracked_and_reaped) {
 
     // Complete the read directly (the stub never completes it itself); the
     // probe's poll() reaps now-ready tracked reads and decrements the count.
-    c.complete_with(Result<std::size_t>{16});
+    ProbeStubBackend::publish_completion(c, Result<std::size_t>{16});
     SLUICE_CHECK(c.ready());
     probe.poll();
     SLUICE_CHECK(probe.live_reads() == 0);

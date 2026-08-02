@@ -120,7 +120,7 @@ public:
                 ready_size_.pop_front();
                 std::size_t requested = pending_size_.front();
                 pending_size_.pop_front();
-                c->complete_with(auto_size_result(requested));
+                publish(*c, auto_size_result(requested));
                 ++n;
             }
             while (!ready_void_.empty()) {
@@ -128,9 +128,9 @@ public:
                 ready_void_.pop_front();
                 pending_void_.pop_front();
                 if (auto_mode_ == Auto::err) {
-                    c->complete_with(make_unexpected<void>(auto_err_));
+                    publish(*c, make_unexpected<void>(auto_err_));
                 } else {
-                    c->complete_with(Result<void>{});
+                    publish(*c, Result<void>{});
                 }
                 ++n;
             }
@@ -148,7 +148,7 @@ public:
                 auto idx = std::distance(ready_size_.begin(), rit);
                 ready_size_.erase(rit);
                 pending_size_.erase(pending_size_.begin() + idx);
-                c->complete_with(make_unexpected<std::size_t>(err));
+                publish(*c, make_unexpected<std::size_t>(err));
                 if (stats_) {
                     if (err.code == IoError::Code::canceled) ++stats_->canceled_ops;
                     else ++stats_->completion_errors;
@@ -164,7 +164,7 @@ public:
                 auto idx = std::distance(ready_void_.begin(), rit);
                 ready_void_.erase(rit);
                 pending_void_.erase(pending_void_.begin() + idx);
-                c->complete_with(make_unexpected<void>(err));
+                publish(*c, make_unexpected<void>(err));
                 if (stats_) {
                     if (err.code == IoError::Code::canceled) ++stats_->canceled_ops;
                     else ++stats_->completion_errors;
@@ -177,14 +177,14 @@ public:
             auto* c = ready_size_.front();
             ready_size_.pop_front();
             pending_size_.pop_front();
-            c->complete_with(take_size_stage());
+            publish(*c, take_size_stage());
             ++n;
         }
         while (!ready_void_.empty() && has_void_stage()) {
             auto* c = ready_void_.front();
             ready_void_.pop_front();
             pending_void_.pop_front();
-            c->complete_with(take_void_stage());
+            publish(*c, take_void_stage());
             ++n;
         }
         return n;
@@ -217,15 +217,13 @@ public:
 
 private:
     Result<void> record_size(auto op, Completion<std::size_t>& c) {
-        if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        c.mark_outstanding();
+        if (!try_claim(c)) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         ready_size_.push_back(&c);
         pending_size_.push_back(op.len);
         return {};
     }
     Result<void> record_void(auto /*op*/, Completion<void>& c) {
-        if (!c.idle()) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        c.mark_outstanding();
+        if (!try_claim(c)) return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         ready_void_.push_back(&c);
         pending_void_.push_back(0);
         return {};

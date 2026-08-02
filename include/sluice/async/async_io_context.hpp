@@ -48,8 +48,14 @@ struct SyncAllOp {   // fsync (W4)
     int fd = -1;
 };
 
-// The internal backend boundary (ADR §4). Not public-facing; AsyncIoContext
-// delegates to it. Concrete backends (019/020A/020B) implement this.
+// The internal backend boundary (ADR §4) — and simultaneously a PUBLIC
+// extension point: the header is installed and AsyncBackend may be subclassed
+// by tests and applications (ADR-explicit-io-completion-authority §3). Any
+// derived class is a TRUSTED backend-author: through the inherited protected
+// helpers it can claim Completions and publish terminal results. This is the
+// deliberate injection seam that decouples L1 from how completions are
+// produced; it is NOT a capability-isolation boundary against deliberately
+// subclassing code. Concrete backends (019/020A/020B) implement this.
 // Lifecycle: AsyncIoContext OWNS its backend (unique_ptr). State is
 // instance-owned; no globals (gate item 6).
 class AsyncBackend {
@@ -65,10 +71,10 @@ public:
     void attach_stats(AsyncStats* s) { stats_ = s; }
 
     // Hand an op to the backend against the caller-owned Completion. The backend
-    // records the op outstanding (marking the Completion via mark_outstanding()
-    // is the context's job, not the backend's, so the state machine stays in one
-    // place). Returns Result<void>: submit-time errors (queue full, invalid op,
-    // Completion not idle — L8) are synchronous (ADR E5).
+    // claims the Completion via try_claim() (ADR-explicit-io-completion-authority:
+    // the backend is the claiming authority). Returns Result<void>: submit-time
+    // errors (queue full, invalid op, Completion not idle — L8) are synchronous
+    // (ADR E5).
     virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
@@ -93,6 +99,31 @@ public:
 protected:
     AsyncBackend() = default;
     AsyncStats* stats_ = nullptr;
+
+    // ADR-explicit-io-completion-authority §9/§10: protected publication
+    // helpers. Derived backends (the trusted backend-author role) use these to
+    // claim Completions, publish terminal results, and roll back a claim that
+    // was never accepted into backend tracking. Ordinary non-backend code
+    // cannot access them (protected + Completion friendship is granted to
+    // AsyncBackend only, not inherited by non-backend code).
+    template <class T>
+    static bool try_claim(Completion<T>& c) noexcept {
+        return c.try_claim_for_backend();
+    }
+
+    template <class T>
+    static void publish(Completion<T>& c, Result<T>&& result) noexcept {
+        c.publish_from_reap(std::move(result));
+    }
+
+    // Backend-only: undo a claim that won but was never accepted into backend
+    // tracking (no register/enqueue/dispatch; submit has not returned success),
+    // e.g. io_uring SQE acquisition failed after claim. Call ONLY immediately
+    // after this backend's own successful try_claim(), before any tracking step.
+    template <class T>
+    static void rollback_claim_before_accept(Completion<T>& c) noexcept {
+        c.rollback_claim_before_accept();
+    }
 };
 
 // The public L1 foundation (parallels the blocking IoContext). Owns a backend;
@@ -100,13 +131,13 @@ protected:
 // Move-only, non-copyable (L6).
 //
 // E15-P1-03 / E15-P2-06 / ADR §5 L11 — outstanding-Completion lifecycle:
-//   * This context is the SOLE publication authority for any Completion that
-//     is currently outstanding against its backend.
-//   * Destroying this context — OR move-assigning another context over it —
-//     while Completions are still outstanding is a CONTRACT VIOLATION and
-//     fails fast in BOTH Debug and Release
-//     (detail::async_context_outstanding_fail_fast → std::terminate). A
-//     destructor / move-assignment has no Result channel to surface
+//   * Publication of a terminal result is done by the BACKEND during reap
+//     (poll/wait_one) through AsyncBackend::publish; the context routes and
+//     reaps but does not itself publish. Destroying this context — OR
+//     move-assigning another context over it — while Completions are still
+//     outstanding is a CONTRACT VIOLATION and fails fast in BOTH Debug and
+//     Release (detail::async_context_outstanding_fail_fast → std::terminate).
+//     A destructor / move-assignment has no Result channel to surface
 //     invalid_state, and silent abandonment would strand caller-owned,
 //     address-stable Completions permanently outstanding.
 //   * Move CONSTRUCTION from a source with outstanding work is SAFE: the

@@ -88,15 +88,19 @@ Completion idle, outstanding unchanged, and no background work in progress.
 
 **Rationale:** The caller uses the submit return value to decide control flow.
 If submit succeeds but the operation later vanishes (e.g., allocation failure
-after mark_outstanding), the caller cannot recover. Zig's `operate` is
+after the backend's claim), the caller cannot recover. Zig's `operate` is
 inherently transactional because the caller owns the storage.
 
 **Required evidence:**
 - Code path from `submit_*` entry to backend acceptance is allocation-free OR
   allocation failure is caught and rolled back to idle.
-- No sequence: mark_outstanding → allocate → fail → "compensate" with error
-  completion. (This is a P1 anti-pattern currently present in
-  `ThreadPoolBackend::enqueue_size` — see findings.)
+- No sequence: `try_claim` → allocate → fail → "compensate" with an error
+  publication. A claim won but not accepted into backend tracking MUST be
+  rolled back via `rollback_claim_before_accept()` (e.g. the io_uring
+  SQE-acquisition-after-claim gap is closed this way). Residual:
+  `register_op` container allocation AFTER the SQE is prepared is still
+  non-transactional — explicitly tracked as P0-02 (open), deferred to the
+  RequestSlot PR.
 - Test: inject `bad_alloc` at each allocation point; verify Completion returns
   to idle.
 
@@ -104,13 +108,14 @@ inherently transactional because the caller owns the storage.
 - If an ADR explicitly approves a two-phase submit with documented rollback.
 
 **Common violations:**
-- `mark_outstanding()` before resource acquisition, with no rollback on failure.
+- Claiming a Completion before resource acquisition, with no rollback on
+  failure.
 - `std::thread` constructor throws after Completion is already outstanding.
 - Ready-queue `push_back` allocates; if it throws, the result is lost.
 
 **Review questions:**
 1. What is the linearization point of "submit succeeded"?
-2. Between mark_outstanding and backend acceptance, what can fail?
+2. Between the claim and backend acceptance, what can fail?
 3. If it fails, is the Completion provably idle?
 
 ---
@@ -157,39 +162,53 @@ contract.
 
 ## AC-5. Single Completion Publication Authority
 
-**Rule:** A Completion enters `ready` state ONLY through the designated reap
-authority (`poll()` / `wait_one()` drain path). Backend workers publish
-backend-ready results into an intermediate structure; they do NOT call
-`Completion::complete_with()` directly. Exactly one terminal publication per
-operation is a structural invariant.
+**Rule:** A Completion reaches `ready` ONLY through the designated backend reap
+publication path. The authorized backend calls `AsyncBackend::publish()`
+(from the protected helper that drives `Completion::publish_from_reap()`) from
+`poll()` / `wait_one()`. Backend workers stage backend-ready results into a
+backend-internal structure; they do NOT publish the Completion directly. Cancel
+records cancel intent; it does NOT publish a terminal result. Exactly one
+terminal publication per operation is a structural invariant (single-winner CAS
+`outstanding → publishing → ready`).
 
 **Rationale:** ADR-async-io-model §6 A3/O1. If multiple paths can complete a
 Completion, exactly-once becomes a race. The current ThreadPoolBackend worker
-pushes to `ready_size_`/`ready_void_`; `poll()` drains and calls
-`complete_with()`. This is correct. Any change that lets a worker, timer, or
-cancel path call `complete_with()` directly MUST be approved by ADR.
+pushes to `ready_size_`/`ready_void_` (backend-ready); `poll()` drains and
+publishes the Completion (Completion-ready). This two-phase split is correct.
+Any change that lets a worker, timer, or cancel path publish a Completion
+directly MUST be approved by ADR.
 
 **Required evidence:**
-- Grep for `complete_with` — all call sites are in `poll()`/`wait_one()` drain
-  loops.
-- No worker lambda, timer callback, or cancel handler calls `complete_with`.
-- Test: concurrent submit + cancel + poll; verify exactly-once.
+- Production `publish()` call sites are confined to the `poll()`/`wait_one()`
+  drain paths (backend-ready → Completion-ready publication).
+- No worker lambda, timer callback, or cancel handler calls `publish()` /
+  `publish_from_reap()`.
+- `publish_from_reap()` uses a single-winner CAS (`outstanding → publishing`)
+  before building the result, so a concurrent publisher cannot race a
+  half-built storage write.
+- Test: concurrent submit + cancel + poll; verify exactly-once. Concurrent
+  publication death test proves a losing publisher fail-fasts before any
+  storage mutation.
 
 **Allowed exceptions:**
 - Future ADR may introduce a direct-wake path with explicit exactly-once CAS.
 
-**Known current violation:**
-- `SyncBackend::cancel()` calls `complete_with()` directly (bypassing
-  poll/wait_one reap). This is tracked as P1-03 in findings.
+**Resolved historical violation (P1-03, ADR-explicit-io-completion-authority):**
+previously `SyncBackend::cancel()` called the legacy `complete_with()`
+mutator directly, bypassing the `poll()`/`wait_one()` reap path. PR #61 changed
+cancel to record cancel intent and lets `poll()`/`wait_one()` publish the
+terminal canceled result through the unified reap path. The direct publication
+call has been removed.
 
 **Common violations:**
-- Adding a "fast path" that completes the Completion in the worker thread.
-- Cancel handler that calls `complete_with(cancelled)` while poll may also
-  complete with the real result.
+- Adding a "fast path" that publishes the Completion in the worker thread.
+- Cancel handler that publishes a canceled result while `poll()` may also
+  publish the real result.
+- A `publish_from_reap()` that mutates storage before winning the CAS.
 
 **Review questions:**
 1. How many code paths can transition this Completion to ready?
-2. Is exactly-once guaranteed by structure or by timing?
+2. Is exactly-once guaranteed by structure (single-winner CAS) or by timing?
 3. If two paths race, who wins and how is the loser suppressed?
 
 ---
@@ -344,12 +363,18 @@ designated. The interface comment, implementation, and ADR MUST agree. If they
 disagree, the discrepancy MUST be flagged as `U — Unresolved` and resolved by
 ADR before the next release. Silent divergence is forbidden.
 
-**Rationale:** Current P1 finding: `async_io_context.hpp` designates context
-as the marking authority ("marking the Completion via mark_outstanding() is the
-context's job, not the backend's"), while every backend implementation performs
-the transition internally. The conflict is documentation-versus-implementation,
-not an as-built double transition — the context never calls mark_outstanding().
-This makes the contract untrustworthy for readers who rely on header comments.
+**Rationale:** A prior P1 finding (P1-01, resolved by
+ADR-explicit-io-completion-authority) recorded a documentation-versus-
+implementation conflict: `async_io_context.hpp` once designated the context as
+the marking authority ("marking the Completion via mark_outstanding() is the
+context's job, not the backend's"), while every backend performed the claim
+internally and the context never did. The conflict was documentation-only (no
+as-built double transition). PR #61 corrected the header comment so the
+interface names the backend as the claim authority (via the protected
+`try_claim()` helper), matching the implementation. The rule itself stands:
+whenever a critical state transition exists, the header comment, the
+implementation, and the ADR MUST agree, or the discrepancy MUST be tracked as
+`U — Unresolved` until resolved by ADR.
 
 **Required evidence:**
 - Each state transition (idle→outstanding, outstanding→ready) names its
@@ -362,7 +387,9 @@ This makes the contract untrustworthy for readers who rely on header comments.
 - During an active corrective PR, temporary discrepancy is allowed if tracked.
 
 **Common violations:**
-- Header says "context marks outstanding" but backend also marks.
+- Header comment names the wrong authority for a transition (e.g. a stale
+  "context claims outstanding" comment while the backend is the claim
+  authority).
 - ADR says "poll is sole publication authority" but a fast-path bypasses poll.
 - Comment says "bounded" but code has no bound.
 
@@ -443,64 +470,103 @@ auditable and prevents accidental accumulation.
 
 ## AC-13. Unforgeable Publication Authority; State-Checked Caller Lifecycle
 
-**Rule:** Internal publication transitions (`mark_outstanding`, `complete_with`)
-MUST be structurally unforgeable by ordinary application code (via type system,
-capability token, or access-control pattern). Caller lifecycle transitions
-(`reset` / `rearm`) remain caller-accessible but MUST be state-checked:
-`ready → idle` only. A comment saying "backend-only" is NOT an authority
-boundary. Debug assertions are NOT an authority boundary. Release builds MUST
-also detect or structurally prevent invalid transitions.
+**Rule:** Internal publication transitions (`try_claim_for_backend`,
+`publish_from_reap`, `rollback_claim_before_accept`) MUST be structurally
+unforgeable by ordinary application code (via type system, capability token, or
+access-control pattern). Caller lifecycle transitions (`reset` / `rearm`) remain
+caller-accessible but MUST be state-checked:
+
+```text
+- `ready → resetting → idle`: successful reuse;
+- `idle → idle`: idempotent no-op;
+- `outstanding` or `publishing` → reset: checked contract violation.
+```
+
+The internal `resetting` transient prevents a new claim from observing idle
+before prior-result cleanup (storage_ / reap_seq_) is complete: reset CASes
+`ready → resetting`, clears the result, then release-stores `idle`; a new
+`try_claim` can only observe `idle` AFTER cleanup has happened. A comment saying
+"backend-only" is NOT an authority boundary. Debug assertions are NOT an
+authority boundary. Release builds MUST also detect or structurally prevent
+invalid transitions.
 
 **Authority separation:**
 ```text
-Backend/system authority (structurally forbidden to callers):
-  mark_outstanding()     idle → outstanding
-  complete_with()        outstanding → ready
+Backend/system authority (structurally forbidden to ordinary callers):
+  claim                      idle → outstanding   (CAS, exactly-once)
+  publish                    outstanding → ready  (CAS via transient publishing,
+                                                   exactly-once, single winner)
+  rollback_claim_before_accept  outstanding → idle (backend-only, pre-tracking)
 
 Caller lifecycle authority (permitted, state-checked):
-  reset() / rearm()      ready → idle ONLY
-                         idle → invalid_state error
+  reset() / rearm()      ready → resetting → idle (success)
+                         idle → no-op (idempotent; registered decision)
                          outstanding → invalid_state error / fail-fast
+                         publishing / resetting → fail-fast
 ```
 
-**Rationale:** Current `Completion<T>` exposes `mark_outstanding()` and
-`complete_with()` as public methods. Any application code can forge publication
-transitions: double-complete, or mark outstanding without a backend. Tests
-already use these as public API, solidifying the authority leak. This enables
-use-after-free (backend holds pointer to reset/destroyed Completion), double
-publication, and permanent state divergence. However, `reset()` is the caller's
-reuse interface — the Completion contract requires callers to reset after
-reading the result. Making reset backend-only would destroy the caller-owned
-reusable model.
+**Caller-lifecycle decision (registered, ADR-explicit-io-completion-authority):**
+`reset()` from `idle` is an **idempotent no-op**, NOT an error and NOT a
+fail-fast. `op_helpers` (`one_step` / `sync_step`) reset before their first
+submit, when the Completion is already idle; fail-fast on idle would break
+that legitimate reuse pattern. This amends the earlier "ready → idle ONLY"
+reading of this rule. Reset from `outstanding`/`publishing` remains a checked
+contract violation (fail-fast).
+
+**Rationale:** Historically `Completion<T>` exposed `mark_outstanding()` and
+`complete_with()` as public methods, so any application code could forge
+publication transitions (double-complete, or mark outstanding without a backend)
+— enabling use-after-free (backend holds pointer to reset/destroyed Completion),
+double publication, and permanent state divergence. That public API was removed
+(ADR-explicit-io-completion-authority; see the Resolved historical violation
+note below). `reset()` remains the caller's reuse interface — the Completion
+contract requires callers to reset after reading the result. Making reset
+backend-only would destroy the caller-owned reusable model, so reset stays
+caller-accessible but state-checked through the `ready → resetting → idle`
+transition.
 
 **Required evidence:**
-- `mark_outstanding()` and `complete_with()` are NOT callable from ordinary
-  application code (negative-compile proof).
-- `reset()` IS callable by the caller but ONLY succeeds from ready state.
-  Reset on idle returns `invalid_state`; reset on outstanding is a checked
-  contract violation (fail-fast in Release).
-- Destruction of an outstanding Completion is a checked contract violation
-  in BOTH Debug and Release.
+- `try_claim_for_backend()`, `publish_from_reap()`,
+  `rollback_claim_before_accept()`, and `reap_seq()` are NOT callable from
+  ordinary application code (negative-compile proof).
+- `reset()` IS callable by the caller. It CASes `ready → resetting`, clears
+  storage/reap_seq, then release-stores `idle`; from idle it is an idempotent
+  no-op; reset on outstanding/publishing/resetting is a checked contract
+  violation (fail-fast in Release).
+- Destruction of an outstanding/publishing/resetting Completion is a checked
+  contract violation in BOTH Debug and Release.
 - No test uses backend-only publication mutators as if they were public API.
-- Two different contexts cannot both mark the same Completion outstanding
-  (structural exclusion, not comment convention).
+- Two different contexts cannot both claim the same Completion outstanding
+  (structural exclusion via claim CAS, not comment convention).
 
 **Allowed exceptions:**
 - During the corrective phase, temporary public access is allowed if tracked
   and guarded by a negative-compile deadline.
 - Test-only access via friend or `SLUICE_ASYNC_INTERNAL_TESTING` guard.
 
+**Resolved historical violation (P0-03, ADR-explicit-io-completion-authority):**
+the legacy public `mark_outstanding()` and `complete_with()` were removed;
+publication mutators are now private (friend `AsyncBackend`), and derived
+backends use the protected `try_claim()` / `publish()` /
+`rollback_claim_before_accept()` helpers. A negative-compile gate
+(`scripts/verify-completion-authority-negative-compile.sh`, wired into CI)
+proves non-backend code cannot publish.
+
 **Common violations:**
-- Public `mark_outstanding()` with only an assert(idle) guard.
-- `reset()` that silently succeeds from outstanding state.
+- `try_claim_for_backend()` / `publish_from_reap()` left public, or reachable
+  through a non-backend seam, with only an assert(idle) guard.
+- `reset()` that silently succeeds from outstanding state, or that publishes
+  `idle` before prior-result cleanup completes (missing the `resetting`
+  transient).
 - Default destructor that does not fail-fast on outstanding.
-- Tests calling `c.complete_with(...)` directly as "convenience."
+- Tests calling publication mutators directly as "convenience."
 
 **Review questions:**
 1. Can application code forge a publication transition?
 2. If yes, what is the worst-case consequence?
 3. Is the boundary structural or merely conventional?
-4. Does reset enforce ready→idle only?
+4. Does reset enforce `ready → resetting → idle` with an `idle → no-op`,
+   `outstanding/publishing/resetting → fail-fast` contract (AC-13 as amended)?
 
 ---
 

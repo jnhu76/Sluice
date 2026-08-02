@@ -248,6 +248,16 @@ private:
     // injection; returns the assigned op id and sets `injected` on failure.
     template <class PendingT>
     static void assign_outstanding_stats(ScriptedBackendSharedState& s);
+
+public:
+    // ADR-explicit-io-completion-authority: publication bridge for the
+    // anonymous-namespace apply_staged_locked helper in the .cpp. This is a
+    // test-only backend; the method is static and does not expose internal
+    // state beyond what the backend already does.
+    template <class T>
+    static void publish_completion(Completion<T>& c, Result<T>&& r) noexcept {
+        publish(c, std::move(r));
+    }
 };
 
 // --- ScriptedBackendController ----------------------------------------------

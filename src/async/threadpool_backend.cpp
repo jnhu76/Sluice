@@ -68,7 +68,8 @@ bool ThreadPoolBackend::accepting_new_work() const {
 
 void ThreadPoolBackend::enqueue_size(Completion<std::size_t>& c,
                                      std::function<Result<std::size_t>()> work) {
-    c.mark_outstanding();
+    // ADR-explicit-io-completion-authority: claim via protected helper.
+    // try_claim already succeeded in submit_* before calling enqueue_size.
     Completion<std::size_t>* cp = &c;
     std::size_t worker_idx = kNoWorker;
     try {
@@ -103,7 +104,8 @@ void ThreadPoolBackend::enqueue_size(Completion<std::size_t>& c,
 
 void ThreadPoolBackend::enqueue_void(Completion<void>& c,
                                      std::function<Result<void>()> work) {
-    c.mark_outstanding();
+    // ADR-explicit-io-completion-authority: claim via protected helper.
+    // try_claim already succeeded in submit_* before calling enqueue_void.
     Completion<void>* cp = &c;
     std::size_t worker_idx = kNoWorker;
     try {
@@ -155,35 +157,43 @@ void ThreadPoolBackend::shutting_down_for_test() {
 }
 
 Result<void> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
-    if (!c.idle() || !accepting_new_work())
+    if (!accepting_new_work())
         return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     auto native_offset = sluice::detail::checked_posix_offset(op.offset);
     if (!native_offset.has_value())
         return make_unexpected<void>(native_offset.error());
+    if (!try_claim(c))
+        return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     enqueue_size(c, [op, off = native_offset.value()] {
         return do_read(op.fd, op.dst, op.len, off);
     });
     return {};
 }
 Result<void> ThreadPoolBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
-    if (!c.idle() || !accepting_new_work())
+    if (!accepting_new_work())
         return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     auto native_offset = sluice::detail::checked_posix_offset(op.offset);
     if (!native_offset.has_value())
         return make_unexpected<void>(native_offset.error());
+    if (!try_claim(c))
+        return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     enqueue_size(c, [op, off = native_offset.value()] {
         return do_write(op.fd, op.src, op.len, off);
     });
     return {};
 }
 Result<void> ThreadPoolBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
-    if (!c.idle() || !accepting_new_work())
+    if (!accepting_new_work())
+        return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
+    if (!try_claim(c))
         return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     enqueue_void(c, [op] { return do_sync(op.fd, /*data_only=*/true); });
     return {};
 }
 Result<void> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>& c) {
-    if (!c.idle() || !accepting_new_work())
+    if (!accepting_new_work())
+        return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
+    if (!try_claim(c))
         return make_unexpected<void>(sluice::IoError{sluice::IoError::Code::invalid_state});
     enqueue_void(c, [op] { return do_sync(op.fd, /*data_only=*/false); });
     return {};
@@ -213,7 +223,7 @@ std::size_t ThreadPoolBackend::poll() {
     std::size_t n = 0;
 
     auto reap_size = [this](ReadySize& e) {
-        e.c->complete_with(std::move(e.r));
+        publish(*e.c, std::move(e.r));
         std::thread worker;
         {
             std::lock_guard<std::mutex> lk(mtx_);
@@ -225,7 +235,7 @@ std::size_t ThreadPoolBackend::poll() {
             worker.join();
     };
     auto reap_void = [this](ReadyVoid& e) {
-        e.c->complete_with(std::move(e.r));
+        publish(*e.c, std::move(e.r));
         std::thread worker;
         {
             std::lock_guard<std::mutex> lk(mtx_);

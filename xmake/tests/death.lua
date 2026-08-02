@@ -106,3 +106,21 @@ end
 -- runtime_wait_death_test — M1-A RuntimeTaskContext::await_completion
 -- idle-await contract violation (Debug assertion). POSIX-only.
 sluice_internal_async_test("runtime_wait_death_test", {platform_gate = {"linux", "macosx"}})
+
+-- completion_authority_death_test — ADR-explicit-io-completion-authority
+-- fail-fast boundary tests: reset-on-outstanding, destroy-outstanding,
+-- double-publish. Also includes a double-claim regression (returns false,
+-- no fail-fast) and a control case (valid lifecycle, exit 0). POSIX-only.
+do
+    local p = R .. "tests/completion_authority_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("completion_authority_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(p)
+            add_tests("completion_authority_death_test")
+    end
+end

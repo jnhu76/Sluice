@@ -158,4 +158,18 @@ bool evented_admission_check() noexcept;
 // Same contract as the other fail-fast entries.
 [[noreturn]] void scheduler_missing_fiber_owner_fail_fast() noexcept;
 
+// Completion publication authority fail-fast. Called when a Completion state
+// transition violates the authority model (ADR-explicit-io-completion-authority):
+//   - reset() on an outstanding or publishing Completion
+//   - destruction of an outstanding or publishing Completion
+//   - publish_from_reap() when the CAS outstanding → publishing loses
+//     (double-publish or publish from idle/ready)
+//   - rollback_claim_before_accept() on a Completion that is not outstanding
+// Note: reset() from idle is a deliberate IDEMPOTENT NO-OP (AC-13 as amended),
+// NOT a fail-fast. These are contract violations that MUST be detected in BOTH
+// Debug and Release.
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void completion_authority_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

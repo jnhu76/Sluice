@@ -211,9 +211,9 @@ struct UringAsyncBackend::Impl {
                              ? static_cast<void*>(rec.void_c)
                              : static_cast<void*>(rec.size_c);
         if (rec.is_void) {
-            rec.void_c->complete_with(make_unexpected<void>(error));
+            UringAsyncBackend::publish(*rec.void_c, make_unexpected<void>(error));
         } else {
-            rec.size_c->complete_with(
+            UringAsyncBackend::publish(*rec.size_c,
                 make_unexpected<std::size_t>(error));
         }
         bump(stats, &AsyncStats::completion_errors);
@@ -345,22 +345,22 @@ struct UringAsyncBackend::Impl {
             if (res < 0) {
                 IoError e = sluice::from_errno_value(-res);
                 bool canceled = (e.code == IoError::Code::canceled);
-                rec.void_c->complete_with(make_unexpected<void>(e));
+                UringAsyncBackend::publish(*rec.void_c, make_unexpected<void>(e));
                 if (canceled) bump(stats, &AsyncStats::canceled_ops);
                 else bump(stats, &AsyncStats::completion_errors);
             } else {
-                rec.void_c->complete_with(Result<void>{});
+                UringAsyncBackend::publish(*rec.void_c, Result<void>{});
             }
         } else {
             if (res < 0) {
                 IoError e = sluice::from_errno_value(-res);
                 bool canceled = (e.code == IoError::Code::canceled);
-                rec.size_c->complete_with(make_unexpected<std::size_t>(e));
+                UringAsyncBackend::publish(*rec.size_c, make_unexpected<std::size_t>(e));
                 if (canceled) bump(stats, &AsyncStats::canceled_ops);
                 else bump(stats, &AsyncStats::completion_errors);
             } else {
                 std::size_t got = static_cast<std::size_t>(res);
-                rec.size_c->complete_with(Result<std::size_t>{got});
+                UringAsyncBackend::publish(*rec.size_c, Result<std::size_t>{got});
                 if (got < rec.requested) bump(stats, &AsyncStats::short_completions);
             }
         }
@@ -481,7 +481,8 @@ namespace {
 // ops/next_id/comp_to_op members, which Impl provides.
 template <class ImplLike, class C>
 __u64 register_op(ImplLike& impl, __u64 id, C& c, OpRec rec) {
-    c.mark_outstanding();
+    // ADR-explicit-io-completion-authority: claim is performed by the caller
+    // (submit_*) via try_claim before reaching here.
     void* comp_key = rec.is_void
                          ? static_cast<void*>(rec.void_c)
                          : static_cast<void*>(rec.size_c);
@@ -508,13 +509,27 @@ Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& 
     auto native_length = sluice::detail::checked_uring_length(op.len);
     if (!native_length.has_value())
         return make_unexpected<void>(native_length.error());
+    // ADR-explicit-io-completion-authority §10: claim BEFORE acquiring the SQE.
+    // Transactional admission: a claim that wins is either accepted into
+    // register_op (tracked) or rolled back via rollback_claim_before_accept
+    // when SQE acquisition fails. This closes the "failed submit yet I/O runs
+    // in the background" gap: the loser of a concurrent claim never acquires an
+    // SQE. Only the container-allocation window inside register_op remains
+    // (P0-02, deferred to the RequestSlot PR).
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
-        // get_sqe_with_pressure is the authoritative queue_full_retries
-        // counter for the ring-full path (it bumps on pressure). Bumping here
-        // too double-counts; a nullptr on the fatal-error path is not a
-        // ring-full event and must not be counted as one. Fatal vs backend
-        // error is still distinguished below for the returned Result.
+        // Roll back the claim: the op is still entirely userspace-owned (not
+        // registered, not in pending_sqes), so no I/O can run. This is also
+        // safe on the fatal-error path (enter_fatal completes only ops that
+        // ARE in pending_sqes; this claim was never registered).
+        // get_sqe_with_pressure is the authoritative queue_full_retries counter
+        // for the ring-full path (it bumps on pressure). Bumping here too
+        // double-counts; a nullptr on the fatal-error path is not a ring-full
+        // event and must not be counted as one. Fatal vs backend error is still
+        // distinguished below for the returned Result.
+        rollback_claim_before_accept(c);
         if (impl_->fatal_error.has_value())
             return make_unexpected<void>(*impl_->fatal_error);
         return make_unexpected<void>(IoError{IoError::Code::backend_error});
@@ -522,6 +537,8 @@ Result<void> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>& 
     __u64 id = impl_->next_id;
     ::io_uring_prep_read(sqe, op.fd, op.dst, native_length.value(), op.offset);
     ::io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(static_cast<std::uintptr_t>(id)));
+    // TODO(P0-02): register_op container allocation can still throw after the
+    // SQE is prepared; a full transactional admission (RequestSlot) is deferred.
     register_op(*impl_, id, c,
                 OpRec{&c, nullptr, /*is_void=*/false, op.len, false, 0});
     return {};
@@ -538,8 +555,13 @@ Result<void> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>
     auto native_length = sluice::detail::checked_uring_length(op.len);
     if (!native_length.has_value())
         return make_unexpected<void>(native_length.error());
+    // ADR-explicit-io-completion-authority §10: claim BEFORE acquiring the SQE
+    // (transactional admission; see submit_read).
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
+        rollback_claim_before_accept(c);
         // get_sqe_with_pressure is the authoritative queue_full_retries
         // counter for the ring-full path (it bumps on pressure). Bumping here
         // too double-counts; a nullptr on the fatal-error path is not a
@@ -565,8 +587,13 @@ Result<void> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>
         // L8 reject; counted ONCE by AsyncIoContext::tally_submit. See submit_read.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
+    // ADR-explicit-io-completion-authority §10: claim BEFORE acquiring the SQE
+    // (transactional admission; see submit_read).
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
+        rollback_claim_before_accept(c);
         // get_sqe_with_pressure is the authoritative queue_full_retries
         // counter for the ring-full path (it bumps on pressure). Bumping here
         // too double-counts; a nullptr on the fatal-error path is not a
@@ -592,8 +619,13 @@ Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
         // L8 reject; counted ONCE by AsyncIoContext::tally_submit. See submit_read.
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
+    // ADR-explicit-io-completion-authority §10: claim BEFORE acquiring the SQE
+    // (transactional admission; see submit_read).
+    if (!try_claim(c))
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     io_uring_sqe* sqe = impl_->get_sqe_with_pressure(stats_);
     if (sqe == nullptr) {
+        rollback_claim_before_accept(c);
         // get_sqe_with_pressure is the authoritative queue_full_retries
         // counter for the ring-full path (it bumps on pressure). Bumping here
         // too double-counts; a nullptr on the fatal-error path is not a

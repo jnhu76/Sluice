@@ -45,8 +45,8 @@ caller
 → AsyncIoContext::submit_*(op, Completion&)
     → lock access_mtx_
     → backend_->submit_*(op, c)
-        → backend checks Completion is idle
-        → backend calls Completion::mark_outstanding()  ← BACKEND is marking authority
+        → backend calls AsyncBackend::try_claim(c)  ← BACKEND is claim authority (CAS idle → outstanding)
+        → on claim failure: return synchronous invalid_state (no tracking mutation)
         → backend records op (returns Result<void>)
     → tally_submit(stats_, result)
     → update_max_outstanding(stats_)
@@ -54,16 +54,14 @@ caller
 → return Result<void>
 ```
 
-**Authority note:** `AsyncIoContext` does NOT check idle state and does NOT
-call `mark_outstanding()`. It only serializes backend access (access_mtx_),
-forwards the call, and tallies statistics. ALL backends (ThreadPool, Uring,
-Fake, Sync) individually check `c.idle()` and call `c.mark_outstanding()`
-inside their own `submit_*` implementations.
-
-The header comment on `AsyncBackend::submit_read` (`async_io_context.hpp:68-70`)
-incorrectly states "marking the Completion via mark_outstanding() is the
-context's job, not the backend's." This is a **P1 stale comment** — see
-findings document P1-01. The implementation truth is: backend marks.
+**Authority note (ADR-explicit-io-completion-authority):** `AsyncIoContext` does
+NOT claim the Completion and does NOT check idle state itself. It only serializes
+backend access (access_mtx_), forwards the call, and tallies statistics. The
+backend is the explicit claim authority via the protected `try_claim()` helper
+(atomic `idle → outstanding` CAS); claim failure returns synchronous
+`invalid_state` without touching tracking or the outstanding counter. The
+previously-stale header comment on `AsyncBackend::submit_read` (P1-01) was
+corrected by PR #61 to name the backend as the claim authority.
 
 ### 2.2 ThreadPoolBackend
 
@@ -71,7 +69,7 @@ findings document P1-01. The implementation truth is: backend marks.
 submit_*(op, c)
 → accepting_new_work()? (mtx_ guarded destroying_ flag)
 → enqueue_size/void(c, work_lambda)
-    → c.mark_outstanding()           ← BACKEND marks (correct authority)
+    → try_claim(c)                    ← BACKEND is claim authority (CAS; on failure return invalid_state)
     → lock mtx_
     → ++outstanding_
     → workers_.emplace_back(worker_lambda)
@@ -91,7 +89,7 @@ submit_*(op, c)
 poll()
 → lock mtx_
 → drain ready_size_ + ready_void_
-    → for each: c->complete_with(result); --outstanding_
+    → for each: publish(c, result); --outstanding_    ← reap publication (single-winner CAS)
 → collect worker indices to join
 → unlock mtx_
 → join each collected worker thread (OUTSIDE lock)
@@ -117,13 +115,14 @@ wait_one()
 
 ```text
 submit_*(op, c)
-→ check impl_, fatal_error, c.idle()
+→ check impl_, fatal_error
 → checked_uring_length(op.len)
-→ get_sqe_with_pressure()         ← acquire SQE slot (may fail: ring full)
-→ io_uring_prep_read/write/fsync  ← fill SQE (unsubmitted)
-→ io_uring_sqe_set_data(sqe, id) ← set user_data = monotonic op id
+→ try_claim(c)                     ← BACKEND is claim authority (CAS; BEFORE SQE acquisition)
+→ get_sqe_with_pressure()          ← acquire SQE slot (may fail: ring full)
+    → on failure: rollback_claim_before_accept(c); return backend_error   (ADR §10 bridge)
+→ io_uring_prep_read/write/fsync   ← fill SQE (unsubmitted)
+→ io_uring_sqe_set_data(sqe, id)   ← set user_data = monotonic op id
 → register_op(impl, id, c, OpRec)
-    → c.mark_outstanding()        ← BACKEND marks (inside register_op)
     → comp_to_op.emplace(comp_key, id)
     → ops.emplace(id, rec)
     → pending_sqes.push_back({operation, id})
@@ -136,7 +135,7 @@ Submission to kernel occurs later in poll()/wait_one() via submit_pending().
 poll()
 → submit_pending() (flush pending_sqes to kernel)
 → io_uring_peek_batch_cqe()
-→ for each CQE: lookup OpRec by id, complete_with(result)
+→ for each CQE: lookup OpRec by id, publish(c, result)    ← reap publication (single-winner CAS)
 → return count
 
 wait_one()
@@ -144,50 +143,57 @@ wait_one()
 → (then drain CQEs as poll)
 ```
 
-**Transactional admission note:** The SQE is acquired and prepared BEFORE
-mark_outstanding. If register_op container allocations fail (comp_to_op,
-ops, pending_sqes), the SQE has already been written but not submitted.
-This is a non-atomic mark-then-allocate sequence (see P0-02).
+**Transactional admission note (ADR §10):** the backend claims BEFORE
+acquiring the SQE and rolls the claim back if SQE acquisition fails (null-SQE
+branch only — no untracked SQE on that path). P0-02 REMAINS: `register_op`
+container allocations (comp_to_op, ops, pending_sqes) happen AFTER the SQE is
+prepared and are still non-transactional — deferred to the RequestSlot PR.
 
 ### 2.4 FakeAsyncBackend
 
 ```text
 submit_*(op, c)
-→ c.mark_outstanding() (backend-side)
+→ try_claim(c) (backend-side; CAS; on failure return invalid_state)
 → ready_size_/pending_size_ push (stage for test-controlled completion)
 
 poll()
-→ complete staged ops on demand (test-controlled)
+→ publish staged ops on demand (test-controlled)
 
 wait_one()
-→ complete next staged op (does not truly block)
+→ publish next staged op (does not truly block)
 ```
 
 ### 2.5 SyncBackend
 
 ```text
 submit_*(op, c)
-→ c.mark_outstanding() (backend-side)
+→ try_claim(c) (backend-side; CAS; on failure return invalid_state)
 → entries_.push_back(Entry{op, &c})   ← synthetic entry buffered
 → (NO real syscall; NO inline completion)
 
 poll() / wait_one()
-→ for each buffered entry: c.complete_with(synthetic_result)
+→ for each buffered entry: publish(c, synthetic_result)   ← reap publication
 → entries_.clear()
 → return count
 
 cancel(c)
 → find entry in entries_
-→ c.complete_with(cancelled) DIRECTLY  ← bypasses reap authority (see findings P1-03)
-→ entries_.erase(it)
+→ mark entry cancelled (records cancel intent; does NOT publish)
+→ entry remains buffered; poll()/wait_one() reap path publishes the canceled result
 ```
+
+**Cancel authority (P1-03 resolved by PR #61):** cancel no longer publishes a
+terminal result directly; it records cancel intent and lets the reap path
+(`poll()`/`wait_one()`) publish the terminal canceled result via `publish()`,
+matching the unified reap/publication authority.
 
 **Key properties:**
 - Synthetic backend for early async foundation testing (job 017)
 - Does NOT execute real syscalls; ReadOps complete with their full `len`
 - Completion happens at poll()/wait_one() time, NOT at submit time
-- `cancel()` calls `complete_with()` directly, bypassing the poll/wait_one
-  reap authority — this is an **authority conflict** (see findings P1-03)
+- (P1-03 resolved by PR #61) `cancel()` previously called the legacy
+  `complete_with()` directly, bypassing the poll/wait_one reap authority; it now
+  records cancel intent and the reap path publishes the canceled result.
 
 ---
 
@@ -375,8 +381,9 @@ wake_mtx_ (Scheduler park/wake)
 
 | Authority | As-built owner | Evidence |
 |-----------|---------------|----------|
-| Completion mark_outstanding | Each backend (inside submit_*) | `threadpool_backend.cpp:71`, `uring_backend.cpp:484`, `fake_backend.hpp:221,228`, `sync_backend.hpp:40,46,52,58`. Context does NOT call it (grep `async_io_context.cpp` = 0 matches). Header comment at `async_io_context.hpp:68-70` is STALE (P1-01). |
-| Completion complete_with | Backend (via poll/wait_one reap) | `threadpool_backend.cpp:160-163` |
+| Completion claim (idle → outstanding) | Each backend, via protected `AsyncBackend::try_claim()` (CAS) | ADR-explicit-io-completion-authority §6; `async_io_context.hpp` (`try_claim` helper); all backends check the claim return value. Context does NOT claim (it routes the call). Header comment at `async_io_context.hpp` names the backend as the claim authority (P1-01 resolved by PR #61). |
+| Completion publish (outstanding → ready) | Backend reap path, via protected `AsyncBackend::publish()` (single-winner CAS through `publishing` transient) | ADR-explicit-io-completion-authority §7; publish confined to `poll()`/`wait_one()` drain. |
+| Completion rollback (outstanding → idle) | Backend, via `AsyncBackend::rollback_claim_before_accept()` (pre-acceptance only) | ADR-explicit-io-completion-authority §10; io_uring SQE-acquisition-after-claim gap. |
 | Completion publication to ready | poll()/wait_one() ONLY (A3/O1) | ADR-async-io-model §6 |
 | Backend admission gate | ThreadPoolBackend::accepting_new_work() | `threadpool_backend.hpp:159` |
 | Scheduler wake (external) | SchedulerWakeHandle::notify() | `scheduler.hpp:107` |
