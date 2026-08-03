@@ -159,6 +159,8 @@ the Result column reads "PENDING — commit N".
 | single-waiter cardinality; wait-cancel doesn't cancel I/O; lease exactly-once (I13) | `request_lifecycle_scheme_b_test.cpp :: waiter_registration_cardinality`, `:: reap_wins_lease_over_wait_cancel` | PASS (commit 3) |
 | TSan under genuine concurrency (submit thread ‖ cancel/reap thread) | `request_lifecycle_scheme_b_test.cpp :: concurrent_submit_cancel_enqueue` | PASS (commit 5; Debug + TSan 132/132, 0 data races; 2000 iterations of submit-vs-cancel on one slot, ~9% record_wins / ~91% cancel_wins — both terminal-winner paths exercised; review-fix: the test now asserts the enqueue pin is ALREADY acknowledged after join — no extra acknowledge that could mask a pin bug) |
 | **backend-level Scheme-B race** (real FakeAsyncBackend submit thread + Completion binding + deterministic barrier pause between commit and enqueue; cancel wins the pending terminal; resumed enqueue no-ops and acks the pin; poll reaps canceled) | `backend_scheme_b_race_test.cpp :: backend_scheme_b_cancel_wins_between_commit_and_enqueue` (links sluice_async_internal_testing for the SubmitPauseGate seam) | PASS (round-2 review-fix: closes review test-gap 1 — the arena trace alone did not prove the real backend integration) |
+| **round-4 finding 1 — running cancel is best-effort (Decision 11)**: a running blocking syscall records cancel INTENT only; `record_terminal` records the REAL result VERBATIM (ordinary success/error NOT rewritten to canceled); a confirmed interruption records `TerminalResult::err(canceled)` explicitly. `CancelDisposition::requested` is split into `terminal_won` (pending/enqueued Scheme-B cancel stores the canceled terminal) and `intent_recorded` (running cancel records intent only); backends tally `canceled_ops` only on `terminal_won`. The capturing test FAILS on the pre-fix code ("ordinary success must NOT be rewritten to an error"). | `request_arena_cancel_intent_test.cpp :: running_cancel_intent_then_ordinary_success_wins_verbatim` (capturing binding), `:: running_cancel_intent_then_confirmed_canceled_wins`, `:: running_cancel_intent_then_ordinary_error_wins_verbatim`, `:: running_cancel_records_intent_only_no_terminal`, `:: running_cancel_intent_idempotent_second_call`, `:: mark_running_backs_off_on_backend_ready` (6 cases) | PASS (round-4: Debug + Release + ASan/UBSan + TSan 135/135, 0 data races) |
+| **round-4 finding 2 — terminal authority rejects unstored results**: `record_terminal` rejects a default-constructed `TerminalResult` (`stored == false`) up front; `push_ready_locked_` asserts its invariants (backend_ready + stored terminal + not-already-linked + ring-not-full). Both fire in Debug AND Release. | `request_arena_death_test.cpp :: record-terminal-unstored-result` (death), `:: mark-running-illegal-state` (death — round-4 dispatch-state fail-fast); ready-ring guard is inspection-verified (the only push sites guarantee the preconditions, like the generation-exhaustion guard) | PASS (round-4: Debug + Release death cases exit 86) |
 
 ### Backend migration (Fake + Sync)
 
@@ -191,12 +193,12 @@ the Result column reads "PENDING — commit N".
 
 | Gate | Command | Result |
 |---|---|---|
-| Clang Debug | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS (round-2: 134/134 passed, 0 failed — includes the two new targets `reference_backend_no_alloc_test`, `backend_scheme_b_race_test`) |
-| Clang Release (§6.1) | `xmake f -m release --toolchain=clang -y && ...` | PASS (round-2: 134/134 passed, 0 failed) |
-| ASan + UBSan (§6.2) | `xmake f -m asanubsan --toolchain=clang -y && ...` | PASS (round-2: 134/134 passed, 0 sanitizer warnings — the counting/always-throw operator new composes with ASan interposition; sized/aligned delete variants route through plain free) |
-| TSan (§6.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && ...` | PASS (round-2: 134/134 passed, 0 data races — including the genuine two-thread `concurrent_submit_cancel_enqueue` case and the backend-level `backend_scheme_b_race_test`; the allocation probe is compiled out under TSan because the TSan C++ runtime owns the new/delete symbols — the lifecycle/zero-side-effect assertions remain active) |
-| negative-compile | `scripts/verify-completion-authority-negative-compile.sh` (12/12) + `scripts/verify-request-arena-negative-compile.sh` (6/6) | PASS (round-2: 18/18 — NEG_SLOT_BINDING_PRIVATE added) |
-| doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PASS (round-2) |
+| Clang Debug | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS (round-4: 135/135 passed, 0 failed — adds `request_arena_cancel_intent_test`; round-2: 134/134) |
+| Clang Release (§6.1) | `xmake f -m release --toolchain=clang -y && ...` | PASS (round-4: 135/135 passed, 0 failed — the unstored-terminal / dispatch-state / ready-ring fail-fasts fire in BOTH modes; round-2: 134/134) |
+| ASan + UBSan (§6.2) | `xmake f -m asanubsan --toolchain=clang -y && ...` | PASS (round-4: 135/135 passed, 0 sanitizer warnings — the capturing-binding + arena-direct cancel-intent path is clean; round-2: 134/134) |
+| TSan (§6.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && ...` | PASS (round-4: 135/135 passed, 0 data races — including the genuine two-thread `concurrent_submit_cancel_enqueue` case, the backend-level `backend_scheme_b_race_test`, and the new arena-direct cancel-intent cases; round-2: 134/134; the allocation probe is compiled out under TSan because the TSan C++ runtime owns the new/delete symbols — the lifecycle/zero-side-effect assertions remain active) |
+| negative-compile | `scripts/verify-completion-authority-negative-compile.sh` (12/12) + `scripts/verify-request-arena-negative-compile.sh` (6/6) | PASS (round-4: 18/18 — unchanged; round-2: NEG_SLOT_BINDING_PRIVATE added) |
+| doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PASS (round-4: divergence-registry DIV-14 + ADR round-4 closeout added; round-2) |
 
 TSan coverage MUST include (§6.3): commit/pending-cancel/enqueue, reap pin check, reset/reuse,
 cross-context binding, waiter cancel/reap.
@@ -224,7 +226,7 @@ cross-context binding, waiter cancel/reap.
 - [x] Conformance map updated (DIV-02 activated; zig-map rows advanced — commit 6)
 - [x] Divergence registry updated (DIV-02 — commit 0)
 - [x] Constitution rules satisfied (design §19)
-- [x] AGENTS.md change-class gates run (Debug 134/134, Release 134/134, ASan/UBSan 134/134 clean, TSan 134/134 0 data races, both negative-compile gates 18/18, doc-check PASS — round-2/round-3)
+- [x] AGENTS.md change-class gates run (Debug 135/135, Release 135/135, ASan/UBSan 135/135 clean, TSan 135/135 0 data races, both negative-compile gates 18/18, doc-check PASS — round-2/round-3/round-4)
 
 (Boxes ticked only when the ACTUAL command has run and passed. "PENDING" rows above are
 the honest pre-execution state.)

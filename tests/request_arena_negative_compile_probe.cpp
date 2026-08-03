@@ -50,6 +50,8 @@ void positive_control() {
     if (!rh.has_value())
         return;
     SlotHandle h = rh.value();
+    // prepare() takes the borrow metadata; the reference backends perform no
+    // real I/O so a default BorrowMetadata is a legal (no-op) descriptor here.
     (void)arena.prepare(h, OperationKind::read, {});
     // install_publication_binding rejects a null completion (CodeRabbit finding:
     // the publish thunk dereferences it), so the positive control passes a real

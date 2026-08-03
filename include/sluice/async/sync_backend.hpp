@@ -96,13 +96,17 @@ class SyncBackend : public AsyncBackend {
     // map) and records the canceled terminal. The Completion stays outstanding;
     // poll()/wait_one() publishes through the unified reap path. Idempotent: a
     // second cancel on an already-terminal slot is a no-op (already_terminal).
-    // Cancel on an unknown/already-reaped Completion is a no-op. canceled_ops /
-    // completion_errors are tallied at the terminal-winner site (exactly-once;
-    // the static publish thunks have no instance state to tally from).
+    // Cancel on an unknown/already-reaped Completion is a no-op.
+    // canceled_ops / completion_errors are tallied ONLY when cancel wins the
+    // terminal transition (terminal_won — exactly-once; the static publish
+    // thunks have no instance state to tally from). A running-slot cancel
+    // (intent_recorded) does NOT tally here: best-effort intent does not promise
+    // a canceled terminal (ADR Decision 11); the tally happens at the confirmed
+    // canceled terminal winner.
     void cancel(Completion<std::size_t>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (h.has_value()) {
-            if (arena_.cancel(*h) == detail::CancelDisposition::requested) {
+            if (arena_.cancel(*h) == detail::CancelDisposition::terminal_won) {
                 tally_canceled();
             }
         }
@@ -110,7 +114,7 @@ class SyncBackend : public AsyncBackend {
     void cancel(Completion<void>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (h.has_value()) {
-            if (arena_.cancel(*h) == detail::CancelDisposition::requested) {
+            if (arena_.cancel(*h) == detail::CancelDisposition::terminal_won) {
                 tally_canceled();
             }
         }

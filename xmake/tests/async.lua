@@ -22,6 +22,13 @@ sluice_production_async_test("completion_binding_test")
 -- while the enqueue pin is live; exactly-one terminal winner; generation reuse).
 sluice_production_async_test("request_lifecycle_scheme_b_test")
 
+-- Phase B round-4 review regression — ADR Decision 11 best-effort cancel. A
+-- running blocking syscall records cancel INTENT only; record_terminal later
+-- records the REAL result VERBATIM (an ordinary success is NOT rewritten to
+-- canceled). Confirmed cancellation records TerminalResult::err(canceled)
+-- explicitly. Drives the arena dispatch seam (mark_running) directly.
+sluice_production_async_test("request_arena_cancel_intent_test")
+
 -- Phase B reference-backend allocation-freedom + transactional-rejection proof
 -- (review test-gap 3 / review C1 fault-injection matrix). A counting +
 -- always-throw operator new drives the accepted submit -> poll -> reset path

@@ -171,18 +171,26 @@ class FakeAsyncBackend : public AsyncBackend {
     // IoError::canceled. We do NOT complete here — A3/O1: completions are
     // produced only inside poll/wait_one. Cancel is POINTER-KEYED (targeted) so
     // it works on any outstanding op, not just the oldest.
-    // Phase B (ADR Decision 11): resolves Completion* -> SlotHandle via the
-    // arena's bounded slot scan (the slot's own binding is the identity — no
-    // parallel map), then arena.cancel() wins the terminal transition under
-    // Scheme B (pending -> backend_ready(canceled) directly; enqueued ->
-    // canceled terminal; a slot that already went terminal is a no-op — losers
-    // never overwrite). canceled_ops is tallied at the terminal-winner site
-    // (exactly-once; reap publishes the stored result). The Completion stays
-    // outstanding; poll/wait_one publishes through reap.
+    // Phase B (ADR Decision 11, review round-4 finding 1): resolves Completion*
+    // -> SlotHandle via the arena's bounded slot scan (the slot's own binding is
+    // the identity — no parallel map), then arena.cancel() acts per state:
+    //   - terminal_won    — cancel won the terminal transition under Scheme B
+    //                       (pending/enqueued -> backend_ready(canceled)). This
+    //                       is the confirmed canceled winner; tally canceled_ops
+    //                       here (exactly-once; reap publishes the stored result).
+    //   - intent_recorded — running: cancel recorded INTENT only (best-effort).
+    //                       No terminal is stored, so canceled_ops is NOT tallied
+    //                       here; a backend that later CONFIRMS the cancellation
+    //                       (a valid interruption / cancel CQE winner) records
+    //                       TerminalResult::err(canceled) and tallies there. The
+    //                       Phase B reference backends never enter `running`, so
+    //                       this branch is dormant here.
+    //   - already_terminal / not_found — no-op (losers never overwrite).
+    // The Completion stays outstanding; poll/wait_one publishes through reap.
     void cancel(Completion<std::size_t>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (h.has_value()) {
-            if (arena_.cancel(*h) == detail::CancelDisposition::requested) {
+            if (arena_.cancel(*h) == detail::CancelDisposition::terminal_won) {
                 tally_canceled();
             }
         }
@@ -190,7 +198,7 @@ class FakeAsyncBackend : public AsyncBackend {
     void cancel(Completion<void>& c) override {
         auto h = arena_.resolve_completion(&c);
         if (h.has_value()) {
-            if (arena_.cancel(*h) == detail::CancelDisposition::requested) {
+            if (arena_.cancel(*h) == detail::CancelDisposition::terminal_won) {
                 tally_canceled();
             }
         }

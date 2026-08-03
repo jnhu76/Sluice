@@ -128,8 +128,10 @@ SLUICE_TEST_CASE(pending_cancel_wins_before_enqueue_then_enqueue_noop) {
     // until step 12.)
 
     // --- 5-6: cancel wins pending -> backend_ready(canceled) ---
+    // Round-4: pending cancel stores the canceled terminal directly, so the
+    // disposition is terminal_won (the confirmed canceled winner).
     auto disp = arena.cancel(h);
-    SLUICE_CHECK(disp == CancelDisposition::requested);
+    SLUICE_CHECK(disp == CancelDisposition::terminal_won);
 
     // Step 7: exactly one terminal result; one backend_ready linkage; pin live;
     // operation never dispatched (never reached enqueued).
@@ -439,14 +441,14 @@ SLUICE_TEST_CASE(cancel_races_per_state) {
     SLUICE_CHECK(arena.cancel(h2) == CancelDisposition::not_found);
     (void)arena.rollback_reserved_or_prepared(h2);
 
-    // pending: Scheme B -> cancel wins terminal -> requested.
+    // pending: Scheme B -> cancel wins terminal -> terminal_won.
     auto rh3 = arena.reserve();
     SLUICE_CHECK(rh3.has_value());
     SlotHandle h3 = rh3.value();
     SLUICE_CHECK(arena.prepare(h3, OperationKind::read, {}).has_value());
     install_noop_binding(arena, h3);
     SLUICE_CHECK(arena.commit(h3).has_value());
-    SLUICE_CHECK(arena.cancel(h3) == CancelDisposition::requested);
+    SLUICE_CHECK(arena.cancel(h3) == CancelDisposition::terminal_won);
     // backend_ready now: a second cancel -> already_terminal.
     SLUICE_CHECK(arena.cancel(h3) == CancelDisposition::already_terminal);
     SLUICE_CHECK(arena.enqueue(h3) == EnqueueOutcome::terminal_noop);
@@ -456,7 +458,7 @@ SLUICE_TEST_CASE(cancel_races_per_state) {
     }
     arena.release_completed_binding(h3);
 
-    // enqueued: cancel records terminal -> requested.
+    // enqueued: cancel records terminal -> terminal_won.
     auto rh4 = arena.reserve();
     SLUICE_CHECK(rh4.has_value());
     SlotHandle h4 = rh4.value();
@@ -466,7 +468,7 @@ SLUICE_TEST_CASE(cancel_races_per_state) {
     SLUICE_CHECK(arena.enqueue(h4) == EnqueueOutcome::enqueued);
     // enqueue already acknowledged the pin as its final slot access.
     SLUICE_CHECK(!arena.enqueue_pin_live(h4.slot));
-    SLUICE_CHECK(arena.cancel(h4) == CancelDisposition::requested);
+    SLUICE_CHECK(arena.cancel(h4) == CancelDisposition::terminal_won);
     {
         RecordingSink sink;
         SLUICE_CHECK(arena.reap(sink) == 1);
@@ -744,7 +746,7 @@ SLUICE_TEST_CASE(concurrent_submit_cancel_enqueue) {
             // arbitrates; cancel is valid on pending OR enqueued, so either
             // winner is a legal terminal outcome.
             iter_sync.arrive_and_wait();
-            if (arena.cancel(h) == CancelDisposition::requested) {
+            if (arena.cancel(h) == CancelDisposition::terminal_won) {
                 cancel_wins.fetch_add(1, std::memory_order_relaxed);
             }
         });

@@ -34,10 +34,17 @@ state-machine / resource-model changes so §5–§14 below stay accurate:
   already-terminal op is a no-op (terminal-winner rule). Review finding #2
   (cross-generation terminal pollution) is closed, and the manual-completion
   path is genuinely allocation-free (Decision 14).
-- **Running-state cancel records intent.** `RequestSlot` gains `cancel_intent_`;
-  `cancel()` on a `running` slot sets intent + returns `requested` WITHOUT
-  storing a terminal; `record_terminal` substitutes `canceled` for an ordinary
-  success when intent is set (Decision 11). Dormant at the reference layer.
+- **Running-state cancel records intent (best-effort, Decision 11).**
+  `RequestSlot` gains `cancel_intent_`; `cancel()` on a `running` slot sets
+  intent + returns `intent_recorded` WITHOUT storing a terminal;
+  `record_terminal` records the REAL result VERBATIM (an ordinary success is
+  NOT rewritten to canceled — cancel is best-effort). A backend that CONFIRMS
+  the cancellation actually took effect records
+  `TerminalResult::err(canceled)` explicitly via `record_canceled`, and THAT
+  call wins the terminal. pending/enqueued cancel returns `terminal_won` and
+  stores the canceled terminal directly (Scheme B). Dormant at the reference
+  layer (Fake/Sync never enter `running`); exercised by
+  `request_arena_cancel_intent_test.cpp` driving the `mark_running()` seam.
 - **Stale enqueue fail-fasts.** `enqueue()` on a stale handle is an I19
   reuse-before-ack invariant violation, not a successful no-op; it calls
   `request_arena_enqueue_stale_fail_fast` (review finding #4).
@@ -262,16 +269,13 @@ Borrowers:      none outside the slot-lifecycle domain; reset/ready-destruction 
 Stability:      private to Completion; forge-resistant (negative-compile gate)
 ```
 
-**Generation wrap policy (I6):** `Generation` is a 32-bit counter incremented on every
-release (including pre-commit rollback releases). On wrap (2^32 releases of one slot), a
-stale key from the previous cycle would match the current generation of a reused slot.
-This is accepted risk for Phase B and the reference backends: a single slot must be
-released 2^32 times for a collision, and each accepted request additionally validates
-the slot state and context under the leaf domain (a wrapped key colliding with a live
-slot would still require the slot to be in a matching lifecycle state). A later phase
-may widen the field or add a per-arena epoch; the wrap policy is recorded here and is
-NOT silently treated as fully safe (ADR Decision 1 permits implementation-chosen widths
-but requires the stale-key guarantee, which holds up to wrap).
+**Generation wrap policy (I6):** `Generation` is a 64-bit counter incremented on every
+release (including pre-commit rollback releases). Round-3 finding #5 widened it from
+32-bit and added a fail-fast at `UINT64_MAX` (`request_arena_generation_exhausted_
+fail_fast`) rather than silently wrapping — I6's absolute wording ("a stale key can
+never mutate the new occupant") holds in perpetuity. A wrap would require ~5.8e11
+years at 1ns/release and is unreachable in practice; the fail-fast makes the guarantee
+absolute instead of probabilistic.
 
 ## 9. State Machine
 
@@ -508,9 +512,12 @@ Exactly-once:   YES — pending cancel and ordinary terminal share ONE winner tr
                 and does NOT overwrite
 Syscall effect: N/A (Fake/Sync have no syscalls; blocking-syscall interruption is Phase E)
 
-CancelDisposition { requested, already_terminal, not_found, not_supported }:
-  - pending      -> may win pending -> backend_ready(canceled) directly (Scheme B / ADR I17)
-  - enqueued     -> remove/neutralize via pre-reserved linkage, then terminal winner
+CancelDisposition { terminal_won, intent_recorded, already_terminal, not_found, not_supported }:
+  - pending      -> terminal_won: cancel wins pending -> backend_ready(canceled) directly (Scheme B / ADR I17)
+  - enqueued     -> terminal_won: cancel wins enqueued -> backend_ready(canceled) (Scheme B)
+  - running      -> intent_recorded: cancel records INTENT only (best-effort, Decision 11);
+                    record_terminal later records the REAL result VERBATIM; a confirmed
+                    interruption records TerminalResult::err(canceled) explicitly
   - backend_ready-> already_terminal (never overwrite)
   - completion_ready (generation-bound) -> already_terminal; after reset -> not_found
   - unknown/stale generation -> not_found (never acts on a reused slot; I6)

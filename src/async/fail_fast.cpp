@@ -168,6 +168,29 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// Phase B (review round-4 finding 2): record_terminal was given an unstored
+// (default-constructed) TerminalResult. Recording it would publish a phantom
+// 0-byte success and risk a double ready-ring push. Fail-fast in BOTH Debug
+// and Release.
+[[noreturn]] void request_arena_invalid_terminal_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review round-4): the dispatch path reached a slot that is neither
+// enqueued nor backend_ready. Invariant violation of the unified state
+// machine. Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_dispatch_state_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review round-4 finding 2): the ready-ring push invariants were
+// violated (slot not backend_ready / no stored terminal / already linked / ring
+// at capacity). Fail-fast in BOTH Debug and Release rather than corrupting the
+// ring silently.
+[[noreturn]] void request_arena_ready_ring_invariant_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

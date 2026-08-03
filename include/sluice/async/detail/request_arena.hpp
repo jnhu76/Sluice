@@ -88,15 +88,30 @@ struct SlotHandle {
     Generation generation;
 };
 
-// Cancel disposition (ADR Decision 11). The cancel lookup resolves a RequestKey
-// to a slot+generation and returns one of:
-//   requested        — cancel was recorded as the terminal winner (pending) or
-//                      recorded as intent on an enqueued/running op
+// Cancel disposition (ADR Decision 11, review round-4 refinement). The cancel
+// lookup resolves a RequestKey to a slot+generation and returns one of:
+//   terminal_won     — cancel WON the terminal transition and stored the
+//                      canceled terminal (pending/enqueued, Scheme B). This is
+//                      the ONLY disposition that establishes a canceled
+//                      terminal; the backend tallies canceled_ops here.
+//   intent_recorded  — running blocking syscall: cancel recorded INTENT only
+//                      (cancel_intent_); the ordinary result/error/valid-
+//                      interruption later competes for the terminal winner.
+//                      The disposition does NOT promise a canceled terminal
+//                      (ADR Decision 11: "requested ... does not promise that
+//                      canceled will win").
 //   already_terminal — the op already has a terminal result; cancel is a no-op
 //   not_found        — stale/unknown generation (the slot was released/reused)
 //   not_supported    — this backend/platform cannot cancel the op
+//
+// ADR `requested` (the accepted-the-request bucket) is refined into
+// terminal_won + intent_recorded so the caller can distinguish "canceled
+// terminal stored" from "intent only" — the ADR's own text anticipates the
+// split ("for pending, cancellation may already have won and stored canceled;
+// for later states, intent may only have been recorded").
 enum class CancelDisposition {
-    requested,
+    terminal_won,
+    intent_recorded,
     already_terminal,
     not_found,
     not_supported,
@@ -196,10 +211,24 @@ public:
         return SlotHandle{SlotIndex{idx}, slot.generation_};
     }
 
-    // --- Stage 2: prepare (ADR Decision 5) ---
+    // --- Stage 2: prepare (ADR Decision 5 / Decision 6) ---
     // Write the operation kind, the borrow metadata (fd identity, buffer
     // address/length), and (in a full backend) the normalized params.
     // reserved -> prepared. A stale handle returns not_found.
+    //
+    // Descriptor validation (Decision 6 invalid_argument) is a DECLARED but
+    // DEFERRED vocabulary item for the Phase B reference backends: the reference
+    // backends perform no real I/O (the fd is a metadata carrier, not a syscall
+    // target — the test corpus deliberately uses ReadOp{-1, ...} as an "unused
+    // by fake" sentinel), and BorrowMetadata carries no offset, so the
+    // invalid_argument causes that ARE representable here (negative fd, null
+    // buffer with nonzero length) would reject reference-backend test traffic
+    // without backing a real safety property. They are enforced by the full-
+    // backend prepare paths (Phase D/E), where a real syscall would actually
+    // dereference the fd/buffer. This is the ADR closeout's explicit deferral
+    // (see docs/adr/ADR-explicit-io-request-contract.md "Open risks" + the
+    // Phase B closeout note); it is recorded as intentional divergence in
+    // docs/architecture/divergence-registry.md.
     Result<void> prepare(SlotHandle h, OperationKind kind, BorrowMetadata borrow) {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
@@ -321,6 +350,38 @@ public:
         request_arena_enqueue_state_fail_fast();
     }
 
+    // --- Dispatch: enqueued -> running (design §9 dispatch authority) ---
+    // The blocking-syscall dispatch path (a real ThreadPool worker in a later
+    // phase) transitions an enqueued op to `running` BEFORE the syscall blocks.
+    // Legal outcomes:
+    //   true  — enqueued -> running; the op is now executing in the backend.
+    //   false — the slot is already backend_ready (a terminal winner — typically
+    //           cancel — won before dispatch). The dispatch MUST NOT start the
+    //           syscall and backs off (losers do not publish, ADR Decision 12).
+    // Any other state (free/reserved/prepared/pending = dispatch before enqueue,
+    // running = double dispatch, completion_ready = dispatch after reap) is an
+    // invariant violation and fails fast (design §9: "only unknown/illegal state
+    // is an invariant violation (fail-fast)"). The Phase B reference backends
+    // dispatch deterministically (enqueued -> backend_ready) and never call
+    // this; it makes the shared arena correct for the ThreadPool/Uring
+    // migration, and it makes the Decision-11 running-cancel semantics testable
+    // (cancel() on a running slot records intent only).
+    bool mark_running(SlotHandle h) noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        RequestSlot* s = validate_(h);
+        if (!s) return false;
+        switch (s->state_) {
+        case RequestState::enqueued:
+            s->state_ = RequestState::running;
+            return true;
+        case RequestState::backend_ready:
+            // A terminal winner (e.g. cancel) won before dispatch; back off.
+            return false;
+        default:
+            request_arena_dispatch_state_fail_fast();
+        }
+    }
+
     // --- Stage 5: reap (ADR Decision 9 / I11 / I16 / I18 / I9 / review C3) ---
     // Allocation-free SINGLE-DOMAIN protocol (review C3 — the Completion-ready
     // release-store is the leaf domain's own linearization point). Pops
@@ -424,12 +485,20 @@ public:
     // A second call (e.g. late cancel after ordinary completion) is a no-op
     // returning false — losers never overwrite and never double-push the ring.
     //
-    // Cancellation intent (review finding on Decision 11): if a running op has
-    // cancel_intent_ set and the caller offers an ORDINARY SUCCESS result, the
-    // recorded terminal becomes `canceled` instead (the intent was recorded by
-    // a cancel() that could not force the running syscall). An ordinary ERROR
-    // or a valid interruption wins normally over the intent. pending/enqueued
-    // cancel already stored the canceled terminal directly (ADR-legal).
+    // The recorded result is the syscall's REAL result, verbatim (review
+    // round-4 finding 1): a running op whose cancel recorded intent is NOT
+    // rewritten to canceled. Cancel is best-effort (ADR Decision 11 — "if the
+    // syscall later succeeds or fails, the common terminal-winner rule decides
+    // the result"); a backend that CONFIRMS the cancellation actually took
+    // effect (a valid interruption, a cancel CQE winner) records
+    // TerminalResult::err(canceled) explicitly. pending/enqueued cancel already
+    // stored the canceled terminal directly via cancel() (ADR-legal).
+    //
+    // A default-constructed TerminalResult (stored == false) is REJECTED up
+    // front in BOTH Debug and Release (review round-4 finding 2): recording it
+    // would publish a phantom 0-byte success (terminal_to_size treats an
+    // unstored result as success) and would leave cancel() unable to recognize
+    // the existing terminal, risking a second ready-ring push of the same slot.
     //
     // The state is validated BEFORE the terminal is written (review I2): on a
     // reserved/prepared slot the request has not been accepted; storing a
@@ -441,6 +510,9 @@ public:
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
         if (!s) return false;
+        if (!result.stored) {
+            request_arena_invalid_terminal_fail_fast();
+        }
         if (s->terminal_.stored) return false;  // exactly-once: already terminal
         if (s->state_ != RequestState::pending && s->state_ != RequestState::enqueued &&
             s->state_ != RequestState::running) {
@@ -448,14 +520,8 @@ public:
             // reaped (terminal must already be stored — guarded above).
             request_arena_terminal_state_fail_fast();
         }
-        // Decision 11: a running op with recorded cancel intent that would
-        // otherwise succeed is resolved as canceled (the intent was recorded by
-        // cancel(); an ordinary error/interruption still wins on its own).
-        if (s->cancel_intent_ && s->state_ == RequestState::running &&
-            !result.is_error) {
-            result = TerminalResult::err(IoError{IoError::Code::canceled});
-        }
-        s->cancel_intent_ = false;  // intent consumed by the terminal winner
+        s->cancel_intent_ = false;  // any recorded cancel intent is consumed by
+                                    // the terminal winner (the real result stands)
         s->terminal_ = result;
         s->state_ = RequestState::backend_ready;
         ++backend_ready_count_;
@@ -514,56 +580,78 @@ public:
         return lease;
     }
 
-    // --- Cancel (ADR Decision 11) ---
+    // --- Cancel (ADR Decision 11, review round-4 finding 1) ---
     // Resolve a RequestKey against the slot+generation and record intent /
-    // terminal per the current state:
+    // terminal per the current state. Cancel is BEST-EFFORT (ADR Decision 11):
+    // it records intent / stores a canceled terminal, but the syscall's real
+    // result still competes normally via the terminal-winner rule.
     //   - pending/enqueued — cancel WINS the terminal transition directly and
-    //     stores `canceled` (Scheme B; ADR-legal for both states). For pending
-    //     the enqueue pin stays live, so reap cannot publish Completion-ready
-    //     until the submit path's enqueue no-ops and acknowledges the pin
-    //     (I17/I19).
+    //     stores `canceled` (Scheme B; ADR-legal for both states). Returns
+    //     terminal_won — this is the ONLY disposition that establishes a canceled
+    //     terminal, so the backend tallies canceled_ops here. For pending the
+    //     enqueue pin stays live, so reap cannot publish Completion-ready until
+    //     the submit path's enqueue no-ops and acknowledges the pin (I17/I19).
     //   - running — cancel records INTENT (cancel_intent_ = true) and returns
-    //     `requested`, but does NOT store a terminal: the running blocking
-    //     syscall's ordinary result, ordinary error, or valid interruption
-    //     later competes for the terminal winner via record_terminal (which
-    //     substitutes `canceled` for an ordinary success when intent is set).
-    //     The Phase B reference backends never enter `running`, so this branch
-    //     is dormant there; it makes the shared arena correct for the later
-    //     ThreadPool/Uring migration (review finding on Decision 11).
-    //   - backend_ready with a stored terminal — already_terminal (no overwrite).
+    //     intent_recorded, but does NOT store a terminal: the running blocking
+    //     syscall's ordinary result, ordinary error, or valid interruption later
+    //     competes for the terminal winner via record_terminal, which records
+    //     the REAL result VERBATIM (review round-4 finding 1: best-effort cancel
+    //     must NOT secretly turn an ordinary success into canceled). A backend
+    //     that CONFIRMS the cancellation actually took effect (a valid
+    //     interruption, a cancel CQE winner) records
+    //     TerminalResult::err(canceled) explicitly and THAT call wins the
+    //     terminal — the backend tallies canceled_ops on that confirmed win, not
+    //     here. The Phase B reference backends never enter `running`, so this
+    //     branch is dormant there; it makes the shared arena correct for the
+    //     later ThreadPool/Uring migration.
+    //   - backend_ready with a stored terminal — already_terminal (no overwrite;
+    //     ADR Decision 12: losers do not overwrite).
     //   - free/reserved/prepared — not_found (the key has no accepted terminal).
     CancelDisposition cancel(SlotHandle h) noexcept {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
         if (!s) return CancelDisposition::not_found;
-        if (s->state_ == RequestState::free ||
-            s->state_ == RequestState::reserved ||
-            s->state_ == RequestState::prepared) {
-            // Not yet accepted — cancel of a non-accepted key is not_found /
-            // invalid; treat as not_found (the key has no accepted terminal).
-            return CancelDisposition::not_found;
-        }
+        // An already-terminal op is a no-op: cancel does not overwrite the
+        // existing terminal winner (ADR Decision 12). checked before the switch
+        // so every state below is a legal cancel candidate with no terminal.
         if (s->terminal_.stored) {
-            // Already terminal — cancel is a no-op (does not overwrite).
             return CancelDisposition::already_terminal;
         }
-        if (s->state_ == RequestState::running) {
-            // Decision 11: a running blocking syscall records INTENT only. The
-            // ordinary result/error/interruption competes for the terminal
-            // winner; record_terminal substitutes canceled for ordinary success
-            // when intent is present. No terminal stored, no ready-ring push.
+        switch (s->state_) {
+        case RequestState::pending:
+        case RequestState::enqueued:
+            // Cancel WINS the terminal transition directly (Scheme B). Store the
+            // canceled terminal, transition to backend_ready, and push the
+            // ready-ring in terminal-winner order (review finding #3). This is
+            // the confirmed canceled winner — the backend tallies canceled_ops.
+            s->cancel_intent_ = false;
+            s->terminal_ = TerminalResult::err(IoError{IoError::Code::canceled});
+            s->state_ = RequestState::backend_ready;
+            ++backend_ready_count_;
+            push_ready_locked_(h.slot.value);
+            return CancelDisposition::terminal_won;
+        case RequestState::running:
+            // Decision 11 best-effort: record INTENT only. No terminal stored,
+            // no ready-ring push — record_terminal later records the real result
+            // verbatim and consumes the intent on any winner.
             s->cancel_intent_ = true;
-            return CancelDisposition::requested;
+            return CancelDisposition::intent_recorded;
+        default:
+            // free (already filtered by validate_)/reserved/prepared: not yet
+            // accepted — the key has no accepted terminal. completion_ready
+            // without a stored terminal is unreachable (reap only runs after a
+            // stored terminal); backend_ready without one is unreachable (the
+            // only path to backend_ready stores one).
+            return CancelDisposition::not_found;
         }
-        // pending / enqueued — cancel wins the terminal transition directly
-        // (Scheme B). Store the canceled terminal, transition to backend_ready,
-        // and push the ready-ring in terminal-winner order (review finding #3).
-        s->cancel_intent_ = false;
-        s->terminal_ = TerminalResult::err(IoError{IoError::Code::canceled});
-        s->state_ = RequestState::backend_ready;
-        ++backend_ready_count_;
-        push_ready_locked_(h.slot.value);
-        return CancelDisposition::requested;
+    }
+
+    // True iff a running-cancel intent is live on this slot (Decision 11). Read-
+    // only introspection for backends/tests; not a test-only control.
+    bool cancel_intent_live(SlotIndex slot) const noexcept {
+        check_slot_in_range_(slot);
+        std::lock_guard<std::mutex> lk(mutex_);
+        return slots_[slot.value].cancel_intent_;
     }
 
     // --- Release (ADR Decision 15 / AC-13 :566-572 / review I1) ---
@@ -779,6 +867,17 @@ private:
     // side-band handle that strands a later accepted op (review finding #1).
     // Caller MUST hold mutex_.
     void push_ready_locked_(std::uint32_t idx) noexcept {
+        // Ready-ring invariants (review round-4 finding 2): a terminal-winner
+        // push is only legal on a slot that just became backend_ready with a
+        // stored terminal, is not already on the ring, and whose ring has room.
+        // Violating any would corrupt the ring or let reap publish a phantom —
+        // fail-fast in BOTH Debug and Release rather than corrupt silently.
+        RequestSlot& s = slots_[idx];
+        if (s.state_ != RequestState::backend_ready || !s.terminal_.stored ||
+            s.ready_next_ != RequestSlot::kNotOnReadyRing ||
+            ready_count_ >= capacity_) {
+            request_arena_ready_ring_invariant_fail_fast();
+        }
         // The slot is being newly linked: thread it onto the tail. ready_next_
         // is kNotOnReadyRing for a freshly-terminal slot (reap clears it; a
         // second terminal-winner push never happens — record_terminal/cancel
@@ -788,7 +887,7 @@ private:
         } else {
             slots_[ready_tail_].ready_next_ = idx;
         }
-        slots_[idx].ready_next_ = RequestSlot::kNotOnReadyRing;
+        s.ready_next_ = RequestSlot::kNotOnReadyRing;
         ready_tail_ = idx;
         ++ready_count_;
     }

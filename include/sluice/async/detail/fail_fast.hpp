@@ -259,8 +259,38 @@ bool evented_admission_check() noexcept;
 // (key_of/generation_of/state_of/...) index the fixed slot array without the
 // bounds check validate_ applies to handle-taking methods. An out-of-range
 // SlotIndex would be an out-of-bounds read. They are a deliberate test surface
-// AND a backend dispatch path, so a stale/unchecked index is an invariant
+// AND a backend dispatch path, so a stale/checked index is an invariant
 // violation, not a recoverable error — fail-fast in BOTH Debug and Release.
 [[noreturn]] void request_arena_slot_index_out_of_range_fail_fast() noexcept;
+
+// Phase B (review round-4 finding 2): record_terminal was given a default-
+// constructed TerminalResult (stored == false). Recording it would publish a
+// phantom 0-byte success (terminal_to_size treats an unstored result as
+// success) and would leave cancel() unable to recognize the existing terminal
+// (it keys the already-terminal check on stored), risking a second ready-ring
+// push of the same slot. An unstored terminal is a caller bug — the production
+// callers always pass a stored result via ok_bytes/ok_void/err. Invariant
+// violation: fail-fast in BOTH Debug and Release.
+[[noreturn]] void request_arena_invalid_terminal_fail_fast() noexcept;
+
+// Phase B (review round-4): the dispatch path (mark_running, enqueued ->
+// running) reached a slot that is neither enqueued nor backend_ready. Entering
+// dispatch from free/reserved/prepared/pending (dispatch before enqueue),
+// running (double dispatch), or completion_ready (dispatch after reap) is an
+// invariant violation of the unified state machine (design §9: "only
+// unknown/illegal state is an invariant violation (fail-fast)"). The Phase B
+// reference backends never call mark_running; it makes the shared arena correct
+// for the later ThreadPool/Uring migration. Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_dispatch_state_fail_fast() noexcept;
+
+// Phase B (review round-4 finding 2): the ready-ring push invariants were
+// violated — a push landed on a slot that is not backend_ready, has no stored
+// terminal, is already linked (ready_next_ != kNotOnReadyRing), or onto a ring
+// already at capacity (which would exceed the one-entry-per-in-flight-op
+// guarantee). Any of these would corrupt the ring or let reap publish a
+// phantom. The only push sites (record_terminal / pending-or-enqueued cancel)
+// guarantee the preconditions; reaching this entry is an invariant violation.
+// Fail-fast in BOTH Debug and Release.
+[[noreturn]] void request_arena_ready_ring_invariant_fail_fast() noexcept;
 
 }  // namespace sluice::async::detail

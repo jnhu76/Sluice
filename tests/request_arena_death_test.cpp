@@ -272,7 +272,7 @@ void child_control_enqueue_terminal_noop() {
     if (!arena.commit(h).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     // cancel wins the terminal transition (pending -> backend_ready).
-    if (arena.cancel(h) != sluice::async::detail::CancelDisposition::requested)
+    if (arena.cancel(h) != sluice::async::detail::CancelDisposition::terminal_won)
         std::_Exit(sluice_death_test::kChildTestFailExit);
     // enqueue on the SAME (current) handle observes backend_ready -> no-op.
     if (arena.enqueue(h) != sluice::async::detail::EnqueueOutcome::terminal_noop)
@@ -305,6 +305,59 @@ void child_generation_exhausted_guard_present() {
     // test. The guard's presence and reachability are verified by inspection
     // (request_arena.hpp free_slot_locked_) and the negative-compile probe.
     std::_Exit(0);
+}
+
+// ---- Child: record_terminal with an UNSTORED result MUST fail-fast ------------
+// Round-4 finding 2: a default-constructed TerminalResult (stored == false) is
+// rejected up front. Recording it would publish a phantom 0-byte success
+// (terminal_to_size treats unstored as success) and would leave cancel() unable
+// to recognize the existing terminal (it keys the already-terminal check on
+// stored), risking a second ready-ring push. The production callers always
+// pass a stored result via ok_bytes/ok_void/err; reaching this with an unstored
+// result is a caller bug.
+void child_record_terminal_unstored_result() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+    auto rh = arena.reserve();
+    if (!rh.has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    SlotHandle h = rh.value();
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.install_publication_binding(h, &dummy_completion_storage, 0, &noop_binding_publish).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.commit(h).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    // A default-constructed TerminalResult has stored == false. record_terminal
+    // MUST reject it up front (round-4 finding 2).
+    TerminalResult unstored{};
+    if (unstored.stored)
+        std::_Exit(sluice_death_test::kChildTestFailExit);  // sanity: really unstored
+    (void)arena.record_terminal(h, unstored);
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// ---- Child: mark_running from an illegal state MUST fail-fast -----------------
+// Round-4: the dispatch path (mark_running) reached a slot that is neither
+// enqueued nor backend_ready. free/reserved/prepared/pending = dispatch before
+// enqueue; running = double dispatch; completion_ready = dispatch after reap.
+// This case drives mark_running on a `pending` slot (dispatch before enqueue).
+void child_mark_running_illegal_state() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+    auto rh = arena.reserve();
+    if (!rh.has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    SlotHandle h = rh.value();
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.install_publication_binding(h, &dummy_completion_storage, 0, &noop_binding_publish).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.commit(h).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    // committed but NOT enqueued: mark_running on `pending` MUST fail-fast.
+    (void)arena.mark_running(h);
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
 // ---- Parent-side test cases -------------------------------------------------
@@ -351,6 +404,24 @@ SLUICE_TEST_CASE(arena_death_record_terminal_on_prepared) {
                      "record_terminal() on a non-accepted slot must fail-fast (exit 86)");
 }
 
+// Round-4 finding 2: record_terminal rejects an unstored (default-constructed)
+// TerminalResult up front, in BOTH Debug and Release.
+SLUICE_TEST_CASE(arena_death_record_terminal_unstored_result) {
+    auto r = sluice_death_test::run_death_case("record-terminal-unstored-result");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "record_terminal() with an unstored TerminalResult must fail-fast (exit 86) — "
+                     "round-4 finding 2: a phantom 0-byte success must never reach the ready-ring");
+}
+
+// Round-4: mark_running from an illegal state (dispatch before enqueue) fails
+// fast in BOTH Debug and Release.
+SLUICE_TEST_CASE(arena_death_mark_running_illegal_state) {
+    auto r = sluice_death_test::run_death_case("mark-running-illegal-state");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "mark_running() on a non-enqueued slot must fail-fast (exit 86) — "
+                     "round-4: dispatch before enqueue is an invariant violation");
+}
+
 SLUICE_TEST_CASE(arena_death_enqueue_stale_handle) {
     auto r = sluice_death_test::run_death_case("enqueue-stale-handle");
     SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
@@ -392,6 +463,10 @@ int main(int argc, char** argv) {
             child_reap_without_binding();
         } else if (child_case == "record-terminal-on-prepared") {
             child_record_terminal_on_prepared();
+        } else if (child_case == "record-terminal-unstored-result") {
+            child_record_terminal_unstored_result();
+        } else if (child_case == "mark-running-illegal-state") {
+            child_mark_running_illegal_state();
         } else if (child_case == "enqueue-stale-handle") {
             child_enqueue_stale_handle();
         } else if (child_case == "control-enqueue-terminal-noop") {

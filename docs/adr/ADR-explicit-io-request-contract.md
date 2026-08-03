@@ -1201,8 +1201,8 @@ remain open for Phase D/E. Evidence map:
 | ordinary caller cannot mutate slot state/generation/pin/terminal/registration/publication-binding | `scripts/verify-request-arena-negative-compile.sh` (6/6) |
 | metric vocabulary (P1-05): `would_block` → `queue_full_retries`; `invalid_state` → `AsyncStats::invalid_state_rejections` (never conflated) | `tests/async_completion_test.cpp :: async_stats_increment_on_submit_poll_wait`; `tests/reference_backend_no_alloc_test.cpp` |
 
-Gate results (command + count): Clang Debug 134/134; Clang Release 134/134; ASan/UBSan 134/134
-clean; TSan 134/134 with 0 data races (including the genuine two-thread concurrent case and the
+Gate results (command + count): Clang Debug 135/135; Clang Release 135/135; ASan/UBSan 135/135
+clean; TSan 135/135 with 0 data races (including the genuine two-thread concurrent case and the
 backend-level Scheme-B race); negative-compile 12/12 + 6/6; doc-check PASS. Round-2 review fixes
 closed the three Critical findings (transactional pre-commit admission with the publication
 binding in the slot record + construction-time bounded ring — C1; the parallel `bindings_` map
@@ -1211,6 +1211,50 @@ the leaf domain — C2/C3) and the three Important findings (completed-binding r
 on any failure — I1; `record_terminal` validates state before writing and the unconditional
 pin-acknowledge escape hatch is gone — I2; `queue_full_retries` no longer counts lifecycle
 violations — I3). Full evidence ledger: `docs/architecture/phase-b-compliance-gate.md`.
+
+### Round-4 review closeout
+
+The round-4 review identified three more findings on the Phase B reference
+layer. Two are code fixes; the third is an ADR-deferred vocabulary item that
+this closeout records as intentional divergence rather than implementing
+behavior the ADR explicitly scopes out.
+
+- **Round-4 finding 1 — running cancel must stay best-effort (Decision 11).**
+  `record_terminal()` previously substituted `canceled` for an ordinary
+  success when `cancel_intent_` was set, secretly turning best-effort cancel
+  into cancel-wins. It now records the REAL result VERBATIM and consumes the
+  intent on any winner. `CancelDisposition::requested` is split into
+  `terminal_won` (pending/enqueued cancel stored the canceled terminal
+  directly — Scheme B) and `intent_recorded` (running cancel recorded intent
+  only); the reference backends now tally `canceled_ops` only on
+  `terminal_won`, not at intent-request time. A confirmed cancellation
+  (valid interruption / cancel CQE winner) records
+  `TerminalResult::err(canceled)` explicitly via `record_canceled`. Regression:
+  `tests/request_arena_cancel_intent_test.cpp` (6 cases, including a capturing
+  test that fails on the pre-fix code with "ordinary success must NOT be
+  rewritten to an error").
+- **Round-4 finding 2 — terminal authority rejects unstored results.**
+  `record_terminal()` now rejects a default-constructed `TerminalResult`
+  (`stored == false`) up front via `request_arena_invalid_terminal_fail_fast`
+  in BOTH Debug and Release. Recording it would publish a phantom 0-byte
+  success and risk a double ready-ring push. `push_ready_locked_()` also
+  asserts its invariants (slot is backend_ready with a stored terminal, not
+  already linked, ring not at capacity) via
+  `request_arena_ready_ring_invariant_fail_fast`. Regression: two new death
+  cases in `tests/request_arena_death_test.cpp`
+  (`record-terminal-unstored-result`; the ready-ring guard is inspection-
+  verified, like the generation-exhaustion guard, since the only push sites
+  guarantee the preconditions).
+- **Round-4 finding 3 — descriptor validation (Decision 5/6).** This remains
+  a DECLARED but DEFERRED vocabulary item for the Phase B reference backends,
+  as the original closeout already stated. The reference backends perform no
+  real I/O (the fd is a metadata carrier, not a syscall target — the test
+  corpus deliberately uses `ReadOp{-1, ...}` as an "unused by fake" sentinel),
+  and `BorrowMetadata` carries no offset, so the `invalid_argument` causes
+  that ARE representable at this layer would reject reference-backend test
+  traffic without backing a real safety property. They are enforced by the
+  full-backend prepare paths (Phase D/E). This is recorded as intentional
+  divergence in `docs/architecture/divergence-registry.md`.
 
 
 ## Phase B closeout (PR #63 review findings)
@@ -1248,13 +1292,19 @@ governing authority (per AGENTS.md §2, accepted decisions are not rewritten).
   LEGITIMATE `terminal_noop` now means only "observed backend_ready from a
   prior terminal winner."
 - **Decision 11 — running-state cancel records intent.** `cancel()` on a
-  `running` blocking-syscall slot now records `cancel_intent_` and returns
-  `requested` WITHOUT storing a terminal; the syscall's ordinary
+  `running` blocking-syscall slot records `cancel_intent_` and returns
+  `intent_recorded` WITHOUT storing a terminal; the syscall's ordinary
   result/error/valid-interruption later competes for the terminal winner via
-  `record_terminal` (which substitutes `canceled` for an ordinary success when
-  intent is set). pending/enqueued cancel still wins the terminal directly.
-  The reference backends never enter `running`, so this is dormant there, but
-  the shared arena is now correct for the later ThreadPool/Uring migration.
+  `record_terminal`, which records the REAL result VERBATIM (an ordinary
+  success is NOT rewritten to canceled — cancel is best-effort, Decision 11).
+  A backend that CONFIRMS the cancellation actually took effect (a valid
+  interruption, a cancel CQE winner) records `TerminalResult::err(canceled)`
+  explicitly and THAT call wins the terminal. pending/enqueued cancel still
+  wins the terminal directly (returns `terminal_won` and stores the canceled
+  terminal under Scheme B). The Phase B reference backends never enter
+  `running`, so the intent path is exercised by `tests/request_arena_cancel_
+  intent_test.cpp` driving the `mark_running()` dispatch seam directly; the
+  shared arena is now correct for the later ThreadPool/Uring migration.
 - **I6 — 64-bit generation with fail-fast (finding #5).** `Generation` is
   `uint64_t`; the arena fail-fasts at `UINT64_MAX` on release
   (`request_arena_generation_exhausted_fail_fast`) rather than silently
@@ -1262,8 +1312,10 @@ governing authority (per AGENTS.md §2, accepted decisions are not rewritten).
   absolute wording holds in perpetuity).
 
 `prepare()` descriptor validation (Decision 6 `invalid_argument`) remains a
-declared-but-not-behaviorally-enforced vocabulary item for the reference
-backends; it is out of scope for this closeout.
+declared-but-deferred vocabulary item for the reference backends — see the
+"Round-4 review closeout" section above and `docs/architecture/divergence-
+registry.md` for the recorded divergence (the reference backends perform no
+real I/O; enforcement lands in the full-backend prepare paths, Phase D/E).
 
 ## Open risks and deferred decisions
 

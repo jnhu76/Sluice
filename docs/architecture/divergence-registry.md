@@ -226,6 +226,24 @@ Status values:
 
 ---
 
+## DIV-14: prepare() Descriptor Validation Deferred for Reference Backends
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-14 |
+| Status | Accepted |
+| Introduced by | ADR-explicit-io-request-contract (Accepted) Decision 5/6 + Phase B closeout |
+| Governing ADR | ADR-explicit-io-request-contract (Decision 6 `invalid_argument` vocabulary) |
+| Reason | Decision 6 declares `invalid_argument` for "malformed operation: invalid length/buffer contract, impossible offset conversion, or invalid fd parameter form." The Phase B reference backends (FakeAsyncBackend, SyncBackend) perform NO real I/O — `fd` is a metadata carrier, not a syscall target (the test corpus deliberately uses `ReadOp{-1, ...}` as an "unused by fake" sentinel), and `BorrowMetadata` carries no offset. Enforcing the representable causes (negative fd, null buffer with nonzero length) at the reference `prepare()` would reject reference-backend test traffic without backing a real safety property. |
+| Benefit | The reference layer stays focused on the arena/slot/terminal lifecycle contract (its actual scope); the test corpus is not churned to placate a check that guards no real syscall at this layer. |
+| Cost | A malformed descriptor is NOT rejected at the reference `prepare()` — it is accepted and surfaces only at the full-backend prepare paths (Phase D/E), where a real syscall would actually dereference the fd/buffer. Callers cannot rely on `invalid_argument` from the reference backends for fd/buffer-form errors until those phases. |
+| Current evidence | `include/sluice/async/detail/request_arena.hpp` `prepare()` (no fd/buffer-form check; the deferral is documented at the call site); ADR Phase B closeout "Round-4 review closeout" item 3; reference-backend tests use `ReadOp{-1, ...}` as a documented sentinel. |
+| Revisit trigger | Phase D (Uring) / Phase E (ThreadPool) full-backend prepare paths MUST enforce the Decision 6 `invalid_argument` causes (negative fd, null buffer with nonzero length, impossible offset conversion) before issuing a real syscall. This divergence is then resolved per-backend. |
+
+---
+
+---
+
 ## Summary
 
 | ID | Status | Area |
@@ -243,3 +261,4 @@ Status values:
 | DIV-11 | Accepted | Cancel protection |
 | DIV-12 | Corrective planned | Resource bounds |
 | DIV-13 | Accepted | Backend extension point |
+| DIV-14 | Accepted | prepare() descriptor validation deferred for reference backends |
