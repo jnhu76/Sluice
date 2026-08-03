@@ -145,6 +145,29 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// Phase B (review finding #4): enqueue on a stale handle is a reuse-before-ack
+// invariant violation (I19), not a successful Scheme-B no-op. Masking it as
+// terminal_noop hid the pin/release authority breach. Detected in BOTH Debug
+// and Release.
+[[noreturn]] void request_arena_enqueue_stale_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review finding #5): a slot whose 64-bit generation reached UINT64_MAX
+// cannot increment without wrapping (which would re-introduce ABA, violating I6's
+// absolute wording). Fail fast instead of silently wrapping. Detected in BOTH
+// Debug and Release; practically unreachable (~5.8e11 years at 1ns/release).
+[[noreturn]] void request_arena_generation_exhausted_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (CodeRabbit finding): an out-of-range SlotIndex passed to an
+// introspection accessor (key_of/generation_of/state_of/...) would index past
+// the fixed slot array. Fail fast in BOTH Debug and Release.
+[[noreturn]] void request_arena_slot_index_out_of_range_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

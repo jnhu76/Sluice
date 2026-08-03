@@ -12,6 +12,39 @@ PR. It is binding for the implementation; divergence requires a superseding ADR 
 note (AGENTS.md §2). The companion evidence/status document is
 `docs/architecture/phase-b-compliance-gate.md`.
 
+## Phase B closeout (PR #63 review findings)
+
+The PR #63 review found five issues plus two ADR-completeness gaps in the first
+implementation. The authoritative closeout text is in the governing ADR's
+"Phase B closeout" section; this design note records the resulting as-built
+state-machine / resource-model changes so §5–§14 below stay accurate:
+
+- **Queue linkage + reap order live in the arena, not a side-band ring.** The
+  FakeAsyncBackend `HandleRing` FIFO and per-kind staging deques are deleted.
+  `RequestSlot` gains `ready_next_` (ready-ring link) and `submit_seq_`
+  (submission order); the arena owns a construction-time bounded ready-ring
+  (`ready_head_`/`ready_tail_`/`ready_count_`). A terminal-winner transition
+  pushes the slot onto the ring's tail; reap pops from the head, delivering in
+  backend-known (terminal-winner) order (Decision 9) for ALL backends. This is
+  the §9 state-machine authority for `backend_ready -> completion_ready` and
+  resolves review findings #1 (no stale side-band handle can strand a later op)
+  and #3 (reap order is not physical slot order).
+- **Terminal binds to identity immediately.** `complete_oldest_*` calls
+  `record_terminal` directly (no staging deque); a second completion against an
+  already-terminal op is a no-op (terminal-winner rule). Review finding #2
+  (cross-generation terminal pollution) is closed, and the manual-completion
+  path is genuinely allocation-free (Decision 14).
+- **Running-state cancel records intent.** `RequestSlot` gains `cancel_intent_`;
+  `cancel()` on a `running` slot sets intent + returns `requested` WITHOUT
+  storing a terminal; `record_terminal` substitutes `canceled` for an ordinary
+  success when intent is set (Decision 11). Dormant at the reference layer.
+- **Stale enqueue fail-fasts.** `enqueue()` on a stale handle is an I19
+  reuse-before-ack invariant violation, not a successful no-op; it calls
+  `request_arena_enqueue_stale_fail_fast` (review finding #4).
+- **64-bit generation.** `Generation` is `uint64_t`; release fail-fasts at
+  `UINT64_MAX` (`request_arena_generation_exhausted_fail_fast`) so I6 holds in
+  perpetuity (review finding #5).
+
 ---
 
 ## 1. Problem

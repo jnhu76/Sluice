@@ -259,3 +259,14 @@ sluice_internal_async_test("threadpool_backend_reap_test")
 -- integration (submit thread + Completion binding + commit/enqueue barrier
 -- pause), which the public API's access_mtx_ serialization hides.
 sluice_internal_async_test("backend_scheme_b_race_test")
+
+-- reference_backend_arena_lifecycle_test — Phase B reference backend migration
+-- regression (commit 4). Proves FakeAsyncBackend + SyncBackend are actually
+-- driven by the bounded RequestArena + five-stage admission + the synchronous
+-- identity-bearing ReadySink, by asserting the OBSERVABLE consequences
+-- (slot_in_use lifecycle, capacity rejections, exactly-once sink deliveries,
+-- generation-on-reuse). Without these the migration would be indistinguishable
+-- from a no-op rename. Lives in the internal-testing group because the
+-- exactly-once delivery counter (sink_deliveries) is a
+-- SLUICE_ASYNC_INTERNAL_TESTING-only seam (CodeRabbit finding / AGENTS §8).
+sluice_internal_async_test("reference_backend_arena_lifecycle_test")

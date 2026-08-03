@@ -45,7 +45,7 @@ Status values:
 | Reason | Zig places operation lifecycle and backend scratch in caller-owned `Operation.Storage`. The accepted request contract selects preserving caller-owned `Completion<T>` while the context/backend owns a bounded arena of `RequestSlot` objects identified by context, slot, and generation. This stages migration without making the prior pointer/container implementation acceptable. |
 | Benefit | Preserves public submit signatures and avoids one-step Runtime/Batch/copy-pipeline migration while still enabling stable identity, bounded admission, and an allocation-independent accepted terminal path. |
 | Cost | Context/backend memory scales with configured capacity; caller cannot supply storage directly; non-reference backends (Uring/ThreadPool) remain non-conforming until their respective phases. |
-| Current evidence | Phase B activates the transitional backend-owned `RequestSlot` arena for the reference backends (FakeAsyncBackend, SyncBackend) only. `UringAsyncBackend` and `ThreadPoolBackend` retain their pointer/container tracking until Phases D/E. The shared `sluice::async::detail::RequestArena` provides one logical capacity per context/backend pair (ADR Decision 2; no two independently oversubscribable stores). |
+| Current evidence | Phase B activates the transitional backend-owned `RequestSlot` arena for the reference backends (FakeAsyncBackend, SyncBackend) only. `UringAsyncBackend` and `ThreadPoolBackend` retain their pointer/container tracking until Phases D/E. The shared `sluice::async::detail::RequestArena` provides one logical capacity per context/backend pair (ADR Decision 2; no two independently oversubscribable stores). PR #63's review closeout moved queue linkage and submission order INTO the slot (`ready_next_`, `submit_seq_`) and removed FakeAsyncBackend's side-band `HandleRing` FIFO and per-kind staging deques; the arena owns a construction-time bounded ready-ring so reap preserves backend-known (terminal-winner) order (ADR Decision 9) for all backends. |
 | Revisit trigger | Re-evaluate when benchmarks or backend ABI evidence show caller-owned storage materially reduces per-request overhead and the public API migration cost for Runtime, Batch, and copy pipelines is controlled. |
 
 ---
@@ -173,7 +173,7 @@ Status values:
 | Reason | Portable cancellation of in-flight blocking syscalls (via `pthread_kill`/`tgkill`) is complex and platform-specific. Current cancel is best-effort: the op completes with its real result. |
 | Benefit | Simplicity; no signal-safety hazards; no UB from interrupted syscalls. |
 | Cost | Cannot interrupt a long-running fsync/pread/pwrite; cancel only affects waiting, not the syscall. |
-| Current evidence | `threadpool_backend.hpp:29-33`; `cancel()` returns but op continues. |
+| Current evidence | `threadpool_backend.hpp:29-33`; `cancel()` returns but op continues. The shared `RequestArena` now records `cancel_intent_` on a `running` slot (ADR-explicit-io-request-contract Decision 11) so the arena layer is correct for the ThreadPool/Uring migration: the syscall's ordinary result later competes for the terminal winner, and `record_terminal` substitutes `canceled` for an ordinary success when intent is set. The reference backends never enter `running`, so this is dormant at the reference layer. |
 | Revisit trigger | If workload requires interruptible long fsync; if io_uring cancel (IORING_OP_ASYNC_CANCEL) is integrated. |
 
 ---

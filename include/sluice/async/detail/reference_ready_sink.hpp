@@ -20,18 +20,33 @@
 
 #include <sluice/async/detail/ready_sink.hpp>
 
+#include <cstddef>
+
 namespace sluice::async::detail {
 
-// Counts deliveries so a test can assert exactly-once (one on_ready per
-// Completion-ready publication). The count is the only observable side effect.
+// No-op SynchronousReadySink for the reference backends. The production sink is
+// STATELESS: on_ready does nothing (the reference backends have no Scheduler
+// routing record to update — Phase F). The delivery counter exists ONLY for
+// test assertions of exactly-once publication, so it is guarded by
+// SLUICE_ASYNC_INTERNAL_TESTING (CodeRabbit finding: keep test-only delivery
+// accounting out of the production sink — AGENTS.md §8). Production builds
+// therefore carry no counter field and no exported test surface.
 class ReferenceReadySink final : public SynchronousReadySink {
   public:
-    void on_ready(ReadyEvent /*event*/) noexcept override { ++deliveries_; }
+    void on_ready(ReadyEvent /*event*/) noexcept override {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        ++deliveries_;
+#endif
+    }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::size_t deliveries() const noexcept { return deliveries_; }
+#endif
 
   private:
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::size_t deliveries_ = 0;
+#endif
 };
 
 } // namespace sluice::async::detail

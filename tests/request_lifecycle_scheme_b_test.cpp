@@ -80,10 +80,14 @@ struct RecordingSink : sluice::async::detail::SynchronousReadySink {
 // Every reaped slot MUST carry an installed binding (review C2 — reap
 // fail-fasts on a missing binding rather than silently dropping an accepted
 // op), so the arena-direct cases install this no-op binding after prepare.
+// The `completion` argument is a non-null dummy: install_publication_binding
+// rejects a null completion (CodeRabbit finding — the publish thunk dereferences
+// it), so a real (if unused) address keeps the no-op binding valid.
 void noop_binding_publish(void*, const TerminalResult&) noexcept {}
 
 void install_noop_binding(RequestArena& arena, SlotHandle h) {
-    auto r = arena.install_publication_binding(h, nullptr, 0, &noop_binding_publish);
+    static int dummy_completion = 0;
+    auto r = arena.install_publication_binding(h, &dummy_completion, 0, &noop_binding_publish);
     SLUICE_CHECK_MSG(r.has_value(), "noop binding install must succeed on a prepared slot");
 }
 } // namespace
@@ -215,14 +219,22 @@ SLUICE_TEST_CASE(pending_cancel_wins_before_enqueue_then_enqueue_noop) {
 
 // ---- exactly one terminal winner (I10) --------------------------------------
 // Among pending-cancel, a dispatch error, and an ordinary result, exactly one
-// becomes the terminal result. Losers are no-ops (do not overwrite).
+// becomes the terminal result. Losers are no-ops (do not overwrite). The
+// binding's publish thunk records the TerminalResult reap actually publishes,
+// so the assertion covers the terminal VALUE (the winner's 42 bytes), not just
+// the event count — a loser overwrite would publish the wrong value.
 SLUICE_TEST_CASE(exactly_one_terminal_winner) {
     RequestArena arena{ContextIdentity::for_testing(1), 1};
     auto rh = arena.reserve();
     SLUICE_CHECK(rh.has_value());
     SlotHandle h = rh.value();
     SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
-    install_noop_binding(arena, h);
+    static sluice::async::detail::TerminalResult published{};
+    auto record_publish = [](void*, const sluice::async::detail::TerminalResult& t) noexcept {
+        published = t;
+    };
+    auto br = arena.install_publication_binding(h, &published, 0, record_publish);
+    SLUICE_CHECK(br.has_value());
     SLUICE_CHECK(arena.commit(h).has_value());
 
     // Winner: ordinary success first.
@@ -240,6 +252,7 @@ SLUICE_TEST_CASE(exactly_one_terminal_winner) {
     SLUICE_CHECK(sink.events.size() == 1);
     // The terminal result is the winner's (42 bytes), NOT the overwrites.
     SLUICE_CHECK(!sink.events[0].waiter.has_waiter);
+    SLUICE_CHECK(published.stored && !published.is_error && published.bytes == 42);
     arena.release_completed_binding(h);
 }
 
@@ -467,9 +480,15 @@ SLUICE_TEST_CASE(cancel_races_per_state) {
 
 // ---- generation reuse: every post-reserve authority rejects a stale handle --
 // After release+reuse, a handle carrying the OLD generation is rejected by
-// prepare/commit/enqueue/record_terminal/register_waiter/cancel_waiter/cancel/
-// release. This is the ABA guard (I6): the stale key cannot act on the new
-// occupant. Each authority returns not_found / invalid outcome under its domain.
+// prepare/commit/record_terminal/register_waiter/cancel_waiter/cancel/release.
+// This is the ABA guard (I6): the stale key cannot act on the new occupant.
+// Each authority returns not_found / invalid outcome under its domain.
+//
+// NOTE: enqueue(stale) is NOT in this list. A stale enqueue is an I19
+// reuse-before-ack invariant violation (the committed submit path's slot moved
+// on while its enqueue pin was still live), not a benign no-op — it fails fast
+// in BOTH Debug and Release (review finding #4). That contract is exercised in
+// request_arena_death_test.cpp (request_arena_enqueue_stale_fail_fast).
 SLUICE_TEST_CASE(generation_reuse_stale_attempts) {
     RequestArena arena{ContextIdentity::for_testing(1), 1};
 
@@ -492,7 +511,6 @@ SLUICE_TEST_CASE(generation_reuse_stale_attempts) {
     // Every authority re-validates generation under the arena mutex.
     SLUICE_CHECK(!arena.prepare(stale, OperationKind::read, {}).has_value());
     SLUICE_CHECK(!arena.commit(stale).has_value());
-    SLUICE_CHECK(arena.enqueue(stale) == EnqueueOutcome::terminal_noop); // stale -> noop
     SLUICE_CHECK(!arena.record_terminal(stale, TerminalResult::ok_bytes(1)));
     SLUICE_CHECK(!arena.record_canceled(stale));
     SLUICE_CHECK(!arena.register_waiter(stale, WaiterToken{1, 0, 0}, RoutingLease{1}).has_value());

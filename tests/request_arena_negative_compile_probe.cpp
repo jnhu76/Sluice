@@ -51,8 +51,12 @@ void positive_control() {
         return;
     SlotHandle h = rh.value();
     (void)arena.prepare(h, OperationKind::read, {});
+    // install_publication_binding rejects a null completion (CodeRabbit finding:
+    // the publish thunk dereferences it), so the positive control passes a real
+    // (unused) dummy address — the no-op lambda never dereferences it.
+    static int dummy_completion = 0;
     (void)arena.install_publication_binding(
-        h, nullptr, 0, [](void*, const TerminalResult&) noexcept {});
+        h, &dummy_completion, 0, [](void*, const TerminalResult&) noexcept {});
     (void)arena.commit(h);
     (void)arena.enqueue(h);
     (void)arena.record_terminal(h, TerminalResult::ok_bytes(1));

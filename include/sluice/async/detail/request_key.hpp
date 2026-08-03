@@ -13,7 +13,12 @@
 //                     detail owned by the arena/context).
 //   SlotIndex       — index into the bounded RequestSlot arena.
 //   Generation      — per-slot ABA guard; incremented on slot release BEFORE the
-//                     next key can become visible (I6).
+//                     next key can become visible (I6). 64-bit so a stale key
+//                     can NEVER collide with the current generation (I6 absolute
+//                     wording): ~584 years at one release per nanosecond. The
+//                     arena fail-fasts at UINT64_MAX rather than silently wrap,
+//                     so the ABA property holds in perpetuity (review finding:
+//                     32-bit wrap re-introduces ABA under heavy reuse).
 //
 // RequestKey is a trivial value type: copyable, comparable, suitable for use as
 // a stable value identity (e.g. carried by-value in a ReadyEvent). It MUST NOT
@@ -46,7 +51,7 @@ struct SlotIndex {
 };
 
 struct Generation {
-    std::uint32_t value = 0;
+    std::uint64_t value = 0;
     friend bool operator==(const Generation&, const Generation&) noexcept = default;
 };
 

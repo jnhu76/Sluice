@@ -100,6 +100,19 @@ jobs:
           CXX: clang++
         run: bash scripts/verify-completion-authority-negative-compile.sh
 
+      - name: RequestArena slot-authority negative-compile (Phase B)
+        # ADR-explicit-io-request-contract (Phase B) — proves the RequestSlot
+        # lifecycle fields (state, generation, enqueue pin, terminal result,
+        # waiter registration, publication binding) are structurally
+        # unreachable from ordinary application code: every transition is owned
+        # by RequestArena under the leaf slot-lifecycle mutex. Previously this
+        # script existed but was not wired into CI, so the slot-authority claim
+        # was not actually exercised by the merge gate.
+        # CXX is pinned to clang++ to match the required Linux Clang Debug gate.
+        env:
+          CXX: clang++
+        run: bash scripts/verify-request-arena-negative-compile.sh
+
       - name: Build and run acceptance consumers
         # Proves the public async-foundation surface is usable from consumers
         # that see only the installed public headers. Build AND execute: a

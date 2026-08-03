@@ -122,7 +122,10 @@ class SyncBackend : public AsyncBackend {
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_capacity_rejections() const noexcept { return arena_.capacity_rejections(); }
+    // Test-only (production sink is stateless — CodeRabbit finding / AGENTS §8).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::size_t sink_deliveries() const noexcept { return sink_.deliveries(); }
+#endif
 
   private:
     static constexpr std::size_t kDefaultCapacity = 64;
@@ -242,6 +245,18 @@ class SyncBackend : public AsyncBackend {
     // record_terminal a no-op on that slot — the canceled result is reaped.
     // Iterates the fixed slot array via the arena's read-only accessors (the
     // slot's own binding carries the dispatch data — no parallel map).
+    //
+    // Snapshot consistency (CodeRabbit finding): the composed handle
+    // {idx, generation_of(idx)} is built from independent locked snapshots, but
+    // record_terminal re-validates the generation under its OWN lock before
+    // writing — so if a release_completed_binding (run outside access_mtx_)
+    // advanced the generation between the snapshot and the record, record_terminal
+    // returns false (no write, no corruption) and the next poll re-dispatches the
+    // still-enqueued slot. The benign skip is the authority guarantee; the
+    // Phase B reference backend is also single-threaded under access_mtx_, so the
+    // window does not arise until the multi-threaded backends of later phases
+    // (which will use a single arena-locked dispatch scan, not this composed-
+    // snapshot path).
     void dispatch_enqueued() {
         for (std::size_t i = 0; i < arena_.capacity(); ++i) {
             detail::SlotIndex idx{static_cast<std::uint32_t>(i)};

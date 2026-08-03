@@ -324,8 +324,21 @@ private:
     void commit_binding_to_outstanding() noexcept {
         // The winner's binding payload writes happen-before this release-store
         // (program order + release). An acquire-load observer of `outstanding`
-        // therefore sees the full binding (I2).
-        state_.store(State::outstanding, std::memory_order::release);
+        // therefore sees the full binding (I2). The CAS from `binding` enforces
+        // that ONLY the context that won begin_binding (idle -> binding) may
+        // publish outstanding: a derived backend that calls commit_binding()
+        // without winning begin_binding() would otherwise manufacture an
+        // outstanding Completion with no accepted binding. That is an authority
+        // violation (ADR-explicit-io-completion-authority); fail-fast in BOTH
+        // Debug and Release (CodeRabbit finding: validate the binding transition
+        // before committing it).
+        State expected = State::binding;
+        if (!state_.compare_exchange_strong(
+                expected, State::outstanding,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
+            detail::completion_authority_fail_fast();
+        }
     }
     void rollback_binding_before_accept() noexcept {
         State expected = State::binding;
@@ -554,7 +567,15 @@ private:
             std::memory_order::acquire);
     }
     void commit_binding_to_outstanding() noexcept {
-        state_.store(State::outstanding, std::memory_order::release);
+        // CAS from binding -> outstanding: only the begin_binding winner may
+        // publish outstanding (parity with Completion<T>; CodeRabbit finding).
+        State expected = State::binding;
+        if (!state_.compare_exchange_strong(
+                expected, State::outstanding,
+                std::memory_order::acq_rel,
+                std::memory_order::acquire)) {
+            detail::completion_authority_fail_fast();
+        }
     }
     void rollback_binding_before_accept() noexcept {
         State expected = State::binding;

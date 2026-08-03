@@ -12,17 +12,19 @@
 //     allocation counter must still read 0.
 //
 // This is the structural proof for review C1/C3/I9: after construction, the
-// reference backends' admission (reserve/prepare/binding-install/CAS/ring
-// push/commit/enqueue), the reap publication (in-domain publish through the
-// slot-bound thunk), and the caller reset handshake allocate NOTHING — the
-// pre-commit bookkeeping is construction-time-bounded (binding in the slot
-// record, FIFO as a preallocated ring; there is no unordered_map and no
-// unbounded deque to fail), and a rejected submit (lost binding CAS) is zero-
-// side-effect AND zero-allocation.
+// reference backends' admission (reserve/prepare/binding-install/CAS/commit/
+// enqueue), the manual completion path (complete_oldest_* -> record_terminal),
+// the reap publication (in-domain publish through the slot-bound thunk), and
+// the caller reset handshake allocate NOTHING — the pre-commit bookkeeping is
+// construction-time-bounded (binding in the slot record; the side-band FIFO and
+// staging deques were removed in review findings #1/#2, so complete_oldest_* is
+// now a bounded O(capacity) scan + record_terminal with no allocation), and a
+// rejected submit (lost binding CAS) is zero-side-effect AND zero-allocation.
 //
-// The always-throw window is kept tight around the measured operations; the
-// test-side staging queues (complete_oldest_with_bytes) allocate and run
-// OUTSIDE the window.
+// The always-throw window covers the measured operations; with the staging
+// deques gone, complete_oldest_with_bytes() runs INSIDE the window (the
+// fake_complete_reap_reset_is_allocation_free case proves Decision 14 for the
+// manual-completion path that the prior implementation could not).
 #include "harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>
@@ -79,7 +81,24 @@ void operator delete[](void* p) noexcept { std::free(p); }
 // otherwise fires under ASan).
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
-void* operator new(std::size_t n, std::align_val_t) { return ::operator new(n); }
+// Aligned overloads MUST preserve the requested alignment (CodeRabbit finding:
+// forwarding to ::operator new(n) returns std::malloc memory, which is only
+// max_align_t-aligned — an over-aligned allocation, e.g. a cache-line-padded
+// slot record, would receive misaligned storage and the matching aligned
+// deletes would free it, which is UB and an ASan alloc-alignment mismatch).
+// std::aligned_alloc requires a size that is an integer multiple of the
+// alignment; round up. <cstdlib> (already included) provides it.
+void* operator new(std::size_t n, std::align_val_t a) {
+    if (g_throw_all.load(std::memory_order_acquire)) {
+        throw std::bad_alloc{};
+    }
+    g_allocations.fetch_add(1, std::memory_order_relaxed);
+    const std::size_t align = static_cast<std::size_t>(a);
+    const std::size_t size = ((n + align - 1) / align) * align;
+    if (void* p = std::aligned_alloc(align, size)) return p;
+    throw std::bad_alloc{};
+}
+void* operator new[](std::size_t n, std::align_val_t a) { return ::operator new(n, a); }
 void operator delete(void* p, std::align_val_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::align_val_t) noexcept { std::free(p); }
 void operator delete(void* p, std::align_val_t, std::size_t) noexcept { std::free(p); }
@@ -197,19 +216,21 @@ SLUICE_TEST_CASE(fake_cas_loss_rejection_zero_side_effects) {
     SLUICE_CHECK_MSG(ok1 && ok2, "both capacity slots must accept");
     SLUICE_CHECK_MSG(rejected_invalid, "submit into a non-idle Completion must invalid_state");
     // Zero side effects (review C1): the rejected submit touched nothing —
-    // its candidate slot was rolled back, the ring was never touched.
+    // its candidate slot was rolled back (slot_in_use unchanged at 2). There is
+    // no side-band FIFO to leave residue in (review finding #1 removed it); the
+    // candidate was freed before commit, so neither submit_seq nor ready-ring
+    // linkage was ever installed for it.
     SLUICE_CHECK_MSG(c1.outstanding(), "the original Completion is untouched");
     SLUICE_CHECK_MSG(c2.outstanding(), "the other Completion is untouched");
     SLUICE_CHECK_MSG(raw->arena_slot_in_use() == 2, "slot_in_use unchanged (candidate rolled back)");
     SLUICE_CHECK_MSG(ctx.outstanding() == 2, "accepted_outstanding unchanged");
-    SLUICE_CHECK_MSG(raw->size_fifo_count() == 2, "submission FIFO unchanged (no residue)");
     if constexpr (kAllocProbeActive) {
         std::size_t allocs = g_allocations.load(std::memory_order_relaxed);
         SLUICE_CHECK_MSG(allocs == 0, "the rejected submit must allocate nothing");
     }
 
-    // No future result contamination: stage + reap deliver exactly the staged
-    // bytes to the right ops; the rejected submit left no staged ghost.
+    // No future result contamination: complete + reap deliver exactly the
+    // resolved bytes to the right ops; the rejected submit left no ghost.
     raw->complete_oldest_with_bytes(8);
     SLUICE_CHECK(ctx.poll() == 1);
     SLUICE_CHECK(c1.ready());
@@ -222,4 +243,48 @@ SLUICE_TEST_CASE(fake_cas_loss_rejection_zero_side_effects) {
     c1.reset();
     c2.reset();
     SLUICE_CHECK(raw->arena_slot_in_use() == 0);
+}
+
+// ---- FakeAsyncBackend: complete_* -> poll (reap) -> reset is allocation-free --
+// Review finding #2 (ADR Decision 14): the manual-completion path (complete_oldest_*
+// binding a terminal result to a RequestKey, then reap publishing it) MUST NOT
+// allocate. The previous implementation staged results in a std::deque, so this
+// test deliberately ran complete_oldest_with_bytes() OUTSIDE the always-throw
+// window — meaning the manual path was never actually proven allocation-free.
+// With the staging deque removed (terminal evidence binds to the slot
+// immediately via record_terminal), complete_oldest_* + poll + reset runs
+// entirely under always-throw operator new and must still succeed with zero
+// allocations. This closes the Decision 14 gap.
+SLUICE_TEST_CASE(fake_complete_reap_reset_is_allocation_free) {
+    auto backend = std::make_unique<FakeAsyncBackend>();
+    FakeAsyncBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    std::byte buf[8]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(ctx.submit_read(ReadOp{0, buf, 8, 0}, c).has_value());
+
+    if constexpr (kAllocProbeActive) {
+        g_allocations.store(0, std::memory_order_relaxed);
+        g_throw_all.store(true, std::memory_order_relaxed);
+    }
+    // The previously-uncovered path: complete (record_terminal) + reap + reset,
+    // all under always-throw operator new.
+    raw->complete_oldest_with_bytes(8);
+    std::size_t polled = ctx.poll();
+    bool ready = c.ready();
+    c.reset();
+    if constexpr (kAllocProbeActive) {
+        g_throw_all.store(false, std::memory_order_relaxed);
+    }
+
+    SLUICE_CHECK_MSG(polled == 1, "poll must reap exactly one under always-throw operator new");
+    SLUICE_CHECK_MSG(ready, "the Completion must become ready under always-throw operator new");
+    SLUICE_CHECK_MSG(c.idle(), "reset must return the Completion to idle");
+    if constexpr (kAllocProbeActive) {
+        std::size_t allocs = g_allocations.load(std::memory_order_relaxed);
+        SLUICE_CHECK_MSG(allocs == 0,
+                         "the complete/reap/reset path must allocate nothing (Decision 14)");
+    }
+    SLUICE_CHECK_MSG(ctx.outstanding() == 0, "arena drained");
 }

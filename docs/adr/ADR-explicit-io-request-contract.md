@@ -1213,6 +1213,58 @@ pin-acknowledge escape hatch is gone — I2; `queue_full_retries` no longer coun
 violations — I3). Full evidence ledger: `docs/architecture/phase-b-compliance-gate.md`.
 
 
+## Phase B closeout (PR #63 review findings)
+
+The PR #63 review identified five findings and two ADR-completeness gaps in the
+first Phase B implementation. All are closed by the reference-layer redesign
+that lands in this PR; the contract decisions themselves are unchanged. This
+section records how each is realized so the Decision text below remains the
+governing authority (per AGENTS.md §2, accepted decisions are not rewritten).
+
+- **Decision 9 — backend-known reap order (finding #3).** Reap no longer scans
+  the slot array by physical index. The arena owns a construction-time bounded
+  ready-ring of backend_ready slot indices threaded through each slot's
+  `ready_next_` link; every terminal-winner transition (`record_terminal`,
+  pending/enqueued `cancel`) pushes the slot onto the ring's tail, and reap pops
+  from the head. Delivery is therefore in terminal-winner (backend-known) order,
+  not slot-index order, for ALL backends (not just Fake).
+- **Queue linkage as a reserved slot resource (finding #1).** The side-band
+  `HandleRing` FIFO and the per-kind staging deques are removed from
+  FakeAsyncBackend. Queue linkage and submission order live IN the slot
+  (`ready_next_`, `submit_seq_`); a cancelled or reused slot can never leave a
+  stale side-band handle that strands a later accepted op. Terminal evidence
+  binds to a stable `RequestKey` at `complete_*`/`cancel` call time.
+- **Decision 12 / Decision 14 — terminal binds to identity immediately
+  (finding #2).** `complete_oldest_*` calls `record_terminal` directly (no
+  staging deque), so a second completion against an already-terminal op is a
+  terminal-winner no-op and terminal evidence cannot leak across generations.
+  The staging-deque allocation is gone, so the manual-completion path is
+  genuinely allocation-free (Decision 14 now proven, not just the auto path).
+- **Decision 5 / I19 — stale enqueue is an invariant violation (finding #4).**
+  `enqueue()` on a stale handle is no longer masked as a successful no-op. A
+  stale handle means the committed submit path's slot moved on while its
+  enqueue pin was still live — an I19 reuse-before-ack disaster. It fails fast
+  in BOTH Debug and Release (`request_arena_enqueue_stale_fail_fast`). A
+  LEGITIMATE `terminal_noop` now means only "observed backend_ready from a
+  prior terminal winner."
+- **Decision 11 — running-state cancel records intent.** `cancel()` on a
+  `running` blocking-syscall slot now records `cancel_intent_` and returns
+  `requested` WITHOUT storing a terminal; the syscall's ordinary
+  result/error/valid-interruption later competes for the terminal winner via
+  `record_terminal` (which substitutes `canceled` for an ordinary success when
+  intent is set). pending/enqueued cancel still wins the terminal directly.
+  The reference backends never enter `running`, so this is dormant there, but
+  the shared arena is now correct for the later ThreadPool/Uring migration.
+- **I6 — 64-bit generation with fail-fast (finding #5).** `Generation` is
+  `uint64_t`; the arena fail-fasts at `UINT64_MAX` on release
+  (`request_arena_generation_exhausted_fail_fast`) rather than silently
+  wrapping, so a stale key can never collide with a future occupant (I6's
+  absolute wording holds in perpetuity).
+
+`prepare()` descriptor validation (Decision 6 `invalid_argument`) remains a
+declared-but-not-behaviorally-enforced vocabulary item for the reference
+backends; it is out of scope for this closeout.
+
 ## Open risks and deferred decisions
 
 - Whether a future API should expose caller-owned `Operation.Storage` after measurement.

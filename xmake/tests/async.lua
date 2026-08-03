@@ -22,14 +22,6 @@ sluice_production_async_test("completion_binding_test")
 -- while the enqueue pin is live; exactly-one terminal winner; generation reuse).
 sluice_production_async_test("request_lifecycle_scheme_b_test")
 
--- Phase B reference backend migration regression (commit 4). Proves
--- FakeAsyncBackend + SyncBackend are actually driven by the bounded RequestArena
--- + five-stage admission + the synchronous identity-bearing ReadySink, by
--- asserting the OBSERVABLE consequences (slot_in_use lifecycle, capacity
--- rejections, exactly-once sink deliveries, generation-on-reuse). Without these
--- the migration would be indistinguishable from a no-op rename.
-sluice_production_async_test("reference_backend_arena_lifecycle_test")
-
 -- Phase B reference-backend allocation-freedom + transactional-rejection proof
 -- (review test-gap 3 / review C1 fault-injection matrix). A counting +
 -- always-throw operator new drives the accepted submit -> poll -> reset path

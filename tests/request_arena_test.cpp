@@ -199,9 +199,12 @@ SLUICE_TEST_CASE(arena_borrow_lifecycle) {
                                sluice::async::detail::BorrowMetadata{7, buf, 16})
                      .has_value());
     // Every reaped slot must carry a publication binding (review C2 — reap
-    // fail-fasts on a missing binding). Install a no-op binding.
+    // fail-fasts on a missing binding). Install a no-op binding. A non-null
+    // completion is required (CodeRabbit finding — the thunk dereferences it);
+    // the no-op lambda never does, so a dummy address keeps the binding valid.
+    static int dummy_completion = 0;
     auto br = arena.install_publication_binding(
-        h, nullptr, 16, [](void*, const sluice::async::detail::TerminalResult&) noexcept {});
+        h, &dummy_completion, 16, [](void*, const sluice::async::detail::TerminalResult&) noexcept {});
     SLUICE_CHECK(br.has_value());
     SLUICE_CHECK(!arena.borrow_active(h.slot));
     // Borrow begins at commit (I7).
@@ -220,5 +223,76 @@ SLUICE_TEST_CASE(arena_borrow_lifecycle) {
     SLUICE_CHECK(arena.slot_in_use() == 1);           // slot still bound until release
 
     arena.release_completed_binding(h);
+    SLUICE_CHECK(arena.slot_in_use() == 0);
+}
+
+// ---- Slice 6: reap preserves backend-known (terminal-winner) order -----------
+// PR #63 review finding #3 / ADR Decision 9: "Reap must preserve identity and
+// backend-known order." The prior reap iterated the slot array by index
+// (for i in capacity), so delivery order was physical slot order, not the order
+// terminals were recorded. The arena now threads backend_ready slots onto a
+// ready-ring in terminal-winner order; reap pops from the head. This test fails
+// on a slot-index scan and passes only on the ready-ring.
+//
+// Sequence: the free list is LIFO, so the FIRST two reserves take slot 0 then
+// slot 1. We record slot 1's terminal FIRST, then slot 0's. A slot-index reap
+// would deliver slot 0 (D) before slot 1 (B); the ready-ring delivers B (the
+// first terminal winner) before D.
+SLUICE_TEST_CASE(arena_reap_preserves_terminal_winner_order) {
+    sluice::async::detail::RequestArena arena{
+        sluice::async::detail::ContextIdentity::for_testing(1), /*request_capacity=*/2};
+
+    auto ra = arena.reserve();
+    auto rb = arena.reserve();
+    SLUICE_CHECK(ra.has_value() && rb.has_value());
+    sluice::async::detail::SlotHandle a = ra.value();
+    sluice::async::detail::SlotHandle b = rb.value();
+    // LIFO free list: a is slot 0, b is slot 1 (both generation 0).
+    SLUICE_CHECK(a.slot.value == 0);
+    SLUICE_CHECK(b.slot.value == 1);
+
+    auto bind = [](sluice::async::detail::RequestArena& ar,
+                   sluice::async::detail::SlotHandle h) {
+        SLUICE_CHECK(ar.prepare(h, sluice::async::detail::OperationKind::read, {}).has_value());
+        // A non-null completion is required (CodeRabbit finding — the thunk
+        // dereferences it). The no-op lambda never dereferences, so a thread-
+        // local dummy address keeps the binding valid across the two binds.
+        static thread_local int dummy_completion = 0;
+        SLUICE_CHECK(ar
+                         .install_publication_binding(
+                             h, &dummy_completion, 0,
+                             [](void*, const sluice::async::detail::TerminalResult&) noexcept {})
+                         .has_value());
+        SLUICE_CHECK(ar.commit(h).has_value());
+    };
+    bind(arena, a);
+    bind(arena, b);
+
+    // Record b's terminal FIRST, then a's. The ready-ring must deliver b, a.
+    SLUICE_CHECK(
+        arena.record_terminal(b, sluice::async::detail::TerminalResult::ok_bytes(2)));
+    SLUICE_CHECK(
+        arena.record_terminal(a, sluice::async::detail::TerminalResult::ok_bytes(1)));
+    // Ack both enqueue pins (terminal_noop: backend_ready observed).
+    SLUICE_CHECK(arena.enqueue(b) == sluice::async::detail::EnqueueOutcome::terminal_noop);
+    SLUICE_CHECK(arena.enqueue(a) == sluice::async::detail::EnqueueOutcome::terminal_noop);
+
+    // Capture the delivery order via the slot index in each ReadyEvent key.
+    struct OrderSink : sluice::async::detail::SynchronousReadySink {
+        void on_ready(sluice::async::detail::ReadyEvent e) noexcept override {
+            order[delivered++] = e.key.slot.value;
+        }
+        std::uint32_t order[2]{};
+        std::size_t delivered = 0;
+    } sink;
+    SLUICE_CHECK(arena.reap(sink) == 2);
+    SLUICE_CHECK_MSG(sink.delivered == 2, "reap delivered both backend_ready slots");
+    // b (slot 1) won the terminal first -> it must be delivered FIRST.
+    SLUICE_CHECK_MSG(sink.order[0] == 1,
+                     "reap must deliver slot 1 (first terminal winner) before slot 0");
+    SLUICE_CHECK_MSG(sink.order[1] == 0, "reap must deliver slot 0 second");
+
+    arena.release_completed_binding(a);
+    arena.release_completed_binding(b);
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }

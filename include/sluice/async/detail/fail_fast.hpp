@@ -234,4 +234,33 @@ bool evented_admission_check() noexcept;
 // fail-fast in BOTH Debug and Release.
 [[noreturn]] void request_arena_terminal_state_fail_fast() noexcept;
 
+// Phase B (review finding #4 — stale enqueue masked as a successful no-op).
+// enqueue() has exactly two LEGAL outcomes (ADR Decision 5 / I17): it wins and
+// publishes pending linkage, or it observes backend_ready from a LEGITIMATE
+// prior terminal winner and completes as a successful no-op. A STALE handle
+// (generation mismatch) is neither: it means the committed submit path's slot
+// moved on (released/reused) while its identity-bound enqueue pin was still
+// live — an I19 reuse-before-acknowledgement disaster, not a normal race.
+// Treating stale as terminal_noop (the prior behavior) silently masqueraded as
+// a Scheme-B success and masked the pin/reuse violation. It now fails fast in
+// BOTH Debug and Release.
+[[noreturn]] void request_arena_enqueue_stale_fail_fast() noexcept;
+
+// Phase B (review finding #5 — generation wrap re-introduces ABA). A 64-bit
+// generation makes ABA practically impossible, but a silent wrap at UINT64_MAX
+// would still violate I6's absolute wording ("a stale key can never mutate the
+// new occupant"). The arena instead fail-fasts when a slot's generation reaches
+// UINT64_MAX on release (~5.8e11 years at 1ns/release is unreachable in
+// practice), so the ABA guard can never wrap. Detected in BOTH Debug and
+// Release.
+[[noreturn]] void request_arena_generation_exhausted_fail_fast() noexcept;
+
+// Phase B (CodeRabbit finding): the read-only introspection accessors
+// (key_of/generation_of/state_of/...) index the fixed slot array without the
+// bounds check validate_ applies to handle-taking methods. An out-of-range
+// SlotIndex would be an out-of-bounds read. They are a deliberate test surface
+// AND a backend dispatch path, so a stale/unchecked index is an invariant
+// violation, not a recoverable error — fail-fast in BOTH Debug and Release.
+[[noreturn]] void request_arena_slot_index_out_of_range_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

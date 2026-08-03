@@ -23,7 +23,12 @@ Conformance map change: yes — DIV-02 Proposed -> Active transitional (Phase B)
                         Operation.Storage / Pending.Userdata / Resource bounds rows advance
 Constitution rules:     AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15
 Public API effect:      none to submit_* signatures; IoError::Code gains three enumerators;
-                        Completion<T> gains an internal binding transient (no public layout change)
+                        Completion<T> gains a binding transient: the internal State enum
+                        gains `binding`/`publishing`/`resetting` values and the class gains
+                        the slot-release payload (`release_arena_`, `bound_slot_`) — a
+                        public LAYOUT change, accepted as the Phase B cost of the
+                        caller-owned Completion lifecycle (ADR Decision 7 / I2; no
+                        signature or semantic change to existing public methods)
 ```
 
 No field is "unknown" or "TBD". Coding may proceed.
@@ -219,7 +224,7 @@ cross-context binding, waiter cancel/reap.
 - [x] Conformance map updated (DIV-02 activated; zig-map rows advanced — commit 6)
 - [x] Divergence registry updated (DIV-02 — commit 0)
 - [x] Constitution rules satisfied (design §19)
-- [x] AGENTS.md change-class gates run (Debug 132/132, Release 132/132, ASan/UBSan 132/132 clean, TSan 132/132 0 data races, both negative-compile gates 15/15, doc-check PASS — commit 5)
+- [x] AGENTS.md change-class gates run (Debug 134/134, Release 134/134, ASan/UBSan 134/134 clean, TSan 134/134 0 data races, both negative-compile gates 18/18, doc-check PASS — round-2/round-3)
 
 (Boxes ticked only when the ACTUAL command has run and passed. "PENDING" rows above are
 the honest pre-execution state.)

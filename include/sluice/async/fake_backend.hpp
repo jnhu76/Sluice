@@ -6,14 +6,20 @@
 // (018/018B/021) and the thing that makes the buffer-lifetime contract (gate
 // item 1) genuinely testable.
 //
-// Completion model:
+// Completion model (PR #63 review findings #1, #2 — terminal evidence binds to a
+// stable RequestKey at completion time, NOT at poll time):
 //   - submit_* records the op (no completion produced).
-//   - The test calls one of the complete_*() helpers to stage a terminal result
-//     for the OLDEST outstanding op of a given kind (FIFO by default, ADR O3 for
-//     the fake). Arbitrary order is available via complete_op_at().
-//   - poll()/wait_one() then move staged results into the Completions (marking
-//     them ready). This keeps the "completions only inside poll/wait_one" rule
-//     (ADR A3/O1) even on the fake.
+//   - The test calls one of the complete_*() helpers to resolve a terminal
+//     result for the OLDEST outstanding op of a given kind. The result is bound
+//     IMMEDIATELY to that op's RequestKey via arena_.record_terminal(): the slot
+//     becomes backend_ready and the ready-ring records the terminal-winner order
+//     (ADR Decision 9 / Decision 12). There is NO staging deque and NO side-band
+//     HandleRing — a second complete_*() against an already-terminal op is a
+//     record_terminal no-op (terminal-winner rule), so terminal evidence can
+//     never leak across generations or strand a later accepted op.
+//   - poll()/wait_one() then REAPS: publishes Completion-ready through the
+//     slot's own binding, in ready-ring (backend-known) order. This keeps the
+//     "completions only inside poll/wait_one" rule (ADR A3/O1) even on the fake.
 //
 // Error / short-completion injection:
 //   - complete_oldest_with_error(IoError) — surface any error (eof/no_space/
@@ -28,7 +34,7 @@
 // cancel/complete_* surface is unchanged (ADR Decision 7); the RequestKey is
 // bound privately during commit and resolved internally for cancel/complete.
 // Ops are held in the `enqueued` slot state with NO terminal recorded until the
-// test stages a result (or auto-mode fires); this preserves the "held
+// test completes them (or auto-mode fires); this preserves the "held
 // outstanding until explicitly completed" contract. Cancel records the canceled
 // terminal directly under Scheme B (pending/enqueued cancel wins).
 //
@@ -37,11 +43,11 @@
 // reap validates it and publishes Completion-ready through it inside the leaf
 // domain. There is NO parallel unordered_map identity bridge — cancel resolves
 // a Completion* by the arena's bounded O(capacity) scan. Pre-commit
-// bookkeeping is transactional (review C1): the submission-order FIFO is a
-// construction-time bounded ring (never allocates, never grows unbounded), and
-// every pre-commit failure path rolls the reservation back with zero side
-// effects (Completion untouched, slot freed, ring unchanged, no future result
-// contamination).
+// bookkeeping is transactional (review C1): the publication binding is
+// installed into the slot record (no map insert), every pre-commit failure
+// path rolls the reservation back with zero side effects (Completion untouched,
+// slot freed), and there is no FIFO ring to leave residue (review finding #1
+// removed the side-band HandleRing entirely).
 //
 // State is instance-owned only (no globals, gate item 6).
 #pragma once
@@ -53,15 +59,12 @@
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
-#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <optional>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 #include <thread>
@@ -69,68 +72,18 @@
 
 namespace sluice::async {
 
-namespace detail {
-// Construction-time bounded SlotHandle FIFO (review C1: the fake's submission-
-// order queue is bounded bookkeeping, not an unbounded deque). Storage is
-// preallocated in the backend constructor (capacity == request_capacity), so
-// push/pop never allocate and the queue can never grow past in-flight ops.
-class HandleRing {
-  public:
-    explicit HandleRing(std::size_t capacity) : storage_(capacity) {}
-
-    bool empty() const noexcept { return count_ == 0; }
-    std::size_t size() const noexcept { return count_; }
-
-    // Insert at the tail. Noexcept + preallocated; returns false only if full
-    // (the backend mis-counted in-flight ops — an invariant violation, not an
-    // allocation failure; at most one handle per in-flight op, so a ring of
-    // request_capacity can never overflow a correctly-driven backend).
-    bool push(SlotHandle h) noexcept {
-        if (count_ == storage_.size()) return false;
-        storage_[tail_] = h;
-        tail_ = (tail_ + 1) % storage_.size();
-        ++count_;
-        return true;
-    }
-    // Undo the most recent push (commit-failure rollback). The submit path is
-    // serialized (AsyncIoContext::access_mtx_), so the tail is this submit's
-    // own handle when pop_tail is called.
-    void pop_tail() noexcept {
-        if (count_ == 0) return;
-        --count_;
-        tail_ = (tail_ == 0) ? storage_.size() - 1 : tail_ - 1;
-    }
-    // Remove and return the oldest handle; nullopt when empty.
-    std::optional<SlotHandle> pop_front() noexcept {
-        if (count_ == 0) return std::nullopt;
-        SlotHandle h = storage_[head_];
-        head_ = (head_ + 1) % storage_.size();
-        --count_;
-        return h;
-    }
-
-  private:
-    std::vector<SlotHandle> storage_;
-    std::size_t head_ = 0;
-    std::size_t tail_ = 0;
-    std::size_t count_ = 0;
-};
-}  // namespace detail
-
 class FakeAsyncBackend : public AsyncBackend {
   public:
     explicit FakeAsyncBackend(std::size_t request_capacity = kDefaultCapacity)
-        : arena_(detail::ContextIdentity::for_testing(next_backend_id()), request_capacity),
-          size_fifo_(request_capacity),
-          void_fifo_(request_capacity) {}
+        : arena_(detail::ContextIdentity::for_testing(next_backend_id()), request_capacity) {}
     ~FakeAsyncBackend() override = default;
 
     // --- auto-complete mode ---
     // When set, poll() auto-completes each outstanding op with `auto_bytes_`
-    // (read/write) or void-success (sync), WITHOUT the test staging anything.
+    // (read/write) or void-success (sync), WITHOUT the test completing anything.
     // This lets the synchronous read_all/write_all coordinators (job 018) drive
     // the fake in a poll-loop, since they submit+poll internally and cannot have
-    // the test stage results between their loop steps.
+    // the test complete results between their loop steps.
     //   auto_bytes(n)         each outstanding op completes with n bytes
     //                         (n may be < requested => short, exercises retry)
     //   auto_short_then_full(first, rest)
@@ -140,7 +93,7 @@ class FakeAsyncBackend : public AsyncBackend {
     //   auto_error(e)         each outstanding op completes with error e
     //   auto_eof()            read completes with 0 bytes (EOF) — shortcut for
     //                         auto_bytes(0).
-    //   auto_disable()        stop auto-completing (resume explicit staging).
+    //   auto_disable()        stop auto-completing (resume explicit completion).
     void auto_bytes(std::size_t n) {
         auto_mode_ = Auto::bytes;
         auto_bytes_ = n;
@@ -171,39 +124,41 @@ class FakeAsyncBackend : public AsyncBackend {
         return submit_void(op, c, detail::OperationKind::sync_all);
     }
 
-    // --- test-driving helpers: stage terminal results for the OLDEST
-    // outstanding op of the matching kind. Applied at the next poll(). ---
+    // --- test-driving helpers: resolve a terminal result for the OLDEST
+    // outstanding op of the matching kind. The result is bound IMMEDIATELY to
+    // that op's RequestKey (arena_.record_terminal); the Completion is published
+    // at the next poll()/wait_one(). ---
+    //
+    // ADR Decision 12 + review finding #2: terminal evidence attaches to a
+    // stable RequestKey at completion-call time, not into an implicit per-kind
+    // queue consumed later by guessing. A second call against an op that is
+    // already terminal (cancel won, or a prior complete_*) is a record_terminal
+    // no-op — the terminal-winner rule prevents any cross-generation pollution.
+    // No-op when no enqueued op of the kind is outstanding.
 
-    // Stage a byte-count result for the oldest outstanding read/write op
-    // (n < requested => short completion). No-op if none outstanding. The result
-    // is consumed at the next poll() when the matching Completion is reaped.
+    // Resolve a byte-count result for the oldest outstanding read/write op
+    // (n < requested => short completion). No-op if none outstanding. The
+    // Completion is published at the next poll() when the slot is reaped.
     void complete_oldest_with_bytes(std::size_t n) {
-        if (size_fifo_.empty())
-            return;
-        staged_size_.push_back(n);
+        resolve_size_terminal(detail::TerminalResult::ok_bytes(n));
     }
-    // Stage an error result for the oldest outstanding read/write op.
+    // Resolve an error result for the oldest outstanding read/write op.
     void complete_oldest_with_error(IoError e) {
-        if (size_fifo_.empty())
-            return;
-        staged_size_err_.push_back(e);
+        resolve_size_terminal(detail::TerminalResult::err(e));
     }
-    // Stage a void success for the oldest outstanding sync op.
+    // Resolve a void success for the oldest outstanding sync op.
     void complete_oldest_sync_ok() {
-        if (void_fifo_.empty())
-            return;
-        staged_void_ok_.push_back(true);
+        resolve_void_terminal(detail::TerminalResult::ok_void());
     }
-    // Stage a void error for the oldest outstanding sync op.
+    // Resolve a void error for the oldest outstanding sync op.
     void complete_oldest_sync_error(IoError e) {
-        if (void_fifo_.empty())
-            return;
-        staged_void_err_.push_back(e);
+        resolve_void_terminal(detail::TerminalResult::err(e));
     }
 
-    // --- reap: apply staged/canceled/auto results to Completions (mark ready).
-    // Order: targeted cancels first (pointer-keyed, take precedence over FIFO
-    // staging), then auto-mode (drains everything), then explicit FIFO staging.
+    // --- reap: apply auto/canceled results then publish Completions. Auto-mode
+    // drains every enqueued slot; otherwise the complete_*/cancel calls already
+    // recorded their terminals. poll()/wait_one() then reaps the ready-ring in
+    // terminal-winner order (ADR Decision 9). ---
     std::size_t poll() override { return dispatch_and_reap(); }
 
     Result<std::size_t> wait_one() override {
@@ -215,7 +170,7 @@ class FakeAsyncBackend : public AsyncBackend {
     // is completed (exactly-once, X3) at the next poll()/wait_one() with
     // IoError::canceled. We do NOT complete here — A3/O1: completions are
     // produced only inside poll/wait_one. Cancel is POINTER-KEYED (targeted) so
-    // it works on any outstanding op, not just the FIFO oldest.
+    // it works on any outstanding op, not just the oldest.
     // Phase B (ADR Decision 11): resolves Completion* -> SlotHandle via the
     // arena's bounded slot scan (the slot's own binding is the identity — no
     // parallel map), then arena.cancel() wins the terminal transition under
@@ -247,11 +202,11 @@ class FakeAsyncBackend : public AsyncBackend {
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_capacity_rejections() const noexcept { return arena_.capacity_rejections(); }
+    // Test-only (the production sink is stateless; the delivery counter exists
+    // only under SLUICE_ASYNC_INTERNAL_TESTING — CodeRabbit finding / AGENTS §8).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::size_t sink_deliveries() const noexcept { return sink_.deliveries(); }
-    // The submission-order ring depth (review C1: bounded, never grows past
-    // in-flight ops; a rejected submit leaves it unchanged).
-    std::size_t size_fifo_count() const noexcept { return size_fifo_.size(); }
-    std::size_t void_fifo_count() const noexcept { return void_fifo_.size(); }
+#endif
     bool arena_enqueue_pin_live(std::uint32_t slot) const noexcept {
         return arena_.enqueue_pin_live(detail::SlotIndex{slot});
     }
@@ -284,19 +239,63 @@ class FakeAsyncBackend : public AsyncBackend {
         return ++id;
     }
 
+    // Resolve a terminal result on the OLDEST enqueued read/write op, binding it
+    // to that op's RequestKey immediately (review finding #2: no staging deque,
+    // no cross-generation pollution). A no-op when no size op is outstanding, or
+    // a no-op on record_terminal when the oldest op already went terminal
+    // (terminal-winner rule — a second complete_* cannot overwrite). Allocation-
+    // free: bounded O(capacity) scan + record_terminal under the arena lock.
+    void resolve_size_terminal(detail::TerminalResult res) {
+        auto oh = arena_.oldest_enqueued_of(detail::OperationKind::read);
+        // read and write share the size completion type; complete the oldest of
+        // EITHER size kind by scanning both. (complete_oldest_* historically
+        // targeted "the oldest read/write op"; preserve that by taking the
+        // older of the read-oldest and write-oldest.)
+        auto wh = arena_.oldest_enqueued_of(detail::OperationKind::write);
+        std::optional<detail::SlotHandle> target;
+        if (oh.has_value() && wh.has_value()) {
+            target = (arena_.submit_seq_of(oh->slot) <= arena_.submit_seq_of(wh->slot))
+                         ? oh : wh;
+        } else if (oh.has_value()) {
+            target = oh;
+        } else {
+            target = wh;
+        }
+        if (!target.has_value()) return;
+        bool won = arena_.record_terminal(*target, res);
+        tally_terminal_result(won, res);
+    }
+    // Resolve a terminal result on the OLDEST enqueued sync op (sync_data /
+    // sync_all share the void completion type).
+    void resolve_void_terminal(detail::TerminalResult res) {
+        auto dh = arena_.oldest_enqueued_of(detail::OperationKind::sync_data);
+        auto ah = arena_.oldest_enqueued_of(detail::OperationKind::sync_all);
+        std::optional<detail::SlotHandle> target;
+        if (dh.has_value() && ah.has_value()) {
+            target = (arena_.submit_seq_of(dh->slot) <= arena_.submit_seq_of(ah->slot))
+                         ? dh : ah;
+        } else if (dh.has_value()) {
+            target = dh;
+        } else {
+            target = ah;
+        }
+        if (!target.has_value()) return;
+        bool won = arena_.record_terminal(*target, res);
+        tally_terminal_result(won, res);
+    }
+
     // Five-stage admission for a byte-carrying op. No terminal is recorded: the
-    // op stays enqueued until the test stages a result or auto-mode fires.
+    // op stays enqueued until the test completes it or auto-mode fires.
     //   reserve -> prepare -> install publication binding -> begin_binding CAS
-    //   -> [bounded ring push] -> commit -> install release capability ->
-    //   commit_binding (submit-success LP) -> enqueue (noexcept).
+    //   -> commit (submit-success LP) -> install release capability ->
+    //   commit_binding -> enqueue (noexcept).
     //
     // Transactional pre-commit path (review C1): every step before the commit
     // LP is rollback-able with ZERO side effects. The publication binding is
-    // installed INTO the slot record (no map insert); the submission-order FIFO
-    // is a construction-time bounded ring (push never allocates and cannot grow
-    // unbounded); the Completion CAS is the only electing step and a lost CAS
-    // rolls back ONLY this submit's slot (no FIFO residue — the ring is
-    // untouched at that point). Nothing after commit_binding may throw (I9).
+    // installed INTO the slot record (no map insert); the Completion CAS is the
+    // only electing step and a lost CAS rolls back ONLY this submit's slot (no
+    // FIFO residue — there is no side-band FIFO anymore, review finding #1).
+    // Nothing after commit_binding may throw (I9).
     template <class Op>
     Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind,
                              std::size_t len) {
@@ -324,20 +323,17 @@ class FakeAsyncBackend : public AsyncBackend {
             return make_unexpected<void>(bh.error());
         }
         // Stage 3a: Completion CAS idle -> binding elects ONE submitting
-        // context. Loser: roll back only our own slot + binding (the ring is
-        // untouched — zero FIFO residue).
+        // context. Loser: roll back only our own slot + binding (zero residue —
+        // there is no side-band FIFO to contaminate).
         if (!begin_binding(c)) {
             (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
-        // Stage 3b: FIFO bookkeeping — bounded ring push (noexcept; capacity ==
-        // request_capacity so it can never overflow a correctly-driven backend).
-        (void)size_fifo_.push(h);
-        // Stage 3c: commit (prepared -> pending, enqueue pin live, accepted++,
-        // borrow begins — the submit-success LP's slot half).
+        // Stage 3b: commit (prepared -> pending, enqueue pin live, accepted++,
+        // borrow begins, submit_seq assigned — the submit-success LP's slot
+        // half).
         auto ch = arena_.commit(h);
         if (!ch.has_value()) {
-            size_fifo_.pop_tail();  // undo the push (serialized submit path)
             rollback_binding_before_accept(c);
             (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
@@ -348,7 +344,7 @@ class FakeAsyncBackend : public AsyncBackend {
         // window (the context's access_mtx_ serialization hides it otherwise).
         wait_submit_pause_();
 #endif
-        // Stage 3d: install the slot-release capability (ADR Decision 7), then
+        // Stage 3c: install the slot-release capability (ADR Decision 7), then
         // publish outstanding. AFTER commit_binding NOTHING may throw: the
         // remaining steps (enqueue) are noexcept.
         install_binding(c, &arena_, h);
@@ -380,10 +376,8 @@ class FakeAsyncBackend : public AsyncBackend {
             (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
-        (void)void_fifo_.push(h);
         auto ch = arena_.commit(h);
         if (!ch.has_value()) {
-            void_fifo_.pop_tail();
             rollback_binding_before_accept(c);
             (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
@@ -407,103 +401,71 @@ class FakeAsyncBackend : public AsyncBackend {
         }
     }
 
-    // Dispatch: record the terminal result on each slot per the active policy,
+    // Dispatch: in auto-complete mode, record the terminal result on each
+    // enqueued slot (drained in submission order via oldest_enqueued_of),
     // transitioning enqueued -> backend_ready. A slot that already has a
     // terminal (a Scheme-B cancel won first) is left untouched (record_terminal
     // is a no-op). After dispatch, reap publishes every backend_ready slot
-    // through the slot's own publication binding (inside the leaf domain).
+    // through the slot's own publication binding in ready-ring order.
     std::size_t dispatch_and_reap() {
-        // (1) Auto-complete mode: drain every enqueued slot with the auto result.
         if (auto_mode_ != Auto::off) {
             drain_auto_size();
             drain_auto_void();
-        } else {
-            // (2) Explicit FIFO staging: apply staged results to the
-            // FIFO-oldest enqueued slots of each kind.
-            apply_size_staging();
-            apply_void_staging();
         }
-
+        // Non-auto: complete_*/cancel already recorded their terminals directly
+        // (review finding #2 — no staging step here). Just reap.
         return arena_.reap(sink_);
     }
 
-    // Pop FIFO-oldest size handles whose slot is still enqueued (skipping slots
-    // that already went terminal via cancel). Returns the next live handle or
-    // nullopt if the FIFO is exhausted.
-    //
-    // Serialization note: the handle is pushed to the ring BEFORE the Completion
-    // CAS / commit / enqueue, but poll() only runs under
-    // AsyncIoContext::access_mtx_, which the submit holds through enqueue — so
-    // a poll can never observe a slot still `pending` here. If a later phase
-    // drops that serialization, this pop-then-check would drop the handle and
-    // strand the op; the check must then move into the arena domain.
-    std::optional<detail::SlotHandle> pop_live_size_front() {
-        while (auto oh = size_fifo_.pop_front()) {
-            detail::SlotHandle h = *oh;
-            auto st = arena_.state_of(h.slot);
-            if (st == detail::RequestState::enqueued &&
-                arena_.generation_of(h.slot).value == h.generation.value) {
-                return h;
-            }
-            // Already terminal (cancel won) or reaped — skip.
-        }
-        return std::nullopt;
-    }
-    std::optional<detail::SlotHandle> pop_live_void_front() {
-        while (auto oh = void_fifo_.pop_front()) {
-            detail::SlotHandle h = *oh;
-            auto st = arena_.state_of(h.slot);
-            if (st == detail::RequestState::enqueued &&
-                arena_.generation_of(h.slot).value == h.generation.value) {
-                return h;
-            }
-        }
-        return std::nullopt;
-    }
-
     void drain_auto_size() {
-        while (auto oh = pop_live_size_front()) {
-            detail::SlotHandle h = *oh;
-            std::size_t requested = static_cast<std::size_t>(arena_.requested_bytes_of(h.slot));
+        // Drain every enqueued read/write op in submission order, recording the
+        // auto result. oldest_enqueued_of returns the next-oldest after each
+        // record_terminal transitions the previous one out of `enqueued`.
+        for (;;) {
+            auto oh = arena_.oldest_enqueued_of(detail::OperationKind::read);
+            auto wh = arena_.oldest_enqueued_of(detail::OperationKind::write);
+            std::optional<detail::SlotHandle> target;
+            if (oh.has_value() && wh.has_value()) {
+                target = (arena_.submit_seq_of(oh->slot) <= arena_.submit_seq_of(wh->slot))
+                             ? oh : wh;
+            } else if (oh.has_value()) {
+                target = oh;
+            } else {
+                target = wh;
+            }
+            if (!target.has_value()) break;
+            std::size_t requested =
+                static_cast<std::size_t>(arena_.requested_bytes_of(target->slot));
             detail::TerminalResult res = auto_size_result(requested);
-            bool won = arena_.record_terminal(h, res);
+            bool won = arena_.record_terminal(*target, res);
             tally_terminal_result(won, res);
         }
     }
     void drain_auto_void() {
-        while (auto oh = pop_live_void_front()) {
-            detail::SlotHandle h = *oh;
-            if (auto_mode_ == Auto::err) {
-                (void)arena_.record_terminal(h, detail::TerminalResult::err(auto_err_));
+        for (;;) {
+            auto dh = arena_.oldest_enqueued_of(detail::OperationKind::sync_data);
+            auto ah = arena_.oldest_enqueued_of(detail::OperationKind::sync_all);
+            std::optional<detail::SlotHandle> target;
+            if (dh.has_value() && ah.has_value()) {
+                target = (arena_.submit_seq_of(dh->slot) <= arena_.submit_seq_of(ah->slot))
+                             ? dh : ah;
+            } else if (dh.has_value()) {
+                target = dh;
             } else {
-                (void)arena_.record_terminal(h, detail::TerminalResult::ok_void());
+                target = ah;
             }
-        }
-    }
-
-    void apply_size_staging() {
-        while (!size_fifo_.empty() && has_size_stage()) {
-            auto oh = pop_live_size_front();
-            if (!oh.has_value())
-                break;
-            detail::TerminalResult res = take_size_stage();
-            bool won = arena_.record_terminal(*oh, res);
-            tally_terminal_result(won, res);
-        }
-    }
-    void apply_void_staging() {
-        while (!void_fifo_.empty() && has_void_stage()) {
-            auto oh = pop_live_void_front();
-            if (!oh.has_value())
-                break;
-            detail::TerminalResult res = take_void_stage();
-            bool won = arena_.record_terminal(*oh, res);
+            if (!target.has_value()) break;
+            detail::TerminalResult res = (auto_mode_ == Auto::err)
+                                             ? detail::TerminalResult::err(auto_err_)
+                                             : detail::TerminalResult::ok_void();
+            // CodeRabbit finding: tally void auto-completions too (parity with
+            // drain_auto_size), so auto_error increments completion_errors for a
+            // sync op just as it does for a read/write op.
+            bool won = arena_.record_terminal(*target, res);
             tally_terminal_result(won, res);
         }
     }
 
-    bool has_size_stage() const { return !staged_size_.empty() || !staged_size_err_.empty(); }
-    bool has_void_stage() const { return !staged_void_ok_.empty() || !staged_void_err_.empty(); }
     // Build the auto-completion result for a read/write op given its requested
     // length (auto mode). short_then_full: first op short, then full remaining.
     detail::TerminalResult auto_size_result(std::size_t requested) {
@@ -521,25 +483,6 @@ class FakeAsyncBackend : public AsyncBackend {
         default:
             return detail::TerminalResult::ok_bytes(requested);
         }
-    }
-    detail::TerminalResult take_size_stage() {
-        if (!staged_size_err_.empty()) {
-            IoError e = staged_size_err_.front();
-            staged_size_err_.pop_front();
-            return detail::TerminalResult::err(e);
-        }
-        std::size_t n = staged_size_.front();
-        staged_size_.pop_front();
-        return detail::TerminalResult::ok_bytes(n);
-    }
-    detail::TerminalResult take_void_stage() {
-        if (!staged_void_err_.empty()) {
-            IoError e = staged_void_err_.front();
-            staged_void_err_.pop_front();
-            return detail::TerminalResult::err(e);
-        }
-        staged_void_ok_.pop_front();
-        return detail::TerminalResult::ok_void();
     }
 
     // --- Completion publication (review C2/C3) ---
@@ -603,20 +546,13 @@ class FakeAsyncBackend : public AsyncBackend {
 
     detail::RequestArena arena_;
     detail::ReferenceReadySink sink_;
-    // SlotHandle FIFOs in submission order (ADR O3 for the fake). Construction-
-    // time bounded rings (review C1): storage is preallocated in the backend
-    // constructor (capacity == request_capacity), so push/pop never allocate
-    // and the queue can never grow past in-flight ops — a failed submit leaves
-    // the ring unchanged (zero side effects). Drained as ops are completed; a
-    // handle whose slot has already gone terminal (cancel) or been reaped is
-    // skipped by pop_live_*_front.
-    detail::HandleRing size_fifo_;
-    detail::HandleRing void_fifo_;
-    // Staged terminal results the test queued; consumed at poll().
-    std::deque<std::size_t> staged_size_;
-    std::deque<IoError> staged_size_err_;
-    std::deque<bool> staged_void_ok_;
-    std::deque<IoError> staged_void_err_;
+    // No side-band HandleRing or staged_* deques (review findings #1, #2): the
+    // submission-order selection is a bounded O(capacity) scan via the arena's
+    // oldest_enqueued_of, and terminal evidence binds to a RequestKey at
+    // complete_*/cancel call time. This removes the stale-handle accumulation
+    // that could strand a later accepted op and the cross-generation terminal
+    // pollution, and it makes the complete_*/cancel path genuinely allocation-
+    // free (Decision 14).
 
     // Auto-complete mode state.
     enum class Auto : std::uint8_t { off, bytes, err, short_then_full };

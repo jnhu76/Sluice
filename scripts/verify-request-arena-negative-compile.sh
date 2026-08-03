@@ -85,7 +85,7 @@ for entry in "${negative_cases[@]}"; do
   log="$tmp_root/$macro.log"
   if "$cxx_bin" "${common_flags[@]}" -D"$macro" "$probe" >"$log" 2>&1; then
     echo "$macro: FAIL (compiled successfully — field is public, authority NOT enforced)"
-    ((failures++))
+    failures=$((failures + 1))
   else
     if grep -qiE "$pattern" "$log"; then
       echo "$macro: PASS (compile rejected with expected diagnostic)"
@@ -93,7 +93,7 @@ for entry in "${negative_cases[@]}"; do
       echo "$macro: FAIL (compile failed, but not with the expected diagnostic)"
       echo "  expected pattern: $pattern"
       sed -n '1,12p' "$log"
-      ((failures++))
+      failures=$((failures + 1))
     fi
   fi
 done
