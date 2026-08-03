@@ -29,6 +29,87 @@
 using namespace sluice::async;
 using sluice::Result;
 
+// ---- Slice 3: the release capability makes reset() the slot-release
+// handshake (ADR Decision 15 / design §9) --------------------------------
+// The binding CAS winner installs the opaque slot-release capability (arena +
+// slot handle). reset() on the ready Completion returns the slot to the arena
+// (slot_in_use--, generation++) under the leaf slot-lifecycle domain — this is
+// the completion_ready -> free transition the design assigns to the caller.
+SLUICE_TEST_CASE(binding_release_capability_reset_releases_slot) {
+    ProbeBackend pb;
+    detail::RequestArena arena{detail::ContextIdentity::for_testing(1), 1};
+    Completion<std::size_t> c;
+
+    // Full lifecycle: reserve -> prepare -> binding CAS -> commit -> install
+    // release capability -> commit_binding (LP) -> terminal -> ack pin -> reap.
+    auto rh = arena.reserve();
+    SLUICE_CHECK(rh.has_value());
+    detail::SlotHandle h = rh.value();
+    SLUICE_CHECK(arena.prepare(h, detail::OperationKind::read,
+                               detail::BorrowMetadata{0, nullptr, 4})
+                     .has_value());
+    SLUICE_CHECK(pb.begin_binding(c));
+    SLUICE_CHECK(arena.commit(h).has_value());
+    pb.install_binding(c, &arena, h);   // only the binding CAS winner installs
+    pb.commit_binding(c);               // submit-success linearization point
+    SLUICE_CHECK(c.outstanding());
+    SLUICE_CHECK(arena.slot_in_use() == 1);
+
+    SLUICE_CHECK(arena.record_terminal(h, detail::TerminalResult::ok_bytes(4)));
+    arena.acknowledge_enqueue_pin(h);
+    struct NoopSink : detail::SynchronousReadySink {
+        void on_ready(detail::ReadyEvent) noexcept override {}
+    } sink;
+    // The reap publish callback is what makes the Completion ready (the arena
+    // hands the terminal payload back; the backend publishes it).
+    SLUICE_CHECK(arena.reap(sink, [&](const detail::RequestArena::ReapPublication&) {
+                      pb.publish_completion(c, Result<std::size_t>{std::size_t{4}});
+                  }) == 1);
+    SLUICE_CHECK(c.ready());
+    // Reap published completion-ready but did NOT free the slot: it stays
+    // bound until the caller's reset handshake (ADR Decision 4).
+    SLUICE_CHECK(arena.slot_in_use() == 1);
+
+    c.reset();  // the release capability returns the slot (generation++)
+    SLUICE_CHECK(arena.slot_in_use() == 0);
+    SLUICE_CHECK(arena.generation_of(h.slot).value == h.generation.value + 1);
+    SLUICE_CHECK(c.idle());
+}
+
+// ---- Slice 4: ready-Completion destruction also releases the slot -----------
+// ADR Decision 15: destroying a ready Completion performs the same allocation-
+// free slot release as reset() before the address becomes invalid.
+SLUICE_TEST_CASE(binding_release_capability_ready_destruction_releases_slot) {
+    ProbeBackend pb;
+    detail::RequestArena arena{detail::ContextIdentity::for_testing(1), 1};
+
+    {
+        Completion<std::size_t> c;
+        auto rh = arena.reserve();
+        SLUICE_CHECK(rh.has_value());
+        detail::SlotHandle h = rh.value();
+        SLUICE_CHECK(arena.prepare(h, detail::OperationKind::write,
+                                   detail::BorrowMetadata{0, nullptr, 4})
+                         .has_value());
+        SLUICE_CHECK(pb.begin_binding(c));
+        SLUICE_CHECK(arena.commit(h).has_value());
+        pb.install_binding(c, &arena, h);
+        pb.commit_binding(c);
+        SLUICE_CHECK(arena.record_terminal(h, detail::TerminalResult::ok_bytes(4)));
+        arena.acknowledge_enqueue_pin(h);
+        struct NoopSink : detail::SynchronousReadySink {
+            void on_ready(detail::ReadyEvent) noexcept override {}
+        } sink;
+        SLUICE_CHECK(arena.reap(sink, [&](const detail::RequestArena::ReapPublication&) {
+                          pb.publish_completion(c, Result<std::size_t>{std::size_t{4}});
+                      }) == 1);
+        SLUICE_CHECK(c.ready());
+        SLUICE_CHECK(arena.slot_in_use() == 1);
+        // c goes out of scope at ready: the destructor releases the slot.
+    }
+    SLUICE_CHECK(arena.slot_in_use() == 0);
+}
+
 SLUICE_MAIN()
 
 // ---- Slice 1: binding CAS elects exactly one context; loser cannot win ------

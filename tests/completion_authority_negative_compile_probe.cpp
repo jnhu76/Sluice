@@ -19,6 +19,7 @@
 // round-trip for a NothrowValue is exercised at runtime in
 // async_completion_test.cpp (where a backend is available to drive it).
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/request_arena.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
@@ -156,6 +157,28 @@ void neg_commit_binding_private() {
 void neg_rollback_binding_private() {
     Completion<std::size_t> c;
     c.rollback_binding_before_accept();  // ERROR: private
+}
+#endif
+
+#if defined(NEG_INSTALL_BINDING_PRIVATE)
+// Phase B (ADR Decision 7 / I2): only the idle -> binding CAS winner may
+// install the slot-release capability. Ordinary application code cannot forge
+// a binding payload that would authorize a slot release.
+void neg_install_binding_private() {
+    Completion<std::size_t> c;
+    sluice::async::detail::RequestArena* arena = nullptr;
+    sluice::async::detail::SlotHandle h{sluice::async::detail::SlotIndex{0},
+                                        sluice::async::detail::Generation{0}};
+    c.install_binding_for_backend(arena, h);  // ERROR: private
+}
+#endif
+
+#if defined(NEG_CLEAR_BINDING_PRIVATE)
+// Phase B: the binding payload can only be cleared by the release handshake
+// (reset/ready-destruction); ordinary code cannot tear it down.
+void neg_clear_binding_private() {
+    Completion<std::size_t> c;
+    c.clear_binding_for_backend();  // ERROR: private
 }
 #endif
 

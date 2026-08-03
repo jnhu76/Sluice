@@ -23,7 +23,7 @@
 //     transitions)
 //
 // Without any NEG_* macro, this file compiles cleanly (positive control): it
-// exercises only the public test-seam introspection (state_for_testing etc.)
+// exercises only the public test-seam introspection (state_of etc.)
 // and the documented stage APIs (reserve/prepare/commit/enqueue/record_terminal/
 // reap/release).
 #include <sluice/async/detail/request_arena.hpp>
@@ -45,16 +45,16 @@ void positive_control() {
     if (!rh.has_value())
         return;
     SlotHandle h = rh.value();
-    (void)arena.prepare(h, OperationKind::read);
+    (void)arena.prepare(h, OperationKind::read, {});
     (void)arena.commit(h);
     (void)arena.enqueue(h);
     (void)arena.record_terminal(h, TerminalResult::ok_bytes(1));
     arena.acknowledge_enqueue_pin(h);
     // Test-seam introspection (read-only; the design makes this a deliberate
     // test surface so the lifecycle contract is assertable).
-    (void)arena.state_for_testing(h.slot);
-    (void)arena.enqueue_pin_live_for_testing(h.slot);
-    (void)arena.generation_for_testing(h.slot);
+    (void)arena.state_of(h.slot);
+    (void)arena.enqueue_pin_live(h.slot);
+    (void)arena.generation_of(h.slot);
     struct NoopSink : sluice::async::detail::SynchronousReadySink {
         void on_ready(sluice::async::detail::ReadyEvent) noexcept override {}
     } sink;

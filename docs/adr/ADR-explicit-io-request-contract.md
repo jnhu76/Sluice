@@ -1194,13 +1194,17 @@ remain open for Phase D/E. Evidence map:
 | allocation-free slot release (1000-cycle convergence; generation advanced 1000×) | `:: allocation_free_slot_release_proof` |
 | genuine concurrent submit ‖ cancel/reap (TSan, 0 data races) | `:: concurrent_submit_cancel_enqueue` |
 | release-with-live-pin / release-with-registered-waiter fail-fast (Debug AND Release) | `tests/request_arena_death_test.cpp` (2 death + 1 control) |
-| Fake/Sync migrate onto the arena; observable slot lifecycle + capacity rejections + exactly-once deliveries | `tests/reference_backend_arena_lifecycle_test.cpp` (6 cases) |
-| ordinary caller cannot forge a binding / claim / publish / reap_seq | `scripts/verify-completion-authority-negative-compile.sh` (10/10) |
+| Fake/Sync migrate onto the arena; observable slot lifecycle + capacity rejections (`would_block`, never `invalid_state`) + exactly-once deliveries + caller-handshake slot release | `tests/reference_backend_arena_lifecycle_test.cpp` (6 cases); `tests/completion_binding_test.cpp` (release-capability cases) |
+| ordinary caller cannot forge a binding / claim / publish / reap_seq / install or clear the slot-release capability | `scripts/verify-completion-authority-negative-compile.sh` (12/12) |
 | ordinary caller cannot mutate slot state/generation/pin/terminal/registration | `scripts/verify-request-arena-negative-compile.sh` (5/5) |
 
 Gate results (command + count): Clang Debug 132/132; Clang Release 132/132; ASan/UBSan 132/132
-clean; TSan 132/132 with 0 data races (including the genuine two-thread concurrent case). Full
-evidence ledger: `docs/architecture/phase-b-compliance-gate.md`.
+clean; TSan 132/132 with 0 data races (including the genuine two-thread concurrent case);
+negative-compile 12/12 + 5/5; doc-check PASS. Post-review fixes closed the three P1 findings —
+allocation-free two-pass reap + pre-CAS backend bookkeeping (I9/Decision 14), `would_block`
+propagation (Decision 6/13), and the caller-handshake slot release at reset/ready-destruction
+(Decision 4/15) with the arena-destruction fail-fast guard. Full evidence ledger:
+`docs/architecture/phase-b-compliance-gate.md`.
 
 
 ## Open risks and deferred decisions

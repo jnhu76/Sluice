@@ -34,7 +34,11 @@ using namespace sluice::async;
 using sluice::IoError;
 using sluice::Result;
 
-// ---- SyncBackend: slot_in_use rises on submit and returns to 0 after reap ---
+// ---- SyncBackend: slot_in_use rises on submit, stays bound through reap, and
+// returns to 0 only when the caller resets the ready Completion ----------------
+// ADR Decision 4/15 + design §9: the slot remains bound (slot_in_use == 1) from
+// commit until reset()/ready-destruction releases it. Reap publishes
+// completion-ready but does NOT free the slot.
 SLUICE_TEST_CASE(sync_arena_slot_in_use_tracks_lifecycle) {
     auto backend = std::make_unique<SyncBackend>();
     SyncBackend* raw = backend.get();
@@ -49,11 +53,14 @@ SLUICE_TEST_CASE(sync_arena_slot_in_use_tracks_lifecycle) {
 
     SLUICE_CHECK(ctx.poll() == 1);
     SLUICE_CHECK(c.ready());
-    // After reap the slot was released (slot-release handshake); slot_in_use
-    // returned to 0 while the Completion remains ready until the caller resets.
-    SLUICE_CHECK(raw->arena_slot_in_use() == 0);
+    // Reap published completion-ready but did NOT release the slot: it stays
+    // bound (capacity accounting) until the caller resets the Completion.
+    SLUICE_CHECK(raw->arena_slot_in_use() == 1);
     SLUICE_CHECK(ctx.outstanding() == 0);
+
+    // reset() is the slot-release handshake (generation++ under the leaf domain).
     c.reset();
+    SLUICE_CHECK(raw->arena_slot_in_use() == 0);
 }
 
 // ---- SyncBackend: generation advances across slot reuse (I6) ---------------
@@ -96,10 +103,12 @@ SLUICE_TEST_CASE(sync_arena_bounded_admission_rejects_full) {
     // Submit two (capacity 2); both accepted.
     SLUICE_CHECK(ctx.submit_read(ReadOp{0, b, 4, 0}, c1).has_value());
     SLUICE_CHECK(ctx.submit_read(ReadOp{0, b, 4, 0}, c2).has_value());
-    // Third must be rejected (arena full).
+    // Third must be rejected with would_block: capacity pressure is a retryable
+    // admission rejection, NEVER invalid_state (ADR Decision 6/13).
     auto r3 = ctx.submit_read(ReadOp{0, b, 4, 0}, c3);
     SLUICE_CHECK(!r3.has_value());
-    SLUICE_CHECK(r3.error().code == IoError::Code::invalid_state);
+    SLUICE_CHECK(r3.error().code == IoError::Code::would_block);
+    SLUICE_CHECK(c3.idle());  // rejected Completion stays idle (I3)
     SLUICE_CHECK(raw->arena_capacity_rejections() == 1);
 
     // Drain so the destructor is clean.
@@ -126,21 +135,23 @@ SLUICE_TEST_CASE(fake_arena_slot_lifecycle_explicit_staging) {
     SLUICE_CHECK(raw->arena_slot_in_use() == 1);
     SLUICE_CHECK(ctx.outstanding() == 1);
 
-    // Stage + poll: slot released at reap, delivery counted.
+    // Stage + poll: Completion becomes ready; the slot stays bound (slot
+    // release is the caller's reset handshake, not part of reap).
     raw->complete_oldest_with_bytes(8);
     SLUICE_CHECK(ctx.poll() == 1);
     SLUICE_CHECK(c.ready());
     SLUICE_CHECK(c.result().value() == 8);
-    SLUICE_CHECK(raw->arena_slot_in_use() == 0);
+    SLUICE_CHECK(raw->arena_slot_in_use() == 1);  // still bound until reset
     SLUICE_CHECK(raw->sink_deliveries() == 1);
     c.reset();
+    SLUICE_CHECK(raw->arena_slot_in_use() == 0);  // reset released the slot
 }
 
 // ---- FakeAsyncBackend: cancel drives the Scheme-B terminal path -------------
-// Cancel on an enqueued slot records the canceled terminal under Scheme B; the
-// slot goes backend_ready; poll reaps it and releases the slot. Delivery count
-// and slot_in_use confirm the path ran through the arena, not a pointer bypass.
-SLUICE_TEST_CASE(fake_arena_cancel_drives_scheme_b_release) {
+// Cancel (pointer-keyed -> SlotHandle) wins the terminal transition under
+// Scheme B at cancel() time; poll reaps the canceled Completion. The slot is
+// released by the caller's reset, not by reap.
+SLUICE_TEST_CASE(fake_arena_cancel_drives_scheme_b_terminal) {
     auto backend = std::make_unique<FakeAsyncBackend>();
     FakeAsyncBackend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
@@ -151,15 +162,18 @@ SLUICE_TEST_CASE(fake_arena_cancel_drives_scheme_b_release) {
     SLUICE_CHECK(raw->arena_slot_in_use() == 1);
 
     ctx.cancel(c);
-    // Cancel is pointer-keyed -> SlotHandle; the terminal is recorded at poll.
+    // Cancel won the terminal transition (Scheme B: canceled result stored);
+    // the slot is not yet reaped and the Completion is not yet ready.
     SLUICE_CHECK(raw->arena_slot_in_use() == 1); // not yet reaped
+    SLUICE_CHECK(!c.ready());
     SLUICE_CHECK(ctx.poll() == 1);
     SLUICE_CHECK(c.ready());
     SLUICE_CHECK(!c.result().has_value());
     SLUICE_CHECK(c.result().error().code == IoError::Code::canceled);
-    SLUICE_CHECK(raw->arena_slot_in_use() == 0); // slot released at reap
+    SLUICE_CHECK(raw->arena_slot_in_use() == 1); // still bound until reset
     SLUICE_CHECK(raw->sink_deliveries() == 1);
     c.reset();
+    SLUICE_CHECK(raw->arena_slot_in_use() == 0); // reset released the slot
 }
 
 // ---- FakeAsyncBackend: bounded arena rejects oversubscription (I8) ----------
@@ -176,6 +190,7 @@ SLUICE_TEST_CASE(fake_arena_bounded_admission_rejects_full) {
     SLUICE_CHECK(ctx.submit_read(ReadOp{0, b, 4, 0}, c2).has_value());
     auto r3 = ctx.submit_read(ReadOp{0, b, 4, 0}, c3);
     SLUICE_CHECK(!r3.has_value());
+    SLUICE_CHECK(r3.error().code == IoError::Code::would_block);  // capacity, never invalid_state
     SLUICE_CHECK(raw->arena_capacity_rejections() == 1);
 
     // Drain via cancel so the context destructs cleanly.

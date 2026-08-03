@@ -50,7 +50,7 @@ void child_release_with_live_pin() {
     if (!rh.has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     SlotHandle h = rh.value();
-    if (!arena.prepare(h, OperationKind::read).has_value())
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     if (!arena.commit(h).has_value()) // sets the enqueue pin
         std::_Exit(sluice_death_test::kChildTestFailExit);
@@ -70,7 +70,7 @@ void child_release_with_registered_waiter() {
     if (!rh.has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     SlotHandle h = rh.value();
-    if (!arena.prepare(h, OperationKind::read).has_value())
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     if (!arena.commit(h).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
@@ -91,7 +91,7 @@ void child_control_valid_release() {
     if (!rh.has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     SlotHandle h = rh.value();
-    if (!arena.prepare(h, OperationKind::read).has_value())
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     if (!arena.commit(h).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
@@ -107,6 +107,49 @@ void child_control_valid_release() {
     if (!arena.release(h).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     std::_Exit(0);
+}
+
+// ---- Child: enqueue before commit MUST fail-fast -----------------------------
+// The Scheme-B arbitration has exactly two legal enqueue outcomes (pending ->
+// enqueued, or observing backend_ready -> no-op). Enqueueing a slot that never
+// reached commit (reserved/prepared) would silently strand the op; the design
+// (§9) classifies it as an invariant violation (fail-fast in BOTH Debug and
+// Release).
+void child_enqueue_before_commit() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+    auto rh = arena.reserve();
+    if (!rh.has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    SlotHandle h = rh.value();
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    // No commit: enqueue on a `prepared` slot is an invariant violation.
+    (void)arena.enqueue(h);
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// ---- Child: arena destruction with slot_in_use != 0 MUST fail-fast -----------
+// ADR Decision 15: quiescent destruction requires every slot free. Destroying
+// the arena (via backend/context destruction) while a slot is still bound —
+// e.g. the caller holds a ready Completion it never reset — must terminate in
+// BOTH Debug and Release; the Completion-bound release capability must never
+// dangle.
+void child_destroy_arena_with_slot_in_use() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    {
+        RequestArena arena{ContextIdentity::for_testing(1), 1};
+        auto rh = arena.reserve();
+        if (!rh.has_value())
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        SlotHandle h = rh.value();
+        if (!arena.prepare(h, OperationKind::read, {}).has_value())
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        // arena goes out of scope with slot_in_use == 1 -> fail-fast.
+        (void)h;
+    }
+    // If we reach here, the arena destructor did NOT fail-fast.
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
 // ---- Parent-side test cases -------------------------------------------------
@@ -129,6 +172,18 @@ SLUICE_TEST_CASE(arena_death_control_valid_release) {
                      "Control: valid release after reap must exit 0");
 }
 
+SLUICE_TEST_CASE(arena_death_enqueue_before_commit) {
+    auto r = sluice_death_test::run_death_case("enqueue-before-commit");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "enqueue() on a slot that never reached commit must fail-fast (exit 86)");
+}
+
+SLUICE_TEST_CASE(arena_death_destroy_with_slot_in_use) {
+    auto r = sluice_death_test::run_death_case("destroy-arena-with-slot-in-use");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "arena destruction with slot_in_use != 0 must fail-fast (exit 86)");
+}
+
 // Child dispatch entry point.
 int main(int argc, char** argv) {
     std::string child_case = sluice_death_test::parse_child_case(argc, argv);
@@ -139,6 +194,10 @@ int main(int argc, char** argv) {
             child_release_with_registered_waiter();
         } else if (child_case == "control-valid-release") {
             child_control_valid_release();
+        } else if (child_case == "enqueue-before-commit") {
+            child_enqueue_before_commit();
+        } else if (child_case == "destroy-arena-with-slot-in-use") {
+            child_destroy_arena_with_slot_in_use();
         } else {
             std::cerr << "[death] unknown child case: " << child_case << "\n";
             std::_Exit(sluice_death_test::kChildTestFailExit);

@@ -83,6 +83,19 @@ enum class WaiterRegistration : std::uint8_t {
     closed,
 };
 
+// fd/buffer borrow metadata (ADR Decision 3 / Decision 8, I7). The slot borrows
+// the caller's buffer; it does not copy contents. Borrowing begins at commit
+// (borrow_active_ = true) and ends at completion-ready publication (reap clears
+// it — I18: an acquire observer of Completion-ready sees the ended borrow).
+// Phase B reference backends perform no real I/O; the fields record the borrow
+// contract so it is observable and auditable.
+struct BorrowMetadata {
+    int fd = -1;
+    const void* address = nullptr;
+    std::size_t length = 0;
+    bool active = false;  // borrow lifecycle flag (commit -> completion-ready)
+};
+
 class RequestSlot {
 public:
     RequestSlot() = default;
@@ -109,6 +122,11 @@ public:
     const TerminalResult& terminal() const noexcept { return terminal_; }
     WaiterRegistration registration() const noexcept { return registration_; }
     const WaiterToken& waiter_token() const noexcept { return waiter_token_; }
+    const BorrowMetadata& borrow() const noexcept { return borrow_; }
+    // True while the slot is completion_ready and this reap's publication step
+    // has not yet run (see RequestArena::reap — the allocation-free two-pass
+    // protocol).
+    bool publish_pending() const noexcept { return publish_pending_; }
 
 private:
     friend class RequestArena;  // the arena owns slot-lifecycle transitions
@@ -132,6 +150,21 @@ private:
     WaiterRegistration registration_ = WaiterRegistration::open_no_waiter;
     WaiterToken waiter_token_{};
     RoutingLease waiter_lease_{};
+    // Whether a registered waiter's token/lease is still stored and must be
+    // delivered by reap (set at register_waiter; cleared at cancel_waiter and
+    // at reap's publication step). Distinguishes "closed after delivery" from
+    // "closed, no waiter ever stored" for the allocation-free two-pass reap.
+    bool waiter_delivery_present_ = false;
+
+    // Completion-ready publication bookkeeping (I9 / Decision 14): set by reap
+    // pass 1 under the leaf domain, cleared by reap pass 2 (the per-slot
+    // publication step). Makes the two-pass reap allocation-free: pass 2
+    // re-locks per slot and copies the by-value ReadyEvent data out, so no
+    // ready-record vector is needed.
+    bool publish_pending_ = false;
+
+    // fd/buffer borrow metadata (Decision 3 / Decision 8 / I7 / I18).
+    BorrowMetadata borrow_{};
 };
 
 }  // namespace sluice::async::detail

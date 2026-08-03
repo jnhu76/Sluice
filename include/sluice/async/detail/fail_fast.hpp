@@ -202,4 +202,20 @@ bool evented_admission_check() noexcept;
 // Same contract as the other fail-fast entries.
 [[noreturn]] void request_slot_release_invariant_fail_fast() noexcept;
 
+// Phase B (design §9 pending -> enqueued failure row): enqueue has exactly two
+// legal outcomes (pending -> enqueued, or observing backend_ready -> successful
+// no-op). Entering enqueue from any other slot state (reserved/prepared =
+// enqueue before commit, enqueued/running = double enqueue, completion_ready =
+// enqueue after reap) is an invariant violation of the Scheme-B arbitration and
+// fails fast in BOTH Debug and Release rather than silently stranding the op.
+[[noreturn]] void request_arena_enqueue_state_fail_fast() noexcept;
+
+// Phase B (ADR Decision 15 / AC-13): quiescent arena destruction requires every
+// slot free (slot_in_use == 0). Destroying the arena — via backend/context
+// destruction — while slots are still bound (e.g. the caller holds ready
+// Completions it never reset) is a contract violation in BOTH Debug and Release:
+// no implicit drain or abandonment, and the Completion-bound release capability
+// must never dangle.
+[[noreturn]] void request_arena_destruction_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

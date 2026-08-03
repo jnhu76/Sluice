@@ -87,14 +87,15 @@ SLUICE_TEST_CASE(pending_cancel_wins_before_enqueue_then_enqueue_noop) {
     auto rh = arena.reserve();
     SLUICE_CHECK_MSG(rh.has_value(), "reserve succeeds on a non-full arena");
     SlotHandle h = rh.value();
-    SLUICE_CHECK(arena.prepare(h, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.commit(h).has_value());
 
     // Step 3 invariants.
     SLUICE_CHECK(arena.slot_in_use() == 1);
     SLUICE_CHECK(arena.accepted_outstanding() == 1);
-    SLUICE_CHECK(arena.enqueue_pin_live_for_testing(h.slot));
-    SLUICE_CHECK(arena.state_for_testing(h.slot) == sluice::async::detail::RequestState::pending);
+    SLUICE_CHECK(arena.enqueue_pin_live(h.slot));
+    SLUICE_CHECK(arena.state_of(h.slot) == sluice::async::detail::RequestState::pending);
+    SLUICE_CHECK(arena.borrow_active(h.slot));  // borrow begins at commit (I7)
 
     // --- 4: deterministic pause of the submit thread BEFORE enqueue arbitration.
     // (Modeled as step ordering — the submit thread does not proceed to enqueue
@@ -106,12 +107,12 @@ SLUICE_TEST_CASE(pending_cancel_wins_before_enqueue_then_enqueue_noop) {
 
     // Step 7: exactly one terminal result; one backend_ready linkage; pin live;
     // operation never dispatched (never reached enqueued).
-    SLUICE_CHECK(arena.terminal_stored_for_testing(h.slot));
-    SLUICE_CHECK(arena.state_for_testing(h.slot) ==
+    SLUICE_CHECK(arena.terminal_stored(h.slot));
+    SLUICE_CHECK(arena.state_of(h.slot) ==
                  sluice::async::detail::RequestState::backend_ready);
-    SLUICE_CHECK(arena.enqueue_pin_live_for_testing(h.slot)); // pin NOT cleared by cancel
+    SLUICE_CHECK(arena.enqueue_pin_live(h.slot)); // pin NOT cleared by cancel
     SLUICE_CHECK(arena.backend_ready_count() == 1);
-    SLUICE_CHECK(arena.terminal_stored_for_testing(h.slot)); // exactly one terminal result
+    SLUICE_CHECK(arena.terminal_stored(h.slot)); // exactly one terminal result
 
     // --- 8-9: reap while the submit thread is still paused (pin live). ---
     RecordingSink sink;
@@ -120,6 +121,7 @@ SLUICE_TEST_CASE(pending_cancel_wins_before_enqueue_then_enqueue_noop) {
     SLUICE_CHECK(sink.events.empty());               // sink not invoked
     SLUICE_CHECK(arena.accepted_outstanding() == 1); // unchanged
     SLUICE_CHECK(arena.backend_ready_count() == 1);  // linkage unconsumed
+    SLUICE_CHECK(arena.borrow_active(h.slot));       // borrow still active (no completion-ready)
     // Step 10: Completion not ready; reset would fail-fast (we cannot call it);
     // generation not incremented; second submit would_block.
     auto rh2 = arena.reserve();
@@ -131,9 +133,9 @@ SLUICE_TEST_CASE(pending_cancel_wins_before_enqueue_then_enqueue_noop) {
     auto outcome = arena.enqueue(h);
     SLUICE_CHECK(outcome == EnqueueOutcome::terminal_noop);
     // Step 12 invariants.
-    SLUICE_CHECK(!arena.enqueue_pin_live_for_testing(h.slot)); // acked as final slot access
+    SLUICE_CHECK(!arena.enqueue_pin_live(h.slot)); // acked as final slot access
     SLUICE_CHECK(arena.backend_ready_count() == 1);            // no second linkage
-    SLUICE_CHECK(arena.terminal_stored_for_testing(h.slot));   // still exactly one result
+    SLUICE_CHECK(arena.terminal_stored(h.slot));   // still exactly one result
 
     // --- 13: submit returns success (commit accepted; enqueue was a no-op). ---
     // (The arena API returns the outcome, not a Result; the "submit success"
@@ -144,20 +146,23 @@ SLUICE_TEST_CASE(pending_cancel_wins_before_enqueue_then_enqueue_noop) {
     reaped = arena.reap(sink, noop_publish);
     SLUICE_CHECK(reaped == 1);
     SLUICE_CHECK(sink.events.size() == 1); // exactly-once delivery
-    SLUICE_CHECK(sink.events[0].key == arena.key_for_testing(h.slot) ||
-                 true); // key is by-value; validated structurally below
+    // The delivered key is exactly the key bound at reserve (the by-value
+    // identity event preserves the RequestKey — I5).
+    SLUICE_CHECK(sink.events[0].key == arena.key_of(h.slot));
     // The terminal result was canceled.
-    SLUICE_CHECK(arena.state_for_testing(h.slot) ==
+    SLUICE_CHECK(arena.state_of(h.slot) ==
                  sluice::async::detail::RequestState::completion_ready);
     SLUICE_CHECK(arena.accepted_outstanding() == 0); // decremented at reap
     SLUICE_CHECK(arena.backend_ready_count() == 0);
     SLUICE_CHECK(arena.slot_in_use() == 1); // still bound until release
+    SLUICE_CHECK(!arena.publish_pending(h.slot));   // publication consumed
+    SLUICE_CHECK(!arena.borrow_active(h.slot));     // borrow ended at completion-ready (I18)
 
     // --- 16-17: release increments generation; old key is stale. ---
-    auto old_generation = arena.generation_for_testing(h.slot);
+    auto old_generation = arena.generation_of(h.slot);
     SLUICE_CHECK(arena.release(h).has_value());
     SLUICE_CHECK(arena.slot_in_use() == 0);
-    auto new_generation = arena.generation_for_testing(h.slot);
+    auto new_generation = arena.generation_of(h.slot);
     SLUICE_CHECK(new_generation.value == old_generation.value + 1);
 
     // Stale cancel on the old key returns not_found (the slot now holds a
@@ -173,7 +178,7 @@ SLUICE_TEST_CASE(pending_cancel_wins_before_enqueue_then_enqueue_noop) {
     SLUICE_CHECK(h3.slot.value == h.slot.value); // same physical slot
     SLUICE_CHECK(h3.generation.value == new_generation.value);
     // A normal lifecycle on the new generation works.
-    SLUICE_CHECK(arena.prepare(h3, OperationKind::write).has_value());
+    SLUICE_CHECK(arena.prepare(h3, OperationKind::write, {}).has_value());
     SLUICE_CHECK(arena.commit(h3).has_value());
     SLUICE_CHECK(arena.record_terminal(h3, TerminalResult::ok_bytes(99)));
     arena.acknowledge_enqueue_pin(h3);
@@ -194,7 +199,7 @@ SLUICE_TEST_CASE(exactly_one_terminal_winner) {
     auto rh = arena.reserve();
     SLUICE_CHECK(rh.has_value());
     SlotHandle h = rh.value();
-    SLUICE_CHECK(arena.prepare(h, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.commit(h).has_value());
 
     // Winner: ordinary success first.
@@ -228,7 +233,7 @@ SLUICE_TEST_CASE(ready_sink_event_survives_reset_during_callback) {
     auto rh = arena.reserve();
     SLUICE_CHECK(rh.has_value());
     SlotHandle h = rh.value();
-    SLUICE_CHECK(arena.prepare(h, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.commit(h).has_value());
     SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(7)));
     arena.acknowledge_enqueue_pin(h);
@@ -266,6 +271,12 @@ SLUICE_TEST_CASE(ready_sink_event_survives_reset_during_callback) {
     SLUICE_CHECK(sink.generation_after_reuse == h.generation.value + 1);
     SLUICE_CHECK(sink.captured.key.context.value == 1);
     SLUICE_CHECK(sink.captured.kind == OperationKind::read);
+
+    // The sink re-reserved the slot during the callback (simulating reset +
+    // reuse); release that reservation so the arena destructs quiescently.
+    SlotHandle reused{sink.h.slot, Generation{static_cast<std::uint32_t>(sink.generation_after_reuse)}};
+    SLUICE_CHECK(arena.release(reused).has_value());
+    SLUICE_CHECK(arena.slot_in_use() == 0);
 }
 
 // ---- Waiter registration cardinality + exactly-once lease (I13) -------------
@@ -278,7 +289,7 @@ SLUICE_TEST_CASE(waiter_registration_cardinality) {
     auto rh = arena.reserve();
     SLUICE_CHECK(rh.has_value());
     SlotHandle h = rh.value();
-    SLUICE_CHECK(arena.prepare(h, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.commit(h).has_value());
 
     // First registration succeeds.
@@ -286,7 +297,7 @@ SLUICE_TEST_CASE(waiter_registration_cardinality) {
     RoutingLease lease{99};
     SLUICE_CHECK(arena.register_waiter(h, token, std::move(lease)).has_value());
     // The lease was MOVED into the slot (id() no longer valid on the caller's copy).
-    SLUICE_CHECK(arena.registration_for_testing(h.slot) ==
+    SLUICE_CHECK(arena.registration_of(h.slot) ==
                  sluice::async::detail::WaiterRegistration::open_registered);
 
     // Second registration fails with invalid_state; the first is NOT overwritten.
@@ -295,17 +306,17 @@ SLUICE_TEST_CASE(waiter_registration_cardinality) {
     auto r2 = arena.register_waiter(h, token2, std::move(lease2));
     SLUICE_CHECK_MSG(!r2.has_value() && r2.error().code == sluice::IoError::Code::invalid_state,
                      "second registration must be invalid_state");
-    SLUICE_CHECK(arena.registration_for_testing(h.slot) ==
+    SLUICE_CHECK(arena.registration_of(h.slot) ==
                  sluice::async::detail::WaiterRegistration::open_registered);
 
     // Wait-cancel takes the lease; the waiter is gone but the I/O is NOT canceled.
     auto rl = arena.cancel_waiter(h);
     SLUICE_CHECK(rl.has_value());
     SLUICE_CHECK(rl.value().id() == 99); // exactly the registered lease
-    SLUICE_CHECK(arena.registration_for_testing(h.slot) ==
+    SLUICE_CHECK(arena.registration_of(h.slot) ==
                  sluice::async::detail::WaiterRegistration::open_no_waiter);
     // The slot is still pending (I/O not canceled by wait-cancel).
-    SLUICE_CHECK(arena.state_for_testing(h.slot) == sluice::async::detail::RequestState::pending);
+    SLUICE_CHECK(arena.state_of(h.slot) == sluice::async::detail::RequestState::pending);
 
     // A second cancel_waiter after the waiter was removed returns not_found
     // (no double delivery).
@@ -332,7 +343,7 @@ SLUICE_TEST_CASE(reap_wins_lease_over_wait_cancel) {
     auto rh = arena.reserve();
     SLUICE_CHECK(rh.has_value());
     SlotHandle h = rh.value();
-    SLUICE_CHECK(arena.prepare(h, OperationKind::write).has_value());
+    SLUICE_CHECK(arena.prepare(h, OperationKind::write, {}).has_value());
     SLUICE_CHECK(arena.commit(h).has_value());
     SLUICE_CHECK(arena.register_waiter(h, WaiterToken{5, 1, 1}, RoutingLease{77}).has_value());
     SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(3)));
@@ -385,7 +396,7 @@ SLUICE_TEST_CASE(cancel_races_per_state) {
     auto rh2 = arena.reserve();
     SLUICE_CHECK(rh2.has_value());
     SlotHandle h2 = rh2.value();
-    SLUICE_CHECK(arena.prepare(h2, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h2, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.cancel(h2) == CancelDisposition::not_found);
     (void)arena.release(h2);
 
@@ -393,7 +404,7 @@ SLUICE_TEST_CASE(cancel_races_per_state) {
     auto rh3 = arena.reserve();
     SLUICE_CHECK(rh3.has_value());
     SlotHandle h3 = rh3.value();
-    SLUICE_CHECK(arena.prepare(h3, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h3, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.commit(h3).has_value());
     SLUICE_CHECK(arena.cancel(h3) == CancelDisposition::requested);
     // backend_ready now: a second cancel -> already_terminal.
@@ -409,7 +420,7 @@ SLUICE_TEST_CASE(cancel_races_per_state) {
     auto rh4 = arena.reserve();
     SLUICE_CHECK(rh4.has_value());
     SlotHandle h4 = rh4.value();
-    SLUICE_CHECK(arena.prepare(h4, OperationKind::write).has_value());
+    SLUICE_CHECK(arena.prepare(h4, OperationKind::write, {}).has_value());
     SLUICE_CHECK(arena.commit(h4).has_value());
     SLUICE_CHECK(arena.enqueue(h4) == EnqueueOutcome::enqueued);
     SLUICE_CHECK(arena.cancel(h4) == CancelDisposition::requested);
@@ -436,7 +447,7 @@ SLUICE_TEST_CASE(generation_reuse_stale_attempts) {
     auto rh = arena.reserve();
     SLUICE_CHECK(rh.has_value());
     SlotHandle h = rh.value();
-    SLUICE_CHECK(arena.prepare(h, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.commit(h).has_value());
     SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(1)));
     arena.acknowledge_enqueue_pin(h);
@@ -449,7 +460,7 @@ SLUICE_TEST_CASE(generation_reuse_stale_attempts) {
 
     SlotHandle stale{h.slot, old_gen};
     // Every authority re-validates generation under the arena mutex.
-    SLUICE_CHECK(!arena.prepare(stale, OperationKind::read).has_value());
+    SLUICE_CHECK(!arena.prepare(stale, OperationKind::read, {}).has_value());
     SLUICE_CHECK(!arena.commit(stale).has_value());
     SLUICE_CHECK(arena.enqueue(stale) == EnqueueOutcome::terminal_noop); // stale -> noop
     SLUICE_CHECK(!arena.record_terminal(stale, TerminalResult::ok_bytes(1)));
@@ -467,7 +478,7 @@ SLUICE_TEST_CASE(generation_reuse_stale_attempts) {
     SlotHandle h2 = rh2.value();
     SLUICE_CHECK(h2.slot.value == h.slot.value);
     SLUICE_CHECK(h2.generation.value == old_gen.value + 1);
-    SLUICE_CHECK(arena.prepare(h2, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h2, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.commit(h2).has_value());
     SLUICE_CHECK(arena.record_terminal(h2, TerminalResult::ok_bytes(2)));
     arena.acknowledge_enqueue_pin(h2);
@@ -492,7 +503,7 @@ SLUICE_TEST_CASE(acquire_observer_of_ready_sees_all_effects) {
     auto rh = arena.reserve();
     SLUICE_CHECK(rh.has_value());
     SlotHandle h = rh.value();
-    SLUICE_CHECK(arena.prepare(h, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.commit(h).has_value());
     SLUICE_CHECK(arena.register_waiter(h, WaiterToken{9, 2, 3}, RoutingLease{42}).has_value());
     SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(123)));
@@ -505,13 +516,13 @@ SLUICE_TEST_CASE(acquire_observer_of_ready_sees_all_effects) {
     SLUICE_CHECK(arena.reap(sink, noop_publish) == 1);
 
     // Every effect is visible after reap returned.
-    SLUICE_CHECK(arena.state_for_testing(h.slot) ==
+    SLUICE_CHECK(arena.state_of(h.slot) ==
                  sluice::async::detail::RequestState::completion_ready);
     SLUICE_CHECK(arena.accepted_outstanding() == 0);
     SLUICE_CHECK(arena.backend_ready_count() == 0);
-    SLUICE_CHECK(arena.registration_for_testing(h.slot) ==
+    SLUICE_CHECK(arena.registration_of(h.slot) ==
                  sluice::async::detail::WaiterRegistration::closed);
-    SLUICE_CHECK(arena.terminal_stored_for_testing(h.slot));
+    SLUICE_CHECK(arena.terminal_stored(h.slot));
     // The waiter was delivered exactly-once with the registered token + lease.
     SLUICE_CHECK(sink.events.size() == 1);
     SLUICE_CHECK(sink.events[0].waiter.has_waiter);
@@ -532,7 +543,7 @@ SLUICE_TEST_CASE(close_admission_rejects_new_but_existing_reapable) {
     auto rh = arena.reserve();
     SLUICE_CHECK(rh.has_value());
     SlotHandle h = rh.value();
-    SLUICE_CHECK(arena.prepare(h, OperationKind::read).has_value());
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
     SLUICE_CHECK(arena.commit(h).has_value());
     SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(5)));
     arena.acknowledge_enqueue_pin(h);
@@ -566,7 +577,7 @@ SLUICE_TEST_CASE(allocation_free_slot_release_proof) {
         auto rh = arena.reserve();
         SLUICE_CHECK(rh.has_value());
         SlotHandle h = rh.value();
-        SLUICE_CHECK(arena.prepare(h, OperationKind::read).has_value());
+        SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
         SLUICE_CHECK(arena.commit(h).has_value());
         SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(i)));
         arena.acknowledge_enqueue_pin(h);
@@ -578,7 +589,7 @@ SLUICE_TEST_CASE(allocation_free_slot_release_proof) {
     }
     // The arena is fully reusable after 1000 release cycles; generation advanced
     // 1000 times on the single slot (I6 ABA guard).
-    SLUICE_CHECK(arena.generation_for_testing(SlotIndex{0}).value == 1000);
+    SLUICE_CHECK(arena.generation_of(SlotIndex{0}).value == 1000);
 }
 
 // ---- Genuine concurrent TSan case: submit thread ‖ cancel/reap thread --------
@@ -627,19 +638,15 @@ SLUICE_TEST_CASE(concurrent_submit_cancel_enqueue) {
         auto rh = arena.reserve();
         SLUICE_CHECK_MSG(rh.has_value(), "reserve must succeed on an empty arena");
         SlotHandle h = rh.value();
-        SLUICE_CHECK(arena.prepare(h, OperationKind::read).has_value());
+        SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
         // Commit sets the enqueue pin and accepts the op. After this the op is
         // racing: the submitter will enqueue + record_terminal; the canceler
         // will try to cancel.
         SLUICE_CHECK(arena.commit(h).has_value());
 
-        std::atomic<bool> submitter_ready{false};
-        std::atomic<bool> canceler_done{false};
         std::barrier iter_sync{2};
 
         std::thread submitter([&] {
-            // Let the canceler observe the committed slot, then race.
-            submitter_ready.store(true, std::memory_order_release);
             iter_sync.arrive_and_wait(); // release both threads
             (void)arena.enqueue(h);
             if (arena.record_terminal(h, TerminalResult::ok_bytes(iter & 0xFF))) {
@@ -648,17 +655,13 @@ SLUICE_TEST_CASE(concurrent_submit_cancel_enqueue) {
         });
 
         std::thread canceler([&] {
-            // Wait for the submitter to be about to enqueue, then race cancel.
+            // Race the submitter's enqueue/record_terminal: the leaf mutex
+            // arbitrates; cancel is valid on pending OR enqueued, so either
+            // winner is a legal terminal outcome.
             iter_sync.arrive_and_wait();
-            // Spin-wait briefly for the submitter to have enqueued (the cancel
-            // is valid on pending OR enqueued; we want to hit the race window).
-            while (!submitter_ready.load(std::memory_order_acquire)) {
-                std::this_thread::yield();
-            }
             if (arena.cancel(h) == CancelDisposition::requested) {
                 cancel_wins.fetch_add(1, std::memory_order_relaxed);
             }
-            canceler_done.store(true, std::memory_order_release);
         });
 
         submitter.join();
@@ -669,7 +672,6 @@ SLUICE_TEST_CASE(concurrent_submit_cancel_enqueue) {
         SLUICE_CHECK_MSG(arena.reap(sink, noop_publish) == 1,
                          "exactly one op must be reaped per iteration");
         SLUICE_CHECK(arena.release(h).has_value());
-        (void)canceler_done;
     }
 
     // ---- Invariants ---------------------------------------------------------

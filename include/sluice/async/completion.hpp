@@ -79,6 +79,7 @@
 #pragma once
 
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/detail/request_arena.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -150,6 +151,14 @@ public:
     // does NOT attempt implicit cancel or drain. (Concurrent object destruction
     // is itself a caller-lifecycle error; the internal state still keeps a
     // consistent fail-fast line.)
+    //
+    // Phase B (ADR Decision 15): destroying a READY Completion is allowed and
+    // performs the same allocation-free slot release as reset() before the
+    // address becomes invalid. The slot was bound at commit (the binding payload
+    // holds the arena + slot handle); release returns it to the arena with
+    // generation++ under the leaf slot-lifecycle domain. The context/backend
+    // must outlive every bound slot (enforced by the arena's
+    // request_arena_destruction_fail_fast on non-quiescent destruction).
     ~Completion() noexcept {
         State s = state_.load(std::memory_order::acquire);
         if (s == State::binding) {
@@ -163,6 +172,11 @@ public:
         if (s == State::outstanding || s == State::publishing ||
             s == State::resetting) {
             detail::completion_authority_fail_fast();
+        }
+        if (s == State::ready && release_arena_ != nullptr) {
+            // Ready-Completion destruction releases the bound slot (Decision 15
+            // / design §9 completion_ready -> free authority).
+            (void)release_arena_->release(bound_slot_);
         }
     }
 
@@ -229,6 +243,17 @@ public:
                 std::memory_order::acquire)) {
             detail::completion_authority_fail_fast();
         }
+        // Phase B (ADR Decision 15 / design §9): reset() is the slot-release
+        // half of the completion_ready -> free transition. The bound slot is
+        // returned to the arena (generation++) under the leaf slot-lifecycle
+        // domain — allocation-free, no I/O/Scheduler/backend-progress wait, no
+        // upward lock. Fail-fast guards inside the arena release reject a live
+        // enqueue pin or an open/unconsumed waiter registration. Probe-driven
+        // Completions (no arena binding) skip this.
+        if (release_arena_ != nullptr) {
+            (void)release_arena_->release(bound_slot_);
+        }
+        clear_binding_for_backend();
         storage_ = Storage{};
         reap_seq_ = 0;
         // Publish idle AFTER cleanup so a new claim can never observe an idle
@@ -305,6 +330,25 @@ private:
         }
     }
 
+    // --- Phase B binding payload (ADR Decision 7 / design §8) ---
+    // The idle -> binding CAS winner installs the opaque release capability:
+    // the backend-owned arena plus the slot handle (slot index + generation).
+    // Ordinary callers cannot forge or replace it (private; negative-compile
+    // gate), and reset()/ready-destruction use it to return the slot with
+    // generation++ — the completion_ready -> free handshake of design §9.
+    // The arena pointer is stable because AsyncIoContext owns its backend via
+    // unique_ptr (never moved); the arena destructor fail-fasts if any slot is
+    // still bound, so this capability cannot dangle.
+    void install_binding_for_backend(detail::RequestArena* arena,
+                                     detail::SlotHandle h) noexcept {
+        release_arena_ = arena;
+        bound_slot_ = h;
+    }
+    void clear_binding_for_backend() noexcept {
+        release_arena_ = nullptr;
+        bound_slot_ = {};
+    }
+
     // ADR §10 (P0-02 bridge): roll back a claim that was won but NOT accepted
     // into backend tracking — no register/enqueue/dispatch happened and submit
     // has not returned success; the operation is still entirely userspace-owned
@@ -355,6 +399,15 @@ private:
     };
     std::atomic<State> state_{State::idle};
     std::uint64_t reap_seq_ = 0;
+
+    // Phase B binding payload (ADR Decision 7 / I2). Written only by the
+    // idle -> binding CAS winner via install_binding_for_backend; observed by
+    // reset()/ready destruction. Publish ordering: the payload writes happen
+    // before the binding -> outstanding release-store, and the Completion-ready
+    // release-store happens after the terminal publication — so reset() (which
+    // requires acquire-observing ready) sees the complete payload.
+    detail::RequestArena* release_arena_ = nullptr;
+    detail::SlotHandle bound_slot_{};
 
     // Storage for the terminal result. Holds either a T or an IoError.
     struct Storage;
@@ -411,6 +464,10 @@ public:
             s == State::resetting) {
             detail::completion_authority_fail_fast();
         }
+        if (s == State::ready && release_arena_ != nullptr) {
+            // Ready-Completion destruction releases the bound slot (Decision 15).
+            (void)release_arena_->release(bound_slot_);
+        }
     }
 
     Completion(const Completion&) = delete;
@@ -454,6 +511,13 @@ public:
                 std::memory_order::acquire)) {
             detail::completion_authority_fail_fast();
         }
+        // Phase B (ADR Decision 15 / design §9): reset() releases the bound
+        // slot (generation++) under the leaf slot-lifecycle domain. Probe-driven
+        // Completions (no arena binding) skip this.
+        if (release_arena_ != nullptr) {
+            (void)release_arena_->release(bound_slot_);
+        }
+        clear_binding_for_backend();
         has_error_ = false;
         reap_seq_ = 0;
         state_.store(State::idle, std::memory_order::release);
@@ -489,6 +553,17 @@ private:
         }
     }
 
+    // Phase B binding payload — see the Completion<T> template's note.
+    void install_binding_for_backend(detail::RequestArena* arena,
+                                     detail::SlotHandle h) noexcept {
+        release_arena_ = arena;
+        bound_slot_ = h;
+    }
+    void clear_binding_for_backend() noexcept {
+        release_arena_ = nullptr;
+        bound_slot_ = {};
+    }
+
     void rollback_claim_before_accept() noexcept {
         State expected = State::outstanding;
         if (!state_.compare_exchange_strong(
@@ -522,6 +597,10 @@ private:
     bool has_error_ = false;
     IoError error_{IoError::Code::backend_error};
     std::uint64_t reap_seq_ = 0;
+
+    // Phase B binding payload — see the Completion<T> template's note.
+    detail::RequestArena* release_arena_ = nullptr;
+    detail::SlotHandle bound_slot_{};
 };
 
 }  // namespace sluice::async

@@ -1177,6 +1177,14 @@ public:
 };
 ```
 
+Phase B (ADR-explicit-io-request-contract, Accepted, Decision 15): `reset()` from
+`ready` is also the slot-release handshake for a request accepted through the
+reference backends (FakeAsyncBackend, SyncBackend). The slot bound at commit
+remains in use (`slot_in_use` accounting) until `reset()` — or ready-Completion
+destruction — returns it to the bounded arena with `generation++`. The context/
+backend must therefore outlive every bound slot: destroying a context (or arena)
+while any slot is still bound fails fast in Debug and Release.
+
 `detail::next_reap_seq()` is a free function in `sluice::async::detail`, not
 part of the public `Completion` surface.
 

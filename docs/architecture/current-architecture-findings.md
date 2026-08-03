@@ -747,13 +747,13 @@ with subsystem prefix in documentation.
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
 | P0-01 | P0 | Worker OOM → terminate | Phase A target + Phase B/C proof + Phase E implementation |
-| P0-02 | P0 | Cross-backend transactional submit | Reference-layer CLOSED (Phase B: bounded RequestArena + five-stage admission on Fake/Sync); production-backend migration open for Phase D/E (register_op allocation after claim) |
+| P0-02 | P0 | Cross-backend transactional submit | Reference-layer CLOSED (Phase B: bounded RequestArena + five-stage admission on Fake/Sync; backend bookkeeping moves BEFORE the commit LP and reap is an allocation-free two-pass protocol, so no post-accept allocation can strand an accepted op); production-backend migration open for Phase D/E (register_op allocation after claim) |
 | P0-03 | P0 | Completion publication authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 |
 | P1-01 | P1 | Completion claim authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (backend is claim authority) |
 | P1-02 | P1 | Backend-ready vs completion-ready | Reference-layer CLOSED (Phase B: distinct `backend_ready` vs `completion_ready` slot states + enqueue-in-flight pin reap-ineligibility); Phase F Scheduler integration pending |
 | P1-03 | P1 | SyncBackend cancel publication | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (cancel records intent; reap publishes) |
 | P1-04 | P1 | Spawn failure lacks explicit admission boundary | Phase E backend migration |
-| P1-05 | P1 | queue_full_retries semantic conflation | Reference-layer CLOSED (Phase B: distinct `slot_in_use` vs `accepted_outstanding` vs `capacity_rejections` counters on the arena); Phase C metrics integration pending |
+| P1-05 | P1 | queue_full_retries semantic conflation | Reference-layer CLOSED (Phase B: distinct `slot_in_use` vs `accepted_outstanding` vs `capacity_rejections` counters on the arena; capacity pressure propagates as `would_block` — never `invalid_state` — and is tallied as the canonical queue-full signal); Phase C metrics integration pending |
 | P1-06 | P1 | No request generation (ABA) | Reference-layer CLOSED (Phase B: per-slot Generation incremented on release before reuse; stale-key rejection proven across every post-reserve authority); production-backend migration open for Phase D/E |
 | P1-07 | P1 | Reap API discards completion identity | Reference-layer CLOSED (Phase B: identity-bearing SynchronousReadySink delivers by-value ReadyEvent{RequestKey, OperationKind, OptionalWaiterDelivery}); Phase F Scheduler integration pending |
 | P1-08 | P1 | wait_one holds lock, blocks cancel | Focused concurrency design before Phase F L1 integration |

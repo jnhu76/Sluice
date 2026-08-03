@@ -86,6 +86,12 @@ void tally_submit(AsyncStats* s, const Result<void>& r) {
         ++s->submitted_ops;
     } else if (r.error().code == IoError::Code::invalid_state) {
         ++s->queue_full_retries;
+    } else if (r.error().code == IoError::Code::would_block) {
+        // Phase B (ADR Decision 6/13): configured-capacity pressure is reported
+        // as would_block by the reference backends; it is the canonical
+        // queue-full retry signal (distinct from lifecycle invalid_state, which
+        // the arena-level capacity_rejections counter tracks separately).
+        ++s->queue_full_retries;
     }
 }
 void update_max_outstanding(AsyncStats* s, std::size_t cur) {

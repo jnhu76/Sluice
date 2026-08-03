@@ -65,6 +65,9 @@ Holder:       caller holds AsyncIoContext; context owns the backend; backend own
 
 Scheduler/Batch/Runtime are NOT modified. The synchronous core (`sluice_core`) is NOT
 modified (only `include/sluice/error.hpp`, a shared header, gains three enum enumerators).
+The `sluice-copy` app gains one required consumer-side fix (reset of the sync Completion
+before context destruction) — mandated by the accepted release-at-reset contract (ADR
+Decision 15), not new feature work.
 
 ## 4. As-Built Path (today)
 
@@ -114,33 +117,48 @@ AsyncIoContext::submit_read(op, c)
   unlock
 ```
 
-Reap (ADR Decision 9, six steps):
+Reap (ADR Decision 9, six steps, allocation-free two-pass):
 
 ```text
 poll() / wait_one()
-  for each backend_ready slot:
-    [NEW] acquire-check enqueue pin. If still live: leave backend_ready linkage unconsumed,
-          publish nothing, no accepted_out--, no borrow end (reap-ineligible). Continue.
+  PASS 1 (under the leaf domain), for each backend_ready slot:
+    [NEW] acquire-check enqueue pin. If still live: leave backend_ready linkage
+          unconsumed, publish nothing, no accepted_out--, no borrow end
+          (reap-ineligible). Continue.
     validate RequestKey + Completion binding
-    enter leaf slot-lifecycle domain
-      close waiter registration; take token/lease atomically (exactly-once vs wait-cancel)
-      install terminal Result; mark slot completion_ready; accepted_out--; stage borrow end
-      [LP: completion-ready] release-store Completion ready
-    leave domain
+    close waiter registration (token/lease stay in the slot for pass 2)
+    mark publish_pending_; slot -> completion_ready; accepted_out--; borrow ends
+  PASS 2 (per-slot lock), for each publish_pending_ slot:
+    copy the by-value ReadyEvent data (key/kind/terminal/waiter delivery) to the
+    stack; clear publish_pending_; release the lock
+    publish the Completion (ready release-store = completion-ready LP)
     invoke SynchronousReadySink::on_ready(ReadyEvent{key, kind, waiter}) noexcept
 ```
+
+No ready-record vector is allocated (I9 / Decision 14): the slot itself is the
+pre-reserved ready linkage; `publish_pending_` (same leaf domain) makes the
+publication exactly-once even under concurrent reaps, and the slot cannot be
+released between pass 1 and its pass-2 publication because the Completion is
+not ready until pass 2 publishes it.
 
 Reset / ready destruction (`Completion::reset()` / `~Completion()` at `ready`):
 
 ```text
   CAS ready -> resetting
-  enter leaf slot-lifecycle domain (after reap has left it)
-    verify enqueue pin acknowledged + registration closed(no_waiter) + no stored token/lease
-      (else request_slot_release_invariant_fail_fast)
+  use the installed release capability (arena + slot handle; installed by the
+  binding CAS winner at commit) to enter the leaf slot-lifecycle domain
+    verify enqueue pin acknowledged + registration closed(no_waiter) + no stored
+    token/lease (else request_slot_release_invariant_fail_fast)
     clear Completion binding; generation++; slot_in_use--; publish slot free
   leave domain
   release-store idle
 ```
+
+The slot therefore remains bound (slot_in_use == 1) from commit until the
+caller's reset/ready-destruction — capacity accounting covers the caller's
+unreset ready Completions, as the ADR requires. The arena destructor fails fast
+(debug AND release) if any slot is still bound, so the Completion-bound release
+capability can never dangle.
 
 ## 6. Zig Source-Derived Comparison
 
@@ -185,6 +203,17 @@ Lifetime:       binding -> outstanding -> ready -> resetting
 Borrowers:      none outside the slot-lifecycle domain; reap validates under the domain
 Stability:      private to Completion; forge-resistant (negative-compile gate)
 ```
+
+**Generation wrap policy (I6):** `Generation` is a 32-bit counter incremented on every
+release (including pre-commit rollback releases). On wrap (2^32 releases of one slot), a
+stale key from the previous cycle would match the current generation of a reused slot.
+This is accepted risk for Phase B and the reference backends: a single slot must be
+released 2^32 times for a collision, and each accepted request additionally validates
+the slot state and context under the leaf domain (a wrapped key colliding with a live
+slot would still require the slot to be in a matching lifecycle state). A later phase
+may widen the field or add a per-arena epoch; the wrap policy is recorded here and is
+NOT silently treated as fully safe (ADR Decision 1 permits implementation-chosen widths
+but requires the stale-key guarantee, which holds up to wrap).
 
 ## 9. State Machine
 

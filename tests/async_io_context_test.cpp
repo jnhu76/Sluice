@@ -51,6 +51,7 @@ SLUICE_TEST_CASE(async_io_context_move_ctor_idle_source) {
     SLUICE_CHECK(dst.poll() == 1);
     SLUICE_CHECK(c.ready());
     SLUICE_CHECK(dst.outstanding() == 0);
+    c.reset();  // slot release handshake (ADR Decision 15)
 }
 
 // ---- Move ctor with outstanding source work TRANSFERS publication authority -
@@ -83,6 +84,7 @@ SLUICE_TEST_CASE(async_io_context_move_ctor_transfers_outstanding_authority) {
     SLUICE_CHECK(r.has_value());
     SLUICE_CHECK(r.value() == 8);
     SLUICE_CHECK(dst.outstanding() == 0);
+    c.reset();  // slot release handshake (ADR Decision 15)
 }
 
 // ---- Move assignment: idle destination, idle source -------------------------
@@ -98,6 +100,7 @@ SLUICE_TEST_CASE(async_io_context_move_assign_idle_dst_idle_src) {
     SLUICE_CHECK(dst.submit_read(ReadOp{0, b, 4, 0}, c).has_value());
     dst.cancel(c);
     SLUICE_CHECK(dst.poll() == 1);
+    c.reset();  // slot release handshake (ADR Decision 15)
 }
 
 // ---- Move assignment: idle destination, source WITH outstanding work --------
@@ -125,6 +128,7 @@ SLUICE_TEST_CASE(async_io_context_move_assign_idle_dst_outstanding_src) {
     SLUICE_CHECK(c.ready());
     SLUICE_CHECK(c.result().value() == 16);
     SLUICE_CHECK(dst.outstanding() == 0);
+    c.reset();  // slot release handshake (ADR Decision 15)
 }
 
 // ---- Self move assignment is a no-op ----------------------------------------
@@ -148,6 +152,7 @@ SLUICE_TEST_CASE(async_io_context_self_move_assignment_safe) {
     ctx.cancel(c);
     SLUICE_CHECK(ctx.poll() == 1);
     SLUICE_CHECK(c.ready());
+    c.reset();  // slot release handshake (ADR Decision 15)
 }
 
 // ---- Destruction of a moved-from context is safe (no backend) ---------------
@@ -184,6 +189,7 @@ SLUICE_TEST_CASE(async_io_context_chained_moves_preserve_authority) {
     SLUICE_CHECK(c.ready());
     SLUICE_CHECK(c.result().value() == 8);
     SLUICE_CHECK(c_ctx.outstanding() == 0);
+    c.reset();  // slot release handshake (ADR Decision 15)
 }
 
 SLUICE_MAIN()

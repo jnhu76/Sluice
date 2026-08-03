@@ -132,6 +132,19 @@ protected:
     static void rollback_binding_before_accept(Completion<T>& c) noexcept {
         c.rollback_binding_before_accept();
     }
+    // Phase B (ADR Decision 7 / design §8): the binding CAS winner installs the
+    // opaque slot-release capability (arena + slot handle) before the Completion
+    // becomes observable as outstanding. reset()/ready-destruction use it to
+    // return the slot with generation++ (completion_ready -> free handshake).
+    template <class T>
+    static void install_binding(Completion<T>& c, detail::RequestArena* arena,
+                                detail::SlotHandle h) noexcept {
+        c.install_binding_for_backend(arena, h);
+    }
+    template <class T>
+    static void clear_binding(Completion<T>& c) noexcept {
+        c.clear_binding_for_backend();
+    }
 
     template <class T>
     static void publish(Completion<T>& c, Result<T>&& result) noexcept {

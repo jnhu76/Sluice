@@ -13,6 +13,7 @@
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/request_arena.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
@@ -61,6 +62,18 @@ public:
     template <class T>
     void rollback_binding(Completion<T>& c) noexcept {
         AsyncBackend::rollback_binding_before_accept(c);
+    }
+    // Phase B (ADR Decision 7): install/clear the slot-release capability so a
+    // probe-driven Completion can exercise the reset/ready-destruction slot
+    // release handshake against a real arena.
+    template <class T>
+    void install_binding(Completion<T>& c, detail::RequestArena* arena,
+                         detail::SlotHandle h) noexcept {
+        AsyncBackend::install_binding(c, arena, h);
+    }
+    template <class T>
+    void clear_binding(Completion<T>& c) noexcept {
+        AsyncBackend::clear_binding(c);
     }
 
     // --- AsyncBackend interface (all stubs — no real I/O) ---

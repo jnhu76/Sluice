@@ -40,6 +40,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
@@ -124,69 +125,90 @@ class SyncBackend : public AsyncBackend {
     // NOT recorded here: it is decided at dispatch (poll) time so a cancel
     // between submit and poll can still win the terminal transition (Scheme B).
     // The requested length is carried in the binding for the dispatch step.
+    // Bind/FIFO bookkeeping happens BEFORE the Completion CAS (I9 / ADR
+    // Decision 14): nothing allocates after the submit-success LP.
     template <class Op>
-    Result<void> submit_size(Op /*op*/, Completion<std::size_t>& c, detail::OperationKind kind,
+    Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind,
                              std::size_t len) {
-        // Stage 1: reserve. Arena full -> would_block (sync submit returns
-        // invalid_state per the public contract; the context tallies this).
+        // Stage 1: reserve. Arena full -> would_block; admission closed ->
+        // invalid_state (ADR Decision 6/13: capacity pressure is NEVER
+        // invalid_state).
         auto rh = arena_.reserve();
         if (!rh.has_value()) {
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            return make_unexpected<void>(rh.error());
         }
         detail::SlotHandle h = rh.value();
-        // Stage 2: prepare.
-        auto ph = arena_.prepare(h, kind);
+        // Stage 2: prepare (op kind + fd/buffer borrow metadata).
+        auto ph = arena_.prepare(h, kind, borrow_of(op));
         if (!ph.has_value()) {
             (void)arena_.release(h); // roll back reservation
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            return make_unexpected<void>(ph.error());
         }
-        // Stage 3: commit. Completion idle -> binding CAS elects ONE submitter.
+        // Pre-CAS bookkeeping (may allocate; failure rolls back cleanly).
+        bind(h, &c, len);
+        // Stage 3a: Completion CAS idle -> binding elects ONE submitter. Loser:
+        // roll back only our own slot + binding entry.
         if (!begin_binding(c)) {
-            (void)arena_.release(h); // loser: roll back own slot only
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        auto ch = arena_.commit(h);
-        if (!ch.has_value()) {
-            rollback_binding_before_accept(c);
+            bindings_.erase(h.slot.value);
             (void)arena_.release(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
-        commit_binding(c); // binding -> outstanding (submit-success LP)
-        // Bind the slot to this Completion for cancel/complete/dispatch
-        // resolution. The pointer is stable while the Completion is outstanding
-        // (L7). requested_bytes carries the synthetic full-length result.
-        bind(h, &c, len);
-        // Stage 4: enqueue (pending -> enqueued OR terminal no-op).
+        // Stage 3b: commit (pending + pin + accepted++ + borrow begins).
+        auto ch = arena_.commit(h);
+        if (!ch.has_value()) {
+            rollback_binding_before_accept(c);
+            bindings_.erase(h.slot.value);
+            (void)arena_.release(h);
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        // Stage 3c: install the slot-release capability, then publish
+        // outstanding (submit-success LP). AFTER this nothing may throw.
+        install_binding(c, &arena_, h);
+        commit_binding(c);
+        // Stage 4: enqueue (pending -> enqueued OR terminal no-op). noexcept.
         (void)arena_.enqueue(h);
         return {};
     }
 
     template <class Op>
-    Result<void> submit_void(Op /*op*/, Completion<void>& c, detail::OperationKind kind) {
+    Result<void> submit_void(Op op, Completion<void>& c, detail::OperationKind kind) {
         auto rh = arena_.reserve();
         if (!rh.has_value()) {
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            return make_unexpected<void>(rh.error());
         }
         detail::SlotHandle h = rh.value();
-        auto ph = arena_.prepare(h, kind);
+        auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
         if (!ph.has_value()) {
             (void)arena_.release(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            return make_unexpected<void>(ph.error());
         }
+        bind(h, &c);
         if (!begin_binding(c)) {
+            bindings_.erase(h.slot.value);
             (void)arena_.release(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         auto ch = arena_.commit(h);
         if (!ch.has_value()) {
             rollback_binding_before_accept(c);
+            bindings_.erase(h.slot.value);
             (void)arena_.release(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
+        install_binding(c, &arena_, h);
         commit_binding(c);
-        bind(h, &c);
         (void)arena_.enqueue(h);
         return {};
+    }
+
+    // fd/buffer borrow metadata for a byte-carrying op (ADR Decision 3/8).
+    template <class Op>
+    static detail::BorrowMetadata borrow_of(const Op& op) {
+        if constexpr (std::is_same_v<Op, ReadOp>) {
+            return {op.fd, op.dst, op.len};
+        } else {
+            return {op.fd, op.src, op.len};
+        }
     }
 
     // Dispatch: every enqueued slot that does not yet have a terminal result
@@ -198,7 +220,7 @@ class SyncBackend : public AsyncBackend {
     void dispatch_enqueued() {
         for (auto& [idx, b] : bindings_) {
             detail::SlotHandle h{detail::SlotIndex{idx}, b.generation};
-            auto st = arena_.state_for_testing(h.slot);
+            auto st = arena_.state_of(h.slot);
             if (st == detail::RequestState::enqueued) {
                 if (b.size_completion) {
                     (void)arena_.record_terminal(
@@ -213,26 +235,28 @@ class SyncBackend : public AsyncBackend {
     std::size_t dispatch_and_reap() {
         dispatch_enqueued();
         return arena_.reap(sink_, [this](const detail::RequestArena::ReapPublication& p) {
-            publish_and_release(p);
+            publish_reaped(p);
         });
     }
 
-    // Resolve the reaped slot back to its Completion*, publish the terminal
-    // result, then release the slot (generation++). The arena has already left
-    // its leaf domain by the time this callback runs, so re-acquiring it via
-    // release() is safe. Slot identity is (slot, generation); the publication
-    // carries the generation the slot had when it went backend_ready, which
-    // equals the binding's generation. The binding is erased before publish so
-    // the Completion pointer is not retained across user-observable ready.
-    void publish_and_release(const detail::RequestArena::ReapPublication& p) {
+    // Resolve the reaped slot back to its Completion* and publish the terminal
+    // result. The SLOT IS NOT RELEASED HERE: it stays bound (slot_in_use == 1)
+    // until the caller resets or destroys the ready Completion (ADR Decision
+    // 4/15; design §9 — the caller's completion_ready -> free handshake via the
+    // release capability installed at commit). The binding is erased before
+    // publish so the Completion pointer is not retained across user-observable
+    // ready.
+    void publish_reaped(const detail::RequestArena::ReapPublication& p) {
         auto it = bindings_.find(p.handle.slot.value);
         if (it == bindings_.end())
             return; // defensive: unknown slot
         detail::SlotHandle bh{p.handle.slot, p.handle.generation};
         if (it->second.generation.value != bh.generation.value) {
             // The binding's generation does not match the publication; the slot
-            // was reused. Defensive only — release (below) erases the binding
-            // in lockstep with the generation bump, so this cannot occur.
+            // was reused. Defensive only — the binding entry is erased in the
+            // same publication that carries the slot's generation, and a slot
+            // cannot be released (generation bump) before its Completion is
+            // published ready, so this cannot occur.
             return;
         }
         Completion<std::size_t>* sc = it->second.size_completion;
@@ -259,10 +283,6 @@ class SyncBackend : public AsyncBackend {
                 }
             }
         }
-        // Release the slot (generation++) AFTER publishing; the publish path
-        // does not touch the arena. This is the slot-release half of the reap
-        // handshake for the reference backends.
-        (void)arena_.release(bh);
     }
 
     static Result<std::size_t> terminal_to_size(const detail::TerminalResult& t) noexcept {
