@@ -76,6 +76,36 @@ public:
         AsyncBackend::clear_binding(c);
     }
 
+    // Phase B (review C2/C3): type-erased terminal publication thunks, written
+    // by a trusted backend-author (they reach the protected AsyncBackend::
+    // publish helpers). A probe-driven arena test installs one of these into a
+    // slot via RequestArena::install_publication_binding; reap then publishes
+    // Completion-ready through it inside the leaf domain.
+    static void publish_size_ready(void* completion,
+                                   const detail::TerminalResult& t) noexcept {
+        AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion),
+                              terminal_to_size(t));
+    }
+    static void publish_void_ready(void* completion,
+                                   const detail::TerminalResult& t) noexcept {
+        AsyncBackend::publish(*static_cast<Completion<void>*>(completion),
+                              terminal_to_void(t));
+    }
+
+  private:
+    static Result<std::size_t> terminal_to_size(const detail::TerminalResult& t) noexcept {
+        if (t.stored && t.is_error)
+            return make_unexpected<std::size_t>(t.error);
+        return Result<std::size_t>{static_cast<std::size_t>(t.bytes)};
+    }
+    static Result<void> terminal_to_void(const detail::TerminalResult& t) noexcept {
+        if (t.stored && t.is_error)
+            return make_unexpected<void>(t.error);
+        return {};
+    }
+
+  public:
+
     // --- AsyncBackend interface (all stubs — no real I/O) ---
     Result<void> submit_read(ReadOp, Completion<std::size_t>&) override {
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});

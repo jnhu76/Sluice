@@ -248,3 +248,14 @@ sluice_internal_async_test("group_evented_admission_exception_safety_test")
 -- 100k-op copy accumulated ~100k unjoined zombie threads, hit the runner's
 -- task-count limit, and failed with backend_error (spawn EAGAIN).
 sluice_internal_async_test("threadpool_backend_reap_test")
+
+-- backend_scheme_b_race_test — Phase B backend-level Scheme-B race regression
+-- (review test-gap 1). Drives the raw FakeAsyncBackend with the
+-- SLUICE_ASYNC_INTERNAL_TESTING-only SubmitPauseGate seam: a submit thread is
+-- paused deterministically between commit and enqueue, a cancel thread wins
+-- the pending terminal transition (Scheme B), the resumed enqueue no-ops and
+-- acknowledges the pin, and poll() reaps the canceled Completion through the
+-- slot-bound publication binding. This proves the REAL reference-backend
+-- integration (submit thread + Completion binding + commit/enqueue barrier
+-- pause), which the public API's access_mtx_ serialization hides.
+sluice_internal_async_test("backend_scheme_b_race_test")

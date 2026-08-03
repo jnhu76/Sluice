@@ -30,6 +30,16 @@ sluice_production_async_test("request_lifecycle_scheme_b_test")
 -- the migration would be indistinguishable from a no-op rename.
 sluice_production_async_test("reference_backend_arena_lifecycle_test")
 
+-- Phase B reference-backend allocation-freedom + transactional-rejection proof
+-- (review test-gap 3 / review C1 fault-injection matrix). A counting +
+-- always-throw operator new drives the accepted submit -> poll -> reset path
+-- (and the would_block / binding-CAS-loss rejection paths) under a total
+-- allocation fault: the path must still succeed with zero allocations, and a
+-- lost binding CAS must leave Completion/slot/FIFO/counters untouched with no
+-- future result contamination. This is the structural zero-allocation proof
+-- the review asked for (ASan alone cannot prove "no allocation").
+sluice_production_async_test("reference_backend_no_alloc_test")
+
 -- AsyncIoContext lifecycle / move-semantics tests (E15-P1-03 / E15-P2-06). The
 -- SAFE move paths (idle-to-idle, source-with-outstanding transfer, self move,
 -- chained moves, moved-from destruction) are exercised here; the FAIL-FAST

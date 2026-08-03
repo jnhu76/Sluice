@@ -218,4 +218,20 @@ bool evented_admission_check() noexcept;
 // must never dangle.
 [[noreturn]] void request_arena_destruction_fail_fast() noexcept;
 
+// Phase B (review C2 / I4 / I5 / I11): reap reached a backend_ready slot whose
+// Completion publication binding was never installed. The binding is installed
+// before commit; a missing binding means the accepted op cannot be published —
+// silently skipping it would lose an accepted request (AC-4) and strand the
+// Completion outstanding forever. Invariant violation: fail-fast in BOTH Debug
+// and Release instead of a silent drop.
+[[noreturn]] void request_arena_missing_binding_fail_fast() noexcept;
+
+// Phase B (review I2): record_terminal/cancel reached a slot that is not a
+// legal terminal candidate (reserved/prepared = not yet accepted; free =
+// never reserved). Storing a terminal before acceptance would strand the op
+// forever (dispatch's later record_terminal would see the terminal already
+// stored and the op could never reach backend_ready). Invariant violation:
+// fail-fast in BOTH Debug and Release.
+[[noreturn]] void request_arena_terminal_state_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

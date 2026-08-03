@@ -8,24 +8,29 @@
 //
 // The authority model (ADR Decision 3 / Decision 5): every slot-lifecycle
 // transition (state, generation, enqueue pin, terminal result, registration,
-// release) is owned by RequestArena under the leaf slot-lifecycle mutex.
-// RequestSlot's mutating fields are private (friend RequestArena only). Ordinary
-// code — even code that constructs a RequestArena — cannot:
-//   - clear the enqueue-in-flight pin bit directly (must go through enqueue() /
-//     acknowledge_enqueue_pin, which are the submit-path authorities)
+// publication binding, release) is owned by RequestArena under the leaf
+// slot-lifecycle mutex. RequestSlot's mutating fields are private (friend
+// RequestArena only). Ordinary code — even code that constructs a RequestArena
+// — cannot:
+//   - clear the enqueue-in-flight pin bit directly (must go through enqueue(),
+//     the submit-path authority)
 //   - publish backend_ready directly (must go through record_terminal, the
 //     single terminal-winner authority)
-//   - release a RequestSlot directly (must go through RequestArena::release,
-//     which checks the pin + registration invariants)
+//   - release a RequestSlot directly (must go through the release authorities:
+//     rollback_reserved_or_prepared for pre-commit rollback,
+//     release_completed_binding for the caller handshake — both check the pin
+//     + registration invariants)
 //   - increment the generation directly (must go through release, the slot-free
 //     authority)
 //   - mutate the slot state directly (must go through the documented stage
 //     transitions)
+//   - install the Completion publication binding directly (must go through
+//     RequestArena::install_publication_binding before commit)
 //
 // Without any NEG_* macro, this file compiles cleanly (positive control): it
 // exercises only the public test-seam introspection (state_of etc.)
-// and the documented stage APIs (reserve/prepare/commit/enqueue/record_terminal/
-// reap/release).
+// and the documented stage APIs (reserve/prepare/install_publication_binding/
+// commit/enqueue/record_terminal/reap/release authorities).
 #include <sluice/async/detail/request_arena.hpp>
 #include <sluice/result.hpp>
 
@@ -46,20 +51,22 @@ void positive_control() {
         return;
     SlotHandle h = rh.value();
     (void)arena.prepare(h, OperationKind::read, {});
+    (void)arena.install_publication_binding(
+        h, nullptr, 0, [](void*, const TerminalResult&) noexcept {});
     (void)arena.commit(h);
     (void)arena.enqueue(h);
     (void)arena.record_terminal(h, TerminalResult::ok_bytes(1));
-    arena.acknowledge_enqueue_pin(h);
     // Test-seam introspection (read-only; the design makes this a deliberate
     // test surface so the lifecycle contract is assertable).
     (void)arena.state_of(h.slot);
     (void)arena.enqueue_pin_live(h.slot);
     (void)arena.generation_of(h.slot);
+    (void)arena.requested_bytes_of(h.slot);
     struct NoopSink : sluice::async::detail::SynchronousReadySink {
         void on_ready(sluice::async::detail::ReadyEvent) noexcept override {}
     } sink;
-    (void)arena.reap(sink, [](const RequestArena::ReapPublication&) {});
-    (void)arena.release(h);
+    (void)arena.reap(sink);
+    arena.release_completed_binding(h);
 }
 
 #if defined(NEG_SLOT_STATE_PRIVATE)
@@ -83,11 +90,20 @@ void neg_slot_generation_private() {
 
 #if defined(NEG_SLOT_PIN_PRIVATE)
 // RequestSlot::enqueue_in_flight_pin_ is private. Ordinary code cannot clear the
-// pin directly — only enqueue()/acknowledge_enqueue_pin (the submit-path
-// authorities) may.
+// pin directly — only enqueue() (the submit-path authority) may.
 void neg_slot_pin_private() {
     RequestSlot s;
     s.enqueue_in_flight_pin_ = false; // ERROR: private
+}
+#endif
+
+#if defined(NEG_SLOT_BINDING_PRIVATE)
+// RequestSlot::publication_binding_ is private. Ordinary code cannot install or
+// forge the Completion publication binding directly — only
+// RequestArena::install_publication_binding (before commit) may.
+void neg_slot_binding_private() {
+    RequestSlot s;
+    s.publication_binding_.completion = nullptr; // ERROR: private
 }
 #endif
 

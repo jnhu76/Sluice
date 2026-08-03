@@ -71,27 +71,35 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
 
 namespace {
 // Tally one submit_* result into AsyncStats. This is the SINGLE counting
-// authority for queue_full_retries on the L8 reject path (submit into a
-// non-idle Completion -> invalid_state): every AsyncBackend returns
-// invalid_state for that case, and tally_submit counts it here once,
-// uniformly across backends (Uring/ThreadPool/Sync/Fake). Backends MUST NOT
-// also bump queue_full_retries for invalid_state — that double-counts. A
-// backend MAY still bump queue_full_retries for a backend_error ring-full
-// path (Uring does; tally_submit cannot see it since it returns
-// backend_error, not invalid_state).
+// authority for the reject-path counters on the L8 reject path:
+//   - would_block (capacity pressure, ADR Decision 6/13) is the canonical
+//     queue-full retry signal and counts queue_full_retries. A backend MAY
+//     also bump queue_full_retries for a backend_error ring-full path (Uring
+//     does; tally_submit cannot see it since it returns backend_error, not
+//     would_block).
+//   - invalid_state (non-idle Completion, admission closed, lifecycle misuse)
+//     is a CALLER contract violation, NOT capacity pressure (P1-05). It counts
+//     invalid_state_rejections so queue_full_retries never conflates capacity
+//     pressure with lifecycle violations.
+// Every AsyncBackend returns invalid_state/would_block for those cases, and
+// tally_submit counts them here once, uniformly across backends. Backends MUST
+// NOT also bump these counters for the same event — that double-counts.
 void tally_submit(AsyncStats* s, const Result<void>& r) {
     if (!s) return;
     ++s->submit_calls;
     if (r.has_value()) {
         ++s->submitted_ops;
-    } else if (r.error().code == IoError::Code::invalid_state) {
-        ++s->queue_full_retries;
     } else if (r.error().code == IoError::Code::would_block) {
         // Phase B (ADR Decision 6/13): configured-capacity pressure is reported
         // as would_block by the reference backends; it is the canonical
-        // queue-full retry signal (distinct from lifecycle invalid_state, which
-        // the arena-level capacity_rejections counter tracks separately).
+        // queue-full retry signal (the arena-level capacity_rejections counter
+        // tracks the same event at the arena).
         ++s->queue_full_retries;
+    } else if (r.error().code == IoError::Code::invalid_state) {
+        // Caller lifecycle violation (non-idle Completion, admission closed,
+        // lifecycle misuse) — NOT capacity pressure. Counted in its own metric
+        // so queue_full_retries never conflates the two (P1-05).
+        ++s->invalid_state_rejections;
     }
 }
 void update_max_outstanding(AsyncStats* s, std::size_t cur) {

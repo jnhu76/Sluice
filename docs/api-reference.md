@@ -1183,7 +1183,12 @@ reference backends (FakeAsyncBackend, SyncBackend). The slot bound at commit
 remains in use (`slot_in_use` accounting) until `reset()` — or ready-Completion
 destruction — returns it to the bounded arena with `generation++`. The context/
 backend must therefore outlive every bound slot: destroying a context (or arena)
-while any slot is still bound fails fast in Debug and Release.
+while any slot is still bound fails fast in Debug and Release. The release uses
+the completed-binding authority (`release_completed_binding`): ANY release
+failure (stale handle, live enqueue pin, open waiter registration, wrong slot
+state) is an internal protocol violation and fails fast — a silently-failed
+release would let the `Completion` become reusable while its old slot stays
+permanently in use.
 
 `detail::next_reap_seq()` is a free function in `sluice::async::detail`, not
 part of the public `Completion` surface.

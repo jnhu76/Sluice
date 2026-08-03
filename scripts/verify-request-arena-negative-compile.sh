@@ -6,10 +6,10 @@
 #
 # Verifies that the slot-lifecycle authority is compile-enforced: ordinary
 # application code cannot directly mutate a RequestSlot's state, generation,
-# enqueue-in-flight pin, terminal result, or waiter registration. Every
-# transition is owned by RequestArena under the leaf slot-lifecycle mutex
-# (ADR Decision 3 / Decision 5); the mutating fields are private (friend
-# RequestArena only).
+# enqueue-in-flight pin, terminal result, waiter registration, or Completion
+# publication binding. Every transition is owned by RequestArena under the leaf
+# slot-lifecycle mutex (ADR Decision 3 / Decision 5); the mutating fields are
+# private (friend RequestArena only).
 #
 # Each NEG_<KIND> macro in the probe source selects one forbidden field write;
 # the script asserts that compiling the probe with that macro defined FAILS with
@@ -57,6 +57,7 @@ negative_cases=(
   "NEG_SLOT_PIN_PRIVATE:private|declared private|inaccessible|not accessible"
   "NEG_SLOT_TERMINAL_PRIVATE:private|declared private|inaccessible|not accessible"
   "NEG_SLOT_REGISTRATION_PRIVATE:private|declared private|inaccessible|not accessible"
+  "NEG_SLOT_BINDING_PRIVATE:private|declared private|inaccessible|not accessible"
 )
 
 echo "=== Phase B RequestArena negative-compile gate ==="

@@ -18,8 +18,17 @@
 // identity-bearing ReadySink. The public submit_*/poll/wait_one/cancel surface
 // is unchanged (ADR Decision 7); the RequestKey is bound privately during
 // commit and resolved internally for cancel. The synthetic terminal result is
-// stored at submit time (record_terminal) so dispatch deterministically
+// stored at dispatch time (record_terminal) so poll deterministically
 // transitions pending/enqueued -> backend_ready; poll()/wait_one() reaps.
+//
+// Identity (review C2): the Completion publication binding lives IN the
+// RequestSlot record (install_publication_binding before the Completion CAS);
+// reap validates it and publishes Completion-ready through it inside the leaf
+// domain. There is NO parallel unordered_map identity bridge — cancel resolves
+// a Completion* by the arena's bounded O(capacity) scan. Pre-commit
+// bookkeeping is transactional (review C1): every pre-commit failure path
+// rolls the reservation back with zero side effects (Completion untouched,
+// slot freed).
 //
 // Cancel (ADR Decision 11): cancel() resolves the Completion* to its slot
 // handle and records the canceled terminal under the arena's leaf domain. The
@@ -41,7 +50,6 @@
 #include <cstdint>
 #include <optional>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 
 namespace sluice::async {
@@ -83,22 +91,29 @@ class SyncBackend : public AsyncBackend {
         return dispatch_and_reap();
     }
 
-    // ADR Decision 11: cancel resolves the Completion* to its slot handle and
-    // records the canceled terminal. The Completion stays outstanding; poll()/
-    // wait_one() publishes through the unified reap path. Idempotent: a second
-    // cancel on an already-terminal slot is a no-op (already_terminal). Cancel
-    // on an unknown/already-reaped Completion is a no-op. canceled_ops /
-    // completion_errors are tallied at reap (the publish path) so the canonical
-    // accounting is single-sourced.
+    // ADR Decision 11: cancel resolves the Completion* to its slot handle (the
+    // arena's bounded scan of the slot records' own bindings — no parallel
+    // map) and records the canceled terminal. The Completion stays outstanding;
+    // poll()/wait_one() publishes through the unified reap path. Idempotent: a
+    // second cancel on an already-terminal slot is a no-op (already_terminal).
+    // Cancel on an unknown/already-reaped Completion is a no-op. canceled_ops /
+    // completion_errors are tallied at the terminal-winner site (exactly-once;
+    // the static publish thunks have no instance state to tally from).
     void cancel(Completion<std::size_t>& c) override {
-        auto h = lookup(&c);
-        if (h.has_value())
-            (void)arena_.cancel(*h);
+        auto h = arena_.resolve_completion(&c);
+        if (h.has_value()) {
+            if (arena_.cancel(*h) == detail::CancelDisposition::requested) {
+                tally_canceled();
+            }
+        }
     }
     void cancel(Completion<void>& c) override {
-        auto h = lookup(&c);
-        if (h.has_value())
-            (void)arena_.cancel(*h);
+        auto h = arena_.resolve_completion(&c);
+        if (h.has_value()) {
+            if (arena_.cancel(*h) == detail::CancelDisposition::requested) {
+                tally_canceled();
+            }
+        }
     }
 
     std::size_t outstanding() const noexcept override { return arena_.accepted_outstanding(); }
@@ -124,9 +139,12 @@ class SyncBackend : public AsyncBackend {
     // Five-stage admission for a byte-carrying op. The synthetic terminal is
     // NOT recorded here: it is decided at dispatch (poll) time so a cancel
     // between submit and poll can still win the terminal transition (Scheme B).
-    // The requested length is carried in the binding for the dispatch step.
-    // Bind/FIFO bookkeeping happens BEFORE the Completion CAS (I9 / ADR
-    // Decision 14): nothing allocates after the submit-success LP.
+    // The requested length is carried in the slot's publication binding for
+    // the dispatch step. Transactional pre-commit path (review C1): the
+    // publication binding is installed INTO the slot record (no map insert,
+    // no allocation) and every pre-commit failure rolls the reservation back
+    // with zero side effects; a lost Completion CAS rolls back only this
+    // submit's slot. Nothing after commit_binding may throw (I9).
     template <class Op>
     Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind,
                              std::size_t len) {
@@ -141,24 +159,29 @@ class SyncBackend : public AsyncBackend {
         // Stage 2: prepare (op kind + fd/buffer borrow metadata).
         auto ph = arena_.prepare(h, kind, borrow_of(op));
         if (!ph.has_value()) {
-            (void)arena_.release(h); // roll back reservation
+            (void)arena_.rollback_reserved_or_prepared(h); // roll back reservation
             return make_unexpected<void>(ph.error());
         }
-        // Pre-CAS bookkeeping (may allocate; failure rolls back cleanly).
-        bind(h, &c, len);
+        // Stage 2.5: install the slot's Completion publication binding (review
+        // C2 — the slot is the identity carrier; reap publishes through it
+        // inside the leaf domain). A later CAS loss rolls the binding back
+        // with the slot.
+        auto bh = arena_.install_publication_binding(h, &c, len, &publish_size_ready);
+        if (!bh.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(bh.error());
+        }
         // Stage 3a: Completion CAS idle -> binding elects ONE submitter. Loser:
-        // roll back only our own slot + binding entry.
+        // roll back only our own slot + binding (zero side effects).
         if (!begin_binding(c)) {
-            bindings_.erase(h.slot.value);
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         // Stage 3b: commit (pending + pin + accepted++ + borrow begins).
         auto ch = arena_.commit(h);
         if (!ch.has_value()) {
             rollback_binding_before_accept(c);
-            bindings_.erase(h.slot.value);
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         // Stage 3c: install the slot-release capability, then publish
@@ -179,20 +202,22 @@ class SyncBackend : public AsyncBackend {
         detail::SlotHandle h = rh.value();
         auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
         if (!ph.has_value()) {
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(ph.error());
         }
-        bind(h, &c);
+        auto bh = arena_.install_publication_binding(h, &c, 0, &publish_void_ready);
+        if (!bh.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(bh.error());
+        }
         if (!begin_binding(c)) {
-            bindings_.erase(h.slot.value);
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         auto ch = arena_.commit(h);
         if (!ch.has_value()) {
             rollback_binding_before_accept(c);
-            bindings_.erase(h.slot.value);
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         install_binding(c, &arena_, h);
@@ -215,74 +240,43 @@ class SyncBackend : public AsyncBackend {
     // gets its synthetic terminal recorded (full length / void-success). A
     // cancel that already won the terminal transition (Scheme B) made
     // record_terminal a no-op on that slot — the canceled result is reaped.
-    // This is the dispatch step (design §5: "Fake/Sync deterministically
-    // transition to backend_ready but do NOT make Completion ready inline").
+    // Iterates the fixed slot array via the arena's read-only accessors (the
+    // slot's own binding carries the dispatch data — no parallel map).
     void dispatch_enqueued() {
-        for (auto& [idx, b] : bindings_) {
-            detail::SlotHandle h{detail::SlotIndex{idx}, b.generation};
-            auto st = arena_.state_of(h.slot);
-            if (st == detail::RequestState::enqueued) {
-                if (b.size_completion) {
-                    (void)arena_.record_terminal(
-                        h, detail::TerminalResult::ok_bytes(b.requested_bytes));
-                } else {
-                    (void)arena_.record_terminal(h, detail::TerminalResult::ok_void());
-                }
-            }
+        for (std::size_t i = 0; i < arena_.capacity(); ++i) {
+            detail::SlotIndex idx{static_cast<std::uint32_t>(i)};
+            if (arena_.state_of(idx) != detail::RequestState::enqueued) continue;
+            detail::SlotHandle h{idx, arena_.generation_of(idx)};
+            detail::OperationKind kind = arena_.kind_of(idx);
+            detail::TerminalResult res =
+                (kind == detail::OperationKind::read || kind == detail::OperationKind::write)
+                    ? detail::TerminalResult::ok_bytes(arena_.requested_bytes_of(idx))
+                    : detail::TerminalResult::ok_void();
+            (void)arena_.record_terminal(h, res);
         }
     }
 
     std::size_t dispatch_and_reap() {
         dispatch_enqueued();
-        return arena_.reap(sink_, [this](const detail::RequestArena::ReapPublication& p) {
-            publish_reaped(p);
-        });
+        return arena_.reap(sink_);
     }
 
-    // Resolve the reaped slot back to its Completion* and publish the terminal
-    // result. The SLOT IS NOT RELEASED HERE: it stays bound (slot_in_use == 1)
-    // until the caller resets or destroys the ready Completion (ADR Decision
-    // 4/15; design §9 — the caller's completion_ready -> free handshake via the
-    // release capability installed at commit). The binding is erased before
-    // publish so the Completion pointer is not retained across user-observable
-    // ready.
-    void publish_reaped(const detail::RequestArena::ReapPublication& p) {
-        auto it = bindings_.find(p.handle.slot.value);
-        if (it == bindings_.end())
-            return; // defensive: unknown slot
-        detail::SlotHandle bh{p.handle.slot, p.handle.generation};
-        if (it->second.generation.value != bh.generation.value) {
-            // The binding's generation does not match the publication; the slot
-            // was reused. Defensive only — the binding entry is erased in the
-            // same publication that carries the slot's generation, and a slot
-            // cannot be released (generation bump) before its Completion is
-            // published ready, so this cannot occur.
-            return;
-        }
-        Completion<std::size_t>* sc = it->second.size_completion;
-        Completion<void>* vc = it->second.void_completion;
-        bindings_.erase(it); // drop the pointer before publish
-        if (sc) {
-            publish(*sc, terminal_to_size(p.terminal));
-            if (stats_) {
-                if (p.terminal.stored && p.terminal.is_error &&
-                    p.terminal.error.code == IoError::Code::canceled) {
-                    ++stats_->canceled_ops;
-                } else if (p.terminal.stored && p.terminal.is_error) {
-                    ++stats_->completion_errors;
-                }
-            }
-        } else if (vc) {
-            publish(*vc, terminal_to_void(p.terminal));
-            if (stats_) {
-                if (p.terminal.stored && p.terminal.is_error &&
-                    p.terminal.error.code == IoError::Code::canceled) {
-                    ++stats_->canceled_ops;
-                } else if (p.terminal.stored && p.terminal.is_error) {
-                    ++stats_->completion_errors;
-                }
-            }
-        }
+    // --- Completion publication (review C2/C3) ---
+    // The arena publishes Completion-ready through the slot-bound thunk INSIDE
+    // the leaf domain. The thunks are written here (a trusted backend-author —
+    // they reach the protected AsyncBackend::publish helpers) and installed
+    // into the slot at submit time via install_publication_binding. They are
+    // static + type-erased: the arena never dereferences the Completion pointer
+    // itself, and the thunk does not touch the backend (no lock, no allocation).
+    static void publish_size_ready(void* completion,
+                                   const detail::TerminalResult& t) noexcept {
+        AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion),
+                              terminal_to_size(t));
+    }
+    static void publish_void_ready(void* completion,
+                                   const detail::TerminalResult& t) noexcept {
+        AsyncBackend::publish(*static_cast<Completion<void>*>(completion),
+                              terminal_to_void(t));
     }
 
     static Result<std::size_t> terminal_to_size(const detail::TerminalResult& t) noexcept {
@@ -296,43 +290,17 @@ class SyncBackend : public AsyncBackend {
         return {};
     }
 
-    // Phase B pointer-keyed bridge: map slot index -> (generation, Completion*,
-    // requested_bytes). This is the bridge until the public RequestHandle lands
-    // (later ADR); cancel/complete remain pointer-keyed in the public API (ADR
-    // Decision 7). requested_bytes carries the synthetic full-length result for
-    // the dispatch step.
-    struct Binding {
-        detail::Generation generation{};
-        Completion<std::size_t>* size_completion = nullptr;
-        Completion<void>* void_completion = nullptr;
-        std::size_t requested_bytes = 0;
-    };
-    void bind(detail::SlotHandle h, Completion<std::size_t>* c, std::size_t len) {
-        bindings_[h.slot.value] = {h.generation, c, nullptr, len};
-    }
-    void bind(detail::SlotHandle h, Completion<void>* c) {
-        bindings_[h.slot.value] = {h.generation, nullptr, c, 0};
-    }
-    std::optional<detail::SlotHandle> lookup(Completion<std::size_t>* c) const {
-        for (const auto& [idx, b] : bindings_) {
-            if (b.size_completion == c) {
-                return detail::SlotHandle{detail::SlotIndex{idx}, b.generation};
-            }
-        }
-        return std::nullopt;
-    }
-    std::optional<detail::SlotHandle> lookup(Completion<void>* c) const {
-        for (const auto& [idx, b] : bindings_) {
-            if (b.void_completion == c) {
-                return detail::SlotHandle{detail::SlotIndex{idx}, b.generation};
-            }
-        }
-        return std::nullopt;
+    // Stats tally at the TERMINAL-WINNER site (exactly-once: cancel returns
+    // `requested` only when it stored the canceled terminal; losers never
+    // tally). The tally was previously done at reap publication; both are
+    // exactly-once for an accepted op, and only the winner site is reachable
+    // from the static publish thunks (which have no instance state).
+    void tally_canceled() noexcept {
+        if (stats_) ++stats_->canceled_ops;
     }
 
     detail::RequestArena arena_;
     detail::ReferenceReadySink sink_;
-    std::unordered_map<std::uint32_t, Binding> bindings_;
 };
 
 } // namespace sluice::async

@@ -3,8 +3,10 @@
 // ADR-explicit-io-request-contract (Accepted) Decision 3: a RequestSlot holds the
 // RequestKey, the unified RequestState, the operation kind, terminal Result
 // storage, the identity-bound enqueue-in-flight pin, the single-waiter
-// registration state + stable token + move-only routing lease, and the borrow
-// metadata.
+// registration state + stable token + move-only routing lease, the borrow
+// metadata, and the type-erased Completion publication binding (installed
+// before commit; reap publishes Completion-ready through it inside the leaf
+// domain — the slot is the single identity carrier, with no parallel map).
 //
 // Every resource the accepted terminal path needs is PRE-RESERVED at the reserve
 // stage (I9: the terminal progress of an accepted request does not depend on any
@@ -96,6 +98,24 @@ struct BorrowMetadata {
     bool active = false;  // borrow lifecycle flag (commit -> completion-ready)
 };
 
+// The slot's Completion publication binding (ADR Decision 3 / review C2):
+// a type-erased publication record stored IN the slot record (construction-
+// time storage, one per slot — there is NO parallel identity map). Installed
+// by the backend BEFORE commit; reap validates it before changing any
+// accounting and publishes the Completion-ready release-store THROUGH it
+// inside the leaf slot-lifecycle domain (review C3). `completion` is an
+// opaque Completion<T>* that the arena never dereferences; `publish` is a
+// thunk written by the trusted backend-author (it reaches the protected
+// AsyncBackend::publish helpers). `requested_bytes` is dispatch-time data
+// (fake auto-mode / sync synthetic full-length result).
+struct CompletionBinding {
+    void* completion = nullptr;  // type-erased Completion<T>* (opaque to the arena)
+    std::uint64_t requested_bytes = 0;
+    void (*publish)(void* completion, const TerminalResult&) noexcept = nullptr;
+
+    bool installed() const noexcept { return publish != nullptr; }
+};
+
 class RequestSlot {
 public:
     RequestSlot() = default;
@@ -123,10 +143,6 @@ public:
     WaiterRegistration registration() const noexcept { return registration_; }
     const WaiterToken& waiter_token() const noexcept { return waiter_token_; }
     const BorrowMetadata& borrow() const noexcept { return borrow_; }
-    // True while the slot is completion_ready and this reap's publication step
-    // has not yet run (see RequestArena::reap — the allocation-free two-pass
-    // protocol).
-    bool publish_pending() const noexcept { return publish_pending_; }
 
 private:
     friend class RequestArena;  // the arena owns slot-lifecycle transitions
@@ -153,15 +169,14 @@ private:
     // Whether a registered waiter's token/lease is still stored and must be
     // delivered by reap (set at register_waiter; cleared at cancel_waiter and
     // at reap's publication step). Distinguishes "closed after delivery" from
-    // "closed, no waiter ever stored" for the allocation-free two-pass reap.
+    // "closed, no waiter ever stored".
     bool waiter_delivery_present_ = false;
 
-    // Completion-ready publication bookkeeping (I9 / Decision 14): set by reap
-    // pass 1 under the leaf domain, cleared by reap pass 2 (the per-slot
-    // publication step). Makes the two-pass reap allocation-free: pass 2
-    // re-locks per slot and copies the by-value ReadyEvent data out, so no
-    // ready-record vector is needed.
-    bool publish_pending_ = false;
+    // The slot's Completion publication binding (see CompletionBinding above).
+    // Set at install_publication_binding (before commit); cleared at release.
+    // Reap validates `installed()` before any accounting change and publishes
+    // the Completion-ready release-store through it inside the leaf domain.
+    CompletionBinding publication_binding_{};
 
     // fd/buffer borrow metadata (Decision 3 / Decision 8 / I7 / I18).
     BorrowMetadata borrow_{};

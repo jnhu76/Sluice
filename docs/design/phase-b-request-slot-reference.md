@@ -97,15 +97,22 @@ AsyncIoContext::submit_read(op, c)
   backend->submit_read(op, c)
     [NEW] reserve   : acquire a free RequestSlot + ALL post-accept resources
                       (terminal Result storage, ready/pending linkage, scratch, waiter
-                      storage) from the bounded RequestArena. Full -> would_block.
+                      storage, the type-erased Completion publication binding) from the
+                      bounded RequestArena. Full -> would_block.
     [NEW] prepare   : write RequestKey, op kind/params, Completion candidate, fd/buffer
                       borrow metadata. Malformed -> invalid_argument;
                       lifecycle/provenance -> invalid_state; capability -> not_supported.
+    [NEW] binding   : install the slot's Completion publication binding (opaque
+                      Completion*, requested_bytes, publish thunk) BEFORE the CAS —
+                      the slot IS the identity carrier; there is NO parallel map.
     [NEW] commit    : CAS Completion idle -> binding (elects ONE submitting context).
-                      Winner writes private RequestKey/ContextIdentity/release-capability,
+                      Winner writes private ContextIdentity/release-capability,
                       slot prepared -> pending, sets enqueue-in-flight pin, accepted_out++,
                       stages borrow, release-stores Completion binding -> outstanding.
                       [LP: submit-success] Loser: rollback own slot only, return invalid_state.
+                      Pre-commit bookkeeping is transactional (review C1): the fake's
+                      submission-order FIFO is a construction-time bounded ring and every
+                      failure path rolls the reservation back with zero side effects.
     [NEW] enqueue   : noexcept, allocation-free. pending -> enqueued (link pending queue,
                       dispatch) OR observes backend_ready (terminal winner first) ->
                       successful no-op (no link, no dispatch, no fail-fast, no overwrite, no
@@ -117,29 +124,32 @@ AsyncIoContext::submit_read(op, c)
   unlock
 ```
 
-Reap (ADR Decision 9, six steps, allocation-free two-pass):
+Reap (ADR Decision 9; allocation-free SINGLE-DOMAIN protocol — review C3: the
+Completion-ready release-store is the leaf domain's own linearization point):
 
 ```text
 poll() / wait_one()
-  PASS 1 (under the leaf domain), for each backend_ready slot:
-    [NEW] acquire-check enqueue pin. If still live: leave backend_ready linkage
-          unconsumed, publish nothing, no accepted_out--, no borrow end
-          (reap-ineligible). Continue.
-    validate RequestKey + Completion binding
-    close waiter registration (token/lease stay in the slot for pass 2)
-    mark publish_pending_; slot -> completion_ready; accepted_out--; borrow ends
-  PASS 2 (per-slot lock), for each publish_pending_ slot:
-    copy the by-value ReadyEvent data (key/kind/terminal/waiter delivery) to the
-    stack; clear publish_pending_; release the lock
-    publish the Completion (ready release-store = completion-ready LP)
-    invoke SynchronousReadySink::on_ready(ReadyEvent{key, kind, waiter}) noexcept
+  per slot (ONE lock acquisition per eligible slot):
+    acquire-check enqueue pin. If still live: leave backend_ready linkage
+      unconsumed, publish nothing, no accepted_out--, no borrow end
+      (reap-ineligible). Continue.
+    validate RequestKey + the slot's Completion publication binding
+      (missing binding -> request_arena_missing_binding_fail_fast — NEVER a
+      silent skip; a silent drop would lose an accepted request, AC-4)
+    close waiter registration; take any token/lease exactly-once into the
+      by-value ReadyEvent on the stack
+    slot -> completion_ready; accepted_out--; backend_ready_count--; borrow ends
+    publish the Completion THROUGH the slot-bound thunk (ready release-store =
+      completion-ready LP; an acquire observer of ready sees every effect — I18)
+  release the lock
+  invoke SynchronousReadySink::on_ready(ReadyEvent{key, kind, waiter}) noexcept
 ```
 
-No ready-record vector is allocated (I9 / Decision 14): the slot itself is the
-pre-reserved ready linkage; `publish_pending_` (same leaf domain) makes the
-publication exactly-once even under concurrent reaps, and the slot cannot be
-released between pass 1 and its pass-2 publication because the Completion is
-not ready until pass 2 publishes it.
+No ready-record vector and no per-slot publish flag are allocated (I9 / Decision
+14): the state transition itself (backend_ready -> completion_ready under the
+leaf domain) is the exactly-once authority — a concurrent reap observes
+completion_ready and skips. The slot is never touched after the lock is
+released (a caller may reset/reuse it while the sink runs — I16).
 
 Reset / ready destruction (`Completion::reset()` / `~Completion()` at `ready`):
 
@@ -147,8 +157,13 @@ Reset / ready destruction (`Completion::reset()` / `~Completion()` at `ready`):
   CAS ready -> resetting
   use the installed release capability (arena + slot handle; installed by the
   binding CAS winner at commit) to enter the leaf slot-lifecycle domain
-    verify enqueue pin acknowledged + registration closed(no_waiter) + no stored
-    token/lease (else request_slot_release_invariant_fail_fast)
+    release_completed_binding: verify enqueue pin acknowledged + registration
+    closed(no_waiter) + slot is completion_ready; ANY failure is an internal
+    protocol violation and fails fast (review I1 — a silently-failed release
+    would leave the old slot permanently slot_in_use while the Completion
+    becomes reusable; a later context destruction fail-fast). Pre-commit
+    rollback is a SEPARATE authority (rollback_reserved_or_prepared) with
+    ordinary recoverable errors.
     clear Completion binding; generation++; slot_in_use--; publish slot free
   leave domain
   release-store idle
@@ -197,10 +212,20 @@ Lifetime:       arena construction -> arena destruction; individual slots free<-
 Borrowers:      backend submit/enqueue/dispatch/reap paths; NEVER the ReadySink
 Stability:      address-stable (arena is a fixed array; slots do not move)
 
-Object:         Completion<T> binding payload (RequestKey, ContextIdentity, release capability)
+Object:         the slot's Completion publication binding (opaque Completion*, requested_bytes,
+                publish thunk)
+Owner:          RequestSlot (private field; installed by RequestArena::install_publication_binding
+                before commit; cleared at release)
+Lifetime:       install (prepared) -> commit -> completion_ready -> release
+Borrowers:      reap (validates + publishes through it INSIDE the leaf domain); cancel resolution
+                (bounded slot scan compares the binding's Completion pointer)
+Stability:      construction-time storage in the fixed slot record — the slot IS the single
+                identity carrier; there is NO parallel map (review C2)
+
+Object:         Completion<T> binding payload (arena + slot handle — the slot-release capability)
 Owner:          Completion<T> (private); only the binding-CAS winner writes it
 Lifetime:       binding -> outstanding -> ready -> resetting
-Borrowers:      none outside the slot-lifecycle domain; reap validates under the domain
+Borrowers:      none outside the slot-lifecycle domain; reset/ready-destruction use it
 Stability:      private to Completion; forge-resistant (negative-compile gate)
 ```
 

@@ -129,6 +129,22 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// Phase B (review C2 / I4 / I5 / I11): reap reached a backend_ready slot whose
+// Completion publication binding was never installed before commit. Silently
+// skipping would lose an accepted request (AC-4) and strand the Completion
+// outstanding forever. Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_missing_binding_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review I2): record_terminal on a slot that is not a legal terminal
+// candidate (reserved/prepared = not yet accepted) would strand the op forever
+// (the terminal would be stored but the op could never reach backend_ready).
+// Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_terminal_state_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

@@ -51,9 +51,10 @@ SLUICE_TEST_CASE(arena_capacity_bounded) {
     SLUICE_CHECK(arena.capacity_rejections() == 1);  // distinct metric (P1-05)
 
     // Release both reservations so the arena destructs quiescently (ADR
-    // Decision 15: destruction with slot_in_use != 0 fails fast).
-    SLUICE_CHECK(arena.release(r1.value()).has_value());
-    SLUICE_CHECK(arena.release(r2.value()).has_value());
+    // Decision 15: destruction with slot_in_use != 0 fails fast). The
+    // pre-commit rollback authority returns the non-accepted slots.
+    SLUICE_CHECK(arena.rollback_reserved_or_prepared(r1.value()).has_value());
+    SLUICE_CHECK(arena.rollback_reserved_or_prepared(r2.value()).has_value());
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
 
@@ -73,7 +74,7 @@ SLUICE_TEST_CASE(arena_generation_advances_on_release) {
     SLUICE_CHECK(first_key.generation.value == 0);
 
     // Release the only slot; its generation must increment before reuse.
-    SLUICE_CHECK(arena.release(first.value()).has_value());
+    SLUICE_CHECK(arena.rollback_reserved_or_prepared(first.value()).has_value());
     SLUICE_CHECK(arena.slot_in_use() == 0);
 
     // Re-reserve the same physical slot — generation now differs.
@@ -85,7 +86,7 @@ SLUICE_TEST_CASE(arena_generation_advances_on_release) {
 
     // The OLD handle is stale: its generation no longer matches. Releasing it
     // again must NOT act on the reused slot (I6) and returns not_found.
-    auto reresult = arena.release(first.value());
+    auto reresult = arena.rollback_reserved_or_prepared(first.value());
     SLUICE_CHECK(!reresult.has_value());
     SLUICE_CHECK(reresult.error().code == sluice::IoError::Code::not_found);
     // The second (current) reservation is untouched.
@@ -93,7 +94,7 @@ SLUICE_TEST_CASE(arena_generation_advances_on_release) {
     SLUICE_CHECK(arena.key_of(second.value().slot).generation.value ==
                  second_key.generation.value);
     // Release the live reservation so the arena destructs quiescently.
-    SLUICE_CHECK(arena.release(second.value()).has_value());
+    SLUICE_CHECK(arena.rollback_reserved_or_prepared(second.value()).has_value());
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
 
@@ -106,7 +107,7 @@ SLUICE_TEST_CASE(arena_stale_key_rejected) {
 
     sluice::async::detail::SlotHandle bogus_out_of_range{
         sluice::async::detail::SlotIndex{999}, sluice::async::detail::Generation{0}};
-    auto r1 = arena.release(bogus_out_of_range);
+    auto r1 = arena.rollback_reserved_or_prepared(bogus_out_of_range);
     SLUICE_CHECK(!r1.has_value());
     SLUICE_CHECK(r1.error().code == sluice::IoError::Code::not_found);
 
@@ -114,7 +115,7 @@ SLUICE_TEST_CASE(arena_stale_key_rejected) {
     // free and the (generation 0, free) check rejects with not_found.
     sluice::async::detail::SlotHandle bogus_free{
         sluice::async::detail::SlotIndex{1}, sluice::async::detail::Generation{0}};
-    auto r2 = arena.release(bogus_free);
+    auto r2 = arena.rollback_reserved_or_prepared(bogus_free);
     SLUICE_CHECK(!r2.has_value());
     SLUICE_CHECK(r2.error().code == sluice::IoError::Code::not_found);
     SLUICE_CHECK(arena.slot_in_use() == 0);  // nothing mutated
@@ -147,12 +148,12 @@ SLUICE_TEST_CASE(arena_accounting_tracks_slot_in_use_vs_accepted_outstanding) {
     // Releasing one drops slot_in_use; accepted_outstanding is still 0 (no commit
     // happened). If these were the same counter, releasing a non-accepted slot
     // would underflow or corrupt accepted accounting.
-    SLUICE_CHECK(arena.release(a.value()).has_value());
+    SLUICE_CHECK(arena.rollback_reserved_or_prepared(a.value()).has_value());
     SLUICE_CHECK(arena.slot_in_use() == 1);
     SLUICE_CHECK(arena.accepted_outstanding() == 0);
     SLUICE_CHECK(arena.high_water_mark() == 2);  // high-water mark does not decay
 
-    SLUICE_CHECK(arena.release(b.value()).has_value());
+    SLUICE_CHECK(arena.rollback_reserved_or_prepared(b.value()).has_value());
     SLUICE_CHECK(arena.slot_in_use() == 0);
     SLUICE_CHECK(arena.accepted_outstanding() == 0);
 }
@@ -174,7 +175,7 @@ SLUICE_TEST_CASE(arena_no_post_accept_allocation) {
     for (int round = 0; round < 1000; ++round) {
         auto h = arena.reserve();
         SLUICE_CHECK_MSG(h.has_value(), "reserve must not fail on a non-full arena");
-        SLUICE_CHECK(arena.release(h.value()).has_value());
+        SLUICE_CHECK(arena.rollback_reserved_or_prepared(h.value()).has_value());
     }
     SLUICE_CHECK(arena.capacity() == 4);                // unchanged
     SLUICE_CHECK(arena.slot_in_use() == 0);             // all released
@@ -197,22 +198,27 @@ SLUICE_TEST_CASE(arena_borrow_lifecycle) {
     SLUICE_CHECK(arena.prepare(h, sluice::async::detail::OperationKind::read,
                                sluice::async::detail::BorrowMetadata{7, buf, 16})
                      .has_value());
+    // Every reaped slot must carry a publication binding (review C2 — reap
+    // fail-fasts on a missing binding). Install a no-op binding.
+    auto br = arena.install_publication_binding(
+        h, nullptr, 16, [](void*, const sluice::async::detail::TerminalResult&) noexcept {});
+    SLUICE_CHECK(br.has_value());
     SLUICE_CHECK(!arena.borrow_active(h.slot));
     // Borrow begins at commit (I7).
     SLUICE_CHECK(arena.commit(h).has_value());
     SLUICE_CHECK(arena.borrow_active(h.slot));
 
-    // Terminal + ack + reap: borrow ends at completion-ready publication (I18).
+    // Terminal + enqueue (acks the pin) + reap: borrow ends at completion-ready
+    // publication (I18).
     SLUICE_CHECK(arena.record_terminal(h, sluice::async::detail::TerminalResult::ok_bytes(16)));
-    arena.acknowledge_enqueue_pin(h);
+    SLUICE_CHECK(arena.enqueue(h) == sluice::async::detail::EnqueueOutcome::terminal_noop);
     struct NoopSink : sluice::async::detail::SynchronousReadySink {
         void on_ready(sluice::async::detail::ReadyEvent) noexcept override {}
     } sink;
-    SLUICE_CHECK(arena.reap(sink, [](const sluice::async::detail::RequestArena::ReapPublication&) {}) == 1);
+    SLUICE_CHECK(arena.reap(sink) == 1);
     SLUICE_CHECK(!arena.borrow_active(h.slot));       // borrow ended
-    SLUICE_CHECK(!arena.publish_pending(h.slot));     // publication consumed
     SLUICE_CHECK(arena.slot_in_use() == 1);           // slot still bound until release
 
-    SLUICE_CHECK(arena.release(h).has_value());
+    arena.release_completed_binding(h);
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }

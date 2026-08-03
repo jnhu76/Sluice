@@ -175,8 +175,13 @@ public:
         }
         if (s == State::ready && release_arena_ != nullptr) {
             // Ready-Completion destruction releases the bound slot (Decision 15
-            // / design §9 completion_ready -> free authority).
-            (void)release_arena_->release(bound_slot_);
+            // / design §9 completion_ready -> free authority). The completed-
+            // binding release authority fails fast on ANY failure (review I1):
+            // a release that silently failed would let this address die while
+            // its old slot stays permanently slot_in_use (a later context
+            // destruction fail-fast) — an internal protocol violation, not a
+            // recoverable user error.
+            release_arena_->release_completed_binding(bound_slot_);
         }
     }
 
@@ -247,11 +252,14 @@ public:
         // half of the completion_ready -> free transition. The bound slot is
         // returned to the arena (generation++) under the leaf slot-lifecycle
         // domain — allocation-free, no I/O/Scheduler/backend-progress wait, no
-        // upward lock. Fail-fast guards inside the arena release reject a live
-        // enqueue pin or an open/unconsumed waiter registration. Probe-driven
+        // upward lock. The completed-binding release authority fails fast on
+        // ANY failure (review I1): a release that silently failed would let
+        // this Completion become reusable while its old slot stays permanently
+        // slot_in_use (a later context destruction fail-fast) — an internal
+        // protocol violation, not a recoverable user error. Probe-driven
         // Completions (no arena binding) skip this.
         if (release_arena_ != nullptr) {
-            (void)release_arena_->release(bound_slot_);
+            release_arena_->release_completed_binding(bound_slot_);
         }
         clear_binding_for_backend();
         storage_ = Storage{};
@@ -465,8 +473,11 @@ public:
             detail::completion_authority_fail_fast();
         }
         if (s == State::ready && release_arena_ != nullptr) {
-            // Ready-Completion destruction releases the bound slot (Decision 15).
-            (void)release_arena_->release(bound_slot_);
+            // Ready-Completion destruction releases the bound slot (Decision 15
+            // / design §9). The completed-binding release authority fails fast
+            // on ANY failure (review I1 — see the Completion<T> template's
+            // destructor note).
+            release_arena_->release_completed_binding(bound_slot_);
         }
     }
 
@@ -512,10 +523,12 @@ public:
             detail::completion_authority_fail_fast();
         }
         // Phase B (ADR Decision 15 / design §9): reset() releases the bound
-        // slot (generation++) under the leaf slot-lifecycle domain. Probe-driven
-        // Completions (no arena binding) skip this.
+        // slot (generation++) under the leaf slot-lifecycle domain, failing
+        // fast on ANY release failure (review I1 — see the Completion<T>
+        // template's reset() note). Probe-driven Completions (no arena binding)
+        // skip this.
         if (release_arena_ != nullptr) {
-            (void)release_arena_->release(bound_slot_);
+            release_arena_->release_completed_binding(bound_slot_);
         }
         clear_binding_for_backend();
         has_error_ = false;

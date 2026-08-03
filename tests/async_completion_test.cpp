@@ -221,13 +221,17 @@ SLUICE_TEST_CASE(async_stats_increment_on_submit_poll_wait) {
     SLUICE_CHECK(s.poll_calls == 1);
     SLUICE_CHECK(s.completed_ops == 1);
 
-    // Submit-into-outstanding rejection increments queue_full_retries.
+    // Submit-into-outstanding rejection is a CALLER lifecycle violation
+    // (invalid_state) — it counts invalid_state_rejections, NOT
+    // queue_full_retries (P1-05: capacity pressure and lifecycle violations
+    // are distinct metrics).
     Completion<std::size_t> c2;
     SLUICE_CHECK(ctx.submit_read(ReadOp{0, b, 8, 0}, c2).has_value());
     // Now submit into c2 again — outstanding -> rejected.
     auto rej = ctx.submit_read(ReadOp{0, b, 8, 0}, c2);
     SLUICE_CHECK(!rej.has_value());
-    SLUICE_CHECK(s.queue_full_retries >= 1);
+    SLUICE_CHECK(s.invalid_state_rejections >= 1);
+    SLUICE_CHECK(s.queue_full_retries == 0);  // lifecycle violation is not queue-full
     ctx.poll();  // drain so destructor is clean
 }
 

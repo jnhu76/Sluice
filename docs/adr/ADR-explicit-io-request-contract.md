@@ -1192,19 +1192,25 @@ remain open for Phase D/E. Evidence map:
 | acquire observer sees all effects (I18) | `:: acquire_observer_of_ready_sees_all_effects` |
 | close_admission rejects new reserve; existing reapable still reaps | `:: close_admission_rejects_new_but_existing_reapable` |
 | allocation-free slot release (1000-cycle convergence; generation advanced 1000×) | `:: allocation_free_slot_release_proof` |
-| genuine concurrent submit ‖ cancel/reap (TSan, 0 data races) | `:: concurrent_submit_cancel_enqueue` |
-| release-with-live-pin / release-with-registered-waiter fail-fast (Debug AND Release) | `tests/request_arena_death_test.cpp` (2 death + 1 control) |
+| genuine concurrent submit ‖ cancel/reap (TSan, 0 data races); the test asserts the pin is already acknowledged after join (no maskable extra-ack) | `:: concurrent_submit_cancel_enqueue` |
+| **backend-level Scheme-B race** (real FakeAsyncBackend submit thread + Completion binding + deterministic commit/enqueue barrier pause; cancel wins pending; resumed enqueue no-ops + acks; poll reaps canceled) | `tests/backend_scheme_b_race_test.cpp` (links `sluice_async_internal_testing` for the `SubmitPauseGate` seam) |
+| **zero-allocation accepted path + transactional rejection**: counting + always-throw operator new drives submit → poll → reset (and the would_block / binding-CAS-loss rejection paths) — zero allocations, zero side effects, no result contamination | `tests/reference_backend_no_alloc_test.cpp` (3 cases) |
+| release-with-live-pin / release-with-registered-waiter / **reap-without-binding / record-terminal-on-prepared** fail-fast (Debug AND Release) + valid-release control | `tests/request_arena_death_test.cpp` (7 death/control cases) |
 | Fake/Sync migrate onto the arena; observable slot lifecycle + capacity rejections (`would_block`, never `invalid_state`) + exactly-once deliveries + caller-handshake slot release | `tests/reference_backend_arena_lifecycle_test.cpp` (6 cases); `tests/completion_binding_test.cpp` (release-capability cases) |
 | ordinary caller cannot forge a binding / claim / publish / reap_seq / install or clear the slot-release capability | `scripts/verify-completion-authority-negative-compile.sh` (12/12) |
-| ordinary caller cannot mutate slot state/generation/pin/terminal/registration | `scripts/verify-request-arena-negative-compile.sh` (5/5) |
+| ordinary caller cannot mutate slot state/generation/pin/terminal/registration/publication-binding | `scripts/verify-request-arena-negative-compile.sh` (6/6) |
+| metric vocabulary (P1-05): `would_block` → `queue_full_retries`; `invalid_state` → `AsyncStats::invalid_state_rejections` (never conflated) | `tests/async_completion_test.cpp :: async_stats_increment_on_submit_poll_wait`; `tests/reference_backend_no_alloc_test.cpp` |
 
-Gate results (command + count): Clang Debug 132/132; Clang Release 132/132; ASan/UBSan 132/132
-clean; TSan 132/132 with 0 data races (including the genuine two-thread concurrent case);
-negative-compile 12/12 + 5/5; doc-check PASS. Post-review fixes closed the three P1 findings —
-allocation-free two-pass reap + pre-CAS backend bookkeeping (I9/Decision 14), `would_block`
-propagation (Decision 6/13), and the caller-handshake slot release at reset/ready-destruction
-(Decision 4/15) with the arena-destruction fail-fast guard. Full evidence ledger:
-`docs/architecture/phase-b-compliance-gate.md`.
+Gate results (command + count): Clang Debug 134/134; Clang Release 134/134; ASan/UBSan 134/134
+clean; TSan 134/134 with 0 data races (including the genuine two-thread concurrent case and the
+backend-level Scheme-B race); negative-compile 12/12 + 6/6; doc-check PASS. Round-2 review fixes
+closed the three Critical findings (transactional pre-commit admission with the publication
+binding in the slot record + construction-time bounded ring — C1; the parallel `bindings_` map
+removed, reap validates the slot's own binding and publishes Completion-ready through it INSIDE
+the leaf domain — C2/C3) and the three Important findings (completed-binding release fails fast
+on any failure — I1; `record_terminal` validates state before writing and the unconditional
+pin-acknowledge escape hatch is gone — I2; `queue_full_retries` no longer counts lifecycle
+violations — I3). Full evidence ledger: `docs/architecture/phase-b-compliance-gate.md`.
 
 
 ## Open risks and deferred decisions

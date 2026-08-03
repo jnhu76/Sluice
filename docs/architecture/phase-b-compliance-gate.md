@@ -130,6 +130,7 @@ the Result column reads "PENDING — commit N".
 | generation advances on release; stale key rejected (I6) | `request_arena_test.cpp :: arena_generation_advances_on_release`, `:: arena_stale_key_rejected` | PENDING — commit 1 |
 | slot_in_use vs accepted_outstanding are distinct counters | `request_arena_test.cpp :: arena_accounting_tracks_slot_in_use_vs_accepted_outstanding` | PENDING — commit 1 |
 | accepted terminal path allocation-independent (I9) | `request_arena_test.cpp :: arena_no_post_accept_allocation` | PENDING — commit 1 |
+| **explicit metric vocabulary (P1-05)**: `queue_full_retries` counts ONLY capacity pressure (would_block); caller lifecycle violations (invalid_state) count `invalid_state_rejections` — the two are never conflated | `async_completion_test.cpp :: async_stats_increment_on_submit_poll_wait` (invalid_state -> invalid_state_rejections, queue_full_retries stays 0), `reference_backend_no_alloc_test.cpp :: sync_full_arena_rejection_is_allocation_free` (would_block -> queue_full_retries), `uring_backend_test.cpp :: uring_sqe_pressure_increments_queue_full_retries` (backend_error SQE-pressure path, unchanged) | PASS (round-2 review-fix: `AsyncStats::invalid_state_rejections` added; tally_submit split) |
 
 ### Completion binding
 
@@ -139,7 +140,8 @@ the Result column reads "PENDING — commit N".
 | binding rollback restores idle (winner that fails pre-commit) | `completion_binding_test.cpp :: binding_rollback_restores_idle` | PASS (commit 2) |
 | binding unobservable: cancel/await gate on outstanding()==false while binding (I15) | `completion_binding_test.cpp :: binding_cas_elects_one_context` asserts !outstanding() while binding | PASS (commit 2) |
 | destroy/reset in binding -> fail-fast (Debug AND Release) | `completion_authority_death_test.cpp :: destroy-in-binding`, `:: reset-in-binding` | PASS (commit 2; Debug + Release + ASan/UBSan) |
-| ordinary caller cannot forge/commit/rollback a binding | `completion_authority_negative_compile_probe.cpp` NEG_BEGIN/COMMIT/ROLLBACK_BINDING_PRIVATE + `verify-completion-authority-negative-compile.sh` (10/10 cases) | PASS (commit 2) |
+| ordinary caller cannot forge/commit/rollback a binding | `completion_authority_negative_compile_probe.cpp` NEG_BEGIN/COMMIT/ROLLBACK_BINDING_PRIVATE + `verify-completion-authority-negative-compile.sh` (12/12 cases) | PASS (commit 2 + round-2) |
+| **the Completion publication binding lives IN the RequestSlot record** (installed before commit, validated by reap before any accounting change, published through inside the leaf domain); missing binding -> fail-fast, never a silent drop (review C2/C3, I4/I5/I11) | `request_lifecycle_scheme_b_test.cpp :: acquire_observer_of_ready_sees_all_effects` (real Completion + real thunk + acquire-load ready), `request_arena_death_test.cpp :: reap-without-binding` (death), `completion_binding_test.cpp` (real thunk publish), `reference_backend_arena_lifecycle_test.cpp` (backend lifecycle), `request_arena_negative_compile_probe.cpp` NEG_SLOT_BINDING_PRIVATE (6/6) | PASS (round-2 review-fix: the parallel `bindings_` unordered_map is GONE — the slot record is the single identity carrier; cancel resolves via a bounded O(capacity) scan) |
 
 ### Scheme B (the load-bearing arbitration)
 
@@ -150,7 +152,8 @@ the Result column reads "PENDING — commit N".
 | exactly one terminal winner among pending-cancel / dispatch-error / ordinary (I10) | `request_lifecycle_scheme_b_test.cpp :: exactly_one_terminal_winner` | PASS (commit 3) |
 | ReadyEvent survives reset/reuse during sink callback; no dangling pointer (I16) | `request_lifecycle_scheme_b_test.cpp :: ready_sink_event_survives_reset_during_callback` | PASS (commit 3) |
 | single-waiter cardinality; wait-cancel doesn't cancel I/O; lease exactly-once (I13) | `request_lifecycle_scheme_b_test.cpp :: waiter_registration_cardinality`, `:: reap_wins_lease_over_wait_cancel` | PASS (commit 3) |
-| TSan under genuine concurrency (submit thread ‖ cancel/reap thread) | `request_lifecycle_scheme_b_test.cpp :: concurrent_submit_cancel_enqueue` | PASS (commit 5; Debug + TSan 132/132, 0 data races; 2000 iterations of submit-vs-cancel on one slot, ~9% record_wins / ~91% cancel_wins — both terminal-winner paths exercised) |
+| TSan under genuine concurrency (submit thread ‖ cancel/reap thread) | `request_lifecycle_scheme_b_test.cpp :: concurrent_submit_cancel_enqueue` | PASS (commit 5; Debug + TSan 132/132, 0 data races; 2000 iterations of submit-vs-cancel on one slot, ~9% record_wins / ~91% cancel_wins — both terminal-winner paths exercised; review-fix: the test now asserts the enqueue pin is ALREADY acknowledged after join — no extra acknowledge that could mask a pin bug) |
+| **backend-level Scheme-B race** (real FakeAsyncBackend submit thread + Completion binding + deterministic barrier pause between commit and enqueue; cancel wins the pending terminal; resumed enqueue no-ops and acks the pin; poll reaps canceled) | `backend_scheme_b_race_test.cpp :: backend_scheme_b_cancel_wins_between_commit_and_enqueue` (links sluice_async_internal_testing for the SubmitPauseGate seam) | PASS (round-2 review-fix: closes review test-gap 1 — the arena trace alone did not prove the real backend integration) |
 
 ### Backend migration (Fake + Sync)
 
@@ -160,7 +163,8 @@ the Result column reads "PENDING — commit N".
 | bounded admission observable: arena_capacity_rejections increments on full; capacity pressure returns synchronous **would_block** (never invalid_state — ADR Decision 6/13); rejected Completion stays idle | `reference_backend_arena_lifecycle_test.cpp :: sync_arena_bounded_admission_rejects_full`, `:: fake_arena_bounded_admission_rejects_full` | PASS (commit 4 + review-fix: error-code propagation + idle-Completion assertion) |
 | generation advances on slot reuse (I6); exactly-once sink deliveries per reaped op (Decision 9) | `reference_backend_arena_lifecycle_test.cpp :: sync_arena_slot_reuse_advances_generation` | PASS (commit 4) |
 | cancel drives the Scheme-B terminal path through the arena (pointer-keyed -> SlotHandle -> canceled terminal at cancel() time -> reap -> Completion-ready) | `reference_backend_arena_lifecycle_test.cpp :: fake_arena_cancel_drives_scheme_b_terminal` | PASS (commit 4 + review-fix: cancel wins via `arena.cancel` directly; no poll-time drop) |
-| **slot release is the caller's reset/ready-destruction handshake**: slot stays bound (slot_in_use == 1) through reap; reset()/ready destruction returns it (generation++) | `reference_backend_arena_lifecycle_test.cpp :: *_slot_in_use_tracks_lifecycle` (post-review), `completion_binding_test.cpp :: binding_release_capability_reset_releases_slot`, `:: binding_release_capability_ready_destruction_releases_slot` | PASS (review-fix: ADR Decision 4/15 — release at reset, not at reap) |
+| **slot release is the caller's reset/ready-destruction handshake**: slot stays bound (slot_in_use == 1) through reap; reset()/ready destruction returns it (generation++); the completed-binding release authority fails fast on ANY release failure (review I1); pre-commit rollback is a separate recoverable authority | `reference_backend_arena_lifecycle_test.cpp :: *_slot_in_use_tracks_lifecycle` (post-review), `completion_binding_test.cpp :: binding_release_capability_reset_releases_slot`, `:: binding_release_capability_ready_destruction_releases_slot`, `request_arena_death_test.cpp :: release-with-live-pin`, `:: release-with-registered-waiter` (death) | PASS (round-2 review-fix: `release_completed_binding` vs `rollback_reserved_or_prepared` — the caller handshake can no longer ignore a failed release) |
+| **transactional pre-commit rejection (review C1)**: a lost binding CAS leaves Completion untouched, slot_in_use / accepted_outstanding / submission-FIFO unchanged, and produces no future result contamination — all under always-throw operator new (zero allocation) | `reference_backend_no_alloc_test.cpp :: fake_cas_loss_rejection_zero_side_effects`, `:: sync_full_arena_rejection_is_allocation_free` | PASS (round-2 review-fix: the parallel `bindings_` map and the unbounded FIFO deque are gone — binding in the slot record + construction-time bounded ring; every pre-commit failure rolls the reservation back) |
 | public submit/cancel/complete surface unchanged (ADR Decision 7) — every pre-existing fake/cancel/completion test passes unmodified | `fake_backend_test.cpp` (7/7), `async_cancel_test.cpp` (5/5), `async_completion_test.cpp` (13/13), `backend_conformance_test.cpp` | PASS (commit 4) |
 
 ### Remaining lifecycle / shutdown / authority
@@ -169,34 +173,38 @@ the Result column reads "PENDING — commit N".
 |---|---|---|
 | generation reuse rejects stale submit/cancel/reap/register/release | `request_lifecycle_scheme_b_test.cpp :: generation_reuse_stale_attempts` | PASS (commit 5; every post-reserve authority rejects a stale-generation handle) |
 | cancel races per state (pending/enqueued/backend_ready -> already_terminal; unknown -> not_found) | `request_lifecycle_scheme_b_test.cpp :: cancel_races_per_state` | PASS (commit 5) |
-| acquire observer of ready sees all effects (result + closed reg + token + completion-ready + accepted_out-- + **borrow end**) (I18) | `request_lifecycle_scheme_b_test.cpp :: acquire_observer_of_ready_sees_all_effects`, `:: pending_cancel_wins_before_enqueue_then_enqueue_noop` (borrow assertions), `request_arena_test.cpp :: arena_borrow_lifecycle` | PASS (commit 5 + review-fix: borrow metadata implemented — borrow begins at commit, ends at completion-ready publication) |
+| acquire observer of ready sees all effects (result + closed reg + token + completion-ready + accepted_out-- + **borrow end**) (I18) | `request_lifecycle_scheme_b_test.cpp :: acquire_observer_of_ready_sees_all_effects` (round-2: drives a REAL Completion through ProbeBackend::publish_size_ready and acquire-loads Completion::ready() — the real linearization point), `:: pending_cancel_wins_before_enqueue_then_enqueue_noop` (borrow assertions), `request_arena_test.cpp :: arena_borrow_lifecycle` | PASS (commit 5 + round-2 review-fix: borrow metadata implemented — borrow begins at commit, ends at completion-ready publication; the I18 proof now uses a real Completion-ready acquire) |
 | allocation-free slot release; no I/O/Scheduler/backend-progress wait; no upward lock | `request_lifecycle_scheme_b_test.cpp :: allocation_free_slot_release_proof` | PASS (commit 5; 1000 release cycles converge; generation advanced 1000× on one slot; ASan/UBSan in the gate run prove no allocation side-effects) |
-| **allocation-free completion-ready publication (I9 / Decision 14)**: reap is a two-pass protocol over the fixed slot array (no ready-record vector); submit does not allocate after the commit LP (binding/FIFO inserts happen pre-CAS) | `request_lifecycle_scheme_b_test.cpp` (all reap cases), `request_arena_test.cpp :: arena_no_post_accept_allocation`, ASan/UBSan runs | PASS (review-fix: removed the per-reap `std::vector<ReapPublication>` and the post-commit `bindings_`/FIFO inserts — P0-02's failure mode is closed at the reference layer) |
+| **allocation-free completion-ready publication (I9 / Decision 14)**: reap is a SINGLE-DOMAIN protocol over the fixed slot array (no ready-record vector, no per-slot publish flag — the backend_ready -> completion_ready transition is the exactly-once authority); the Completion-ready release-store happens INSIDE the leaf domain (review C3); submit does not allocate after the commit LP (publication binding lives in the slot record; the fake's FIFO is a construction-time bounded ring) | `request_lifecycle_scheme_b_test.cpp` (all reap cases), `reference_backend_no_alloc_test.cpp` (counting + always-throw operator new: the accepted submit -> poll -> reset path performs ZERO allocations), `request_arena_test.cpp :: arena_no_post_accept_allocation` | PASS (round-2 review-fix: binding-in-slot + single-domain reap + bounded ring; P0-02's failure mode is closed at the reference layer) |
 | close_admission rejects new reserve but existing reapable still reaps (Decision 15) | `request_lifecycle_scheme_b_test.cpp :: close_admission_rejects_new_but_existing_reapable` | PASS (commit 5; also found+fixed an arena bug where reserve() did not consult admission_closed_) |
-| death: release-with-live-pin, release-with-registered-waiter, **enqueue-before-commit, destroy-arena-with-slot-in-use** (Debug AND Release) | `request_arena_death_test.cpp` (5 death/control cases) | PASS (commit 5 + review-fix: two new fail-fast boundaries — illegal enqueue state; non-quiescent arena destruction) |
+| death: release-with-live-pin, release-with-registered-waiter, **enqueue-before-commit, destroy-arena-with-slot-in-use, reap-without-binding, record-terminal-on-prepared** (Debug AND Release) | `request_arena_death_test.cpp` (7 death/control cases) | PASS (commit 5 + round-2 review-fix: two new fail-fast boundaries — illegal enqueue state; non-quiescent arena destruction; missing publication binding; terminal on a non-accepted slot) |
 | death: destroy-in-binding, reset-in-binding, destroy-outstanding, reset-outstanding, double-publish, concurrent-publish-loser | `completion_authority_death_test.cpp` (commit 2 + existing) | PASS (commit 2) |
-| ordinary caller cannot mutate slot state / generation / enqueue pin / terminal / registration | `request_arena_negative_compile_probe.cpp` + `verify-request-arena-negative-compile.sh` (5/5 cases) | PASS (commit 5) |
+| ordinary caller cannot mutate slot state / generation / enqueue pin / terminal / registration / **publication binding** | `request_arena_negative_compile_probe.cpp` + `verify-request-arena-negative-compile.sh` (6/6 cases) | PASS (commit 5 + round-2: NEG_SLOT_BINDING_PRIVATE added) |
 | ordinary caller cannot forge/commit/rollback a binding / claim / publish / reap_seq / **install or clear the slot-release capability** | `completion_authority_negative_compile_probe.cpp` + `verify-completion-authority-negative-compile.sh` (12/12 cases) | PASS (commit 2 + review-fix) |
 
 ### Sanitizers / modes
 
 | Gate | Command | Result |
 |---|---|---|
-| Clang Debug | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS (commit 5: 132/132 passed, 0 failed) |
-| Clang Release (§6.1) | `xmake f -m release --toolchain=clang -y && ...` | PASS (commit 5: 132/132 passed, 0 failed) |
-| ASan + UBSan (§6.2) | `xmake f -m asanubsan --toolchain=clang -y && ...` | PASS (commit 5: 132/132 passed, 0 sanitizer warnings) |
-| TSan (§6.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && ...` | PASS (commit 5: 132/132 passed, 0 data races — including the genuine two-thread `concurrent_submit_cancel_enqueue` case) |
-| negative-compile | `scripts/verify-completion-authority-negative-compile.sh` (10/10) + `scripts/verify-request-arena-negative-compile.sh` (5/5) | PASS (commit 5) |
-| doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PASS (commit 5; doc-content updates land at commit 6) |
+| Clang Debug | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS (round-2: 134/134 passed, 0 failed — includes the two new targets `reference_backend_no_alloc_test`, `backend_scheme_b_race_test`) |
+| Clang Release (§6.1) | `xmake f -m release --toolchain=clang -y && ...` | PASS (round-2: 134/134 passed, 0 failed) |
+| ASan + UBSan (§6.2) | `xmake f -m asanubsan --toolchain=clang -y && ...` | PASS (round-2: 134/134 passed, 0 sanitizer warnings — the counting/always-throw operator new composes with ASan interposition; sized/aligned delete variants route through plain free) |
+| TSan (§6.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && ...` | PASS (round-2: 134/134 passed, 0 data races — including the genuine two-thread `concurrent_submit_cancel_enqueue` case and the backend-level `backend_scheme_b_race_test`; the allocation probe is compiled out under TSan because the TSan C++ runtime owns the new/delete symbols — the lifecycle/zero-side-effect assertions remain active) |
+| negative-compile | `scripts/verify-completion-authority-negative-compile.sh` (12/12) + `scripts/verify-request-arena-negative-compile.sh` (6/6) | PASS (round-2: 18/18 — NEG_SLOT_BINDING_PRIVATE added) |
+| doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PASS (round-2) |
 
 TSan coverage MUST include (§6.3): commit/pending-cancel/enqueue, reap pin check, reset/reuse,
 cross-context binding, waiter cancel/reap.
 
 > **TSan scope note:** the 0-data-race TSan run covers the `RequestArena` protocol (the
-> leaf slot-lifecycle domain) under genuine two-thread races (`concurrent_submit_cancel_enqueue`).
-> The reference backends' pointer-keyed `bindings_` bridge is single-threaded by design —
-> the design and `AsyncIoContext::access_mtx_` serialize all backend entry points — so the
-> TSan evidence does not cover the backend map itself. Multi-threaded backend usage is a
+> leaf slot-lifecycle domain) under genuine two-thread races (`concurrent_submit_cancel_enqueue`)
+> and the backend-level Scheme-B race (`backend_scheme_b_race_test` — submit thread paused
+> between commit and enqueue via the internal-testing seam, cancel thread interleaved).
+> The reference backends' identity resolution is now the arena's bounded slot scan (the
+> pointer-keyed `bindings_` map was removed in round 2), and the submit paths are
+> single-threaded by design — `AsyncIoContext::access_mtx_` serializes all backend entry
+> points — so the TSan evidence covers the slot-domain protocol under concurrency and the
+> backend bookkeeping under the serialized domain. Multi-threaded backend usage is a
 > later-phase concern (Phase D/E backends drive their own domains).
 
 ---

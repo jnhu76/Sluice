@@ -40,13 +40,18 @@ SLUICE_TEST_CASE(binding_release_capability_reset_releases_slot) {
     detail::RequestArena arena{detail::ContextIdentity::for_testing(1), 1};
     Completion<std::size_t> c;
 
-    // Full lifecycle: reserve -> prepare -> binding CAS -> commit -> install
-    // release capability -> commit_binding (LP) -> terminal -> ack pin -> reap.
+    // Full lifecycle: reserve -> prepare -> install publication binding ->
+    // binding CAS -> commit -> install release capability -> commit_binding
+    // (LP) -> terminal -> enqueue (acks pin) -> reap.
     auto rh = arena.reserve();
     SLUICE_CHECK(rh.has_value());
     detail::SlotHandle h = rh.value();
     SLUICE_CHECK(arena.prepare(h, detail::OperationKind::read,
                                detail::BorrowMetadata{0, nullptr, 4})
+                     .has_value());
+    // The slot carries a REAL publication binding (review C2/C3): reap
+    // publishes Completion-ready through this thunk inside the leaf domain.
+    SLUICE_CHECK(arena.install_publication_binding(h, &c, 4, &ProbeBackend::publish_size_ready)
                      .has_value());
     SLUICE_CHECK(pb.begin_binding(c));
     SLUICE_CHECK(arena.commit(h).has_value());
@@ -56,16 +61,15 @@ SLUICE_TEST_CASE(binding_release_capability_reset_releases_slot) {
     SLUICE_CHECK(arena.slot_in_use() == 1);
 
     SLUICE_CHECK(arena.record_terminal(h, detail::TerminalResult::ok_bytes(4)));
-    arena.acknowledge_enqueue_pin(h);
+    SLUICE_CHECK(arena.enqueue(h) == detail::EnqueueOutcome::terminal_noop);
     struct NoopSink : detail::SynchronousReadySink {
         void on_ready(detail::ReadyEvent) noexcept override {}
     } sink;
-    // The reap publish callback is what makes the Completion ready (the arena
-    // hands the terminal payload back; the backend publishes it).
-    SLUICE_CHECK(arena.reap(sink, [&](const detail::RequestArena::ReapPublication&) {
-                      pb.publish_completion(c, Result<std::size_t>{std::size_t{4}});
-                  }) == 1);
+    // Reap publishes through the slot binding (inside the leaf domain): the
+    // Completion becomes ready; the slot is NOT freed by reap.
+    SLUICE_CHECK(arena.reap(sink) == 1);
     SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(c.result().value() == 4);
     // Reap published completion-ready but did NOT free the slot: it stays
     // bound until the caller's reset handshake (ADR Decision 4).
     SLUICE_CHECK(arena.slot_in_use() == 1);
@@ -91,18 +95,18 @@ SLUICE_TEST_CASE(binding_release_capability_ready_destruction_releases_slot) {
         SLUICE_CHECK(arena.prepare(h, detail::OperationKind::write,
                                    detail::BorrowMetadata{0, nullptr, 4})
                          .has_value());
+        SLUICE_CHECK(arena.install_publication_binding(h, &c, 4, &ProbeBackend::publish_size_ready)
+                         .has_value());
         SLUICE_CHECK(pb.begin_binding(c));
         SLUICE_CHECK(arena.commit(h).has_value());
         pb.install_binding(c, &arena, h);
         pb.commit_binding(c);
         SLUICE_CHECK(arena.record_terminal(h, detail::TerminalResult::ok_bytes(4)));
-        arena.acknowledge_enqueue_pin(h);
+        SLUICE_CHECK(arena.enqueue(h) == detail::EnqueueOutcome::terminal_noop);
         struct NoopSink : detail::SynchronousReadySink {
             void on_ready(detail::ReadyEvent) noexcept override {}
         } sink;
-        SLUICE_CHECK(arena.reap(sink, [&](const detail::RequestArena::ReapPublication&) {
-                          pb.publish_completion(c, Result<std::size_t>{std::size_t{4}});
-                      }) == 1);
+        SLUICE_CHECK(arena.reap(sink) == 1);
         SLUICE_CHECK(c.ready());
         SLUICE_CHECK(arena.slot_in_use() == 1);
         // c goes out of scope at ready: the destructor releases the slot.

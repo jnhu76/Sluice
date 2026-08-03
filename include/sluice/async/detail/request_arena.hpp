@@ -25,8 +25,18 @@
 // Locking: one leaf slot-lifecycle mutex guards reserve/release/prepare/commit/
 // enqueue/record_terminal/reap/register_waiter/cancel_waiter/cancel and the
 // free-list/generation/counters (ADR :290-297). Code holding this mutex MUST NOT
-// call ReadySink, Scheduler, user code, or backend progress (ADR :296-297). The
-// arena's reap path leaves the mutex BEFORE invoking the sink.
+// call ReadySink, Scheduler, user code, or backend progress (ADR :296-297);
+// the ONLY user-visible publication that happens under the mutex is the
+// Completion-ready release-store, which is the leaf domain's own linearization
+// point (review C3; ADR completion-ready order). The sink is invoked after the
+// lock is released.
+//
+// Identity: the RequestSlot IS the identity carrier. The slot record holds the
+// type-erased Completion publication binding (install_publication_binding
+// before commit); reap validates it before changing any accounting and
+// publishes Completion-ready through it inside the leaf domain (review C2/C3).
+// There is no parallel identity map: cancel resolves a Completion* by a bounded
+// O(capacity) scan of the fixed slot array (resolve_completion).
 //
 // Phase B reference backends (FakeAsyncBackend, SyncBackend) own one arena each.
 // The arena is single-allocation at construction (a fixed array; no per-submit
@@ -45,6 +55,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <vector>
 
 namespace sluice::async::detail {
@@ -152,7 +163,7 @@ public:
         slot.waiter_token_ = {};
         slot.waiter_lease_ = {};
         slot.waiter_delivery_present_ = false;
-        slot.publish_pending_ = false;
+        slot.publication_binding_ = {};
         slot.borrow_ = {};
         ++slot_in_use_;
         if (slot_in_use_ > high_water_mark_) high_water_mark_ = slot_in_use_;
@@ -174,6 +185,34 @@ public:
         s->borrow_ = borrow;
         s->borrow_.active = false;  // borrowing begins at commit (I7), not at prepare
         s->state_ = RequestState::prepared;
+        return {};
+    }
+
+    // --- Stage 2.5: install the Completion publication binding (review C2) ---
+    // The slot record carries the type-erased publication binding: the opaque
+    // Completion pointer, the dispatch-time requested_bytes, and the publish
+    // thunk (written by the trusted backend-author). MUST be called before
+    // commit; reap validates `installed()` before changing any accounting and
+    // publishes Completion-ready through the thunk inside the leaf domain.
+    // Exactly one binding per slot generation: a reinstall is invalid_state.
+    // On any later pre-commit failure the binding is cleared together with the
+    // slot by rollback_reserved_or_prepared — zero residue.
+    Result<void> install_publication_binding(
+        SlotHandle h, void* completion, std::uint64_t requested_bytes,
+        void (*publish)(void* completion, const TerminalResult&) noexcept) {
+        std::lock_guard<std::mutex> lk(mutex_);
+        RequestSlot* s = validate_(h);
+        if (!s) return make_unexpected<void>(IoError{IoError::Code::not_found});
+        if (s->state_ != RequestState::prepared) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        if (s->publication_binding_.installed()) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        if (publish == nullptr) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        s->publication_binding_ = {completion, requested_bytes, publish};
         return {};
     }
 
@@ -237,35 +276,111 @@ public:
         request_arena_enqueue_state_fail_fast();
     }
 
-    // Acknowledge the enqueue pin WITHOUT changing state (used by paths that
-    // observed a terminal state and want to release the pin explicitly without
-    // the enqueue call). Equivalent to enqueue() on a terminal slot.
-    void acknowledge_enqueue_pin(SlotHandle h) noexcept {
-        std::lock_guard<std::mutex> lk(mutex_);
-        if (RequestSlot* s = validate_(h)) {
-            s->enqueue_in_flight_pin_ = false;
+    // --- Stage 5: reap (ADR Decision 9 / I11 / I16 / I18 / I9 / review C3) ---
+    // Allocation-free SINGLE-DOMAIN protocol (review C3 — the Completion-ready
+    // release-store is the leaf domain's own linearization point). Per
+    // eligible slot (backend_ready, enqueue pin acknowledged) under ONE lock
+    // acquisition, in ADR order:
+    //   - validate slot + generation + the Completion publication binding
+    //     BEFORE any accounting change (review C2 / I4 / I5: a missing binding
+    //     is a fail-fast invariant violation, never a silent skip — silently
+    //     dropping would lose an accepted request and strand the Completion
+    //     outstanding forever);
+    //   - close registration, taking any waiter token/lease exactly-once;
+    //   - prepare the by-value ReadyEvent on the stack;
+    //   - end the borrow, transition to completion_ready, decrement
+    //     accepted_outstanding / backend_ready_count;
+    //   - publish Completion-ready THROUGH the slot binding (the release-store
+    //     to ready — an acquire observer of ready sees every effect above, I18).
+    // Then release the lock and invoke the sink. The sink is NEVER called under
+    // the mutex (ADR :296-297); only the Completion publication is. The state
+    // transition itself is the exactly-once authority (a concurrent reap sees
+    // completion_ready and skips), so no ready-record vector and no per-slot
+    // publish flag are needed (I9).
+    //
+    // A still-pinned backend_ready slot stays reap-ineligible (I19): linkage
+    // unconsumed, nothing published, no decrement; the next reap publishes it
+    // once enqueue acknowledged the pin (level-triggered). The slot is never
+    // touched after the lock is released (a caller may reset/reuse it while the
+    // sink runs — I16).
+    //
+    // Returns the number of Completions made ready. The arena publishes through
+    // the slot's own type-erased binding (no publish callback parameter): the
+    // binding was installed before commit and validated above.
+    std::size_t reap(SynchronousReadySink& sink) {
+        std::size_t reaped = 0;
+        for (std::size_t i = 0; i < capacity_; ++i) {
+            ReadyEvent event{};
+            bool publish_this = false;
+            {
+                std::lock_guard<std::mutex> lk(mutex_);
+                RequestSlot& s = slots_[i];
+                if (s.state_ != RequestState::backend_ready) continue;
+                if (s.enqueue_in_flight_pin_) continue;  // reap-ineligible (I19)
+                // Validate the publication binding BEFORE any accounting
+                // change: an accepted slot without its binding is an invariant
+                // violation — the Completion can never be made ready.
+                if (!s.publication_binding_.installed()) {
+                    request_arena_missing_binding_fail_fast();
+                }
+                // Close registration; take any waiter delivery exactly-once
+                // (races wait-cancel; the loser gets none).
+                s.registration_ = WaiterRegistration::closed;
+                event = ReadyEvent{s.key_, s.op_kind_, OptionalWaiterDelivery::none()};
+                if (s.waiter_delivery_present_) {
+                    event.waiter = OptionalWaiterDelivery::of(s.waiter_token_,
+                                                              std::move(s.waiter_lease_));
+                    s.waiter_token_ = {};
+                    s.waiter_delivery_present_ = false;
+                }
+                // Accounting / borrow / state changes (I18).
+                s.borrow_.active = false;  // borrow ends at completion-ready (I7)
+                s.state_ = RequestState::completion_ready;
+                --accepted_outstanding_;
+                --backend_ready_count_;
+                // Publish Completion-ready INSIDE the leaf domain: the
+                // release-store to ready is the single linearization point
+                // (review C3). The thunk is noexcept + allocation-free.
+                s.publication_binding_.publish(s.publication_binding_.completion,
+                                               s.terminal_);
+                publish_this = true;
+                ++reaped;
+            }
+            if (publish_this) {
+                sink.on_ready(std::move(event));  // sink OUTSIDE the leaf domain
+            }
         }
+        return reaped;
     }
 
-    // --- Terminal winner (ADR Decision 12 / I10) ---
-    // Record exactly one terminal result. First caller wins: stores the result,
-    // transitions to backend_ready (from pending OR enqueued), bumps
+    // --- Terminal winner (ADR Decision 12 / I10 / review I2) ---
+    // Record exactly one terminal result. First caller wins: validates that the
+    // slot is a legal terminal candidate (pending/enqueued/running — accepted,
+    // not yet terminal), stores the result, transitions to backend_ready, bumps
     // backend_ready_count_, and (for edge-triggered backends) is the readiness
     // signal. A second call (e.g. late cancel after ordinary completion) is a
     // no-op returning false — losers never overwrite.
+    //
+    // The state is validated BEFORE the terminal is written (review I2): on a
+    // reserved/prepared slot the request has not been accepted; storing a
+    // terminal there would strand the op forever (a later dispatch
+    // record_terminal would see the terminal already stored and the op could
+    // never reach backend_ready). That is an invariant violation and fails
+    // fast rather than returning a misleading true.
     bool record_terminal(SlotHandle h, TerminalResult result) noexcept {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
         if (!s) return false;
         if (s->terminal_.stored) return false;  // exactly-once: already terminal
-        s->terminal_ = result;
-        // pending -> backend_ready OR enqueued -> backend_ready. Both are legal
-        // terminal-winner transitions under the same arbitration domain (I17).
-        if (s->state_ == RequestState::pending || s->state_ == RequestState::enqueued ||
-            s->state_ == RequestState::running) {
-            s->state_ = RequestState::backend_ready;
-            ++backend_ready_count_;
+        if (s->state_ != RequestState::pending && s->state_ != RequestState::enqueued &&
+            s->state_ != RequestState::running) {
+            // free/reserved/prepared: not accepted; completion_ready: already
+            // reaped (terminal must already be stored — guarded above).
+            request_arena_terminal_state_fail_fast();
         }
+        s->terminal_ = result;
+        s->state_ = RequestState::backend_ready;
+        ++backend_ready_count_;
         return true;
     }
 
@@ -274,96 +389,7 @@ public:
         return record_terminal(h, TerminalResult::err(IoError{IoError::Code::canceled}));
     }
 
-    // --- Stage 5: reap (ADR Decision 9 / I11 / I16 / I18 / I9) ---
-    // Allocation-free TWO-PASS protocol (I9 / Decision 14: completion-ready
-    // publication never allocates — no ready-record vector):
-    //   Pass 1 (under lock): for each backend_ready slot whose enqueue pin is
-    //     acknowledged, close registration (leaving any waiter token/lease in
-    //     place for pass 2), mark publish_pending_, transition to
-    //     completion_ready, decrement accepted_outstanding, end the borrow.
-    //     A still-pinned slot stays backend_ready and reap-ineligible: linkage
-    //     unconsumed, nothing published, no decrement (I19).
-    //   Pass 2 (per-slot lock): for each publish_pending_ slot, copy the
-    //     by-value ReadyEvent data (key/kind/terminal/waiter delivery) onto the
-    //     stack, clear publish_pending_, and — after releasing the lock —
-    //     publish the Completion and invoke the sink. The publish_pending_ flag
-    //     (same leaf domain) guarantees exactly-once publication even under
-    //     concurrent reaps. No sink/publish call is made under the lock
-    //     (ADR :296-297); the slot cannot be released between pass 1 and its
-    //     pass-2 publication because the Completion is not ready until pass 2
-    //     publishes it (reset/destruction of a non-ready Completion fails fast).
-    //
-    // Returns the number of Completions made ready. The caller supplies the
-    // per-slot Completion publication via `publish` (the arena cannot call
-    // Completion<T>'s template publish directly, so it hands the terminal
-    // payload back through the callback).
-    struct ReapPublication {
-        SlotHandle handle;
-        RequestKey key;
-        OperationKind kind;
-        TerminalResult terminal;
-        OptionalWaiterDelivery waiter;
-    };
-    template <class PublishFn>
-    std::size_t reap(SynchronousReadySink& sink, PublishFn publish) {
-        // Pass 1 (under lock): mark eligible slots publish_pending_ and
-        // transition them to completion_ready.
-        {
-            std::lock_guard<std::mutex> lk(mutex_);
-            for (std::size_t i = 0; i < capacity_; ++i) {
-                RequestSlot& s = slots_[i];
-                if (s.state_ != RequestState::backend_ready) continue;
-                if (s.enqueue_in_flight_pin_) continue;  // reap-ineligible (I19)
-                // Eligible: close registration (delivery stays in the slot for
-                // pass 2 — allocation-free) and end the borrow (I18).
-                s.registration_ = WaiterRegistration::closed;
-                s.borrow_.active = false;  // borrow ends at completion-ready (I7)
-                s.state_ = RequestState::completion_ready;
-                s.publish_pending_ = true;
-                --accepted_outstanding_;
-                --backend_ready_count_;
-            }
-        }
-        // Pass 2 (per-slot lock): publish + deliver each publish_pending_ slot.
-        // Re-locking per slot keeps the protocol correct under concurrent reaps
-        // (the flag is exactly-once authority) without allocating a ready
-        // record. The by-value event is copied to the stack; the slot is never
-        // touched after the lock is released (a caller may reset/reuse it while
-        // the sink runs — I16).
-        std::size_t reaped = 0;
-        for (std::size_t i = 0; i < capacity_; ++i) {
-            ReapPublication p;
-            bool publish_this = false;
-            {
-                std::lock_guard<std::mutex> lk(mutex_);
-                RequestSlot& s = slots_[i];
-                if (!s.publish_pending_) continue;
-                publish_this = true;
-                p = ReapPublication{
-                    SlotHandle{SlotIndex{static_cast<std::uint32_t>(i)}, s.generation_},
-                    s.key_, s.op_kind_, s.terminal_,
-                    OptionalWaiterDelivery::none()};
-                if (s.waiter_delivery_present_) {
-                    // Move the token/lease out of the slot exactly-once (races
-                    // wait-cancel; the loser gets none).
-                    p.waiter = OptionalWaiterDelivery::of(s.waiter_token_,
-                                                          std::move(s.waiter_lease_));
-                    s.waiter_token_ = {};
-                    s.waiter_delivery_present_ = false;
-                }
-                s.publish_pending_ = false;
-            }
-            if (publish_this) {
-                ++reaped;
-                publish(p);
-                ReadyEvent ev{p.key, p.kind,
-                              OptionalWaiterDelivery{p.waiter.has_waiter, p.waiter.token,
-                                                     std::move(p.waiter.lease)}};
-                sink.on_ready(std::move(ev));
-            }
-        }
-        return reaped;
-    }
+    // --- Stage 5: reap (ADR Decision 9 / I11 / I16 / I18 / I9 / review C3) ---
 
     // --- Waiter registration (ADR Decision 10 / I13) ---
     // Register one waiter. Second registration while open_registered returns
@@ -448,46 +474,57 @@ public:
         return CancelDisposition::requested;
     }
 
-    // --- Release (ADR Decision 15 / AC-13 :566-572) ---
-    // Release a slot back to the free list and INCREMENT its generation before
-    // the slot can become visible to a new reserve (I6). Release is a contract
-    // violation (fail-fast in BOTH Debug and Release) when the enqueue pin is
-    // still live, registration is still open, or a stored token/lease has not
-    // been consumed. On a completion_ready slot this is the slot-release half
-    // of Completion::reset() / ready destruction.
-    Result<void> release(SlotHandle h) {
+    // --- Release (ADR Decision 15 / AC-13 :566-572 / review I1) ---
+    // Two DISTINCT authorities with different failure contracts:
+    //
+    //   rollback_reserved_or_prepared(h) — the PRE-COMMIT rollback authority.
+    //     Returns a slot that was reserved/prepared but never accepted (the
+    //     backend's submit path after reserve/prepare/binding-install failure
+    //     or a lost Completion binding CAS). Failures are ordinary errors
+    //     (not_found for a stale handle, invalid_state for a wrong state) that
+    //     the backend maps onto its synchronous reject result — zero side
+    //     effects, synchronous rejection stays zero-side-effect (review C1).
+    //
+    //   release_completed_binding(h) — the COMPLETED-binding release authority.
+    //     Returns a completion_ready slot from Completion::reset() / ready
+    //     destruction. ANY failure is an internal protocol violation (the
+    //     caller cannot recover the slot, and ignoring the failure would let
+    //     the Completion become reusable while its old slot is permanently
+    //     slot_in_use — a later context destruction fail-fast) and fails fast
+    //     in BOTH Debug and Release: stale handle, live enqueue pin, open
+    //     waiter registration, or a slot that is not completion_ready.
+    //
+    // Both paths free the slot under the leaf domain: generation++ BEFORE the
+    // slot becomes visible to a new reserve (I6), binding cleared, counters
+    // decremented.
+    Result<void> rollback_reserved_or_prepared(SlotHandle h) {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
         if (!s) return make_unexpected<void>(IoError{IoError::Code::not_found});
+        if (s->state_ != RequestState::reserved && s->state_ != RequestState::prepared) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        free_slot_locked_(s, h.slot.value);
+        return {};
+    }
+
+    void release_completed_binding(SlotHandle h) noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        RequestSlot* s = validate_(h);
+        if (!s) request_slot_release_invariant_fail_fast();  // stale handle
         if (s->enqueue_in_flight_pin_) {
             request_slot_release_invariant_fail_fast();
         }
         if (s->registration_ == WaiterRegistration::open_registered) {
             request_slot_release_invariant_fail_fast();
         }
-        if (s->state_ != RequestState::completion_ready &&
-            s->state_ != RequestState::reserved &&
-            s->state_ != RequestState::prepared) {
-            // Only a completion_ready, reserved, or prepared slot may be released.
-            // (Releasing pending/enqueued/running/backend_ready is a leak of an
-            // in-flight op — not a release path.)
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        if (s->state_ != RequestState::completion_ready) {
+            // Only a reaped slot may be released by the caller handshake;
+            // releasing pending/enqueued/backend_ready would leak an in-flight
+            // op, and reserved/prepared belongs to the rollback authority.
+            request_slot_release_invariant_fail_fast();
         }
-        s->state_ = RequestState::free;
-        s->generation_ = Generation{s->generation_.value + 1};  // I6
-        s->key_ = {};
-        s->op_kind_ = OperationKind::read;
-        s->enqueue_in_flight_pin_ = false;
-        s->terminal_ = {};
-        s->registration_ = WaiterRegistration::open_no_waiter;
-        s->waiter_token_ = {};
-        s->waiter_lease_ = {};
-        s->waiter_delivery_present_ = false;
-        s->publish_pending_ = false;
-        s->borrow_ = {};
-        --slot_in_use_;
-        free_slots_.push_back(h.slot.value);
-        return {};
+        free_slot_locked_(s, h.slot.value);
     }
 
     // --- Close admission (ADR Decision 15) ---
@@ -538,9 +575,34 @@ public:
         std::lock_guard<std::mutex> lk(mutex_);
         return slots_[slot.value].borrow_.active;
     }
-    bool publish_pending(SlotIndex slot) const noexcept {
+    OperationKind kind_of(SlotIndex slot) const noexcept {
         std::lock_guard<std::mutex> lk(mutex_);
-        return slots_[slot.value].publish_pending_;
+        return slots_[slot.value].op_kind_;
+    }
+    // Dispatch-time requested length (the binding's requested_bytes; the fake's
+    // auto-mode and the sync backend's synthetic full-length result use it).
+    std::uint64_t requested_bytes_of(SlotIndex slot) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        return slots_[slot.value].publication_binding_.requested_bytes;
+    }
+
+    // Resolve a bound Completion pointer to its current slot+generation (the
+    // pointer-keyed bridge for cancel: the public API stays pointer-keyed, ADR
+    // Decision 7). Bounded O(capacity) scan of the fixed slot array —
+    // allocation-free, and NO parallel identity map (review C2: the slot's own
+    // binding is the authoritative identity). Returns nullopt when no slot is
+    // bound to the pointer (unknown/stale/released Completion).
+    std::optional<SlotHandle> resolve_completion(const void* completion) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        for (std::size_t i = 0; i < capacity_; ++i) {
+            const RequestSlot& s = slots_[i];
+            if (s.state_ != RequestState::free &&
+                s.publication_binding_.completion == completion) {
+                return SlotHandle{SlotIndex{static_cast<std::uint32_t>(i)},
+                                  s.generation_};
+            }
+        }
+        return std::nullopt;
     }
 
 private:
@@ -560,6 +622,28 @@ private:
         if (s.state_ == RequestState::free) return nullptr;
         if (s.key_.context != context_) return nullptr;
         return &s;
+    }
+
+    // Free a validated slot back to the free list (caller holds the mutex and
+    // has already validated the release authority's preconditions). Generation
+    // increments BEFORE the slot becomes visible to a new reserve (I6); the
+    // publication binding is cleared so a stale resolve can never match a
+    // released slot.
+    void free_slot_locked_(RequestSlot* s, std::uint32_t idx) noexcept {
+        s->state_ = RequestState::free;
+        s->generation_ = Generation{s->generation_.value + 1};  // I6
+        s->key_ = {};
+        s->op_kind_ = OperationKind::read;
+        s->enqueue_in_flight_pin_ = false;
+        s->terminal_ = {};
+        s->registration_ = WaiterRegistration::open_no_waiter;
+        s->waiter_token_ = {};
+        s->waiter_lease_ = {};
+        s->waiter_delivery_present_ = false;
+        s->publication_binding_ = {};
+        s->borrow_ = {};
+        --slot_in_use_;
+        free_slots_.push_back(idx);
     }
 
     ContextIdentity context_;

@@ -32,6 +32,17 @@
 // outstanding until explicitly completed" contract. Cancel records the canceled
 // terminal directly under Scheme B (pending/enqueued cancel wins).
 //
+// Identity (review C2): the Completion publication binding lives IN the
+// RequestSlot record (install_publication_binding before the Completion CAS);
+// reap validates it and publishes Completion-ready through it inside the leaf
+// domain. There is NO parallel unordered_map identity bridge — cancel resolves
+// a Completion* by the arena's bounded O(capacity) scan. Pre-commit
+// bookkeeping is transactional (review C1): the submission-order FIFO is a
+// construction-time bounded ring (never allocates, never grows unbounded), and
+// every pre-commit failure path rolls the reservation back with zero side
+// effects (Completion untouched, slot freed, ring unchanged, no future result
+// contamination).
+//
 // State is instance-owned only (no globals, gate item 6).
 #pragma once
 
@@ -49,15 +60,69 @@
 #include <deque>
 #include <optional>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
+#include <vector>
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+#include <thread>
+#endif
 
 namespace sluice::async {
+
+namespace detail {
+// Construction-time bounded SlotHandle FIFO (review C1: the fake's submission-
+// order queue is bounded bookkeeping, not an unbounded deque). Storage is
+// preallocated in the backend constructor (capacity == request_capacity), so
+// push/pop never allocate and the queue can never grow past in-flight ops.
+class HandleRing {
+  public:
+    explicit HandleRing(std::size_t capacity) : storage_(capacity) {}
+
+    bool empty() const noexcept { return count_ == 0; }
+    std::size_t size() const noexcept { return count_; }
+
+    // Insert at the tail. Noexcept + preallocated; returns false only if full
+    // (the backend mis-counted in-flight ops — an invariant violation, not an
+    // allocation failure; at most one handle per in-flight op, so a ring of
+    // request_capacity can never overflow a correctly-driven backend).
+    bool push(SlotHandle h) noexcept {
+        if (count_ == storage_.size()) return false;
+        storage_[tail_] = h;
+        tail_ = (tail_ + 1) % storage_.size();
+        ++count_;
+        return true;
+    }
+    // Undo the most recent push (commit-failure rollback). The submit path is
+    // serialized (AsyncIoContext::access_mtx_), so the tail is this submit's
+    // own handle when pop_tail is called.
+    void pop_tail() noexcept {
+        if (count_ == 0) return;
+        --count_;
+        tail_ = (tail_ == 0) ? storage_.size() - 1 : tail_ - 1;
+    }
+    // Remove and return the oldest handle; nullopt when empty.
+    std::optional<SlotHandle> pop_front() noexcept {
+        if (count_ == 0) return std::nullopt;
+        SlotHandle h = storage_[head_];
+        head_ = (head_ + 1) % storage_.size();
+        --count_;
+        return h;
+    }
+
+  private:
+    std::vector<SlotHandle> storage_;
+    std::size_t head_ = 0;
+    std::size_t tail_ = 0;
+    std::size_t count_ = 0;
+};
+}  // namespace detail
 
 class FakeAsyncBackend : public AsyncBackend {
   public:
     explicit FakeAsyncBackend(std::size_t request_capacity = kDefaultCapacity)
-        : arena_(detail::ContextIdentity::for_testing(next_backend_id()), request_capacity) {}
+        : arena_(detail::ContextIdentity::for_testing(next_backend_id()), request_capacity),
+          size_fifo_(request_capacity),
+          void_fifo_(request_capacity) {}
     ~FakeAsyncBackend() override = default;
 
     // --- auto-complete mode ---
@@ -151,21 +216,28 @@ class FakeAsyncBackend : public AsyncBackend {
     // IoError::canceled. We do NOT complete here — A3/O1: completions are
     // produced only inside poll/wait_one. Cancel is POINTER-KEYED (targeted) so
     // it works on any outstanding op, not just the FIFO oldest.
-    // Phase B (ADR Decision 11): resolves Completion* -> SlotHandle, then
-    // arena.cancel() wins the terminal transition under Scheme B (pending ->
-    // backend_ready(canceled) directly; enqueued -> canceled terminal; a slot
-    // that already went terminal is a no-op — losers never overwrite). The
-    // Completion stays outstanding; poll/wait_one publishes through reap.
+    // Phase B (ADR Decision 11): resolves Completion* -> SlotHandle via the
+    // arena's bounded slot scan (the slot's own binding is the identity — no
+    // parallel map), then arena.cancel() wins the terminal transition under
+    // Scheme B (pending -> backend_ready(canceled) directly; enqueued ->
+    // canceled terminal; a slot that already went terminal is a no-op — losers
+    // never overwrite). canceled_ops is tallied at the terminal-winner site
+    // (exactly-once; reap publishes the stored result). The Completion stays
+    // outstanding; poll/wait_one publishes through reap.
     void cancel(Completion<std::size_t>& c) override {
-        auto h = lookup(&c);
+        auto h = arena_.resolve_completion(&c);
         if (h.has_value()) {
-            (void)arena_.cancel(*h);
+            if (arena_.cancel(*h) == detail::CancelDisposition::requested) {
+                tally_canceled();
+            }
         }
     }
     void cancel(Completion<void>& c) override {
-        auto h = lookup(&c);
+        auto h = arena_.resolve_completion(&c);
         if (h.has_value()) {
-            (void)arena_.cancel(*h);
+            if (arena_.cancel(*h) == detail::CancelDisposition::requested) {
+                tally_canceled();
+            }
         }
     }
 
@@ -176,6 +248,33 @@ class FakeAsyncBackend : public AsyncBackend {
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
     std::size_t arena_capacity_rejections() const noexcept { return arena_.capacity_rejections(); }
     std::size_t sink_deliveries() const noexcept { return sink_.deliveries(); }
+    // The submission-order ring depth (review C1: bounded, never grows past
+    // in-flight ops; a rejected submit leaves it unchanged).
+    std::size_t size_fifo_count() const noexcept { return size_fifo_.size(); }
+    std::size_t void_fifo_count() const noexcept { return void_fifo_.size(); }
+    bool arena_enqueue_pin_live(std::uint32_t slot) const noexcept {
+        return arena_.enqueue_pin_live(detail::SlotIndex{slot});
+    }
+    bool arena_state_is(std::uint32_t slot, detail::RequestState st) const noexcept {
+        return arena_.state_of(detail::SlotIndex{slot}) == st;
+    }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic causal seam (Phase B / review test-gap 1): pause the submit
+    // path between commit and enqueue so a backend-level test can interleave
+    // cancel exactly in the Scheme-B window (the window AsyncIoContext::
+    // access_mtx_ serialization hides). Test-only: production builds of this
+    // header (no macro) carry no field and no pause; the layout cost is
+    // accepted and documented (AGENTS.md §8 — internal-testing variants may
+    // carry guarded seams).
+    struct SubmitPauseGate {
+        std::atomic<bool> paused{false};  // the submit path set this when paused
+        std::atomic<bool> resume{false};  // the test sets this to resume
+    };
+    void set_submit_pause_after_commit(SubmitPauseGate* gate) noexcept {
+        submit_pause_gate_ = gate;
+    }
+#endif
 
   private:
     static constexpr std::size_t kDefaultCapacity = 64;
@@ -187,14 +286,17 @@ class FakeAsyncBackend : public AsyncBackend {
 
     // Five-stage admission for a byte-carrying op. No terminal is recorded: the
     // op stays enqueued until the test stages a result or auto-mode fires.
-    //   reserve -> prepare -> [bind + FIFO push] -> begin_binding CAS -> commit
-    //   -> install release capability -> commit_binding (submit-success LP) ->
-    //   enqueue (noexcept).
-    // The bind/FIFO operations happen BEFORE the Completion CAS (I9 / ADR
-    // Decision 14): nothing allocates after the submit-success linearization
-    // point, so a post-accept allocation failure can never strand an accepted
-    // op. Pre-CAS failures roll back cleanly (slot still `prepared`, Completion
-    // untouched); the CAS loser rolls back only its own slot + binding entry.
+    //   reserve -> prepare -> install publication binding -> begin_binding CAS
+    //   -> [bounded ring push] -> commit -> install release capability ->
+    //   commit_binding (submit-success LP) -> enqueue (noexcept).
+    //
+    // Transactional pre-commit path (review C1): every step before the commit
+    // LP is rollback-able with ZERO side effects. The publication binding is
+    // installed INTO the slot record (no map insert); the submission-order FIFO
+    // is a construction-time bounded ring (push never allocates and cannot grow
+    // unbounded); the Completion CAS is the only electing step and a lost CAS
+    // rolls back ONLY this submit's slot (no FIFO residue — the ring is
+    // untouched at that point). Nothing after commit_binding may throw (I9).
     template <class Op>
     Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind,
                              std::size_t len) {
@@ -209,30 +311,44 @@ class FakeAsyncBackend : public AsyncBackend {
         // Stage 2: prepare (writes the op kind + fd/buffer borrow metadata).
         auto ph = arena_.prepare(h, kind, borrow_of(op));
         if (!ph.has_value()) {
-            (void)arena_.release(h);  // roll back reservation
+            (void)arena_.rollback_reserved_or_prepared(h);  // roll back reservation
             return make_unexpected<void>(ph.error());
         }
-        // Pre-CAS bookkeeping (may allocate; failure rolls back cleanly — the
-        // slot is still `prepared` and the Completion is untouched).
-        bind(h, &c, len);
-        size_fifo_.push_back(h);  // FIFO submission order (ADR O3 for fake)
+        // Stage 2.5: install the slot's Completion publication binding (review
+        // C2 — the slot is the identity carrier; reap publishes through it
+        // inside the leaf domain). A later CAS loss rolls the binding back
+        // with the slot.
+        auto bh = arena_.install_publication_binding(h, &c, len, &publish_size_ready);
+        if (!bh.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(bh.error());
+        }
         // Stage 3a: Completion CAS idle -> binding elects ONE submitting
-        // context. Loser: roll back only our own slot + binding entry.
+        // context. Loser: roll back only our own slot + binding (the ring is
+        // untouched — zero FIFO residue).
         if (!begin_binding(c)) {
-            bindings_.erase(h.slot.value);
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
-        // Stage 3b: commit (prepared -> pending, enqueue pin live, accepted++,
+        // Stage 3b: FIFO bookkeeping — bounded ring push (noexcept; capacity ==
+        // request_capacity so it can never overflow a correctly-driven backend).
+        (void)size_fifo_.push(h);
+        // Stage 3c: commit (prepared -> pending, enqueue pin live, accepted++,
         // borrow begins — the submit-success LP's slot half).
         auto ch = arena_.commit(h);
         if (!ch.has_value()) {
+            size_fifo_.pop_tail();  // undo the push (serialized submit path)
             rollback_binding_before_accept(c);
-            bindings_.erase(h.slot.value);
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
-        // Stage 3c: install the slot-release capability (ADR Decision 7), then
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Deterministic causal seam: pause between commit and enqueue so a
+        // backend-level test can interleave cancel exactly in the Scheme-B
+        // window (the context's access_mtx_ serialization hides it otherwise).
+        wait_submit_pause_();
+#endif
+        // Stage 3d: install the slot-release capability (ADR Decision 7), then
         // publish outstanding. AFTER commit_binding NOTHING may throw: the
         // remaining steps (enqueue) are noexcept.
         install_binding(c, &arena_, h);
@@ -252,23 +368,29 @@ class FakeAsyncBackend : public AsyncBackend {
         detail::SlotHandle h = rh.value();
         auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
         if (!ph.has_value()) {
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(ph.error());
         }
-        bind(h, &c);
-        void_fifo_.push_back(h);
+        auto bh = arena_.install_publication_binding(h, &c, 0, &publish_void_ready);
+        if (!bh.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(bh.error());
+        }
         if (!begin_binding(c)) {
-            bindings_.erase(h.slot.value);
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
+        (void)void_fifo_.push(h);
         auto ch = arena_.commit(h);
         if (!ch.has_value()) {
+            void_fifo_.pop_tail();
             rollback_binding_before_accept(c);
-            bindings_.erase(h.slot.value);
-            (void)arena_.release(h);
+            (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        wait_submit_pause_();
+#endif
         install_binding(c, &arena_, h);
         commit_binding(c);
         (void)arena_.enqueue(h);
@@ -288,7 +410,8 @@ class FakeAsyncBackend : public AsyncBackend {
     // Dispatch: record the terminal result on each slot per the active policy,
     // transitioning enqueued -> backend_ready. A slot that already has a
     // terminal (a Scheme-B cancel won first) is left untouched (record_terminal
-    // is a no-op). After dispatch, reap publishes every backend_ready slot.
+    // is a no-op). After dispatch, reap publishes every backend_ready slot
+    // through the slot's own publication binding (inside the leaf domain).
     std::size_t dispatch_and_reap() {
         // (1) Auto-complete mode: drain every enqueued slot with the auto result.
         if (auto_mode_ != Auto::off) {
@@ -301,25 +424,22 @@ class FakeAsyncBackend : public AsyncBackend {
             apply_void_staging();
         }
 
-        return arena_.reap(sink_, [this](const detail::RequestArena::ReapPublication& p) {
-            publish_reaped(p);
-        });
+        return arena_.reap(sink_);
     }
 
     // Pop FIFO-oldest size handles whose slot is still enqueued (skipping slots
     // that already went terminal via cancel). Returns the next live handle or
     // nullopt if the FIFO is exhausted.
     //
-    // Serialization note: the handle is pushed to the FIFO BEFORE the Completion
+    // Serialization note: the handle is pushed to the ring BEFORE the Completion
     // CAS / commit / enqueue, but poll() only runs under
     // AsyncIoContext::access_mtx_, which the submit holds through enqueue — so
     // a poll can never observe a slot still `pending` here. If a later phase
     // drops that serialization, this pop-then-check would drop the handle and
     // strand the op; the check must then move into the arena domain.
     std::optional<detail::SlotHandle> pop_live_size_front() {
-        while (!size_fifo_.empty()) {
-            detail::SlotHandle h = size_fifo_.front();
-            size_fifo_.pop_front();
+        while (auto oh = size_fifo_.pop_front()) {
+            detail::SlotHandle h = *oh;
             auto st = arena_.state_of(h.slot);
             if (st == detail::RequestState::enqueued &&
                 arena_.generation_of(h.slot).value == h.generation.value) {
@@ -330,9 +450,8 @@ class FakeAsyncBackend : public AsyncBackend {
         return std::nullopt;
     }
     std::optional<detail::SlotHandle> pop_live_void_front() {
-        while (!void_fifo_.empty()) {
-            detail::SlotHandle h = void_fifo_.front();
-            void_fifo_.pop_front();
+        while (auto oh = void_fifo_.pop_front()) {
+            detail::SlotHandle h = *oh;
             auto st = arena_.state_of(h.slot);
             if (st == detail::RequestState::enqueued &&
                 arena_.generation_of(h.slot).value == h.generation.value) {
@@ -345,8 +464,10 @@ class FakeAsyncBackend : public AsyncBackend {
     void drain_auto_size() {
         while (auto oh = pop_live_size_front()) {
             detail::SlotHandle h = *oh;
-            std::size_t requested = bindings_[h.slot.value].requested_bytes;
-            (void)arena_.record_terminal(h, auto_size_result(requested));
+            std::size_t requested = static_cast<std::size_t>(arena_.requested_bytes_of(h.slot));
+            detail::TerminalResult res = auto_size_result(requested);
+            bool won = arena_.record_terminal(h, res);
+            tally_terminal_result(won, res);
         }
     }
     void drain_auto_void() {
@@ -365,7 +486,9 @@ class FakeAsyncBackend : public AsyncBackend {
             auto oh = pop_live_size_front();
             if (!oh.has_value())
                 break;
-            (void)arena_.record_terminal(*oh, take_size_stage());
+            detail::TerminalResult res = take_size_stage();
+            bool won = arena_.record_terminal(*oh, res);
+            tally_terminal_result(won, res);
         }
     }
     void apply_void_staging() {
@@ -373,7 +496,9 @@ class FakeAsyncBackend : public AsyncBackend {
             auto oh = pop_live_void_front();
             if (!oh.has_value())
                 break;
-            (void)arena_.record_terminal(*oh, take_void_stage());
+            detail::TerminalResult res = take_void_stage();
+            bool won = arena_.record_terminal(*oh, res);
+            tally_terminal_result(won, res);
         }
     }
 
@@ -417,38 +542,22 @@ class FakeAsyncBackend : public AsyncBackend {
         return detail::TerminalResult::ok_void();
     }
 
-    // Resolve a reaped slot back to its Completion* and publish the terminal
-    // result. The SLOT IS NOT RELEASED HERE: it stays bound (slot_in_use == 1)
-    // until the caller resets or destroys the ready Completion (ADR Decision
-    // 4/15; design §9 — completion_ready -> free is the caller's handshake,
-    // performed through the release capability installed at commit).
-    void publish_reaped(const detail::RequestArena::ReapPublication& p) {
-        auto it = bindings_.find(p.handle.slot.value);
-        if (it == bindings_.end())
-            return;
-        detail::SlotHandle bh{p.handle.slot, p.handle.generation};
-        if (it->second.generation.value != bh.generation.value)
-            return;
-        Completion<std::size_t>* sc = it->second.size_completion;
-        Completion<void>* vc = it->second.void_completion;
-        bindings_.erase(it);
-        if (sc) {
-            publish(*sc, terminal_to_size(p.terminal));
-            tally_terminal(p.terminal);
-        } else if (vc) {
-            publish(*vc, terminal_to_void(p.terminal));
-            tally_terminal(p.terminal);
-        }
+    // --- Completion publication (review C2/C3) ---
+    // The arena publishes Completion-ready through the slot-bound thunk INSIDE
+    // the leaf domain. The thunks are written here (a trusted backend-author —
+    // they reach the protected AsyncBackend::publish helpers) and installed
+    // into the slot at submit time via install_publication_binding. They are
+    // static + type-erased: the arena never dereferences the Completion pointer
+    // itself, and the thunk does not touch the backend (no lock, no allocation).
+    static void publish_size_ready(void* completion,
+                                   const detail::TerminalResult& t) noexcept {
+        AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion),
+                              terminal_to_size(t));
     }
-
-    void tally_terminal(const detail::TerminalResult& t) {
-        if (!stats_)
-            return;
-        if (t.stored && t.is_error && t.error.code == IoError::Code::canceled) {
-            ++stats_->canceled_ops;
-        } else if (t.stored && t.is_error) {
-            ++stats_->completion_errors;
-        }
+    static void publish_void_ready(void* completion,
+                                   const detail::TerminalResult& t) noexcept {
+        AsyncBackend::publish(*static_cast<Completion<void>*>(completion),
+                              terminal_to_void(t));
     }
 
     static Result<std::size_t> terminal_to_size(const detail::TerminalResult& t) noexcept {
@@ -462,53 +571,52 @@ class FakeAsyncBackend : public AsyncBackend {
         return {};
     }
 
-    // Phase B pointer-keyed bridge (see SyncBackend).
-    struct Binding {
-        detail::Generation generation{};
-        Completion<std::size_t>* size_completion = nullptr;
-        Completion<void>* void_completion = nullptr;
-        std::size_t requested_bytes = 0;
-    };
-    void bind(detail::SlotHandle h, Completion<std::size_t>* c, std::size_t len) {
-        bindings_[h.slot.value] = {h.generation, c, nullptr, len};
+    // Stats tally at the TERMINAL-WINNER site (exactly-once: record_terminal
+    // returns true only for the single winner, and cancel returns `requested`
+    // only when it stored the canceled terminal; losers never tally). The
+    // tally was previously done at reap publication; both are exactly-once for
+    // an accepted op, and only the winner site is reachable from the static
+    // publish thunks (which have no instance state).
+    void tally_canceled() noexcept {
+        if (stats_) ++stats_->canceled_ops;
     }
-    void bind(detail::SlotHandle h, Completion<void>* c) {
-        bindings_[h.slot.value] = {h.generation, nullptr, c, 0};
-    }
-    std::optional<detail::SlotHandle> lookup(Completion<std::size_t>* c) const {
-        for (const auto& [idx, b] : bindings_) {
-            if (b.size_completion == c) {
-                return detail::SlotHandle{detail::SlotIndex{idx}, b.generation};
-            }
+    void tally_terminal_result(bool won, const detail::TerminalResult& t) noexcept {
+        if (!stats_ || !won || !t.stored || !t.is_error) return;
+        if (t.error.code == IoError::Code::canceled) {
+            ++stats_->canceled_ops;
+        } else {
+            ++stats_->completion_errors;
         }
-        return std::nullopt;
     }
-    std::optional<detail::SlotHandle> lookup(Completion<void>* c) const {
-        for (const auto& [idx, b] : bindings_) {
-            if (b.void_completion == c) {
-                return detail::SlotHandle{detail::SlotIndex{idx}, b.generation};
-            }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    void wait_submit_pause_() noexcept {
+        SubmitPauseGate* g = submit_pause_gate_.load(std::memory_order_relaxed);
+        if (g == nullptr) return;
+        g->paused.store(true, std::memory_order_release);
+        while (!g->resume.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
         }
-        return std::nullopt;
     }
+    std::atomic<SubmitPauseGate*> submit_pause_gate_{nullptr};
+#endif
 
     detail::RequestArena arena_;
     detail::ReferenceReadySink sink_;
-    // SlotHandle FIFOs in submission order (ADR O3 for the fake). Drained as ops
-    // are completed; a handle whose slot has already gone terminal (cancel) or
-    // been reaped is skipped by pop_live_*_front.
-    std::deque<detail::SlotHandle> size_fifo_;
-    std::deque<detail::SlotHandle> void_fifo_;
+    // SlotHandle FIFOs in submission order (ADR O3 for the fake). Construction-
+    // time bounded rings (review C1): storage is preallocated in the backend
+    // constructor (capacity == request_capacity), so push/pop never allocate
+    // and the queue can never grow past in-flight ops — a failed submit leaves
+    // the ring unchanged (zero side effects). Drained as ops are completed; a
+    // handle whose slot has already gone terminal (cancel) or been reaped is
+    // skipped by pop_live_*_front.
+    detail::HandleRing size_fifo_;
+    detail::HandleRing void_fifo_;
     // Staged terminal results the test queued; consumed at poll().
     std::deque<std::size_t> staged_size_;
     std::deque<IoError> staged_size_err_;
     std::deque<bool> staged_void_ok_;
     std::deque<IoError> staged_void_err_;
-    // Pointer-keyed bridge: slot index -> (generation, Completion*, requested
-    // bytes). Bounded by request_capacity. Inserts happen BEFORE the Completion
-    // CAS (pre-accept; clean rollback on failure); entries are erased at reap
-    // publication (I9: no post-accept allocation on the terminal path).
-    std::unordered_map<std::uint32_t, Binding> bindings_;
 
     // Auto-complete mode state.
     enum class Auto : std::uint8_t { off, bytes, err, short_then_full };
