@@ -114,7 +114,7 @@ inline int fork_exec_child(const std::string& case_name, bool& timed_out) {
         std::perror("death_test: execv");
         std::_Exit(kChildTestFailExit);
     }
-    // Parent: bounded wait with a60-second watchdog.
+    // Parent: bounded wait with a 60-second watchdog.
     const auto start = std::chrono::steady_clock::now();
     constexpr auto kTimeout = std::chrono::seconds(60);
     for (;;) {
@@ -128,9 +128,12 @@ inline int fork_exec_child(const std::string& case_name, bool& timed_out) {
         }
         // w == 0: child still running; check the timeout.
         if (std::chrono::steady_clock::now() - start >= kTimeout) {
+            timed_out = true;
             std::cerr << "[death] child " << case_name << " (pid " << pid
-                      << ") exceeded60s timeout; sending SIGKILL\n";
-            ::kill(pid, SIGKILL);
+                      << ") exceeded 60s timeout; sending SIGKILL\n";
+            if (::kill(pid, SIGKILL) != 0 && errno != ESRCH) {
+                std::perror("death_test: kill");
+            }
             // Reap the killed child (should return almost immediately).
             for (;;) {
                 w = waitpid(pid, &status, 0);
@@ -141,8 +144,6 @@ inline int fork_exec_child(const std::string& case_name, bool& timed_out) {
                     return -1;
                 }
             }
-            timed_out = true;
-            return -1;
         }
         usleep(10000);  // 10ms poll interval while child is alive
     }
@@ -184,7 +185,7 @@ inline DeathResult run_death_case(const std::string& case_name) {
 // boundary. Returns true iff the child exited normally with the expected
 // terminate code (86).
 inline bool expect_terminated_via_fail_fast(const DeathResult& r) {
-    if (!r.spawned && r.timed_out) {
+    if (r.timed_out) {
         std::cerr << "[death] " << r.case_name
                   << ": FAIL (child exceeded watchdog timeout and was killed; "
                      "the destructor likely hung instead of fail-fasting)\n";
@@ -216,7 +217,7 @@ inline bool expect_terminated_via_fail_fast(const DeathResult& r) {
 // Parent-side assertion for the CONTROL case (T4): the child must exit 0
 // (everything succeeded with no fault armed).
 inline bool expect_normal_exit_zero(const DeathResult& r) {
-    if (!r.spawned && r.timed_out) {
+    if (r.timed_out) {
         std::cerr << "[death] " << r.case_name
                   << ": FAIL (child exceeded watchdog timeout and was killed; "
                      "the control case should exit promptly)\n";

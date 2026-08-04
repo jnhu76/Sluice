@@ -104,16 +104,17 @@ bool drain_bounded(ThreadPoolBackend& backend,
     return true;
 }
 
-// RAII: resume a paused gate, join a thread on scope exit, wait for the
-// production path to leave the gate, and unbind the gate pointer from the
-// backend so it never holds a dangling pointer to a stack gate.
+// RAII: resume a paused gate and join a thread on scope exit, then wait for the
+// production path to leave the gate.  The gate object must outlive the backend
+// (declared before it in the test), so no disarm is needed — lexical scope
+// guarantees the gate is destroyed after the backend and its workers.
 // Guarantees the test never leaves a gate armed or a thread joinable when an
 // assertion fails.
 template <class Gate>
 class ScopedGateAndThread {
 public:
-    ScopedGateAndThread(ThreadPoolBackend& backend, Gate& gate, std::thread& t)
-        : backend_(&backend), gate_(&gate), thread_(&t) {}
+    ScopedGateAndThread(ThreadPoolBackend& /*backend*/, Gate& gate, std::thread& t)
+        : gate_(&gate), thread_(&t) {}
     void join() {
         if (joined_) return;
         gate_->resume.store(true, std::memory_order_release);
@@ -125,40 +126,33 @@ private:
     void cleanup() {
         join();
         wait_for_exit();
-        disarm();
     }
-    void wait_for_exit() {
+    void wait_for_exit() noexcept {
         const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
         while (!gate_->exited.load(std::memory_order_acquire)) {
-            if (std::chrono::steady_clock::now() >= deadline) return;
+            if (std::chrono::steady_clock::now() >= deadline) {
+                std::fprintf(stderr,
+                             "ThreadPool test gate failed to exit before timeout\n");
+                std::abort();
+            }
             std::this_thread::yield();
         }
     }
-    void disarm() noexcept {
-        if constexpr (std::is_same_v<Gate, ThreadPoolBackend::AfterArenaEnqueueBeforeDispatchPushPauseGate>) {
-            backend_->set_after_enqueue_before_push_pause_gate(nullptr);
-        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::BeforeWorkerDequeuePauseGate>) {
-            backend_->set_before_dequeue_pause_gate(nullptr);
-        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::WorkerRunningPauseGate>) {
-            backend_->set_running_pause_gate(nullptr);
-        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::TerminalPublicationPauseGate>) {
-            backend_->set_terminal_publication_pause_gate(nullptr);
-        }
-    }
-    ThreadPoolBackend* backend_;
     Gate* gate_;
     std::thread* thread_;
     bool joined_ = false;
 };
 
 // RAII: resume a paused gate on scope exit (for tests without a submitter
-// thread), wait for the production path to leave the gate, and unbind the
-// gate pointer from the backend.
+// thread) and wait for the production path to leave the gate.  The gate object
+// must outlive the backend (declared before it in the test), so no disarm is
+// needed — lexical scope guarantees the gate is destroyed after the backend
+// and its workers.
 template <class Gate>
 class ScopedGateResume {
 public:
-    ScopedGateResume(ThreadPoolBackend& backend, Gate& gate)
-        : backend_(&backend), gate_(&gate) {}
+    ScopedGateResume(ThreadPoolBackend& /*backend*/, Gate& gate)
+        : gate_(&gate) {}
     void resume() {
         if (resumed_) return;
         gate_->resume.store(true, std::memory_order_release);
@@ -169,27 +163,18 @@ private:
     void cleanup() {
         resume();
         wait_for_exit();
-        disarm();
     }
-    void wait_for_exit() {
+    void wait_for_exit() noexcept {
         const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
         while (!gate_->exited.load(std::memory_order_acquire)) {
-            if (std::chrono::steady_clock::now() >= deadline) return;
+            if (std::chrono::steady_clock::now() >= deadline) {
+                std::fprintf(stderr,
+                             "ThreadPool test gate failed to exit before timeout\n");
+                std::abort();
+            }
             std::this_thread::yield();
         }
     }
-    void disarm() noexcept {
-        if constexpr (std::is_same_v<Gate, ThreadPoolBackend::AfterArenaEnqueueBeforeDispatchPushPauseGate>) {
-            backend_->set_after_enqueue_before_push_pause_gate(nullptr);
-        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::BeforeWorkerDequeuePauseGate>) {
-            backend_->set_before_dequeue_pause_gate(nullptr);
-        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::WorkerRunningPauseGate>) {
-            backend_->set_running_pause_gate(nullptr);
-        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::TerminalPublicationPauseGate>) {
-            backend_->set_terminal_publication_pause_gate(nullptr);
-        }
-    }
-    ThreadPoolBackend* backend_;
     Gate* gate_;
     bool resumed_ = false;
 };
@@ -202,8 +187,10 @@ SLUICE_MAIN()
 // No cancel is issued in this case: a canceled terminal would be a backend
 // defect, so only a real success (value==1, exactly one syscall) is accepted.
 SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
-    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    // Gate must outlive backend (destroyed after it by C++ reverse declaration
+    // order), so the worker never accesses a destroyed atomic.
     ThreadPoolBackend::AfterArenaEnqueueBeforeDispatchPushPauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_after_enqueue_before_push_pause_gate(&gate);
 
     TempPath tp("A");
@@ -277,8 +264,10 @@ SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
 
 // Gate B: enqueued cancel wins before the worker dequeues; no syscall runs.
 SLUICE_TEST_CASE(tp_enqueued_cancel_wins_no_syscall) {
-    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    // Gate must outlive backend (destroyed after it by C++ reverse declaration
+    // order), so the worker never accesses a destroyed atomic.
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_before_dequeue_pause_gate(&gate);
     ScopedGateResume guard(backend, gate);
 
@@ -337,8 +326,10 @@ SLUICE_TEST_CASE(tp_enqueued_cancel_wins_no_syscall) {
 
 // Gate C: running cancel records intent only; the real syscall result wins verbatim.
 SLUICE_TEST_CASE(tp_running_cancel_intent_real_result_verbatim) {
-    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    // Gate must outlive backend (destroyed after it by C++ reverse declaration
+    // order), so the worker never accesses a destroyed atomic.
     ThreadPoolBackend::WorkerRunningPauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_running_pause_gate(&gate);
     ScopedGateResume guard(backend, gate);
 
@@ -397,8 +388,10 @@ SLUICE_TEST_CASE(tp_running_cancel_intent_real_result_verbatim) {
 
 // Gate D: terminal publication happens after worker bookkeeping is complete.
 SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
-    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    // Gate must outlive backend (destroyed after it by C++ reverse declaration
+    // order), so the worker never accesses a destroyed atomic.
     ThreadPoolBackend::TerminalPublicationPauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_terminal_publication_pause_gate(&gate);
     ScopedGateResume guard(backend, gate);
 

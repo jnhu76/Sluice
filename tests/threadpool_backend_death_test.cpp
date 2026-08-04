@@ -94,14 +94,16 @@ bool wait_paused(Gate& gate, std::chrono::steady_clock::time_point deadline) {
 void child_destroy_with_enqueued() {
     sluice_death_test::install_deterministic_terminate_handler();
 
-    // Completion must outlive the backend so the backend destructor runs first
-    // and is the fail-fast authority (see the file header).
+    // Completion and gate must outlive the backend so the backend destructor
+    // runs first and is the fail-fast authority (see the file header). Gate
+    // declared here (outside the inner block) ensures it is destroyed AFTER
+    // the backend, so the paused worker never accesses a destroyed atomic.
     std::byte buf[1]{};
     Completion<std::size_t> c;
+    ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
 
     {
         ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
-        ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
         backend.set_before_dequeue_pause_gate(&gate);
 
         TempPath tp("enqueued");
@@ -142,14 +144,16 @@ void child_destroy_with_enqueued() {
 void child_destroy_with_running() {
     sluice_death_test::install_deterministic_terminate_handler();
 
-    // Completion must outlive the backend so the backend destructor runs first
-    // and is the fail-fast authority (see the file header).
+    // Completion and gate must outlive the backend so the backend destructor
+    // runs first and is the fail-fast authority (see the file header). Gate
+    // declared here (outside the inner block) ensures it is destroyed AFTER
+    // the backend, so the paused worker never accesses a destroyed atomic.
     std::byte buf[1]{};
     Completion<std::size_t> c;
+    ThreadPoolBackend::WorkerRunningPauseGate gate;
 
     {
         ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
-        ThreadPoolBackend::WorkerRunningPauseGate gate;
         backend.set_running_pause_gate(&gate);
 
         TempPath tp("running");
