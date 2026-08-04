@@ -235,13 +235,16 @@ SLUICE_TEST_CASE(phase_e_cancel_wins_no_double_terminal) {
 
     constexpr int kBatches = 8;
     std::vector<Completion<std::size_t>> cs(kCap);
-    std::vector<std::byte> bufs(kCap);
+    // Each op reads 4 bytes into its own slot (4 bytes per op, not 1 — a
+    // 1-byte slot would overflow when the worker writes the 4-byte result).
+    std::vector<std::byte> bufs(kCap * 4);
     int total = 0;
     for (int batch = 0; batch < kBatches; ++batch) {
         for (std::size_t i = 0; i < kCap; ++i) {
             cs[i].reset();
-            SLUICE_CHECK(
-                backend.submit_read(ReadOp{fd, bufs.data() + i, 4, 0}, cs[i]).has_value());
+            SLUICE_CHECK(backend
+                             .submit_read(ReadOp{fd, bufs.data() + i * 4, 4, 0}, cs[i])
+                             .has_value());
             backend.cancel(cs[i]);  // race vs the worker for each op
             ++total;
         }
