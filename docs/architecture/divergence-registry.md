@@ -242,14 +242,12 @@ Status values:
 
 ---
 
----
-
 ## Summary
 
 | ID | Status | Area |
 |----|--------|------|
 | DIV-01 | Approved | Context shape |
-| DIV-02 | Proposed transitional decision | Operation storage ownership |
+| DIV-02 | Active transitional decision (Phase B) | Operation storage ownership |
 | DIV-03 | Corrective planned | Backend execution model |
 | DIV-04 | Approved | Wake integration |
 | DIV-05 | Approved | Observation interval |

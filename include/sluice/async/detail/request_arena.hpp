@@ -355,21 +355,28 @@ public:
     // phase) transitions an enqueued op to `running` BEFORE the syscall blocks.
     // Legal outcomes:
     //   true  — enqueued -> running; the op is now executing in the backend.
-    //   false — the slot is already backend_ready (a terminal winner — typically
-    //           cancel — won before dispatch). The dispatch MUST NOT start the
-    //           syscall and backs off (losers do not publish, ADR Decision 12).
-    // Any other state (free/reserved/prepared/pending = dispatch before enqueue,
-    // running = double dispatch, completion_ready = dispatch after reap) is an
-    // invariant violation and fails fast (design §9: "only unknown/illegal state
-    // is an invariant violation (fail-fast)"). The Phase B reference backends
-    // dispatch deterministically (enqueued -> backend_ready) and never call
-    // this; it makes the shared arena correct for the ThreadPool/Uring
-    // migration, and it makes the Decision-11 running-cancel semantics testable
-    // (cancel() on a running slot records intent only).
+    //   false — the CURRENT-GENERATION slot is already backend_ready (a terminal
+    //           winner — typically cancel — won before dispatch). The dispatch
+    //           MUST NOT start the syscall and backs off (losers do not publish,
+    //           ADR Decision 12). This false is RESERVED for that legitimate
+    //           cancel/dispatch race.
+    // A handle validate_ rejects (stale generation, free slot, out-of-range
+    // index, wrong context provenance) is NEITHER outcome: the backend holds a
+    // dispatch identity whose slot moved on (released/reused) — a lifecycle
+    // invariant violation, not a normal race — and fails fast in BOTH Debug and
+    // Release (round-5 fix 1) instead of masquerading as a backoff. Any other
+    // current-generation state (reserved/prepared/pending = dispatch before
+    // enqueue, running = double dispatch, completion_ready = dispatch after
+    // reap) is an invariant violation and fails fast (design §9: "only
+    // unknown/illegal state is an invariant violation (fail-fast)"). The Phase B
+    // reference backends dispatch deterministically (enqueued -> backend_ready)
+    // and never call this; it makes the shared arena correct for the
+    // ThreadPool/Uring migration, and it makes the Decision-11 running-cancel
+    // semantics testable (cancel() on a running slot records intent only).
     bool mark_running(SlotHandle h) noexcept {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
-        if (!s) return false;
+        if (!s) request_arena_dispatch_stale_fail_fast();  // stale identity
         switch (s->state_) {
         case RequestState::enqueued:
             s->state_ = RequestState::running;
@@ -867,15 +874,29 @@ private:
     // side-band handle that strands a later accepted op (review finding #1).
     // Caller MUST hold mutex_.
     void push_ready_locked_(std::uint32_t idx) noexcept {
-        // Ready-ring invariants (review round-4 finding 2): a terminal-winner
-        // push is only legal on a slot that just became backend_ready with a
-        // stored terminal, is not already on the ring, and whose ring has room.
-        // Violating any would corrupt the ring or let reap publish a phantom —
-        // fail-fast in BOTH Debug and Release rather than corrupt silently.
+        // Ready-ring invariants (review round-4 finding 2; round-5 fix 2): a
+        // terminal-winner push is only legal on a slot that just became
+        // backend_ready with a stored terminal, is not ALREADY ON the ring,
+        // and whose ring has room. The membership check must cover the TAIL:
+        // the ring is an intrusive singly-linked FIFO whose tail node
+        // legitimately carries ready_next_ == kNotOnReadyRing (the list
+        // terminator), so the link-state test alone cannot distinguish
+        // "not on ring" from "linked as tail" — `already_tail` closes that
+        // gap (a repeated push of the current tail is rejected). The
+        // head/tail/count triple must also be structurally consistent (O(1);
+        // no list traversal, no allocation). Violating any invariant would
+        // corrupt the ring or let reap publish a phantom — fail-fast in BOTH
+        // Debug and Release rather than corrupt silently.
         RequestSlot& s = slots_[idx];
+        const bool already_tail = ready_count_ != 0 && ready_tail_ == idx;
+        const bool ends_consistent =
+            ready_count_ == 0
+                ? (ready_head_ == RequestSlot::kNotOnReadyRing &&
+                   ready_tail_ == RequestSlot::kNotOnReadyRing)
+                : (ready_head_ < capacity_ && ready_tail_ < capacity_);
         if (s.state_ != RequestState::backend_ready || !s.terminal_.stored ||
-            s.ready_next_ != RequestSlot::kNotOnReadyRing ||
-            ready_count_ >= capacity_) {
+            s.ready_next_ != RequestSlot::kNotOnReadyRing || already_tail ||
+            !ends_consistent || ready_count_ >= capacity_) {
             request_arena_ready_ring_invariant_fail_fast();
         }
         // The slot is being newly linked: thread it onto the tail. ready_next_

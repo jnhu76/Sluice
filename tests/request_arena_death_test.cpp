@@ -20,6 +20,10 @@
 // binding was never installed fails fast — silently skipping would lose an
 // accepted request (AC-4) and strand the Completion outstanding forever.
 //
+// Round-5 fix 1: mark_running on a STALE dispatch identity fails fast — the
+// legitimate `false` backoff is reserved for a current-generation slot that a
+// terminal winner already moved to backend_ready before dispatch.
+//
 // These are the runtime guards that make the Phase B reference lifecycle
 // safe-by-construction: a backend that mis-sequences its admission cannot
 // silently leak a half-installed request or double-deliver a waiter lease. The
@@ -360,6 +364,44 @@ void child_mark_running_illegal_state() {
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
+// ---- Child: mark_running on a STALE handle MUST fail-fast (round-5 fix 1) ---
+// reserve -> prepare -> install binding -> commit -> enqueue -> record terminal
+// -> reap -> release_completed_binding advances the generation; the old handle
+// is now STALE. mark_running's `false` is RESERVED for the legitimate dispatch
+// backoff (a CURRENT-GENERATION slot already backend_ready because a terminal
+// winner won before dispatch). A stale dispatch identity — the backend holds a
+// dispatch handle whose slot moved on — is a lifecycle invariant violation,
+// not a cancel/dispatch race, and fails fast in BOTH Debug and Release. The
+// control case (current-generation backend_ready -> false, no fail-fast) is
+// request_arena_cancel_intent_test.cpp :: mark_running_backs_off_on_backend_ready.
+void child_mark_running_stale_handle() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+    auto rh = arena.reserve();
+    if (!rh.has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    SlotHandle h = rh.value();
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.install_publication_binding(h, &dummy_completion_storage, 0, &noop_binding_publish).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.commit(h).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (arena.enqueue(h) != sluice::async::detail::EnqueueOutcome::enqueued)
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.record_terminal(h, TerminalResult::ok_bytes(1)))
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    struct NoopSink : sluice::async::detail::SynchronousReadySink {
+        void on_ready(sluice::async::detail::ReadyEvent) noexcept override {}
+    } sink;
+    if (arena.reap(sink) != 1)
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    arena.release_completed_binding(h);  // generation now advances past h
+    // h is now STALE (old generation). mark_running(h) MUST fail-fast.
+    (void)arena.mark_running(h);
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 // ---- Parent-side test cases -------------------------------------------------
 
 SLUICE_TEST_CASE(arena_death_release_with_live_pin) {
@@ -429,6 +471,16 @@ SLUICE_TEST_CASE(arena_death_enqueue_stale_handle) {
                      "review finding #4: a stale enqueue is an I19 violation, not a no-op");
 }
 
+// Round-5 fix 1: mark_running on a stale dispatch identity fails fast in BOTH
+// Debug and Release — the legitimate `false` backoff is reserved for a
+// current-generation backend_ready slot.
+SLUICE_TEST_CASE(arena_death_mark_running_stale_handle) {
+    auto r = sluice_death_test::run_death_case("mark-running-stale-handle");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "mark_running() on a stale handle must fail-fast (exit 86) — "
+                     "round-5 fix 1: a stale dispatch identity is not a backoff");
+}
+
 SLUICE_TEST_CASE(arena_death_control_enqueue_terminal_noop) {
     auto r = sluice_death_test::run_death_case("control-enqueue-terminal-noop");
     SLUICE_CHECK_MSG(sluice_death_test::expect_normal_exit_zero(r),
@@ -469,6 +521,8 @@ int main(int argc, char** argv) {
             child_mark_running_illegal_state();
         } else if (child_case == "enqueue-stale-handle") {
             child_enqueue_stale_handle();
+        } else if (child_case == "mark-running-stale-handle") {
+            child_mark_running_stale_handle();
         } else if (child_case == "control-enqueue-terminal-noop") {
             child_control_enqueue_terminal_noop();
         } else if (child_case == "generation-exhausted-guard-present") {

@@ -155,8 +155,9 @@ namespace sluice::async::detail {
 
 // Phase B (review finding #5): a slot whose 64-bit generation reached UINT64_MAX
 // cannot increment without wrapping (which would re-introduce ABA, violating I6's
-// absolute wording). Fail fast instead of silently wrapping. Detected in BOTH
-// Debug and Release; practically unreachable (~5.8e11 years at 1ns/release).
+// absolute wording). Fail fast on generation exhaustion instead of silently
+// wrapping. Detected in BOTH Debug and Release; practically unreachable
+// (~585 years at 1 release/ns).
 [[noreturn]] void request_arena_generation_exhausted_fail_fast() noexcept {
     std::terminate();
 }
@@ -183,10 +184,19 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
-// Phase B (review round-4 finding 2): the ready-ring push invariants were
-// violated (slot not backend_ready / no stored terminal / already linked / ring
-// at capacity). Fail-fast in BOTH Debug and Release rather than corrupting the
-// ring silently.
+// Phase B (review round-4): the dispatch path (mark_running) was given a stale
+// dispatch identity (stale generation / free / out-of-range / wrong-domain
+// handle). Not the legitimate backend_ready backoff — a lifecycle invariant
+// violation. Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_dispatch_stale_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review round-4 finding 2; round-5 tail hardening): the ready-ring
+// push invariants were violated (slot not backend_ready / no stored terminal /
+// already linked, including as the current tail / structurally inconsistent
+// head-tail-count triple / ring at capacity). Fail-fast in BOTH Debug and
+// Release rather than corrupting the ring silently.
 [[noreturn]] void request_arena_ready_ring_invariant_fail_fast() noexcept {
     std::terminate();
 }

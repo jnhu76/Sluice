@@ -271,11 +271,14 @@ Stability:      private to Completion; forge-resistant (negative-compile gate)
 
 **Generation wrap policy (I6):** `Generation` is a 64-bit counter incremented on every
 release (including pre-commit rollback releases). Round-3 finding #5 widened it from
-32-bit and added a fail-fast at `UINT64_MAX` (`request_arena_generation_exhausted_
-fail_fast`) rather than silently wrapping — I6's absolute wording ("a stale key can
-never mutate the new occupant") holds in perpetuity. A wrap would require ~5.8e11
-years at 1ns/release and is unreachable in practice; the fail-fast makes the guarantee
-absolute instead of probabilistic.
+32-bit and added a fail-fast at `UINT64_MAX`
+(`request_arena_generation_exhausted_fail_fast`) rather than silently wrapping, so
+I6's absolute wording ("a stale key can never mutate the new occupant") holds in
+perpetuity. The failure condition is generation EXHAUSTION, not an actual wrap: the
+arena refuses to increment a generation that has reached `UINT64_MAX`, so a wrap can
+never occur. Exhaustion would take 2^64 releases — approximately 585 years at one
+release per nanosecond — and is unreachable in practice; the fail-fast makes the
+guarantee absolute instead of probabilistic.
 
 ## 9. State Machine
 

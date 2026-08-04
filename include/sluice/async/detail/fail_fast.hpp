@@ -249,10 +249,10 @@ bool evented_admission_check() noexcept;
 // Phase B (review finding #5 — generation wrap re-introduces ABA). A 64-bit
 // generation makes ABA practically impossible, but a silent wrap at UINT64_MAX
 // would still violate I6's absolute wording ("a stale key can never mutate the
-// new occupant"). The arena instead fail-fasts when a slot's generation reaches
-// UINT64_MAX on release (~5.8e11 years at 1ns/release is unreachable in
-// practice), so the ABA guard can never wrap. Detected in BOTH Debug and
-// Release.
+// new occupant"). The arena instead fail-fasts on generation EXHAUSTION when a
+// slot's generation reaches UINT64_MAX on release (~585 years at 1 release/ns
+// is unreachable in practice), so the ABA guard can never actually wrap.
+// Detected in BOTH Debug and Release.
 [[noreturn]] void request_arena_generation_exhausted_fail_fast() noexcept;
 
 // Phase B (CodeRabbit finding): the read-only introspection accessors
@@ -283,14 +283,28 @@ bool evented_admission_check() noexcept;
 // for the later ThreadPool/Uring migration. Detected in BOTH Debug and Release.
 [[noreturn]] void request_arena_dispatch_state_fail_fast() noexcept;
 
-// Phase B (review round-4 finding 2): the ready-ring push invariants were
-// violated — a push landed on a slot that is not backend_ready, has no stored
-// terminal, is already linked (ready_next_ != kNotOnReadyRing), or onto a ring
-// already at capacity (which would exceed the one-entry-per-in-flight-op
-// guarantee). Any of these would corrupt the ring or let reap publish a
-// phantom. The only push sites (record_terminal / pending-or-enqueued cancel)
-// guarantee the preconditions; reaching this entry is an invariant violation.
-// Fail-fast in BOTH Debug and Release.
+// Phase B (review round-4): the dispatch path (mark_running) was given a STALE
+// dispatch identity — validate_ rejected the handle (stale generation, free
+// slot, out-of-range index, or wrong context provenance). `mark_running`
+// returning false is RESERVED for the legitimate dispatch backoff: a
+// current-generation slot already backend_ready because a terminal winner won
+// before dispatch. A stale handle is none of the legal outcomes — the backend
+// holds a dispatch identity whose slot moved on (released/reused) — a
+// lifecycle invariant violation, not a normal cancel/dispatch race. Fail-fast
+// in BOTH Debug and Release rather than masquerading as a backoff.
+[[noreturn]] void request_arena_dispatch_stale_fail_fast() noexcept;
+
+// Phase B (review round-4 finding 2; round-5 tail hardening): the ready-ring
+// push invariants were violated — a push landed on a slot that is not
+// backend_ready, has no stored terminal, is already linked onto the ring
+// (ready_next_ != kNotOnReadyRing for a non-tail node, or the slot IS the
+// current tail, whose ready_next_ legitimately carries the kNotOnReadyRing
+// terminator), onto a ring whose head/tail/count triple is structurally
+// inconsistent, or onto a ring already at capacity (which would exceed the
+// one-entry-per-in-flight-op guarantee). Any of these would corrupt the ring
+// or let reap publish a phantom. The only push sites (record_terminal /
+// pending-or-enqueued cancel) guarantee the preconditions; reaching this entry
+// is an invariant violation. Fail-fast in BOTH Debug and Release.
 [[noreturn]] void request_arena_ready_ring_invariant_fail_fast() noexcept;
 
 }  // namespace sluice::async::detail
