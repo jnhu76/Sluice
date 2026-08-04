@@ -451,12 +451,12 @@ enqueued entry (ADR §10.3).
 
 ## 10. Formal model impact (Gate, AGENTS.md §17)
 
-Check `spec/tla/manifest.json`. The Phase B arena model covers the slot state machine and Scheme-B
-arbitration but NOT the worker dequeue/cancel/ring protocol that is the load-bearing Phase-E race.
-The plan is to add a focused `spec/tla/phase_e_blocking_dispatch/` model with states
-`free/pending/enqueued/running/backend_ready/completion_ready` proving at minimum:
-`NoExecuteAfterEnqueuedCancel`, `NoPopBeforeRunningGap`, `ExactlyOneTerminal`,
-`NoReleaseWhileRunning`, `BoundedQueue`, `QuiescentShutdownOnly`, `PinBeforeReap`, plus one
+Check the TLA manifest under spec/tla. The Phase B arena model covers the slot state machine and
+Scheme-B arbitration but NOT the worker dequeue/cancel/ring protocol that is the load-bearing
+Phase-E race. The plan is to add a focused Phase-E blocking-dispatch model whose states are the
+free / pending / enqueued / running / backend_ready / completion_ready lifecycle, proving at
+minimum: NoExecuteAfterEnqueuedCancel, NoPopBeforeRunningGap, ExactlyOneTerminal,
+NoReleaseWhileRunning, BoundedQueue, QuiescentShutdownOnly, PinBeforeReap, plus one
 **negative/broken** model proving the verifier catches the pop-then-stale-mark_running gap. If the
 scope does not permit a new model, the compliance gate records a justified formal-coverage gap
 (reason, risk, revisit trigger). It NEVER claims "formally verified C++ implementation."

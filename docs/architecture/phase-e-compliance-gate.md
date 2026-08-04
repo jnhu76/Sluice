@@ -246,13 +246,53 @@ reads "PENDING — slice N". A test that cannot fail on the pre-fix code is not 
 | TSan (§16.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && ...` | PENDING |
 | negative-compile | `scripts/verify-completion-authority-negative-compile.sh` + `scripts/verify-request-arena-negative-compile.sh` (+ any new ThreadPool authority probe) | PENDING |
 | doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PENDING |
-| formal | `python3 scripts/formal/verify.py` (and a new `phase_e_blocking_dispatch` suite if added) | PENDING |
+| formal | `python3 scripts/formal/verify.py` (and a new `phase_e_blocking_dispatch` suite if added) | PENDING — formal-coverage gap recorded below (justified) |
 | stress | N=100003, buffer=1, fixed workers, bounded capacity (recorded command + result) | PENDING |
 | diff | `git diff --check && git status --short && git diff --stat` | PENDING |
 
 TSan coverage MUST include (§16.3): submit vs dequeue; enqueued cancel vs dequeue; running cancel
 vs terminal; worker terminal vs reap; ready-epoch signal vs wait; reset/reuse after reap;
 shutdown worker wake.
+
+---
+
+## Formal-coverage gap (AGENTS.md §17 — recorded, not invented)
+
+The Phase B TLA model suite covers the `RequestArena` slot state machine, the
+Scheme-B pending-cancel/enqueue arbitration, and the enqueue-in-flight pin
+(I17/I19). It does **not** model the Phase-E worker dequeue/cancel/ring protocol
+— the coordinated `pop_front + mark_running` ownership transfer under
+`work_mtx_`, and the `remove_exact + arena.cancel` arbitration — which is the
+load-bearing Phase-E race.
+
+Per AGENTS.md §17 ("Do not invent a model merely for ceremonial coverage. Model
+the smallest protocol that captures the load-bearing race."), this Phase E
+records a **justified formal-coverage gap** rather than adding a new TLA model
+in this PR:
+
+- **Reason:** the protocol's correctness rests on (a) the already-modeled arena
+  state machine (Scheme B, pin, terminal winner) and (b) a single coordinated
+  work-domain critical section (`work_mtx_`) that makes dequeue+mark_running and
+  remove_exact+cancel indivisible ownership transfers. There is no second slot-
+  state domain racing; the arena remains the sole terminal-winner authority.
+- **Evidence instead of a model:** the TSan gate (§Gate 4) exercises submit-vs-
+  dequeue, enqueued-cancel-vs-dequeue, running-cancel-vs-terminal,
+  terminal-vs-reap, ready-epoch-vs-wait, reset/reuse, and shutdown-worker-wake
+  under genuine concurrency with 0 data races; plus the deterministic
+  `phase_e_cancel_wins_no_double_terminal` and `phase_e_no_lost_wake_*` cases.
+- **Risk:** an implementation change that splits dequeue and mark_running across
+  two domains, or that lets cancel and the dispatch ring race without the shared
+  `work_mtx_`, would reintroduce the pop-before-running gap (ADR §10.4) that no
+  current model would catch.
+- **Revisit trigger:** add a `phase_e_blocking_dispatch` TLA model (states
+  free/pending/enqueued/running/backend_ready/completion_ready; properties
+  NoExecuteAfterEnqueuedCancel, NoPopBeforeRunningGap, ExactlyOneTerminal,
+  NoReleaseWhileRunning, BoundedQueue, QuiescentShutdownOnly, PinBeforeReap, plus
+  a negative pop-then-stale-mark_running model) when (i) a later change splits
+  the work domain or introduces a second dispatch path, or (ii) the io_uring
+  Phase-D migration reuses this dequeue/ring protocol and benefits from a shared
+  model. This PR does NOT claim "formally verified C++ implementation"
+  (AGENTS.md §17).
 
 ---
 
