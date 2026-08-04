@@ -419,18 +419,20 @@ void ThreadPoolBackend::worker_loop() {
 #endif
             if (have_op) {
                 detail::TerminalResult terminal = run_syscall(op);
-                // record_terminal takes the arena leaf lock alone (no work_mtx_
-                // held); the first caller wins, losers no-op (ADR Decision 12).
-                (void)arena_.record_terminal(h, terminal);
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                // Gate D pre-fix: terminal is stored, worker bookkeeping is stale.
-                wait_terminal_publication_pause_();
-#endif
+                // Bookkeeping BEFORE terminal publication (P2): an observer must
+                // not see a ready Completion with stale worker accounting.
+                syscall_count_.fetch_add(1, std::memory_order_relaxed);
                 {
                     std::lock_guard<std::mutex> wl(work_mtx_);
                     --active_workers_;
                 }
-                syscall_count_.fetch_add(1, std::memory_order_relaxed);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                // Gate D post-fix: bookkeeping is done, terminal not yet stored.
+                wait_terminal_publication_pause_();
+#endif
+                // record_terminal takes the arena leaf lock alone (no work_mtx_
+                // held); the first caller wins, losers no-op (ADR Decision 12).
+                (void)arena_.record_terminal(h, terminal);
                 // Wake the ready domain so a blocked wait_one() observes the new
                 // backend-ready (AC-6; design §4.5).
                 signal_ready_progress();
