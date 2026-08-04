@@ -168,24 +168,26 @@ SLUICE_TEST_CASE(tp_many_concurrent_writes_complete) {
     ::close(fd);
 }
 
-// ---- Slice 8 (025 B2): submit after shutdown begins -> invalid_state ------
-// destroying_ is now actually consulted by submit (was dead state). Once the
-// gate is flipped, submit must reject synchronously with invalid_state rather
-// than spawn a worker that could not be joined. shutting_down_for_test() flips
-// the gate without running the destructor (the destructor path is unsafe to
-// test directly: use-after-free on the backend).
+// ---- Slice 8 (025 B2 / Phase E): submit after admission close -> invalid_state
+// Phase E maps the legacy destroying_ gate onto real close_admission() (ADR
+// Decision 15). Once admission is closed, submit must reject synchronously with
+// invalid_state rather than accept a request it cannot bound. The Completion
+// stays idle, nothing is enqueued, and outstanding stays 0.
 SLUICE_TEST_CASE(tp_submit_after_shutdown_rejected) {
     ThreadPoolBackend backend;
-    backend.shutting_down_for_test();  // flip the gate without destructing
+    backend.close_admission();  // real production admission close
     Completion<std::size_t> c;
     std::byte b[4]{};
     auto r = backend.submit_read(ReadOp{0, b, 4, 0}, c);
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
-    SLUICE_CHECK(!c.outstanding());  // rejected before mark_outstanding
+    SLUICE_CHECK(!c.outstanding());  // rejected before binding/outstanding
     SLUICE_CHECK(backend.outstanding() == 0);
 }
 
+// Phase E: a real-syscall backend validates descriptors BEFORE commit (ADR
+// Decision 6; DIV-14 does NOT apply). An offset beyond off_t max is a malformed
+// descriptor -> invalid_argument (synchronous rejection, Completion idle).
 SLUICE_TEST_CASE(tp_offset_past_native_max_is_rejected_before_enqueue) {
     constexpr std::uint64_t native_max =
         static_cast<std::uint64_t>(std::numeric_limits<off_t>::max());
@@ -197,27 +199,25 @@ SLUICE_TEST_CASE(tp_offset_past_native_max_is_rejected_before_enqueue) {
         std::byte byte{};
 
         auto r = ctx.submit_read(ReadOp{fd, &byte, 1, native_max + 1}, c);
-        // Drain the old behavior before asserting so the red test does not
-        // violate AsyncIoContext's outstanding-completion destruction contract.
-        if (r.has_value()) {
-            (void)ctx.wait_one();
-        }
         SLUICE_CHECK(!r.has_value());
-        SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
+        SLUICE_CHECK(r.error().code == IoError::Code::invalid_argument);
         SLUICE_CHECK(c.idle());
         SLUICE_CHECK(ctx.outstanding() == 0);
         ::close(fd);
     }
 }
 
-// ---- Slice 9 (025 B2): cancel records intent; op completes (best-effort) ---
-// Cancel on the thread-pool backend is best-effort: an in-flight blocking
-// syscall is not interrupted (portability hazard), so the op completes with its
-// real result and cancel only records intent (ADR §7 X3 — terminal result is
-// one of {success, error, canceled}). This case verifies the DEFINED-contract
-// half: after cancel + reap, the Completion is ready with a real result, and
-// exactly-once holds. canceled_ops stat stays 0 here because no op was
-// actually canceled (it completed for real).
+// ---- cancel is best-effort and exactly-once (ADR §7 X2/X3, Decision 11) ----
+// Phase E drives cancel through the RequestArena state machine (it is no longer
+// a no-op). Two races are both legal and both exactly-once:
+//   - the worker wins dispatch first: cancel records intent only; the read's
+//     REAL result wins verbatim (success), canceled_ops stays 0;
+//   - cancel wins while still pending/enqueued: it stores the canceled terminal
+//     (Scheme B), the worker never runs the read, canceled_ops == 1.
+// Under TSan (slower worker wake) the cancel-wins race becomes reachable, so
+// this test asserts the DEFINED-and-exactly-once contract for EITHER outcome,
+// not a specific one. (The old "canceled_ops == 0 always" assertion assumed the
+// legacy no-op cancel and is no longer valid.)
 SLUICE_TEST_CASE(tp_cancel_best_effort_op_completes_with_real_result) {
     TempPath tp;
     int fd = open_temp(tp.path());
@@ -234,9 +234,8 @@ SLUICE_TEST_CASE(tp_cancel_best_effort_op_completes_with_real_result) {
     SLUICE_CHECK(ctx.submit_read(ReadOp{fd, got, 4, 0}, r).has_value());
     SLUICE_CHECK(r.outstanding());
 
-    // Request cancel; the op is almost certainly already in-flight on a worker.
-    // We do NOT assert WHICH terminal result — only that it is DEFINED and the
-    // Completion reaches ready exactly once.
+    // Request cancel; either the worker's real result wins, or cancel wins the
+    // pending/enqueued terminal. The Completion reaches ready exactly once.
     ctx.cancel(r);
     std::size_t guard = 0;
     while (!r.ready() && guard < 10000) {
@@ -253,10 +252,8 @@ SLUICE_TEST_CASE(tp_cancel_best_effort_op_completes_with_real_result) {
                          res.error().code == IoError::Code::eof ||
                          res.error().code == IoError::Code::backend_error;
     SLUICE_CHECK(defined);
-    // No op was actually canceled (real result), so the stat stays 0.
-    // (If a future sub-job adds signal-based interrupt, this assertion is
-    // updated to reflect real cancellation.)
-    SLUICE_CHECK(stats.canceled_ops == 0);
+    // Either outcome is exactly-once and tallied at most once.
+    SLUICE_CHECK(stats.canceled_ops == 0 || stats.canceled_ops == 1);
     ::close(fd);
 }
 

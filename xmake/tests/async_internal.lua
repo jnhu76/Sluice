@@ -240,13 +240,14 @@ sluice_internal_async_test("threaded_evented_internal_test")
 -- out. Gated to x86_64 (fiber_ctx::supported) at runtime.
 sluice_internal_async_test("group_evented_admission_exception_safety_test")
 
--- threadpool_backend_reap_test — ThreadPoolBackend worker-reaping regression
--- (Version B CI gate, 2026-08-01). Proves poll()/wait_one() join each worker
--- as its result is reaped: the unreaped-worker count (via the
--- SLUICE_ASYNC_INTERNAL_TESTING-only unjoined_workers_for_test() seam) stays
--- bounded by outstanding ops instead of growing with total ops. Pre-fix, a
--- 100k-op copy accumulated ~100k unjoined zombie threads, hit the runner's
--- task-count limit, and failed with backend_error (spawn EAGAIN).
+-- threadpool_backend_reap_test — ThreadPoolBackend persistent-worker regression
+-- (Phase E). Proves the fixed worker pool never grows under load: the
+-- SLUICE_ASYNC_INTERNAL_TESTING-only workers_spawned_for_test() seam equals the
+-- configured worker_count for the backend's whole life, no matter how many ops
+-- are submitted/drained, and every op terminates with the real result. This is
+-- the Phase-E restatement of the original DIV-03/DIV-12 resource-bound
+-- regression (the per-op-thread model is gone; the pool is bounded by
+-- construction).
 sluice_internal_async_test("threadpool_backend_reap_test")
 
 -- backend_scheme_b_race_test — Phase B backend-level Scheme-B race regression
