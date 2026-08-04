@@ -727,6 +727,20 @@ public:
         return admission_closed_;
     }
 
+    // Production quiescence snapshot for ThreadPoolBackend destruction (Phase E P1).
+    // Returns counts under one arena leaf lock so the backend can verify that no
+    // accepted work, active borrow, or backend-ready terminal remains before it
+    // begins worker teardown. The destructor MUST NOT implicitly drain/cancel/wait.
+    struct ArenaQuiescence {
+        std::size_t slot_in_use;
+        std::size_t accepted_outstanding;
+        std::size_t backend_ready;
+    };
+    ArenaQuiescence quiescence_snapshot() const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        return {slot_in_use_, accepted_outstanding_, backend_ready_count_};
+    }
+
     // Read-only introspection of the slot lifecycle (used by the reference
     // backends' dispatch/reap paths AND by tests; read-only, so it is not a
     // test-only control and does not belong behind SLUICE_ASYNC_INTERNAL_TESTING).

@@ -307,4 +307,13 @@ bool evented_admission_check() noexcept;
 // is an invariant violation. Fail-fast in BOTH Debug and Release.
 [[noreturn]] void request_arena_ready_ring_invariant_fail_fast() noexcept;
 
+// Phase E (ThreadPoolBackend): non-quiescent destruction. The backend's
+// destructor is called while accepted work remains (active workers, enqueued ops,
+// backend-ready slots, or bound slots). Quiescent teardown requires the caller
+// to close admission, drain all outstanding Completions, and reset them so that
+// slot_in_use == 0 and accepted_outstanding == 0. Silent implicit drain/cancel
+// would violate the explicit lifecycle and could strand caller-owned Completions.
+// Fail-fast in BOTH Debug and Release.
+[[noreturn]] void threadpool_non_quiescent_destruction_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

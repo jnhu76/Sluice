@@ -201,6 +201,13 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// Phase E (ThreadPoolBackend): non-quiescent destruction. The caller destroyed
+// the backend while accepted work remains (active workers, enqueued ops, backend-
+// ready slots, or bound slots). Fail-fast in BOTH Debug and Release.
+[[noreturn]] void threadpool_non_quiescent_destruction_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

@@ -129,12 +129,19 @@ ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
 }
 
 ThreadPoolBackend::~ThreadPoolBackend() {
-    // Quiescent persistent-worker teardown only (AGENTS.md §14): set stop,
+    // Quiescent persistent-worker teardown only (AGENTS.md §14): verify no
+    // accepted work, active worker, or ring entry remains, then set stop,
     // notify all idle workers, join the fixed pool. This join is worker-pool
-    // teardown, NOT an I/O drain. The arena destructor fail-fasts if any slot
-    // is still in use (non-quiescent destruction — ADR Decision 15).
+    // teardown, NOT an I/O drain. Non-quiescent destruction fail-fasts in BOTH
+    // Debug and Release (ADR Decision 15).
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
+        auto q = arena_.quiescence_snapshot();  // arena leaf lock under work_mtx_
+        if (!dispatch_.empty() || active_workers_ != 0 ||
+            q.slot_in_use != 0 || q.accepted_outstanding != 0 ||
+            q.backend_ready != 0) {
+            detail::threadpool_non_quiescent_destruction_fail_fast();
+        }
         stopping_ = true;
     }
     work_cv_.notify_all();
