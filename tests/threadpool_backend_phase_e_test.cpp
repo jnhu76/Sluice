@@ -6,9 +6,9 @@
 //   - capacity / would_block (I3/I8, ADR Decision 13)
 //   - descriptor validation (ADR Decision 6; DIV-14 does NOT apply)
 //   - closed-fd -> accepted -> real EBADF terminal (AGENTS.md §9.1)
-//   - Scheme-B cancel wins before dispatch (the syscall does not run)
-//   - enqueued cancel wins (worker does not execute the op)
-//   - running cancel preserves the real result verbatim (Decision 11)
+//   - exactly-once defined terminal under concurrent submit+cancel
+//     (the deterministic no-execute and verbatim proofs live in
+//     threadpool_backend_scheme_b_race_test.cpp)
 //   - no lost wake: wait_one never hangs / never busy-loops / never 0-success
 //   - high-frequency small-I/O bounded regression (the original DIV-03 load)
 //
@@ -205,17 +205,14 @@ SLUICE_TEST_CASE(phase_e_closed_fd_accepted_then_ebadf_terminal) {
     ::close(fds[1]);
 }
 
-// ---- Scheme-B cancel: pending/enqueued cancel wins, the syscall never runs --
-// With request_capacity=1, worker_count=1, and a worker blocked on a slow
-// device, a second op cannot even be submitted (capacity=1). So we instead
-// exercise the cancel-wins-no-execute property by cancelling a read against a
-// pipe that has NO data yet: the worker is blocked in pread-like behavior is
-// not available on a plain file (pread returns 0 at EOF immediately). Use a
-// pipe with no writer data: read() blocks in the worker, giving cancel a window
-// to win the pending/enqueued terminal. We assert the OPPOSITE-direction
-// invariant under the deterministic seam: after cancel + drain, the syscall
-// count did NOT advance for a canceled-while-enqueued op (when cancel wins
-// before dispatch).
+// ---- exactly-once defined terminal under concurrent submit+cancel ---------
+// Submit in small batches within the configured capacity, cancel each, then
+// drain — so slots are released by the reap/reset of each batch before the
+// next batch. We do not assert WHICH terminal won (that depends on the
+// worker-wake race), only that exactly one terminal is published per op.
+// The deterministic no-execute proof (cancel wins before syscall) and the
+// real-result-verbatim-under-running-cancel proof are in
+// threadpool_backend_scheme_b_race_test.cpp (Gates B and C).
 SLUICE_TEST_CASE(phase_e_cancel_wins_no_double_terminal) {
     // The semantic guarantee (exactly-once terminal, never stuck outstanding)
     // under concurrent submit + cancel. Submit in small batches within the
@@ -267,8 +264,9 @@ SLUICE_TEST_CASE(phase_e_cancel_wins_no_double_terminal) {
 // races are reachable; this case asserts the DEFINED-and-exactly-once contract
 // (either a real byte count OR a canceled terminal, never stuck, never double).
 // The "real result verbatim under a confirmed running cancel" half is proven
-// by the request_arena_cancel_intent_test at the arena layer (round-4) and by a
-// slow-syscall deterministic seam in a later slice.
+// by the request_arena_cancel_intent_test at the arena layer and by Gate C
+// (tp_running_cancel_intent_real_result_verbatim) in
+// threadpool_backend_scheme_b_race_test.cpp.
 SLUICE_TEST_CASE(phase_e_cancel_defined_and_exactly_once) {
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/4, /*workers=*/1});
     TempPath tp;
@@ -377,9 +375,13 @@ SLUICE_TEST_CASE(phase_e_high_frequency_small_io_bounded) {
         while (batch > 0) {
             auto wr = backend.wait_one();
             SLUICE_CHECK(wr.has_value() && wr.value() > 0);
-            reaped += static_cast<int>(wr.value());
-            batch -= static_cast<int>(wr.value());
-            if (batch < 0) batch = 0;
+            const std::size_t n = wr.value();
+            // wait_one may reap several ready ops at once, but never more than
+            // the current batch: earlier batches were fully drained, so the
+            // outstanding ops are exactly the remaining batch ops.
+            SLUICE_CHECK(n <= static_cast<std::size_t>(batch));
+            reaped += static_cast<int>(n);
+            batch -= static_cast<int>(n);
         }
     }
     SLUICE_CHECK(reaped == submitted);

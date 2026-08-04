@@ -336,7 +336,7 @@ void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
             dispatch_.push_back(h);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
             {
-                auto* g = after_enqueue_before_push_gate_.load(std::memory_order_relaxed);
+                auto* g = after_enqueue_before_push_gate_.load(std::memory_order_acquire);
                 if (g != nullptr) {
                     g->dispatch_push_completed.store(true, std::memory_order_release);
                 }
@@ -397,7 +397,7 @@ void ThreadPoolBackend::worker_loop() {
                 work_cv_.wait(lk, [&] { return stopping_ || !dispatch_.empty(); });
                 if (stopping_ && dispatch_.empty()) return;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-                if (before_dequeue_gate_ != nullptr) {
+                if (before_dequeue_gate_.load(std::memory_order_acquire) != nullptr) {
                     // Gate B: release work_mtx_ while paused so the test can
                     // safely call cancel/dispatch_size_for_test. The request
                     // stays on the ring; pop_front happens only after resume.
@@ -534,41 +534,49 @@ void ThreadPoolBackend::signal_ready_progress() noexcept {
 
 void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(
     bool inside_work_mtx) noexcept {
-    auto* g = after_enqueue_before_push_gate_.load(std::memory_order_relaxed);
+    auto* g = after_enqueue_before_push_gate_.load(std::memory_order_acquire);
     if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
     g->work_domain_held.store(inside_work_mtx, std::memory_order_release);
     g->dispatch_push_completed.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
+    g->exited.store(true, std::memory_order_release);
 }
 
 void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
-    auto* g = before_dequeue_gate_.load(std::memory_order_relaxed);
+    auto* g = before_dequeue_gate_.load(std::memory_order_acquire);
     if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
+    g->exited.store(true, std::memory_order_release);
 }
 
 void ThreadPoolBackend::wait_running_pause_() noexcept {
-    auto* g = running_gate_.load(std::memory_order_relaxed);
+    auto* g = running_gate_.load(std::memory_order_acquire);
     if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
+    g->exited.store(true, std::memory_order_release);
 }
 
 void ThreadPoolBackend::wait_terminal_publication_pause_() noexcept {
-    auto* g = terminal_publication_gate_.load(std::memory_order_relaxed);
+    auto* g = terminal_publication_gate_.load(std::memory_order_acquire);
     if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
+    g->exited.store(true, std::memory_order_release);
 }
 #endif
 

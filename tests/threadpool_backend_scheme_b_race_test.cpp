@@ -41,6 +41,7 @@
 #include <string>
 #include <sys/types.h>
 #include <thread>
+#include <type_traits>
 #include <unistd.h>
 
 using namespace sluice::async;
@@ -89,51 +90,106 @@ bool wait_paused(Gate& gate, std::chrono::steady_clock::time_point deadline) {
 }
 
 // Drain outstanding ops through the real reaper with a bounded total time.
+// Uses only poll() and yield() — never a blocking wait_one(), which has no
+// timeout and could hang the test (and ultimately the parent waitpid) forever
+// if a terminal or ready-wake were lost.
 bool drain_bounded(ThreadPoolBackend& backend,
                    std::chrono::steady_clock::time_point deadline) {
     while (backend.outstanding() > 0) {
         if (std::chrono::steady_clock::now() >= deadline) return false;
-        std::size_t n = backend.poll();
-        if (n == 0) {
-            auto wr = backend.wait_one();
-            if (!wr.has_value()) return false;
-            n = wr.value();
+        if (backend.poll() == 0) {
+            std::this_thread::yield();
         }
-        if (n == 0) return false;
     }
     return true;
 }
 
-// RAII: resume a paused gate and join a thread on scope exit. Guarantees the
-// test never leaves a gate armed or a thread joinable if an assertion fails.
+// RAII: resume a paused gate, join a thread on scope exit, wait for the
+// production path to leave the gate, and unbind the gate pointer from the
+// backend so it never holds a dangling pointer to a stack gate.
+// Guarantees the test never leaves a gate armed or a thread joinable when an
+// assertion fails.
 template <class Gate>
 class ScopedGateAndThread {
 public:
-    ScopedGateAndThread(Gate& gate, std::thread& t) : gate_(&gate), thread_(&t) {}
+    ScopedGateAndThread(ThreadPoolBackend& backend, Gate& gate, std::thread& t)
+        : backend_(&backend), gate_(&gate), thread_(&t) {}
     void join() {
         if (joined_) return;
         gate_->resume.store(true, std::memory_order_release);
         thread_->join();
         joined_ = true;
     }
-    ~ScopedGateAndThread() { join(); }
+    ~ScopedGateAndThread() { cleanup(); }
 private:
+    void cleanup() {
+        join();
+        wait_for_exit();
+        disarm();
+    }
+    void wait_for_exit() {
+        const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!gate_->exited.load(std::memory_order_acquire)) {
+            if (std::chrono::steady_clock::now() >= deadline) return;
+            std::this_thread::yield();
+        }
+    }
+    void disarm() noexcept {
+        if constexpr (std::is_same_v<Gate, ThreadPoolBackend::AfterArenaEnqueueBeforeDispatchPushPauseGate>) {
+            backend_->set_after_enqueue_before_push_pause_gate(nullptr);
+        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::BeforeWorkerDequeuePauseGate>) {
+            backend_->set_before_dequeue_pause_gate(nullptr);
+        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::WorkerRunningPauseGate>) {
+            backend_->set_running_pause_gate(nullptr);
+        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::TerminalPublicationPauseGate>) {
+            backend_->set_terminal_publication_pause_gate(nullptr);
+        }
+    }
+    ThreadPoolBackend* backend_;
     Gate* gate_;
     std::thread* thread_;
     bool joined_ = false;
 };
 
-// RAII: resume a paused gate on scope exit (for tests without a submitter thread).
+// RAII: resume a paused gate on scope exit (for tests without a submitter
+// thread), wait for the production path to leave the gate, and unbind the
+// gate pointer from the backend.
 template <class Gate>
 class ScopedGateResume {
 public:
-    explicit ScopedGateResume(Gate& gate) : gate_(&gate) {}
+    ScopedGateResume(ThreadPoolBackend& backend, Gate& gate)
+        : backend_(&backend), gate_(&gate) {}
     void resume() {
-        resumed_ = true;
+        if (resumed_) return;
         gate_->resume.store(true, std::memory_order_release);
+        resumed_ = true;
     }
-    ~ScopedGateResume() { if (!resumed_) resume(); }
+    ~ScopedGateResume() { cleanup(); }
 private:
+    void cleanup() {
+        resume();
+        wait_for_exit();
+        disarm();
+    }
+    void wait_for_exit() {
+        const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!gate_->exited.load(std::memory_order_acquire)) {
+            if (std::chrono::steady_clock::now() >= deadline) return;
+            std::this_thread::yield();
+        }
+    }
+    void disarm() noexcept {
+        if constexpr (std::is_same_v<Gate, ThreadPoolBackend::AfterArenaEnqueueBeforeDispatchPushPauseGate>) {
+            backend_->set_after_enqueue_before_push_pause_gate(nullptr);
+        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::BeforeWorkerDequeuePauseGate>) {
+            backend_->set_before_dequeue_pause_gate(nullptr);
+        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::WorkerRunningPauseGate>) {
+            backend_->set_running_pause_gate(nullptr);
+        } else if constexpr (std::is_same_v<Gate, ThreadPoolBackend::TerminalPublicationPauseGate>) {
+            backend_->set_terminal_publication_pause_gate(nullptr);
+        }
+    }
+    ThreadPoolBackend* backend_;
     Gate* gate_;
     bool resumed_ = false;
 };
@@ -143,6 +199,8 @@ private:
 SLUICE_MAIN()
 
 // Gate A: the pause between enqueue and dispatch push fires INSIDE work_mtx_.
+// No cancel is issued in this case: a canceled terminal would be a backend
+// defect, so only a real success (value==1, exactly one syscall) is accepted.
 SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     ThreadPoolBackend::AfterArenaEnqueueBeforeDispatchPushPauseGate gate;
@@ -160,9 +218,10 @@ SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
     std::thread submitter([&] {
         submit_result = backend.submit_read(ReadOp{fd, buf, 1, 0}, c);
     });
-    ScopedGateAndThread arm(gate, submitter);
+    ScopedGateAndThread arm(backend, gate, submitter);
 
     const char* fail_msg = nullptr;
+    std::uint64_t syscalls_before = 0;
 
     const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
     if (!wait_paused(gate, deadline)) {
@@ -172,6 +231,7 @@ SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
     } else if (gate.dispatch_push_completed.load(std::memory_order_acquire)) {
         fail_msg = "dispatch push must not have completed while paused";
     } else {
+        syscalls_before = backend.syscall_count_for_test();
         auto handle = backend.handle_for_completion_for_test(&c);
         if (!handle.has_value()) {
             fail_msg = "handle_for_completion_for_test must find the bound Completion";
@@ -195,10 +255,11 @@ SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
         SLUICE_CHECK(drain_bounded(backend,
                                    std::chrono::steady_clock::now() + kWaitTimeout));
         SLUICE_CHECK(c.ready());
-        const bool real = c.result().has_value() && c.result().value() == 1;
-        const bool canceled =
-            !c.result().has_value() && c.result().error().code == IoError::Code::canceled;
-        SLUICE_CHECK(real || canceled);
+        // No cancel was issued — only a real success is legal; a spurious
+        // canceled terminal would be a backend defect.
+        SLUICE_CHECK(c.result().has_value());
+        SLUICE_CHECK(c.result().value() == 1);
+        SLUICE_CHECK(backend.syscall_count_for_test() == syscalls_before + 1);
         SLUICE_CHECK(backend.outstanding() == 0);
         c.reset();
         SLUICE_CHECK(backend.arena_slot_in_use() == 0);
@@ -219,7 +280,7 @@ SLUICE_TEST_CASE(tp_enqueued_cancel_wins_no_syscall) {
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
     backend.set_before_dequeue_pause_gate(&gate);
-    ScopedGateResume guard(gate);
+    ScopedGateResume guard(backend, gate);
 
     TempPath tp("B");
     int fd = open_temp(tp.path());
@@ -279,7 +340,7 @@ SLUICE_TEST_CASE(tp_running_cancel_intent_real_result_verbatim) {
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     ThreadPoolBackend::WorkerRunningPauseGate gate;
     backend.set_running_pause_gate(&gate);
-    ScopedGateResume guard(gate);
+    ScopedGateResume guard(backend, gate);
 
     TempPath tp("C");
     int fd = open_temp(tp.path());
@@ -339,7 +400,7 @@ SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     ThreadPoolBackend::TerminalPublicationPauseGate gate;
     backend.set_terminal_publication_pause_gate(&gate);
-    ScopedGateResume guard(gate);
+    ScopedGateResume guard(backend, gate);
 
     TempPath tp("D");
     int fd = open_temp(tp.path());

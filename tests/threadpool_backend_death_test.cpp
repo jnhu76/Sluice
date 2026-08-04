@@ -5,11 +5,25 @@
 // either terminates with exit 86 (fail-fast fired) or exits 87 (the call
 // returned without terminating — the regression). The control case exits 0.
 //
+// Fail-fast authority: every non-quiescent case declares the Completion BEFORE
+// the backend (and outside the backend's scope), so the backend destructor is
+// the FIRST authority to run and must be the one that fail-fasts. If the
+// Completion were declared inside the same scope, its destructor (which runs
+// first in reverse declaration order) would hit the outstanding-state
+// completion_authority_fail_fast and the backend destructor would never run —
+// a false positive. The intended fail-fast authority for cases 1-4 is
+// threadpool_non_quiescent_destruction_fail_fast.
+//
 // Critical: cases 1 and 2 arm pause gates that park the worker in a state that
 // the pre-fix destructor would try to join (and hang). The new destructor
 // checks quiescence BEFORE setting stopping_ or joining, so it fail-fasts
 // immediately while the worker is still paused. The death test therefore ships
 // WITH the destructor fix (commit 5), not before it.
+//
+// Bounded waits: all child wait loops are bounded poll/yield loops with a
+// deadline (never a blocking wait_one(), which has no timeout and could hang a
+// child — and thus the blocking parent waitpid — forever if a terminal or
+// wake were lost). On deadline the child exits kChildTestFailExit.
 #include "harness.hpp"
 #include "death_test_runner_posix.hpp"
 
@@ -80,6 +94,11 @@ bool wait_paused(Gate& gate, std::chrono::steady_clock::time_point deadline) {
 void child_destroy_with_enqueued() {
     sluice_death_test::install_deterministic_terminate_handler();
 
+    // Completion must outlive the backend so the backend destructor runs first
+    // and is the fail-fast authority (see the file header).
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
     {
         ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
         ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
@@ -92,8 +111,6 @@ void child_destroy_with_enqueued() {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
 
-        std::byte buf[1]{};
-        Completion<std::size_t> c;
         if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
@@ -125,6 +142,11 @@ void child_destroy_with_enqueued() {
 void child_destroy_with_running() {
     sluice_death_test::install_deterministic_terminate_handler();
 
+    // Completion must outlive the backend so the backend destructor runs first
+    // and is the fail-fast authority (see the file header).
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
     {
         ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
         ThreadPoolBackend::WorkerRunningPauseGate gate;
@@ -137,8 +159,6 @@ void child_destroy_with_running() {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
 
-        std::byte buf[1]{};
-        Completion<std::size_t> c;
         if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
@@ -169,6 +189,11 @@ void child_destroy_with_running() {
 void child_destroy_with_backend_ready() {
     sluice_death_test::install_deterministic_terminate_handler();
 
+    // Completion must outlive the backend so the backend destructor runs first
+    // and is the fail-fast authority (see the file header).
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
     {
         ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
 
@@ -179,8 +204,6 @@ void child_destroy_with_backend_ready() {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
 
-        std::byte buf[1]{};
-        Completion<std::size_t> c;
         if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
@@ -233,17 +256,20 @@ void child_destroy_with_completion_ready() {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
 
+        // Wait for the worker to record backend-ready (not yet reaped) using a
+        // bounded poll/yield loop — wait_one() has no timeout and could hang
+        // forever if a terminal or wake were lost, dragging the parent waitpid
+        // along with it.
         const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
         while (!c.ready()) {
-            auto wr = backend.wait_one();
-            if (!wr.has_value()) std::_Exit(sluice_death_test::kChildTestFailExit);
             if (std::chrono::steady_clock::now() >= deadline) {
                 std::_Exit(sluice_death_test::kChildTestFailExit);
             }
+            if (backend.poll() == 0) {
+                std::this_thread::yield();
+            }
         }
         if (!c.ready()) std::_Exit(sluice_death_test::kChildTestFailExit);
-        std::fprintf(stderr, "[debug death4] before destroy: slot_in_use=%zu outstanding=%zu backend_ready=%zu\n",
-                     backend.arena_slot_in_use(), backend.outstanding(), backend.backend_ready_count_for_test());
         if (backend.arena_slot_in_use() != 1) {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
@@ -280,8 +306,7 @@ void child_control_quiescent_destroy() {
                 std::_Exit(sluice_death_test::kChildTestFailExit);
             }
             if (backend.poll() == 0) {
-                auto wr = backend.wait_one();
-                if (!wr.has_value()) std::_Exit(sluice_death_test::kChildTestFailExit);
+                std::this_thread::yield();
             }
         }
         if (!c.ready()) std::_Exit(sluice_death_test::kChildTestFailExit);

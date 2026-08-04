@@ -98,7 +98,10 @@ reserve
 Current migration status:
 
 - `FakeAsyncBackend` and `SyncBackend` use the bounded `RequestArena` / `RequestSlot` model.
-- `ThreadPoolBackend` and `UringAsyncBackend` may temporarily retain legacy paths only where the
+- `ThreadPoolBackend` has completed the bounded persistent-worker migration (Phase E) and
+  conforms with generation-safe explicit identity, bounded accepted-terminal storage, and the
+  unified RequestArena lifecycle.
+- `UringAsyncBackend` may temporarily retain legacy paths only where the
   active roadmap, ADR, or divergence registry explicitly records that staging.
 - A backend still on a legacy path MUST NOT claim conformance with generation-safe explicit
   identity, bounded accepted-terminal storage, or the unified RequestArena lifecycle.

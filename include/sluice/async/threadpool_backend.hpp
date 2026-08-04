@@ -86,10 +86,9 @@ class ThreadPoolBackend : public AsyncBackend {
     ThreadPoolBackend() : ThreadPoolBackend(ThreadPoolConfig{}) {}
 
     // Explicit bounded configuration. request_capacity and worker_count MUST be
-    // > 0. worker_count may be derived from hardware_concurrency() by the caller;
-    // the backend treats a 0 from hardware_concurrency() as 1 internally only if
-    // the caller passes it through normalize_worker_count (it does not by
-    // default — callers pass an explicit non-zero ThreadPoolConfig).
+    // > 0. Callers may derive worker_count from hardware_concurrency() and
+    // clamp it to >= 1 themselves; the constructor rejects a 0 value with
+    // std::invalid_argument.
     explicit ThreadPoolBackend(ThreadPoolConfig config);
 
     // Quiescent destruction: joins the persistent workers. MUST be preceded by
@@ -183,18 +182,26 @@ class ThreadPoolBackend : public AsyncBackend {
         // Set false before the pause, true after dispatch_.push_back(h) completes.
         // Lets the test observe "not yet pushed" without taking work_mtx_.
         std::atomic<bool> dispatch_push_completed{false};
+        // Set false when the production path enters the pause, true after it
+        // leaves (the spin loop exits). The test waits on this before unbinding
+        // the gate pointer from the backend so the gate object always outlives
+        // every production-path access.
+        std::atomic<bool> exited{true};
     };
     struct BeforeWorkerDequeuePauseGate {
         std::atomic<bool> paused{false};
         std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
     };
     struct WorkerRunningPauseGate {
         std::atomic<bool> paused{false};
         std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
     };
     struct TerminalPublicationPauseGate {
         std::atomic<bool> paused{false};
         std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
     };
 
     void set_after_enqueue_before_push_pause_gate(
