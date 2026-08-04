@@ -7,6 +7,38 @@ local R = SLUICE_ROOT
 -- measurement) and sluice_async (Completion/AsyncIoContext/backends).
 sluice_production_async_test("async_completion_test")
 
+-- Phase B reference lifecycle — bounded RequestSlot arena unit tests. The arena
+-- is an internal detail:: type but its capacity/reserve/release/generation
+-- contract is a deliberate test seam (design: docs/design/phase-b-request-slot-
+-- reference.md). Links sluice_async for the detail/ headers (header-only so far).
+sluice_production_async_test("request_arena_test")
+
+-- Phase B reference lifecycle — Completion binding transient tests (idle ->
+-- binding -> outstanding). Drives the two-stage claim directly via ProbeBackend.
+sluice_production_async_test("completion_binding_test")
+
+-- Phase B reference lifecycle — Scheme B proof (pending cancel wins before
+-- enqueue; enqueue observes backend_ready -> successful no-op; reap-ineligible
+-- while the enqueue pin is live; exactly-one terminal winner; generation reuse).
+sluice_production_async_test("request_lifecycle_scheme_b_test")
+
+-- Phase B round-4 review regression — ADR Decision 11 best-effort cancel. A
+-- running blocking syscall records cancel INTENT only; record_terminal later
+-- records the REAL result VERBATIM (an ordinary success is NOT rewritten to
+-- canceled). Confirmed cancellation records TerminalResult::err(canceled)
+-- explicitly. Drives the arena dispatch seam (mark_running) directly.
+sluice_production_async_test("request_arena_cancel_intent_test")
+
+-- Phase B reference-backend allocation-freedom + transactional-rejection proof
+-- (review test-gap 3 / review C1 fault-injection matrix). A counting +
+-- always-throw operator new drives the accepted submit -> poll -> reset path
+-- (and the would_block / binding-CAS-loss rejection paths) under a total
+-- allocation fault: the path must still succeed with zero allocations, and a
+-- lost binding CAS must leave Completion/slot/FIFO/counters untouched with no
+-- future result contamination. This is the structural zero-allocation proof
+-- the review asked for (ASan alone cannot prove "no allocation").
+sluice_production_async_test("reference_backend_no_alloc_test")
+
 -- AsyncIoContext lifecycle / move-semantics tests (E15-P1-03 / E15-P2-06). The
 -- SAFE move paths (idle-to-idle, source-with-outstanding transfer, self move,
 -- chained moves, moved-from destruction) are exercised here; the FAIL-FAST

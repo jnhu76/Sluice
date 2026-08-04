@@ -63,11 +63,25 @@ These rows show what acceptance and later implementation of
 ADR-explicit-io-request-contract would change. They are intentionally excluded
 from the current summary counts above.
 
+> **Phase B implementation status (working tree, branch
+> `feat/bounded-request-slot-reference`):** ADR-explicit-io-request-contract is
+> now **Accepted**, and the Phase B reference layer implements the
+> `Operation.Storage` identity/ownership adaptation, bounded `request_capacity`
+> admission, and the allocation-independent terminal path on the reference
+> backends (`FakeAsyncBackend`, `SyncBackend`) via the shared
+> `detail::RequestArena`. At the reference layer these three rows advance to
+> their target class (**I** / **I** / **F**); the production backends
+> (`UringAsyncBackend`, `ThreadPoolBackend`) remain at the baseline
+> classification pending Phase D/E migration. The matrix above stays anchored to
+> the `b20bcc7` baseline until the production backends migrate; see
+> `docs/architecture/phase-b-compliance-gate.md` for the reference-layer
+> evidence.
+
 | Concept | Current class | Proposed target class | Decision status | Implementation status |
 |---|---:|---:|---|---|
-| `Operation.Storage` ownership and identity | **A** | **I** | Proposed transitional C++ adaptation; DIV-02 pending acceptance | Unimplemented; Phases B–E |
-| `Pending.Userdata` bounded per-request scratch | **A** | **I** | Proposed exact-layout adaptation with bounded semantic requirement | Unimplemented; per-backend evidence pending |
-| Resource bounds | **A** | **F** | Proposed faithful restoration of explicit bounded admission pressure | Unimplemented; Phases B–E |
+| `Operation.Storage` ownership and identity | **A** | **I** | Accepted (ADR-explicit-io-request-contract); DIV-02 Active transitional | Reference-layer implemented (Phase B: `detail::RequestArena` + `RequestKey`/`Generation`); production backends Phase D/E |
+| `Pending.Userdata` bounded per-request scratch | **A** | **I** | Accepted; bounded semantic requirement specified | Reference-layer implemented (Phase B: pre-reserved per-slot `TerminalResult` storage + waiter registration); production backends Phase D/E |
+| Resource bounds | **A** | **F** | Accepted; bounded `request_capacity` with `would_block` | Reference-layer implemented (Phase B: arena capacity + `capacity_rejections`); `ThreadPoolBackend` remains unbounded pending Phase E |
 
 ---
 

@@ -86,6 +86,121 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5 / I15): the
+// private `binding` transient is an exclusive publication window — only the
+// backend that won the idle -> binding CAS may install the RequestKey/context/
+// release-capability payload. Destroying or resetting a Completion while it is
+// in `binding` observes a half-installed payload, so both are contract
+// violations detected in BOTH Debug and Release. Distinct entries (rather than
+// reusing completion_authority_fail_fast) keep the failure site attributable to
+// the binding transient specifically.
+[[noreturn]] void completion_binding_destruction_fail_fast() noexcept {
+    std::terminate();
+}
+[[noreturn]] void completion_binding_reset_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (ADR Decision 15 / AC-13 :566-572): slot release via reset/destroy is
+// allocation-free and acquires the leaf slot-lifecycle domain after reap has
+// left it. Releasing a slot whose enqueue-in-flight pin is still live, whose
+// waiter registration is still open, or that still holds a stored waiter
+// token/routing-lease is a contract violation — none of those may be silently
+// discarded to make teardown pass. Detected in BOTH Debug and Release.
+[[noreturn]] void request_slot_release_invariant_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (design §9 / ADR Decision 4 :341-349): enqueue from any slot state
+// other than pending (-> enqueued) or backend_ready (-> successful no-op) is an
+// invariant violation of the Scheme-B arbitration — enqueue before commit,
+// double enqueue, or enqueue after reap would silently strand or double-link an
+// accepted op. Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_enqueue_state_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (ADR Decision 15 / AC-13): arena destruction with slot_in_use != 0 is
+// a contract violation — quiescent destruction requires every slot free, and
+// the Completion-bound release capability must never dangle after the arena is
+// gone. Detected in BOTH Debug and Release (fires from the arena destructor
+// during backend/context destruction).
+[[noreturn]] void request_arena_destruction_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review C2 / I4 / I5 / I11): reap reached a backend_ready slot whose
+// Completion publication binding was never installed before commit. Silently
+// skipping would lose an accepted request (AC-4) and strand the Completion
+// outstanding forever. Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_missing_binding_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review I2): record_terminal on a slot that is not a legal terminal
+// candidate (reserved/prepared = not yet accepted) would strand the op forever
+// (the terminal would be stored but the op could never reach backend_ready).
+// Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_terminal_state_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review finding #4): enqueue on a stale handle is a reuse-before-ack
+// invariant violation (I19), not a successful Scheme-B no-op. Masking it as
+// terminal_noop hid the pin/release authority breach. Detected in BOTH Debug
+// and Release.
+[[noreturn]] void request_arena_enqueue_stale_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review finding #5): a slot whose 64-bit generation reached UINT64_MAX
+// cannot increment without wrapping (which would re-introduce ABA, violating I6's
+// absolute wording). Fail fast on generation exhaustion instead of silently
+// wrapping. Detected in BOTH Debug and Release; practically unreachable
+// (~585 years at 1 release/ns).
+[[noreturn]] void request_arena_generation_exhausted_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (CodeRabbit finding): an out-of-range SlotIndex passed to an
+// introspection accessor (key_of/generation_of/state_of/...) would index past
+// the fixed slot array. Fail fast in BOTH Debug and Release.
+[[noreturn]] void request_arena_slot_index_out_of_range_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review round-4 finding 2): record_terminal was given an unstored
+// (default-constructed) TerminalResult. Recording it would publish a phantom
+// 0-byte success and risk a double ready-ring push. Fail-fast in BOTH Debug
+// and Release.
+[[noreturn]] void request_arena_invalid_terminal_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review round-4): the dispatch path reached a slot that is neither
+// enqueued nor backend_ready. Invariant violation of the unified state
+// machine. Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_dispatch_state_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review round-4): the dispatch path (mark_running) was given a stale
+// dispatch identity (stale generation / free / out-of-range / wrong-domain
+// handle). Not the legitimate backend_ready backoff — a lifecycle invariant
+// violation. Detected in BOTH Debug and Release.
+[[noreturn]] void request_arena_dispatch_stale_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase B (review round-4 finding 2; round-5 tail hardening): the ready-ring
+// push invariants were violated (slot not backend_ready / no stored terminal /
+// already linked, including as the current tail / structurally inconsistent
+// head-tail-count triple / ring at capacity). Fail-fast in BOTH Debug and
+// Release rather than corrupting the ring silently.
+[[noreturn]] void request_arena_ready_ring_invariant_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

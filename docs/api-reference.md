@@ -19,11 +19,22 @@ struct IoError {
         permission_denied,// access denied (EACCES, EPERM, ENOENT, ENOTDIR)
         invalid_state,    // precondition violated (e.g. flush dirty bytes after error)
         backend_error,    // unclassified / raw errno
+        invalid_argument, // malformed operation descriptor (ADR-explicit-io-request-contract Decision 6)
+        not_found,        // stale/unknown RequestKey (cancel/reap lookup)
+        not_supported,    // backend/platform does not provide the op or cancel capability
     };
     Code code;
     int os_errno = 0;     // preserved POSIX errno (0 if not applicable)
 };
 ```
+
+`invalid_argument`, `not_found`, and `not_supported` are introduced by the explicit I/O
+request contract (ADR-explicit-io-request-contract, Decision 6). They keep admission
+rejection, stale-key lookup, and capability refusal distinct from one another and from
+configured-capacity `would_block`, lifecycle `invalid_state`, and genuine-init `no_space`.
+Phase B reference backends (FakeAsyncBackend, SyncBackend) emit them; the cancel disposition
+lookup returns `not_found` for an absent or stale generation rather than overloading
+`invalid_state`.
 
 **Helpers:**
 
@@ -1166,6 +1177,19 @@ public:
 };
 ```
 
+Phase B (ADR-explicit-io-request-contract, Accepted, Decision 15): `reset()` from
+`ready` is also the slot-release handshake for a request accepted through the
+reference backends (FakeAsyncBackend, SyncBackend). The slot bound at commit
+remains in use (`slot_in_use` accounting) until `reset()` — or ready-Completion
+destruction — returns it to the bounded arena with `generation++`. The context/
+backend must therefore outlive every bound slot: destroying a context (or arena)
+while any slot is still bound fails fast in Debug and Release. The release uses
+the completed-binding authority (`release_completed_binding`): ANY release
+failure (stale handle, live enqueue pin, open waiter registration, wrong slot
+state) is an internal protocol violation and fails fast — a silently-failed
+release would let the `Completion` become reusable while its old slot stays
+permanently in use.
+
 `detail::next_reap_seq()` is a free function in `sluice::async::detail`, not
 part of the public `Completion` surface.
 
@@ -1177,6 +1201,15 @@ returns `Result<std::size_t>`; `cancel()` has two overloads. Any class that
 derives `AsyncBackend` is a trusted backend-author: it inherits the protected
 `try_claim()` / `publish()` / `rollback_claim_before_accept()` helpers, the
 only sanctioned way to claim a `Completion` and publish a terminal result.
+
+Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5) adds the
+protected two-stage **binding** helpers (`begin_binding` / `commit_binding` /
+`rollback_binding_before_accept`) used by the migrated reference backends
+(Fake/Sync) to install the RequestKey/context/release-capability payload before
+the `Completion` becomes observable as outstanding. The legacy single-step
+`try_claim` remains for the not-yet-migrated backends (Uring/ThreadPool); the
+two paths do not race because a given `Completion` is driven by exactly one
+backend.
 
 ```cpp
 class AsyncBackend {
@@ -1201,7 +1234,12 @@ public:
     virtual std::size_t outstanding() const noexcept = 0;
 
 protected:
+    // Legacy single-step claim (Uring/ThreadPool).
     template <class T> static bool try_claim(Completion<T>& c) noexcept;
+    // Phase B two-stage binding (Fake/Sync — migrated reference backends).
+    template <class T> static bool begin_binding(Completion<T>& c) noexcept;             // idle -> binding
+    template <class T> static void commit_binding(Completion<T>& c) noexcept;            // binding -> outstanding (submit-success LP)
+    template <class T> static void rollback_binding_before_accept(Completion<T>& c) noexcept; // binding -> idle
     template <class T> static void publish(Completion<T>& c, Result<T>&& result) noexcept;
     template <class T> static void rollback_claim_before_accept(Completion<T>& c) noexcept;
 };
@@ -1337,10 +1375,18 @@ Deterministic test backend. Construct directly and configure `auto_bytes()`,
 `auto_error()`, `auto_eof()`, `auto_short_then_full()`; or drive
 `complete_oldest_with_bytes()` / `complete_oldest_with_error()` manually.
 
+Phase B (ADR-explicit-io-request-contract, Accepted): `FakeAsyncBackend` now
+drives the bounded `detail::RequestArena` five-stage admission and the unified
+reap path with a `detail::SynchronousReadySink`. The public submit/cancel/
+complete surface is unchanged (ADR Decision 7); the optional `request_capacity`
+constructor argument bounds the arena (default 64). Test-only introspection
+(`arena_slot_in_use()`, `arena_capacity_rejections()`, `sink_deliveries()`)
+exposes the arena lifecycle for regression tests.
+
 ```cpp
 class FakeAsyncBackend : public AsyncBackend {
 public:
-    FakeAsyncBackend() = default;
+    explicit FakeAsyncBackend(std::size_t request_capacity = 64);
     ~FakeAsyncBackend() override = default;
 
     void auto_bytes(std::size_t n);
@@ -1353,6 +1399,12 @@ public:
     void complete_oldest_with_error(IoError e);
     void complete_oldest_sync_ok();
     void complete_oldest_sync_error(IoError e);
+
+    // Phase B test-only introspection (the arena is a private detail).
+    std::size_t arena_capacity() const noexcept;
+    std::size_t arena_slot_in_use() const noexcept;
+    std::size_t arena_capacity_rejections() const noexcept;
+    std::size_t sink_deliveries() const noexcept;
 
     // ... AsyncBackend implementation
 };

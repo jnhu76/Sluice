@@ -747,21 +747,21 @@ with subsystem prefix in documentation.
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
 | P0-01 | P0 | Worker OOM → terminate | Phase A target + Phase B/C proof + Phase E implementation |
-| P0-02 | P0 | Cross-backend transactional submit | Phase A target + Phase B/C reference + Phase D/E migration (open: register_op allocation after claim) |
+| P0-02 | P0 | Cross-backend transactional submit | Reference-layer CLOSED (Phase B round 2: bounded RequestArena + five-stage admission on Fake/Sync; the Completion publication binding lives IN the RequestSlot record (no parallel map), the fake's submission-order FIFO is a construction-time bounded ring, and the Completion-ready release-store happens INSIDE the leaf domain (single-domain reap) — pre-commit bookkeeping is transactional and the accepted path performs ZERO allocations (proven by counting + always-throw operator new in `reference_backend_no_alloc_test.cpp`); a lost binding CAS leaves Completion/slot/FIFO/counters untouched with no result contamination); production-backend migration open for Phase D/E (register_op allocation after claim) |
 | P0-03 | P0 | Completion publication authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 |
 | P1-01 | P1 | Completion claim authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (backend is claim authority) |
-| P1-02 | P1 | Backend-ready vs completion-ready | Phase A target defined; Phase B/C/F implementation evidence pending |
+| P1-02 | P1 | Backend-ready vs completion-ready | Reference-layer CLOSED (Phase B: distinct `backend_ready` vs `completion_ready` slot states + enqueue-in-flight pin reap-ineligibility); Phase F Scheduler integration pending |
 | P1-03 | P1 | SyncBackend cancel publication | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (cancel records intent; reap publishes) |
 | P1-04 | P1 | Spawn failure lacks explicit admission boundary | Phase E backend migration |
-| P1-05 | P1 | queue_full_retries semantic conflation | Phase B/C vocabulary and metrics |
-| P1-06 | P1 | No request generation (ABA) | Phase B/C, then D/E/F |
-| P1-07 | P1 | Reap API discards completion identity | Phase B/C reference, Phase F integration |
+| P1-05 | P1 | queue_full_retries semantic conflation | Reference-layer CLOSED (Phase B round 2: distinct `slot_in_use` vs `accepted_outstanding` vs `capacity_rejections` counters on the arena; capacity pressure propagates as `would_block` — never `invalid_state` — and tallies `queue_full_retries`, while caller lifecycle violations (`invalid_state`) tally the new `AsyncStats::invalid_state_rejections` — the two are never conflated); Phase C metrics integration pending |
+| P1-06 | P1 | No request generation (ABA) | Reference-layer CLOSED (Phase B: per-slot Generation incremented on release before reuse; stale-key rejection proven across every post-reserve authority); production-backend migration open for Phase D/E |
+| P1-07 | P1 | Reap API discards completion identity | Reference-layer CLOSED (Phase B: identity-bearing SynchronousReadySink delivers by-value ReadyEvent{RequestKey, OperationKind, OptionalWaiterDelivery}); Phase F Scheduler integration pending |
 | P1-08 | P1 | wait_one holds lock, blocks cancel | Focused concurrency design before Phase F L1 integration |
-| P1-09 | P1 | Cancel API not explicit | Phase B/C target mechanics, focused API review before public change |
-| P1-10 | P1 | Runtime await no provenance check | Phase B/C identity, Phase F enforcement |
+| P1-09 | P1 | Cancel API not explicit | Reference-layer CLOSED at arena (Phase B: RequestKey-targeted cancel returns CancelDisposition); public-API change deferred to a later ADR |
+| P1-10 | P1 | Runtime await no provenance check | Reference-layer CLOSED (Phase B: RequestKey provenance is the cancel/reap identity); Phase F Runtime enforcement pending |
 | P2-01 | P2 | Per-op thread creation | Phase E persistent workers |
 | P2-02 | P2 | workers_ monotonic growth | Phase E persistent workers |
-| P2-03 | P2 | Hot-path allocation | Phase B/C reference, Phase E backend |
+| P2-03 | P2 | Hot-path allocation | Reference-layer CLOSED (Phase B round 2: allocation-independent accepted terminal path — fixed RequestSlot array, pre-reserved terminal storage, publication binding in the slot record, construction-time bounded FIFO ring; the accepted submit → poll → reset path performs ZERO allocations under a counting + always-throw operator new); Phase E backend migration pending |
 | P2-04 | P2 | 2ms MIXED-WAKE latency | Phase G wake integration |
 | P2-05 | P2 | Batch conflates rejection with completion | Phase F Batch integration |
 | P3-01 | P3 | ThreadPoolBackend naming | Phase E naming correction |

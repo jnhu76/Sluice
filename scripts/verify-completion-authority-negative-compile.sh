@@ -69,6 +69,14 @@ negative_cases=(
   "NEG_ROLLBACK_PRIVATE:private|no member|not accessible|inaccessible"
   "NEG_REAP_SEQ_PRIVATE:private|no member|not accessible|inaccessible"
   "NEG_THROWING_COMPLETION_VALUE:static assertion|static_assert|nothrow|nothrow_move_assignable"
+  # Phase B binding-protocol authority (ADR-explicit-io-request-contract Decision 5):
+  # ordinary application code cannot forge a binding / commit one / roll one back /
+  # install or clear the slot-release capability (Decision 7 / I2).
+  "NEG_BEGIN_BINDING_PRIVATE:private|no member|not accessible|inaccessible"
+  "NEG_COMMIT_BINDING_PRIVATE:private|no member|not accessible|inaccessible"
+  "NEG_ROLLBACK_BINDING_PRIVATE:private|no member|not accessible|inaccessible"
+  "NEG_INSTALL_BINDING_PRIVATE:private|no member|not accessible|inaccessible"
+  "NEG_CLEAR_BINDING_PRIVATE:private|no member|not accessible|inaccessible"
 )
 
 echo "=== ADR-explicit-io-completion-authority negative-compile gate ==="
@@ -96,7 +104,7 @@ for entry in "${negative_cases[@]}"; do
   log="$tmp_root/$macro.log"
   if "$cxx_bin" "${common_flags[@]}" -D"$macro" "$probe" >"$log" 2>&1; then
     echo "$macro: FAIL (compiled successfully — authority/contract NOT enforced)"
-    ((failures++))
+    failures=$((failures + 1))
   else
     # Verify the failure is for the EXPECTED reason for THIS case.
     if grep -qiE "$pattern" "$log"; then
@@ -105,7 +113,7 @@ for entry in "${negative_cases[@]}"; do
       echo "$macro: FAIL (compile failed, but not with the expected diagnostic)"
       echo "  expected pattern: $pattern"
       sed -n '1,12p' "$log"
-      ((failures++))
+      failures=$((failures + 1))
     fi
   fi
 done

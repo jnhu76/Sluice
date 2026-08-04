@@ -39,13 +39,13 @@ Status values:
 | Field | Value |
 |-------|-------|
 | ID | DIV-02 |
-| Status | Proposed transitional decision |
-| Introduced by | Existing Completion/backend-record separation; formalized as a transitional C++ adaptation by the Proposed explicit request contract |
-| Governing ADR | ADR-explicit-io-request-contract (Proposed; Decision 2) |
-| Reason | Zig places operation lifecycle and backend scratch in caller-owned `Operation.Storage`. The Proposed request contract selects preserving caller-owned `Completion<T>` while the context/backend owns a bounded arena of `RequestSlot` objects identified by context, slot, and generation. If accepted, this stages migration without making the current pointer/container implementation acceptable. |
+| Status | Active transitional decision (Phase B) |
+| Introduced by | Existing Completion/backend-record separation; formalized as a transitional C++ adaptation by the explicit request contract |
+| Governing ADR | ADR-explicit-io-request-contract (Accepted; Decision 2) |
+| Reason | Zig places operation lifecycle and backend scratch in caller-owned `Operation.Storage`. The accepted request contract selects preserving caller-owned `Completion<T>` while the context/backend owns a bounded arena of `RequestSlot` objects identified by context, slot, and generation. This stages migration without making the prior pointer/container implementation acceptable. |
 | Benefit | Preserves public submit signatures and avoids one-step Runtime/Batch/copy-pipeline migration while still enabling stable identity, bounded admission, and an allocation-independent accepted terminal path. |
-| Cost | Context/backend memory scales with configured capacity; caller cannot supply storage directly; current backends remain non-conforming until migrated. |
-| Current evidence | Current code: `completion.hpp`, backend-specific containers, and no RequestSlot arena. Target decision: ADR-explicit-io-request-contract Decisions 1–5. No production implementation exists yet. |
+| Cost | Context/backend memory scales with configured capacity; caller cannot supply storage directly; non-reference backends (Uring/ThreadPool) remain non-conforming until their respective phases. |
+| Current evidence | Phase B activates the transitional backend-owned `RequestSlot` arena for the reference backends (FakeAsyncBackend, SyncBackend) only. `UringAsyncBackend` and `ThreadPoolBackend` retain their pointer/container tracking until Phases D/E. The shared `sluice::async::detail::RequestArena` provides one logical capacity per context/backend pair (ADR Decision 2; no two independently oversubscribable stores). PR #63's review closeout moved queue linkage and submission order INTO the slot (`ready_next_`, `submit_seq_`) and removed FakeAsyncBackend's side-band `HandleRing` FIFO and per-kind staging deques; the arena owns a construction-time bounded ready-ring so reap preserves backend-known (terminal-winner) order (ADR Decision 9) for all backends. |
 | Revisit trigger | Re-evaluate when benchmarks or backend ABI evidence show caller-owned storage materially reduces per-request overhead and the public API migration cost for Runtime, Batch, and copy pipelines is controlled. |
 
 ---
@@ -173,7 +173,7 @@ Status values:
 | Reason | Portable cancellation of in-flight blocking syscalls (via `pthread_kill`/`tgkill`) is complex and platform-specific. Current cancel is best-effort: the op completes with its real result. |
 | Benefit | Simplicity; no signal-safety hazards; no UB from interrupted syscalls. |
 | Cost | Cannot interrupt a long-running fsync/pread/pwrite; cancel only affects waiting, not the syscall. |
-| Current evidence | `threadpool_backend.hpp:29-33`; `cancel()` returns but op continues. |
+| Current evidence | `threadpool_backend.hpp:29-33`; `cancel()` returns but op continues. The shared `RequestArena` now records `cancel_intent_` on a `running` slot (ADR-explicit-io-request-contract Decision 11) so the arena layer is correct for the ThreadPool/Uring migration: the syscall's ordinary result later competes for the terminal winner, and `record_terminal` substitutes `canceled` for an ordinary success when intent is set. The reference backends never enter `running`, so this is dormant at the reference layer. |
 | Revisit trigger | If workload requires interruptible long fsync; if io_uring cancel (IORING_OP_ASYNC_CANCEL) is integrated. |
 
 ---
@@ -226,12 +226,28 @@ Status values:
 
 ---
 
+## DIV-14: prepare() Descriptor Validation Deferred for Reference Backends
+
+| Field | Value |
+|-------|-------|
+| ID | DIV-14 |
+| Status | Accepted |
+| Introduced by | ADR-explicit-io-request-contract (Accepted) Decision 5/6 + Phase B closeout |
+| Governing ADR | ADR-explicit-io-request-contract (Decision 6 `invalid_argument` vocabulary) |
+| Reason | Decision 6 declares `invalid_argument` for "malformed operation: invalid length/buffer contract, impossible offset conversion, or invalid fd parameter form." The Phase B reference backends (FakeAsyncBackend, SyncBackend) perform NO real I/O — `fd` is a metadata carrier, not a syscall target (the test corpus deliberately uses `ReadOp{-1, ...}` as an "unused by fake" sentinel), and `BorrowMetadata` carries no offset. Enforcing the representable causes (negative fd, null buffer with nonzero length) at the reference `prepare()` would reject reference-backend test traffic without backing a real safety property. |
+| Benefit | The reference layer stays focused on the arena/slot/terminal lifecycle contract (its actual scope); the test corpus is not churned to placate a check that guards no real syscall at this layer. |
+| Cost | A malformed descriptor is NOT rejected at the reference `prepare()` — it is accepted and surfaces only at the full-backend prepare paths (Phase D/E), where a real syscall would actually dereference the fd/buffer. Callers cannot rely on `invalid_argument` from the reference backends for fd/buffer-form errors until those phases. |
+| Current evidence | `include/sluice/async/detail/request_arena.hpp` `prepare()` (no fd/buffer-form check; the deferral is documented at the call site); ADR Phase B closeout "Round-4 review closeout" item 3; reference-backend tests use `ReadOp{-1, ...}` as a documented sentinel. |
+| Revisit trigger | Phase D (Uring) / Phase E (ThreadPool) full-backend prepare paths MUST enforce the Decision 6 `invalid_argument` causes (negative fd, null buffer with nonzero length, impossible offset conversion) before issuing a real syscall. This divergence is then resolved per-backend. |
+
+---
+
 ## Summary
 
 | ID | Status | Area |
 |----|--------|------|
 | DIV-01 | Approved | Context shape |
-| DIV-02 | Proposed transitional decision | Operation storage ownership |
+| DIV-02 | Active transitional decision (Phase B) | Operation storage ownership |
 | DIV-03 | Corrective planned | Backend execution model |
 | DIV-04 | Approved | Wake integration |
 | DIV-05 | Approved | Observation interval |
@@ -243,3 +259,4 @@ Status values:
 | DIV-11 | Accepted | Cancel protection |
 | DIV-12 | Corrective planned | Resource bounds |
 | DIV-13 | Accepted | Backend extension point |
+| DIV-14 | Accepted | prepare() descriptor validation deferred for reference backends |

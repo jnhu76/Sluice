@@ -75,6 +75,8 @@ void child_double_publish() {
 }
 
 // ---- Child case: control — valid lifecycle MUST exit 0 ----------------------
+// (Phase B also adds destroy-in-binding and reset-in-binding child cases below;
+// those exercise the new binding-transient fail-fast boundary.)
 void child_control_valid_lifecycle() {
     ProbeBackend pb;
     Completion<std::size_t> c;
@@ -96,6 +98,71 @@ void child_control_valid_lifecycle() {
     if (c.result().value() != 2) std::_Exit(sluice_death_test::kChildTestFailExit);
     c.reset();
     // Clean destroy (idle).
+    std::_Exit(0);
+}
+
+// ---- Phase B child case: destroying a Completion in `binding` MUST fail-fast -
+// ADR-explicit-io-request-contract (Accepted) Decision 5 / I15: the binding
+// transient is an exclusive publication window. A destructor that observes it
+// would tear down a half-installed RequestKey/context/release-capability
+// payload. The truthful deterministic contract is fail-fast in BOTH Debug and
+// Release (no silent abandonment, no half-state reuse).
+void child_destroy_in_binding() {
+    sluice_death_test::install_deterministic_terminate_handler();
+
+    ProbeBackend pb;
+    {
+        Completion<std::size_t> c;
+        if (!pb.begin_binding(c)) std::_Exit(sluice_death_test::kChildTestFailExit);
+        // c is now in `binding`. It goes out of scope here -> fail-fast.
+    }
+    // If we reach here, the destructor did NOT fail-fast.
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// ---- Phase B child case: reset() on a Completion in `binding` MUST fail-fast -
+// reset() during binding would observe/overwrite a half-installed payload.
+void child_reset_in_binding() {
+    sluice_death_test::install_deterministic_terminate_handler();
+
+    ProbeBackend pb;
+    Completion<std::size_t> c;
+    if (!pb.begin_binding(c)) std::_Exit(sluice_death_test::kChildTestFailExit);
+    // c is now in `binding`. reset() is forbidden (I15).
+    c.reset();
+    // If we reach here, the fail-fast did NOT fire.
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// ---- Phase B child case: commit_binding WITHOUT begin_binding MUST fail-fast --
+// CodeRabbit finding (validate the binding transition before committing it):
+// commit_binding_to_outstanding CASes binding -> outstanding. A derived backend
+// that calls commit_binding() on an IDLE Completion (never won begin_binding)
+// would otherwise manufacture an outstanding Completion with no accepted
+// binding. The CAS loses on idle and fails fast in BOTH Debug and Release.
+void child_commit_binding_without_begin() {
+    sluice_death_test::install_deterministic_terminate_handler();
+
+    ProbeBackend pb;
+    Completion<std::size_t> c;
+    // c is idle. begin_binding was NEVER called. commit must fail-fast.
+    pb.commit_binding(c);
+    // If we reach here, the fail-fast did NOT fire.
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// ---- Phase B child case: control — begin_binding THEN commit exits 0 --------
+// Proves the commit-without-begin fail-fast is not a false positive: a
+// Completion that won begin_binding (idle -> binding) commits cleanly to
+// outstanding (the CAS from binding succeeds). The process exits via _Exit(0)
+// before any destructor runs, so the outstanding Completion needs no further
+// teardown in this control (the fail-fast cases are the authority proof).
+void child_control_begin_then_commit() {
+    ProbeBackend pb;
+    Completion<std::size_t> c;
+    if (!pb.begin_binding(c)) std::_Exit(sluice_death_test::kChildTestFailExit);
+    pb.commit_binding(c);  // binding -> outstanding (CAS succeeds)
+    if (!c.outstanding()) std::_Exit(sluice_death_test::kChildTestFailExit);
     std::_Exit(0);
 }
 
@@ -162,6 +229,36 @@ SLUICE_TEST_CASE(completion_death_concurrent_publish_fail_fast) {
     SLUICE_CHECK_MSG(
         sluice_death_test::expect_terminated_via_fail_fast(r),
         "two threads publishing one outstanding Completion: the loser must fail-fast (exit 86)");
+}
+
+// ---- Phase B binding-transient death cases --------------------------------
+
+SLUICE_TEST_CASE(completion_death_destroy_in_binding) {
+    auto r = sluice_death_test::run_death_case("destroy-in-binding");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "destroying a Completion in `binding` must fail-fast (exit 86)");
+}
+
+SLUICE_TEST_CASE(completion_death_reset_in_binding) {
+    auto r = sluice_death_test::run_death_case("reset-in-binding");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "reset() on a Completion in `binding` must fail-fast (exit 86)");
+}
+
+SLUICE_TEST_CASE(completion_death_commit_binding_without_begin) {
+    auto r = sluice_death_test::run_death_case("commit-binding-without-begin");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "commit_binding() without a winning begin_binding() must fail-fast (exit 86) — "
+        "only the begin_binding winner may publish outstanding");
+}
+
+SLUICE_TEST_CASE(completion_death_control_begin_then_commit) {
+    auto r = sluice_death_test::run_death_case("control-begin-then-commit");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_normal_exit_zero(r),
+                     "Control: begin_binding() then commit_binding() commits cleanly to outstanding");
 }
 
 // ---- Non-death regression: double-claim returns false (no fail-fast) --------
@@ -239,6 +336,14 @@ int main(int argc, char** argv) {
             child_concurrent_publish();
         } else if (child_case == "control") {
             child_control_valid_lifecycle();
+        } else if (child_case == "destroy-in-binding") {
+            child_destroy_in_binding();
+        } else if (child_case == "reset-in-binding") {
+            child_reset_in_binding();
+        } else if (child_case == "commit-binding-without-begin") {
+            child_commit_binding_without_begin();
+        } else if (child_case == "control-begin-then-commit") {
+            child_control_begin_then_commit();
         } else {
             std::cerr << "[death] unknown child case: " << child_case << "\n";
             std::_Exit(sluice_death_test::kChildTestFailExit);

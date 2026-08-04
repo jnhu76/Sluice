@@ -1,10 +1,42 @@
 # ADR: Unified Explicit I/O Request Contract
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-08-02
 **Scope:** `sluice_async` request identity, admission, completion, cancellation, capacity,
 and lifecycle contracts
 **Baseline:** `b20bcc7` (`master`, including PR #60 and PR #61)
+**Accepted at:** Phase B implementation (`feat(async): add bounded RequestKey / RequestSlot
+reference lifecycle`), branch `feat/bounded-request-slot-reference`, working-tree change
+awaiting the user's review/commit.
+
+## Acceptance
+
+This ADR was merged in its complete, normative form via PR #62 (commits `818b8d6`,
+`3e80535`, `88f2d03`; merge `503e3fb` on `master`). The full Decision 1–16 text, the I1–I19
+formal invariants, the linearization-points table, the architecture compliance gate
+(Gate 0–4), and the rejected-alternatives analysis (Alternatives A–G) are all part of the
+accepted record. With Phase B implementation beginning against it, the ADR is promoted from
+`Proposed` to `Accepted` and becomes binding authority (AGENTS.md §2 tier 2).
+
+On acceptance, the supersessions listed below take effect exactly as written — and only
+those listed portions are superseded. In particular:
+
+- The `idle -> binding -> outstanding` two-stage backend claim (Decision 5) now supersedes
+  the direct `idle -> outstanding` claim described in ADR-explicit-io-completion-authority
+  §§2.2/5/9/10. The access-control boundary, backend-only authority, reap-only publication,
+  fail-fast invalid transitions, and idle/ready destruction permission of that ADR remain
+  authoritative.
+- The reference lifecycle's pending-cancellation-wins + enqueue-no-op + enqueue-in-flight-pin
+  protocol (Decision 4, I17, I19) is the selected arbitration scheme. The rejected
+  "record-intent-and-terminalize-after-enqueue" alternative (one of Alternatives A–G) is NOT
+  implemented.
+
+Acceptance does not assert that the C++ implementation already conforms — it does not. It
+asserts that this document is the contract the implementation must now satisfy, and that
+divergence from it requires a superseding ADR or closeout note rather than a silent choice
+(AGENTS.md §2). Phase B's scope fence (Decision "Next PR" / roadmap Phase B) is binding: it
+must not jump to Uring migration, blocking-offload, Scheduler integration, Batch migration,
+Runtime wake integration, or a public `RequestHandle`.
 
 ## Authority and relationship to existing decisions
 
@@ -1107,7 +1139,7 @@ The implementation/conformance PRs must add evidence for:
   reaches a new generation, progress is not lost, and exactly one backend-ready result/linkage and
   Completion publication occur;
 - two-context contention for one Completion, proving that only the `idle -> binding` CAS winner
-  installs binding payload and that no operation observes a half binding;
+  installs binding payload and that no operation observe a half binding;
 - OOM/failure after commit without loss, hang, or worker exception escape;
 - identity-bearing completion order and exact RequestKey preservation;
 - generation reuse and stale submit/cancel/CQE/waiter attempts;
@@ -1138,6 +1170,152 @@ The implementation/conformance PRs must add evidence for:
 - TSan coverage for submit/cancel/reap/slot-reuse concurrency when implementation changes land.
 
 No Gate 4 item is marked passed by this documentation-only ADR.
+
+#### Phase B reference-layer evidence (working tree, branch `feat/bounded-request-slot-reference`)
+
+The Phase B implementation closes the reference-layer portion of Gate 4 (Fake/Sync backends +
+the bounded `RequestArena` + the `Completion` binding transient + the enqueue-in-flight pin +
+the `SynchronousReadySink`). The production-backend rows (io_uring SQE pressure, blocking offload)
+remain open for Phase D/E. Evidence map:
+
+| Obligation | Evidence |
+|---|---|
+| state transitions / capacity-full / generation-on-release / stale-key rejection / distinct counters / allocation-independent terminal | `tests/request_arena_test.cpp` (5 cases); `tests/request_lifecycle_scheme_b_test.cpp` |
+| `idle -> binding -> outstanding` two-stage claim; rollback; concurrent exactly-one-winner | `tests/completion_binding_test.cpp` (3 cases) |
+| destroy/reset-in-binding fail-fast (Debug AND Release) | `tests/completion_authority_death_test.cpp` |
+| the 19-step Scheme-B trace (pending cancel wins; enqueue no-op; reap-ineligible while pinned; exactly-one terminal; generation++; stale not_found) | `tests/request_lifecycle_scheme_b_test.cpp :: pending_cancel_wins_before_enqueue_then_enqueue_noop` |
+| exactly-one terminal winner among pending-cancel / dispatch-error / ordinary | `:: exactly_one_terminal_winner` |
+| ReadyEvent survives reset/reuse during the sink callback (no dangling pointer) | `:: ready_sink_event_survives_reset_during_callback` |
+| duplicate-waiter `invalid_state`; wait-cancel/I/O independence; lease exactly-once | `:: waiter_registration_cardinality`, `:: reap_wins_lease_over_wait_cancel` |
+| cancel disposition per state (pending/enqueued/backend_ready/free/reserved/prepared) | `:: cancel_races_per_state` |
+| generation reuse rejects stale submit/cancel/reap/register/release | `:: generation_reuse_stale_attempts` |
+| acquire observer sees all effects (I18) | `:: acquire_observer_of_ready_sees_all_effects` |
+| close_admission rejects new reserve; existing reapable still reaps | `:: close_admission_rejects_new_but_existing_reapable` |
+| allocation-free slot release (1000-cycle convergence; generation advanced 1000×) | `:: allocation_free_slot_release_proof` |
+| genuine concurrent submit ‖ cancel/reap (TSan, 0 data races); the test asserts the pin is already acknowledged after join (no maskable extra-ack) | `:: concurrent_submit_cancel_enqueue` |
+| **backend-level Scheme-B race** (real FakeAsyncBackend submit thread + Completion binding + deterministic commit/enqueue barrier pause; cancel wins pending; resumed enqueue no-ops + acks; poll reaps canceled) | `tests/backend_scheme_b_race_test.cpp` (links `sluice_async_internal_testing` for the `SubmitPauseGate` seam) |
+| **zero-allocation accepted path + transactional rejection**: counting + always-throw operator new drives submit → poll → reset (and the would_block / binding-CAS-loss rejection paths) — zero allocations, zero side effects, no result contamination | `tests/reference_backend_no_alloc_test.cpp` (3 cases) |
+| release-with-live-pin / release-with-registered-waiter / **reap-without-binding / record-terminal-on-prepared** fail-fast (Debug AND Release) + valid-release control | `tests/request_arena_death_test.cpp` (7 death/control cases) |
+| Fake/Sync migrate onto the arena; observable slot lifecycle + capacity rejections (`would_block`, never `invalid_state`) + exactly-once deliveries + caller-handshake slot release | `tests/reference_backend_arena_lifecycle_test.cpp` (6 cases); `tests/completion_binding_test.cpp` (release-capability cases) |
+| ordinary caller cannot forge a binding / claim / publish / reap_seq / install or clear the slot-release capability | `scripts/verify-completion-authority-negative-compile.sh` (12/12) |
+| ordinary caller cannot mutate slot state/generation/pin/terminal/registration/publication-binding | `scripts/verify-request-arena-negative-compile.sh` (6/6) |
+| metric vocabulary (P1-05): `would_block` → `queue_full_retries`; `invalid_state` → `AsyncStats::invalid_state_rejections` (never conflated) | `tests/async_completion_test.cpp :: async_stats_increment_on_submit_poll_wait`; `tests/reference_backend_no_alloc_test.cpp` |
+
+Gate results (command + count): Clang Debug 135/135; Clang Release 135/135; ASan/UBSan 135/135
+clean; TSan 135/135 with 0 data races (including the genuine two-thread concurrent case and the
+backend-level Scheme-B race); negative-compile 12/12 + 6/6; doc-check PASS. Round-2 review fixes
+closed the three Critical findings (transactional pre-commit admission with the publication
+binding in the slot record + construction-time bounded ring — C1; the parallel `bindings_` map
+removed, reap validates the slot's own binding and publishes Completion-ready through it INSIDE
+the leaf domain — C2/C3) and the three Important findings (completed-binding release fails fast
+on any failure — I1; `record_terminal` validates state before writing and the unconditional
+pin-acknowledge escape hatch is gone — I2; `queue_full_retries` no longer counts lifecycle
+violations — I3). Full evidence ledger: `docs/architecture/phase-b-compliance-gate.md`.
+
+### Round-4 review closeout
+
+The round-4 review identified three more findings on the Phase B reference
+layer. Two are code fixes; the third is an ADR-deferred vocabulary item that
+this closeout records as intentional divergence rather than implementing
+behavior the ADR explicitly scopes out.
+
+- **Round-4 finding 1 — running cancel must stay best-effort (Decision 11).**
+  `record_terminal()` previously substituted `canceled` for an ordinary
+  success when `cancel_intent_` was set, secretly turning best-effort cancel
+  into cancel-wins. It now records the REAL result VERBATIM and consumes the
+  intent on any winner. `CancelDisposition::requested` is split into
+  `terminal_won` (pending/enqueued cancel stored the canceled terminal
+  directly — Scheme B) and `intent_recorded` (running cancel recorded intent
+  only); the reference backends now tally `canceled_ops` only on
+  `terminal_won`, not at intent-request time. A confirmed cancellation
+  (valid interruption / cancel CQE winner) records
+  `TerminalResult::err(canceled)` explicitly via `record_canceled`. Regression:
+  `tests/request_arena_cancel_intent_test.cpp` (6 cases, including a capturing
+  test that fails on the pre-fix code with "ordinary success must NOT be
+  rewritten to an error").
+- **Round-4 finding 2 — terminal authority rejects unstored results.**
+  `record_terminal()` now rejects a default-constructed `TerminalResult`
+  (`stored == false`) up front via `request_arena_invalid_terminal_fail_fast`
+  in BOTH Debug and Release. Recording it would publish a phantom 0-byte
+  success and risk a double ready-ring push. `push_ready_locked_()` also
+  asserts its invariants (slot is backend_ready with a stored terminal, not
+  already linked, ring not at capacity) via
+  `request_arena_ready_ring_invariant_fail_fast`. Regression: two new death
+  cases in `tests/request_arena_death_test.cpp`
+  (`record-terminal-unstored-result`; the ready-ring guard is inspection-
+  verified, like the generation-exhaustion guard, since the only push sites
+  guarantee the preconditions).
+- **Round-4 finding 3 — descriptor validation (Decision 5/6).** This remains
+  a DECLARED but DEFERRED vocabulary item for the Phase B reference backends,
+  as the original closeout already stated. The reference backends perform no
+  real I/O (the fd is a metadata carrier, not a syscall target — the test
+  corpus deliberately uses `ReadOp{-1, ...}` as an "unused by fake" sentinel),
+  and `BorrowMetadata` carries no offset, so the `invalid_argument` causes
+  that ARE representable at this layer would reject reference-backend test
+  traffic without backing a real safety property. They are enforced by the
+  full-backend prepare paths (Phase D/E). This is recorded as intentional
+  divergence in `docs/architecture/divergence-registry.md`.
+
+
+## Phase B closeout (PR #63 review findings)
+
+The PR #63 review identified five findings and two ADR-completeness gaps in the
+first Phase B implementation. All are closed by the reference-layer redesign
+that lands in this PR; the contract decisions themselves are unchanged. This
+section records how each is realized so the Decision text below remains the
+governing authority (per AGENTS.md §2, accepted decisions are not rewritten).
+
+- **Decision 9 — backend-known reap order (finding #3).** Reap no longer scans
+  the slot array by physical index. The arena owns a construction-time bounded
+  ready-ring of backend_ready slot indices threaded through each slot's
+  `ready_next_` link; every terminal-winner transition (`record_terminal`,
+  pending/enqueued `cancel`) pushes the slot onto the ring's tail, and reap pops
+  from the head. Delivery is therefore in terminal-winner (backend-known) order,
+  not slot-index order, for ALL backends (not just Fake).
+- **Queue linkage as a reserved slot resource (finding #1).** The side-band
+  `HandleRing` FIFO and the per-kind staging deques are removed from
+  FakeAsyncBackend. Queue linkage and submission order live IN the slot
+  (`ready_next_`, `submit_seq_`); a cancelled or reused slot can never leave a
+  stale side-band handle that strands a later accepted op. Terminal evidence
+  binds to a stable `RequestKey` at `complete_*`/`cancel` call time.
+- **Decision 12 / Decision 14 — terminal binds to identity immediately
+  (finding #2).** `complete_oldest_*` calls `record_terminal` directly (no
+  staging deque), so a second completion against an already-terminal op is a
+  terminal-winner no-op and terminal evidence cannot leak across generations.
+  The staging-deque allocation is gone, so the manual-completion path is
+  genuinely allocation-free (Decision 14 now proven, not just the auto path).
+- **Decision 5 / I19 — stale enqueue is an invariant violation (finding #4).**
+  `enqueue()` on a stale handle is no longer masked as a successful no-op. A
+  stale handle means the committed submit path's slot moved on while its
+  enqueue pin was still live — an I19 reuse-before-ack disaster. It fails fast
+  in BOTH Debug and Release (`request_arena_enqueue_stale_fail_fast`). A
+  LEGITIMATE `terminal_noop` now means only "observed backend_ready from a
+  prior terminal winner."
+- **Decision 11 — running-state cancel records intent.** `cancel()` on a
+  `running` blocking-syscall slot records `cancel_intent_` and returns
+  `intent_recorded` WITHOUT storing a terminal; the syscall's ordinary
+  result/error/valid-interruption later competes for the terminal winner via
+  `record_terminal`, which records the REAL result VERBATIM (an ordinary
+  success is NOT rewritten to canceled — cancel is best-effort, Decision 11).
+  A backend that CONFIRMS the cancellation actually took effect (a valid
+  interruption, a cancel CQE winner) records `TerminalResult::err(canceled)`
+  explicitly and THAT call wins the terminal. pending/enqueued cancel still
+  wins the terminal directly (returns `terminal_won` and stores the canceled
+  terminal under Scheme B). The Phase B reference backends never enter
+  `running`, so the intent path is exercised by `tests/request_arena_cancel_
+  intent_test.cpp` driving the `mark_running()` dispatch seam directly; the
+  shared arena is now correct for the later ThreadPool/Uring migration.
+- **I6 — 64-bit generation with fail-fast (finding #5).** `Generation` is
+  `uint64_t`; the arena fail-fasts at `UINT64_MAX` on release
+  (`request_arena_generation_exhausted_fail_fast`) rather than silently
+  wrapping, so a stale key can never collide with a future occupant (I6's
+  absolute wording holds in perpetuity).
+
+`prepare()` descriptor validation (Decision 6 `invalid_argument`) remains a
+declared-but-deferred vocabulary item for the reference backends — see the
+"Round-4 review closeout" section above and `docs/architecture/divergence-
+registry.md` for the recorded divergence (the reference backends perform no
+real I/O; enforcement lands in the full-backend prepare paths, Phase D/E).
 
 ## Open risks and deferred decisions
 

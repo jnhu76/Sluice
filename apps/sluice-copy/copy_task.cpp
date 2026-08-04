@@ -401,6 +401,13 @@ struct PipelinedCopyTask {
             if (!sr.has_value()) return make_unexpected<CopyStats>(sr.error());
         }
 
+        // Phase B (ADR-explicit-io-request-contract, Accepted, Decision 15):
+        // the sync Completion's slot stays bound until reset()/ready-destruction
+        // releases it (completion_ready -> free is the caller's handshake). The
+        // context/backend must be quiescent (every slot free) before it is
+        // destroyed, so release the sync slot here like every other Completion.
+        sync_c.reset();
+
         return stats;
     }
 };

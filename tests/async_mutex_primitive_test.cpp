@@ -356,10 +356,19 @@ SLUICE_TEST_CASE(mtx_t5_owner_before_publication_phase) {
             std::this_thread::yield();
         }
         release_g0.set();   // G0 unlocks -> handoff pauses
-        for (int i = 0; i < 10000; ++i) {
-            if (AsyncMutexSeam::is_handoff_paused(sched)) break;
-            std::this_thread::yield();
-        }
+        // Coordination fix: WAIT (block) for the handoff phase to reach the
+        // paused state rather than polling with a bounded retry loop. A bounded
+        // yield-loop can return before the worker reaches the phase; the
+        // following is_paused() CHECK would then fail and RETURN from this
+        // lambda WITHOUT calling release_handoff(), leaving the worker blocked
+        // forever in test_phase() (a deterministic Release-only hang observed at
+        // baseline b157fcb, ~75% repro). wait_handoff_paused() blocks on the
+        // phase's own cv and therefore cannot give up before the phase is paused;
+        // release_handoff() is then guaranteed to run, so the worker always
+        // resumes. The is_paused()/pre-publication CHECKs below are retained as
+        // positive observations (they cannot fail once wait_handoff_paused
+        // returned). This is the same discipline the E12-D/E13 phase tests use.
+        AsyncMutexSeam::wait_handoff_paused(sched);
         SLUICE_CHECK_MSG(AsyncMutexSeam::is_handoff_paused(sched),
                          "handoff paused after owner commit, before publication");
         SLUICE_CHECK_MSG(!w1_resumed.load(std::memory_order_acquire),

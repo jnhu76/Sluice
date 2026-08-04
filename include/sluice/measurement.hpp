@@ -133,7 +133,14 @@ struct AsyncStats {
     std::uint64_t completion_errors = 0;   // Completions completed with an error != canceled
     std::uint64_t short_completions = 0;   // read/write with fewer bytes than requested
     std::uint64_t max_outstanding = 0;     // high-water mark of in-flight ops
-    std::uint64_t queue_full_retries = 0;  // submit rejected (L8) then retried
+    // Submit rejected for CAPACITY pressure (would_block) then retried. This is
+    // the canonical queue-full signal (ADR Decision 6/13); a backend MAY also
+    // bump it for its own ring-full backend_error path (Uring does).
+    std::uint64_t queue_full_retries = 0;
+    // Submit rejected for a CALLER lifecycle violation (invalid_state: non-idle
+    // Completion, admission closed, lifecycle misuse) — NOT capacity pressure.
+    // Counted separately so queue_full_retries never conflates the two (P1-05).
+    std::uint64_t invalid_state_rejections = 0;
 };
 
 } // namespace sluice

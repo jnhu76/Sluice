@@ -19,6 +19,7 @@
 // round-trip for a NothrowValue is exercised at runtime in
 // async_completion_test.cpp (where a backend is available to drive it).
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/request_arena.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
@@ -125,6 +126,59 @@ void neg_throwing_completion_value() {
     // ERROR: static_assert in Completion<T> (nothrow move-assignable trait).
     Completion<ThrowingMoveValue> c;
     (void)c;
+}
+#endif
+
+// --- Phase B binding-protocol negative-compile cases -------------------------
+// ADR-explicit-io-request-contract (Accepted) Decision 5 / I2 / I15: the
+// binding mutators (begin_binding_for_backend / commit_binding_to_outstanding /
+// rollback_binding_before_accept) are PRIVATE to Completion<T>, reachable only
+// via AsyncBackend's protected helpers by derived backends (the trusted
+// backend-author role). Ordinary application code cannot forge a binding,
+// observe a half-installed payload, or roll one back. Each case below must fail
+// with a private-access / no-member diagnostic, exactly like the claim/publish
+// cases above.
+
+#if defined(NEG_BEGIN_BINDING_PRIVATE)
+void neg_begin_binding_private() {
+    Completion<std::size_t> c;
+    c.begin_binding_for_backend();  // ERROR: private
+}
+#endif
+
+#if defined(NEG_COMMIT_BINDING_PRIVATE)
+void neg_commit_binding_private() {
+    Completion<std::size_t> c;
+    c.commit_binding_to_outstanding();  // ERROR: private
+}
+#endif
+
+#if defined(NEG_ROLLBACK_BINDING_PRIVATE)
+void neg_rollback_binding_private() {
+    Completion<std::size_t> c;
+    c.rollback_binding_before_accept();  // ERROR: private
+}
+#endif
+
+#if defined(NEG_INSTALL_BINDING_PRIVATE)
+// Phase B (ADR Decision 7 / I2): only the idle -> binding CAS winner may
+// install the slot-release capability. Ordinary application code cannot forge
+// a binding payload that would authorize a slot release.
+void neg_install_binding_private() {
+    Completion<std::size_t> c;
+    sluice::async::detail::RequestArena* arena = nullptr;
+    sluice::async::detail::SlotHandle h{sluice::async::detail::SlotIndex{0},
+                                        sluice::async::detail::Generation{0}};
+    c.install_binding_for_backend(arena, h);  // ERROR: private
+}
+#endif
+
+#if defined(NEG_CLEAR_BINDING_PRIVATE)
+// Phase B: the binding payload can only be cleared by the release handshake
+// (reset/ready-destruction); ordinary code cannot tear it down.
+void neg_clear_binding_private() {
+    Completion<std::size_t> c;
+    c.clear_binding_for_backend();  // ERROR: private
 }
 #endif
 

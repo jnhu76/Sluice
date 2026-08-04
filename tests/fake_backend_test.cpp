@@ -152,4 +152,70 @@ SLUICE_TEST_CASE(fake_buffer_reusable_after_completion) {
     SLUICE_CHECK(b[0] == std::byte{0xFF});
 }
 
+// ---- PR #63 review finding #1: cancel-then-reuse must not strand a later op --
+// The review's minimal failure sequence for the prior side-band HandleRing:
+//   submit(c1) -> cancel(c1) -> poll() (reap canceled) -> c1.reset() (slot free)
+//   -> submit(c2) -> complete_oldest_with_bytes(8) -> poll()
+// The OLD implementation left the cancelled c1's FIFO handle in the side-band
+// ring; the next submit's ring push could silently fail (ring full of stale
+// handles) and c2 would be permanently outstanding. With the side-band ring
+// removed (terminal binds directly to the slot), c2 must complete normally.
+SLUICE_TEST_CASE(fake_cancel_then_reuse_does_not_strand_next_op) {
+    FakeAsyncBackend backend{/*request_capacity=*/1};
+
+    std::byte buf[8]{};
+    Completion<std::size_t> c1;
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, c1).has_value());
+    backend.cancel(c1);
+    SLUICE_CHECK(backend.poll() == 1);  // reap the canceled c1
+    SLUICE_CHECK(c1.ready());
+    SLUICE_CHECK(c1.result().error().code == IoError::Code::canceled);
+    c1.reset();  // release the slot (generation advances)
+
+    // Reuse the now-free slot for a fresh op. It MUST be completable — no stale
+    // side-band handle strands it.
+    Completion<std::size_t> c2;
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, c2).has_value());
+    backend.complete_oldest_with_bytes(8);
+    SLUICE_CHECK_MSG(backend.poll() == 1,
+                     "c2 (the reused-slot op) must complete — no stale handle strands it");
+    SLUICE_CHECK(c2.ready());
+    SLUICE_CHECK(c2.result().value() == 8);
+    c2.reset();
+}
+
+// ---- PR #63 review finding #2: terminal evidence does not cross generations ---
+// The review's minimal failure sequence for the prior staging deque: completing
+// the same op twice (or completing with no matching op outstanding) left a
+// staged result that a LATER op on a reused slot would wrongly consume. With
+// terminal evidence bound to a RequestKey at complete_* time (record_terminal),
+// a second complete_* against an already-terminal op is a no-op (terminal-winner
+// rule), so a fresh op on a reused slot can never inherit a stale result.
+SLUICE_TEST_CASE(fake_double_complete_does_not_pollute_next_generation) {
+    FakeAsyncBackend backend{/*request_capacity=*/1};
+
+    std::byte buf[8]{};
+    Completion<std::size_t> c1;
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, c1).has_value());
+    backend.complete_oldest_with_bytes(1);
+    backend.complete_oldest_with_bytes(2);  // c1 already terminal -> no-op
+    SLUICE_CHECK(backend.poll() == 1);
+    SLUICE_CHECK(c1.ready());
+    SLUICE_CHECK(c1.result().value() == 1);  // the FIRST result won
+    c1.reset();
+
+    // A fresh op on the reused slot must NOT consume the leftover "2".
+    Completion<std::size_t> c2;
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, c2).has_value());
+    SLUICE_CHECK_MSG(backend.poll() == 0,
+                     "c2 has no terminal recorded; the stale '2' must not have leaked");
+    SLUICE_CHECK(!c2.ready());
+    // Now complete c2 explicitly and confirm it gets ITS OWN result.
+    backend.complete_oldest_with_bytes(8);
+    SLUICE_CHECK(backend.poll() == 1);
+    SLUICE_CHECK(c2.ready());
+    SLUICE_CHECK(c2.result().value() == 8);
+    c2.reset();
+}
+
 SLUICE_MAIN()
