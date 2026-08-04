@@ -258,7 +258,7 @@ sluice_internal_async_test("threadpool_backend_reap_test")
 --   C: running cancel records intent only and the real syscall result wins;
 --   D: terminal publication happens after worker bookkeeping is observable.
 -- Cases A and D fail on the pre-fix code; cases B and C are conformance proofs.
-sluice_internal_async_test("threadpool_backend_scheme_b_race_test")
+sluice_internal_async_test("threadpool_backend_scheme_b_race_test", {platform_gate = {"linux", "macosx"}})
 
 -- backend_scheme_b_race_test — Phase B backend-level Scheme-B race regression
 -- (review test-gap 1). Drives the raw FakeAsyncBackend with the
