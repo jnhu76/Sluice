@@ -1,65 +1,238 @@
-# AGENTS.md — Sluice Repository Instructions
+# AGENTS.md — Sluice Repository Operating Contract
 
 This file is the repository-wide operating contract for coding agents working on Sluice.
-It applies to the entire repository unless a more specific nested `AGENTS.md` is added later.
+
+It applies to the entire repository unless a more specific nested `AGENTS.md` exists for a
+subdirectory. A nested file may add stricter local rules, but it MUST NOT silently weaken an
+Accepted ADR, the architecture constitution, public API contract, or the explicit-I/O lifecycle
+defined here.
 
 Normative words such as **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are intentional.
 
+---
+
 ## 1. Project identity and architectural boundaries
 
-Sluice is an experimental C++20 I/O control-flow library built around explicit capabilities,
-pluggable backends, and backend-neutral `Reader` / `Writer` semantics.
+Sluice is an experimental C++20 I/O control-flow library built around:
+
+- explicit capability objects;
+- backend-neutral public I/O descriptors;
+- stable request identity;
+- bounded resource ownership;
+- pluggable execution backends;
+- synchronous `Reader` / `Writer` semantics in the core; and
+- an opt-in asynchronous runtime in `namespace sluice::async`.
 
 The main build boundaries are:
 
-- `sluice_core`: the synchronous core. It owns `Result<T>`, `IoError`, `Reader`, `Writer`,
-  buffering, copy helpers, WAL, file I/O, positional I/O, durability, and the production
-  `BlockingIoPool`.
-- `sluice_async`: the opt-in asynchronous runtime in `namespace sluice::async`. It is a
-  separate production static library and MUST NOT alter the synchronous public contract merely
-  to make async implementation easier.
-- `sluice_async_internal_testing`: a test-only build of the same authoritative async production
-  sources plus guarded deterministic test controls. Production code MUST NOT depend on it, and
-  no executable may link both async variants.
-- `sluice_experimental_uring`: optional experimental io_uring code. It is off by default and is
-  not the default backend.
-- `zig/`: design reference only. It is not built, linked, vendored into production output, or
-  treated as source code to copy mechanically.
+- `sluice_core`
+  - synchronous core;
+  - owns `Result<T>`, `IoError`, `Reader`, `Writer`, buffering, copy helpers, WAL,
+    positional I/O, durability, file I/O, and the production `BlockingIoPool`;
+- `sluice_async`
+  - opt-in asynchronous production library;
+  - owns `AsyncIoContext`, `Completion<T>`, async backends, Runtime/Scheduler integration,
+    and the explicit request lifecycle;
+- `sluice_async_internal_testing`
+  - test-only build of the authoritative async production sources plus guarded deterministic
+    controls;
+  - production code MUST NOT depend on this target;
+  - no executable may link both async variants;
+- `sluice_experimental_uring`
+  - optional io_uring support;
+  - off by default;
+  - io_uring is one backend, not the architecture;
+- `zig/`
+  - source-derived design reference only;
+  - not built, linked, vendored into production output, or copied mechanically.
 
-Do not collapse these boundaries. In particular:
+Do not collapse these boundaries.
+
+In particular:
 
 - `BlockingIoContext` remains the default blocking path.
-- `BlockingIoPool` is a bounded OS-thread helper, not the async runtime.
-- io_uring is one optional backend, not the architecture.
-- public synchronous `Reader` / `Writer` semantics remain synchronous.
-- test seams remain non-installed and compile-time guarded.
+- `BlockingIoPool` is a bounded synchronous-core helper, not the async Runtime.
+- `ThreadPoolBackend` is a blocking-I/O offload mechanism, not a task-execution strategy.
+- Scheduler workers, blocking-I/O workers, kernel queue depth, request capacity, and application
+  pipeline depth are distinct resources.
+- Public synchronous `Reader` / `Writer` semantics remain synchronous.
+- Async implementation convenience is not permission to alter the synchronous public contract.
+- Test seams remain compile-time guarded and non-authoritative.
 
-## 2. Authority and conflict resolution
+---
+
+## 2. Current explicit-I/O architecture status
+
+The Accepted explicit-I/O request contract defines the current target architecture.
+
+The core logical request identity is:
+
+```text
+RequestKey = (ContextIdentity, SlotIndex, Generation)
+```
+
+The canonical lifecycle is:
+
+```text
+free
+  -> reserved
+  -> prepared
+  -> pending
+  -> enqueued
+  -> running / kernel-owned
+  -> backend-ready
+  -> completion-ready
+  -> free with generation increment
+```
+
+The five-stage submission transaction is:
+
+```text
+reserve
+-> prepare
+-> commit / accept
+-> enqueue
+-> dispatch
+```
+
+Current migration status:
+
+- `FakeAsyncBackend` and `SyncBackend` use the bounded `RequestArena` / `RequestSlot` model.
+- `ThreadPoolBackend` and `UringAsyncBackend` may temporarily retain legacy paths only where the
+  active roadmap, ADR, or divergence registry explicitly records that staging.
+- A backend still on a legacy path MUST NOT claim conformance with generation-safe explicit
+  identity, bounded accepted-terminal storage, or the unified RequestArena lifecycle.
+- `RequestKey` is currently an internal identity. The public API may remain Completion-based until
+  a later approved API ADR introduces a public request handle.
+- `Completion<T>` is a caller-owned publication and result object. It is not the logical identity
+  of an accepted request.
+
+Do not describe the repository as fully end-to-end migrated while a production backend or upper
+layer still reconstructs identity from pointers, scans, or side-band containers.
+
+---
+
+## 3. Authority and conflict resolution
 
 Before changing a subsystem, identify its authority chain.
 
 Use the following order:
 
-1. The explicit current task, issue, approved plan, or review finding scope.
-2. Accepted ADRs and subsystem closeout/design documents under `docs/`.
-3. Public headers under `include/sluice/` and the deliberate public API description in
-   `docs/api-reference.md`.
-4. Production implementation under `src/`.
-5. Contract, regression, death, negative-compile, and causal tests under `tests/`, plus the
-   subsystem verification scripts under `scripts/`.
-6. `xmake.lua` for target membership, dependencies, feature gates, and executable test names.
-7. `.github/workflows/ci.yml` for the minimum repository merge gate.
-8. `README.md` for orientation and common commands.
+1. The explicit current task, approved issue scope, accepted review finding, or approved plan.
+2. Accepted ADRs and active subsystem design/closeout documents under `docs/`.
+3. `docs/architecture/architecture-constitution.md`.
+4. This `AGENTS.md`.
+5. Public headers under `include/sluice/` and `docs/api-reference.md`.
+6. Production implementation under `src/`.
+7. Contract, regression, death, negative-compile, causal, and formal tests.
+8. `xmake.lua` for target membership, dependencies, feature gates, and test names.
+9. `.github/workflows/*.yml` for repository merge gates.
+10. `README.md` for orientation and common commands.
 
 A scanner report, code-review summary, comment, commit message, or stale planning note is evidence,
 not automatic authority.
 
-If these sources disagree, MUST NOT silently choose whichever is easiest. Characterize the current
-behavior with a focused test, report the contradiction, and make the smallest change that restores
-an explicitly approved contract. Do not rewrite an accepted ADR to pretend a historical decision
-never existed; add a superseding ADR or closeout note when semantics deliberately change.
+If sources disagree:
 
-## 3. Protect the working tree
+- MUST NOT silently choose whichever is easiest;
+- characterize the as-built behavior with a focused test or precise static argument;
+- identify which higher authority is stale or violated;
+- make the smallest change that restores an explicitly approved contract;
+- update interface comments, implementation, tests, and governing docs together;
+- record intentional divergence instead of hiding it;
+- add a superseding ADR or closeout note when semantics deliberately change.
+
+An Accepted ADR is not rewritten to pretend a historical decision never existed.
+
+---
+
+## 4. Explicit authority separation
+
+### 4.1 RequestArena / RequestSlot authority
+
+The `RequestArena` / `RequestSlot` lifecycle domain owns accepted-I/O request semantics:
+
+- stable `RequestKey`;
+- request provenance and generation;
+- `RequestState`;
+- slot admission and release;
+- enqueue-in-flight pin;
+- operation kind and bounded backend scratch;
+- fd/buffer borrow metadata;
+- accepted-outstanding and slot-in-use accounting;
+- terminal-winner arbitration;
+- terminal result storage;
+- backend-ready linkage;
+- waiter registration state stored in the request slot;
+- reap transition to completion-ready; and
+- generation increment before slot reuse.
+
+The slot-lifecycle domain is the authority for the request, not a parallel map, closure, ready
+deque, Completion pointer, Scheduler record, or worker-local object.
+
+### 4.2 Backend progress authority
+
+A concrete backend owns its bounded progress mechanism, such as:
+
+- a fixed worker pool and bounded dispatch queue;
+- io_uring SQ/CQ ownership;
+- backend-specific cancellation attempts;
+- backend progress notification; and
+- the mapping from a valid `RequestKey` to execution ownership.
+
+A backend worker or CQE handler may publish only `backend-ready` through the request lifecycle.
+It MUST NOT make a `Completion<T>` ready directly.
+
+### 4.3 Completion authority
+
+`Completion<T>` is caller-owned and address-stable for the documented request lifetime.
+
+Backend-only capabilities own:
+
+```text
+idle -> binding -> outstanding
+outstanding -> publishing -> ready
+binding -> idle rollback before acceptance
+```
+
+Caller lifecycle owns:
+
+```text
+ready -> resetting -> idle
+idle -> idle no-op
+```
+
+Reset or destruction in `binding`, `outstanding`, `publishing`, or `resetting` is a checked contract
+violation where the Completion contract requires fail-fast.
+
+Only designated reap code publishes Completion-ready through the slot-bound publication capability.
+
+### 4.4 Scheduler authority
+
+The Scheduler owns:
+
+- Scheduler-integrated waiter/routing records;
+- routing leases;
+- wait-epoch accounting;
+- canonical runnable publication;
+- Fiber/runnable routing; and
+- Scheduler shutdown/drain rules.
+
+The Scheduler does **not**:
+
+- choose an I/O request's terminal result;
+- overwrite a RequestSlot terminal result;
+- own accepted-I/O generation;
+- publish Completion-ready independently;
+- treat `Completion*` as logical request identity; or
+- bypass RequestArena terminal-winner authority.
+
+The request slot may temporarily hold a stable Scheduler token and move-only routing lease, but the
+Scheduler remains the sole routing authority.
+
+---
+
+## 5. Protect the working tree
 
 Before any edit:
 
@@ -71,21 +244,23 @@ git diff
 
 Agents MUST:
 
-- preserve all unrelated tracked, untracked, and ignored files;
-- avoid `git clean`, `git reset --hard`, destructive checkout, blanket restore, or implicit stashing;
+- preserve unrelated tracked, untracked, and ignored files;
+- avoid `git clean`, `git reset --hard`, destructive checkout, blanket restore, or implicit stash;
 - avoid rebasing, force-pushing, merging, or changing branches unless explicitly asked;
 - never delete or rewrite `.c-review-results/` merely to make a finding disappear;
-- avoid whole-file or repository-wide formatting when only a local repair is required;
+- avoid whole-file or repository-wide formatting for a local repair;
 - inspect the final diff and prove that only intended files changed.
 
 Normal xmake commands may refresh ignored state such as `.xmake/`, `build/`, and
-`compile_commands.json`. Do not claim that a command touched only ignored output without checking
-`git status --short` afterward.
+`compile_commands.json`. Check `git status --short` afterward before claiming no source changes.
 
-## 4. Required baseline before production changes
+---
 
-The repository CI gate is Linux Clang Debug. Unless the current task explicitly defines a stronger
-baseline, run the same path before editing production code:
+## 6. Required baseline before production changes
+
+The minimum repository CI baseline is Linux Clang Debug.
+
+Unless the current task defines a stronger baseline, run before editing production code:
 
 ```sh
 xmake f -m debug --toolchain=clang -y
@@ -95,57 +270,600 @@ xmake build -g test
 xmake test -v
 ```
 
-This explicit production-library build is required even when tests depend mostly on
-`sluice_async_internal_testing`; the test variant is not proof that the production async surface
-still compiles warning-clean.
+The explicit production-library build is required even when tests mainly link
+`sluice_async_internal_testing`.
 
 If the baseline fails:
 
-1. do not start broad repair work;
-2. isolate the failing target or test case;
-3. determine whether the failure predates the requested change;
-4. record the exact command and output;
-5. add or use a focused reproducer before modifying production behavior.
+1. do not begin broad repair work;
+2. isolate the failing target or case;
+3. determine whether it predates the requested change;
+4. record exact command and output;
+5. add or use a focused reproducer;
+6. do not weaken or skip the failing gate.
 
-Never hide a baseline failure by weakening assertions, removing a test target, changing the test
-group, adding retries, increasing sleeps, or marking failures non-blocking.
+Never hide a baseline failure by:
 
-## 5. Focused build and test workflow
+- weakening assertions;
+- removing a target;
+- changing its group;
+- adding retries;
+- increasing sleeps or yield counts;
+- marking it non-blocking; or
+- excluding it without an approved, documented gate decision.
 
-Use the exact target names defined in `xmake.lua`.
+---
+
+## 7. Focused build and test workflow
+
+Use exact target names from `xmake.lua`.
 
 ```sh
 xmake build <target>
 xmake run <target>
 ```
 
-The dependency-free test harness supports case-name filtering:
+The test harness supports case filtering:
 
 ```sh
 SLUICE_TEST_FILTER=<case-name-substring> xmake run <test-target>
 ```
 
-A focused test is for diagnosis and iteration. It does not replace the full repository gate.
+A focused test is for diagnosis and iteration. It does not replace the full gate.
 
-For bug and security repairs, the normal order is:
+For bug, race, or security repairs, the normal order is:
 
 1. reproduce the defect or establish a precise invariant violation;
 2. add a regression test that fails for the intended reason when feasible;
-3. implement the smallest production fix;
+3. implement the smallest production repair consistent with the accepted architecture;
 4. run the focused test;
 5. run the complete Clang Debug gate;
-6. run the change-class-specific gates below.
+6. run all applicable change-class gates;
+7. update architecture evidence with actual results.
 
-A test that cannot fail on the pre-fix code is not proof of the repair. For death tests and
-negative-compile probes, verify the test reaches the intended invariant rather than merely failing
-for an earlier unrelated precondition.
+A test that cannot fail on the pre-fix code is not proof of the repair.
 
-## 6. Change-class-specific gates
+For death tests and negative-compile probes, verify that the test reaches the intended invariant,
+not an earlier unrelated failure.
 
-### 6.1 Public headers, templates, `noexcept`, assertions, or API contracts
+---
 
-Run Clang Release in addition to Debug because `NDEBUG`, unused assertion-only locals, template
-instantiation, visibility, and function-type changes may differ:
+## 8. Architecture compliance gate
+
+Any change affecting one or more of the following MUST complete an architecture compliance gate
+before production implementation begins:
+
+- async I/O ownership;
+- RequestKey / RequestSlot lifecycle;
+- Completion binding or publication;
+- backend submission, dispatch, or reap;
+- cancellation;
+- queue capacity or worker count;
+- Scheduler wake/progress;
+- Runtime ownership;
+- public async API;
+- shutdown/drain;
+- a synchronization primitive;
+- io_uring ownership;
+- a thread pool or executor.
+
+Required steps:
+
+1. Read `docs/architecture/architecture-constitution.md`.
+2. Identify all applicable AC-N rules.
+3. Read the governing Accepted ADRs.
+4. Complete either:
+   - `docs/architecture/design-compliance-gate.md`; or
+   - a phase-specific compliance gate that explicitly covers every Gate 0–4 field and links to the
+     generic gate.
+5. Classify Zig conformance/divergence.
+6. Provide a state machine.
+7. Provide a lock/atomic authority table.
+8. Provide a resource-capacity and allocation model.
+9. Provide a wake/progress model.
+10. Provide shutdown semantics.
+11. List evidence as `PENDING` before implementation.
+12. Fill `PASS` only after commands actually run.
+13. Record intentional divergence in `docs/architecture/divergence-registry.md`.
+14. Update or add the design/ADR before production code.
+
+Unknown or `TBD` authority, failure, wake, or capacity fields block implementation.
+
+Passing tests is necessary but not sufficient for architecture compliance.
+
+---
+
+## 9. Core C++ and I/O contracts
+
+The repository uses C++20 and treats compiler warnings as errors.
+
+Preserve these rules unless an approved contract changes them:
+
+- Use `Result<T>` / `IoError` for ordinary I/O error propagation.
+- Do not introduce exception-based public I/O control flow.
+- Preserve raw OS error information where required.
+- Retry blocking syscalls on `EINTR` through repository retry authority.
+- Do not duplicate inconsistent retry loops.
+- `read_some` / `write_some` may be short.
+- Exact/all helpers must loop correctly.
+- Zero progress on a non-empty write is an invalid backend state, not an infinite retry.
+- Positional I/O must not mutate the shared file offset.
+- `flush()` does not imply durability.
+- `sync_data()` and `sync_all()` retain distinct contracts.
+- Destructors must not invent unreportable I/O success.
+- Do not add hidden destructor flush, drain, or cancel behavior.
+- Borrowed buffers and caller-owned Completions remain alive and address-stable for the documented
+  lifetime.
+- Check attacker-controlled sizes, integer conversions, arithmetic overflow, and allocation bounds
+  before allocation or I/O.
+- Check every syscall/backend return value whose failure affects correctness, liveness, or data
+  integrity.
+- Do not add networking, timers, coroutine layers, P2300, actor semantics, or new cancellation
+  models as incidental changes.
+
+### 9.1 Descriptor validation
+
+A real syscall backend MUST validate representationally malformed descriptors before commit.
+
+Examples include:
+
+- negative fd parameter form;
+- non-zero length with null buffer;
+- impossible offset conversion;
+- impossible native length conversion; and
+- unsupported operation capability.
+
+Malformed descriptors return synchronous `invalid_argument`, leave Completion idle, leave no
+accepted slot or borrow, and start no background execution.
+
+Do not use a syscall preflight such as `fcntl(F_GETFD)` as a substitute for operation execution;
+that introduces TOCTOU. A non-negative but closed fd may be accepted and later complete with the
+real syscall error.
+
+Reference/synthetic backends may retain an explicitly registered descriptor-validation divergence.
+Do not silently extend that exemption to real syscall backends.
+
+---
+
+## 10. Explicit request lifecycle invariants
+
+Every migrated backend MUST preserve the following invariants.
+
+### 10.1 Stable identity
+
+- Every accepted request has exactly one current `RequestKey`.
+- Slot reuse increments generation before the new occupant becomes visible.
+- A stale key cannot cancel, dispatch, complete, attach a waiter to, or mutate a later occupant.
+- `Completion*`, queue index, worker index, or closure identity cannot replace generation.
+
+### 10.2 Transactional submission
+
+A successful `submit_*` means:
+
+- required bounded userspace resources were reserved;
+- the Completion binding is complete;
+- the slot is accepted;
+- borrow lifetime has begun;
+- accepted-outstanding accounting is committed;
+- a reliable enqueue/dispatch/terminal path exists.
+
+A failed `submit_*` means:
+
+- Completion remains idle;
+- no accepted request exists;
+- no borrow exists;
+- accepted-outstanding is unchanged;
+- no queue entry or kernel/worker execution exists.
+
+The commit/accept path uses:
+
+```text
+reserve
+-> prepare
+-> begin binding
+-> commit slot
+-> install release capability
+-> publish Completion outstanding
+-> allocation-free/noexcept enqueue
+```
+
+After the Completion is published outstanding:
+
+- submit MUST NOT return a rejection;
+- enqueue MUST NOT allocate;
+- enqueue MUST NOT throw;
+- an accepted request MUST NOT be dropped;
+- dynamic expansion is not a recovery strategy.
+
+### 10.3 Enqueue/cancel arbitration
+
+`pending -> enqueued` and `pending -> backend-ready(canceled)` compete under one request-state
+authority.
+
+If cancel wins:
+
+- it stores one canceled terminal;
+- it establishes one backend-ready linkage;
+- the enqueue pin remains live;
+- later enqueue observes `backend-ready`;
+- enqueue performs a successful terminal no-op;
+- enqueue acknowledges the pin as its final slot access;
+- no dispatch linkage is added.
+
+If enqueue wins:
+
+- the request becomes `enqueued`;
+- later cancellation follows enqueued/running backend semantics.
+
+A request can never have both a live dispatch linkage and an independent terminal-ready linkage.
+
+### 10.4 Dispatch ownership
+
+A dispatch path may start execution only after a current-generation
+`enqueued -> running/kernel-owned` transition.
+
+For a blocking backend:
+
+- dequeue and establishment of `running` MUST form one coordinated ownership transfer;
+- cancel MUST NOT be able to terminalize and reap a request in a visible pop-before-running gap;
+- execution occurs without holding the queue mutex or RequestArena mutex;
+- stale dispatch identity is an invariant violation, not normal backoff.
+
+For io_uring:
+
+- SQE preparation/submission ownership must preserve RequestKey;
+- partial or zero-progress submission does not retroactively reject accepted work;
+- a request cannot be released while a prepared SQE, kernel request, or future CQE may refer to it.
+
+### 10.5 Terminal winner
+
+The first valid transition to `backend-ready` wins.
+
+Winner candidates may include:
+
+- ordinary success;
+- ordinary syscall error;
+- confirmed effective cancellation;
+- pending/enqueued cancellation where permitted;
+- ownership-safe post-commit dispatch failure; and
+- an explicitly approved shutdown terminal event.
+
+Losers do not:
+
+- overwrite terminal storage;
+- publish Completion-ready;
+- unlink independently;
+- decrement accounting twice;
+- mutate generation; or
+- fabricate a second result.
+
+### 10.6 Reap authority
+
+Only designated reap code makes Completion-ready.
+
+Workers, CQE handlers, cancel paths, timers, and Scheduler routing code MUST NOT directly publish a
+Completion.
+
+Reap:
+
+- validates key and publication binding;
+- observes an acknowledged enqueue pin;
+- closes waiter registration;
+- extracts waiter delivery exactly once;
+- installs the terminal result;
+- ends the borrow;
+- changes slot state to completion-ready;
+- decrements accepted-outstanding;
+- release-publishes Completion-ready;
+- leaves the slot-lifecycle domain; and
+- synchronously invokes any identity-bearing ReadySink without slot or Completion pointers.
+
+### 10.7 Slot release
+
+`Completion::reset()` or destruction of a ready Completion may release the slot only after:
+
+- reap left the slot-lifecycle domain;
+- enqueue pin is acknowledged;
+- registration is closed;
+- no waiter delivery remains stored;
+- no worker/kernel/backend ownership remains.
+
+Release:
+
+- clears the Completion binding;
+- increments generation;
+- decrements slot-in-use;
+- publishes the slot reusable;
+- allocates nothing;
+- waits for no asynchronous progress; and
+- calls no Scheduler, user code, sink, or backend progress function.
+
+---
+
+## 11. Cancellation layers and semantics
+
+The following are distinct and MUST NOT be conflated:
+
+- task cancellation;
+- wait cancellation;
+- I/O operation cancellation;
+- backend syscall interruption;
+- admission closure;
+- graceful drain;
+- abort shutdown.
+
+Every cancel entry point documents:
+
+- what object it targets;
+- how identity is resolved;
+- winner authority;
+- possible disposition;
+- possible terminal results;
+- whether it interrupts a syscall;
+- exactly-once behavior; and
+- whether it is best-effort.
+
+Required I/O cancellation behavior:
+
+### Pending
+
+Cancellation may win:
+
+```text
+pending -> backend-ready(canceled)
+```
+
+It stores the canceled terminal and backend-ready linkage. It does not publish Completion-ready.
+
+### Enqueued
+
+A backend may remove or neutralize the bounded dispatch linkage and then win the canceled terminal.
+If cancellation reports a terminal win, the request MUST NOT later execute.
+
+### Running blocking syscall
+
+Cancellation records intent only unless the backend confirms an effective interruption.
+
+An ordinary syscall success or error remains eligible to win **verbatim**.
+
+A cancel intent MUST NOT rewrite ordinary success or ordinary error into `canceled`.
+
+### Kernel-owned io_uring
+
+Cancel SQE result is evidence about the cancellation attempt, not independent authority to overwrite
+the original request. Original CQE, effective cancel, and cancel-not-found races resolve through the
+same RequestSlot terminal winner and generation validation.
+
+### Terminal/stale
+
+- `backend-ready` or `completion-ready` returns/acts as already terminal.
+- Released or stale identity is not found.
+- Unknown identity never acts on a reused slot.
+
+Cancellation never publishes Completion-ready directly.
+
+---
+
+## 12. Resource bounds
+
+Every significant resource MUST be:
+
+- explicitly bounded; or
+- caller-owned with the caller responsible for bounding.
+
+No long-lived container may grow with cumulative historical submissions without reclamation.
+
+Required resource distinctions:
+
+```text
+request_capacity
+blocking-I/O worker count
+scheduler worker count
+io_uring queue depth
+application pipeline depth
+caller-owned Completion count
+```
+
+For each resource, document:
+
+- capacity;
+- allocation time;
+- hot-path allocation;
+- full behavior;
+- reclamation;
+- high-water metric;
+- shutdown ownership.
+
+Configured capacity pressure returns a synchronous, reportable result such as `would_block` before
+acceptance.
+
+Do not use:
+
+- unbounded per-op maps;
+- per-op detached threads;
+- per-op `std::function` as the core accepted request record;
+- vectors that grow by total operations submitted;
+- unbounded ready deques required for terminal progress; or
+- dynamic allocation as a post-accept liveness dependency.
+
+### 12.1 ThreadPoolBackend migration constraints
+
+When modifying `ThreadPoolBackend`, the target is a bounded persistent blocking-I/O offload backend:
+
+- fixed persistent worker count;
+- construction-time bounded dispatch storage;
+- RequestArena / RequestSlot identity;
+- fixed operation kind/payload, not arbitrary callable;
+- no `Completion*` dispatch/ready queue;
+- worker only records backend-ready;
+- reap publishes Completion-ready;
+- no per-operation thread creation;
+- no worker storage growth by historical submissions;
+- enqueued cancel and worker dequeue have a coordinated ownership protocol;
+- running cancel remains best-effort intent unless interruption is confirmed.
+
+A patch that merely joins threads earlier, increases limits, reduces test scale, or renames the old
+thread-per-op model does not close the resource violation.
+
+### 12.2 Uring migration constraints
+
+When modifying the real io_uring path:
+
+- validate the default stub/off build;
+- validate the real liburing path when available;
+- encode or indirectly preserve RequestKey in `user_data`;
+- do not use Completion pointer as sole kernel identity;
+- preserve unsubmitted suffixes after partial submit;
+- do not terminalize while SQE/kernel/CQE ownership may remain;
+- validate stale CQEs by generation;
+- keep request capacity distinct from ring depth.
+
+Never present a stub-only build as real-path evidence.
+
+---
+
+## 13. Locks, wakeups, and concurrency
+
+### 13.1 Lock-order discipline
+
+Every design touching concurrency MUST publish a lock-order table.
+
+The RequestArena slot-lifecycle domain is a leaf domain.
+
+Code holding it MUST NOT:
+
+- call Scheduler global state;
+- call ReadySink;
+- call user code;
+- wait for worker/kernel progress;
+- join a thread;
+- execute a syscall;
+- acquire a backend progress lock if another path acquires backend progress lock then arena lock.
+
+Backend designs must avoid bidirectional lock order such as:
+
+```text
+work mutex -> arena mutex
+arena mutex -> work mutex
+```
+
+unless a proven, documented protocol eliminates the cycle.
+
+Joining threads under a queue/progress mutex is forbidden.
+
+### 13.2 Wake obligation
+
+Every progress-enabling state change documents:
+
+- persistent state written;
+- signal producer;
+- sleeping consumer;
+- predicate;
+- commit-to-sleep race closure;
+- worst-case latency;
+- shutdown behavior.
+
+Correct designs use an explicit predicate, epoch, sequence, or equivalent condition protocol.
+
+Do not use:
+
+- bounded yield loops;
+- sleeps as ordering proof;
+- periodic poll as undocumented sole progress;
+- notification without persistent state;
+- a predicate read from a different unsynchronized domain.
+
+A pinned backend-ready request may be temporarily reap-ineligible. Pin acknowledgement must preserve
+or re-arm readiness so no wake is lost.
+
+### 13.3 Deterministic concurrency tests
+
+Concurrency correctness SHOULD use:
+
+- deterministic phase seams;
+- barriers;
+- condition variables;
+- controlled clocks;
+- explicit state observations;
+- bounded ownership probes.
+
+`sleep_for` MAY be used for diagnosis but MUST NOT prove:
+
+- ordering;
+- no lost wake;
+- exactly-once;
+- cancellation precedence;
+- shutdown convergence;
+- stale-generation safety; or
+- liveness.
+
+TSan supplements deterministic tests; it does not replace them.
+
+---
+
+## 14. Shutdown and destruction
+
+Async backend/context destruction is quiescent.
+
+Unless an approved ADR defines otherwise:
+
+- destructors do not implicitly close admission;
+- destructors do not cancel accepted work;
+- destructors do not drain;
+- destructors do not wait for asynchronous I/O completion;
+- destructors do not publish terminal results;
+- destruction with accepted or bound requests is a contract violation;
+- fail-fast behavior required by contract remains active in Release.
+
+The explicit lifecycle is:
+
+```text
+close admission
+-> continue progress
+-> reap accepted requests
+-> callers reset or destroy ready Completions
+-> accepted_outstanding == 0
+-> slot_in_use == 0
+-> backend progress ownership == 0
+-> destroy
+```
+
+A persistent worker backend may notify and join already-idle workers during quiescent destruction.
+That join is worker-pool teardown, not implicit I/O drain.
+
+Any abort/cancel-on-shutdown mode requires separate approved semantics.
+
+---
+
+## 15. Test-only controls
+
+Test-only controls MUST:
+
+- be guarded by `SLUICE_ASYNC_INTERNAL_TESTING`;
+- live outside installed production headers where practical;
+- not change public API;
+- not alter exported production behavior;
+- not become production correctness dependencies;
+- not silently change object layout unless the design explicitly accepts and documents the cost.
+
+An unguarded public method named `*_for_test` is a contract smell and requires explicit review.
+
+Prefer:
+
+- method-only introspection seams;
+- internal helper headers;
+- deterministic pause gates compiled only into the internal-testing target;
+- stable counters proving boundedness.
+
+Do not expose private queue mutation or RequestSlot mutation merely to simplify a test.
+
+---
+
+## 16. Change-class-specific gates
+
+### 16.1 Public headers, templates, `noexcept`, fail-fast, or API contracts
+
+Run Clang Release in addition to Debug:
 
 ```sh
 xmake f -m release --toolchain=clang -y
@@ -155,20 +873,26 @@ xmake build -g test
 xmake test -v
 ```
 
-After a non-Debug mode, restore the CI configuration before the final status check if the working
-session continues:
+Restore Debug configuration afterward if work continues:
 
 ```sh
 xmake f -m debug --toolchain=clang -y
 ```
 
-Public API changes require deliberate approval and corresponding updates to public headers,
-contract tests, `docs/api-reference.md`, and affected examples or README text. Do not silently
-remove or re-semanticize a public API.
+Public API changes require explicit approval and updates to:
 
-### 6.2 Memory ownership, parsing, allocation, buffer lifetime, or filesystem changes
+- public headers;
+- contract tests;
+- `docs/api-reference.md`;
+- examples;
+- README text where affected;
+- negative-compile tests where authority changes.
 
-Run ASan and UBSan, preferably together when supported by the current environment:
+Do not silently remove or re-semanticize public API.
+
+### 16.2 Ownership, allocation, buffer lifetime, parsing, or filesystem
+
+Run ASan + UBSan:
 
 ```sh
 xmake f -m asanubsan --toolchain=clang -y
@@ -178,12 +902,13 @@ xmake build -g test
 xmake run -g test
 ```
 
-Use Valgrind for focused ownership/leak questions when available. Report unavailable tools as
-skipped; do not claim a gate passed when it was not executed.
+Use Valgrind for focused ownership/leak questions when available.
 
-### 6.3 Scheduler, synchronization, cancellation, queues, wakeups, or multi-worker changes
+Report unavailable tools as skipped. Never report an unexecuted gate as passed.
 
-Run TSan in addition to deterministic causal tests:
+### 16.3 Scheduler, synchronization, cancellation, queues, wakeups, multi-worker, or backend migration
+
+Run TSan:
 
 ```sh
 xmake f -m tsan --toolchain=clang -y
@@ -193,157 +918,166 @@ xmake build -g test
 xmake run -g test
 ```
 
-Correctness tests for concurrency SHOULD use deterministic phase seams, barriers, controlled
-clocks, or explicit state observation. `sleep_for` MAY be used during diagnosis but MUST NOT be the
-proof of ordering, liveness, absence of a lost wake, or exactly-once publication. Report tests that
-were not built or run because of architecture or platform gates; a skip is not execution evidence.
+TSan evidence must include the modified race classes, not merely unrelated tests.
 
-### 6.4 Build-system or CI changes
+For a blocking worker backend, include:
 
-Prove that:
+- submit vs dequeue;
+- enqueued cancel vs dequeue;
+- running cancel vs terminal recording;
+- backend-ready vs reap;
+- wake signal vs wait;
+- reset/reuse after reap;
+- shutdown worker wake.
+
+### 16.4 Build-system or CI changes
+
+Prove:
 
 - `sluice_core` builds independently;
 - production `sluice_async` builds independently;
-- the complete `test` group builds;
-- test failures still propagate as a non-zero command result;
+- complete test group builds;
+- test failures propagate non-zero;
 - optional feature gates remain off by default;
-- no test-only define or source leaks into a production target.
+- test-only defines/sources do not leak to production.
 
-If `xmake.lua` or `.github/workflows/ci.yml` changes the canonical commands, update this file in the
-same change.
+If canonical commands change, update this file in the same change.
 
-### 6.5 io_uring changes
+### 16.5 io_uring changes
 
-Always validate the default stub/off path. When liburing is available and the task concerns the
-real backend, also configure with `--with-liburing=true` and report that real-path evidence
-separately. Never present a stub-only build as validation of the real io_uring path.
+Always validate stub/off.
 
-## 7. Core C++ and I/O contracts
+When liburing is available and the real backend is affected:
 
-The repository uses C++20 and treats compiler warnings as errors.
+```sh
+xmake f --with-liburing=true ...
+```
 
-Preserve these rules unless an approved contract explicitly changes them:
+Report real-path evidence separately.
 
-- Use `Result<T>` / `IoError` for ordinary I/O error propagation.
-- Do not introduce exception-based public I/O control flow.
-- Preserve raw OS error information where the existing error model requires it.
-- Retry blocking syscalls on `EINTR` through the repository retry authority; do not duplicate
-  inconsistent retry loops.
-- `read_some` / `write_some` may be short. Derived exact/all helpers must loop correctly.
-- Zero progress on a non-empty write is an invalid backend state, not an infinite retry.
-- Positional I/O must not mutate the shared file offset.
-- `flush()` drains software buffering; it does not imply durability.
-- `sync_data()` and `sync_all()` retain their distinct OS/filesystem contracts.
-- Destructors must not invent unreportable I/O success. Do not add hidden destructor flushes.
-- Borrowed buffers and caller-owned completions must remain alive and address-stable for the
-  documented operation lifetime.
-- Check attacker-controlled sizes, integer conversions, addition/multiplication overflow, and
-  allocation bounds before allocation or I/O.
-- Check every syscall/backend return value whose failure affects correctness, liveness, or data
-  integrity.
-- Do not add dependencies, public abstractions, networking, timers, coroutine layers, P2300,
-  actor semantics, or new cancellation models as incidental parts of an unrelated fix.
+### 16.6 Negative compile, docs, and diff hygiene
 
-## 8. Async and concurrency invariants
+Run applicable authority probes and documentation checks:
 
-Async repairs MUST preserve the subsystem's documented authority model. At minimum:
+```sh
+scripts/verify-completion-authority-negative-compile.sh
+scripts/verify-request-arena-negative-compile.sh
+python3 scripts/check-doc-links.py --self-test
+python3 scripts/check-doc-links.py
+python3 scripts/verify-architecture-docs.py
+git diff --check
+```
 
-- The Scheduler owns scheduler-integrated registration, terminal resolution accounting, and
-  canonical runnable routing.
-- Private `WaitQueue` structural operations must not be exposed as a public or forgeable bypass.
-- A terminal winner transition and its unlink/removal obligation remain one coordinated authority;
-  losers do not unlink, publish, or wake.
-- A wait epoch has exactly one terminal outcome and at most one runnable publication.
-- Reusing, moving, or destroying an outstanding registration object is forbidden unless its
-  documented lifecycle explicitly permits it.
-- Queue identity, Scheduler identity, owner identity, and stable-address requirements are not
-  optional debug conveniences.
-- Preserve documented lock ordering. Do not acquire a primitive/queue lock and then reach upward
-  into Scheduler global state if the subsystem contract requires Scheduler-global lock first.
-- Resource availability versus deadline/cancellation precedence must remain consistent with the
-  primitive's contract and cross-primitive parity tests.
-- Destruction with live waiters, registrations, or outstanding callbacks is a contract violation
-  where the subsystem says so; do not silently leak or detach them to make teardown pass.
-- Existing fail-fast boundaries must remain fail-fast in Release when the contract requires it.
-  Do not replace invariant failures with recoverable results without an approved semantic change.
-- Test-only controls belong behind `SLUICE_ASYNC_INTERNAL_TESTING`, outside installed production
-  headers where possible, and must not alter production object layout or exported behavior unless
-  the design explicitly accepts that cost.
+Use repository-authoritative script names from the current tree.
 
-When touching E10–E13 code, read the named subsystem document referenced by the relevant header or
-test before editing. The comments and tests encode specific laws such as fresh-per-epoch nodes,
-queue-identity-safe cancellation, owner-before-publication, rollback ordering, stale-registration
-handling, and exactly-once publication. Do not reconstruct these laws from memory.
+---
 
-### 8.1 Architecture compliance gate
+## 17. Formal models and protocol evidence
 
-Any change affecting async I/O ownership, operation lifecycle, Completion publication, Scheduler
-wake/progress, backend submission, cancellation, resource capacity, or Runtime ownership MUST:
-
-1. Read `docs/architecture/architecture-constitution.md` and identify which AC-N rules apply.
-2. Complete the gate checklist in `docs/architecture/design-compliance-gate.md`.
-3. Classify Zig conformance or divergence (`docs/architecture/zig-io-conformance-map.md`).
-4. Provide an explicit state machine and wake/resource model in the design document.
-5. Land or update an ADR/design BEFORE production implementation.
-6. Record any new intentional divergence in `docs/architecture/divergence-registry.md`.
-
-Passing tests is necessary but not sufficient for architecture compliance. A change that passes all
-tests but violates an AC-N rule or introduces unregistered divergence is non-compliant.
-
-For new designs, use `docs/templates/architecture-design-template.md`. For the current as-built
-architecture, see `docs/architecture/as-built-async-architecture.md`.
-
-## 9. Formal models and protocol evidence
-
-Formal models under `spec/tla/` (per-suite directory) supplement implementation tests; they do not prove that
-the C++ code is bug-free.
+Formal models under `spec/tla/` supplement implementation tests. They do not prove the C++ code
+bug-free.
 
 Canonical locations:
 
-- Models (`.tla`, `.cfg`, per-suite README): `spec/tla/` (per-suite directory)
-- Machine-readable inventory: `spec/tla/manifest.json`
-- Tooling and verifier scripts: `scripts/formal/`
-- Unified orchestrator: `python3 scripts/formal/verify.py`
-- CI workflow: `.github/workflows/formal.yml`
+- models: `spec/tla/`;
+- inventory: `spec/tla/manifest.json`;
+- scripts: `scripts/formal/`;
+- orchestrator: `python3 scripts/formal/verify.py`;
+- workflow: `.github/workflows/formal.yml`.
 
 Rules:
 
-- Never run TLC directly inside `spec/tla/`. Every verifier must copy the suite's files into an
-  isolated `mktemp` workspace (`sluice-formal.<suite>.<random>`), run TLC there, and clean up on
-  exit. This prevents `MC.out`, `states/`, `metadir`, and `*_TTrace*` from polluting the source
-  tree.
-- Do not describe abstract model checking as C++ implementation formal verification.
-- When a code change alters a modeled state transition, admission rule, winner rule, queue bound,
-  lifecycle, or shutdown behavior:
-  - update the matching model or explicitly explain why the model is unaffected;
-  - run the repository's existing verification script or documented checker command;
-  - preserve a negative/broken-model check when the subsystem uses one to demonstrate that the
-    model can actually produce a counterexample;
-  - add or retain a C++ regression test connecting the modeled property to implementation behavior.
-- Never report "formally verified implementation" when only the abstract protocol model was checked.
+- Never run TLC directly in a source suite directory.
+- Use repository verifier scripts that copy files into isolated temporary workspaces.
+- Do not describe abstract model checking as C++ implementation verification.
+- When code changes a modeled:
+  - state transition;
+  - admission rule;
+  - queue bound;
+  - terminal winner;
+  - wake rule;
+  - lifecycle;
+  - generation rule; or
+  - shutdown behavior,
+  update the matching model or explicitly document why no existing model applies.
+- Preserve negative/broken-model checks where the suite uses them.
+- Retain a C++ regression test connecting the modeled property to implementation behavior.
+- If no model covers a new high-risk protocol, the compliance gate must either:
+  - add a focused model; or
+  - record a justified formal-coverage gap and follow-up trigger.
 
-## 10. Security and review findings
+Do not invent a model merely for ceremonial coverage. Model the smallest protocol that captures the
+load-bearing race.
 
-Treat `.c-review-results/` and other automated findings as hypotheses to verify.
+---
+
+## 18. Backend conformance and testing philosophy
+
+Correctness tests prove semantics, not implementation preference.
+
+Do not use thread count, container internals, timing, or syscall names as the sole proof of:
+
+- no lost wake;
+- exactly-once;
+- accepted terminality;
+- cancellation correctness;
+- shutdown convergence;
+- backend conformance.
+
+Implementation-resource tests are still required for AC-7 and may assert:
+
+- configured worker count;
+- total workers created;
+- queue capacity;
+- high-water marks;
+- lack of historical growth;
+- absence of per-op thread creation.
+
+Pair them with semantic tests:
+
+- full capacity returns the correct synchronous result;
+- accepted request reaches exactly one terminal;
+- canceled enqueued request does not execute;
+- running cancel preserves real result;
+- wait does not lose a wake;
+- stale generation cannot dispatch;
+- quiescent destruction succeeds;
+- non-quiescent destruction fails as specified.
+
+Common backend conformance should run against every backend for which the property is meaningful.
+Backend-specific mechanism tests do not by themselves establish repository-wide conformance.
+
+---
+
+## 19. Security and review findings
+
+Treat automated findings as hypotheses.
 
 For each finding:
 
-1. inspect the exact code and all relevant callers;
-2. determine the input/trust boundary and reachable failure mode;
-3. reproduce with a test, a focused probe, or a precise static argument;
-4. distinguish true positive, false positive, accepted risk, and duplicate;
-5. repair the root cause, not merely the reported line;
-6. retain behavior outside the finding's scope;
-7. add evidence that would catch regression;
-8. document any residual platform or environment limitation.
+1. inspect exact code and callers;
+2. determine trust boundary;
+3. identify reachable failure mode;
+4. reproduce with a test, focused probe, or precise static argument;
+5. classify true positive, false positive, accepted risk, or duplicate;
+6. repair root cause;
+7. preserve behavior outside scope;
+8. add regression evidence;
+9. document residual platform limitations.
 
-Do not batch unrelated findings into a broad refactor. Do not change public semantics merely because
-it makes one warning easier to silence. Do not mark a finding fixed solely because the compiler or
-scanner stopped reporting it.
+Do not:
 
-## 11. Formatting and static analysis
+- batch unrelated findings into a broad refactor;
+- change public semantics merely to silence a warning;
+- mark a finding fixed because a scanner stopped reporting it;
+- hide a violation by weakening fail-fast or changing an error vocabulary;
+- describe a stale identity, double terminal, or lost wake as harmless timing noise.
 
-Use the repository `.clang-format` configuration:
+---
+
+## 20. Formatting and static analysis
+
+Use repository `.clang-format`:
 
 - 4-space indentation;
 - no tabs;
@@ -352,14 +1086,14 @@ Use the repository `.clang-format` configuration:
 - pointer/reference alignment with the type;
 - preserved include blocks and include order.
 
-Format only files or ranges intentionally changed. Do not run formatting across the entire
-repository during a focused repair.
+Format only intentionally changed files or ranges.
 
-Use the repository `.clang-tidy` configuration when static analysis is part of the task. Treat
-`clang-tidy --fix` as a code change requiring full review and normal tests; it is not an automatic
-source of truth.
+Do not run whole-repository formatting for a focused change.
 
-Before completion, run:
+Use `.clang-tidy` when part of the task. `clang-tidy --fix` is a code change and requires normal
+review and gates.
+
+Before completion:
 
 ```sh
 git diff --check
@@ -368,32 +1102,127 @@ git diff --stat
 git diff
 ```
 
-## 12. Documentation discipline
+---
 
-Update documentation when the change affects a documented contract, public API, build command,
-target, feature gate, lifecycle, ownership rule, or failure behavior.
+## 21. Documentation discipline
 
-Comments should explain invariants, authority, ownership, lock order, and non-obvious failure
-behavior. Avoid comments that merely narrate the next line or preserve obsolete phase history in
-production code.
+Update documentation when a change affects:
 
-Do not claim performance improvements without an appropriate benchmark and a described workload.
-Do not claim sanitizer, platform, real-liburing, or formal-model coverage that was not run.
+- authority;
+- lifecycle;
+- ownership;
+- failure behavior;
+- resource bounds;
+- lock order;
+- wake behavior;
+- cancellation;
+- shutdown;
+- public API;
+- target names;
+- feature gates;
+- build commands;
+- formal-model bindings;
+- Zig conformance/divergence.
 
-## 13. Completion report
+Comments should explain:
 
-Every non-trivial coding task should end with a concise report containing:
+- invariant;
+- authority;
+- ownership;
+- lock order;
+- allocation boundary;
+- failure behavior;
+- why a tempting alternative is incorrect.
 
-- **Scope:** finding, issue, or contract addressed.
-- **Baseline:** exact pre-change commands and result.
-- **Root cause:** why the defect occurred.
-- **Changes:** files and semantic effect.
-- **Tests:** exact focused and full commands with results.
-- **Additional gates:** Release, ASan/UBSan, TSan, Valgrind, real liburing, negative compile,
-  death tests, or formal model, as applicable.
-- **Skipped evidence:** unavailable or intentionally out-of-scope gates, with reason.
-- **Residual risk:** platform limitations, untested paths, or follow-up work.
-- **Working tree:** confirmation that unrelated files were preserved.
+Avoid comments that merely narrate code or preserve obsolete phase history in production headers.
 
-Evidence must be command-backed. "Looks correct", "should pass", and "CI will catch it" are not
-completion criteria.
+Interface comment, implementation, Accepted ADR, compliance gate, and tests MUST agree for critical
+transitions.
+
+Do not claim:
+
+- performance improvement without a benchmark and workload;
+- sanitizer coverage not executed;
+- real liburing coverage from stub builds;
+- formal implementation verification from abstract models;
+- complete explicit-I/O migration while legacy production paths remain.
+
+---
+
+## 22. Commit and PR discipline
+
+Keep commits reviewable and semantically coherent.
+
+Prefer slices such as:
+
+```text
+design / compliance gate
+tests proving the old violation
+bounded storage and invariants
+production migration
+race/shutdown repair
+documentation and evidence
+```
+
+Do not combine unrelated cleanup with a protocol migration unless the cleanup is required to make
+the governing contract internally consistent.
+
+A PR affecting explicit I/O should state:
+
+- baseline SHA;
+- affected capability/layer;
+- governing ADR;
+- AC-N rules;
+- state-machine changes;
+- resource equations;
+- lock order;
+- wake protocol;
+- cancellation semantics;
+- shutdown semantics;
+- migration status;
+- tests and actual results;
+- remaining divergences.
+
+Do not pre-fill `PASS` before execution.
+
+Do not claim a phase is complete if its stated production backend, wake bridge, Scheduler routing,
+or public API migration remains out of scope.
+
+---
+
+## 23. Completion report
+
+Every non-trivial coding task ends with a command-backed report:
+
+- **Scope**
+  - issue, finding, contract, or phase addressed;
+- **Baseline**
+  - branch, SHA, exact commands, results;
+- **Authority**
+  - governing ADR/design and applicable AC-N rules;
+- **Root cause**
+  - why the prior implementation violated the contract;
+- **Changes**
+  - files and semantic effect;
+- **State/race proof**
+  - winner, lock/atomic domains, lost-wake closure, generation/reuse safety;
+- **Resources**
+  - capacities, allocation boundaries, high-water evidence;
+- **Tests**
+  - exact focused and full commands with results;
+- **Additional gates**
+  - Release, ASan/UBSan, TSan, Valgrind, real liburing, negative compile, death tests,
+    docs, formal model;
+- **Skipped evidence**
+  - unavailable or out-of-scope gates with reasons;
+- **Residual risk**
+  - only real unresolved risk;
+- **Commits**
+  - SHA and subject;
+- **Working tree**
+  - unrelated files preserved;
+- **Pushed branch**
+  - when publishing was requested.
+
+“Looks correct”, “should pass”, “CI will catch it”, and unexecuted claimed gates are not completion
+criteria.

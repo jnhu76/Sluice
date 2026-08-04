@@ -25,6 +25,7 @@ The following future-phase proposals may exist:
 
 | Design | Status | Related ADR |
 |--------|--------|-------------|
+| [Phase E — Bounded Blocking-I/O Backend](phase-e-bounded-threadpool-backend.md) | Accepted (governing `feat/phase-e-bounded-threadpool-explicit-io`) | [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md) |
 | [E16 Application Runtime](e16-application-runtime.md) | Proposed | [ADR-application-runtime](../adr/ADR-application-runtime.md) |
 | Fuzz infrastructure | Not yet proposed | — |
 

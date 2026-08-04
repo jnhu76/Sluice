@@ -52,11 +52,13 @@ owns it, what state is it in, which Completion does it relate to, and who can
 terminate it.
 
 **Rationale:** Sluice separates caller-owned `Completion<T>` from per-request
-storage. The Proposed ADR-explicit-io-request-contract selects a transitional
+storage. The Accepted ADR-explicit-io-request-contract selects a transitional
 C++ adaptation in which the context/backend owns a bounded `RequestSlot` arena
 and fixes logical identity as `(ContextIdentity, SlotIndex, Generation)`.
-DIV-02 records that proposal as pending acceptance; neither document makes the
-current pointer/container implementation conforming.
+DIV-02 records that as an active transitional decision (Phase B): FakeAsyncBackend
+and SyncBackend now use RequestArena / RequestSlot; ThreadPoolBackend and
+UringAsyncBackend remain on legacy paths until their roadmap phases (E/D) complete
+and MUST NOT claim generation-safe conformance in the meantime.
 
 **Required evidence:**
 - Each backend documents how an accepted op is tracked from submit to reap.
@@ -67,9 +69,9 @@ current pointer/container implementation conforming.
 - No operation exists only as a closure with no queryable identity.
 
 **Allowed exceptions:**
-- During the explicitly staged migration, Fake and Sync/Synthetic may retain
-  pointer-based tracking only while the roadmap names the removal phase and
-  tests do not claim generation/provenance conformance.
+- During the explicitly staged migration, a backend still on a legacy path may
+  retain pointer/container tracking only while the roadmap names its removal
+  phase and its tests do not claim generation/provenance conformance.
 - A raw pointer may remain a validated locating optimization after migration;
   it is never the sole logical identity.
 
@@ -556,15 +558,16 @@ transition.
   violation (fail-fast in Release).
 - Destruction of an outstanding/publishing/resetting Completion is a checked
   contract violation in BOTH Debug and Release.
-- If the Proposed RequestSlot contract is accepted and implemented, Completion
-  claim gains a private `idle → binding → outstanding` protocol. The first CAS
-  elects one context; only its winner initializes the private RequestKey,
-  context provenance, and slot-release capability. Acquire observation of
-  `outstanding` sees the complete binding. Cancel and waiter registration do
-  not read fields while `binding`; reset/destruction in `binding` fail fast.
-- Under that proposal, `reset()` and destruction of a ready Completion also
-  perform the same allocation-free release of the bound slot. Release does not
-  wait for I/O, workers, cancellation, drain, backend progress, or Scheduler
+- The Accepted RequestSlot contract (ADR-explicit-io-request-contract, Decision
+  5) gives Completion claim a private `idle → binding → outstanding` protocol.
+  The first CAS elects one context; only its winner initializes the private
+  RequestKey, context provenance, and slot-release capability. Acquire
+  observation of `outstanding` sees the complete binding. Cancel and waiter
+  registration do not read fields while `binding`; reset/destruction in
+  `binding` fail fast.
+- Under that accepted contract, `reset()` and destruction of a ready Completion
+  also perform the same allocation-free release of the bound slot. Release does
+  not wait for I/O, workers, cancellation, drain, backend progress, or Scheduler
   activity. It may use a bounded internal critical section in the leaf
   slot-lifecycle domain shared with waiter registration and reap-ready
   publication, but calls no user code, ReadySink, Scheduler, or backend progress

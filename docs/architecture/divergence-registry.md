@@ -173,7 +173,7 @@ Status values:
 | Reason | Portable cancellation of in-flight blocking syscalls (via `pthread_kill`/`tgkill`) is complex and platform-specific. Current cancel is best-effort: the op completes with its real result. |
 | Benefit | Simplicity; no signal-safety hazards; no UB from interrupted syscalls. |
 | Cost | Cannot interrupt a long-running fsync/pread/pwrite; cancel only affects waiting, not the syscall. |
-| Current evidence | `threadpool_backend.hpp:29-33`; `cancel()` returns but op continues. The shared `RequestArena` now records `cancel_intent_` on a `running` slot (ADR-explicit-io-request-contract Decision 11) so the arena layer is correct for the ThreadPool/Uring migration: the syscall's ordinary result later competes for the terminal winner, and `record_terminal` substitutes `canceled` for an ordinary success when intent is set. The reference backends never enter `running`, so this is dormant at the reference layer. |
+| Current evidence | `threadpool_backend.hpp:29-33`; `cancel()` returns but op continues. The shared `RequestArena` now records `cancel_intent_` on a `running` slot (ADR-explicit-io-request-contract Decision 11) so the arena layer is correct for the ThreadPool/Uring migration: `cancel()` returns `intent_recorded` without storing a terminal, and `record_terminal` records the REAL result VERBATIM (an ordinary success is NOT rewritten to canceled — cancel is best-effort). Only a backend that CONFIRMS the interruption took effect records `TerminalResult::err(canceled)` explicitly via `record_canceled`. The reference backends never enter `running`, so this is dormant at the reference layer. |
 | Revisit trigger | If workload requires interruptible long fsync; if io_uring cancel (IORING_OP_ASYNC_CANCEL) is integrated. |
 
 ---
