@@ -145,8 +145,6 @@ ThreadPoolBackend::~ThreadPoolBackend() {
         stopping_ = true;
     }
     work_cv_.notify_all();
-    // Wake any wait_one() so it observes stopping and returns.
-    signal_ready_progress();
     for (auto& w : workers_) {
         if (w.joinable()) w.join();
     }
@@ -501,8 +499,10 @@ std::size_t ThreadPoolBackend::poll() {
 
 Result<std::size_t> ThreadPoolBackend::wait_one() {
     // Persistent ready-epoch protocol (design §4.5; AC-6): snapshot the epoch,
-    // reap, and if nothing was reaped, wait until the epoch changes (or stop).
-    // This closes the commit-to-sleep race without any periodic poll/timeout.
+    // reap, and if nothing was reaped, block until the epoch changes.  Returns
+    // only >0 progress (a ready count); it never fabricates a 0-success.  The
+    // caller decides when to stop waiting by tracking outstanding() or using
+    // close_admission(); this avoids the cross-domain data race on stopping_.
     for (;;) {
         std::uint64_t snap;
         {
@@ -513,12 +513,6 @@ Result<std::size_t> ThreadPoolBackend::wait_one() {
         if (n > 0) return n;
         {
             std::unique_lock<std::mutex> lk(ready_mtx_);
-            if (stopping_) {
-                // Drain once more on shutdown so a just-recorded terminal is not
-                // lost, then return 0 to let the caller observe progress ended.
-                lk.unlock();
-                return arena_.reap(sink_);
-            }
             if (ready_epoch_ != snap) continue;  // a signal arrived before we locked
             ready_cv_.wait(lk);
         }
@@ -623,9 +617,10 @@ std::size_t ThreadPoolBackend::outstanding() const noexcept {
 }
 
 void ThreadPoolBackend::close_admission() {
+    // Close admission only.  wait_one() is a pure ready-epoch protocol; it does
+    // not observe stopping_ or admission state, so there is no one to wake here.
+    // Spurious signals would also be incorrect (AC-6).
     arena_.close_admission();
-    // Wake any blocked wait_one() so it can observe the closed state and return.
-    signal_ready_progress();
 }
 
 }  // namespace sluice::async
