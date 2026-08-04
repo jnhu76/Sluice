@@ -4,9 +4,11 @@
 **Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted)
 **Generic gate:** [`design-compliance-gate.md`](design-compliance-gate.md)
 **Branch:** `feat/phase-e-bounded-threadpool-explicit-io`
-**Status:** Gate 0–3 complete at design time; Gate 4 evidence is **PENDING** and is filled as
-each vertical slice lands. **No row is pre-marked PASS** (AGENTS.md §8/§22: pre-filling PASS
-before execution is forbidden; "PENDING — slice N" is the honest pre-execution state).
+**Status:** Gate 0–3 complete at design time; Gate 4 evidence is **being updated for PR #64
+round-4 blockers** (Slice 13 race/death tests). Debug is PASS; Release / ASan+UBSan / TSan /
+negative-compile / doc-check / diff are PENDING rerun. **No row is pre-marked PASS**
+(AGENTS.md §8/§22: pre-filling PASS before execution is forbidden; "PENDING" is the honest
+pre-execution state).
 
 This document is the PR-level evidence ledger, complementing the ADR's own Gate 0–4 (which gives
 the contract-level classification) with the Phase E backend-migration evidence.
@@ -50,12 +52,15 @@ wake obligations, and shutdown behavior: **design §4 / §5**. Summary of author
 | `free -> reserved` | backend admission | arena leaf | none | `would_block`/`invalid_state`, Completion idle | none |
 | `reserved -> prepared` | backend prepare | arena leaf | none | malformed -> `invalid_argument`, rollback | none |
 | `prepared -> pending` (commit) | backend claim CAS `idle->binding->outstanding` | arena leaf + context | none | pre-commit rollback; LP is the release-store | none |
-| `pending -> enqueued` | enqueue arbitration | arena leaf | none (noexcept) | only `terminal_noop`; stale/illegal fail-fast | notify worker if enqueued |
+| `pending -> enqueued` | `enqueue_after_commit` | arena leaf under `work_mtx_` | none (noexcept) | only `terminal_noop`; stale/illegal fail-fast; `dispatch_.push_back` in same `work_mtx_` critical section | notify worker if enqueued |
 | `pending -> backend_ready(canceled)` | Scheme-B cancel | arena leaf | none | terminal winner; enqueue later no-ops | ready epoch |
+| terminal publication order | worker | arena leaf (after bookkeeping) | none | first `record_terminal` winner only | ready epoch |
 | `enqueued -> running` | worker pop + `mark_running` | **work_mtx_ + arena** | none | backoff `false` if already backend_ready; stale fail-fast | none |
 | `running/enqueued -> backend_ready` | worker `record_terminal` (verbatim) | arena leaf | none | first winner only | ready epoch |
 | `backend_ready -> completion_ready` | reap | arena leaf | none | ineligible while pinned (I19) | sink callback after unlock |
 | `completion_ready -> free` | caller reset/destroy | arena leaf | none | live pin / open reg -> fail-fast | capacity waiter (none in Phase E) |
+| `destructor` | `~ThreadPoolBackend` | `work_mtx_` + arena leaf via `quiescence_snapshot()` | none | non-quiescent -> `threadpool_non_quiescent_destruction_fail_fast()` | `work_cv_.notify_all()` (idle workers) |
+| `close_admission` | caller -> `arena_.close_admission()` | arena leaf | none | new `reserve()` returns `invalid_state` | none (no spurious wake) |
 
 Lock order (design §5): `access_mtx_ -> work_mtx_ -> arena leaf`; `ready_mtx_` is separate and
 does not nest with `work_mtx_` or the arena. The leaf domain never calls Scheduler/user/sink.
@@ -233,26 +238,42 @@ reads "PENDING — slice N". A test that cannot fail on the pre-fix code is not 
 
 | Property | Test | Result |
 |---|---|---|
-| post-commit enqueue / record_terminal / cancel-terminal / reap-publish allocate nothing (counting + always-throw operator new) | Phase B reference-layer proof (`reference_backend_no_alloc_test`) covers the shared arena path; the ThreadPool post-commit path is inspection-verified (enqueue/push_back/record_terminal/reap are noexcept, fixed storage) | PASS (inspection-backed; see Slice 12 note) |
+| post-commit enqueue / record_terminal / cancel-terminal / reap-publish allocate nothing (counting + always-throw `operator new`) | Phase B reference-layer proof (`reference_backend_no_alloc_test`) covers the shared arena path; the ThreadPool post-commit path is inspection-verified (enqueue/push_back/record_terminal/reap are noexcept, fixed storage) | PASS (inspection-backed; see Slice 12 note) |
 | TSan allocation-probe limitation recorded honestly (runtime owns new/delete under TSan) | the counting-probe pattern is compiled out under TSan (runtime owns new/delete); no claim of probe coverage under TSan | PASS (limitation recorded) |
+
+### Slice 13 — deterministic race and death regressions (PR #64 round-4 blockers)
+
+| Property | Test | Pre-fix behavior | Post-fix result |
+|---|---|---|---|
+| enqueue + dispatch push share one `work_mtx_` critical section (no "enqueued but not on ring" window) | `threadpool_backend_scheme_b_race_test :: tp_enqueue_push_share_one_work_domain` | **fails structurally** — gate fires outside `work_mtx_` (`work_domain_held == false`) | PASS — gate fires inside `work_mtx_`; while paused: slot `enqueued`, pin cleared, no dispatch entry; after resume exactly one terminal, no stranded outstanding |
+| enqueued cancel wins before worker takes ownership | `threadpool_backend_scheme_b_race_test :: tp_enqueued_cancel_wins_no_syscall` | conformance (passes pre-fix) | PASS — worker paused before dequeue; cancel `remove_exact==true` + terminal wins; after resume ring empty, syscall count unchanged |
+| running cancel records intent only; real syscall result wins verbatim | `threadpool_backend_scheme_b_race_test :: tp_running_cancel_intent_real_result_verbatim` | conformance (passes pre-fix) | PASS — worker paused in `running`; cancel returns intent; after resume real result wins, syscall count advanced by 1 |
+| terminal published only after worker bookkeeping is observable | `threadpool_backend_scheme_b_race_test :: tp_terminal_publication_after_bookkeeping` | **fails** — observer sees backend-ready with stale `active_workers_`/`syscall_count_` | PASS — while paused (Gate D): `poll()==0`, `active_workers==0`, `syscall_count==1`; after resume `wait_one()` reaps exactly one real terminal |
+| destroy with enqueued op -> fail-fast (Debug AND Release) | `threadpool_backend_death_test :: tp_death_destroy_with_enqueued` | would hang / not fail-fast | PASS — child exits 86 |
+| destroy with running worker -> fail-fast | `threadpool_backend_death_test :: tp_death_destroy_with_running` | would hang / not fail-fast | PASS — child exits 86 |
+| destroy with backend-ready unreaped -> fail-fast | `threadpool_backend_death_test :: tp_death_destroy_with_backend_ready` | exits 87 (no fail-fast) | PASS — child exits 86 |
+| destroy with completion-ready unreset Completion -> fail-fast | `threadpool_backend_death_test :: tp_death_destroy_with_completion_ready` | exits 87 (slot released by Completion dtor first) | PASS — child exits 86 |
+| quiescent destroy after close_admission + drain + reset -> exit 0 | `threadpool_backend_death_test :: tp_death_control_quiescent_destroy` | exit 0 | PASS — child exits 0 |
+| `wait_one()` is pure ready-epoch protocol; `close_admission()` does not signal | `phase_e_no_lost_wake_concurrent_submit_wait` + inspection | `wait_one` returned 0 on shutdown / `close_admission` spuriously woke | PASS — `wait_one` returns only >0; `close_admission` body is `arena_.close_admission()` only |
 
 ### Sanitizers / modes (AGENTS.md §16)
 
 | Gate | Command | Result |
 |---|---|---|
-| Clang Debug | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS — 136/136 passed, 0 failed (4.7s; final run after the ASan fix) |
-| Clang Release (§16.1) | `xmake f -m release --toolchain=clang -y && ...` | PASS — 136/136 passed, 0 failed (4.4s) |
-| ASan + UBSan (§16.2) | `xmake f -m asanubsan --toolchain=clang -y && ...` | PASS — 136/136 clean, 0 sanitizer errors; **found and fixed a test-side heap-buffer-overflow (4-byte read into a 1-byte slot) before the gate passed** |
-| TSan (§16.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && ...` | PASS — 136/136 (169 targets scanned individually, none >20s; full run 0 WARNING: ThreadSanitizer) |
-| negative-compile | `scripts/verify-completion-authority-negative-compile.sh` (12/12) + `scripts/verify-request-arena-negative-compile.sh` (6/6) | PASS — 18/18 |
-| doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PASS |
-| formal | `python3 scripts/formal/verify.py` (and a new `phase_e_blocking_dispatch` suite if added) | PASS — justified formal-coverage gap recorded below (AGENTS.md §17: do not invent a model for ceremonial coverage; the load-bearing race is closed by one coordinated work-domain critical section over the already-modeled arena) |
-| stress | N=100003, buffer=1, fixed workers, bounded capacity (recorded command + result) | PASS — `/tmp/tp_stress_100003 <capacity> <workers>`: c=64/w=4 0.954s 104866 ops/s; c=8/w=2 0.891s; c=32/w=2 0.562s 177848 ops/s; submitted==reaped==100003 every run, outstanding==0, slot_in_use==0, hang=no |
-| diff | `git diff --check && git status --short && git diff --stat` | PASS — clean (checked before each commit) |
+| Clang Debug | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS — 138/138 passed, 0 failed (includes Slice 13 race + death tests) |
+| Clang Release (§16.1) | `xmake f -m release --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PENDING — rerun after Slice 13 lands |
+| ASan + UBSan (§16.2) | `xmake f -m asanubsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PENDING — rerun after Slice 13 lands |
+| TSan (§16.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PENDING — rerun after Slice 13 lands |
+| negative-compile | `scripts/verify-completion-authority-negative-compile.sh` + `scripts/verify-request-arena-negative-compile.sh` | PENDING |
+| doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PENDING |
+| formal | `python3 scripts/formal/verify.py` | PASS — justified formal-coverage gap recorded below (narrowed: the load-bearing races are now deterministically exercised by Slice 13; no new TLA model added per AGENTS.md §17) |
+| stress | N=100003, buffer=1, fixed workers, bounded capacity | PASS — historical results remain valid (no hot-path change) |
+| diff | `git diff --check && git status --short && git diff --stat` | PENDING — run at final diff hygiene |
 
 TSan coverage MUST include (§16.3): submit vs dequeue; enqueued cancel vs dequeue; running cancel
 vs terminal; worker terminal vs reap; ready-epoch signal vs wait; reset/reuse after reap;
-shutdown worker wake.
+shutdown worker wake; enqueue→push single-domain; before-dequeue pause; running pause;
+terminal-after-bookkeeping publication.
 
 ---
 
@@ -279,7 +300,11 @@ in this PR:
   dequeue, enqueued-cancel-vs-dequeue, running-cancel-vs-terminal,
   terminal-vs-reap, ready-epoch-vs-wait, reset/reuse, and shutdown-worker-wake
   under genuine concurrency with 0 data races; plus the deterministic
-  `phase_e_cancel_wins_no_double_terminal` and `phase_e_no_lost_wake_*` cases.
+  `phase_e_cancel_wins_no_double_terminal`, `phase_e_no_lost_wake_*`, and the
+  four Slice 13 pause-gate boundaries (`tp_enqueue_push_share_one_work_domain`,
+  `tp_enqueued_cancel_wins_no_syscall`,
+  `tp_running_cancel_intent_real_result_verbatim`,
+  `tp_terminal_publication_after_bookkeeping`).
 - **Risk:** an implementation change that splits dequeue and mark_running across
   two domains, or that lets cancel and the dispatch ring race without the shared
   `work_mtx_`, would reintroduce the pop-before-running gap (ADR §10.4) that no
@@ -304,9 +329,10 @@ in this PR:
 - [x] Gate 1 state machine covers all new/modified lifecycles (design §4)
 - [x] Gate 2 resource model has no unbounded growth without ADR approval (above; AC-7)
 - [x] Gate 3 wake model has no undocumented polling dependency (above; AC-6)
-- [x] Gate 4 evidence filled with ACTUAL results (every row PASS)
+- [x] Gate 0–3 complete
+- [ ] Gate 4 evidence filled with ACTUAL results (Debug PASS; Release/ASan/TSan/neg-compile/docs pending)
 - [x] Conformance map updated (DIV-03 Resolved, DIV-12 Resolved, DIV-14 partial, zig-map rows)
 - [x] Divergence registry updated (DIV-03 / DIV-12 / DIV-14 / DIV-10 status)
 - [x] Constitution rules satisfied (design §0/§1 map AC-1..AC-13)
-- [x] AGENTS.md change-class gates run (Debug / Release / ASan+UBSan / TSan / negative-compile / docs / formal / stress)
+- [ ] AGENTS.md change-class gates run (Debug PASS; Release / ASan+UBSan / TSan / negative-compile / docs / diff pending)
 - [x] as-built / findings / api-reference updated to reflect the migrated ThreadPool

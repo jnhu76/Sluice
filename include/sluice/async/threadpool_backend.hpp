@@ -40,8 +40,11 @@
 //
 // Shutdown (ADR Decision 15; AGENTS.md §14): close_admission() rejects new
 // reserve with invalid_state (Completion idle, no borrow) while existing accepted
-// requests continue; cancel/poll/wait_one/reap remain legal. Destruction is
-// quiescent and fail-fast: it does NOT implicitly cancel, drain, wait for a
+// requests continue; cancel/poll/wait_one/reap remain legal. close_admission()
+// does NOT signal waiters — wait_one() is a pure ready-epoch protocol that
+// returns only >0 reaped progress. Destruction is quiescent and fail-fast: the
+// destructor verifies arena/dispatch/worker quiescence via quiescence_snapshot()
+// before setting stopping_; it does NOT implicitly cancel, drain, wait for a
 // running syscall, publish, or discard the queue; it only tears down the
 // already-idle persistent workers. Non-quiescent destruction fail-fasts in Debug
 // AND Release.
@@ -90,8 +93,8 @@ class ThreadPoolBackend : public AsyncBackend {
     explicit ThreadPoolBackend(ThreadPoolConfig config);
 
     // Quiescent destruction: joins the persistent workers. MUST be preceded by
-    // close_admission + drain to accepted_outstanding == 0 / slot_in_use == 0.
-    // Non-quiescent destruction fail-fasts (Debug AND Release).
+    // close_admission + drain + reset to accepted_outstanding == 0 /
+    // slot_in_use == 0. Non-quiescent destruction fail-fasts (Debug AND Release).
     ~ThreadPoolBackend() override;
 
     ThreadPoolBackend(const ThreadPoolBackend&) = delete;
@@ -112,7 +115,8 @@ class ThreadPoolBackend : public AsyncBackend {
 
     // Production admission close (ADR Decision 15). New reserve() returns
     // invalid_state (Completion idle, no borrow); existing accepted requests
-    // continue; cancel/poll/wait_one/reap remain legal. Idempotent.
+    // continue; cancel/poll/wait_one/reap remain legal. Does not signal waiters.
+    // Idempotent.
     void close_admission();
 
     // Phase E resource introspection (method-only seams; no member data exposed).

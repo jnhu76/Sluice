@@ -165,12 +165,17 @@ onward. One submit does:
 6.  begin_binding(c) CAS idle->binding             [loser: rollback own slot, return invalid_state]
 7.  commit(h) prepared->pending, pin, ++accepted_outstanding, borrow begins
 8.  install_binding(c, &arena_, h)                 [slot-release capability]
-9.  commit_binding(c) binding->outstanding         [== submit LP]
-10. enqueue(h)  noexcept, allocation-free          [pending->enqueued OR terminal_noop]
-11. if enqueued: push h onto the dispatch ring (noexcept), notify_one worker
-12. if terminal_noop: the cancel/terminal winner owns readiness; signal backend-ready progress
-13. return {}
+    9.  commit_binding(c) binding->outstanding         [== submit LP]
+    10. `enqueue_after_commit(h)` (noexcept): under one `work_mtx_` critical section,
+        `arena_.enqueue(h)` then, iff `enqueued`, `dispatch_.push_back(h)`; notify_one worker
+    11. if terminal_noop: the cancel/terminal winner owns readiness; signal backend-ready progress
+    12. return {}
 ```
+
+The helper `enqueue_after_commit` closes the load-bearing gap where `enqueue` had published the
+slot as `enqueued` and cleared the enqueue pin, but `push_back` had not yet run under a separate
+critical section. Both outcomes (`enqueued` and `terminal_noop`) are handled allocation-free and
+noexcept, satisfying I9.
 
 **Pre-commit rollback (review C1, I3):** every failure before step 9 calls
 `arena_.rollback_reserved_or_prepared(h)`; a lost CAS (step 6) additionally calls
@@ -194,7 +199,9 @@ worker pops h from the ring
 ```
 
 This is closed by making **dequeue + mark_running one coordinated ownership transfer under the
-backend work domain**, never exposing a popped-but-not-running window:
+backend work domain**, never exposing a popped-but-not-running window. The enqueue→push path is
+similarly one coordinated transfer under `work_mtx_` (§4.1), so the only legal cancel window for an
+`enqueued` request is **before the worker pops it**:
 
 ```text
 worker:
@@ -259,9 +266,15 @@ The worker NEVER holds a `Completion*` and NEVER calls `publish`. It does only:
 ```text
   result = run_syscall(prepared_op)            # pread/pwrite/fdatasync/fsync via retry_on_eintr
   terminal = syscall_to_terminal(result)       # ok_bytes(n) | ok_void() | err(errno)
+  syscall_count_.fetch_add(1, relaxed)         # bookkeeping BEFORE observable terminal
+  { lock work_mtx_; --active_workers_; }       # worker no longer "running" before terminal
   arena_.record_terminal(h, terminal)          # first caller wins; losers no-op
   signal_ready_progress()                       # backend-ready progress wake
 ```
+
+Bookkeeping (`syscall_count_` and `active_workers_`) is published **before**
+`record_terminal`. An observer that sees a backend-ready Completion therefore also sees accurate
+worker bookkeeping: `active_workers` no longer includes this op and `syscall_count` includes it.
 
 `poll()` / `wait_one()` drive `arena_.reap(sink_)`; reap is the SOLE path that installs the
 result and release-stores the Completion ready (via the slot's `publish_size_ready` /
@@ -294,10 +307,12 @@ wait_one():
 ```
 
 `signal_ready_progress` is called by: worker after `record_terminal`; cancel on `terminal_won`;
-the enqueue pin-ack re-arm path when a terminal winner preceded acknowledgement; and shutdown
-stop. A successful `wait_one()` return MUST have reaped ≥1 (it never returns 0 as a "success").
-The pin-ack re-arm preserves the level-triggered readiness so no wake is lost (ADR Decision 4,
-I19; AGENTS.md §13.2).
+and the enqueue pin-ack re-arm path when a terminal winner preceded acknowledgement. It is NOT
+called by `close_admission()` and NOT called by the destructor. `wait_one()` is a pure ready-epoch
+protocol: it returns only when it has reaped ≥1 request; it never returns 0 as a "success" and it
+does not observe `stopping_` or admission state. The caller stops waiting by tracking
+`outstanding()` or by simply ceasing to call `wait_one()`. The pin-ack re-arm preserves the
+level-triggered readiness so no wake is lost (ADR Decision 4, I19; AGENTS.md §13.2).
 
 ---
 
@@ -380,9 +395,13 @@ no backend-ready unreaped
 no completion-ready bound slot
 ```
 
-Non-quiescent destruction fail-fasts in Debug AND Release. The destructor does NOT implicitly
-cancel, drain, wait for a running syscall, publish, or discard the queue. The ONLY thing it does
-is persistent-worker teardown:
+Non-quiescent destruction fail-fasts in Debug AND Release. Before setting `stopping_`, the
+destructor takes `work_mtx_` and uses `arena_.quiescence_snapshot()` to verify that the dispatch
+ring is empty, no worker is active, and the arena reports `slot_in_use == 0`,
+`accepted_outstanding == 0`, and `backend_ready == 0`. If any condition holds, it calls
+`threadpool_non_quiescent_destruction_fail_fast()` (std::terminate) before any join. The
+destructor does NOT implicitly cancel, drain, wait for a running syscall, publish, or discard the
+queue. After the quiescence check it only does persistent-worker teardown:
 
 ```text
 set stopping_ = true
