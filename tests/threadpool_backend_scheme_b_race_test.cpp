@@ -113,7 +113,7 @@ bool drain_bounded(ThreadPoolBackend& backend,
 template <class Gate>
 class ScopedGateAndThread {
 public:
-    ScopedGateAndThread(ThreadPoolBackend& /*backend*/, Gate& gate, std::thread& t)
+    ScopedGateAndThread(Gate& gate, std::thread& t)
         : gate_(&gate), thread_(&t) {}
     void join() {
         if (joined_) return;
@@ -151,7 +151,7 @@ private:
 template <class Gate>
 class ScopedGateResume {
 public:
-    ScopedGateResume(ThreadPoolBackend& /*backend*/, Gate& gate)
+    ScopedGateResume(Gate& gate)
         : gate_(&gate) {}
     void resume() {
         if (resumed_) return;
@@ -205,7 +205,7 @@ SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
     std::thread submitter([&] {
         submit_result = backend.submit_read(ReadOp{fd, buf, 1, 0}, c);
     });
-    ScopedGateAndThread arm(backend, gate, submitter);
+    ScopedGateAndThread arm(gate, submitter);
 
     const char* fail_msg = nullptr;
     std::uint64_t syscalls_before = 0;
@@ -269,7 +269,7 @@ SLUICE_TEST_CASE(tp_enqueued_cancel_wins_no_syscall) {
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_before_dequeue_pause_gate(&gate);
-    ScopedGateResume guard(backend, gate);
+    ScopedGateResume guard(gate);
 
     TempPath tp("B");
     int fd = open_temp(tp.path());
@@ -331,7 +331,7 @@ SLUICE_TEST_CASE(tp_running_cancel_intent_real_result_verbatim) {
     ThreadPoolBackend::WorkerRunningPauseGate gate;
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_running_pause_gate(&gate);
-    ScopedGateResume guard(backend, gate);
+    ScopedGateResume guard(gate);
 
     TempPath tp("C");
     int fd = open_temp(tp.path());
@@ -393,7 +393,7 @@ SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
     ThreadPoolBackend::TerminalPublicationPauseGate gate;
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_terminal_publication_pause_gate(&gate);
-    ScopedGateResume guard(backend, gate);
+    ScopedGateResume guard(gate);
 
     TempPath tp("D");
     int fd = open_temp(tp.path());
