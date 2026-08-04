@@ -261,14 +261,14 @@ reads "PENDING — slice N". A test that cannot fail on the pre-fix code is not 
 | Gate | Command | Result |
 |---|---|---|
 | Clang Debug | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS — 138/138 passed, 0 failed (includes Slice 13 race + death tests) |
-| Clang Release (§16.1) | `xmake f -m release --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PENDING — rerun after Slice 13 lands |
-| ASan + UBSan (§16.2) | `xmake f -m asanubsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PENDING — rerun after Slice 13 lands |
-| TSan (§16.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PENDING — rerun after Slice 13 lands |
-| negative-compile | `scripts/verify-completion-authority-negative-compile.sh` + `scripts/verify-request-arena-negative-compile.sh` | PENDING |
-| doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PENDING |
+| Clang Release (§16.1) | `xmake f -m release --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS — 138/138 passed, 0 failed |
+| ASan + UBSan (§16.2) | `xmake f -m asanubsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS — 138/138 passed, 0 sanitizer errors |
+| TSan (§16.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS — 138/138 passed, 0 data races |
+| negative-compile | `scripts/verify-completion-authority-negative-compile.sh` + `scripts/verify-request-arena-negative-compile.sh` | PASS — all 12 + 6 cases rejected |
+| doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PASS — self-test pass, 0 broken markdown links, 0 stale repo paths |
 | formal | `python3 scripts/formal/verify.py` | PASS — justified formal-coverage gap recorded below (narrowed: the load-bearing races are now deterministically exercised by Slice 13; no new TLA model added per AGENTS.md §17) |
 | stress | N=100003, buffer=1, fixed workers, bounded capacity | PASS — historical results remain valid (no hot-path change) |
-| diff | `git diff --check && git status --short && git diff --stat` | PENDING — run at final diff hygiene |
+| diff | `git diff --check && git status --short && git diff --stat` | PASS — clean |
 
 TSan coverage MUST include (§16.3): submit vs dequeue; enqueued cancel vs dequeue; running cancel
 vs terminal; worker terminal vs reap; ready-epoch signal vs wait; reset/reuse after reap;
@@ -330,9 +330,9 @@ in this PR:
 - [x] Gate 2 resource model has no unbounded growth without ADR approval (above; AC-7)
 - [x] Gate 3 wake model has no undocumented polling dependency (above; AC-6)
 - [x] Gate 0–3 complete
-- [ ] Gate 4 evidence filled with ACTUAL results (Debug PASS; Release/ASan/TSan/neg-compile/docs pending)
+- [x] Gate 4 evidence filled with ACTUAL results (Debug/Release/ASan/TSan/neg-compile/docs/diff PASS)
 - [x] Conformance map updated (DIV-03 Resolved, DIV-12 Resolved, DIV-14 partial, zig-map rows)
 - [x] Divergence registry updated (DIV-03 / DIV-12 / DIV-14 / DIV-10 status)
 - [x] Constitution rules satisfied (design §0/§1 map AC-1..AC-13)
-- [ ] AGENTS.md change-class gates run (Debug PASS; Release / ASan+UBSan / TSan / negative-compile / docs / diff pending)
+- [x] AGENTS.md change-class gates run (Debug/Release/ASan+UBSan/TSan/negative-compile/docs/diff PASS)
 - [x] as-built / findings / api-reference updated to reflect the migrated ThreadPool
