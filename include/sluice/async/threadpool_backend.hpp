@@ -280,6 +280,13 @@ class ThreadPoolBackend : public AsyncBackend {
     template <class Op>
     Result<void> submit_void(Op op, Completion<void>& c, detail::OperationKind kind);
 
+    // Unified enqueue + dispatch push under one work_mtx_ critical section
+    // (Phase E P0). Closes the window where the arena pin is cleared but the
+    // ring entry is not yet visible. noexcept because the arena lock and the
+    // bounded ring push are allocation-free; the caller has already committed
+    // the request, so a failure here would strand an accepted op.
+    void enqueue_after_commit(detail::SlotHandle h) noexcept;
+
     template <class Op>
     static detail::BorrowMetadata borrow_of(const Op& op) noexcept {
         if constexpr (std::is_same_v<Op, ReadOp>) {

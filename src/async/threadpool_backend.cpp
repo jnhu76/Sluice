@@ -266,36 +266,9 @@ Result<void> ThreadPoolBackend::submit_size(Op op, Completion<std::size_t>& c,
     install_binding(c, &arena_, h);
     commit_binding(c);
 
-    // Stage 4: enqueue (pending -> enqueued OR terminal no-op). noexcept.
-    auto outcome = arena_.enqueue(h);
-    if (outcome == detail::EnqueueOutcome::enqueued) {
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        // Pre-fix placement: the gate fires OUTSIDE work_mtx_ (see the
-        // work_domain_held flag). The real enqueue/dispatch publication gap is
-        // closed in commit 3 by moving this pause inside the unified critical
-        // section below.
-        wait_after_enqueue_before_push_pause_(/*inside_work_mtx=*/false);
-#endif
-        // Allocation-free, noexcept push into the bounded ring, then wake a worker.
-        {
-            std::lock_guard<std::mutex> lk(work_mtx_);
-            dispatch_.push_back(h);
-        }
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        {
-            auto* g = after_enqueue_before_push_gate_.load(std::memory_order_relaxed);
-            if (g != nullptr) {
-                g->dispatch_push_completed.store(true, std::memory_order_release);
-            }
-        }
-#endif
-        work_cv_.notify_one();
-    } else {
-        // terminal_noop: a pending cancel/terminal won first (Scheme B). That
-        // winner owns readiness; re-arm the ready condition so the wake is not
-        // lost (ADR Decision 4 / I19; design §4.5).
-        signal_ready_progress();
-    }
+    // Stage 4: enqueue + dispatch publication under one work_mtx_ critical
+    // section (P0). No gap between pin clear and ring visibility.
+    enqueue_after_commit(h);
     return {};
 }
 
@@ -334,29 +307,46 @@ Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
     install_binding(c, &arena_, h);
     commit_binding(c);
 
-    auto outcome = arena_.enqueue(h);
-    if (outcome == detail::EnqueueOutcome::enqueued) {
+    enqueue_after_commit(h);
+    return {};
+}
+
+// ---------------------------------------------------------------------------
+// Unified enqueue + dispatch publication (P0)
+// ---------------------------------------------------------------------------
+
+void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
+    detail::EnqueueOutcome outcome;
+    {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        outcome = arena_.enqueue(h);  // pending -> enqueued OR terminal_noop
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        // Pre-fix placement: outside work_mtx_. See submit_size above.
-        wait_after_enqueue_before_push_pause_(/*inside_work_mtx=*/false);
+        if (outcome == detail::EnqueueOutcome::enqueued) {
+            // Post-fix placement: the gate fires INSIDE work_mtx_, so the
+            // structural lock-domain probe sees work_domain_held == true.
+            wait_after_enqueue_before_push_pause_(/*inside_work_mtx=*/true);
+        }
 #endif
-        {
-            std::lock_guard<std::mutex> lk(work_mtx_);
+        if (outcome == detail::EnqueueOutcome::enqueued) {
             dispatch_.push_back(h);
-        }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        {
-            auto* g = after_enqueue_before_push_gate_.load(std::memory_order_relaxed);
-            if (g != nullptr) {
-                g->dispatch_push_completed.store(true, std::memory_order_release);
+            {
+                auto* g = after_enqueue_before_push_gate_.load(std::memory_order_relaxed);
+                if (g != nullptr) {
+                    g->dispatch_push_completed.store(true, std::memory_order_release);
+                }
             }
-        }
 #endif
+        }
+    }
+    if (outcome == detail::EnqueueOutcome::enqueued) {
         work_cv_.notify_one();
     } else {
+        // terminal_noop: a pending cancel/terminal won first (Scheme B). That
+        // winner owns readiness; re-arm the ready condition so the wake is not
+        // lost (ADR Decision 4 / I19; design §4.5).
         signal_ready_progress();
     }
-    return {};
 }
 
 // ---------------------------------------------------------------------------
