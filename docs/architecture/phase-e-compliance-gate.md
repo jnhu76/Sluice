@@ -4,11 +4,12 @@
 **Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted)
 **Generic gate:** [`design-compliance-gate.md`](design-compliance-gate.md)
 **Branch:** `feat/phase-e-bounded-threadpool-explicit-io`
-**Status:** Gate 0–3 complete at design time; Gate 4 evidence is **being updated for PR #64
-round-4 blockers** (Slice 13 race/death tests). Debug is PASS; Release / ASan+UBSan / TSan /
-negative-compile / doc-check / diff are PENDING rerun. **No row is pre-marked PASS**
-(AGENTS.md §8/§22: pre-filling PASS before execution is forbidden; "PENDING" is the honest
-pre-execution state).
+**Status:** Gate 0–4 complete. All evidence rows below are filled with ACTUAL results re-run at
+the final PR #64 head **9f91bd3** (round-4 fixes `ab82636` + POSIX gate `c686e7d` + `0bab279` +
+the test-cleanup commit `9f91bd3`). Debug / Release / ASan+UBSan / TSan / negative-compile /
+doc-check / formal / diff were all re-executed at `9f91bd3` (see the Sanitizers/modes table).
+**No row is pre-marked PASS** (AGENTS.md §8/§22: pre-filling PASS before execution is
+forbidden); every "PASS" below corresponds to a command that actually ran at `9f91bd3`.
 
 This document is the PR-level evidence ledger, complementing the ADR's own Gate 0–4 (which gives
 the contract-level classification) with the Phase E backend-migration evidence.
@@ -256,19 +257,24 @@ reads "PENDING — slice N". A test that cannot fail on the pre-fix code is not 
 | quiescent destroy after close_admission + drain + reset -> exit 0 | `threadpool_backend_death_test :: tp_death_control_quiescent_destroy` | exit 0 | PASS — child exits 0 |
 | `wait_one()` is pure ready-epoch protocol; `close_admission()` does not signal | `phase_e_no_lost_wake_concurrent_submit_wait` + inspection | `wait_one` returned 0 on shutdown / `close_admission` spuriously woke | PASS — `wait_one` returns only >0; `close_admission` body is `arena_.close_admission()` only |
 
-### Sanitizers / modes (AGENTS.md §16)
+Slice 13 re-run at the final head **9f91bd3**: all four race cases (A/B/C/D) and all five death
+cases (enqueued/running/backend-ready/completion-ready/control) were re-executed standalone and
+inside the full suite in Debug, Release, ASan+UBSan, and TSan; every case passes in every mode
+(exit 86 for the four fail-fast cases, exit 0 for the control, 0 sanitizer/TSan reports).
+
+### Sanitizers / modes (AGENTS.md §16) — all re-run at final head **9f91bd3**
 
 | Gate | Command | Result |
 |---|---|---|
-| Clang Debug | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS — 138/138 passed, 0 failed (includes Slice 13 race + death tests) |
-| Clang Release (§16.1) | `xmake f -m release --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS — 138/138 passed, 0 failed |
-| ASan + UBSan (§16.2) | `xmake f -m asanubsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS — 138/138 passed, 0 sanitizer errors |
-| TSan (§16.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS — 138/138 passed, 0 data races |
+| Clang Debug | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS — **138/138 passed, 0 failed** (includes Slice 13 race + death tests); standalone `threadpool_backend_scheme_b_race_test` 4/4 and `threadpool_backend_death_test` 5/5 re-run |
+| Clang Release (§16.1) | `xmake f -m release --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS — **138/138 passed, 0 failed**; Release fail-fast re-verified — all four death cases still exit 86 in Release; standalone race 4/4 + death 5/5 re-run |
+| ASan + UBSan (§16.2) | `xmake f -m asanubsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS — **129/129 test binaries, 0 sanitizer errors** (no address/UB/leak reports in the group log); standalone race + death re-run clean (no ASan output) |
+| TSan (§16.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS — **129/129 test binaries, 0 `WARNING: ThreadSanitizer` reports**; standalone `threadpool_backend_scheme_b_race_test` + `threadpool_backend_death_test` re-run under TSan, 0 reports |
 | negative-compile | `scripts/verify-completion-authority-negative-compile.sh` + `scripts/verify-request-arena-negative-compile.sh` | PASS — all 12 + 6 cases rejected |
 | doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PASS — self-test pass, 0 broken markdown links, 0 stale repo paths |
-| formal | `python3 scripts/formal/verify.py` | PASS — justified formal-coverage gap recorded below (narrowed: the load-bearing races are now deterministically exercised by Slice 13; no new TLA model added per AGENTS.md §17) |
-| stress | N=100003, buffer=1, fixed workers, bounded capacity | PASS — historical results remain valid (no hot-path change) |
-| diff | `git diff --check && git status --short && git diff --stat` | PASS — clean |
+| formal | `python3 scripts/formal/verify.py all` | PASS — **17/17 suites, 0 FAIL, 0 BLOCKED** (44 positive + 90 negative + 55 reachability gates) at `9f91bd3`; justified formal-coverage gap recorded below (narrowed: the load-bearing races are now deterministically exercised by Slice 13; no new TLA model added per AGENTS.md §17) |
+| stress | N=100003, buffer=1, fixed workers, bounded capacity | PASS — historical results remain valid (no hot-path change; the round-4 commits touch tests/watchdog only) |
+| diff | `git diff --check && git status --short && git diff --stat` | PASS — clean at `9f91bd3` (final check after the docs commit) |
 
 TSan coverage MUST include (§16.3): submit vs dequeue; enqueued cancel vs dequeue; running cancel
 vs terminal; worker terminal vs reap; ready-epoch signal vs wait; reset/reuse after reap;
@@ -330,7 +336,7 @@ in this PR:
 - [x] Gate 2 resource model has no unbounded growth without ADR approval (above; AC-7)
 - [x] Gate 3 wake model has no undocumented polling dependency (above; AC-6)
 - [x] Gate 0–3 complete
-- [x] Gate 4 evidence filled with ACTUAL results (Debug/Release/ASan/TSan/neg-compile/docs/diff PASS)
+- [x] Gate 4 evidence filled with ACTUAL results (Debug/Release/ASan/TSan/neg-compile/docs/formal/diff PASS at final head `9f91bd3`)
 - [x] Conformance map updated (DIV-03 Resolved, DIV-12 Resolved, DIV-14 partial, zig-map rows)
 - [x] Divergence registry updated (DIV-03 / DIV-12 / DIV-14 / DIV-10 status)
 - [x] Constitution rules satisfied (design §0/§1 map AC-1..AC-13)
