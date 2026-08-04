@@ -836,6 +836,30 @@ public:
         return std::nullopt;
     }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // A single-lock observation of a SlotHandle that validates generation, context,
+    // and non-free state. Returns nullopt if the handle is stale, out of range, or
+    // points to a free slot. This is the preferred test seam over the piecewise
+    // state_of/enqueue_pin_live/terminal_stored accessors because it cannot
+    // mistake a later slot reuse for the original request.
+    struct RequestObservation {
+        SlotHandle handle;
+        RequestState state;
+        bool enqueue_pin_live;
+        bool terminal_stored;
+    };
+    std::optional<RequestObservation> observe_for_test(SlotHandle h) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (h.slot.value >= capacity_) return std::nullopt;
+        const RequestSlot& s = slots_[h.slot.value];
+        if (s.state_ == RequestState::free) return std::nullopt;
+        if (s.generation_ != h.generation) return std::nullopt;
+        if (s.key_.context != context_) return std::nullopt;
+        return RequestObservation{h, s.state_, s.enqueue_in_flight_pin_,
+                                  s.terminal_.stored};
+    }
+#endif
+
 private:
     // Bounds-check a SlotIndex for the read-only introspection accessors
     // (CodeRabbit finding: those are the only slot-addressing paths without

@@ -269,11 +269,26 @@ Result<void> ThreadPoolBackend::submit_size(Op op, Completion<std::size_t>& c,
     // Stage 4: enqueue (pending -> enqueued OR terminal no-op). noexcept.
     auto outcome = arena_.enqueue(h);
     if (outcome == detail::EnqueueOutcome::enqueued) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Pre-fix placement: the gate fires OUTSIDE work_mtx_ (see the
+        // work_domain_held flag). The real enqueue/dispatch publication gap is
+        // closed in commit 3 by moving this pause inside the unified critical
+        // section below.
+        wait_after_enqueue_before_push_pause_(/*inside_work_mtx=*/false);
+#endif
         // Allocation-free, noexcept push into the bounded ring, then wake a worker.
         {
             std::lock_guard<std::mutex> lk(work_mtx_);
             dispatch_.push_back(h);
         }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        {
+            auto* g = after_enqueue_before_push_gate_.load(std::memory_order_relaxed);
+            if (g != nullptr) {
+                g->dispatch_push_completed.store(true, std::memory_order_release);
+            }
+        }
+#endif
         work_cv_.notify_one();
     } else {
         // terminal_noop: a pending cancel/terminal won first (Scheme B). That
@@ -321,10 +336,22 @@ Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
 
     auto outcome = arena_.enqueue(h);
     if (outcome == detail::EnqueueOutcome::enqueued) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Pre-fix placement: outside work_mtx_. See submit_size above.
+        wait_after_enqueue_before_push_pause_(/*inside_work_mtx=*/false);
+#endif
         {
             std::lock_guard<std::mutex> lk(work_mtx_);
             dispatch_.push_back(h);
         }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        {
+            auto* g = after_enqueue_before_push_gate_.load(std::memory_order_relaxed);
+            if (g != nullptr) {
+                g->dispatch_push_completed.store(true, std::memory_order_release);
+            }
+        }
+#endif
         work_cv_.notify_one();
     } else {
         signal_ready_progress();
@@ -374,6 +401,17 @@ void ThreadPoolBackend::worker_loop() {
                 std::unique_lock<std::mutex> lk(work_mtx_);
                 work_cv_.wait(lk, [&] { return stopping_ || !dispatch_.empty(); });
                 if (stopping_ && dispatch_.empty()) return;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                if (before_dequeue_gate_ != nullptr) {
+                    // Gate B: release work_mtx_ while paused so the test can
+                    // safely call cancel/dispatch_size_for_test. The request
+                    // stays on the ring; pop_front happens only after resume.
+                    lk.unlock();
+                    wait_before_dequeue_pause_();
+                    lk.lock();
+                    if (stopping_ && dispatch_.empty()) return;
+                }
+#endif
                 if (!dispatch_.pop_front(h)) continue;  // spurious / raced
                 // Dequeue + mark_running form ONE coordinated ownership transfer
                 // under work_mtx_: there is no external window where the request
@@ -386,11 +424,18 @@ void ThreadPoolBackend::worker_loop() {
                 have_op = true;
             }  // work_mtx_ released BEFORE the blocking syscall (lock order §5)
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            if (have_op) wait_running_pause_();  // Gate C: slot is `running`
+#endif
             if (have_op) {
                 detail::TerminalResult terminal = run_syscall(op);
                 // record_terminal takes the arena leaf lock alone (no work_mtx_
                 // held); the first caller wins, losers no-op (ADR Decision 12).
                 (void)arena_.record_terminal(h, terminal);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                // Gate D pre-fix: terminal is stored, worker bookkeeping is stale.
+                wait_terminal_publication_pause_();
+#endif
                 {
                     std::lock_guard<std::mutex> wl(work_mtx_);
                     --active_workers_;
@@ -488,6 +533,51 @@ void ThreadPoolBackend::signal_ready_progress() noexcept {
     }
     ready_cv_.notify_one();
 }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// Deterministic pause helpers. Each is a no-op when the corresponding gate is
+// disarmed. The gate itself is a simple paused/resume atomic handshake; the
+// test is responsible for setting resume only after observing paused.
+
+void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(
+    bool inside_work_mtx) noexcept {
+    auto* g = after_enqueue_before_push_gate_.load(std::memory_order_relaxed);
+    if (g == nullptr) return;
+    g->work_domain_held.store(inside_work_mtx, std::memory_order_release);
+    g->dispatch_push_completed.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+}
+
+void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
+    auto* g = before_dequeue_gate_.load(std::memory_order_relaxed);
+    if (g == nullptr) return;
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+}
+
+void ThreadPoolBackend::wait_running_pause_() noexcept {
+    auto* g = running_gate_.load(std::memory_order_relaxed);
+    if (g == nullptr) return;
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+}
+
+void ThreadPoolBackend::wait_terminal_publication_pause_() noexcept {
+    auto* g = terminal_publication_gate_.load(std::memory_order_relaxed);
+    if (g == nullptr) return;
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // cancel — Completion-keyed, drives the shared state machine

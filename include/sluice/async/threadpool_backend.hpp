@@ -146,6 +146,67 @@ class ThreadPoolBackend : public AsyncBackend {
     // Test-only: number of real syscalls the workers have executed (for
     // cancel/no-execute assertions). Monotonic; not a public contract.
     std::uint64_t syscall_count_for_test() const noexcept { return syscall_count_.load(); }
+
+    // Test-only: number of backend_ready slots not yet reaped.
+    std::size_t backend_ready_count_for_test() const noexcept {
+        return arena_.backend_ready_count();
+    }
+
+    // Test-only: resolve a Completion pointer to its current slot+generation.
+    // Returns nullopt if the Completion is not bound to any slot.
+    std::optional<detail::SlotHandle> handle_for_completion_for_test(
+        const void* completion) const noexcept {
+        return arena_.resolve_completion(completion);
+    }
+
+    // Test-only: single-lock observation that validates generation, context, and
+    // non-free state. Returns nullopt for a stale/released/unknown handle.
+    std::optional<detail::RequestArena::RequestObservation> observe_for_test(
+        detail::SlotHandle h) const noexcept {
+        return arena_.observe_for_test(h);
+    }
+
+    // Deterministic pause gates for the ThreadPoolBackend race tests. Each gate
+    // is armed by the test, the production path spins on `paused` and waits on
+    // `resume`, giving the test an exact observation window. These are compiled
+    // out of production sluice_async; the layout cost in the internal-testing
+    // target is accepted and documented (AGENTS.md §8).
+    struct AfterArenaEnqueueBeforeDispatchPushPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        // Set by the production path: true iff the gate fired INSIDE work_mtx_.
+        std::atomic<bool> work_domain_held{false};
+        // Set false before the pause, true after dispatch_.push_back(h) completes.
+        // Lets the test observe "not yet pushed" without taking work_mtx_.
+        std::atomic<bool> dispatch_push_completed{false};
+    };
+    struct BeforeWorkerDequeuePauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+    };
+    struct WorkerRunningPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+    };
+    struct TerminalPublicationPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+    };
+
+    void set_after_enqueue_before_push_pause_gate(
+        AfterArenaEnqueueBeforeDispatchPushPauseGate* gate) noexcept {
+        after_enqueue_before_push_gate_.store(gate, std::memory_order_release);
+    }
+    void set_before_dequeue_pause_gate(BeforeWorkerDequeuePauseGate* gate) noexcept {
+        before_dequeue_gate_.store(gate, std::memory_order_release);
+    }
+    void set_running_pause_gate(WorkerRunningPauseGate* gate) noexcept {
+        running_gate_.store(gate, std::memory_order_release);
+    }
+    void set_terminal_publication_pause_gate(
+        TerminalPublicationPauseGate* gate) noexcept {
+        terminal_publication_gate_.store(gate, std::memory_order_release);
+    }
 #endif
 
   private:
@@ -249,6 +310,15 @@ class ThreadPoolBackend : public AsyncBackend {
     // Wake the ready domain: bump ready_epoch_ under ready_mtx_ and notify.
     void signal_ready_progress() noexcept;
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic pause helpers (see the public gate setters above). Each
+    // helper is a no-op when the corresponding gate is disarmed.
+    void wait_after_enqueue_before_push_pause_(bool inside_work_mtx) noexcept;
+    void wait_before_dequeue_pause_() noexcept;
+    void wait_running_pause_() noexcept;
+    void wait_terminal_publication_pause_() noexcept;
+#endif
+
     void tally_canceled() noexcept {
         if (stats_) ++stats_->canceled_ops;
     }
@@ -275,6 +345,15 @@ class ThreadPoolBackend : public AsyncBackend {
 
     // Observability: monotonic syscall counter (test-only introspection).
     std::atomic<std::uint64_t> syscall_count_{0};
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic pause-gate pointers (null when disarmed). Compiled out of
+    // production sluice_async; see the public setter declarations above.
+    std::atomic<AfterArenaEnqueueBeforeDispatchPushPauseGate*> after_enqueue_before_push_gate_{nullptr};
+    std::atomic<BeforeWorkerDequeuePauseGate*> before_dequeue_gate_{nullptr};
+    std::atomic<WorkerRunningPauseGate*> running_gate_{nullptr};
+    std::atomic<TerminalPublicationPauseGate*> terminal_publication_gate_{nullptr};
+#endif
 };
 
 }  // namespace sluice::async
