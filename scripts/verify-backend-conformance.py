@@ -7,13 +7,21 @@
 # backend, per-section report. It:
 #   * preflights each target via `xmake show -t` (target existence) then
 #     `xmake build` (build) then `xmake run` (run) — NO Lua-source grep;
-#   * parses ONLY the stable [conformance-meta] lines (backend/profile/mode)
-#     from the shared-suite driver output — never display names, skip text,
-#     "PASS" strings, or build-directory contents;
+#   * drives the shared suite once PER registered backend in a separate
+#     subprocess filtered to that backend's exact driver case, and counts a
+#     run as PASS only when it provably executed exactly that one case and
+#     emitted exactly one [conformance-meta] line whose backend (canonicalized)
+#     matches the registry, profile matches the manifest, and mode is allowed
+#     for the profile — never display names, skip text, "PASS" strings, or
+#     build-directory contents;
 #   * classifies each backend's verdict (ELIGIBLE / INCOMPLETE / NOT
-#     CONFORMING) from the manifest's closed profiles and the run results;
+#     CONFORMING) from the manifest's closed profiles and the run results:
+#     a mandatory RUN_FAIL is NOT CONFORMING; missing/insufficient mandatory
+#     evidence is INCOMPLETE; only provably-satisfied mandatory layers make a
+#     backend ELIGIBLE;
 #   * exits non-zero on any mandatory MISSING_TARGET / BUILD_FAIL / RUN_FAIL,
-#     or when a registered backend's mandatory case-set is not covered.
+#     any INCOMPLETE verdict for a non-kernel backend, or when a registered
+#     backend's mandatory case-set is not covered.
 #
 # Usage:
 #   python3 scripts/verify-backend-conformance.py
@@ -24,7 +32,8 @@
 # Exit codes:
 #   0 — every mandatory gate PASS / NOT_APPLICABLE; all profiles honest.
 #   1 — at least one mandatory gate did not pass (target missing, build/run
-#       failure, or a backend's mandatory case-set uncovered).
+#       failure, an INCOMPLETE verdict for a non-kernel backend, or a
+#       backend's mandatory case-set uncovered).
 #   2 — harness error (xmake unavailable, manifest import failure).
 """Phase C1 aggregate backend-conformance gate."""
 
@@ -57,8 +66,9 @@ INCOMPLETE = "INCOMPLETE"
 SATISFACTORY = {PASS, NOT_APPLICABLE}
 
 # Verdicts for a backend.
-ELIGIBLE = "ELIGIBLE"
-NOT_CONFORMING = "NOT CONFORMING"
+ELIGIBLE = "ELIGIBLE"               # every mandatory layer provably satisfied.
+INCOMPLETE = "INCOMPLETE"           # insufficient evidence (not a violation).
+NOT_CONFORMING = "NOT CONFORMING"   # a mandatory evidence proved a violation.
 
 
 @dataclass
@@ -108,11 +118,12 @@ def xmake_run_target(target: str, env_filter: Optional[str] = None
     """Run a built test target; return (returncode, combined_output).
 
     `env_filter`, when set, is passed through as the SLUICE_TEST_FILTER env
-    var so the in-binary test harness runs ONLY the comma/space-separated
-    case-name substrings it names (see tests/harness.hpp). This is how the
-    aggregate gate drives each registered backend's shared-suite case in a
-    SEPARATE subprocess: one backend's failure cannot affect another
-    backend's process exit code or [conformance-meta] emission.
+    var so the in-binary test harness runs ONLY the exact case-name allowlist
+    it names (see tests/harness.hpp; a filter that matches zero cases makes
+    the binary exit non-zero). This is how the aggregate gate drives each
+    registered backend's shared-suite case in a SEPARATE subprocess: one
+    backend's failure cannot affect another backend's process exit code or
+    [conformance-meta] emission.
     """
     env = dict(os.environ) if env_filter else None
     if env_filter:
@@ -160,6 +171,10 @@ def parse_meta_lines(driver_output: str) -> dict[str, dict[str, str]]:
     """Parse [conformance-meta] lines into {backend: {profile, mode}}.
 
     backend is the value after backend= EXACTLY as printed (e.g. "Uring(stub)").
+    Deduplicated by backend name — intended for the REPORT. The fail-closed
+    per-run validation uses parse_meta_line_list() instead, which preserves
+    duplicates so that a double-emitted meta line cannot be mistaken for a
+    single valid one.
     """
     meta: dict[str, dict[str, str]] = {}
     for line in driver_output.splitlines():
@@ -168,6 +183,34 @@ def parse_meta_lines(driver_output: str) -> dict[str, dict[str, str]]:
             backend, profile, mode = m.group(1), m.group(2), m.group(3)
             meta[backend] = {"profile": profile, "mode": mode}
     return meta
+
+
+def parse_meta_line_list(driver_output: str) -> list[tuple[str, str, str]]:
+    """Every [conformance-meta] line in order, preserving duplicates.
+
+    Returns [(backend, profile, mode)] with backend EXACTLY as printed.
+    """
+    lines: list[tuple[str, str, str]] = []
+    for line in driver_output.splitlines():
+        m = META_RE.match(line.strip())
+        if m:
+            lines.append((m.group(1), m.group(2), m.group(3)))
+    return lines
+
+
+# The harness prints exactly one "[run] <case-name>" line per executed case
+# (tests/harness.hpp). The gate counts these to prove WHICH case ran.
+RUN_RE = re.compile(r"^\[run\]\s+(\S+)\s*$")
+
+
+def parse_run_lines(driver_output: str) -> list[str]:
+    """The case names the harness actually executed, in order.
+
+    An empty list means the SLUICE_TEST_FILTER selected nothing — that must
+    never be treated as PASS.
+    """
+    return [m.group(1) for line in driver_output.splitlines()
+            if (m := RUN_RE.match(line.strip()))]
 
 
 def canonical_backend_key(meta_backend: str, registered: list[str]) -> Optional[str]:
@@ -236,8 +279,10 @@ class Gate:
         if shared_ev is not None:
             self._run_shared_suite(shared_ev)
 
-        # Parse [conformance-meta] from every per-backend shared run; each run
-        # emits exactly one meta line for its own backend.
+        # Parse [conformance-meta] from every per-backend shared run for the
+        # REPORT. Per-run meta existence/identity is already enforced by
+        # _classify_shared_run — a run without exactly one valid meta line can
+        # never be PASS; this dict is only the report's display view.
         self.meta = {}
         for name, rr in self.shared_by_backend.items():
             if rr.stdout:
@@ -272,11 +317,64 @@ class Gate:
         # One isolated subprocess per registered backend. The case name
         # (BackendEntry.driver_case) is the SLUICE_TEST_CASE the driver
         # registers for that backend (see backend_conformance_driver_test.cpp).
+        # Each run is classified fail-closed: PASS only when it provably ran
+        # exactly the driver case and emitted exactly one valid meta line.
         for b in M.BACKENDS:
             rc, out = xmake_run_target(ev.target, env_filter=b.driver_case)
+            state, detail = self._classify_shared_run(b, rc, out)
             self.shared_by_backend[b.name] = RunResult(
-                f"{ev.evidence_id}:{b.name}", ev.target, _state_for_rc(rc),
-                detail=f"exit {rc} (filter={b.driver_case})", stdout=out)
+                f"{ev.evidence_id}:{b.name}", ev.target, state,
+                detail=detail, stdout=out)
+
+    def _classify_shared_run(self, backend: M.BackendEntry, rc: int,
+                             out: str) -> tuple[str, str]:
+        """Classify ONE backend's isolated shared-suite subprocess run.
+
+        Fail-closed: a run is PASS only when ALL of the following hold:
+
+          * returncode == 0 (else RUN_FAIL);
+          * the harness executed exactly the manifest's driver_case and
+            nothing else (the `[run]` lines must be exactly [driver_case]);
+          * exactly one [conformance-meta] line was emitted;
+          * its backend, canonicalized (Uring(stub) -> Uring), equals this
+            backend;
+          * its profile equals the manifest-declared profile; and
+          * its mode is allowed for that profile (M.PROFILE_MODES).
+
+        Zero/extra selected cases, missing/duplicate/foreign meta, a wrong
+        backend/profile, or a disallowed mode are INCOMPLETE — never PASS.
+        This is what closes the "filter matched nothing still exits 0" false
+        green: a typo'd or renamed driver_case can no longer report PASS.
+        """
+        if rc != 0:
+            return RUN_FAIL, f"exit {rc} (filter={backend.driver_case})"
+        selected = parse_run_lines(out)
+        if selected != [backend.driver_case]:
+            return INCOMPLETE, (
+                f"filter={backend.driver_case!r} selected cases "
+                f"{selected!r}; expected exactly [{backend.driver_case!r}]")
+        metas = parse_meta_line_list(out)
+        if len(metas) != 1:
+            return INCOMPLETE, (
+                f"expected exactly one [conformance-meta] line, got "
+                f"{len(metas)} (filter={backend.driver_case!r})")
+        meta_backend, profile, mode = metas[0]
+        registered = [b.name for b in M.BACKENDS]
+        if canonical_backend_key(meta_backend, registered) != backend.name:
+            return INCOMPLETE, (
+                f"[conformance-meta] backend={meta_backend!r} does not match "
+                f"registered backend {backend.name!r}")
+        if profile != backend.profile:
+            return INCOMPLETE, (
+                f"[conformance-meta] profile={profile!r} != manifest profile "
+                f"{backend.profile!r}")
+        allowed = M.PROFILE_MODES[backend.profile]
+        if mode not in allowed:
+            return INCOMPLETE, (
+                f"[conformance-meta] mode={mode!r} not in allowed "
+                f"{sorted(allowed)} for profile {backend.profile!r}")
+        return PASS, (f"exit 0; selected {selected}; meta backend="
+                      f"{meta_backend} profile={profile} mode={mode}")
 
     def _drive(self, ev: M.Evidence) -> RunResult:
         if ev.target.startswith("__script__:"):
@@ -351,7 +449,24 @@ class Gate:
         return r.state
 
     def _backend_verdict(self, backend: M.BackendEntry) -> tuple[str, list[str]]:
-        """Compute (verdict, reasons) for one backend."""
+        """Compute (verdict, reasons) for one backend.
+
+        Priority (P2 corrective) over the backend's applicable MANDATORY
+        evidence:
+          1. any RUN_FAIL                                -> NOT CONFORMING
+             (evidence proves a violation);
+          2. else any MISSING_TARGET / BUILD_FAIL /
+             NOT_RUN / INCOMPLETE                        -> INCOMPLETE
+             (insufficient evidence — never ELIGIBLE);
+          3. else all PASS / legal NOT_APPLICABLE and
+             every mandatory layer has an applicable
+             record                                      -> ELIGIBLE.
+
+        Non-mandatory evidence is diagnostic only: it can neither satisfy a
+        mandatory layer nor block ELIGIBLE. A layer with one PASS and one
+        MISSING_TARGET is INCOMPLETE, not ELIGIBLE — one PASS per layer is
+        not enough.
+        """
         reasons: list[str] = []
         mode = self.meta.get(backend.name) or self.meta.get(
             self._meta_name_for(backend.name), {})
@@ -368,31 +483,39 @@ class Gate:
                 reasons.append(f"kernel profile mode={mode_str} (Phase D pending)")
             return NOT_CONFORMING, reasons
 
-        # Reference / BlockingIo: must have PASS in every mandatory layer.
-        for layer in M.MANDATORY_LAYERS_PER_BACKEND:
-            applicable = [
-                ev for ev in M.evidence_for_backend(backend.name)
-                if ev.layer == layer and ev.status == M.STATUS_IMPLEMENTED
-            ]
-            if not applicable:
-                reasons.append(f"no evidence records for mandatory layer '{layer}'")
-                continue
-            layer_states = {
-                self._backend_run_state(ev, backend.name, backend.profile)
-                for ev in applicable
-            }
-            if not (layer_states & SATISFACTORY):
-                reasons.append(
-                    f"mandatory layer '{layer}' not satisfied: {sorted(layer_states)}")
-            elif RUN_FAIL in layer_states and not (layer_states & {PASS}):
-                reasons.append(f"mandatory layer '{layer}' has failures")
-        # Any mandatory lifecycle/backend_specific target failed -> not eligible.
-        any_fail = any(
-            self._backend_run_state(ev, backend.name, backend.profile) == RUN_FAIL
+        # Mandatory evidence only; non-mandatory records are diagnostic.
+        states = [
+            (ev, self._backend_run_state(ev, backend.name, backend.profile))
             for ev in M.evidence_for_backend(backend.name)
-        )
-        if reasons or any_fail:
+            if ev.mandatory
+        ]
+
+        # Priority 1: a mandatory evidence proved a violation.
+        failed = [(ev, s) for ev, s in states if s == RUN_FAIL]
+        if failed:
+            for ev, s in failed:
+                reasons.append(
+                    f"mandatory evidence '{ev.evidence_id}' ({ev.target}): {s}")
             return NOT_CONFORMING, reasons
+
+        # Priority 2: insufficient evidence (missing target, build failure,
+        # not run, or stub-subset-only) — INCOMPLETE, never ELIGIBLE.
+        insufficient = [
+            (ev, s) for ev, s in states
+            if s in (MISSING_TARGET, BUILD_FAIL, NOT_RUN, INCOMPLETE)
+        ]
+        if insufficient:
+            for ev, s in insufficient:
+                reasons.append(
+                    f"mandatory evidence '{ev.evidence_id}' ({ev.target}): {s}")
+            return INCOMPLETE, reasons
+
+        # Priority 3: every mandatory layer must actually have applicable
+        # evidence (all remaining states are PASS / legal NOT_APPLICABLE).
+        for layer in M.MANDATORY_LAYERS_PER_BACKEND:
+            if not any(ev.layer == layer for ev, _ in states):
+                reasons.append(f"no evidence records for mandatory layer '{layer}'")
+                return INCOMPLETE, reasons
         return ELIGIBLE, reasons
 
     @staticmethod

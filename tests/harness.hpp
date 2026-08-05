@@ -74,8 +74,11 @@ inline void run_case(const char* name, test_fn fn) {
 }
 inline int run_all() {
     // TEST-ONLY diagnostic: optional comma/space-separated case-name allowlist
-    // via $SLUICE_TEST_FILTER (Phase-1 root-cause investigation). When unset,
-    // runs all registered cases in registration order (original behavior).
+    // via $SLUICE_TEST_FILTER (Phase-1 root-cause investigation). Each token
+    // must be an EXACT registered case name (not a substring) — a partial
+    // name selects nothing and is an error (see below), so a typo can never
+    // silently run the wrong case. When unset, runs all registered cases in
+    // registration order (original behavior).
     const char* filt = std::getenv("SLUICE_TEST_FILTER");
     std::vector<std::string> allow;
     if (filt && *filt) {
@@ -85,11 +88,13 @@ inline int run_all() {
     }
     auto selected = [&](const char* name){
         if (allow.empty()) return true;
-        for (auto& a : allow) if (std::string(name).find(a)!=std::string::npos) return true;
+        for (auto& a : allow) if (a == name) return true;
         return false;
     };
+    size_t ran = 0;
     for (const auto& c : registered_cases()) {
         if (!selected(c.name)) continue;
+        ++ran;
         std::printf("[run] %s\n", c.name);
         std::fflush(stdout);
         c.fn();
@@ -97,6 +102,14 @@ inline int run_all() {
             std::printf("FAILED in case: %s\n", c.name);
             break;
         }
+    }
+    // A set filter that matches ZERO cases must fail, not print "ALL TESTS
+    // PASSED" and exit 0 — that would turn "nothing ran" into false green
+    // evidence (the Phase C1 aggregate gate depends on this fail-closed
+    // behavior for its per-backend isolation runs).
+    if (!allow.empty() && ran == 0) {
+        std::printf("SLUICE_TEST_FILTER matched zero cases\n");
+        return 1;
     }
     return report_and_exit();
 }

@@ -57,6 +57,19 @@ LAYERS: tuple[str, ...] = (
     "external_admission",   # Public-extension-surface admission (NOT conformance).
 )
 
+# Closed execution-mode vocabulary per profile. The shared driver's
+# [conformance-meta] line declares (profile, mode); the aggregate gate rejects
+# a meta line whose mode is outside this set for the declared profile, so a
+# driver regression (e.g. claiming "real" for a stub build) fails the gate
+# instead of being silently accepted.
+PROFILE_MODES: dict[str, tuple[str, ...]] = {
+    "ReferenceProfile": ("deterministic",),  # Fake — deterministic, no kernel.
+    "BlockingIoProfile": ("real",),          # ThreadPool — real blocking syscalls.
+    "KernelIoProfile": ("real", "stub"),     # Uring — real or stub build; the
+                                             # profile is NOT CONFORMING until
+                                             # Phase D either way.
+}
+
 # Mandatory section coverage: every backend MUST have at least one PASS
 # evidence record in each of these layers to be ELIGIBLE. external_admission is
 # a separate probe (not a per-backend section).
