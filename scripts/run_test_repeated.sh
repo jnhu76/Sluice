@@ -12,7 +12,12 @@
 #
 # Example:
 #   scripts/run_test_repeated.sh application_runtime_resource_test 1000
-#   scripts/run_test_repeated.sh application_runtime_identity_test 1000 c2_task
+#   scripts/run_test_repeated.sh application_runtime_identity_test 1000 c2_task_cannot_self_close
+#
+# case-filter is passed as $SLUICE_TEST_FILTER and must be an EXACT registered
+# case name (tests/harness.hpp matches exact names only; a filter that matches
+# zero cases makes the binary exit non-zero, so a stale or partial name cannot
+# produce false stability evidence).
 #
 # Exit non-zero if any iteration fails. Prints a one-line per-iteration trace
 # and a summary. The test target must already be built (xmake build <target>).

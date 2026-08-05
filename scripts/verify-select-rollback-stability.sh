@@ -4,8 +4,9 @@
 # Reuses the generic stability-loop discipline (see verify-e8-stability.sh):
 # run ONE test binary N times, stop on the first failure, print one result per
 # iteration + a summary. A test case may be selected via $SLUICE_TEST_FILTER
-# (substring; see tests/harness.hpp). This makes the rollback stability gates
-# reproducible from committed artifacts without ad hoc shell loops.
+# (EXACT case-name match; see tests/harness.hpp — a filter that matches zero
+# cases makes the binary exit non-zero). This makes the rollback stability
+# gates reproducible from committed artifacts without ad hoc shell loops.
 #
 # Usage:
 #   scripts/verify-select-rollback-stability.sh MODE BINARY [FILTER] [COUNT]
@@ -16,7 +17,8 @@
 # Arguments:
 #   MODE    build mode: release | debug | tsan | asan | ubsan | asanubsan
 #   BINARY  test binary name (e.g. select_registration_rollback_test). Must be an xmake target.
-#   FILTER  optional SLUICE_TEST_FILTER token (substring). Empty = whole binary.
+#   FILTER  optional SLUICE_TEST_FILTER token — an EXACT registered case name
+#           (tests/harness.hpp). Empty = whole binary.
 #   COUNT   iterations (default 1000). Stop on first failure.
 #
 # Exit status: 0 iff every iteration passed; 1 otherwise.
@@ -45,7 +47,7 @@ export SLUICE_TEST_FILTER="$FILTER"
 
 echo "# verify-select-rollback-stability" >&2
 echo "# binary:   $BIN_PATH" >&2
-echo "# filter:   '${FILTER:-<none>}'  (SLUICE_TEST_FILTER substring; empty = whole binary)" >&2
+echo "# filter:   '${FILTER:-<none>}'  (SLUICE_TEST_FILTER exact case name; empty = whole binary)" >&2
 echo "# count:    $COUNT  (stop on first failure)" >&2
 echo "# host:     $(uname -srm)" >&2
 echo "# started:  $(date -u +%FT%TZ)" >&2

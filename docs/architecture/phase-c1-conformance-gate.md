@@ -13,7 +13,7 @@ remains **PARTIAL**.
 
 ---
 
-## C1 corrective (this update)
+## C1 corrective (first corrective: CI fix + attribution isolation)
 
 The first C1 push (implementation head `32b1ff4`) landed two latent defects that the local
 matrix did not catch but GitHub CI did:
@@ -56,6 +56,89 @@ its own verdict.
 
 ---
 
+## C1 review-fix corrective (this update)
+
+The PR review (Request changes) found two fail-closed gaps in the aggregate gate. Both are
+closed at this head.
+
+### P1: a per-backend shared run that ran NOTHING still counted as PASS (false green)
+
+The gate drove each backend's shared-suite case via `SLUICE_TEST_FILTER=<driver_case>` and
+classified the run purely from the subprocess exit code. The in-binary harness matched filter
+tokens by SUBSTRING, and a filter that matched zero cases printed `ALL TESTS PASSED` and
+exited 0 — so a typo'd or renamed `driver_case` made the subprocess "pass" without running
+anything, and the backend was recorded ELIGIBLE while the gate exited 0. (The residual-risk
+note in the original corrective claimed a zero-match filter "runs the whole suite"; that was
+wrong — it runs ZERO cases and fabricates a green banner.)
+
+Closed at two layers:
+
+- **Harness ([`tests/harness.hpp`](../../tests/harness.hpp))**: `SLUICE_TEST_FILTER` tokens
+  must now be EXACT registered case names (no substring matching), and a set filter that
+  matches zero cases prints `SLUICE_TEST_FILTER matched zero cases` and exits non-zero — a
+  zero-case run can never print `ALL TESTS PASSED`. This is fail-closed for every harness
+  user, not just the gate. The documented substring workflows are updated in the same change:
+  `AGENTS.md` §7, `scripts/run_test_repeated.sh`, and the stability-script headers
+  (`verify-runnable-steal-stability.sh`, `verify-select-rollback-stability.sh`) now say
+  "exact case name". All committed callers already pass full case names; no CI step passes a
+  prefix.
+- **Gate ([`scripts/verify-backend-conformance.py`](../../scripts/verify-backend-conformance.py)
+  `_classify_shared_run`)**: a per-backend shared run is PASS only when ALL of the following
+  hold:
+  1. subprocess returncode == 0 (else `RUN_FAIL`);
+  2. the harness executed exactly `[driver_case]` — parsed from the stable `[run] <case>`
+     lines the harness prints per executed case (zero or extra cases → `INCOMPLETE`);
+  3. exactly one `[conformance-meta]` line (missing/duplicate/foreign → `INCOMPLETE`);
+  4. its backend, canonicalized (`Uring(stub)` → `Uring`), equals the registered backend;
+  5. its profile equals the manifest-declared profile; and
+  6. its mode is in the profile's closed `PROFILE_MODES` set
+     (`ReferenceProfile→deterministic`, `BlockingIoProfile→real`,
+     `KernelIoProfile→real|stub`).
+
+  Any violation is `INCOMPLETE` — never `PASS`.
+
+### P2: one PASS per mandatory layer was treated as "layer satisfied"
+
+The old verdict logic satisfied a mandatory layer when ANY evidence in it passed
+(`layer_states & SATISFACTORY`), never consulted `ev.mandatory`, and scanned only for
+`RUN_FAIL` — so a layer with one PASS + one MISSING_TARGET could still yield ELIGIBLE, and
+"no evidence at all" was misclassified as NOT CONFORMING (a violation) instead of INCOMPLETE
+(insufficient evidence). The verdict vocabulary claimed `INCOMPLETE` in the gate docstring
+but the code never produced it.
+
+The verdict is now an explicit priority over the backend's applicable MANDATORY evidence:
+
+```text
+any RUN_FAIL                                   -> NOT CONFORMING  (proven violation)
+else any MISSING_TARGET / BUILD_FAIL /
+     NOT_RUN / INCOMPLETE                      -> INCOMPLETE      (insufficient evidence)
+else all PASS / legal NOT_APPLICABLE and
+     every mandatory layer actually covered    -> ELIGIBLE
+```
+
+Non-mandatory evidence is diagnostic only: it can neither satisfy a mandatory layer nor block
+ELIGIBLE. A layer with one PASS and one MISSING_TARGET is INCOMPLETE; an INCOMPLETE verdict
+for a non-kernel backend fails the gate (exit 1). KernelIo remains NOT CONFORMING until
+Phase D regardless (unchanged).
+
+### Regression coverage
+
+`scripts/tests/test_backend_conformance_manifest.py` adds:
+
+- `SharedRunFailClosedTest` — driver_case typo, zero selected cases, missing/duplicate/foreign
+  `[conformance-meta]`, wrong backend/profile/mode, filter matching multiple cases, valid run,
+  non-zero rc, `Uring(stub)` canonicalization;
+- `MandatoryVerdictPriorityTest` — one PASS + one MISSING_TARGET in a layer → INCOMPLETE,
+  RUN_FAIL beats INCOMPLETE, uncovered mandatory layer → INCOMPLETE, non-mandatory evidence
+  is diagnostic-only;
+- `ProfileModesTest` — `PROFILE_MODES` is the closed profile→mode vocabulary and every
+  registered backend has a non-empty `driver_case`.
+
+All new cases were RED on the pre-fix code (the old state machine returned
+ELIGIBLE/NOT CONFORMING where INCOMPLETE is required) and are GREEN at this head.
+
+---
+
 ## SHA provenance (three-head discipline)
 
 Following the PR #64/#65 corrective, evidence SHAs are separated so the ledger does not recurse
@@ -68,6 +151,10 @@ fresh implementation-fix head; the original implementation head is preserved for
 - **Implementation-fix head:** the C1 corrective commit on this branch
   (gate/result-attribution fix + unittest-discover fix + CI wiring). The validation matrix
   below re-ran at this head. Exact SHA recorded in the commit log; see "Validation matrix" notes.
+- **Review-fix head:** the review corrective commits on this branch (P1: harness exact-filter +
+  zero-match error + gate `_classify_shared_run` meta/selection validation; P2: verdict
+  priority with a real `INCOMPLETE` verdict; regression tests; docs). The validation matrix
+  re-ran at this head. Exact SHAs recorded in the commit log.
 - **Evidence/docs head:** this documentation commit (records the fix-head results + this
   corrective section + roadmap update; no production or test-binary change).
 - **PR final head:** TBD at merge time (will be the implementation-fix head unless further
@@ -173,6 +260,23 @@ because that is where the gate and self-test changed.
 | `.github/workflows/ci.yml` Phase C1 steps | **WIRED** | Three explicit, named steps added after the hardening runner: (1) `Phase C1 backend-conformance aggregate gate` (`verify-backend-conformance.py --no-build`); (2) `Phase C1 manifest + attribution self-test` (`test_backend_conformance_manifest.py`); (3) `External-backend authority negative-compile (Phase C1)`. Previously these ran only as implications of other steps; a result-attribution regression could pass as "runner unit tests pass". Each step's failure now makes the job non-zero directly. |
 | GitHub Actions (Linux Clang Debug) | **PENDING** | Must be a GREEN run on the final PR head before READY. Was RED at `32b1ff4` (run `30972306135`, hardening step) due to defect 1; the corrective's new run is the gate of record. |
 
+### Review-fix head re-run (P1/P2 corrective)
+
+All commands ran at the review-fix head (Clang Debug; regression tests RED on the pre-fix
+code, GREEN at this head).
+
+| Command | Result | Notes |
+|---|---|---|
+| `xmake f -m debug --toolchain=clang -y` → `xmake build sluice_core` → `xmake build sluice_async` → `xmake build -g test` → `xmake test -v` | **PASS** (139/139, 0 failed) | Full baseline after the harness change (`tests/harness.hpp` exact-match + zero-match error). |
+| `python3 -m unittest discover -v scripts/tests` | **PASS** (232 tests) | The exact CI invocation; includes hardening-runner tests + the 60-case manifest/attribution suite. |
+| `python3 scripts/tests/test_backend_conformance_manifest.py` | **PASS** (60 tests, exit 0) | Standalone: 36 original cases + 24 new (ProfileModes 6, SharedRunFailClosed 12, MandatoryVerdictPriority 6). All 24 were RED pre-fix (old state machine returned ELIGIBLE/NOT CONFORMING where INCOMPLETE is required; new symbols absent). |
+| `python3 scripts/verify-backend-conformance.py --no-build` | **PASS** (exit 0) | Fake=ELIGIBLE, ThreadPool=ELIGIBLE, Uring(stub)=NOT CONFORMING (Phase D), external=admission PASS / conformance NOT ASSESSED. Per-backend shared runs now validated by `_classify_shared_run`. |
+| `SLUICE_TEST_FILTER=no_such_case xmake run backend_conformance_test` | **FAILS** (exit ≠ 0) | Probe: harness prints `SLUICE_TEST_FILTER matched zero cases` and exits non-zero — no more "ALL TESTS PASSED" on a zero-case run. |
+| `SLUICE_TEST_FILTER=conformance_fak xmake run backend_conformance_test` | **FAILS** (exit ≠ 0) | Probe: substring typos now select zero cases (exact match) and fail instead of silently running `conformance_fake`. |
+| `SLUICE_TEST_FILTER=conformance_fake xmake run backend_conformance_test` | **PASS** (exit 0) | Probe: exactly one `[run] conformance_fake` + one `[conformance-meta]` line. |
+| `python3 scripts/check-doc-links.py --self-test` / `check-doc-links.py` / `verify-architecture-docs.py` | **PASS** | Doc links + architecture-doc structure after the corrective edits. |
+| `git diff --check` | **PASS** | No whitespace errors. |
+
 ---
 
 ## Aggregate gate output (default stub build, no liburing)
@@ -238,16 +342,19 @@ implement it. The shared suite covers only the stub subset in a stub build.
   it does NOT prove the subclass *conforms* (it implements no real semantics). The report says so
   explicitly (`conformance NOT ASSESSED`).
 - The aggregate gate's Uring mode classification comes from the stable `[conformance-meta]`
-  line, not from display-name or skip-text parsing; a driver that forgets to emit the meta line
-  would surface as `mode=unknown`, which is treated as NOT CONFORMING for KernelIo (fail-closed).
+  line, not from display-name or skip-text parsing. A driver that forgets, duplicates, or
+  misdeclares the meta line now makes that backend's shared run `INCOMPLETE` (and the Fake/
+  ThreadPool verdict `INCOMPLETE` fails the gate); for KernelIo a missing meta additionally
+  stays NOT CONFORMING via `mode=unknown`.
 - DIV-14 (descriptor-validation deferral) remains open for Fake/Sync (reference, no real syscall)
   and Uring (Phase D); it is recorded, not a C1 blocker.
-- **C1 corrective residual:** the per-backend isolation relies on the harness case names
-  (`conformance_fake`/`conformance_threadpool`/`conformance_uring`) matching the manifest's
-  `BackendEntry.driver_case`. A future rename of either side without the other would surface as a
-  shared suite that runs zero cases for that backend (the harness runs the whole suite when the
-  filter matches nothing), which the regression suite does not yet assert as a fail-closed case.
-  Low risk (the names are stable and tested in the driver), recorded for C2.
+- **C1 corrective residual — CLOSED at the review-fix head:** the original corrective's
+  residual risk (a rename of the harness case names or the manifest `BackendEntry.driver_case`
+  without the other) is now fail-closed: the harness exits non-zero when a set filter matches
+  zero cases, and the gate's `_classify_shared_run` requires exactly the driver case to have
+  executed plus exactly one valid `[conformance-meta]` line. A one-sided rename now fails the
+  gate with a precise `INCOMPLETE`/`RUN_FAIL` reason instead of a green run of nothing. Covered
+  by `SharedRunFailClosedTest` (typo / zero-selected / missing-meta / duplicate-meta cases).
 
 ---
 
@@ -295,5 +402,36 @@ docs/architecture/phase-c1-conformance-gate.md   (mod)  this corrective section 
 docs/architecture/remediation-roadmap.md         (mod)  C1 corrective note
 ```
 
-No `src/` or `include/sluice/` file was modified in either the original implementation or the
-corrective (strict scope).
+### C1 review-fix (this head)
+
+```text
+scripts/tests/test_backend_conformance_manifest.py (mod)  +24 regression cases: SharedRunFailClosed
+                                                          (P1: zero/extra selected, missing/
+                                                          duplicate/foreign meta, wrong backend/
+                                                          profile/mode), MandatoryVerdictPriority
+                                                          (P2: one PASS + one MISSING_TARGET ->
+                                                          INCOMPLETE, RUN_FAIL precedence,
+                                                          uncovered layer, diagnostic-only
+                                                          non-mandatory), ProfileModes
+scripts/verify-backend-conformance.py            (mod)  INCOMPLETE verdict; _classify_shared_run
+                                                          fail-closed per-backend run validation
+                                                          (exact [run] selection, exactly-one meta,
+                                                          canonical backend, profile, PROFILE_MODES
+                                                          mode); verdict priority over mandatory
+                                                          evidence; [run] + raw meta parsers
+scripts/backend_conformance_manifest.py          (mod)  +PROFILE_MODES closed profile->mode set
+tests/harness.hpp                                (mod)  exact case-name filter (no substring);
+                                                          zero-match filter exits non-zero instead
+                                                          of "ALL TESTS PASSED"
+AGENTS.md                                        (mod)  §7: filter contract = exact case name;
+                                                          zero-match is an error
+scripts/run_test_repeated.sh                     (mod)  header: exact case-name filter; example
+                                                          uses a full case name
+scripts/verify-runnable-steal-stability.sh       (mod)  header: exact case-name filter
+scripts/verify-select-rollback-stability.sh      (mod)  header: exact case-name filter
+docs/architecture/phase-c1-conformance-gate.md   (mod)  this review-fix section + matrix + residual
+                                                          closure
+```
+
+No `src/` or `include/sluice/` file was modified in the original implementation, the
+corrective, or the review-fix (strict scope).
