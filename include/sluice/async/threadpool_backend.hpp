@@ -155,6 +155,17 @@ class ThreadPoolBackend : public AsyncBackend {
         return arena_.backend_ready_count();
     }
 
+    // Test-only: wait-phase entry flag (issue #67 drain-starvation regression).
+    // The ready wait path stores `true` into the pointed-to atomic immediately
+    // before it blocks in the ready-cv wait, so a test can deterministically
+    // observe "a participant has completed its empty reap and is now parked in
+    // the backend ready wait" (the exact state from which the old code held
+    // access_mtx_ across the block and starved every other poll/reap path).
+    // Disarm by passing nullptr. Compiled out of production sluice_async.
+    void set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept {
+        wait_phase_flag_.store(flag, std::memory_order_release);
+    }
+
     // Test-only: resolve a Completion pointer to its current slot+generation.
     // Returns nullopt if the Completion is not bound to any slot.
     std::optional<detail::SlotHandle> handle_for_completion_for_test(
@@ -371,6 +382,8 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<BeforeWorkerDequeuePauseGate*> before_dequeue_gate_{nullptr};
     std::atomic<WorkerRunningPauseGate*> running_gate_{nullptr};
     std::atomic<TerminalPublicationPauseGate*> terminal_publication_gate_{nullptr};
+    // Issue #67: wait-phase entry flag (see set_wait_phase_flag_for_test).
+    std::atomic<std::atomic<bool>*> wait_phase_flag_{nullptr};
 #endif
 };
 

@@ -260,6 +260,16 @@ sluice_internal_async_test("threadpool_backend_reap_test")
 -- Cases A and D fail on the pre-fix code; cases B and C are conformance proofs.
 sluice_internal_async_test("threadpool_backend_scheme_b_race_test", {platform_gate = {"linux", "macosx"}})
 
+-- threadpool_wait_drain_deadlock_test — issue #67 drain-starvation regression.
+-- Deterministically drives the captured production deadlock state (a
+-- participant parked in the backend ready wait after an empty reap) using the
+-- running-gate seam + the wait-phase flag, and proves a second participant can
+-- poll/reap while the first is parked, that close_admission wakes the parked
+-- waiter as a control wake (0, no fabricated completion), and that the final
+-- request drains. Fails (bounded) on the pre-fix code where wait_one held
+-- access_mtx_ across the backend wait and starved every other poll/reap path.
+sluice_internal_async_test("threadpool_wait_drain_deadlock_test", {platform_gate = {"linux", "macosx"}})
+
 -- backend_scheme_b_race_test — Phase B backend-level Scheme-B race regression
 -- (review test-gap 1). Drives the raw FakeAsyncBackend with the
 -- SLUICE_ASYNC_INTERNAL_TESTING-only SubmitPauseGate seam: a submit thread is

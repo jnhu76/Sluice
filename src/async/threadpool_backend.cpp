@@ -514,6 +514,15 @@ Result<std::size_t> ThreadPoolBackend::wait_one() {
         {
             std::unique_lock<std::mutex> lk(ready_mtx_);
             if (ready_epoch_ != snap) continue;  // a signal arrived before we locked
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // Issue #67 seam: announce the imminent park so a test can observe
+            // the exact "empty reap done, about to block in the ready wait"
+            // state deterministically. The flag is a one-way latch (the test
+            // never clears it); disarmed by setting a null pointer.
+            if (auto* f = wait_phase_flag_.load(std::memory_order_acquire)) {
+                f->store(true, std::memory_order_release);
+            }
+#endif
             ready_cv_.wait(lk);
         }
     }
