@@ -37,7 +37,12 @@ jobs:
   linux-clang-debug:
     name: Linux Clang Debug
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 60-minute budget: the Phase C1 aggregate gate (run with --no-build) still
+    # launches ~21 evidence subprocesses, each with an internal 600s cap, so
+    # the job needs headroom beyond the build/test steps. The gate is
+    # fail-closed — a hung target fails the gate; the larger budget lets the
+    # gate finish attributing failures instead of being killed mid-report.
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -173,9 +178,12 @@ jobs:
       - name: External-backend authority negative-compile (Phase C1)
         # Closes the narrower Phase C1 gap that AsyncBackend protected
         # publication helpers (try_claim / publish) are inaccessible to
-        # non-derived ordinary code. The gate's external_admission layer
-        # depends on this probe passing; running it explicitly makes the merge
-        # blocker visible by name rather than only via the aggregate gate.
+        # non-derived ordinary code. The probe's positive control also proves
+        # a DERIVED backend can still reach both helpers (private using
+        # declarations), so a protected->private regression fails the gate.
+        # The gate's external_admission layer depends on this probe passing;
+        # running it explicitly makes the merge blocker visible by name rather
+        # than only via the aggregate gate.
         env:
           CXX: clang++
         run: bash scripts/verify-external-backend-authority-negative-compile.sh

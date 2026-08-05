@@ -139,6 +139,44 @@ ELIGIBLE/NOT CONFORMING where INCOMPLETE is required) and are GREEN at this head
 
 ---
 
+## C1 review round 2 (this update)
+
+Second review pass — findings against the review-fix head, applied at this head:
+
+- **Empty `driver_case` can no longer run the whole suite unfiltered.** The gate's
+  `_run_shared_suite` rejects a registered backend with an empty `driver_case`
+  (`INCOMPLETE`, never a subprocess) — an empty filter would otherwise run every backend's
+  cases in one process and fabricate attribution. The manifest self-test already requires a
+  non-empty `driver_case` per backend.
+- **Canonical meta keys.** `[conformance-meta]` lines are normalized through
+  `canonical_backend_key` ONCE when the report table is built, so any variant
+  (`Uring(stub)`, `ThreadPool(stub)`, …) resolves to the registered backend name; the
+  hardcoded `_meta_name_for` "(stub)" special case is gone.
+- **`_drive` args guard.** `G.Gate._drive` guards `self.args` exactly like
+  `_run_shared_suite` (`args=None` no longer raises when checking `--no-build`).
+- **Tautological manifest tests replaced with behavioral checks.**
+  `test_not_implemented_never_counts_as_pass` now drives the gate with a fabricated
+  `not_implemented` evidence record and asserts the result is `INCOMPLETE` (never in
+  `SATISFACTORY`); `test_no_unregistered_backend_can_be_eligible` calls `_backend_verdict`
+  with an unregistered `BackendEntry` and asserts it is not ELIGIBLE. The registry-content
+  assertion remains in `BackendRegistryTest`.
+- **External-admission probe scope (per review).** `external_backend_admission_test` now
+  proves ONLY subclass compilation + `AsyncIoContext` ownership (one case); the public
+  claim/publish wrappers and the direct Completion lifecycle assertions are removed. Derived
+  access to the protected helpers is proven at COMPILE level by the authority probe's
+  positive control, which now exercises `try_claim` / `publish` through private using
+  declarations in `LegitimateBackend` (so a protected→private regression in `AsyncBackend`
+  fails the positive control); claim/publish lifecycle semantics remain covered by the
+  arena-backed Completion tests.
+- **CI budget.** The `linux-clang-debug` job budget is raised to 60 minutes with a comment
+  tying it to the aggregate gate's per-run subprocess timeouts (the gate re-runs every
+  evidence target in its own subprocess; a hung target fails the gate — fail-closed — and
+  the larger budget lets it finish attributing failures instead of being killed mid-report).
+- **Ledger hygiene.** Full SHA recorded for the implementation-fix head; the duplicate
+  "C++ test evidence" heading removed.
+
+---
+
 ## SHA provenance (three-head discipline)
 
 Following the PR #64/#65 corrective, evidence SHAs are separated so the ledger does not recurse
@@ -148,13 +186,14 @@ fresh implementation-fix head; the original implementation head is preserved for
 - **Baseline master:** `07cfcad401971c7333bf3b0f2d959759d508a3bd`
 - **Original reviewed PR head:** `75d58b6f0ef29fbd8859cb6f0bfd2a34cb7de833`
   (implementation head `32b1ff4a2643834627ae2423ca894a18a52e8c8d`; GitHub CI RED here).
-- **Implementation-fix head:** the C1 corrective commit on this branch
-  (gate/result-attribution fix + unittest-discover fix + CI wiring). The validation matrix
-  below re-ran at this head. Exact SHA recorded in the commit log; see "Validation matrix" notes.
-- **Review-fix head:** the review corrective commits on this branch (P1: harness exact-filter +
-  zero-match error + gate `_classify_shared_run` meta/selection validation; P2: verdict
-  priority with a real `INCOMPLETE` verdict; regression tests; docs). The validation matrix
-  re-ran at this head. Exact SHAs recorded in the commit log.
+- **Implementation-fix head:** `10b0dba96221cf0ecaf1ccf4541e15d4146b4261` — the C1
+  corrective commit (gate/result-attribution fix + unittest-discover fix + CI wiring). The
+  validation matrix below re-ran at this head.
+- **Review-fix head:** `bbd91984c03f0f4c5e9aeb8fab549ac87c380188` — the review corrective
+  fix commit (P1: harness exact-filter + zero-match error + gate `_classify_shared_run`
+  meta/selection validation; P2: verdict priority with a real `INCOMPLETE` verdict),
+  with the regression tests and the review-fix documentation as separate slices of the
+  same PR. The validation matrix re-ran at this head.
 - **Evidence/docs head:** this documentation commit (records the fix-head results + this
   corrective section + roadmap update; no production or test-binary change).
 - **PR final head:** TBD at merge time (will be the implementation-fix head unless further
@@ -206,10 +245,13 @@ evidence object.
 
 `external_backend_admission_test` proves a legitimate backend subclass can be built from the
 PUBLIC extension surface (no `<sluice/async/detail/*>` include) and admitted into an
-`AsyncIoContext`. It is **not** run through the shared observable-semantics suite and is reported
-as `conformance NOT ASSESSED`. The companion negative-compile gate closes the narrower gap that
-`AsyncBackend` protected publication helpers (`try_claim` / `publish`) are inaccessible to
-non-derived ordinary code.
+`AsyncIoContext`, destroying cleanly with zero outstanding work. It is **not** run through the
+shared observable-semantics suite and is reported as `conformance NOT ASSESSED`. The companion
+negative-compile gate closes the narrower gap that `AsyncBackend` protected publication helpers
+(`try_claim` / `publish`) are inaccessible to non-derived ordinary code; its positive control
+proves at compile level that a DERIVED backend can still reach both helpers (via private using
+declarations in `LegitimateBackend`), and the claim/publish lifecycle semantics live in the
+arena-backed Completion tests.
 
 ---
 
@@ -221,8 +263,6 @@ rows below remain valid; the Python-infra and CI rows are re-run at the implemen
 because that is where the gate and self-test changed.
 
 ### C++ test evidence (unchanged target set; re-verified at fix head)
-
-### C++ test evidence
 
 | Command | Profile / target | Result | Notes |
 |---|---|---|---|
@@ -276,6 +316,20 @@ code, GREEN at this head).
 | `SLUICE_TEST_FILTER=conformance_fake xmake run backend_conformance_test` | **PASS** (exit 0) | Probe: exactly one `[run] conformance_fake` + one `[conformance-meta]` line. |
 | `python3 scripts/check-doc-links.py --self-test` / `check-doc-links.py` / `verify-architecture-docs.py` | **PASS** | Doc links + architecture-doc structure after the corrective edits. |
 | `git diff --check` | **PASS** | No whitespace errors. |
+
+### Review round 2 re-run (this head)
+
+All commands ran at the round-2 head (Clang Debug).
+
+| Command | Result | Notes |
+|---|---|---|
+| `xmake f -m debug --toolchain=clang -y` → `xmake build sluice_core` → `xmake build sluice_async` → `xmake build -g test` → `xmake test -v` | **PASS** (139/139, 0 failed) | Full baseline after the admission-probe scope change (`external_backend_admission_test` now 1 case) and the positive-control update in the authority probe. |
+| `python3 -m unittest discover -v scripts/tests` | **PASS** | Includes the rewritten behavioral tests (not_implemented → INCOMPLETE; unregistered backend → not ELIGIBLE) and the 3-backend-meta fail-closed case. |
+| `python3 scripts/tests/test_backend_conformance_manifest.py` | **PASS** (60 tests, exit 0) | Two tautological assertions replaced with behavioral checks; foreign-meta case extended to all three backends. |
+| `python3 scripts/verify-backend-conformance.py --no-build` | **PASS** (exit 0) | Fake=ELIGIBLE, ThreadPool=ELIGIBLE, Uring(stub)=NOT CONFORMING (Phase D); meta now canonical-keyed; empty `driver_case` rejected before any subprocess. |
+| `bash scripts/verify-external-backend-authority-negative-compile.sh` | **PASS** | Positive control compiles with the private using declarations + claim/publish calls; both NEG_ cases still rejected with the expected diagnostic. |
+| `xmake run external_backend_admission_test` | **PASS** (1 case) | `external_backend_owned_by_context_destroys_clean`; probe scoped to compile + ownership. |
+| `python3 scripts/check-doc-links.py` / `verify-architecture-docs.py` / `git diff --check` | **PASS** | Doc links + architecture-doc structure + whitespace after round-2 edits. |
 
 ---
 
@@ -433,5 +487,36 @@ docs/architecture/phase-c1-conformance-gate.md   (mod)  this review-fix section 
                                                           closure
 ```
 
+### C1 review round 2 (this head)
+
+```text
+scripts/verify-backend-conformance.py            (mod)  empty driver_case rejected before any
+                                                          subprocess (INCOMPLETE); meta table keyed
+                                                          by canonical registered name (removes
+                                                          _meta_name_for "(stub)" special case);
+                                                          _drive guards self.args like
+                                                          _run_shared_suite
+scripts/tests/test_backend_conformance_manifest.py (mod)  tautological assertions replaced with
+                                                          behavioral checks (not_implemented ->
+                                                          INCOMPLETE via gate.run(); unregistered
+                                                          BackendEntry -> not ELIGIBLE via
+                                                          _backend_verdict); foreign-meta case
+                                                          extended to all three backends
+scripts/backend_conformance_manifest.py          (mod)  evidence notes: admission probe scope;
+                                                          authority positive control
+tests/external_backend_admission_test.cpp        (mod)  probe scoped to compile + AsyncIoContext
+                                                          ownership (1 case); public claim/publish
+                                                          wrappers and direct Completion lifecycle
+                                                          assertions removed
+tests/external_backend_authority_negative_probe.cpp (mod) positive control exercises derived
+                                                          try_claim/publish via private using
+                                                          declarations (protected->private guard)
+.github/workflows/ci.yml                         (mod)  linux-clang-debug job budget 30 -> 60 min
+                                                          (aggregate-gate subprocess timeouts)
+docs/architecture/phase-c1-conformance-gate.md   (mod)  this round-2 section + matrix + full SHA
+                                                          for the implementation-fix head +
+                                                          duplicate heading removed
+```
+
 No `src/` or `include/sluice/` file was modified in the original implementation, the
-corrective, or the review-fix (strict scope).
+corrective, the review-fix, or the round-2 review-fix (strict scope).
