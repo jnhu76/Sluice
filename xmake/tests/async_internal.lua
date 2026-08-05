@@ -279,6 +279,18 @@ sluice_internal_async_test("threadpool_wait_drain_deadlock_test", {platform_gate
 -- parks forever and drain() never returns (bounded join -> clean failure).
 sluice_internal_async_test("application_runtime_drain_starvation_test", {platform_gate = {"linux", "macosx"}})
 
+-- async_stats_wait_race_test — issue #67 P1 follow-up regression for the
+-- AsyncStats data race the split-wait fix introduced. wait_calls / completed_ops
+-- are plain std::uint64_t and access_mtx_ is their only accounting domain, but
+-- the fix moved both the park AND (incorrectly) the stats bumps out of the
+-- lock. Case A races multiple wait_one() callers (wait_calls write/write);
+-- case B races wait_one()'s reap-path completed_ops bump against a concurrent
+-- poll()'s. Both assert EXACT final counters, not just liveness. Under the
+-- pre-fix code TSan flags the non-atomic concurrent writes; the fix puts every
+-- accounting access back inside access_mtx_. Run under TSan for the race proof
+-- (AGENTS.md §16.3).
+sluice_internal_async_test("async_stats_wait_race_test", {platform_gate = {"linux", "macosx"}})
+
 -- backend_scheme_b_race_test — Phase B backend-level Scheme-B race regression
 -- (review test-gap 1). Drives the raw FakeAsyncBackend with the
 -- SLUICE_ASYNC_INTERNAL_TESTING-only SubmitPauseGate seam: a submit thread is

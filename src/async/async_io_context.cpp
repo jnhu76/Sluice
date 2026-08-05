@@ -151,7 +151,14 @@ Result<std::size_t> AsyncIoContext::wait_one() {
     //   snapshot -> poll (serialized reap) -> park in the observe-only wait
     // so a second participant's poll/reap path stays reachable while this
     // caller waits (I7).
-    if (stats_) ++stats_->wait_calls;
+    //
+    // Stats accounting stays inside access_mtx_: AsyncStats fields are plain
+    // std::uint64_t (caller-owned, never atomic — see measurement.hpp), and
+    // access_mtx_ is the single serialized consuming/accounting domain for
+    // this context (AGENTS.md §4.1/§13.1 leaf domain). The split-wait fix
+    // moved the PARK out of the lock; it MUST NOT also move accounting out,
+    // or two wait_one() callers (or a wait_one() and a poll()) race on
+    // wait_calls / completed_ops.
     BackendWaitSource* ws = backend_ ? backend_->wait_source() : nullptr;
     if (ws == nullptr) {
         // Legacy backend without the split wait capability: keep the original
@@ -162,23 +169,34 @@ Result<std::size_t> AsyncIoContext::wait_one() {
         // ApplicationRuntime rejects such backends at build time so the
         // multi-participant production path never takes this fallback (D3).
         std::lock_guard<std::mutex> lk(access_mtx_);
+        if (stats_) ++stats_->wait_calls;
         auto r = backend_->wait_one();
         if (r.has_value() && stats_) stats_->completed_ops += r.value();
         return r;
+    }
+    // wait_calls counts ONE external invocation (I9), not one loop iteration.
+    // Account it once under access_mtx_ before entering the reap/park loop;
+    // spurious-wake re-scans MUST NOT bump it again.
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        if (stats_) ++stats_->wait_calls;
     }
     for (;;) {
         BackendWaitToken token = ws->snapshot();
         std::size_t n = 0;
         std::size_t outstanding_now = 0;
         {
-            // Reap under the serialized backend domain (E7-C preserved: every
-            // consuming backend access is still serialized by access_mtx_).
+            // Reap AND account under the serialized backend domain (E7-C:
+            // every consuming backend access is serialized by access_mtx_).
+            // completed_ops is tallied here, inside the lock, not after it —
+            // a concurrent poll() / wait_one() updates the same field under
+            // the same lock, and AsyncStats is not atomic.
             std::lock_guard<std::mutex> lk(access_mtx_);
             n = backend_->poll();
             outstanding_now = backend_->outstanding();
+            if (n > 0 && stats_) stats_->completed_ops += n;
         }
         if (n > 0) {
-            if (stats_) stats_->completed_ops += n;
             return Result<std::size_t>{n};
         }
         // Nothing reaped and nothing outstanding: nothing can ever become
@@ -196,14 +214,16 @@ Result<std::size_t> AsyncIoContext::wait_one() {
         }
         // Control-plane interruption: one final non-blocking poll closes the
         // interrupt-vs-final-ready race, then return 0 (interrupted, nothing
-        // reaped — I8: no fake completion, no completed_ops inflation).
+        // reaped — I8: no fake completion, no completed_ops inflation). The
+        // poll + accounting form one critical section, same as the main reap.
+        std::size_t final_n = 0;
         {
             std::lock_guard<std::mutex> lk(access_mtx_);
-            n = backend_->poll();
+            final_n = backend_->poll();
+            if (final_n > 0 && stats_) stats_->completed_ops += final_n;
         }
-        if (n > 0) {
-            if (stats_) stats_->completed_ops += n;
-            return Result<std::size_t>{n};
+        if (final_n > 0) {
+            return Result<std::size_t>{final_n};
         }
         return Result<std::size_t>{0};
     }
