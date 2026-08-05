@@ -40,6 +40,7 @@
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/ready_wait_source.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_arena.hpp>
 #include <sluice/error.hpp>
@@ -90,6 +91,14 @@ class SyncBackend : public AsyncBackend {
         // No real waiting in 017 (no kernel/threads); just drain like poll().
         return dispatch_and_reap();
     }
+
+    // Issue #67 split-phase wait capability. Readiness is produced exclusively
+    // inside poll() (dispatch_and_reap completes every outstanding slot), so a
+    // split-phase wait_one never parks: its serialized poll always reaps, and
+    // an empty poll implies zero outstanding work (no-progress boundary). The
+    // capability exists so ApplicationRuntime accepts SyncBackend and so the
+    // control plane can wake any waiter during shutdown.
+    BackendWaitSource* wait_source() noexcept override { return &ready_wait_; }
 
     // ADR Decision 11: cancel resolves the Completion* to its slot handle (the
     // arena's bounded scan of the slot records' own bindings — no parallel
@@ -320,6 +329,8 @@ class SyncBackend : public AsyncBackend {
 
     detail::RequestArena arena_;
     detail::ReferenceReadySink sink_;
+    // Split-phase ready wait domain (see wait_source()).
+    detail::ReadyWaitSource ready_wait_;
 };
 
 } // namespace sluice::async

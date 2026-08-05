@@ -18,10 +18,12 @@
 //   B. A completes an empty reap and parks in the backend ready wait
 //   C. while A is parked, a second participant must be able to reach poll()
 //      (this is the property the old code violated: A held access_mtx_)
-//   D. close_admission wakes A as a control wake — wait_one returns 0
-//   E. the interrupt fabricates no completion (op1 still running, not ready)
-//   F. after the wake, the final request is submitted, completes, and is
-//      reaped; then op1 completes and is reaped; outstanding reaches 0
+//   D. the final request is submitted while A is still parked (the running
+//      gate holds both workers, so no real readiness races the control wake)
+//   E. close_admission wakes A as a control wake — wait_one returns 0, no
+//      completion is fabricated, no accounting changes (I8/I9)
+//   F. both workers are released, both real syscalls complete and are reaped
+//      by poll, and outstanding/backend_ready reach 0
 //
 // On the pre-fix code this FAILS (bounded) at step C: the probe poll blocks
 // on access_mtx_ forever, the bounded join times out, and the test reports
@@ -197,6 +199,20 @@ SLUICE_TEST_CASE(wait_one_does_not_starve_poll_or_drain) {
             }
         }
 
+        // E. The final request is submitted WHILE A is still parked (the gate
+        //    still holds BOTH workers, so no real readiness can arrive before
+        //    the control wake — the interrupt-vs-progress outcome stays
+        //    deterministic). The submit itself must succeed: A holds no
+        //    context lock while parked.
+        if (fail_msg == nullptr) {
+            auto sr = ctx.submit_read(ReadOp{fd, buf2, 1, 0}, c2);
+            if (!sr.has_value()) {
+                fail_msg = "submit of the final request must succeed while A is parked";
+            } else if (ctx.outstanding() != 2) {
+                fail_msg = "both requests must be outstanding (workers paused at the gate)";
+            }
+        }
+
         // D. Close admission: a control wake, not a fabricated completion.
         if (fail_msg == nullptr) {
             raw->close_admission();
@@ -206,52 +222,26 @@ SLUICE_TEST_CASE(wait_one_does_not_starve_poll_or_drain) {
                 fail_msg = "control wake must return 0 (no completion reaped)";
             } else if (!a_wait_result.has_value()) {
                 fail_msg = "control wake must not surface as a backend error";
-            } else if (c1.ready()) {
+            } else if (c1.ready() || c2.ready()) {
                 fail_msg = "control wake must not fabricate a completion";
+            } else if (ctx.outstanding() != 2) {
+                fail_msg = "the control wake must not change request accounting";
             } else if (stats.completed_ops != 0 || stats.wait_calls != 1) {
                 fail_msg = "control wake must not count completions (I8/I9)";
             }
         }
 
-        // E/F. The final request is submitted after the wake, completes, and
-        // is reaped; then op1 is released, completes, and is reaped.
+        // F. Release both workers: real syscalls complete, are reaped by the
+        //    remaining participant (poll is the single reap path — this is
+        //    what the old code starved while a participant held access_mtx_
+        //    across the backend wait), and the context drains to zero.
         if (fail_msg == nullptr) {
-            raw->set_running_pause_gate(nullptr);  // worker 2 runs op2 freely
-            auto sr = ctx.submit_read(ReadOp{fd, buf2, 1, 0}, c2);
-            if (!sr.has_value()) {
-                fail_msg = "submit of the final request must succeed while A is parked";
-            } else {
-                // The Completion has no ready flag; reap in a bounded loop
-                // (poll is the single reap path — this is what the old code
-                // starved while a participant held access_mtx_ across the
-                // backend wait).
-                const auto reap_deadline = std::chrono::steady_clock::now() + kWaitTimeout;
-                while (!c2.ready()) {
-                    if (std::chrono::steady_clock::now() >= reap_deadline) {
-                        fail_msg = "final request was never reaped (reap path starved)";
-                        break;
-                    }
-                    ctx.poll();
-                    std::this_thread::yield();
-                }
-            }
-        }
-        if (fail_msg == nullptr) {
-            if (!c2.ready() || !c2.result().has_value() || c2.result().value() != 1) {
-                fail_msg = "final request must complete with the 1 seeded byte";
-            } else if (raw->backend_ready_count_for_test() != 0) {
-                fail_msg = "no backend_ready request may remain un-reaped";
-            } else if (ctx.outstanding() != 1) {
-                fail_msg = "op1 must still be outstanding (running at the gate)";
-            }
-        }
-        if (fail_msg == nullptr) {
-            // Release op1: the worker runs the syscall and records ready.
+            raw->set_running_pause_gate(nullptr);
             gate.resume.store(true, std::memory_order_release);
             const auto reap_deadline = std::chrono::steady_clock::now() + kWaitTimeout;
-            while (!c1.ready()) {
+            while (!c1.ready() || !c2.ready()) {
                 if (std::chrono::steady_clock::now() >= reap_deadline) {
-                    fail_msg = "op1 was never reaped after the gate release";
+                    fail_msg = "requests were never reaped after the gate release";
                     break;
                 }
                 ctx.poll();
@@ -261,6 +251,8 @@ SLUICE_TEST_CASE(wait_one_does_not_starve_poll_or_drain) {
         if (fail_msg == nullptr) {
             if (!c1.ready() || !c1.result().has_value() || c1.result().value() != 1) {
                 fail_msg = "op1 must complete with the 1 seeded byte";
+            } else if (!c2.ready() || !c2.result().has_value() || c2.result().value() != 1) {
+                fail_msg = "op2 must complete with the 1 seeded byte";
             } else if (ctx.outstanding() != 0) {
                 fail_msg = "outstanding must reach zero after the final reap";
             } else if (raw->backend_ready_count_for_test() != 0) {

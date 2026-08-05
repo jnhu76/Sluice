@@ -98,6 +98,16 @@ Result<std::unique_ptr<ApplicationRuntime>> RuntimeBuilder::build() {
     if (workers_ == 0) {
         workers_ = 1;
     }
+    // Issue #67 (D3): the multi-participant runtime path MUST NOT fall back to
+    // the pre-fix serialized blocking wait_one — a participant parked while
+    // holding access_mtx_ starves every other poll/reap path and deadlocks
+    // drain. A backend without the split wait capability (UringAsyncBackend,
+    // external legacy backends) is therefore rejected HERE with a reportable
+    // invalid_state instead of silently taking the dangerous fallback.
+    if (backend_->wait_source() == nullptr) {
+        return make_unexpected<std::unique_ptr<ApplicationRuntime>>(
+            IoError{IoError::Code::invalid_state});
+    }
     // Construct on the heap for stable address (P1-02).
     // Cannot use make_unique because the constructor is private.
     std::unique_ptr<ApplicationRuntime> rt(
@@ -374,6 +384,17 @@ void ApplicationRuntime::request_stop() noexcept {
         control_epoch_++;
     }
     // Stopping/Draining/Stopped/StartFailed/Fatal: no additional action.
+
+    // Issue #67 (I6): wake every participant parked in the backend ready wait.
+    // Without this, an MW-S2 participant parked in wait_one's observe phase
+    // would never learn that the run must terminate, the coordinated run could
+    // not reach its stop-predicate boundary, and drain_complete_ would never
+    // be satisfied. Order: stopping state is published above, THEN the
+    // backend waiters are interrupted (state first, then wake). Lock order:
+    // lifecycle_mtx_ -> ready-wait leaf mutex (accepted; no path acquires
+    // lifecycle_mtx_ while holding the ready-wait mutex). No-op for backends
+    // without the split wait capability (rejected at build).
+    if (io_ctx_) io_ctx_->interrupt_backend_waiters();
 
     runtime_cv_.notify_all();
     wake_handle_.notify();

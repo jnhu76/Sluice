@@ -625,10 +625,15 @@ std::size_t ThreadPoolBackend::outstanding() const noexcept {
 }
 
 void ThreadPoolBackend::close_admission() {
-    // Close admission only.  wait_one() is a pure ready-epoch protocol; it does
-    // not observe stopping_ or admission state, so there is no one to wake here.
-    // Spurious signals would also be incorrect (AC-6).
+    // Close admission, THEN wake any participant parked in the ready wait so
+    // it re-evaluates (issue #67: the frozen design's "close does not signal"
+    // constraint starved a parked wait_one and deadlocked drain). The wake is
+    // a one-shot control generation advance — a re-evaluation signal, not a
+    // fabricated completion and not a persistent "never park again" state:
+    // future waits snapshot the advanced generation and park normally, so an
+    // admission-closed runtime with outstanding work never busy-spins.
     arena_.close_admission();
+    ready_wait_.interrupt_all();
 }
 
 }  // namespace sluice::async
