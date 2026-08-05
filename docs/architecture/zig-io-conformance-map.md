@@ -40,7 +40,7 @@ Classification key:
 | `Select` (multi-wait winner protocol) | Wait on multiple sources; exactly-once winner | E13 `select()` template + `SelectGroup`/`SelectPort`/`SelectArmSlot` | **F** | `scheduler.hpp:16`; `select_fwd.hpp`; E13 spec | Implemented with exactly-once winner CAS. |
 | Registered buffers / files | Kernel-pinned buffers for zero-copy io_uring | Not implemented | **M** | ADR-async-io-model §5 (deferred); §14 | Explicitly deferred pending lifetime contract. |
 | Signal-based blocking syscall cancellation | `pthread_kill`/`tgkill` to interrupt blocking I/O | Not implemented | **M** | `threadpool_backend.hpp:29-33` | Portable cancel of in-flight blocking syscall deferred. Cancel is best-effort (op completes with real result). |
-| `AsyncBackend` (L0 internal seam) | Backend implementations are library-internal; caller never subclasses or sees backend internals | Public `AsyncBackend` extension point with trusted backend-author contract. `Completion` mutation stays private; derived backends receive protected `try_claim` / `publish` / `rollback_claim_before_accept` capabilities | **I** | ADR-explicit-io-completion-authority §3; DIV-13 (Accepted); `completion.hpp` (private mutators + friend AsyncBackend); `scripts/verify-completion-authority-negative-compile.sh` | Custom/test backends remain injectable without exposing mutation APIs to ordinary callers. Backend subclasses enter the trusted computing base and must pass the shared backend conformance suite (`tests/backend_conformance_*`). |
+| `AsyncBackend` (L0 internal seam) | Backend implementations are library-internal; caller never subclasses or sees backend internals | Public `AsyncBackend` extension point with trusted backend-author contract. `Completion` mutation stays private; derived backends receive protected `try_claim` / `publish` / `rollback_claim_before_accept` capabilities | **I** | ADR-explicit-io-completion-authority §3; DIV-13 (Accepted); `completion.hpp` (private mutators + friend AsyncBackend); `scripts/verify-completion-authority-negative-compile.sh` | Custom/test backends remain injectable without exposing mutation APIs to ordinary callers. Backend subclasses enter the trusted computing base and must satisfy the conformance contract; the current shared suite exercises the built-in backends, and a standardized conformance entry mechanism for external/custom backends remains incomplete Phase C work. |
 
 ---
 
@@ -130,8 +130,9 @@ from the current summary counts above.
    §3). Publication mutators stay private on `Completion<T>`; derived backends
    receive the protected `try_claim` / `publish` / `rollback_claim_before_accept`
    helpers as the sanctioned backend-author capability. Ordinary non-backend
-   callers still cannot forge publication (negative-compile gate). Backend
-   authors must pass the shared backend conformance suite
-   (`tests/backend_conformance.hpp` + `backend_conformance_driver_test.cpp`,
-   target `backend_conformance_test`, running against Fake, ThreadPool, and
-   Uring).
+   callers still cannot forge publication (negative-compile gate). The shared
+   backend conformance suite (`tests/backend_conformance.hpp` +
+   `backend_conformance_driver_test.cpp`, target `backend_conformance_test`)
+   currently exercises the built-in backends (Fake, ThreadPool, Uring); a
+   standardized conformance entry requirement for external/custom
+   `AsyncBackend` implementations remains incomplete Phase C work.

@@ -6,23 +6,26 @@
 **Branch:** `feat/phase-e-bounded-threadpool-explicit-io` (merged to master as PR #64)
 **Status:** Gate 0–4 complete.
 
-The complete Debug, Release, ASan+UBSan, TSan, negative-compile, documentation, and
-full-formal validation set was executed against the **validated implementation head `9f91bd3`**
-(round-4 fixes `ab82636` + POSIX gate `c686e7d` + `0bab279` + the test-cleanup commit `9f91bd3`).
-All evidence rows below are filled with ACTUAL results from that run (see the Sanitizers/modes
-table).
+The complete change-class validation set — Debug, Release, ASan+UBSan, TSan, negative-compile,
+documentation checks, and the local full-formal run — was executed against the **validated
+implementation head `9f91bd3`** (round-4 fixes `ab82636` + POSIX gate `c686e7d` + `0bab279` +
+the test-cleanup commit `9f91bd3`). The change-class PASS rows below are filled with ACTUAL
+results from that run (see the Sanitizers/modes table).
 
 Commit **4af082b** is the **evidence-recording head**: it records those results and changes
 documentation only. Commit **a8178d8** is the **master merge commit**: PR #64 was merged into
 master at `a8178d8` after GitHub CI and the PR formal smoke tier (the only formal tier the
 GitHub workflow runs on PRs — the `full` job is workflow_dispatch-only) passed on the final PR
-branch head `f71f990`. No evidence row below was executed at the merge commit; every PASS row is
-bound to the validated implementation head `9f91bd3`, with results recorded by the doc-only
-evidence-recording commit `4af082b`.
+branch head `f71f990`. No evidence row below was executed at the merge commit.
+
+Rows with a provenance other than the implementation head are explicitly labeled: the
+directed-stress row remains bound to its original (historical) run; the diff row was re-checked
+at the evidence-recording head `4af082b`; GitHub CI/formal smoke evidence is scoped to the final
+PR branch head `f71f990`.
 
 **No row is pre-marked PASS** (AGENTS.md §8/§22: pre-filling PASS before execution is
-forbidden); every "PASS" below corresponds to a command that actually ran at the validated
-implementation head `9f91bd3`.
+forbidden); every change-class PASS row below corresponds to a command that actually ran at the
+validated implementation head `9f91bd3`, and rows with other provenance are labeled as such.
 
 This document is the PR-level evidence ledger, complementing the ADR's own Gate 0–4 (which gives
 the contract-level classification) with the Phase E backend-migration evidence.

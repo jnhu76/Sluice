@@ -59,7 +59,9 @@ docs(adr): define unified Explicit I/O Request Contract
 
 **Status:** Complete — `ADR-explicit-io-request-contract.md` is Accepted
 (2026-08-02). Documentation-only — no production behavior was changed by the ADR
-itself; its target contract is implemented by Phases B and E below.
+itself. Its target contract is implemented for the reference backends by Phase B
+and for `ThreadPoolBackend` by Phase E; Uring migration remains Phase D, while
+Scheduler/Batch identity consumption and wake integration remain Phases F and G.
 
 **Decisions made:**
 
