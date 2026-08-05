@@ -55,14 +55,15 @@ Status values:
 | Field | Value |
 |-------|-------|
 | ID | DIV-03 |
-| Status | Corrective planned |
+| Status | Resolved (Phase E) |
 | Introduced by | Implementation (no founding ADR for this specific model) |
-| Governing ADR | ADR-execution-model §9.1 P2 (mentions blocking offload but does not approve per-op thread model) |
-| Reason | Zig `Threaded` = thread-per-TASK (execution strategy). Sluice `ThreadPoolBackend` = thread-per-OP (blocking I/O offload for the Evented scheduler). These are different concepts at different layers. The naming is misleading and the per-op thread model has known resource issues (unbounded, expensive). Corrective action is Phase E of the current roadmap. |
-| Benefit | Evented scheduler workers remain free during blocking I/O; simple functional prototype under normal resource availability. |
-| Cost | Thread creation per op (expensive); unbounded thread count; misleading name suggests a bounded pool; violates AC-7 (bounded resources). |
-| Current evidence | `threadpool_backend.hpp:8-9` ("one worker thread per outstanding op"); `group.hpp:49-51` (Threaded mode = thread-per-task). |
-| Revisit trigger | Phase E roadmap (persistent blocking-I/O offload design with bounded capacity). Naming correction at that time. |
+| Governing ADR | ADR-execution-model §9.1 P2; resolved by ADR-explicit-io-request-contract (Accepted) Phase E |
+| Reason | Zig `Threaded` = thread-per-TASK (execution strategy). The legacy Sluice `ThreadPoolBackend` was thread-per-OP (blocking I/O offload for the Evented scheduler) — a different concept at a different layer, with a misleading name and known unbounded resource issues. Phase E replaced it. |
+| Benefit (historical) | Evented scheduler workers remained free during blocking I/O; a simple functional prototype under normal resource availability. |
+| Cost (historical) | Thread creation per op (expensive); unbounded thread count; misleading name suggested a bounded pool; violated AC-7. |
+| Resolution | Phase E (`feat/phase-e-bounded-threadpool-explicit-io`) replaced the per-op-thread model with a fixed pool of persistent blocking-I/O workers + a construction-time bounded dispatch ring + `RequestArena` / `RequestSlot` as the single request-lifecycle authority. Workers are created only at construction and worker storage never grows; the thread-per-OP model is gone. The name is retained for API continuity but the backend is now a bounded blocking-I/O offload mechanism, not a Zig `Threaded` translation. |
+| Current evidence | `include/sluice/async/threadpool_backend.hpp` (ThreadPoolConfig, persistent workers, bounded dispatch ring, RequestArena); `tests/threadpool_backend_reap_test.cpp` (workers_spawned_for_test == worker_count for the backend's whole life); `docs/design/phase-e-bounded-threadpool-backend.md`. |
+| Revisit trigger | None for the per-op model. The naming (ThreadPoolBackend) is retained for continuity; a future rename would be a separate API ADR. |
 
 ---
 
@@ -173,7 +174,7 @@ Status values:
 | Reason | Portable cancellation of in-flight blocking syscalls (via `pthread_kill`/`tgkill`) is complex and platform-specific. Current cancel is best-effort: the op completes with its real result. |
 | Benefit | Simplicity; no signal-safety hazards; no UB from interrupted syscalls. |
 | Cost | Cannot interrupt a long-running fsync/pread/pwrite; cancel only affects waiting, not the syscall. |
-| Current evidence | `threadpool_backend.hpp:29-33`; `cancel()` returns but op continues. The shared `RequestArena` now records `cancel_intent_` on a `running` slot (ADR-explicit-io-request-contract Decision 11) so the arena layer is correct for the ThreadPool/Uring migration: the syscall's ordinary result later competes for the terminal winner, and `record_terminal` substitutes `canceled` for an ordinary success when intent is set. The reference backends never enter `running`, so this is dormant at the reference layer. |
+| Current evidence | `threadpool_backend.hpp:29-33`; `cancel()` returns but op continues. The shared `RequestArena` now records `cancel_intent_` on a `running` slot (ADR-explicit-io-request-contract Decision 11) so the arena layer is correct for the ThreadPool/Uring migration: `cancel()` returns `intent_recorded` without storing a terminal, and `record_terminal` records the REAL result VERBATIM (an ordinary success is NOT rewritten to canceled — cancel is best-effort). Only a backend that CONFIRMS the interruption took effect records `TerminalResult::err(canceled)` explicitly via `record_canceled`. The reference backends never enter `running`, so this is dormant at the reference layer. |
 | Revisit trigger | If workload requires interruptible long fsync; if io_uring cancel (IORING_OP_ASYNC_CANCEL) is integrated. |
 
 ---
@@ -199,14 +200,15 @@ Status values:
 | Field | Value |
 |-------|-------|
 | ID | DIV-12 |
-| Status | Corrective planned |
+| Status | Resolved (Phase E) |
 | Introduced by | Implementation drift (no ADR approves unbounded thread creation) |
-| Governing ADR | ADR-explicit-io-request-contract (Proposed target); correction remains unimplemented |
-| Reason | ThreadPoolBackend accepts unlimited concurrent ops with no capacity limit, no queue-full error, and no backpressure. Zig `Threaded` has `async_limit`/`concurrent_limit`. No Sluice ADR approves unbounded resource growth. |
-| Benefit | (None — this is not a benefit, it is an absence of constraint.) |
-| Cost | Unbounded thread creation; OOM under load; no graceful degradation; violates AC-7. |
-| Current evidence | `threadpool_backend.hpp:51-57` (documented risk); no capacity parameter; no `would_block` error. |
-| Revisit trigger | Phase E roadmap after bounded RequestSlot reference lifecycle and conformance framework exist. |
+| Governing ADR | ADR-explicit-io-request-contract (Accepted); corrected in Phase E |
+| Reason | The legacy ThreadPoolBackend accepted unlimited concurrent ops with no capacity limit, no queue-full error, and no backpressure (Zig `Threaded` has `async_limit`/`concurrent_limit`). No Sluice ADR approved that unbounded growth. |
+| Benefit (historical) | (None — this was an absence of constraint.) |
+| Cost (historical) | Unbounded thread creation; OOM under load; no graceful degradation; violated AC-7. |
+| Resolution | Phase E gave `ThreadPoolBackend` an explicit `ThreadPoolConfig{request_capacity, worker_count}`, a construction-time bounded dispatch ring (capacity == request_capacity), and `RequestArena` admission that returns synchronous `would_block` at capacity (Completion idle, no borrow). Worker threads are created only at construction and never grow. The unbounded path is gone. |
+| Current evidence | `include/sluice/async/threadpool_backend.hpp` (ThreadPoolConfig, BoundedDispatchQueue); `tests/threadpool_backend_phase_e_test.cpp :: phase_e_capacity_full_returns_would_block`. |
+| Revisit trigger | None. The bounds are now explicit and configurable; tuning the defaults is a benchmark decision, not a divergence. |
 
 ---
 
@@ -237,8 +239,8 @@ Status values:
 | Reason | Decision 6 declares `invalid_argument` for "malformed operation: invalid length/buffer contract, impossible offset conversion, or invalid fd parameter form." The Phase B reference backends (FakeAsyncBackend, SyncBackend) perform NO real I/O — `fd` is a metadata carrier, not a syscall target (the test corpus deliberately uses `ReadOp{-1, ...}` as an "unused by fake" sentinel), and `BorrowMetadata` carries no offset. Enforcing the representable causes (negative fd, null buffer with nonzero length) at the reference `prepare()` would reject reference-backend test traffic without backing a real safety property. |
 | Benefit | The reference layer stays focused on the arena/slot/terminal lifecycle contract (its actual scope); the test corpus is not churned to placate a check that guards no real syscall at this layer. |
 | Cost | A malformed descriptor is NOT rejected at the reference `prepare()` — it is accepted and surfaces only at the full-backend prepare paths (Phase D/E), where a real syscall would actually dereference the fd/buffer. Callers cannot rely on `invalid_argument` from the reference backends for fd/buffer-form errors until those phases. |
-| Current evidence | `include/sluice/async/detail/request_arena.hpp` `prepare()` (no fd/buffer-form check; the deferral is documented at the call site); ADR Phase B closeout "Round-4 review closeout" item 3; reference-backend tests use `ReadOp{-1, ...}` as a documented sentinel. |
-| Revisit trigger | Phase D (Uring) / Phase E (ThreadPool) full-backend prepare paths MUST enforce the Decision 6 `invalid_argument` causes (negative fd, null buffer with nonzero length, impossible offset conversion) before issuing a real syscall. This divergence is then resolved per-backend. |
+| Current evidence | `include/sluice/async/detail/request_arena.hpp` `prepare()` (no fd/buffer-form check; the deferral is documented at the call site); ADR Phase B closeout "Round-4 review closeout" item 3; reference-backend tests use `ReadOp{-1, ...}` as a documented sentinel. **Phase E closeout (ThreadPool):** the ThreadPoolBackend now enforces the Decision 6 `invalid_argument` causes (negative fd, null buffer with nonzero length, offset beyond `off_t`, length beyond `SSIZE_MAX`) at its own descriptor-validation step before commit (`ThreadPoolBackend::validate_read/write/sync`); a non-negative but closed fd is accepted and later completes with the real `EBADF` terminal (no `fcntl(F_GETFD)` preflight). This divergence is therefore resolved for ThreadPool only; it remains open for Fake/Sync (reference, no real syscall) and Uring (Phase D). |
+| Revisit trigger | Phase D (Uring) full-backend prepare path MUST enforce the Decision 6 `invalid_argument` causes before issuing a real syscall; the divergence is then fully resolved. (ThreadPool is resolved as of Phase E.) |
 
 ---
 
@@ -248,7 +250,7 @@ Status values:
 |----|--------|------|
 | DIV-01 | Approved | Context shape |
 | DIV-02 | Active transitional decision (Phase B) | Operation storage ownership |
-| DIV-03 | Corrective planned | Backend execution model |
+| DIV-03 | Resolved (Phase E) | Backend execution model |
 | DIV-04 | Approved | Wake integration |
 | DIV-05 | Approved | Observation interval |
 | DIV-06 | Approved | Durability ops |
@@ -257,6 +259,6 @@ Status values:
 | DIV-09 | Accepted | Registered buffers |
 | DIV-10 | Accepted | Syscall cancellation |
 | DIV-11 | Accepted | Cancel protection |
-| DIV-12 | Corrective planned | Resource bounds |
+| DIV-12 | Resolved (Phase E) | Resource bounds |
 | DIV-13 | Accepted | Backend extension point |
-| DIV-14 | Accepted | prepare() descriptor validation deferred for reference backends |
+| DIV-14 | Accepted (partially resolved for ThreadPool in Phase E) | prepare() descriptor validation deferred for reference backends |

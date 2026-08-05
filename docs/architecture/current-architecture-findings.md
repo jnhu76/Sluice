@@ -558,6 +558,15 @@ test the semantic distinction.
 
 ## P2-01: Per-Op Thread Creation (Unbounded)
 
+> **Phase E resolution (branch `feat/phase-e-bounded-threadpool-explicit-io`):**
+> RESOLVED. ThreadPoolBackend now uses a fixed pool of persistent blocking-I/O
+> workers created only at construction (`ThreadPoolConfig::worker_count`); no
+> thread is created per op and worker storage never grows. The line references
+> below describe the pre-Phase-E legacy model and are retained as the historical
+> audit record. Regression: `tests/threadpool_backend_reap_test.cpp`
+> (`workers_spawned_for_test == worker_count` for the backend's whole life).
+> See DIV-03 (Resolved).
+
 **Finding:** ThreadPoolBackend spawns one `std::thread` per submitted operation.
 Thread creation is expensive (~10-50μs + kernel resources). Under sustained
 load, this creates and destroys threads at I/O rate.
@@ -586,6 +595,11 @@ offload workers with bounded capacity.
 ---
 
 ## P2-02: workers_ Vector Monotonic Growth
+
+> **Phase E resolution:** RESOLVED. The historical-growth `workers_` vector is
+> gone; the worker pool is a fixed `std::vector<std::thread>` of size
+> `worker_count` created once. The line references below are the legacy audit
+> record. See DIV-12 (Resolved).
 
 **Finding:** The `workers_` vector grows by one entry per submitted operation
 and never reclaims entries. Joined threads leave non-joinable placeholders.
@@ -617,6 +631,14 @@ RequestSlot reuse remove the historical per-op vector model.
 ---
 
 ## P2-03: Hot-Path Heap Allocation (std::function + deque)
+
+> **Phase E resolution:** RESOLVED for ThreadPoolBackend. The `std::function`
+> payload and the per-op `ready_size_`/`ready_void_` deques are gone: the
+> payload is a fixed `PreparedBlockingOp` per slot, the dispatch ring is a
+> construction-time bounded `BoundedDispatchQueue`, and the terminal path goes
+> through the `RequestArena` ready-ring (no per-op allocation). The accepted
+> terminal path is allocation-independent (ADR Decision 14 / I9). The line
+> references below are the legacy audit record.
 
 **Finding:** Every accepted operation traverses multiple potentially
 allocating hot-path operations:

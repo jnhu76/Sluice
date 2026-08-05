@@ -211,17 +211,20 @@ private:
     // handles (review finding #1).
     std::uint32_t ready_next_ = kNotOnReadyRing;
 
-    // Cancellation intent (review finding on ADR Decision 11): set by cancel()
+    // Cancellation intent (ADR Decision 11, round-4 closeout): set by cancel()
     // on a RUNNING blocking-syscall slot. A running op CANNOT be forced to a
     // canceled terminal — the syscall's ordinary result, ordinary error, or
     // valid interruption competes for the terminal winner (Decision 11).
-    // cancel() records intent (returns `requested`) WITHOUT storing a terminal;
-    // the dispatch path observes the intent and substitutes a canceled terminal
-    // when it would otherwise record an ordinary success. pending/enqueued
-    // cancel still wins the terminal directly (ADR-legal for those states).
-    // The Phase B reference backends never enter `running`, so this field is
-    // always false there; it makes the shared arena correct for the later
-    // ThreadPool/Uring migration.
+    // cancel() records intent (returns `intent_recorded`) WITHOUT storing a
+    // terminal; record_terminal() then records the REAL result VERBATIM (an
+    // ordinary success is NOT rewritten to canceled) and consumes the intent
+    // on any winner. Only a backend that CONFIRMS the interruption took effect
+    // records TerminalResult::err(canceled) explicitly via record_canceled,
+    // and THAT call wins the terminal. pending/enqueued cancel still wins the
+    // terminal directly (returns `terminal_won`, Scheme B). The Phase B
+    // reference backends never enter `running`, so this field is always false
+    // there; it makes the shared arena correct for the later ThreadPool/Uring
+    // migration.
     bool cancel_intent_ = false;
 };
 

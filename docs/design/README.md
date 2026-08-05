@@ -48,6 +48,7 @@ documents are historical:
 | E12-F AsyncRwLock | `docs/history/implementation-plans/e12-rwlock.md` | `docs/history/closeout/e10-e12-api-semantic-closure.md` |
 | E13 Select | `docs/history/implementation-plans/e13-select-*.md` | `docs/history/closeout/e13-select-p7-rollback-closeout.md` |
 | E14 Threaded/Evented Parity | `docs/history/implementation-plans/e14-threaded-evented-parity-preparation.md` | — |
+| Phase E — Bounded Blocking-I/O Backend | `docs/design/phase-e-bounded-threadpool-backend.md` | `docs/architecture/phase-e-compliance-gate.md` |
 
 ## Navigation
 

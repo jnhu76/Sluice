@@ -35,6 +35,7 @@
 
 #include <unistd.h>
 
+#include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -79,10 +80,12 @@ inline std::string parse_child_case(int argc, char** argv) {
 }
 
 // Fork a child that re-execs this binary with `--death-child=<case_name>` and
-// wait for it. Returns the child's waitpid status (use WIFEXITED / WEXITSTATUS
-// / WIFSIGNALED / WTERMSIG). On fork/exec failure returns -1 and prints to
-// stderr.
-inline int fork_exec_child(const std::string& case_name) {
+// wait for it. Uses a non-blocking poll with a 60-second watchdog so that a
+// child stuck in a hang (e.g. a destructor that should have fail-fasted but
+// instead joined a paused worker) does not block the parent and drag the CI
+// target forever. The watchdog sends SIGKILL on timeout.
+inline int fork_exec_child(const std::string& case_name, bool& timed_out) {
+    timed_out = false;
     pid_t pid = fork();
     if (pid < 0) {
         std::perror("death_test: fork");
@@ -111,14 +114,38 @@ inline int fork_exec_child(const std::string& case_name) {
         std::perror("death_test: execv");
         std::_Exit(kChildTestFailExit);
     }
-    // Parent.
-    int status = 0;
+    // Parent: bounded wait with a 60-second watchdog.
+    const auto start = std::chrono::steady_clock::now();
+    constexpr auto kTimeout = std::chrono::seconds(60);
     for (;;) {
-        pid_t w = waitpid(pid, &status, 0);
+        int status = 0;
+        pid_t w = waitpid(pid, &status, WNOHANG);
         if (w == pid) return status;
         if (w < 0 && errno == EINTR) continue;
-        std::perror("death_test: waitpid");
-        return -1;
+        if (w < 0) {
+            std::perror("death_test: waitpid");
+            return -1;
+        }
+        // w == 0: child still running; check the timeout.
+        if (std::chrono::steady_clock::now() - start >= kTimeout) {
+            timed_out = true;
+            std::cerr << "[death] child " << case_name << " (pid " << pid
+                      << ") exceeded 60s timeout; sending SIGKILL\n";
+            if (::kill(pid, SIGKILL) != 0 && errno != ESRCH) {
+                std::perror("death_test: kill");
+            }
+            // Reap the killed child (should return almost immediately).
+            for (;;) {
+                w = waitpid(pid, &status, 0);
+                if (w == pid) return status;
+                if (w < 0 && errno == EINTR) continue;
+                if (w < 0) {
+                    std::perror("death_test: waitpid after SIGKILL");
+                    return -1;
+                }
+            }
+        }
+        usleep(10000);  // 10ms poll interval while child is alive
     }
 }
 
@@ -129,13 +156,21 @@ struct DeathResult {
     bool        signaled      = false;  // WIFSIGNALED
     int         signal_number = 0;      // valid if signaled
     int         exit_code     = -1;     // valid if !signaled && spawned
+    bool        timed_out     = false;  // parent killed child after timeout
 };
 
 inline DeathResult run_death_case(const std::string& case_name) {
     DeathResult r;
     r.case_name = case_name;
-    int status = fork_exec_child(case_name);
-    if (status < 0) return r;
+    bool timed_out = false;
+    int status = fork_exec_child(case_name, timed_out);
+    r.timed_out = timed_out;
+    if (status < 0) {
+        if (!timed_out) {
+            // fork/exec/waitpid error (not timeout) — r.spawned stays false.
+        }
+        return r;
+    }
     r.spawned = true;
     if (WIFSIGNALED(status)) {
         r.signaled = true;
@@ -150,6 +185,12 @@ inline DeathResult run_death_case(const std::string& case_name) {
 // boundary. Returns true iff the child exited normally with the expected
 // terminate code (86).
 inline bool expect_terminated_via_fail_fast(const DeathResult& r) {
+    if (r.timed_out) {
+        std::cerr << "[death] " << r.case_name
+                  << ": FAIL (child exceeded watchdog timeout and was killed; "
+                     "the destructor likely hung instead of fail-fasting)\n";
+        return false;
+    }
     if (!r.spawned) {
         std::cerr << "[death] " << r.case_name << ": FAIL (fork/exec/waitpid error)\n";
         return false;
@@ -176,6 +217,12 @@ inline bool expect_terminated_via_fail_fast(const DeathResult& r) {
 // Parent-side assertion for the CONTROL case (T4): the child must exit 0
 // (everything succeeded with no fault armed).
 inline bool expect_normal_exit_zero(const DeathResult& r) {
+    if (r.timed_out) {
+        std::cerr << "[death] " << r.case_name
+                  << ": FAIL (child exceeded watchdog timeout and was killed; "
+                     "the control case should exit promptly)\n";
+        return false;
+    }
     if (!r.spawned) {
         std::cerr << "[death] " << r.case_name << ": FAIL (fork/exec/waitpid error)\n";
         return false;

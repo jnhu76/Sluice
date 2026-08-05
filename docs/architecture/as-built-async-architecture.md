@@ -72,6 +72,22 @@ corrected by PR #61 to name the backend as the claim authority.
 
 ### 2.2 ThreadPoolBackend
 
+> **Phase E update (branch `feat/phase-e-bounded-threadpool-explicit-io`):**
+> The per-op-thread model, `std::function` payload, `try_claim` admission, and
+> `ready_size_`/`ready_void_` deques described below are the **pre-Phase-E
+> legacy** record. Phase E replaced them with: `ThreadPoolConfig{request_
+> capacity, worker_count}`; a fixed pool of persistent blocking-I/O workers
+> (created only at construction); a construction-time bounded `BoundedDispatch
+> Queue`; the five-stage `RequestArena` admission (reserve → prepare → install
+> publication binding → begin_binding → commit → install_binding →
+> commit_binding → enqueue) mirroring the migrated reference backends; a fixed
+> `PreparedBlockingOp` per slot (no `std::function`/`Completion*`); workers that
+> record `backend-ready` ONLY via `record_terminal`; reap-only Completion-ready
+> publication; real-syscall descriptor validation before commit; and a
+> persistent ready-epoch wake. See `docs/design/phase-e-bounded-threadpool-
+> backend.md` and `docs/architecture/phase-e-compliance-gate.md`. DIV-03 and
+> DIV-12 are Resolved; DIV-14 is partially resolved for ThreadPool.
+
 ```text
 submit_*(op, c)
 → accepting_new_work()? (mtx_ guarded destroying_ flag)

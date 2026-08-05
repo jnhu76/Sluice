@@ -1204,12 +1204,12 @@ only sanctioned way to claim a `Completion` and publish a terminal result.
 
 Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5) adds the
 protected two-stage **binding** helpers (`begin_binding` / `commit_binding` /
-`rollback_binding_before_accept`) used by the migrated reference backends
-(Fake/Sync) to install the RequestKey/context/release-capability payload before
-the `Completion` becomes observable as outstanding. The legacy single-step
-`try_claim` remains for the not-yet-migrated backends (Uring/ThreadPool); the
-two paths do not race because a given `Completion` is driven by exactly one
-backend.
+`rollback_binding_before_accept`) used by the migrated backends (Fake/Sync, and
+— as of Phase E — ThreadPool) to install the RequestKey/context/release-
+capability payload before the `Completion` becomes observable as outstanding.
+The legacy single-step `try_claim` remains for the not-yet-migrated backends
+(Uring); the two paths do not race because a given `Completion` is driven by
+exactly one backend.
 
 ```cpp
 class AsyncBackend {
@@ -1332,25 +1332,61 @@ public:
 
 ### `sluice::async::ThreadPoolBackend`
 
-Portable real backend. One `std::thread` per outstanding op. Always buildable;
-no external dependency. Construct directly; there is no factory function. Workers
-are joined as their results are reaped (poll/wait_one), so the number of unreaped
-worker threads stays bounded by the number of outstanding ops; the destructor
-joins any remaining in-flight workers.
+Portable real blocking-I/O backend. Always buildable; no external dependency.
+Construct directly; there is no factory function.
+
+Phase E (ADR-explicit-io-request-contract, Accepted): `ThreadPoolBackend` is now
+a **bounded explicit-I/O backend** — the first production backend to drive real
+POSIX syscalls through the `detail::RequestArena` / `RequestSlot` lifecycle. It
+uses a fixed pool of persistent blocking-I/O workers and a construction-time
+bounded dispatch ring, with `RequestArena` as the single request-lifecycle
+authority. The legacy "one `std::thread` per op + `std::function` + `Completion*`
+ready deque" model (DIV-03 / DIV-12) is gone. Workers record `backend-ready`
+ONLY; reap (`poll` / `wait_one`) is the sole `Completion`-ready publication
+authority. `cancel` drives the shared state machine (pending/enqueued cancel may
+win the canceled terminal under Scheme B; running cancel records intent only and
+the real result wins verbatim — DIV-10). The public submit signatures are
+unchanged (ADR Decision 7).
 
 ```cpp
+struct ThreadPoolConfig {
+    std::size_t request_capacity = 64;  // arena capacity == dispatch ring capacity
+    std::size_t worker_count = 4;       // persistent blocking-I/O workers
+};
+
 class ThreadPoolBackend : public AsyncBackend {
 public:
-    ThreadPoolBackend();
-    ~ThreadPoolBackend() override;
-    // ... AsyncBackend implementation
+    ThreadPoolBackend();                           // ThreadPoolConfig{} defaults
+    explicit ThreadPoolBackend(ThreadPoolConfig config);
+    ~ThreadPoolBackend() override;                 // quiescent; joins workers
 
-    // Test-only hook — NOT supported user API.
-    // Flips the shutdown gate so submit_* returns invalid_state.
-    // Production code never calls it.
-    void shutting_down_for_test();
+    // ... AsyncBackend implementation (submit_read/write/sync_data/sync_all,
+    //     poll, wait_one, cancel, outstanding)
+
+    // Production admission close (ADR Decision 15). New submit_* returns
+    // invalid_state (Completion idle, no borrow); existing accepted requests
+    // continue; cancel/poll/wait_one/reap remain legal. Idempotent.
+    void close_admission();
+
+    // Phase E resource introspection (method-only; no member data exposed).
+    std::size_t arena_capacity() const noexcept;
+    std::size_t arena_slot_in_use() const noexcept;
+    std::size_t arena_capacity_rejections() const noexcept;
+    std::size_t configured_worker_count() const noexcept;
 };
 ```
+
+`request_capacity` and `worker_count` MUST be `> 0`. These are DISTINCT
+resources (ADR Decision 13, AC-7): request capacity, blocking-I/O worker count,
+Scheduler worker count, io_uring queue depth, and application pipeline depth are
+all separate. No worker thread is created after construction and worker storage
+never grows. Destruction is quiescent and fail-fast: it does NOT implicitly
+cancel/drain/publish; the caller must `close_admission` + drain to
+`outstanding() == 0` first. The real-syscall descriptor validation (ADR Decision
+6; `invalid_argument` for negative fd, null buffer with nonzero length, offset
+beyond `off_t`, length beyond `SSIZE_MAX`) runs before commit; a non-negative
+but closed fd is accepted and later completes with the real `EBADF` terminal
+(AGENTS.md §9.1 — no `fcntl(F_GETFD)` preflight).
 
 ### `sluice::async::UringAsyncBackend`
 

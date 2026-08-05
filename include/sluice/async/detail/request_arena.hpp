@@ -727,6 +727,20 @@ public:
         return admission_closed_;
     }
 
+    // Production quiescence snapshot for ThreadPoolBackend destruction (Phase E P1).
+    // Returns counts under one arena leaf lock so the backend can verify that no
+    // accepted work, active borrow, or backend-ready terminal remains before it
+    // begins worker teardown. The destructor MUST NOT implicitly drain/cancel/wait.
+    struct ArenaQuiescence {
+        std::size_t slot_in_use;
+        std::size_t accepted_outstanding;
+        std::size_t backend_ready;
+    };
+    ArenaQuiescence quiescence_snapshot() const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        return {slot_in_use_, accepted_outstanding_, backend_ready_count_};
+    }
+
     // Read-only introspection of the slot lifecycle (used by the reference
     // backends' dispatch/reap paths AND by tests; read-only, so it is not a
     // test-only control and does not belong behind SLUICE_ASYNC_INTERNAL_TESTING).
@@ -835,6 +849,30 @@ public:
         }
         return std::nullopt;
     }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // A single-lock observation of a SlotHandle that validates generation, context,
+    // and non-free state. Returns nullopt if the handle is stale, out of range, or
+    // points to a free slot. This is the preferred test seam over the piecewise
+    // state_of/enqueue_pin_live/terminal_stored accessors because it cannot
+    // mistake a later slot reuse for the original request.
+    struct RequestObservation {
+        SlotHandle handle;
+        RequestState state;
+        bool enqueue_pin_live;
+        bool terminal_stored;
+    };
+    std::optional<RequestObservation> observe_for_test(SlotHandle h) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (h.slot.value >= capacity_) return std::nullopt;
+        const RequestSlot& s = slots_[h.slot.value];
+        if (s.state_ == RequestState::free) return std::nullopt;
+        if (s.generation_ != h.generation) return std::nullopt;
+        if (s.key_.context != context_) return std::nullopt;
+        return RequestObservation{h, s.state_, s.enqueue_in_flight_pin_,
+                                  s.terminal_.stored};
+    }
+#endif
 
 private:
     // Bounds-check a SlotIndex for the read-only introspection accessors

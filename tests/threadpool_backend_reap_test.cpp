@@ -1,28 +1,26 @@
-// ThreadPoolBackend worker-reaping regression (Version B CI gate, 2026-08-01).
+// ThreadPoolBackend persistent-worker regression (Phase E).
 //
-// Root cause: ThreadPoolBackend spawns one worker thread per op and joined
-// workers ONLY in the destructor. A high-op-count copy (buf=1, N=100003 ->
-// ~200k ops per depth) therefore accumulated ~200k unjoined pthreads.
-// Unjoined pthreads retain implementation-managed resources, and the sheer
-// volume of thread create/exit/reclaim cycles has extreme overhead. On
-// resource-constrained CI runners this led to thread creation failure
-// (pthread_create EAGAIN from platform-dependent resource exhaustion) or
-// abnormal runtime growth. The cancelled CI runs do not provide sufficient
-// evidence to attribute the failure to a specific mechanism (RLIMIT_NPROC,
-// threads-max, or pid_max) or to a WSL2-vs-runner kernel difference.
+// HISTORY: the original Version-B regression (2026-08-01) targeted the legacy
+// "one std::thread per op" model (DIV-03 / DIV-12): workers_ grew by one entry
+// per submitted op and were joined only in the destructor, so a high-op-count
+// copy (buf=1, N=100003) accumulated ~200k unjoined pthreads and could exhaust
+// platform thread limits. The seam `unjoined_workers_for_test()` counted that
+// growth.
 //
-// Fix under test: poll()/wait_one() join each worker as its result is
-// reaped, so the number of unjoined workers stays bounded by the number of
-// outstanding ops instead of growing with the total op count.
+// Phase E replaced that model with a FIXED persistent worker pool + a bounded
+// dispatch ring + RequestArena as the single request-lifecycle authority. The
+// resource violation is gone by construction: worker threads created after
+// construction == 0, and worker storage never grows. This file restates the
+// regression against the new invariant:
 //
-// The seam: unjoined_workers_for_test() (SLUICE_ASYNC_INTERNAL_TESTING only)
-// counts workers_ entries that have not been joined. The proof is checked
-// MID-RUN: submits and full drains are interleaved in small batches, and
-// after EVERY batch drain the unjoined count must already be zero. Pre-fix
-// this equals the batch size after the first drain and grows linearly with
-// the op count; post-fix it is zero after every batch. The end-of-run check
-// alone cannot tell "joined as we go" from "joined once everything was
-// drained", so the batched mid-stream checks are the regression.
+//   - the worker pool size is fixed for the backend's whole life and equals the
+//     configured worker_count;
+//   - no matter how many ops are submitted/drained, no new worker is created;
+//   - ops still terminate correctly (no loss, no hang) — the semantic pairing
+//     for the resource bound (AC-11).
+//
+// The seam: workers_spawned_for_test() (SLUICE_ASYNC_INTERNAL_TESTING only) is
+// the pool size; it never changes after construction.
 #include "harness.hpp"
 
 #include <sluice/async/completion.hpp>
@@ -63,12 +61,10 @@ private:
     static inline long counter_ = 0;
 };
 
-// Drain every currently-ready result through the real reaper (wait_one ->
-// poll) and return how many results were drained. wait_one() blocks until at
-// least one result is ready, so the loop ends exactly when nothing remains
-// outstanding — no sleeps, no timeouts. An error result (ThreadPoolBackend
-// never produces one) breaks the loop; the caller's exact-count check then
-// fails loudly instead of hanging.
+// Drain every currently-ready result through the real reaper (wait_one -> poll)
+// and return how many results were drained. wait_one() blocks until at least one
+// result is ready, so the loop ends exactly when nothing remains outstanding —
+// no sleeps, no timeouts.
 std::size_t drain_all_ready(ThreadPoolBackend& backend) {
     std::size_t reaped = 0;
     while (backend.outstanding() > 0) {
@@ -81,91 +77,89 @@ std::size_t drain_all_ready(ThreadPoolBackend& backend) {
 
 }  // namespace
 
-SLUICE_TEST_CASE(tp_reap_unjoined_workers_bounded_after_full_reap) {
+// Resource bound + semantic pairing: a tight submit/drain loop over many more
+// ops than the configured capacity must NOT create any new worker, and every op
+// must terminate with the real result. This is the Phase-E restatement of the
+// original "unjoined workers bounded" regression.
+SLUICE_TEST_CASE(tp_workers_persistent_and_bounded_under_load) {
     TempPath tp;
     int fd = ::open(tp.path().c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
     SLUICE_CHECK(fd >= 0);
     const std::byte seed[1] = {std::byte{0x5a}};
     SLUICE_CHECK(::write(fd, seed, 1) == 1);
 
+    // Small capacity + small pool: the loop submits far more ops than capacity,
+    // so slots are reused many times. worker_count is fixed at 2.
+    constexpr std::size_t kCapacity = 8;
+    constexpr std::size_t kWorkers = 2;
     constexpr std::size_t kOperations = 4096;
-    constexpr std::size_t kBatch = 64;
-    ThreadPoolBackend backend;
-    std::vector<Completion<std::size_t>> cs(kOperations);
-    // One byte per op: concurrent workers write their own slot (the caller
-    // contract forbids sharing a buffer across outstanding ops).
-    std::vector<std::byte> bufs(kOperations);
+    constexpr std::size_t kBatch = kCapacity;
+    ThreadPoolBackend backend(ThreadPoolConfig{kCapacity, kWorkers});
+    SLUICE_CHECK_MSG(backend.workers_spawned_for_test() == kWorkers,
+                     "pool size must equal configured worker_count at construction");
 
-    // Submit and fully drain in interleaved batches of kBatch. After EVERY
-    // batch drain the unjoined-worker count must already be back to zero: an
-    // implementation that only joins at destruction — or only after the
-    // final drain — leaves kBatch unjoined threads after the first batch and
-    // grows linearly with the op count (the resource accumulation that broke
-    // CI). Small batches bound live threads to kBatch, so the proof is
-    // deterministic without exhausting platform thread limits or waiting on a
-    // timeout.
-    for (std::size_t i = 0; i < kOperations; ++i) {
-        auto r = backend.submit_read(ReadOp{fd, bufs.data() + i, 1, 0}, cs[i]);
-        SLUICE_CHECK(r.has_value());
+    std::vector<Completion<std::size_t>> cs(kBatch);
+    std::vector<std::byte> bufs(kBatch);
 
-        if ((i + 1) % kBatch == 0) {
-            std::size_t reaped = drain_all_ready(backend);
-            SLUICE_CHECK_MSG(reaped == kBatch,
-                             "batch drain reaped the wrong number of ops");
-            SLUICE_CHECK_MSG(backend.unjoined_workers_for_test() == 0,
-                             "reaped ops left unjoined workers behind mid-run "
-                             "(worker handles grow linearly with submits)");
+    // Submit + drain in batches of kBatch. After EVERY batch the pool size must
+    // still be kWorkers (no growth) and outstanding must be 0 (all drained).
+    // Each batch reuses the same kBatch Completions (they are reset by poll's
+    // reap->reset path of the previous batch's caller loop below).
+    for (std::size_t base = 0; base < kOperations; base += kBatch) {
+        for (std::size_t i = 0; i < kBatch; ++i) {
+            cs[i].reset();  // return the slot, generation++; ready -> idle
+            auto r = backend.submit_read(ReadOp{fd, bufs.data() + i, 1, 0}, cs[i]);
+            SLUICE_CHECK(r.has_value());
+        }
+        std::size_t reaped = drain_all_ready(backend);
+        SLUICE_CHECK_MSG(reaped == kBatch, "batch drain reaped the wrong number of ops");
+        SLUICE_CHECK_MSG(backend.outstanding() == 0,
+                         "ops remained outstanding after a batch drain");
+        SLUICE_CHECK_MSG(backend.workers_spawned_for_test() == kWorkers,
+                         "submit/drain created new workers (pool is not persistent)");
+        // Each reaped op carries the real result (1 byte at offset 0).
+        for (std::size_t i = 0; i < kBatch; ++i) {
+            SLUICE_CHECK(cs[i].ready());
+            SLUICE_CHECK(cs[i].result().has_value());
+            SLUICE_CHECK(cs[i].result().value() == 1);
         }
     }
-    SLUICE_CHECK_MSG(backend.outstanding() == 0,
-                     "ops remained outstanding after the final drain");
-
-    // Every completion carries the real result (1 byte at offset 0).
-    for (auto& c : cs) {
-        SLUICE_CHECK(c.ready());
-        SLUICE_CHECK(c.result().has_value());
-        SLUICE_CHECK(c.result().value() == 1);
-    }
-
-    // THE REGRESSION, restated at the end: no worker may remain unreaped.
-    // Pre-fix this equals OPS (4096 unjoined threads); post-fix poll() joined
-    // every reaped worker as it drained.
-    SLUICE_CHECK_MSG(backend.unjoined_workers_for_test() == 0,
-                     "reaped ops left unjoined worker threads behind (unjoined "
-                     "pthread resource accumulation)");
+    SLUICE_CHECK_MSG(backend.workers_spawned_for_test() == kWorkers,
+                     "final pool size must equal configured worker_count");
     ::close(fd);
 }
 
-SLUICE_TEST_CASE(tp_reap_void_ops_bounded_too) {
+// Same invariant for void ops (sync_data): the pool stays fixed, every op
+// terminates.
+SLUICE_TEST_CASE(tp_void_ops_keep_pool_bounded) {
     TempPath tp;
     int fd = ::open(tp.path().c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
     SLUICE_CHECK(fd >= 0);
 
+    constexpr std::size_t kCapacity = 8;
+    constexpr std::size_t kWorkers = 2;
     constexpr std::size_t kOperations = 256;
-    constexpr std::size_t kBatch = 64;
-    ThreadPoolBackend backend;
-    std::vector<Completion<void>> cs(kOperations);
-    for (std::size_t i = 0; i < kOperations; ++i) {
-        auto r = backend.submit_sync_data(SyncDataOp{fd}, cs[i]);
-        SLUICE_CHECK(r.has_value());
+    constexpr std::size_t kBatch = kCapacity;
+    ThreadPoolBackend backend(ThreadPoolConfig{kCapacity, kWorkers});
+    SLUICE_CHECK(backend.workers_spawned_for_test() == kWorkers);
 
-        if ((i + 1) % kBatch == 0) {
-            std::size_t reaped = drain_all_ready(backend);
-            SLUICE_CHECK_MSG(reaped == kBatch,
-                             "batch drain reaped the wrong number of ops");
-            SLUICE_CHECK_MSG(backend.unjoined_workers_for_test() == 0,
-                             "reaped void ops left unjoined workers behind "
-                             "mid-run");
+    std::vector<Completion<void>> cs(kBatch);
+    for (std::size_t base = 0; base < kOperations; base += kBatch) {
+        for (std::size_t i = 0; i < kBatch; ++i) {
+            cs[i].reset();
+            auto r = backend.submit_sync_data(SyncDataOp{fd}, cs[i]);
+            SLUICE_CHECK(r.has_value());
+        }
+        std::size_t reaped = drain_all_ready(backend);
+        SLUICE_CHECK_MSG(reaped == kBatch, "void batch drain reaped the wrong count");
+        SLUICE_CHECK_MSG(backend.outstanding() == 0, "void ops remained outstanding");
+        SLUICE_CHECK_MSG(backend.workers_spawned_for_test() == kWorkers,
+                         "void submit/drain created new workers");
+        for (std::size_t i = 0; i < kBatch; ++i) {
+            SLUICE_CHECK(cs[i].ready());
+            SLUICE_CHECK(cs[i].result().has_value());
         }
     }
-    SLUICE_CHECK_MSG(backend.outstanding() == 0,
-                     "void ops remained outstanding after the final drain");
-    for (auto& c : cs) {
-        SLUICE_CHECK(c.ready());
-        SLUICE_CHECK(c.result().has_value());
-    }
-    SLUICE_CHECK_MSG(backend.unjoined_workers_for_test() == 0,
-                     "reaped void ops left unjoined worker threads behind");
     ::close(fd);
 }
 

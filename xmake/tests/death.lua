@@ -143,3 +143,12 @@ do
             add_tests("request_arena_death_test")
     end
 end
+
+-- threadpool_backend_death_test — Phase E ThreadPoolBackend non-quiescent
+-- destruction fail-fast. Verifies that destroying a backend with enqueued ops,
+-- running workers, backend-ready unreaped terminals, or completion-ready
+-- unreset Completions terminates (exit 86) in BOTH Debug and Release, while a
+-- quiescent close_admission + drain + reset path exits 0. Uses
+-- SLUICE_ASYNC_INTERNAL_TESTING pause gates for the enqueued/running cases;
+-- links sluice_async_internal_testing. POSIX-only.
+sluice_internal_async_test("threadpool_backend_death_test", {platform_gate = {"linux", "macosx"}})

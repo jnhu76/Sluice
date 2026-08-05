@@ -240,14 +240,25 @@ sluice_internal_async_test("threaded_evented_internal_test")
 -- out. Gated to x86_64 (fiber_ctx::supported) at runtime.
 sluice_internal_async_test("group_evented_admission_exception_safety_test")
 
--- threadpool_backend_reap_test — ThreadPoolBackend worker-reaping regression
--- (Version B CI gate, 2026-08-01). Proves poll()/wait_one() join each worker
--- as its result is reaped: the unreaped-worker count (via the
--- SLUICE_ASYNC_INTERNAL_TESTING-only unjoined_workers_for_test() seam) stays
--- bounded by outstanding ops instead of growing with total ops. Pre-fix, a
--- 100k-op copy accumulated ~100k unjoined zombie threads, hit the runner's
--- task-count limit, and failed with backend_error (spawn EAGAIN).
+-- threadpool_backend_reap_test — ThreadPoolBackend persistent-worker regression
+-- (Phase E). Proves the fixed worker pool never grows under load: the
+-- SLUICE_ASYNC_INTERNAL_TESTING-only workers_spawned_for_test() seam equals the
+-- configured worker_count for the backend's whole life, no matter how many ops
+-- are submitted/drained, and every op terminates with the real result. This is
+-- the Phase-E restatement of the original DIV-03/DIV-12 resource-bound
+-- regression (the per-op-thread model is gone; the pool is bounded by
+-- construction).
 sluice_internal_async_test("threadpool_backend_reap_test")
+
+-- threadpool_backend_scheme_b_race_test — Phase E ThreadPoolBackend Scheme-B
+-- race regressions. Drives the real backend through the
+-- SLUICE_ASYNC_INTERNAL_TESTING-only pause gates (A/B/C/D) to prove:
+--   A: enqueue and dispatch push share one work_mtx_ critical section;
+--   B: enqueued cancel wins before dequeue and the syscall does not run;
+--   C: running cancel records intent only and the real syscall result wins;
+--   D: terminal publication happens after worker bookkeeping is observable.
+-- Cases A and D fail on the pre-fix code; cases B and C are conformance proofs.
+sluice_internal_async_test("threadpool_backend_scheme_b_race_test", {platform_gate = {"linux", "macosx"}})
 
 -- backend_scheme_b_race_test — Phase B backend-level Scheme-B race regression
 -- (review test-gap 1). Drives the raw FakeAsyncBackend with the

@@ -65,6 +65,13 @@ sluice_production_async_test("uring_backend_test")
 -- ThreadPoolBackend tests (sluice-CORE-020A). Real blocking I/O on threads.
 sluice_production_async_test("threadpool_backend_test")
 
+-- ThreadPoolBackend Phase E contract tests: capacity/would_block, descriptor
+-- validation, closed-fd EBADF terminal, Scheme-B cancel exactly-once,
+-- running-cancel real-result-wins, no-lost-wake, and high-frequency small-I/O
+-- bounded regression. Uses the public AsyncIoContext + ThreadPoolConfig API;
+-- the SLUICE_ASYNC_INTERNAL_TESTING-only count seams are no-ops in production.
+sluice_production_async_test("threadpool_backend_phase_e_test")
+
 -- Shared AsyncBackend conformance suite (sluice-CORE-024, B1). One parameterized
 -- harness asserting every genuinely-shared backend semantic against every
 -- backend. The suite impl is compiled into the driver target alongside the

@@ -1,64 +1,62 @@
-// sluice::async::ThreadPoolBackend (sluice-CORE-020A, ADR §4 Option 5).
+// sluice::async::ThreadPoolBackend (sluice-CORE-020A, Phase E).
 //
-// The portable, always-buildable REAL async backend: runs the existing blocking
-// pread/pwrite/fdatasync/fsync on worker threads. This is the FALLBACK where
-// io_uring is absent (ADR §4) and provides the ThreadPool row that 022's bench
-// compares. Reuses Result<T>/IoError verbatim.
+// The portable, always-buildable REAL async backend: a bounded set of persistent
+// blocking-I/O workers that run pread/pwrite/fdatasync/fsync. This is the
+// FALLBACK where io_uring is absent (ADR §4) and is the first PRODUCTION backend
+// to drive real POSIX syscalls through the bounded RequestArena / RequestSlot
+// lifecycle (ADR-explicit-io-request-contract, Accepted; Phase E).
 //
-// Threading model: one worker thread per outstanding op (simple, correct; the
-// high-concurrency path is UringAsyncBackend, job 020B). Each submitted op
-// spawns a worker that performs the blocking syscall and pushes a terminal
-// result into a ready queue. poll() drains the ready queue (marking
-// Completions ready) and JOINS the worker that produced each drained result;
-// wait_one() blocks on a condition variable until >=1 ready and then polls.
-// Joining at reap time keeps the number of unjoined pthread resources bounded
-// by the number of outstanding ops instead of growing with the total op
-// count. Accumulated unjoined pthreads retain implementation-managed resources
-// and, combined with the high overhead of hundreds of thousands of thread
-// create/exit/reclaim cycles, can exhaust platform-dependent thread limits or
-// cause extreme runtime on resource-constrained CI runners. The destructor
-// joins any remaining in-flight workers, so the captured `this` stays valid
-// for every worker (workers never outlive the backend).
+// Phase E replaces the legacy "one std::thread per op + std::function +
+// Completion* ready deque" model (DIV-03 / DIV-12) with:
 //
-// Buffer lifetime (L1-L3c): the worker reads/writes the caller's buffer; the
-// caller MUST keep it alive + address-stable until the Completion is ready
-// (same rule as the rest of async). The backend does NOT copy buffers.
+//   fixed count of persistent blocking-I/O workers (worker_count)
+// + construction-time bounded dispatch ring (capacity == request_capacity)
+// + RequestArena / RequestSlot as the ONE request lifecycle authority
+// + a fixed tagged PreparedBlockingOp payload (no std::function, no Completion*)
+// + worker consumes a SlotHandle, runs the syscall, records backend-ready ONLY
+// + reap (poll/wait_one) is the SOLE Completion-ready publication authority
 //
-// Cancel (ADR §7 X2): best-effort and asynchronous. This backend spawns one
-// worker thread per submitted op, so an op is "started" essentially at submit.
-// Portable cancel of an in-flight blocking syscall is deferred (it would need
-// pthread_kill/tgkill — a portability hazard). Therefore cancel here records a
-// cancel request and the op completes with its real result when the syscall
-// returns (exactly-once, ADR X3). The terminal result after cancel is one of
-// {success, error, canceled} — defined, never stuck outstanding. Cancellation
-// that actually interrupts the syscall is the Uring backend's job (020B/026).
+// See docs/design/phase-e-bounded-threadpool-backend.md (the frozen design) and
+// docs/architecture/phase-e-compliance-gate.md (the evidence ledger).
 //
-// Shutdown gate: once destruction begins (or shutting_down_for_test flips the
-// gate), submit_* returns invalid_state synchronously instead of spawning a
-// worker that could not be joined (was dead state before 025 B2; now enforced).
+// Resource bounds (AC-7, ADR Decision 13) — these are DISTINCT resources:
+//   request_capacity  : arena slots == dispatch ring entries (backend-owned)
+//   worker_count      : persistent blocking-I/O worker threads (backend-owned)
+//   (Scheduler worker count, io_uring queue depth, application pipeline depth,
+//    and caller-owned Completion count are all separate and unchanged here.)
 //
-// Spawn-failure safety: if a worker thread cannot be spawned (resource
-// exhaustion — std::thread construction throws), the op is resolved as a
-// terminal backend_error instead of letting the exception escape submit_*.
-// The reaper (poll/wait_one) completes the Completion with that error and
-// the outstanding_ accounting stays balanced, so a failed spawn is an op
-// error — never a hang, a leaked outstanding op, or an exception crossing a
-// public submit boundary.
+//   worker threads created after successful construction = 0
+//   dispatch storage growth after construction          = 0
+//   0 <= accepted_outstanding <= request_capacity
+//   0 <= active_workers       <= worker_count
 //
-// No new dependency (std::thread/mutex/condition_variable only — ADR §11 D4).
-// State is instance-owned (no globals, gate item 6).
+// Cancel (ADR Decision 11, layered — AC-9): the public API is Completion-keyed;
+// it resolves to a SlotHandle via the arena's bounded scan and drives the shared
+// state machine. pending/enqueued cancel may win the canceled terminal directly
+// (Scheme B); running cancel records intent only (best-effort, DIV-10 — no
+// pthread_kill/tgkill), and the syscall's REAL result wins verbatim. A confirmed
+// interruption would record err(canceled) explicitly and win; Phase E does not
+// implement one. cancel never publishes Completion-ready directly.
 //
-// Remaining risk: workers_ handle storage grows linearly with the cumulative
-// number of submitted operations over the backend's lifetime (reaped slots
-// become non-joinable placeholders but are never reclaimed). This is bounded
-// memory growth (sizeof(std::thread) per historical op), not a thread or
-// kernel-resource leak, but a long-lived backend with millions of ops will
-// accumulate a large vector. A free-list or fixed-size persistent worker pool
-// would eliminate this; tracked as a follow-up.
+// Shutdown (ADR Decision 15; AGENTS.md §14): close_admission() rejects new
+// reserve with invalid_state (Completion idle, no borrow) while existing accepted
+// requests continue; cancel/poll/wait_one/reap remain legal. close_admission()
+// does NOT signal waiters — wait_one() is a pure ready-epoch protocol that
+// returns only >0 reaped progress. Destruction is quiescent and fail-fast: the
+// destructor verifies arena/dispatch/worker quiescence via quiescence_snapshot()
+// before setting stopping_; it does NOT implicitly cancel, drain, wait for a
+// running syscall, publish, or discard the queue; it only tears down the
+// already-idle persistent workers. Non-quiescent destruction fail-fasts in Debug
+// AND Release.
+//
+// No new dependency (std::thread/mutex/condition_vector only — ADR §11 D4).
+// State is instance-owned (no globals).
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/reference_ready_sink.hpp>
+#include <sluice/async/detail/request_arena.hpp>
 #include <sluice/detail/posix_retry.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
@@ -67,20 +65,39 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
-#include <functional>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace sluice::async {
 
+// Phase E configuration (AC-7, ADR Decision 13). Both MUST be > 0. The default
+// constructor ThreadPoolBackend() uses ThreadPoolConfig{} below.
+struct ThreadPoolConfig {
+    std::size_t request_capacity = 64;  // arena capacity == dispatch ring capacity
+    std::size_t worker_count = 4;       // persistent blocking-I/O workers
+};
+
 class ThreadPoolBackend : public AsyncBackend {
-public:
-    ThreadPoolBackend() = default;
+  public:
+    // Default configuration (see ThreadPoolConfig).
+    ThreadPoolBackend() : ThreadPoolBackend(ThreadPoolConfig{}) {}
+
+    // Explicit bounded configuration. request_capacity and worker_count MUST be
+    // > 0. Callers may derive worker_count from hardware_concurrency() and
+    // clamp it to >= 1 themselves; the constructor rejects a 0 value with
+    // std::invalid_argument.
+    explicit ThreadPoolBackend(ThreadPoolConfig config);
+
+    // Quiescent destruction: joins the persistent workers. MUST be preceded by
+    // close_admission + drain + reset to accepted_outstanding == 0 /
+    // slot_in_use == 0. Non-quiescent destruction fail-fasts (Debug AND Release).
     ~ThreadPoolBackend() override;
+
+    ThreadPoolBackend(const ThreadPoolBackend&) = delete;
+    ThreadPoolBackend& operator=(const ThreadPoolBackend&) = delete;
 
     Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override;
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) override;
@@ -95,86 +112,266 @@ public:
 
     std::size_t outstanding() const noexcept override;
 
-    // Test-only hook: flips the shutdown gate WITHOUT running the destructor
-    // (the destructor path is unsafe to test directly: use-after-free on the
-    // backend object). Used by the 025 B2 contract tests to verify submit-
-    // after-shutdown-begun returns invalid_state. The leading underscore marks
-    // it as internal; production code never calls it.
-    void shutting_down_for_test();
+    // Production admission close (ADR Decision 15). New reserve() returns
+    // invalid_state (Completion idle, no borrow); existing accepted requests
+    // continue; cancel/poll/wait_one/reap remain legal. Does not signal waiters.
+    // Idempotent.
+    void close_admission();
+
+    // Phase E resource introspection (method-only seams; no member data exposed).
+    std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
+    std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
+    std::size_t arena_capacity_rejections() const noexcept {
+        return arena_.capacity_rejections();
+    }
+    std::size_t configured_worker_count() const noexcept { return workers_.size(); }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // Test-only: count of spawned worker threads that have not yet been
-    // joined (reaped) by poll()/wait_one(). A method-only seam — no member
-    // data, so production object layout is unchanged. Regression for the
-    // Version B CI failure: unjoined workers must stay bounded by outstanding
-    // ops, not grow with total ops.
-    std::size_t unjoined_workers_for_test() const {
-        std::lock_guard<std::mutex> lk(mtx_);
-        std::size_t n = 0;
-        for (const auto& w : workers_)
-            if (w.joinable())
-                ++n;
-        return n;
+    // Test-only: persistent workers spawned (== worker_count for the backend's
+    // whole life; never grows). Replaces the legacy unjoined_workers_for_test
+    // (the per-op thread model is gone).
+    std::size_t workers_spawned_for_test() const noexcept { return workers_.size(); }
+    // Test-only: active workers currently between mark_running and
+    // record_terminal. Bounded by worker_count.
+    std::size_t active_workers_for_test() const {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        return active_workers_;
+    }
+    // Test-only: current dispatch ring occupancy and high-water mark.
+    std::size_t dispatch_size_for_test() const {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        return dispatch_.size();
+    }
+    std::size_t dispatch_high_water_for_test() const {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        return dispatch_.high_water();
+    }
+    // Test-only: number of real syscalls the workers have executed (for
+    // cancel/no-execute assertions). Monotonic; not a public contract.
+    std::uint64_t syscall_count_for_test() const noexcept { return syscall_count_.load(); }
+
+    // Test-only: number of backend_ready slots not yet reaped.
+    std::size_t backend_ready_count_for_test() const noexcept {
+        return arena_.backend_ready_count();
+    }
+
+    // Test-only: resolve a Completion pointer to its current slot+generation.
+    // Returns nullopt if the Completion is not bound to any slot.
+    std::optional<detail::SlotHandle> handle_for_completion_for_test(
+        const void* completion) const noexcept {
+        return arena_.resolve_completion(completion);
+    }
+
+    // Test-only: single-lock observation that validates generation, context, and
+    // non-free state. Returns nullopt for a stale/released/unknown handle.
+    std::optional<detail::RequestArena::RequestObservation> observe_for_test(
+        detail::SlotHandle h) const noexcept {
+        return arena_.observe_for_test(h);
+    }
+
+    // Deterministic pause gates for the ThreadPoolBackend race tests. Each gate
+    // is armed by the test, the production path spins on `paused` and waits on
+    // `resume`, giving the test an exact observation window. These are compiled
+    // out of production sluice_async; the layout cost in the internal-testing
+    // target is accepted and documented (AGENTS.md §8).
+    struct AfterArenaEnqueueBeforeDispatchPushPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        // Set by the production path: true iff the gate fired INSIDE work_mtx_.
+        std::atomic<bool> work_domain_held{false};
+        // Set false before the pause, true after dispatch_.push_back(h) completes.
+        // Lets the test observe "not yet pushed" without taking work_mtx_.
+        std::atomic<bool> dispatch_push_completed{false};
+        // Set false when the production path enters the pause, true after it
+        // leaves (the spin loop exits). The test waits on this before unbinding
+        // the gate pointer from the backend so the gate object always outlives
+        // every production-path access.
+        std::atomic<bool> exited{true};
+    };
+    struct BeforeWorkerDequeuePauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
+    struct WorkerRunningPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
+    struct TerminalPublicationPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
+
+    void set_after_enqueue_before_push_pause_gate(
+        AfterArenaEnqueueBeforeDispatchPushPauseGate* gate) noexcept {
+        after_enqueue_before_push_gate_.store(gate, std::memory_order_release);
+    }
+    void set_before_dequeue_pause_gate(BeforeWorkerDequeuePauseGate* gate) noexcept {
+        before_dequeue_gate_.store(gate, std::memory_order_release);
+    }
+    void set_running_pause_gate(WorkerRunningPauseGate* gate) noexcept {
+        running_gate_.store(gate, std::memory_order_release);
+    }
+    void set_terminal_publication_pause_gate(
+        TerminalPublicationPauseGate* gate) noexcept {
+        terminal_publication_gate_.store(gate, std::memory_order_release);
     }
 #endif
 
-private:
-    // A pending op's ready form. The work callable runs on a worker thread; on
-    // return it pushes a terminal result into the matching ready_ deque. `worker`
-    // is the index of the std::thread object in workers_ that produced this
-    // result, so the reaper can join exactly that worker once the result is
-    // drained; spawn-failure entries (no thread was created) carry kNoWorker.
-    struct ReadySize {
-        Completion<std::size_t>* c;
-        Result<std::size_t> r;
-        std::size_t worker;
-    };
-    struct ReadyVoid {
-        Completion<void>* c;
-        Result<void> r;
-        std::size_t worker;
+  private:
+    // ---- fixed tagged operation payload (Scheme B: per-slot scratch) -------
+    // Sized to request_capacity at construction, indexed by SlotIndex (1:1 with
+    // arena slots). Carries NO Completion*/RequestSlot*/lambda/std::function.
+    // A worker reads prepared_ops_[h.slot] only after mark_running(h) succeeded,
+    // which proves the slot is `running` at generation h.generation.
+    struct PreparedBlockingOp {
+        detail::OperationKind kind = detail::OperationKind::read;
+        int fd = -1;
+        const std::byte* buffer = nullptr;  // dst (read) / src (write) / null (sync)
+        std::size_t length = 0;
+        std::uint64_t offset = 0;
     };
 
-    // Sentinel worker index: the op never spawned a thread (spawn failure).
-    static constexpr std::size_t kNoWorker = static_cast<std::size_t>(-1);
+    // ---- bounded dispatch ring (capacity == request_capacity) --------------
+    // Stores SlotHandle only. push/pop/remove are noexcept; never allocates
+    // after construction; never stores Completion*/RequestSlot*.
+    class BoundedDispatchQueue {
+      public:
+        explicit BoundedDispatchQueue(std::size_t capacity)
+            : storage_(capacity), capacity_(capacity) {}
+        bool empty() const noexcept { return size_ == 0; }
+        std::size_t size() const noexcept { return size_; }
+        std::size_t capacity() const noexcept { return capacity_; }
+        std::size_t high_water() const noexcept { return high_water_; }
 
-    // Enqueue a job: record outstanding + spawn worker. Caller has already
-    // verified accepting_new_work() and c.idle().
-    void enqueue_size(Completion<std::size_t>& c, std::function<Result<std::size_t>()> work);
-    void enqueue_void(Completion<void>& c, std::function<Result<void>()> work);
+        // noexcept push. Caller guarantees room (dispatch capacity == request
+        // capacity, and a committed request holds its slot); a full push is an
+        // invariant fail-fast, not would_block (AGENTS.md §12).
+        void push_back(detail::SlotHandle h) noexcept;
+        // noexcept pop; returns false if empty.
+        bool pop_front(detail::SlotHandle& out) noexcept;
+        // noexcept bounded compaction: remove the first entry whose slot+gen
+        // match h exactly. O(capacity). Returns true if removed.
+        bool remove_exact(detail::SlotHandle h) noexcept;
 
-    // Resolve an op whose worker-thread spawn failed (resource exhaustion):
-    // push a terminal error into the ready queue so the reaper completes the
-    // Completion and balances the outstanding_ accounting. The alternative —
-    // letting the exception escape submit_* — would be swallowed by the
-    // Runtime task boundary and hang the caller (the copy task's done_cv
-    // wait), so a failed spawn must surface as an op ERROR, not an exception.
-    void fail_spawn_size(Completion<std::size_t>* c, const IoError& err);
-    void fail_spawn_void(Completion<void>* c, const IoError& err);
+      private:
+        std::vector<detail::SlotHandle> storage_;
+        std::size_t head_ = 0;
+        std::size_t size_ = 0;
+        std::size_t high_water_ = 0;
+        std::size_t capacity_;
+    };
 
-    // True if the backend will accept a new submitted op (not shutting down).
-    // Centralizes the destroying_ gate so every submit_* enforces it. Reads
-    // destroying_ under mtx_; the lock provides the happens-before edge to the
-    // destructor's write (CP.20).
-    bool accepting_new_work() const;
+    // Process-wide monotonic id for ContextIdentity provenance (distinct per
+    // ThreadPoolBackend instance — ADR Decision 2).
+    static std::uint64_t next_backend_id() noexcept {
+        static std::atomic<std::uint64_t> id{0x54500000u};  // 'Tp' provenance tag
+        return ++id;
+    }
 
-    // Take the worker thread at `index` out of workers_ so the caller can
-    // join it OUTSIDE mtx_ (joining inside the lock would stall every other
-    // submit and worker publication for the whole thread teardown and invites
-    // lock-ordering bugs). MUST be called with mtx_ held. Returns a non-
-    // joinable thread when the index is out of range or the slot was already
-    // taken — each worker is moved out exactly once, right after its result
-    // is reaped. The moved-out slot becomes a non-joinable placeholder, so
-    // vector indices stay stable and the destructor's join loop skips it.
-    std::thread take_worker_for_join_locked(std::size_t index);
+    // Descriptor validation for a REAL syscall backend (ADR Decision 6; DIV-14
+    // does NOT apply — ThreadPool issues real syscalls). Returns invalid_argument
+    // for a malformed descriptor (negative fd, null buffer with nonzero length,
+    // offset beyond off_t, length beyond SSIZE_MAX). Does NOT use fcntl(F_GETFD)
+    // preflight (TOCTOU — AGENTS.md §9.1): a non-negative but closed fd is
+    // accepted and later completes with the real EBADF terminal.
+    static Result<void> validate_read(ReadOp op);
+    static Result<void> validate_write(WriteOp op);
+    static Result<void> validate_sync(SyncDataOp op);
+    static Result<void> validate_sync(SyncAllOp op);
 
-    mutable std::mutex mtx_;
-    std::condition_variable cv_;
-    std::deque<ReadySize> ready_size_;
-    std::deque<ReadyVoid> ready_void_;
-    std::vector<std::thread> workers_;     // joined in destructor
-    std::size_t outstanding_ = 0;
-    bool destroying_ = false;
+    // Five-stage admission for a byte-carrying / void op (ADR Decision 5; mirrors
+    // the SyncBackend reference). Records the fixed prepared op into per-slot
+    // scratch so the worker can run the real syscall after mark_running.
+    template <class Op>
+    Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind,
+                             std::size_t len);
+    template <class Op>
+    Result<void> submit_void(Op op, Completion<void>& c, detail::OperationKind kind);
+
+    // Unified enqueue + dispatch push under one work_mtx_ critical section
+    // (Phase E P0). Closes the window where the arena pin is cleared but the
+    // ring entry is not yet visible. noexcept because the arena lock and the
+    // bounded ring push are allocation-free; the caller has already committed
+    // the request, so a failure here would strand an accepted op.
+    void enqueue_after_commit(detail::SlotHandle h) noexcept;
+
+    template <class Op>
+    static detail::BorrowMetadata borrow_of(const Op& op) noexcept {
+        if constexpr (std::is_same_v<Op, ReadOp>) {
+            return {op.fd, op.dst, op.len};
+        } else {
+            return {op.fd, op.src, op.len};
+        }
+    }
+
+    // Publication thunks (ADR Decision 9): convert the arena's TerminalResult to
+    // a Result<T> and publish the Completion-ready through the protected helper.
+    // Static + type-erased; the arena calls them inside the leaf domain at reap.
+    static void publish_size_ready(void* completion, const detail::TerminalResult& t) noexcept;
+    static void publish_void_ready(void* completion, const detail::TerminalResult& t) noexcept;
+    static Result<std::size_t> terminal_to_size(const detail::TerminalResult& t) noexcept;
+    static Result<void> terminal_to_void(const detail::TerminalResult& t) noexcept;
+
+    // Run the blocking syscall for a prepared op (no backend lock held) and
+    // convert the exact outcome to a TerminalResult. retry_on_eintr handles EINTR.
+    static detail::TerminalResult run_syscall(const PreparedBlockingOp& p) noexcept;
+
+    // Persistent worker loop (one per worker thread). Waits on work_cv_ for the
+    // dispatch ring or stopping_; pops + mark_running atomically under work_mtx_,
+    // copies the prepared op, releases work_mtx_, runs the syscall, records the
+    // terminal, signals ready progress.
+    void worker_loop();
+
+    // Wake the ready domain: bump ready_epoch_ under ready_mtx_ and notify.
+    void signal_ready_progress() noexcept;
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic pause helpers (see the public gate setters above). Each
+    // helper is a no-op when the corresponding gate is disarmed.
+    void wait_after_enqueue_before_push_pause_(bool inside_work_mtx) noexcept;
+    void wait_before_dequeue_pause_() noexcept;
+    void wait_running_pause_() noexcept;
+    void wait_terminal_publication_pause_() noexcept;
+#endif
+
+    void tally_canceled() noexcept {
+        if (stats_) ++stats_->canceled_ops;
+    }
+
+    // ---- members -----------------------------------------------------------
+    detail::RequestArena arena_;
+    detail::ReferenceReadySink sink_;
+    std::vector<PreparedBlockingOp> prepared_ops_;  // size == request_capacity
+
+    // Backend work domain: dispatch ring + dequeue/cancel arbitration.
+    mutable std::mutex work_mtx_;
+    std::condition_variable work_cv_;
+    BoundedDispatchQueue dispatch_;
+    std::size_t active_workers_ = 0;
+    bool stopping_ = false;
+
+    // Ready/wake domain: persistent epoch so a ready recorded between snapshot
+    // and wait is not lost (AC-6; design §4.5). Does NOT nest with work_mtx_.
+    mutable std::mutex ready_mtx_;
+    std::condition_variable ready_cv_;
+    std::uint64_t ready_epoch_ = 0;
+
+    std::vector<std::thread> workers_;  // fixed worker_count, joined in dtor
+
+    // Observability: monotonic syscall counter (test-only introspection).
+    std::atomic<std::uint64_t> syscall_count_{0};
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic pause-gate pointers (null when disarmed). Compiled out of
+    // production sluice_async; see the public setter declarations above.
+    std::atomic<AfterArenaEnqueueBeforeDispatchPushPauseGate*> after_enqueue_before_push_gate_{nullptr};
+    std::atomic<BeforeWorkerDequeuePauseGate*> before_dequeue_gate_{nullptr};
+    std::atomic<WorkerRunningPauseGate*> running_gate_{nullptr};
+    std::atomic<TerminalPublicationPauseGate*> terminal_publication_gate_{nullptr};
+#endif
 };
 
 }  // namespace sluice::async
