@@ -143,4 +143,39 @@ jobs:
         # require xmake or a C++ build; they validate runner logic
         # (heartbeat scheduling, failure detail parsing, reporting,
         # timeout escalation, verdict calculation, etc.) independently.
+        # This is also the discovery harness for the Phase C1 manifest self-test
+        # (scripts/tests/test_backend_conformance_manifest.py), which proves the
+        # aggregate gate's per-backend RESULT ATTRIBUTION is isolated: one
+        # backend's failure cannot contaminate another's verdict.
         run: python3 -m unittest discover -v scripts/tests
+
+      - name: Phase C1 backend-conformance aggregate gate
+        # The Phase C1 "ruler": drives the shared conformance suite once PER
+        # registered backend (each in its own subprocess via SLUICE_TEST_FILTER)
+        # plus the lifecycle / backend-specific / authority / external-admission
+        # evidence, and classifies each backend honestly from its own run +
+        # stable [conformance-meta] lines. Must exit 0 (Fake/ThreadPool
+        # ELIGIBLE, Uring NOT CONFORMING is expected before Phase D).
+        # This was previously only implied by the hardening step; the gate is
+        # now an explicit merge blocker so a result-attribution or isolation
+        # regression cannot slip through as "runner unit tests pass".
+        run: python3 scripts/verify-backend-conformance.py --no-build
+
+      - name: Phase C1 manifest + attribution self-test
+        # Pure-data self-test for the conformance manifest (closed profiles /
+        # layers / statuses, mandatory coverage, helper well-definedness) AND
+        # the aggregate gate's per-backend attribution/isolation regression
+        # suite. Runs standalone (same module, different entry point) so the
+        # attribution invariants are enforced even when the xmake-driven gate
+        # step is skipped.
+        run: python3 scripts/tests/test_backend_conformance_manifest.py
+
+      - name: External-backend authority negative-compile (Phase C1)
+        # Closes the narrower Phase C1 gap that AsyncBackend protected
+        # publication helpers (try_claim / publish) are inaccessible to
+        # non-derived ordinary code. The gate's external_admission layer
+        # depends on this probe passing; running it explicitly makes the merge
+        # blocker visible by name rather than only via the aggregate gate.
+        env:
+          CXX: clang++
+        run: bash scripts/verify-external-backend-authority-negative-compile.sh
