@@ -145,11 +145,81 @@ std::size_t AsyncIoContext::poll() {
 }
 
 Result<std::size_t> AsyncIoContext::wait_one() {
-    std::lock_guard<std::mutex> lk(access_mtx_);
+    // Issue #67 / D4: wait_calls counts the single external wait invocation
+    // (I9). The blocking phase NEVER runs under access_mtx_: with a
+    // split-wait-capable backend the call repeatedly
+    //   snapshot -> poll (serialized reap) -> park in the observe-only wait
+    // so a second participant's poll/reap path stays reachable while this
+    // caller waits (I7).
     if (stats_) ++stats_->wait_calls;
-    auto r = backend_->wait_one();
-    if (r.has_value() && stats_) stats_->completed_ops += r.value();
-    return r;
+    BackendWaitSource* ws = backend_ ? backend_->wait_source() : nullptr;
+    if (ws == nullptr) {
+        // Legacy backend without the split wait capability: keep the original
+        // serialized contract — the whole call, including a backend-side
+        // block, runs under access_mtx_. This is safe when the backend's
+        // wait_one does not block (SyncBackend / FakeAsyncBackend) or when
+        // the caller is the single documented driver (UringAsyncBackend).
+        // ApplicationRuntime rejects such backends at build time so the
+        // multi-participant production path never takes this fallback (D3).
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        auto r = backend_->wait_one();
+        if (r.has_value() && stats_) stats_->completed_ops += r.value();
+        return r;
+    }
+    for (;;) {
+        BackendWaitToken token = ws->snapshot();
+        std::size_t n = 0;
+        std::size_t outstanding_now = 0;
+        {
+            // Reap under the serialized backend domain (E7-C preserved: every
+            // consuming backend access is still serialized by access_mtx_).
+            std::lock_guard<std::mutex> lk(access_mtx_);
+            n = backend_->poll();
+            outstanding_now = backend_->outstanding();
+        }
+        if (n > 0) {
+            if (stats_) stats_->completed_ops += n;
+            return Result<std::size_t>{n};
+        }
+        // Nothing reaped and nothing outstanding: nothing can ever become
+        // ready — an empty wait is a no-progress boundary, not a park.
+        if (outstanding_now == 0) {
+            return Result<std::size_t>{0};
+        }
+        // Park WITHOUT access_mtx_ (I1). The snapshot-then-poll-then-wait
+        // order closes both lost-wake windows: a signal before poll is seen
+        // by poll; a signal between poll and park advances the epoch so the
+        // predicate wait does not park (I5). Spurious wakes only re-check the
+        // predicate and re-loop (I10).
+        if (ws->wait_for_change(token) == BackendWakeReason::progress) {
+            continue;
+        }
+        // Control-plane interruption: one final non-blocking poll closes the
+        // interrupt-vs-final-ready race, then return 0 (interrupted, nothing
+        // reaped — I8: no fake completion, no completed_ops inflation).
+        {
+            std::lock_guard<std::mutex> lk(access_mtx_);
+            n = backend_->poll();
+        }
+        if (n > 0) {
+            if (stats_) stats_->completed_ops += n;
+            return Result<std::size_t>{n};
+        }
+        return Result<std::size_t>{0};
+    }
+}
+
+void AsyncIoContext::interrupt_backend_waiters() noexcept {
+    // Control-plane wake for parked split-phase waiters (issue #67 / I6):
+    // unblocks every participant parked in wait_one()'s observe phase so
+    // shutdown / admission close can re-evaluate. Pure control: no backend
+    // state is consumed, so no access_mtx_ is taken; a backend without the
+    // wait capability has no one to wake (no-op).
+    if (backend_) {
+        if (auto* ws = backend_->wait_source()) {
+            ws->interrupt_all();
+        }
+    }
 }
 
 void AsyncIoContext::cancel(Completion<std::size_t>& c) {

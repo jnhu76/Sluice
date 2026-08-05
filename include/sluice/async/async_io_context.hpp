@@ -48,6 +48,53 @@ struct SyncAllOp {   // fsync (W4)
     int fd = -1;
 };
 
+// --- Split-phase readiness wait (issue #67 / AGENTS.md §13.2) ---------------
+// A backend MAY expose an observe-only readiness wait so a caller can block
+// for progress WITHOUT holding AsyncIoContext::access_mtx_ (the pre-fix code
+// held it across ThreadPoolBackend::wait_one, starving every other poll/reap
+// path and deadlocking drain at shutdown). The wait is pure observation:
+// wait_for_change() never reaps, never publishes a Completion, never touches
+// request lifecycle or accounting state. It can be interrupted by the control
+// plane (interrupt_all) so shutdown can wake parked waiters without
+// fabricating readiness.
+struct BackendWaitToken {
+    // Epochs are monotonic and published under the wait source's own mutex
+    // BEFORE any notification. A wait for an observed token returns when
+    // either epoch advances; the predicate protocol closes the lost-wake
+    // window between snapshot and park (AGENTS.md §13.2).
+    std::uint64_t progress_generation = 0;  // real readiness published
+    std::uint64_t control_generation = 0;   // control-plane wake (close/stop)
+};
+
+enum class BackendWakeReason {
+    progress,     // a real readiness publication advanced the epoch
+    interrupted,  // a control-plane wake (close_admission / runtime stop)
+};
+
+class BackendWaitSource {
+public:
+    BackendWaitSource() = default;  // keep the implicit default (copy ops are deleted)
+    virtual ~BackendWaitSource() = default;
+    BackendWaitSource(const BackendWaitSource&) = delete;
+    BackendWaitSource& operator=(const BackendWaitSource&) = delete;
+
+    // Snapshot both epochs. MUST be paired with wait_for_change under the
+    // documented order: snapshot -> poll -> wait_for_change(observed).
+    virtual BackendWaitToken snapshot() const noexcept = 0;
+
+    // MAY block, but NEVER reaps, publishes, or mutates any request,
+    // outstanding, or backend_ready state. Returns progress when real
+    // readiness advanced, interrupted when the control plane woke the wait.
+    // Spurious wakes only re-check the predicate (no state change).
+    virtual BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept = 0;
+
+    // Control-plane wake: unblocks ALL parked waiters (notify_all). Must NOT
+    // fabricate readiness, change request state, publish Completions, or
+    // cancel real I/O. One-shot: future waits snapshot the advanced control
+    // generation and park normally again.
+    virtual void interrupt_all() noexcept = 0;
+};
+
 // The internal backend boundary (ADR §4) — and simultaneously a PUBLIC
 // extension point: the header is installed and AsyncBackend may be subclassed
 // by tests and applications (ADR-explicit-io-completion-authority §3). Any
@@ -95,6 +142,17 @@ public:
 
     // Outstanding op count (for AsyncStats.max_outstanding + L11 checks).
     virtual std::size_t outstanding() const noexcept = 0;
+
+    // Issue #67 split-phase wait capability (optional, default absent). A
+    // backend that provides it lets AsyncIoContext::wait_one park for
+    // readiness WITHOUT holding access_mtx_ (pure observation, interruptible
+    // by the control plane). Backends that return nullptr keep the legacy
+    // serialized wait_one contract: the whole blocking wait runs under
+    // access_mtx_ (safe for non-blocking wait_one implementations; the
+    // ApplicationRuntime rejects such backends at build time so the
+    // multi-participant production path never takes the blocking fallback).
+    // Source-compatible: existing external backends do not override it.
+    virtual BackendWaitSource* wait_source() noexcept { return nullptr; }
 
 protected:
     AsyncBackend() = default;
@@ -207,7 +265,24 @@ public:
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
     std::size_t poll();
+    // Blocking reap. With a split-wait-capable backend (wait_source != null)
+    // the wait NEVER runs under access_mtx_: the call repeatedly
+    //   snapshot -> poll (serialized) -> park in the observe-only ready wait
+    // and returns the count of Completions reaped (a plain >0 progress), or
+    // 0 when the wait was interrupted by the control plane (close_admission /
+    // interrupt_backend_waiters) with nothing reaped — 0 is NOT an error and
+    // fabricates no completion (I8). A 0 with no outstanding work is also
+    // returned (an empty wait is a no-progress boundary, never a park).
+    // Without the capability the legacy serialized contract applies (the whole
+    // call, including a backend-side block, runs under access_mtx_).
     Result<std::size_t> wait_one();
+
+    // Control-plane wake for a split-phase wait in progress (issue #67): wakes
+    // every participant parked in wait_one()'s observe phase so shutdown /
+    // admission close can re-evaluate. No-op for backends without the wait
+    // capability. Never fabricates readiness, never touches request state, and
+    // never blocks on access_mtx_.
+    void interrupt_backend_waiters() noexcept;
 
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);
@@ -218,8 +293,13 @@ public:
 private:
     std::unique_ptr<AsyncBackend> backend_;
     AsyncStats* stats_;
-    // E7-C serialized backend access domain: at most one caller drives
-    // AsyncBackend at a time. All submit_*/cancel/poll/wait_one acquire this.
+    // E7-C serialized backend access domain: at most one caller CONSUMES
+    // AsyncBackend at a time (submit_*/cancel/poll/reap/outstanding all
+    // acquire this). The split-phase wait's OBSERVE phase (wait_for_change)
+    // intentionally runs outside it — it is a pure epoch wait that touches no
+    // backend state, so it may run concurrently with serialized consuming
+    // operations. No context-level lock is ever held across an unbounded
+    // block (issue #67).
     mutable std::mutex access_mtx_;
 };
 

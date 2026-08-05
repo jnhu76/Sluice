@@ -102,10 +102,12 @@ bool wait_flag(std::atomic<bool>& flag, std::chrono::steady_clock::time_point de
 // Join a thread with a bounded deadline. The thread must publish `done` when
 // its work is finished; the joiner waits for the flag (bounded), then really
 // joins (std::thread::joinable() stays true until join(), so spinning on
-// joinable() alone would never join). Returns false on timeout; the caller
-// must unblock the thread before the scope ends.
+// joinable() alone would never join; and join() on an already-joined thread
+// throws EINVAL, so skip it). Returns false on timeout; the caller must
+// unblock the thread before the scope ends.
 bool join_bounded(std::thread& t, std::atomic<bool>& done,
                   std::chrono::steady_clock::time_point deadline) {
+    if (!t.joinable()) return true;  // already joined
     while (!done.load(std::memory_order_acquire)) {
         if (std::chrono::steady_clock::now() >= deadline) return false;
         std::this_thread::yield();

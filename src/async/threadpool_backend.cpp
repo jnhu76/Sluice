@@ -498,42 +498,33 @@ std::size_t ThreadPoolBackend::poll() {
 }
 
 Result<std::size_t> ThreadPoolBackend::wait_one() {
-    // Persistent ready-epoch protocol (design §4.5; AC-6): snapshot the epoch,
-    // reap, and if nothing was reaped, block until the epoch changes.  Returns
-    // only >0 progress (a ready count); it never fabricates a 0-success.  The
-    // caller decides when to stop waiting by tracking outstanding() or using
-    // close_admission(); this avoids the cross-domain data race on stopping_.
+    // Split-phase ready-epoch protocol (design §4.5; AC-6; issue #67): snapshot
+    // the epochs, reap, and if nothing was reaped, park in the OBSERVE-ONLY
+    // ready wait (no backend lock held across the park — the context-level
+    // caller keeps access_mtx_ only across this reap). Returns only the reaped
+    // count; 0 means a control-plane interruption (close_admission /
+    // interrupt_all) with no completion reaped. The caller decides when to
+    // stop waiting by tracking outstanding() or using close_admission().
     for (;;) {
-        std::uint64_t snap;
-        {
-            std::lock_guard<std::mutex> lk(ready_mtx_);
-            snap = ready_epoch_;
-        }
+        BackendWaitToken token = ready_wait_.snapshot();
         std::size_t n = arena_.reap(sink_);
         if (n > 0) return n;
-        {
-            std::unique_lock<std::mutex> lk(ready_mtx_);
-            if (ready_epoch_ != snap) continue;  // a signal arrived before we locked
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            // Issue #67 seam: announce the imminent park so a test can observe
-            // the exact "empty reap done, about to block in the ready wait"
-            // state deterministically. The flag is a one-way latch (the test
-            // never clears it); disarmed by setting a null pointer.
-            if (auto* f = wait_phase_flag_.load(std::memory_order_acquire)) {
-                f->store(true, std::memory_order_release);
-            }
-#endif
-            ready_cv_.wait(lk);
+        if (ready_wait_.wait_for_change(token) == BackendWakeReason::interrupted) {
+            // One final non-blocking reap closes the interrupt-vs-final-ready
+            // race, then report the interruption (0 = no completion reaped).
+            n = arena_.reap(sink_);
+            if (n > 0) return n;
+            return std::size_t{0};
         }
+        // progress: re-loop and reap the newly backend_ready request(s).
     }
 }
 
 void ThreadPoolBackend::signal_ready_progress() noexcept {
-    {
-        std::lock_guard<std::mutex> lk(ready_mtx_);
-        ++ready_epoch_;
-    }
-    ready_cv_.notify_one();
+    // Publish the progress epoch under the ready mutex, then notify ALL
+    // observers (the split wait allows concurrent parkers; notify_one could
+    // strand a second waiter on a stale token).
+    ready_wait_.signal_progress();
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
