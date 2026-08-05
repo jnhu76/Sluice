@@ -5,8 +5,9 @@ architecture audit. A phase may not claim completion without its named evidence.
 
 **Baseline:** `b20bcc7` (master, including PR #60 and PR #61). This roadmap is
 governed by the current findings, divergence registry, Zig conformance map, and
-the Proposed
+the Accepted
 [Unified Explicit I/O Request Contract](../adr/ADR-explicit-io-request-contract.md).
+Statuses below reflect master as of PR #64 (merge commit `a8178d8`).
 
 **Ordering rule:** Stabilize bottom-layer request identity, admission, and reap
 before higher-layer Scheduler/Batch/wake migration. Do not make a persistent
@@ -56,8 +57,11 @@ P1-10, P2-01 through P2-05, DIV-02 implementation, or DIV-12.
 docs(adr): define unified Explicit I/O Request Contract
 ```
 
-**Status:** Proposed by `ADR-explicit-io-request-contract.md`; awaiting Accepted
-review. Documentation-only—no production behavior is changed.
+**Status:** Complete — `ADR-explicit-io-request-contract.md` is Accepted
+(2026-08-02). Documentation-only — no production behavior was changed by the ADR
+itself. Its target contract is implemented for the reference backends by Phase B
+and for `ThreadPoolBackend` by Phase E; Uring migration remains Phase D, while
+Scheduler/Batch identity consumption and wake integration remain Phases F and G.
 
 **Decisions made:**
 
@@ -89,14 +93,16 @@ review. Documentation-only—no production behavior is changed.
   claiming acceptance.
 - [x] Conformance map distinguishes selected target from current implementation.
 - [x] Architecture Gate 0–4 completed without claiming future tests passed.
-- [ ] Maintainer review accepts the ADR.
+- [x] Maintainer review accepts the ADR.
 
 **Out of scope:** Any C++ implementation or public API change.
 
 ## Phase B — bounded reference request lifecycle
 
-**Status:** IMPLEMENTED (working-tree change on branch
-`feat/bounded-request-slot-reference`, awaiting user review/commit).
+**Status:** COMPLETE — merged to master via PR #63 (merge commit `7f434f0`).
+The bounded `RequestArena` / `RequestSlot` reference lifecycle landed with
+`FakeAsyncBackend` and `SyncBackend` migrated, along with the Phase B evidence
+ledger in `docs/architecture/phase-b-compliance-gate.md`.
 
 ```text
 feat(async): add bounded RequestKey / RequestSlot reference lifecycle
@@ -161,6 +167,22 @@ public RequestHandle, and public submit-signature changes.
 test(async): enforce explicit request lifecycle across backends
 ```
 
+**Status:** PARTIAL — the shared backend-agnostic suite is implemented and wired
+into the `test` group (`tests/backend_conformance.hpp` + `backend_conformance_test.cpp`
++ driver `backend_conformance_driver_test.cpp`; target `backend_conformance_test`) and
+runs against Fake, ThreadPool, and Uring (stub without liburing; real path with
+liburing). It currently contains 8 shared-semantic cases (submit→reap exactly-once,
+positional independence, EOF after partial, short-completion retry, exactly-once
+terminal, cancel yields defined terminal, stats accounting, clean shutdown).
+ThreadPool passes the suite as of Phase E (PR #64); Fake passes; Uring passes only the
+stub subset (non-`real_mode` skips). NOT complete: the "must cover" scope below is
+broader than the suite — injected allocation/startup/dispatch failure, accepted-terminal
+under allocator failure, single-waiter enforcement, generation/stale-event cases,
+borrow-lifetime cases, and the public-backend negative-compile/conformance entry
+requirements are not yet in the suite (some are covered out-of-suite by Phase B arena
+tests, death tests, and the negative-compile scripts). Per the scope text below, Uring
+must not be marked conforming before the Phase D migration.
+
 Build a backend-agnostic suite rather than backend-specific happy-path copies.
 The framework must cover:
 
@@ -196,6 +218,13 @@ the logical dependency remains B -> C.
 refactor(async): migrate UringBackend to RequestSlot identity
 ```
 
+**Status:** NOT IMPLEMENTED — `UringAsyncBackend` remains on the legacy maps/deques
+identity path (DIV-02 and DIV-14 remain open for Uring; the conformance map keeps
+its rows/notes at the pre-migration classification). This is the remaining
+incomplete backend prerequisite ahead of Phase F: F must not switch the common
+Scheduler/Batch identity consumption while Uring still reconstructs identity from
+side-band containers. The D → F dependency below is unchanged.
+
 **Work:**
 
 - map RequestKey to SQE `user_data` and CQE back to the same validated slot;
@@ -224,6 +253,11 @@ refactor(async): migrate UringBackend to RequestSlot identity
 refactor(async): replace per-op threads with bounded blocking-I/O workers
 ```
 
+**Status:** COMPLETE — merged to master via PR #64 (merge commit `a8178d8`).
+The full evidence ledger is `docs/architecture/phase-e-compliance-gate.md`
+(validated implementation head `9f91bd3`, evidence-recording head `4af082b`,
+master merge commit `a8178d8`).
+
 **Work:**
 
 - replace thread-per-operation with a fixed persistent worker set;
@@ -239,7 +273,9 @@ refactor(async): replace per-op threads with bounded blocking-I/O workers
 **Exit criteria:** Phase C suite passes; no per-op thread creation; no unbounded
 hot-path allocation; worker/storage bounds and defaults documented; P0-01,
 P1-04, P2-01, P2-02, P2-03, DIV-03, and DIV-12 receive command-backed resolution
-evidence.
+evidence. **All exit criteria are met** — see `phase-e-compliance-gate.md` for the
+command-backed evidence and the resolution notes in `current-architecture-findings.md`
+(P0-01, P1-04, P2-01, P2-02, P2-03) and `divergence-registry.md` (DIV-03, DIV-12).
 
 **Dependencies:** Phase C. It does not depend on Scheduler wake.
 
@@ -318,8 +354,8 @@ current type is named `ThreadPoolBackend`.
 
 | Finding/divergence | Target phase |
 |---|---|
-| P0-01, P1-04, P2-01, P2-02, P2-03, DIV-03, DIV-12 | E, after B/C |
-| residual P0-02 | B/C reference; D/E production backends |
+| P0-01, P1-04, P2-01, P2-02, P2-03, DIV-03, DIV-12 | E, after B/C — **resolved in Phase E (PR #64)** |
+| residual P0-02 | B/C reference (closed); D Uring — open; E ThreadPool — resolved (PR #64) |
 | P1-02, P1-06, P1-07 | B/C, then D/E/F |
 | P1-05 | B/C vocabulary and metrics |
 | P1-08, P1-09, P1-10 | B/C target semantics; focused lock design and F integration |
