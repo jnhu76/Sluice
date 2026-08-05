@@ -103,10 +103,34 @@ def xmake_build_target(target: str) -> tuple[bool, str]:
     return rc == 0, combined
 
 
-def xmake_run_target(target: str) -> tuple[int, str]:
-    """Run a built test target; return (returncode, combined_output)."""
-    rc, out, err = run_cmd(["xmake", "run", target], timeout=600)
-    return rc, out + "\n" + err
+def xmake_run_target(target: str, env_filter: Optional[str] = None
+                     ) -> tuple[int, str]:
+    """Run a built test target; return (returncode, combined_output).
+
+    `env_filter`, when set, is passed through as the SLUICE_TEST_FILTER env
+    var so the in-binary test harness runs ONLY the comma/space-separated
+    case-name substrings it names (see tests/harness.hpp). This is how the
+    aggregate gate drives each registered backend's shared-suite case in a
+    SEPARATE subprocess: one backend's failure cannot affect another
+    backend's process exit code or [conformance-meta] emission.
+    """
+    env = dict(os.environ) if env_filter else None
+    if env_filter:
+        env["SLUICE_TEST_FILTER"] = env_filter
+    try:
+        p = subprocess.run(["xmake", "run", target], cwd=REPO_ROOT,
+                           capture_output=True, text=True, timeout=600,
+                           env=env)
+        return p.returncode, p.stdout + "\n" + p.stderr
+    except FileNotFoundError:
+        return 127, f"command not found: xmake"
+    except subprocess.TimeoutExpired:
+        return 124, f"timeout after 600s: xmake run {target}"
+
+
+def _state_for_rc(rc: int) -> str:
+    """Map a subprocess return code to a gate state (pure, testable)."""
+    return PASS if rc == 0 else RUN_FAIL
 
 
 def run_shell_script(script_rel: str) -> tuple[int, str]:
@@ -168,13 +192,25 @@ def canonical_backend_key(meta_backend: str, registered: list[str]) -> Optional[
 @dataclass
 class Gate:
     args: argparse.Namespace
-    shared_driver_output: str = ""
-    shared_driver_rc: int = 0
     results: dict[str, RunResult] = field(default_factory=dict)  # evidence_id -> RunResult
+    # Per-backend shared-suite result. The shared driver binary runs ALL three
+    # registered backends in ONE process, but the in-binary test harness
+    # (tests/harness.hpp) BREAKS on the first failing case. Driving all three
+    # backends in a single process therefore makes one backend's failure
+    # contaminate the others (they never run, so their meta is never emitted
+    # and their result is inferred from the single shared exit code — a
+    # dishonest cross-backend attribution). To make each backend's verdict
+    # depend ONLY on that backend's own run, the gate drives the shared suite
+    # once per registered backend in a SEPARATE subprocess, filtered to that
+    # backend's case via SLUICE_TEST_FILTER. Each subprocess owns its exit
+    # code, its [conformance-meta] line, and its [conformance] FAIL lines.
+    shared_by_backend: dict[str, RunResult] = field(default_factory=dict)
     meta: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def run(self) -> int:
-        # Drive every IMPLEMENTED evidence record once.
+        # Drive every IMPLEMENTED evidence record once. Non-shared evidence is
+        # already per-backend by construction (the manifest tags each record
+        # with the backend(s) it covers), so it needs no subprocess isolation.
         for ev in M.EVIDENCE:
             if ev.status == M.STATUS_NOT_IMPLEMENTED:
                 self.results[ev.evidence_id] = RunResult(
@@ -186,15 +222,61 @@ class Gate:
                     ev.evidence_id, ev.target, NOT_APPLICABLE,
                     detail=ev.reason or "not applicable")
                 continue
+            # The shared suite is driven per-backend in _run_shared_suite below.
+            if ev.evidence_id == "shared_suite":
+                continue
             self.results[ev.evidence_id] = self._drive(ev)
 
-        # Parse the shared-suite driver meta once (it's the only target that
-        # emits [conformance-meta] lines).
-        shared = self.results.get("shared_suite")
-        if shared and shared.stdout:
-            self.meta = parse_meta_lines(shared.stdout)
+        # Drive the shared suite once PER registered backend, each in its own
+        # subprocess filtered to that backend's case. This is the corrective
+        # for the cross-backend contamination defect: each backend's shared
+        # result now comes from ITS OWN subprocess exit code + meta + FAIL
+        # lines, never from another backend's.
+        shared_ev = M.evidence_by_id("shared_suite")
+        if shared_ev is not None:
+            self._run_shared_suite(shared_ev)
+
+        # Parse [conformance-meta] from every per-backend shared run; each run
+        # emits exactly one meta line for its own backend.
+        self.meta = {}
+        for name, rr in self.shared_by_backend.items():
+            if rr.stdout:
+                self.meta.update(parse_meta_lines(rr.stdout))
 
         return self._report()
+
+    def _run_shared_suite(self, ev: M.Evidence) -> None:
+        """Drive the shared suite once per registered backend in isolation.
+
+        Preflight (target existence + build) is done ONCE; each backend then
+        runs in its own `xmake run` subprocess with SLUICE_TEST_FILTER set to
+        its case name. A backend whose subprocess fails records RUN_FAIL for
+        THAT backend only; the others run and report independently.
+        """
+        # Preflight target existence + build once (cheap, shared).
+        if not xmake_target_exists(ev.target):
+            missing = RunResult(ev.evidence_id, ev.target, MISSING_TARGET,
+                                detail="xmake show -t reports not a valid target")
+            for b in M.BACKENDS:
+                self.shared_by_backend[b.name] = missing
+            return
+        if self.args is not None and not getattr(self.args, "no_build", False):
+            ok, log = xmake_build_target(ev.target)
+            if not ok:
+                bf = RunResult(ev.evidence_id, ev.target, BUILD_FAIL,
+                               detail="xmake build failed", stdout=log)
+                for b in M.BACKENDS:
+                    self.shared_by_backend[b.name] = bf
+                return
+
+        # One isolated subprocess per registered backend. The case name
+        # (BackendEntry.driver_case) is the SLUICE_TEST_CASE the driver
+        # registers for that backend (see backend_conformance_driver_test.cpp).
+        for b in M.BACKENDS:
+            rc, out = xmake_run_target(ev.target, env_filter=b.driver_case)
+            self.shared_by_backend[b.name] = RunResult(
+                f"{ev.evidence_id}:{b.name}", ev.target, _state_for_rc(rc),
+                detail=f"exit {rc} (filter={b.driver_case})", stdout=out)
 
     def _drive(self, ev: M.Evidence) -> RunResult:
         if ev.target.startswith("__script__:"):
@@ -219,10 +301,7 @@ class Gate:
                                  detail="xmake build failed", stdout=log)
 
         rc, out = xmake_run_target(ev.target)
-        if ev.evidence_id == "shared_suite":
-            self.shared_driver_output = out
-            self.shared_driver_rc = rc
-        state = PASS if rc == 0 else RUN_FAIL
+        state = _state_for_rc(rc)
         return RunResult(ev.evidence_id, ev.target, state,
                          detail=f"exit {rc}", stdout=out)
 
@@ -231,8 +310,13 @@ class Gate:
     def _backend_run_state(self, ev: M.Evidence, backend_name: str,
                            backend_profile: str = "") -> str:
         """The run state of an evidence record FROM THE PERSPECTIVE of one
-        backend. For the shared suite (which drives all backends in one
-        binary), we look for a [conformance] FAIL line naming this backend.
+        backend.
+
+        Per-backend isolation (the C1 corrective): the shared suite is driven
+        once PER backend in a separate subprocess (see _run_shared_suite), so a
+        backend's shared-suite state is read from THIS backend's own subprocess
+        result, never inferred from a single shared exit code. One backend's
+        RUN_FAIL therefore cannot become another backend's state.
 
         IMPORTANT: backend-agnostic arena/lifecycle evidence proves the
         RequestSlot CONTRACT, NOT that a given backend conforms to it. The
@@ -242,6 +326,13 @@ class Gate:
         INCOMPLETE for KernelIoProfile lifecycle/backend_specific regardless of
         the arena tests passing, because those tests do not exercise Uring.
         """
+        # The shared suite: this backend's OWN subprocess result.
+        if ev.evidence_id == "shared_suite":
+            r = self.shared_by_backend.get(backend_name)
+            if r is None:
+                return NOT_RUN
+            return r.state
+
         r = self.results.get(ev.evidence_id)
         if r is None:
             return NOT_RUN
@@ -257,17 +348,6 @@ class Gate:
             # stub subset, so it is INCOMPLETE for the kernel profile.
             return INCOMPLETE
 
-        # For the shared suite specifically, a backend-specific FAIL is encoded
-        # as a [conformance] FAIL <backend> line even though the binary exits 0
-        # or non-zero. Parse those.
-        if ev.evidence_id == "shared_suite" and r.stdout:
-            for line in r.stdout.splitlines():
-                # [conformance] FAIL <backend> :: <case> : ...
-                m = re.match(r"\[conformance\] FAIL (\S+) ::", line.strip())
-                if m:
-                    fb = canonical_backend_key(m.group(1), [b.name for b in M.BACKENDS])
-                    if fb == backend_name:
-                        return RUN_FAIL
         return r.state
 
     def _backend_verdict(self, backend: M.BackendEntry) -> tuple[str, list[str]]:
@@ -329,8 +409,6 @@ class Gate:
         print("Explicit-I/O Backend Conformance Gate (Phase C1)")
         print("=" * 72)
         print()
-
-        registered_names = [b.name for b in M.BACKENDS]
 
         # --- Per-backend report ---
         for backend in M.BACKENDS:
@@ -394,14 +472,43 @@ class Gate:
                 f"external backend authority: {auth_ext.state}")
 
         # --- Mandatory target-level failures (any backend) ---
+        # Non-shared evidence is global (one result per evidence id). The shared
+        # suite is per-backend (see _run_shared_suite), so its mandatory
+        # failures are attributed to the SPECIFIC backend that failed — never
+        # propagated to the other backends. This is the closed attribution
+        # model: a single mandatory issue names exactly the backend/evidence
+        # that failed.
         for ev in M.EVIDENCE:
-            r = self.results[ev.evidence_id]
-            if ev.status != M.STATUS_IMPLEMENTED:
+            if ev.status != M.STATUS_IMPLEMENTED or not ev.mandatory:
                 continue
-            if r.state in (MISSING_TARGET, BUILD_FAIL, RUN_FAIL) and ev.mandatory:
+            if ev.evidence_id == "shared_suite":
+                # Per-backend shared suite: attribute each backend's own state.
+                for b in M.BACKENDS:
+                    rr = self.shared_by_backend.get(b.name)
+                    if rr and rr.state in (MISSING_TARGET, BUILD_FAIL,
+                                           RUN_FAIL):
+                        overall_failures.append(
+                            f"mandatory evidence '{ev.evidence_id}' "
+                            f"backend {b.name} ({ev.target}): {rr.state}")
+                continue
+            r = self.results.get(ev.evidence_id)
+            if r is None:
+                overall_failures.append(
+                    f"mandatory evidence '{ev.evidence_id}' "
+                    f"({ev.target}): {NOT_RUN} (not evaluated)")
+            elif r.state in (MISSING_TARGET, BUILD_FAIL, RUN_FAIL):
                 overall_failures.append(
                     f"mandatory evidence '{ev.evidence_id}' "
                     f"({ev.target}): {r.state}")
+
+        # Fail closed: every registered backend MUST have been evaluated for the
+        # shared suite. A missing shared_by_backend entry means the gate did not
+        # run that backend — that is a harness error, not a benign skip.
+        for b in M.BACKENDS:
+            if b.name not in self.shared_by_backend:
+                overall_failures.append(
+                    f"registered backend {b.name} shared-suite result MISSING "
+                    f"(gate must evaluate every registered backend)")
 
         # --- Summary ---
         print("-" * 72)
