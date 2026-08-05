@@ -33,6 +33,7 @@ import importlib.util
 import os
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -393,6 +394,239 @@ class SubprocessOutcomeMappingTest(unittest.TestCase):
 
     def test_timeout_subprocess_is_run_fail(self):
         self.assertEqual(G._state_for_rc(124), G.RUN_FAIL)
+
+
+class ProfileModesTest(unittest.TestCase):
+    """Closed mode vocabulary per profile (P1 meta validation input)."""
+
+    def test_profile_modes_keys_are_exactly_profiles(self):
+        self.assertEqual(set(M.PROFILE_MODES), set(M.PROFILES))
+
+    def test_modes_are_the_closed_vocabulary(self):
+        all_modes = set().union(*(set(v) for v in M.PROFILE_MODES.values()))
+        self.assertEqual(all_modes, {"deterministic", "real", "stub"})
+
+    def test_reference_profile_allows_deterministic_only(self):
+        self.assertEqual(set(M.PROFILE_MODES["ReferenceProfile"]),
+                         {"deterministic"})
+
+    def test_blocking_io_profile_allows_real_only(self):
+        self.assertEqual(set(M.PROFILE_MODES["BlockingIoProfile"]), {"real"})
+
+    def test_kernel_io_profile_allows_real_or_stub(self):
+        self.assertEqual(set(M.PROFILE_MODES["KernelIoProfile"]),
+                         {"real", "stub"})
+
+    def test_every_backend_has_nonempty_driver_case(self):
+        for b in M.BACKENDS:
+            self.assertTrue(b.driver_case,
+                            f"{b.name}: driver_case must be set")
+
+
+# ---------------------------------------------------------------------------
+# P1 corrective: the isolated shared-suite run is fail-closed.
+#
+# A per-backend shared run counts as PASS only when it provably executed
+# exactly the manifest driver_case and emitted exactly one [conformance-meta]
+# line declaring the manifest profile and a profile-allowed mode. Anything
+# else (zero/extra selected cases, missing/duplicate/foreign meta, wrong
+# backend/profile/mode) is INCOMPLETE — never PASS. These tests drive the
+# gate's pure classification helper with fabricated subprocess outputs.
+# ---------------------------------------------------------------------------
+
+class SharedRunFailClosedTest(unittest.TestCase):
+    """_classify_shared_run: PASS only with provable, exactly-one coverage."""
+
+    GOOD_FAKE = (
+        "[run] conformance_fake\n"
+        "[conformance-meta] backend=Fake profile=ReferenceProfile "
+        "mode=deterministic\n")
+
+    def _classify(self, backend="Fake", rc=0, out=""):
+        g = G.Gate(args=None)
+        return g._classify_shared_run(M.backend_by_name(backend), rc, out)
+
+    def test_valid_run_is_pass(self):
+        state, detail = self._classify(out=self.GOOD_FAKE)
+        self.assertEqual(state, G.PASS, detail)
+
+    def test_nonzero_rc_is_run_fail(self):
+        state, detail = self._classify(rc=1, out=self.GOOD_FAKE)
+        self.assertEqual(state, G.RUN_FAIL, detail)
+
+    def test_driver_case_typo_selects_zero_cases_is_incomplete(self):
+        # A typo'd / renamed driver_case runs zero cases: no [run] line, no
+        # meta. Previously this produced "ALL TESTS PASSED" -> exit 0 -> PASS.
+        state, detail = self._classify(out="")
+        self.assertEqual(state, G.INCOMPLETE, detail)
+        self.assertIn("selected", detail)
+
+    def test_filter_matches_multiple_cases_is_incomplete(self):
+        out = ("[run] conformance_fake\n[run] conformance_threadpool\n"
+               "[conformance-meta] backend=Fake profile=ReferenceProfile "
+               "mode=deterministic\n")
+        state, detail = self._classify(out=out)
+        self.assertEqual(state, G.INCOMPLETE, detail)
+
+    def test_missing_conformance_meta_is_incomplete(self):
+        out = ("[run] conformance_fake\n"
+               "[conformance] skip Fake :: foo (non-real_mode)\n")
+        state, detail = self._classify(out=out)
+        self.assertEqual(state, G.INCOMPLETE, detail)
+        self.assertIn("meta", detail)
+
+    def test_wrong_backend_meta_is_incomplete(self):
+        out = ("[run] conformance_fake\n"
+               "[conformance-meta] backend=ThreadPool "
+               "profile=BlockingIoProfile mode=real\n")
+        state, detail = self._classify(out=out)
+        self.assertEqual(state, G.INCOMPLETE, detail)
+        self.assertIn("backend", detail)
+
+    def test_wrong_profile_meta_is_incomplete(self):
+        out = ("[run] conformance_fake\n"
+               "[conformance-meta] backend=Fake profile=BlockingIoProfile "
+               "mode=deterministic\n")
+        state, detail = self._classify(out=out)
+        self.assertEqual(state, G.INCOMPLETE, detail)
+        self.assertIn("profile", detail)
+
+    def test_wrong_mode_meta_is_incomplete(self):
+        out = ("[run] conformance_fake\n"
+               "[conformance-meta] backend=Fake profile=ReferenceProfile "
+               "mode=real\n")
+        state, detail = self._classify(out=out)
+        self.assertEqual(state, G.INCOMPLETE, detail)
+        self.assertIn("mode", detail)
+
+    def test_duplicate_meta_lines_is_incomplete(self):
+        out = ("[run] conformance_fake\n"
+               "[conformance-meta] backend=Fake profile=ReferenceProfile "
+               "mode=deterministic\n"
+               "[conformance-meta] backend=Fake profile=ReferenceProfile "
+               "mode=deterministic\n")
+        state, detail = self._classify(out=out)
+        self.assertEqual(state, G.INCOMPLETE, detail)
+        self.assertIn("meta", detail)
+
+    def test_foreign_backend_meta_alongside_own_is_incomplete(self):
+        out = ("[run] conformance_fake\n"
+               "[conformance-meta] backend=Fake profile=ReferenceProfile "
+               "mode=deterministic\n"
+               "[conformance-meta] backend=ThreadPool "
+               "profile=BlockingIoProfile mode=real\n")
+        state, detail = self._classify(out=out)
+        self.assertEqual(state, G.INCOMPLETE, detail)
+
+    def test_uring_stub_meta_canonicalizes_to_registered_backend(self):
+        out = ("[run] conformance_uring\n"
+               "[conformance-meta] backend=Uring(stub) profile=KernelIoProfile "
+               "mode=stub\n")
+        state, detail = self._classify(backend="Uring", out=out)
+        self.assertEqual(state, G.PASS, detail)
+
+    def test_threadpool_real_meta_is_pass(self):
+        out = ("[run] conformance_threadpool\n"
+               "[conformance-meta] backend=ThreadPool "
+               "profile=BlockingIoProfile mode=real\n")
+        state, detail = self._classify(backend="ThreadPool", out=out)
+        self.assertEqual(state, G.PASS, detail)
+
+
+# ---------------------------------------------------------------------------
+# P2 corrective: verdicts distinguish proven violation from missing evidence.
+#
+# Priority: any applicable MANDATORY evidence RUN_FAIL => NOT_CONFORMING;
+# else any MISSING_TARGET / BUILD_FAIL / NOT_RUN / INCOMPLETE => INCOMPLETE;
+# else all mandatory evidence PASS / legal NOT_APPLICABLE and every mandatory
+# layer actually covered => ELIGIBLE. Non-mandatory evidence is diagnostic
+# only: it can neither satisfy a mandatory layer nor block ELIGIBLE.
+# ---------------------------------------------------------------------------
+
+class MandatoryVerdictPriorityTest(unittest.TestCase):
+    """_backend_verdict: one PASS per layer is NOT enough."""
+
+    def test_layer_one_pass_one_missing_target_is_incomplete(self):
+        # Same mandatory layer: one target PASS, one MISSING_TARGET. The old
+        # state machine saw PASS in the layer set and returned ELIGIBLE.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["arena_capacity_generation_release"] = G.RunResult(
+            "arena_capacity_generation_release", "request_arena_test",
+            G.MISSING_TARGET,
+            detail="xmake show -t reports not a valid target")
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Fake"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertTrue(
+            any("arena_capacity_generation_release" in r for r in reasons))
+
+    def test_run_fail_beats_incomplete(self):
+        # A proven violation outranks missing evidence: NOT_CONFORMING.
+        g = _stub_gate({"Fake": "RUN_FAIL", "ThreadPool": "PASS",
+                        "Uring": "PASS"})
+        g.results["arena_capacity_generation_release"] = G.RunResult(
+            "arena_capacity_generation_release", "request_arena_test",
+            G.MISSING_TARGET, detail="missing")
+        verdict, _ = g._backend_verdict(M.backend_by_name("Fake"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+
+    def test_missing_target_in_other_layer_is_incomplete(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["threadpool_phase_e_contract"] = G.RunResult(
+            "threadpool_phase_e_contract", "threadpool_backend_phase_e_test",
+            G.NOT_RUN, detail="not evaluated")
+        verdict, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+
+    def test_all_mandatory_pass_is_eligible(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Fake"))
+        self.assertEqual(verdict, G.ELIGIBLE)
+        verdict, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        self.assertEqual(verdict, G.ELIGIBLE)
+
+    def test_uncovered_mandatory_layer_is_incomplete(self):
+        # A backend with no evidence in a mandatory layer must be INCOMPLETE
+        # (insufficient evidence), NOT NOT_CONFORMING (proven violation) and
+        # never ELIGIBLE. "Ghost" is not registered: only backend-agnostic
+        # lifecycle evidence applies, so "shared" and "backend_specific"
+        # layers have no records.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        ghost = M.BackendEntry("Ghost", "ReferenceProfile", "conformance_ghost")
+        verdict, reasons = g._backend_verdict(ghost)
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertTrue(any("layer" in r for r in reasons))
+
+    def test_non_mandatory_evidence_is_diagnostic_only(self):
+        # A mandatory=False record must not satisfy a mandatory layer nor
+        # block ELIGIBLE when it fails.
+        diag = M.Evidence(
+            evidence_id="diagnostic_probe",
+            target="diagnostic_probe_test",
+            layer="lifecycle",
+            backends=("Fake",),
+            mandatory=False,
+            notes="diagnostic only",
+        )
+        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (diag,)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            g.results["diagnostic_probe"] = G.RunResult(
+                "diagnostic_probe", "diagnostic_probe_test",
+                G.RUN_FAIL, detail="diagnostic failure")
+            verdict, reasons = g._backend_verdict(M.backend_by_name("Fake"))
+            self.assertEqual(verdict, G.ELIGIBLE, reasons)
+            # ...but a mandatory record failing in the same layer still
+            # produces INCOMPLETE (the diagnostic cannot rescue it).
+            g2 = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                             "Uring": "PASS"})
+            g2.results["diagnostic_probe"] = G.RunResult(
+                "diagnostic_probe", "diagnostic_probe_test",
+                G.PASS, detail="diagnostic pass")
+            g2.results["arena_capacity_generation_release"] = G.RunResult(
+                "arena_capacity_generation_release", "request_arena_test",
+                G.MISSING_TARGET, detail="missing")
+            verdict, _ = g2._backend_verdict(M.backend_by_name("Fake"))
+            self.assertEqual(verdict, G.INCOMPLETE)
 
 
 if __name__ == "__main__":
