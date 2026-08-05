@@ -30,6 +30,14 @@ namespace sluice_test::conformance {
 // backend can do real I/O on (only used when real_mode). real_mode=false means
 // the backend cannot do real I/O (Fake, or Uring stub without liburing) — the
 // fd-backed cases are skipped cleanly.
+//
+// Phase C1 classification fields (profile + mode): these are the stable,
+// machine-readable identity the aggregate gate reads via [conformance-meta]
+// lines. They are HIGHER-LEVEL than real_mode (which still controls per-case
+// skip logic inside the suite) and exist so the gate does not have to infer a
+// backend's family/mode from display names or skip text. Values:
+//   profile: one of ReferenceProfile / BlockingIoProfile / KernelIoProfile.
+//   mode:    deterministic | real | stub.
 struct BackendFactory {
     using MakeBackend = std::function<std::unique_ptr<sluice::async::AsyncBackend>()>;
     using MakeTempFd = std::function<int()>;  // returns an open rw fd; -1 if unsupported
@@ -38,11 +46,22 @@ struct BackendFactory {
     MakeBackend make_backend;
     MakeTempFd make_temp_fd;  // may be nullptr when not real_mode
     bool real_mode;           // can do real kernel I/O
+    const char* profile;      // Phase C1 closed-profile classification
+    const char* mode;         // Phase C1 execution mode classification
 };
 
 // Records a conformance skip (not a failure). Printed for visibility.
 inline void note_skip(const char* backend, const char* case_name, const char* reason) {
     std::printf("[conformance] skip %s :: %s (%s)\n", backend, case_name, reason);
+}
+
+// Phase C1: emit a stable machine-readable identity line for a backend BEFORE
+// its shared-suite case runs. The aggregate gate parses ONLY these
+// [conformance-meta] lines to classify backends. Must be printed exactly once
+// per registered backend, before any [conformance] skip/FAIL line for it.
+inline void emit_meta(const BackendFactory& factory) {
+    std::printf("[conformance-meta] backend=%s profile=%s mode=%s\n",
+                factory.name, factory.profile, factory.mode);
 }
 
 // The shared suite. Returns 0 on full pass, 1 on any failure. Skips are not

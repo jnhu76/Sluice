@@ -6,6 +6,15 @@
 //
 // Backend-specific MECHANISM tests (SQE pressure, ThreadPool concurrency) stay
 // in their own files. This file asserts only shared SEMANTIC outcomes.
+//
+// Phase C1: each registered backend emits a stable machine-readable
+// [conformance-meta] line BEFORE its case runs, declaring its profile and
+// mode. The aggregate gate (scripts/verify-backend-conformance.py) parses
+// ONLY these meta lines to classify backends — it does NOT infer mode from
+// display names, skip text, or build-directory contents. The existing
+// BackendFactory::real_mode field is retained (it still controls which cases
+// the shared suite skips); the meta line is the higher-level classification
+// surface added by C1.
 #include "backend_conformance.hpp"
 #include "harness.hpp"
 
@@ -48,7 +57,9 @@ BackendFactory make_fake_factory() {
         "Fake",
         [] { return std::make_unique<FakeAsyncBackend>(); },
         nullptr,                // no real fd
-        false                   // not real_mode
+        false,                  // not real_mode
+        "ReferenceProfile",     // Phase C1 profile
+        "deterministic"         // Phase C1 mode
     };
 }
 
@@ -57,7 +68,9 @@ BackendFactory make_threadpool_factory() {
         "ThreadPool",
         [] { return std::make_unique<ThreadPoolBackend>(); },
         &make_temp_fd,
-        true
+        true,
+        "BlockingIoProfile",    // Phase C1 profile
+        "real"                  // Phase C1 mode
     };
 }
 
@@ -67,17 +80,23 @@ BackendFactory make_uring_factory() {
         "Uring",
         [] { return std::make_unique<UringAsyncBackend>(); },
         &make_temp_fd,
-        true
+        true,
+        "KernelIoProfile",      // Phase C1 profile
+        "real"                  // Phase C1 mode
     };
 #else
     // Stub mode: UringAsyncBackend compiles but available() is false and
     // submit_* returns backend_error. real_mode=false so fd-backed cases skip
-    // cleanly; the suite still asserts the submit->error shape.
+    // cleanly; the suite still asserts the submit->error shape. The meta line
+    // declares mode=stub so the aggregate gate classifies the KernelIo profile
+    // as NOT CONFORMING (kernel coverage INCOMPLETE) without parsing names.
     return BackendFactory{
         "Uring(stub)",
         [] { return std::make_unique<UringAsyncBackend>(); },
         nullptr,
-        false
+        false,
+        "KernelIoProfile",      // Phase C1 profile
+        "stub"                  // Phase C1 mode
     };
 #endif
 }
@@ -85,15 +104,21 @@ BackendFactory make_uring_factory() {
 }  // namespace
 
 SLUICE_TEST_CASE(conformance_fake) {
-    SLUICE_CHECK(sluice_test::conformance::run_conformance(make_fake_factory()) == 0);
+    const auto f = make_fake_factory();
+    sluice_test::conformance::emit_meta(f);
+    SLUICE_CHECK(sluice_test::conformance::run_conformance(f) == 0);
 }
 
 SLUICE_TEST_CASE(conformance_threadpool) {
-    SLUICE_CHECK(sluice_test::conformance::run_conformance(make_threadpool_factory()) == 0);
+    const auto f = make_threadpool_factory();
+    sluice_test::conformance::emit_meta(f);
+    SLUICE_CHECK(sluice_test::conformance::run_conformance(f) == 0);
 }
 
 SLUICE_TEST_CASE(conformance_uring) {
-    SLUICE_CHECK(sluice_test::conformance::run_conformance(make_uring_factory()) == 0);
+    const auto f = make_uring_factory();
+    sluice_test::conformance::emit_meta(f);
+    SLUICE_CHECK(sluice_test::conformance::run_conformance(f) == 0);
 }
 
 SLUICE_MAIN()
