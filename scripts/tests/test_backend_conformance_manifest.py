@@ -146,12 +146,27 @@ class EvidenceRecordsTest(unittest.TestCase):
             self.assertTrue(e.target, f"{e.evidence_id}: empty target")
 
     def test_not_implemented_never_counts_as_pass(self):
-        # A not_implemented evidence record must not be mandatory with a
-        # misleading pass note; the gate treats not_implemented as INCOMPLETE.
-        for e in M.EVIDENCE:
-            if e.status == M.STATUS_NOT_IMPLEMENTED:
-                # Sanity: the manifest never marks a known-gap record PASS.
-                self.assertNotEqual(e.status, M.STATUS_IMPLEMENTED)
+        # Behavioral: drive the gate with a not_implemented evidence record
+        # present and assert the record is INCOMPLETE, which is never in the
+        # SATISFACTORY set — a known gap can never satisfy a mandatory slot.
+        gap = M.Evidence(
+            evidence_id="phase_d_gap",
+            target="phase_d_target",
+            layer="backend_specific",
+            backends=("Uring",),
+            status=M.STATUS_NOT_IMPLEMENTED,
+        )
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (gap,)), \
+             mock.patch.object(G, "xmake_target_exists", return_value=False), \
+             mock.patch.object(G, "run_shell_script", return_value=(0, "")), \
+             contextlib.redirect_stdout(buf):
+            g = G.Gate(args=None)
+            g.run()
+            self.assertEqual(g.results["phase_d_gap"].state, G.INCOMPLETE)
+        self.assertNotIn(G.INCOMPLETE, G.SATISFACTORY)
 
 
 class MandatoryCoverageTest(unittest.TestCase):
@@ -232,7 +247,7 @@ def _stub_gate(shared_per_backend, *, shared_rc=None,
     g.meta = meta_override if meta_override is not None else {
         "Fake": {"profile": "ReferenceProfile", "mode": "deterministic"},
         "ThreadPool": {"profile": "BlockingIoProfile", "mode": "real"},
-        "Uring(stub)": {"profile": "KernelIoProfile", "mode": "stub"},
+        "Uring": {"profile": "KernelIoProfile", "mode": "stub"},
     }
     # Seed every non-shared IMPLEMENTED evidence to PASS by default.
     g.results = {}
@@ -368,10 +383,13 @@ class ClosedProfileMappingTest(unittest.TestCase):
     """Case 9/10 of task §4: closed profile manifest, no nameless backends."""
 
     def test_no_unregistered_backend_can_be_eligible(self):
-        # Only registered backends are evaluated; there is no code path that
-        # can produce a verdict for an unregistered name.
-        registered = {b.name for b in M.BACKENDS}
-        self.assertEqual(registered, {"Fake", "ThreadPool", "Uring"})
+        # Behavioral: an unregistered backend name cannot produce an ELIGIBLE
+        # verdict even when every applicable evidence record passes. (The
+        # registry CONTENT itself is asserted in BackendRegistryTest.)
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        ghost = M.BackendEntry("Ghost", "ReferenceProfile", "conformance_ghost")
+        verdict, _ = g._backend_verdict(ghost)
+        self.assertNotEqual(verdict, G.ELIGIBLE)
 
     def test_kernel_profile_never_eligible_in_c1(self):
         # Regardless of run state, KernelIoProfile lifecycle/backend_specific
@@ -510,11 +528,16 @@ class SharedRunFailClosedTest(unittest.TestCase):
         self.assertIn("meta", detail)
 
     def test_foreign_backend_meta_alongside_own_is_incomplete(self):
+        # Evaluating ONE filtered backend while the output carries meta for
+        # every backend (Fake, ThreadPool, Uring) must be INCOMPLETE — the
+        # run provably executed more than the expected backend's case.
         out = ("[run] conformance_fake\n"
                "[conformance-meta] backend=Fake profile=ReferenceProfile "
                "mode=deterministic\n"
                "[conformance-meta] backend=ThreadPool "
-               "profile=BlockingIoProfile mode=real\n")
+               "profile=BlockingIoProfile mode=real\n"
+               "[conformance-meta] backend=Uring(stub) profile=KernelIoProfile "
+               "mode=stub\n")
         state, detail = self._classify(out=out)
         self.assertEqual(state, G.INCOMPLETE, detail)
 

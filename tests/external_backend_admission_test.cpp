@@ -22,18 +22,21 @@
 //
 // Proven properties:
 //   (1) A self-contained subclass compiles against the public surface.
-//   (2) The subclass can reach the inherited protected helpers to drive a
-//       Completion through idle -> outstanding -> ready and observe the
-//       terminal result.
-//   (3) An instance owned by AsyncIoContext with zero outstanding work
+//   (2) An instance owned by AsyncIoContext with zero outstanding work
 //       destroys cleanly (the caller-destructor L11 happy path).
+//
+// The claim/publish LIFECYCLE semantics are intentionally NOT re-proven here:
+// derived-class ACCESS to the inherited protected helpers is covered at
+// compile level by the authority probe's positive control
+// (external_backend_authority_negative_probe.cpp, compiled with no NEG_*
+// macro), and the idle -> binding -> outstanding -> ready semantics live in
+// the arena-backed Completion tests.
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
 #include <cstdio>
-#include <utility>
 
 #include "harness.hpp"
 
@@ -42,11 +45,12 @@ using sluice::Result;
 using sluice::IoError;
 
 // A minimal external backend built ONLY from the public extension surface. All
-// seven pure-virtual AsyncBackend methods are inert stubs. It additionally
-// exposes the inherited protected helpers through public wrappers so this test
-// can drive a Completion lifecycle directly (exactly the authorized
-// backend-author pattern; ordinary NON-backend code cannot reach these — that
-// boundary is proven by the companion negative-compile gate).
+// seven pure-virtual AsyncBackend methods are inert stubs. This TU proves the
+// subclass compiles against the public surface and can be owned by
+// AsyncIoContext; it deliberately does not drive the protected publication
+// helpers (that access is proven at compile level by the authority probe's
+// positive control, and the lifecycle semantics live in the arena-backed
+// Completion tests).
 class MinimalExternalBackend : public AsyncBackend {
   public:
     Result<void> submit_read(ReadOp, Completion<std::size_t>&) override {
@@ -64,49 +68,12 @@ class MinimalExternalBackend : public AsyncBackend {
     std::size_t poll() override { return 0; }
     Result<std::size_t> wait_one() override { return Result<std::size_t>{0}; }
     std::size_t outstanding() const noexcept override { return 0; }
-
-    // Authorized wrappers over the inherited protected helpers. These are the
-    // sanctioned backend-author capability; a class that does NOT derive from
-    // AsyncBackend cannot name them (see external_backend_authority_negative_
-    // probe.cpp).
-    template <class T>
-    bool claim(Completion<T>& c) noexcept {
-        return try_claim(c);
-    }
-    template <class T>
-    void publish_completion(Completion<T>& c, Result<T>&& r) noexcept {
-        publish(c, std::move(r));
-    }
 };
 
 // (1) The subclass compiles against the public surface (this whole TU is the
-// proof). (2) It can drive a Completion idle -> outstanding -> ready and the
-// terminal result is observable.
-SLUICE_TEST_CASE(external_backend_can_claim_and_publish) {
-    MinimalExternalBackend backend;
-    Completion<std::size_t> c;
-    SLUICE_CHECK(c.idle());
-    SLUICE_CHECK(!c.outstanding());
-    SLUICE_CHECK(!c.ready());
-
-    // Claimed via the inherited protected try_claim: idle -> outstanding.
-    SLUICE_CHECK(backend.claim(c));
-    SLUICE_CHECK(!c.idle());
-    SLUICE_CHECK(c.outstanding());
-    SLUICE_CHECK(!c.ready());
-
-    // Published via the inherited protected publish: outstanding -> ready.
-    backend.publish_completion(c, Result<std::size_t>{7});
-    SLUICE_CHECK(!c.idle());
-    SLUICE_CHECK(!c.outstanding());
-    SLUICE_CHECK(c.ready());
-    SLUICE_CHECK(c.result().has_value());
-    SLUICE_CHECK(c.result().value() == 7);
-}
-
-// (3) An instance owned by AsyncIoContext with zero outstanding work destroys
-// cleanly (the caller-destructor L11 happy path). If we reach the end of the
-// scope without terminating, the admission contract holds.
+// proof). (2) An instance owned by AsyncIoContext with zero outstanding work
+// destroys cleanly (the caller-destructor L11 happy path). If we reach the end
+// of the scope without terminating, the admission contract holds.
 SLUICE_TEST_CASE(external_backend_owned_by_context_destroys_clean) {
     {
         AsyncIoContext ctx(std::make_unique<MinimalExternalBackend>());
@@ -115,25 +82,6 @@ SLUICE_TEST_CASE(external_backend_owned_by_context_destroys_clean) {
     }
     // Reached here => destructor did not fail-fast.
     SLUICE_CHECK(true);
-}
-
-// A second claim on an already-claimed Completion must lose (exactly-one
-// winner): the inherited helper returns false and the Completion stays
-// outstanding, not double-claimed. The winner must then be published and reset
-// before destruction (L11: destroying an outstanding Completion fails fast).
-SLUICE_TEST_CASE(external_backend_double_claim_loses) {
-    MinimalExternalBackend a;
-    MinimalExternalBackend b;
-    Completion<std::size_t> c;
-    SLUICE_CHECK(a.claim(c));      // first claim wins
-    SLUICE_CHECK(!b.claim(c));     // second claim loses
-    SLUICE_CHECK(c.outstanding()); // still exactly one outstanding
-    // Drive the winner to ready so the Completion can be reset cleanly before
-    // destruction (the L11 happy path).
-    a.publish_completion(c, Result<std::size_t>{11});
-    SLUICE_CHECK(c.ready());
-    SLUICE_CHECK(c.result().value() == 11);
-    c.reset();  // ready -> idle; slot-release handshake (no-op without an arena)
 }
 
 SLUICE_MAIN()

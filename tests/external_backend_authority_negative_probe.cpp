@@ -49,17 +49,39 @@ class LegitimateBackend : public AsyncBackend {
     std::size_t poll() override { return 0; }
     Result<std::size_t> wait_one() override { return Result<std::size_t>{0}; }
     std::size_t outstanding() const noexcept override { return 0; }
+
+    // Authorized derived-class access to the inherited protected publication
+    // helpers (the sanctioned backend-author pattern): a member function can
+    // drive a Completion through claim -> publish. The private using
+    // declarations below make the positive control FAIL to compile if either
+    // helper is ever narrowed from protected to private in AsyncBackend — a
+    // regression the negative cases alone cannot detect (they only prove that
+    // NON-derived code cannot reach the helpers).
+    bool claim(Completion<std::size_t>& c) noexcept { return try_claim(c); }
+    void publish_ready(Completion<std::size_t>& c,
+                       Result<std::size_t>&& r) noexcept {
+        publish(c, std::move(r));
+    }
+
+  private:
+    using AsyncBackend::try_claim;
+    using AsyncBackend::publish;
 };
 
 // Positive control: a derived backend reaches the helpers through inheritance
 // (the sanctioned backend-author capability), and ordinary code uses the public
-// Completion API. Always compiles with no NEG_* macro.
+// Completion API. Always compiles with no NEG_* macro. Compiled with
+// -fsyntax-only, so the claim/publish calls prove ACCESS at compile time.
 void positive_control() {
     LegitimateBackend b;
     AsyncIoContext ctx(std::make_unique<LegitimateBackend>());
     (void)ctx.outstanding();
     Completion<std::size_t> c;
     (void)c.idle();
+    // Derived-class access to the inherited protected helpers:
+    if (b.claim(c)) {
+        b.publish_ready(c, Result<std::size_t>{1});
+    }
     c.reset();
     (void)b.outstanding();
 }

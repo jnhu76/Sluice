@@ -311,7 +311,9 @@ EVIDENCE: tuple[Evidence, ...] = (
         layer="authority",
         backends=(),
         notes="NEW (C1): AsyncBackend protected publish/claim helpers are "
-              "inaccessible to non-derived ordinary code.",
+              "inaccessible to non-derived ordinary code; the probe's positive "
+              "control proves derived-class access to both helpers still "
+              "compiles (guards against protected->private regression).",
     ),
 
     # -----------------------------------------------------------------------
@@ -325,8 +327,10 @@ EVIDENCE: tuple[Evidence, ...] = (
         target="external_backend_admission_test",
         layer="external_admission",
         backends=(),
-        notes="Public-surface subclass can claim/publish + be owned by "
-              "AsyncIoContext. NOT a conformance witness.",
+        notes="Public-surface subclass compiles + is owned by AsyncIoContext; "
+              "derived access to the protected publication helpers is proven "
+              "at compile level by the authority probe's positive control. "
+              "NOT a conformance witness.",
     ),
 )
 
