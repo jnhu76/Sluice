@@ -73,10 +73,17 @@ jobs:
         # Builds every target in the unified 'test' group (xmake.lua).
         run: xmake build -g test
 
-      - name: Run tests
+      - name: Run tests (bounded hang watchdog)
         # xmake test returns non-zero if any test fails (suitable for CI).
-        # -v keeps the per-test output visible in the Actions log.
-        run: xmake test -v
+        # -v keeps the per-test output visible in the Actions log. The
+        # watchdog (issue #67: sluice_copy_pipeline_stress_test can stall on
+        # the hosted runner) turns a rare hang into a gdb all-thread capture
+        # printed in the log instead of a silent stall; a hang still fails
+        # the job (fail-closed). ptrace_scope=0 lets gdb attach to the
+        # orphaned test binaries (runner user has passwordless sudo).
+        run: |
+          sudo sysctl -w kernel.yama.ptrace_scope=0 || true
+          bash scripts/ci-hang-watchdog.sh 420 xmake test -v
 
       - name: Negative-compile verification (E15-P2-03)
         # Verifies that every deleted/private API guard on the E10-E12 async
