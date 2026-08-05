@@ -91,6 +91,14 @@ do
     end
 end
 
+-- Phase C1 — external/custom backend ADMISSION probe (NOT conformance).
+-- MinimalExternalBackend subclasses AsyncBackend from the PUBLIC extension
+-- surface only (no <sluice/async/detail/*> include) and proves a legitimate
+-- subclass can claim/publish + be owned by AsyncIoContext. It is deliberately
+-- NOT driven through the shared observable-semantics suite; see
+-- scripts/backend_conformance_manifest.py (external_admission layer).
+sluice_production_async_test("external_backend_admission_test")
+
 -- Cooperative cancellation primitives tests (sluice-CORE-027, T1). Pure-logic;
 -- links sluice_core (Result/IoError) + sluice_async (cancel.cpp).
 sluice_production_async_test("cancel_token_test")

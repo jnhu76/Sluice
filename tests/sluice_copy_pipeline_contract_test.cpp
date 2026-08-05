@@ -35,6 +35,7 @@
 #include "support/scripted_async_backend.hpp"
 
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/ready_wait_source.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -1500,6 +1501,9 @@ public:
     ~ThrowingBackend() override {
         stop_.store(true, std::memory_order::release);
         cv_.notify_all();
+        // Split-wait control wake (issue #67 / D3): wake any context-level
+        // waiter parked in the observe phase so teardown never strands it.
+        ready_wait_.interrupt_all();
     }
     Result<void> submit_read(sluice::async::ReadOp,
                              sluice::async::Completion<std::size_t>&) override {
@@ -1530,10 +1534,19 @@ public:
     }
     std::size_t outstanding() const noexcept override { return 0; }
 
+    // Split wait capability (issue #67 / D3): the context-level wait_one
+    // polls, observes outstanding()==0, and returns 0 without ever parking —
+    // the wait source exists so the Runtime build accepts the backend; the
+    // destructor interrupt above keeps any parked waiter safe by construction.
+    sluice::async::BackendWaitSource* wait_source() noexcept override {
+        return &ready_wait_;
+    }
+
 private:
     std::mutex m_;
     std::condition_variable cv_;
     std::atomic<bool> stop_{false};
+    sluice::async::detail::ReadyWaitSource ready_wait_;
 };
 
 SLUICE_TEST_CASE(contract_submit_exception_publishes_error) {

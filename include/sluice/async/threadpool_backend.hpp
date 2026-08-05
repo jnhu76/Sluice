@@ -41,13 +41,14 @@
 // Shutdown (ADR Decision 15; AGENTS.md §14): close_admission() rejects new
 // reserve with invalid_state (Completion idle, no borrow) while existing accepted
 // requests continue; cancel/poll/wait_one/reap remain legal. close_admission()
-// does NOT signal waiters — wait_one() is a pure ready-epoch protocol that
-// returns only >0 reaped progress. Destruction is quiescent and fail-fast: the
-// destructor verifies arena/dispatch/worker quiescence via quiescence_snapshot()
-// before setting stopping_; it does NOT implicitly cancel, drain, wait for a
-// running syscall, publish, or discard the queue; it only tears down the
-// already-idle persistent workers. Non-quiescent destruction fail-fasts in Debug
-// AND Release.
+// ALSO wakes any participant parked in the ready wait (issue #67): a one-shot
+// control wake that re-evaluates — it never fabricates readiness or changes
+// request state, and future waits park normally again (no shutdown busy-spin).
+// Destruction is quiescent and fail-fast: the destructor verifies
+// arena/dispatch/worker quiescence via quiescence_snapshot() before setting
+// stopping_; it does NOT implicitly cancel, drain, wait for a running syscall,
+// publish, or discard the queue; it only tears down the already-idle persistent
+// workers. Non-quiescent destruction fail-fasts in Debug AND Release.
 //
 // No new dependency (std::thread/mutex/condition_vector only — ADR §11 D4).
 // State is instance-owned (no globals).
@@ -55,6 +56,7 @@
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/ready_wait_source.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_arena.hpp>
 #include <sluice/detail/posix_retry.hpp>
@@ -112,9 +114,16 @@ class ThreadPoolBackend : public AsyncBackend {
 
     std::size_t outstanding() const noexcept override;
 
+    // Issue #67 split-phase wait capability: the backend's ready wait is a
+    // pure observe-only epoch wait (see detail::ReadyWaitSource). AsyncIoContext
+    // uses it to park for readiness WITHOUT holding access_mtx_, so a second
+    // participant's poll/reap path always stays reachable (I7).
+    BackendWaitSource* wait_source() noexcept override { return &ready_wait_; }
+
     // Production admission close (ADR Decision 15). New reserve() returns
     // invalid_state (Completion idle, no borrow); existing accepted requests
-    // continue; cancel/poll/wait_one/reap remain legal. Does not signal waiters.
+    // continue; cancel/poll/wait_one/reap remain legal. Wakes any participant
+    // parked in the ready wait (issue #67) as a one-shot re-evaluation signal.
     // Idempotent.
     void close_admission();
 
@@ -153,6 +162,18 @@ class ThreadPoolBackend : public AsyncBackend {
     // Test-only: number of backend_ready slots not yet reaped.
     std::size_t backend_ready_count_for_test() const noexcept {
         return arena_.backend_ready_count();
+    }
+
+    // Test-only: wait-phase entry flag (issue #67 drain-starvation regression).
+    // The ready wait domain stores `true` into the pointed-to atomic
+    // immediately before it blocks in the ready-cv wait, so a test can
+    // deterministically observe "a participant has completed its empty reap
+    // and is now parked in the backend ready wait" (the exact state from
+    // which the old code held access_mtx_ across the block and starved every
+    // other poll/reap path). Disarm by passing nullptr. Compiled out of
+    // production sluice_async.
+    void set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept {
+        ready_wait_.set_wait_phase_flag(flag);
     }
 
     // Test-only: resolve a Completion pointer to its current slot+generation.
@@ -325,7 +346,9 @@ class ThreadPoolBackend : public AsyncBackend {
     // terminal, signals ready progress.
     void worker_loop();
 
-    // Wake the ready domain: bump ready_epoch_ under ready_mtx_ and notify.
+    // Wake the ready domain: publish the progress epoch under the ready mutex
+    // and notify ALL parked observers (the split wait allows concurrent
+    // observers, so a single notification could strand a second parker).
     void signal_ready_progress() noexcept;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -353,11 +376,11 @@ class ThreadPoolBackend : public AsyncBackend {
     std::size_t active_workers_ = 0;
     bool stopping_ = false;
 
-    // Ready/wake domain: persistent epoch so a ready recorded between snapshot
-    // and wait is not lost (AC-6; design §4.5). Does NOT nest with work_mtx_.
-    mutable std::mutex ready_mtx_;
-    std::condition_variable ready_cv_;
-    std::uint64_t ready_epoch_ = 0;
+    // Ready/wake domain (issue #67): persistent progress + control epochs so a
+    // ready recorded between snapshot and wait is not lost (AC-6; design
+    // §4.5). A LEAF domain — never nested with work_mtx_ or the arena lock;
+    // waiters park here WITHOUT any context-level lock (I1).
+    detail::ReadyWaitSource ready_wait_;
 
     std::vector<std::thread> workers_;  // fixed worker_count, joined in dtor
 

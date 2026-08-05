@@ -3,8 +3,10 @@
 #
 # Runs ONE selected test binary N times, stopping on the first failure, and
 # prints a one-line result per iteration plus a summary. Selects an
-# individual test case via $SLUICE_TEST_FILTER (substring match; see
-# tests/harness.hpp). This makes the steal/worker stability gates reproducible from
+# individual test case via $SLUICE_TEST_FILTER (EXACT case-name match; see
+# tests/harness.hpp — a filter that matches zero cases makes the binary exit
+# non-zero, so a stale or partial name cannot produce false stability
+# evidence). This makes the steal/worker stability gates reproducible from
 # committed artifacts without ad hoc shell loops.
 #
 # Usage:
@@ -16,19 +18,17 @@
 # Arguments:
 #   MODE    build mode: release | debug | tsan | asan | ubsan | asanubsan
 #   BINARY  test binary name (e.g. runnable_steal_test). Must be an xmake target.
-#   FILTER  optional SLUICE_TEST_FILTER token (substring). Use a precise, full
-#           case name to avoid multi-match (see NOTE below). Empty/unset =>
-#           run the whole binary.
+#   FILTER  optional SLUICE_TEST_FILTER token — an EXACT registered case name
+#           (tests/harness.hpp). Empty/unset => run the whole binary.
 #   COUNT   iterations (default 1000). Stop on first failure.
 #
 # Exit status: 0 iff every iteration passed; 1 otherwise.
 #
-# NOTE on filter precision: SLUICE_TEST_FILTER is a substring allowlist
-# (tests/harness.hpp). A short prefix matches several cases — e.g. the prefix
-# "steal_steal_" matches steal_steal_run_suspend_wake_resume_on_thief,
-# steal_steal_transfers_owner_no_duplicate, AND steal_steal_vs_pop_exactly_one_wins.
-# Always use the full case name (e.g. steal_steal_transfers_owner_no_duplicate),
-# never an ambiguous shared prefix.
+# NOTE on filter precision: SLUICE_TEST_FILTER is an exact-case-name allowlist
+# (tests/harness.hpp). A partial name selects nothing and fails the run — that
+# is intentional (a typo must never silently run the wrong case or nothing).
+# Always pass the full registered case name (e.g.
+# steal_steal_transfers_owner_no_duplicate), never an ambiguous shared prefix.
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
@@ -55,7 +55,7 @@ export SLUICE_TEST_FILTER="$FILTER"
 
 echo "# verify-runnable-steal-stability" >&2
 echo "# binary:   $BIN_PATH" >&2
-echo "# filter:   '${FILTER:-<none>}'  (SLUICE_TEST_FILTER substring; empty = whole binary)" >&2
+echo "# filter:   '${FILTER:-<none>}'  (SLUICE_TEST_FILTER exact case name; empty = whole binary)" >&2
 echo "# count:    $COUNT  (stop on first failure)" >&2
 echo "# host:     $(uname -srm)" >&2
 echo "# started:  $(date -u +%FT%TZ)" >&2

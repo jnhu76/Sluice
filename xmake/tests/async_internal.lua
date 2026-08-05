@@ -260,6 +260,37 @@ sluice_internal_async_test("threadpool_backend_reap_test")
 -- Cases A and D fail on the pre-fix code; cases B and C are conformance proofs.
 sluice_internal_async_test("threadpool_backend_scheme_b_race_test", {platform_gate = {"linux", "macosx"}})
 
+-- threadpool_wait_drain_deadlock_test — issue #67 drain-starvation regression.
+-- Deterministically drives the captured production deadlock state (a
+-- participant parked in the backend ready wait after an empty reap) using the
+-- running-gate seam + the wait-phase flag, and proves a second participant can
+-- poll/reap while the first is parked, that close_admission wakes the parked
+-- waiter as a control wake (0, no fabricated completion), and that the final
+-- request drains. Fails (bounded) on the pre-fix code where wait_one held
+-- access_mtx_ across the backend wait and starved every other poll/reap path.
+sluice_internal_async_test("threadpool_wait_drain_deadlock_test", {platform_gate = {"linux", "macosx"}})
+
+-- application_runtime_drain_starvation_test — issue #67 end-to-end Runtime
+-- regression: the final backend-ready request must drain at shutdown. A task
+-- awaits one real read while the MW-S2 participant parks in the backend ready
+-- wait; request_stop() interrupts the park (control wake), the final request
+-- completes and is reaped by the re-entered run, and drain()/join() return
+-- with backend_ready == 0 and outstanding == 0. On the pre-fix code the run
+-- parks forever and drain() never returns (bounded join -> clean failure).
+sluice_internal_async_test("application_runtime_drain_starvation_test", {platform_gate = {"linux", "macosx"}})
+
+-- async_stats_wait_race_test — issue #67 P1 follow-up regression for the
+-- AsyncStats data race the split-wait fix introduced. wait_calls / completed_ops
+-- are plain std::uint64_t and access_mtx_ is their only accounting domain, but
+-- the fix moved both the park AND (incorrectly) the stats bumps out of the
+-- lock. Case A races multiple wait_one() callers (wait_calls write/write);
+-- case B races wait_one()'s reap-path completed_ops bump against a concurrent
+-- poll()'s. Both assert EXACT final counters, not just liveness. Under the
+-- pre-fix code TSan flags the non-atomic concurrent writes; the fix puts every
+-- accounting access back inside access_mtx_. Run under TSan for the race proof
+-- (AGENTS.md §16.3).
+sluice_internal_async_test("async_stats_wait_race_test", {platform_gate = {"linux", "macosx"}})
+
 -- backend_scheme_b_race_test — Phase B backend-level Scheme-B race regression
 -- (review test-gap 1). Drives the raw FakeAsyncBackend with the
 -- SLUICE_ASYNC_INTERNAL_TESTING-only SubmitPauseGate seam: a submit thread is

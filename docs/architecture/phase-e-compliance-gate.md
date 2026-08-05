@@ -358,3 +358,115 @@ in this PR:
 - [x] Constitution rules satisfied (design §0/§1 map AC-1..AC-13)
 - [x] AGENTS.md change-class gates run (Debug/Release/ASan+UBSan/TSan/negative-compile/docs/diff PASS)
 - [x] as-built / findings / api-reference updated to reflect the migrated ThreadPool
+
+---
+
+## Issue #67 corrective — split-phase ready wait (wait_one / E7-C / drain liveness)
+
+**Status:** corrective round recorded; sanitizer re-runs executed in this round (evidence
+above and in the deterministic table).
+
+### Scope
+
+`AsyncIoContext::wait_one` held `access_mtx_` across `ThreadPoolBackend::wait_one`'s
+ready-cv park (AGENTS.md §13.1 violation: a domain lock held across an unbounded wait for
+worker progress). The MW-S2 participant therefore parked while holding the serialized
+backend access domain; every other participant's loop-top `poll()` — the ONLY reap path for
+a `backend_ready` request — blocked forever; the final request stayed un-reaped; classify
+stayed MW-S2; the coordinated run never terminated; `drain_complete_` was never satisfied
+(issue #67, TSan seed 5905338 round 69).
+
+### Contract changes
+
+| Item | Before | After |
+|---|---|---|
+| `AsyncIoContext::wait_one` | whole call (incl. block) under `access_mtx_` | with a split-wait-capable backend: reap under `access_mtx_` only; park in the observe-only wait WITHOUT it (D1 preserved: every consuming backend access stays serialized) |
+| `AsyncBackend` | — | optional `wait_source()` capability (`BackendWaitSource`: snapshot / `wait_for_change` / `interrupt_all`), default `nullptr` — source-compatible |
+| `wait_one()` 0-return | never 0 | 0 = control-plane interruption with nothing reaped, or an empty wait (no fake completion, no `completed_ops` inflation — I8) |
+| `ThreadPoolBackend::close_admission()` | does not signal waiters | closes admission FIRST, then advances the control epoch and `notify_all`s every parked waiter (one-shot re-evaluation; never fabricates readiness) |
+| `ApplicationRuntime::request_stop()` | — | publishes stopping state, then interrupts backend waiters (I6), then notifies scheduler wake sources |
+| `ApplicationRuntime` build | accepts any backend | REQUIRES the split wait capability OR a non-blocking `wait_one` (`wait_source() != nullptr` or `wait_one_is_nonblocking()`); rejects everything else with `invalid_state` — D3 (a blocking legacy wait_one would reintroduce the deadlock; Fake/Sync keep their E7 no-progress-boundary contract) |
+| ready wake | single epoch, `notify_one` | progress + control epochs, `notify_all` (concurrent observers possible) |
+
+### Lock / wake proof (Gate 3, AGENTS.md §13.1/§13.2)
+
+```text
+readiness publication (worker/cancel/pin-ack re-arm):
+  record_terminal / terminal_won / enqueue-terminal-noop   (request lifecycle state FIRST — I4)
+  -> signal_progress(): { ready_mtx_; ++ready_epoch_; }    (leaf domain, no other lock held)
+  -> ready_cv_.notify_all()
+
+control wake (close_admission / request_stop):
+  close admission / publish stopping state FIRST
+  -> interrupt_all(): { ready_mtx_; ++control_epoch_; }    (leaf domain)
+  -> ready_cv_.notify_all()                                (all parked waiters — I6)
+
+split-phase wait (AsyncIoContext::wait_one / ThreadPoolBackend::wait_one):
+  snapshot()        -> { ready_mtx_; read both epochs }    (leaf domain)
+  poll()/reap       -> under access_mtx_ (E7-C serialized) — NEVER blocks
+  wait_for_change() -> { ready_mtx_; cv.wait(predicate) }  — pure observation, NO access_mtx_
+```
+
+Both lost-wake windows are closed by the snapshot->poll->wait order (a signal before poll is
+seen by poll; a signal between poll and park advances an epoch so the predicate wait does not
+park). The control epoch is one-shot by construction: future waits snapshot the advanced
+generation and park normally, so an admission-closed runtime with outstanding work never
+busy-spins. Lock order: `global_mtx_ -> access_mtx_` (unchanged) and
+`lifecycle_mtx_ -> ready-wait leaf` (request_stop); the ready mutex is a leaf domain with no
+reverse acquisition path.
+
+### Backend capability inventory (corrective round)
+
+| Backend | Capability | Notes |
+|---|---|---|
+| `ThreadPoolBackend` | `wait_source()` (`detail::ReadyWaitSource`) | production split wait; workers publish backend-ready, reap stays context-side |
+| `FakeAsyncBackend` / `SyncBackend` | `wait_one_is_nonblocking() == true` | readiness produced synchronously inside `poll`; a wait source would change the E7 no-progress-boundary contract (`wait_one()==0` semantics) |
+| `ScriptedAsyncBackend` (test) | `wait_source()` (`detail::ReadyWaitSource` in the shared state) | staged results call `signal_progress()`; destruction calls `interrupt_all()`; legacy `wait_one` retained for direct single-driver callers; lock order `state mtx -> ready-wait leaf` |
+| `ThrowingBackend` (contract test) | `wait_source()` (`detail::ReadyWaitSource`) | `outstanding()==0` always, so the split wait never parks; destructor interrupts any hypothetical parker |
+| legacy backends (`UringAsyncBackend`, external) | neither | rejected by the Runtime build with `invalid_state` (D3); single-driver `AsyncIoContext` use keeps the original serialized contract |
+
+### Deterministic evidence (Debug, at this corrective round)
+
+| Item | Test | Result |
+|---|---|---|
+| poll/reap reachable while a participant is parked | `threadpool_wait_drain_deadlock_test :: wait_one_does_not_starve_poll_or_drain` | PASS — probe poll returns while A is parked; FAILS bounded on pre-fix code ("poll blocked while a participant was parked in wait_one") |
+| close_admission control wake returns 0, no fabricated completion, no stats inflation | same | PASS — `wait_one` returns 0, `c1`/`c2` not ready, `completed_ops == 0`, `wait_calls == 1` |
+| final requests drained after the wake | same | PASS — both reaped exactly once, `outstanding == 0`, `backend_ready == 0`, `completed_ops == 2` |
+| end-to-end runtime drain (captured topology) | `application_runtime_drain_starvation_test :: final_backend_ready_request_drains_at_shutdown` | PASS — `drain()` and `join()` return; `backend_ready == 0`; `outstanding == 0`; slot released by caller reset before quiescent teardown |
+| full Clang Debug suite | `xmake run -g test` | PASS — 132/132 test binaries green incl. both new regressions; re-run on the final tree after the test-backend split-wait fix (commit `e08204a`) |
+
+### Sanitizer / mode re-runs for this corrective
+
+Recorded after execution in this round (no pre-filled PASS):
+
+- TSan exact-seed reproduction — PASS: `--seed 5905338 --iterations 100` (rounds 0-99,
+  covering the issue's failing round 69), exit 0, **0 `WARNING: ThreadSanitizer`**.
+- TSan 6-way rotating-seed stress — PASS: seeds 5905338..5905343 × 100 rounds each, all
+  exit 0, 0 TSan warnings per seed.
+- TSan full suite — PASS: every test binary green, 0 TSan warnings (incl. both new
+  regressions and the scripted contract suite).
+- ASan+UBSan full suite — PASS: all 132 test binaries, 0 sanitizer reports;
+  `evented_scheduler_test :: sched_single_worker_scheduler_liveness` loop 15/15.
+- Negative-compile probes — PASS: completion-authority (12), request-arena (6),
+  async-api (9) all reject with the expected diagnostics.
+- Doc checks — PASS: `check-doc-links.py` (self-test + full), `verify-architecture-docs.py`,
+  `git diff --check`.
+- Baseline comparison — the TSan contract regression (`contract_depth_1_single_outstanding_read`
+  timeout) was proven to be introduced by this corrective round: baseline `2c08a3b` passes the
+  case under TSan; the pre-fix tree of this round failed it. Root cause: the D3 build
+  rejection of blocking-`wait_one` backends rejected the sanctioned test backends
+  (`ScriptedAsyncBackend`, `ThrowingBackend`); fixed by real split waits on those backends
+  (commit `e08204a`).
+- Clang Release (§16.1) — PASS: `xmake f -m release --toolchain=clang -y && xmake build
+  sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` — 132/132
+  test binaries green (public-header change: `wait_one_is_nonblocking`).
+
+### Residual risk (recorded, not hidden)
+
+- A legacy external backend (no split wait capability) used with `ApplicationRuntime` is now
+  rejected at build (`invalid_state`) — a reportable contract change, not a silent fallback;
+  direct `AsyncIoContext` users of such backends retain the pre-existing single-driver
+  serialized contract.
+- A genuinely stuck blocking syscall still cannot drain (documented caller obligation:
+  outstanding work must eventually complete); the interrupt only unblocks the WAIT, never a
+  running syscall.

@@ -309,8 +309,15 @@ xmake run <target>
 The test harness supports case filtering:
 
 ```sh
-SLUICE_TEST_FILTER=<case-name-substring> xmake run <test-target>
+SLUICE_TEST_FILTER=<case-name> xmake run <test-target>
 ```
+
+Each filter token must be an **exact** registered case name (not a substring).
+A filter that matches zero cases is an error: the binary prints
+`SLUICE_TEST_FILTER matched zero cases` and exits non-zero instead of printing
+"ALL TESTS PASSED" — a zero-case run must never masquerade as green evidence
+(the Phase C1 backend-conformance gate depends on this fail-closed behavior
+for its per-backend isolation runs).
 
 A focused test is for diagnosis and iteration. It does not replace the full gate.
 

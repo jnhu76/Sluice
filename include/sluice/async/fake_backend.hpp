@@ -166,6 +166,14 @@ class FakeAsyncBackend : public AsyncBackend {
         return dispatch_and_reap();
     }
 
+    // Issue #67: FakeAsyncBackend intentionally has NO split wait capability.
+    // Its wait_one is NON-BLOCKING by contract (E7 no-progress boundary: an
+    // un-staged op returns 0 immediately so a Drain-mode coordinated run can
+    // terminate instead of parking on a completion that only an external
+    // complete_* call can produce). It advertises that non-blocking contract
+    // so ApplicationRuntime accepts it without a wait source (D3).
+    bool wait_one_is_nonblocking() const noexcept override { return true; }
+
     // Minimal cancel (ADR §7 X2): REQUESTS cancel. The op stays outstanding and
     // is completed (exactly-once, X3) at the next poll()/wait_one() with
     // IoError::canceled. We do NOT complete here — A3/O1: completions are

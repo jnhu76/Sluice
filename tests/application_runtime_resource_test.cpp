@@ -64,6 +64,12 @@ public:
     std::size_t poll() override { return inner_.poll(); }
     Result<std::size_t> wait_one() override { return inner_.wait_one(); }
     std::size_t outstanding() const noexcept override { return inner_.outstanding(); }
+    // Issue #67: forward the backend capability probes (the Runtime rejects
+    // backends that are neither split-wait-capable nor non-blocking).
+    BackendWaitSource* wait_source() noexcept override { return inner_.wait_source(); }
+    bool wait_one_is_nonblocking() const noexcept override {
+        return inner_.wait_one_is_nonblocking();
+    }
 
     ~ProbeBackend() override {
         probe_->destructor_count.fetch_add(1, std::memory_order::release);

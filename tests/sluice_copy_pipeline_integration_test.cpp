@@ -439,6 +439,12 @@ public:
         reap_ready_reads();
         return r;
     }
+    // Issue #67: forward the split wait capability so the pipeline drives the
+    // safe split-phase wait (parking WITHOUT holding the context's serialized
+    // access domain) instead of the legacy lock-held blocking fallback.
+    sluice::async::BackendWaitSource* wait_source() noexcept override {
+        return inner_->wait_source();
+    }
     void cancel(sluice::async::Completion<std::size_t>& c) override {
         inner_->cancel(c);
     }

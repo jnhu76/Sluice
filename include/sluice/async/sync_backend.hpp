@@ -91,6 +91,12 @@ class SyncBackend : public AsyncBackend {
         return dispatch_and_reap();
     }
 
+    // Issue #67: SyncBackend intentionally has NO split wait capability. Its
+    // wait_one is NON-BLOCKING by contract (poll drains every outstanding slot,
+    // so a wait never needs to park). It advertises that non-blocking contract
+    // so ApplicationRuntime accepts it without a wait source (D3).
+    bool wait_one_is_nonblocking() const noexcept override { return true; }
+
     // ADR Decision 11: cancel resolves the Completion* to its slot handle (the
     // arena's bounded scan of the slot records' own bindings — no parallel
     // map) and records the canceled terminal. The Completion stays outstanding;
