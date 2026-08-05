@@ -199,7 +199,7 @@ SLUICE_TEST_CASE(wait_one_does_not_starve_poll_or_drain) {
             }
         }
 
-        // E. The final request is submitted WHILE A is still parked (the gate
+        // D. The final request is submitted WHILE A is still parked (the gate
         //    still holds BOTH workers, so no real readiness can arrive before
         //    the control wake — the interrupt-vs-progress outcome stays
         //    deterministic). The submit itself must succeed: A holds no
@@ -213,7 +213,7 @@ SLUICE_TEST_CASE(wait_one_does_not_starve_poll_or_drain) {
             }
         }
 
-        // D. Close admission: a control wake, not a fabricated completion.
+        // E. Close admission: a control wake, not a fabricated completion.
         if (fail_msg == nullptr) {
             raw->close_admission();
             if (!wait_flag(a_finished, deadline)) {

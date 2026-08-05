@@ -385,7 +385,7 @@ stayed MW-S2; the coordinated run never terminated; `drain_complete_` was never 
 | `wait_one()` 0-return | never 0 | 0 = control-plane interruption with nothing reaped, or an empty wait (no fake completion, no `completed_ops` inflation — I8) |
 | `ThreadPoolBackend::close_admission()` | does not signal waiters | closes admission FIRST, then advances the control epoch and `notify_all`s every parked waiter (one-shot re-evaluation; never fabricates readiness) |
 | `ApplicationRuntime::request_stop()` | — | publishes stopping state, then interrupts backend waiters (I6), then notifies scheduler wake sources |
-| `ApplicationRuntime` build | accepts any backend | REQUIRES the split wait capability OR a non-blocking `wait_one` (`wait_source() != nullptr` || `wait_one_is_nonblocking()`); rejects everything else with `invalid_state` — D3 (a blocking legacy wait_one would reintroduce the deadlock; Fake/Sync keep their E7 no-progress-boundary contract) |
+| `ApplicationRuntime` build | accepts any backend | REQUIRES the split wait capability OR a non-blocking `wait_one` (`wait_source() != nullptr` or `wait_one_is_nonblocking()`); rejects everything else with `invalid_state` — D3 (a blocking legacy wait_one would reintroduce the deadlock; Fake/Sync keep their E7 no-progress-boundary contract) |
 | ready wake | single epoch, `notify_one` | progress + control epochs, `notify_all` (concurrent observers possible) |
 
 ### Lock / wake proof (Gate 3, AGENTS.md §13.1/§13.2)

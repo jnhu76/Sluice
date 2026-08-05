@@ -210,17 +210,29 @@ SLUICE_TEST_CASE(wait_one_concurrent_callers_no_stats_race) {
         SLUICE_CHECK(completions[i].result().value() == 1);
     }
 
-    // Exact-value assertions: the accounting domain is access_mtx_, so the
-    // final counters must be deterministic, not merely "no hang".
-    //   - wait_calls == kCallers (each caller called wait_one exactly once)
-    //   - submitted_ops == kOps
-    //   - completed_ops == kOps (each submitted read reaped exactly once)
-    // A racy counter would be lower (lost increment) or, for completed_ops,
-    // potentially higher (double count). The pre-fix race made wait_calls
-    // non-deterministic under concurrency; the fix makes these exact.
-    SLUICE_CHECK(stats.wait_calls == kCallers);
+    // Exact-value assertion: completed_ops is THE counter the split-wait race
+    // raced on (reap-path bump raced vs concurrent poll()). The fix puts the
+    // bump inside access_mtx_, so completed_ops MUST be exactly kOps — never
+    // a lost increment, never a double count. This is the load-bearing
+    // correctness assertion for the race class the fix targets.
+    //
+    // wait_calls is NOT asserted exact here: the loop-while-not-ready shape
+    // makes the call count schedule-dependent (a caller re-enters wait_one
+    // when its own Completion was reaped by another participant). The fix
+    // makes wait_calls correct (bumped exactly once per wait_one call, under
+    // the lock); the TSan run of THIS test proves the wait_calls race is gone
+    // (on the pre-fix code TSan flagged it at async_io_context.cpp:181). A
+    // schedule-dependent exact value would make the test flaky for reasons
+    // unrelated to the race, so we assert completed_ops (deterministic) +
+    // rely on TSan for wait_calls.
     SLUICE_CHECK(stats.submitted_ops == kOps);
     SLUICE_CHECK(stats.completed_ops == kOps);
+    // wait_calls >= kCallers: each caller enters wait_one at least once. The
+    // re-entry-on-behalf-of-another shape can only ADD calls, never lose them
+    // (a lost wait_calls increment under the fix is impossible — every call
+    // bumps it under access_mtx_). This bound catches a regression where
+    // wait_calls is undercounted without coupling the test to a schedule.
+    SLUICE_CHECK(stats.wait_calls >= kCallers);
 
     // Release slots before the context goes out of scope (quiescent teardown
     // requires slot_in_use == 0).
