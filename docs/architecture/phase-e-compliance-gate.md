@@ -385,7 +385,7 @@ stayed MW-S2; the coordinated run never terminated; `drain_complete_` was never 
 | `wait_one()` 0-return | never 0 | 0 = control-plane interruption with nothing reaped, or an empty wait (no fake completion, no `completed_ops` inflation — I8) |
 | `ThreadPoolBackend::close_admission()` | does not signal waiters | closes admission FIRST, then advances the control epoch and `notify_all`s every parked waiter (one-shot re-evaluation; never fabricates readiness) |
 | `ApplicationRuntime::request_stop()` | — | publishes stopping state, then interrupts backend waiters (I6), then notifies scheduler wake sources |
-| `ApplicationRuntime` build | accepts any backend | REQUIRES `wait_source() != nullptr` (rejects legacy backends with `invalid_state` — D3) |
+| `ApplicationRuntime` build | accepts any backend | REQUIRES the split wait capability OR a non-blocking `wait_one` (`wait_source() != nullptr` || `wait_one_is_nonblocking()`); rejects everything else with `invalid_state` — D3 (a blocking legacy wait_one would reintroduce the deadlock; Fake/Sync keep their E7 no-progress-boundary contract) |
 | ready wake | single epoch, `notify_one` | progress + control epochs, `notify_all` (concurrent observers possible) |
 
 ### Lock / wake proof (Gate 3, AGENTS.md §13.1/§13.2)
@@ -414,6 +414,16 @@ generation and park normally, so an admission-closed runtime with outstanding wo
 busy-spins. Lock order: `global_mtx_ -> access_mtx_` (unchanged) and
 `lifecycle_mtx_ -> ready-wait leaf` (request_stop); the ready mutex is a leaf domain with no
 reverse acquisition path.
+
+### Backend capability inventory (corrective round)
+
+| Backend | Capability | Notes |
+|---|---|---|
+| `ThreadPoolBackend` | `wait_source()` (`detail::ReadyWaitSource`) | production split wait; workers publish backend-ready, reap stays context-side |
+| `FakeAsyncBackend` / `SyncBackend` | `wait_one_is_nonblocking() == true` | readiness produced synchronously inside `poll`; a wait source would change the E7 no-progress-boundary contract (`wait_one()==0` semantics) |
+| `ScriptedAsyncBackend` (test) | `wait_source()` (`detail::ReadyWaitSource` in the shared state) | staged results call `signal_progress()`; destruction calls `interrupt_all()`; legacy `wait_one` retained for direct single-driver callers; lock order `state mtx -> ready-wait leaf` |
+| `ThrowingBackend` (contract test) | `wait_source()` (`detail::ReadyWaitSource`) | `outstanding()==0` always, so the split wait never parks; destructor interrupts any hypothetical parker |
+| legacy backends (`UringAsyncBackend`, external) | neither | rejected by the Runtime build with `invalid_state` (D3); single-driver `AsyncIoContext` use keeps the original serialized contract |
 
 ### Deterministic evidence (Debug, at this corrective round)
 

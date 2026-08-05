@@ -130,11 +130,13 @@ public:
     RuntimeBuilder() = default;
 
     // Inject the backend (required). The Runtime owns the AsyncIoContext which
-    // owns this backend. The backend MUST expose the split wait capability
-    // (wait_source() != nullptr): the multi-participant runtime path cannot
-    // use the legacy serialized blocking wait_one (issue #67 — a participant
-    // parked while holding access_mtx_ starves every other poll/reap path and
-    // deadlocks drain). build() rejects legacy backends with invalid_state.
+    // owns this backend. The backend MUST either expose the split wait
+    // capability (wait_source() != nullptr — ThreadPoolBackend) or guarantee a
+    // non-blocking wait_one (wait_one_is_nonblocking() — SyncBackend /
+    // FakeAsyncBackend): the multi-participant runtime path cannot use a
+    // BLOCKING legacy serialized wait_one (issue #67 — a participant parked
+    // while holding access_mtx_ starves every other poll/reap path and
+    // deadlocks drain). build() rejects anything else with invalid_state.
     RuntimeBuilder& backend(std::unique_ptr<AsyncBackend> b);
 
     // Set the worker count for Scheduler::run_live invocations. Default: 1.

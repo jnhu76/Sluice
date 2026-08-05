@@ -54,7 +54,6 @@
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
-#include <sluice/async/detail/ready_wait_source.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_arena.hpp>
 #include <sluice/error.hpp>
@@ -167,12 +166,13 @@ class FakeAsyncBackend : public AsyncBackend {
         return dispatch_and_reap();
     }
 
-    // Issue #67 split-phase wait capability: a split-phase wait_one parks in
-    // the observe-only ready wait until a complete_*/cancel records a terminal
-    // (signaled below) or the control plane interrupts. The capability exists
-    // so ApplicationRuntime accepts FakeAsyncBackend and so shutdown can wake
-    // any parked waiter.
-    BackendWaitSource* wait_source() noexcept override { return &ready_wait_; }
+    // Issue #67: FakeAsyncBackend intentionally has NO split wait capability.
+    // Its wait_one is NON-BLOCKING by contract (E7 no-progress boundary: an
+    // un-staged op returns 0 immediately so a Drain-mode coordinated run can
+    // terminate instead of parking on a completion that only an external
+    // complete_* call can produce). It advertises that non-blocking contract
+    // so ApplicationRuntime accepts it without a wait source (D3).
+    bool wait_one_is_nonblocking() const noexcept override { return true; }
 
     // Minimal cancel (ADR §7 X2): REQUESTS cancel. The op stays outstanding and
     // is completed (exactly-once, X3) at the next poll()/wait_one() with
@@ -200,7 +200,6 @@ class FakeAsyncBackend : public AsyncBackend {
         if (h.has_value()) {
             if (arena_.cancel(*h) == detail::CancelDisposition::terminal_won) {
                 tally_canceled();
-                ready_wait_.signal_progress();  // wake split-phase waiters (I4)
             }
         }
     }
@@ -209,7 +208,6 @@ class FakeAsyncBackend : public AsyncBackend {
         if (h.has_value()) {
             if (arena_.cancel(*h) == detail::CancelDisposition::terminal_won) {
                 tally_canceled();
-                ready_wait_.signal_progress();  // wake split-phase waiters (I4)
             }
         }
     }
@@ -282,7 +280,6 @@ class FakeAsyncBackend : public AsyncBackend {
         if (!target.has_value()) return;
         bool won = arena_.record_terminal(*target, res);
         tally_terminal_result(won, res);
-        if (won) ready_wait_.signal_progress();  // wake split-phase waiters (I4)
     }
     // Resolve a terminal result on the OLDEST enqueued sync op (sync_data /
     // sync_all share the void completion type).
@@ -301,7 +298,6 @@ class FakeAsyncBackend : public AsyncBackend {
         if (!target.has_value()) return;
         bool won = arena_.record_terminal(*target, res);
         tally_terminal_result(won, res);
-        if (won) ready_wait_.signal_progress();  // wake split-phase waiters (I4)
     }
 
     // Five-stage admission for a byte-carrying op. No terminal is recorded: the
@@ -459,7 +455,6 @@ class FakeAsyncBackend : public AsyncBackend {
             detail::TerminalResult res = auto_size_result(requested);
             bool won = arena_.record_terminal(*target, res);
             tally_terminal_result(won, res);
-            if (won) ready_wait_.signal_progress();  // wake split-phase waiters (I4)
         }
     }
     void drain_auto_void() {
@@ -484,7 +479,6 @@ class FakeAsyncBackend : public AsyncBackend {
             // sync op just as it does for a read/write op.
             bool won = arena_.record_terminal(*target, res);
             tally_terminal_result(won, res);
-            if (won) ready_wait_.signal_progress();  // wake split-phase waiters (I4)
         }
     }
 
@@ -568,11 +562,6 @@ class FakeAsyncBackend : public AsyncBackend {
 
     detail::RequestArena arena_;
     detail::ReferenceReadySink sink_;
-    // Split-phase ready wait domain (see wait_source()). Signal points: every
-    // terminal-winner recording OUTSIDE poll() (complete_*, cancel, auto-mode
-    // drain) publishes the progress epoch so a parked split-phase waiter wakes
-    // (state first, then notify — I4).
-    detail::ReadyWaitSource ready_wait_;
     // No side-band HandleRing or staged_* deques (review findings #1, #2): the
     // submission-order selection is a bounded O(capacity) scan via the arena's
     // oldest_enqueued_of, and terminal evidence binds to a RequestKey at

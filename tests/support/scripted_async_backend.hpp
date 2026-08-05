@@ -48,6 +48,7 @@
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/ready_wait_source.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -201,6 +202,14 @@ public:
     // Shutdown flag observed by wait_one().
     bool shutdown = false;
 
+    // Split-phase ready wait (issue #67 / D2): the context-level split
+    // wait_one parks HERE (outside access_mtx_) instead of blocking in the
+    // backend's legacy wait_one under the shared-state mutex. signal_progress()
+    // is called wherever a result is staged (complete_*/cancel/cleanup);
+    // interrupt_all() on destruction. Lock order: state mtx -> ready-wait leaf
+    // mutex (the leaf never re-enters the shared state, so no cycle).
+    detail::ReadyWaitSource ready_wait;
+
     // Snapshot of outstanding count at destruction (for diagnostics).
     std::size_t final_outstanding = 0;
 };
@@ -232,6 +241,14 @@ public:
 
     std::size_t poll() override;
     Result<std::size_t> wait_one() override;
+
+    // Split wait capability (issue #67 / D2): the context-level wait_one uses
+    // snapshot/poll/park on the shared ready wait instead of holding access_mtx_
+    // across a backend-side block. The legacy wait_one() above remains for
+    // direct single-driver callers.
+    BackendWaitSource* wait_source() noexcept override {
+        return &state_->ready_wait;
+    }
 
     void cancel(Completion<std::size_t>& c) override;
     void cancel(Completion<void>& c) override;

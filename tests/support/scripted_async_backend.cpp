@@ -106,6 +106,10 @@ ScriptedAsyncBackend::~ScriptedAsyncBackend() {
         state_->size_ops.size() + state_->void_ops.size() +
         state_->staged_size.size() + state_->staged_void.size();
     state_->cv.notify_all();
+    // Split-wait control wake: any participant parked in the context-level
+    // wait_one observe phase must re-evaluate after close (it re-polls and
+    // terminates on the empty wait / shutdown boundary).
+    state_->ready_wait.interrupt_all();
 
     // Debug-only invariant: a well-behaved copy task drains everything before
     // the Runtime tears down, so nothing should be outstanding at destruction.
@@ -286,6 +290,7 @@ void ScriptedAsyncBackend::cancel(Completion<std::size_t>& c) {
                 {&c, make_unexpected<std::size_t>(
                          IoError{IoError::Code::canceled})});
             state_->cv.notify_all();
+            state_->ready_wait.signal_progress();  // split-wait: staged result
             return;
         }
     }
@@ -304,6 +309,7 @@ void ScriptedAsyncBackend::cancel(Completion<void>& c) {
                 {&c, make_unexpected<void>(
                          IoError{IoError::Code::canceled})});
             state_->cv.notify_all();
+            state_->ready_wait.signal_progress();  // split-wait: staged result
             return;
         }
     }
@@ -440,6 +446,7 @@ void ScriptedBackendController::complete_bytes(std::uint64_t op_id,
     it->second.stage = OpStage::staged;
     state_->staged_size.push_back({it->second.completion, Result<std::size_t>{n}});
     state_->cv.notify_all();
+    state_->ready_wait.signal_progress();  // split-wait: staged result
 }
 
 void ScriptedBackendController::complete_eof(std::uint64_t op_id) {
@@ -460,6 +467,7 @@ void ScriptedBackendController::complete_eof(std::uint64_t op_id) {
     it->second.stage = OpStage::staged;
     state_->staged_size.push_back({it->second.completion, Result<std::size_t>{0}});
     state_->cv.notify_all();
+    state_->ready_wait.signal_progress();  // split-wait: staged result
 }
 
 void ScriptedBackendController::complete_error(std::uint64_t op_id,
@@ -477,6 +485,7 @@ void ScriptedBackendController::complete_error(std::uint64_t op_id,
         state_->staged_size.push_back(
             {it->second.completion, make_unexpected<std::size_t>(error)});
         state_->cv.notify_all();
+        state_->ready_wait.signal_progress();  // split-wait: staged result
         return;
     }
     // Void ops (sync).
@@ -490,6 +499,7 @@ void ScriptedBackendController::complete_error(std::uint64_t op_id,
         state_->staged_void.push_back(
             {vit->second.completion, make_unexpected<void>(error)});
         state_->cv.notify_all();
+        state_->ready_wait.signal_progress();  // split-wait: staged result
         return;
     }
     throw ScriptedBackendError(
@@ -516,6 +526,7 @@ void ScriptedBackendController::complete_sync_success(std::uint64_t op_id) {
     it->second.stage = OpStage::staged;
     state_->staged_void.push_back({it->second.completion, Result<void>{}});
     state_->cv.notify_all();
+    state_->ready_wait.signal_progress();  // split-wait: staged result
 }
 
 void ScriptedBackendController::complete_sync_error(std::uint64_t op_id,
@@ -540,6 +551,7 @@ void ScriptedBackendController::complete_sync_error(std::uint64_t op_id,
     state_->staged_void.push_back(
         {it->second.completion, make_unexpected<void>(error)});
     state_->cv.notify_all();
+    state_->ready_wait.signal_progress();  // split-wait: staged result
 }
 
 void ScriptedBackendController::complete_read_with_data(std::uint64_t op_id,
@@ -571,6 +583,7 @@ void ScriptedBackendController::complete_read_with_data(std::uint64_t op_id,
     state_->staged_size.push_back(
         {it->second.completion, Result<std::size_t>{len}});
     state_->cv.notify_all();
+    state_->ready_wait.signal_progress();  // split-wait: staged result
 }
 
 std::vector<std::byte> ScriptedBackendController::captured_write_bytes(
@@ -697,6 +710,7 @@ void ScriptedBackendController::complete_all_for_cleanup() {
         state_->staged_void.push_back({op.completion, Result<void>{}});
     }
     state_->cv.notify_all();
+    state_->ready_wait.signal_progress();  // split-wait: staged result
 }
 
 }  // namespace sluice::async

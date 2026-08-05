@@ -1209,11 +1209,14 @@ never reaps or publishes, may run concurrently with serialized consuming
 operations, and can be interrupted by the control plane. The default is
 `nullptr` (source-compatible for existing external backends): such backends
 keep the legacy serialized `wait_one` contract, where the whole blocking call
-runs under the context's serialized access domain. `ApplicationRuntime`
-REQUIRES the capability at build time and rejects legacy backends with
-`invalid_state` — the multi-participant runtime path must never take the
-pre-fix serialized blocking wait (a participant parked while holding the
-context lock starves every other poll/reap path and deadlocks drain).
+runs under the context's serialized access domain. `wait_one_is_nonblocking()`
+(default false) declares that a backend's `wait_one` never blocks (the
+reference backends, whose readiness is produced synchronously inside poll).
+`ApplicationRuntime` accepts a backend only if it provides the split wait
+capability OR the non-blocking contract, and rejects anything else with
+`invalid_state` — the multi-participant runtime path must never take a
+BLOCKING serialized wait (a participant parked while holding the context lock
+starves every other poll/reap path and deadlocks drain).
 
 Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5) adds the
 protected two-stage **binding** helpers (`begin_binding` / `commit_binding` /

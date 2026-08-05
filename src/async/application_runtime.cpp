@@ -99,12 +99,15 @@ Result<std::unique_ptr<ApplicationRuntime>> RuntimeBuilder::build() {
         workers_ = 1;
     }
     // Issue #67 (D3): the multi-participant runtime path MUST NOT fall back to
-    // the pre-fix serialized blocking wait_one — a participant parked while
-    // holding access_mtx_ starves every other poll/reap path and deadlocks
-    // drain. A backend without the split wait capability (UringAsyncBackend,
-    // external legacy backends) is therefore rejected HERE with a reportable
-    // invalid_state instead of silently taking the dangerous fallback.
-    if (backend_->wait_source() == nullptr) {
+    // a BLOCKING serialized wait_one — a participant parked while holding
+    // access_mtx_ starves every other poll/reap path and deadlocks drain. A
+    // backend is accepted only if it exposes the split wait capability
+    // (ThreadPoolBackend) OR guarantees a non-blocking wait_one (the reference
+    // backends SyncBackend / FakeAsyncBackend, whose readiness is produced
+    // synchronously inside poll). Anything else (UringAsyncBackend, external
+    // legacy backends) is rejected HERE with a reportable invalid_state
+    // instead of silently taking the dangerous fallback.
+    if (backend_->wait_source() == nullptr && !backend_->wait_one_is_nonblocking()) {
         return make_unexpected<std::unique_ptr<ApplicationRuntime>>(
             IoError{IoError::Code::invalid_state});
     }

@@ -148,11 +148,21 @@ public:
     // readiness WITHOUT holding access_mtx_ (pure observation, interruptible
     // by the control plane). Backends that return nullptr keep the legacy
     // serialized wait_one contract: the whole blocking wait runs under
-    // access_mtx_ (safe for non-blocking wait_one implementations; the
-    // ApplicationRuntime rejects such backends at build time so the
-    // multi-participant production path never takes the blocking fallback).
-    // Source-compatible: existing external backends do not override it.
+    // access_mtx_ — safe when the backend's wait_one never blocks (see
+    // wait_one_is_nonblocking) or when the caller is the single documented
+    // driver. Source-compatible: existing external backends do not override
+    // it.
     virtual BackendWaitSource* wait_source() noexcept { return nullptr; }
+
+    // Issue #67 (D3): whether wait_one() is guaranteed NON-BLOCKING (returns
+    // immediately with whatever is currently reaped — e.g. the reference
+    // backends, whose readiness is produced synchronously inside poll).
+    // ApplicationRuntime requires EITHER a split wait capability OR this
+    // non-blocking contract: the multi-participant runtime path must never
+    // take a BLOCKING legacy wait_one (a participant parked while holding
+    // access_mtx_ starves every other poll/reap path and deadlocks drain).
+    // The default (false) is the conservative choice for external backends.
+    virtual bool wait_one_is_nonblocking() const noexcept { return false; }
 
 protected:
     AsyncBackend() = default;
