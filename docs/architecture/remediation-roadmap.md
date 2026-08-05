@@ -190,6 +190,22 @@ coverage).
   implemented), external probe = admission PASS / conformance NOT ASSESSED.
   `Uring` is never marked conforming.
 
+  - **C1 corrective (PR #66 review):** the first C1 push had two latent defects
+    surfaced by GitHub CI (run `30972306135`): (1) the manifest self-test called
+    `sys.exit(0)` at module top level, which `unittest discover` surfaced as a
+    `_FailedTest` ERROR; and (2) the aggregate gate drove all three backends'
+    shared suite in one process, so one backend's shared-case failure
+    contaminated the others' verdicts (the in-binary harness breaks on first
+    failure). The corrective removes the top-level `sys.exit`, drives the shared
+    suite **once per registered backend in a separate subprocess** (via
+    `SLUICE_TEST_FILTER=<driver_case>`), adds a 36-case manifest + attribution
+    isolation regression suite, and wires three explicit Phase C1 CI steps
+    (aggregate gate, manifest self-test, external-backend authority
+    negative-compile). See `phase-c1-conformance-gate.md` § "C1 corrective".
+    Scope is still `scripts/` + `.github/` + docs only; no production/public-API
+    change. Phase C remains PARTIAL; READY requires a green CI run on the final
+    PR head.
+
 - **C2 — semantic coverage: PENDING.** The "must cover" scope below is broader
   than the 8-case shared suite: injected allocation/startup/dispatch failure,
   accepted-terminal under allocator failure, single-waiter enforcement,
