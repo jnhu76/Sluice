@@ -270,6 +270,15 @@ sluice_internal_async_test("threadpool_backend_scheme_b_race_test", {platform_ga
 -- access_mtx_ across the backend wait and starved every other poll/reap path.
 sluice_internal_async_test("threadpool_wait_drain_deadlock_test", {platform_gate = {"linux", "macosx"}})
 
+-- application_runtime_drain_starvation_test — issue #67 end-to-end Runtime
+-- regression: the final backend-ready request must drain at shutdown. A task
+-- awaits one real read while the MW-S2 participant parks in the backend ready
+-- wait; request_stop() interrupts the park (control wake), the final request
+-- completes and is reaped by the re-entered run, and drain()/join() return
+-- with backend_ready == 0 and outstanding == 0. On the pre-fix code the run
+-- parks forever and drain() never returns (bounded join -> clean failure).
+sluice_internal_async_test("application_runtime_drain_starvation_test", {platform_gate = {"linux", "macosx"}})
+
 -- backend_scheme_b_race_test — Phase B backend-level Scheme-B race regression
 -- (review test-gap 1). Drives the raw FakeAsyncBackend with the
 -- SLUICE_ASYNC_INTERNAL_TESTING-only SubmitPauseGate seam: a submit thread is
