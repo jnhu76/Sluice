@@ -1202,6 +1202,19 @@ derives `AsyncBackend` is a trusted backend-author: it inherits the protected
 `try_claim()` / `publish()` / `rollback_claim_before_accept()` helpers, the
 only sanctioned way to claim a `Completion` and publish a terminal result.
 
+Issue #67 adds the OPTIONAL split-phase wait capability. A backend may
+override `wait_source()` to expose a `BackendWaitSource` (snapshot /
+`wait_for_change` / `interrupt_all`) — an observe-only readiness wait that
+never reaps or publishes, may run concurrently with serialized consuming
+operations, and can be interrupted by the control plane. The default is
+`nullptr` (source-compatible for existing external backends): such backends
+keep the legacy serialized `wait_one` contract, where the whole blocking call
+runs under the context's serialized access domain. `ApplicationRuntime`
+REQUIRES the capability at build time and rejects legacy backends with
+`invalid_state` — the multi-participant runtime path must never take the
+pre-fix serialized blocking wait (a participant parked while holding the
+context lock starves every other poll/reap path and deadlocks drain).
+
 Phase B (ADR-explicit-io-request-contract, Accepted, Decision 5) adds the
 protected two-stage **binding** helpers (`begin_binding` / `commit_binding` /
 `rollback_binding_before_accept`) used by the migrated backends (Fake/Sync, and
@@ -1280,7 +1293,23 @@ public:
 
     // Reap
     std::size_t poll();              // non-blocking
-    Result<std::size_t> wait_one();  // blocking; returns count reaped
+    // Blocking; returns the count of Completions reaped. With a
+    // split-wait-capable backend (wait_source() != nullptr) the wait NEVER
+    // holds the serialized access domain: the call loops
+    //   snapshot -> poll (serialized) -> park in the observe-only ready wait
+    // so other participants' poll/reap paths stay reachable (issue #67).
+    // A successful return of 0 means the wait was interrupted by the control
+    // plane (close_admission / interrupt_backend_waiters) with nothing
+    // reaped, or that no work was outstanding — 0 is NOT an error and never
+    // fabricates a completion. Without the capability the legacy serialized
+    // contract applies (the whole call, including a backend-side block, runs
+    // under the serialized access domain).
+    Result<std::size_t> wait_one();
+
+    // Control-plane wake (issue #67): unblocks every participant parked in
+    // wait_one()'s observe phase so shutdown / admission close can
+    // re-evaluate. No-op for backends without the split wait capability.
+    void interrupt_backend_waiters() noexcept;
 
     // Cancel
     void cancel(Completion<std::size_t>& c);
@@ -1366,6 +1395,8 @@ public:
     // Production admission close (ADR Decision 15). New submit_* returns
     // invalid_state (Completion idle, no borrow); existing accepted requests
     // continue; cancel/poll/wait_one/reap remain legal. Idempotent.
+    // Issue #67: also wakes any participant parked in the ready wait as a
+    // one-shot re-evaluation signal (never fabricates readiness).
     void close_admission();
 
     // Phase E resource introspection (method-only; no member data exposed).

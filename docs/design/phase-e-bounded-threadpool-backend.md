@@ -281,7 +281,7 @@ result and release-stores the Completion ready (via the slot's `publish_size_rea
 `publish_void_ready` thunk, inside the leaf domain). `outstanding()` returns
 `arena_.accepted_outstanding()`; the legacy duplicate `outstanding_` counter is deleted.
 
-### 4.5 Wake protocol — persistent ready epoch (Gate 3, AC-6, AGENTS.md §13.2)
+### 4.5 Wake protocol — split-phase ready epochs (Gate 3, AC-6, AGENTS.md §13.2; issue #67 corrective)
 
 The old `cv_.wait(ready deque nonempty)` is insufficient: backend-ready authority lives in the
 arena (a `backend_ready` slot that is still **pinned** is temporarily reap-ineligible, I19), and a
@@ -289,30 +289,47 @@ ready result can be recorded between the snapshot and the wait without a deque e
 close the commit-to-sleep race without polling:
 
 ```text
-ready domain: ready_mtx_, ready_cv_, std::uint64_t ready_epoch_ = 0
+ready domain (detail::ReadyWaitSource — a leaf domain):
+  ready_mtx_, ready_cv_
+  std::uint64_t ready_epoch_    # real readiness published
+  std::uint64_t control_epoch_  # control-plane wake (close_admission / runtime stop)
 
-signal_ready_progress():
-  { lock_guard(ready_mtx_); ++ready_epoch_; }
-  ready_cv_.notify_one()
+snapshot():   { lock ready_mtx_; return {ready_epoch_, control_epoch_}; }
 
-wait_one():
-  loop:
-    snap = ready_epoch_ (under ready_mtx_)
-    n = arena_.reap(sink_)           # publishes ready Completions; may be 0 if a slot is pinned
-    if n > 0: return n
-    lock ready_mtx_ (unique_lock)
-    if ready_epoch_ != snap: unlock; continue   # a signal arrived between snapshot and lock
-    ready_cv_.wait(lk)                           # NO timeout, NO periodic poll
-    unlock
+signal_progress():               # real readiness: state published FIRST, then notify
+  { lock ready_mtx_; ++ready_epoch_; }
+  ready_cv_.notify_all()         # concurrent observers possible — notify_one could strand a parker
+
+interrupt_all():                 # control wake: ONE-SHOT re-evaluation signal
+  { lock ready_mtx_; ++control_epoch_; }   # never fabricates readiness (I8)
+  ready_cv_.notify_all()                   # unblocks ALL parked waiters (I6)
+
+wait_for_change(observed):
+  lock ready_mtx_
+  ready_cv_.wait(lk, ready_epoch_ != observed.progress_generation
+                    || control_epoch_ != observed.control_generation)
+  return interrupted if control_epoch_ changed else progress
 ```
 
-`signal_ready_progress` is called by: worker after `record_terminal`; cancel on `terminal_won`;
-and the enqueue pin-ack re-arm path when a terminal winner preceded acknowledgement. It is NOT
-called by `close_admission()` and NOT called by the destructor. `wait_one()` is a pure ready-epoch
-protocol: it returns only when it has reaped ≥1 request; it never returns 0 as a "success" and it
-does not observe `stopping_` or admission state. The caller stops waiting by tracking
-`outstanding()` or by simply ceasing to call `wait_one()`. The pin-ack re-arm preserves the
-level-triggered readiness so no wake is lost (ADR Decision 4, I19; AGENTS.md §13.2).
+Two epochs (not one) distinguish a progress wake from a control wake WITHOUT a sticky interrupt
+flag — a sticky flag would make every FUTURE wait return immediately and busy-spin a runtime with
+outstanding work. The control wake is one-shot: future waits snapshot the advanced control
+generation and park normally again. `wait_for_change` is PURE OBSERVATION: it never reaps, never
+publishes a Completion, never touches request lifecycle or accounting state, so it may run
+concurrently with serialized consuming backend operations (E7-C serializes only the consuming
+domain; AsyncIoContext::wait_one parks in wait_for_change WITHOUT holding access_mtx_ — the
+issue #67 root-cause fix).
+
+`signal_progress` is called by: worker after `record_terminal`; cancel on `terminal_won`; and the
+enqueue pin-ack re-arm path when a terminal winner preceded acknowledgement. It is NOT called by
+the destructor. `interrupt_all` is called by `close_admission()` (issue #67 corrective — the
+frozen design's "close does not signal waiters" constraint starved a parked wait_one and
+deadlocked drain) and by ApplicationRuntime::request_stop (via AsyncIoContext::
+interrupt_backend_waiters). `wait_one()` returns only the reaped count; 0 means a control-plane
+interruption with no completion reaped (or, at the context level, an empty wait). The caller
+stops waiting by tracking `outstanding()` or by simply ceasing to call `wait_one()`. The pin-ack
+re-arm preserves the level-triggered readiness so no wake is lost (ADR Decision 4, I19;
+AGENTS.md §13.2).
 
 ---
 
@@ -367,7 +384,7 @@ Completion lifecycle misuse / admission closed / provenance; `would_block` = are
 
 ## 7. Shutdown and destruction (ADR Decision 15; AGENTS.md §14)
 
-### 7.1 `close_admission()` (real production semantics)
+### 7.1 `close_admission()` (real production semantics; issue #67 corrective)
 
 Maps the legacy `destroying_` gate + `shutting_down_for_test()` onto `arena_.close_admission()`:
 
@@ -375,7 +392,15 @@ Maps the legacy `destroying_` gate + `shutting_down_for_test()` onto `arena_.clo
 new submit -> reserve() returns invalid_state  (Completion idle, no borrow)
 existing accepted requests continue toward their ordinary terminal
 cancel remains legal; poll/wait_one/reap remains legal
+then interrupt_all(): advance the control epoch and notify_all every parked waiter
 ```
+
+The wake is a ONE-SHOT re-evaluation signal (issue #67): the frozen design's "close does not
+signal waiters" constraint let shutdown strand a participant parked in wait_one forever while
+admission closed but outstanding work remained — the final backend_ready request could not be
+reaped by the other participant and drain_complete_ was never satisfied. The control wake does
+NOT fabricate readiness, does NOT change request state, and does NOT make future waits return
+immediately (an admission-closed runtime with outstanding work must not busy-spin).
 
 The unguarded `shutting_down_for_test()` (threadpool_backend.hpp:103) is REMOVED (replaced by
 real `close_admission()` driven through the arena). The internal-testing-only seam
