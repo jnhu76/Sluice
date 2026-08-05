@@ -5,9 +5,9 @@
 reference files.
 
 The primary matrix classifies the **current accepted architecture and
-implementation**, not a Proposed target. Proposed decisions that would change a
-classification are listed separately in “Proposed target deltas”; they are
-neither current conformance nor implementation evidence.
+implementation**, not a Proposed target. Target-design decisions that would
+change a classification are listed separately in “Proposed target deltas”;
+they are not current conformance evidence until implemented.
 
 Classification key:
 - **F** — Faithful: core semantic preserved, C++ expression differs
@@ -25,7 +25,7 @@ Classification key:
 |---|---|---|---|---|---|
 | `Io` (userdata + vtable) | Lightweight copyable capability; any holder can submit ops | `AsyncIoContext` (move-only, owning, mutex-serialized) | **I** | ADR-async-io-model §3 A6; `async_io_context.hpp:118-158` | Sluice context is an owner, not a borrowed capability. Runtime injects it. Acceptable for the current single-runtime model; a lightweight façade is deferred. |
 | `Operation` (tagged union) | Explicit op descriptor with typed result | `ReadOp/WriteOp/SyncDataOp/SyncAllOp` structs | **F** | `async_io_context.hpp:32-49`; ADR §3 | Same semantic: explicit positional ops, typed results. C++ uses separate structs instead of a tagged union. |
-| `Operation.Storage` (caller-owned reusable slot with intrusive lifecycle lists) | Caller allocates stable bounded storage for submission→pending→completion and identity-preserving reuse | Accepted API structure keeps Completion caller-owned and submission machinery context/backend-owned; current per-request records remain backend-specific, dynamic, and identity-fragmented | **A** | ADR-async-io-model caller/Completion ownership; current backend sources; P1-06; DIV-02 is pending | **A** applies to the missing stable bounded request record and fragmented identity, not to the accepted caller/Completion ownership split. The Proposed contract selects a transitional storage target, shown below. |
+| `Operation.Storage` (caller-owned reusable slot with intrusive lifecycle lists) | Caller allocates stable bounded storage for submission→pending→completion and identity-preserving reuse | Accepted API structure keeps Completion caller-owned and submission machinery context/backend-owned; Uring per-request records remain backend-specific, dynamic, and identity-fragmented, while Fake/Sync (Phase B, PR #63) and ThreadPool (Phase E, PR #64) use the bounded `RequestArena` / `RequestSlot` identity | **A** (Uring) | ADR-async-io-model caller/Completion ownership; backend sources; P1-06; DIV-02 Active transitional | **A** applies to the missing stable bounded request record and fragmented identity on Uring, not to the accepted caller/Completion ownership split. The Accepted contract selects a transitional storage target; its implementation status is shown below. |
 | `Pending.Userdata` (7×usize backend scratch per op) | Backend-private bounded scratch in stable operation storage | Fake/Sync and (Phase E) ThreadPool use a bounded `RequestSlot` per op; Uring still uses maps/deques rather than common bounded per-request scratch | **I** (Fake/Sync/ThreadPool); **A** (Uring) | Phase B/E backend sources; DIV-02 | Phase B/E moved the reference + blocking backends onto a bounded `RequestArena` of reusable `RequestSlot`s with fixed per-slot backend scratch (`ThreadPoolBackend::PreparedBlockingOp`). Uring remains on the legacy maps/deques path until Phase D. The exact Zig fixed-word ABI is not required (DIV-02). |
 | `operate` (blocking-shaped I/O on current task) | Submit + await on the current concurrency unit; returns result inline | `op_helpers::read_all/write_all` (poll-loop) or `RuntimeTaskContext::submit_* + await_completion` (Fiber suspend) | **F** | `op_helpers.hpp:1-64`; `application_runtime.hpp:60-86` | Both paths preserve blocking-shaped semantics. The Runtime path is the Evented equivalent; op_helpers is the Threaded equivalent. |
 | `Batch` (caller storage + concurrent await + intrusive lists) | N ops submitted together; await ≥1; iterate in completion order; cancel as a whole | `Batch` class (driver over AsyncIoContext; `vector<unique_ptr<Slot>>`) | **I** | `batch.hpp:1-137` | Semantic contract preserved (submit N, await ≥1, iterate reap order, cancel). Implementation is a driver over per-op submit, NOT a native backend batchAwait vtable. Documented as deliberate narrowing in Batch header. The mechanism diverges from Zig (no native batch vtable entry) but the caller-visible semantics are equivalent. |
@@ -40,7 +40,7 @@ Classification key:
 | `Select` (multi-wait winner protocol) | Wait on multiple sources; exactly-once winner | E13 `select()` template + `SelectGroup`/`SelectPort`/`SelectArmSlot` | **F** | `scheduler.hpp:16`; `select_fwd.hpp`; E13 spec | Implemented with exactly-once winner CAS. |
 | Registered buffers / files | Kernel-pinned buffers for zero-copy io_uring | Not implemented | **M** | ADR-async-io-model §5 (deferred); §14 | Explicitly deferred pending lifetime contract. |
 | Signal-based blocking syscall cancellation | `pthread_kill`/`tgkill` to interrupt blocking I/O | Not implemented | **M** | `threadpool_backend.hpp:29-33` | Portable cancel of in-flight blocking syscall deferred. Cancel is best-effort (op completes with real result). |
-| `AsyncBackend` (L0 internal seam) | Backend implementations are library-internal; caller never subclasses or sees backend internals | Public `AsyncBackend` extension point with trusted backend-author contract. `Completion` mutation stays private; derived backends receive protected `try_claim` / `publish` / `rollback_claim_before_accept` capabilities | **I** | ADR-explicit-io-completion-authority §3; DIV-13 (Accepted); `completion.hpp` (private mutators + friend AsyncBackend); `scripts/verify-completion-authority-negative-compile.sh` | Custom/test backends remain injectable without exposing mutation APIs to ordinary callers. Backend subclasses enter the trusted computing base and must pass a future backend conformance suite. |
+| `AsyncBackend` (L0 internal seam) | Backend implementations are library-internal; caller never subclasses or sees backend internals | Public `AsyncBackend` extension point with trusted backend-author contract. `Completion` mutation stays private; derived backends receive protected `try_claim` / `publish` / `rollback_claim_before_accept` capabilities | **I** | ADR-explicit-io-completion-authority §3; DIV-13 (Accepted); `completion.hpp` (private mutators + friend AsyncBackend); `scripts/verify-completion-authority-negative-compile.sh` | Custom/test backends remain injectable without exposing mutation APIs to ordinary callers. Backend subclasses enter the trusted computing base and must pass the shared backend conformance suite (`tests/backend_conformance_*`). |
 
 ---
 
@@ -60,58 +60,63 @@ Classification key:
 ## Proposed Target Deltas
 
 These rows show what acceptance and later implementation of
-ADR-explicit-io-request-contract would change. They are intentionally excluded
+ADR-explicit-io-request-contract would change (the ADR is now **Accepted**;
+per-row implementation status is listed). They are intentionally excluded
 from the current summary counts above.
 
-> **Phase B implementation status (working tree, branch
-> `feat/bounded-request-slot-reference`):** ADR-explicit-io-request-contract is
-> now **Accepted**, and the Phase B reference layer implements the
+> **Implementation status (Phase B, PR #63; Phase E, PR #64):**
+> ADR-explicit-io-request-contract is **Accepted**, and the reference layer
+> (Phase B) plus `ThreadPoolBackend` (Phase E) implement the
 > `Operation.Storage` identity/ownership adaptation, bounded `request_capacity`
-> admission, and the allocation-independent terminal path on the reference
-> backends (`FakeAsyncBackend`, `SyncBackend`) via the shared
-> `detail::RequestArena`. At the reference layer these three rows advance to
-> their target class (**I** / **I** / **F**); the production backends
-> (`UringAsyncBackend`, `ThreadPoolBackend`) remain at the baseline
-> classification pending Phase D/E migration. The matrix above stays anchored to
-> the `b20bcc7` baseline until the production backends migrate; see
-> `docs/architecture/phase-b-compliance-gate.md` for the reference-layer
-> evidence.
+> admission, and the allocation-independent terminal path via the shared
+> `detail::RequestArena`. For Fake/Sync/ThreadPool these three rows advance to
+> their target class (**I** / **I** / **F**); `UringAsyncBackend` remains at the
+> baseline classification pending Phase D migration. The matrix above stays
+> anchored to the `b20bcc7` baseline until Uring migrates; see
+> `docs/architecture/phase-b-compliance-gate.md` and
+> `docs/architecture/phase-e-compliance-gate.md` for the evidence ledgers.
 
 | Concept | Current class | Proposed target class | Decision status | Implementation status |
 |---|---:|---:|---|---|
-| `Operation.Storage` ownership and identity | **A** | **I** | Accepted (ADR-explicit-io-request-contract); DIV-02 Active transitional | Reference-layer implemented (Phase B: `detail::RequestArena` + `RequestKey`/`Generation`); production backends Phase D/E |
-| `Pending.Userdata` bounded per-request scratch | **A** | **I** | Accepted; bounded semantic requirement specified | Reference-layer implemented (Phase B: pre-reserved per-slot `TerminalResult` storage + waiter registration); production backends Phase D/E |
-| Resource bounds | **A** | **F** | Accepted; bounded `request_capacity` with `would_block` | Reference-layer implemented (Phase B: arena capacity + `capacity_rejections`); `ThreadPoolBackend` remains unbounded pending Phase E |
+| `Operation.Storage` ownership and identity | **A** | **I** | Accepted (ADR-explicit-io-request-contract); DIV-02 Active transitional | Reference-layer implemented (Phase B: `detail::RequestArena` + `RequestKey`/`Generation`) + ThreadPool (Phase E, PR #64); Uring pending Phase D |
+| `Pending.Userdata` bounded per-request scratch | **A** | **I** | Accepted; bounded semantic requirement specified | Reference-layer implemented (Phase B: pre-reserved per-slot `TerminalResult` storage + waiter registration) + ThreadPool (Phase E: fixed `PreparedBlockingOp` per slot); Uring pending Phase D |
+| Resource bounds | **A** | **F** | Accepted; bounded `request_capacity` with `would_block` | Reference-layer implemented (Phase B: arena capacity + `capacity_rejections`) + ThreadPool (Phase E, PR #64: `ThreadPoolConfig{request_capacity, worker_count}` + `would_block` admission); Uring pending Phase D |
 
 ---
 
 ## Notes
 
-1. The largest current implementation gap is **resource bounds**. The Proposed
-   request contract selects bounded `request_capacity` and synchronous
-   `would_block`, but ThreadPoolBackend remains unbounded and no backend yet has
-   the common arena. The row stays **A** until implementation evidence exists.
+1. The largest current implementation gap is **resource bounds for
+   `UringAsyncBackend`**: the Accepted request contract selects bounded
+   `request_capacity` and synchronous `would_block`, and Fake/Sync (Phase B) and
+   ThreadPool (Phase E) now implement the common bounded `RequestArena`; Uring
+   still has ring depth but no unified request capacity. The Uring rows stay
+   **A** until Phase D implementation evidence exists.
 
 2. The **completion wake bridge** (polling instead of direct backend→Scheduler
    wake) is an explicit, documented, accepted decision (E9 P3). It is classified
    **I** despite being a significant structural difference from Zig.
 
-3. **Operation.Storage** remains current class **A** for the absence of common
+3. **Operation.Storage** was current class **A** for the absence of common
    stable bounded request storage and identity. Caller-owned Completion and
    context/backend submission machinery are already accepted API structure;
-   they are not accidental. The Proposed ADR and pending DIV-02 entry select
-   target class **I** for the specific backend/context-owned bounded RequestSlot
-   adaptation. Acceptance would approve that target; implementation evidence
-   would still be required separately.
+   they are not accidental. The Accepted ADR and DIV-02 (Active transitional)
+   select target class **I** for the backend/context-owned bounded RequestSlot
+   adaptation; Fake/Sync (Phase B) and ThreadPool (Phase E) implement it, and
+   Uring (Phase D) remains the outstanding production backend.
 
-4. **Pending.Userdata** heap mechanics remain **A** (Accidental Drift). The
-   target bounded RequestSlot scratch and intrusive/pre-reserved linkage are
-   specified, but no backend has implemented them yet.
+4. **Pending.Userdata** heap mechanics remain **A** (Accidental Drift) for
+   `UringAsyncBackend`. The target bounded RequestSlot scratch and
+   intrusive/pre-reserved linkage are implemented for Fake/Sync (Phase B) and
+   ThreadPool (Phase E, `PreparedBlockingOp` per slot); Uring still uses
+   maps/deques until Phase D.
 
-5. **ThreadPoolBackend** is a blocking-I/O offload mechanism (thread-per-op),
-   NOT an implementation of Zig's `Threaded` execution strategy (thread-per-
-   task). Group Threaded mode is the faithful Zig Threaded equivalent.
-   Conflating these leads to incorrect capacity reasoning.
+5. **ThreadPoolBackend** is a blocking-I/O offload mechanism — as of Phase E
+   (PR #64) a fixed pool of persistent blocking-I/O workers + a construction-
+   time bounded dispatch ring — NOT an implementation of Zig's `Threaded`
+   execution strategy (thread-per-task). Group Threaded mode is the faithful
+   Zig Threaded equivalent. Conflating these leads to incorrect capacity
+   reasoning. (The historical thread-per-op model is DIV-03, Resolved.)
 
 6. **Evented** is no longer classified as a single **F**. The execution
    semantic (Fiber suspends, worker free) is faithful, but the backend
@@ -125,5 +130,8 @@ from the current summary counts above.
    §3). Publication mutators stay private on `Completion<T>`; derived backends
    receive the protected `try_claim` / `publish` / `rollback_claim_before_accept`
    helpers as the sanctioned backend-author capability. Ordinary non-backend
-   callers still cannot forge publication (negative-compile gate). A backend
-   conformance suite is a follow-up requirement.
+   callers still cannot forge publication (negative-compile gate). Backend
+   authors must pass the shared backend conformance suite
+   (`tests/backend_conformance.hpp` + `backend_conformance_driver_test.cpp`,
+   target `backend_conformance_test`, running against Fake, ThreadPool, and
+   Uring).

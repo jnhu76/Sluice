@@ -2,7 +2,8 @@
 
 **Baseline:** `b20bcc7` (master, including PR #60 and PR #61). Findings retain
 their original audit evidence where useful and include explicit resolved notes
-for PR #61. No target contract is treated as implementation evidence.
+for PR #61, the Phase B reference layer (PR #63), and the Phase E blocking
+backend (PR #64). No target contract is treated as implementation evidence.
 
 Severity:
 - **P0** — correctness/liveness: accepted op may be permanently lost or process
@@ -17,27 +18,39 @@ Severity:
 
 [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
 now supplies a concrete target for the remaining request-lifecycle findings.
-Because the ADR is Proposed and this task changes no production code, every
-open finding below remains open.
+The ADR is Accepted (2026-08-02); the reference layer (Phase B, PR #63) and
+`ThreadPoolBackend` (Phase E, PR #64) implement it, and findings resolved by
+those merges carry resolution notes below (see the Summary table). Open
+findings remain open.
 
 | Open finding | Target decision | Required follow-up evidence |
 |---|---|---|
-| P0-01, P2-03 | Pre-reserved result/ready linkage; no post-accept unbounded-allocation dependency | Phase B/C OOM and terminal-path conformance, then Phase E blocking-offload migration |
-| P0-02, P1-04 | Five-stage admission; pre-commit failure rejects, post-commit dispatch failure completes | Phase B/C injected failure tests; Phase D/E backend migration |
+| P0-01, P2-03 | Pre-reserved result/ready linkage; no post-accept unbounded-allocation dependency | RESOLVED — Phase B/C reference terminal-path proof + Phase E (PR #64): ThreadPool post-commit path is allocation-free (see P0-01/P2-03 notes) |
+| P0-02, P1-04 | Five-stage admission; pre-commit failure rejects, post-commit dispatch failure completes | RESOLVED at the reference layer (Phase B) and for ThreadPool (Phase E, PR #64); Uring remains open (Phase D) — see P0-02/P1-04 notes |
 | P1-02, P1-07 | Distinct backend-ready/completion-ready plus synchronous pointer-free `ReadyEvent`/`ReadySink` delivery | Phase B/C reset/reuse-during-sink proof, Phase F Scheduler/Batch consumption |
 | P1-05 | `invalid_state`, `would_block`, and `no_space` are distinct; capacity rejects have their own metric | Phase B implementation and stats contract tests |
 | P1-06, P1-10 | `(context, slot, generation)` identity, private Completion `binding` transient, RequestSlot-owned stable waiter token/routing lease | Phase B/C cross-context binding/generation/fake-lease tests; Phase F Runtime/Scheduler lifetime and routing |
 | P1-08, P1-09 | RequestKey-targeted cancellation and explicit disposition; exact wait/cancel lock design remains open | Phase C contract tests plus a focused later concurrency design before L1 lock changes |
 | P2-05 | Batch outcome origin distinguishes rejection from accepted completion | Phase F Batch migration |
-| P2-01, P2-02 | Fixed persistent blocking workers and bounded queue | Phase E implementation and benchmark evidence |
+| P2-01, P2-02 | Fixed persistent blocking workers and bounded queue | RESOLVED — Phase E (PR #64): persistent construction-time workers + bounded dispatch ring + directed stress evidence (see P2-01/P2-02 notes) |
 | P2-04 | Backend-ready progress signal remains a separate wake contract | Phase G wake design and causal tests |
 
-The Proposed ADR is decision evidence only. It does not make an unchecked box,
+The Accepted ADR is decision evidence only. It does not make an unchecked box,
 missing regression, or current backend defect resolved.
 
 ---
 
 ## P0-01: Worker Thread Unhandled Exception → std::terminate
+
+> **Phase E resolution (PR #64):** RESOLVED. The per-op worker lambdas that
+> pushed to `ready_size_`/`ready_void_` are gone; workers are a fixed
+> construction-time pool whose post-commit terminal path records into
+> preallocated slot storage (`record_terminal`) and allocates nothing (Phase E
+> gate Slice 12), so no accepted-request worker path can throw
+> `std::bad_alloc` and terminate the process. The finding text below describes
+> the pre-Phase-E legacy model and is retained as the historical audit record.
+> Evidence: `docs/architecture/phase-e-compliance-gate.md` (Slices 5/12);
+> `tests/threadpool_backend_reap_test.cpp`.
 
 **Finding:** If `ready_size_.push_back()` or `ready_void_.push_back()` throws
 `std::bad_alloc` inside a worker thread lambda, the exception is unhandled.
@@ -228,6 +241,15 @@ an explicit cancel disposition remains P1-09.
 ---
 
 ## P1-04: ThreadPoolBackend Spawn Failure Has No Explicit Admission Boundary
+
+> **Phase E resolution (PR #64):** RESOLVED. Worker threads are created only at
+> construction (`ThreadPoolConfig::worker_count`); a construction failure stops
+> and joins the started workers and rethrows, so thread-creation failure is a
+> synchronous construction-time admission boundary — no submit path can hit a
+> `std::thread` construction throw after the Completion claim. The finding text
+> below describes the pre-Phase-E legacy model and is retained as the historical
+> audit record. Evidence: `docs/architecture/phase-e-compliance-gate.md` (Slice
+> 11: partial worker-construction cleanup) and the Phase E contract suite.
 
 **Finding:** When `std::thread` construction throws in
 `ThreadPoolBackend::enqueue_size`, the catch handler (`fail_spawn_size`)
@@ -768,24 +790,24 @@ with subsystem prefix in documentation.
 
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
-| P0-01 | P0 | Worker OOM → terminate | Phase A target + Phase B/C proof + Phase E implementation |
-| P0-02 | P0 | Cross-backend transactional submit | Reference-layer CLOSED (Phase B round 2: bounded RequestArena + five-stage admission on Fake/Sync; the Completion publication binding lives IN the RequestSlot record (no parallel map), the fake's submission-order FIFO is a construction-time bounded ring, and the Completion-ready release-store happens INSIDE the leaf domain (single-domain reap) — pre-commit bookkeeping is transactional and the accepted path performs ZERO allocations (proven by counting + always-throw operator new in `reference_backend_no_alloc_test.cpp`); a lost binding CAS leaves Completion/slot/FIFO/counters untouched with no result contamination); production-backend migration open for Phase D/E (register_op allocation after claim) |
+| P0-01 | P0 | Worker OOM → terminate | RESOLVED — Phase E (PR #64): fixed construction-time worker pool; worker post-commit terminal path allocates nothing (see section note; phase-e gate Slices 5/12) |
+| P0-02 | P0 | Cross-backend transactional submit | Reference-layer CLOSED (Phase B round 2: bounded RequestArena + five-stage admission on Fake/Sync; the Completion publication binding lives IN the RequestSlot record (no parallel map), the fake's submission-order FIFO is a construction-time bounded ring, and the Completion-ready release-store happens INSIDE the leaf domain (single-domain reap) — pre-commit bookkeeping is transactional and the accepted path performs ZERO allocations (proven by counting + always-throw operator new in `reference_backend_no_alloc_test.cpp`); a lost binding CAS leaves Completion/slot/FIFO/counters untouched with no result contamination); ThreadPool transactional admission RESOLVED (Phase E, PR #64 — `would_block` at capacity, pre-commit rollback, no borrow); Uring open (Phase D — register_op allocation after claim) |
 | P0-03 | P0 | Completion publication authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 |
 | P1-01 | P1 | Completion claim authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (backend is claim authority) |
 | P1-02 | P1 | Backend-ready vs completion-ready | Reference-layer CLOSED (Phase B: distinct `backend_ready` vs `completion_ready` slot states + enqueue-in-flight pin reap-ineligibility); Phase F Scheduler integration pending |
 | P1-03 | P1 | SyncBackend cancel publication | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (cancel records intent; reap publishes) |
-| P1-04 | P1 | Spawn failure lacks explicit admission boundary | Phase E backend migration |
+| P1-04 | P1 | Spawn failure lacks explicit admission boundary | RESOLVED — Phase E (PR #64): workers created only at construction; ctor failure stops/joins started workers and rethrows (see section note; phase-e gate Slice 11) |
 | P1-05 | P1 | queue_full_retries semantic conflation | Reference-layer CLOSED (Phase B round 2: distinct `slot_in_use` vs `accepted_outstanding` vs `capacity_rejections` counters on the arena; capacity pressure propagates as `would_block` — never `invalid_state` — and tallies `queue_full_retries`, while caller lifecycle violations (`invalid_state`) tally the new `AsyncStats::invalid_state_rejections` — the two are never conflated); Phase C metrics integration pending |
-| P1-06 | P1 | No request generation (ABA) | Reference-layer CLOSED (Phase B: per-slot Generation incremented on release before reuse; stale-key rejection proven across every post-reserve authority); production-backend migration open for Phase D/E |
+| P1-06 | P1 | No request generation (ABA) | Reference-layer CLOSED (Phase B: per-slot Generation incremented on release before reuse; stale-key rejection proven across every post-reserve authority); ThreadPool generation-safe as of Phase E (PR #64); Uring migration open for Phase D |
 | P1-07 | P1 | Reap API discards completion identity | Reference-layer CLOSED (Phase B: identity-bearing SynchronousReadySink delivers by-value ReadyEvent{RequestKey, OperationKind, OptionalWaiterDelivery}); Phase F Scheduler integration pending |
 | P1-08 | P1 | wait_one holds lock, blocks cancel | Focused concurrency design before Phase F L1 integration |
 | P1-09 | P1 | Cancel API not explicit | Reference-layer CLOSED at arena (Phase B: RequestKey-targeted cancel returns CancelDisposition); public-API change deferred to a later ADR |
 | P1-10 | P1 | Runtime await no provenance check | Reference-layer CLOSED (Phase B: RequestKey provenance is the cancel/reap identity); Phase F Runtime enforcement pending |
-| P2-01 | P2 | Per-op thread creation | Phase E persistent workers |
-| P2-02 | P2 | workers_ monotonic growth | Phase E persistent workers |
-| P2-03 | P2 | Hot-path allocation | Reference-layer CLOSED (Phase B round 2: allocation-independent accepted terminal path — fixed RequestSlot array, pre-reserved terminal storage, publication binding in the slot record, construction-time bounded FIFO ring; the accepted submit → poll → reset path performs ZERO allocations under a counting + always-throw operator new); Phase E backend migration pending |
+| P2-01 | P2 | Per-op thread creation | RESOLVED — Phase E (PR #64): fixed persistent workers, no per-op thread creation (see section note; DIV-03) |
+| P2-02 | P2 | workers_ monotonic growth | RESOLVED — Phase E (PR #64): fixed worker vector, no historical growth (see section note; DIV-12) |
+| P2-03 | P2 | Hot-path allocation | Reference-layer CLOSED (Phase B round 2: allocation-independent accepted terminal path — fixed RequestSlot array, pre-reserved terminal storage, publication binding in the slot record, construction-time bounded FIFO ring; the accepted submit → poll → reset path performs ZERO allocations under a counting + always-throw operator new); Phase E backend migration RESOLVED (PR #64: ThreadPool post-commit path allocation-free — phase-e gate Slice 12; see section note) |
 | P2-04 | P2 | 2ms MIXED-WAKE latency | Phase G wake integration |
 | P2-05 | P2 | Batch conflates rejection with completion | Phase F Batch integration |
-| P3-01 | P3 | ThreadPoolBackend naming | Phase E naming correction |
+| P3-01 | P3 | ThreadPoolBackend naming | Phase E decision (PR #64): name retained for API continuity (DIV-03); the backend is now genuinely bounded, so the misleading resource-model semantic is gone; a rename would require a separate API ADR |
 | P3-02 | P3 | Header claim-authority comment | RESOLVED — PR #61 corrected backend claim authority |
 | P3-03 | P3 | "workers" ambiguity | Phase E/G documentation audit |

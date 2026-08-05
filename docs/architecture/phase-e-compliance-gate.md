@@ -3,7 +3,7 @@
 **Design:** [`docs/design/phase-e-bounded-threadpool-backend.md`](../design/phase-e-bounded-threadpool-backend.md)
 **Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted)
 **Generic gate:** [`design-compliance-gate.md`](design-compliance-gate.md)
-**Branch:** `feat/phase-e-bounded-threadpool-explicit-io`
+**Branch:** `feat/phase-e-bounded-threadpool-explicit-io` (merged to master as PR #64)
 **Status:** Gate 0–4 complete.
 
 The complete Debug, Release, ASan+UBSan, TSan, negative-compile, documentation, and
@@ -13,7 +13,12 @@ All evidence rows below are filled with ACTUAL results from that run (see the Sa
 table).
 
 Commit **4af082b** is the **evidence-recording head**: it records those results and changes
-documentation only. GitHub CI and the PR formal smoke gate passed again at `4af082b`.
+documentation only. Commit **a8178d8** is the **master merge commit**: PR #64 was merged into
+master at `a8178d8` after GitHub CI and the PR formal smoke tier (the only formal tier the
+GitHub workflow runs on PRs — the `full` job is workflow_dispatch-only) passed on the final PR
+branch head `f71f990`. No evidence row below was executed at the merge commit; every PASS row is
+bound to the validated implementation head `9f91bd3`, with results recorded by the doc-only
+evidence-recording commit `4af082b`.
 
 **No row is pre-marked PASS** (AGENTS.md §8/§22: pre-filling PASS before execution is
 forbidden); every "PASS" below corresponds to a command that actually ran at the validated
@@ -280,7 +285,7 @@ inside the full suite in Debug, Release, ASan+UBSan, and TSan; every case passes
 | TSan (§16.3) — target 0 data races | `xmake f -m tsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS — **129/129 test binaries, 0 `WARNING: ThreadSanitizer` reports**; standalone `threadpool_backend_scheme_b_race_test` + `threadpool_backend_death_test` re-run under TSan, 0 reports |
 | negative-compile | `scripts/verify-completion-authority-negative-compile.sh` + `scripts/verify-request-arena-negative-compile.sh` | PASS — all 12 + 6 cases rejected |
 | doc-check | `python3 scripts/check-doc-links.py --self-test && python3 scripts/check-doc-links.py && python3 scripts/verify-architecture-docs.py` | PASS — self-test pass, 0 broken markdown links, 0 stale repo paths |
-| formal | `python3 scripts/formal/verify.py all` | PASS — **17/17 suites, 0 FAIL, 0 BLOCKED** (44 positive + 90 negative + 55 reachability gates) — **local full run** at the validated implementation head `9f91bd3`; the GitHub formal workflow at the evidence-recording head runs the **PR smoke tier** only (`verify.py smoke`; the `full` job is workflow_dispatch-only and is not executed on PRs); justified formal-coverage gap recorded below (narrowed: the load-bearing races are now deterministically exercised by Slice 13; no new TLA model added per AGENTS.md §17) |
+| formal | `python3 scripts/formal/verify.py all` | PASS — **17/17 suites, 0 FAIL, 0 BLOCKED** (44 positive + 90 negative + 55 reachability gates) — **local full run** at the validated implementation head `9f91bd3`; GitHub formal evidence is scoped to what the workflow actually runs on PRs — the **PR smoke tier** only (`verify.py smoke`; the `full` job is workflow_dispatch-only and is not executed on PRs) — which ran on the final PR branch head `f71f990` and merged to master at `a8178d8`; justified formal-coverage gap recorded below (narrowed: the load-bearing races are now deterministically exercised by Slice 13; no new TLA model added per AGENTS.md §17) |
 | stress | N=100003, buffer=1, fixed workers, bounded capacity | PASS — historical results remain valid (no hot-path change; the round-4 commits touch tests/watchdog only) |
 | diff | `git diff --check && git status --short && git diff --stat` | PASS — clean at the validated implementation head `9f91bd3`; re-verified at the evidence-recording head `4af082b` (`git show --check 4af082b` clean; `git status --short` empty after the evidence-recording commit) |
 

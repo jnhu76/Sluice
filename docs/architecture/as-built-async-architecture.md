@@ -7,9 +7,12 @@ discrepancy.
 
 **Target-design boundary:**
 [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
-is Proposed. Its `RequestKey`, bounded `RequestSlot`, identity-bearing reap,
-capacity, cancel disposition, and close-admission lifecycle are **not** present
-in this as-built baseline.
+is Accepted (2026-08-02). Its `RequestKey`, bounded `RequestSlot`, identity-bearing
+reap, capacity, cancel disposition, and close-admission lifecycle were **not**
+present in the `b20bcc7` baseline; they are implemented today at the reference
+layer (Phase B, PR #63 — see §9) and for `ThreadPoolBackend` (Phase E, PR #64 —
+see §2.2). `UringAsyncBackend` remains at the baseline classification until the
+Phase D migration.
 
 ---
 
@@ -72,7 +75,7 @@ corrected by PR #61 to name the backend as the claim authority.
 
 ### 2.2 ThreadPoolBackend
 
-> **Phase E update (branch `feat/phase-e-bounded-threadpool-explicit-io`):**
+> **Phase E update (merged to master as PR #64, `a8178d8`):**
 > The per-op-thread model, `std::function` payload, `try_claim` admission, and
 > `ready_size_`/`ready_void_` deques described below are the **pre-Phase-E
 > legacy** record. Phase E replaced them with: `ThreadPoolConfig{request_
@@ -425,7 +428,7 @@ wake_mtx_ (Scheduler park/wake)
 ## 9. Phase B reference-layer delta (post-baseline)
 
 > This section records a DELTA over the `b20bcc7` baseline above. It is added by
-> the Phase B working-tree change (branch `feat/bounded-request-slot-reference`,
+> the Phase B change (merged to master as PR #63, `7f434f0`;
 > ADR-explicit-io-request-contract **Accepted**) and reflects what the reference
 > backends now actually do. The baseline sections (1–8) are left unchanged so
 > the pre-Phase-B state remains readable; this section is the authoritative
@@ -437,8 +440,9 @@ admission (reserve → prepare → commit → enqueue → dispatch/reap) defined
 ADR-explicit-io-request-contract. The public submit/cancel/complete surface is
 unchanged (ADR Decision 7); the `RequestKey` is bound privately during commit.
 
-As-built authority changes at the reference layer (production backends
-Uring/ThreadPool remain at the baseline until Phase D/E):
+As-built authority changes at the reference layer (the production backend
+Uring remains at the baseline until Phase D; ThreadPool migrated in Phase E —
+see §2.2):
 
 | Authority | Phase B reference-layer owner | Evidence |
 |-----------|-------------------------------|----------|
@@ -455,5 +459,6 @@ Uring/ThreadPool remain at the baseline until Phase D/E):
 Findings closed at the reference layer: P0-02, P1-02, P1-05, P1-06, P1-07,
 P1-09 (arena), P1-10, P2-03. See `current-architecture-findings.md` summary
 table and `phase-b-compliance-gate.md` for the evidence ledger. Production-
-backend migration (Uring/ThreadPool) remains open for Phase D/E; Scheduler/
+backend migration (Uring) remains open for Phase D (ThreadPool completed in
+Phase E, PR #64 — see `phase-e-compliance-gate.md`); Scheduler/
 Batch/Runtime integration for Phase F/G.
