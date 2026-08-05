@@ -363,8 +363,8 @@ in this PR:
 
 ## Issue #67 corrective — split-phase ready wait (wait_one / E7-C / drain liveness)
 
-**Status:** corrective round recorded; sanitizer re-runs below are PENDING until the
-commands in this round actually run (no pre-filled PASS).
+**Status:** corrective round recorded; sanitizer re-runs executed in this round (evidence
+above and in the deterministic table).
 
 ### Scope
 
@@ -433,14 +433,33 @@ reverse acquisition path.
 | close_admission control wake returns 0, no fabricated completion, no stats inflation | same | PASS — `wait_one` returns 0, `c1`/`c2` not ready, `completed_ops == 0`, `wait_calls == 1` |
 | final requests drained after the wake | same | PASS — both reaped exactly once, `outstanding == 0`, `backend_ready == 0`, `completed_ops == 2` |
 | end-to-end runtime drain (captured topology) | `application_runtime_drain_starvation_test :: final_backend_ready_request_drains_at_shutdown` | PASS — `drain()` and `join()` return; `backend_ready == 0`; `outstanding == 0`; slot released by caller reset before quiescent teardown |
-| full Clang Debug suite | `xmake run -g test` | PASS — all suites green incl. both new regressions |
+| full Clang Debug suite | `xmake run -g test` | PASS — 132/132 test binaries green incl. both new regressions; re-run on the final tree after the test-backend split-wait fix (commit `e08204a`) |
 
 ### Sanitizer / mode re-runs for this corrective
 
-PENDING (commands must actually run before PASS is claimed; not yet executed in this round):
+Recorded after execution in this round (no pre-filled PASS):
 
-- TSan exact-seed reproduction (`--seed 5905338 --iterations 70`) and 6-way rotating-seed stress;
-- Clang Release, ASan+UBSan, negative-compile, doc-check re-runs.
+- TSan exact-seed reproduction — PASS: `--seed 5905338 --iterations 100` (rounds 0-99,
+  covering the issue's failing round 69), exit 0, **0 `WARNING: ThreadSanitizer`**.
+- TSan 6-way rotating-seed stress — PASS: seeds 5905338..5905343 × 100 rounds each, all
+  exit 0, 0 TSan warnings per seed.
+- TSan full suite — PASS: every test binary green, 0 TSan warnings (incl. both new
+  regressions and the scripted contract suite).
+- ASan+UBSan full suite — PASS: all 132 test binaries, 0 sanitizer reports;
+  `evented_scheduler_test :: sched_single_worker_scheduler_liveness` loop 15/15.
+- Negative-compile probes — PASS: completion-authority (12), request-arena (6),
+  async-api (9) all reject with the expected diagnostics.
+- Doc checks — PASS: `check-doc-links.py` (self-test + full), `verify-architecture-docs.py`,
+  `git diff --check`.
+- Baseline comparison — the TSan contract regression (`contract_depth_1_single_outstanding_read`
+  timeout) was proven to be introduced by this corrective round: baseline `2c08a3b` passes the
+  case under TSan; the pre-fix tree of this round failed it. Root cause: the D3 build
+  rejection of blocking-`wait_one` backends rejected the sanctioned test backends
+  (`ScriptedAsyncBackend`, `ThrowingBackend`); fixed by real split waits on those backends
+  (commit `e08204a`).
+- Clang Release (§16.1) — PASS: `xmake f -m release --toolchain=clang -y && xmake build
+  sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` — 132/132
+  test binaries green (public-header change: `wait_one_is_nonblocking`).
 
 ### Residual risk (recorded, not hidden)
 
