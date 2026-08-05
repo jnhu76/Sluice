@@ -280,13 +280,19 @@ class Gate:
             self._run_shared_suite(shared_ev)
 
         # Parse [conformance-meta] from every per-backend shared run for the
-        # REPORT. Per-run meta existence/identity is already enforced by
+        # REPORT, keyed by the CANONICAL registered backend name (a variant
+        # such as "Uring(stub)" resolves to "Uring" via canonical_backend_key).
+        # Per-run meta existence/identity is already enforced by
         # _classify_shared_run — a run without exactly one valid meta line can
         # never be PASS; this dict is only the report's display view.
         self.meta = {}
+        registered = [b.name for b in M.BACKENDS]
         for name, rr in self.shared_by_backend.items():
             if rr.stdout:
-                self.meta.update(parse_meta_lines(rr.stdout))
+                for meta_backend, info in parse_meta_lines(rr.stdout).items():
+                    ck = canonical_backend_key(meta_backend, registered)
+                    if ck is not None:
+                        self.meta[ck] = info
 
         return self._report()
 
@@ -320,6 +326,17 @@ class Gate:
         # Each run is classified fail-closed: PASS only when it provably ran
         # exactly the driver case and emitted exactly one valid meta line.
         for b in M.BACKENDS:
+            if not b.driver_case:
+                # A registered backend with no shared-suite driver case must
+                # NEVER be run unfiltered — that would execute every backend's
+                # cases in one process and fabricate attribution. Record
+                # INCOMPLETE instead (fail-closed; the manifest self-test
+                # also requires a non-empty driver_case for every backend).
+                self.shared_by_backend[b.name] = RunResult(
+                    f"{ev.evidence_id}:{b.name}", ev.target, INCOMPLETE,
+                    detail="empty driver_case: shared suite not driven "
+                           "for this backend")
+                continue
             rc, out = xmake_run_target(ev.target, env_filter=b.driver_case)
             state, detail = self._classify_shared_run(b, rc, out)
             self.shared_by_backend[b.name] = RunResult(
@@ -392,7 +409,7 @@ class Gate:
             return RunResult(ev.evidence_id, ev.target, MISSING_TARGET,
                              detail="xmake show -t reports not a valid target")
 
-        if not self.args.no_build:
+        if self.args is not None and not getattr(self.args, "no_build", False):
             ok, log = xmake_build_target(ev.target)
             if not ok:
                 return RunResult(ev.evidence_id, ev.target, BUILD_FAIL,
@@ -468,8 +485,8 @@ class Gate:
         not enough.
         """
         reasons: list[str] = []
-        mode = self.meta.get(backend.name) or self.meta.get(
-            self._meta_name_for(backend.name), {})
+        # self.meta is keyed by canonical registered backend names (see run()).
+        mode = self.meta.get(backend.name, {})
         mode_str = mode.get("mode", "unknown")
 
         # KernelIo profile: never ELIGIBLE in C1 (Phase D not implemented).
@@ -518,12 +535,6 @@ class Gate:
                 return INCOMPLETE, reasons
         return ELIGIBLE, reasons
 
-    @staticmethod
-    def _meta_name_for(registered_name: str) -> str:
-        # The driver prints "Uring(stub)" in stub builds; the meta dict is
-        # keyed by whatever was printed. Provide the stub-variant lookup.
-        return registered_name + "(stub)" if registered_name == "Uring" else registered_name
-
     # --- Reporting ---------------------------------------------------------
 
     def _report(self) -> int:
@@ -535,8 +546,8 @@ class Gate:
 
         # --- Per-backend report ---
         for backend in M.BACKENDS:
-            mode_info = self.meta.get(backend.name) or self.meta.get(
-                self._meta_name_for(backend.name), {})
+            # self.meta is keyed by canonical registered backend names.
+            mode_info = self.meta.get(backend.name, {})
             profile_seen = mode_info.get("profile", "?")
             mode_seen = mode_info.get("mode", "?")
             verdict, reasons = self._backend_verdict(backend)
