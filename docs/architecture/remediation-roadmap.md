@@ -167,21 +167,49 @@ public RequestHandle, and public submit-signature changes.
 test(async): enforce explicit request lifecycle across backends
 ```
 
-**Status:** PARTIAL — the shared backend-agnostic suite is implemented and wired
-into the `test` group (`tests/backend_conformance.hpp` + `backend_conformance_test.cpp`
-+ driver `backend_conformance_driver_test.cpp`; target `backend_conformance_test`) and
+**Status:** PARTIAL. Phase C is split into C1 (infrastructure) and C2 (semantic
+coverage).
+
+- **C1 — infrastructure: IMPLEMENTED.** A reliable, extensible, auditable
+  backend-conformance "ruler" now exists: a closed profile model
+  (`ReferenceProfile` → Fake, `BlockingIoProfile` → ThreadPool, `KernelIoProfile`
+  → Uring), a three-layer evidence classification (shared observable semantics /
+  lifecycle protocol / backend-specific mechanism), a single-source-of-truth
+  manifest (`scripts/backend_conformance_manifest.py`) with a pure-data
+  self-test, an aggregate gate (`scripts/verify-backend-conformance.py`) that
+  preflights via `xmake show`/`build`/`run` and classifies backends from stable
+  `[conformance-meta]` lines (never display-name/skip-text/`PASS`-string
+  parsing), an external-backend admission probe built from the public extension
+  surface only, and a narrow negative-compile gate for the `AsyncBackend`
+  protected-helper authority gap. The full C1 validation matrix (Debug, Release,
+  ASan/UBSan, TSan, all negative-compile gates, aggregate gate, doc checks) is
+  recorded in [`phase-c1-conformance-gate.md`](phase-c1-conformance-gate.md),
+  bound to the validated implementation head. The gate reports honestly:
+  Fake = ELIGIBLE, ThreadPool = ELIGIBLE, **Uring = NOT CONFORMING**
+  (KernelIo lifecycle/backend-specific INCOMPLETE — Phase D migration not
+  implemented), external probe = admission PASS / conformance NOT ASSESSED.
+  `Uring` is never marked conforming.
+
+- **C2 — semantic coverage: PENDING.** The "must cover" scope below is broader
+  than the 8-case shared suite: injected allocation/startup/dispatch failure,
+  accepted-terminal under allocator failure, single-waiter enforcement,
+  generation/stale-event cases, borrow-lifetime cases, the full
+  capacity/high-water/rejection matrix, the full stale cancel/wait/reap matrix,
+  the full waiter/borrow/delivery-lease interleave, and all
+  shutdown/reset/non-quiescent destruction cases. Some are already covered
+  out-of-suite by Phase B arena tests, death tests, and the negative-compile
+  scripts; C2 closes the remaining matrix into the aggregate gate.
+
+The shared backend-agnostic suite is implemented and wired into the `test` group
+(`tests/backend_conformance.hpp` + `backend_conformance_test.cpp` + driver
+`backend_conformance_driver_test.cpp`; target `backend_conformance_test`) and
 runs against Fake, ThreadPool, and Uring (stub without liburing; real path with
-liburing). It currently contains 8 shared-semantic cases (submit→reap exactly-once,
-positional independence, EOF after partial, short-completion retry, exactly-once
-terminal, cancel yields defined terminal, stats accounting, clean shutdown).
-ThreadPool passes the suite as of Phase E (PR #64); Fake passes; Uring passes only the
-stub subset (non-`real_mode` skips). NOT complete: the "must cover" scope below is
-broader than the suite — injected allocation/startup/dispatch failure, accepted-terminal
-under allocator failure, single-waiter enforcement, generation/stale-event cases,
-borrow-lifetime cases, and the public-backend negative-compile/conformance entry
-requirements are not yet in the suite (some are covered out-of-suite by Phase B arena
-tests, death tests, and the negative-compile scripts). Per the scope text below, Uring
-must not be marked conforming before the Phase D migration.
+liburing). It currently contains 8 shared-semantic cases (submit→reap
+exactly-once, positional independence, EOF after partial, short-completion
+retry, exactly-once terminal, cancel yields defined terminal, stats accounting,
+clean shutdown). ThreadPool passes the suite as of Phase E (PR #64); Fake
+passes; Uring passes only the stub subset (non-`real_mode` skips). Per the scope
+text below, Uring must not be marked conforming before the Phase D migration.
 
 Build a backend-agnostic suite rather than backend-specific happy-path copies.
 The framework must cover:
