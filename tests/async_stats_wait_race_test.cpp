@@ -194,10 +194,6 @@ SLUICE_TEST_CASE(wait_one_concurrent_callers_no_stats_race) {
         }
     }
 
-    for (std::size_t i = 0; i < kOps; ++i) {
-        if (completions[i].ready()) completions[i].reset();
-    }
-
     // If any caller failed to join we cannot make exact counter assertions.
     // Detach any stragglers so the SLUICE_FAIL return path (which runs
     // destructors) does not call std::terminate on a joinable thread.
@@ -226,6 +222,11 @@ SLUICE_TEST_CASE(wait_one_concurrent_callers_no_stats_race) {
     SLUICE_CHECK(stats.submitted_ops == kOps);
     SLUICE_CHECK(stats.completed_ops == kOps);
 
+    // Release slots before the context goes out of scope (quiescent teardown
+    // requires slot_in_use == 0).
+    for (std::size_t i = 0; i < kOps; ++i) {
+        completions[i].reset();
+    }
     ::close(fd);
 }
 
