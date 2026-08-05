@@ -16,19 +16,22 @@
 // (TSan flags it). Under the fix every accounting access is inside access_mtx_
 // and the final counters are exact.
 //
-// Cleanup discipline: the failure path NEVER detaches a participant thread.
-// Detached threads here still hold references to ctx / completions / stats /
-// the done-flags; once SLUICE_FAIL returns and the locals begin destructing,
-// a detached thread still calling ctx.wait_one() would be a use-after-free,
-// and destroying a context with a parked waiter would trip the backend's
-// non-quiescent-destruction fail-fast — turning a clean bounded failure into
-// an unexplained abort. Instead every failure/teardown path:
-//   1. sets a shared stop flag,
-//   2. calls ctx.interrupt_backend_waiters() so any parked wait_one() returns,
-//   3. drains outstanding work via poll() so accepted requests reach terminal
-//      and slots release (quiescent teardown requires outstanding == 0),
-//   4. joins every thread,
-//   5. only then reports failure / leaves scope.
+// Cleanup discipline: EVERY exit path — success and every failure — routes
+// through a single teardown that:
+//   1. sets the shared stop flag,
+//   2. resumes any armed ThreadPool pause gate,
+//   3. calls ctx.interrupt_backend_waiters() so any parked wait_one() returns,
+//   4. poll-drains ctx.outstanding() to zero (quiescent teardown requires it),
+//      re-interrupting each round so a parked waiter re-loops and exits,
+//   5. joins every participant thread,
+//   6. resets every ready Completion (releases slots),
+//   7. only then reports failure / leaves scope.
+// If drain or a join cannot complete within a bounded deadline, the helper
+// prints a precise diagnostic and std::abort()s — it NEVER lets a non-quiescent
+// context destruction or a joinable-thread destructor take over, because that
+// would surface as an opaque abort / UAF instead of the test's own message. No
+// path detaches a thread (detached threads here still reference ctx /
+// completions / stats / done-flags and would be a use-after-free).
 #include "harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>
@@ -117,6 +120,34 @@ bool join_bounded(std::thread& t, std::atomic<bool>& done,
     return true;
 }
 
+// Quiescent teardown for a context that MAY still have outstanding work /
+// parked waiters. Drains outstanding to zero by poll()ing and re-interrupting
+// (a parked waiter needs an interrupt to re-loop, observe stop, and exit;
+// poll() alone cannot wake it). If drain cannot complete within the deadline,
+// the failure is unrecoverable: print a precise diagnostic and abort rather
+// than let a non-quiescent context destructor or a joinable-thread destructor
+// surface as an opaque abort. Returns true on a clean drain.
+bool drain_to_quiescent(AsyncIoContext& ctx,
+                        std::chrono::steady_clock::time_point deadline) {
+    while (ctx.outstanding() != 0) {
+        if (std::chrono::steady_clock::now() >= deadline) return false;
+        ctx.poll();
+        // A waiter parked between interrupt rounds would otherwise never
+        // re-check stop; re-interrupt each round so it re-loops and exits.
+        ctx.interrupt_backend_waiters();
+        std::this_thread::yield();
+    }
+    return true;
+}
+
+// Hard-fail helper: when teardown cannot complete safely (drain or join
+// wedged), print a precise diagnostic and abort so the CI log shows the exact
+// reason instead of an opaque non-quiescent-destruction abort / UAF.
+void abort_with(const char* why) {
+    std::fprintf(stderr, "async_stats_wait_race_test: %s; aborting\n", why);
+    std::abort();
+}
+
 }  // namespace
 
 SLUICE_MAIN()
@@ -147,9 +178,10 @@ SLUICE_TEST_CASE(wait_one_concurrent_callers_no_stats_race) {
     std::vector<Completion<std::size_t>> completions(kOps);
 
     // The stop flag is the single orderly-shutdown signal for every caller.
-    // On the failure path we set it and interrupt_backend_waiters() so any
-    // parked wait_one() returns; callers observe stop and exit, so join()
-    // always succeeds and no thread outlives the scope (no detach anywhere).
+    // On ANY exit path (success or failure) the teardown sets it +
+    // interrupt_backend_waiters() so parked wait_one() calls return; callers
+    // observe stop and exit, so join() always succeeds and no thread outlives
+    // the scope (no detach anywhere).
     std::atomic<bool> stop{false};
     std::atomic<std::size_t> submitted{0};
     std::vector<std::atomic<bool>> done_flags(kCallers);
@@ -162,17 +194,23 @@ SLUICE_TEST_CASE(wait_one_concurrent_callers_no_stats_race) {
             ReadOp op{fd, buf.data() + i, 1, static_cast<std::uint64_t>(i)};
             if (ctx.submit_read(op, completions[i]).has_value()) {
                 submitted.fetch_add(1, std::memory_order_release);
-                // Each caller calls wait_one() at least once UNCONDITIONALLY,
-                // so wait_calls >= kCallers is a causal guarantee, not a
-                // schedule-dependent hope. Without this, a caller whose
-                // Completion was reaped by another participant before it
-                // re-checked ready() could skip the loop entirely and never
-                // call wait_one() at all.
-                for (;;) {
-                    if (stop.load(std::memory_order_acquire)) break;
-                    if (completions[i].ready()) break;
-                    auto r = ctx.wait_one();
-                    if (!r.has_value()) break;
+                // Each caller calls wait_one() at least once UNCONDITIONALLY —
+                // BEFORE the ready() check. This is what makes
+                // wait_calls >= kCallers a CAUSAL guarantee: without it, a
+                // caller whose Completion was reaped by another participant
+                // before it first entered the loop would observe ready() and
+                // skip wait_one() entirely, making the lower bound
+                // schedule-dependent. After the unconditional first call, the
+                // loop only re-enters while not-yet-ready and not-stopped.
+                if (!stop.load(std::memory_order_acquire)) {
+                    auto first = ctx.wait_one();
+                    if (first.has_value()) {
+                        while (!stop.load(std::memory_order_acquire) &&
+                               !completions[i].ready()) {
+                            auto r = ctx.wait_one();
+                            if (!r.has_value()) break;
+                        }
+                    }
                 }
             }
             done_flags[i].store(true, std::memory_order_release);
@@ -197,32 +235,23 @@ SLUICE_TEST_CASE(wait_one_concurrent_callers_no_stats_race) {
         // lock.
         const auto drain_deadline =
             std::chrono::steady_clock::now() + kWaitTimeout;
-        while (ctx.outstanding() != 0) {
-            if (std::chrono::steady_clock::now() >= drain_deadline) {
-                fail_msg = "did not drain to zero in time";
-                break;
-            }
-            ctx.poll();
-            std::this_thread::yield();
+        if (!drain_to_quiescent(ctx, drain_deadline)) {
+            fail_msg = "did not drain to zero in time";
         }
     }
 
-    // Orderly shutdown on ANY failure: set stop, wake parked waiters, drain
-    // accepted work so the context can be destroyed quiescently, then JOIN
-    // every thread. NEVER detach — a detached caller still references ctx /
-    // completions / stats / done_flags and would be a use-after-free once the
-    // locals destruct. (On the success path stop is still set + interrupt
-    // issued here as the single teardown point — callers have already set
-    // done_flags, so join is immediate.)
+    // SINGLE teardown for every path. On failure we MUST drain + join before
+    // reporting: otherwise SLUICE_FAIL returns, the locals destruct, and the
+    // context destruction sees outstanding != 0 / a joinable thread and either
+    // fail-fasts opaquely or UAFs. On the success path the callers are already
+    // joined and outstanding is 0, so this is cheap.
     if (fail_msg != nullptr) {
         stop.store(true, std::memory_order_release);
         ctx.interrupt_backend_waiters();
-        const auto drain_deadline =
-            std::chrono::steady_clock::now() + kWaitTimeout;
-        while (ctx.outstanding() != 0) {
-            if (std::chrono::steady_clock::now() >= drain_deadline) break;
-            ctx.poll();
-            std::this_thread::yield();
+        if (!drain_to_quiescent(ctx,
+                                std::chrono::steady_clock::now() +
+                                    kWaitTimeout)) {
+            abort_with("case A failure path: could not drain to quiescent");
         }
         for (auto& t : callers) {
             if (t.joinable()) t.join();
@@ -252,10 +281,10 @@ SLUICE_TEST_CASE(wait_one_concurrent_callers_no_stats_race) {
     SLUICE_CHECK(stats.submitted_ops == kOps);
     SLUICE_CHECK(stats.completed_ops == kOps);
     // wait_calls >= kCallers is a CAUSAL guarantee here, not schedule-dependent:
-    // each caller calls wait_one() at least once unconditionally before
-    // observing its own ready() / stop. A regression that undercounts wait_calls
-    // (e.g. re-introducing the lock-free bump) would still trip TSan; this bound
-    // is the runtime backstop.
+    // each caller calls wait_one() at least once unconditionally before it ever
+    // checks ready() / stop. A regression that undercounts wait_calls (e.g.
+    // re-introducing the lock-free bump) would still trip TSan; this bound is
+    // the runtime backstop.
     SLUICE_CHECK(stats.wait_calls >= kCallers);
 
     // Release slots before the context goes out of scope (quiescent teardown
@@ -274,10 +303,11 @@ SLUICE_TEST_CASE(wait_one_concurrent_callers_no_stats_race) {
 //
 // To actually exercise the wait_one() reap path (the >0-return branch), this
 // case uses the ThreadPool running-pause gate to HOLD one op in `running` while
-// the waiter is parked: only after the waiter is observed parked do we release
-// the gate, so the worker's completion wakes the parked waiter (progress wake)
-// and the waiter's wait_one() returns >0. That makes waiter_reaped > 0 a
-// deterministic guarantee, not a race between waiter / poller / main.
+// the waiter is parked: only after the waiter is observed parked (via the
+// wait-phase flag) do we release the gate, so the worker's completion wakes the
+// parked waiter (progress wake) and the waiter's wait_one() returns >0. That
+// makes waiter_reaped > 0 a deterministic guarantee, not a race between
+// waiter / poller / main.
 SLUICE_TEST_CASE(wait_one_and_poll_concurrent_no_stats_race) {
     constexpr std::size_t kOps = 4;
 
@@ -313,22 +343,73 @@ SLUICE_TEST_CASE(wait_one_and_poll_concurrent_no_stats_race) {
         SLUICE_CHECK(ctx.submit_read(op, completions[i]).has_value());
     }
 
-    // Wait for the first op to reach the running gate (paused pre-syscall), so
-    // no readiness signal can arrive before the waiter parks.
-    const char* fail_msg = nullptr;
-    const auto gate_deadline = std::chrono::steady_clock::now() + kWaitTimeout;
-    while (!gate.paused.load(std::memory_order_acquire)) {
-        if (std::chrono::steady_clock::now() >= gate_deadline) {
-            fail_msg = "op did not reach the running gate in time";
-            break;
-        }
-        std::this_thread::yield();
-    }
-    if (fail_msg != nullptr) {
+    std::atomic<bool> stop{false};
+    std::atomic<bool> poller_may_start{false};
+    std::atomic<std::size_t> waiter_reaped{0};
+    std::atomic<bool> waiter_done{false};
+    std::atomic<bool> poller_done{false};
+
+    // Thread objects declared up-front (default-constructed = not-yet-joined)
+    // so the teardown lambda below can capture them by reference and be valid
+    // on every exit path — including the early-failure paths that fire BEFORE
+    // the threads are started (waiter/poller stay non-joinable in that case,
+    // and teardown's joinable() guards make that a no-op).
+    std::thread waiter;
+    std::thread poller;
+
+    // Orderly teardown applied on EVERY exit path (success + every failure).
+    // Captures by reference so it can touch stop, the gate, ctx, both threads,
+    // and completions. It is idempotent (safe to call from multiple points).
+    auto teardown = [&](const char* why) {
+        stop.store(true, std::memory_order_release);
+        poller_may_start.store(true, std::memory_order_release);
+        // Release any armed gate so a paused worker can run and the op can be
+        // reaped by the drain below (otherwise the worker is stuck forever).
+        gate.resume.store(true, std::memory_order_release);
         backend_raw->set_running_pause_gate(nullptr);
         backend_raw->set_wait_phase_flag_for_test(nullptr);
-        gate.resume.store(true, std::memory_order_release);
-        SLUICE_FAIL(fail_msg);
+        // Wake any parked waiter so it observes stop and exits; re-interrupt
+        // each drain round so a re-parked waiter re-loops.
+        ctx.interrupt_backend_waiters();
+        if (!drain_to_quiescent(ctx,
+                                std::chrono::steady_clock::now() +
+                                    kWaitTimeout)) {
+            abort_with("case B teardown: could not drain to quiescent");
+        }
+        // Join both participants. waiter re-loops on stop via the interrupt;
+        // poller observes stop directly. If a join still fails after stop +
+        // interrupt, the participant is wedged in a way the test cannot recover
+        // from safely — abort loudly (the contract says this never happens).
+        const auto join_deadline =
+            std::chrono::steady_clock::now() + kWaitTimeout;
+        if (waiter.joinable() &&
+            !join_bounded(waiter, waiter_done, join_deadline)) {
+            abort_with("case B teardown: waiter unjoinable after stop+interrupt");
+        }
+        if (poller.joinable() &&
+            !join_bounded(poller, poller_done, join_deadline)) {
+            abort_with("case B teardown: poller unjoinable after stop");
+        }
+        // Release any ready slots (quiescent teardown requires slot_in_use==0).
+        for (auto& c : completions) {
+            if (c.ready()) c.reset();
+        }
+        if (why != nullptr) SLUICE_FAIL(why);
+    };
+
+    // Wait for the first op to reach the running gate (paused pre-syscall), so
+    // no readiness signal can arrive before the waiter parks. On failure route
+    // through the single teardown (which drains + joins before failing).
+    {
+        const auto gate_deadline =
+            std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!gate.paused.load(std::memory_order_acquire)) {
+            if (std::chrono::steady_clock::now() >= gate_deadline) {
+                teardown("op did not reach the running gate in time");
+                return;
+            }
+            std::this_thread::yield();
+        }
     }
 
     // waiter_reaped records the count of completions the waiter's wait_one()
@@ -340,12 +421,7 @@ SLUICE_TEST_CASE(wait_one_and_poll_concurrent_no_stats_race) {
     // uncontested. Only AFTER that proof does the poller start, and the
     // remaining ops are reaped under genuine wait-vs-poll contention (the
     // completed_ops race this test exists to exercise).
-    std::atomic<bool> stop{false};
-    std::atomic<bool> poller_may_start{false};
-    std::atomic<std::size_t> waiter_reaped{0};
-    std::atomic<bool> waiter_done{false};
-    std::atomic<bool> poller_done{false};
-    std::thread waiter([&] {
+    waiter = std::thread([&] {
         while (!stop.load(std::memory_order_acquire)) {
             auto r = ctx.wait_one();
             if (!r.has_value()) break;
@@ -361,7 +437,7 @@ SLUICE_TEST_CASE(wait_one_and_poll_concurrent_no_stats_race) {
         }
         waiter_done.store(true, std::memory_order_release);
     });
-    std::thread poller([&] {
+    poller = std::thread([&] {
         // Do not poll until the waiter has proven it reaped op0 — this keeps
         // waiter_reaped > 0 deterministic without weakening the wait-vs-poll
         // contention for the remaining ops.
@@ -388,8 +464,8 @@ SLUICE_TEST_CASE(wait_one_and_poll_concurrent_no_stats_race) {
             std::chrono::steady_clock::now() + kWaitTimeout;
         while (!wait_phase_entered.load(std::memory_order_acquire)) {
             if (std::chrono::steady_clock::now() >= park_deadline) {
-                fail_msg = "waiter never parked (wait-phase flag never fired)";
-                break;
+                teardown("waiter never parked (wait-phase flag never fired)");
+                return;
             }
             std::this_thread::yield();
         }
@@ -400,69 +476,58 @@ SLUICE_TEST_CASE(wait_one_and_poll_concurrent_no_stats_race) {
     backend_raw->set_wait_phase_flag_for_test(nullptr);
     gate.resume.store(true, std::memory_order_release);
 
-    if (fail_msg == nullptr) {
-        // First: wait for the waiter to deterministically reap op0 BEFORE the
-        // main thread polls. Otherwise the main thread (or poller) wins the
-        // race for op0 and waiter_reaped stays 0 — defeating the whole point
-        // of the deterministic handoff.
+    // Wait for the waiter to deterministically reap op0 BEFORE the main thread
+    // polls. Otherwise the main thread wins the race for op0 and waiter_reaped
+    // stays 0 — defeating the whole point of the deterministic handoff.
+    {
         const auto handoff_deadline =
             std::chrono::steady_clock::now() + kWaitTimeout;
         while (waiter_reaped.load(std::memory_order_acquire) == 0) {
             if (std::chrono::steady_clock::now() >= handoff_deadline) {
-                fail_msg = "waiter did not reap op0 after gate release";
-                break;
+                teardown("waiter did not reap op0 after gate release");
+                return;
             }
             std::this_thread::yield();
         }
     }
 
-    if (fail_msg == nullptr) {
+    // Drain the remaining ops under genuine wait-vs-poll contention.
+    {
         const auto reap_deadline =
             std::chrono::steady_clock::now() + kWaitTimeout;
         while (ctx.outstanding() != 0) {
             if (std::chrono::steady_clock::now() >= reap_deadline) {
-                fail_msg = "did not reap all ops in time";
-                break;
+                teardown("did not reap all ops in time");
+                return;
             }
             ctx.poll();
             std::this_thread::yield();
         }
     }
 
-    // Orderly shutdown: set stop, interrupt parked waiters, then join both
-    // participants. NEVER detach — they reference ctx / completions / stats.
-    stop.store(true, std::memory_order_release);
-    ctx.interrupt_backend_waiters();
-    const auto join_deadline = std::chrono::steady_clock::now() + kWaitTimeout;
-    bool waiter_joined = join_bounded(waiter, waiter_done, join_deadline);
-    bool poller_joined = join_bounded(poller, poller_done, join_deadline);
-    if (fail_msg == nullptr && (!waiter_joined || !poller_joined)) {
-        fail_msg = "participant did not finish after stop signal";
-    }
-    // If a join still failed after stop + interrupt, the participant is wedged
-    // in a way the test cannot recover from safely — surface it loudly. (Under
-    // the contract this never happens: interrupt wakes every parked waiter.)
-    if (!waiter_joined && waiter.joinable()) {
-        std::fprintf(stderr,
-                     "async_stats_wait_race_test B: waiter unjoinable after "
-                     "stop+interrupt; aborting to avoid scoped-use-after-free\n");
-        std::abort();
-    }
-    if (!poller_joined && poller.joinable()) {
-        std::fprintf(stderr,
-                     "async_stats_wait_race_test B: poller unjoinable after "
-                     "stop; aborting to avoid scoped-use-after-free\n");
-        std::abort();
-    }
-    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
-
+    // Capture Completion-readiness BEFORE teardown (teardown resets ready
+    // slots back to idle). Stats counters, by contrast, MUST be read AFTER
+    // teardown: until both participants are joined the poller/waiter may still
+    // be writing them (under access_mtx_), so a lock-free read here would race
+    // with those writes. After teardown no writer remains.
+    bool all_ready_with_one = true;
     for (std::size_t i = 0; i < kOps; ++i) {
-        SLUICE_CHECK(completions[i].ready());
-        SLUICE_CHECK(completions[i].result().has_value());
-        SLUICE_CHECK(completions[i].result().value() == 1);
-        completions[i].reset();
+        if (!completions[i].ready() || !completions[i].result().has_value() ||
+            completions[i].result().value() != 1) {
+            all_ready_with_one = false;
+            break;
+        }
     }
 
+    // Success path teardown: stop both participants, drain any tail, join,
+    // release slots. Same routine as failure — single exit discipline. After
+    // it returns no participant thread is running, so stats counters are
+    // quiescent and can be read without a lock.
+    teardown(nullptr);
+
+    // Now assert against post-teardown state. waiter_reaped is atomic; the
+    // stats fields are read only after both threads have joined (no writers).
+    SLUICE_CHECK(all_ready_with_one);
     // The waiter MUST have reaped at least one completion via wait_one() —
     // otherwise the wait_one() reap-path bump of completed_ops (the exact
     // statement this test exists to prove race-free) was never exercised.
