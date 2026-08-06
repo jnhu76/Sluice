@@ -448,4 +448,17 @@ int run_conformance(const BackendFactory& f) {
     return failed ? 1 : 0;
 }
 
+// Phase C2a placeholder for run_capacity_cases. The full implementation lands
+// in commit 3 (shared capacity cases + CapacityFixture). This stub keeps commit
+// 1 (the factory seam) compilable and the baseline green; it returns the empty
+// string (all-pass) so a driver that calls it today observes no failure. The
+// real cases are added with their CapacityFixture cleanup in commit 3.
+//
+// NOTE: this stub is intentionally a no-op that does NOT touch the factory's
+// capacity seam yet. Once commit 3 lands, this definition is replaced with the
+// real capacity-case driver.
+std::string run_capacity_cases(const BackendFactory& /*factory*/) {
+    return {};
+}
+
 }  // namespace sluice_test::conformance

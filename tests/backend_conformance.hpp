@@ -38,17 +38,42 @@ namespace sluice_test::conformance {
 // backend's family/mode from display names or skip text. Values:
 //   profile: one of ReferenceProfile / BlockingIoProfile / KernelIoProfile.
 //   mode:    deterministic | real | stub.
+//
+// Phase C2a capacity seam: the OPTIONAL make_backend_with_capacity constructs a
+// backend at a CHOSEN request_capacity. It is the authoritative way the shared
+// capacity cases (run_capacity_cases) build a small bounded backend. A backend
+// that has not migrated onto the bounded RequestArena (Uring before Phase D)
+// leaves this null; the capacity cases then do not execute for that backend's
+// driver, and the gap is recorded authoritatively by the manifest's
+// not_implemented record + applicable_evidence_for_backend() — there is NO
+// driver-side "skip-as-pass" and NO separate machine-readable INCOMPLETE marker
+// protocol. The default zero-arg make_backend is preserved so the existing 8
+// shared cases are unchanged.
 struct BackendFactory {
-    using MakeBackend = std::function<std::unique_ptr<sluice::async::AsyncBackend>()>;
+    using MakeBackend =
+        std::function<std::unique_ptr<sluice::async::AsyncBackend>()>;
+    using MakeBackendWithCapacity =
+        std::function<std::unique_ptr<sluice::async::AsyncBackend>(std::size_t)>;
     using MakeTempFd = std::function<int()>;  // returns an open rw fd; -1 if unsupported
 
     const char* name;
-    MakeBackend make_backend;
+    MakeBackend make_backend;                       // default-capacity path
+    MakeBackendWithCapacity make_backend_with_capacity = nullptr;  // optional
     MakeTempFd make_temp_fd;  // may be nullptr when not real_mode
     bool real_mode;           // can do real kernel I/O
     const char* profile;      // Phase C1 closed-profile classification
     const char* mode;         // Phase C1 execution mode classification
 };
+
+// Whether a factory can construct a backend at a chosen capacity. A factory
+// that cannot is NOT a silent skip for the capacity cases: the SOLE
+// authoritative gap record is the manifest entry
+// (uring_capacity_not_implemented), carried into the verdict via
+// applicable_evidence_for_backend(). The capacity runner observes a false
+// result and does not register the capacity cases for that backend's driver.
+inline bool factory_supports_capacity(const BackendFactory& f) {
+    return f.make_backend_with_capacity != nullptr;
+}
 
 // Records a conformance skip (not a failure). Printed for visibility.
 inline void note_skip(const char* backend, const char* case_name, const char* reason) {
@@ -69,5 +94,19 @@ inline void emit_meta(const BackendFactory& factory) {
 // Implemented out-of-line in backend_conformance_test.cpp so adding a case is
 // one vertical slice (RED on Fake -> GREEN -> parameterize to other backends).
 int run_conformance(const BackendFactory& factory);
+
+// Phase C2a — shared capacity/admission/accounting cases. Drives ONLY the
+// capacity cases against a backend built at a chosen small request_capacity via
+// factory.make_backend_with_capacity. Returns:
+//   * the empty string  — all capacity cases passed;
+//   * a non-empty string — the stable name of the FIRST failing capacity case
+//     (diagnosable; never just a bool or a whole-suite exit code, so a validity
+//     fixture can assert the SPECIFIC case that caught a defect).
+//
+// Precondition: factory_supports_capacity(factory). A factory without the seam
+// (Uring before Phase D) MUST NOT call this; the manifest's
+// uring_capacity_not_implemented record is the authoritative gap surface.
+// Implemented out-of-line in backend_conformance_test.cpp.
+std::string run_capacity_cases(const BackendFactory& factory);
 
 }  // namespace sluice_test::conformance
