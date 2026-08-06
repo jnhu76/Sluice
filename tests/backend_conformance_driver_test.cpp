@@ -140,4 +140,35 @@ SLUICE_TEST_CASE(conformance_uring) {
     SLUICE_CHECK(sluice_test::conformance::run_conformance(f) == 0);
 }
 
+// Phase C2a — shared capacity/admission/rejection/accounting cases, driven
+// per-backend. Each runs run_capacity_cases() against a backend built at a
+// chosen small request_capacity via the factory's make_backend_with_capacity
+// seam. The cases assert ONLY AsyncIoContext-observable state. Uring has no
+// capacity seam (Phase D pending), so it has NO capacity driver case here —
+// the authoritative gap is the manifest's uring_capacity_not_implemented
+// record. The aggregate gate drives these per-backend in isolated subprocesses.
+SLUICE_TEST_CASE(conformance_capacity_fake) {
+    const auto f = make_fake_factory();
+    sluice_test::conformance::emit_meta(f);
+    SLUICE_CHECK(sluice_test::conformance::factory_supports_capacity(f));
+    const std::string failed = sluice_test::conformance::run_capacity_cases(f);
+    if (!failed.empty()) {
+        std::fprintf(stderr, "[conformance] capacity FAIL Fake :: %s\n",
+                     failed.c_str());
+    }
+    SLUICE_CHECK(failed.empty());
+}
+
+SLUICE_TEST_CASE(conformance_capacity_threadpool) {
+    const auto f = make_threadpool_factory();
+    sluice_test::conformance::emit_meta(f);
+    SLUICE_CHECK(sluice_test::conformance::factory_supports_capacity(f));
+    const std::string failed = sluice_test::conformance::run_capacity_cases(f);
+    if (!failed.empty()) {
+        std::fprintf(stderr, "[conformance] capacity FAIL ThreadPool :: %s\n",
+                     failed.c_str());
+    }
+    SLUICE_CHECK(failed.empty());
+}
+
 SLUICE_MAIN()

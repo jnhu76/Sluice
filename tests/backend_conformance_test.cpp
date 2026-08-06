@@ -14,11 +14,15 @@
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <span>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 #include <unistd.h>
@@ -448,16 +452,344 @@ int run_conformance(const BackendFactory& f) {
     return failed ? 1 : 0;
 }
 
-// Phase C2a placeholder for run_capacity_cases. The full implementation lands
-// in commit 3 (shared capacity cases + CapacityFixture). This stub keeps commit
-// 1 (the factory seam) compilable and the baseline green; it returns the empty
-// string (all-pass) so a driver that calls it today observes no failure. The
-// real cases are added with their CapacityFixture cleanup in commit 3.
+// ===========================================================================
+// Phase C2a — shared capacity/admission/rejection/accounting cases.
 //
-// NOTE: this stub is intentionally a no-op that does NOT touch the factory's
-// capacity seam yet. Once commit 3 lands, this definition is replaced with the
-// real capacity-case driver.
-std::string run_capacity_cases(const BackendFactory& /*factory*/) {
+// These cases prove (Issue #68 Rev 3, requirements 1-2):
+//   * a bounded backend accepts exactly `capacity` requests;
+//   * the (capacity+1)th submit synchronously returns would_block;
+//   * a rejected Completion stays idle (no async from a reject);
+//   * capacity rejection does not increment outstanding;
+//   * submitted_ops counts committed requests only;
+//   * submit_calls counts every submit attempt;
+//   * max_outstanding never exceeds capacity;
+//   * capacity rejection and invalid_state rejection are classified precisely;
+//   * after accepted requests cancel -> reap -> reset, the capacity recycles.
+//
+// SHARED-OBSERVABLE BOUNDARY: the cases use ONLY
+//   AsyncIoContext::submit / cancel / poll / wait_one / outstanding / stats
+//   + Completion's public state/reset. They MUST NOT downcast, touch
+//   complete_*, arena_*, dispatch_size_for_test, or any backend-specific
+//   internals. The arena/mechanism evidence stays in the Phase B/E tests.
+//
+// CLEANUP MODEL (Issue #68 Rev 3, CORRECTION 3a/7a): cleanup is an EXPLICIT
+// method cleanup_or_abort(), NOT a destructor. SLUICE_CHECK expands to
+// record_failure(); return; — returning out of a destructor lets the
+// AsyncIoContext member destruct and fire its own L11 fail-fast, masking the
+// real cause. cleanup_or_abort() is never built on SLUICE_CHECK; it is
+// time-bounded with a real deadline and abort()s on timeout so the failure
+// cause is the capacity case, not a context-destructor violation. Every
+// successful submit is funneled through submit_and_track(), which registers
+// the Completion into `accepted` BEFORE the case inspects the result, so a
+// deliberately-nonconforming backend that wrongly accepts the (N+1)th op is
+// still cleaned up even if the case throws right after.
+// ===========================================================================
+
+// A small RAII fd holder for real_mode capacity cases. ThreadPool rejects
+// fd < 0 with invalid_argument (pre-commit descriptor validation), so a real
+// open fd is required to reach the capacity path on a real-syscall backend.
+// Fake has no descriptor validation; it accepts fd=-1 at capacity pressure.
+struct ScopedTempFd {
+    int fd = -1;
+    explicit ScopedTempFd(int f) : fd(f) {}
+    ~ScopedTempFd() { if (fd >= 0) ::close(fd); }
+    ScopedTempFd(const ScopedTempFd&) = delete;
+    ScopedTempFd& operator=(const ScopedTempFd&) = delete;
+    operator int() const noexcept { return fd; }
+};
+
+// Open a temp fd for a real_mode capacity run; -1 if the factory is non-real.
+inline int capacity_temp_fd(const BackendFactory& f) {
+    return f.make_temp_fd ? f.make_temp_fd() : -1;
+}
+
+struct CapacityFixture {
+    AsyncIoContext ctx;
+    AsyncStats stats;
+    // Raw pointers into caller-owned Completions; the test owns the storage
+    // and MUST keep the Completions alive until after cleanup_or_abort().
+    std::vector<Completion<std::size_t>*> accepted;
+
+    explicit CapacityFixture(std::unique_ptr<AsyncBackend> backend)
+        : ctx(std::move(backend), &stats) {}
+
+    // Build a ReadOp that the backend will accept under capacity pressure.
+    // real_mode backends need a real fd; Fake accepts any fd form.
+    ReadOp make_read_op(int fd, std::byte* dst, std::size_t len) const {
+        return ReadOp{fd, dst, len, 0};
+    }
+
+    // Every successful submit MUST be tracked BEFORE the case inspects it, so a
+    // deliberately-nonconforming backend that wrongly accepts the (N+1)th op is
+    // still cleaned up even if the case throws right after (CORRECTION 7b).
+    // Register FIRST, assert LATER.
+    Result<void> submit_and_track(Completion<std::size_t>& c, ReadOp op) {
+        auto r = ctx.submit_read(op, c);
+        if (r.has_value()) accepted.push_back(&c);
+        return r;
+    }
+
+    // Cleanup is explicit and un-ignorable. It is NOT built on SLUICE_CHECK
+    // (which returns out of the current function) and does NOT use a fixed
+    // `guard < 10000` loop. It is time-bounded; if the deadline passes with
+    // outstanding work, it prints a precise diagnostic and abort()s so the
+    // failure cause is the capacity case, not a context-destructor violation.
+    void cleanup_or_abort(const char* backend_name, const char* case_name) {
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(10);
+
+        // 1. Cancel everything still outstanding.
+        for (auto* c : accepted) {
+            if (c->outstanding()) ctx.cancel(*c);
+        }
+        // 2. Drive poll/reap until outstanding hits 0 or the deadline expires.
+        //    interrupt_backend_waiters() re-arms waiters; yield() lets workers
+        //    progress. This is liveness, not ordering proof — cancel may still
+        //    yield the real syscall result on ThreadPool (a valid terminal).
+        while (ctx.outstanding() != 0 &&
+               std::chrono::steady_clock::now() < deadline) {
+            (void)ctx.poll();
+            ctx.interrupt_backend_waiters();
+            std::this_thread::yield();
+        }
+        if (ctx.outstanding() != 0) {
+            // Precise diagnostic — do NOT let the AsyncIoContext destructor's
+            // fail-fast fire and mask this as an unrelated L11 violation.
+            std::fprintf(stderr,
+                "CapacityFixture: cleanup deadline expired "
+                "(backend=%s case=%s outstanding=%zu accepted=%zu)\n",
+                backend_name, case_name, ctx.outstanding(), accepted.size());
+            for (std::size_t i = 0; i < accepted.size(); ++i) {
+                const auto* c = accepted[i];
+                std::fprintf(stderr,
+                    "  accepted[%zu]: idle=%d outstanding=%d ready=%d\n",
+                    i, (int)c->idle(), (int)c->outstanding(), (int)c->ready());
+            }
+            std::fprintf(stderr,
+                "  stats: submit_calls=%llu submitted_ops=%llu "
+                "canceled_ops=%llu completion_errors=%llu\n",
+                (unsigned long long)stats.submit_calls,
+                (unsigned long long)stats.submitted_ops,
+                (unsigned long long)stats.canceled_ops,
+                (unsigned long long)stats.completion_errors);
+            std::abort();
+        }
+        // 3. Reset every ready Completion so the slot is released (capacity
+        //    recycles). The context is now quiescent; the fixture destructor
+        //    (default) is a no-op.
+        for (auto* c : accepted) {
+            if (c->ready()) c->reset();
+        }
+    }
+};
+
+// Each capacity case is a SELF-CONTAINED scope that owns, in ONE stack frame,
+// its CapacityFixture + Completions + cleanup. The macro CAPACITY_CASE opens a
+// brace + declares `cname` + builds the fixture + opens a try; END_CAPACITY_CASE
+// calls cleanup_or_abort() (success path), closes the try, adds the catch that
+// ALSO calls cleanup_or_abort() and returns the failing case name, and closes
+// the outer brace. The case statements go BETWEEN the two macros WITHOUT an
+// extra brace — an extra `{ ... }` would put the Completions in an inner block
+// that destructs BEFORE END_CAPACITY_CASE runs cleanup, defeating the design.
+//
+//   CAPACITY_CASE(f, "case_name", CAP)
+//       <statements using `fx` and `cname`; declarations live in the try scope>
+//   END_CAPACITY_CASE(f)
+//
+// This is the only scope-correct shape: fixture and Completions share the try
+// frame, cleanup runs before either destructs (so the accepted-pointers stay
+// valid and the context is quiescent before destruction), and a CONF_CHECK
+// case_bail still reaches cleanup via the catch.
+#define CAPACITY_CASE(f, case_name_str, cap_value)                                   \
+    {                                                                                \
+        const char* cname = (case_name_str);                                         \
+        CapacityFixture fx((f).make_backend_with_capacity(cap_value));               \
+        try {
+
+// Closes the CAPACITY_CASE block: runs cleanup_or_abort() on the success path
+// (no exception) and on the exception path (case_bail), then returns the
+// failing case name on failure or empty on success. The macro must be matched
+// 1:1 with CAPACITY_CASE.
+#define END_CAPACITY_CASE(f)                                                         \
+        fx.cleanup_or_abort((f).name, cname);                                        \
+        } catch (...) {                                                              \
+            fx.cleanup_or_abort((f).name, cname);                                    \
+            return cname;                                                            \
+        }                                                                            \
+    }
+
+// The capacity-case driver. Returns the empty string on full pass, or the
+// stable name of the FIRST failing case. Drives ONLY the capacity cases against
+// a backend built at a chosen small request_capacity via
+// factory.make_backend_with_capacity. Precondition: factory_supports_capacity.
+//
+// Each case is a CAPACITY_CASE...END_CAPACITY_CASE block: the fixture + the
+// Completions + cleanup all live in ONE scope, so cleanup_or_abort() runs while
+// the Completions are still on the stack (the accepted-pointers stay valid) and
+// on BOTH the success and exception paths (a CONF_CHECK case_bail still reaches
+// cleanup before the fixture destructs).
+std::string run_capacity_cases(const BackendFactory& f) {
+    // ---- Case A: accepts exact capacity -----------------------------------
+    // capacity=2: c1 accept, c2 accept, outstanding==2, submit_calls==2,
+    // submitted_ops==2, max_outstanding==2, queue_full_retries==0,
+    // invalid_state_rejections==0.
+    CAPACITY_CASE(f, "capacity_accepts_exact_limit", 2)
+        ScopedTempFd fd(capacity_temp_fd(f));
+        std::byte buf1[4]{}, buf2[4]{};
+        Completion<std::size_t> c1, c2;
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c2, fx.make_read_op(fd, buf2, 4)).has_value());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 2);
+        CONF_CHECK(f.name, cname, fx.stats.submit_calls == 2);
+        CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 2);
+        CONF_CHECK(f.name, cname, fx.stats.max_outstanding == 2);
+        CONF_CHECK(f.name, cname, fx.stats.queue_full_retries == 0);
+        CONF_CHECK(f.name, cname, fx.stats.invalid_state_rejections == 0);
+    END_CAPACITY_CASE(f)
+
+    // ---- Case B: the (N+1)th submit is rejected with would_block -----------
+    // c1, c2 accept; c3 returns would_block; c3 stays idle; outstanding==2;
+    // submitted_ops==2; submit_calls==3; queue_full_retries==1;
+    // invalid_state_rejections==0; max_outstanding==2.
+    CAPACITY_CASE(f, "capacity_rejects_with_idle_completion", 2)
+        ScopedTempFd fd(capacity_temp_fd(f));
+        std::byte buf1[4]{}, buf2[4]{}, buf3[4]{};
+        Completion<std::size_t> c1, c2, c3;
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c2, fx.make_read_op(fd, buf2, 4)).has_value());
+        // c3 must be REJECTED for capacity. NOT tracked (not accepted).
+        auto r3 = fx.ctx.submit_read(fx.make_read_op(fd, buf3, 4), c3);
+        CONF_CHECK(f.name, cname, !r3.has_value());
+        CONF_CHECK(f.name, cname,
+                   r3.error().code == IoError::Code::would_block);
+        // The rejected Completion stays idle throughout — no async from a reject.
+        CONF_CHECK(f.name, cname, c3.idle());
+        CONF_CHECK(f.name, cname, !c3.outstanding());
+        CONF_CHECK(f.name, cname, !c3.ready());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 2);
+        CONF_CHECK(f.name, cname, fx.stats.submit_calls == 3);
+        CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 2);
+        CONF_CHECK(f.name, cname, fx.stats.queue_full_retries == 1);
+        CONF_CHECK(f.name, cname, fx.stats.invalid_state_rejections == 0);
+        CONF_CHECK(f.name, cname, fx.stats.max_outstanding == 2);
+    END_CAPACITY_CASE(f)
+
+    // ---- Case C: a rejected request never produces a late completion -------
+    // cap=1: c1 accept, c2 rejected (would_block). Then drive backend progress,
+    // clean up c1 (cancel -> reap). c2 must remain idle/not-outstanding/not-
+    // ready throughout and after — no completion publication belongs to c2.
+    CAPACITY_CASE(f, "capacity_rejection_never_completes", 1)
+        ScopedTempFd fd(capacity_temp_fd(f));
+        std::byte buf1[4]{}, buf2[4]{};
+        Completion<std::size_t> c1, c2;
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
+        auto r2 = fx.ctx.submit_read(fx.make_read_op(fd, buf2, 4), c2);
+        CONF_CHECK(f.name, cname, !r2.has_value());
+        CONF_CHECK(f.name, cname,
+                   r2.error().code == IoError::Code::would_block);
+        CONF_CHECK(f.name, cname, c2.idle());
+        // Drive backend progress and reap c1. c2 must stay idle the whole time.
+        fx.ctx.cancel(c1);
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (fx.ctx.outstanding() != 0 &&
+               std::chrono::steady_clock::now() < deadline) {
+            (void)fx.ctx.poll();
+            fx.ctx.interrupt_backend_waiters();
+            // c2 must NEVER become outstanding/ready as a side effect.
+            CONF_CHECK(f.name, cname, c2.idle());
+            CONF_CHECK(f.name, cname, !c2.outstanding());
+            CONF_CHECK(f.name, cname, !c2.ready());
+            std::this_thread::yield();
+        }
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
+        CONF_CHECK(f.name, cname, c2.idle());
+        CONF_CHECK(f.name, cname, !c2.ready());
+        CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 1);
+    END_CAPACITY_CASE(f)
+
+    // ---- Case D: rejection classification is precise ----------------------
+    // Deterministic sequence: c1 accept; resubmit on non-idle c1 ->
+    // invalid_state; c2 accept; c3 -> would_block. Exact stats (CORRECTION 5):
+    //   submit_calls==4, submitted_ops==2, invalid_state_rejections==1,
+    //   queue_full_retries==1, max_outstanding==2, outstanding==2.
+    CAPACITY_CASE(f, "capacity_stats_are_exact", 2)
+        ScopedTempFd fd(capacity_temp_fd(f));
+        std::byte buf1[4]{}, buf1b[4]{}, buf2[4]{}, buf3[4]{};
+        Completion<std::size_t> c1, c2, c3;
+        // 1. c1 accept.
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
+        // 2. Resubmit on the still-non-idle c1 -> invalid_state (caller
+        //    lifecycle violation, NOT capacity). c1 already tracked.
+        auto r1b = fx.ctx.submit_read(fx.make_read_op(fd, buf1b, 4), c1);
+        CONF_CHECK(f.name, cname, !r1b.has_value());
+        CONF_CHECK(f.name, cname,
+                   r1b.error().code == IoError::Code::invalid_state);
+        // 3. c2 accept.
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c2, fx.make_read_op(fd, buf2, 4)).has_value());
+        // 4. c3 -> would_block (capacity full).
+        auto r3 = fx.ctx.submit_read(fx.make_read_op(fd, buf3, 4), c3);
+        CONF_CHECK(f.name, cname, !r3.has_value());
+        CONF_CHECK(f.name, cname,
+                   r3.error().code == IoError::Code::would_block);
+        // Exact assertions — deterministic counters tallied exactly once.
+        CONF_CHECK(f.name, cname, fx.stats.submit_calls == 4);
+        CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 2);
+        CONF_CHECK(f.name, cname, fx.stats.invalid_state_rejections == 1);
+        CONF_CHECK(f.name, cname, fx.stats.queue_full_retries == 1);
+        CONF_CHECK(f.name, cname, fx.stats.max_outstanding == 2);
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 2);
+        CONF_CHECK(f.name, cname, fx.stats.canceled_ops == 0);
+        CONF_CHECK(f.name, cname, fx.stats.completion_errors == 0);
+    END_CAPACITY_CASE(f)
+
+    // ---- Case E: capacity recycles after cancel -> reap -> reset ----------
+    // cap=1: c1 accept (fills capacity). Cancel + reap c1, then reset c1
+    // (releases the slot). A fresh c2 submit MUST succeed (capacity recycled).
+    CAPACITY_CASE(f, "capacity_recycles_after_reset", 1)
+        ScopedTempFd fd(capacity_temp_fd(f));
+        std::byte buf1[4]{}, buf2[4]{};
+        Completion<std::size_t> c1, c2;
+        // Fill capacity.
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 1);
+        // Terminalize c1 (cancel may win canceled or yield the real result;
+        // either is a valid terminal — C2a does not care WHICH terminal wins,
+        // only that the accepted op reaches exactly one and the slot recycles).
+        fx.ctx.cancel(c1);
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!c1.ready() && std::chrono::steady_clock::now() < deadline) {
+            (void)fx.ctx.poll();
+            fx.ctx.interrupt_backend_waiters();
+            std::this_thread::yield();
+        }
+        CONF_CHECK(f.name, cname, c1.ready());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
+        // Reset c1 — releases the slot. Capacity must now be reusable.
+        c1.reset();
+        // c1 is no longer tracked as accepted (it was reset); drop it so
+        // cleanup does not touch it again.
+        for (auto it = fx.accepted.begin(); it != fx.accepted.end(); ++it) {
+            if (*it == &c1) { fx.accepted.erase(it); break; }
+        }
+        // A fresh submit MUST succeed (capacity recycled).
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c2, fx.make_read_op(fd, buf2, 4)).has_value());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 1);
+        CONF_CHECK(f.name, cname, fx.stats.submit_calls == 2);
+        CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 2);
+        CONF_CHECK(f.name, cname, fx.stats.max_outstanding == 1);
+    END_CAPACITY_CASE(f)
+
     return {};
 }
 
