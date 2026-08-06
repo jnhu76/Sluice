@@ -325,17 +325,32 @@ sluice_internal_async_test("reference_backend_arena_lifecycle_test")
 -- no_recycle -> capacity_recycles_after_reset; the None control passes all.
 -- Compiles the shared-suite implementation (backend_conformance_test.cpp)
 -- alongside the validity cases so run_capacity_cases() resolves.
+--
+-- FAIL-FAST (review finding): both sources are fixed in-repo source files with
+-- NO platform/feature condition. The old `if os.isfile(...) then` guard made
+-- the target silently DISAPPEAR if either file were renamed/deleted, while
+-- `xmake test` could still go green with validity coverage silently absent
+-- (the validity target is not in the conformance manifest). Unconditional
+-- registration + explicit raise() (xmake's sandbox exposes `raise`, not plain
+-- `assert`) makes a missing source a hard xmake error instead of a silent
+-- coverage drop.
 do
     local validity = R .. "tests/capacity_validity_test.cpp"
     local impl = R .. "tests/backend_conformance_test.cpp"
-    if os.isfile(validity) and os.isfile(impl) then
-        target("capacity_validity_test")
-            set_kind("binary")
-            set_default(false)
-            set_group("test")
-            add_deps("sluice_core", "sluice_async_internal_testing")
-            add_includedirs(R .. "include", R .. "tests")
-            add_files(validity, impl)
-            add_tests("capacity_validity_test")
+
+    if not os.isfile(validity) then
+        raise("capacity_validity_test source missing: " .. validity)
     end
+    if not os.isfile(impl) then
+        raise("capacity_validity_test shared-suite impl missing: " .. impl)
+    end
+
+    target("capacity_validity_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core", "sluice_async_internal_testing")
+        add_includedirs(R .. "include", R .. "tests")
+        add_files(validity, impl)
+        add_tests("capacity_validity_test")
 end

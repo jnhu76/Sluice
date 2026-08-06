@@ -14,6 +14,7 @@
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -49,7 +50,8 @@ inline std::vector<ConformanceFailure>& conf_failures() {
     static std::vector<ConformanceFailure> v;
     return v;
 }
-struct case_bail {};
+// case_bail is now declared in backend_conformance.hpp so C++ regression tests
+// can drive run_capacity_case / CapacityFixture directly.
 #define CONF_CHECK(backend, case_name, cond)                                            \
     do {                                                                                \
         if (!(cond)) {                                                                  \
@@ -485,123 +487,57 @@ int run_conformance(const BackendFactory& f) {
 // still cleaned up even if the case throws right after.
 // ===========================================================================
 
-// A small RAII fd holder for real_mode capacity cases. ThreadPool rejects
-// fd < 0 with invalid_argument (pre-commit descriptor validation), so a real
-// open fd is required to reach the capacity path on a real-syscall backend.
-// Fake has no descriptor validation; it accepts fd=-1 at capacity pressure.
-struct ScopedTempFd {
-    int fd = -1;
-    explicit ScopedTempFd(int f) : fd(f) {}
-    ~ScopedTempFd() { if (fd >= 0) ::close(fd); }
-    ScopedTempFd(const ScopedTempFd&) = delete;
-    ScopedTempFd& operator=(const ScopedTempFd&) = delete;
-    operator int() const noexcept { return fd; }
-};
+// cleanup_or_abort out-of-line definition. CapacityFixture, submit_and_track,
+// run_capacity_case, ScopedTempFd, and capacity_temp_fd live in
+// backend_conformance.hpp so C++ regression tests in capacity_validity_test.cpp
+// can drive the fixture directly (the header is test-only, never installed).
+void CapacityFixture::cleanup_or_abort(const char* backend_name,
+                                       const char* case_name) {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
 
-// Open a temp fd for a real_mode capacity run; -1 if the factory is non-real.
-inline int capacity_temp_fd(const BackendFactory& f) {
-    return f.make_temp_fd ? f.make_temp_fd() : -1;
-}
-
-struct CapacityFixture {
-    AsyncIoContext ctx;
-    AsyncStats stats;
-    // Raw pointers into caller-owned Completions; the test owns the storage
-    // and MUST keep the Completions alive until after cleanup_or_abort().
-    std::vector<Completion<std::size_t>*> accepted;
-
-    explicit CapacityFixture(std::unique_ptr<AsyncBackend> backend)
-        : ctx(std::move(backend), &stats) {}
-
-    // Build a ReadOp that the backend will accept under capacity pressure.
-    // real_mode backends need a real fd; Fake accepts any fd form.
-    ReadOp make_read_op(int fd, std::byte* dst, std::size_t len) const {
-        return ReadOp{fd, dst, len, 0};
+    // 1. Cancel everything still outstanding.
+    for (auto* c : accepted) {
+        if (c->outstanding()) ctx.cancel(*c);
     }
-
-    // Every successful submit MUST be tracked BEFORE the case inspects it, so a
-    // deliberately-nonconforming backend that wrongly accepts the (N+1)th op is
-    // still cleaned up even if the case throws right after (CORRECTION 7b).
-    // Register FIRST, assert LATER.
-    Result<void> submit_and_track(Completion<std::size_t>& c, ReadOp op) {
-        auto r = ctx.submit_read(op, c);
-        if (r.has_value()) accepted.push_back(&c);
-        return r;
+    // 2. Drive poll/reap until outstanding hits 0 or the deadline expires.
+    //    interrupt_backend_waiters() re-arms waiters; yield() lets workers
+    //    progress. This is liveness, not ordering proof — cancel may still
+    //    yield the real syscall result on ThreadPool (a valid terminal).
+    while (ctx.outstanding() != 0 &&
+           std::chrono::steady_clock::now() < deadline) {
+        (void)ctx.poll();
+        ctx.interrupt_backend_waiters();
+        std::this_thread::yield();
     }
-
-    // Cleanup is explicit and un-ignorable. It is NOT built on SLUICE_CHECK
-    // (which returns out of the current function) and does NOT use a fixed
-    // `guard < 10000` loop. It is time-bounded; if the deadline passes with
-    // outstanding work, it prints a precise diagnostic and abort()s so the
-    // failure cause is the capacity case, not a context-destructor violation.
-    void cleanup_or_abort(const char* backend_name, const char* case_name) {
-        const auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::seconds(10);
-
-        // 1. Cancel everything still outstanding.
-        for (auto* c : accepted) {
-            if (c->outstanding()) ctx.cancel(*c);
-        }
-        // 2. Drive poll/reap until outstanding hits 0 or the deadline expires.
-        //    interrupt_backend_waiters() re-arms waiters; yield() lets workers
-        //    progress. This is liveness, not ordering proof — cancel may still
-        //    yield the real syscall result on ThreadPool (a valid terminal).
-        while (ctx.outstanding() != 0 &&
-               std::chrono::steady_clock::now() < deadline) {
-            (void)ctx.poll();
-            ctx.interrupt_backend_waiters();
-            std::this_thread::yield();
-        }
-        if (ctx.outstanding() != 0) {
-            // Precise diagnostic — do NOT let the AsyncIoContext destructor's
-            // fail-fast fire and mask this as an unrelated L11 violation.
+    if (ctx.outstanding() != 0) {
+        // Precise diagnostic — do NOT let the AsyncIoContext destructor's
+        // fail-fast fire and mask this as an unrelated L11 violation.
+        std::fprintf(stderr,
+            "CapacityFixture: cleanup deadline expired "
+            "(backend=%s case=%s outstanding=%zu accepted=%zu)\n",
+            backend_name, case_name, ctx.outstanding(), accepted.size());
+        for (std::size_t i = 0; i < accepted.size(); ++i) {
+            const auto* c = accepted[i];
             std::fprintf(stderr,
-                "CapacityFixture: cleanup deadline expired "
-                "(backend=%s case=%s outstanding=%zu accepted=%zu)\n",
-                backend_name, case_name, ctx.outstanding(), accepted.size());
-            for (std::size_t i = 0; i < accepted.size(); ++i) {
-                const auto* c = accepted[i];
-                std::fprintf(stderr,
-                    "  accepted[%zu]: idle=%d outstanding=%d ready=%d\n",
-                    i, (int)c->idle(), (int)c->outstanding(), (int)c->ready());
-            }
-            std::fprintf(stderr,
-                "  stats: submit_calls=%llu submitted_ops=%llu "
-                "canceled_ops=%llu completion_errors=%llu\n",
-                (unsigned long long)stats.submit_calls,
-                (unsigned long long)stats.submitted_ops,
-                (unsigned long long)stats.canceled_ops,
-                (unsigned long long)stats.completion_errors);
-            std::abort();
+                "  accepted[%zu]: idle=%d outstanding=%d ready=%d\n",
+                i, (int)c->idle(), (int)c->outstanding(), (int)c->ready());
         }
-        // 3. Reset every ready Completion so the slot is released (capacity
-        //    recycles). The context is now quiescent; the fixture destructor
-        //    (default) is a no-op.
-        for (auto* c : accepted) {
-            if (c->ready()) c->reset();
-        }
+        std::fprintf(stderr,
+            "  stats: submit_calls=%llu submitted_ops=%llu "
+            "canceled_ops=%llu completion_errors=%llu\n",
+            (unsigned long long)stats.submit_calls,
+            (unsigned long long)stats.submitted_ops,
+            (unsigned long long)stats.canceled_ops,
+            (unsigned long long)stats.completion_errors);
+        std::abort();
     }
-};
-
-// Uniform case wrapper: cleanup runs on BOTH the success and exception paths,
-// so a case-failure exception (case_bail from CONF_CHECK) cannot leave
-// outstanding work behind for the context destructor to detect. The Completions
-// live in the CALLER's frame (the case function), which is still alive when
-// cleanup runs — the wrapper is invoked before the case function returns, so
-// the accepted-pointers stay valid. This is the ONLY scope-correct shape:
-// putting the Completions inside the wrapper's try block would destruct them
-// (fail-fast on outstanding) BEFORE the catch could run cleanup.
-template <typename Body>
-std::string run_capacity_case(CapacityFixture& fx, const char* backend_name,
-                              const char* case_name, Body&& body) {
-    try {
-        body();
-    } catch (const case_bail&) {
-        fx.cleanup_or_abort(backend_name, case_name);
-        return case_name;  // failure: return the failing case name
+    // 3. Reset every ready Completion so the slot is released (capacity
+    //    recycles). The context is now quiescent; the fixture destructor
+    //    (default) is a no-op.
+    for (auto* c : accepted) {
+        if (c->ready()) c->reset();
     }
-    fx.cleanup_or_abort(backend_name, case_name);
-    return {};  // success
 }
 
 // ---- Case A: accepts exact capacity --------------------------------------
@@ -643,8 +579,13 @@ std::string case_capacity_rejects_with_idle_completion(const BackendFactory& f) 
                    fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
         CONF_CHECK(f.name, cname,
                    fx.submit_and_track(c2, fx.make_read_op(fd, buf2, 4)).has_value());
-        // c3 must be REJECTED for capacity. NOT tracked (not accepted).
-        auto r3 = fx.ctx.submit_read(fx.make_read_op(fd, buf3, 4), c3);
+        // c3 must be REJECTED for capacity. A conforming backend returns
+        // would_block and leaves c3 idle; a deliberately-broken validity
+        // backend may bind c3 before returning the error. Either way the
+        // submit goes through submit_and_track so a non-idle c3 is tracked
+        // and cleanup can terminalize it instead of letting a destructor
+        // fail-fast mask the capacity assertion.
+        auto r3 = fx.submit_and_track(c3, fx.make_read_op(fd, buf3, 4));
         CONF_CHECK(f.name, cname, !r3.has_value());
         CONF_CHECK(f.name, cname,
                    r3.error().code == IoError::Code::would_block);
@@ -674,7 +615,7 @@ std::string case_capacity_rejection_never_completes(const BackendFactory& f) {
     return run_capacity_case(fx, f.name, cname, [&] {
         CONF_CHECK(f.name, cname,
                    fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
-        auto r2 = fx.ctx.submit_read(fx.make_read_op(fd, buf2, 4), c2);
+        auto r2 = fx.submit_and_track(c2, fx.make_read_op(fd, buf2, 4));
         CONF_CHECK(f.name, cname, !r2.has_value());
         CONF_CHECK(f.name, cname,
                    r2.error().code == IoError::Code::would_block);
@@ -716,16 +657,22 @@ std::string case_capacity_stats_are_exact(const BackendFactory& f) {
         CONF_CHECK(f.name, cname,
                    fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
         // 2. Resubmit on the still-non-idle c1 -> invalid_state (caller
-        //    lifecycle violation, NOT capacity). c1 already tracked.
-        auto r1b = fx.ctx.submit_read(fx.make_read_op(fd, buf1b, 4), c1);
+        //    lifecycle violation, NOT capacity). c1 is already tracked; a
+        //    conforming backend leaves it non-idle so submit_and_track's
+        //    !c.idle() branch is a no-op track_once (c1 is already registered).
+        //    A deliberately-broken backend that re-binds-and-errors still sees
+        //    a no-op track_once.
+        auto r1b = fx.submit_and_track(c1, fx.make_read_op(fd, buf1b, 4));
         CONF_CHECK(f.name, cname, !r1b.has_value());
         CONF_CHECK(f.name, cname,
                    r1b.error().code == IoError::Code::invalid_state);
         // 3. c2 accept.
         CONF_CHECK(f.name, cname,
                    fx.submit_and_track(c2, fx.make_read_op(fd, buf2, 4)).has_value());
-        // 4. c3 -> would_block (capacity full).
-        auto r3 = fx.ctx.submit_read(fx.make_read_op(fd, buf3, 4), c3);
+        // 4. c3 -> would_block (capacity full). Routed through submit_and_track
+        //    so a broken backend that binds c3 before returning would_block is
+        //    still cleaned up.
+        auto r3 = fx.submit_and_track(c3, fx.make_read_op(fd, buf3, 4));
         CONF_CHECK(f.name, cname, !r3.has_value());
         CONF_CHECK(f.name, cname,
                    r3.error().code == IoError::Code::would_block);

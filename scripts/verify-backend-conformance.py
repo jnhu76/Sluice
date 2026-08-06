@@ -270,8 +270,8 @@ class Gate:
                     ev.evidence_id, ev.target, NOT_APPLICABLE,
                     detail=ev.reason or "not applicable")
                 continue
-            # The shared suite is driven per-backend in _run_shared_suite below.
-            if ev.evidence_id == "shared_suite":
+            # The shared base and capacity suites are driven per backend below.
+            if ev.evidence_id in ("shared_suite", "shared_capacity_suite"):
                 continue
             self.results[ev.evidence_id] = self._drive(ev)
 
@@ -361,8 +361,8 @@ class Gate:
         a capacity driver case, each in its own subprocess. Backends without a
         capacity seam (Uring) have no capacity driver case and are skipped here
         — their gap is the manifest's uring_capacity_not_implemented record,
-        surfaced in the verdict via applicable_evidence_for_backend(). Preflight
-        (target existence + build) is shared with _run_shared_suite.
+        surfaced in the verdict via applicable_evidence_for_backend(). Uses the
+        same preflight shape as _run_shared_suite (target existence + build).
         """
         if not xmake_target_exists(ev.target):
             missing = RunResult(ev.evidence_id, ev.target, MISSING_TARGET,
@@ -647,22 +647,26 @@ class Gate:
                 # Phase C2a: report APPLICABLE evidence (implemented +
                 # not_implemented + not_applicable) so a known gap surfaces in
                 # the per-backend section, not just in the verdict reasons.
-                applicable = [
-                    ev for ev in M.applicable_evidence_for_backend(backend.name)
+                #
+                # Compute each applicable evidence's run state ONCE and reuse it
+                # for both the per-layer summary and the per-evidence detail
+                # lines. A previous version called _backend_run_state up to
+                # three times per evidence (once for the states set, twice for
+                # the detail loop) and relied on a tautological
+                # `elif st not in ("", )` branch (the helper never returns "")
+                # that duplicated the default detail line.
+                ev_states = [
+                    (ev, self._backend_run_state(ev, backend.name, backend.profile))
+                    for ev in M.applicable_evidence_for_backend(backend.name)
                     if ev.layer == layer
                 ]
-                states = sorted({
-                    self._backend_run_state(ev, backend.name, backend.profile)
-                    for ev in applicable
-                })
+                states = sorted({st for _, st in ev_states})
                 label = layer.replace("_", " ")
                 # For KernelIoProfile in a stub build, the shared suite covers
                 # only the stub subset — relabel honestly. If a not_implemented
                 # gap (e.g. capacity) is also in the layer, show it alongside.
                 layer_parts: list[str] = []
-                for ev in applicable:
-                    st = self._backend_run_state(
-                        ev, backend.name, backend.profile)
+                for ev, st in ev_states:
                     if (backend.profile == "KernelIoProfile"
                             and layer == "shared" and mode_seen == "stub"
                             and ev.evidence_id == "shared_suite" and st == PASS):
@@ -670,15 +674,12 @@ class Gate:
                     elif ev.status == M.STATUS_NOT_IMPLEMENTED:
                         layer_parts.append(
                             f"{ev.evidence_id}=INCOMPLETE (not_implemented)")
-                    elif st not in ("", ):
+                    else:
                         layer_parts.append(f"{ev.evidence_id}={st}")
                 summary = states[0] if len(states) == 1 else "/".join(states)
-                if layer_parts:
-                    print(f"  {label:<22} {summary}")
-                    for p in layer_parts:
-                        print(f"    {p}")
-                else:
-                    print(f"  {label:<22} {summary}")
+                print(f"  {label:<22} {summary}")
+                for part in layer_parts:
+                    print(f"    {part}")
             print(f"  overall               {verdict}")
             for r in reasons:
                 print(f"    reason: {r}")

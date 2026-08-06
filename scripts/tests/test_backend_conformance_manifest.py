@@ -159,7 +159,7 @@ class EvidenceRecordsTest(unittest.TestCase):
         import contextlib
         import io
         buf = io.StringIO()
-        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (gap,)), \
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)), \
              mock.patch.object(G, "xmake_target_exists", return_value=False), \
              mock.patch.object(G, "run_shell_script", return_value=(0, "")), \
              contextlib.redirect_stdout(buf):
@@ -667,7 +667,7 @@ class MandatoryVerdictPriorityTest(unittest.TestCase):
             mandatory=False,
             notes="diagnostic only",
         )
-        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (diag,)):
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, diag)):
             g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
                             "Uring": "PASS"})
             g.results["diagnostic_probe"] = G.RunResult(
@@ -757,7 +757,7 @@ class NotImplementedEntersVerdictTest(unittest.TestCase):
             target="backend_conformance_test", layer="shared",
             backends=("Fake",), status=M.STATUS_NOT_IMPLEMENTED, mandatory=True,
         )
-        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (gap,)):
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)):
             g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
                             "Uring": "PASS"})
             # Seed the gap's results entry the way the run loop does.
@@ -777,7 +777,7 @@ class NotImplementedEntersVerdictTest(unittest.TestCase):
             target="backend_conformance_test", layer="shared",
             backends=("Fake",), status=M.STATUS_NOT_IMPLEMENTED, mandatory=True,
         )
-        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (gap,)):
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)):
             g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
                             "Uring": "PASS"})
             g.results["fake_capacity_gap_injected"] = G.RunResult(
@@ -812,7 +812,7 @@ class NotImplementedEntersVerdictTest(unittest.TestCase):
             backends=("ThreadPool",), status=M.STATUS_NOT_IMPLEMENTED,
             mandatory=True,
         )
-        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (gap,)):
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)):
             g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
                             "Uring": "PASS"})
             g.results["tp_only_gap_injected"] = G.RunResult(
@@ -911,6 +911,185 @@ class CapacitySuiteAttributionTest(unittest.TestCase):
         self.assertNotIn("shared_capacity_suite", ids_uring,
                          "Uring must not see the implemented capacity record "
                          "(its gap is uring_capacity_not_implemented)")
+
+
+# ---------------------------------------------------------------------------
+# PR #69 review-finding regression: shared_capacity_suite MUST NOT enter the
+# generic `_drive()` loop (which runs the WHOLE backend_conformance_test
+# unfiltered), and the per-backend capacity runs MUST go through
+# `_run_capacity_suite()`. A previous version only excluded `shared_suite`,
+# so the IMPLEMENTED `shared_capacity_suite` was driven once unfiltered via
+# `_drive()` AND THEN again per-backend via `_run_capacity_suite()` — a
+# double-drive that contradicts the per-backend-subprocess isolation design
+# and leaves a `results["shared_capacity_suite"]` entry with no consumer.
+# ---------------------------------------------------------------------------
+
+class SharedCapacitySuiteDriveExclusionTest(unittest.TestCase):
+    """_drive() never receives shared_suite or shared_capacity_suite; the
+    per-backend runs happen through _run_shared_suite / _run_capacity_suite."""
+
+    def _run_gate_observing_drives(self):
+        """Run Gate.run() with _drive / _run_shared_suite / _run_capacity_suite
+        mocked to record which evidence they received. Every xmake target /
+        script call is stubbed to a benign PASS so no subprocess runs."""
+        g = G.Gate(args=None)
+        driven: list[str] = []
+        shared_runs: list[str] = []
+        capacity_runs: list[str] = []
+
+        def fake_drive(ev):
+            driven.append(ev.evidence_id)
+            return G.RunResult(ev.evidence_id, ev.target, G.PASS,
+                               detail="stub drive")
+
+        def fake_shared(ev):
+            shared_runs.append(ev.evidence_id)
+            # Seed a benign PASS for every backend so _report() is valid.
+            for b in M.BACKENDS:
+                if b.driver_case:
+                    g.shared_by_backend[b.name] = G.RunResult(
+                        f"{ev.evidence_id}:{b.name}", ev.target, G.PASS,
+                        detail="stub shared")
+
+        def fake_capacity(ev):
+            capacity_runs.append(ev.evidence_id)
+            for b in M.BACKENDS:
+                if b.capacity_driver_case:
+                    g.capacity_by_backend[b.name] = G.RunResult(
+                        f"{ev.evidence_id}:{b.name}", ev.target, G.PASS,
+                        detail="stub capacity")
+
+        with mock.patch.object(g, "_drive", side_effect=fake_drive), \
+             mock.patch.object(g, "_run_shared_suite", side_effect=fake_shared), \
+             mock.patch.object(g, "_run_capacity_suite",
+                               side_effect=fake_capacity):
+            g.run()
+        return driven, shared_runs, capacity_runs
+
+    def test_drive_never_receives_shared_suite(self):
+        driven, _, _ = self._run_gate_observing_drives()
+        self.assertNotIn("shared_suite", driven,
+                         f"shared_suite must not enter _drive(): {driven}")
+
+    def test_drive_never_receives_shared_capacity_suite(self):
+        # The core PR #69 finding: shared_capacity_suite is IMPLEMENTED, so
+        # without the explicit exclusion it WAS driven once unfiltered via
+        # _drive(). After the fix it must be driven ONLY per-backend.
+        driven, _, _ = self._run_gate_observing_drives()
+        self.assertNotIn("shared_capacity_suite", driven,
+                         f"shared_capacity_suite must not enter _drive(): "
+                         f"{driven}")
+
+    def test_run_shared_suite_executed_once(self):
+        _, shared_runs, _ = self._run_gate_observing_drives()
+        self.assertEqual(shared_runs, ["shared_suite"],
+                         f"_run_shared_suite must run exactly once: "
+                         f"{shared_runs}")
+
+    def test_run_capacity_suite_executed_once(self):
+        # Regression D: the capacity suite's ONLY runtime execution path must
+        # be _run_capacity_suite(). It must be called exactly once (it loops
+        # over backends internally), not driven via _drive().
+        _, _, capacity_runs = self._run_gate_observing_drives()
+        self.assertEqual(capacity_runs, ["shared_capacity_suite"],
+                         f"_run_capacity_suite must run exactly once: "
+                         f"{capacity_runs}")
+
+    def test_no_results_entry_for_shared_capacity_suite(self):
+        # The generic _drive() loop would populate
+        # results["shared_capacity_suite"]; the per-backend path populates
+        # capacity_by_backend instead. After the fix the generic results dict
+        # must NOT carry a shared_capacity_suite key.
+        g = G.Gate(args=None)
+        with mock.patch.object(g, "_drive",
+                               side_effect=lambda ev: G.RunResult(
+                                   ev.evidence_id, ev.target, G.PASS,
+                                   detail="stub")), \
+             mock.patch.object(g, "_run_shared_suite"), \
+             mock.patch.object(g, "_run_capacity_suite"):
+            g.run()
+        self.assertNotIn(
+            "shared_capacity_suite", g.results,
+            "shared_capacity_suite must not get a generic results[] entry; "
+            "its verdict is read from capacity_by_backend")
+
+
+class CapacityResultAuthorityTest(unittest.TestCase):
+    """Regression E: the Fake/ThreadPool verdict reads each backend's OWN
+    capacity result from capacity_by_backend; the generic
+    results['shared_capacity_suite'] does not exist and does not affect the
+    verdict; Uring reaches capacity INCOMPLETE only via
+    uring_capacity_not_implemented."""
+
+    def test_fake_verdict_reads_its_own_capacity_state(self):
+        # Fake capacity RUN_FAIL must make Fake NOT CONFORMING even when every
+        # other evidence (including the shared base suite) PASSES.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.capacity_by_backend["Fake"] = G.RunResult(
+            "shared_capacity_suite:Fake", "backend_conformance_test",
+            G.RUN_FAIL, detail="stub capacity fail")
+        v, reasons = g._backend_verdict(M.backend_by_name("Fake"))
+        self.assertEqual(v, G.NOT_CONFORMING)
+        self.assertTrue(any("shared_capacity_suite" in r for r in reasons),
+                        f"capacity failure must surface in reasons: {reasons}")
+
+    def test_generic_results_capacity_key_absent_does_not_break_verdict(self):
+        # After the fix the generic run() loop does NOT populate
+        # results["shared_capacity_suite"] (it is driven per-backend via
+        # _run_capacity_suite into capacity_by_backend). Drive a fresh Gate.run()
+        # with _drive / _run_shared_suite / _run_capacity_suite mocked so no
+        # subprocess runs, then assert the generic key is absent and the
+        # Fake/ThreadPool verdicts are ELIGIBLE from their own per-backend
+        # capacity results.
+        g = G.Gate(args=None)
+
+        def fake_drive(ev):
+            return G.RunResult(ev.evidence_id, ev.target, G.PASS,
+                               detail="stub drive")
+
+        def fake_shared(ev):
+            for b in M.BACKENDS:
+                if b.driver_case:
+                    g.shared_by_backend[b.name] = G.RunResult(
+                        f"{ev.evidence_id}:{b.name}", ev.target, G.PASS,
+                        detail="stub shared")
+
+        def fake_capacity(ev):
+            for b in M.BACKENDS:
+                if b.capacity_driver_case:
+                    g.capacity_by_backend[b.name] = G.RunResult(
+                        f"{ev.evidence_id}:{b.name}", ev.target, G.PASS,
+                        detail="stub capacity")
+
+        with mock.patch.object(g, "_drive", side_effect=fake_drive), \
+             mock.patch.object(g, "_run_shared_suite", side_effect=fake_shared), \
+             mock.patch.object(g, "_run_capacity_suite",
+                               side_effect=fake_capacity):
+            g.run()
+        self.assertNotIn(
+            "shared_capacity_suite", g.results,
+            "shared_capacity_suite must not get a generic results[] entry; "
+            "its verdict is read from capacity_by_backend")
+        self.assertEqual(
+            g._backend_verdict(M.backend_by_name("Fake"))[0], G.ELIGIBLE)
+        self.assertEqual(
+            g._backend_verdict(M.backend_by_name("ThreadPool"))[0], G.ELIGIBLE)
+
+    def test_uring_capacity_incomplete_only_via_gap_record(self):
+        # Uring has no capacity_by_backend entry (no seam). Its capacity
+        # INCOMPLETE must come from the uring_capacity_not_implemented record,
+        # never from a phantom generic results key.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        # Uring is seeded with NO capacity_by_backend entry by _stub_gate.
+        self.assertNotIn("Uring", g.capacity_by_backend)
+        g.results["uring_capacity_not_implemented"] = G.RunResult(
+            "uring_capacity_not_implemented", "backend_conformance_test",
+            G.INCOMPLETE, detail="not_implemented")
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_capacity_not_implemented" in r for r in reasons),
+            f"Uring capacity gap must come from the gap record: {reasons}")
 
 
 if __name__ == "__main__":
