@@ -21,6 +21,8 @@
 //   late_bind_only      rejected op bound to outstanding -> capacity_rejection_never_completes
 //                       later by progress (never published)
 //   late_complete       completes a rejected op on poll -> capacity_rejection_never_completes
+//   late_complete_after_drain publishes a rejected op on the poll AFTER
+//                       accepted work drained          -> capacity_rejection_never_completes
 //   misclassify_invalid non-idle submit -> would_block  -> capacity_stats_are_exact
 //   inflate_outstanding outstanding() over-reports +1   -> capacity_accepts_exact_limit
 //   no_recycle          capacity never recycles         -> capacity_recycles_after_reset
@@ -68,6 +70,11 @@ enum class CapacityViolation {
                          // fixture must have tracked it at submit time, or
                          // cleanup cannot find it (timeout/abort)
     late_complete,       // rejected op is later completed by backend progress
+    late_complete_after_drain, // rejected op is ARMED (not published) on the
+                               // poll that reaps the accepted op; the NEXT
+                               // poll binds + publishes it — pins the
+                               // post-drain progress probe that case C drives
+                               // AFTER accepted work drained to 0
     misclassify_invalid, // non-idle Completion submit -> would_block (not
                          // invalid_state): the queue_full/invalid_state split
     inflate_outstanding, // outstanding() over-reports by 1 while live
@@ -114,7 +121,28 @@ class NonConformingCapacityBackend : public AsyncBackend {
             }
         }
         canceled_.clear();
-        if (violation_ == CapacityViolation::late_complete) {
+        if (violation_ == CapacityViolation::late_complete_after_drain) {
+            // The illegal completion lands on the NEXT backend-progress turn
+            // after the accepted op drained, not on the same turn. Poll #1
+            // only ARMS the deferred publish; it may also reap the accepted
+            // op via canceled_ above, so outstanding() can hit 0 HERE while
+            // the illegal completion is still pending. Only poll #2 binds +
+            // publishes the rejected op — exactly the window the post-drain
+            // probe in case C must observe.
+            if (!late_after_drain_armed_) {
+                late_after_drain_armed_ = true;  // arm; publish on next poll
+            } else {
+                for (auto* c : rejected_) {
+                    if (c->idle() && begin_binding(*c)) {
+                        commit_binding(*c);
+                        publish(*c, make_unexpected<std::size_t>(
+                                        IoError{IoError::Code::canceled}));
+                        ++n;
+                    }
+                }
+                rejected_.clear();
+            }
+        } else if (violation_ == CapacityViolation::late_complete) {
             for (auto* c : rejected_) {
                 if (c->idle() && begin_binding(*c)) {
                     commit_binding(*c);
@@ -251,6 +279,13 @@ class NonConformingCapacityBackend : public AsyncBackend {
                 // it (a rejected op must NEVER produce a completion).
                 rejected_.push_back(&c);
                 return make_unexpected<void>(IoError{IoError::Code::would_block});
+            case CapacityViolation::late_complete_after_drain:
+                // Reject (Completion stays idle at submit time); the illegal
+                // completion is deferred to the poll AFTER accepted work
+                // drained (see poll()). A probe that only drives progress
+                // WHILE outstanding != 0 would never observe it.
+                rejected_.push_back(&c);
+                return make_unexpected<void>(IoError{IoError::Code::would_block});
             default:
                 return make_unexpected<void>(IoError{IoError::Code::would_block});
             }
@@ -277,6 +312,9 @@ class NonConformingCapacityBackend : public AsyncBackend {
     std::vector<Completion<std::size_t>*> bogus_;     // bound-but-rejected
     std::vector<Completion<std::size_t>*> rejected_;  // rejected, late-complete
     std::vector<Completion<std::size_t>*> canceled_;  // cancel intent
+    // late_complete_after_drain one-poll deferral: false until the first poll
+    // arms the deferred publish, true thereafter.
+    bool late_after_drain_armed_ = false;
 };
 
 // Factory for the nonconforming backend. real_mode=false (no kernel I/O; the
@@ -340,6 +378,22 @@ SLUICE_TEST_CASE(capacity_validity_late_complete) {
     const std::string failed = sluice_test::conformance::run_capacity_cases(f);
     SLUICE_CHECK_MSG(failed == "capacity_rejection_never_completes",
                      "late_complete must fail capacity_rejection_never_completes, got: " +
+                         failed);
+}
+
+SLUICE_TEST_CASE(capacity_validity_late_complete_after_drain) {
+    // A rejected op whose illegal completion lands on the backend-progress
+    // turn AFTER all accepted work drained to 0 must STILL be caught — by
+    // the case's explicit post-drain probe (one more poll after outstanding
+    // hit 0), not only by the in-drain loop. Without that probe this mutant
+    // would be false-green: the loop exits as soon as the accepted op is
+    // reaped, so a deferred publish on the NEXT turn is never observed.
+    const auto f = make_nonconforming_factory(
+        CapacityViolation::late_complete_after_drain);
+    const std::string failed = sluice_test::conformance::run_capacity_cases(f);
+    SLUICE_CHECK_MSG(failed == "capacity_rejection_never_completes",
+                     "late_complete_after_drain must fail "
+                     "capacity_rejection_never_completes, got: " +
                          failed);
 }
 

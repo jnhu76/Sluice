@@ -127,6 +127,7 @@ failing case name:
 | `over_accept` — accepts the (N+1)th op | `capacity_rejects_with_idle_completion` |
 | `bind_rejected` — claims the rejected Completion | `capacity_rejects_with_idle_completion` |
 | `late_complete` — completes a rejected op on progress | `capacity_rejection_never_completes` |
+| `late_complete_after_drain` — publishes a rejected op on the post-drain progress turn (PR #69 round 3) | `capacity_rejection_never_completes` |
 | `misclassify_invalid` — non-idle submit returns `would_block` | `capacity_stats_are_exact` |
 | `inflate_outstanding` — `outstanding()` over-reports +1 | `capacity_accepts_exact_limit` |
 | `no_recycle` — capacity never recycles after reap | `capacity_recycles_after_reset` |
@@ -147,6 +148,7 @@ release capability, so `reset()` of a published Completion is safe (probe-driven
 | `capacity_validity_over_accept` | capacity_validity_test | PASS |
 | `capacity_validity_bind_rejected` | capacity_validity_test | PASS |
 | `capacity_validity_late_complete` | capacity_validity_test | PASS |
+| `capacity_validity_late_complete_after_drain` (PR #69 round 3: post-drain probe pin) | capacity_validity_test | PASS |
 | `capacity_validity_late_bind_only` (PR #69: pre-submit tracking pin) | capacity_validity_test | PASS |
 | `capacity_validity_misclassify_invalid` | capacity_validity_test | PASS |
 | `capacity_validity_inflate_outstanding` | capacity_validity_test | PASS |
@@ -180,7 +182,7 @@ does not duplicate them.
 |---|---|---|
 | Debug build | `xmake f -m debug --toolchain=clang -y` | PASS |
 | Focused conformance | `xmake build backend_conformance_test && xmake run backend_conformance_test` | PASS (10 driver cases) |
-| Focused validity | `xmake build capacity_validity_test && xmake run capacity_validity_test` | PASS (11 cases) |
+| Focused validity | `xmake build capacity_validity_test && xmake run capacity_validity_test` | PASS (12 cases) |
 | Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (86 cases) |
 | Aggregate gate | `python3 scripts/verify-backend-conformance.py` | PASS (Fake/TP ELIGIBLE; Uring NOT CONFORMING with capacity gap) |
 | Full test group | `xmake test -v` | see section 8 |
@@ -190,16 +192,18 @@ does not duplicate them.
 
 ## 8. Validation matrix (full evidence)
 
-All rows below were executed on the current branch head (`b4299cf`). `PASS` is recorded only for
-commands that actually ran green. The PR #69 review-fix iteration (tracked cleanup, bind_rejected
-without self-cleanup, pre-submit registration, late_bind_only mutant, cleanup re-cancel) landed in
-the same head; the row counts reflect the post-fix binaries.
+All rows below were executed on the current branch head (`6b8ff84`). `PASS` is recorded only for commands that actually ran green. The PR #69 review-fix
+iterations landed across the branch: round 2 (tracked cleanup, bind_rejected without self-cleanup,
+pre-submit registration, late_bind_only mutant, cleanup re-cancel) and round 3 (post-drain progress
+probe in `capacity_rejection_never_completes` + the `late_complete_after_drain` validity mutant that
+pins it). The Debug / focused-conformance / focused-validity rows below reflect the round-3
+binaries; Release / ASan/UBSan / TSan were last run green on the round-2 head and are re-run by CI.
 
 | Gate | Command | Result |
 | ---- | ------- | ------ |
 | Debug / Clang full | `xmake f -m debug --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (143 targets, 0 failed) |
 | Focused conformance | `xmake run backend_conformance_test` | PASS (10 driver cases) |
-| Focused validity | `xmake run capacity_validity_test` | PASS (11 cases) |
+| Focused validity | `xmake run capacity_validity_test` | PASS (12 cases) |
 | Release / Clang | `xmake f -m release --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (143 targets, 0 failed) |
 | ASan/UBSan | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0; validity-backend lifetime fix landed in 965ae6f) |
 | TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0; 134 targets, zero race reports) |

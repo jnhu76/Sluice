@@ -666,8 +666,20 @@ std::string case_capacity_rejection_never_completes(const BackendFactory& f) {
             std::this_thread::yield();
         }
         CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
+
+        // Post-drain progress probe: one more backend-progress turn AFTER all
+        // accepted work drained. The loop above exits the instant outstanding
+        // hits 0, so a backend that only fires the rejected op's ILLEGAL
+        // completion on the NEXT progress turn would otherwise be missed
+        // (false green). A rejected request must not have left a deferred
+        // completion of any kind. Pinned by the late_complete_after_drain
+        // validity mutant, whose publish lands here.
+        const auto post_drain_reaped = fx.ctx.poll();
+        CONF_CHECK(f.name, cname, post_drain_reaped == 0);
         CONF_CHECK(f.name, cname, c2.idle());
+        CONF_CHECK(f.name, cname, !c2.outstanding());
         CONF_CHECK(f.name, cname, !c2.ready());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
         CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 1);
     });
 }

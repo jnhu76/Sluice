@@ -320,6 +320,7 @@ sluice_internal_async_test("reference_backend_arena_lifecycle_test")
 -- violation: over_accept -> capacity_rejects_with_idle_completion,
 -- bind_rejected -> capacity_rejects_with_idle_completion,
 -- late_complete -> capacity_rejection_never_completes,
+-- late_complete_after_drain -> capacity_rejection_never_completes,
 -- misclassify_invalid -> capacity_stats_are_exact,
 -- inflate_outstanding -> capacity_accepts_exact_limit,
 -- no_recycle -> capacity_recycles_after_reset; the None control passes all.
