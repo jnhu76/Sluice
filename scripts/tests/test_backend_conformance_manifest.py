@@ -159,7 +159,7 @@ class EvidenceRecordsTest(unittest.TestCase):
         import contextlib
         import io
         buf = io.StringIO()
-        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (gap,)), \
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)), \
              mock.patch.object(G, "xmake_target_exists", return_value=False), \
              mock.patch.object(G, "run_shell_script", return_value=(0, "")), \
              contextlib.redirect_stdout(buf):
@@ -270,7 +270,70 @@ def _stub_gate(shared_per_backend, *, shared_rc=None,
         g.shared_by_backend[name] = G.RunResult(
             f"shared_suite:{name}", "backend_conformance_test", state,
             detail=f"stub {state}")
+    # Phase C2a: per-backend shared CAPACITY-suite state. Only backends with a
+    # capacity seam (Fake, ThreadPool) are driven; default them to PASS so the
+    # ONLY variable under test (in the attribution tests) is the shared-suite
+    # state. Uring has no capacity driver case, so it is not seeded here.
+    g.capacity_by_backend = {}
+    for b in M.BACKENDS:
+        if b.capacity_driver_case:
+            g.capacity_by_backend[b.name] = G.RunResult(
+                f"shared_capacity_suite:{b.name}", "backend_conformance_test",
+                G.PASS, detail="stub capacity PASS")
     return g
+
+
+def _stubbed_gate_with_recorded_runs():
+    """Build a Gate with the shared-suite drive methods mocked, run it, and
+    return (gate, driven, shared_runs, capacity_runs).
+
+    `_drive` / `_run_shared_suite` / `_run_capacity_suite` are replaced by
+    recorders that also seed benign per-backend PASS results so `_report()`
+    stays valid. Gate.run()'s report output is suppressed with
+    contextlib.redirect_stdout (same pattern as the nearby
+    test_not_implemented_never_counts_as_pass), so the test runner does not
+    print the full gate report.
+
+    Shared by SharedCapacitySuiteDriveExclusionTest and
+    CapacityResultAuthorityTest (PR #69 regression D/E).
+    """
+    import contextlib
+    import io
+
+    g = G.Gate(args=None)
+    driven: list[str] = []
+    shared_runs: list[str] = []
+    capacity_runs: list[str] = []
+
+    def fake_drive(ev):
+        driven.append(ev.evidence_id)
+        return G.RunResult(ev.evidence_id, ev.target, G.PASS,
+                           detail="stub drive")
+
+    def fake_shared(ev):
+        shared_runs.append(ev.evidence_id)
+        # Seed a benign PASS for every backend so _report() is valid.
+        for b in M.BACKENDS:
+            if b.driver_case:
+                g.shared_by_backend[b.name] = G.RunResult(
+                    f"{ev.evidence_id}:{b.name}", ev.target, G.PASS,
+                    detail="stub shared")
+
+    def fake_capacity(ev):
+        capacity_runs.append(ev.evidence_id)
+        for b in M.BACKENDS:
+            if b.capacity_driver_case:
+                g.capacity_by_backend[b.name] = G.RunResult(
+                    f"{ev.evidence_id}:{b.name}", ev.target, G.PASS,
+                    detail="stub capacity")
+
+    with mock.patch.object(g, "_drive", side_effect=fake_drive), \
+         mock.patch.object(g, "_run_shared_suite", side_effect=fake_shared), \
+         mock.patch.object(g, "_run_capacity_suite",
+                           side_effect=fake_capacity), \
+         contextlib.redirect_stdout(io.StringIO()):
+        g.run()
+    return g, driven, shared_runs, capacity_runs
 
 
 class MetaParsingTest(unittest.TestCase):
@@ -555,6 +618,33 @@ class SharedRunFailClosedTest(unittest.TestCase):
         state, detail = self._classify(backend="ThreadPool", out=out)
         self.assertEqual(state, G.PASS, detail)
 
+    def test_capacity_case_passes_with_capacity_driver_case(self):
+        # Phase C2a: a capacity-suite run is classified against the CAPACITY
+        # driver case (conformance_capacity_fake), not the base shared-suite
+        # case (conformance_fake). Passing expected_case=conformance_capacity_fake
+        # must make a run that selected exactly that case PASS.
+        out = ("[run] conformance_capacity_fake\n"
+               "[conformance-meta] backend=Fake profile=ReferenceProfile "
+               "mode=deterministic\n")
+        g = G.Gate(args=None)
+        state, detail = g._classify_shared_run(
+            M.backend_by_name("Fake"), 0, out,
+            expected_case="conformance_capacity_fake")
+        self.assertEqual(state, G.PASS, detail)
+
+    def test_capacity_case_fails_without_expected_case(self):
+        # Regression guard: WITHOUT passing expected_case, the capacity run
+        # selected conformance_capacity_fake but the classifier expects the base
+        # driver_case (conformance_fake) — must be INCOMPLETE, never PASS. This
+        # pins the "capacity runs are classified by their own case name" wiring.
+        out = ("[run] conformance_capacity_fake\n"
+               "[conformance-meta] backend=Fake profile=ReferenceProfile "
+               "mode=deterministic\n")
+        g = G.Gate(args=None)
+        state, detail = g._classify_shared_run(
+            M.backend_by_name("Fake"), 0, out)
+        self.assertEqual(state, G.INCOMPLETE, detail)
+
 
 # ---------------------------------------------------------------------------
 # P2 corrective: verdicts distinguish proven violation from missing evidence.
@@ -630,7 +720,7 @@ class MandatoryVerdictPriorityTest(unittest.TestCase):
             mandatory=False,
             notes="diagnostic only",
         )
-        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (diag,)):
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, diag)):
             g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
                             "Uring": "PASS"})
             g.results["diagnostic_probe"] = G.RunResult(
@@ -650,6 +740,351 @@ class MandatoryVerdictPriorityTest(unittest.TestCase):
                 G.MISSING_TARGET, detail="missing")
             verdict, _ = g2._backend_verdict(M.backend_by_name("Fake"))
             self.assertEqual(verdict, G.INCOMPLETE)
+
+
+# ---------------------------------------------------------------------------
+# Phase C2a corrective: not_implemented mandatory evidence enters the verdict.
+#
+# The prior gate iterated only implemented evidence in _backend_verdict, so a
+# not_implemented mandatory record landed in self.results as INCOMPLETE but was
+# invisible to the per-backend evidence set and the verdict. The C2a fix splits
+# the helper into implemented_evidence_for_backend / applicable_evidence_for_
+# backend and has the verdict iterate APPLICABLE evidence so a known gap forces
+# INCOMPLETE in the backend's OWN verdict (not just a global results dict).
+# ---------------------------------------------------------------------------
+
+class ApplicableEvidenceHelpersTest(unittest.TestCase):
+    """implemented_evidence_for_backend vs applicable_evidence_for_backend."""
+
+    def test_implemented_excludes_not_implemented_and_not_applicable(self):
+        # The real Uring capacity gap record is not_implemented; implemented
+        # helper must NOT return it.
+        impl = M.implemented_evidence_for_backend("Uring")
+        ids = {e.evidence_id for e in impl}
+        self.assertNotIn("uring_capacity_not_implemented", ids)
+
+    def test_applicable_includes_not_implemented_for_tagged_backend(self):
+        appl = M.applicable_evidence_for_backend("Uring")
+        ids = {e.evidence_id for e in appl}
+        self.assertIn("uring_capacity_not_implemented", ids)
+
+    def test_applicable_excludes_not_implemented_for_other_backend(self):
+        # The Uring gap record is tagged backends=("Uring",); it MUST NOT apply
+        # to Fake or ThreadPool.
+        for name in ("Fake", "ThreadPool"):
+            appl = M.applicable_evidence_for_backend(name)
+            ids = {e.evidence_id for e in appl}
+            self.assertNotIn("uring_capacity_not_implemented", ids,
+                             f"{name} must not see the Uring capacity gap")
+
+    def test_applicable_includes_backend_agnostic_records(self):
+        # Backend-agnostic records (backends == ()) apply to every backend in
+        # BOTH helpers.
+        for name in ("Fake", "ThreadPool", "Uring"):
+            appl = M.applicable_evidence_for_backend(name)
+            ids = {e.evidence_id for e in appl}
+            self.assertIn("arena_capacity_generation_release", ids,
+                          f"{name} must see backend-agnostic arena evidence")
+
+    def test_evidence_for_backend_alias_equals_implemented(self):
+        # The public alias must equal implemented_evidence_for_backend exactly.
+        self.assertEqual(
+            M.evidence_for_backend("Fake"),
+            M.implemented_evidence_for_backend("Fake"))
+
+
+class NotImplementedEntersVerdictTest(unittest.TestCase):
+    """A not_implemented MANDATORY record forces a backend verdict INCOMPLETE.
+
+    This is the C2a-corrective test the prior suite lacked: it proves the gap
+    record enters the VERDICT (not just the global results dict).
+    """
+
+    def test_not_implemented_mandatory_forces_incomplete_verdict(self):
+        # Inject a not_implemented MANDATORY record tagged for Fake. Fake's
+        # verdict MUST become INCOMPLETE — proving the record entered the
+        # verdict, not just the global results dict. (Fake is otherwise ELIGIBLE
+        # in the stub gate.)
+        gap = M.Evidence(
+            evidence_id="fake_capacity_gap_injected",
+            target="backend_conformance_test", layer="shared",
+            backends=("Fake",), status=M.STATUS_NOT_IMPLEMENTED, mandatory=True,
+        )
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            # Seed the gap's results entry the way the run loop does.
+            g.results["fake_capacity_gap_injected"] = G.RunResult(
+                "fake_capacity_gap_injected", "backend_conformance_test",
+                G.INCOMPLETE, detail="not_implemented")
+            verdict, reasons = g._backend_verdict(M.backend_by_name("Fake"))
+            self.assertEqual(verdict, G.INCOMPLETE, reasons)
+            self.assertTrue(
+                any("fake_capacity_gap_injected" in r for r in reasons),
+                f"gap record must appear in reasons: {reasons}")
+
+    def test_not_implemented_does_not_block_other_backends(self):
+        # A gap tagged for Fake MUST NOT affect ThreadPool's verdict.
+        gap = M.Evidence(
+            evidence_id="fake_capacity_gap_injected",
+            target="backend_conformance_test", layer="shared",
+            backends=("Fake",), status=M.STATUS_NOT_IMPLEMENTED, mandatory=True,
+        )
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            g.results["fake_capacity_gap_injected"] = G.RunResult(
+                "fake_capacity_gap_injected", "backend_conformance_test",
+                G.INCOMPLETE, detail="not_implemented")
+            v_tp, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+            self.assertEqual(v_tp, G.ELIGIBLE,
+                             "ThreadPool must not be affected by Fake's gap")
+
+    def test_uring_capacity_gap_surfaces_in_verdict(self):
+        # The real uring_capacity_not_implemented record: Uring is NOT CONFORMING
+        # (KernelIoProfile rule), and the capacity gap MUST appear among the
+        # reasons. The KernelIoProfile branch of _backend_verdict derives the
+        # reason from the MANIFEST record status (mandatory + not_implemented)
+        # via applicable_evidence_for_backend, so no results[] seeding is
+        # needed or read.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_capacity_not_implemented" in r for r in reasons),
+            f"Uring capacity gap must appear in reasons: {reasons}")
+
+    def test_not_implemented_never_counts_as_pass_in_verdict(self):
+        # A not_implemented record can never satisfy a mandatory slot. Even
+        # though it seeds INCOMPLETE (which is not RUN_FAIL), the verdict logic
+        # treats INCOMPLETE as insufficient -> INCOMPLETE — never ELIGIBLE and
+        # never NOT_CONFORMING (no proven violation). Assert the exact verdict,
+        # not just "not ELIGIBLE".
+        gap = M.Evidence(
+            evidence_id="tp_only_gap_injected",
+            target="backend_conformance_test", layer="shared",
+            backends=("ThreadPool",), status=M.STATUS_NOT_IMPLEMENTED,
+            mandatory=True,
+        )
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            g.results["tp_only_gap_injected"] = G.RunResult(
+                "tp_only_gap_injected", "backend_conformance_test",
+                G.INCOMPLETE, detail="not_implemented")
+            verdict, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+            self.assertEqual(verdict, G.INCOMPLETE)
+
+
+# ---------------------------------------------------------------------------
+# Phase C2a: shared_capacity_suite is driven per-backend in isolated
+# subprocesses, and the verdict reads each backend's OWN capacity result.
+# Backends without a capacity seam (Uring) are not driven (their gap is the
+# manifest's not_implemented record, surfaced via applicable_evidence).
+# ---------------------------------------------------------------------------
+
+class CapacitySuiteDriverCaseTest(unittest.TestCase):
+    """The capacity_driver_case field: Fake/TP have one, Uring does not."""
+
+    def test_fake_and_threadpool_have_capacity_driver_case(self):
+        for name in ("Fake", "ThreadPool"):
+            b = M.backend_by_name(name)
+            self.assertTrue(b.capacity_driver_case,
+                            f"{name} must have a capacity_driver_case")
+
+    def test_uring_has_no_capacity_driver_case(self):
+        # Uring has not migrated onto RequestArena (Phase D pending); it has no
+        # capacity seam, so it has no capacity driver case. The gap is the
+        # uring_capacity_not_implemented record, never a skip-as-pass.
+        b = M.backend_by_name("Uring")
+        self.assertFalse(b.capacity_driver_case,
+                         "Uring must NOT have a capacity_driver_case "
+                         "(Phase D pending)")
+
+    def test_capacity_driver_cases_are_unique(self):
+        cases = [b.capacity_driver_case for b in M.BACKENDS
+                 if b.capacity_driver_case]
+        self.assertEqual(len(cases), len(set(cases)),
+                         f"capacity driver cases must be unique: {cases}")
+
+
+class CapacitySuiteAttributionTest(unittest.TestCase):
+    """The capacity suite is driven per-backend; one failure doesn't propagate."""
+
+    def _stub_capacity(self, cap_per_backend):
+        """Build a gate with per-backend capacity-suite state."""
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.capacity_by_backend = {}
+        for name, state in cap_per_backend.items():
+            g.capacity_by_backend[name] = G.RunResult(
+                f"shared_capacity_suite:{name}", "backend_conformance_test",
+                state, detail=f"stub {state}")
+        return g
+
+    def test_threadpool_capacity_fail_does_not_make_fake_ineligible(self):
+        g = self._stub_capacity({"Fake": "PASS", "ThreadPool": "RUN_FAIL"})
+        v_fake, _ = g._backend_verdict(M.backend_by_name("Fake"))
+        v_tp, reasons = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        self.assertEqual(v_fake, G.ELIGIBLE,
+                         "Fake must stay ELIGIBLE from its own capacity evidence")
+        self.assertEqual(v_tp, G.NOT_CONFORMING,
+                         "ThreadPool must report its own capacity failure")
+        self.assertTrue(any("shared_capacity_suite" in r for r in reasons))
+
+    def test_fake_capacity_fail_does_not_make_threadpool_ineligible(self):
+        g = self._stub_capacity({"Fake": "RUN_FAIL", "ThreadPool": "PASS"})
+        v_fake, _ = g._backend_verdict(M.backend_by_name("Fake"))
+        v_tp, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        self.assertEqual(v_fake, G.NOT_CONFORMING)
+        self.assertEqual(v_tp, G.ELIGIBLE)
+
+    def test_uring_verdict_unaffected_by_capacity_seam_absence(self):
+        # Uring has no capacity_driver_case, so it has no capacity_by_backend
+        # entry. Its verdict stays NOT CONFORMING (KernelIoProfile rule) and the
+        # uring_capacity_not_implemented record appears in its reasons.
+        g = self._stub_capacity({"Fake": "PASS", "ThreadPool": "PASS"})
+        g.results["uring_capacity_not_implemented"] = G.RunResult(
+            "uring_capacity_not_implemented", "backend_conformance_test",
+            G.INCOMPLETE, detail="not_implemented")
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_capacity_not_implemented" in r for r in reasons))
+
+    def test_shared_capacity_suite_evidence_tagged_for_fake_and_tp(self):
+        # The implemented shared_capacity_suite record applies to Fake and
+        # ThreadPool only; it must NOT apply to Uring.
+        appl_fake = M.applicable_evidence_for_backend("Fake")
+        appl_tp = M.applicable_evidence_for_backend("ThreadPool")
+        appl_uring = M.applicable_evidence_for_backend("Uring")
+        ids_fake = {e.evidence_id for e in appl_fake}
+        ids_tp = {e.evidence_id for e in appl_tp}
+        ids_uring = {e.evidence_id for e in appl_uring}
+        self.assertIn("shared_capacity_suite", ids_fake)
+        self.assertIn("shared_capacity_suite", ids_tp)
+        self.assertNotIn("shared_capacity_suite", ids_uring,
+                         "Uring must not see the implemented capacity record "
+                         "(its gap is uring_capacity_not_implemented)")
+
+
+# ---------------------------------------------------------------------------
+# PR #69 review-finding regression: shared_capacity_suite MUST NOT enter the
+# generic `_drive()` loop (which runs the WHOLE backend_conformance_test
+# unfiltered), and the per-backend capacity runs MUST go through
+# `_run_capacity_suite()`. A previous version only excluded `shared_suite`,
+# so the IMPLEMENTED `shared_capacity_suite` was driven once unfiltered via
+# `_drive()` AND THEN again per-backend via `_run_capacity_suite()` — a
+# double-drive that contradicts the per-backend-subprocess isolation design
+# and leaves a `results["shared_capacity_suite"]` entry with no consumer.
+# ---------------------------------------------------------------------------
+
+class SharedCapacitySuiteDriveExclusionTest(unittest.TestCase):
+    """_drive() never receives shared_suite or shared_capacity_suite; the
+    per-backend runs happen through _run_shared_suite / _run_capacity_suite."""
+
+    def _run_gate_observing_drives(self):
+        """Run the stubbed gate and return the recorded evidence lists. The
+        gate construction + run + stdout suppression live in the module-level
+        _stubbed_gate_with_recorded_runs helper (shared with
+        CapacityResultAuthorityTest)."""
+        _, driven, shared_runs, capacity_runs = \
+            _stubbed_gate_with_recorded_runs()
+        return driven, shared_runs, capacity_runs
+
+    def test_drive_never_receives_shared_suite(self):
+        driven, _, _ = self._run_gate_observing_drives()
+        self.assertNotIn("shared_suite", driven,
+                         f"shared_suite must not enter _drive(): {driven}")
+
+    def test_drive_never_receives_shared_capacity_suite(self):
+        # The core PR #69 finding: shared_capacity_suite is IMPLEMENTED, so
+        # without the explicit exclusion it WAS driven once unfiltered via
+        # _drive(). After the fix it must be driven ONLY per-backend.
+        driven, _, _ = self._run_gate_observing_drives()
+        self.assertNotIn("shared_capacity_suite", driven,
+                         f"shared_capacity_suite must not enter _drive(): "
+                         f"{driven}")
+
+    def test_run_shared_suite_executed_once(self):
+        _, shared_runs, _ = self._run_gate_observing_drives()
+        self.assertEqual(shared_runs, ["shared_suite"],
+                         f"_run_shared_suite must run exactly once: "
+                         f"{shared_runs}")
+
+    def test_run_capacity_suite_executed_once(self):
+        # Regression D: the capacity suite's ONLY runtime execution path must
+        # be _run_capacity_suite(). It must be called exactly once (it loops
+        # over backends internally), not driven via _drive().
+        _, _, capacity_runs = self._run_gate_observing_drives()
+        self.assertEqual(capacity_runs, ["shared_capacity_suite"],
+                         f"_run_capacity_suite must run exactly once: "
+                         f"{capacity_runs}")
+
+    def test_no_results_entry_for_shared_capacity_suite(self):
+        # The generic _drive() loop would populate
+        # results["shared_capacity_suite"]; the per-backend path populates
+        # capacity_by_backend instead. After the fix the generic results dict
+        # must NOT carry a shared_capacity_suite key.
+        g, _, _, _ = _stubbed_gate_with_recorded_runs()
+        self.assertNotIn(
+            "shared_capacity_suite", g.results,
+            "shared_capacity_suite must not get a generic results[] entry; "
+            "its verdict is read from capacity_by_backend")
+
+
+class CapacityResultAuthorityTest(unittest.TestCase):
+    """Regression E: the Fake/ThreadPool verdict reads each backend's OWN
+    capacity result from capacity_by_backend; the generic
+    results['shared_capacity_suite'] does not exist and does not affect the
+    verdict; Uring reaches capacity INCOMPLETE only via
+    uring_capacity_not_implemented."""
+
+    def test_fake_verdict_reads_its_own_capacity_state(self):
+        # Fake capacity RUN_FAIL must make Fake NOT CONFORMING even when every
+        # other evidence (including the shared base suite) PASSES.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.capacity_by_backend["Fake"] = G.RunResult(
+            "shared_capacity_suite:Fake", "backend_conformance_test",
+            G.RUN_FAIL, detail="stub capacity fail")
+        v, reasons = g._backend_verdict(M.backend_by_name("Fake"))
+        self.assertEqual(v, G.NOT_CONFORMING)
+        self.assertTrue(any("shared_capacity_suite" in r for r in reasons),
+                        f"capacity failure must surface in reasons: {reasons}")
+
+    def test_generic_results_capacity_key_absent_does_not_break_verdict(self):
+        # After the fix the generic run() loop does NOT populate
+        # results["shared_capacity_suite"] (it is driven per-backend via
+        # _run_capacity_suite into capacity_by_backend). Drive a fresh Gate.run()
+        # with _drive / _run_shared_suite / _run_capacity_suite mocked so no
+        # subprocess runs, then assert the generic key is absent and the
+        # Fake/ThreadPool verdicts are ELIGIBLE from their own per-backend
+        # capacity results. Reuses the module-level
+        # _stubbed_gate_with_recorded_runs (same stubs as
+        # SharedCapacitySuiteDriveExclusionTest).
+        g, _, _, _ = _stubbed_gate_with_recorded_runs()
+        self.assertNotIn(
+            "shared_capacity_suite", g.results,
+            "shared_capacity_suite must not get a generic results[] entry; "
+            "its verdict is read from capacity_by_backend")
+        self.assertEqual(
+            g._backend_verdict(M.backend_by_name("Fake"))[0], G.ELIGIBLE)
+        self.assertEqual(
+            g._backend_verdict(M.backend_by_name("ThreadPool"))[0], G.ELIGIBLE)
+
+    def test_uring_capacity_incomplete_only_via_gap_record(self):
+        # Uring has no capacity_by_backend entry (no seam). Its capacity gap
+        # must come from the uring_capacity_not_implemented MANIFEST record
+        # status (mandatory + not_implemented) via applicable_evidence_for_
+        # backend — never from a phantom generic results key (the KernelIo
+        # branch of _backend_verdict does not read results[]).
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        # Uring is seeded with NO capacity_by_backend entry by _stub_gate.
+        self.assertNotIn("Uring", g.capacity_by_backend)
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_capacity_not_implemented" in r for r in reasons),
+            f"Uring capacity gap must come from the gap record: {reasons}")
 
 
 if __name__ == "__main__":

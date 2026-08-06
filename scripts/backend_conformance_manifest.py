@@ -96,12 +96,20 @@ class BackendEntry:
     driver_case: str        # the SLUICE_TEST_CASE in backend_conformance_test
                             # that drives the shared suite for this backend; may
                             # be "" if the shared suite does not cover it.
+    capacity_driver_case: str = ""  # Phase C2a: the SLUICE_TEST_CASE that drives
+                                    # the shared capacity cases for this backend.
+                                    # "" when the backend has no capacity seam
+                                    # (Uring before Phase D) — the gap is the
+                                    # not_implemented manifest record, never a
+                                    # skip-as-pass.
 
 
 # The C1 backend registry. Sync/Synthetic are intentionally absent.
 BACKENDS: tuple[BackendEntry, ...] = (
-    BackendEntry("Fake", "ReferenceProfile", "conformance_fake"),
-    BackendEntry("ThreadPool", "BlockingIoProfile", "conformance_threadpool"),
+    BackendEntry("Fake", "ReferenceProfile", "conformance_fake",
+                 capacity_driver_case="conformance_capacity_fake"),
+    BackendEntry("ThreadPool", "BlockingIoProfile", "conformance_threadpool",
+                 capacity_driver_case="conformance_capacity_threadpool"),
     BackendEntry("Uring", "KernelIoProfile", "conformance_uring"),
 )
 
@@ -150,6 +158,53 @@ EVIDENCE: tuple[Evidence, ...] = (
         notes="8-case shared suite: submit->reap exactly-once, positional "
               "independence, EOF, short-completion retry, terminal exactly-once, "
               "cancel-defined-terminal, stats, clean shutdown.",
+    ),
+
+    # -----------------------------------------------------------------------
+    # Phase C2a — shared capacity/admission/accounting conformance gap.
+    # The capacity cases (shared_capacity_suite, IMPLEMENTED for Fake/ThreadPool)
+    # land in commit 3 alongside the driver case + run_capacity_cases(). Uring
+    # has NOT migrated onto RequestArena (Phase D pending), so its capacity
+    # coverage is recorded here as a known not_implemented gap: a
+    # not_implemented MANDATORY record enters the verdict via
+    # applicable_evidence_for_backend() and forces the backend to INCOMPLETE,
+    # never skip-as-pass. This record reinforces (does not replace) the existing
+    # KernelIoProfile-stays-NOT-CONFORMING rule.
+    # -----------------------------------------------------------------------
+    Evidence(
+        evidence_id="uring_capacity_not_implemented",
+        target="backend_conformance_test",
+        layer="shared",
+        backends=_U,
+        status=STATUS_NOT_IMPLEMENTED,
+        mandatory=True,
+        notes="C2a: Uring has no RequestArena before Phase D; capacity "
+              "rejection/admission/accounting conformance is not implemented. "
+              "Recorded as a known gap; the driver does not execute the "
+              "capacity cases for Uring. Uring stays NOT CONFORMING.",
+    ),
+
+    # -----------------------------------------------------------------------
+    # Phase C2a — shared capacity/admission/accounting conformance (implemented
+    # for backends that have migrated onto RequestArena: Fake, ThreadPool). The
+    # capacity cases live in the SAME target as shared_suite
+    # (backend_conformance_test) and are driven by run_capacity_cases(), built
+    # via make_backend_with_capacity. They assert ONLY AsyncIoContext-observable
+    # state. The gate drives this per-backend in isolated subprocesses
+    # (conformance_capacity_fake / conformance_capacity_threadpool). Uring's gap
+    # is the not_implemented record above.
+    # -----------------------------------------------------------------------
+    Evidence(
+        evidence_id="shared_capacity_suite",
+        target="backend_conformance_test",
+        layer="shared",
+        backends=("Fake", "ThreadPool"),
+        notes="C2a capacity/admission/rejection/accounting cases: accepts "
+              "exact capacity, (N+1)th rejects with would_block (rejected "
+              "Completion stays idle; no async from a reject), exact stats "
+              "split (submitted_ops committed-only; queue_full_retries vs "
+              "invalid_state_rejections), max_outstanding <= capacity, "
+              "recycle after cancel->reap->reset. Shared-observable only.",
     ),
 
     # -----------------------------------------------------------------------
@@ -350,10 +405,43 @@ def evidence_for_backend(backend_name: str) -> tuple[Evidence, ...]:
     """All IMPLEMENTED evidence records covering a given backend display name.
 
     Backend-agnostic records (backends == ()) apply to every backend.
+
+    NOTE (Phase C2a): this returns ONLY implemented records, so it is the right
+    helper for target selection, command execution, and the "existence of
+    records" mandatory-layer coverage check. For verdict / report / known-gap
+    display use applicable_evidence_for_backend() instead, which also includes
+    not_implemented and not_applicable records so a known gap surfaces in the
+    backend's own verdict (INCOMPLETE), not just in a global results dict.
+    """
+    return implemented_evidence_for_backend(backend_name)
+
+
+def implemented_evidence_for_backend(backend_name: str) -> tuple[Evidence, ...]:
+    """Only IMPLEMENTED records covering this backend.
+
+    Used for: target selection, command execution, runtime PASS/FAIL collection,
+    and the mandatory implemented-coverage (mandatory_layers_covered) check.
     """
     return tuple(
         e for e in EVIDENCE
         if e.status == STATUS_IMPLEMENTED
+        and (not e.backends or backend_name in e.backends)
+    )
+
+
+def applicable_evidence_for_backend(backend_name: str) -> tuple[Evidence, ...]:
+    """IMPLEMENTED + not_implemented + not_applicable records covering this
+    backend.
+
+    Used by the verdict and the per-backend report so a known gap (e.g. Uring's
+    Phase-D capacity gap) surfaces as INCOMPLETE in the backend's OWN verdict,
+    not just in a global results dict. Backend-agnostic records (backends == ())
+    apply to every backend.
+    """
+    return tuple(
+        e for e in EVIDENCE
+        if e.status in (STATUS_IMPLEMENTED, STATUS_NOT_IMPLEMENTED,
+                        STATUS_NOT_APPLICABLE)
         and (not e.backends or backend_name in e.backends)
     )
 

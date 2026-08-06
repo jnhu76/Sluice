@@ -248,6 +248,11 @@ class Gate:
     # backend's case via SLUICE_TEST_FILTER. Each subprocess owns its exit
     # code, its [conformance-meta] line, and its [conformance] FAIL lines.
     shared_by_backend: dict[str, RunResult] = field(default_factory=dict)
+    # Phase C2a: per-backend shared CAPACITY-suite result, driven in its own
+    # subprocess (conformance_capacity_fake / conformance_capacity_threadpool).
+    # Backends without a capacity seam (Uring) have no capacity driver case;
+    # their gap is the manifest's uring_capacity_not_implemented record.
+    capacity_by_backend: dict[str, RunResult] = field(default_factory=dict)
     meta: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def run(self) -> int:
@@ -265,8 +270,8 @@ class Gate:
                     ev.evidence_id, ev.target, NOT_APPLICABLE,
                     detail=ev.reason or "not applicable")
                 continue
-            # The shared suite is driven per-backend in _run_shared_suite below.
-            if ev.evidence_id == "shared_suite":
+            # The shared base and capacity suites are driven per backend below.
+            if ev.evidence_id in ("shared_suite", "shared_capacity_suite"):
                 continue
             self.results[ev.evidence_id] = self._drive(ev)
 
@@ -278,6 +283,14 @@ class Gate:
         shared_ev = M.evidence_by_id("shared_suite")
         if shared_ev is not None:
             self._run_shared_suite(shared_ev)
+
+        # Phase C2a: drive the shared CAPACITY suite once per registered backend
+        # that HAS a capacity driver case (Fake, ThreadPool). Backends without a
+        # capacity seam (Uring) have no capacity driver case; their gap is the
+        # manifest's uring_capacity_not_implemented record (not a skip-as-pass).
+        cap_ev = M.evidence_by_id("shared_capacity_suite")
+        if cap_ev is not None:
+            self._run_capacity_suite(cap_ev)
 
         # Parse [conformance-meta] from every per-backend shared run for the
         # REPORT, keyed by the CANONICAL registered backend name (a variant
@@ -343,15 +356,58 @@ class Gate:
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
                 detail=detail, stdout=out)
 
-    def _classify_shared_run(self, backend: M.BackendEntry, rc: int,
-                             out: str) -> tuple[str, str]:
+    def _run_capacity_suite(self, ev: M.Evidence) -> None:
+        """Phase C2a: drive the shared capacity suite once per backend that HAS
+        a capacity driver case, each in its own subprocess. Backends without a
+        capacity seam (Uring) have no capacity driver case and are skipped here
+        — their gap is the manifest's uring_capacity_not_implemented record,
+        surfaced in the verdict via applicable_evidence_for_backend(). Uses the
+        same preflight shape as _run_shared_suite (target existence + build).
+        """
+        if not xmake_target_exists(ev.target):
+            missing = RunResult(ev.evidence_id, ev.target, MISSING_TARGET,
+                                detail="xmake show -t reports not a valid target")
+            for b in M.BACKENDS:
+                if b.capacity_driver_case:
+                    self.capacity_by_backend[b.name] = missing
+            return
+        if self.args is not None and not getattr(self.args, "no_build", False):
+            ok, log = xmake_build_target(ev.target)
+            if not ok:
+                bf = RunResult(ev.evidence_id, ev.target, BUILD_FAIL,
+                               detail="xmake build failed", stdout=log)
+                for b in M.BACKENDS:
+                    if b.capacity_driver_case:
+                        self.capacity_by_backend[b.name] = bf
+                return
+
+        # One isolated subprocess per backend with a capacity driver case. The
+        # capacity cases assert ONLY AsyncIoContext-observable state, so a run
+        # is PASS only when it provably ran exactly the driver case and emitted
+        # exactly one valid [conformance-meta] line (same fail-closed shape as
+        # the shared suite). A run that reports a failing capacity case prints
+        # "[conformance] capacity FAIL <backend> :: <case>" and exits non-zero
+        # -> RUN_FAIL for that backend only.
+        for b in M.BACKENDS:
+            if not b.capacity_driver_case:
+                continue  # Uring: no capacity seam; gap is the manifest record.
+            rc, out = xmake_run_target(ev.target,
+                                       env_filter=b.capacity_driver_case)
+            state, detail = self._classify_shared_run(
+                b, rc, out, expected_case=b.capacity_driver_case)
+            self.capacity_by_backend[b.name] = RunResult(
+                f"{ev.evidence_id}:{b.name}", ev.target, state,
+                detail=detail, stdout=out)
+
+    def _classify_shared_run(self, backend: M.BackendEntry, rc: int, out: str,
+                             expected_case: str = "") -> tuple[str, str]:
         """Classify ONE backend's isolated shared-suite subprocess run.
 
         Fail-closed: a run is PASS only when ALL of the following hold:
 
           * returncode == 0 (else RUN_FAIL);
           * the harness executed exactly the manifest's driver_case and
-            nothing else (the `[run]` lines must be exactly [driver_case]);
+            nothing else (the `[run]` lines must be exactly [expected_case]);
           * exactly one [conformance-meta] line was emitted;
           * its backend, canonicalized (Uring(stub) -> Uring), equals this
             backend;
@@ -362,19 +418,25 @@ class Gate:
         backend/profile, or a disallowed mode are INCOMPLETE — never PASS.
         This is what closes the "filter matched nothing still exits 0" false
         green: a typo'd or renamed driver_case can no longer report PASS.
+
+        `expected_case` defaults to backend.driver_case (the shared suite). For
+        the Phase C2a capacity suite pass backend.capacity_driver_case so the
+        selected-case check uses the capacity driver case name.
         """
+        if not expected_case:
+            expected_case = backend.driver_case
         if rc != 0:
-            return RUN_FAIL, f"exit {rc} (filter={backend.driver_case})"
+            return RUN_FAIL, f"exit {rc} (filter={expected_case})"
         selected = parse_run_lines(out)
-        if selected != [backend.driver_case]:
+        if selected != [expected_case]:
             return INCOMPLETE, (
-                f"filter={backend.driver_case!r} selected cases "
-                f"{selected!r}; expected exactly [{backend.driver_case!r}]")
+                f"filter={expected_case!r} selected cases "
+                f"{selected!r}; expected exactly [{expected_case!r}]")
         metas = parse_meta_line_list(out)
         if len(metas) != 1:
             return INCOMPLETE, (
                 f"expected exactly one [conformance-meta] line, got "
-                f"{len(metas)} (filter={backend.driver_case!r})")
+                f"{len(metas)} (filter={expected_case!r})")
         meta_backend, profile, mode = metas[0]
         registered = [b.name for b in M.BACKENDS]
         if canonical_backend_key(meta_backend, registered) != backend.name:
@@ -448,6 +510,18 @@ class Gate:
                 return NOT_RUN
             return r.state
 
+        # Phase C2a: the shared CAPACITY suite — this backend's OWN subprocess
+        # result (conformance_capacity_fake / conformance_capacity_threadpool).
+        if ev.evidence_id == "shared_capacity_suite":
+            r = self.capacity_by_backend.get(backend_name)
+            if r is None:
+                # A backend with a capacity seam that the gate never drove: NOT_RUN
+                # (a harness error). A backend with NO seam has no applicable
+                # implemented record (only the uring_capacity_not_implemented
+                # not_implemented record), so this branch is not reached for it.
+                return NOT_RUN
+            return r.state
+
         r = self.results.get(ev.evidence_id)
         if r is None:
             return NOT_RUN
@@ -483,6 +557,12 @@ class Gate:
         mandatory layer nor block ELIGIBLE. A layer with one PASS and one
         MISSING_TARGET is INCOMPLETE, not ELIGIBLE — one PASS per layer is
         not enough.
+
+        Phase C2a: the verdict iterates applicable_evidence_for_backend()
+        (implemented + not_implemented + not_applicable), so a not_implemented
+        MANDATORY record forces INCOMPLETE in the backend's OWN verdict, not
+        just in the global results dict. This is how a known Phase-D gap
+        (e.g. uring_capacity_not_implemented) surfaces honestly.
         """
         reasons: list[str] = []
         # self.meta is keyed by canonical registered backend names (see run()).
@@ -498,12 +578,21 @@ class Gate:
                                "(Phase D: RequestArena/RequestKey identity)")
             else:
                 reasons.append(f"kernel profile mode={mode_str} (Phase D pending)")
+            # Still enumerate applicable not_implemented mandatory records so a
+            # Phase-D gap (e.g. capacity) appears in the reasons for the report,
+            # reinforcing (not replacing) the KernelIo NOT CONFORMING rule.
+            for ev in M.applicable_evidence_for_backend(backend.name):
+                if ev.mandatory and ev.status == M.STATUS_NOT_IMPLEMENTED:
+                    reasons.append(
+                        f"known gap: mandatory evidence '{ev.evidence_id}' "
+                        f"({ev.target}): not_implemented")
             return NOT_CONFORMING, reasons
 
-        # Mandatory evidence only; non-mandatory records are diagnostic.
+        # Mandatory APPLICABLE evidence only (implemented + not_implemented +
+        # not_applicable). Non-mandatory records are diagnostic.
         states = [
             (ev, self._backend_run_state(ev, backend.name, backend.profile))
-            for ev in M.evidence_for_backend(backend.name)
+            for ev in M.applicable_evidence_for_backend(backend.name)
             if ev.mandatory
         ]
 
@@ -555,22 +644,42 @@ class Gate:
             print(f"Backend: {backend.name} ({backend.profile})")
             print(f"  mode (from meta): {mode_seen}  profile (from meta): {profile_seen}")
             for layer in M.MANDATORY_LAYERS_PER_BACKEND:
-                applicable = [
-                    ev for ev in M.evidence_for_backend(backend.name)
-                    if ev.layer == layer and ev.status == M.STATUS_IMPLEMENTED
+                # Phase C2a: report APPLICABLE evidence (implemented +
+                # not_implemented + not_applicable) so a known gap surfaces in
+                # the per-backend section, not just in the verdict reasons.
+                #
+                # Compute each applicable evidence's run state ONCE and reuse it
+                # for both the per-layer summary and the per-evidence detail
+                # lines. A previous version called _backend_run_state up to
+                # three times per evidence (once for the states set, twice for
+                # the detail loop) and relied on a tautological
+                # `elif st not in ("", )` branch (the helper never returns "")
+                # that duplicated the default detail line.
+                ev_states = [
+                    (ev, self._backend_run_state(ev, backend.name, backend.profile))
+                    for ev in M.applicable_evidence_for_backend(backend.name)
+                    if ev.layer == layer
                 ]
-                states = sorted({
-                    self._backend_run_state(ev, backend.name, backend.profile)
-                    for ev in applicable
-                })
+                states = sorted({st for _, st in ev_states})
                 label = layer.replace("_", " ")
                 # For KernelIoProfile in a stub build, the shared suite covers
-                # only the stub subset — relabel honestly.
-                if (backend.profile == "KernelIoProfile" and layer == "shared"
-                        and mode_seen == "stub" and PASS in states):
-                    print(f"  {label:<22} PASS (stub subset)")
-                else:
-                    print(f"  {label:<22} {states[0] if len(states)==1 else '/'.join(states)}")
+                # only the stub subset — relabel honestly. If a not_implemented
+                # gap (e.g. capacity) is also in the layer, show it alongside.
+                layer_parts: list[str] = []
+                for ev, st in ev_states:
+                    if (backend.profile == "KernelIoProfile"
+                            and layer == "shared" and mode_seen == "stub"
+                            and ev.evidence_id == "shared_suite" and st == PASS):
+                        layer_parts.append(f"{ev.evidence_id}=PASS (stub subset)")
+                    elif ev.status == M.STATUS_NOT_IMPLEMENTED:
+                        layer_parts.append(
+                            f"{ev.evidence_id}=INCOMPLETE (not_implemented)")
+                    else:
+                        layer_parts.append(f"{ev.evidence_id}={st}")
+                summary = states[0] if len(states) == 1 else "/".join(states)
+                print(f"  {label:<22} {summary}")
+                for part in layer_parts:
+                    print(f"    {part}")
             print(f"  overall               {verdict}")
             for r in reasons:
                 print(f"    reason: {r}")
@@ -625,6 +734,21 @@ class Gate:
                             f"mandatory evidence '{ev.evidence_id}' "
                             f"backend {b.name} ({ev.target}): {rr.state}")
                 continue
+            if ev.evidence_id == "shared_capacity_suite":
+                # Phase C2a: per-backend shared CAPACITY suite. Only backends
+                # with a capacity seam (Fake, ThreadPool) are driven; Uring's
+                # gap is the uring_capacity_not_implemented record, handled by
+                # applicable_evidence_for_backend in the verdict.
+                for b in M.BACKENDS:
+                    if not b.capacity_driver_case:
+                        continue
+                    rr = self.capacity_by_backend.get(b.name)
+                    if rr and rr.state in (MISSING_TARGET, BUILD_FAIL,
+                                           RUN_FAIL):
+                        overall_failures.append(
+                            f"mandatory evidence '{ev.evidence_id}' "
+                            f"backend {b.name} ({ev.target}): {rr.state}")
+                continue
             r = self.results.get(ev.evidence_id)
             if r is None:
                 overall_failures.append(
@@ -643,6 +767,15 @@ class Gate:
                 overall_failures.append(
                     f"registered backend {b.name} shared-suite result MISSING "
                     f"(gate must evaluate every registered backend)")
+
+        # Phase C2a fail-closed: every backend with a capacity seam MUST have a
+        # capacity-suite result. A missing capacity_by_backend entry for a
+        # backend that declares a capacity_driver_case is a harness error.
+        for b in M.BACKENDS:
+            if b.capacity_driver_case and b.name not in self.capacity_by_backend:
+                overall_failures.append(
+                    f"registered backend {b.name} capacity-suite result MISSING "
+                    f"(gate must evaluate every capacity-capable backend)")
 
         # --- Summary ---
         print("-" * 72)

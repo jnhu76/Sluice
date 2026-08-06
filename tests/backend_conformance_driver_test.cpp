@@ -53,52 +53,71 @@ int make_temp_fd() {
 }
 
 BackendFactory make_fake_factory() {
-    return BackendFactory{
-        "Fake",
-        [] { return std::make_unique<FakeAsyncBackend>(); },
-        nullptr,                // no real fd
-        false,                  // not real_mode
-        "ReferenceProfile",     // Phase C1 profile
-        "deterministic"         // Phase C1 mode
+    BackendFactory f;
+    f.name = "Fake";
+    f.make_backend = [] { return std::make_unique<FakeAsyncBackend>(); };
+    // Phase C2a: Fake supports bounded construction via FakeAsyncBackend(cap).
+    // The zero-arg make_backend above uses the default capacity so the existing
+    // 8 shared cases are unchanged; the capacity cases build a small arena here.
+    f.make_backend_with_capacity = [](std::size_t cap) {
+        return std::make_unique<FakeAsyncBackend>(cap);
     };
+    f.make_temp_fd = nullptr;   // no real fd
+    f.real_mode = false;        // not real_mode
+    f.profile = "ReferenceProfile";   // Phase C1 profile
+    f.mode = "deterministic";         // Phase C1 mode
+    return f;
 }
 
 BackendFactory make_threadpool_factory() {
-    return BackendFactory{
-        "ThreadPool",
-        [] { return std::make_unique<ThreadPoolBackend>(); },
-        &make_temp_fd,
-        true,
-        "BlockingIoProfile",    // Phase C1 profile
-        "real"                  // Phase C1 mode
+    BackendFactory f;
+    f.name = "ThreadPool";
+    f.make_backend = [] { return std::make_unique<ThreadPoolBackend>(); };
+    // Phase C2a: ThreadPool supports bounded construction via ThreadPoolConfig.
+    // worker_count=1 because capacity is the variable under test (a larger pool
+    // would not change the arena bound, and one worker is enough to drive
+    // cancel/reap/reset through the real syscall path).
+    f.make_backend_with_capacity = [](std::size_t cap) {
+        ThreadPoolConfig cfg;
+        cfg.request_capacity = cap;
+        cfg.worker_count = 1;
+        return std::make_unique<ThreadPoolBackend>(cfg);
     };
+    f.make_temp_fd = &make_temp_fd;
+    f.real_mode = true;
+    f.profile = "BlockingIoProfile";   // Phase C1 profile
+    f.mode = "real";                   // Phase C1 mode
+    return f;
 }
 
 BackendFactory make_uring_factory() {
+    BackendFactory f;
 #if defined(SLUICE_HAS_LIBURING)
-    return BackendFactory{
-        "Uring",
-        [] { return std::make_unique<UringAsyncBackend>(); },
-        &make_temp_fd,
-        true,
-        "KernelIoProfile",      // Phase C1 profile
-        "real"                  // Phase C1 mode
-    };
+    f.name = "Uring";
+    f.make_backend = [] { return std::make_unique<UringAsyncBackend>(); };
+    f.make_temp_fd = &make_temp_fd;
+    f.real_mode = true;
+    f.profile = "KernelIoProfile";     // Phase C1 profile
+    f.mode = "real";                   // Phase C1 mode
 #else
     // Stub mode: UringAsyncBackend compiles but available() is false and
     // submit_* returns backend_error. real_mode=false so fd-backed cases skip
     // cleanly; the suite still asserts the submit->error shape. The meta line
     // declares mode=stub so the aggregate gate classifies the KernelIo profile
     // as NOT CONFORMING (kernel coverage INCOMPLETE) without parsing names.
-    return BackendFactory{
-        "Uring(stub)",
-        [] { return std::make_unique<UringAsyncBackend>(); },
-        nullptr,
-        false,
-        "KernelIoProfile",      // Phase C1 profile
-        "stub"                  // Phase C1 mode
-    };
+    f.name = "Uring(stub)";
+    f.make_backend = [] { return std::make_unique<UringAsyncBackend>(); };
+    f.make_temp_fd = nullptr;
+    f.real_mode = false;
+    f.profile = "KernelIoProfile";     // Phase C1 profile
+    f.mode = "stub";                   // Phase C1 mode
 #endif
+    // Phase C2a: Uring has NOT migrated onto RequestArena (Phase D pending), so
+    // make_backend_with_capacity stays null. The capacity cases do not execute
+    // for Uring's driver, and the authoritative gap is the manifest's
+    // uring_capacity_not_implemented record (added in commit 2). Uring is never
+    // skip-as-pass for capacity.
+    return f;
 }
 
 }  // namespace
@@ -119,6 +138,37 @@ SLUICE_TEST_CASE(conformance_uring) {
     const auto f = make_uring_factory();
     sluice_test::conformance::emit_meta(f);
     SLUICE_CHECK(sluice_test::conformance::run_conformance(f) == 0);
+}
+
+// Phase C2a — shared capacity/admission/rejection/accounting cases, driven
+// per-backend. Each runs run_capacity_cases() against a backend built at a
+// chosen small request_capacity via the factory's make_backend_with_capacity
+// seam. The cases assert ONLY AsyncIoContext-observable state. Uring has no
+// capacity seam (Phase D pending), so it has NO capacity driver case here —
+// the authoritative gap is the manifest's uring_capacity_not_implemented
+// record. The aggregate gate drives these per-backend in isolated subprocesses.
+SLUICE_TEST_CASE(conformance_capacity_fake) {
+    const auto f = make_fake_factory();
+    sluice_test::conformance::emit_meta(f);
+    SLUICE_CHECK(sluice_test::conformance::factory_supports_capacity(f));
+    const std::string failed = sluice_test::conformance::run_capacity_cases(f);
+    if (!failed.empty()) {
+        std::fprintf(stderr, "[conformance] capacity FAIL Fake :: %s\n",
+                     failed.c_str());
+    }
+    SLUICE_CHECK(failed.empty());
+}
+
+SLUICE_TEST_CASE(conformance_capacity_threadpool) {
+    const auto f = make_threadpool_factory();
+    sluice_test::conformance::emit_meta(f);
+    SLUICE_CHECK(sluice_test::conformance::factory_supports_capacity(f));
+    const std::string failed = sluice_test::conformance::run_capacity_cases(f);
+    if (!failed.empty()) {
+        std::fprintf(stderr, "[conformance] capacity FAIL ThreadPool :: %s\n",
+                     failed.c_str());
+    }
+    SLUICE_CHECK(failed.empty());
 }
 
 SLUICE_MAIN()

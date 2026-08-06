@@ -206,15 +206,54 @@ coverage).
     change. Phase C remains PARTIAL; READY requires a green CI run on the final
     PR head.
 
-- **C2 — semantic coverage: PENDING.** The "must cover" scope below is broader
-  than the 8-case shared suite: injected allocation/startup/dispatch failure,
-  accepted-terminal under allocator failure, single-waiter enforcement,
-  generation/stale-event cases, borrow-lifetime cases, the full
-  capacity/high-water/rejection matrix, the full stale cancel/wait/reap matrix,
-  the full waiter/borrow/delivery-lease interleave, and all
-  shutdown/reset/non-quiescent destruction cases. Some are already covered
-  out-of-suite by Phase B arena tests, death tests, and the negative-compile
-  scripts; C2 closes the remaining matrix into the aggregate gate.
+- **C2 — semantic coverage: PARTIAL.** C2 is split into C2a (capacity /
+  admission / rejection / accounting), C2b (generation / stale / cancel matrix),
+  C2c (waiter / borrow / delivery lease), C2d (failure injection), and C2e
+  (close / drain / destruction).
+
+  - **C2a — capacity / admission / rejection / accounting: COMPLETE.** The
+    shared observable capacity suite (`run_capacity_cases`, 5 cases) runs
+    identically against Fake and ThreadPool via the `make_backend_with_capacity`
+    factory seam and asserts ONLY `AsyncIoContext`-observable state: accepts
+    exact capacity, (N+1)th rejects with `would_block` (rejected Completion
+    stays idle; no async from a reject), exact stats split (`submitted_ops`
+    committed-only; `queue_full_retries` vs `invalid_state_rejections`),
+    `max_outstanding <= capacity`, and recycle after cancel→reap→reset. The
+    aggregate gate drives the capacity suite per-backend in isolated
+    subprocesses (`shared_capacity_suite` evidence) and a `not_implemented`
+    manifest record (`uring_capacity_not_implemented`) enters the verdict via
+    `applicable_evidence_for_backend()`, so Uring's Phase-D capacity gap
+    surfaces as INCOMPLETE in its own shared layer — never skip-as-pass.
+    `NonConformingCapacityBackend` (test-only, `SLUICE_ASYNC_INTERNAL_TESTING`-
+    guarded, NOT in the manifest) proves `run_capacity_cases()` returns the
+    SPECIFIC failing case name for six injected violations (over-accept,
+    bind-rejected, late-complete, misclassified `invalid_state`, inflated
+    `outstanding`, no-recycle). See
+    [`phase-c2a-compliance-gate.md`](phase-c2a-compliance-gate.md).
+
+  - **C2b — generation / stale / cancel matrix: PENDING.** Generation /
+    provenance / stale-key / cancel-winner rows (3–8) remain PARTIAL (arena +
+    TP-specific evidence exists; no shared cross-backend matrix).
+
+  - **C2c — waiter / borrow / delivery lease: PENDING.** Rows 11–14 remain
+    PARTIAL (arena-level only).
+
+  - **C2d — failure injection: PENDING.** Rows 9–10 (injected
+    allocation/startup/dispatch failure; accepted-terminal under allocator
+    failure) remain MISSING.
+
+  - **C2e — close / drain / destruction: PENDING.** Row 15 (close/drain/reset
+    sequence) remains PARTIAL; row 16 (quiescent destruction) is already FULL.
+
+  The "must cover" scope below is broader than the 8-case shared suite: injected
+  allocation/startup/dispatch failure, accepted-terminal under allocator
+  failure, single-waiter enforcement, generation/stale-event cases,
+  borrow-lifetime cases, the full capacity/high-water/rejection matrix (C2a
+  done), the full stale cancel/wait/reap matrix, the full
+  waiter/borrow/delivery-lease interleave, and all shutdown/reset/non-quiescent
+  destruction cases. Some are already covered out-of-suite by Phase B arena
+  tests, death tests, and the negative-compile scripts; C2 closes the remaining
+  matrix into the aggregate gate.
 
 The shared backend-agnostic suite is implemented and wired into the `test` group
 (`tests/backend_conformance.hpp` + `backend_conformance_test.cpp` + driver
