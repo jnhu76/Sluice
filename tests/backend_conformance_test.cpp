@@ -583,60 +583,38 @@ struct CapacityFixture {
     }
 };
 
-// Each capacity case is a SELF-CONTAINED scope that owns, in ONE stack frame,
-// its CapacityFixture + Completions + cleanup. The macro CAPACITY_CASE opens a
-// brace + declares `cname` + builds the fixture + opens a try; END_CAPACITY_CASE
-// calls cleanup_or_abort() (success path), closes the try, adds the catch that
-// ALSO calls cleanup_or_abort() and returns the failing case name, and closes
-// the outer brace. The case statements go BETWEEN the two macros WITHOUT an
-// extra brace — an extra `{ ... }` would put the Completions in an inner block
-// that destructs BEFORE END_CAPACITY_CASE runs cleanup, defeating the design.
-//
-//   CAPACITY_CASE(f, "case_name", CAP)
-//       <statements using `fx` and `cname`; declarations live in the try scope>
-//   END_CAPACITY_CASE(f)
-//
-// This is the only scope-correct shape: fixture and Completions share the try
-// frame, cleanup runs before either destructs (so the accepted-pointers stay
-// valid and the context is quiescent before destruction), and a CONF_CHECK
-// case_bail still reaches cleanup via the catch.
-#define CAPACITY_CASE(f, case_name_str, cap_value)                                   \
-    {                                                                                \
-        const char* cname = (case_name_str);                                         \
-        CapacityFixture fx((f).make_backend_with_capacity(cap_value));               \
-        try {
-
-// Closes the CAPACITY_CASE block: runs cleanup_or_abort() on the success path
-// (no exception) and on the exception path (case_bail), then returns the
-// failing case name on failure or empty on success. The macro must be matched
-// 1:1 with CAPACITY_CASE.
-#define END_CAPACITY_CASE(f)                                                         \
-        fx.cleanup_or_abort((f).name, cname);                                        \
-        } catch (...) {                                                              \
-            fx.cleanup_or_abort((f).name, cname);                                    \
-            return cname;                                                            \
-        }                                                                            \
+// Uniform case wrapper: cleanup runs on BOTH the success and exception paths,
+// so a case-failure exception (case_bail from CONF_CHECK) cannot leave
+// outstanding work behind for the context destructor to detect. The Completions
+// live in the CALLER's frame (the case function), which is still alive when
+// cleanup runs — the wrapper is invoked before the case function returns, so
+// the accepted-pointers stay valid. This is the ONLY scope-correct shape:
+// putting the Completions inside the wrapper's try block would destruct them
+// (fail-fast on outstanding) BEFORE the catch could run cleanup.
+template <typename Body>
+std::string run_capacity_case(CapacityFixture& fx, const char* backend_name,
+                              const char* case_name, Body&& body) {
+    try {
+        body();
+    } catch (const case_bail&) {
+        fx.cleanup_or_abort(backend_name, case_name);
+        return case_name;  // failure: return the failing case name
     }
+    fx.cleanup_or_abort(backend_name, case_name);
+    return {};  // success
+}
 
-// The capacity-case driver. Returns the empty string on full pass, or the
-// stable name of the FIRST failing case. Drives ONLY the capacity cases against
-// a backend built at a chosen small request_capacity via
-// factory.make_backend_with_capacity. Precondition: factory_supports_capacity.
-//
-// Each case is a CAPACITY_CASE...END_CAPACITY_CASE block: the fixture + the
-// Completions + cleanup all live in ONE scope, so cleanup_or_abort() runs while
-// the Completions are still on the stack (the accepted-pointers stay valid) and
-// on BOTH the success and exception paths (a CONF_CHECK case_bail still reaches
-// cleanup before the fixture destructs).
-std::string run_capacity_cases(const BackendFactory& f) {
-    // ---- Case A: accepts exact capacity -----------------------------------
-    // capacity=2: c1 accept, c2 accept, outstanding==2, submit_calls==2,
-    // submitted_ops==2, max_outstanding==2, queue_full_retries==0,
-    // invalid_state_rejections==0.
-    CAPACITY_CASE(f, "capacity_accepts_exact_limit", 2)
-        ScopedTempFd fd(capacity_temp_fd(f));
-        std::byte buf1[4]{}, buf2[4]{};
-        Completion<std::size_t> c1, c2;
+// ---- Case A: accepts exact capacity --------------------------------------
+// capacity=2: c1 accept, c2 accept, outstanding==2, submit_calls==2,
+// submitted_ops==2, max_outstanding==2, queue_full_retries==0,
+// invalid_state_rejections==0.
+std::string case_capacity_accepts_exact_limit(const BackendFactory& f) {
+    constexpr const char* cname = "capacity_accepts_exact_limit";
+    CapacityFixture fx(f.make_backend_with_capacity(2));
+    ScopedTempFd fd(capacity_temp_fd(f));
+    std::byte buf1[4]{}, buf2[4]{};
+    Completion<std::size_t> c1, c2;
+    return run_capacity_case(fx, f.name, cname, [&] {
         CONF_CHECK(f.name, cname,
                    fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
         CONF_CHECK(f.name, cname,
@@ -647,16 +625,20 @@ std::string run_capacity_cases(const BackendFactory& f) {
         CONF_CHECK(f.name, cname, fx.stats.max_outstanding == 2);
         CONF_CHECK(f.name, cname, fx.stats.queue_full_retries == 0);
         CONF_CHECK(f.name, cname, fx.stats.invalid_state_rejections == 0);
-    END_CAPACITY_CASE(f)
+    });
+}
 
-    // ---- Case B: the (N+1)th submit is rejected with would_block -----------
-    // c1, c2 accept; c3 returns would_block; c3 stays idle; outstanding==2;
-    // submitted_ops==2; submit_calls==3; queue_full_retries==1;
-    // invalid_state_rejections==0; max_outstanding==2.
-    CAPACITY_CASE(f, "capacity_rejects_with_idle_completion", 2)
-        ScopedTempFd fd(capacity_temp_fd(f));
-        std::byte buf1[4]{}, buf2[4]{}, buf3[4]{};
-        Completion<std::size_t> c1, c2, c3;
+// ---- Case B: the (N+1)th submit is rejected with would_block --------------
+// c1, c2 accept; c3 returns would_block; c3 stays idle; outstanding==2;
+// submitted_ops==2; submit_calls==3; queue_full_retries==1;
+// invalid_state_rejections==0; max_outstanding==2.
+std::string case_capacity_rejects_with_idle_completion(const BackendFactory& f) {
+    constexpr const char* cname = "capacity_rejects_with_idle_completion";
+    CapacityFixture fx(f.make_backend_with_capacity(2));
+    ScopedTempFd fd(capacity_temp_fd(f));
+    std::byte buf1[4]{}, buf2[4]{}, buf3[4]{};
+    Completion<std::size_t> c1, c2, c3;
+    return run_capacity_case(fx, f.name, cname, [&] {
         CONF_CHECK(f.name, cname,
                    fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
         CONF_CHECK(f.name, cname,
@@ -676,16 +658,20 @@ std::string run_capacity_cases(const BackendFactory& f) {
         CONF_CHECK(f.name, cname, fx.stats.queue_full_retries == 1);
         CONF_CHECK(f.name, cname, fx.stats.invalid_state_rejections == 0);
         CONF_CHECK(f.name, cname, fx.stats.max_outstanding == 2);
-    END_CAPACITY_CASE(f)
+    });
+}
 
-    // ---- Case C: a rejected request never produces a late completion -------
-    // cap=1: c1 accept, c2 rejected (would_block). Then drive backend progress,
-    // clean up c1 (cancel -> reap). c2 must remain idle/not-outstanding/not-
-    // ready throughout and after — no completion publication belongs to c2.
-    CAPACITY_CASE(f, "capacity_rejection_never_completes", 1)
-        ScopedTempFd fd(capacity_temp_fd(f));
-        std::byte buf1[4]{}, buf2[4]{};
-        Completion<std::size_t> c1, c2;
+// ---- Case C: a rejected request never produces a late completion ----------
+// cap=1: c1 accept, c2 rejected (would_block). Then drive backend progress,
+// clean up c1 (cancel -> reap). c2 must remain idle/not-outstanding/not-ready
+// throughout and after — no completion publication belongs to c2.
+std::string case_capacity_rejection_never_completes(const BackendFactory& f) {
+    constexpr const char* cname = "capacity_rejection_never_completes";
+    CapacityFixture fx(f.make_backend_with_capacity(1));
+    ScopedTempFd fd(capacity_temp_fd(f));
+    std::byte buf1[4]{}, buf2[4]{};
+    Completion<std::size_t> c1, c2;
+    return run_capacity_case(fx, f.name, cname, [&] {
         CONF_CHECK(f.name, cname,
                    fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
         auto r2 = fx.ctx.submit_read(fx.make_read_op(fd, buf2, 4), c2);
@@ -711,17 +697,21 @@ std::string run_capacity_cases(const BackendFactory& f) {
         CONF_CHECK(f.name, cname, c2.idle());
         CONF_CHECK(f.name, cname, !c2.ready());
         CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 1);
-    END_CAPACITY_CASE(f)
+    });
+}
 
-    // ---- Case D: rejection classification is precise ----------------------
-    // Deterministic sequence: c1 accept; resubmit on non-idle c1 ->
-    // invalid_state; c2 accept; c3 -> would_block. Exact stats (CORRECTION 5):
-    //   submit_calls==4, submitted_ops==2, invalid_state_rejections==1,
-    //   queue_full_retries==1, max_outstanding==2, outstanding==2.
-    CAPACITY_CASE(f, "capacity_stats_are_exact", 2)
-        ScopedTempFd fd(capacity_temp_fd(f));
-        std::byte buf1[4]{}, buf1b[4]{}, buf2[4]{}, buf3[4]{};
-        Completion<std::size_t> c1, c2, c3;
+// ---- Case D: rejection classification is precise --------------------------
+// Deterministic sequence: c1 accept; resubmit on non-idle c1 -> invalid_state;
+// c2 accept; c3 -> would_block. Exact stats (CORRECTION 5: no >= 1):
+//   submit_calls==4, submitted_ops==2, invalid_state_rejections==1,
+//   queue_full_retries==1, max_outstanding==2, outstanding==2.
+std::string case_capacity_stats_are_exact(const BackendFactory& f) {
+    constexpr const char* cname = "capacity_stats_are_exact";
+    CapacityFixture fx(f.make_backend_with_capacity(2));
+    ScopedTempFd fd(capacity_temp_fd(f));
+    std::byte buf1[4]{}, buf1b[4]{}, buf2[4]{}, buf3[4]{};
+    Completion<std::size_t> c1, c2, c3;
+    return run_capacity_case(fx, f.name, cname, [&] {
         // 1. c1 accept.
         CONF_CHECK(f.name, cname,
                    fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
@@ -748,15 +738,19 @@ std::string run_capacity_cases(const BackendFactory& f) {
         CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 2);
         CONF_CHECK(f.name, cname, fx.stats.canceled_ops == 0);
         CONF_CHECK(f.name, cname, fx.stats.completion_errors == 0);
-    END_CAPACITY_CASE(f)
+    });
+}
 
-    // ---- Case E: capacity recycles after cancel -> reap -> reset ----------
-    // cap=1: c1 accept (fills capacity). Cancel + reap c1, then reset c1
-    // (releases the slot). A fresh c2 submit MUST succeed (capacity recycled).
-    CAPACITY_CASE(f, "capacity_recycles_after_reset", 1)
-        ScopedTempFd fd(capacity_temp_fd(f));
-        std::byte buf1[4]{}, buf2[4]{};
-        Completion<std::size_t> c1, c2;
+// ---- Case E: capacity recycles after cancel -> reap -> reset --------------
+// cap=1: c1 accept (fills capacity). Cancel + reap c1, then reset c1 (releases
+// the slot). A fresh c2 submit MUST succeed (capacity recycled).
+std::string case_capacity_recycles_after_reset(const BackendFactory& f) {
+    constexpr const char* cname = "capacity_recycles_after_reset";
+    CapacityFixture fx(f.make_backend_with_capacity(1));
+    ScopedTempFd fd(capacity_temp_fd(f));
+    std::byte buf1[4]{}, buf2[4]{};
+    Completion<std::size_t> c1, c2;
+    return run_capacity_case(fx, f.name, cname, [&] {
         // Fill capacity.
         CONF_CHECK(f.name, cname,
                    fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
@@ -788,7 +782,36 @@ std::string run_capacity_cases(const BackendFactory& f) {
         CONF_CHECK(f.name, cname, fx.stats.submit_calls == 2);
         CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 2);
         CONF_CHECK(f.name, cname, fx.stats.max_outstanding == 1);
-    END_CAPACITY_CASE(f)
+    });
+}
+
+// The capacity-case driver. Returns the empty string on full pass, or the
+// stable name of the FIRST failing case. Drives ONLY the capacity cases against
+// a backend built at a chosen small request_capacity via
+// factory.make_backend_with_capacity. Precondition: factory_supports_capacity.
+//
+// Each case is a self-contained function owning its CapacityFixture + its
+// Completions in the same frame; run_capacity_case() runs cleanup_or_abort()
+// on BOTH paths while that frame (and therefore the Completions) is still
+// alive. See the run_capacity_case comment for why this is the only scope-
+// correct shape.
+std::string run_capacity_cases(const BackendFactory& f) {
+    std::string failed;
+
+    failed = case_capacity_accepts_exact_limit(f);
+    if (!failed.empty()) return failed;
+
+    failed = case_capacity_rejects_with_idle_completion(f);
+    if (!failed.empty()) return failed;
+
+    failed = case_capacity_rejection_never_completes(f);
+    if (!failed.empty()) return failed;
+
+    failed = case_capacity_stats_are_exact(f);
+    if (!failed.empty()) return failed;
+
+    failed = case_capacity_recycles_after_reset(f);
+    if (!failed.empty()) return failed;
 
     return {};
 }

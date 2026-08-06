@@ -312,3 +312,30 @@ sluice_internal_async_test("backend_scheme_b_race_test")
 -- exactly-once delivery counter (sink_deliveries) is a
 -- SLUICE_ASYNC_INTERNAL_TESTING-only seam (CodeRabbit finding / AGENTS §8).
 sluice_internal_async_test("reference_backend_arena_lifecycle_test")
+
+-- capacity_validity_test — Phase C2a capacity-case validity fixture (issue #68,
+-- CORRECTION 6). A deliberately nonconforming capacity backend (guarded by
+-- SLUICE_ASYNC_INTERNAL_TESTING; NOT registered in the conformance manifest)
+-- proves run_capacity_cases() returns the SPECIFIC failing case name for each
+-- violation: over_accept -> capacity_rejects_with_idle_completion,
+-- bind_rejected -> capacity_rejects_with_idle_completion,
+-- late_complete -> capacity_rejection_never_completes,
+-- misclassify_invalid -> capacity_stats_are_exact,
+-- inflate_outstanding -> capacity_accepts_exact_limit,
+-- no_recycle -> capacity_recycles_after_reset; the None control passes all.
+-- Compiles the shared-suite implementation (backend_conformance_test.cpp)
+-- alongside the validity cases so run_capacity_cases() resolves.
+do
+    local validity = R .. "tests/capacity_validity_test.cpp"
+    local impl = R .. "tests/backend_conformance_test.cpp"
+    if os.isfile(validity) and os.isfile(impl) then
+        target("capacity_validity_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async_internal_testing")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(validity, impl)
+            add_tests("capacity_validity_test")
+    end
+end
