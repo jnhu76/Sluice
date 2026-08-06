@@ -190,7 +190,7 @@ does not duplicate them.
 
 ## 8. Validation matrix (full evidence)
 
-All rows below were executed on the current branch head (`17ca668`). `PASS` is recorded only for
+All rows below were executed on the current branch head (`b4299cf`). `PASS` is recorded only for
 commands that actually ran green. The PR #69 review-fix iteration (tracked cleanup, bind_rejected
 without self-cleanup, pre-submit registration, late_bind_only mutant, cleanup re-cancel) landed in
 the same head; the row counts reflect the post-fix binaries.
