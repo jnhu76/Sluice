@@ -28,9 +28,11 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/error.hpp>
+#include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
+#include <barrier>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -418,6 +420,8 @@ SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
             fail_msg = "exactly one syscall must have executed before publication";
         } else if (backend.poll() != 0) {
             fail_msg = "poll must see nothing ready before publication";
+        } else if (c.ready()) {
+            fail_msg = "Completion must not be ready before reap publishes";
         } else {
             guard.resume();
             if (!drain_bounded(backend,
@@ -447,4 +451,381 @@ SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
 
     ::close(fd);
     if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b row 5 (ThreadPool): canceled_ops tallies ONLY on terminal_won ------
+// Enqueued cancel wins the terminal (Gate B): exactly one canceled_ops. A late
+// cancel on the already-terminal (still bound) Completion is already_terminal
+// and never tallies again; the worker runs no syscall.
+SLUICE_TEST_CASE(tp_canceled_ops_tallied_only_on_terminal_won) {
+    ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_before_dequeue_pause_gate(&gate);
+    ScopedGateResume guard(gate);
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+
+    TempPath tp("E");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x55}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+
+    const char* fail_msg = nullptr;
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+
+    if (!wait_paused(gate, deadline)) {
+        fail_msg = "Gate E did not pause in time";
+    } else {
+        const std::uint64_t syscalls_before = backend.syscall_count_for_test();
+        backend.cancel(c);  // enqueued -> terminal_won
+        if (stats.canceled_ops != 1) {
+            fail_msg = "terminal_won must tally exactly one canceled op";
+        } else if (stats.completion_errors != 0) {
+            fail_msg = "a canceled winner is not a completion error";
+        } else {
+            // Late cancel while the canceled terminal is bound:
+            // already_terminal -> no second tally.
+            backend.cancel(c);
+            if (stats.canceled_ops != 1) {
+                fail_msg = "late cancel must not tally again";
+            } else {
+                guard.resume();
+                if (!drain_bounded(backend,
+                                   std::chrono::steady_clock::now() + kWaitTimeout)) {
+                    fail_msg = "drain did not complete in time";
+                } else if (!c.ready()) {
+                    fail_msg = "canceled op must be ready after drain";
+                } else if (c.result().has_value()) {
+                    fail_msg = "canceled op must report an error";
+                } else if (c.result().error().code != IoError::Code::canceled) {
+                    fail_msg = "canceled op must report IoError::canceled";
+                } else if (backend.syscall_count_for_test() != syscalls_before) {
+                    fail_msg = "canceled enqueued op must not execute a syscall";
+                }
+            }
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        // Cancel AFTER ready (still bound until reset): already_terminal.
+        backend.cancel(c);
+        SLUICE_CHECK(stats.canceled_ops == 1);
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        guard.resume();
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b row 5/6 (ThreadPool): running-cancel intent never tallies ---------
+// Gate C: cancel on a RUNNING op records intent only — no canceled terminal,
+// no canceled_ops tally; the real syscall result wins VERBATIM (never rewritten
+// to canceled). A cancel after that ordinary winner is already_terminal.
+SLUICE_TEST_CASE(tp_running_cancel_intent_does_not_tally) {
+    ThreadPoolBackend::WorkerRunningPauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_running_pause_gate(&gate);
+    ScopedGateResume guard(gate);
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+
+    TempPath tp("F");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x66}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+
+    const char* fail_msg = nullptr;
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+
+    if (!wait_paused(gate, deadline)) {
+        fail_msg = "Gate F did not pause in time";
+    } else {
+        backend.cancel(c);  // running -> intent_recorded
+        if (stats.canceled_ops != 0) {
+            fail_msg = "intent_recorded must NOT tally canceled_ops";
+        } else if (backend.backend_ready_count_for_test() != 0) {
+            fail_msg = "intent must not store a terminal or push the ready ring";
+        } else if (c.ready()) {
+            fail_msg = "the Completion must stay outstanding on intent";
+        } else {
+            guard.resume();
+            if (!drain_bounded(backend,
+                               std::chrono::steady_clock::now() + kWaitTimeout)) {
+                fail_msg = "drain did not complete in time";
+            } else if (!c.ready()) {
+                fail_msg = "running-cancel op must still complete";
+            } else if (!c.result().has_value()) {
+                fail_msg = "real result must win verbatim; intent must not rewrite";
+            } else if (c.result().value() != 1) {
+                fail_msg = "read must return the 1 seeded byte";
+            } else if (stats.canceled_ops != 0) {
+                fail_msg = "an ordinary winner must never tally canceled_ops";
+            }
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        // Cancel after the ordinary winner: already_terminal, still no tally.
+        backend.cancel(c);
+        SLUICE_CHECK(stats.canceled_ops == 0);
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        guard.resume();
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b row 4 (ThreadPool integration): stale-generation events harmless --
+// After the Completion is reset (slot released, generation advanced) and the
+// SAME physical slot is reused by a NEW request, stale-generation attempts
+// cannot act on the new occupant: the stale SlotHandle fails observe_for_test,
+// the stale pointer-keyed cancel resolves nothing, and the new request's
+// result/counters/state stay exactly intact. All identity is pointer-free
+// (SlotHandle/RequestKey) — no Completion reverse map.
+SLUICE_TEST_CASE(tp_stale_generation_event_harmless) {
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+
+    TempPath tp("G");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x77}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    const char* fail_msg = nullptr;
+
+    // Generation N: full lifecycle; capture the slot+generation identity.
+    if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
+        fail_msg = "first submit must succeed";
+    }
+    std::optional<detail::SlotHandle> h0;
+    if (fail_msg == nullptr) {
+        h0 = backend.handle_for_completion_for_test(&c);
+        if (!h0.has_value()) {
+            fail_msg = "the bound Completion must resolve to a slot handle";
+        } else if (!drain_bounded(backend,
+                                  std::chrono::steady_clock::now() + kWaitTimeout)) {
+            fail_msg = "first drain did not complete in time";
+        } else if (!c.ready() || !c.result().has_value() || c.result().value() != 1) {
+            fail_msg = "first op must complete with the seeded byte";
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        // Late cancel while bound: already_terminal — no tally, no syscall.
+        const std::uint64_t syscalls_after_first = backend.syscall_count_for_test();
+        backend.cancel(c);
+        if (stats.canceled_ops != 0) {
+            fail_msg = "late cancel on a terminal op must not tally";
+        } else {
+            c.reset();  // release handshake: slot freed, generation advances
+            // Stale attempts after release:
+            if (backend.observe_for_test(*h0).has_value()) {
+                fail_msg = "stale handle must fail observation (generation advanced)";
+            } else {
+                backend.cancel(c);  // pointer no longer resolves -> no-op
+                if (stats.canceled_ops != 0 || backend.outstanding() != 0) {
+                    fail_msg = "stale cancel attempt must be harmless";
+                }
+            }
+        }
+        if (fail_msg == nullptr) {
+            // The same physical slot is reused by a NEW request (gen N+1).
+            if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
+                fail_msg = "second submit must reuse the released slot";
+            } else {
+                auto h1 = backend.handle_for_completion_for_test(&c);
+                if (!h1.has_value()) {
+                    fail_msg = "new occupant must resolve to a slot handle";
+                } else if (h1->slot.value != h0->slot.value ||
+                           h1->generation.value != h0->generation.value + 1) {
+                    fail_msg = "reuse must keep the slot and advance generation by one";
+                } else if (backend.observe_for_test(*h0).has_value()) {
+                    fail_msg = "stale handle must not observe the new occupant";
+                } else if (!drain_bounded(backend,
+                                           std::chrono::steady_clock::now() + kWaitTimeout)) {
+                    fail_msg = "second drain did not complete in time";
+                } else if (!c.ready() || !c.result().has_value() ||
+                           c.result().value() != 1) {
+                    fail_msg = "new occupant must complete with ITS OWN result";
+                } else if (backend.syscall_count_for_test() !=
+                           syscalls_after_first + 1) {
+                    fail_msg = "exactly one new syscall for the new occupant";
+                } else if (stats.canceled_ops != 0 || stats.completion_errors != 0) {
+                    fail_msg = "stale attempts must leave counters intact";
+                }
+            }
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b row 8 (ThreadPool): publication boundary — reap gates ready -------
+// Runtime evidence that a worker NEVER publishes: once the worker's syscall
+// finished and record_terminal stored the backend_ready terminal, the
+// Completion is STILL not ready — only poll()/wait_one() reap publishes
+// through the slot binding. No gate is needed: the test catches the exact
+// backend_ready window (terminal stored, not yet reaped) because only the
+// main thread reaps.
+SLUICE_TEST_CASE(tp_publication_boundary_reap_gates_ready) {
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+
+    TempPath tp("H");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x88}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+
+    const char* fail_msg = nullptr;
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+    // Wait for the worker to record the terminal (backend_ready), BEFORE any
+    // reap runs.
+    while (backend.backend_ready_count_for_test() == 0) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            fail_msg = "terminal was not recorded before timeout";
+            break;
+        }
+        std::this_thread::yield();
+    }
+
+    if (fail_msg == nullptr) {
+        if (c.ready()) {
+            fail_msg = "Completion must NOT be ready before poll/reap publishes";
+        } else if (backend.syscall_count_for_test() != 1) {
+            fail_msg = "exactly one syscall must have executed";
+        } else if (backend.poll() != 1) {
+            fail_msg = "the reap must publish exactly one Completion";
+        } else if (!c.ready()) {
+            fail_msg = "reap must publish the Completion ready";
+        } else if (!c.result().has_value() || c.result().value() != 1) {
+            fail_msg = "read must return the 1 seeded byte";
+        } else if (backend.poll() != 0) {
+            fail_msg = "a second poll must publish nothing (exactly-once)";
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b rows 6/7 (ThreadPool): cancel races the worker terminal winner ----
+// Genuine two-thread TSan evidence: a cancel issued concurrently with the
+// worker's dispatch/syscall races for the single terminal transition. Each
+// iteration asserts the exactly-one winner contract end to end:
+//   - exactly one publication (poll total == 1), one ready Completion
+//   - the result is EITHER canceled OR the real 1-byte success
+//   - canceled_ops tallies exactly the canceled winners (never intent/losers)
+//   - syscall_count tallies exactly the syscall winners (cancel-won iterations
+//     run no syscall)
+// Barrier-released; no sleep_for, no timing assumptions.
+SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
+    constexpr std::size_t kIters = 300;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+
+    TempPath tp("I");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x99}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    std::uint64_t canceled_total = 0;
+    std::uint64_t success_total = 0;
+
+    for (std::size_t iter = 0; iter < kIters; ++iter) {
+        Completion<std::size_t> c;
+        SLUICE_CHECK_MSG(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value(),
+                         "submit must succeed on a drained backend");
+
+        // Release the canceler exactly when the op is in flight; the worker
+        // races it under the backend's work-domain arbitration.
+        std::barrier sync{2};
+        std::thread canceler([&] {
+            sync.arrive_and_wait();
+            backend.cancel(c);
+        });
+        sync.arrive_and_wait();
+        canceler.join();
+
+        // Drain through the real reaper, counting publications.
+        std::size_t published = 0;
+        const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+        while (backend.outstanding() > 0) {
+            SLUICE_CHECK_MSG(std::chrono::steady_clock::now() < deadline,
+                             "drain must complete within the bounded deadline");
+            published += backend.poll();
+            if (backend.outstanding() > 0) std::this_thread::yield();
+        }
+
+        SLUICE_CHECK_MSG(published == 1, "exactly one publication per iteration");
+        SLUICE_CHECK(c.ready());
+        if (c.result().has_value()) {
+            SLUICE_CHECK(c.result().value() == 1);
+            ++success_total;
+        } else {
+            SLUICE_CHECK(c.result().error().code == IoError::Code::canceled);
+            ++canceled_total;
+        }
+        c.reset();
+
+        // Exactly-one accounting: a canceled winner tallied one canceled op and
+        // ran no syscall; a syscall winner tallied neither.
+        SLUICE_CHECK(stats.canceled_ops == canceled_total);
+        SLUICE_CHECK(backend.syscall_count_for_test() == success_total);
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    }
+
+    SLUICE_CHECK(canceled_total + success_total == kIters);
+    SLUICE_CHECK(backend.outstanding() == 0);
+    ::close(fd);
 }
