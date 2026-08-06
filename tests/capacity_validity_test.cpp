@@ -34,6 +34,7 @@
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <vector>
 
@@ -109,6 +110,14 @@ class NonConformingCapacityBackend : public AsyncBackend {
             }
             rejected_.clear();
         }
+        // Reap ends the backend's borrow of every published Completion: drop
+        // the now-ready ops from the tracking lists so outstanding() (which the
+        // AsyncIoContext destructor calls during fixture teardown) never
+        // dereferences a Completion after the case function has destroyed it.
+        // This mirrors a real arena backend, whose outstanding() counts live
+        // slots without holding Completion pointers.
+        remove_ready(accepted_);
+        remove_ready(bogus_);
         return n;
     }
     Result<std::size_t> wait_one() override { return poll(); }
@@ -131,6 +140,14 @@ class NonConformingCapacityBackend : public AsyncBackend {
     }
 
   private:
+    static void remove_ready(std::vector<Completion<std::size_t>*>& v) noexcept {
+        v.erase(std::remove_if(v.begin(), v.end(),
+                               [](Completion<std::size_t>* c) {
+                                   return !c->outstanding();
+                               }),
+                v.end());
+    }
+
     // Whether capacity is (from this backend's point of view) full. no_recycle
     // treats every ever-accepted op as occupying a slot forever (the reap does
     // not release capacity); every other violation counts live (outstanding)
@@ -139,7 +156,9 @@ class NonConformingCapacityBackend : public AsyncBackend {
     // the internal admission check.
     bool at_capacity() const noexcept {
         if (violation_ == CapacityViolation::no_recycle) {
-            return accepted_.size() + bogus_.size() >= capacity_;
+            // total_accepted_ never decreases: capacity is never recycled, even
+            // after reap + reset (the case-E violation).
+            return total_accepted_ >= capacity_;
         }
         std::size_t n = 0;
         for (auto* c : accepted_) {
@@ -198,11 +217,13 @@ class NonConformingCapacityBackend : public AsyncBackend {
         }
         commit_binding(c);
         accepted_.push_back(&c);
+        ++total_accepted_;
         return {};
     }
 
     std::size_t capacity_;
     CapacityViolation violation_;
+    std::size_t total_accepted_ = 0;  // ever-accepted count (no_recycle uses it)
     std::vector<Completion<std::size_t>*> accepted_;  // normal accepts
     std::vector<Completion<std::size_t>*> bogus_;     // bound-but-rejected
     std::vector<Completion<std::size_t>*> rejected_;  // rejected, late-complete

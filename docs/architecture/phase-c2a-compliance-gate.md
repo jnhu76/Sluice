@@ -3,7 +3,7 @@
 **Roadmap:** [`remediation-roadmap.md`](remediation-roadmap.md) — Phase C (status PARTIAL; C2a COMPLETE)
 **Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 5, 6, 13; invariants I3, I8
 **Issue #68:** https://github.com/jnhu76/Sluice/issues/68 — Revision 3 (PLAN READY), C2a scope (rows 1–2)
-**Branch:** `test/phase-c2-capacity-admission-rejection`
+**Branch:** test/phase-c2-capacity-admission-rejection (see the PR)
 **Scope:** Tests + gate scripts + docs only. **No `src/` or `include/sluice/` production change.**
 
 This is the PR-level evidence ledger for Phase C2a, the first C2 semantic-coverage slice: the
