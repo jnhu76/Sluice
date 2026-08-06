@@ -402,6 +402,90 @@ void child_mark_running_stale_handle() {
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
+// ---- Child: double enqueue MUST fail-fast ------------------------------------
+// C2b row 3 "double enqueue": enqueue on a slot that is ALREADY enqueued is an
+// invariant violation (the submit path touches the slot after its final slot
+// access), not a no-op. Fails fast in BOTH Debug and Release.
+void child_enqueue_double() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+    auto rh = arena.reserve();
+    if (!rh.has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    SlotHandle h = rh.value();
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.install_publication_binding(h, &dummy_completion_storage, 0, &noop_binding_publish).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.commit(h).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (arena.enqueue(h) != sluice::async::detail::EnqueueOutcome::enqueued)
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    (void)arena.enqueue(h);  // double enqueue MUST fail-fast
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// ---- Child: release before completion_ready MUST fail-fast -------------------
+// C2b row 3 "release before completion_ready": the completed-binding release
+// authority may only act on a REAPED slot. A slot whose pin was acknowledged
+// but that is still enqueued (never reaped) must not be released — releasing
+// it would leak an in-flight accepted op.
+void child_release_before_completion_ready() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+    auto rh = arena.reserve();
+    if (!rh.has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    SlotHandle h = rh.value();
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.install_publication_binding(h, &dummy_completion_storage, 0, &noop_binding_publish).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.commit(h).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (arena.enqueue(h) != sluice::async::detail::EnqueueOutcome::enqueued)
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    // Pin acknowledged, registration open_no_waiter — but state is enqueued,
+    // NOT completion_ready. The release authority MUST fail-fast.
+    arena.release_completed_binding(h);
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// ---- Child: release with a STALE handle MUST fail-fast -----------------------
+// C2b row 3 "stale release" / row 4 "stale handle cannot release the new
+// occupant": after a completed release, the OLD handle is stale. Calling the
+// completed-binding authority again with it would free the slot a SECOND time
+// (or free a reused occupant) — an internal protocol violation that fails fast
+// in BOTH Debug and Release. (The pre-commit rollback authority returns
+// not_found for a stale handle instead — that is the ordinary-error contract
+// proven in request_arena_test.)
+void child_release_stale_handle() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+    auto rh = arena.reserve();
+    if (!rh.has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    SlotHandle h = rh.value();
+    if (!arena.prepare(h, OperationKind::read, {}).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.install_publication_binding(h, &dummy_completion_storage, 0, &noop_binding_publish).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.commit(h).has_value())
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (!arena.record_terminal(h, TerminalResult::ok_bytes(1)))
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    struct NoopSink : sluice::async::detail::SynchronousReadySink {
+        void on_ready(sluice::async::detail::ReadyEvent) noexcept override {}
+    } sink;
+    if (arena.enqueue(h) != sluice::async::detail::EnqueueOutcome::terminal_noop)
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    if (arena.reap(sink) != 1)
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    arena.release_completed_binding(h);  // legitimate release; generation++
+    arena.release_completed_binding(h);  // STALE: MUST fail-fast
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 // ---- Parent-side test cases -------------------------------------------------
 
 SLUICE_TEST_CASE(arena_death_release_with_live_pin) {
@@ -488,6 +572,33 @@ SLUICE_TEST_CASE(arena_death_control_enqueue_terminal_noop) {
                      "successful no-op and must exit 0");
 }
 
+// C2b row 3: double enqueue is an invariant violation (the submit path touches
+// the slot after its final slot access), not a no-op.
+SLUICE_TEST_CASE(arena_death_enqueue_double) {
+    auto r = sluice_death_test::run_death_case("enqueue-double");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "enqueue() on an already-enqueued slot must fail-fast (exit 86) — "
+                     "C2b row 3: double enqueue is an invariant violation");
+}
+
+// C2b row 3: the completed-binding release authority only acts on a reaped
+// (completion_ready) slot; releasing an enqueued slot would leak the op.
+SLUICE_TEST_CASE(arena_death_release_before_completion_ready) {
+    auto r = sluice_death_test::run_death_case("release-before-completion-ready");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "release() on a slot that is not completion_ready must fail-fast (exit 86) — "
+                     "C2b row 3: release before completion_ready");
+}
+
+// C2b row 3/row 4: a second completed-binding release with the STALE handle
+// fails fast (it would double-free the slot or free a reused occupant).
+SLUICE_TEST_CASE(arena_death_release_stale_handle) {
+    auto r = sluice_death_test::run_death_case("release-stale-handle");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "release() with a stale handle must fail-fast (exit 86) — "
+                     "C2b row 4: a stale handle cannot release the new occupant");
+}
+
 SLUICE_TEST_CASE(arena_death_generation_exhaustion_guard_present) {
     // A real 2^64-release exhaustion is impractical; the guard is verified by
     // code inspection + the negative-compile probe. This case confirms the
@@ -523,6 +634,12 @@ int main(int argc, char** argv) {
             child_enqueue_stale_handle();
         } else if (child_case == "mark-running-stale-handle") {
             child_mark_running_stale_handle();
+        } else if (child_case == "enqueue-double") {
+            child_enqueue_double();
+        } else if (child_case == "release-before-completion-ready") {
+            child_release_before_completion_ready();
+        } else if (child_case == "release-stale-handle") {
+            child_release_stale_handle();
         } else if (child_case == "control-enqueue-terminal-noop") {
             child_control_enqueue_terminal_noop();
         } else if (child_case == "generation-exhausted-guard-present") {
