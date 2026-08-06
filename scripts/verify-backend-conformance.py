@@ -483,6 +483,12 @@ class Gate:
         mandatory layer nor block ELIGIBLE. A layer with one PASS and one
         MISSING_TARGET is INCOMPLETE, not ELIGIBLE — one PASS per layer is
         not enough.
+
+        Phase C2a: the verdict iterates applicable_evidence_for_backend()
+        (implemented + not_implemented + not_applicable), so a not_implemented
+        MANDATORY record forces INCOMPLETE in the backend's OWN verdict, not
+        just in the global results dict. This is how a known Phase-D gap
+        (e.g. uring_capacity_not_implemented) surfaces honestly.
         """
         reasons: list[str] = []
         # self.meta is keyed by canonical registered backend names (see run()).
@@ -498,12 +504,21 @@ class Gate:
                                "(Phase D: RequestArena/RequestKey identity)")
             else:
                 reasons.append(f"kernel profile mode={mode_str} (Phase D pending)")
+            # Still enumerate applicable not_implemented mandatory records so a
+            # Phase-D gap (e.g. capacity) appears in the reasons for the report,
+            # reinforcing (not replacing) the KernelIo NOT CONFORMING rule.
+            for ev in M.applicable_evidence_for_backend(backend.name):
+                if ev.mandatory and ev.status == M.STATUS_NOT_IMPLEMENTED:
+                    reasons.append(
+                        f"known gap: mandatory evidence '{ev.evidence_id}' "
+                        f"({ev.target}): not_implemented")
             return NOT_CONFORMING, reasons
 
-        # Mandatory evidence only; non-mandatory records are diagnostic.
+        # Mandatory APPLICABLE evidence only (implemented + not_implemented +
+        # not_applicable). Non-mandatory records are diagnostic.
         states = [
             (ev, self._backend_run_state(ev, backend.name, backend.profile))
-            for ev in M.evidence_for_backend(backend.name)
+            for ev in M.applicable_evidence_for_backend(backend.name)
             if ev.mandatory
         ]
 
@@ -555,9 +570,12 @@ class Gate:
             print(f"Backend: {backend.name} ({backend.profile})")
             print(f"  mode (from meta): {mode_seen}  profile (from meta): {profile_seen}")
             for layer in M.MANDATORY_LAYERS_PER_BACKEND:
+                # Phase C2a: report APPLICABLE evidence (implemented +
+                # not_implemented + not_applicable) so a known gap surfaces in
+                # the per-backend section, not just in the verdict reasons.
                 applicable = [
-                    ev for ev in M.evidence_for_backend(backend.name)
-                    if ev.layer == layer and ev.status == M.STATUS_IMPLEMENTED
+                    ev for ev in M.applicable_evidence_for_backend(backend.name)
+                    if ev.layer == layer
                 ]
                 states = sorted({
                     self._backend_run_state(ev, backend.name, backend.profile)
@@ -565,12 +583,28 @@ class Gate:
                 })
                 label = layer.replace("_", " ")
                 # For KernelIoProfile in a stub build, the shared suite covers
-                # only the stub subset — relabel honestly.
-                if (backend.profile == "KernelIoProfile" and layer == "shared"
-                        and mode_seen == "stub" and PASS in states):
-                    print(f"  {label:<22} PASS (stub subset)")
+                # only the stub subset — relabel honestly. If a not_implemented
+                # gap (e.g. capacity) is also in the layer, show it alongside.
+                layer_parts: list[str] = []
+                for ev in applicable:
+                    st = self._backend_run_state(
+                        ev, backend.name, backend.profile)
+                    if (backend.profile == "KernelIoProfile"
+                            and layer == "shared" and mode_seen == "stub"
+                            and ev.evidence_id == "shared_suite" and st == PASS):
+                        layer_parts.append(f"{ev.evidence_id}=PASS (stub subset)")
+                    elif ev.status == M.STATUS_NOT_IMPLEMENTED:
+                        layer_parts.append(
+                            f"{ev.evidence_id}=INCOMPLETE (not_implemented)")
+                    elif st not in ("", ):
+                        layer_parts.append(f"{ev.evidence_id}={st}")
+                summary = states[0] if len(states) == 1 else "/".join(states)
+                if layer_parts:
+                    print(f"  {label:<22} {summary}")
+                    for p in layer_parts:
+                        print(f"    {p}")
                 else:
-                    print(f"  {label:<22} {states[0] if len(states)==1 else '/'.join(states)}")
+                    print(f"  {label:<22} {summary}")
             print(f"  overall               {verdict}")
             for r in reasons:
                 print(f"    reason: {r}")

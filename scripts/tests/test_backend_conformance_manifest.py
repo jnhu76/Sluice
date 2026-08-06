@@ -652,6 +652,139 @@ class MandatoryVerdictPriorityTest(unittest.TestCase):
             self.assertEqual(verdict, G.INCOMPLETE)
 
 
+# ---------------------------------------------------------------------------
+# Phase C2a corrective: not_implemented mandatory evidence enters the verdict.
+#
+# The prior gate iterated only implemented evidence in _backend_verdict, so a
+# not_implemented mandatory record landed in self.results as INCOMPLETE but was
+# invisible to the per-backend evidence set and the verdict. The C2a fix splits
+# the helper into implemented_evidence_for_backend / applicable_evidence_for_
+# backend and has the verdict iterate APPLICABLE evidence so a known gap forces
+# INCOMPLETE in the backend's OWN verdict (not just a global results dict).
+# ---------------------------------------------------------------------------
+
+class ApplicableEvidenceHelpersTest(unittest.TestCase):
+    """implemented_evidence_for_backend vs applicable_evidence_for_backend."""
+
+    def test_implemented_excludes_not_implemented_and_not_applicable(self):
+        # The real Uring capacity gap record is not_implemented; implemented
+        # helper must NOT return it.
+        impl = M.implemented_evidence_for_backend("Uring")
+        ids = {e.evidence_id for e in impl}
+        self.assertNotIn("uring_capacity_not_implemented", ids)
+
+    def test_applicable_includes_not_implemented_for_tagged_backend(self):
+        appl = M.applicable_evidence_for_backend("Uring")
+        ids = {e.evidence_id for e in appl}
+        self.assertIn("uring_capacity_not_implemented", ids)
+
+    def test_applicable_excludes_not_implemented_for_other_backend(self):
+        # The Uring gap record is tagged backends=("Uring",); it MUST NOT apply
+        # to Fake or ThreadPool.
+        for name in ("Fake", "ThreadPool"):
+            appl = M.applicable_evidence_for_backend(name)
+            ids = {e.evidence_id for e in appl}
+            self.assertNotIn("uring_capacity_not_implemented", ids,
+                             f"{name} must not see the Uring capacity gap")
+
+    def test_applicable_includes_backend_agnostic_records(self):
+        # Backend-agnostic records (backends == ()) apply to every backend in
+        # BOTH helpers.
+        for name in ("Fake", "ThreadPool", "Uring"):
+            appl = M.applicable_evidence_for_backend(name)
+            ids = {e.evidence_id for e in appl}
+            self.assertIn("arena_capacity_generation_release", ids,
+                          f"{name} must see backend-agnostic arena evidence")
+
+    def test_evidence_for_backend_alias_equals_implemented(self):
+        # The public alias must equal implemented_evidence_for_backend exactly.
+        self.assertEqual(
+            M.evidence_for_backend("Fake"),
+            M.implemented_evidence_for_backend("Fake"))
+
+
+class NotImplementedEntersVerdictTest(unittest.TestCase):
+    """A not_implemented MANDATORY record forces a backend verdict INCOMPLETE.
+
+    This is the C2a-corrective test the prior suite lacked: it proves the gap
+    record enters the VERDICT (not just the global results dict).
+    """
+
+    def test_not_implemented_mandatory_forces_incomplete_verdict(self):
+        # Inject a not_implemented MANDATORY record tagged for Fake. Fake's
+        # verdict MUST become INCOMPLETE — proving the record entered the
+        # verdict, not just the global results dict. (Fake is otherwise ELIGIBLE
+        # in the stub gate.)
+        gap = M.Evidence(
+            evidence_id="fake_capacity_gap_injected",
+            target="backend_conformance_test", layer="shared",
+            backends=("Fake",), status=M.STATUS_NOT_IMPLEMENTED, mandatory=True,
+        )
+        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (gap,)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            # Seed the gap's results entry the way the run loop does.
+            g.results["fake_capacity_gap_injected"] = G.RunResult(
+                "fake_capacity_gap_injected", "backend_conformance_test",
+                G.INCOMPLETE, detail="not_implemented")
+            verdict, reasons = g._backend_verdict(M.backend_by_name("Fake"))
+            self.assertEqual(verdict, G.INCOMPLETE, reasons)
+            self.assertTrue(
+                any("fake_capacity_gap_injected" in r for r in reasons),
+                f"gap record must appear in reasons: {reasons}")
+
+    def test_not_implemented_does_not_block_other_backends(self):
+        # A gap tagged for Fake MUST NOT affect ThreadPool's verdict.
+        gap = M.Evidence(
+            evidence_id="fake_capacity_gap_injected",
+            target="backend_conformance_test", layer="shared",
+            backends=("Fake",), status=M.STATUS_NOT_IMPLEMENTED, mandatory=True,
+        )
+        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (gap,)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            g.results["fake_capacity_gap_injected"] = G.RunResult(
+                "fake_capacity_gap_injected", "backend_conformance_test",
+                G.INCOMPLETE, detail="not_implemented")
+            v_tp, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+            self.assertEqual(v_tp, G.ELIGIBLE,
+                             "ThreadPool must not be affected by Fake's gap")
+
+    def test_uring_capacity_gap_surfaces_in_verdict(self):
+        # The real uring_capacity_not_implemented record: Uring is NOT CONFORMING
+        # (KernelIoProfile rule), and the capacity gap MUST appear among the
+        # reasons (reinforcing, not replacing, the rule).
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        # The run loop seeds not_implemented records as INCOMPLETE.
+        g.results["uring_capacity_not_implemented"] = G.RunResult(
+            "uring_capacity_not_implemented", "backend_conformance_test",
+            G.INCOMPLETE, detail="not_implemented")
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_capacity_not_implemented" in r for r in reasons),
+            f"Uring capacity gap must appear in reasons: {reasons}")
+
+    def test_not_implemented_never_counts_as_pass_in_verdict(self):
+        # A not_implemented record can never satisfy a mandatory slot. Even
+        # though it seeds INCOMPLETE (which is not RUN_FAIL), the verdict logic
+        # treats INCOMPLETE as insufficient -> INCOMPLETE, never ELIGIBLE.
+        gap = M.Evidence(
+            evidence_id="tp_only_gap_injected",
+            target="backend_conformance_test", layer="shared",
+            backends=("ThreadPool",), status=M.STATUS_NOT_IMPLEMENTED,
+            mandatory=True,
+        )
+        with mock.patch.object(M, "EVIDENCE", M.EVIDENCE + (gap,)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            g.results["tp_only_gap_injected"] = G.RunResult(
+                "tp_only_gap_injected", "backend_conformance_test",
+                G.INCOMPLETE, detail="not_implemented")
+            verdict, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+            self.assertNotEqual(verdict, G.ELIGIBLE)
+
+
 if __name__ == "__main__":
     # Standalone invocation mirrors `unittest discover`: exit non-zero on any
     # failure, zero on full pass. No top-level sys.exit during import.
