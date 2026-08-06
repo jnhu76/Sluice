@@ -186,21 +186,26 @@ does not duplicate them.
 
 ## 8. Validation matrix (full evidence)
 
-To be completed after the full matrix runs (see the C2a PR description / final report for actual
-results; `PASS` below is filled only after the command ran).
+All rows below were executed on the final branch head (`965ae6f`). `PASS` is recorded only for
+commands that actually ran green.
 
 | Gate | Command | Result |
 | ---- | ------- | ------ |
-| Debug / Clang full | `xmake f -m debug --toolchain=clang -y && xmake build -g test && xmake test -v` | PENDING |
-| Release / Clang | `xmake f -m release --toolchain=clang -y && xmake build -g test && xmake test -v` | PENDING |
-| ASan/UBSan | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PENDING |
-| TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PENDING |
+| Debug / Clang full | `xmake f -m debug --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (143 targets, 0 failed) |
+| Focused conformance | `xmake run backend_conformance_test` | PASS (10 driver cases) |
+| Focused validity | `xmake run capacity_validity_test` | PASS (7 cases) |
+| Release / Clang | `xmake f -m release --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (143 targets, 0 failed) |
+| ASan/UBSan | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0; validity-backend lifetime fix landed in 965ae6f) |
+| TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0; 134 targets, zero race reports) |
 | Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (78) |
-| Aggregate gate | `python3 scripts/verify-backend-conformance.py` | PASS |
-| Doc links | `python3 scripts/check-doc-links.py` | PENDING |
-| Architecture docs | `python3 scripts/verify-architecture-docs.py` | PENDING |
-| Negative-compile | `scripts/verify-completion-authority-negative-compile.sh`, `scripts/verify-request-arena-negative-compile.sh`, `scripts/verify-async-identity-negative-compile.sh`, `scripts/verify-external-backend-authority-negative-compile.sh` | PENDING |
-| Diff hygiene | `git diff --check` | PENDING |
+| Aggregate gate | `python3 scripts/verify-backend-conformance.py` | PASS (Fake/TP ELIGIBLE; Uring NOT CONFORMING) |
+| Doc links | `python3 scripts/check-doc-links.py` | PASS (after branch-name link fix) |
+| Architecture docs | `python3 scripts/verify-architecture-docs.py` | PASS |
+| Negative-compile | `scripts/verify-completion-authority-negative-compile.sh` | PASS (12 cases) |
+| Negative-compile | `scripts/verify-request-arena-negative-compile.sh` | PASS (6 cases) |
+| Negative-compile | `scripts/verify-async-identity-negative-compile.sh` | PASS (3 cases) |
+| Negative-compile | `scripts/verify-external-backend-authority-negative-compile.sh` | PASS (2 cases) |
+| Diff hygiene | `git diff --check` | PASS |
 
 ## 9. Remaining gaps
 
