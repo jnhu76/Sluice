@@ -481,10 +481,12 @@ int run_conformance(const BackendFactory& f) {
 // real cause. cleanup_or_abort() is never built on SLUICE_CHECK; it is
 // time-bounded with a real deadline and abort()s on timeout so the failure
 // cause is the capacity case, not a context-destructor violation. Every
-// successful submit is funneled through submit_and_track(), which registers
-// the Completion into `accepted` BEFORE the case inspects the result, so a
-// deliberately-nonconforming backend that wrongly accepts the (N+1)th op is
-// still cleaned up even if the case throws right after.
+// submit (successful or expected-rejection) is funneled through
+// submit_and_track(), which registers the Completion into `tracked` BEFORE
+// calling submit_read, so a deliberately-nonconforming backend that wrongly
+// accepts the (N+1)th op, or that ILLEGALLY binds/publishes a rejected
+// Completion later during backend progress, is still cleaned up even if the
+// case throws right after.
 // ===========================================================================
 
 // cleanup_or_abort out-of-line definition. CapacityFixture, submit_and_track,
@@ -496,17 +498,28 @@ void CapacityFixture::cleanup_or_abort(const char* backend_name,
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(10);
 
-    // 1. Cancel everything still outstanding.
-    for (auto* c : accepted) {
+    // 1. Cancel everything still outstanding. Idle tracked Completions
+    //    (rejected submits) are skipped — they have no async state.
+    for (auto* c : tracked) {
         if (c->outstanding()) ctx.cancel(*c);
     }
     // 2. Drive poll/reap until outstanding hits 0 or the deadline expires.
     //    interrupt_backend_waiters() re-arms waiters; yield() lets workers
     //    progress. This is liveness, not ordering proof — cancel may still
     //    yield the real syscall result on ThreadPool (a valid terminal).
+    //
+    //    A deliberately-broken backend may ILLEGALLY bind a tracked-but-idle
+    //    Completion during ITS OWN poll progress (the late_bind_only validity
+    //    mutant), AFTER the upfront cancel pass skipped it (it was still
+    //    idle). Re-cancel after every poll so such a Completion is resolved
+    //    too instead of starving the loop to the deadline. Cancelling an
+    //    already-ready/idle Completion is a no-op (guarded by outstanding()).
     while (ctx.outstanding() != 0 &&
            std::chrono::steady_clock::now() < deadline) {
         (void)ctx.poll();
+        for (auto* c : tracked) {
+            if (c->outstanding()) ctx.cancel(*c);
+        }
         ctx.interrupt_backend_waiters();
         std::this_thread::yield();
     }
@@ -515,12 +528,12 @@ void CapacityFixture::cleanup_or_abort(const char* backend_name,
         // fail-fast fire and mask this as an unrelated L11 violation.
         std::fprintf(stderr,
             "CapacityFixture: cleanup deadline expired "
-            "(backend=%s case=%s outstanding=%zu accepted=%zu)\n",
-            backend_name, case_name, ctx.outstanding(), accepted.size());
-        for (std::size_t i = 0; i < accepted.size(); ++i) {
-            const auto* c = accepted[i];
+            "(backend=%s case=%s outstanding=%zu tracked=%zu)\n",
+            backend_name, case_name, ctx.outstanding(), tracked.size());
+        for (std::size_t i = 0; i < tracked.size(); ++i) {
+            const auto* c = tracked[i];
             std::fprintf(stderr,
-                "  accepted[%zu]: idle=%d outstanding=%d ready=%d\n",
+                "  tracked[%zu]: idle=%d outstanding=%d ready=%d\n",
                 i, (int)c->idle(), (int)c->outstanding(), (int)c->ready());
         }
         std::fprintf(stderr,
@@ -535,7 +548,7 @@ void CapacityFixture::cleanup_or_abort(const char* backend_name,
     // 3. Reset every ready Completion so the slot is released (capacity
     //    recycles). The context is now quiescent; the fixture destructor
     //    (default) is a no-op.
-    for (auto* c : accepted) {
+    for (auto* c : tracked) {
         if (c->ready()) c->reset();
     }
 }
@@ -548,6 +561,12 @@ std::string case_capacity_accepts_exact_limit(const BackendFactory& f) {
     constexpr const char* cname = "capacity_accepts_exact_limit";
     CapacityFixture fx(f.make_backend_with_capacity(2));
     ScopedTempFd fd(capacity_temp_fd(f));
+    // real_mode only: a failed temp-fd setup must be reported separately, not
+    // misread as a capacity rejection (see capacity_temp_fd_setup_error).
+    if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
+        !setup_err.empty()) {
+        return setup_err;
+    }
     std::byte buf1[4]{}, buf2[4]{};
     Completion<std::size_t> c1, c2;
     return run_capacity_case(fx, f.name, cname, [&] {
@@ -572,6 +591,12 @@ std::string case_capacity_rejects_with_idle_completion(const BackendFactory& f) 
     constexpr const char* cname = "capacity_rejects_with_idle_completion";
     CapacityFixture fx(f.make_backend_with_capacity(2));
     ScopedTempFd fd(capacity_temp_fd(f));
+    // real_mode only: report a failed temp-fd setup separately (see
+    // capacity_temp_fd_setup_error).
+    if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
+        !setup_err.empty()) {
+        return setup_err;
+    }
     std::byte buf1[4]{}, buf2[4]{}, buf3[4]{};
     Completion<std::size_t> c1, c2, c3;
     return run_capacity_case(fx, f.name, cname, [&] {
@@ -610,6 +635,12 @@ std::string case_capacity_rejection_never_completes(const BackendFactory& f) {
     constexpr const char* cname = "capacity_rejection_never_completes";
     CapacityFixture fx(f.make_backend_with_capacity(1));
     ScopedTempFd fd(capacity_temp_fd(f));
+    // real_mode only: report a failed temp-fd setup separately (see
+    // capacity_temp_fd_setup_error).
+    if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
+        !setup_err.empty()) {
+        return setup_err;
+    }
     std::byte buf1[4]{}, buf2[4]{};
     Completion<std::size_t> c1, c2;
     return run_capacity_case(fx, f.name, cname, [&] {
@@ -650,6 +681,12 @@ std::string case_capacity_stats_are_exact(const BackendFactory& f) {
     constexpr const char* cname = "capacity_stats_are_exact";
     CapacityFixture fx(f.make_backend_with_capacity(2));
     ScopedTempFd fd(capacity_temp_fd(f));
+    // real_mode only: report a failed temp-fd setup separately (see
+    // capacity_temp_fd_setup_error).
+    if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
+        !setup_err.empty()) {
+        return setup_err;
+    }
     std::byte buf1[4]{}, buf1b[4]{}, buf2[4]{}, buf3[4]{};
     Completion<std::size_t> c1, c2, c3;
     return run_capacity_case(fx, f.name, cname, [&] {
@@ -695,6 +732,12 @@ std::string case_capacity_recycles_after_reset(const BackendFactory& f) {
     constexpr const char* cname = "capacity_recycles_after_reset";
     CapacityFixture fx(f.make_backend_with_capacity(1));
     ScopedTempFd fd(capacity_temp_fd(f));
+    // real_mode only: report a failed temp-fd setup separately (see
+    // capacity_temp_fd_setup_error).
+    if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
+        !setup_err.empty()) {
+        return setup_err;
+    }
     std::byte buf1[4]{}, buf2[4]{};
     Completion<std::size_t> c1, c2;
     return run_capacity_case(fx, f.name, cname, [&] {
@@ -717,10 +760,10 @@ std::string case_capacity_recycles_after_reset(const BackendFactory& f) {
         CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
         // Reset c1 — releases the slot. Capacity must now be reusable.
         c1.reset();
-        // c1 is no longer tracked as accepted (it was reset); drop it so
-        // cleanup does not touch it again.
-        for (auto it = fx.accepted.begin(); it != fx.accepted.end(); ++it) {
-            if (*it == &c1) { fx.accepted.erase(it); break; }
+        // c1 is no longer tracked (it was reset); drop it so cleanup does not
+        // touch it again.
+        for (auto it = fx.tracked.begin(); it != fx.tracked.end(); ++it) {
+            if (*it == &c1) { fx.tracked.erase(it); break; }
         }
         // A fresh submit MUST succeed (capacity recycled).
         CONF_CHECK(f.name, cname,

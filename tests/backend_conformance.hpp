@@ -26,6 +26,8 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <unistd.h>  // ::close (ScopedTempFd)
+#include <utility>   // std::move (CapacityFixture ctor)
 #include <vector>
 
 namespace sluice_test::conformance {
@@ -123,13 +125,16 @@ std::string run_capacity_cases(const BackendFactory& factory);
 // Phase C2a capacity fixture + uniform case wrapper (defined in the header so
 // C++ regression tests in capacity_validity_test.cpp can drive them directly).
 //
-// CapacityFixture owns the AsyncIoContext + AsyncStats + the accepted-tracking
+// CapacityFixture owns the AsyncIoContext + AsyncStats + the tracked-Completion
 // list. It is the cleanup authority: cleanup_or_abort() is explicit,
 // time-bounded, and abort()s on timeout (never lets the AsyncIoContext
 // destructor fail-fast mask a capacity assertion). submit_and_track() registers
-// EVERY Completion the backend actually claimed — including a Completion a
-// broken backend ILLEGALLY binds before returning a rejection error — so
-// cleanup can terminalize it (Issue #68 Rev 3 cleanup principle).
+// EVERY Completion a case attempts to submit BEFORE calling submit_read — a
+// normal accept, a rejection that leaves it idle (no-op for cleanup), a
+// Completion a broken backend ILLEGALLY binds before returning a rejection
+// error, and a Completion a broken backend binds/publishes LATER during
+// backend progress — so cleanup can terminalize it (Issue #68 Rev 3 cleanup
+// principle).
 // ===========================================================================
 
 // A small RAII fd holder for real_mode capacity cases. ThreadPool rejects
@@ -150,12 +155,42 @@ inline int capacity_temp_fd(const BackendFactory& f) {
     return f.make_temp_fd ? f.make_temp_fd() : -1;
 }
 
+// Temp-fd setup guard used by every capacity case. A real_mode backend
+// (ThreadPool) rejects fd < 0 with invalid_argument during PRE-COMMIT
+// descriptor validation, i.e. BEFORE the capacity path is reached — so a
+// failed temp-file setup would be misreported as a capacity rejection. On a
+// non-real backend (Fake, validity fixture) fd == -1 is the NORMAL form the
+// backend accepts at capacity pressure, and the guard is a no-op. Returns a
+// non-empty diagnostic (distinct from any capacity case name) when a real_mode
+// run could not create its temp fd; the caller reports it separately.
+inline std::string capacity_temp_fd_setup_error(const BackendFactory& f,
+                                                int fd) {
+    if (f.real_mode && fd < 0) {
+        return "temp_fd_setup_failed";
+    }
+    return {};
+}
+
 struct CapacityFixture {
-    sluice::async::AsyncIoContext ctx;
+    // stats is declared BEFORE ctx so it is constructed first and destroyed
+    // LAST: AsyncIoContext holds a pointer to it for its whole lifetime, so it
+    // must outlive ctx (member destruction is reverse declaration order; a
+    // stats declared after ctx would be destroyed before ctx).
     sluice::AsyncStats stats;
+    sluice::async::AsyncIoContext ctx;
     // Raw pointers into caller-owned Completions; the test owns the storage
     // and MUST keep the Completions alive until after cleanup_or_abort().
-    std::vector<sluice::async::Completion<std::size_t>*> accepted;
+    //
+    // `tracked` holds EVERY Completion a case attempted to submit (not only
+    // accepted ones): cleanup only acts on outstanding (cancel) / ready
+    // (reset) Completions, so tracking a rejected-but-idle Completion is a
+    // no-op for cleanup — and it closes the window where a broken backend
+    // returns an error while the Completion is still idle, then ILLEGALLY
+    // binds/publishes it later during backend progress (late_bind_only /
+    // late_complete violations). Such a Completion would otherwise be
+    // unreachable by cleanup and its destructor/context fail-fast would mask
+    // the real capacity assertion.
+    std::vector<sluice::async::Completion<std::size_t>*> tracked;
 
     explicit CapacityFixture(std::unique_ptr<sluice::async::AsyncBackend> backend)
         : ctx(std::move(backend), &stats) {}
@@ -166,36 +201,35 @@ struct CapacityFixture {
         return sluice::async::ReadOp{fd, dst, len, 0};
     }
 
-    // Track a Completion into `accepted` exactly once. A repeat registration
-    // (e.g. an invalid-state resubmit of an already-accepted Completion) MUST
+    // Track a Completion into `tracked` exactly once. A repeat registration
+    // (e.g. an invalid-state resubmit of an already-tracked Completion) MUST
     // NOT push a second entry, or cleanup would cancel/reap/reset the same
     // Completion twice.
     void track_once(sluice::async::Completion<std::size_t>& c) {
-        if (std::find(accepted.begin(), accepted.end(), &c) == accepted.end()) {
-            accepted.push_back(&c);
+        if (std::find(tracked.begin(), tracked.end(), &c) == tracked.end()) {
+            tracked.push_back(&c);
         }
     }
 
     // EVERY capacity-case submit — including the ones that EXPECT a rejection —
     // MUST go through this helper (Issue #68 Rev 3 cleanup principle: before a
-    // case inspects the submit result, every Completion the backend ACTUALLY
-    // claimed must be reachable by cleanup). Two cases:
-    //   * a normal accept: track it so cancel/reap/reset can terminalize it;
+    // case inspects the submit result, every Completion that may be claimed by
+    // the backend must be reachable by cleanup). The Completion is registered
+    // BEFORE submit_read (not after, and not conditionally on the result):
+    //   * a normal accept is tracked so cancel/reap/reset can terminalize it;
+    //   * a rejection that leaves the Completion idle is tracked as a no-op —
+    //     cleanup ignores idle Completions;
     //   * a deliberately-broken backend that ILLEGALLY binds the Completion and
-    //     THEN returns an error (over_accept-success, bind_rejected-would_block,
-    //     the non-idle c1 resubmit in stats_are_exact): rejection MUST be
-    //     transactional, but a violation backend can bind before returning the
-    //     error. If we did not track such a non-idle Completion, cleanup would
-    //     skip it, the outstanding Completion would reach the AsyncIoContext
-    //     destructor, and its fail-fast would MASK the real capacity assertion.
+    //     THEN returns an error (bind_rejected-would_block, the non-idle c1
+    //     resubmit in stats_are_exact), or that binds/publishes it LATER during
+    //     backend progress (late_bind_only / late_complete) is still tracked,
+    //     so cleanup terminalizes it instead of letting a destructor fail-fast
+    //     mask the real capacity assertion.
     // Register FIRST (track_once), assert LATER.
     sluice::Result<void> submit_and_track(sluice::async::Completion<std::size_t>& c,
                                           sluice::async::ReadOp op) {
-        auto r = ctx.submit_read(op, c);
-        if (r.has_value() || !c.idle()) {
-            track_once(c);
-        }
-        return r;
+        track_once(c);
+        return ctx.submit_read(op, c);
     }
 
     // Cleanup is explicit and un-ignorable. It is NOT built on SLUICE_CHECK

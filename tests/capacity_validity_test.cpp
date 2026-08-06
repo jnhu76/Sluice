@@ -18,6 +18,8 @@
 // Violations and the exact case each one pins:
 //   over_accept         accepts the (N+1)th op          -> capacity_rejects_with_idle_completion
 //   bind_rejected       claims the rejected Completion  -> capacity_rejects_with_idle_completion
+//   late_bind_only      rejected op bound to outstanding -> capacity_rejection_never_completes
+//                       later by progress (never published)
 //   late_complete       completes a rejected op on poll -> capacity_rejection_never_completes
 //   misclassify_invalid non-idle submit -> would_block  -> capacity_stats_are_exact
 //   inflate_outstanding outstanding() over-reports +1   -> capacity_accepts_exact_limit
@@ -54,10 +56,17 @@ using sluice::Result;
 enum class CapacityViolation {
     none,                // conforming control (must pass all cases)
     over_accept,         // capacity full still accepts+binds (N+1)th, returns
-                         // success — c3 must be caught by cleanup via
-                         // submit_and_track's non-idle branch, not left for a
-                         // destructor fail-fast
-    bind_rejected,       // capacity reject still claims the Completion
+                         // success — c3 must be caught by cleanup, not left
+                         // for a destructor fail-fast
+    bind_rejected,       // capacity reject still claims the Completion and
+                         // returns would_block — WITHOUT recording any cancel
+                         // intent (no self-cleanup); only the fixture's
+                         // cleanup can terminalize c3
+    late_bind_only,      // capacity reject returns would_block with the
+                         // Completion still idle; backend progress LATER
+                         // binds it to outstanding (never publishing). The
+                         // fixture must have tracked it at submit time, or
+                         // cleanup cannot find it (timeout/abort)
     late_complete,       // rejected op is later completed by backend progress
     misclassify_invalid, // non-idle Completion submit -> would_block (not
                          // invalid_state): the queue_full/invalid_state split
@@ -92,9 +101,9 @@ class NonConformingCapacityBackend : public AsyncBackend {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
 
-    // Reap: complete every op with a recorded cancel intent, then (late_complete
-    // only) complete every op that was rejected but must "late-complete" on
-    // backend progress. Publishes through the protected reap authority.
+    // Reap: complete every op with a recorded cancel intent, then (for the
+    // late_* violations) act on every op that was rejected but must misbehave
+    // on backend progress. Publishes through the protected reap authority.
     std::size_t poll() override {
         std::size_t n = 0;
         for (auto* c : canceled_) {
@@ -112,6 +121,19 @@ class NonConformingCapacityBackend : public AsyncBackend {
                     publish(*c, make_unexpected<std::size_t>(
                                     IoError{IoError::Code::canceled}));
                     ++n;
+                }
+            }
+            rejected_.clear();
+        } else if (violation_ == CapacityViolation::late_bind_only) {
+            // Bind the rejected op to outstanding (idle -> binding ->
+            // outstanding) WITHOUT publishing a terminal: the op becomes
+            // observable via outstanding() but never completes on its own.
+            // Only cleanup's cancel -> reap can resolve it — proving the
+            // fixture tracked the still-idle-at-submit Completion.
+            for (auto* c : rejected_) {
+                if (c->idle() && begin_binding(*c)) {
+                    commit_binding(*c);
+                    bogus_.push_back(c);
                 }
             }
             rejected_.clear();
@@ -207,14 +229,22 @@ class NonConformingCapacityBackend : public AsyncBackend {
                 return {};
             case CapacityViolation::bind_rejected:
                 // Reject for capacity but STILL claim the Completion: it
-                // becomes outstanding (a rejected op must stay idle). Also
-                // record the cancel intent so cleanup/reap can resolve it
-                // (otherwise it would stay outstanding forever).
+                // becomes outstanding (a rejected op must stay idle). Deliberately
+                // NO cancel intent is recorded here: the violation branch must
+                // NOT self-clean (that would let the test pass even if the
+                // fixture never tracked c3). Only cleanup's ctx.cancel(c3) ->
+                // backend.cancel() -> canceled_ path can resolve it.
                 if (begin_binding(c)) {
                     commit_binding(c);
                     bogus_.push_back(&c);
-                    canceled_.push_back(&c);
                 }
+                return make_unexpected<void>(IoError{IoError::Code::would_block});
+            case CapacityViolation::late_bind_only:
+                // Reject (Completion stays idle at submit time), remember the
+                // op; backend progress later binds it to outstanding without
+                // publishing (see poll()). A fixture that only tracked at
+                // submit-success or at non-idle-after-submit would miss it.
+                rejected_.push_back(&c);
                 return make_unexpected<void>(IoError{IoError::Code::would_block});
             case CapacityViolation::late_complete:
                 // Reject but remember the op; backend progress later completes
@@ -313,6 +343,21 @@ SLUICE_TEST_CASE(capacity_validity_late_complete) {
                          failed);
 }
 
+SLUICE_TEST_CASE(capacity_validity_late_bind_only) {
+    // A rejected op that stays idle AT SUBMIT TIME but is later bound to
+    // outstanding by backend progress (never published) must fail
+    // capacity_rejection_never_completes with a STABLE case name — NOT a
+    // cleanup timeout/abort or a destructor fail-fast. This pins the
+    // pre-submit tracking of submit_and_track: a fixture that only tracked
+    // submit-success or non-idle-after-submit would not find this Completion
+    // during cleanup and would abort on the deadline.
+    const auto f = make_nonconforming_factory(CapacityViolation::late_bind_only);
+    const std::string failed = sluice_test::conformance::run_capacity_cases(f);
+    SLUICE_CHECK_MSG(failed == "capacity_rejection_never_completes",
+                     "late_bind_only must fail capacity_rejection_never_completes, got: " +
+                         failed);
+}
+
 SLUICE_TEST_CASE(capacity_validity_misclassify_invalid) {
     // Conflating invalid_state with would_block (queue_full) must fail
     // capacity_stats_are_exact (the exact counter-split assertions).
@@ -373,15 +418,15 @@ SLUICE_TEST_CASE(capacity_validity_conforming_backend_passes) {
 // ---------------------------------------------------------------------------
 
 SLUICE_TEST_CASE(capacity_regression_bound_over_accept_cleanup) {
-    // Regression A: over_accept now ACTUALLY binds the (N+1)th Completion
-    // (c3 becomes outstanding) before returning success. The case fails
-    // capacity_rejects_with_idle_completion (the idle assertion). The proof
-    // this regression adds is not the case name — the validity case above
-    // already pins that — but that REACHING the end of the case (no process
-    // death) means cleanup terminalized the bound c3 instead of letting the
-    // AsyncIoContext destructor fail-fast mask the assertion. Before the fix,
-    // submit_and_track only tracked successful accepts, so a bound c3 would
-    // have escaped cleanup.
+    // Regression A: over_accept ACTUALLY binds the (N+1)th Completion (c3
+    // becomes outstanding) and returns SUCCESS. The case fails
+    // capacity_rejects_with_idle_completion (the idle assertion); REACHING
+    // the end of the case (no process death) means cleanup terminalized the
+    // bound c3 instead of letting the AsyncIoContext destructor fail-fast
+    // mask the assertion. Note: over_accept returns success, so ANY
+    // success-tracking helper would register c3 — the error-return equivalent
+    // is pinned by regression B (bind_rejected, which returns would_block
+    // with no backend self-cleanup).
     const auto f = make_nonconforming_factory(CapacityViolation::over_accept);
     const std::string failed = sluice_test::conformance::run_capacity_cases(f);
     SLUICE_CHECK_MSG(failed == "capacity_rejects_with_idle_completion",
@@ -391,18 +436,45 @@ SLUICE_TEST_CASE(capacity_regression_bound_over_accept_cleanup) {
 
 SLUICE_TEST_CASE(capacity_regression_bound_but_error_cleanup) {
     // Regression B: bind_rejected binds c3 (outstanding) and returns
-    // would_block. submit_and_track's `!c.idle()` branch must register c3 so
-    // cleanup cancel/reap/reset terminalizes it. Before the fix the validity
-    // backend self-cleaned via poll() (c3 was in canceled_), masking the gap
-    // in the fixture; this regression pins the FIXTURE's tracking, not the
-    // backend's self-cleanup, by reaching the end without a destructor
+    // would_block. The violation branch deliberately records NO cancel intent
+    // (no self-cleanup): the ONLY path that can terminalize c3 is the
+    // fixture's cleanup, so submit_and_track MUST have tracked c3 before the
+    // case inspects the result. Assert the tracking DIRECTLY (not only "the
+    // process did not die"): c3 is in fx.tracked, then cleanup_or_abort
+    // drives outstanding to 0 (cancel -> reap -> reset) with no destructor
     // fail-fast.
-    const auto f =
-        make_nonconforming_factory(CapacityViolation::bind_rejected);
-    const std::string failed = sluice_test::conformance::run_capacity_cases(f);
-    SLUICE_CHECK_MSG(failed == "capacity_rejects_with_idle_completion",
-                     "regression B: bind_rejected must fail "
-                     "capacity_rejects_with_idle_completion, got: " + failed);
+    using sluice_test::conformance::CapacityFixture;
+    CapacityFixture fx(make_nonconforming_factory(CapacityViolation::bind_rejected)
+                           .make_backend_with_capacity(2));
+    Completion<std::size_t> c1, c2, c3;
+    std::byte buf1[4]{}, buf2[4]{}, buf3[4]{};
+    SLUICE_CHECK_MSG(
+        fx.submit_and_track(c1, fx.make_read_op(-1, buf1, 4)).has_value(),
+        "regression B: c1 accept must succeed");
+    SLUICE_CHECK_MSG(
+        fx.submit_and_track(c2, fx.make_read_op(-1, buf2, 4)).has_value(),
+        "regression B: c2 accept must succeed");
+    auto r3 = fx.submit_and_track(c3, fx.make_read_op(-1, buf3, 4));
+    SLUICE_CHECK_MSG(!r3.has_value(),
+                     "regression B: c3 must be rejected");
+    SLUICE_CHECK_MSG(r3.error().code == IoError::Code::would_block,
+                     "regression B: rejection must be would_block");
+    // The backend ILLEGALLY bound c3 before returning the error: it is
+    // non-idle, and the helper must have tracked it BEFORE the case inspected
+    // the result (pre-submit registration).
+    SLUICE_CHECK_MSG(!c3.idle(),
+                     "regression B: broken backend must have bound c3");
+    SLUICE_CHECK_MSG(
+        std::find(fx.tracked.begin(), fx.tracked.end(), &c3) != fx.tracked.end(),
+        "regression B: c3 must be in fx.tracked before the case inspects "
+        "the result — cleanup cannot find a Completion the helper never "
+        "registered");
+    // Cleanup must cancel/reap/reset all three; reaching this line without a
+    // destructor fail-fast proves the fixture's tracking + cleanup, not the
+    // backend's self-cleanup.
+    fx.cleanup_or_abort("NonConformingCapacity", "regression_b");
+    SLUICE_CHECK_MSG(fx.ctx.outstanding() == 0,
+                     "regression B: cleanup must drive outstanding to 0");
 }
 
 SLUICE_TEST_CASE(capacity_regression_catch_all_exception_cleanup) {
