@@ -218,7 +218,11 @@ EVIDENCE: tuple[Evidence, ...] = (
         target="request_arena_test",
         layer="lifecycle",
         backends=(),  # arena-level; applies to all migrated backends.
-        notes="RequestSlot arena capacity/reserve/release/generation contract.",
+        notes="RequestSlot arena capacity/reserve/release/generation "
+              "contract. C2b: generation advances exactly +1 on BOTH "
+              "release authorities (rollback + completed-binding); reap "
+              "delivers ReadyEvent.key in backend-known terminal-winner "
+              "order (not slot-index/submit order).",
     ),
     Evidence(
         evidence_id="arena_cancel_intent_best_effort",
@@ -293,24 +297,32 @@ EVIDENCE: tuple[Evidence, ...] = (
 
     # -----------------------------------------------------------------------
     # Phase C2b — generation / stale-key / cancel-winner / identity-bearing reap.
-    # Rows 3–8 of Issue #68. The arena-level record proves the RequestSlot
+    # Rows 3-8 of Issue #68. The arena-level records prove the RequestSlot
     # state/generation/stale-event contract (backend-agnostic); the Fake and
     # ThreadPool integration records prove each backend actually uses the
     # protocol (not a side-band path). Uring's gap is the not_implemented
     # record below (Phase D pending). The C2b arena cases live within the
-    # existing request_lifecycle_scheme_b_test target alongside the pre-C2b
-    # Scheme-B cases; the gate drives the full target so both generations of
-    # cases run.
+    # existing arena lifecycle targets alongside the pre-C2b Scheme-B cases;
+    # the gate drives the full target so both generations of cases run.
     # -----------------------------------------------------------------------
+    # NOTE on attribution: the legal/illegal state-transition matrix,
+    # stale-handle-leaves-live-occupant-untouched, and RequestKey context
+    # provenance cases live in request_lifecycle_scheme_b_test; the
+    # generation +1 on both release authorities and reap terminal-winner
+    # order cases live in request_arena_test (covered by the
+    # arena_capacity_generation_release record below). Each record's notes
+    # name ONLY the cases its target executes.
     Evidence(
         evidence_id="c2b_arena_state_identity_matrix",
         target="request_lifecycle_scheme_b_test",
         layer="lifecycle",
         backends=(),
-        notes="C2b rows 3-4: legal/illegal state-transition matrix, "
-              "generation +1 on both release authorities, stale-handle "
+        notes="C2b rows 3-4 (request_lifecycle_scheme_b_test cases only): "
+              "legal/illegal state-transition matrix, stale-handle "
               "leaves live occupant untouched, RequestKey context "
-              "provenance, reap terminal-winner order (arena-level).",
+              "provenance. Generation +1 on both release authorities "
+              "and reap terminal-winner order live in request_arena_test "
+              "(see arena_capacity_generation_release).",
     ),
     Evidence(
         evidence_id="c2b_fake_identity_integration",
@@ -336,7 +348,7 @@ EVIDENCE: tuple[Evidence, ...] = (
     ),
     Evidence(
         evidence_id="uring_c2b_identity_not_implemented",
-        target="threadpool_backend_scheme_b_race_test",
+        target="backend_conformance_test",
         layer="lifecycle",
         backends=_U,
         mandatory=True,
@@ -344,7 +356,9 @@ EVIDENCE: tuple[Evidence, ...] = (
         notes="C2b rows 3-8 require RequestArena identity/generation/"
               "cancel/reap integration; Uring remains legacy until "
               "Phase D. Recorded as a known gap; not_implemented never "
-              "counts as PASS.",
+              "counts as PASS. (Target is the Uring-driving conformance "
+              "binary, matching uring_capacity_not_implemented; the gap "
+              "is not executed.)",
     ),
 
     # -----------------------------------------------------------------------

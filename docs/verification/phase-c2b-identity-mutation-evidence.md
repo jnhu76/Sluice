@@ -10,15 +10,18 @@ Method chosen: **local uncommitted mutation** (the §13-accepted alternative).
 Constructing a test-only nonconforming fixture for classes A/C/D/E would have
 required duplicating substantial `RequestArena` internals, so each defect class
 was instead proven by a single-point temporary mutation of the real production
-logic, a focused filtered test run, and an immediate revert.
+logic, a focused filtered test run, and an immediate revert. The cancel-intent
+class B is covered by TWO mutants (B1 = counter defect, B2 = result-rewrite
+defect) so both the accounting invariant and the verbatim-result invariant of
+ADR Decision 11 / DIV-10 are independently proven.
 
 All commands ran on the test/phase-c2b-generation-stale-cancel-matrix branch at
-HEAD `e857eb3` (master base `37298f0`). Toolchain: **Clang 21.1.8
+the PR #70 review-fix head (master base `37298f0`). Toolchain: **Clang 21.1.8
 (6ubuntu1)**, xmake **v3.0.9**, `xmake f -m debug --toolchain=clang -y`.
 
 ## Method
 
-For each mutant A–G:
+For each mutant A, B1, B2, C, D, E, F, G:
 
 1. apply ONE single-point mutation to the production logic;
 2. rebuild the affected test target (`xmake build -j 6 <target>`);
@@ -30,6 +33,12 @@ For each mutant A–G:
 6. after all mutants, confirm `git diff` is EMPTY (no mutation entered a
    commit) and re-run all four affected targets to ALL TESTS PASSED.
 
+Mutants B1 and B2 are deliberately separate: B1 injects a counter defect
+(intent_recorded incorrectly tallies canceled_ops) and B2 injects the actual
+§13 class-B result-rewrite defect (a cancel intent rewrites an ordinary result
+to canceled). Together they prove BOTH the accounting invariant and the
+verbatim-result invariant of ADR Decision 11 / DIV-10.
+
 Exit-code note: `xmake run` reports 255 when the child fails. Harness assertion
 failures exit 1 (`failed(1)`); arena fail-fast invariants call `std::terminate`
 (`failed(-1)`). Both are recorded as 255 below because that is what the
@@ -40,7 +49,8 @@ recording command (`echo EXIT=$?` after `xmake run`) observed.
 | Mutant | Deliberate defect (§13 class) | Mutation applied | Expected failing case | Actual failing case / failure mode | Command | Exit |
 | --- | --- | --- | --- | --- | --- | --- |
 | A | stale terminal delivered to a reused generation | `RequestArena::record_terminal` (`include/sluice/async/detail/request_arena.hpp`): replace `validate_(h)` with an index-only slot lookup that ignores the handle generation | `arena_stale_handle_leaves_live_occupant_untouched` | same — the stale `record_terminal` lands on the generation+1 occupant; the case's rejection check fails and the skipped cleanup trips the arena fail-fast (`std::terminate`) | `SLUICE_TEST_FILTER=arena_stale_handle_leaves_live_occupant_untouched xmake run request_lifecycle_scheme_b_test` | 255 |
-| B | cancel intent rewrites an ordinary success into canceled | `ThreadPoolBackend::cancel(Completion<std::size_t>&)` (`src/async/threadpool_backend.cpp`): also tally `canceled_ops` on `intent_recorded` | `tp_running_cancel_intent_does_not_tally` | same — harness assertion `intent_recorded must NOT tally canceled_ops` (`tests/threadpool_backend_scheme_b_race_test.cpp:597`) fails; real success still wins verbatim but the counter is corrupted | `SLUICE_TEST_FILTER=tp_running_cancel_intent_does_not_tally xmake run threadpool_backend_scheme_b_race_test` | 255 |
+| B1 | cancel intent incorrectly tallies canceled_ops (counter defect, distinct from the result-rewrite defect below) | `ThreadPoolBackend::cancel(Completion<std::size_t>&)` (`src/async/threadpool_backend.cpp`): add `else if (disp == intent_recorded) tally_canceled();` after the `terminal_won` branch | `tp_running_cancel_intent_does_not_tally` | same — the harness sets `fail_msg = "intent_recorded must NOT tally canceled_ops"` at `tests/threadpool_backend_scheme_b_race_test.cpp:561` and fires it at the case-end `SLUICE_FAIL(fail_msg)` (line 597); real success still wins verbatim but the counter is corrupted | `SLUICE_TEST_FILTER=tp_running_cancel_intent_does_not_tally xmake run threadpool_backend_scheme_b_race_test` | 255 |
+| B2 | cancel intent rewrites an ordinary success/error into canceled (the §13 class B defect; DIV-10 / ADR Decision 11 — the real result must win verbatim) | `ThreadPoolBackend` worker terminal path (`src/async/threadpool_backend.cpp`, immediately before `arena_.record_terminal(h, terminal)`): `if (arena_.cancel_intent_live(h.slot)) terminal = TerminalResult::err(IoError{canceled});` | `tp_running_cancel_intent_real_result_verbatim` | same — the canceled rewrite makes the post-resume result an error; harness assertion `real result must win verbatim; cancel must not rewrite` (`tests/threadpool_backend_scheme_b_race_test.cpp:388`) fails | `SLUICE_TEST_FILTER=tp_running_cancel_intent_real_result_verbatim xmake run threadpool_backend_scheme_b_race_test` | 255 |
 | C | second terminal overwrites the first winner | `RequestArena::record_terminal`: when `terminal_.stored`, overwrite the stored result before returning false | `exactly_one_terminal_winner` | same — reap publishes the loser's `backend_error` instead of the winner's 42 bytes; the published-result check fails and the skipped release trips the arena fail-fast | `SLUICE_TEST_FILTER=exactly_one_terminal_winner xmake run request_lifecycle_scheme_b_test` | 255 |
 | D | second terminal re-enters the ready ring | `RequestArena::cancel`: the `already_terminal` branch additionally calls `push_ready_locked_` | `tp_canceled_ops_tallied_only_on_terminal_won` | same — the late (already-bound) second cancel re-pushes a slot that is still the ring tail; the ready-ring invariant guard fail-fasts (`std::terminate`) exactly as designed | `SLUICE_TEST_FILTER=tp_canceled_ops_tallied_only_on_terminal_won xmake run threadpool_backend_scheme_b_race_test` | 255 |
 | E | reap by slot index instead of terminal-winner order | `RequestArena::push_ready_locked_`: insert the ring entry in ascending slot-index order instead of appending at the tail | `arena_reap_preserves_terminal_winner_order` | same — reap delivers slot 0 before the earlier winner slot 1; the delivery-order check (`tests/request_arena_test.cpp:291`) fails | `SLUICE_TEST_FILTER=arena_reap_preserves_terminal_winner_order xmake run request_arena_test` | 255 |
@@ -49,11 +59,11 @@ recording command (`echo EXIT=$?` after `xmake run`) observed.
 
 ## Revert verification
 
-After mutant G was reverted:
+After mutant B2 was reverted (the last mutant applied):
 
 - `grep -rn "VALIDITY MUTATION" include/ src/ tests/` → zero matches;
-- `git status --short` and `git diff --stat` → empty working tree (no mutation
-  entered any commit);
+- `git status --short` and `git diff --stat src/` → empty (no mutation entered
+  any commit);
 - re-run of all four affected targets (Clang Debug) → `ALL TESTS PASSED`:
   `request_arena_test`, `request_lifecycle_scheme_b_test`,
   `backend_scheme_b_race_test`, `threadpool_backend_scheme_b_race_test`.
@@ -66,9 +76,12 @@ the positive contract:
 
 - A ↔ `arena_stale_handle_leaves_live_occupant_untouched`,
   `fake_stale_generation_event_harmless`,
-  `tp_stale_generation_event_harmless` (all green);
-- B ↔ `tp_running_cancel_intent_does_not_tally` and
-  `tp_running_cancel_intent_real_result_verbatim` (green);
+  `tp_stale_generation_event_harmless` (all green; the two backend cases now
+  inject the stale handle against a LIVE N+1 occupant via the
+  `cancel_handle_for_test` seam);
+- B1 ↔ `tp_running_cancel_intent_does_not_tally` (green — counter invariant);
+- B2 ↔ `tp_running_cancel_intent_real_result_verbatim` (green — verbatim-result
+  invariant);
 - C ↔ `exactly_one_terminal_winner` and
   `tp_cancel_races_worker_terminal_exactly_one` (green);
 - D ↔ `tp_canceled_ops_tallied_only_on_terminal_won` and

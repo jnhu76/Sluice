@@ -1259,15 +1259,20 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
             "c2b_arena_state_identity_matrix",
             "request_lifecycle_scheme_b_test",
             G.PASS, detail="stub")
-        # Seed the Uring C2b gap's results entry.
+        # Seed the Uring C2b gap's results entry (target matches the manifest
+        # record: backend_conformance_test, the Uring-driving conformance
+        # binary, mirroring uring_capacity_not_implemented).
         g.results["uring_c2b_identity_not_implemented"] = G.RunResult(
             "uring_c2b_identity_not_implemented",
-            "threadpool_backend_scheme_b_race_test",
+            "backend_conformance_test",
             G.INCOMPLETE, detail="not_implemented")
-        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
         # Uring stays NOT_CONFORMING (KernelIoProfile rule) regardless; the
         # point is the C2b gap appears in reasons.
         self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_c2b_identity_not_implemented" in r for r in reasons),
+            f"Uring C2b gap must appear in reasons: {reasons}")
 
 
 if __name__ == "__main__":
