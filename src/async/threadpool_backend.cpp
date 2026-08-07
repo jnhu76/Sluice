@@ -636,6 +636,16 @@ Result<std::size_t> ThreadPoolBackend::wait_one() {
         std::size_t n = arena_.reap(sink_);
         if (n > 0) return n;
         if (ready_wait_.wait_for_change(token) == BackendWakeReason::interrupted) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // C2e (row 15): deterministic interrupt-vs-final-ready window. The
+            // pause lets a test record the final terminal in the exact window
+            // between the control wake and the final reap, proving the final
+            // reap returns it — the control interrupt never swallows the last
+            // ready (tp_c2e_interrupt_final_reap_closes_ready_race; mutant M4
+            // detector). Compiled out of production builds (no branch, no
+            // local, no symbol).
+            wait_control_wake_final_reap_pause_();
+#endif
             // One final non-blocking reap closes the interrupt-vs-final-ready
             // race, then report the interruption (0 = no completion reaped).
             n = arena_.reap(sink_);
@@ -742,6 +752,19 @@ void ThreadPoolBackend::wait_running_pause_() noexcept {
 
 void ThreadPoolBackend::wait_terminal_publication_pause_() noexcept {
     auto* g = terminal_publication_gate_.load(std::memory_order_acquire);
+    if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
+
+// C2e: pause between the interrupted control wake and wait_one's final reap
+// (see the public gate struct's comment). No-op when disarmed.
+void ThreadPoolBackend::wait_control_wake_final_reap_pause_() noexcept {
+    auto* g = control_wake_final_reap_gate_.load(std::memory_order_acquire);
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);

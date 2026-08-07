@@ -367,6 +367,29 @@ sluice_internal_async_test("threadpool_backend_c2c_waiter_borrow_test", {platfor
 -- contributes no tally). Gated to linux/macosx (POSIX syscalls).
 sluice_internal_async_test("threadpool_backend_c2d_failure_test", {platform_gate = {"linux", "macosx"}})
 
+-- threadpool_backend_c2e_close_drain_test — Phase C2e ThreadPoolBackend
+-- close/drain/destruction deterministic tests (Issue #68 rows 15-16; ADR
+-- Decision 15). Deterministic pause gates prove: close while the submit path
+-- is paused between commit and enqueue (`pending`) / while the request is
+-- `enqueued` on the ring / while the worker is `running` the syscall — in
+-- every window the accepted request completes with its REAL result verbatim
+-- (close never retroactively rejects, cancels, or discards; the void path
+-- too); void submit after close -> invalid_state with idle Completion; close
+-- then pending cancel still WINS the canceled terminal (Scheme B, no dispatch
+-- linkage, no syscall); close then running cancel records intent only (real
+-- result verbatim); close wakes a parked wait_one as a ONE-SHOT control wake
+-- (0, no fabricated completion) and a FUTURE wait_one parks normally again and
+-- is woken by real progress (no busy-spin); close || final record_terminal in
+-- BOTH orderings (close first: the interrupted wait_one's final reap returns
+-- 0 and the NEXT wait_one reaps the final ready — the control interrupt never
+-- swallows it; terminal first: close does not affect an already-stored
+-- terminal); an invariant-only close-vs-workers race drain (every accepted
+-- request reaches exactly one verbatim terminal, accounting zero); and the
+-- submit || close concurrent linearization invariant (every attempt is
+-- accepted-then-terminal or synchronously invalid_state-idle — never
+-- half-accepted). Gated to linux/macosx (POSIX syscalls).
+sluice_internal_async_test("threadpool_backend_c2e_close_drain_test", {platform_gate = {"linux", "macosx"}})
+
 -- reference_backend_arena_lifecycle_test — Phase B reference backend migration
 -- regression (commit 4). Proves FakeAsyncBackend + SyncBackend are actually
 -- driven by the bounded RequestArena + five-stage admission + the synchronous

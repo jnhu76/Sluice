@@ -248,6 +248,17 @@ class ThreadPoolBackend : public AsyncBackend {
         std::atomic<bool> resume{false};
         std::atomic<bool> exited{true};
     };
+    // C2e (row 15): deterministic interrupt-vs-final-ready window. wait_one()
+    // pauses between the interrupted control wake and its ONE final reap, so a
+    // test can record the final terminal in that exact window and prove the
+    // final reap returns it (the control interrupt never swallows the last
+    // ready). Compiled out of production sluice_async (see
+    // tp_c2e_interrupt_final_reap_closes_ready_race; mutant M4 detector).
+    struct ControlWakeFinalReapPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
     // C2d (ADR Gate 4): deterministic commit/enqueue pause. The submit path
     // pauses AFTER commit (Completion outstanding, slot `pending`, enqueue pin
     // set) and BEFORE taking work_mtx_ — the exact state from which a pending
@@ -274,6 +285,10 @@ class ThreadPoolBackend : public AsyncBackend {
     void set_terminal_publication_pause_gate(
         TerminalPublicationPauseGate* gate) noexcept {
         terminal_publication_gate_.store(gate, std::memory_order_release);
+    }
+    void set_control_wake_final_reap_pause_gate(
+        ControlWakeFinalReapPauseGate* gate) noexcept {
+        control_wake_final_reap_gate_.store(gate, std::memory_order_release);
     }
     void set_before_enqueue_lock_pause_gate(
         BeforeEnqueueLockPauseGate* gate) noexcept {
@@ -556,6 +571,7 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_running_pause_() noexcept;
     void wait_terminal_publication_pause_() noexcept;
     void wait_before_enqueue_lock_pause_() noexcept;
+    void wait_control_wake_final_reap_pause_() noexcept;
 
     // The pre-commit admission stages that carry a synchronous rejection
     // (ADR Gate 4): reserve (capacity-full would_block / admission-closed
@@ -604,6 +620,9 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<WorkerRunningPauseGate*> running_gate_{nullptr};
     std::atomic<TerminalPublicationPauseGate*> terminal_publication_gate_{nullptr};
     std::atomic<BeforeEnqueueLockPauseGate*> before_enqueue_lock_gate_{nullptr};
+    // C2e: deterministic interrupt-vs-final-ready window in wait_one (see the
+    // public gate struct above). Compiled out of production builds.
+    std::atomic<ControlWakeFinalReapPauseGate*> control_wake_final_reap_gate_{nullptr};
     // Phase C2d: post-commit dispatch-failure injection control (see the
     // guarded setter above). Null when disarmed; never dereferenced by
     // production builds (the branch is compiled out).
