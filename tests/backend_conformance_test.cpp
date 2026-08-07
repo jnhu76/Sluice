@@ -60,6 +60,18 @@ inline std::vector<ConformanceFailure>& conf_failures() {
         }                                                                               \
     } while (0)
 
+// Print every conformance failure recorded since `since` (used by the C2e
+// close/drain driver so a failing case names its exact assertion, like
+// run_conformance's tail does for the shared suite).
+inline void print_conf_failures_since(std::size_t since) {
+    for (std::size_t i = since; i < conf_failures().size(); ++i) {
+        const auto& fl = conf_failures()[i];
+        std::printf("[conformance] FAIL %s :: %s : %s (%s:%d)\n",
+                    fl.backend.c_str(), fl.case_name.c_str(),
+                    fl.expr.c_str(), fl.file.c_str(), fl.line);
+    }
+}
+
 // Helper: drain any outstanding ops on a context so its destructor's L11
 // assert is clean. Used at the end of cases that may leave ops in flight.
 inline void drain(AsyncIoContext& ctx) {
@@ -814,6 +826,323 @@ std::string run_capacity_cases(const BackendFactory& f) {
 
     failed = case_capacity_recycles_after_reset(f);
     if (!failed.empty()) return failed;
+
+    return {};
+}
+
+// ===========================================================================
+// Phase C2e — shared close/drain/destruction cases (Issue #68 rows 15-16).
+//
+// These cases prove, at the SHARED OBSERVABLE boundary (ADR Decision 15):
+//   * close_admission() rejects new submit with invalid_state, deterministically
+//     (the Completion stays idle, no borrow, no outstanding, no submitted_ops
+//     increment — the reject is a synchronous no-side-effect admission refusal);
+//   * close NEVER retroactively rejects or cancels an already-accepted request:
+//     the accepted op stays outstanding, cancel/poll/reap remain legal, and the
+//     request reaches EXACTLY ONE defined terminal, then the caller reset
+//     releases the slot;
+//   * drained != releasable backend destruction: after outstanding == 0 and
+//     Completion-ready, the slot is still bound (slot_in_use == 1) until the
+//     caller resets the ready Completion (slot_in_use == 0);
+//   * slot-lifecycle release and admission-lifecycle close are ORTHOGONAL:
+//     after drain + reset the slot is free but a fresh submit is still
+//     invalid_state (admission stays closed);
+//   * cancel remains legal after close (ADR Decision 15: "operation
+//     cancellation remains legal") — the shared terminalize-and-reap path of
+//     cases B/H/J runs AFTER close_admission.
+//
+// SHARED-OBSERVABLE BOUNDARY: the case bodies use ONLY
+//   AsyncIoContext::submit/cancel/poll/wait_one/outstanding/interrupt_backend_waiters/stats
+//   + Completion's public state/reset
+//   + the two driver-wired closures (close, slot_in_use).
+// They MUST NOT downcast, touch complete_*, arena_*, dispatch_*, or any
+// backend-specific internals. The deterministic per-window evidence (close
+// while pending/enqueued/running, close || final backend-ready, parked-waiter
+// wake) lives in the per-backend targets.
+//
+// CLEANUP MODEL: identical to the capacity cases — every submit goes through
+// submit_and_track; cleanup_or_abort() is explicit, time-bounded, and abort()s
+// on timeout (never lets the AsyncIoContext destructor fail-fast mask a C2e
+// assertion).
+// ===========================================================================
+
+void CloseDrainFixture::cleanup_or_abort(const char* backend_name,
+                                         const char* case_name) {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+
+    // 1. Cancel everything still outstanding. Idle tracked Completions
+    //    (rejected submits) are skipped — they have no async state. Cancel is
+    //    legal after close (ADR Decision 15), so this always terminalizes.
+    for (auto* c : tracked) {
+        if (c->outstanding()) ctx.cancel(*c);
+    }
+    // 2. Drive poll/reap until outstanding hits 0 or the deadline expires.
+    //    interrupt_backend_waiters() re-arms waiters; yield() lets workers
+    //    progress. This is liveness, not ordering proof.
+    while (ctx.outstanding() != 0 &&
+           std::chrono::steady_clock::now() < deadline) {
+        (void)ctx.poll();
+        for (auto* c : tracked) {
+            if (c->outstanding()) ctx.cancel(*c);
+        }
+        ctx.interrupt_backend_waiters();
+        std::this_thread::yield();
+    }
+    if (ctx.outstanding() != 0) {
+        std::fprintf(stderr,
+            "CloseDrainFixture: cleanup deadline expired "
+            "(backend=%s case=%s outstanding=%zu tracked=%zu)\n",
+            backend_name, case_name, ctx.outstanding(), tracked.size());
+        for (std::size_t i = 0; i < tracked.size(); ++i) {
+            const auto* c = tracked[i];
+            std::fprintf(stderr,
+                "  tracked[%zu]: idle=%d outstanding=%d ready=%d\n",
+                i, (int)c->idle(), (int)c->outstanding(), (int)c->ready());
+        }
+        std::fprintf(stderr,
+            "  stats: submit_calls=%llu submitted_ops=%llu "
+            "invalid_state_rejections=%llu canceled_ops=%llu "
+            "completion_errors=%llu\n",
+            (unsigned long long)stats.submit_calls,
+            (unsigned long long)stats.submitted_ops,
+            (unsigned long long)stats.invalid_state_rejections,
+            (unsigned long long)stats.canceled_ops,
+            (unsigned long long)stats.completion_errors);
+        std::abort();
+    }
+    // 3. Reset every ready Completion so the slot is released. The context is
+    //    now quiescent; the fixture destructor (default) is a no-op.
+    for (auto* c : tracked) {
+        if (c->ready()) c->reset();
+    }
+}
+
+// ---- Case A: close rejects future submit (deterministic invalid_state) -----
+// backend/context open -> close_admission() -> submit => invalid_state;
+// Completion idle; submitted_ops unchanged; outstanding unchanged; no
+// borrow/dispatch/ready residue. Both Fake and ThreadPool run this.
+std::string case_close_rejects_future_submit(const BackendFactory& f,
+                                             const MakeCloseDrainFixture& make_fx) {
+    constexpr const char* cname = "close_rejects_future_submit";
+    auto fx = make_fx();
+    ScopedTempFd fd(capacity_temp_fd(f));
+    // real_mode only: report a failed temp-fd setup separately (a ThreadPool
+    // submit needs a valid fd to reach the admission path — descriptor
+    // validation precedes reserve).
+    if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
+        !setup_err.empty()) {
+        return setup_err;
+    }
+    std::byte buf[4]{};
+    Completion<std::size_t> c;
+    return run_close_drain_case(fx, f.name, cname, [&] {
+        fx.close();  // close admission
+        // A fresh submit MUST be rejected with invalid_state — deterministically,
+        // synchronously, at the admission boundary (ADR Decision 15).
+        auto r = fx.submit_and_track(c, fx.make_read_op(fd, buf, 4));
+        CONF_CHECK(f.name, cname, !r.has_value());
+        CONF_CHECK(f.name, cname,
+                   r.error().code == IoError::Code::invalid_state);
+        // The rejected Completion stays idle throughout — no async from a reject.
+        CONF_CHECK(f.name, cname, c.idle());
+        CONF_CHECK(f.name, cname, !c.outstanding());
+        CONF_CHECK(f.name, cname, !c.ready());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
+        // Accounting: the submit call happened but nothing was accepted.
+        CONF_CHECK(f.name, cname, fx.stats.submit_calls == 1);
+        CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 0);
+        CONF_CHECK(f.name, cname, fx.stats.invalid_state_rejections == 1);
+        CONF_CHECK(f.name, cname, fx.stats.queue_full_retries == 0);
+        // poll after close with nothing outstanding: the no-progress boundary,
+        // never a fabricated completion (I8).
+        CONF_CHECK(f.name, cname, fx.ctx.poll() == 0);
+    });
+}
+
+// ---- Case B: accepted-before-close still completes exactly once -------------
+// submit succeeds -> close -> the request continues -> a defined terminal ->
+// reap -> Completion ready -> reset -> slot released. close MUST NOT
+// retroactively reject or cancel an already-accepted request; the request
+// reaches exactly ONE defined terminal (the shared contract does not pin WHICH
+// — canceled or the real result — that is backend-specific); poll/reap and
+// cancel remain legal after close.
+std::string case_close_preserves_accepted_terminal(const BackendFactory& f,
+                                                   const MakeCloseDrainFixture& make_fx) {
+    constexpr const char* cname = "close_preserves_accepted_terminal";
+    auto fx = make_fx();
+    ScopedTempFd fd(capacity_temp_fd(f));
+    if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
+        !setup_err.empty()) {
+        return setup_err;
+    }
+    std::byte buf[4]{};
+    Completion<std::size_t> c;
+    return run_close_drain_case(fx, f.name, cname, [&] {
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c, fx.make_read_op(fd, buf, 4)).has_value());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 1);
+        CONF_CHECK(f.name, cname, c.outstanding());
+
+        fx.close();  // close AFTER accept
+        // close must not retroactively reject or cancel the accepted request.
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 1);
+        CONF_CHECK(f.name, cname, c.outstanding());
+        CONF_CHECK(f.name, cname, !c.ready());
+
+        // Operation cancellation remains legal after close (ADR Decision 15).
+        // Terminalize the accepted op (cancel may win canceled, or the real
+        // syscall result may win verbatim — either is a defined terminal).
+        fx.ctx.cancel(c);
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!c.ready() && std::chrono::steady_clock::now() < deadline) {
+            (void)fx.ctx.poll();
+            fx.ctx.interrupt_backend_waiters();
+            std::this_thread::yield();
+        }
+        CONF_CHECK(f.name, cname, c.ready());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
+        // Exactly one defined terminal: success or a defined error code
+        // (canceled / eof / backend_error). Never a phantom or double result.
+        const auto res = c.result();
+        CONF_CHECK(f.name, cname,
+                   res.has_value() ||
+                       res.error().code == IoError::Code::canceled ||
+                       res.error().code == IoError::Code::eof ||
+                       res.error().code == IoError::Code::backend_error);
+        // A further poll must NOT produce a second completion for the same op.
+        CONF_CHECK(f.name, cname, fx.ctx.poll() == 0);
+        c.reset();
+    });
+}
+
+// ---- Case H: drained != releasable backend destruction ---------------------
+// close -> the accepted request reaches terminal -> reap all ->
+// accepted_outstanding == 0 (Completion ready) BUT slot_in_use == 1 until the
+// caller resets the ready Completion (slot_in_use == 0). The slot stays bound
+// by the caller-owned Completion's publication binding after reap.
+std::string case_drain_then_reset_releases_slot(const BackendFactory& f,
+                                                const MakeCloseDrainFixture& make_fx) {
+    constexpr const char* cname = "drain_then_reset_releases_slot";
+    auto fx = make_fx();
+    ScopedTempFd fd(capacity_temp_fd(f));
+    if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
+        !setup_err.empty()) {
+        return setup_err;
+    }
+    std::byte buf[4]{};
+    Completion<std::size_t> c;
+    return run_close_drain_case(fx, f.name, cname, [&] {
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c, fx.make_read_op(fd, buf, 4)).has_value());
+        // The slot is bound from reserve (slot_in_use == 1).
+        CONF_CHECK(f.name, cname, fx.slot_in_use() == 1);
+
+        fx.close();
+        fx.ctx.cancel(c);  // cancel remains legal after close (Decision 15)
+        // Drain: reap until accepted_outstanding == 0.
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (fx.ctx.outstanding() != 0 &&
+               std::chrono::steady_clock::now() < deadline) {
+            (void)fx.ctx.poll();
+            fx.ctx.interrupt_backend_waiters();
+            std::this_thread::yield();
+        }
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
+        CONF_CHECK(f.name, cname, c.ready());
+        // DRAINED != RELEASABLE: reap published completion-ready but did NOT
+        // release the slot. The ready-but-unreset Completion still holds the
+        // binding, so the backend is NOT yet quiescent for destruction.
+        CONF_CHECK(f.name, cname, fx.slot_in_use() == 1);
+        // Caller reset releases the slot (allocation-free; generation++).
+        c.reset();
+        CONF_CHECK(f.name, cname, fx.slot_in_use() == 0);
+        CONF_CHECK(f.name, cname, c.idle());
+        // Post-reset poll: nothing reaped, nothing fabricated.
+        CONF_CHECK(f.name, cname, fx.ctx.poll() == 0);
+    });
+}
+
+// ---- Case J: slot released but admission still closed (orthogonal states) --
+// close -> drain -> reset -> slot free (slot_in_use == 0) -> submit =>
+// invalid_state. Slot-lifecycle release and admission-lifecycle close are two
+// ORTHOGONAL states: a free slot does not re-open admission.
+std::string case_slot_released_but_admission_stays_closed(const BackendFactory& f,
+                                                          const MakeCloseDrainFixture& make_fx) {
+    constexpr const char* cname = "slot_released_but_admission_stays_closed";
+    auto fx = make_fx();
+    ScopedTempFd fd(capacity_temp_fd(f));
+    if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
+        !setup_err.empty()) {
+        return setup_err;
+    }
+    std::byte buf1[4]{}, buf2[4]{};
+    Completion<std::size_t> c1, c2;
+    return run_close_drain_case(fx, f.name, cname, [&] {
+        CONF_CHECK(f.name, cname,
+                   fx.submit_and_track(c1, fx.make_read_op(fd, buf1, 4)).has_value());
+        fx.close();
+        fx.ctx.cancel(c1);
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!c1.ready() && std::chrono::steady_clock::now() < deadline) {
+            (void)fx.ctx.poll();
+            fx.ctx.interrupt_backend_waiters();
+            std::this_thread::yield();
+        }
+        CONF_CHECK(f.name, cname, c1.ready());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
+        c1.reset();
+        // The slot IS free (slot lifecycle released)...
+        CONF_CHECK(f.name, cname, fx.slot_in_use() == 0);
+        // ...but admission is still CLOSED: a fresh submit is rejected with
+        // invalid_state and the Completion stays idle. Releasing the slot does
+        // not re-open admission — the two lifecycles are orthogonal.
+        auto r = fx.submit_and_track(c2, fx.make_read_op(fd, buf2, 4));
+        CONF_CHECK(f.name, cname, !r.has_value());
+        CONF_CHECK(f.name, cname,
+                   r.error().code == IoError::Code::invalid_state);
+        CONF_CHECK(f.name, cname, c2.idle());
+        CONF_CHECK(f.name, cname, !c2.outstanding());
+        CONF_CHECK(f.name, cname, fx.ctx.outstanding() == 0);
+        CONF_CHECK(f.name, cname, fx.stats.submitted_ops == 1);
+    });
+}
+
+// The close/drain-case driver. Returns the empty string on full pass, or the
+// stable name of the FIRST failing case. Each case builds its OWN fixture via
+// the driver-supplied factory (close_admission is irreversible), observes only
+// through the shared boundary, and cleans up within its own frame.
+std::string run_close_drain_cases(const BackendFactory& f,
+                                  const MakeCloseDrainFixture& make_fx) {
+    const std::size_t before = conf_failures().size();
+    std::string failed;
+
+    failed = case_close_rejects_future_submit(f, make_fx);
+    if (!failed.empty()) {
+        print_conf_failures_since(before);
+        return failed;
+    }
+
+    failed = case_close_preserves_accepted_terminal(f, make_fx);
+    if (!failed.empty()) {
+        print_conf_failures_since(before);
+        return failed;
+    }
+
+    failed = case_drain_then_reset_releases_slot(f, make_fx);
+    if (!failed.empty()) {
+        print_conf_failures_since(before);
+        return failed;
+    }
+
+    failed = case_slot_released_but_admission_stays_closed(f, make_fx);
+    if (!failed.empty()) {
+        print_conf_failures_since(before);
+        return failed;
+    }
 
     return {};
 }

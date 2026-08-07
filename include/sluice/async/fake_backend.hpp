@@ -214,6 +214,16 @@ class FakeAsyncBackend : public AsyncBackend {
 
     std::size_t outstanding() const noexcept override { return arena_.accepted_outstanding(); }
 
+    // ADR Decision 15 (reference semantics): close admission. New reserve()
+    // returns invalid_state (Completion idle, no borrow) while existing accepted
+    // requests continue; cancel/poll/wait_one/reap remain legal. Idempotent.
+    // FakeAsyncBackend has NO split wait capability (its wait_one is
+    // non-blocking by contract), so there is no parked participant to wake —
+    // the arena admission flag alone is the full reference semantics, and the
+    // shared close/drain suite (C2e) drives this identically for Fake and
+    // ThreadPool. Mirrors ThreadPoolBackend::close_admission.
+    void close_admission() noexcept { arena_.close_admission(); }
+
     // Phase B test-only introspection (the arena is a private detail).
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
