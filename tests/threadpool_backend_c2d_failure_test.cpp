@@ -2,25 +2,35 @@
 // allocator failure (Issue #68 rows 9-10).
 //
 // Scope of this target:
-//   1. transactional pre-commit rejection on the REAL backend (binding-CAS
+//   1. ADR Gate-4 pre-commit stage-failure injection on the REAL backend, one
+//      deterministic case per stage: reserve (injected would_block
+//      capacity-full rejection — Completion stays idle, zero slot/borrow/
+//      dispatch residue); prepare (candidate slot rolled back by
+//      rollback_reserved_or_prepared, capacity immediately recyclable); and
+//      the COMMIT-BOUNDARY (the binding CAS wins, then commit is injected to
+//      fail — the submit path executes the REAL rollback_binding_before_accept
+//      + slot rollback, the only executable instance of that branch in the
+//      corpus; the Completion returns to fully reusable idle and the same
+//      Completion + capacity are immediately reusable);
+//   2. transactional pre-commit rejection on the REAL backend (binding-CAS
 //      loss: submit into a non-idle Completion -> invalid_state, zero residue,
 //      capacity immediately recyclable);
-//   2. partial worker-startup failure (finding P1-04: no test injected a
+//   3. partial worker-startup failure (finding P1-04: no test injected a
 //      thread-creation failure; the constructor must stop and join the
 //      already-started workers and rethrow synchronously);
-//   3. post-commit permanent dispatch failure (ADR Decision 12 "post-commit
+//   4. post-commit permanent dispatch failure (ADR Decision 12 "post-commit
 //      dispatch failure after execution ownership is proven absent"):
 //      injected between enqueue and dispatch push, INSIDE work_mtx_, with no
 //      worker ever able to see the handle -> submit returns success, the
 //      request reaches exactly one defined backend_error terminal, reap
 //      publishes exactly once, the borrow stays valid until reap, no worker
 //      or syscall executes, the ring-full invariant path is untouched;
-//   4. post-commit no-allocation (ADR Decision 14 / I9): the accepted
+//   5. post-commit no-allocation (ADR Decision 14 / I9): the accepted
 //      submit -> enqueue/terminal -> poll/reap -> reset path on the REAL
 //      ThreadPool performs ZERO heap allocations under an always-throw
 //      operator new, for both the ordinary worker path and the injected
 //      dispatch-failure path;
-//   5. terminal winner: the injected dispatch-failure terminal vs cancel —
+//   6. terminal winner: the injected dispatch-failure terminal vs cancel —
 //      exactly one winner, no overwrite, no double publication, no worker
 //      execution in any outcome, and at most one tally (canceled_ops == 1 iff
 //      cancel won — the injected backend_error terminal contributes no tally
@@ -823,6 +833,162 @@ SLUICE_TEST_CASE(tp_c2d_cancel_after_dispatch_failure_terminal_no_overwrite) {
     SLUICE_CHECK(!c.result().has_value());
     SLUICE_CHECK(c.result().error().code == IoError::Code::backend_error);
     SLUICE_CHECK(stats.canceled_ops == 0);  // cancel never tallied
+    c.reset();
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    ::close(fd);
+}
+
+// ---- C2d row 9: injected reserve failure (ADR Gate 4) -----------------------
+// The capacity-full rejection is DRIVEN as an injected stage failure: the
+// submit path returns the arena's would_block BEFORE reserving a slot. The
+// Completion stays idle and zero slot/borrow/dispatch/ready residue exists by
+// construction; the capacity is untouched — a fresh submit (disarmed)
+// immediately succeeds and runs a real syscall.
+SLUICE_TEST_CASE(tp_c2d_reserve_failure_injection_zero_residue) {
+    ThreadPoolBackend::SubmitStageFailureInjection injection;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_submit_stage_failure_injection(&injection);
+    TempPath tp("rs");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x66}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    Completion<std::size_t> c;
+    std::byte buf[1]{};
+
+    injection.fail_reserve.store(true);
+    auto rej = backend.submit_read(ReadOp{fd, buf, 1, 0}, c);
+    injection.fail_reserve.store(false);
+
+    SLUICE_CHECK(!rej.has_value());
+    SLUICE_CHECK(rej.error().code == IoError::Code::would_block);
+    SLUICE_CHECK(injection.reserve_fired == 1);
+    // Zero residue: the Completion never left idle, no slot was reserved, no
+    // borrow, no dispatch linkage, no ready residue, nothing executed.
+    SLUICE_CHECK(!c.outstanding());
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    SLUICE_CHECK(backend.dispatch_size_for_test() == 0);
+    SLUICE_CHECK(backend.backend_ready_count_for_test() == 0);
+    SLUICE_CHECK(backend.syscall_count_for_test() == 0);
+
+    // The capacity is untouched: a fresh submit (disarmed) succeeds and runs.
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+    SLUICE_CHECK(drain_bounded(backend, deadline));
+    SLUICE_CHECK(c.ready() && c.result().has_value() && c.result().value() == 1);
+    c.reset();
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    ::close(fd);
+}
+
+// ---- C2d row 9: injected prepare failure (ADR Gate 4) -----------------------
+// Reserve succeeds, then the prepare stage is forced to fail: the candidate
+// slot is rolled back by the SAME rollback the natural prepare-failure path
+// uses (rollback_reserved_or_prepared) — slot_in_use returns to zero, no
+// borrow metadata was ever written (prepare writes it), and the capacity is
+// immediately recyclable. The Completion stays idle; zero dispatch/ready
+// residue; nothing executed.
+SLUICE_TEST_CASE(tp_c2d_prepare_failure_injection_slot_rollback) {
+    ThreadPoolBackend::SubmitStageFailureInjection injection;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_submit_stage_failure_injection(&injection);
+    TempPath tp("pp");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x77}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    Completion<std::size_t> c;
+    std::byte buf[1]{};
+
+    injection.fail_prepare.store(true);
+    auto rej = backend.submit_read(ReadOp{fd, buf, 1, 0}, c);
+    injection.fail_prepare.store(false);
+
+    SLUICE_CHECK(!rej.has_value());
+    SLUICE_CHECK(rej.error().code == IoError::Code::invalid_state);
+    SLUICE_CHECK(injection.prepare_fired == 1);
+    // The candidate slot was rolled back (reserved -> free, generation++):
+    // zero slot residue, no borrow, no dispatch linkage, no ready residue,
+    // nothing executed.
+    SLUICE_CHECK(!c.outstanding());
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    SLUICE_CHECK(backend.dispatch_size_for_test() == 0);
+    SLUICE_CHECK(backend.backend_ready_count_for_test() == 0);
+    SLUICE_CHECK(backend.syscall_count_for_test() == 0);
+
+    // The rolled-back slot is immediately recyclable: capacity 1 accepts a
+    // fresh submit and runs it to a real terminal.
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+    SLUICE_CHECK(drain_bounded(backend, deadline));
+    SLUICE_CHECK(c.ready() && c.result().has_value() && c.result().value() == 1);
+    c.reset();
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    ::close(fd);
+}
+
+// ---- C2d row 9: injected commit-boundary failure (ADR Gate 4) ----------------
+// The binding CAS ALREADY WON (Completion in `binding`), then the commit stage
+// is forced to fail: the submit path executes the REAL commit-failure rollback
+// — rollback_binding_before_accept (binding -> idle, restoring a fully
+// reusable Completion) followed by the slot rollback (publication binding
+// cleared, generation++, capacity recyclable, accepted-outstanding untouched).
+// This is the ONLY case in the corpus that executes
+// rollback_binding_before_accept (review P1): a natural commit failure (stale
+// handle / non-prepared slot) is unreachable after a same-thread
+// reserve -> prepare -> begin_binding. The destructor of a Completion stuck in
+// `binding` would fail-fast, so the clean exit of this case is itself part of
+// the proof.
+SLUICE_TEST_CASE(tp_c2d_commit_failure_injection_rollback_binding_before_accept) {
+    ThreadPoolBackend::SubmitStageFailureInjection injection;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_submit_stage_failure_injection(&injection);
+    TempPath tp("cb");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x88}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    Completion<std::size_t> c;
+    std::byte buf[1]{};
+
+    injection.fail_commit.store(true);
+    auto rej = backend.submit_read(ReadOp{fd, buf, 1, 0}, c);
+    injection.fail_commit.store(false);
+
+    SLUICE_CHECK(!rej.has_value());
+    SLUICE_CHECK(rej.error().code == IoError::Code::invalid_state);
+    SLUICE_CHECK(injection.commit_fired == 1);
+    // The Completion binding was rolled back (binding -> idle): NOT
+    // outstanding, NOT ready. If rollback_binding_before_accept had NOT run,
+    // the Completion would be stuck in `binding` (outstanding()==false yet the
+    // fresh submit below would lose the idle->binding CAS and the destructor
+    // would fail-fast).
+    SLUICE_CHECK(!c.outstanding());
+    SLUICE_CHECK(!c.ready());
+    // Zero residue: slot rolled back (publication binding cleared,
+    // generation++, slot_in_use -> 0), accepted-outstanding unchanged at
+    // zero, no borrow, no dispatch linkage, no ready residue, nothing
+    // executed.
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    SLUICE_CHECK(backend.dispatch_size_for_test() == 0);
+    SLUICE_CHECK(backend.backend_ready_count_for_test() == 0);
+    SLUICE_CHECK(backend.syscall_count_for_test() == 0);
+
+    // The SAME Completion and the rolled-back slot are immediately reusable:
+    // the fresh submit re-wins idle->binding, commits, runs a real syscall,
+    // and publishes exactly one terminal.
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+    SLUICE_CHECK(drain_bounded(backend, deadline));
+    SLUICE_CHECK(c.ready() && c.result().has_value() && c.result().value() == 1);
     c.reset();
     SLUICE_CHECK(backend.outstanding() == 0);
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);

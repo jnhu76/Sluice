@@ -305,6 +305,36 @@ class ThreadPoolBackend : public AsyncBackend {
         dispatch_failure_injection_.store(injection, std::memory_order_release);
     }
 
+    // Pre-commit stage-failure injection (ADR Gate 4: reserve / prepare /
+    // commit-boundary). Each stage is armed independently; the submit path
+    // checks the seam immediately BEFORE that stage's arena call and, when
+    // armed, returns the stage's natural synchronous rejection WITHOUT
+    // entering the stage — through the SAME rollback code the natural failure
+    // path uses (reserve: nothing to roll back; prepare:
+    // rollback_reserved_or_prepared; commit:
+    // rollback_binding_before_accept + rollback_reserved_or_prepared). The
+    // commit-boundary arm is the ONLY executable instance of
+    // rollback_binding_before_accept in the corpus: a natural commit failure
+    // (stale handle / non-prepared slot) is unreachable after a same-thread
+    // reserve -> prepare -> begin_binding, so no well-formed test could drive
+    // that branch without this seam (review P1). `*_fired` increments exactly
+    // once per injected submit at that stage; the test reads it to distinguish
+    // "seam fired" from a natural failure. TEST-ONLY (AGENTS.md §15):
+    // production builds carry no branch, no local, no symbol (the whole seam
+    // block is compiled out).
+    struct SubmitStageFailureInjection {
+        std::atomic<bool> fail_reserve{false};
+        std::atomic<bool> fail_prepare{false};
+        std::atomic<bool> fail_commit{false};
+        std::atomic<std::size_t> reserve_fired{0};
+        std::atomic<std::size_t> prepare_fired{0};
+        std::atomic<std::size_t> commit_fired{0};
+    };
+    void set_submit_stage_failure_injection(
+        SubmitStageFailureInjection* injection) noexcept {
+        submit_stage_failure_injection_.store(injection, std::memory_order_release);
+    }
+
     // Construction-time worker-spawn failure injection (rows 9-10; finding
     // P1-04 "no test injects thread-creation failure"). The
     // constructor-before-instance shape forces a CONTROLLED static seam: an
@@ -526,6 +556,17 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_running_pause_() noexcept;
     void wait_terminal_publication_pause_() noexcept;
     void wait_before_enqueue_lock_pause_() noexcept;
+
+    // The pre-commit admission stages that carry a synchronous rejection
+    // (ADR Gate 4): reserve (capacity-full would_block / admission-closed
+    // invalid_state), prepare, and commit.
+    enum class SubmitStage { reserve, prepare, commit };
+
+    // C2d pre-commit stage-failure injection (see the public seam above):
+    // when the seam is armed at `stage`, increments that stage's `fired`
+    // counter and returns the stage's natural synchronous rejection;
+    // std::nullopt when disarmed.
+    std::optional<IoError> injected_precommit_stage_failure_(SubmitStage stage) noexcept;
 #endif
 
     void tally_canceled() noexcept {
@@ -567,6 +608,10 @@ class ThreadPoolBackend : public AsyncBackend {
     // guarded setter above). Null when disarmed; never dereferenced by
     // production builds (the branch is compiled out).
     std::atomic<DispatchFailureInjection*> dispatch_failure_injection_{nullptr};
+    // Phase C2d: pre-commit stage-failure injection control (ADR Gate 4; see
+    // the guarded setter above). Null when disarmed; never dereferenced by
+    // production builds (the branches are compiled out).
+    std::atomic<SubmitStageFailureInjection*> submit_stage_failure_injection_{nullptr};
 #endif
 };
 
