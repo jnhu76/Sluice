@@ -64,5 +64,6 @@ on the case's own assertion text; M3 fails on the explicit
   (exit 0, `ALL TESTS PASSED`) before the next mutant was applied.
 - Post-run `grep -c MUTANT src/ include/` → 0 matches.
 - `git status --short` shows only the intended C2d files (guarded seams in
-  `threadpool_backend.hpp/.cpp`, the new test target, the Fake no-alloc case,
-  the manifest/gate records, and docs).
+  `include/sluice/async/threadpool_backend.hpp` / `src/async/threadpool_backend.cpp`,
+  the new test target, the Fake no-alloc case, the manifest/gate records, and
+  docs).

@@ -329,7 +329,7 @@ only for commands that actually ran green.
   terminal under a full-window always-throw probe), each detector proven
   mutation-RED, with Uring's Phase-D gap authoritatively recorded.
 - Production change (guarded only): the C2d failure-injection seams in
-  `threadpool_backend.hpp/.cpp` compile out of production builds (verified by
-  symbol inspection); no other production behavior change; no synchronous
+  `include/sluice/async/threadpool_backend.hpp` / `src/async/threadpool_backend.cpp`
+  compile out of production builds (verified by symbol inspection); no other production behavior change; no synchronous
   Reader/Writer change; no Phase D Uring implementation; no C2e/Phase F/Phase G
   scope creep.
