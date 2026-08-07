@@ -102,14 +102,23 @@ class BackendEntry:
                                     # (Uring before Phase D) — the gap is the
                                     # not_implemented manifest record, never a
                                     # skip-as-pass.
+    close_drain_driver_case: str = ""  # Phase C2e: the SLUICE_TEST_CASE that
+                                       # drives the shared close/drain cases for
+                                       # this backend. "" when the backend has
+                                       # no close_admission seam (Uring before
+                                       # Phase D) — the gap is the
+                                       # uring_c2e_close_drain_not_implemented
+                                       # manifest record, never a skip-as-pass.
 
 
 # The C1 backend registry. Sync/Synthetic are intentionally absent.
 BACKENDS: tuple[BackendEntry, ...] = (
     BackendEntry("Fake", "ReferenceProfile", "conformance_fake",
-                 capacity_driver_case="conformance_capacity_fake"),
+                 capacity_driver_case="conformance_capacity_fake",
+                 close_drain_driver_case="conformance_close_drain_fake"),
     BackendEntry("ThreadPool", "BlockingIoProfile", "conformance_threadpool",
-                 capacity_driver_case="conformance_capacity_threadpool"),
+                 capacity_driver_case="conformance_capacity_threadpool",
+                 close_drain_driver_case="conformance_close_drain_threadpool"),
     BackendEntry("Uring", "KernelIoProfile", "conformance_uring"),
 )
 
@@ -292,7 +301,10 @@ EVIDENCE: tuple[Evidence, ...] = (
         target="threadpool_backend_death_test",
         layer="lifecycle",
         backends=_TP,
-        notes="Non-quiescent destruction fail-fast.",
+        notes="Non-quiescent destruction fail-fast (Debug AND Release): "
+              "destroying with enqueued / running / backend-ready-unreaped / "
+              "completion-ready-unreset / pending (C2e) work terminates; "
+              "quiescent close_admission + drain + reset exits 0.",
     ),
 
     # -----------------------------------------------------------------------
@@ -531,6 +543,106 @@ EVIDENCE: tuple[Evidence, ...] = (
               "known gap; not_implemented never counts as PASS. (Target is "
               "the Uring-driving conformance binary, matching the other "
               "uring_*_not_implemented records; the gap is not executed.)",
+    ),
+
+    # -----------------------------------------------------------------------
+    # Phase C2e — close / drain / reset / destruction (Issue #68 rows 15-16).
+    # The shared close/drain suite (run_close_drain_cases, driven per backend
+    # by conformance_close_drain_fake / conformance_close_drain_threadpool)
+    # asserts ONLY AsyncIoContext-observable state plus the driver-wired
+    # close/slot_in_use closures: close rejects future submit with
+    # invalid_state (Completion idle, zero residue), accepted-before-close
+    # still reaches exactly one defined terminal with cancel/poll/reap legal,
+    # drained != releasable (slot_in_use stays 1 until the ready Completion is
+    # reset), and slot-release vs admission-close orthogonality (reuse after
+    # close is rejected). The ThreadPool deterministic target proves the
+    # per-window races (close while pending/enqueued/running, close || final
+    # record_terminal in both orderings, one-shot parked-waiter wake with no
+    # busy-spin, submit || close linearization); the Fake death target proves
+    # the reference backend's non-quiescent destruction fail-fasts through the
+    # arena destructor and its quiescent path exits 0. Row 16 (quiescent
+    # destruction) also keeps the threadpool_death / arena_lifecycle_death
+    # records; the C2e ThreadPool death matrix adds the `pending` state case.
+    # Uring's gap is the not_implemented record below (Phase D pending),
+    # entered via applicable_evidence_for_backend() so Uring's OWN verdict
+    # surfaces it — never skip-as-pass.
+    # -----------------------------------------------------------------------
+    Evidence(
+        evidence_id="c2e_shared_close_drain_suite",
+        target="backend_conformance_test",
+        layer="shared",
+        backends=("Fake", "ThreadPool"),
+        mandatory=True,
+        notes="C2e rows 15-16 shared close/drain cases: close rejects future "
+              "submit with invalid_state (Completion idle, no borrow, no "
+              "outstanding, no submitted_ops, no residue); accepted-before-"
+              "close still reaches exactly ONE defined terminal with "
+              "cancel/poll/reap legal after close; drained != releasable "
+              "(accepted_outstanding == 0 and Completion ready but slot_in_use "
+              "== 1 until the caller resets the ready Completion, then == 0); "
+              "slot-release and admission-close are orthogonal (a released "
+              "slot does not re-open admission — a fresh submit after "
+              "close/drain/reset is still invalid_state). Shared-observable "
+              "only + the driver-wired close/slot_in_use closures.",
+    ),
+    Evidence(
+        evidence_id="c2e_threadpool_close_drain_race",
+        target="threadpool_backend_c2e_close_drain_test",
+        layer="lifecycle",
+        backends=_TP,
+        mandatory=True,
+        notes="C2e rows 15-16 ThreadPool deterministic window evidence "
+              "(SLUICE_ASYNC_INTERNAL_TESTING pause gates): close while the "
+              "submit path is paused between commit and enqueue (`pending`) / "
+              "while `enqueued` on the ring / while the worker is `running` "
+              "the syscall — in every window the accepted request completes "
+              "with its REAL result verbatim (close never retroactively "
+              "rejects, cancels, or discards; void path too); void submit "
+              "after close -> invalid_state with idle Completion; close then "
+              "pending cancel still WINS canceled (Scheme B: no dispatch "
+              "linkage, no syscall, canceled_ops == 1); close then running "
+              "cancel records intent only (real result verbatim); close wakes "
+              "a parked wait_one as a ONE-SHOT control wake (0, no fabricated "
+              "completion) and a FUTURE wait_one parks normally again (no "
+              "busy-spin); close || final record_terminal in BOTH orderings "
+              "(close first: the interrupted wait_one returns 0 after its "
+              "final reap and the NEXT wait_one reaps the final ready — the "
+              "control interrupt never swallows it; terminal first: close "
+              "does not affect an already-stored terminal); an invariant-only "
+              "close-vs-workers race drain (every accepted request reaches "
+              "exactly one verbatim terminal, accounting zero); submit || "
+              "close concurrent linearization (every attempt is "
+              "accepted-then-terminal or synchronously invalid_state-idle — "
+              "never half-accepted).",
+    ),
+    Evidence(
+        evidence_id="c2e_fake_close_drain_death",
+        target="fake_backend_death_test",
+        layer="lifecycle",
+        backends=_F,
+        mandatory=True,
+        notes="C2e row 16 Fake reference-path death evidence through the "
+              "CONCRETE FakeAsyncBackend type: destroying the backend with a "
+              "bound unreaped request, or with a completion-ready-but-unreset "
+              "Completion (drained != releasable), fail-fasts in BOTH Debug "
+              "and Release (request_arena_destruction_fail_fast); the "
+              "quiescent path close_admission + drain + reset + destroy exits "
+              "0.",
+    ),
+    Evidence(
+        evidence_id="uring_c2e_close_drain_not_implemented",
+        target="backend_conformance_test",
+        layer="lifecycle",
+        backends=_U,
+        mandatory=True,
+        status=STATUS_NOT_IMPLEMENTED,
+        notes="C2e rows 15-16 (close_admission / drain / quiescent "
+              "destruction) require RequestArena admission-close + slot "
+              "lifecycle integration; Uring remains legacy until Phase D. "
+              "Recorded as a known gap; not_implemented never counts as PASS. "
+              "(Target is the Uring-driving conformance binary, matching the "
+              "other uring_*_not_implemented records; the gap is not "
+              "executed.)",
     ),
 
     # -----------------------------------------------------------------------
