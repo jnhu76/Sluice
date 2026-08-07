@@ -1501,6 +1501,153 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
                       {e.evidence_id for e in appl})
 
 
+C2D_EVIDENCE_IDS = (
+    "c2d_threadpool_failure_injection",
+    "c2d_fake_failure_injection_terminal",
+    "uring_c2d_failure_injection_not_implemented",
+)
+
+
+class C2dEvidenceRecordTest(unittest.TestCase):
+    """C2d evidence records exist with correct attributes (Issue #68 rows 9-10)."""
+
+    def test_all_c2d_records_exist(self):
+        for eid in C2D_EVIDENCE_IDS:
+            self.assertIsNotNone(M.evidence_by_id(eid),
+                                 f"C2d evidence '{eid}' must exist in manifest")
+
+    def test_threadpool_injection_is_mandatory_and_tagged(self):
+        ev = M.evidence_by_id("c2d_threadpool_failure_injection")
+        self.assertIn("ThreadPool", ev.backends)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+
+    def test_fake_injection_terminal_is_mandatory_and_tagged(self):
+        ev = M.evidence_by_id("c2d_fake_failure_injection_terminal")
+        self.assertIn("Fake", ev.backends)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+
+    def test_uring_c2d_gap_is_not_implemented(self):
+        ev = M.evidence_by_id("uring_c2d_failure_injection_not_implemented")
+        self.assertIn("Uring", ev.backends)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+
+    def test_c2d_ids_unique_in_manifest(self):
+        ids = [e.evidence_id for e in M.EVIDENCE]
+        for eid in C2D_EVIDENCE_IDS:
+            self.assertEqual(ids.count(eid), 1,
+                             f"C2d evidence '{eid}' must appear exactly once")
+
+
+class C2dVerdictIntegrationTest(unittest.TestCase):
+    """C2d evidence enters the per-backend verdict correctly."""
+
+    def test_fake_has_mandatory_c2d_lifecycle_evidence(self):
+        appl = M.applicable_evidence_for_backend("Fake")
+        c2d = [e for e in appl if e.evidence_id in C2D_EVIDENCE_IDS]
+        self.assertTrue(any(e.mandatory and e.status == M.STATUS_IMPLEMENTED
+                            for e in c2d),
+                        "Fake must have at least one mandatory implemented "
+                        "C2d lifecycle record")
+
+    def test_threadpool_has_mandatory_c2d_lifecycle_evidence(self):
+        appl = M.applicable_evidence_for_backend("ThreadPool")
+        c2d = [e for e in appl if e.evidence_id in C2D_EVIDENCE_IDS]
+        self.assertTrue(any(e.mandatory and e.status == M.STATUS_IMPLEMENTED
+                            for e in c2d),
+                        "ThreadPool must have at least one mandatory "
+                        "implemented C2d lifecycle record")
+
+    def test_uring_has_mandatory_not_implemented_c2d_record(self):
+        appl = M.applicable_evidence_for_backend("Uring")
+        c2d = [e for e in appl if e.evidence_id in C2D_EVIDENCE_IDS]
+        self.assertTrue(any(e.mandatory and e.status == M.STATUS_NOT_IMPLEMENTED
+                            for e in c2d),
+                        "Uring must have a mandatory not_implemented C2d record")
+
+    def test_uring_c2d_gap_surfaces_in_verdict(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_c2d_failure_injection_not_implemented" in r for r in reasons),
+            f"Uring C2d gap must appear in reasons: {reasons}")
+
+    def test_fake_c2d_failure_does_not_affect_threadpool(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["c2d_fake_failure_injection_terminal"] = G.RunResult(
+            "c2d_fake_failure_injection_terminal", "reference_backend_no_alloc_test",
+            G.RUN_FAIL, detail="stub C2d Fake failure")
+        v_fake, reasons_fake = g._backend_verdict(M.backend_by_name("Fake"))
+        v_tp, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        self.assertEqual(v_fake, G.NOT_CONFORMING)
+        self.assertEqual(v_tp, G.ELIGIBLE,
+                         "ThreadPool must stay ELIGIBLE when Fake C2d fails")
+
+    def test_threadpool_c2d_failure_does_not_affect_fake(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["c2d_threadpool_failure_injection"] = G.RunResult(
+            "c2d_threadpool_failure_injection", "threadpool_backend_c2d_failure_test",
+            G.RUN_FAIL, detail="stub C2d ThreadPool failure")
+        v_tp, reasons_tp = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        v_fake, _ = g._backend_verdict(M.backend_by_name("Fake"))
+        self.assertEqual(v_tp, G.NOT_CONFORMING)
+        self.assertEqual(v_fake, G.ELIGIBLE,
+                         "Fake must stay ELIGIBLE when ThreadPool C2d fails")
+
+    def test_arena_pass_cannot_erase_uring_c2d_gap(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_c2d_failure_injection_not_implemented" in r for r in reasons),
+            "a generic arena PASS can never erase the Uring C2d gap")
+
+    def test_missing_c2d_target_fails_closed(self):
+        # A backend's mandatory implemented C2d record whose run state is not
+        # PASS forces the verdict to INCOMPLETE (never skip-as-pass).
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["c2d_threadpool_failure_injection"] = G.RunResult(
+            "c2d_threadpool_failure_injection", "threadpool_backend_c2d_failure_test",
+            G.MISSING_TARGET, detail="xmake show -t reports not valid")
+        v_tp, reasons_tp = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        self.assertEqual(v_tp, G.INCOMPLETE)
+        self.assertTrue(
+            any("c2d_threadpool_failure_injection" in r for r in reasons_tp))
+
+    def test_c2d_evidence_in_lifecycle_layer(self):
+        for eid in C2D_EVIDENCE_IDS:
+            ev = M.evidence_by_id(eid)
+            self.assertEqual(ev.layer, "lifecycle",
+                             f"C2d evidence '{eid}' must live in the lifecycle layer")
+
+    def test_c2d_not_implemented_never_satisfies_mandatory_slot(self):
+        # The Uring C2d gap is mandatory + not_implemented: it must force the
+        # Uring verdict to NOT_CONFORMING, never count as a pass.
+        appl = M.applicable_evidence_for_backend("Uring")
+        gap = M.evidence_by_id("uring_c2d_failure_injection_not_implemented")
+        self.assertIn(gap.evidence_id, {e.evidence_id for e in appl})
+        self.assertTrue(gap.mandatory)
+        self.assertEqual(gap.status, M.STATUS_NOT_IMPLEMENTED)
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+
+    def test_uring_c2d_gap_evidence_is_mandatory_not_implemented_applicable(self):
+        ev = M.evidence_by_id("uring_c2d_failure_injection_not_implemented")
+        self.assertIn("Uring", ev.backends)
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        appl = M.applicable_evidence_for_backend("Uring")
+        self.assertIn("uring_c2d_failure_injection_not_implemented",
+                      {e.evidence_id for e in appl})
+
+
 if __name__ == "__main__":
     # Standalone invocation mirrors `unittest discover`: exit non-zero on any
     # failure, zero on full pass. No top-level sys.exit during import.
