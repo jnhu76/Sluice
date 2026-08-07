@@ -551,19 +551,34 @@ public:
 
     // --- Waiter registration (ADR Decision 10 / I13) ---
     // Register one waiter. Second registration while open_registered returns
-    // invalid_state without overwriting the first. Returns invalid_state if the
-    // slot is not pending/enqueued (registration only makes sense pre-terminal).
+    // invalid_state without overwriting the first. Registration is ORTHOGONAL
+    // to execution state (ADR Decision 10 :668-698): it is legal for any
+    // accepted, unreaped request — pending/enqueued/running/backend_ready —
+    // while registration is open, and ONLY reap closes it. A terminal winner
+    // (record_terminal -> backend_ready) does NOT close registration: a waiter
+    // registered after the terminal is recorded but before reap still succeeds
+    // and reap delivers it. invalid_state is returned only for reserved/
+    // prepared (the pre-commit binding window, :483-484) and completion_ready
+    // (reap already closed registration; observationally closed ==
+    // completion_ready because reap sets both in one leaf-domain critical
+    // section, so the state guard is the single registration-window authority —
+    // a future path that closes registration without completion_ready must
+    // restore a closed-registration guard) and for a duplicate waiter. A stale
+    // handle returns not_found. On any failure the candidate lease is consumed
+    // at the by-value call boundary and released inline — never transferred to
+    // the slot (ADR :661-662: "Scheduler reclaims it or completes inline as
+    // appropriate"; Phase B completes inline).
     Result<void> register_waiter(SlotHandle h, WaiterToken token, RoutingLease lease) {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
         if (!s) return make_unexpected<void>(IoError{IoError::Code::not_found});
-        if (s->state_ != RequestState::pending && s->state_ != RequestState::enqueued) {
+        if (s->state_ != RequestState::pending && s->state_ != RequestState::enqueued &&
+            s->state_ != RequestState::running && s->state_ != RequestState::backend_ready) {
+            // reserved/prepared: not accepted yet (pre-commit binding window);
+            // completion_ready: reap already closed registration.
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         if (s->registration_ == WaiterRegistration::open_registered) {
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        if (s->registration_ == WaiterRegistration::closed) {
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         s->registration_ = WaiterRegistration::open_registered;

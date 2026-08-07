@@ -274,7 +274,8 @@ class ThreadPoolBackend : public AsyncBackend {
     // Register one waiter on the slot bound to a real accepted Completion.
     // Returns the arena's own register_waiter result (not_found for an
     // unbound/stale Completion; invalid_state for a second registration or a
-    // non-pending/enqueued slot).
+    // non-accepted/unreaped slot — registration is orthogonal to execution
+    // state, ADR Decision 10).
     Result<void> register_waiter_for_test(Completion<std::size_t>& c,
                                           detail::WaiterToken token,
                                           detail::RoutingLease lease) {
