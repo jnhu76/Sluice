@@ -1601,7 +1601,14 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
                          "Fake must stay ELIGIBLE when ThreadPool C2d fails")
 
     def test_arena_pass_cannot_erase_uring_c2d_gap(self):
+        # The arena matrix record is backend-agnostic (backends=()); it applies
+        # to Uring but cannot satisfy Uring's C2d obligation because Uring's
+        # own tagged not_implemented record remains INCOMPLETE.
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["c2c_arena_borrow_waiter_lease_matrix"] = G.RunResult(
+            "c2c_arena_borrow_waiter_lease_matrix",
+            "request_waiter_borrow_lease_test",
+            G.PASS, detail="stub arena PASS")
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(verdict, G.NOT_CONFORMING)
         self.assertTrue(
@@ -1627,16 +1634,34 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
                              f"C2d evidence '{eid}' must live in the lifecycle layer")
 
     def test_c2d_not_implemented_never_satisfies_mandatory_slot(self):
-        # The Uring C2d gap is mandatory + not_implemented: it must force the
-        # Uring verdict to NOT_CONFORMING, never count as a pass.
-        appl = M.applicable_evidence_for_backend("Uring")
-        gap = M.evidence_by_id("uring_c2d_failure_injection_not_implemented")
-        self.assertIn(gap.evidence_id, {e.evidence_id for e in appl})
-        self.assertTrue(gap.mandatory)
-        self.assertEqual(gap.status, M.STATUS_NOT_IMPLEMENTED)
-        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
-        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
+        # A not_implemented MANDATORY record can never satisfy a mandatory slot
+        # in the ORDINARY (non-KernelIo) verdict branch. Use a synthetic
+        # ReferenceProfile backend ("Ghost", not registered) so the priority-2
+        # branch of _backend_verdict is actually exercised: the not_implemented
+        # record seeds an INCOMPLETE run state, which is insufficient evidence
+        # -> INCOMPLETE (never ELIGIBLE, never NOT_CONFORMING). The Uring
+        # KernelIo early-return cannot prove this branch (C2b/C2c lesson), so
+        # it is not used here.
+        gap = M.Evidence(
+            evidence_id="ghost_c2d_gap_injected",
+            target="backend_conformance_test", layer="lifecycle",
+            backends=("Ghost",), status=M.STATUS_NOT_IMPLEMENTED, mandatory=True,
+        )
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            ghost = M.BackendEntry("Ghost", "ReferenceProfile",
+                                   "conformance_ghost")
+            # Seed the run state the gate loop would produce for the
+            # not_implemented record.
+            g.results["ghost_c2d_gap_injected"] = G.RunResult(
+                "ghost_c2d_gap_injected", "backend_conformance_test",
+                G.INCOMPLETE, detail="not_implemented")
+            verdict, reasons = g._backend_verdict(ghost)
+            self.assertEqual(verdict, G.INCOMPLETE, reasons)
+            self.assertTrue(
+                any("ghost_c2d_gap_injected" in r for r in reasons),
+                f"gap record must appear in reasons: {reasons}")
 
     def test_uring_c2d_gap_evidence_is_mandatory_not_implemented_applicable(self):
         ev = M.evidence_by_id("uring_c2d_failure_injection_not_implemented")

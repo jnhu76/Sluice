@@ -454,8 +454,10 @@ EVIDENCE: tuple[Evidence, ...] = (
     # operation paths; post-commit no-allocation under an always-throw
     # operator new (ADR Decision 14 / I9) on the real worker path and on the
     # injected failure path; and the dispatch-failure terminal vs cancel
-    # exactly-one-winner invariant (no overwrite, no double publication,
-    # exactly one tally in every interleaving). The Fake record proves the
+    # exactly-one-winner invariant (no overwrite, no double publication, at
+    # most one tally: canceled_ops == 1 iff cancel won — the injected
+    # backend_error terminal contributes no tally, as completion_errors is
+    # unwired for ThreadPool). The Fake record proves the
     # reference path reaches a defined error terminal under a FULL-window
     # always-throw operator new (submit -> complete_oldest_with_error ->
     # poll -> reset, zero allocations). Uring's gap is the not_implemented
