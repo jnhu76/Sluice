@@ -252,15 +252,17 @@ coverage).
     13 (waiter-cancel independence), and 14a (abstract move-only delivery
     lease) now have arena-level, per-backend, concurrency-proven,
     mutation-valid evidence: a focused arena matrix target
-    (`request_waiter_borrow_lease_test`, 13 cases) and Fake/ThreadPool
+    (`request_waiter_borrow_lease_test`, 14 cases) and Fake/ThreadPool
     integration targets (`backend_c2c_waiter_borrow_test`,
     `threadpool_backend_c2c_waiter_borrow_test`) that route real accepted
     Completions through the REAL arena waiter/borrow authorities. The
     ThreadPool evidence includes the running window (borrow active with exact
     fd/addr/len, waiter survives enqueued → running → backend_ready, running
-    cancel intent ends neither) and the backend_ready-before-reap window (a
-    worker finishing its syscall is NOT the borrow lifetime end). Eight
-    single-point production mutations (A–H) prove each detector case fails on
+    cancel intent ends neither), the backend_ready-before-reap window (a
+    worker finishing its syscall is NOT the borrow lifetime end), and waiter
+    registration inside the running/backend_ready windows (registration is
+    orthogonal to execution state — ADR Decision 10). Nine
+    single-point production mutations (A–I) prove each detector case fails on
     deliberately nonconforming borrow/waiter/lease behavior. **Rows 12b
     (public waiter / RequestHandle / Scheduler registration consumer) and 14b
     (real Scheduler routing-record lifetime / lease acknowledgement) are

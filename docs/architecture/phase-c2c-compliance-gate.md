@@ -4,14 +4,21 @@
 **Governing ADR:** [`ADR-explicit-io-request-contract`](../adr/ADR-explicit-io-request-contract.md) (Accepted) — Decisions 8, 9, 10; invariants I7, I13, I16, I18
 **Issue #68:** https://github.com/jnhu76/Sluice/issues/68 — C2c scope (rows 11–14)
 **Branch:** test/phase-c2c-borrow-waiter-delivery-lease
-**Scope:** Tests + test-only guarded header seams + gate scripts + docs only. **No production behavior change**: the production `RequestArena` / `RequestSlot` already implements the C2c contract (Phase B); this slice proves it at arena level, at the Fake/ThreadPool integration level, under concurrency, and against deliberate nonconforming mutations.
+**Scope:** Tests + test-only guarded header seams + gate scripts + docs + ONE production
+correction: `RequestArena::register_waiter`'s state window was widened from pending/enqueued to
+pending/enqueued/running/backend_ready to match the Accepted ADR (Decision 10: registration is
+orthogonal to execution state and only reap closes it). The previous pending/enqueued-only guard
+rejected registration exactly where the ADR mandates success (running syscall, terminal-won-but-
+not-yet-reaped) and is reachable in production on ThreadPoolBackend (mark_running). Everything else
+this slice proves at arena level, at the Fake/ThreadPool integration level, under concurrency, and
+against deliberate nonconforming mutations.
 
 This is the PR-level evidence ledger for Phase C2c, the third C2 semantic-coverage slice:
 **fd/buffer borrow lifetime** (row 11), **single-waiter registration** (row 12a), **waiter-cancel
 independence** (row 13), and the **move-only delivery lease** (row 14a). C2c closes these rows for the
 RequestArena authority layer and for the migrated Fake / ThreadPool backends, records Uring's Phase-D
 gap as a `not_implemented` manifest record, and proves every detector case fails on deliberately
-nonconforming code (mutants A–H).
+nonconforming code (mutants A–I).
 
 ---
 
@@ -34,8 +41,9 @@ integration; Phase B alone is not that evidence."):
 
 - **Row 12a (C2c):** the RequestSlot-level single-waiter registration authority — one registration,
   synchronous `invalid_state` for a second without overwriting the first, registration state matrix
-  pinned from the as-built contract, and the abstract delivery mechanics (reap closes registration and
-  moves the token/lease out exactly once, racing wait-cancel).
+  pinned from ADR Decision 10 (registration is orthogonal to execution state and only reap closes
+  it; a terminal winner does NOT close registration), and the abstract delivery mechanics (reap
+  closes registration and moves the token/lease out exactly once, racing wait-cancel).
 - **Row 12b (Phase F):** the real public waiter / RequestHandle / Scheduler registration consumer that
   will translate slot-level closed-registration into an already-ready observation. C2c adds **no
   public waiter API**.
@@ -91,23 +99,44 @@ result later wins verbatim), and wait-cancel. `arena_borrow_rollback_and_stale_p
 pre-commit rollback never borrows (metadata cleared, generation++) and that a stale-generation handle
 reads nullopt and cannot touch a new occupant's borrow metadata.
 
+`arena_borrow_publication_order` pins the I18 order DETERMINISTICALLY: a guarded trace seam inside
+reap's leaf-domain critical section records borrow-end and the Completion-ready publication as
+sequence numbers from one monotonic sequence; the case asserts publish_seq > borrow_end_seq. A mutant
+that moves the borrow end after the publication — same critical section, still before reap returns —
+flips the trace and fails this case; a post-reap borrow observation alone cannot distinguish it
+(mutant I, §3.7).
+
 The borrow is observed through the new generation-validated `borrow_for_test(SlotHandle)` seam
 (`SLUICE_ASYNC_INTERNAL_TESTING`-guarded; by-value `BorrowSnapshot` — never a `RequestSlot*` or
 `BorrowMetadata&`), so a later slot reuse can never be mistaken for the original request.
 
 ### 3.2 Rows 12a/14a — single waiter + lease (arena)
 
-`arena_waiter_registration_state_matrix` pins the registration window from the as-built contract
-(which the Accepted ADR's Decision 10 state machine describes — registration happens while the
-request is outstanding pre-terminal):
+`arena_waiter_registration_state_matrix` pins the registration window from the Accepted ADR's
+Decision 10 (:668-698): registration is **orthogonal to execution state** and **only reap closes
+it**. A terminal winner (record_terminal → backend_ready) does NOT close registration — a waiter
+registered after the terminal is recorded but before reap succeeds, and reap delivers it:
 
 | Slot state | register_waiter result |
 |---|---|
-| reserved / prepared | `invalid_state` |
-| pending / enqueued | success (the pre-terminal registration window) |
-| running | `invalid_state` (syscall already executing; no audit divergence — the implementation allows only pending/enqueued and the ADR does not authorize running registration) |
-| backend_ready / completion_ready | `invalid_state` (terminal won; registration closed; the Phase F public consumer will translate closed-into-ready) |
+| reserved / prepared | `invalid_state` (pre-commit binding window, ADR :483-484) |
+| pending / enqueued | success (registration open) |
+| running | success (registration open — the executing syscall does not close registration) |
+| backend_ready | success (the terminal winner does NOT close registration; reap delivers) |
+| completion_ready | `invalid_state` (reap closed registration; the Phase F public consumer will translate closed-into-ready) |
 | stale (released/reused) | `not_found` (generation validation) |
+
+This matrix is the review-driven correction of the earlier pending/enqueued-only as-built guard
+(`request_arena.hpp` `register_waiter`). The previous gate text claimed "the ADR does not authorize
+running registration" — no ADR text supports that; the Accepted ADR contains no execution-state
+restriction on registration, and ThreadPool production reaches `running`/`backend_ready`
+(`threadpool_backend.cpp` `mark_running`), so the narrower guard rejected registration exactly where
+the ADR mandates success. Every failure path (reserved/prepared, duplicate, completion_ready, stale)
+consumes the candidate lease at the by-value call boundary and releases it inline — it is never
+transferred to the slot (ADR :661-662: "Duplicate, invalid, or already-ready registration does not
+transfer the candidate lease; Scheduler reclaims it or completes inline as appropriate" — Phase B
+completes inline; the tests assert the caller's named lease is moved-from after every failed call
+and the slot stores nothing).
 
 `arena_single_waiter_first_registration_survives` proves the no-overwrite property the task calls the
 C2c false-green trap: the second registration returns `invalid_state` **and** the final reap delivery
@@ -122,19 +151,24 @@ sink delivery safe; the as-built type already has them). `arena_lease_transfer_c
 registration, slot owns it while registered, reap moves it into the event (slot no longer owns;
 second reap produces nothing) or cancel_waiter returns it (ReadyEvent never gets it).
 
-`arena_ready_event_waiter_survives_slot_reuse` proves the by-value property WITH a waiter payload:
-inside the sink callback the slot is released AND re-reserved (generation advances) and the captured
-event's key/kind/token/lease remain intact.
+`arena_ready_event_waiter_survives_slot_reuse` proves the by-value property WITH a waiter payload
+under the ADR's callback-scoped consumption contract (:625-636): the sink copies only plain scalars
+(key/kind/token/lease-id) and consumes the move-only lease INSIDE the callback, then releases AND
+re-reserves the slot mid-callback (generation advances); the saved scalars stay intact after reap
+returns — the delivery is by-value identity, not slot storage, and no lease escapes the callback.
 
 ### 3.3 Rows 13/14a — concurrency (arena)
 
 Both races are driven with `std::barrier`-released threads through the arena's single leaf
 slot-lifecycle domain; both assert the exactly-one invariant, not an outcome distribution.
 
-`arena_register_waiter_vs_terminal_race` (32 iterations): exactly two legal outcomes —
-register-wins (delivery carries A exactly once; late wait-cancel gets nothing) or terminal-wins
-(register `invalid_state`; event has no waiter). Never register-success-with-lost-delivery, never
-register-failure-with-stored-waiter.
+`arena_register_waiter_vs_reap_race` (32 iterations): the terminal winner does NOT close
+registration (ADR Decision 10), so the load-bearing race is register vs **reap** (not register vs
+record_terminal). Exactly two legal outcomes — register-wins (delivery carries token A + lease A
+exactly once; late wait-cancel gets nothing) or reap-wins (register `invalid_state`; the event
+carries no waiter; the candidate lease is consumed at the by-value call boundary and released
+inline — never stored in the slot, never delivered). The lease ownership count is exactly one in
+every iteration; a second reap delivers nothing in both outcomes.
 
 `arena_cancel_waiter_vs_reap_race` (32 iterations): the C2c centerpiece — a registered waiter's
 token/lease is moved out EXACTLY ONCE: cancel-wins (cancel_waiter returns lease A; event has no
@@ -153,6 +187,10 @@ arena's own bounded scan, the same identity bridge the public cancel path uses):
   register waiter A; `complete_*` produces ONLY backend_ready (Completion not ready, borrow still
   active, sink silent before poll); poll → Completion ready, borrow ended, sink delivered token A +
   lease 99 exactly once; second poll delivers nothing.
+- `fake_backend_ready_window_waiter_registration` — complete_* produces ONLY backend_ready; a
+  waiter registered IN that window (terminal recorded, reap not run) succeeds and poll() delivers
+  it exactly once together with the terminal result — the terminal winner does NOT close
+  registration (ADR Decision 10), the exact window the pre-correction guard wrongly rejected.
 - `fake_wait_cancel_keeps_io` — wait-cancel returns the lease, reopens registration, and the I/O
   stays accepted with its borrow active, no terminal, no canceled tally; the I/O then completes
   normally with no waiter delivered.
@@ -177,6 +215,13 @@ the Completion is NOT ready — **a worker finishing its syscall is not the borr
 reap releases the borrow. `tp_wait_cancel_keeps_io` proves wait-cancel ≠ I/O cancel on the real
 backend (the syscall still executes and its real result wins). `tp_io_cancel_keeps_waiter` proves an
 enqueued I/O cancel keeps the waiter (canceled result + waiter delivered together; no syscall runs).
+`tp_running_window_waiter_registration` (Gate C) registers a FRESH waiter while the worker is paused
+in the RUNNING window (between mark_running and the syscall): registration succeeds and reap
+delivers it exactly once with the syscall's real result. `tp_backend_ready_window_waiter_registration`
+registers a FRESH waiter at backend_ready (terminal recorded, no reap run): registration succeeds
+and reap delivers it exactly once. Both pin ADR Decision 10's execution-state orthogonality on the
+real backend — the exact windows the review identified as wrongly rejected by the pre-correction
+guard.
 `tp_stale_waiter_authority_harmless` proves a stale waiter authority cannot touch a live N+1
 occupant on the real backend.
 
@@ -196,8 +241,10 @@ occupant on the real backend.
 `scripts/verify-backend-conformance.py` needs no change: the existing `_backend_verdict` iteration
 over APPLICABLE mandatory evidence handles the new records — Fake/ThreadPool C2c integration is
 mandatory + implemented, so a RUN_FAIL forces NOT_CONFORMING; Uring's C2c gap is mandatory +
-not_implemented, so it forces INCOMPLETE in Uring's OWN verdict (surfaced in the reasons list
-alongside the C2a/C2b gaps). A generic arena PASS can never erase Uring's tagged gap.
+not_implemented, surfaced as `uring_c2c_borrow_waiter_not_implemented=INCOMPLETE (not_implemented)`
+in the layer detail AND in the verdict reasons (alongside the C2a/C2b gaps), while the KernelIo-
+profile rule (Uring is registered under `KernelIoProfile` in the manifest) keeps Uring's OWN verdict
+**NOT CONFORMING**. A generic arena PASS can never erase Uring's tagged gap.
 
 ### 3.7 Validity evidence
 
@@ -217,8 +264,9 @@ for the full per-mutant patch/command/exit-code/restore ledger.
 | D | wait-cancel also cancels the I/O (stolen I/O authority) | `arena_waiter_cancel_removes_only_the_waiter` | same |
 | E | cancel_waiter returns the lease but leaves `waiter_delivery_present_` set (duplicate lease) | `arena_cancel_waiter_vs_reap_race` | same |
 | F | reap closes registration but drops the lease (lease dropped) | `arena_lease_transfer_chain_reap_path` | same |
-| G | registration allowed after terminal (state matrix violation) | `arena_waiter_registration_state_matrix` | same |
+| G | registration allowed after reap (completion_ready accepted — the window must end at reap, NOT at terminal: "registration after terminal" is legal per ADR Decision 10, "registration after reap" is not) | `arena_waiter_registration_state_matrix` | same |
 | H | stale waiter authority bypasses generation validation | `fake_stale_waiter_authority_harmless` | same |
+| I | borrow ends AFTER the Completion-ready publication but still inside reap (I18 order violation — a post-reap borrow observation alone cannot detect it) | `arena_borrow_publication_order` | same |
 
 Every mutant run exited non-zero; arena-level mutants terminate via the destructor fail-fast after the
 case's assertion records the violation (the fail-fast fires because the broken invariant leaves the
@@ -231,6 +279,7 @@ were restored and `git diff include/ src/` shows only the guarded test seams.
 | Case (SLUICE_TEST_CASE) | Target | Status |
 |---|---|---|
 | `arena_borrow_lifecycle_full_matrix` | request_waiter_borrow_lease_test | PASS |
+| `arena_borrow_publication_order` | request_waiter_borrow_lease_test | PASS |
 | `arena_borrow_survives_cancel_and_wait_cancel` | request_waiter_borrow_lease_test | PASS |
 | `arena_borrow_rollback_and_stale_protection` | request_waiter_borrow_lease_test | PASS |
 | `arena_waiter_registration_state_matrix` | request_waiter_borrow_lease_test | PASS |
@@ -241,15 +290,18 @@ were restored and `git diff include/ src/` shows only the guarded test seams.
 | `arena_lease_transfer_chain_reap_path` | request_waiter_borrow_lease_test | PASS |
 | `arena_lease_transfer_chain_wait_cancel_path` | request_waiter_borrow_lease_test | PASS |
 | `arena_ready_event_waiter_survives_slot_reuse` | request_waiter_borrow_lease_test | PASS |
-| `arena_register_waiter_vs_terminal_race` | request_waiter_borrow_lease_test | PASS |
+| `arena_register_waiter_vs_reap_race` | request_waiter_borrow_lease_test | PASS |
 | `arena_cancel_waiter_vs_reap_race` | request_waiter_borrow_lease_test | PASS |
 | `fake_borrow_waiter_delivery_integration` | backend_c2c_waiter_borrow_test | PASS |
+| `fake_backend_ready_window_waiter_registration` | backend_c2c_waiter_borrow_test | PASS |
 | `fake_wait_cancel_keeps_io` | backend_c2c_waiter_borrow_test | PASS |
 | `fake_io_cancel_keeps_waiter` | backend_c2c_waiter_borrow_test | PASS |
 | `fake_stale_waiter_authority_harmless` | backend_c2c_waiter_borrow_test | PASS |
 | `fake_waiter_seam_unbound_completion_not_found` | backend_c2c_waiter_borrow_test | PASS |
 | `tp_running_borrow_cancel_intent_waiter_survives` | threadpool_backend_c2c_waiter_borrow_test | PASS |
 | `tp_backend_ready_borrow_still_active_before_reap` | threadpool_backend_c2c_waiter_borrow_test | PASS |
+| `tp_running_window_waiter_registration` | threadpool_backend_c2c_waiter_borrow_test | PASS |
+| `tp_backend_ready_window_waiter_registration` | threadpool_backend_c2c_waiter_borrow_test | PASS |
 | `tp_wait_cancel_keeps_io` | threadpool_backend_c2c_waiter_borrow_test | PASS |
 | `tp_io_cancel_keeps_waiter` | threadpool_backend_c2c_waiter_borrow_test | PASS |
 | `tp_stale_waiter_authority_harmless` | threadpool_backend_c2c_waiter_borrow_test | PASS |
@@ -287,13 +339,13 @@ were restored and `git diff include/ src/` shows only the guarded test seams.
 
 | Gate | Command | Result |
 |---|---|---|
-| Focused arena | `xmake build request_waiter_borrow_lease_test && xmake run request_waiter_borrow_lease_test` | PASS (13 cases) |
-| Focused Fake | `xmake build backend_c2c_waiter_borrow_test && xmake run backend_c2c_waiter_borrow_test` | PASS (5 cases) |
-| Focused ThreadPool | `xmake build threadpool_backend_c2c_waiter_borrow_test && xmake run threadpool_backend_c2c_waiter_borrow_test` | PASS (5 cases) |
+| Focused arena | `xmake build request_waiter_borrow_lease_test && xmake run request_waiter_borrow_lease_test` | PASS (14 cases) |
+| Focused Fake | `xmake build backend_c2c_waiter_borrow_test && xmake run backend_c2c_waiter_borrow_test` | PASS (6 cases) |
+| Focused ThreadPool | `xmake build threadpool_backend_c2c_waiter_borrow_test && xmake run threadpool_backend_c2c_waiter_borrow_test` | PASS (7 cases) |
 | Stability | 3× repeated runs of the arena + ThreadPool targets | PASS (no flake) |
 | Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (120 cases) |
 | Aggregate gate | `python3 scripts/verify-backend-conformance.py` | see section 8 |
-| RED validity | 8 mutations (A–H), focused filtered runs | all RED; all restored (see §3.7 + mutation ledger) |
+| RED validity | 9 mutations (A–I), focused filtered runs | all RED; all restored (see §3.7 + mutation ledger) |
 
 ## 8. Validation matrix (full evidence)
 
@@ -303,13 +355,13 @@ actually ran green.
 | Gate | Command | Result |
 | ---- | ------- | ------ |
 | Debug / Clang full | `xmake f -m debug --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (146 targets, 0 failed) |
-| Focused arena | `xmake run request_waiter_borrow_lease_test` | PASS (13 cases) |
-| Focused Fake | `xmake run backend_c2c_waiter_borrow_test` | PASS (5 cases) |
-| Focused ThreadPool | `xmake run threadpool_backend_c2c_waiter_borrow_test` | PASS (5 cases) |
+| Focused arena | `xmake run request_waiter_borrow_lease_test` | PASS (14 cases) |
+| Focused Fake | `xmake run backend_c2c_waiter_borrow_test` | PASS (6 cases) |
+| Focused ThreadPool | `xmake run threadpool_backend_c2c_waiter_borrow_test` | PASS (7 cases) |
 | Stability | 3× repeated runs of arena + ThreadPool targets | PASS (no flake) |
 | Release / Clang | `xmake f -m release --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (146 targets, 0 failed) |
 | ASan/UBSan | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0; zero ASan/UBSan reports) |
-| TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0; zero race reports, incl. the C2c register-vs-terminal and cancel_waiter-vs-reap races) |
+| TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0; zero race reports, incl. the C2c register-vs-reap and cancel_waiter-vs-reap races) |
 | Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (120 cases, incl. 17 C2c) |
 | Aggregate gate | `python3 scripts/verify-backend-conformance.py` | PASS (Fake/TP ELIGIBLE with C2c records PASS; Uring NOT CONFORMING with the C2c gap in its reasons) |
 | Doc links | `python3 scripts/check-doc-links.py --self-test` + `python3 scripts/check-doc-links.py` | PASS (no broken links, no stale paths) |
@@ -331,6 +383,11 @@ actually ran green.
 - **Phase D** — Uring RequestArena migration: PENDING; Uring C2c conformance is the
   `uring_c2c_borrow_waiter_not_implemented` record, never skip-as-pass.
 - **Phase G** — backend-ready progress wake bridge: PENDING (out of C2c scope).
+- **Formal models** — no TLA suite under `spec/tla/` binds the RequestArena / waiter-registration
+  lifecycle (manifest checked; the formal suites cover scheduler primitives e10–e16 and
+  blocking-io-pool), so the C2c registration-window correction changes no modeled transition and no
+  model update is required (AGENTS.md §17 formal-coverage gap recorded here). A future RequestArena
+  model should encode the register-vs-reap window and the I18 publication order.
 
 ## 10. Phase status
 
@@ -340,6 +397,10 @@ actually ran green.
   concurrency-proven, mutation-valid evidence for Fake and ThreadPool; Uring's gap is authoritatively
   recorded. Rows 12b/14b (real Scheduler waiter consumer / routing-record lifetime) are explicitly
   Phase F scope, not C2c gaps.
-- No production behavior change (only `SLUICE_ASYNC_INTERNAL_TESTING`-guarded header seams in
-  `include/sluice/`); no synchronous Reader/Writer behavior change; no Phase D Uring implementation;
-  no C2d/C2e/Phase F/Phase G scope creep.
+- Production change (review-driven): `RequestArena::register_waiter`'s state window widened from
+  pending/enqueued to pending/enqueued/running/backend_ready to match the Accepted ADR (Decision 10:
+  registration is orthogonal to execution state and only reap closes it; the terminal winner does
+  NOT close registration). No other production behavior change beyond the
+  `SLUICE_ASYNC_INTERNAL_TESTING`-guarded header seams (incl. the I18 publication-order trace,
+  compiled out of production builds); no synchronous Reader/Writer behavior change; no Phase D Uring
+  implementation; no C2d/C2e/Phase F/Phase G scope creep.
