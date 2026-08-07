@@ -1250,29 +1250,46 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
                              f"C2b evidence '{eid}' must be lifecycle layer")
 
     def test_c2b_not_implemented_never_satisfies_mandatory_slot(self):
-        # Even when the C2b arena matrix PASSES for Uring (it applies
-        # backend-agnostically), the uring_c2b_identity_not_implemented record
-        # forces INCOMPLETE in the verdict — not_implemented can never satisfy
-        # a mandatory lifecycle slot.
-        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
-        g.results["c2b_arena_state_identity_matrix"] = G.RunResult(
-            "c2b_arena_state_identity_matrix",
-            "request_lifecycle_scheme_b_test",
-            G.PASS, detail="stub")
-        # Seed the Uring C2b gap's results entry (target matches the manifest
-        # record: backend_conformance_test, the Uring-driving conformance
-        # binary, mirroring uring_capacity_not_implemented).
-        g.results["uring_c2b_identity_not_implemented"] = G.RunResult(
-            "uring_c2b_identity_not_implemented",
-            "backend_conformance_test",
-            G.INCOMPLETE, detail="not_implemented")
-        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
-        # Uring stays NOT_CONFORMING (KernelIoProfile rule) regardless; the
-        # point is the C2b gap appears in reasons.
-        self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_c2b_identity_not_implemented" in r for r in reasons),
-            f"Uring C2b gap must appear in reasons: {reasons}")
+        # A not_implemented MANDATORY record can never satisfy a mandatory slot
+        # in the ORDINARY (non-KernelIo) verdict branch. Use a synthetic
+        # ReferenceProfile backend ("Ghost", not registered) so the priority-2
+        # branch of _backend_verdict is actually exercised: the not_implemented
+        # record seeds an INCOMPLETE run state, which is insufficient evidence
+        # -> INCOMPLETE (never ELIGIBLE, never NOT_CONFORMING). The Uring
+        # KernelIo early-return cannot prove this branch, so it is not used here.
+        gap = M.Evidence(
+            evidence_id="ghost_c2b_gap_injected",
+            target="backend_conformance_test", layer="lifecycle",
+            backends=("Ghost",), status=M.STATUS_NOT_IMPLEMENTED, mandatory=True,
+        )
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            ghost = M.BackendEntry("Ghost", "ReferenceProfile",
+                                   "conformance_ghost")
+            # Seed the run state the gate loop would produce for the
+            # not_implemented record.
+            g.results["ghost_c2b_gap_injected"] = G.RunResult(
+                "ghost_c2b_gap_injected", "backend_conformance_test",
+                G.INCOMPLETE, detail="not_implemented")
+            verdict, reasons = g._backend_verdict(ghost)
+            self.assertEqual(verdict, G.INCOMPLETE, reasons)
+            self.assertTrue(
+                any("ghost_c2b_gap_injected" in r for r in reasons),
+                f"gap record must appear in reasons: {reasons}")
+
+    def test_uring_c2b_gap_evidence_is_mandatory_not_implemented_applicable(self):
+        # Direct manifest-level assertions (no verdict loop involved): the
+        # Uring C2b gap is mandatory + not_implemented and enters Uring's
+        # applicable evidence set — the properties the C2b gap record must
+        # carry regardless of the KernelIoProfile verdict early-return.
+        ev = M.evidence_by_id("uring_c2b_identity_not_implemented")
+        self.assertIn("Uring", ev.backends)
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        appl = M.applicable_evidence_for_backend("Uring")
+        self.assertIn("uring_c2b_identity_not_implemented",
+                      {e.evidence_id for e in appl})
 
 
 if __name__ == "__main__":
