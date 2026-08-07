@@ -231,9 +231,21 @@ coverage).
     `outstanding`, no-recycle). See
     [`phase-c2a-compliance-gate.md`](phase-c2a-compliance-gate.md).
 
-  - **C2b — generation / stale / cancel matrix: PENDING.** Generation /
-    provenance / stale-key / cancel-winner rows (3–8) remain PARTIAL (arena +
-    TP-specific evidence exists; no shared cross-backend matrix).
+  - **C2b — generation / stale / cancel matrix: COMPLETE.** The arena-level
+    state-transition and identity matrix (rows 3 and 4a — slot-generation
+    authority: generation +1 before reuse, stale-handle rejection, live-N+1
+    stale-event harmless) is extended with Fake and ThreadPool integration
+    evidence for cancel-winner and publication-boundary semantics (rows 5–8).
+    Uring's Phase-D identity gap is recorded as a `not_implemented` manifest
+    record (`uring_c2b_identity_not_implemented`), which enters Uring's verdict
+    via `applicable_evidence_for_backend()`. Eight single-point production
+    mutations (A, B1, B2, C, D, E, F, G) prove each detector case fails on
+    deliberately nonconforming identity behavior. **Row 4b — cross-context
+    `RequestKey` authority rejection — is Phase F scope**, not a C2b gap: the
+    RequestArena mutable authorities take a context-less `SlotHandle`, so the
+    foreign-`RequestKey` authority path does not exist until the Phase F public
+    RequestHandle consumer does. See
+    [`phase-c2b-compliance-gate.md`](phase-c2b-compliance-gate.md).
 
   - **C2c — waiter / borrow / delivery lease: PENDING.** Rows 11–14 remain
     PARTIAL (arena-level only).

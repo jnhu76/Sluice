@@ -45,6 +45,7 @@ using sluice::async::detail::Generation;
 using sluice::async::detail::OperationKind;
 using sluice::async::detail::OptionalWaiterDelivery;
 using sluice::async::detail::RequestArena;
+using sluice::async::detail::RequestKey;
 using sluice::async::detail::RoutingLease;
 using sluice::async::detail::SlotHandle;
 using sluice::async::detail::SlotIndex;
@@ -776,4 +777,270 @@ SLUICE_TEST_CASE(concurrent_submit_cancel_enqueue) {
                      "exactly one terminal winner per iteration (I10)");
     SLUICE_CHECK_MSG(sink.n.load(std::memory_order_acquire) == kIters,
                      "exactly one delivery per iteration");
+}
+
+// ---- C2b row 3: the LEGAL mainline state transition matrix -----------------
+// Walks one accepted request through every RequestState the ADR defines,
+// asserting state_of() at each step:
+//   free -> reserved -> prepared -> pending -> enqueued -> running
+//        -> backend_ready -> completion_ready -> free (generation + 1)
+// The running step (mark_running) is the ThreadPool dispatch shape; the Phase B
+// reference backends never enter it, but the shared arena must support it. The
+// case also pins the legitimate dispatch backoff: mark_running on a slot a
+// terminal winner already moved to backend_ready returns false (NOT fail-fast).
+SLUICE_TEST_CASE(arena_mainline_state_transition_matrix) {
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+    const SlotIndex idx{0};
+
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::free);
+
+    auto rh = arena.reserve();
+    SLUICE_CHECK(rh.has_value());
+    SlotHandle h = rh.value();
+    SLUICE_CHECK(h.slot.value == 0);
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::reserved);
+
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::prepared);
+    install_noop_binding(arena, h);
+    // Binding installation does not move the state.
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::prepared);
+
+    SLUICE_CHECK(arena.commit(h).has_value());
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::pending);
+    SLUICE_CHECK(arena.enqueue_pin_live(idx));
+
+    SLUICE_CHECK(arena.enqueue(h) == EnqueueOutcome::enqueued);
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::enqueued);
+    SLUICE_CHECK(!arena.enqueue_pin_live(idx));
+
+    // Dispatch: enqueued -> running (the blocking-syscall shape).
+    SLUICE_CHECK(arena.mark_running(h));
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::running);
+
+    // Ordinary terminal winner: running -> backend_ready.
+    SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(7)));
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::backend_ready);
+    SLUICE_CHECK(arena.backend_ready_count() == 1);
+    // A dispatch identity that arrives AFTER the terminal winner backs off with
+    // a legitimate `false` (losers do not publish; NOT a fail-fast).
+    SLUICE_CHECK(!arena.mark_running(h));
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::backend_ready);
+
+    // Reap: backend_ready -> completion_ready (the sink sees the exact key).
+    RecordingSink sink;
+    SLUICE_CHECK(arena.reap(sink) == 1);
+    SLUICE_CHECK(sink.events.size() == 1);
+    SLUICE_CHECK(sink.events[0].key == arena.key_of(idx));
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::completion_ready);
+
+    // Release: completion_ready -> free, generation +1 before visibility (I6).
+    const Generation gen = h.generation;
+    arena.release_completed_binding(h);
+    SLUICE_CHECK(arena.state_of(idx) == sluice::async::detail::RequestState::free);
+    SLUICE_CHECK(arena.generation_of(idx).value == gen.value + 1);
+}
+
+// ---- C2b row 3: the ILLEGAL transition matrix keeps its contract errors ----
+// Every illegal transition returns the error the contract assigns it — never a
+// substituted semantics (a contract error is not turned into a death; a death
+// is not softened into an error). The fail-fast entries of this matrix (double
+// enqueue, release before completion_ready, stale enqueue/mark_running/release,
+// record_terminal before acceptance, ...) live in request_arena_death_test.
+SLUICE_TEST_CASE(arena_illegal_transition_contract_errors) {
+    RequestArena arena{ContextIdentity::for_testing(1), 2};
+
+    // prepare on a never-reserved (free) slot -> not_found.
+    SlotHandle free_h{SlotIndex{1}, Generation{0}};
+    auto p0 = arena.prepare(free_h, OperationKind::read, {});
+    SLUICE_CHECK(!p0.has_value() && p0.error().code == sluice::IoError::Code::not_found);
+
+    auto rh = arena.reserve();
+    SLUICE_CHECK(rh.has_value());
+    SlotHandle h = rh.value();
+
+    // commit before prepare (reserved) -> invalid_state.
+    auto c0 = arena.commit(h);
+    SLUICE_CHECK(!c0.has_value() && c0.error().code == sluice::IoError::Code::invalid_state);
+
+    // binding install before prepare (reserved) -> invalid_state.
+    static int dummy_completion = 0;
+    auto b0 = arena.install_publication_binding(h, &dummy_completion, 0, noop_binding_publish);
+    SLUICE_CHECK(!b0.has_value() && b0.error().code == sluice::IoError::Code::invalid_state);
+
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
+
+    // double prepare -> invalid_state.
+    auto p2 = arena.prepare(h, OperationKind::read, {});
+    SLUICE_CHECK(!p2.has_value() && p2.error().code == sluice::IoError::Code::invalid_state);
+
+    // binding guards: null publish / null completion -> invalid_state.
+    auto bnull1 = arena.install_publication_binding(h, &dummy_completion, 0, nullptr);
+    SLUICE_CHECK(!bnull1.has_value() &&
+                 bnull1.error().code == sluice::IoError::Code::invalid_state);
+    auto bnull2 = arena.install_publication_binding(h, nullptr, 0, noop_binding_publish);
+    SLUICE_CHECK(!bnull2.has_value() &&
+                 bnull2.error().code == sluice::IoError::Code::invalid_state);
+
+    install_noop_binding(arena, h);
+    // double binding install -> invalid_state.
+    auto b3 = arena.install_publication_binding(h, &dummy_completion, 0, noop_binding_publish);
+    SLUICE_CHECK(!b3.has_value() && b3.error().code == sluice::IoError::Code::invalid_state);
+
+    SLUICE_CHECK(arena.commit(h).has_value());
+
+    // double commit (pending) -> invalid_state.
+    auto c2 = arena.commit(h);
+    SLUICE_CHECK(!c2.has_value() && c2.error().code == sluice::IoError::Code::invalid_state);
+    // rollback after commit (pending) -> invalid_state (rollback is pre-commit).
+    auto rb = arena.rollback_reserved_or_prepared(h);
+    SLUICE_CHECK(!rb.has_value() && rb.error().code == sluice::IoError::Code::invalid_state);
+    // A second waiter registration while open_registered -> invalid_state.
+    SLUICE_CHECK(arena.register_waiter(h, WaiterToken{1, 0, 0}, RoutingLease{1}).has_value());
+    auto w2 = arena.register_waiter(h, WaiterToken{2, 0, 0}, RoutingLease{2});
+    SLUICE_CHECK(!w2.has_value() && w2.error().code == sluice::IoError::Code::invalid_state);
+
+    // Drive the accepted slot to a quiescent release: cancel wins the pending
+    // terminal (Scheme B), enqueue acks the pin, reap publishes (delivering the
+    // registered waiter exactly-once), then the completed-binding release.
+    SLUICE_CHECK(arena.cancel(h) == CancelDisposition::terminal_won);
+    SLUICE_CHECK(arena.enqueue(h) == EnqueueOutcome::terminal_noop);
+    RecordingSink sink;
+    SLUICE_CHECK(arena.reap(sink) == 1);
+    SLUICE_CHECK(sink.events.size() == 1);
+    SLUICE_CHECK(sink.events[0].waiter.has_waiter);
+    arena.release_completed_binding(h);
+    SLUICE_CHECK(arena.slot_in_use() == 0);
+}
+
+// ---- C2b row 4: a stale handle leaves a LIVE new occupant untouched --------
+// generation_reuse_stale_attempts proves each authority REJECTS a stale handle
+// after the slot went free. This case proves the stronger property while the
+// slot holds a LIVE accepted occupant: every stale attempt is rejected AND
+// produces zero side effect on the new occupant (state, terminal, pin, and
+// counters all unchanged).
+SLUICE_TEST_CASE(arena_stale_handle_leaves_live_occupant_untouched) {
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+
+    // Generation 0: run to completion and release (the handle becomes stale).
+    auto r1 = arena.reserve();
+    SLUICE_CHECK(r1.has_value());
+    SlotHandle old = r1.value();
+    SLUICE_CHECK(arena.prepare(old, OperationKind::read, {}).has_value());
+    install_noop_binding(arena, old);
+    SLUICE_CHECK(arena.commit(old).has_value());
+    SLUICE_CHECK(arena.record_terminal(old, TerminalResult::ok_bytes(1)));
+    SLUICE_CHECK(arena.enqueue(old) == EnqueueOutcome::terminal_noop);
+    {
+        RecordingSink sink;
+        SLUICE_CHECK(arena.reap(sink) == 1);
+    }
+    arena.release_completed_binding(old);
+
+    // Generation 1: the same physical slot now holds a LIVE accepted occupant
+    // (driven to enqueued so pin/terminal/counters are all observable).
+    auto r2 = arena.reserve();
+    SLUICE_CHECK(r2.has_value());
+    SlotHandle live = r2.value();
+    SLUICE_CHECK(live.slot.value == old.slot.value);
+    SLUICE_CHECK(live.generation.value == old.generation.value + 1);
+    SLUICE_CHECK(arena.prepare(live, OperationKind::write, {}).has_value());
+    install_noop_binding(arena, live);
+    SLUICE_CHECK(arena.commit(live).has_value());
+    SLUICE_CHECK(arena.enqueue(live) == EnqueueOutcome::enqueued);
+
+    // Stale (generation-0) attempts on every handle-taking authority...
+    SLUICE_CHECK(!arena.prepare(old, OperationKind::read, {}).has_value());
+    auto b = arena.install_publication_binding(old, &live, 0, noop_binding_publish);
+    SLUICE_CHECK(!b.has_value());
+    SLUICE_CHECK(!arena.commit(old).has_value());
+    SLUICE_CHECK(!arena.record_terminal(old, TerminalResult::ok_bytes(999)));
+    SLUICE_CHECK(!arena.record_canceled(old));
+    SLUICE_CHECK(arena.cancel(old) == CancelDisposition::not_found);
+    SLUICE_CHECK(!arena.register_waiter(old, WaiterToken{1, 0, 0}, RoutingLease{1}).has_value());
+    SLUICE_CHECK(!arena.cancel_waiter(old).has_value());
+    SLUICE_CHECK(!arena.rollback_reserved_or_prepared(old).has_value());
+    // (stale enqueue / stale mark_running / stale release fail fast — those
+    //  contracts live in request_arena_death_test)
+
+    // ...leave the live occupant COMPLETELY untouched.
+    SLUICE_CHECK(arena.state_of(live.slot) == sluice::async::detail::RequestState::enqueued);
+    SLUICE_CHECK(!arena.terminal_stored(live.slot));
+    SLUICE_CHECK(!arena.enqueue_pin_live(live.slot));
+    SLUICE_CHECK(arena.accepted_outstanding() == 1);
+    SLUICE_CHECK(arena.backend_ready_count() == 0);
+    SLUICE_CHECK(arena.slot_in_use() == 1);
+
+    // The live occupant still completes normally with its own identity.
+    SLUICE_CHECK(arena.record_terminal(live, TerminalResult::ok_bytes(2)));
+    RecordingSink sink;
+    SLUICE_CHECK(arena.reap(sink) == 1);
+    SLUICE_CHECK(sink.events.size() == 1);
+    SLUICE_CHECK(sink.events[0].key == arena.key_of(live.slot));
+    arena.release_completed_binding(live);
+    SLUICE_CHECK(arena.slot_in_use() == 0);
+}
+
+// ---- C2b row 4: RequestKey (not SlotHandle) carries context provenance -----
+// SlotHandle is deliberately context-less (slot + generation only); RequestKey
+// is the identity that carries provenance. Proven at the RequestArena/ReadySink
+// boundary (no production API injects a cross-context key):
+//   - two arenas with identical slot/generation produce DIFFERENT RequestKeys;
+//   - the ReadyEvent.key carries the originating context/slot/generation BY
+//     VALUE and survives the slot's release + reuse;
+//   - a cross-context key can never be resolved as a same-slot/same-generation
+//     request of the other arena (its key never matches the other's key_of).
+SLUICE_TEST_CASE(arena_request_key_carries_context_provenance) {
+    RequestArena a{ContextIdentity::for_testing(1), 1};
+    RequestArena b{ContextIdentity::for_testing(2), 1};
+
+    auto ra = a.reserve();
+    auto rb = b.reserve();
+    SLUICE_CHECK(ra.has_value() && rb.has_value());
+    SlotHandle ha = ra.value();
+    SlotHandle hb = rb.value();
+
+    // Same physical slot and generation...
+    SLUICE_CHECK(ha.slot.value == hb.slot.value);
+    SLUICE_CHECK(ha.generation.value == hb.generation.value);
+    // ...and SlotHandle carries NO provenance (structurally identical), but the
+    // RequestKeys differ exactly in the context component.
+    RequestKey ka = a.key_of(ha.slot);
+    RequestKey kb = b.key_of(hb.slot);
+    SLUICE_CHECK(ka.slot == kb.slot);
+    SLUICE_CHECK(ka.generation == kb.generation);
+    SLUICE_CHECK(!(ka == kb));
+    SLUICE_CHECK(ka.context == ContextIdentity::for_testing(1));
+    SLUICE_CHECK(kb.context == ContextIdentity::for_testing(2));
+
+    // Drive arena A to reap; the ReadyEvent carries A's provenance by value.
+    SLUICE_CHECK(a.prepare(ha, OperationKind::read, {}).has_value());
+    install_noop_binding(a, ha);
+    SLUICE_CHECK(a.commit(ha).has_value());
+    SLUICE_CHECK(a.record_terminal(ha, TerminalResult::ok_bytes(1)));
+    SLUICE_CHECK(a.enqueue(ha) == EnqueueOutcome::terminal_noop);
+    RecordingSink sink;
+    SLUICE_CHECK(a.reap(sink) == 1);
+    SLUICE_CHECK(sink.events.size() == 1);
+    const RequestKey event_key = sink.events[0].key;
+    SLUICE_CHECK(event_key == ka);
+
+    // Release and reuse A's slot: the retained event's identity is unchanged
+    // (by-value; no pointer into the slot) and still refuses to match either
+    // arena's current occupant.
+    a.release_completed_binding(ha);
+    auto ra2 = a.reserve();
+    SLUICE_CHECK(ra2.has_value());
+    SLUICE_CHECK(ra2.value().slot.value == ha.slot.value);
+    SLUICE_CHECK(!(event_key == a.key_of(ha.slot)));  // new generation
+    SLUICE_CHECK(!(event_key == b.key_of(hb.slot)));  // different context
+    // Context A's key can never act as context B's same-slot/same-generation
+    // request: B's own key for the same physical slot never equals A's key.
+    SLUICE_CHECK(!(ka == b.key_of(hb.slot)));
+
+    // Cleanup: release both arenas to quiescence.
+    SLUICE_CHECK(a.rollback_reserved_or_prepared(ra2.value()).has_value());
+    SLUICE_CHECK(b.rollback_reserved_or_prepared(hb).has_value());
+    SLUICE_CHECK(a.slot_in_use() == 0);
+    SLUICE_CHECK(b.slot_in_use() == 0);
 }

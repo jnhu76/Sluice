@@ -296,3 +296,54 @@ SLUICE_TEST_CASE(arena_reap_preserves_terminal_winner_order) {
     arena.release_completed_binding(b);
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
+
+// ---- C2b row 4: generation advances exactly +1 on BOTH release authorities --
+// I6: both the pre-commit rollback authority and the completed-binding release
+// authority increment the slot generation by EXACTLY one, and the increment is
+// observable (generation_of) immediately after release — BEFORE the slot can
+// re-enter a reserve — so a stale key can never collide with the next
+// occupant. The rollback half is asserted here next to the completed-binding
+// half so the two authorities are pinned side by side.
+SLUICE_TEST_CASE(arena_generation_plus_one_on_both_release_authorities) {
+    sluice::async::detail::RequestArena arena{
+        sluice::async::detail::ContextIdentity::for_testing(1), /*request_capacity=*/1};
+
+    // Authority 1: pre-commit rollback (reserved never accepted).
+    auto r1 = arena.reserve();
+    SLUICE_CHECK(r1.has_value());
+    const auto gen_before_rollback = arena.generation_of(r1.value().slot);
+    SLUICE_CHECK(arena.rollback_reserved_or_prepared(r1.value()).has_value());
+    // The increment is visible immediately after release, before any re-reserve.
+    SLUICE_CHECK(arena.generation_of(r1.value().slot).value ==
+                 gen_before_rollback.value + 1);
+
+    // Authority 2: completed-binding release (the caller handshake after reap).
+    auto r2 = arena.reserve();
+    SLUICE_CHECK(r2.has_value());
+    sluice::async::detail::SlotHandle h = r2.value();
+    SLUICE_CHECK(h.generation.value == gen_before_rollback.value + 1);
+    SLUICE_CHECK(arena.prepare(h, sluice::async::detail::OperationKind::read, {}).has_value());
+    static int dummy_completion = 0;
+    SLUICE_CHECK(arena
+                     .install_publication_binding(
+                         h, &dummy_completion, 0,
+                         [](void*, const sluice::async::detail::TerminalResult&) noexcept {})
+                     .has_value());
+    SLUICE_CHECK(arena.commit(h).has_value());
+    SLUICE_CHECK(arena.record_terminal(h, sluice::async::detail::TerminalResult::ok_bytes(1)));
+    SLUICE_CHECK(arena.enqueue(h) == sluice::async::detail::EnqueueOutcome::terminal_noop);
+    struct NoopSink : sluice::async::detail::SynchronousReadySink {
+        void on_ready(sluice::async::detail::ReadyEvent) noexcept override {}
+    } sink;
+    SLUICE_CHECK(arena.reap(sink) == 1);
+    const auto gen_before_release = arena.generation_of(h.slot);
+    arena.release_completed_binding(h);
+    // Exactly +1, visible before the slot can become visible to a new reserve.
+    SLUICE_CHECK(arena.generation_of(h.slot).value == gen_before_release.value + 1);
+    // The next reserve observes the incremented generation.
+    auto r3 = arena.reserve();
+    SLUICE_CHECK(r3.has_value());
+    SLUICE_CHECK(r3.value().generation.value == gen_before_release.value + 1);
+    SLUICE_CHECK(arena.rollback_reserved_or_prepared(r3.value()).has_value());
+    SLUICE_CHECK(arena.slot_in_use() == 0);
+}

@@ -29,6 +29,7 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/fake_backend.hpp>
 #include <sluice/error.hpp>
+#include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
@@ -91,6 +92,174 @@ SLUICE_TEST_CASE(backend_scheme_b_cancel_wins_between_commit_and_enqueue) {
     SLUICE_CHECK(backend.sink_deliveries() == 1);
     SLUICE_CHECK(backend.arena_slot_in_use() == 1);  // bound until the reset handshake
 
+    c.reset();
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
+// ---- C2b row 5 (Fake): canceled_ops tallies ONLY on a confirmed canceled ----
+// terminal win (terminal_won). A terminal loser (complete_* after cancel won,
+// or cancel after an ordinary winner) and a late cancel after the terminal
+// never tally; cancel of an unbound Completion resolves nothing. The Fake
+// never enters `running`, so intent_recorded is dormant here by honest profile
+// (running-cancel accounting is proven on the ThreadPoolBackend).
+SLUICE_TEST_CASE(fake_cancel_disposition_counts_exactly_once) {
+    FakeAsyncBackend backend{/*request_capacity=*/2};
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+    std::byte buf[8]{};
+
+    // 1. enqueued cancel WINS the terminal -> exactly one canceled_ops.
+    Completion<std::size_t> c1;
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, c1).has_value());
+    SLUICE_CHECK(backend.arena_state_is(0, detail::RequestState::enqueued));
+    backend.cancel(c1);  // terminal_won
+    SLUICE_CHECK(stats.canceled_ops == 1);
+    // After cancel won, c1 is backend_ready and Fake's complete_oldest_*
+    // selects only enqueued slots, so this call is a no-op (it does NOT
+    // exercise the terminal-loser overwrite path — that is proven at the
+    // arena level by exactly_one_terminal_winner). It still pins that a
+    // late complete_* leaves the canceled winner's counter untouched.
+    backend.complete_oldest_with_bytes(8);
+    SLUICE_CHECK(stats.canceled_ops == 1);
+    // Publication boundary (row 8): the canceled terminal is backend_ready, but
+    // the Completion is NOT ready before poll().
+    SLUICE_CHECK(!c1.ready());
+    SLUICE_CHECK(backend.poll() == 1);
+    SLUICE_CHECK(c1.ready());
+    SLUICE_CHECK(!c1.result().has_value());
+    SLUICE_CHECK(c1.result().error().code == IoError::Code::canceled);
+    // Late cancel after the terminal: already_terminal -> no second tally.
+    backend.cancel(c1);
+    SLUICE_CHECK(stats.canceled_ops == 1);
+    c1.reset();
+
+    // 2. ordinary error wins first; a subsequent cancel is already_terminal
+    //    (pointer resolves to the bound slot) -> no tally, no overwrite.
+    //    completion_errors stays at 1; canceled_ops stays at 1.
+    Completion<std::size_t> c2;
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, c2).has_value());
+    backend.complete_oldest_with_error(IoError{IoError::Code::backend_error});
+    SLUICE_CHECK(stats.completion_errors == 1);
+    backend.cancel(c2);  // already_terminal: no-op on the winner
+    SLUICE_CHECK(stats.canceled_ops == 1);        // unchanged
+    SLUICE_CHECK(stats.completion_errors == 1);   // unchanged
+    SLUICE_CHECK(!c2.ready());                    // poll gates publication (row 8)
+    SLUICE_CHECK(backend.poll() == 1);
+    SLUICE_CHECK(c2.ready());
+    SLUICE_CHECK(c2.result().error().code == IoError::Code::backend_error);
+    c2.reset();
+
+    // 3. cancel of an UNBOUND Completion resolves nothing -> no tally.
+    Completion<std::size_t> c3;
+    backend.cancel(c3);
+    SLUICE_CHECK(stats.canceled_ops == 1);
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
+// ---- C2b row 8 (Fake): binding identity A->A B->B + publication boundary ---
+// Each terminal publishes to ITS OWN slot-bound Completion even when the
+// terminal-winner order differs from the submit order — no queue-head guessing,
+// no op-kind guessing, no side-band pointer FIFO. Swapped/mis-bound bindings
+// would deliver B's canceled result to A and A's byte count to B (the C2b
+// validity fixture proves that mutant goes RED). The case also pins the
+// publication boundary: complete_*/cancel only produce backend_ready; the
+// Completions are NOT ready until poll()/wait_one() reaps, and a second poll
+// returns 0 (exactly-one publication, row 7).
+SLUICE_TEST_CASE(fake_binding_identity_and_publication_boundary) {
+    FakeAsyncBackend backend{/*request_capacity=*/2};
+    std::byte buf[8]{};
+    Completion<std::size_t> ca;
+    Completion<std::size_t> cb;
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, ca).has_value());
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, cb).has_value());
+
+    // B wins the terminal FIRST (terminal-winner order != submit order).
+    backend.cancel(cb);                      // B: canceled terminal
+    backend.complete_oldest_with_bytes(4);   // A: ordinary success terminal
+
+    // Publication boundary: both terminals are backend_ready, neither
+    // Completion is ready before poll().
+    SLUICE_CHECK(!ca.ready());
+    SLUICE_CHECK(!cb.ready());
+    SLUICE_CHECK(backend.poll() == 2);
+
+    // Binding identity: A's ordinary result lands on ca; B's canceled terminal
+    // lands on cb — each through its own slot binding.
+    SLUICE_CHECK(ca.ready());
+    SLUICE_CHECK(ca.result().has_value());
+    SLUICE_CHECK(ca.result().value() == 4);
+    SLUICE_CHECK(cb.ready());
+    SLUICE_CHECK(!cb.result().has_value());
+    SLUICE_CHECK(cb.result().error().code == IoError::Code::canceled);
+
+    // Exactly-one publication: a second poll publishes nothing.
+    SLUICE_CHECK(backend.poll() == 0);
+
+    ca.reset();
+    cb.reset();
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
+// ---- C2b row 4 (Fake integration): stale-generation events are harmless -----
+// Issue #68 row 4 requires: after a slot is released and the SAME physical slot
+// is reused by a NEW request (generation N+1), a stale-generation event (the
+// N-handle) must NOT act on the live N+1 occupant. The stale handle is injected
+// through cancel_handle_for_test, which routes it through the REAL arena_.cancel
+// authority (the same path the public cancel(Completion&) takes after resolving
+// the pointer) — so this exercises the genuine identity-validation reject, not a
+// pointer-resolution no-op. The new occupant's Completion, result, counters, and
+// state all stay exactly intact; the stale handle resolves to not_found.
+SLUICE_TEST_CASE(fake_stale_generation_event_harmless) {
+    FakeAsyncBackend backend{/*request_capacity=*/1};
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+    std::byte buf[8]{};
+    Completion<std::size_t> c;
+
+    // Generation N: full lifecycle; capture the slot+generation identity BEFORE
+    // the release. The handle becomes stale the moment the slot is freed.
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, c).has_value());
+    auto h0 = backend.handle_for_completion_for_test(&c);
+    SLUICE_CHECK(h0.has_value());
+    backend.complete_oldest_with_bytes(3);
+    SLUICE_CHECK(backend.poll() == 1);
+    SLUICE_CHECK(c.result().value() == 3);
+    c.reset();  // release handshake: slot freed, generation advances to N+1
+
+    // The SAME physical slot is reused by a NEW request (generation N+1) BEFORE
+    // the stale event is injected — so the stale handle targets a LIVE occupant.
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, c).has_value());
+    auto h1 = backend.handle_for_completion_for_test(&c);
+    SLUICE_CHECK(h1.has_value());
+    SLUICE_CHECK(h1->slot.value == h0->slot.value);
+    SLUICE_CHECK(h1->generation.value == h0->generation.value + 1);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 1);
+
+    // NOW inject the stale N-handle through the REAL cancel authority path while
+    // the N+1 occupant is LIVE (enqueued). arena_.cancel validates the handle's
+    // generation against the slot's current generation and rejects it.
+    SLUICE_CHECK(backend.cancel_handle_for_test(*h0)
+                 == detail::CancelDisposition::not_found);
+
+    // The live N+1 occupant is completely untouched: still enqueued, no
+    // terminal, no canceled tally, slot still in use.
+    SLUICE_CHECK(backend.arena_state_is(h1->slot.value,
+                                        detail::RequestState::enqueued));
+    SLUICE_CHECK(stats.canceled_ops == 0);
+    SLUICE_CHECK(stats.completion_errors == 0);
+    SLUICE_CHECK(backend.outstanding() == 1);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 1);
+
+    // The live occupant still completes with ITS OWN result through the normal
+    // publication boundary (poll gates ready — row 8).
+    backend.complete_oldest_with_bytes(7);
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(backend.poll() == 1);
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(c.result().value() == 7);
+    SLUICE_CHECK(stats.canceled_ops == 0);
+    SLUICE_CHECK(stats.completion_errors == 0);
     c.reset();
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);
 }

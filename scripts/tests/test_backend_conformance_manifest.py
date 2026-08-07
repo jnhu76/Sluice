@@ -1087,6 +1087,211 @@ class CapacityResultAuthorityTest(unittest.TestCase):
             f"Uring capacity gap must come from the gap record: {reasons}")
 
 
+# ---------------------------------------------------------------------------
+# Phase C2b corrective: generation / stale-key / cancel-winner / identity
+# evidence enters the per-backend verdict.
+#
+# The C2b slice adds four evidence records: a backend-agnostic arena matrix,
+# Fake-tagged and ThreadPool-tagged integration records (both mandatory +
+# implemented), and a Uring-tagged not_implemented record. The tests below
+# prove:
+#   * each mandatory C2b record exists with the correct layer, backends,
+#     status, and mandatory flag;
+#   * Fake/ThreadPool C2b integration is mandatory and implemented;
+#   * Uring's C2b gap is mandatory and not_implemented (never PASS);
+#   * a C2b RUN_FAIL on one backend does not contaminate the other;
+#   * the arena-level PASS cannot erase Uring's not_implemented C2b gap;
+#   * a missing C2b target fails closed (MISSING_TARGET -> INCOMPLETE);
+#   * the C2b records appear in the lifecycle layer for the tagged backend.
+# ---------------------------------------------------------------------------
+
+C2B_EVIDENCE_IDS = (
+    "c2b_arena_state_identity_matrix",
+    "c2b_fake_identity_integration",
+    "c2b_threadpool_identity_integration",
+    "uring_c2b_identity_not_implemented",
+)
+
+
+class C2bEvidenceRecordTest(unittest.TestCase):
+    """C2b evidence records exist with correct attributes."""
+
+    def test_all_c2b_records_exist(self):
+        for eid in C2B_EVIDENCE_IDS:
+            self.assertIsNotNone(M.evidence_by_id(eid),
+                                 f"C2b evidence '{eid}' must exist in manifest")
+
+    def test_arena_matrix_is_backend_agnostic(self):
+        ev = M.evidence_by_id("c2b_arena_state_identity_matrix")
+        self.assertEqual(ev.backends, ())
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+
+    def test_fake_integration_is_mandatory_and_tagged(self):
+        ev = M.evidence_by_id("c2b_fake_identity_integration")
+        self.assertIn("Fake", ev.backends)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+
+    def test_threadpool_integration_is_mandatory_and_tagged(self):
+        ev = M.evidence_by_id("c2b_threadpool_identity_integration")
+        self.assertIn("ThreadPool", ev.backends)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+
+    def test_uring_c2b_gap_is_not_implemented(self):
+        ev = M.evidence_by_id("uring_c2b_identity_not_implemented")
+        self.assertIn("Uring", ev.backends)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+
+    def test_c2b_ids_unique_in_manifest(self):
+        ids = [e.evidence_id for e in M.EVIDENCE]
+        for eid in C2B_EVIDENCE_IDS:
+            self.assertEqual(ids.count(eid), 1,
+                             f"C2b evidence '{eid}' must appear exactly once")
+
+
+class C2bVerdictIntegrationTest(unittest.TestCase):
+    """C2b evidence enters the per-backend verdict correctly."""
+
+    def test_fake_has_mandatory_c2b_lifecycle_evidence(self):
+        appl = M.applicable_evidence_for_backend("Fake")
+        c2b = [e for e in appl if e.evidence_id in C2B_EVIDENCE_IDS]
+        self.assertTrue(any(e.mandatory and e.status == M.STATUS_IMPLEMENTED
+                            for e in c2b),
+                        "Fake must have at least one mandatory implemented "
+                        "C2b lifecycle record")
+
+    def test_threadpool_has_mandatory_c2b_lifecycle_evidence(self):
+        appl = M.applicable_evidence_for_backend("ThreadPool")
+        c2b = [e for e in appl if e.evidence_id in C2B_EVIDENCE_IDS]
+        self.assertTrue(any(e.mandatory and e.status == M.STATUS_IMPLEMENTED
+                            for e in c2b),
+                        "ThreadPool must have at least one mandatory "
+                        "implemented C2b lifecycle record")
+
+    def test_uring_has_mandatory_not_implemented_c2b_record(self):
+        appl = M.applicable_evidence_for_backend("Uring")
+        c2b = [e for e in appl if e.evidence_id in C2B_EVIDENCE_IDS]
+        self.assertTrue(any(e.mandatory and e.status == M.STATUS_NOT_IMPLEMENTED
+                            for e in c2b),
+                        "Uring must have a mandatory not_implemented C2b record")
+
+    def test_uring_c2b_gap_surfaces_in_verdict(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_c2b_identity_not_implemented" in r for r in reasons),
+            f"Uring C2b gap must appear in reasons: {reasons}")
+
+    def test_fake_c2b_failure_does_not_affect_threadpool(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["c2b_fake_identity_integration"] = G.RunResult(
+            "c2b_fake_identity_integration", "backend_scheme_b_race_test",
+            G.RUN_FAIL, detail="stub C2b Fake failure")
+        v_fake, reasons_fake = g._backend_verdict(M.backend_by_name("Fake"))
+        v_tp, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        self.assertEqual(v_fake, G.NOT_CONFORMING)
+        self.assertEqual(v_tp, G.ELIGIBLE,
+                         "ThreadPool must stay ELIGIBLE when Fake C2b fails")
+        self.assertTrue(
+            any("c2b_fake_identity_integration" in r for r in reasons_fake))
+
+    def test_threadpool_c2b_failure_does_not_affect_fake(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["c2b_threadpool_identity_integration"] = G.RunResult(
+            "c2b_threadpool_identity_integration",
+            "threadpool_backend_scheme_b_race_test",
+            G.RUN_FAIL, detail="stub C2b ThreadPool failure")
+        v_fake, _ = g._backend_verdict(M.backend_by_name("Fake"))
+        v_tp, reasons_tp = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        self.assertEqual(v_fake, G.ELIGIBLE,
+                         "Fake must stay ELIGIBLE when ThreadPool C2b fails")
+        self.assertEqual(v_tp, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("c2b_threadpool_identity_integration" in r for r in reasons_tp))
+
+    def test_arena_pass_cannot_erase_uring_c2b_gap(self):
+        # The arena matrix record is backend-agnostic (backends=()); it applies
+        # to Uring but cannot satisfy Uring's C2b obligation because Uring's
+        # own tagged not_implemented record remains INCOMPLETE.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["c2b_arena_state_identity_matrix"] = G.RunResult(
+            "c2b_arena_state_identity_matrix",
+            "request_lifecycle_scheme_b_test",
+            G.PASS, detail="stub arena PASS")
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_c2b_identity_not_implemented" in r for r in reasons))
+
+    def test_missing_c2b_target_fails_closed(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.results["c2b_fake_identity_integration"] = G.RunResult(
+            "c2b_fake_identity_integration", "backend_scheme_b_race_test",
+            G.MISSING_TARGET, detail="xmake show -t reports not valid")
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Fake"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertTrue(
+            any("c2b_fake_identity_integration" in r for r in reasons))
+
+    def test_c2b_evidence_in_lifecycle_layer(self):
+        # Every C2b record must be in the lifecycle layer so it appears in the
+        # per-layer report section.
+        for eid in C2B_EVIDENCE_IDS:
+            ev = M.evidence_by_id(eid)
+            self.assertEqual(ev.layer, "lifecycle",
+                             f"C2b evidence '{eid}' must be lifecycle layer")
+
+    def test_c2b_not_implemented_never_satisfies_mandatory_slot(self):
+        # A not_implemented MANDATORY record can never satisfy a mandatory slot
+        # in the ORDINARY (non-KernelIo) verdict branch. Use a synthetic
+        # ReferenceProfile backend ("Ghost", not registered) so the priority-2
+        # branch of _backend_verdict is actually exercised: the not_implemented
+        # record seeds an INCOMPLETE run state, which is insufficient evidence
+        # -> INCOMPLETE (never ELIGIBLE, never NOT_CONFORMING). The Uring
+        # KernelIo early-return cannot prove this branch, so it is not used here.
+        gap = M.Evidence(
+            evidence_id="ghost_c2b_gap_injected",
+            target="backend_conformance_test", layer="lifecycle",
+            backends=("Ghost",), status=M.STATUS_NOT_IMPLEMENTED, mandatory=True,
+        )
+        with mock.patch.object(M, "EVIDENCE", (*M.EVIDENCE, gap)):
+            g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
+                            "Uring": "PASS"})
+            ghost = M.BackendEntry("Ghost", "ReferenceProfile",
+                                   "conformance_ghost")
+            # Seed the run state the gate loop would produce for the
+            # not_implemented record.
+            g.results["ghost_c2b_gap_injected"] = G.RunResult(
+                "ghost_c2b_gap_injected", "backend_conformance_test",
+                G.INCOMPLETE, detail="not_implemented")
+            verdict, reasons = g._backend_verdict(ghost)
+            self.assertEqual(verdict, G.INCOMPLETE, reasons)
+            self.assertTrue(
+                any("ghost_c2b_gap_injected" in r for r in reasons),
+                f"gap record must appear in reasons: {reasons}")
+
+    def test_uring_c2b_gap_evidence_is_mandatory_not_implemented_applicable(self):
+        # Direct manifest-level assertions (no verdict loop involved): the
+        # Uring C2b gap is mandatory + not_implemented and enters Uring's
+        # applicable evidence set — the properties the C2b gap record must
+        # carry regardless of the KernelIoProfile verdict early-return.
+        ev = M.evidence_by_id("uring_c2b_identity_not_implemented")
+        self.assertIn("Uring", ev.backends)
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        appl = M.applicable_evidence_for_backend("Uring")
+        self.assertIn("uring_c2b_identity_not_implemented",
+                      {e.evidence_id for e in appl})
+
+
 if __name__ == "__main__":
     # Standalone invocation mirrors `unittest discover`: exit non-zero on any
     # failure, zero on full pass. No top-level sys.exit during import.

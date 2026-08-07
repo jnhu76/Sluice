@@ -28,9 +28,11 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/error.hpp>
+#include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
+#include <barrier>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -418,6 +420,8 @@ SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
             fail_msg = "exactly one syscall must have executed before publication";
         } else if (backend.poll() != 0) {
             fail_msg = "poll must see nothing ready before publication";
+        } else if (c.ready()) {
+            fail_msg = "Completion must not be ready before reap publishes";
         } else {
             guard.resume();
             if (!drain_bounded(backend,
@@ -443,6 +447,576 @@ SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
         (void)drain_bounded(backend,
                             std::chrono::steady_clock::now() + kWaitTimeout);
         if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b row 5 (ThreadPool): canceled_ops tallies ONLY on terminal_won ------
+// Enqueued cancel wins the terminal (Gate B): exactly one canceled_ops. A late
+// cancel on the already-terminal (still bound) Completion is already_terminal
+// and never tallies again; the worker runs no syscall.
+SLUICE_TEST_CASE(tp_canceled_ops_tallied_only_on_terminal_won) {
+    ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_before_dequeue_pause_gate(&gate);
+    ScopedGateResume guard(gate);
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+
+    TempPath tp("E");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x55}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+
+    const char* fail_msg = nullptr;
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+
+    if (!wait_paused(gate, deadline)) {
+        fail_msg = "Gate E did not pause in time";
+    } else {
+        const std::uint64_t syscalls_before = backend.syscall_count_for_test();
+        backend.cancel(c);  // enqueued -> terminal_won
+        if (stats.canceled_ops != 1) {
+            fail_msg = "terminal_won must tally exactly one canceled op";
+        } else if (stats.completion_errors != 0) {
+            fail_msg = "a canceled winner is not a completion error";
+        } else {
+            // Late cancel while the canceled terminal is bound:
+            // already_terminal -> no second tally.
+            backend.cancel(c);
+            if (stats.canceled_ops != 1) {
+                fail_msg = "late cancel must not tally again";
+            } else {
+                guard.resume();
+                if (!drain_bounded(backend,
+                                   std::chrono::steady_clock::now() + kWaitTimeout)) {
+                    fail_msg = "drain did not complete in time";
+                } else if (!c.ready()) {
+                    fail_msg = "canceled op must be ready after drain";
+                } else if (c.result().has_value()) {
+                    fail_msg = "canceled op must report an error";
+                } else if (c.result().error().code != IoError::Code::canceled) {
+                    fail_msg = "canceled op must report IoError::canceled";
+                } else if (backend.syscall_count_for_test() != syscalls_before) {
+                    fail_msg = "canceled enqueued op must not execute a syscall";
+                }
+            }
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        // Cancel AFTER ready (still bound until reset): already_terminal.
+        backend.cancel(c);
+        SLUICE_CHECK(stats.canceled_ops == 1);
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        guard.resume();
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b row 5/6 (ThreadPool): running-cancel intent never tallies ---------
+// Gate C: cancel on a RUNNING op records intent only — no canceled terminal,
+// no canceled_ops tally; the real syscall result wins VERBATIM (never rewritten
+// to canceled). A cancel after that ordinary winner is already_terminal.
+SLUICE_TEST_CASE(tp_running_cancel_intent_does_not_tally) {
+    ThreadPoolBackend::WorkerRunningPauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_running_pause_gate(&gate);
+    ScopedGateResume guard(gate);
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+
+    TempPath tp("F");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x66}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+
+    const char* fail_msg = nullptr;
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+
+    if (!wait_paused(gate, deadline)) {
+        fail_msg = "Gate F did not pause in time";
+    } else {
+        backend.cancel(c);  // running -> intent_recorded
+        if (stats.canceled_ops != 0) {
+            fail_msg = "intent_recorded must NOT tally canceled_ops";
+        } else if (backend.backend_ready_count_for_test() != 0) {
+            fail_msg = "intent must not store a terminal or push the ready ring";
+        } else if (c.ready()) {
+            fail_msg = "the Completion must stay outstanding on intent";
+        } else {
+            guard.resume();
+            if (!drain_bounded(backend,
+                               std::chrono::steady_clock::now() + kWaitTimeout)) {
+                fail_msg = "drain did not complete in time";
+            } else if (!c.ready()) {
+                fail_msg = "running-cancel op must still complete";
+            } else if (!c.result().has_value()) {
+                fail_msg = "real result must win verbatim; intent must not rewrite";
+            } else if (c.result().value() != 1) {
+                fail_msg = "read must return the 1 seeded byte";
+            } else if (stats.canceled_ops != 0) {
+                fail_msg = "an ordinary winner must never tally canceled_ops";
+            }
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        // Cancel after the ordinary winner: already_terminal, still no tally.
+        backend.cancel(c);
+        SLUICE_CHECK(stats.canceled_ops == 0);
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        guard.resume();
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b row 4 (ThreadPool integration): stale-generation events harmless --
+// Issue #68 row 4 requires: after a slot is released and the SAME physical slot
+// is reused by a NEW request (generation N+1), a stale-generation event (the
+// N-handle) must NOT act on the live N+1 occupant. The stale handle is injected
+// through cancel_handle_for_test, which routes it through the REAL cancel
+// authority path (remove_exact + arena_.cancel under work_mtx_, tally on
+// terminal_won) — the same path the public cancel(Completion&) takes after
+// resolving the pointer. The BeforeWorkerDequeuePauseGate holds the N+1
+// occupant in the `enqueued` state so the stale event targets a genuinely LIVE
+// occupant (not a free slot). The new occupant's result, counters, syscall
+// count, and state all stay exactly intact; the stale handle resolves to
+// not_found. All identity is pointer-free (SlotHandle/RequestKey) — no
+// Completion reverse map.
+SLUICE_TEST_CASE(tp_stale_generation_event_harmless) {
+    ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    // The gate is NOT armed for the gen-N lifecycle (it must drain freely); it
+    // is armed only for the gen-N+1 submit so that occupant stays enqueued.
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+
+    TempPath tp("G");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x77}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    const char* fail_msg = nullptr;
+    std::optional<detail::SlotHandle> h0;
+
+    // Generation N: full lifecycle; capture the slot+generation identity BEFORE
+    // the release. The handle becomes stale once the slot is freed.
+    if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
+        fail_msg = "first submit must succeed";
+    } else if (!drain_bounded(backend,
+                              std::chrono::steady_clock::now() + kWaitTimeout)) {
+        fail_msg = "first drain did not complete in time";
+    } else if (!c.ready() || !c.result().has_value() || c.result().value() != 1) {
+        fail_msg = "first op must complete with the seeded byte";
+    } else {
+        h0 = backend.handle_for_completion_for_test(&c);
+        if (!h0.has_value()) {
+            fail_msg = "the bound Completion must resolve to a slot handle";
+        }
+    }
+
+    std::optional<detail::SlotHandle> h1;
+    if (fail_msg == nullptr) {
+        c.reset();  // release handshake: slot freed, generation advances to N+1
+        // Arm the gate NOW so the gen-N+1 occupant stays enqueued (the worker
+        // pauses before dequeue), making it a LIVE target for the stale event.
+        backend.set_before_dequeue_pause_gate(&gate);
+        // The SAME physical slot is reused by a NEW request (generation N+1)
+        // BEFORE the stale event is injected.
+        if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
+            fail_msg = "second submit must reuse the released slot";
+        } else if (!wait_paused(gate,
+                                std::chrono::steady_clock::now() + kWaitTimeout)) {
+            fail_msg = "gate did not pause before the N+1 dequeue";
+        } else {
+            h1 = backend.handle_for_completion_for_test(&c);
+            if (!h1.has_value()) {
+                fail_msg = "new occupant must resolve to a slot handle";
+            } else if (h1->slot.value != h0->slot.value ||
+                       h1->generation.value != h0->generation.value + 1) {
+                fail_msg = "reuse must keep the slot and advance generation by one";
+            }
+        }
+    }
+
+    const std::uint64_t syscalls_before_inject =
+        (fail_msg == nullptr) ? backend.syscall_count_for_test() : 0;
+    if (fail_msg == nullptr) {
+        // NOW inject the stale N-handle through the REAL cancel authority path
+        // while the N+1 occupant is LIVE (enqueued, worker paused pre-dequeue).
+        detail::CancelDisposition disp = backend.cancel_handle_for_test(*h0);
+        if (disp != detail::CancelDisposition::not_found) {
+            fail_msg = "stale handle must resolve to not_found against a live N+1";
+        } else if (stats.canceled_ops != 0) {
+            fail_msg = "stale cancel must not tally canceled_ops";
+        } else if (backend.outstanding() != 1) {
+            fail_msg = "live N+1 occupant must remain outstanding";
+        } else {
+            // Observe exactly ONCE: if the stale event destroyed the N+1
+            // occupant, observe_for_test returns nullopt — that MUST fail (a
+            // missing occupant is the worst regression this case can catch).
+            auto obs = backend.observe_for_test(*h1);
+            if (!obs.has_value()) {
+                fail_msg = "live N+1 occupant must still be observable";
+            } else if (obs->state != detail::RequestState::enqueued) {
+                fail_msg = "live N+1 occupant must stay enqueued";
+            }
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        // Resume the worker; the live N+1 occupant completes with ITS OWN
+        // result. The stale injection left no residue.
+        gate.resume.store(true, std::memory_order_release);
+        // Wait for the production path to leave the gate before unbinding it.
+        const auto exit_deadline =
+            std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!gate.exited.load(std::memory_order_acquire)) {
+            if (std::chrono::steady_clock::now() >= exit_deadline) {
+                fail_msg = "gate failed to exit before timeout";
+                break;
+            }
+            std::this_thread::yield();
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        if (!drain_bounded(backend,
+                           std::chrono::steady_clock::now() + kWaitTimeout)) {
+            fail_msg = "second drain did not complete in time";
+        } else if (!c.ready() || !c.result().has_value() ||
+                   c.result().value() != 1) {
+            fail_msg = "new occupant must complete with ITS OWN result";
+        } else if (backend.syscall_count_for_test() != syscalls_before_inject + 1) {
+            fail_msg = "exactly one new syscall for the new occupant";
+        } else if (stats.canceled_ops != 0 || stats.completion_errors != 0) {
+            fail_msg = "stale attempts must leave counters intact";
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        gate.resume.store(true, std::memory_order_release);
+        const auto cleanup_deadline =
+            std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!gate.exited.load(std::memory_order_acquire)) {
+            if (std::chrono::steady_clock::now() >= cleanup_deadline) {
+                std::fprintf(stderr,
+                             "tp_stale_generation_event_harmless: gate failed "
+                             "to exit before timeout; aborting\n");
+                std::abort();
+            }
+            std::this_thread::yield();
+        }
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b row 8 (ThreadPool): publication boundary — reap gates ready -------
+// Runtime evidence that a worker NEVER publishes: once the worker's syscall
+// finished and record_terminal stored the backend_ready terminal, the
+// Completion is STILL not ready — only poll()/wait_one() reap publishes
+// through the slot binding. No gate is needed: the test catches the exact
+// backend_ready window (terminal stored, not yet reaped) because only the
+// main thread reaps.
+SLUICE_TEST_CASE(tp_publication_boundary_reap_gates_ready) {
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+
+    TempPath tp("H");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x88}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+
+    const char* fail_msg = nullptr;
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+    // Wait for the worker to record the terminal (backend_ready), BEFORE any
+    // reap runs.
+    while (backend.backend_ready_count_for_test() == 0) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            fail_msg = "terminal was not recorded before timeout";
+            break;
+        }
+        std::this_thread::yield();
+    }
+
+    if (fail_msg == nullptr) {
+        if (c.ready()) {
+            fail_msg = "Completion must NOT be ready before poll/reap publishes";
+        } else if (backend.syscall_count_for_test() != 1) {
+            fail_msg = "exactly one syscall must have executed";
+        } else if (backend.poll() != 1) {
+            fail_msg = "the reap must publish exactly one Completion";
+        } else if (!c.ready()) {
+            fail_msg = "reap must publish the Completion ready";
+        } else if (!c.result().has_value() || c.result().value() != 1) {
+            fail_msg = "read must return the 1 seeded byte";
+        } else if (backend.poll() != 0) {
+            fail_msg = "a second poll must publish nothing (exactly-once)";
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C2b rows 6/7 (ThreadPool): cancel races the worker terminal winner ----
+// Genuine causal two-thread TSan evidence: BeforeWorkerDequeuePauseGate holds
+// the worker in the pre-dequeue window on EVERY iteration, so the op is
+// provably `enqueued` when the barrier releases. The barrier then releases the
+// canceler and the worker-gate resume together, so cancel and dequeue race for
+// the single terminal transition under the backend's work_mtx_ arbitration.
+// This closes the "worker already finished before the canceler started" hole:
+// the race is forced, not probabilistic. Each iteration asserts the exactly-one
+// winner contract end to end:
+//   - exactly one publication (poll total == 1), one ready Completion
+//   - the result is EITHER canceled OR the real 1-byte success
+//   - canceled_ops tallies exactly the canceled winners (never intent/losers)
+//   - syscall_count tallies exactly the syscall winners (cancel-won iterations
+//     run no syscall)
+// No sleep_for, no timing assumptions.
+SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
+    constexpr std::size_t kIters = 64;
+    ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_before_dequeue_pause_gate(&gate);
+    sluice::AsyncStats stats;
+    backend.attach_stats(&stats);
+
+    TempPath tp("I");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x99}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    std::uint64_t canceled_total = 0;
+    std::uint64_t success_total = 0;
+    const char* fail_msg = nullptr;
+
+    // Per-iteration cleanup. The Completion is a loop-body local; destroying it
+    // while outstanding/publishing is a Completion-authority fail-fast that
+    // would mask the real failure attribution (the test's own SLUICE_FAIL would
+    // never run). So EVERY fail path must drain the backend and reset/abort the
+    // Completion before breaking out of the iteration scope. The gate is also
+    // resumed so the worker is never stranded, and the gate-exit is awaited so
+    // the next iteration (or the final backend destruction) sees a stable gate.
+    auto cleanup_iteration = [&](Completion<std::size_t>& c) noexcept {
+        gate.resume.store(true, std::memory_order_release);
+        const auto exit_deadline =
+            std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!gate.exited.load(std::memory_order_acquire)) {
+            if (std::chrono::steady_clock::now() >= exit_deadline) break;
+            std::this_thread::yield();
+        }
+        if (!drain_bounded(backend,
+                           std::chrono::steady_clock::now() + kWaitTimeout)) {
+            // The harness itself cannot safely recover from a stuck backend;
+            // abort so the failure cause is explicit, not a destructor race.
+            std::abort();
+        }
+        if (c.ready()) {
+            c.reset();
+        } else if (!c.idle()) {
+            // Never allow an outstanding/publishing Completion to destruct.
+            std::abort();
+        }
+    };
+    // Sets the failure message and cleans up the iteration. The caller MUST
+    // follow with an explicit `break` (or an `if (fail_msg != nullptr) break`
+    // after an inner loop) — no control-flow is hidden in the helper.
+    auto fail_iteration = [&](const char* msg, Completion<std::size_t>& c) {
+        fail_msg = msg;
+        cleanup_iteration(c);
+    };
+
+    for (std::size_t iter = 0; iter < kIters && fail_msg == nullptr; ++iter) {
+        Completion<std::size_t> c;
+        if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
+            // Submit rejected: c is idle, nothing to clean up.
+            fail_msg = "submit must succeed on a drained backend";
+            break;
+        }
+        // Force the worker into the pre-dequeue window so the op is provably
+        // `enqueued` before the race is released.
+        if (!wait_paused(gate,
+                         std::chrono::steady_clock::now() + kWaitTimeout)) {
+            fail_iteration("gate did not pause before the worker dequeue", c);
+            break;
+        }
+        // Barrier synchronizes TWO threads: the main thread (which resumes the
+        // worker gate) and the canceler. Both release together AFTER the worker
+        // is confirmed paused, so cancel and dequeue genuinely race. The
+        // canceler executes cancel immediately (it cannot run before the barrier
+        // because the worker was already paused BEFORE the barrier released),
+        // while the main thread resumes the worker gate at the same instant.
+        // The two then contend for work_mtx_: cancel either wins the enqueued
+        // terminal (terminal_won -> canceled winner, no syscall) or loses to the
+        // worker's dequeue (running/ordinary winner). Either outcome is valid;
+        // the exactly-one assertions below are the contract. The canceler is
+        // created inside a try block and joined before scope exit so a
+        // thread-creation failure under load cannot leave a joinable thread
+        // (which would std::terminate the process at scope end).
+        std::barrier sync{2};
+        std::thread canceler;
+        try {
+            canceler = std::thread([&] {
+                sync.arrive_and_wait();
+                backend.cancel(c);
+            });
+        } catch (...) {
+            // Thread creation can fail under heavy concurrency load. The gate
+            // is resumed inside cleanup_iteration so the worker is not stranded.
+            fail_iteration("canceler thread creation failed under load", c);
+            break;
+        }
+        sync.arrive_and_wait();
+        gate.resume.store(true, std::memory_order_release);
+        canceler.join();
+        // Wait for the worker to leave the gate before the next iteration arms
+        // it again (the gate struct is reused).
+        const auto gate_exit_deadline =
+            std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!gate.exited.load(std::memory_order_acquire)) {
+            if (std::chrono::steady_clock::now() >= gate_exit_deadline) {
+                fail_iteration("gate failed to exit before timeout", c);
+                break;
+            }
+            std::this_thread::yield();
+        }
+        if (fail_msg != nullptr) break;
+        // Re-arm the gate for the next iteration.
+        gate.paused.store(false, std::memory_order_release);
+        gate.resume.store(false, std::memory_order_release);
+        gate.exited.store(true, std::memory_order_release);
+
+        // Drain through the real reaper, counting publications. The loop
+        // condition is `!c.ready()` (not just `outstanding() > 0`) so the
+        // `c.ready()`/`result()` assertions below are never racy: the Completion
+        // is published exactly by the reap inside poll(), and we only proceed
+        // once that publication is observed.
+        std::size_t published = 0;
+        const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!c.ready()) {
+            if (std::chrono::steady_clock::now() >= deadline) {
+                fail_iteration("drain must complete within the bounded deadline",
+                               c);
+                break;
+            }
+            published += backend.poll();
+            if (!c.ready()) std::this_thread::yield();
+        }
+        if (fail_msg != nullptr) break;
+
+        if (published != 1) {
+            fail_iteration("exactly one publication per iteration", c);
+            break;
+        }
+        if (!c.ready()) {
+            fail_iteration("Completion must be ready after drain", c);
+            break;
+        }
+        if (c.result().has_value()) {
+            if (c.result().value() != 1) {
+                fail_iteration("real result must be the 1 seeded byte", c);
+                break;
+            }
+            ++success_total;
+        } else {
+            if (c.result().error().code != IoError::Code::canceled) {
+                fail_iteration("non-success result must be canceled", c);
+                break;
+            }
+            ++canceled_total;
+        }
+        c.reset();
+
+        // Exactly-one accounting: a canceled winner tallied one canceled op and
+        // ran no syscall; a syscall winner tallied neither. (c is now idle, so a
+        // fail here needs no Completion cleanup.)
+        if (stats.canceled_ops != canceled_total) {
+            fail_msg = "canceled_ops must tally exactly the canceled winners";
+            break;
+        }
+        if (backend.syscall_count_for_test() != success_total) {
+            fail_msg = "syscall_count must tally exactly the syscall winners";
+            break;
+        }
+        if (backend.arena_slot_in_use() != 0) {
+            fail_msg = "slot must be released after reset";
+            break;
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        if (canceled_total + success_total != kIters) {
+            fail_msg = "every iteration must produce exactly one winner";
+        }
+    }
+
+    // Safety: ensure the gate is resumed and the worker has exited it before
+    // the backend (and its worker thread) is destroyed. Bounded: a stuck worker
+    // must produce a stable abort, not a hung CI.
+    gate.resume.store(true, std::memory_order_release);
+    const auto teardown_deadline =
+        std::chrono::steady_clock::now() + kWaitTimeout;
+    while (!gate.exited.load(std::memory_order_acquire)) {
+        if (std::chrono::steady_clock::now() >= teardown_deadline) {
+            std::fprintf(stderr,
+                         "tp_cancel_races_worker_terminal_exactly_one: gate "
+                         "failed to exit before timeout; aborting\n");
+            std::abort();
+        }
+        std::this_thread::yield();
     }
 
     ::close(fd);

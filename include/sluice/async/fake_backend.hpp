@@ -245,6 +245,33 @@ class FakeAsyncBackend : public AsyncBackend {
     void set_submit_pause_after_commit(SubmitPauseGate* gate) noexcept {
         submit_pause_gate_ = gate;
     }
+
+    // Test-only: resolve a Completion pointer to its current slot+generation.
+    // Returns nullopt if the Completion is not bound to any slot. Mirrors the
+    // ThreadPoolBackend seam (Phase C2b row 4 identity tests capture a handle,
+    // release the slot, reuse it, then inject the stale handle).
+    std::optional<detail::SlotHandle> handle_for_completion_for_test(
+        const void* completion) const noexcept {
+        return arena_.resolve_completion(completion);
+    }
+
+    // Test-only identity-injection seam (Phase C2b row 4): drive a CAPTURED
+    // SlotHandle (typically a stale-generation handle from a released occupant)
+    // through the REAL cancel authority path — arena_.cancel(h) — instead of
+    // the pointer-keyed public cancel(Completion&). This is what proves a
+    // stale-generation event cannot act on a live N+1 occupant of the same
+    // physical slot: the handle validation in arena_.cancel rejects it with
+    // not_found and no side effect. Returns the disposition so the test can
+    // assert not_found/already_terminal. Mirrors observe_for_test (test-only,
+    // guarded; production builds carry nothing). The seam accepts/returns
+    // pointer-free identity (SlotHandle), not a Completion reverse map.
+    detail::CancelDisposition cancel_handle_for_test(detail::SlotHandle h) noexcept {
+        detail::CancelDisposition disp = arena_.cancel(h);
+        if (disp == detail::CancelDisposition::terminal_won) {
+            tally_canceled();
+        }
+        return disp;
+    }
 #endif
 
   private:
