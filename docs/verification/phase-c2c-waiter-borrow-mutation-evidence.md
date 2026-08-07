@@ -40,7 +40,8 @@ For each mutant A–I:
 5. restore the file from a pre-mutation snapshot of the CURRENT working tree
    (the C2c guarded seams and the register_waiter window correction — never
    from git, so uncommitted work is never lost);
-6. after all mutants, confirm `grep -c MUTANT include/` is zero and `git diff
+6. after all mutants, confirm no mutation marker remains
+   (`grep -rn "MUTANT" include/sluice/ src/` → 0 matches) and `git diff
    include/ src/` shows only the intended C2c changes (guarded seams + the
    register_waiter window correction).
 

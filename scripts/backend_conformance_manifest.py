@@ -386,7 +386,7 @@ EVIDENCE: tuple[Evidence, ...] = (
               "registration state matrix + no-overwrite cardinality (final "
               "delivery = first waiter), wait-cancel vs I/O-cancel "
               "independence, move-only lease transfer chains, by-value "
-              "ReadyEvent across slot reuse, register-vs-terminal and "
+              "ReadyEvent across slot reuse, register-vs-reap and "
               "cancel_waiter-vs-reap races (exactly-one lease ownership).",
     ),
     Evidence(

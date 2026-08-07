@@ -27,7 +27,7 @@ nonconforming code (mutants A–I).
 | Requirement (Issue #68 row) | Evidence |
 |---|---|
 | 11 — fd/buffer borrow lifetime: commit owns, reap releases; survives every intermediate state and every cancel/wait-cancel path | `c2c_arena_borrow_waiter_lease_matrix` (arena), `c2c_fake_borrow_waiter_integration` (Fake), `c2c_threadpool_borrow_waiter_integration` (ThreadPool) |
-| 12a — single-waiter registration + abstract delivery mechanics (C2c scope) | `arena_waiter_registration_state_matrix`, `arena_single_waiter_first_registration_survives`, `arena_register_waiter_vs_terminal_race`; Fake/TP integration cases |
+| 12a — single-waiter registration + abstract delivery mechanics (C2c scope) | `arena_waiter_registration_state_matrix`, `arena_single_waiter_first_registration_survives`, `arena_register_waiter_vs_reap_race`; Fake/TP integration cases |
 | 12b — real public waiter / RequestHandle / Scheduler registration consumer (**Phase F scope**) | not in C2c — see §3.2; no public waiter API exists (ADR Decision 7/10) |
 | 13 — waiter-cancel independence: wait-cancel ≠ I/O cancel; cancel_waiter vs reap exactly-once | `arena_waiter_cancel_removes_only_the_waiter`, `arena_io_cancel_keeps_waiter_registration`, `arena_cancel_waiter_vs_reap_race`; Fake/TP integration cases |
 | 14a — abstract move-only delivery lease ownership / exactly-once transfer (C2c scope) | `arena_lease_type_properties`, `arena_lease_transfer_chain_reap_path`, `arena_lease_transfer_chain_wait_cancel_path`, `arena_ready_event_waiter_survives_slot_reuse`, `arena_cancel_waiter_vs_reap_race`; Fake/TP integration cases |
