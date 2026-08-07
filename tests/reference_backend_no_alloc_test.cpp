@@ -245,6 +245,50 @@ SLUICE_TEST_CASE(fake_cas_loss_rejection_zero_side_effects) {
     SLUICE_CHECK(raw->arena_slot_in_use() == 0);
 }
 
+// ---- FakeAsyncBackend: FULL-window allocation failure with a DEFINED error --
+// C2d row 10 (reference path): the accepted submit -> complete_oldest_with_error
+// (manual dispatch terminal) -> poll (reap) -> reset path runs ENTIRELY under
+// always-throw operator new. The prior cases proved the success terminal and
+// the rejection paths under allocation failure; this one proves an accepted
+// request reaches exactly one DEFINED ERROR terminal with zero allocations —
+// a completed-with-error op is not allocation-gated either (ADR Decision 14:
+// the terminal path cannot depend on new unbounded allocation).
+SLUICE_TEST_CASE(fake_full_window_alloc_failure_defined_error_terminal) {
+    auto backend = std::make_unique<FakeAsyncBackend>();
+    FakeAsyncBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    std::byte buf[8]{};
+    Completion<std::size_t> c;
+
+    if constexpr (kAllocProbeActive) {
+        g_allocations.store(0, std::memory_order_relaxed);
+        g_throw_all.store(true, std::memory_order_relaxed);
+    }
+    bool submit_ok = ctx.submit_read(ReadOp{0, buf, 8, 0}, c).has_value();
+    raw->complete_oldest_with_error(IoError{IoError::Code::backend_error});
+    std::size_t polled = ctx.poll();
+    bool ready = c.ready();
+    bool error_ok = ready && !c.result().has_value() &&
+                    c.result().error().code == IoError::Code::backend_error;
+    c.reset();
+    if constexpr (kAllocProbeActive) {
+        g_throw_all.store(false, std::memory_order_relaxed);
+    }
+
+    SLUICE_CHECK_MSG(submit_ok, "submit must succeed under always-throw operator new");
+    SLUICE_CHECK_MSG(polled == 1, "poll must reap exactly one under always-throw operator new");
+    SLUICE_CHECK_MSG(ready, "the Completion must become ready under always-throw operator new");
+    SLUICE_CHECK_MSG(error_ok,
+                     "the accepted request must reach the defined backend_error terminal");
+    SLUICE_CHECK_MSG(c.idle(), "reset must return the Completion to idle");
+    if constexpr (kAllocProbeActive) {
+        std::size_t allocs = g_allocations.load(std::memory_order_relaxed);
+        SLUICE_CHECK_MSG(allocs == 0,
+                         "the submit/complete-error/reap/reset path must allocate nothing");
+    }
+    SLUICE_CHECK_MSG(ctx.outstanding() == 0, "arena drained");
+}
+
 // ---- FakeAsyncBackend: complete_* -> poll (reap) -> reset is allocation-free --
 // Review finding #2 (ADR Decision 14): the manual-completion path (complete_oldest_*
 // binding a terminal result to a RequestKey, then reap publishing it) MUST NOT

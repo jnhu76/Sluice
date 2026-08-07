@@ -23,6 +23,7 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -113,6 +114,18 @@ ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
     stopping_ = false;
     try {
         for (std::size_t i = 0; i < config.worker_count; ++i) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // C2d: injected worker-spawn failure (rows 9-10; finding P1-04
+            // "no test injects thread-creation failure"). The injected
+            // std::system_error mirrors a real pthread_create EAGAIN; the
+            // catch path below stops and joins the already-started workers and
+            // rethrows. Compiled out of production builds.
+            if (i == injected_worker_spawn_failure_index()) {
+                throw std::system_error(
+                    std::make_error_code(std::errc::resource_unavailable_try_again),
+                    "injected ThreadPoolBackend worker spawn failure");
+            }
+#endif
             workers_.emplace_back([this] { worker_loop(); });
         }
     } catch (...) {
@@ -322,6 +335,7 @@ Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
 
 void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
     detail::EnqueueOutcome outcome;
+    bool injected_dispatch_failure = false;
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
         outcome = arena_.enqueue(h);  // pending -> enqueued OR terminal_noop
@@ -330,9 +344,27 @@ void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
             // Post-fix placement: the gate fires INSIDE work_mtx_, so the
             // structural lock-domain probe sees work_domain_held == true.
             wait_after_enqueue_before_push_pause_(/*inside_work_mtx=*/true);
+            // C2d: post-commit dispatch-failure injection (rows 9-10). The
+            // enqueue already won (slot `enqueued`, pin acknowledged) but the
+            // handle was NOT yet pushed: no worker can pop it (workers dequeue
+            // only under work_mtx_, which we hold), so no worker, ring, kernel,
+            // or other executor holds execution ownership. Record the defined
+            // `backend_error` terminal through the arena's terminal-winner
+            // authority instead of pushing — the ADR Decision-12
+            // "post-commit dispatch failure after execution ownership is
+            // proven absent" winner candidate (AGENTS.md §10.5). reap
+            // publishes it exactly once; the borrow stays active until reap.
+            // Compiled out of production builds (no branch, no symbol).
+            auto* inj = dispatch_failure_injection_.load(std::memory_order_acquire);
+            if (inj != nullptr && inj->armed.load(std::memory_order_acquire)) {
+                inj->fired.fetch_add(1, std::memory_order_relaxed);
+                (void)arena_.record_terminal(
+                    h, detail::TerminalResult::err(IoError{IoError::Code::backend_error}));
+                injected_dispatch_failure = true;
+            }
         }
 #endif
-        if (outcome == detail::EnqueueOutcome::enqueued) {
+        if (outcome == detail::EnqueueOutcome::enqueued && !injected_dispatch_failure) {
             dispatch_.push_back(h);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
             {
@@ -344,7 +376,12 @@ void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
 #endif
         }
     }
-    if (outcome == detail::EnqueueOutcome::enqueued) {
+    if (injected_dispatch_failure) {
+        // The dispatch-failure terminal won (ADR Decision 12); no worker will
+        // run or signal, so the READY domain must observe the new backend_ready
+        // (a blocked wait_one must not lose the wake — AC-6 / design §4.5).
+        signal_ready_progress();
+    } else if (outcome == detail::EnqueueOutcome::enqueued) {
         work_cv_.notify_one();
     } else {
         // terminal_noop: a pending cancel/terminal won first (Scheme B). That
@@ -635,5 +672,27 @@ void ThreadPoolBackend::close_admission() {
     arena_.close_admission();
     ready_wait_.interrupt_all();
 }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+namespace {
+// C2d: worker-spawn failure injection state (see the guarded class setters in
+// threadpool_backend.hpp). SIZE_MAX = disarmed. A static seam is required
+// because the injection point is the constructor, which runs before any
+// instance exists; the tests guarantee serial isolation (only the constructing
+// thread reads it while armed; the harness runs cases sequentially in one
+// process) and restore SIZE_MAX via RAII. Compiled out of production builds.
+std::atomic<std::size_t> g_injected_worker_spawn_failure_index{
+    std::numeric_limits<std::size_t>::max()};
+}  // namespace
+
+std::size_t ThreadPoolBackend::injected_worker_spawn_failure_index() noexcept {
+    return g_injected_worker_spawn_failure_index.load(std::memory_order_acquire);
+}
+
+void ThreadPoolBackend::set_injected_worker_spawn_failure_index(
+    std::size_t index) noexcept {
+    g_injected_worker_spawn_failure_index.store(index, std::memory_order_release);
+}
+#endif
 
 }  // namespace sluice::async

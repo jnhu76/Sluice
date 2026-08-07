@@ -264,6 +264,44 @@ class ThreadPoolBackend : public AsyncBackend {
         terminal_publication_gate_.store(gate, std::memory_order_release);
     }
 
+    // --- Phase C2d seams (rows 9-10): failure injection. Compiled out of
+    // production sluice_async; the layout cost in the internal-testing target
+    // is accepted and documented (AGENTS.md §8). ---
+
+    // Post-commit dispatch-failure injection. When `armed` and the submit
+    // path's enqueue won (outcome == enqueued), the submit path records the
+    // defined `backend_error` terminal through the arena's terminal-winner
+    // authority INSTEAD of pushing the handle onto the dispatch ring — the
+    // ADR Decision-12 "post-commit dispatch failure after execution ownership
+    // is proven absent" winner candidate (AGENTS.md §10.5). The handle was
+    // never visible to any worker (workers dequeue only under work_mtx_, which
+    // the injection holds), so no worker, ring, kernel, or other executor
+    // holds execution ownership; submit still returns success; reap publishes
+    // the defined terminal exactly once. `fired` increments exactly once per
+    // injected submit; the test reads it to distinguish "injection fired" from
+    // "a cancel won first". The control object must be declared before the
+    // backend and outlive it (same lifetime rule as the pause gates).
+    struct DispatchFailureInjection {
+        std::atomic<bool> armed{false};
+        std::atomic<std::size_t> fired{0};
+    };
+    void set_dispatch_failure_injection(DispatchFailureInjection* injection) noexcept {
+        dispatch_failure_injection_.store(injection, std::memory_order_release);
+    }
+
+    // Construction-time worker-spawn failure injection (rows 9-10; finding
+    // P1-04 "no test injects thread-creation failure"). The
+    // constructor-before-instance shape forces a CONTROLLED static seam: an
+    // instance member cannot be configured before construction. The value is
+    // the zero-based worker index whose std::thread creation must throw
+    // std::system_error(errc::resource_unavailable_try_again) (mirroring a
+    // real pthread_create EAGAIN); SIZE_MAX disarms. Tests MUST restore
+    // SIZE_MAX via RAII even on failure; the seam is serialized (only the
+    // constructing thread reads it while armed — the harness runs cases
+    // sequentially in one process) and is compiled out of production builds.
+    static void set_injected_worker_spawn_failure_index(std::size_t index) noexcept;
+    static std::size_t injected_worker_spawn_failure_index() noexcept;
+
     // --- Phase C2c seams (rows 11-14): route a real accepted Completion
     // through the REAL arena waiter/borrow authorities. No side-band waiter
     // map, no reimplementation of the waiter state machine: the Completion is
@@ -507,6 +545,10 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<BeforeWorkerDequeuePauseGate*> before_dequeue_gate_{nullptr};
     std::atomic<WorkerRunningPauseGate*> running_gate_{nullptr};
     std::atomic<TerminalPublicationPauseGate*> terminal_publication_gate_{nullptr};
+    // Phase C2d: post-commit dispatch-failure injection control (see the
+    // guarded setter above). Null when disarmed; never dereferenced by
+    // production builds (the branch is compiled out).
+    std::atomic<DispatchFailureInjection*> dispatch_failure_injection_{nullptr};
 #endif
 };
 
