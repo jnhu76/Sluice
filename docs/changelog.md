@@ -1,5 +1,56 @@
 # Changelog
 
+## Unreleased — Phase C2e close / drain / reset / destruction (Issue #68 rows 15–16)
+
+### Changed
+
+- **`sluice::async::FakeAsyncBackend::close_admission()` added** — the
+  reference backend now exposes the same production admission close as
+  `ThreadPoolBackend` (ADR Decision 15 reference semantics:
+  `arena_.close_admission()`). New `submit_*` returns `invalid_state`
+  (Completion idle, no borrow) while existing accepted requests continue;
+  cancel/poll/wait_one/reap remain legal. Idempotent. Additive — no existing
+  behavior changed. Fake has no split wait capability (its `wait_one` is
+  non-blocking by contract), so there is no parked participant to wake; the
+  arena admission flag alone is the full reference semantics.
+  (`include/sluice/async/fake_backend.hpp`)
+
+### Tests
+
+- `tests/backend_conformance_test.cpp` — shared close/drain suite
+  (`run_close_drain_cases`, driven per backend by
+  `conformance_close_drain_fake` / `conformance_close_drain_threadpool`):
+  close rejects future submit with `invalid_state` (idle Completion, zero
+  residue), accepted-before-close reaches exactly one defined terminal with
+  cancel/poll/reap legal, drained != releasable (`slot_in_use == 1` until the
+  caller resets the ready Completion), slot-release vs admission-close
+  orthogonality.
+- `tests/threadpool_backend_c2e_close_drain_test.cpp` — deterministic window
+  evidence on the real backend (13 cases): close while pending/enqueued/
+  running (real result verbatim, size + void), close then pending cancel
+  winner, close then running cancel intent only, one-shot parked-waiter wake
+  with no busy-spin, close ‖ final `record_terminal` in both orderings plus
+  the interrupt-vs-final-ready window closed by `wait_one`'s final reap,
+  invariant race drain, submit ‖ close linearization.
+- `tests/threadpool_backend_death_test.cpp` — added the `pending`-state
+  non-quiescent destruction death case.
+- `tests/fake_backend_death_test.cpp` (new) — Fake-type non-quiescent
+  destruction fail-fast (unreaped bound request; ready-but-unreset
+  Completion) + quiescent control, Debug AND Release.
+- `scripts/backend_conformance_manifest.py` / `scripts/verify-backend-conformance.py`
+  — C2e evidence records (`c2e_shared_close_drain_suite`,
+  `c2e_threadpool_close_drain_race`, `c2e_fake_close_drain_death`,
+  `uring_c2e_close_drain_not_implemented`) + per-backend close/drain driver
+  driving; Uring's C2e gap enters its verdict via
+  `applicable_evidence_for_backend()` (never skip-as-pass).
+- `scripts/tests/test_backend_conformance_manifest.py` — 16 new C2e self-test
+  cases (records exist/applicable; missing close/drain run → INCOMPLETE;
+  per-backend attribution isolation; Uring gap never PASS; drive exclusion).
+- `include/sluice/async/threadpool_backend.hpp` /
+  `src/async/threadpool_backend.cpp` — `ControlWakeFinalReapPauseGate`
+  (guarded, compiled out of production; 0 symbols in `libsluice_async.a`)
+  making the interrupt-vs-final-ready window deterministic.
+
 ## Unreleased — Group Evented admission exception safety (P2-01)
 
 ### Changed
