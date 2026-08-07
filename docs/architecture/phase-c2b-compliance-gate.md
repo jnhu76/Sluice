@@ -8,11 +8,14 @@
 
 This is the PR-level evidence ledger for Phase C2b, the second C2 semantic-coverage slice: generation,
 provenance, stale-event rejection, cancel-winner semantics, exactly-one terminal, and identity-bearing
-reap. C2b closes rows 3–8 of the C2 requirement-to-evidence matrix (Issue #68) by extending the
-existing arena lifecycle targets with state-transition and identity matrix cases, adding Fake and
-ThreadPool integration evidence for cancel-winner and publication-boundary semantics, recording
-Uring's Phase-D identity gap as a `not_implemented` manifest record, and proving the cases catch
-deliberately nonconforming identity behavior.
+reap. C2b closes rows 3, 4a, 5, 6, 7, and 8 of the C2 requirement-to-evidence matrix (Issue #68) — i.e.
+the slot-generation, stale-handle, cancel-winner, exactly-one-terminal, and identity-bearing-reap
+contracts that the current RequestArena authority layer actually owns — by extending the existing arena
+lifecycle targets with state-transition and identity matrix cases, adding Fake and ThreadPool integration
+evidence for cancel-winner and publication-boundary semantics, recording Uring's Phase-D identity gap as
+a `not_implemented` manifest record, and proving the cases catch deliberately nonconforming identity
+behavior. Row 4b (cross-context `RequestKey` authority rejection) is explicitly deferred to Phase F,
+where the public RequestHandle consumer that exercises that authority will exist; C2b does not claim it.
 
 ---
 
@@ -21,11 +24,21 @@ deliberately nonconforming identity behavior.
 | Requirement (Issue #68 row) | Evidence |
 |---|---|
 | 3 — every legal state transition has evidence; illegal transitions return contract errors or fail-fast | `arena_mainline_state_transition_matrix`, `arena_illegal_transition_contract_errors`, `arena_death_enqueue_double`, `arena_death_release_before_completion_ready`, `arena_death_release_stale_handle` (arena-level) |
-| 4 — generation / provenance / stale-event rejection | `arena_generation_plus_one_on_both_release_authorities`, `arena_stale_handle_leaves_live_occupant_untouched`, `arena_request_key_carries_context_provenance`, `fake_stale_generation_event_harmless`, `tp_stale_generation_event_harmless` |
+| 4a — generation / stale-generation authority rejection (C2b scope) | `arena_generation_plus_one_on_both_release_authorities`, `arena_stale_handle_leaves_live_occupant_untouched`, `fake_stale_generation_event_harmless`, `tp_stale_generation_event_harmless` |
+| 4b — cross-context RequestKey authority rejection (**Phase F scope**) | not in C2b — see §3.2 scope note; no production authority accepts a foreign `RequestKey`, so this layer closes when the public RequestHandle consumer exists (Phase F) |
 | 5 — cancel matrix: pending / enqueued / running / terminal / stale | `fake_cancel_disposition_counts_exactly_once`, `tp_canceled_ops_tallied_only_on_terminal_won`, `tp_running_cancel_intent_does_not_tally` |
 | 6 — cancel winner does not overwrite ordinary success / error / dispatch terminal | `tp_running_cancel_intent_real_result_verbatim`, `tp_cancel_races_worker_terminal_exactly_one` |
 | 7 — exactly-one backend-ready winner; all losers no-op | `exactly_one_terminal_winner`, `tp_cancel_races_worker_terminal_exactly_one` |
 | 8 — identity-bearing reap: slot binding publishes; backend-known terminal-winner order; worker does not publish Completion | `arena_reap_preserves_terminal_winner_order`, `fake_binding_identity_and_publication_boundary`, `tp_publication_boundary_reap_gates_ready`, `tp_terminal_publication_after_bookkeeping` |
+
+**Row 4 decomposition.** Issue #68 row 4 conflates two distinct authority layers. The C2b-closed
+portion is the **slot-generation authority** (row 4a): generation advances exactly +1 before reuse, a
+stale-generation `SlotHandle` is rejected by every arena authority with zero side effect, and the Fake /
+ThreadPool backends prove a stale event cannot act on a live N+1 occupant of the same physical slot. The
+**cross-context RequestKey authority rejection** (row 4b) is a Phase F concern: the RequestArena mutable
+authorities take a context-less `SlotHandle`, so there is no production path that injects a context-A
+`RequestKey` into context-B's authority. C2b does not lower the bar for row 4b — it places the bar at the
+layer where that authority actually exists (the Phase F public RequestHandle consumer). See §3.2.
 
 Explicitly **out of scope** (later slices): C2c waiter/borrow/delivery lease (rows 11–14), C2d failure
 injection (rows 9–10), C2e close/drain/destruction (row 15), and the entire Phase D Uring RequestArena
@@ -80,12 +93,12 @@ unchanged).
 generation only); `RequestKey` is the identity that carries provenance. Proven at the RequestArena/ReadySink
 boundary: two arenas with identical slot/generation produce DIFFERENT RequestKeys; the ReadyEvent.key
 carries the originating context/slot/generation BY VALUE and survives the slot's release + reuse; and a
-context-A key never EQUALS context-B's key for the same physical slot/generation. (Scope note: the current
-RequestArena mutable authorities take a `SlotHandle`, which carries no context component, so this case
-proves provenance is ENCODED into the published identity and the cross-context keys are observably
-distinct — it does not inject a context-A `RequestKey` into context-B's authority path, because no
-production path accepts a foreign `RequestKey`. Cross-context authority rejection at the RequestKey level
-is a Phase F concern once a public RequestHandle exists.)
+context-A key never EQUALS context-B's key for the same physical slot/generation. This case covers the
+**row 4a provenance-encoding** portion. The **row 4b cross-context RequestKey authority rejection** is
+NOT claimed here: the current RequestArena mutable authorities take a context-less `SlotHandle`, so no
+production path injects a context-A `RequestKey` into context-B's authority. Rather than synthesize a
+test-only `RequestKey`-taking authority that production never runs, C2b places row 4b at Phase F, where
+the public RequestHandle consumer that exercises that authority will exist (see §1 row decomposition).
 
 `fake_stale_generation_event_harmless` and `tp_stale_generation_event_harmless` prove each backend's
 integration that a stale-generation event cannot act on a LIVE N+1 occupant: the gen-N `SlotHandle` is
@@ -279,13 +292,17 @@ that actually ran green.
 - **C2c** — waiter/borrow/delivery lease (rows 11–14): PARTIAL, not closed.
 - **C2d** — failure injection + post-commit allocator terminal (rows 9–10): MISSING, not closed.
 - **C2e** — close/drain/reset (row 15; row 16 already FULL): PARTIAL, not closed.
+- **Row 4b** — cross-context `RequestKey` authority rejection: Phase F scope (the public RequestHandle
+  consumer that exercises a foreign-`RequestKey` authority path does not exist yet). See §3.2.
 - **Phase D** — Uring RequestArena migration: PENDING; Uring C2b conformance is the
   `uring_c2b_identity_not_implemented` record, never skip-as-pass.
 
 ## 10. Phase status
 
 - Phase C remains **PARTIAL** (C1 IMPLEMENTED; C2a COMPLETE; C2b COMPLETE; C2c–C2e pending).
-- **C2b: COMPLETE** — rows 3–8 of the C2 matrix have arena-level, per-backend, validity-proven
-  evidence for Fake and ThreadPool; Uring's gap is authoritatively recorded.
-- No `src/` or `include/sluice/` change; no synchronous Reader/Writer behavior change; no Phase D
-  Uring implementation; no C2c–C2e scope creep.
+- **C2b: COMPLETE** — rows 3, 4a, 5, 6, 7, and 8 of the C2 matrix have arena-level, per-backend,
+  validity-proven evidence for Fake and ThreadPool; Uring's gap is authoritatively recorded. Row 4b
+  (cross-context RequestKey authority rejection) is explicitly Phase F scope, not a C2b gap.
+- No `src/` production change (only `SLUICE_ASYNC_INTERNAL_TESTING`-guarded header seams in
+  `include/sluice/`); no synchronous Reader/Writer behavior change; no Phase D Uring implementation;
+  no C2c–C2e scope creep.
