@@ -235,14 +235,19 @@ SLUICE_TEST_CASE(tp_running_borrow_cancel_intent_waiter_survives) {
                     fail_msg = "running cancel intent must NOT tally canceled_ops";
                 } else if (c.ready()) {
                     fail_msg = "Completion must not be ready in the running window";
-                } else if (!backend.borrow_for_test(*h)->active) {
-                    fail_msg = "running cancel intent must not end the borrow";
                 } else {
-                    auto w2 = backend.waiter_for_test(*h);
-                    if (!w2.has_value() ||
-                        w2->registration != WaiterRegistration::open_registered ||
-                        w2->token != WaiterToken{1, 7, 3} || w2->lease_id != 99) {
-                        fail_msg = "running cancel intent must not delete the waiter";
+                    auto b2 = backend.borrow_for_test(*h);
+                    if (!b2.has_value() || !b2->active) {
+                        fail_msg = "running cancel intent must not end the borrow";
+                    } else {
+                        auto w2 = backend.waiter_for_test(*h);
+                        if (!w2.has_value() ||
+                            w2->registration != WaiterRegistration::open_registered ||
+                            w2->token != WaiterToken{1, 7, 3} ||
+                            w2->lease_id != 99) {
+                            fail_msg =
+                                "running cancel intent must not delete the waiter";
+                        }
                     }
                 }
             }
@@ -584,11 +589,12 @@ SLUICE_TEST_CASE(tp_wait_cancel_keeps_io) {
                 fail_msg = "cancel_waiter must return the registered lease";
             } else {
                 auto w = backend.waiter_for_test(*h);
+                auto b = backend.borrow_for_test(*h);
                 if (!w.has_value() ||
                     w->registration != WaiterRegistration::open_no_waiter ||
                     w->delivery_present) {
                     fail_msg = "registration must be reopened with no stored delivery";
-                } else if (!backend.borrow_for_test(*h)->active) {
+                } else if (!b.has_value() || !b->active) {
                     fail_msg = "wait-cancel must not end the borrow";
                 } else if (stats.canceled_ops != 0) {
                     fail_msg = "wait-cancel must never tally canceled_ops";
@@ -672,11 +678,12 @@ SLUICE_TEST_CASE(tp_io_cancel_keeps_waiter) {
                 fail_msg = "terminal_won must tally exactly one canceled op";
             } else {
                 auto w = backend.waiter_for_test(*h);
+                auto b = backend.borrow_for_test(*h);
                 if (!w.has_value() ||
                     w->registration != WaiterRegistration::open_registered ||
                     w->token != WaiterToken{3, 1, 1} || w->lease_id != 66) {
                     fail_msg = "I/O cancel must NOT delete the waiter registration";
-                } else if (!backend.borrow_for_test(*h)->active) {
+                } else if (!b.has_value() || !b->active) {
                     fail_msg = "I/O cancel must not end the borrow";
                 } else if (c.ready()) {
                     fail_msg = "Completion must not be ready before reap";

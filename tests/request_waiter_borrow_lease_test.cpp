@@ -207,16 +207,28 @@ SLUICE_TEST_CASE(arena_borrow_lifecycle_full_matrix) {
     install_noop_binding(arena, h);
     SLUICE_CHECK(arena.commit(h).has_value());
     SLUICE_CHECK(arena.state_of(h.slot) == RequestState::pending);
-    SLUICE_CHECK(arena.borrow_for_test(h)->active);
+    {
+        auto obs = arena.borrow_for_test(h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
 
     // pending -> enqueued: borrow persists.
     SLUICE_CHECK(arena.enqueue(h) == EnqueueOutcome::enqueued);
-    SLUICE_CHECK(arena.borrow_for_test(h)->active);
+    {
+        auto obs = arena.borrow_for_test(h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
 
     // enqueued -> running (dispatch shape): borrow persists.
     SLUICE_CHECK(arena.mark_running(h));
     SLUICE_CHECK(arena.state_of(h.slot) == RequestState::running);
-    SLUICE_CHECK(arena.borrow_for_test(h)->active);
+    {
+        auto obs = arena.borrow_for_test(h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
 
     // running -> backend_ready via record_terminal: the terminal result being
     // known does NOT end the borrow (worker finishing the syscall != borrow
@@ -232,7 +244,11 @@ SLUICE_TEST_CASE(arena_borrow_lifecycle_full_matrix) {
     RecordingSink sink;
     SLUICE_CHECK(arena.reap(sink) == 1);
     SLUICE_CHECK(arena.state_of(h.slot) == RequestState::completion_ready);
-    SLUICE_CHECK(!arena.borrow_for_test(h)->active);
+    {
+        auto obs = arena.borrow_for_test(h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(!obs->active);
+    }
 
     // release: slot free, no observable borrow.
     arena.release_completed_binding(h);
@@ -263,7 +279,11 @@ SLUICE_TEST_CASE(arena_borrow_publication_order) {
                      "borrow must end BEFORE the Completion-ready publication "
                      "(I18: an acquire observer of ready sees the ended borrow)");
     // The conventional post-reap observation still holds.
-    SLUICE_CHECK(!arena.borrow_for_test(h)->active);
+    {
+        auto obs = arena.borrow_for_test(h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(!obs->active);
+    }
     arena.release_completed_binding(h);
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
@@ -287,13 +307,24 @@ SLUICE_TEST_CASE(arena_borrow_survives_cancel_and_wait_cancel) {
         SLUICE_CHECK(arena.commit(h).has_value());
         SLUICE_CHECK(arena.cancel(h) == CancelDisposition::terminal_won);
         SLUICE_CHECK(arena.state_of(h.slot) == RequestState::backend_ready);
-        SLUICE_CHECK_MSG(arena.borrow_for_test(h)->active,
-                         "Scheme-B cancel must not end the borrow");
+        {
+            auto obs = arena.borrow_for_test(h);
+            SLUICE_CHECK_MSG(obs.has_value() && obs->active,
+                             "Scheme-B cancel must not end the borrow");
+        }
         SLUICE_CHECK(arena.enqueue(h) == EnqueueOutcome::terminal_noop);
-        SLUICE_CHECK(arena.borrow_for_test(h)->active);
+        {
+            auto obs = arena.borrow_for_test(h);
+            SLUICE_CHECK(obs.has_value());
+            SLUICE_CHECK(obs->active);
+        }
         RecordingSink sink;
         SLUICE_CHECK(arena.reap(sink) == 1);
-        SLUICE_CHECK(!arena.borrow_for_test(h)->active);
+        {
+            auto obs = arena.borrow_for_test(h);
+            SLUICE_CHECK(obs.has_value());
+            SLUICE_CHECK(!obs->active);
+        }
         arena.release_completed_binding(h);
         SLUICE_CHECK(arena.slot_in_use() == 0);
     }
@@ -308,14 +339,25 @@ SLUICE_TEST_CASE(arena_borrow_survives_cancel_and_wait_cancel) {
         SLUICE_CHECK(arena.mark_running(h));
         SLUICE_CHECK(arena.cancel(h) == CancelDisposition::intent_recorded);
         SLUICE_CHECK(!arena.terminal_stored(h.slot));
-        SLUICE_CHECK_MSG(arena.borrow_for_test(h)->active,
-                         "running cancel intent must not end the borrow");
+        {
+            auto obs = arena.borrow_for_test(h);
+            SLUICE_CHECK_MSG(obs.has_value() && obs->active,
+                             "running cancel intent must not end the borrow");
+        }
         // The real syscall result wins verbatim (Decision 11).
         SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(8)));
-        SLUICE_CHECK(arena.borrow_for_test(h)->active);
+        {
+            auto obs = arena.borrow_for_test(h);
+            SLUICE_CHECK(obs.has_value());
+            SLUICE_CHECK(obs->active);
+        }
         RecordingSink sink;
         SLUICE_CHECK(arena.reap(sink) == 1);
-        SLUICE_CHECK(!arena.borrow_for_test(h)->active);
+        {
+            auto obs = arena.borrow_for_test(h);
+            SLUICE_CHECK(obs.has_value());
+            SLUICE_CHECK(!obs->active);
+        }
         arena.release_completed_binding(h);
         SLUICE_CHECK(arena.slot_in_use() == 0);
     }
@@ -332,13 +374,20 @@ SLUICE_TEST_CASE(arena_borrow_survives_cancel_and_wait_cancel) {
                          .has_value());
         auto rl = arena.cancel_waiter(h);
         SLUICE_CHECK(rl.has_value());
-        SLUICE_CHECK_MSG(arena.borrow_for_test(h)->active,
-                         "wait-cancel must not end the borrow");
+        {
+            auto obs = arena.borrow_for_test(h);
+            SLUICE_CHECK_MSG(obs.has_value() && obs->active,
+                             "wait-cancel must not end the borrow");
+        }
         SLUICE_CHECK(arena.state_of(h.slot) == RequestState::enqueued);
         SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(8)));
         RecordingSink sink;
         SLUICE_CHECK(arena.reap(sink) == 1);
-        SLUICE_CHECK(!arena.borrow_for_test(h)->active);
+        {
+            auto obs = arena.borrow_for_test(h);
+            SLUICE_CHECK(obs.has_value());
+            SLUICE_CHECK(!obs->active);
+        }
         arena.release_completed_binding(h);
         SLUICE_CHECK(arena.slot_in_use() == 0);
     }
@@ -360,7 +409,10 @@ SLUICE_TEST_CASE(arena_borrow_rollback_and_stale_protection) {
     SLUICE_CHECK(arena.prepare(h0, OperationKind::read,
                                sluice::async::detail::BorrowMetadata{9, buf1, 8})
                      .has_value());
-    SLUICE_CHECK(!arena.borrow_for_test(h0)->active);  // prepared only
+    {
+        auto obs = arena.borrow_for_test(h0);
+        SLUICE_CHECK_MSG(obs.has_value() && !obs->active, "prepared only");
+    }
     SLUICE_CHECK(arena.rollback_reserved_or_prepared(h0).has_value());
     SLUICE_CHECK(arena.slot_in_use() == 0);
 
@@ -384,13 +436,21 @@ SLUICE_TEST_CASE(arena_borrow_rollback_and_stale_protection) {
     // arena authority validates generation (borrow_for_test returns nullopt),
     // and the occupant's own borrow is still active after the stale probe.
     SLUICE_CHECK(arena.borrow_for_test(h0) == std::nullopt);
-    SLUICE_CHECK(arena.borrow_for_test(h1)->active);
+    {
+        auto obs = arena.borrow_for_test(h1);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
 
     // Drain the new occupant (reap ends its borrow at completion-ready).
     SLUICE_CHECK(arena.record_terminal(h1, TerminalResult::ok_bytes(16)));
     RecordingSink sink;
     SLUICE_CHECK(arena.reap(sink) == 1);
-    SLUICE_CHECK(!arena.borrow_for_test(h1)->active);
+    {
+        auto obs = arena.borrow_for_test(h1);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(!obs->active);
+    }
     arena.release_completed_binding(h1);
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
@@ -688,7 +748,11 @@ SLUICE_TEST_CASE(arena_waiter_cancel_removes_only_the_waiter) {
     // The I/O is untouched: still enqueued, no terminal stored, borrow active.
     SLUICE_CHECK(arena.state_of(h.slot) == RequestState::enqueued);
     SLUICE_CHECK(!arena.terminal_stored(h.slot));
-    SLUICE_CHECK(arena.borrow_for_test(h)->active);
+    {
+        auto obs = arena.borrow_for_test(h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
 
     // I/O completes normally; reap delivers NO waiter; lease A never re-appears.
     SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(8)));
@@ -725,7 +789,11 @@ SLUICE_TEST_CASE(arena_io_cancel_keeps_waiter_registration) {
     SLUICE_CHECK(w->registration == WaiterRegistration::open_registered);
     SLUICE_CHECK((w->token == WaiterToken{9, 0, 0}));
     SLUICE_CHECK(w->lease_id == 77);
-    SLUICE_CHECK(arena.borrow_for_test(h)->active);
+    {
+        auto obs = arena.borrow_for_test(h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
 
     // Reap: canceled terminal + waiter A delivered together.
     RecordingSink sink;

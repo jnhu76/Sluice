@@ -63,7 +63,11 @@ SLUICE_TEST_CASE(fake_borrow_waiter_delivery_integration) {
     // and the borrow is still active before poll().
     backend.complete_oldest_with_bytes(4);
     SLUICE_CHECK(!c.ready());
-    SLUICE_CHECK(backend.borrow_for_test(*h)->active);
+    {
+        auto obs = backend.borrow_for_test(*h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
     SLUICE_CHECK(backend.sink_deliveries() == 0);
 
     // poll() reaps: Completion ready; the acquire observer sees the ended
@@ -72,7 +76,11 @@ SLUICE_TEST_CASE(fake_borrow_waiter_delivery_integration) {
     SLUICE_CHECK(c.ready());
     SLUICE_CHECK(c.result().has_value());
     SLUICE_CHECK(c.result().value() == 4);
-    SLUICE_CHECK(!backend.borrow_for_test(*h)->active);  // borrow ended
+    {
+        auto obs = backend.borrow_for_test(*h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(!obs->active);  // borrow ended
+    }
     SLUICE_CHECK(backend.sink_deliveries() == 1);
     SLUICE_CHECK(backend.sink_last_has_waiter());
     SLUICE_CHECK((backend.sink_last_token() == WaiterToken{1, 5, 2}));
@@ -105,7 +113,11 @@ SLUICE_TEST_CASE(fake_backend_ready_window_waiter_registration) {
     // Terminal recorded, reap not run: not ready, borrow active, sink silent.
     backend.complete_oldest_with_bytes(4);
     SLUICE_CHECK(!c.ready());
-    SLUICE_CHECK(backend.borrow_for_test(*h)->active);
+    {
+        auto obs = backend.borrow_for_test(*h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
     SLUICE_CHECK(backend.sink_deliveries() == 0);
 
     // The terminal winner does NOT close registration (ADR Decision 10):
@@ -158,7 +170,11 @@ SLUICE_TEST_CASE(fake_wait_cancel_keeps_io) {
     // The I/O is untouched: still accepted/outstanding, borrow active, no
     // terminal, no canceled tally.
     SLUICE_CHECK(backend.outstanding() == 1);
-    SLUICE_CHECK(backend.borrow_for_test(*h)->active);
+    {
+        auto obs = backend.borrow_for_test(*h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
     SLUICE_CHECK(stats.canceled_ops == 0);
     SLUICE_CHECK(stats.completion_errors == 0);
 
@@ -202,7 +218,11 @@ SLUICE_TEST_CASE(fake_io_cancel_keeps_waiter) {
     SLUICE_CHECK(w->registration == WaiterRegistration::open_registered);
     SLUICE_CHECK(((w->token == WaiterToken{3, 1, 1})));
     SLUICE_CHECK(w->lease_id == 66);
-    SLUICE_CHECK(backend.borrow_for_test(*h)->active);
+    {
+        auto obs = backend.borrow_for_test(*h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->active);
+    }
     SLUICE_CHECK(!c.ready());
 
     // Reap: canceled result + waiter delivered together, exactly once.
