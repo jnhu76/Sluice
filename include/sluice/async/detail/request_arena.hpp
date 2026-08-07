@@ -872,6 +872,60 @@ public:
         return RequestObservation{h, s.state_, s.enqueue_in_flight_pin_,
                                   s.terminal_.stored};
     }
+
+    // C2c row 11: a single-lock BY-VALUE snapshot of the fd/buffer borrow
+    // metadata for a validated SlotHandle (generation + context + non-free).
+    // Returns nullopt for a stale/out-of-range/free handle, exactly like
+    // observe_for_test. Deliberately returns a value copy — never a
+    // RequestSlot* or BorrowMetadata& — so a test cannot mutate slot state.
+    // This is what lets the C2c borrow matrix observe the exact
+    // fd/address/length/active at every lifecycle window (prepare-stage
+    // inactive, commit-active, backend_ready-before-reap still active,
+    // completion-ready ended) through one generation-validated seam instead of
+    // the piecewise borrow_active(SlotIndex) accessor (which cannot distinguish
+    // a later slot reuse from the original request).
+    struct BorrowSnapshot {
+        int fd = -1;
+        const void* address = nullptr;
+        std::size_t length = 0;
+        bool active = false;
+    };
+    std::optional<BorrowSnapshot> borrow_for_test(SlotHandle h) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (h.slot.value >= capacity_) return std::nullopt;
+        const RequestSlot& s = slots_[h.slot.value];
+        if (s.state_ == RequestState::free) return std::nullopt;
+        if (s.generation_ != h.generation) return std::nullopt;
+        if (s.key_.context != context_) return std::nullopt;
+        return BorrowSnapshot{s.borrow_.fd, s.borrow_.address, s.borrow_.length,
+                              s.borrow_.active};
+    }
+
+    // C2c rows 12-14: a single-lock BY-VALUE observation of the single-waiter
+    // registration for a validated SlotHandle: the registration state, whether
+    // a token/lease delivery is still stored (waiter_delivery_present_), and
+    // the stored token + lease id (0 when no lease is stored). Same
+    // generation-validated shape as observe_for_test/borrow_for_test; returns
+    // nullopt for a stale/out-of-range/free handle. Read-only by-value — a
+    // test can prove "registration still open_registered with EXACTLY token A /
+    // lease A" (the no-overwrite and stale-waiter proofs) without touching slot
+    // internals.
+    struct WaiterObservation {
+        WaiterRegistration registration;
+        bool delivery_present;
+        WaiterToken token;
+        std::uint64_t lease_id;
+    };
+    std::optional<WaiterObservation> waiter_for_test(SlotHandle h) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (h.slot.value >= capacity_) return std::nullopt;
+        const RequestSlot& s = slots_[h.slot.value];
+        if (s.state_ == RequestState::free) return std::nullopt;
+        if (s.generation_ != h.generation) return std::nullopt;
+        if (s.key_.context != context_) return std::nullopt;
+        return WaiterObservation{s.registration_, s.waiter_delivery_present_,
+                                 s.waiter_token_, s.waiter_lease_.id()};
+    }
 #endif
 
 private:
