@@ -250,6 +250,21 @@ an explicit cancel disposition remains P1-09.
 > below describes the pre-Phase-E legacy model and is retained as the historical
 > audit record. Evidence: `docs/architecture/phase-e-compliance-gate.md` (Slice
 > 11: partial worker-construction cleanup) and the Phase E contract suite.
+>
+> **C2d resolution (Phase C):** the missing regression test is now
+> closed. `tp_c2d_partial_worker_startup_failure`
+> (`tests/threadpool_backend_c2d_failure_test.cpp`) injects a
+> `std::system_error(errc::resource_unavailable_try_again)` worker-spawn
+> failure at a chosen index via a `SLUICE_ASYNC_INTERNAL_TESTING`-guarded
+> static seam (constructor-before-instance; RAII-restored) and proves the
+> constructor propagates the failure synchronously (both before the first
+> worker and after one started), that the already-started workers exit and are
+> joined (surviving the failed construction with no `std::terminate` IS the
+> join proof — an unjoined joinable thread vector aborts), and that a normal
+> construction afterwards succeeds with the full worker count. See
+> `docs/architecture/phase-c2d-compliance-gate.md` §3.2 and
+> `docs/verification/phase-c2d-failure-injection-mutation-evidence.md`
+> (mutants M4/M5/M9).
 
 **Finding:** When `std::thread` construction throws in
 `ThreadPoolBackend::enqueue_size`, the catch handler (`fail_spawn_size`)

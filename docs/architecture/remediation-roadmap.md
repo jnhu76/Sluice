@@ -272,9 +272,37 @@ coverage).
     `uring_c2c_borrow_waiter_not_implemented` record. See
     [`phase-c2c-compliance-gate.md`](phase-c2c-compliance-gate.md).
 
-  - **C2d — failure injection: PENDING.** Rows 9–10 (injected
-    allocation/startup/dispatch failure; accepted-terminal under allocator
-    failure) remain MISSING.
+  - **C2d — failure injection / accepted-terminal under allocator failure:
+    COMPLETE.** Rows 9–10 now have real-backend runtime evidence on
+    `ThreadPoolBackend` (`threadpool_backend_c2d_failure_test`, 8 cases,
+    `SLUICE_ASYNC_INTERNAL_TESTING`-guarded deterministic seams) and
+    reference-path evidence on Fake (`reference_backend_no_alloc_test`
+    full-window defined-error case): transactional pre-commit rejection on the
+    real backend (binding-CAS loss → `invalid_state`, zero residue, capacity
+    recyclable); partial worker-startup failure stops and joins the
+    already-started workers and rethrows synchronously (the finding P1-04
+    regression test that was missing); a post-commit permanent dispatch
+    failure (injected between enqueue and dispatch push, inside `work_mtx_`,
+    with no worker ever able to see the handle — the ADR Decision-12
+    "post-commit dispatch failure after execution ownership is proven
+    absent" winner candidate) leaves submit successful, drives the request to
+    exactly ONE defined `backend_error` terminal, publishes once via reap,
+    keeps the borrow active until reap, and never executes a worker or syscall
+    — for both the size and void operation paths; the accepted
+    submit → enqueue/terminal → reap → reset path performs ZERO heap
+    allocations under an always-throw operator new (ADR Decision 14 / I9) on
+    the real worker path and on the injected failure path; and the
+    dispatch-failure terminal vs cancel has exactly one winner, no overwrite,
+    no double publication, and exactly one tally in every interleaving. Nine
+    single-point production mutations (M1–M9) prove each detector case fails
+    on deliberately nonconforming behavior
+    (`docs/verification/phase-c2d-failure-injection-mutation-evidence.md`).
+    The ring-full invariant fail-fast path is untouched (never converted to a
+    recovery path). Uring's Phase-D gap is the
+    `uring_c2d_failure_injection_not_implemented` record, which enters Uring's
+    verdict — Uring stays NOT CONFORMING and is never skip-as-pass for
+    failure injection. See
+    [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md).
 
   - **C2e — close / drain / destruction: PENDING.** Row 15 (close/drain/reset
     sequence) remains PARTIAL; row 16 (quiescent destruction) is already FULL.
