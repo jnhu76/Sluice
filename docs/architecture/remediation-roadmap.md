@@ -272,9 +272,47 @@ coverage).
     `uring_c2c_borrow_waiter_not_implemented` record. See
     [`phase-c2c-compliance-gate.md`](phase-c2c-compliance-gate.md).
 
-  - **C2d — failure injection: PENDING.** Rows 9–10 (injected
-    allocation/startup/dispatch failure; accepted-terminal under allocator
-    failure) remain MISSING.
+  - **C2d — failure injection / accepted-terminal under allocator failure:
+    COMPLETE.** Rows 9–10 now have real-backend runtime evidence on
+    `ThreadPoolBackend` (`threadpool_backend_c2d_failure_test`, 12 cases,
+    `SLUICE_ASYNC_INTERNAL_TESTING`-guarded deterministic seams) and
+    reference-path evidence on Fake (`reference_backend_no_alloc_test`
+    full-window defined-error case): ADR Gate-4 per-stage pre-commit injection
+    at reserve (injected would_block — Completion idle, zero residue), prepare
+    (candidate slot rolled back, capacity immediately recyclable), and the
+    COMMIT-BOUNDARY (the binding CAS wins, then commit is injected to fail —
+    the submit path executes the REAL `rollback_binding_before_accept` + slot
+    rollback, the only executable instance of that branch in the corpus, and
+    the Completion returns to fully reusable idle); transactional pre-commit
+    rejection on the real backend (binding-CAS loss → `invalid_state`, zero
+    residue, capacity recyclable); partial worker-startup failure stops and
+    joins the already-started workers and rethrows synchronously (the finding
+    P1-04 regression test that was missing); a post-commit permanent dispatch
+    failure (injected between enqueue and dispatch push, inside `work_mtx_`,
+    with no worker ever able to see the handle — the ADR Decision-12
+    "post-commit dispatch failure after execution ownership is proven
+    absent" winner candidate) leaves submit successful, drives the request to
+    exactly ONE defined `backend_error` terminal, publishes once via reap,
+    keeps the borrow active until reap, and never executes a worker or syscall
+    — for both the size and void operation paths; the accepted
+    submit → enqueue/terminal → reap → reset path performs ZERO heap
+    allocations under an always-throw operator new (ADR Decision 14 / I9) on
+    the real worker path and on the injected failure path; and the
+    dispatch-failure terminal vs cancel has exactly one winner, no overwrite,
+    no double publication, and at most one tally in every interleaving
+    (`canceled_ops == 1` iff cancel won — the injected `backend_error`
+    terminal contributes no tally because `completion_errors` is unwired for
+    ThreadPool). The two orderings are proven deterministically: cancel-wins
+    before enqueue (ADR Gate 4 commit/enqueue pause) and injection-wins with
+    a cancel-after no-op. Thirteen single-point mutations (M1–M13) prove each
+    detector case fails on deliberately nonconforming behavior
+    (`docs/verification/phase-c2d-failure-injection-mutation-evidence.md`).
+    The ring-full invariant fail-fast path is untouched (never converted to a
+    recovery path). Uring's Phase-D gap is the
+    `uring_c2d_failure_injection_not_implemented` record, which enters Uring's
+    verdict — Uring stays NOT CONFORMING and is never skip-as-pass for
+    failure injection. See
+    [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md).
 
   - **C2e — close / drain / destruction: PENDING.** Row 15 (close/drain/reset
     sequence) remains PARTIAL; row 16 (quiescent destruction) is already FULL.

@@ -23,6 +23,7 @@
 #include <cstring>
 #include <limits>
 #include <stdexcept>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 
@@ -113,6 +114,18 @@ ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
     stopping_ = false;
     try {
         for (std::size_t i = 0; i < config.worker_count; ++i) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // C2d: injected worker-spawn failure (rows 9-10; finding P1-04
+            // "no test injects thread-creation failure"). The injected
+            // std::system_error mirrors a real pthread_create EAGAIN; the
+            // catch path below stops and joins the already-started workers and
+            // rethrows. Compiled out of production builds.
+            if (i == injected_worker_spawn_failure_index()) {
+                throw std::system_error(
+                    std::make_error_code(std::errc::resource_unavailable_try_again),
+                    "injected ThreadPoolBackend worker spawn failure");
+            }
+#endif
             workers_.emplace_back([this] { worker_loop(); });
         }
     } catch (...) {
@@ -229,11 +242,33 @@ Result<void> ThreadPoolBackend::submit_size(Op op, Completion<std::size_t>& c,
                                              detail::OperationKind kind, std::size_t len) {
     // Stage 1: reserve. Arena full -> would_block; admission closed ->
     // invalid_state (ADR Decision 6/13).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // C2d (ADR Gate 4): injected reserve failure. Returns the capacity-full
+    // rejection WITHOUT reserving a slot: the Completion stays idle and zero
+    // slot/borrow/dispatch residue exists by construction. Compiled out of
+    // production builds (no branch, no local, no symbol).
+    auto reserve_failure = injected_precommit_stage_failure_(SubmitStage::reserve);
+    if (reserve_failure.has_value()) {
+        return make_unexpected<void>(*reserve_failure);
+    }
+#endif
     auto rh = arena_.reserve();
     if (!rh.has_value()) return make_unexpected<void>(rh.error());
     detail::SlotHandle h = rh.value();
 
     // Stage 2: prepare (op kind + fd/buffer borrow metadata).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // C2d (ADR Gate 4): injected prepare failure AFTER a successful reserve.
+    // The candidate slot is rolled back by the SAME rollback the natural
+    // prepare-failure path uses below (rollback_reserved_or_prepared): the
+    // slot returns to the free pool with generation++ and the capacity is
+    // immediately recyclable. Compiled out of production builds.
+    auto prepare_failure = injected_precommit_stage_failure_(SubmitStage::prepare);
+    if (prepare_failure.has_value()) {
+        (void)arena_.rollback_reserved_or_prepared(h);
+        return make_unexpected<void>(*prepare_failure);
+    }
+#endif
     auto ph = arena_.prepare(h, kind, borrow_of(op));
     if (!ph.has_value()) {
         (void)arena_.rollback_reserved_or_prepared(h);
@@ -260,6 +295,24 @@ Result<void> ThreadPoolBackend::submit_size(Op op, Completion<std::size_t>& c,
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
     // Stage 3b: commit (pending + pin + accepted++ + borrow begins).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // C2d (ADR Gate 4): injected COMMIT-BOUNDARY failure — the binding CAS
+    // already won (Completion in `binding`), so the submit path executes the
+    // REAL commit-failure rollback: rollback_binding_before_accept (binding ->
+    // idle, restoring a fully reusable Completion) followed by the slot
+    // rollback (publication binding cleared, generation++, capacity
+    // recyclable, accepted-outstanding untouched). This is the ONLY executable
+    // instance of rollback_binding_before_accept in the corpus: a natural
+    // commit failure (stale handle / non-prepared slot) is unreachable after a
+    // same-thread reserve -> prepare -> begin_binding (review P1). Compiled
+    // out of production builds (no branch, no local, no symbol).
+    auto commit_failure = injected_precommit_stage_failure_(SubmitStage::commit);
+    if (commit_failure.has_value()) {
+        rollback_binding_before_accept(c);
+        (void)arena_.rollback_reserved_or_prepared(h);
+        return make_unexpected<void>(*commit_failure);
+    }
+#endif
     auto ch = arena_.commit(h);
     if (!ch.has_value()) {
         rollback_binding_before_accept(c);
@@ -280,10 +333,25 @@ Result<void> ThreadPoolBackend::submit_size(Op op, Completion<std::size_t>& c,
 template <class Op>
 Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
                                             detail::OperationKind kind) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // C2d (ADR Gate 4): injected reserve failure — see submit_size.
+    auto reserve_failure = injected_precommit_stage_failure_(SubmitStage::reserve);
+    if (reserve_failure.has_value()) {
+        return make_unexpected<void>(*reserve_failure);
+    }
+#endif
     auto rh = arena_.reserve();
     if (!rh.has_value()) return make_unexpected<void>(rh.error());
     detail::SlotHandle h = rh.value();
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // C2d (ADR Gate 4): injected prepare failure — see submit_size.
+    auto prepare_failure = injected_precommit_stage_failure_(SubmitStage::prepare);
+    if (prepare_failure.has_value()) {
+        (void)arena_.rollback_reserved_or_prepared(h);
+        return make_unexpected<void>(*prepare_failure);
+    }
+#endif
     auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
     if (!ph.has_value()) {
         (void)arena_.rollback_reserved_or_prepared(h);
@@ -303,6 +371,16 @@ Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
         (void)arena_.rollback_reserved_or_prepared(h);
         return make_unexpected<void>(IoError{IoError::Code::invalid_state});
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // C2d (ADR Gate 4): injected commit-boundary failure — the real
+    // rollback_binding_before_accept + slot rollback; see submit_size.
+    auto commit_failure = injected_precommit_stage_failure_(SubmitStage::commit);
+    if (commit_failure.has_value()) {
+        rollback_binding_before_accept(c);
+        (void)arena_.rollback_reserved_or_prepared(h);
+        return make_unexpected<void>(*commit_failure);
+    }
+#endif
     auto ch = arena_.commit(h);
     if (!ch.has_value()) {
         rollback_binding_before_accept(c);
@@ -322,6 +400,17 @@ Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
 
 void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
     detail::EnqueueOutcome outcome;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    bool injected_dispatch_failure = false;
+    // C2d (ADR Gate 4): deterministic commit/enqueue pause. The request is
+    // committed (Completion outstanding, slot `pending`, enqueue pin set) but
+    // work_mtx_ is not yet held, so a test-issued pending cancellation wins
+    // the canceled terminal here (Scheme B); the resumed enqueue then observes
+    // backend_ready and acknowledges the pin as a terminal no-op with no
+    // dispatch linkage (ADR Gate 4; I17/I19). Entirely compiled out of
+    // production builds (no branch, no local, no symbol).
+    wait_before_enqueue_lock_pause_();
+#endif
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
         outcome = arena_.enqueue(h);  // pending -> enqueued OR terminal_noop
@@ -330,20 +419,57 @@ void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
             // Post-fix placement: the gate fires INSIDE work_mtx_, so the
             // structural lock-domain probe sees work_domain_held == true.
             wait_after_enqueue_before_push_pause_(/*inside_work_mtx=*/true);
+            // C2d: post-commit dispatch-failure injection (rows 9-10). The
+            // enqueue already won (slot `enqueued`, pin acknowledged) but the
+            // handle was NOT yet pushed: no worker can pop it (workers dequeue
+            // only under work_mtx_, which we hold), so no worker, ring, kernel,
+            // or other executor holds execution ownership. Record the defined
+            // `backend_error` terminal through the arena's terminal-winner
+            // authority instead of pushing — the ADR Decision-12
+            // "post-commit dispatch failure after execution ownership is
+            // proven absent" winner candidate (AGENTS.md §10.5). reap
+            // publishes it exactly once; the borrow stays active until reap.
+            // TEST-ONLY probe (AGENTS.md §15): production dispatch cannot fail
+            // by construction (bounded ring, allocation-free push; a full push
+            // is the §12 invariant fail-fast), so this branch proves the
+            // SHARED arena's terminal-winner/reap machinery under a simulated
+            // post-commit terminal event — not a production failure-handling
+            // path. Entirely compiled out of production builds (no branch, no
+            // local, no symbol).
+            auto* inj = dispatch_failure_injection_.load(std::memory_order_acquire);
+            if (inj != nullptr && inj->armed.load(std::memory_order_acquire)) {
+                inj->fired.fetch_add(1, std::memory_order_relaxed);
+                (void)arena_.record_terminal(
+                    h, detail::TerminalResult::err(IoError{IoError::Code::backend_error}));
+                injected_dispatch_failure = true;
+            }
         }
 #endif
         if (outcome == detail::EnqueueOutcome::enqueued) {
-            dispatch_.push_back(h);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            {
-                auto* g = after_enqueue_before_push_gate_.load(std::memory_order_acquire);
-                if (g != nullptr) {
-                    g->dispatch_push_completed.store(true, std::memory_order_release);
-                }
-            }
+            if (!injected_dispatch_failure)  // injection won: no dispatch linkage
 #endif
+            {
+                dispatch_.push_back(h);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                {
+                    auto* g = after_enqueue_before_push_gate_.load(std::memory_order_acquire);
+                    if (g != nullptr) {
+                        g->dispatch_push_completed.store(true, std::memory_order_release);
+                    }
+                }
+#endif
+            }
         }
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    if (injected_dispatch_failure) {
+        // The dispatch-failure terminal won (ADR Decision 12); no worker will
+        // run or signal, so the READY domain must observe the new backend_ready
+        // (a blocked wait_one must not lose the wake — AC-6 / design §4.5).
+        signal_ready_progress();
+    } else
+#endif
     if (outcome == detail::EnqueueOutcome::enqueued) {
         work_cv_.notify_one();
     } else {
@@ -557,6 +683,52 @@ void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
     g->exited.store(true, std::memory_order_release);
 }
 
+void ThreadPoolBackend::wait_before_enqueue_lock_pause_() noexcept {
+    auto* g = before_enqueue_lock_gate_.load(std::memory_order_acquire);
+    if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
+
+// C2d (ADR Gate 4): pre-commit stage-failure injection. Returns the stage's
+// natural synchronous rejection (and increments its `fired` counter) when the
+// seam is armed; std::nullopt when disarmed. The submit paths consult this
+// immediately before the stage's arena call and return the rejection through
+// their OWN rollback code — the injected branch never duplicates the arena
+// call, only the rollback of a stage that never executed.
+std::optional<IoError> ThreadPoolBackend::injected_precommit_stage_failure_(
+    SubmitStage stage) noexcept {
+    auto* inj = submit_stage_failure_injection_.load(std::memory_order_acquire);
+    if (inj == nullptr) return std::nullopt;
+    switch (stage) {
+    case SubmitStage::reserve:
+        if (inj->fail_reserve.load(std::memory_order_acquire)) {
+            inj->reserve_fired.fetch_add(1, std::memory_order_relaxed);
+            // The capacity-full form (ADR Decision 6): the only natural
+            // reserve rejection on a well-formed context.
+            return IoError{IoError::Code::would_block};
+        }
+        break;
+    case SubmitStage::prepare:
+        if (inj->fail_prepare.load(std::memory_order_acquire)) {
+            inj->prepare_fired.fetch_add(1, std::memory_order_relaxed);
+            return IoError{IoError::Code::invalid_state};
+        }
+        break;
+    case SubmitStage::commit:
+        if (inj->fail_commit.load(std::memory_order_acquire)) {
+            inj->commit_fired.fetch_add(1, std::memory_order_relaxed);
+            return IoError{IoError::Code::invalid_state};
+        }
+        break;
+    }
+    return std::nullopt;
+}
+
 void ThreadPoolBackend::wait_running_pause_() noexcept {
     auto* g = running_gate_.load(std::memory_order_acquire);
     if (g == nullptr) return;
@@ -635,5 +807,27 @@ void ThreadPoolBackend::close_admission() {
     arena_.close_admission();
     ready_wait_.interrupt_all();
 }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+namespace {
+// C2d: worker-spawn failure injection state (see the guarded class setters in
+// threadpool_backend.hpp). SIZE_MAX = disarmed. A static seam is required
+// because the injection point is the constructor, which runs before any
+// instance exists; the tests guarantee serial isolation (only the constructing
+// thread reads it while armed; the harness runs cases sequentially in one
+// process) and restore SIZE_MAX via RAII. Compiled out of production builds.
+std::atomic<std::size_t> g_injected_worker_spawn_failure_index{
+    std::numeric_limits<std::size_t>::max()};
+}  // namespace
+
+std::size_t ThreadPoolBackend::injected_worker_spawn_failure_index() noexcept {
+    return g_injected_worker_spawn_failure_index.load(std::memory_order_acquire);
+}
+
+void ThreadPoolBackend::set_injected_worker_spawn_failure_index(
+    std::size_t index) noexcept {
+    g_injected_worker_spawn_failure_index.store(index, std::memory_order_release);
+}
+#endif
 
 }  // namespace sluice::async

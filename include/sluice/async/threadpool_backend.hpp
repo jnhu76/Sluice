@@ -218,7 +218,7 @@ class ThreadPoolBackend : public AsyncBackend {
     // is armed by the test, the production path spins on `paused` and waits on
     // `resume`, giving the test an exact observation window. These are compiled
     // out of production sluice_async; the layout cost in the internal-testing
-    // target is accepted and documented (AGENTS.md §8).
+    // target is accepted and documented (AGENTS.md §15).
     struct AfterArenaEnqueueBeforeDispatchPushPauseGate {
         std::atomic<bool> paused{false};
         std::atomic<bool> resume{false};
@@ -248,6 +248,18 @@ class ThreadPoolBackend : public AsyncBackend {
         std::atomic<bool> resume{false};
         std::atomic<bool> exited{true};
     };
+    // C2d (ADR Gate 4): deterministic commit/enqueue pause. The submit path
+    // pauses AFTER commit (Completion outstanding, slot `pending`, enqueue pin
+    // set) and BEFORE taking work_mtx_ — the exact state from which a pending
+    // cancellation wins the canceled terminal (Scheme B) and the resumed
+    // enqueue observes backend_ready and acknowledges the pin as a terminal
+    // no-op with no dispatch linkage. See
+    // `tp_c2d_cancel_wins_before_enqueue_injection_armed`.
+    struct BeforeEnqueueLockPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
 
     void set_after_enqueue_before_push_pause_gate(
         AfterArenaEnqueueBeforeDispatchPushPauseGate* gate) noexcept {
@@ -263,6 +275,78 @@ class ThreadPoolBackend : public AsyncBackend {
         TerminalPublicationPauseGate* gate) noexcept {
         terminal_publication_gate_.store(gate, std::memory_order_release);
     }
+    void set_before_enqueue_lock_pause_gate(
+        BeforeEnqueueLockPauseGate* gate) noexcept {
+        before_enqueue_lock_gate_.store(gate, std::memory_order_release);
+    }
+
+    // --- Phase C2d seams (rows 9-10): failure injection. Compiled out of
+    // production sluice_async; the layout cost in the internal-testing target
+    // is accepted and documented (AGENTS.md §15). ---
+
+    // Post-commit dispatch-failure injection. When `armed` and the submit
+    // path's enqueue won (outcome == enqueued), the submit path records the
+    // defined `backend_error` terminal through the arena's terminal-winner
+    // authority INSTEAD of pushing the handle onto the dispatch ring — the
+    // ADR Decision-12 "post-commit dispatch failure after execution ownership
+    // is proven absent" winner candidate (AGENTS.md §10.5). The handle was
+    // never visible to any worker (workers dequeue only under work_mtx_, which
+    // the injection holds), so no worker, ring, kernel, or other executor
+    // holds execution ownership; submit still returns success; reap publishes
+    // the defined terminal exactly once. `fired` increments exactly once per
+    // injected submit; the test reads it to distinguish "injection fired" from
+    // "a cancel won first". The control object must be declared before the
+    // backend and outlive it (same lifetime rule as the pause gates).
+    struct DispatchFailureInjection {
+        std::atomic<bool> armed{false};
+        std::atomic<std::size_t> fired{0};
+    };
+    void set_dispatch_failure_injection(DispatchFailureInjection* injection) noexcept {
+        dispatch_failure_injection_.store(injection, std::memory_order_release);
+    }
+
+    // Pre-commit stage-failure injection (ADR Gate 4: reserve / prepare /
+    // commit-boundary). Each stage is armed independently; the submit path
+    // checks the seam immediately BEFORE that stage's arena call and, when
+    // armed, returns the stage's natural synchronous rejection WITHOUT
+    // entering the stage — through the SAME rollback code the natural failure
+    // path uses (reserve: nothing to roll back; prepare:
+    // rollback_reserved_or_prepared; commit:
+    // rollback_binding_before_accept + rollback_reserved_or_prepared). The
+    // commit-boundary arm is the ONLY executable instance of
+    // rollback_binding_before_accept in the corpus: a natural commit failure
+    // (stale handle / non-prepared slot) is unreachable after a same-thread
+    // reserve -> prepare -> begin_binding, so no well-formed test could drive
+    // that branch without this seam (review P1). `*_fired` increments exactly
+    // once per injected submit at that stage; the test reads it to distinguish
+    // "seam fired" from a natural failure. TEST-ONLY (AGENTS.md §15):
+    // production builds carry no branch, no local, no symbol (the whole seam
+    // block is compiled out).
+    struct SubmitStageFailureInjection {
+        std::atomic<bool> fail_reserve{false};
+        std::atomic<bool> fail_prepare{false};
+        std::atomic<bool> fail_commit{false};
+        std::atomic<std::size_t> reserve_fired{0};
+        std::atomic<std::size_t> prepare_fired{0};
+        std::atomic<std::size_t> commit_fired{0};
+    };
+    void set_submit_stage_failure_injection(
+        SubmitStageFailureInjection* injection) noexcept {
+        submit_stage_failure_injection_.store(injection, std::memory_order_release);
+    }
+
+    // Construction-time worker-spawn failure injection (rows 9-10; finding
+    // P1-04 "no test injects thread-creation failure"). The
+    // constructor-before-instance shape forces a CONTROLLED static seam: an
+    // instance member cannot be configured before construction. The value is
+    // the zero-based worker index whose std::thread creation must throw
+    // std::system_error(errc::resource_unavailable_try_again) (mirroring a
+    // real pthread_create EAGAIN); SIZE_MAX disarms. Tests MUST restore
+    // SIZE_MAX via RAII even on failure; the seam is serialized (only the
+    // constructing thread reads it while armed — the harness runs cases
+    // sequentially in one process) and is compiled out of production builds.
+    static void set_injected_worker_spawn_failure_index(std::size_t index) noexcept;
+    static std::size_t injected_worker_spawn_failure_index() noexcept;
 
     // --- Phase C2c seams (rows 11-14): route a real accepted Completion
     // through the REAL arena waiter/borrow authorities. No side-band waiter
@@ -471,6 +555,18 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_before_dequeue_pause_() noexcept;
     void wait_running_pause_() noexcept;
     void wait_terminal_publication_pause_() noexcept;
+    void wait_before_enqueue_lock_pause_() noexcept;
+
+    // The pre-commit admission stages that carry a synchronous rejection
+    // (ADR Gate 4): reserve (capacity-full would_block / admission-closed
+    // invalid_state), prepare, and commit.
+    enum class SubmitStage { reserve, prepare, commit };
+
+    // C2d pre-commit stage-failure injection (see the public seam above):
+    // when the seam is armed at `stage`, increments that stage's `fired`
+    // counter and returns the stage's natural synchronous rejection;
+    // std::nullopt when disarmed.
+    std::optional<IoError> injected_precommit_stage_failure_(SubmitStage stage) noexcept;
 #endif
 
     void tally_canceled() noexcept {
@@ -507,6 +603,15 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<BeforeWorkerDequeuePauseGate*> before_dequeue_gate_{nullptr};
     std::atomic<WorkerRunningPauseGate*> running_gate_{nullptr};
     std::atomic<TerminalPublicationPauseGate*> terminal_publication_gate_{nullptr};
+    std::atomic<BeforeEnqueueLockPauseGate*> before_enqueue_lock_gate_{nullptr};
+    // Phase C2d: post-commit dispatch-failure injection control (see the
+    // guarded setter above). Null when disarmed; never dereferenced by
+    // production builds (the branch is compiled out).
+    std::atomic<DispatchFailureInjection*> dispatch_failure_injection_{nullptr};
+    // Phase C2d: pre-commit stage-failure injection control (ADR Gate 4; see
+    // the guarded setter above). Null when disarmed; never dereferenced by
+    // production builds (the branches are compiled out).
+    std::atomic<SubmitStageFailureInjection*> submit_stage_failure_injection_{nullptr};
 #endif
 };
 

@@ -438,6 +438,102 @@ EVIDENCE: tuple[Evidence, ...] = (
     ),
 
     # -----------------------------------------------------------------------
+    # Phase C2d — failure injection / accepted-terminal under allocator
+    # failure (Issue #68 rows 9-10). The ThreadPool record proves, on the REAL
+    # blocking backend with deterministic guarded injection seams (compiled
+    # out of production builds): ADR Gate-4 per-stage pre-commit injection at
+    # reserve / prepare / commit-boundary — injected reserve (would_block)
+    # leaves the Completion idle with zero residue, injected prepare rolls
+    # back the candidate slot (capacity recyclable), and the injected
+    # COMMIT-BOUNDARY failure executes the REAL rollback_binding_before_accept
+    # + slot rollback (the only executable instance of that branch; the
+    # Completion returns to fully reusable idle and the same Completion +
+    # capacity are immediately reusable); transactional pre-commit rejection
+    # (binding-CAS loss -> invalid_state, zero residue, capacity recyclable);
+    # partial worker-startup failure (the constructor stops and joins the
+    # already-started workers and rethrows synchronously — finding P1-04);
+    # post-commit permanent dispatch failure (injected between enqueue and
+    # dispatch push, inside work_mtx_, with no worker ever able to see the
+    # handle): submit still succeeds, the request reaches exactly ONE defined
+    # backend_error terminal, reap publishes exactly once, the borrow stays
+    # active until reap, no worker/syscall executes, and the ring-full
+    # fail-fast invariant path is untouched — for BOTH the size and void
+    # operation paths; post-commit no-allocation under an always-throw
+    # operator new (ADR Decision 14 / I9) on the real worker path and on the
+    # injected failure path; and the dispatch-failure terminal vs cancel
+    # exactly-one-winner invariant (no overwrite, no double publication, at
+    # most one tally: canceled_ops == 1 iff cancel won — the injected
+    # backend_error terminal contributes no tally, as completion_errors is
+    # unwired for ThreadPool). The Fake record proves the
+    # reference path reaches a defined error terminal under a FULL-window
+    # always-throw operator new (submit -> complete_oldest_with_error ->
+    # poll -> reset, zero allocations). Uring's gap is the not_implemented
+    # record below (Phase D pending).
+    # -----------------------------------------------------------------------
+    Evidence(
+        evidence_id="c2d_threadpool_failure_injection",
+        target="threadpool_backend_c2d_failure_test",
+        layer="lifecycle",
+        backends=_TP,
+        mandatory=True,
+        notes="C2d rows 9-10 ThreadPool integration (deterministic injection "
+              "seams, SLUICE_ASYNC_INTERNAL_TESTING-only): ADR Gate-4 per-stage "
+              "pre-commit injection at reserve (injected would_block, "
+              "Completion idle, zero residue), prepare (candidate slot "
+              "rolled back, capacity recyclable), and the COMMIT-BOUNDARY "
+              "(the binding CAS wins, then commit fails — the submit path "
+              "executes the REAL rollback_binding_before_accept + slot "
+              "rollback, the only executable instance of that branch; the "
+              "Completion returns to fully reusable idle); real-backend "
+              "binding-CAS-loss rejection is transactional (invalid_state, "
+              "zero residue, capacity recyclable); partial worker-startup "
+              "failure stops+joins started workers and rethrows "
+              "synchronously; post-commit permanent dispatch failure "
+              "(injected after enqueue, before dispatch push, inside "
+              "work_mtx_, handle never visible to a worker) leaves submit "
+              "successful, reaches exactly one defined backend_error "
+              "terminal, publishes once via reap, keeps the borrow active "
+              "until reap, executes no worker/syscall (size + void paths); "
+              "post-commit no-allocation under always-throw operator new "
+              "(real worker path and injected path); dispatch-failure vs "
+              "cancel exactly-one-winner with at most one tally (canceled_ops "
+              "== 1 iff cancel won — the injected backend_error terminal "
+              "contributes no tally) and no worker execution in every "
+              "interleaving.",
+    ),
+    Evidence(
+        evidence_id="c2d_fake_failure_injection_terminal",
+        target="reference_backend_no_alloc_test",
+        layer="lifecycle",
+        backends=_F,
+        mandatory=True,
+        notes="C2d rows 9-10 Fake reference path: a FULL-window always-throw "
+              "operator new around submit -> complete_oldest_with_error "
+              "(manual dispatch terminal) -> poll (reap) -> reset proves the "
+              "accepted request reaches exactly one defined backend_error "
+              "terminal with zero allocations (ADR Decision 14 / I9) — the "
+              "defined-error terminal is not allocation-gated either. "
+              "Complements the existing success/rejection no-allocation "
+              "cases in the same target.",
+    ),
+    Evidence(
+        evidence_id="uring_c2d_failure_injection_not_implemented",
+        target="backend_conformance_test",
+        layer="lifecycle",
+        backends=_U,
+        mandatory=True,
+        status=STATUS_NOT_IMPLEMENTED,
+        notes="C2d rows 9-10 require RequestArena-based failure injection "
+              "(allocation / worker-spawn / dispatch-failure semantics under "
+              "the unified lifecycle); Uring remains legacy until Phase D "
+              "(its own submit-failure tests drive the pre-RequestArena SQE "
+              "model and do not satisfy the C2d contract). Recorded as a "
+              "known gap; not_implemented never counts as PASS. (Target is "
+              "the Uring-driving conformance binary, matching the other "
+              "uring_*_not_implemented records; the gap is not executed.)",
+    ),
+
+    # -----------------------------------------------------------------------
     # Layer: backend-specific mechanism evidence.
     # -----------------------------------------------------------------------
     Evidence(

@@ -340,6 +340,33 @@ sluice_internal_async_test("backend_c2c_waiter_borrow_test")
 -- a stale waiter authority is harmless against a live N+1 occupant.
 sluice_internal_async_test("threadpool_backend_c2c_waiter_borrow_test", {platform_gate = {"linux", "macosx"}})
 
+-- threadpool_backend_c2d_failure_test — Phase C2d ThreadPoolBackend failure
+-- injection / accepted-terminal under allocator failure (Issue #68 rows 9-10).
+-- Deterministic injection seams prove: (0) ADR Gate-4 per-stage pre-commit
+-- injection at reserve (injected would_block; Completion idle; zero residue),
+-- prepare (candidate slot rolled back; capacity recyclable), and the
+-- COMMIT-BOUNDARY (the binding CAS wins, then commit is injected to fail —
+-- the submit path executes the REAL rollback_binding_before_accept + slot
+-- rollback, the only executable instance of that branch in the corpus; the
+-- Completion returns to fully reusable idle); (1) pre-commit rejection on the
+-- REAL backend is transactional (binding-CAS loss -> invalid_state, zero
+-- residue, capacity immediately recyclable); (2) partial worker-startup
+-- failure stops and joins the already-started workers and rethrows
+-- synchronously (finding P1-04); (3) a post-commit permanent dispatch failure
+-- (injected between enqueue and dispatch push, inside work_mtx_, with no
+-- worker ever able to see the handle) leaves submit successful, drives the
+-- request to exactly ONE defined backend_error terminal, publishes once via
+-- reap, keeps the borrow active until reap, and never executes a worker or
+-- syscall — for BOTH the size and void operation paths; (4) the accepted
+-- submit -> enqueue/terminal -> reap -> reset path performs ZERO heap
+-- allocations under an always-throw operator new (ADR Decision 14 / I9) on
+-- the real worker path and on the injected failure path; (5) the
+-- dispatch-failure terminal vs cancel has exactly one winner, no overwrite,
+-- no double publication, and at most one tally in every interleaving
+-- (canceled_ops == 1 iff cancel won — the injected backend_error terminal
+-- contributes no tally). Gated to linux/macosx (POSIX syscalls).
+sluice_internal_async_test("threadpool_backend_c2d_failure_test", {platform_gate = {"linux", "macosx"}})
+
 -- reference_backend_arena_lifecycle_test — Phase B reference backend migration
 -- regression (commit 4). Proves FakeAsyncBackend + SyncBackend are actually
 -- driven by the bounded RequestArena + five-stage admission + the synchronous
