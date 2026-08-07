@@ -12,7 +12,7 @@ required duplicating substantial `RequestArena` internals, so each defect class
 was instead proven by a single-point temporary mutation of the real production
 logic, a focused filtered test run, and an immediate revert.
 
-All commands ran on branch `test/phase-c2b-generation-stale-cancel-matrix` at
+All commands ran on the test/phase-c2b-generation-stale-cancel-matrix branch at
 HEAD `e857eb3` (master base `37298f0`). Toolchain: **Clang 21.1.8
 (6ubuntu1)**, xmake **v3.0.9**, `xmake f -m debug --toolchain=clang -y`.
 

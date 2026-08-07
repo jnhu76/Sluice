@@ -231,9 +231,15 @@ coverage).
     `outstanding`, no-recycle). See
     [`phase-c2a-compliance-gate.md`](phase-c2a-compliance-gate.md).
 
-  - **C2b — generation / stale / cancel matrix: PENDING.** Generation /
-    provenance / stale-key / cancel-winner rows (3–8) remain PARTIAL (arena +
-    TP-specific evidence exists; no shared cross-backend matrix).
+  - **C2b — generation / stale / cancel matrix: COMPLETE.** The arena-level
+    state-transition and identity matrix (rows 3–4) is extended with Fake and
+    ThreadPool integration evidence for cancel-winner and publication-boundary
+    semantics (rows 5–8). Uring's Phase-D identity gap is recorded as a
+    `not_implemented` manifest record (`uring_c2b_identity_not_implemented`),
+    which enters Uring's verdict via `applicable_evidence_for_backend()`. Seven
+    single-point production mutations (A–G) prove each detector case fails on
+    deliberately nonconforming identity behavior. See
+    [`phase-c2b-compliance-gate.md`](phase-c2b-compliance-gate.md).
 
   - **C2c — waiter / borrow / delivery lease: PENDING.** Rows 11–14 remain
     PARTIAL (arena-level only).
