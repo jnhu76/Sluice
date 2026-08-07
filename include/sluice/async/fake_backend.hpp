@@ -272,6 +272,93 @@ class FakeAsyncBackend : public AsyncBackend {
         }
         return disp;
     }
+
+    // --- Phase C2c seams (rows 11-14): route a real accepted Completion
+    // through the REAL arena waiter/borrow authorities. No side-band waiter
+    // map, no reimplementation of the waiter state machine: the Completion is
+    // resolved to its current SlotHandle by the arena's own bounded scan
+    // (the same identity bridge the public cancel path uses) and the call is
+    // forwarded verbatim. Guarded; production builds carry nothing. ---
+
+    // Register one waiter on the slot bound to a real accepted Completion.
+    // Returns the arena's own register_waiter result (not_found for an
+    // unbound/stale Completion; invalid_state for a second registration or a
+    // non-accepted/unreaped slot — registration is orthogonal to execution
+    // state, ADR Decision 10).
+    Result<void> register_waiter_for_test(Completion<std::size_t>& c,
+                                          detail::WaiterToken token,
+                                          detail::RoutingLease lease) {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<void>(IoError{IoError::Code::not_found});
+        }
+        return arena_.register_waiter(*h, token, std::move(lease));
+    }
+    Result<void> register_waiter_for_test(Completion<void>& c,
+                                          detail::WaiterToken token,
+                                          detail::RoutingLease lease) {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<void>(IoError{IoError::Code::not_found});
+        }
+        return arena_.register_waiter(*h, token, std::move(lease));
+    }
+
+    // Wait-cancel through the REAL arena authority: removes ONLY the waiter,
+    // never the I/O. Returns the moved-out RoutingLease (the caller owns it),
+    // or not_found when no registered waiter remains (already closed by reap /
+    // already canceled / unbound Completion).
+    Result<detail::RoutingLease> cancel_waiter_for_test(Completion<std::size_t>& c) {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<detail::RoutingLease>(
+                IoError{IoError::Code::not_found});
+        }
+        return arena_.cancel_waiter(*h);
+    }
+    Result<detail::RoutingLease> cancel_waiter_for_test(Completion<void>& c) {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<detail::RoutingLease>(
+                IoError{IoError::Code::not_found});
+        }
+        return arena_.cancel_waiter(*h);
+    }
+
+    // Stale-generation waiter injection (C2c row 14a): drive a CAPTURED
+    // SlotHandle (typically a stale-generation handle from a released
+    // occupant) through the REAL arena register/cancel_waiter authorities.
+    // This is what proves a stale waiter authority cannot act on a live N+1
+    // occupant's registration: handle validation rejects it with not_found and
+    // zero side effect. Mirrors cancel_handle_for_test (C2b) — pointer-free
+    // identity only, no Completion reverse map, no side-band waiter map.
+    Result<void> register_waiter_handle_for_test(detail::SlotHandle h,
+                                                 detail::WaiterToken token,
+                                                 detail::RoutingLease lease) {
+        return arena_.register_waiter(h, token, std::move(lease));
+    }
+    Result<detail::RoutingLease> cancel_waiter_handle_for_test(detail::SlotHandle h) {
+        return arena_.cancel_waiter(h);
+    }
+
+    // Generation-validated by-value borrow snapshot for a captured SlotHandle.
+    std::optional<detail::RequestArena::BorrowSnapshot> borrow_for_test(
+        detail::SlotHandle h) const noexcept {
+        return arena_.borrow_for_test(h);
+    }
+
+    // Generation-validated by-value single-waiter registration observation.
+    std::optional<detail::RequestArena::WaiterObservation> waiter_for_test(
+        detail::SlotHandle h) const noexcept {
+        return arena_.waiter_for_test(h);
+    }
+
+    // C2c sink observation (fixed-size, allocation-free, test-only): the last
+    // delivered ReadyEvent's waiter payload + total delivery count. Read after
+    // poll()/wait_one() returns.
+    bool sink_last_has_waiter() const noexcept { return sink_.last_has_waiter(); }
+    detail::WaiterToken sink_last_token() const noexcept { return sink_.last_token(); }
+    std::uint64_t sink_last_lease_id() const noexcept { return sink_.last_lease_id(); }
 #endif
 
   private:

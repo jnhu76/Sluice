@@ -31,21 +31,41 @@ namespace sluice::async::detail {
 // SLUICE_ASYNC_INTERNAL_TESTING (CodeRabbit finding: keep test-only delivery
 // accounting out of the production sink — AGENTS.md §8). Production builds
 // therefore carry no counter field and no exported test surface.
+//
+// C2c: the guarded observation additionally records the LAST delivered event's
+// waiter payload (has_waiter, token, lease id) as plain by-value scalars — a
+// FIXED-SIZE, allocation-free, test-only observation (AGENTS.md §12: no
+// long-lived per-delivery storage, no heap history). The lease itself is NOT
+// stored or consumed: on_ready still drops the by-value event exactly like the
+// production no-op, so the observation never changes ownership semantics. A
+// test reads the payload after reap returns (single-threaded observation) to
+// prove exactly-once delivery of a specific token/lease.
 class ReferenceReadySink final : public SynchronousReadySink {
   public:
-    void on_ready(ReadyEvent /*event*/) noexcept override {
+    void on_ready(ReadyEvent event) noexcept override {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         ++deliveries_;
+        last_has_waiter_ = event.waiter.has_waiter;
+        if (event.waiter.has_waiter) {
+            last_token_ = event.waiter.token;
+            last_lease_id_ = event.waiter.lease.id();
+        }
 #endif
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::size_t deliveries() const noexcept { return deliveries_; }
+    bool last_has_waiter() const noexcept { return last_has_waiter_; }
+    WaiterToken last_token() const noexcept { return last_token_; }
+    std::uint64_t last_lease_id() const noexcept { return last_lease_id_; }
 #endif
 
   private:
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::size_t deliveries_ = 0;
+    bool last_has_waiter_ = false;
+    WaiterToken last_token_{};
+    std::uint64_t last_lease_id_ = 0;
 #endif
 };
 

@@ -247,8 +247,30 @@ coverage).
     RequestHandle consumer does. See
     [`phase-c2b-compliance-gate.md`](phase-c2b-compliance-gate.md).
 
-  - **C2c — waiter / borrow / delivery lease: PENDING.** Rows 11–14 remain
-    PARTIAL (arena-level only).
+  - **C2c — waiter / borrow / delivery lease: COMPLETE.** Rows 11 (fd/buffer
+    borrow lifetime), 12a (RequestSlot-level single-waiter registration),
+    13 (waiter-cancel independence), and 14a (abstract move-only delivery
+    lease) now have arena-level, per-backend, concurrency-proven,
+    mutation-valid evidence: a focused arena matrix target
+    (`request_waiter_borrow_lease_test`, 14 cases) and Fake/ThreadPool
+    integration targets (`backend_c2c_waiter_borrow_test`,
+    `threadpool_backend_c2c_waiter_borrow_test`) that route real accepted
+    Completions through the REAL arena waiter/borrow authorities. The
+    ThreadPool evidence includes the running window (borrow active with exact
+    fd/addr/len, waiter survives enqueued → running → backend_ready, running
+    cancel intent ends neither), the backend_ready-before-reap window (a
+    worker finishing its syscall is NOT the borrow lifetime end), and waiter
+    registration inside the running/backend_ready windows (registration is
+    orthogonal to execution state — ADR Decision 10). Nine
+    single-point production mutations (A–I) prove each detector case fails on
+    deliberately nonconforming borrow/waiter/lease behavior. **Rows 12b
+    (public waiter / RequestHandle / Scheduler registration consumer) and 14b
+    (real Scheduler routing-record lifetime / lease acknowledgement) are
+    Phase F scope** — the Accepted ADR's own Decision 10 boundary (Phase B
+    proves abstract transfer; Phase F proves real Scheduler lifetime); C2c
+    adds no public waiter API. Uring's Phase-D gap is the
+    `uring_c2c_borrow_waiter_not_implemented` record. See
+    [`phase-c2c-compliance-gate.md`](phase-c2c-compliance-gate.md).
 
   - **C2d — failure injection: PENDING.** Rows 9–10 (injected
     allocation/startup/dispatch failure; accepted-terminal under allocator

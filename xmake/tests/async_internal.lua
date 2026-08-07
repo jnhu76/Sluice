@@ -302,6 +302,44 @@ sluice_internal_async_test("async_stats_wait_race_test", {platform_gate = {"linu
 -- pause), which the public API's access_mtx_ serialization hides.
 sluice_internal_async_test("backend_scheme_b_race_test")
 
+-- request_waiter_borrow_lease_test — Phase C2c arena-level waiter/borrow/
+-- delivery-lease matrix (Issue #68 rows 11-14). Proves at the RequestArena
+-- authority layer: the borrow lifecycle across every state (prepare inactive,
+-- commit active, survives pending/enqueued/running/backend_ready and every
+-- cancel/wait-cancel path, reap ends it before completion-ready, rollback
+-- never borrows, stale handles cannot touch a new occupant), the single-waiter
+-- registration matrix + no-overwrite cardinality (final delivery = first
+-- waiter), waiter-cancel vs I/O-cancel independence, the move-only lease
+-- transfer chains (caller -> slot -> ReadyEvent / cancel_waiter return), the
+-- by-value ReadyEvent across slot reuse, and the register-vs-terminal and
+-- cancel_waiter-vs-reap races (std::barrier; exactly-one lease ownership).
+-- Links sluice_async_internal_testing for the generation-validated
+-- borrow_for_test / waiter_for_test observation seams.
+sluice_internal_async_test("request_waiter_borrow_lease_test")
+
+-- backend_c2c_waiter_borrow_test — Phase C2c FakeAsyncBackend integration
+-- (rows 11-14). Proves the REAL Fake submit path carries the exact borrow
+-- metadata active, that the waiter seam routes a real accepted Completion
+-- through the REAL arena register_waiter/cancel_waiter authorities (no
+-- side-band waiter map), that complete_*/cancel only produce backend_ready
+-- while the borrow stays active until poll() reaps, that the production sink
+-- delivers the registered token + lease exactly once, wait-cancel vs I/O-cancel
+-- independence, and that a stale-generation waiter authority cannot touch a
+-- live N+1 occupant.
+sluice_internal_async_test("backend_c2c_waiter_borrow_test")
+
+-- threadpool_backend_c2c_waiter_borrow_test — Phase C2c ThreadPoolBackend
+-- integration (rows 11-14). Deterministic pause gates prove: the RUNNING
+-- window borrow is active with the exact submitted fd/address/length and a
+-- registered waiter survives enqueued -> running -> backend_ready; running
+-- cancel intent ends neither the borrow nor the waiter; the backend_ready-
+-- before-reap window still shows the borrow active (a worker finishing its
+-- syscall is NOT the borrow lifetime end; only reap releases it); wait-cancel
+-- removes only the waiter (the real syscall still executes); enqueued I/O
+-- cancel keeps the waiter (canceled result + waiter delivered together); and
+-- a stale waiter authority is harmless against a live N+1 occupant.
+sluice_internal_async_test("threadpool_backend_c2c_waiter_borrow_test", {platform_gate = {"linux", "macosx"}})
+
 -- reference_backend_arena_lifecycle_test — Phase B reference backend migration
 -- regression (commit 4). Proves FakeAsyncBackend + SyncBackend are actually
 -- driven by the bounded RequestArena + five-stage admission + the synchronous

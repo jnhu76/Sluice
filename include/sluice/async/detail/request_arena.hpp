@@ -464,12 +464,18 @@ public:
                 }
                 // Accounting / borrow / state changes (I18).
                 s.borrow_.active = false;  // borrow ends at completion-ready (I7)
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                borrow_end_at_ = ++trace_seq_;  // I18 order trace
+#endif
                 s.state_ = RequestState::completion_ready;
                 --accepted_outstanding_;
                 --backend_ready_count_;
                 // Publish Completion-ready INSIDE the leaf domain: the
                 // release-store to ready is the single linearization point
                 // (review C3). The thunk is noexcept + allocation-free.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                publish_at_ = ++trace_seq_;  // I18 order trace
+#endif
                 s.publication_binding_.publish(s.publication_binding_.completion,
                                                s.terminal_);
                 publish_this = true;
@@ -545,19 +551,34 @@ public:
 
     // --- Waiter registration (ADR Decision 10 / I13) ---
     // Register one waiter. Second registration while open_registered returns
-    // invalid_state without overwriting the first. Returns invalid_state if the
-    // slot is not pending/enqueued (registration only makes sense pre-terminal).
+    // invalid_state without overwriting the first. Registration is ORTHOGONAL
+    // to execution state (ADR Decision 10 :668-698): it is legal for any
+    // accepted, unreaped request — pending/enqueued/running/backend_ready —
+    // while registration is open, and ONLY reap closes it. A terminal winner
+    // (record_terminal -> backend_ready) does NOT close registration: a waiter
+    // registered after the terminal is recorded but before reap still succeeds
+    // and reap delivers it. invalid_state is returned only for reserved/
+    // prepared (the pre-commit binding window, :483-484) and completion_ready
+    // (reap already closed registration; observationally closed ==
+    // completion_ready because reap sets both in one leaf-domain critical
+    // section, so the state guard is the single registration-window authority —
+    // a future path that closes registration without completion_ready must
+    // restore a closed-registration guard) and for a duplicate waiter. A stale
+    // handle returns not_found. On any failure the candidate lease is consumed
+    // at the by-value call boundary and released inline — never transferred to
+    // the slot (ADR :661-662: "Scheduler reclaims it or completes inline as
+    // appropriate"; Phase B completes inline).
     Result<void> register_waiter(SlotHandle h, WaiterToken token, RoutingLease lease) {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
         if (!s) return make_unexpected<void>(IoError{IoError::Code::not_found});
-        if (s->state_ != RequestState::pending && s->state_ != RequestState::enqueued) {
+        if (s->state_ != RequestState::pending && s->state_ != RequestState::enqueued &&
+            s->state_ != RequestState::running && s->state_ != RequestState::backend_ready) {
+            // reserved/prepared: not accepted yet (pre-commit binding window);
+            // completion_ready: reap already closed registration.
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         if (s->registration_ == WaiterRegistration::open_registered) {
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        if (s->registration_ == WaiterRegistration::closed) {
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
         s->registration_ = WaiterRegistration::open_registered;
@@ -872,9 +893,87 @@ public:
         return RequestObservation{h, s.state_, s.enqueue_in_flight_pin_,
                                   s.terminal_.stored};
     }
+
+    // C2c row 11: a single-lock BY-VALUE snapshot of the fd/buffer borrow
+    // metadata for a validated SlotHandle (generation + context + non-free).
+    // Returns nullopt for a stale/out-of-range/free handle, exactly like
+    // observe_for_test. Deliberately returns a value copy — never a
+    // RequestSlot* or BorrowMetadata& — so a test cannot mutate slot state.
+    // This is what lets the C2c borrow matrix observe the exact
+    // fd/address/length/active at every lifecycle window (prepare-stage
+    // inactive, commit-active, backend_ready-before-reap still active,
+    // completion-ready ended) through one generation-validated seam instead of
+    // the piecewise borrow_active(SlotIndex) accessor (which cannot distinguish
+    // a later slot reuse from the original request).
+    struct BorrowSnapshot {
+        int fd = -1;
+        const void* address = nullptr;
+        std::size_t length = 0;
+        bool active = false;
+    };
+    std::optional<BorrowSnapshot> borrow_for_test(SlotHandle h) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (h.slot.value >= capacity_) return std::nullopt;
+        const RequestSlot& s = slots_[h.slot.value];
+        if (s.state_ == RequestState::free) return std::nullopt;
+        if (s.generation_ != h.generation) return std::nullopt;
+        if (s.key_.context != context_) return std::nullopt;
+        return BorrowSnapshot{s.borrow_.fd, s.borrow_.address, s.borrow_.length,
+                              s.borrow_.active};
+    }
+
+    // C2c rows 12-14: a single-lock BY-VALUE observation of the single-waiter
+    // registration for a validated SlotHandle: the registration state, whether
+    // a token/lease delivery is still stored (waiter_delivery_present_), and
+    // the stored token + lease id (0 when no lease is stored). Same
+    // generation-validated shape as observe_for_test/borrow_for_test; returns
+    // nullopt for a stale/out-of-range/free handle. Read-only by-value — a
+    // test can prove "registration still open_registered with EXACTLY token A /
+    // lease A" (the no-overwrite and stale-waiter proofs) without touching slot
+    // internals.
+    struct WaiterObservation {
+        WaiterRegistration registration;
+        bool delivery_present;
+        WaiterToken token;
+        std::uint64_t lease_id;
+    };
+    std::optional<WaiterObservation> waiter_for_test(SlotHandle h) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (h.slot.value >= capacity_) return std::nullopt;
+        const RequestSlot& s = slots_[h.slot.value];
+        if (s.state_ == RequestState::free) return std::nullopt;
+        if (s.generation_ != h.generation) return std::nullopt;
+        if (s.key_.context != context_) return std::nullopt;
+        return WaiterObservation{s.registration_, s.waiter_delivery_present_,
+                                 s.waiter_token_, s.waiter_lease_.id()};
+    }
+
+    // C2c row 11: I18 publication-order trace. Inside reap's leaf-domain
+    // critical section, borrow-end and the Completion-ready publication each
+    // record a value from ONE monotonic sequence (trace_seq_). A test asserts
+    // publish_seq > borrow_end_seq to pin I18 (an acquire observer of
+    // Completion-ready sees the ended borrow); a mutant that moves the borrow
+    // end AFTER the publication — same critical section, still before reap
+    // returns — flips the order and the focused case fails, where a post-reap
+    // borrow observation alone cannot distinguish that defect. Written under
+    // mutex_; read after reap returns (or after a thread join) in tests.
+    // Diagnostics only; the counters are compiled out of production builds.
+    struct PublicationOrder {
+        std::uint64_t borrow_end_seq = 0;
+        std::uint64_t publish_seq = 0;
+    };
+    PublicationOrder publication_order_for_test() const noexcept {
+        return {borrow_end_at_, publish_at_};
+    }
 #endif
 
 private:
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // I18 publication-order trace storage (see publication_order_for_test).
+    std::uint64_t trace_seq_ = 0;
+    std::uint64_t borrow_end_at_ = 0;
+    std::uint64_t publish_at_ = 0;
+#endif
     // Bounds-check a SlotIndex for the read-only introspection accessors
     // (CodeRabbit finding: those are the only slot-addressing paths without
     // validate_'s range check). An out-of-range index is an invariant violation,
