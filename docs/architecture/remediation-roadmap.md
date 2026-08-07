@@ -274,7 +274,7 @@ coverage).
 
   - **C2d — failure injection / accepted-terminal under allocator failure:
     COMPLETE.** Rows 9–10 now have real-backend runtime evidence on
-    `ThreadPoolBackend` (`threadpool_backend_c2d_failure_test`, 8 cases,
+    `ThreadPoolBackend` (`threadpool_backend_c2d_failure_test`, 9 cases,
     `SLUICE_ASYNC_INTERNAL_TESTING`-guarded deterministic seams) and
     reference-path evidence on Fake (`reference_backend_no_alloc_test`
     full-window defined-error case): transactional pre-commit rejection on the
@@ -293,9 +293,13 @@ coverage).
     allocations under an always-throw operator new (ADR Decision 14 / I9) on
     the real worker path and on the injected failure path; and the
     dispatch-failure terminal vs cancel has exactly one winner, no overwrite,
-    no double publication, and exactly one tally in every interleaving. Nine
-    single-point production mutations (M1–M9) prove each detector case fails
-    on deliberately nonconforming behavior
+    no double publication, and at most one tally in every interleaving
+    (`canceled_ops == 1` iff cancel won — the injected `backend_error`
+    terminal contributes no tally because `completion_errors` is unwired for
+    ThreadPool). The two orderings are proven deterministically: cancel-wins
+    before enqueue (ADR Gate 4 commit/enqueue pause) and injection-wins with
+    a cancel-after no-op. Ten single-point mutations (M1–M10) prove each
+    detector case fails on deliberately nonconforming behavior
     (`docs/verification/phase-c2d-failure-injection-mutation-evidence.md`).
     The ring-full invariant fail-fast path is untouched (never converted to a
     recovery path). Uring's Phase-D gap is the
