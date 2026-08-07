@@ -14,7 +14,7 @@ slice: **failure injection** (row 9) and **accepted-terminal under allocator fai
 (row 10). C2d closes these rows for the Fake reference path and the real
 ThreadPoolBackend, records Uring's Phase-D gap as a `not_implemented` manifest record
 that enters Uring's verdict, and proves every detector case fails on deliberately
-nonconforming code (mutants M1–M10).
+nonconforming code (mutants M1–M13).
 
 ---
 
@@ -22,7 +22,7 @@ nonconforming code (mutants M1–M10).
 
 | Requirement (Issue #68 row) | Evidence |
 |---|---|
-| 9 — failure injection (alloc / worker-spawn / dispatch failure surfaces a defined terminal, leaves no partial state) | `tp_c2d_cas_loss_rejection_zero_side_effects`, `tp_c2d_partial_worker_startup_failure`, `tp_c2d_dispatch_failure_injection_size_op`, `tp_c2d_dispatch_failure_injection_void_op`, `tp_c2d_dispatch_failure_races_cancel_exactly_one`, `tp_c2d_cancel_after_dispatch_failure_terminal_no_overwrite` (ThreadPool); `fake_full_window_alloc_failure_defined_error_terminal` + existing `fake_cas_loss_rejection_zero_side_effects` (Fake) |
+| 9 — failure injection (alloc / worker-spawn / dispatch failure surfaces a defined terminal, leaves no partial state) | `tp_c2d_reserve_failure_injection_zero_residue`, `tp_c2d_prepare_failure_injection_slot_rollback`, `tp_c2d_commit_failure_injection_rollback_binding_before_accept`, `tp_c2d_cas_loss_rejection_zero_side_effects`, `tp_c2d_partial_worker_startup_failure`, `tp_c2d_dispatch_failure_injection_size_op`, `tp_c2d_dispatch_failure_injection_void_op`, `tp_c2d_dispatch_failure_races_cancel_exactly_one`, `tp_c2d_cancel_after_dispatch_failure_terminal_no_overwrite` (ThreadPool); `fake_full_window_alloc_failure_defined_error_terminal` + existing `fake_cas_loss_rejection_zero_side_effects` (Fake) |
 | 10 — post-commit allocation failure still reaches terminal (ADR Decision 14 / I9) | `tp_c2d_real_worker_post_commit_no_allocation`, `tp_c2d_dispatch_failure_post_commit_no_allocation` (ThreadPool, always-throw operator new); `fake_full_window_alloc_failure_defined_error_terminal` (Fake, full-window) |
 
 **Out of scope (explicitly, unchanged from Issue #68):** rows 4b/12b/14b (Phase F),
@@ -78,24 +78,28 @@ and dispatch**. Per stage, the C2d evidence is:
 
 | Stage | Failure surface | C2d evidence | Status |
 |---|---|---|---|
-| reserve | capacity full → `would_block`; admission closed → `invalid_state` | Phase E `phase_e_capacity_full_returns_would_block` + the C2a shared capacity suite — deterministic, real backend | DRIVEN (pre-existing; not duplicated) |
+| reserve | capacity full → `would_block`; admission closed → `invalid_state` | Phase E `phase_e_capacity_full_returns_would_block` + the C2a shared capacity suite (deterministic, real backend), PLUS `tp_c2d_reserve_failure_injection_zero_residue` — the Gate-4 injected reserve failure: the submit path returns `would_block` BEFORE reserving, the Completion stays idle, zero slot/borrow/dispatch/ready residue, and the capacity is untouched (a fresh submit immediately succeeds) | DRIVEN (C2a suite + C2d injected stage failure) |
 | reserve | allocation failure | `reserve()` performs NO allocation: fixed slot array + construction-time-pre-reserved free list (arena ctor); an empty free list is capacity pressure (`would_block`), not OOM | N/A (structural) |
-| prepare | stale/invalid handle | unreachable for a well-formed submit (the submit path holds the current-generation `reserved` handle it just obtained); no allocation on the path | N/A (structural) |
+| prepare | stale/invalid handle | natural failure unreachable for a well-formed submit (the submit path holds the current-generation `reserved` handle it just obtained); no allocation on the path. Gate-4 injected verification: `tp_c2d_prepare_failure_injection_slot_rollback` — injected prepare failure AFTER a successful reserve drives the SAME `rollback_reserved_or_prepared` rollback the natural path uses: slot_in_use → 0, capacity immediately recyclable (fresh submit runs a real syscall), Completion idle, zero dispatch/ready residue | DRIVEN (C2d, injected; natural surface N/A structural) |
 | binding install | duplicate/null binding | unreachable for a well-formed submit (fresh slot, real Completion pointer); no allocation | N/A (structural) |
-| begin_binding (Completion CAS) | non-idle Completion | `tp_c2d_cas_loss_rejection_zero_side_effects` — the ONE triggerable pre-commit failure, driven deterministically on the real backend: `invalid_state`, both original Completions untouched, `slot_in_use`/`outstanding` unchanged at 2, dispatch holds exactly the two real ops, `backend_ready_count` 0 (no ghost), both accepted ops reach exactly one terminal, capacity immediately recycled by a third submit | DRIVEN (C2d, new) |
-| commit | stale/invalid handle → `rollback_binding_before_accept` | unreachable for a well-formed submit (the slot is `prepared` at current generation immediately after a successful binding install); no allocation. The commit-failure rollback path is therefore structurally unreachable and N/A — the CAS-loss rollback path (`rollback_reserved_or_prepared`) IS driven (above) | N/A (structural) |
+| begin_binding (Completion CAS) | non-idle Completion | `tp_c2d_cas_loss_rejection_zero_side_effects` — the one naturally triggerable pre-commit failure, driven deterministically on the real backend: `invalid_state`, both original Completions untouched, `slot_in_use`/`outstanding` unchanged at 2, dispatch holds exactly the two real ops, `backend_ready_count` 0 (no ghost), both accepted ops reach exactly one terminal, capacity immediately recycled by a third submit | DRIVEN (C2d, new) |
+| commit | stale/invalid handle → `rollback_binding_before_accept` | natural failure unreachable for a well-formed submit (the slot is `prepared` at current generation immediately after a successful binding install); no allocation. Gate-4 injected verification: `tp_c2d_commit_failure_injection_rollback_binding_before_accept` — the binding CAS WINS (Completion in `binding`), then commit is injected to fail: the submit path executes the REAL `rollback_binding_before_accept` (binding → idle) + `rollback_reserved_or_prepared` — the ONLY executable instance of that branch in the corpus (a natural commit failure is unreachable after a same-thread reserve → prepare → begin_binding). The Completion returns to fully reusable idle and the SAME Completion + capacity are immediately reused by a fresh submit; accepted-outstanding/borrow/dispatch/ready residue all zero | DRIVEN (C2d, injected; natural surface N/A structural) |
 | enqueue | no failure surface; `terminal_noop` outcome | allocation-free `noexcept` (ADR Gate 4: "enqueue is allocation-free and cannot produce an ordinary recoverable failure"); the `terminal_noop` outcome is driven deterministically by `tp_c2d_cancel_wins_before_enqueue_injection_armed` (§3.5, ADR Gate 4 pending-cancel scenario) | DRIVEN (C2d, new) |
 | dispatch push | full ring | `BoundedDispatchQueue::push_back` is `noexcept`, capacity == request_capacity, allocation-free; a full push is the invariant fail-fast (Debug AND Release, §3.3) — never a recoverable failure | N/A (structural, fail-fast) |
 | dispatch (post-commit terminal event) | ADR Decision-12 candidate | guarded one-shot injection probe (`SLUICE_ASYNC_INTERNAL_TESTING` only) driving the SHARED production arena's terminal-winner/reap machinery (§3.3) | PROBE (test-only, supplementary) |
 
-The C2d `COMPLETE` claim is therefore scoped precisely: the one triggerable
-pre-commit failure (binding CAS) is driven with real-backend transactional
-residue proof; every stage that cannot fail on a well-formed submit path
-(allocation-free, bounded, fail-fast) is marked structural N/A with the static
-argument above; and the dispatch-failure terminal is a guarded probe, not a
-claim that production ThreadPool handles an ordinary dispatch failure (it
-cannot fail by construction). A CAS-loss case is never presented as coverage
-for prepare/commit boundaries it does not drive.
+The C2d `COMPLETE` claim is therefore scoped precisely: all four ADR Gate-4
+stages are DRIVEN — reserve / prepare / commit-boundary by deterministic
+injected stage failure on the real backend, the binding-CAS by its real
+transactional residue proof, and the dispatch-failure terminal by a guarded
+probe, not a claim that production ThreadPool handles an ordinary dispatch
+failure (it cannot fail by construction). Where the natural failure surface is
+structurally unreachable on a well-formed submit path (allocation-free,
+bounded, fail-fast), it is marked N/A structural WITH the injected Gate-4
+verification beside it — the injected verification is the executable instance
+of the rollback code (for prepare/commit) or of the synchronous rejection
+(for reserve). A CAS-loss case is never presented as coverage for
+prepare/commit boundaries it does not drive.
 
 ### 3.2 Worker / backend construction failure (partial worker startup)
 
@@ -302,6 +306,10 @@ for the full per-mutant ledger.
 | M7 | post-commit heap allocation added to the enqueue path | `tp_c2d_real_worker_post_commit_no_allocation` | same — bad_alloc in the noexcept post-commit path aborts |
 | M8 | Fake manual terminal path allocates | `fake_full_window_alloc_failure_defined_error_terminal` | same — bad_alloc under always-throw aborts |
 | M9 | worker-spawn injection seam removed | `tp_c2d_partial_worker_startup_failure` | same — `constructor must propagate the injected spawn failure` |
+| M10 | dispatch-failure injection fires on a terminal_noop enqueue (seam not gated on the enqueued outcome) | `tp_c2d_cancel_wins_before_enqueue_injection_armed` | same — `the injection must not fire on a terminal_noop enqueue` |
+| M11 | injected commit-failure rollback drops `rollback_binding_before_accept` | `tp_c2d_commit_failure_injection_rollback_binding_before_accept` | same — the Completion is stuck in `binding`: the fresh submit loses the idle→binding CAS and the destructor fail-fast aborts |
+| M12 | injected reserve check removed (submit succeeds instead of `would_block`) | `tp_c2d_reserve_failure_injection_zero_residue` | same — the armed injection is ignored; the rejection assertions fail |
+| M13 | injected prepare check removed (submit succeeds instead of `invalid_state`) | `tp_c2d_prepare_failure_injection_slot_rollback` | same — the armed injection is ignored; the rejection assertions fail |
 
 Every mutant ran RED (non-zero exit) and GREEN after restore; a marker scan
 confirmed zero `MUTANT` residue.
@@ -310,12 +318,12 @@ confirmed zero `MUTANT` residue.
 
 | Gate | Command | Result |
 |---|---|---|
-| Focused ThreadPool | `xmake build threadpool_backend_c2d_failure_test && xmake run threadpool_backend_c2d_failure_test` | PASS (9 cases) |
+| Focused ThreadPool | `xmake build threadpool_backend_c2d_failure_test && xmake run threadpool_backend_c2d_failure_test` | PASS (12 cases) |
 | Focused Fake | `xmake build reference_backend_no_alloc_test && xmake run reference_backend_no_alloc_test` | PASS (5 cases) |
 | Stability | 10× repeated runs of `threadpool_backend_c2d_failure_test` | PASS (10/10, no flake) |
 | Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (136 cases) |
 | Aggregate gate | `python3 scripts/verify-backend-conformance.py` | PASS (Fake/TP ELIGIBLE with C2d records PASS; Uring NOT CONFORMING with the C2d gap in its reasons) |
-| RED validity | 10 mutations (M1–M10), focused filtered runs | all RED; all restored GREEN (see §7 + mutation ledger) |
+| RED validity | 13 mutations (M1–M13), focused filtered runs | all RED; all restored GREEN (see §7 + mutation ledger) |
 
 > **Gate-run note (honesty):** the FIRST aggregate-gate run was executed
 > concurrently with the full `xmake test -v` suite and reported one isolated
@@ -360,6 +368,29 @@ confirmed zero `MUTANT` residue.
 > rerun (one contention RUN_FAIL of the pre-existing scheme-b evidence while
 > the full suite was still finishing — see the gate-run note above), 5×
 > negative-compile, doc-link/architecture checks PASS.
+>
+> **Second review round (P1 per-stage injection, fixed):** the reviewer's P1
+> (ADR Gate 4 demands injected failure at reserve/prepare/commit-boundary, not
+> only a structural-N/A argument) is closed by the `SubmitStageFailureInjection`
+> seam: (1) `tp_c2d_reserve_failure_injection_zero_residue` — injected
+> reserve failure returns `would_block` before reserving; Completion idle, zero
+> residue, capacity untouched; (2) `tp_c2d_prepare_failure_injection_slot_rollback`
+> — injected prepare failure after a successful reserve drives the SAME
+> `rollback_reserved_or_prepared` rollback the natural path uses; slot_in_use
+> → 0, capacity immediately recyclable; (3) `tp_c2d_commit_failure_injection_rollback_binding_before_accept`
+> — the binding CAS wins (Completion in `binding`), then commit is injected to
+> fail: the submit path executes the REAL `rollback_binding_before_accept`
+> (binding → idle) + slot rollback, the ONLY executable instance of that
+> branch in the corpus (a natural commit failure is unreachable after a
+> same-thread reserve → prepare → begin_binding), and the Completion returns
+> to fully reusable idle — the same Completion + capacity are immediately
+> reused. §3.1's matrix now marks reserve/prepare/commit **DRIVEN (injected)**
+> with the natural surface N/A structural. All seam blocks compile out of
+> production builds (no branch, no local, no symbol; re-scanned). New
+> mutations M11 (drop `rollback_binding_before_accept` from the injected
+> commit rollback), M12 (drop the injected reserve check), M13 (drop the
+> injected prepare check) all ran RED on their detector case and GREEN after
+> restore. Focused target now 12 cases.
 
 ## 9. Validation matrix (full evidence)
 
@@ -369,7 +400,7 @@ only for commands that actually ran green.
 | Gate | Command | Result |
 | ---- | ------- | ------ |
 | Debug / Clang full | `xmake f -m debug --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (147 targets, 0 failed) |
-| Focused ThreadPool | `xmake run threadpool_backend_c2d_failure_test` | PASS (9 cases) |
+| Focused ThreadPool | `xmake run threadpool_backend_c2d_failure_test` | PASS (12 cases) |
 | Focused Fake | `xmake run reference_backend_no_alloc_test` | PASS (5 cases) |
 | Stability | 10× repeated runs of the C2d ThreadPool target | PASS (10/10) |
 | Release / Clang | `xmake f -m release --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (147 targets, 0 failed; re-run after the test-hygiene fix) |
@@ -384,7 +415,7 @@ only for commands that actually ran green.
 | Negative-compile | `scripts/verify-async-identity-negative-compile.sh` | PASS (3 cases) |
 | Negative-compile | `scripts/verify-external-backend-authority-negative-compile.sh` | PASS (2 cases) |
 | Negative-compile | `scripts/verify-async-api-negative-compile.sh` | PASS (9 cases; CI runs it at `.github/workflows/ci.yml` — included here for a complete negative-compile row set) |
-| Seam absence | `nm -C` symbol scan of production `libsluice_async.a` for `injected_worker_spawn` and `dispatch_failure_injection` | PASS (0 matches); the internal-testing library carries both. Post-restructure the entire injected block is preprocessor-removed from the production build — no branch, no local, no symbol — so the scan result and the source-level exclusion agree (symbol inspection alone cannot prove control-flow absence, which is why the source-level claim is stated here too) |
+| Seam absence | `nm -C` symbol scan of production `libsluice_async.a` for `injected_worker_spawn`, `dispatch_failure_injection`, and `submit_stage_failure_injection`/`injected_precommit_stage_failure` | PASS (0 matches); the internal-testing library carries all of them. Post-restructure the entire injected block is preprocessor-removed from the production build — no branch, no local, no symbol — so the scan result and the source-level exclusion agree (symbol inspection alone cannot prove control-flow absence, which is why the source-level claim is stated here too) |
 | Diff hygiene | `git diff --check` | PASS (clean) |
 
 ## 10. Remaining gaps
@@ -417,14 +448,16 @@ only for commands that actually ran green.
 - Phase C remains **PARTIAL** (C1 IMPLEMENTED; C2a COMPLETE; C2b COMPLETE; C2c
   COMPLETE; C2d COMPLETE; C2e pending).
 - **C2d: COMPLETE** — rows 9–10 have real-backend runtime evidence
-  (ThreadPool: transactional rejection, partial worker-startup cleanup,
-  post-commit dispatch-failure defined terminal on size + void paths,
-  post-commit no-allocation on the real worker path and the injected path,
-  deterministic cancel-wins before enqueue (ADR Gate 4), exactly-one winner vs
-  cancel in the racy interleaving) and reference-path evidence (Fake
-  defined-error terminal under a full-window always-throw probe), each detector
-  proven mutation-RED (M1–M10), with Uring's Phase-D gap authoritatively
-  recorded.
+  (ThreadPool: ADR Gate-4 per-stage pre-commit injection at reserve / prepare /
+  commit-boundary — the commit-boundary arm being the ONLY executable instance
+  of `rollback_binding_before_accept` — plus transactional rejection, partial
+  worker-startup cleanup, post-commit dispatch-failure defined terminal on
+  size + void paths, post-commit no-allocation on the real worker path and the
+  injected path, deterministic cancel-wins before enqueue (ADR Gate 4),
+  exactly-one winner vs cancel in the racy interleaving) and reference-path
+  evidence (Fake defined-error terminal under a full-window always-throw
+  probe), each detector proven mutation-RED (M1–M13), with Uring's Phase-D gap
+  authoritatively recorded.
 - Production change (guarded only): the C2d failure-injection seams in
   `include/sluice/async/threadpool_backend.hpp` / `src/async/threadpool_backend.cpp`
   compile out of production builds (verified by symbol inspection); no other production behavior change; no synchronous

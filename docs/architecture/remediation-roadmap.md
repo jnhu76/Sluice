@@ -274,14 +274,20 @@ coverage).
 
   - **C2d — failure injection / accepted-terminal under allocator failure:
     COMPLETE.** Rows 9–10 now have real-backend runtime evidence on
-    `ThreadPoolBackend` (`threadpool_backend_c2d_failure_test`, 9 cases,
+    `ThreadPoolBackend` (`threadpool_backend_c2d_failure_test`, 12 cases,
     `SLUICE_ASYNC_INTERNAL_TESTING`-guarded deterministic seams) and
     reference-path evidence on Fake (`reference_backend_no_alloc_test`
-    full-window defined-error case): transactional pre-commit rejection on the
-    real backend (binding-CAS loss → `invalid_state`, zero residue, capacity
-    recyclable); partial worker-startup failure stops and joins the
-    already-started workers and rethrows synchronously (the finding P1-04
-    regression test that was missing); a post-commit permanent dispatch
+    full-window defined-error case): ADR Gate-4 per-stage pre-commit injection
+    at reserve (injected would_block — Completion idle, zero residue), prepare
+    (candidate slot rolled back, capacity immediately recyclable), and the
+    COMMIT-BOUNDARY (the binding CAS wins, then commit is injected to fail —
+    the submit path executes the REAL `rollback_binding_before_accept` + slot
+    rollback, the only executable instance of that branch in the corpus, and
+    the Completion returns to fully reusable idle); transactional pre-commit
+    rejection on the real backend (binding-CAS loss → `invalid_state`, zero
+    residue, capacity recyclable); partial worker-startup failure stops and
+    joins the already-started workers and rethrows synchronously (the finding
+    P1-04 regression test that was missing); a post-commit permanent dispatch
     failure (injected between enqueue and dispatch push, inside `work_mtx_`,
     with no worker ever able to see the handle — the ADR Decision-12
     "post-commit dispatch failure after execution ownership is proven
@@ -298,7 +304,7 @@ coverage).
     terminal contributes no tally because `completion_errors` is unwired for
     ThreadPool). The two orderings are proven deterministically: cancel-wins
     before enqueue (ADR Gate 4 commit/enqueue pause) and injection-wins with
-    a cancel-after no-op. Ten single-point mutations (M1–M10) prove each
+    a cancel-after no-op. Thirteen single-point mutations (M1–M13) prove each
     detector case fails on deliberately nonconforming behavior
     (`docs/verification/phase-c2d-failure-injection-mutation-evidence.md`).
     The ring-full invariant fail-fast path is untouched (never converted to a

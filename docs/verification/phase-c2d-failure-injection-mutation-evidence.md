@@ -22,7 +22,7 @@ branch (master base `8b24ede5b54bc41fde67decb3b820c6385faf125`). Toolchain:
 
 ## Method
 
-For each mutant M1–M10:
+For each mutant M1–M13:
 
 1. apply ONE single-point mutation to the production logic (exact string
    replacement via the harness);
@@ -48,7 +48,12 @@ message: the detectors collect the terminal facts and reset the ready
 Completion BEFORE asserting (post-review-fix shape), so the backend destructor
 stays quiescent and the harness prints the case's message — `wait_one lost the
 dispatch-failure ready wake` (M1/M3) and `the injection must not fire on a
-terminal_noop enqueue` (M10).
+terminal_noop enqueue` (M10). The per-stage-injection mutants M11/M12/M13
+(review P1 round) abort via the case's own fail-fast/assertion machinery:
+M11 leaves the Completion stuck in `binding` (the fresh submit loses the
+idle→binding CAS and the destructor's checked-contract fail-fast aborts),
+M12/M13 make the armed injection inert so the rejection assertions fail on a
+submit that unexpectedly succeeds.
 
 ## Mutation matrix
 
@@ -64,6 +69,9 @@ terminal_noop enqueue` (M10).
 | M8 | Fake manual terminal path allocates | `fake_backend.hpp`: `(void)new int;` in `complete_oldest_with_error` | `fake_full_window_alloc_failure_defined_error_terminal` | same — bad_alloc under always-throw aborts the process | `SLUICE_TEST_FILTER=fake_full_window_alloc_failure_defined_error_terminal xmake run reference_backend_no_alloc_test` | 255 |
 | M9 | worker-spawn injection seam removed (constructor can no longer inject) | `threadpool_backend.cpp` ctor: the guarded spawn-failure check block removed | `tp_c2d_partial_worker_startup_failure` | same — `constructor must propagate the injected spawn failure` | `SLUICE_TEST_FILTER=tp_c2d_partial_worker_startup_failure xmake run threadpool_backend_c2d_failure_test` | 255 |
 | M10 | injection fires on a terminal_noop enqueue (the seam is not gated on the `enqueued` outcome) | `threadpool_backend.cpp` `enqueue_after_commit` (guarded block): `if (outcome == detail::EnqueueOutcome::enqueued) {` → `if (true) {` | `tp_c2d_cancel_wins_before_enqueue_injection_armed` | same — `the injection must not fire on a terminal_noop enqueue` (the cancel-won terminal stays canceled and is published; the detector's post-quiescence assertion fails with the case's own message) | `SLUICE_TEST_FILTER=tp_c2d_cancel_wins_before_enqueue_injection_armed xmake run threadpool_backend_c2d_failure_test` | 255 |
+| M11 | injected commit-failure rollback drops `rollback_binding_before_accept` (the Completion stays in `binding`) | `threadpool_backend.cpp` `submit_size` (guarded commit block): `rollback_binding_before_accept(c);` removed | `tp_c2d_commit_failure_injection_rollback_binding_before_accept` | same — the Completion is stuck in `binding`: the fresh submit loses the idle→binding CAS (`has_value()` fails) and the destructor's checked-contract fail-fast aborts the process | `SLUICE_TEST_FILTER=tp_c2d_commit_failure_injection_rollback_binding_before_accept xmake run threadpool_backend_c2d_failure_test` | 255 |
+| M12 | injected reserve check removed (the armed reserve injection is ignored; submit succeeds instead of rejecting `would_block`) | `threadpool_backend.cpp` `submit_size` (guarded reserve block): block removed | `tp_c2d_reserve_failure_injection_zero_residue` | same — the armed injection never fires; `!rej.has_value()` / `rej.error().code == would_block` fail on a submit that unexpectedly succeeds | `SLUICE_TEST_FILTER=tp_c2d_reserve_failure_injection_zero_residue xmake run threadpool_backend_c2d_failure_test` | 255 |
+| M13 | injected prepare check removed (the armed prepare injection is ignored; submit succeeds instead of rejecting `invalid_state`) | `threadpool_backend.cpp` `submit_size` (guarded prepare block): block removed | `tp_c2d_prepare_failure_injection_slot_rollback` | same — the armed injection never fires; `!rej.has_value()` / `rej.error().code == invalid_state` fail on a submit that unexpectedly succeeds | `SLUICE_TEST_FILTER=tp_c2d_prepare_failure_injection_slot_rollback xmake run threadpool_backend_c2d_failure_test` | 255 |
 
 ## Restore and hygiene
 
