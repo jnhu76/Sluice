@@ -362,6 +362,82 @@ EVIDENCE: tuple[Evidence, ...] = (
     ),
 
     # -----------------------------------------------------------------------
+    # Phase C2c — waiter / borrow / delivery-lease (Issue #68 rows 11-14).
+    # The arena-level record proves the RequestSlot borrow/waiter/lease
+    # protocol (backend-agnostic: the contract exists for every migrated
+    # backend); the Fake and ThreadPool integration records prove each
+    # backend's REAL submit path carries the same arena borrow lifecycle and
+    # routes waiter registration through the REAL arena register_waiter /
+    # cancel_waiter authorities (no side-band waiter map). Uring's gap is the
+    # not_implemented record below (Phase D pending), entered via
+    # applicable_evidence_for_backend() so Uring's OWN verdict surfaces it —
+    # never skip-as-pass.
+    # -----------------------------------------------------------------------
+    Evidence(
+        evidence_id="c2c_arena_borrow_waiter_lease_matrix",
+        target="request_waiter_borrow_lease_test",
+        layer="lifecycle",
+        backends=(),
+        notes="C2c rows 11-14 (arena): borrow lifecycle matrix (prepare "
+              "inactive -> commit active -> survives pending/enqueued/running/"
+              "backend_ready and every cancel/wait-cancel path -> reap ends "
+              "it before completion-ready; rollback never borrows; stale "
+              "handle cannot touch a new occupant's borrow), single-waiter "
+              "registration state matrix + no-overwrite cardinality (final "
+              "delivery = first waiter), wait-cancel vs I/O-cancel "
+              "independence, move-only lease transfer chains, by-value "
+              "ReadyEvent across slot reuse, register-vs-terminal and "
+              "cancel_waiter-vs-reap races (exactly-one lease ownership).",
+    ),
+    Evidence(
+        evidence_id="c2c_fake_borrow_waiter_integration",
+        target="backend_c2c_waiter_borrow_test",
+        layer="lifecycle",
+        backends=_F,
+        mandatory=True,
+        notes="C2c rows 11-14 Fake integration: real submit path carries the "
+              "exact borrow metadata active; waiter seam routes a real "
+              "accepted Completion through the REAL arena register_waiter/"
+              "cancel_waiter authorities; complete_*/cancel only produce "
+              "backend_ready while the borrow stays active until poll() "
+              "reaps; the production sink delivers the registered token+lease "
+              "exactly once; wait-cancel keeps the I/O; I/O cancel keeps the "
+              "waiter; stale waiter authority cannot touch a live N+1 "
+              "occupant.",
+    ),
+    Evidence(
+        evidence_id="c2c_threadpool_borrow_waiter_integration",
+        target="threadpool_backend_c2c_waiter_borrow_test",
+        layer="lifecycle",
+        backends=_TP,
+        mandatory=True,
+        notes="C2c rows 11-14 ThreadPool integration (deterministic pause "
+              "gates): running borrow active with the exact submitted "
+              "fd/addr/len; a registered waiter survives enqueued->running->"
+              "backend_ready; running cancel intent ends neither the borrow "
+              "nor the waiter; the backend_ready-before-reap window still "
+              "shows the borrow active (a worker finishing its syscall is NOT "
+              "the borrow lifetime end); wait-cancel != I/O cancel (the real "
+              "syscall still runs); enqueued I/O cancel keeps the waiter; a "
+              "stale waiter authority is harmless against a live N+1 "
+              "occupant.",
+    ),
+    Evidence(
+        evidence_id="uring_c2c_borrow_waiter_not_implemented",
+        target="backend_conformance_test",
+        layer="lifecycle",
+        backends=_U,
+        mandatory=True,
+        status=STATUS_NOT_IMPLEMENTED,
+        notes="C2c rows 11-14 require RequestArena borrow/waiter/lease "
+              "lifecycle integration; Uring remains legacy until Phase D. "
+              "Recorded as a known gap; not_implemented never counts as "
+              "PASS. (Target is the Uring-driving conformance binary, "
+              "matching uring_c2b_identity_not_implemented; the gap is not "
+              "executed.)",
+    ),
+
+    # -----------------------------------------------------------------------
     # Layer: backend-specific mechanism evidence.
     # -----------------------------------------------------------------------
     Evidence(
