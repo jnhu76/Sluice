@@ -464,12 +464,18 @@ public:
                 }
                 // Accounting / borrow / state changes (I18).
                 s.borrow_.active = false;  // borrow ends at completion-ready (I7)
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                borrow_end_at_ = ++trace_seq_;  // I18 order trace
+#endif
                 s.state_ = RequestState::completion_ready;
                 --accepted_outstanding_;
                 --backend_ready_count_;
                 // Publish Completion-ready INSIDE the leaf domain: the
                 // release-store to ready is the single linearization point
                 // (review C3). The thunk is noexcept + allocation-free.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                publish_at_ = ++trace_seq_;  // I18 order trace
+#endif
                 s.publication_binding_.publish(s.publication_binding_.completion,
                                                s.terminal_);
                 publish_this = true;
@@ -926,9 +932,33 @@ public:
         return WaiterObservation{s.registration_, s.waiter_delivery_present_,
                                  s.waiter_token_, s.waiter_lease_.id()};
     }
+
+    // C2c row 11: I18 publication-order trace. Inside reap's leaf-domain
+    // critical section, borrow-end and the Completion-ready publication each
+    // record a value from ONE monotonic sequence (trace_seq_). A test asserts
+    // publish_seq > borrow_end_seq to pin I18 (an acquire observer of
+    // Completion-ready sees the ended borrow); a mutant that moves the borrow
+    // end AFTER the publication — same critical section, still before reap
+    // returns — flips the order and the focused case fails, where a post-reap
+    // borrow observation alone cannot distinguish that defect. Written under
+    // mutex_; read after reap returns (or after a thread join) in tests.
+    // Diagnostics only; the counters are compiled out of production builds.
+    struct PublicationOrder {
+        std::uint64_t borrow_end_seq = 0;
+        std::uint64_t publish_seq = 0;
+    };
+    PublicationOrder publication_order_for_test() const noexcept {
+        return {borrow_end_at_, publish_at_};
+    }
 #endif
 
 private:
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // I18 publication-order trace storage (see publication_order_for_test).
+    std::uint64_t trace_seq_ = 0;
+    std::uint64_t borrow_end_at_ = 0;
+    std::uint64_t publish_at_ = 0;
+#endif
     // Bounds-check a SlotIndex for the read-only introspection accessors
     // (CodeRabbit finding: those are the only slot-addressing paths without
     // validate_'s range check). An out-of-range index is an invariant violation,

@@ -6,15 +6,23 @@
 //             stays active across pending/enqueued/running/backend_ready,
 //             across record_terminal, Scheme-B cancel, running cancel intent,
 //             and wait-cancel; reap ends it BEFORE the Completion-ready
-//             publication; rollback never borrows and clears metadata;
-//             generation++ makes a stale handle unable to touch a new
-//             occupant's borrow.
+//             publication (I18 — pinned by a deterministic publication-order
+//             trace, not just post-reap observation); rollback never borrows
+//             and clears metadata; generation++ makes a stale handle unable
+//             to touch a new occupant's borrow.
 //   row 12a — single-waiter registration: one registration authority; a
 //             second register is invalid_state AND does not overwrite the
 //             first (final delivery carries token A + lease A, never B);
-//             per-state registration matrix pinned from the as-built
-//             contract (pending/enqueued allowed; reserved/prepared/running/
-//             backend_ready/completion_ready invalid_state; stale not_found).
+//             per-state registration matrix pinned from ADR Decision 10 —
+//             registration is ORTHOGONAL to execution state and only reap
+//             closes it: legal in pending/enqueued/running/backend_ready
+//             while registration is open; reserved/prepared (pre-commit
+//             binding window) and completion_ready (reap closed) are
+//             invalid_state; stale not_found. A failed registration consumes
+//             the candidate lease at the by-value call boundary and releases
+//             it inline — it is never transferred to the slot (ADR :661-662:
+//             "Scheduler reclaims it or completes inline as appropriate" —
+//             Phase B completes inline).
 //   row 13  — waiter-cancel independence: cancel_waiter removes ONLY the
 //             waiter; it never cancels the I/O, never picks a terminal,
 //             never ends the borrow. I/O cancel removes NOTHING of the
@@ -23,15 +31,21 @@
 //   row 14a — delivery lease: move-only type properties; caller -> slot ->
 //             ReadyEvent (or caller -> slot -> cancel_waiter return) transfer
 //             chain with exactly one owner; ReadyEvent is by-value and stays
-//             valid across slot release + reuse even with a waiter payload.
+//             valid across slot release + reuse even with a waiter payload;
+//             sinks consume the delivery (including the move-only lease)
+//             INSIDE the callback and retain plain scalars only (ADR :625-636
+//             callback-scoped consumption).
 //
-// Concurrency (row 13/14a): register_waiter vs record_terminal and
-// cancel_waiter vs reap are driven with std::barrier-released threads under
-// the arena's single leaf domain — only the two ADR-legal outcomes can occur,
-// and the lease ownership count is exactly one in every interleaving.
+// Concurrency (row 13/14a): register_waiter vs reap (the terminal winner does
+// NOT close registration — ADR Decision 10 — so reap is the only registration
+// closer) and cancel_waiter vs reap are driven with std::barrier-released
+// threads under the arena's single leaf domain — only the two ADR-legal
+// outcomes can occur, and the lease ownership count is exactly one in every
+// interleaving.
 //
 // Links sluice_async_internal_testing: the generation-validated
-// borrow_for_test / waiter_for_test observation seams are guarded by
+// borrow_for_test / waiter_for_test observation seams and the
+// publication_order_for_test I18 trace are guarded by
 // SLUICE_ASYNC_INTERNAL_TESTING (AGENTS.md §15; production carries nothing).
 //
 // All waits are bounded and every case restores slot_in_use == 0 before the
@@ -72,17 +86,33 @@ SLUICE_MAIN()
 
 namespace {
 
-// Records every ReadyEvent by value (the event carries a move-only lease, so
-// the sink MOVES each event into storage). Heap-allocating (std::vector), so
-// it is used ONLY for event-content inspection; the allocation-independent
-// sink contract is proven by the ReferenceReadySink observation in the
-// backend integration targets.
+// Records every delivery as plain scalars (key/kind/token/lease-id) and drops
+// the by-value ReadyEvent — including the move-only RoutingLease — INSIDE the
+// callback: callback-scoped consumption (ADR :625-636 — the sink may copy the
+// by-value key/kind and consume the move-only waiter delivery; it must not
+// retain the event or lease past the call). This sink exists ONLY for
+// event-content inspection; the allocation-independent sink contract is proven
+// by the ReferenceReadySink observation in the backend integration targets.
 struct RecordingSink : sluice::async::detail::SynchronousReadySink {
-    std::vector<sluice::async::detail::ReadyEvent> events;
-    std::vector<std::uint64_t> lease_ids;
+    struct Delivery {
+        sluice::async::detail::RequestKey key{};
+        sluice::async::detail::OperationKind kind =
+            sluice::async::detail::OperationKind::read;
+        bool has_waiter = false;
+        sluice::async::detail::WaiterToken token{};
+        std::uint64_t lease_id = 0;
+    };
+    std::vector<Delivery> deliveries;
     void on_ready(sluice::async::detail::ReadyEvent e) noexcept override {
-        if (e.waiter.has_waiter) lease_ids.push_back(e.waiter.lease.id());
-        events.push_back(std::move(e));
+        Delivery d;
+        d.key = e.key;
+        d.kind = e.kind;
+        d.has_waiter = e.waiter.has_waiter;
+        d.token = e.waiter.token;
+        d.lease_id = e.waiter.has_waiter ? e.waiter.lease.id() : 0;
+        deliveries.push_back(d);
+        // e — including its move-only lease — is consumed and dropped here,
+        // inside the callback; nothing escapes the call.
     }
 };
 
@@ -207,6 +237,34 @@ SLUICE_TEST_CASE(arena_borrow_lifecycle_full_matrix) {
     // release: slot free, no observable borrow.
     arena.release_completed_binding(h);
     SLUICE_CHECK(!arena.borrow_for_test(h).has_value());
+    SLUICE_CHECK(arena.slot_in_use() == 0);
+}
+
+// ---- Row 11: I18 publication-order (borrow ends BEFORE Completion-ready) ----
+// A deterministic trace seam inside reap's leaf-domain critical section
+// records borrow-end and the Completion-ready publication as sequence numbers.
+// An acquire observer of Completion-ready must see the ended borrow (I18), so
+// the publication sequence must follow the borrow-end sequence. A mutant that
+// moves `borrow_.active = false` AFTER the publication call — same critical
+// section, still before reap returns — flips the order and this case fails;
+// the post-reap borrow observation alone cannot distinguish that defect.
+SLUICE_TEST_CASE(arena_borrow_publication_order) {
+    RequestArena arena{ContextIdentity::for_testing(1), 1};
+    std::byte buf[8]{};
+    SlotHandle h = submit_enqueued(
+        arena, OperationKind::read, sluice::async::detail::BorrowMetadata{0, buf, 8});
+    SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(8)));
+
+    RecordingSink sink;
+    SLUICE_CHECK(arena.reap(sink) == 1);
+    auto order = arena.publication_order_for_test();
+    SLUICE_CHECK(order.borrow_end_seq > 0);
+    SLUICE_CHECK_MSG(order.publish_seq > order.borrow_end_seq,
+                     "borrow must end BEFORE the Completion-ready publication "
+                     "(I18: an acquire observer of ready sees the ended borrow)");
+    // The conventional post-reap observation still holds.
+    SLUICE_CHECK(!arena.borrow_for_test(h)->active);
+    arena.release_completed_binding(h);
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
 
@@ -338,33 +396,53 @@ SLUICE_TEST_CASE(arena_borrow_rollback_and_stale_protection) {
 }
 
 // ---- Row 12a: waiter registration state matrix ------------------------------
-// Pinned from the as-built contract (arena register_waiter accepts only
-// pending/enqueued — the pre-terminal registration window the ADR's Decision
-// 10 state machine describes; a second waiter is invalid_state without
-// overwriting the first; closed registration observes ready and stores
-// nothing). reserved/prepared/running/backend_ready/completion_ready are
-// invalid_state; a stale handle is not_found.
+// Pinned from ADR Decision 10: registration is ORTHOGONAL to execution state
+// and only reap closes it (:668-698). Legal while the request is accepted and
+// unreaped (pending/enqueued/running/backend_ready) with registration open; a
+// second waiter is invalid_state WITHOUT overwriting the first; reserved/
+// prepared (pre-commit binding window, :483-484) and completion_ready (reap
+// closed registration) are invalid_state; a stale handle is not_found. A
+// failed registration consumes the candidate lease at the by-value call
+// boundary and releases it inline — never transferred to the slot (ADR
+// :661-662: "Scheduler reclaims it or completes inline as appropriate" —
+// Phase B completes inline).
 SLUICE_TEST_CASE(arena_waiter_registration_state_matrix) {
-    RequestArena arena{ContextIdentity::for_testing(1), 5};
+    RequestArena arena{ContextIdentity::for_testing(1), 8};
     std::byte buf[8]{};
 
-    // reserved -> invalid_state.
+    // reserved -> invalid_state (pre-commit binding window); the candidate
+    // lease is consumed at the call boundary and released inline.
     auto r1 = arena.reserve();
     SLUICE_CHECK(r1.has_value());
     SlotHandle h1 = r1.value();
-    auto reg1 = arena.register_waiter(h1, WaiterToken{1, 0, 0}, RoutingLease{1});
+    RoutingLease cand1{1};
+    auto reg1 = arena.register_waiter(h1, WaiterToken{1, 0, 0}, std::move(cand1));
     SLUICE_CHECK(!reg1.has_value());
     SLUICE_CHECK(reg1.error().code == sluice::IoError::Code::invalid_state);
+    SLUICE_CHECK_MSG(!cand1.valid(),
+                     "failed registration must consume the candidate lease at "
+                     "the by-value boundary (never transferred to the slot)");
+    auto w1 = arena.waiter_for_test(h1);
+    SLUICE_CHECK(w1.has_value());
+    SLUICE_CHECK(w1->registration == WaiterRegistration::open_no_waiter);
+    SLUICE_CHECK(!w1->delivery_present);
+    SLUICE_CHECK(w1->lease_id == 0);
     (void)arena.rollback_reserved_or_prepared(h1);
 
-    // prepared -> invalid_state.
+    // prepared -> invalid_state (pre-commit); same inline lease consumption.
     auto r2 = arena.reserve();
     SLUICE_CHECK(r2.has_value());
     SlotHandle h2 = r2.value();
     SLUICE_CHECK(arena.prepare(h2, OperationKind::read, {}).has_value());
-    auto reg2 = arena.register_waiter(h2, WaiterToken{1, 0, 0}, RoutingLease{1});
+    RoutingLease cand2{2};
+    auto reg2 = arena.register_waiter(h2, WaiterToken{1, 0, 0}, std::move(cand2));
     SLUICE_CHECK(!reg2.has_value());
     SLUICE_CHECK(reg2.error().code == sluice::IoError::Code::invalid_state);
+    SLUICE_CHECK(!cand2.valid());
+    auto w2 = arena.waiter_for_test(h2);
+    SLUICE_CHECK(w2.has_value());
+    SLUICE_CHECK(w2->registration == WaiterRegistration::open_no_waiter);
+    SLUICE_CHECK(!w2->delivery_present);
     (void)arena.rollback_reserved_or_prepared(h2);
 
     // pending (committed, not yet enqueued) -> allowed.
@@ -379,7 +457,7 @@ SLUICE_TEST_CASE(arena_waiter_registration_state_matrix) {
     SLUICE_CHECK(arena.state_of(hp.slot) == RequestState::pending);
     SLUICE_CHECK(arena.register_waiter(hp, WaiterToken{2, 0, 0}, RoutingLease{2})
                      .has_value());
-    // Drain the pending slot (terminal + enqueue no-op + reap + release).
+    // Drain the pending slot (wait-cancel + terminal + enqueue no-op + reap).
     SLUICE_CHECK(arena.cancel_waiter(hp).has_value());
     SLUICE_CHECK(arena.record_terminal(hp, TerminalResult::ok_bytes(8)));
     SLUICE_CHECK(arena.enqueue(hp) == EnqueueOutcome::terminal_noop);
@@ -390,57 +468,135 @@ SLUICE_TEST_CASE(arena_waiter_registration_state_matrix) {
     arena.release_completed_binding(hp);
 
     // enqueued -> allowed (the state a real backend submit leaves the slot in);
-    // a second registration on the same slot is invalid_state WITHOUT
-    // overwriting the first (single-waiter cardinality, proven again in
-    // arena_single_waiter_first_registration_survives with token/lease
-    // equality).
+    // a second registration is invalid_state WITHOUT overwriting the first
+    // (single-waiter cardinality, proven again with token/lease equality in
+    // arena_single_waiter_first_registration_survives).
     SlotHandle h3 = submit_enqueued(
         arena, OperationKind::read, sluice::async::detail::BorrowMetadata{0, buf, 8});
     SLUICE_CHECK(arena.register_waiter(h3, WaiterToken{3, 0, 0}, RoutingLease{3})
                      .has_value());
-    auto dup = arena.register_waiter(h3, WaiterToken{4, 0, 0}, RoutingLease{4});
+    RoutingLease cand_dup{4};
+    auto dup = arena.register_waiter(h3, WaiterToken{4, 0, 0}, std::move(cand_dup));
     SLUICE_CHECK(!dup.has_value());
     SLUICE_CHECK(dup.error().code == sluice::IoError::Code::invalid_state);
-    auto w = arena.waiter_for_test(h3);
-    SLUICE_CHECK(w.has_value());
-    SLUICE_CHECK(w->registration == WaiterRegistration::open_registered);
-    SLUICE_CHECK((w->token == WaiterToken{3, 0, 0}));
-    SLUICE_CHECK(w->lease_id == 3);
-    // Drop the first waiter, then register a second one for the running case.
-    auto dropped = arena.cancel_waiter(h3);
-    SLUICE_CHECK(dropped.has_value());
-    SLUICE_CHECK(dropped.value().id() == 3);
-    SLUICE_CHECK(arena.register_waiter(h3, WaiterToken{4, 0, 0}, RoutingLease{4})
-                     .has_value());
+    SLUICE_CHECK_MSG(!cand_dup.valid(),
+                     "duplicate registration must consume the candidate lease "
+                     "inline without overwriting the first");
+    auto w3 = arena.waiter_for_test(h3);
+    SLUICE_CHECK(w3.has_value());
+    SLUICE_CHECK(w3->registration == WaiterRegistration::open_registered);
+    SLUICE_CHECK((w3->token == WaiterToken{3, 0, 0}));
+    SLUICE_CHECK(w3->lease_id == 3);
 
-    // running -> invalid_state (registration is a pre-terminal window; the
-    // syscall is already executing).
+    // running -> the syscall executing does NOT close registration: a second
+    // waiter is still rejected by CARDINALITY (state-independent), and the
+    // original registration is untouched.
     SLUICE_CHECK(arena.mark_running(h3));
-    auto reg_running =
-        arena.register_waiter(h3, WaiterToken{5, 0, 0}, RoutingLease{5});
-    SLUICE_CHECK(!reg_running.has_value());
-    SLUICE_CHECK(reg_running.error().code == sluice::IoError::Code::invalid_state);
+    RoutingLease cand_run{5};
+    auto reg_run = arena.register_waiter(h3, WaiterToken{5, 0, 0},
+                                         std::move(cand_run));
+    SLUICE_CHECK(!reg_run.has_value());
+    SLUICE_CHECK(reg_run.error().code == sluice::IoError::Code::invalid_state);
+    SLUICE_CHECK(!cand_run.valid());
+    auto w4 = arena.waiter_for_test(h3);
+    SLUICE_CHECK(w4.has_value());
+    SLUICE_CHECK(w4->registration == WaiterRegistration::open_registered);
+    SLUICE_CHECK((w4->token == WaiterToken{3, 0, 0}));
+    SLUICE_CHECK(w4->lease_id == 3);
 
-    // backend_ready -> invalid_state (terminal already won; registration is
-    // closed to new waiters).
+    // backend_ready -> the terminal winner does NOT close registration either:
+    // a duplicate is still rejected and the original waiter is delivered at
+    // reap.
     SLUICE_CHECK(arena.record_terminal(h3, TerminalResult::ok_bytes(8)));
-    auto reg_br = arena.register_waiter(h3, WaiterToken{6, 0, 0}, RoutingLease{6});
+    RoutingLease cand_br{6};
+    auto reg_br = arena.register_waiter(h3, WaiterToken{6, 0, 0},
+                                        std::move(cand_br));
     SLUICE_CHECK(!reg_br.has_value());
     SLUICE_CHECK(reg_br.error().code == sluice::IoError::Code::invalid_state);
+    SLUICE_CHECK(!cand_br.valid());
+    {
+        RecordingSink sink;
+        SLUICE_CHECK(arena.reap(sink) == 1);
+        SLUICE_CHECK(sink.deliveries.size() == 1);
+        SLUICE_CHECK(sink.deliveries[0].has_waiter);
+        SLUICE_CHECK((sink.deliveries[0].token == WaiterToken{3, 0, 0}));
+        SLUICE_CHECK(sink.deliveries[0].lease_id == 3);
+    }
 
     // completion_ready -> invalid_state (reap closed registration; a
     // higher-level waiter consumer would observe ready instead — Phase F).
-    RecordingSink sink;
-    SLUICE_CHECK(arena.reap(sink) == 1);
-    auto reg_cr = arena.register_waiter(h3, WaiterToken{7, 0, 0}, RoutingLease{7});
+    RoutingLease cand_cr{7};
+    auto reg_cr = arena.register_waiter(h3, WaiterToken{7, 0, 0},
+                                        std::move(cand_cr));
     SLUICE_CHECK(!reg_cr.has_value());
     SLUICE_CHECK(reg_cr.error().code == sluice::IoError::Code::invalid_state);
+    SLUICE_CHECK(!cand_cr.valid());
     arena.release_completed_binding(h3);
 
-    // stale -> not_found (generation advanced past the captured handle).
-    auto reg_stale = arena.register_waiter(h3, WaiterToken{8, 0, 0}, RoutingLease{8});
+    // stale -> not_found (generation advanced past the captured handle); the
+    // candidate lease is consumed at the boundary and never touches a later
+    // occupant.
+    RoutingLease cand_stale{8};
+    auto reg_stale = arena.register_waiter(h3, WaiterToken{8, 0, 0},
+                                           std::move(cand_stale));
     SLUICE_CHECK(!reg_stale.has_value());
     SLUICE_CHECK(reg_stale.error().code == sluice::IoError::Code::not_found);
+    SLUICE_CHECK(!cand_stale.valid());
+    SLUICE_CHECK(arena.slot_in_use() == 0);
+
+    // --- Positive window proofs (ADR Decision 10): a FRESH registration is
+    // accepted while running and at backend_ready, and reap delivers it
+    // exactly once. ---
+    // running -> success.
+    SlotHandle h4 = submit_enqueued(
+        arena, OperationKind::read, sluice::async::detail::BorrowMetadata{0, buf, 8});
+    SLUICE_CHECK(arena.mark_running(h4));
+    RoutingLease lease_run{55};
+    SLUICE_CHECK(arena.register_waiter(h4, WaiterToken{9, 1, 1},
+                                       std::move(lease_run))
+                     .has_value());
+    SLUICE_CHECK(!lease_run.valid());  // transferred to the slot
+    auto w5 = arena.waiter_for_test(h4);
+    SLUICE_CHECK(w5.has_value());
+    SLUICE_CHECK(w5->registration == WaiterRegistration::open_registered);
+    SLUICE_CHECK((w5->token == WaiterToken{9, 1, 1}));
+    SLUICE_CHECK(w5->lease_id == 55);
+    SLUICE_CHECK(arena.record_terminal(h4, TerminalResult::ok_bytes(8)));
+    {
+        RecordingSink sink;
+        SLUICE_CHECK(arena.reap(sink) == 1);
+        SLUICE_CHECK(sink.deliveries.size() == 1);
+        SLUICE_CHECK(sink.deliveries[0].has_waiter);
+        SLUICE_CHECK((sink.deliveries[0].token == WaiterToken{9, 1, 1}));
+        SLUICE_CHECK(sink.deliveries[0].lease_id == 55);
+    }
+    arena.release_completed_binding(h4);
+
+    // backend_ready (terminal recorded, reap not yet run) -> success; reap
+    // delivers the registered waiter.
+    SlotHandle h5 = submit_enqueued(
+        arena, OperationKind::read, sluice::async::detail::BorrowMetadata{0, buf, 8});
+    SLUICE_CHECK(arena.record_terminal(h5, TerminalResult::ok_bytes(8)));
+    SLUICE_CHECK(arena.state_of(h5.slot) == RequestState::backend_ready);
+    RoutingLease lease_br{66};
+    SLUICE_CHECK(arena.register_waiter(h5, WaiterToken{10, 2, 2},
+                                       std::move(lease_br))
+                     .has_value());
+    SLUICE_CHECK(!lease_br.valid());
+    auto w6 = arena.waiter_for_test(h5);
+    SLUICE_CHECK(w6.has_value());
+    SLUICE_CHECK(w6->registration == WaiterRegistration::open_registered);
+    SLUICE_CHECK((w6->token == WaiterToken{10, 2, 2}));
+    SLUICE_CHECK(w6->lease_id == 66);
+    {
+        RecordingSink sink;
+        SLUICE_CHECK(arena.reap(sink) == 1);
+        SLUICE_CHECK(sink.deliveries.size() == 1);
+        SLUICE_CHECK(sink.deliveries[0].has_waiter);
+        SLUICE_CHECK((sink.deliveries[0].token == WaiterToken{10, 2, 2}));
+        SLUICE_CHECK(sink.deliveries[0].lease_id == 66);
+    }
+    arena.release_completed_binding(h5);
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
 
@@ -476,11 +632,10 @@ SLUICE_TEST_CASE(arena_single_waiter_first_registration_survives) {
     SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(8)));
     RecordingSink sink;
     SLUICE_CHECK(arena.reap(sink) == 1);
-    SLUICE_CHECK(sink.events.size() == 1);
-    SLUICE_CHECK(sink.events[0].waiter.has_waiter);
-    SLUICE_CHECK((sink.events[0].waiter.token == WaiterToken{1, 7, 3}));
-    SLUICE_CHECK(sink.lease_ids.size() == 1);
-    SLUICE_CHECK(sink.lease_ids[0] == 99);
+    SLUICE_CHECK(sink.deliveries.size() == 1);
+    SLUICE_CHECK(sink.deliveries[0].has_waiter);
+    SLUICE_CHECK((sink.deliveries[0].token == WaiterToken{1, 7, 3}));
+    SLUICE_CHECK(sink.deliveries[0].lease_id == 99);
     SLUICE_CHECK(arena.reap(sink) == 0);  // exactly-once
     // A late wait-cancel after reap gets nothing (reap consumed the lease).
     SLUICE_CHECK(!arena.cancel_waiter(h).has_value());
@@ -500,11 +655,10 @@ SLUICE_TEST_CASE(arena_single_waiter_first_registration_survives) {
     SLUICE_CHECK(arena.record_terminal(h2, TerminalResult::ok_bytes(8)));
     RecordingSink sink2;
     SLUICE_CHECK(arena.reap(sink2) == 1);
-    SLUICE_CHECK(sink2.events[0].waiter.has_waiter);
-    SLUICE_CHECK_MSG((sink2.events[0].waiter.token == WaiterToken{2, 8, 4}),
+    SLUICE_CHECK(sink2.deliveries[0].has_waiter);
+    SLUICE_CHECK_MSG((sink2.deliveries[0].token == WaiterToken{2, 8, 4}),
                      "after wait-cancel + re-register, only B may be delivered");
-    SLUICE_CHECK(sink2.lease_ids.size() == 1);
-    SLUICE_CHECK(sink2.lease_ids[0] == 100);
+    SLUICE_CHECK(sink2.deliveries[0].lease_id == 100);
     arena.release_completed_binding(h2);
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
@@ -540,10 +694,10 @@ SLUICE_TEST_CASE(arena_waiter_cancel_removes_only_the_waiter) {
     SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(8)));
     RecordingSink sink;
     SLUICE_CHECK(arena.reap(sink) == 1);
-    SLUICE_CHECK(sink.events.size() == 1);
-    SLUICE_CHECK_MSG(!sink.events[0].waiter.has_waiter,
+    SLUICE_CHECK(sink.deliveries.size() == 1);
+    SLUICE_CHECK_MSG(!sink.deliveries[0].has_waiter,
                      "wait-canceled waiter must not be delivered at reap");
-    SLUICE_CHECK(sink.lease_ids.empty());
+    SLUICE_CHECK(sink.deliveries[0].lease_id == 0);
     SLUICE_CHECK(!arena.cancel_waiter(h).has_value());  // no double delivery
     arena.release_completed_binding(h);
     SLUICE_CHECK(arena.slot_in_use() == 0);
@@ -576,11 +730,10 @@ SLUICE_TEST_CASE(arena_io_cancel_keeps_waiter_registration) {
     // Reap: canceled terminal + waiter A delivered together.
     RecordingSink sink;
     SLUICE_CHECK(arena.reap(sink) == 1);
-    SLUICE_CHECK(sink.events.size() == 1);
-    SLUICE_CHECK(sink.events[0].waiter.has_waiter);
-    SLUICE_CHECK((sink.events[0].waiter.token == WaiterToken{9, 0, 0}));
-    SLUICE_CHECK(sink.lease_ids.size() == 1);
-    SLUICE_CHECK(sink.lease_ids[0] == 77);
+    SLUICE_CHECK(sink.deliveries.size() == 1);
+    SLUICE_CHECK(sink.deliveries[0].has_waiter);
+    SLUICE_CHECK((sink.deliveries[0].token == WaiterToken{9, 0, 0}));
+    SLUICE_CHECK(sink.deliveries[0].lease_id == 77);
     SLUICE_CHECK(arena.terminal_stored(h.slot));  // canceled terminal stands
     arena.release_completed_binding(h);
     SLUICE_CHECK(arena.slot_in_use() == 0);
@@ -639,8 +792,8 @@ SLUICE_TEST_CASE(arena_lease_transfer_chain_reap_path) {
     SLUICE_CHECK(!w2->delivery_present);
     SLUICE_CHECK(w2->lease_id == 0);
     // The event owns the lease.
-    SLUICE_CHECK(sink.lease_ids.size() == 1);
-    SLUICE_CHECK(sink.lease_ids[0] == 42);
+    SLUICE_CHECK(sink.deliveries.size() == 1);
+    SLUICE_CHECK(sink.deliveries[0].lease_id == 42);
     // A second reap produces nothing; a late wait-cancel gets nothing.
     SLUICE_CHECK(arena.reap(sink) == 0);
     SLUICE_CHECK(!arena.cancel_waiter(h).has_value());
@@ -671,16 +824,21 @@ SLUICE_TEST_CASE(arena_lease_transfer_chain_wait_cancel_path) {
     SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(8)));
     RecordingSink sink;
     SLUICE_CHECK(arena.reap(sink) == 1);
-    SLUICE_CHECK(sink.lease_ids.empty());
-    SLUICE_CHECK(!sink.events[0].waiter.has_waiter);
+    SLUICE_CHECK(sink.deliveries.size() == 1);
+    SLUICE_CHECK(sink.deliveries[0].lease_id == 0);
+    SLUICE_CHECK(!sink.deliveries[0].has_waiter);
     arena.release_completed_binding(h);
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
 
 // ---- Row 14a: ReadyEvent with a waiter is by-value across slot reuse --------
 // Inside the sink callback the slot is released AND re-reserved (generation
-// advances); the captured event's key/kind/token/lease stay intact — the event
-// owns by-value identity + lease, not slot storage.
+// advances). The sink copies ONLY plain scalars (key/kind/token/lease-id) and
+// consumes the by-value event — including the move-only lease — inside the
+// callback (ADR :625-636 callback-scoped consumption); nothing is retained
+// past the call. The saved scalars stay valid after reap returns even though
+// the slot was released + reused mid-callback — the delivery is by-value
+// identity, not slot storage.
 SLUICE_TEST_CASE(arena_ready_event_waiter_survives_slot_reuse) {
     RequestArena arena{ContextIdentity::for_testing(1), 1};
     std::byte buf[8]{};
@@ -693,16 +851,25 @@ SLUICE_TEST_CASE(arena_ready_event_waiter_survives_slot_reuse) {
     struct ReuseDuringCallbackSink : sluice::async::detail::SynchronousReadySink {
         RequestArena* arena;
         SlotHandle h;
-        sluice::async::detail::ReadyEvent captured;
+        sluice::async::detail::RequestKey captured_key{};
+        sluice::async::detail::OperationKind captured_kind =
+            sluice::async::detail::OperationKind::read;
+        bool captured_has_waiter = false;
+        sluice::async::detail::WaiterToken captured_token{};
+        std::uint64_t captured_lease_id = 0;
         std::uint64_t generation_after_reuse = 0;
         void on_ready(sluice::async::detail::ReadyEvent e) noexcept override {
-            captured = std::move(e);  // by-value copy of all fields
+            // Copy plain scalars only; the move-only lease is consumed and
+            // dropped here WITH e (callback-scoped, ADR :625-636).
+            captured_key = e.key;
+            captured_kind = e.kind;
+            captured_has_waiter = e.waiter.has_waiter;
+            captured_token = e.waiter.token;
+            captured_lease_id = e.waiter.has_waiter ? e.waiter.lease.id() : 0;
             // Simulate the caller resetting + reusing the slot mid-callback.
             arena->release_completed_binding(h);
             auto rh2 = arena->reserve();
             if (rh2.has_value()) generation_after_reuse = rh2.value().generation.value;
-            // The captured waiter payload must still be intact here.
-            (void)captured.waiter.token;
         }
     };
     ReuseDuringCallbackSink sink;
@@ -711,34 +878,39 @@ SLUICE_TEST_CASE(arena_ready_event_waiter_survives_slot_reuse) {
 
     SLUICE_CHECK(arena.reap(sink) == 1);
     SLUICE_CHECK(sink.generation_after_reuse == h.generation.value + 1);
-    SLUICE_CHECK(sink.captured.key.context.value == 1);
-    SLUICE_CHECK(sink.captured.key.slot.value == h.slot.value);
-    SLUICE_CHECK(sink.captured.key.generation.value == h.generation.value);
-    SLUICE_CHECK(sink.captured.kind == OperationKind::read);
-    SLUICE_CHECK(sink.captured.waiter.has_waiter);
-    SLUICE_CHECK((sink.captured.waiter.token == WaiterToken{5, 2, 1}));
-    SLUICE_CHECK(sink.captured.waiter.lease.id() == 77);
+    SLUICE_CHECK(sink.captured_key.context.value == 1);
+    SLUICE_CHECK(sink.captured_key.slot.value == h.slot.value);
+    SLUICE_CHECK(sink.captured_key.generation.value == h.generation.value);
+    SLUICE_CHECK(sink.captured_kind == OperationKind::read);
+    SLUICE_CHECK(sink.captured_has_waiter);
+    SLUICE_CHECK((sink.captured_token == WaiterToken{5, 2, 1}));
+    SLUICE_CHECK(sink.captured_lease_id == 77);
 
     // The sink re-reserved the slot during the callback; roll it back so the
-    // arena destructs quiescently.
-    SlotHandle reused{h.slot,
-                      Generation{static_cast<std::uint32_t>(sink.generation_after_reuse)}};
+    // arena destructs quiescently. The generation is 64-bit (request_key.hpp:
+    // a 32-bit wrap would re-introduce ABA) — no narrowing cast.
+    SlotHandle reused{h.slot, Generation{sink.generation_after_reuse}};
     SLUICE_CHECK(arena.rollback_reserved_or_prepared(reused).has_value());
     SLUICE_CHECK(arena.slot_in_use() == 0);
 }
 
-// ---- Rows 12a/14a: register_waiter vs record_terminal race ------------------
-// Both go through the arena's single leaf domain, so exactly two legal
-// outcomes exist:
-//   register wins  -> register succeeds; terminal follows; reap delivers
-//                     token A + lease A exactly once; a late wait-cancel
-//                     gets nothing.
-//   terminal wins  -> register returns invalid_state; the event carries no
-//                     waiter; nothing was stored.
-// Never: register success with lost delivery, or register failure with a
-// stored waiter. (Correctness, not scheduler fairness: we assert the
-// invariant, not that both outcomes occur in every run.)
-SLUICE_TEST_CASE(arena_register_waiter_vs_terminal_race) {
+// ---- Rows 12a/14a: register_waiter vs reap race -----------------------------
+// ADR Decision 10 (:691-695): registration is orthogonal to execution state
+// and ONLY reap closes it — the terminal winner does NOT close registration.
+// The load-bearing race is therefore register vs REAP (not register vs
+// record_terminal), driven through the arena's single leaf domain:
+//   register wins -> token A + lease A are stored and reap delivers them
+//                    exactly once; a late wait-cancel gets nothing.
+//   reap wins      -> reap closed registration first; register returns
+//                    invalid_state and stores nothing; the candidate lease is
+//                    consumed at the by-value call boundary (moved-from,
+//                    released inline — ADR :661-662) and never reaches the
+//                    slot or the event.
+// Lease ownership is exactly one in every iteration: delivered once by reap,
+// or consumed inline by the failed registration — never both, never neither.
+// (Correctness, not scheduler fairness: we assert the invariant, not that both
+// outcomes occur in every run.)
+SLUICE_TEST_CASE(arena_register_waiter_vs_reap_race) {
     constexpr std::size_t kIters = 32;
     for (std::size_t iter = 0; iter < kIters; ++iter) {
         RequestArena arena{ContextIdentity::for_testing(1), 1};
@@ -750,34 +922,46 @@ SLUICE_TEST_CASE(arena_register_waiter_vs_terminal_race) {
         std::atomic<bool> register_won{false};
         std::atomic<bool> register_failed{false};
         std::barrier sync{2};
+        RecordingSink sink;
+        RoutingLease candidate{99};
         std::thread t1([&] {
             sync.arrive_and_wait();
-            auto r = arena.register_waiter(h, WaiterToken{1, 0, 0}, RoutingLease{99});
+            auto r = arena.register_waiter(h, WaiterToken{1, 0, 0},
+                                           std::move(candidate));
             if (r.has_value()) register_won.store(true, std::memory_order_release);
             else register_failed.store(true, std::memory_order_release);
         });
         std::thread t2([&] {
             sync.arrive_and_wait();
             (void)arena.record_terminal(h, TerminalResult::ok_bytes(8));
+            (void)arena.reap(sink);
         });
         t1.join();
         t2.join();
 
+        // The candidate lease is consumed at the by-value boundary in BOTH
+        // outcomes (transferred to the slot on success, released inline on
+        // failure) — the caller can never observe it again.
+        SLUICE_CHECK(!candidate.valid());
         SLUICE_CHECK(register_won.load() != register_failed.load());  // XOR
-        RecordingSink sink;
-        SLUICE_CHECK(arena.reap(sink) == 1);
+        SLUICE_CHECK(sink.deliveries.size() == 1);
         if (register_won.load()) {
-            SLUICE_CHECK_MSG(sink.events[0].waiter.has_waiter,
+            SLUICE_CHECK_MSG(sink.deliveries[0].has_waiter,
                              "register winner must be delivered at reap");
-            SLUICE_CHECK((sink.events[0].waiter.token == WaiterToken{1, 0, 0}));
-            SLUICE_CHECK(sink.lease_ids.size() == 1);
-            SLUICE_CHECK(sink.lease_ids[0] == 99);
+            SLUICE_CHECK((sink.deliveries[0].token == WaiterToken{1, 0, 0}));
+            SLUICE_CHECK(sink.deliveries[0].lease_id == 99);
             SLUICE_CHECK(!arena.cancel_waiter(h).has_value());
         } else {
-            SLUICE_CHECK_MSG(!sink.events[0].waiter.has_waiter,
-                             "terminal winner must close registration with no "
-                             "stored waiter");
-            SLUICE_CHECK(sink.lease_ids.empty());
+            SLUICE_CHECK_MSG(!sink.deliveries[0].has_waiter,
+                             "reap winner must close registration: the event "
+                             "carries no waiter and the candidate lease never "
+                             "reaches the slot");
+            SLUICE_CHECK(sink.deliveries[0].lease_id == 0);
+            auto w = arena.waiter_for_test(h);
+            SLUICE_CHECK(w.has_value());
+            SLUICE_CHECK(w->registration == WaiterRegistration::closed);
+            SLUICE_CHECK(!w->delivery_present);
+            SLUICE_CHECK(w->lease_id == 0);
         }
         // A second reap delivers nothing in both outcomes.
         SLUICE_CHECK(arena.reap(sink) == 0);
@@ -824,22 +1008,23 @@ SLUICE_TEST_CASE(arena_cancel_waiter_vs_reap_race) {
         t2.join();
 
         const bool cancel_won = cancel_result.has_value();
-        const bool reap_delivered = sink.lease_ids.size() == 1;
+        const bool reap_delivered =
+            sink.deliveries.size() == 1 && sink.deliveries[0].has_waiter;
         // Exactly one owner of lease 99: cancel XOR reap.
         SLUICE_CHECK_MSG(cancel_won != reap_delivered,
                          "lease ownership count must be exactly one "
                          "(cancel XOR reap)");
         if (cancel_won) {
             SLUICE_CHECK(cancel_result->id() == 99);
-            SLUICE_CHECK(sink.events.size() == 1);
-            SLUICE_CHECK(!sink.events[0].waiter.has_waiter);
+            SLUICE_CHECK(sink.deliveries.size() == 1);
+            SLUICE_CHECK(!sink.deliveries[0].has_waiter);
             // The second reap after cancel-won delivers nothing.
             SLUICE_CHECK(arena.reap(sink) == 0);
         } else {
-            SLUICE_CHECK(sink.events.size() == 1);
-            SLUICE_CHECK(sink.events[0].waiter.has_waiter);
-            SLUICE_CHECK((sink.events[0].waiter.token == WaiterToken{7, 3, 2}));
-            SLUICE_CHECK(sink.lease_ids[0] == 99);
+            SLUICE_CHECK(sink.deliveries.size() == 1);
+            SLUICE_CHECK(sink.deliveries[0].has_waiter);
+            SLUICE_CHECK((sink.deliveries[0].token == WaiterToken{7, 3, 2}));
+            SLUICE_CHECK(sink.deliveries[0].lease_id == 99);
             // The second wait-cancel after reap-won gets nothing.
             SLUICE_CHECK(!arena.cancel_waiter(h).has_value());
             SLUICE_CHECK(arena.reap(sink) == 0);

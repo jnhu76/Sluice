@@ -10,7 +10,11 @@
 //             only reap ends the borrow.
 //   row 12a — a waiter registered through the real arena authority while the
 //             op is enqueued survives the enqueue -> running -> backend_ready
-//             transitions and is delivered exactly once at reap.
+//             transitions and is delivered exactly once at reap; registration
+//             is ALSO legal while running (Gate C) and at backend_ready
+//             (terminal recorded, not yet reaped) — registration is
+//             orthogonal to execution state, only reap closes it (ADR
+//             Decision 10).
 //   row 13  — wait-cancel removes ONLY the waiter (the real syscall still
 //             executes and its real result wins); enqueued I/O cancel keeps
 //             the waiter (canceled result + waiter delivered together).
@@ -376,6 +380,156 @@ SLUICE_TEST_CASE(tp_backend_ready_borrow_still_active_before_reap) {
                                : std::optional<detail::RequestArena::BorrowSnapshot>{};
         SLUICE_CHECK(h.has_value() && b.has_value() && !b->active);
         SLUICE_CHECK(backend.poll() == 0);  // exactly-once publication
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- Row 12a (ThreadPool): registration in the RUNNING window ---------------
+// Gate C holds the worker between mark_running and the syscall. Per ADR
+// Decision 10, registration is ORTHOGONAL to execution state: a waiter
+// registered while the op is RUNNING succeeds and reap delivers it exactly
+// once together with the syscall's real result.
+SLUICE_TEST_CASE(tp_running_window_waiter_registration) {
+    ThreadPoolBackend::WorkerRunningPauseGate gate_c;
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_running_pause_gate(&gate_c);
+    ScopedGateResume guard_c(gate_c);
+
+    TempPath tp("RC");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x56}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+
+    const char* fail_msg = nullptr;
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+
+    // Worker RUNNING (paused between mark_running and the syscall).
+    if (!wait_paused(gate_c, deadline)) {
+        fail_msg = "Gate C did not pause in time";
+    } else {
+        auto h = backend.handle_for_completion_for_test(&c);
+        if (!h.has_value()) {
+            fail_msg = "handle_for_completion_for_test must find the bound Completion";
+        } else if (!backend.register_waiter_for_test(c, WaiterToken{5, 4, 2},
+                                                     detail::RoutingLease{77})
+                        .has_value()) {
+            fail_msg = "waiter registration in the running window must succeed "
+                       "(ADR Decision 10)";
+        } else {
+            auto w = backend.waiter_for_test(*h);
+            if (!w.has_value() ||
+                w->registration != WaiterRegistration::open_registered ||
+                w->token != WaiterToken{5, 4, 2} || w->lease_id != 77) {
+                fail_msg = "running-window registration must be stored exactly";
+            }
+        }
+    }
+
+    // Resume: the real syscall executes and its result wins verbatim; the
+    // running-window waiter is delivered exactly once at reap.
+    if (fail_msg == nullptr) {
+        guard_c.resume();
+        if (!drain_bounded(backend,
+                           std::chrono::steady_clock::now() + kWaitTimeout)) {
+            fail_msg = "drain did not complete in time";
+        } else if (!c.ready() || !c.result().has_value() ||
+                   c.result().value() != 1) {
+            fail_msg = "the real syscall result must win verbatim";
+        } else if (backend.sink_deliveries() != 1 ||
+                   !backend.sink_last_has_waiter() ||
+                   backend.sink_last_token() != WaiterToken{5, 4, 2} ||
+                   backend.sink_last_lease_id() != 77) {
+            fail_msg = "running-window waiter must be delivered exactly once";
+        }
+    }
+
+    if (fail_msg == nullptr) {
+        c.reset();
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    } else {
+        guard_c.resume();
+        (void)drain_bounded(backend,
+                            std::chrono::steady_clock::now() + kWaitTimeout);
+        if (c.ready()) c.reset();
+    }
+
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- Row 12a (ThreadPool): registration in the backend_ready window ---------
+// The worker finished the syscall and record_terminal stored the terminal,
+// but no poll/reap has run. The terminal winner does NOT close registration
+// (ADR Decision 10): a waiter registered in this window succeeds and reap
+// delivers it exactly once with the real result.
+SLUICE_TEST_CASE(tp_backend_ready_window_waiter_registration) {
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+
+    TempPath tp("BD");
+    int fd = open_temp(tp.path());
+    const std::byte seed[1] = {std::byte{0x78}};
+    SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value());
+
+    const char* fail_msg = nullptr;
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+    while (backend.backend_ready_count_for_test() == 0) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            fail_msg = "terminal was not recorded before timeout";
+            break;
+        }
+        std::this_thread::yield();
+    }
+
+    if (fail_msg == nullptr) {
+        auto h = backend.handle_for_completion_for_test(&c);
+        if (!h.has_value()) {
+            fail_msg = "backend_ready handle must resolve";
+        } else if (c.ready()) {
+            fail_msg = "Completion must NOT be ready before reap publishes";
+        } else if (!backend.register_waiter_for_test(c, WaiterToken{6, 5, 3},
+                                                     detail::RoutingLease{88})
+                        .has_value()) {
+            fail_msg = "waiter registration in the backend_ready window must "
+                       "succeed (ADR Decision 10)";
+        } else {
+            auto w = backend.waiter_for_test(*h);
+            if (!w.has_value() ||
+                w->registration != WaiterRegistration::open_registered ||
+                w->token != WaiterToken{6, 5, 3} || w->lease_id != 88) {
+                fail_msg = "backend_ready-window registration must be stored exactly";
+            }
+        }
+    }
+
+    // Reap: the real result + the backend_ready-window waiter, exactly once.
+    if (fail_msg == nullptr) {
+        SLUICE_CHECK(backend.poll() == 1);
+        SLUICE_CHECK(c.ready());
+        SLUICE_CHECK(c.result().has_value());
+        SLUICE_CHECK(c.result().value() == 1);
+        SLUICE_CHECK(backend.poll() == 0);  // exactly-once publication
+        SLUICE_CHECK(backend.sink_deliveries() == 1);
+        SLUICE_CHECK(backend.sink_last_has_waiter());
+        SLUICE_CHECK((backend.sink_last_token() == WaiterToken{6, 5, 3}));
+        SLUICE_CHECK(backend.sink_last_lease_id() == 88);
         c.reset();
         SLUICE_CHECK(backend.arena_slot_in_use() == 0);
     } else {

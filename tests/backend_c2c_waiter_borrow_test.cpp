@@ -88,6 +88,45 @@ SLUICE_TEST_CASE(fake_borrow_waiter_delivery_integration) {
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);
 }
 
+// ---- Row 12a (Fake): registration in the backend_ready window ---------------
+// complete_* produces ONLY backend_ready — the Completion is not ready, no
+// sink delivery has run. Per ADR Decision 10, the terminal winner does NOT
+// close registration: a waiter registered in this window succeeds and reap
+// delivers it exactly once together with the terminal result.
+SLUICE_TEST_CASE(fake_backend_ready_window_waiter_registration) {
+    FakeAsyncBackend backend{/*request_capacity=*/2};
+    std::byte buf[8]{};
+    Completion<std::size_t> c;
+
+    SLUICE_CHECK(backend.submit_read(ReadOp{0, buf, 8, 0}, c).has_value());
+    auto h = backend.handle_for_completion_for_test(&c);
+    SLUICE_CHECK(h.has_value());
+
+    // Terminal recorded, reap not run: not ready, borrow active, sink silent.
+    backend.complete_oldest_with_bytes(4);
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(backend.borrow_for_test(*h)->active);
+    SLUICE_CHECK(backend.sink_deliveries() == 0);
+
+    // The terminal winner does NOT close registration (ADR Decision 10):
+    // registering in this window succeeds and reap delivers the waiter.
+    SLUICE_CHECK(backend.register_waiter_for_test(c, WaiterToken{6, 3, 3},
+                                                  detail::RoutingLease{88})
+                     .has_value());
+
+    SLUICE_CHECK(backend.poll() == 1);
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(c.result().has_value());
+    SLUICE_CHECK(c.result().value() == 4);
+    SLUICE_CHECK(backend.sink_deliveries() == 1);
+    SLUICE_CHECK(backend.sink_last_has_waiter());
+    SLUICE_CHECK((backend.sink_last_token() == WaiterToken{6, 3, 3}));
+    SLUICE_CHECK(backend.sink_last_lease_id() == 88);
+    SLUICE_CHECK(backend.poll() == 0);  // exactly-once publication
+    c.reset();
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
 // ---- Row 13: wait-cancel removes ONLY the waiter; the I/O still completes ----
 // cancel_waiter returns lease A and reopens registration; the accepted I/O
 // stays outstanding with its borrow active, no terminal, no canceled tally.
