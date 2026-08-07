@@ -829,9 +829,47 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     std::uint64_t success_total = 0;
     const char* fail_msg = nullptr;
 
+    // Per-iteration cleanup. The Completion is a loop-body local; destroying it
+    // while outstanding/publishing is a Completion-authority fail-fast that
+    // would mask the real failure attribution (the test's own SLUICE_FAIL would
+    // never run). So EVERY fail path must drain the backend and reset/abort the
+    // Completion before breaking out of the iteration scope. The gate is also
+    // resumed so the worker is never stranded, and the gate-exit is awaited so
+    // the next iteration (or the final backend destruction) sees a stable gate.
+    auto cleanup_iteration = [&](Completion<std::size_t>& c) noexcept {
+        gate.resume.store(true, std::memory_order_release);
+        const auto exit_deadline =
+            std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!gate.exited.load(std::memory_order_acquire)) {
+            if (std::chrono::steady_clock::now() >= exit_deadline) break;
+            std::this_thread::yield();
+        }
+        if (!drain_bounded(backend,
+                           std::chrono::steady_clock::now() + kWaitTimeout)) {
+            // The harness itself cannot safely recover from a stuck backend;
+            // abort so the failure cause is explicit, not a destructor race.
+            std::abort();
+        }
+        if (c.ready()) {
+            c.reset();
+        } else if (!c.idle()) {
+            // Never allow an outstanding/publishing Completion to destruct.
+            std::abort();
+        }
+    };
+    // Macro to set the failure message, clean up the iteration, and break. Keeps
+    // every fail path lifecycle-legal.
+#define RACE_FAIL(msg_)                                            \
+    do {                                                           \
+        fail_msg = (msg_);                                         \
+        cleanup_iteration(c);                                      \
+        break;                                                     \
+    } while (false)
+
     for (std::size_t iter = 0; iter < kIters && fail_msg == nullptr; ++iter) {
         Completion<std::size_t> c;
         if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
+            // Submit rejected: c is idle, nothing to clean up.
             fail_msg = "submit must succeed on a drained backend";
             break;
         }
@@ -839,8 +877,7 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
         // `enqueued` before the race is released.
         if (!wait_paused(gate,
                          std::chrono::steady_clock::now() + kWaitTimeout)) {
-            fail_msg = "gate did not pause before the worker dequeue";
-            break;
+            RACE_FAIL("gate did not pause before the worker dequeue");
         }
         // Barrier synchronizes TWO threads: the main thread (which resumes the
         // worker gate) and the canceler. Both release together AFTER the worker
@@ -856,11 +893,9 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
                 backend.cancel(c);
             });
         } catch (...) {
-            // Thread creation can fail under heavy concurrency load; resume the
-            // gate so the worker is not stranded, then report the failure.
-            gate.resume.store(true, std::memory_order_release);
-            fail_msg = "canceler thread creation failed under load";
-            break;
+            // Thread creation can fail under heavy concurrency load. The gate
+            // is resumed inside cleanup_iteration so the worker is not stranded.
+            RACE_FAIL("canceler thread creation failed under load");
         }
         sync.arrive_and_wait();
         gate.resume.store(true, std::memory_order_release);
@@ -871,55 +906,52 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
             std::chrono::steady_clock::now() + kWaitTimeout;
         while (!gate.exited.load(std::memory_order_acquire)) {
             if (std::chrono::steady_clock::now() >= gate_exit_deadline) {
-                fail_msg = "gate failed to exit before timeout";
-                break;
+                RACE_FAIL("gate failed to exit before timeout");
             }
             std::this_thread::yield();
         }
-        if (fail_msg != nullptr) break;
         // Re-arm the gate for the next iteration.
         gate.paused.store(false, std::memory_order_release);
         gate.resume.store(false, std::memory_order_release);
         gate.exited.store(true, std::memory_order_release);
 
-        // Drain through the real reaper, counting publications.
+        // Drain through the real reaper, counting publications. The loop
+        // condition is `!c.ready()` (not just `outstanding() > 0`) so the
+        // `c.ready()`/`result()` assertions below are never racy: the Completion
+        // is published exactly by the reap inside poll(), and we only proceed
+        // once that publication is observed.
         std::size_t published = 0;
         const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
-        while (backend.outstanding() > 0) {
+        while (!c.ready()) {
             if (std::chrono::steady_clock::now() >= deadline) {
-                fail_msg = "drain must complete within the bounded deadline";
-                break;
+                RACE_FAIL("drain must complete within the bounded deadline");
             }
             published += backend.poll();
-            if (backend.outstanding() > 0) std::this_thread::yield();
+            if (!c.ready()) std::this_thread::yield();
         }
-        if (fail_msg != nullptr) break;
 
         if (published != 1) {
-            fail_msg = "exactly one publication per iteration";
-            break;
+            RACE_FAIL("exactly one publication per iteration");
         }
         if (!c.ready()) {
-            fail_msg = "Completion must be ready after drain";
-            break;
+            RACE_FAIL("Completion must be ready after drain");
         }
         if (c.result().has_value()) {
             if (c.result().value() != 1) {
-                fail_msg = "real result must be the 1 seeded byte";
-                break;
+                RACE_FAIL("real result must be the 1 seeded byte");
             }
             ++success_total;
         } else {
             if (c.result().error().code != IoError::Code::canceled) {
-                fail_msg = "non-success result must be canceled";
-                break;
+                RACE_FAIL("non-success result must be canceled");
             }
             ++canceled_total;
         }
         c.reset();
 
         // Exactly-one accounting: a canceled winner tallied one canceled op and
-        // ran no syscall; a syscall winner tallied neither.
+        // ran no syscall; a syscall winner tallied neither. (c is now idle, so a
+        // fail here needs no Completion cleanup.)
         if (stats.canceled_ops != canceled_total) {
             fail_msg = "canceled_ops must tally exactly the canceled winners";
             break;
@@ -933,14 +965,15 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
             break;
         }
     }
+#undef RACE_FAIL
 
     if (fail_msg == nullptr) {
         if (canceled_total + success_total != kIters) {
             fail_msg = "every iteration must produce exactly one winner";
         }
     }
-    // Diagnostic: a healthy causal race should produce BOTH outcomes across 300
-    // iterations. If one outcome is missing the race is not actually racing
+    // Diagnostic: a healthy causal race should produce BOTH outcomes across the
+    // iteration run. If one outcome is missing the race is not actually racing
     // (the gate is likely not forcing the window). This is a soft signal, not a
     // correctness bound, so it is logged not asserted-fatal.
     if (fail_msg == nullptr && (canceled_total == 0 || success_total == 0)) {
