@@ -335,7 +335,17 @@ Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
 
 void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
     detail::EnqueueOutcome outcome;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     bool injected_dispatch_failure = false;
+    // C2d (ADR Gate 4): deterministic commit/enqueue pause. The request is
+    // committed (Completion outstanding, slot `pending`, enqueue pin set) but
+    // work_mtx_ is not yet held, so a test-issued pending cancellation wins
+    // the canceled terminal here (Scheme B); the resumed enqueue then observes
+    // backend_ready and acknowledges the pin as a terminal no-op with no
+    // dispatch linkage (ADR Gate 4; I17/I19). Entirely compiled out of
+    // production builds (no branch, no local, no symbol).
+    wait_before_enqueue_lock_pause_();
+#endif
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
         outcome = arena_.enqueue(h);  // pending -> enqueued OR terminal_noop
@@ -354,7 +364,13 @@ void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
             // "post-commit dispatch failure after execution ownership is
             // proven absent" winner candidate (AGENTS.md §10.5). reap
             // publishes it exactly once; the borrow stays active until reap.
-            // Compiled out of production builds (no branch, no symbol).
+            // TEST-ONLY probe (AGENTS.md §15): production dispatch cannot fail
+            // by construction (bounded ring, allocation-free push; a full push
+            // is the §12 invariant fail-fast), so this branch proves the
+            // SHARED arena's terminal-winner/reap machinery under a simulated
+            // post-commit terminal event — not a production failure-handling
+            // path. Entirely compiled out of production builds (no branch, no
+            // local, no symbol).
             auto* inj = dispatch_failure_injection_.load(std::memory_order_acquire);
             if (inj != nullptr && inj->armed.load(std::memory_order_acquire)) {
                 inj->fired.fetch_add(1, std::memory_order_relaxed);
@@ -364,24 +380,32 @@ void ThreadPoolBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
             }
         }
 #endif
-        if (outcome == detail::EnqueueOutcome::enqueued && !injected_dispatch_failure) {
-            dispatch_.push_back(h);
+        if (outcome == detail::EnqueueOutcome::enqueued) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            {
-                auto* g = after_enqueue_before_push_gate_.load(std::memory_order_acquire);
-                if (g != nullptr) {
-                    g->dispatch_push_completed.store(true, std::memory_order_release);
-                }
-            }
+            if (!injected_dispatch_failure)  // injection won: no dispatch linkage
 #endif
+            {
+                dispatch_.push_back(h);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                {
+                    auto* g = after_enqueue_before_push_gate_.load(std::memory_order_acquire);
+                    if (g != nullptr) {
+                        g->dispatch_push_completed.store(true, std::memory_order_release);
+                    }
+                }
+#endif
+            }
         }
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     if (injected_dispatch_failure) {
         // The dispatch-failure terminal won (ADR Decision 12); no worker will
         // run or signal, so the READY domain must observe the new backend_ready
         // (a blocked wait_one must not lose the wake — AC-6 / design §4.5).
         signal_ready_progress();
-    } else if (outcome == detail::EnqueueOutcome::enqueued) {
+    } else
+#endif
+    if (outcome == detail::EnqueueOutcome::enqueued) {
         work_cv_.notify_one();
     } else {
         // terminal_noop: a pending cancel/terminal won first (Scheme B). That
@@ -585,6 +609,17 @@ void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(
 
 void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
     auto* g = before_dequeue_gate_.load(std::memory_order_acquire);
+    if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
+
+void ThreadPoolBackend::wait_before_enqueue_lock_pause_() noexcept {
+    auto* g = before_enqueue_lock_gate_.load(std::memory_order_acquire);
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);

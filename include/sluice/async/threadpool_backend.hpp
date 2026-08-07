@@ -218,7 +218,7 @@ class ThreadPoolBackend : public AsyncBackend {
     // is armed by the test, the production path spins on `paused` and waits on
     // `resume`, giving the test an exact observation window. These are compiled
     // out of production sluice_async; the layout cost in the internal-testing
-    // target is accepted and documented (AGENTS.md §8).
+    // target is accepted and documented (AGENTS.md §15).
     struct AfterArenaEnqueueBeforeDispatchPushPauseGate {
         std::atomic<bool> paused{false};
         std::atomic<bool> resume{false};
@@ -248,6 +248,18 @@ class ThreadPoolBackend : public AsyncBackend {
         std::atomic<bool> resume{false};
         std::atomic<bool> exited{true};
     };
+    // C2d (ADR Gate 4): deterministic commit/enqueue pause. The submit path
+    // pauses AFTER commit (Completion outstanding, slot `pending`, enqueue pin
+    // set) and BEFORE taking work_mtx_ — the exact state from which a pending
+    // cancellation wins the canceled terminal (Scheme B) and the resumed
+    // enqueue observes backend_ready and acknowledges the pin as a terminal
+    // no-op with no dispatch linkage. See
+    // `tp_c2d_cancel_wins_before_enqueue_injection_armed`.
+    struct BeforeEnqueueLockPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
 
     void set_after_enqueue_before_push_pause_gate(
         AfterArenaEnqueueBeforeDispatchPushPauseGate* gate) noexcept {
@@ -263,10 +275,14 @@ class ThreadPoolBackend : public AsyncBackend {
         TerminalPublicationPauseGate* gate) noexcept {
         terminal_publication_gate_.store(gate, std::memory_order_release);
     }
+    void set_before_enqueue_lock_pause_gate(
+        BeforeEnqueueLockPauseGate* gate) noexcept {
+        before_enqueue_lock_gate_.store(gate, std::memory_order_release);
+    }
 
     // --- Phase C2d seams (rows 9-10): failure injection. Compiled out of
     // production sluice_async; the layout cost in the internal-testing target
-    // is accepted and documented (AGENTS.md §8). ---
+    // is accepted and documented (AGENTS.md §15). ---
 
     // Post-commit dispatch-failure injection. When `armed` and the submit
     // path's enqueue won (outcome == enqueued), the submit path records the
@@ -509,6 +525,7 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_before_dequeue_pause_() noexcept;
     void wait_running_pause_() noexcept;
     void wait_terminal_publication_pause_() noexcept;
+    void wait_before_enqueue_lock_pause_() noexcept;
 #endif
 
     void tally_canceled() noexcept {
@@ -545,6 +562,7 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<BeforeWorkerDequeuePauseGate*> before_dequeue_gate_{nullptr};
     std::atomic<WorkerRunningPauseGate*> running_gate_{nullptr};
     std::atomic<TerminalPublicationPauseGate*> terminal_publication_gate_{nullptr};
+    std::atomic<BeforeEnqueueLockPauseGate*> before_enqueue_lock_gate_{nullptr};
     // Phase C2d: post-commit dispatch-failure injection control (see the
     // guarded setter above). Null when disarmed; never dereferenced by
     // production builds (the branch is compiled out).
