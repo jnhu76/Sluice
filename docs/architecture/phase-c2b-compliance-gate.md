@@ -235,29 +235,29 @@ Full mutation matrix, commands, exit codes, and revert verification are recorded
 
 ## 8. Validation matrix (full evidence)
 
-All rows below were executed on the current branch head (`e857eb3`). `PASS` is recorded only for commands
+All rows below were executed on the current branch head (`2582e91`). `PASS` is recorded only for commands
 that actually ran green.
 
 | Gate | Command | Result |
 | ---- | ------- | ------ |
-| Debug / Clang full | `xmake f -m debug --toolchain=clang -y && xmake build -g test && xmake test -v` | PENDING |
+| Debug / Clang full | `xmake f -m debug --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (143 targets, 0 failed) |
 | Focused arena | `xmake run request_arena_test` | PASS (8 cases) |
 | Focused arena death | `xmake run request_arena_death_test` | PASS (17 cases) |
 | Focused lifecycle | `xmake run request_lifecycle_scheme_b_test` | PASS (15 cases) |
 | Focused Fake race | `xmake run backend_scheme_b_race_test` | PASS (4 cases) |
 | Focused ThreadPool race | `xmake run threadpool_backend_scheme_b_race_test` | PASS (9 cases) |
-| Release / Clang | `xmake f -m release --toolchain=clang -y && xmake build -g test && xmake test -v` | PENDING |
-| ASan/UBSan | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PENDING |
-| TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PENDING |
+| Release / Clang | `xmake f -m release --toolchain=clang -y && xmake build -g test && xmake test -v` | PASS (143 targets, 0 failed) |
+| ASan/UBSan | `xmake f -m asanubsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0) |
+| TSan | `xmake f -m tsan --toolchain=clang -y && xmake build -g test && xmake run -g test` | PASS (exit 0; 134 targets, zero race reports) |
 | Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (102) |
 | Aggregate gate | `python3 scripts/verify-backend-conformance.py` | PASS (Fake/TP ELIGIBLE; Uring NOT CONFORMING) |
-| Doc links | `python3 scripts/check-doc-links.py` | PENDING |
-| Architecture docs | `python3 scripts/verify-architecture-docs.py` | PENDING |
-| Negative-compile | `scripts/verify-completion-authority-negative-compile.sh` | PENDING |
-| Negative-compile | `scripts/verify-request-arena-negative-compile.sh` | PENDING |
-| Negative-compile | `scripts/verify-async-identity-negative-compile.sh` | PENDING |
-| Negative-compile | `scripts/verify-external-backend-authority-negative-compile.sh` | PENDING |
-| Diff hygiene | `git diff --check` | PENDING |
+| Doc links | `python3 scripts/check-doc-links.py` | PASS (no broken links, no stale paths) |
+| Architecture docs | `python3 scripts/verify-architecture-docs.py` | PASS |
+| Negative-compile | `scripts/verify-completion-authority-negative-compile.sh` | PASS (12 cases) |
+| Negative-compile | `scripts/verify-request-arena-negative-compile.sh` | PASS (6 cases) |
+| Negative-compile | `scripts/verify-async-identity-negative-compile.sh` | PASS (3 cases) |
+| Negative-compile | `scripts/verify-external-backend-authority-negative-compile.sh` | PASS (2 cases) |
+| Diff hygiene | `git diff --check` | PASS (clean working tree) |
 
 ## 9. Remaining gaps
 
