@@ -326,6 +326,74 @@ void child_control_quiescent_destroy() {
     std::_Exit(0);
 }
 
+// 6) Destroy with a request paused in `pending` (committed, enqueue pin live,
+// but the submit thread has not yet enqueued — Phase C2e destruction-matrix
+// row). The submit thread pauses at the before-enqueue-lock gate; the backend
+// destructor must fail-fast on slot_in_use != 0 (a `pending` slot is bound and
+// accepted). The child terminates before the paused submitter is resumed, so
+// the gate and Completion must outlive the backend (declared here, outside the
+// inner block) so no paused production path touches a destroyed object.
+void child_destroy_with_pending() {
+    sluice_death_test::install_deterministic_terminate_handler();
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+    ThreadPoolBackend::BeforeEnqueueLockPauseGate gate;
+    std::thread submitter;
+
+    {
+        ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+        backend.set_before_enqueue_lock_pause_gate(&gate);
+
+        TempPath tp("pending");
+        int fd = open_temp(tp.path());
+        const std::byte seed[1] = {std::byte{0x66}};
+        if (::pwrite(fd, seed, 1, 0) != 1) {
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        }
+
+        // The submit runs on a helper thread so the main thread can destroy the
+        // backend while the request sits in `pending` (commit done, enqueue
+        // not yet run).
+        std::atomic<bool> started{false};
+        submitter = std::thread([&] {
+            started.store(true, std::memory_order_release);
+            (void)backend.submit_read(ReadOp{fd, buf, 1, 0}, c);
+        });
+
+        const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+        while (!started.load(std::memory_order_acquire)) {
+            if (std::chrono::steady_clock::now() >= deadline) {
+                std::_Exit(sluice_death_test::kChildTestFailExit);
+            }
+            std::this_thread::yield();
+        }
+        if (!wait_paused(gate, deadline)) {
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        }
+
+        auto h = backend.handle_for_completion_for_test(&c);
+        if (!h.has_value()) std::_Exit(sluice_death_test::kChildTestFailExit);
+        auto obs = backend.observe_for_test(*h);
+        if (!obs.has_value() || obs->state != detail::RequestState::pending) {
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        }
+        if (backend.dispatch_size_for_test() != 0) {
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        }
+
+        // backend destroyed here while a `pending` slot is bound -> fail-fast.
+        ::close(fd);
+    }
+
+    // The destructor did NOT fail-fast (or the submitter was joined first,
+    // which cannot happen — the destructor never resumes the paused submitter;
+    // reaching here means the destructor returned, the regression).
+    gate.resume.store(true, std::memory_order_release);
+    if (submitter.joinable()) submitter.join();
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 SLUICE_TEST_CASE(tp_death_destroy_with_enqueued) {
     auto r = sluice_death_test::run_death_case("enqueued");
     SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
@@ -356,6 +424,12 @@ SLUICE_TEST_CASE(tp_death_control_quiescent_destroy) {
                      "quiescent destroy after close_admission + drain + reset must exit 0");
 }
 
+SLUICE_TEST_CASE(tp_death_destroy_with_pending) {
+    auto r = sluice_death_test::run_death_case("pending");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "destroying with a pending request must fail-fast (exit 86)");
+}
+
 int main(int argc, char** argv) {
     std::string child_case = sluice_death_test::parse_child_case(argc, argv);
     if (!child_case.empty()) {
@@ -369,6 +443,8 @@ int main(int argc, char** argv) {
             child_destroy_with_completion_ready();
         } else if (child_case == "control") {
             child_control_quiescent_destroy();
+        } else if (child_case == "pending") {
+            child_destroy_with_pending();
         } else {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
