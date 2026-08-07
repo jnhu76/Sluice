@@ -190,6 +190,30 @@ class ThreadPoolBackend : public AsyncBackend {
         return arena_.observe_for_test(h);
     }
 
+    // Test-only identity-injection seam (Phase C2b row 4): drive a CAPTURED
+    // SlotHandle (typically a stale-generation handle from a released occupant)
+    // through the REAL cancel authority path — remove_exact + arena_.cancel
+    // under work_mtx_, then tally+signal on terminal_won — instead of the
+    // pointer-keyed public cancel(Completion&). This proves a stale-generation
+    // event cannot act on a live N+1 occupant of the same physical slot: handle
+    // validation rejects it with not_found and no side effect (no dispatch
+    // removal, no tally). Returns the disposition so the test can assert
+    // not_found/already_terminal. Mirrors observe_for_test (test-only,
+    // guarded; production builds carry nothing).
+    detail::CancelDisposition cancel_handle_for_test(detail::SlotHandle h) noexcept {
+        detail::CancelDisposition disp;
+        {
+            std::lock_guard<std::mutex> lk(work_mtx_);
+            (void)dispatch_.remove_exact(h);  // matches the real cancel() sequence
+            disp = arena_.cancel(h);
+        }
+        if (disp == detail::CancelDisposition::terminal_won) {
+            tally_canceled();
+            signal_ready_progress();
+        }
+        return disp;
+    }
+
     // Deterministic pause gates for the ThreadPoolBackend race tests. Each gate
     // is armed by the test, the production path spins on `paused` and waits on
     // `resume`, giving the test an exact observation window. These are compiled

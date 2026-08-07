@@ -415,7 +415,9 @@ void child_enqueue_double() {
     SlotHandle h = rh.value();
     if (!arena.prepare(h, OperationKind::read, {}).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
-    if (!arena.install_publication_binding(h, &dummy_completion_storage, 0, &noop_binding_publish).has_value())
+    auto bh = arena.install_publication_binding(h, &dummy_completion_storage, 0,
+                                                &noop_binding_publish);
+    if (!bh.has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     if (!arena.commit(h).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
@@ -439,7 +441,9 @@ void child_release_before_completion_ready() {
     SlotHandle h = rh.value();
     if (!arena.prepare(h, OperationKind::read, {}).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
-    if (!arena.install_publication_binding(h, &dummy_completion_storage, 0, &noop_binding_publish).has_value())
+    auto bh = arena.install_publication_binding(h, &dummy_completion_storage, 0,
+                                                &noop_binding_publish);
+    if (!bh.has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     if (!arena.commit(h).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
@@ -468,7 +472,9 @@ void child_release_stale_handle() {
     SlotHandle h = rh.value();
     if (!arena.prepare(h, OperationKind::read, {}).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
-    if (!arena.install_publication_binding(h, &dummy_completion_storage, 0, &noop_binding_publish).has_value())
+    auto bh = arena.install_publication_binding(h, &dummy_completion_storage, 0,
+                                                &noop_binding_publish);
+    if (!bh.has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
     if (!arena.commit(h).has_value())
         std::_Exit(sluice_death_test::kChildTestFailExit);
