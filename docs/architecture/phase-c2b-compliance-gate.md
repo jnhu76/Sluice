@@ -79,14 +79,22 @@ unchanged).
 `arena_request_key_carries_context_provenance` proves `SlotHandle` is deliberately context-less (slot +
 generation only); `RequestKey` is the identity that carries provenance. Proven at the RequestArena/ReadySink
 boundary: two arenas with identical slot/generation produce DIFFERENT RequestKeys; the ReadyEvent.key
-carries the originating context/slot/generation BY VALUE and survives the slot's release + reuse; a
-cross-context key can never be resolved as a same-slot/same-generation request of the other arena.
+carries the originating context/slot/generation BY VALUE and survives the slot's release + reuse; and a
+context-A key never EQUALS context-B's key for the same physical slot/generation. (Scope note: the current
+RequestArena mutable authorities take a `SlotHandle`, which carries no context component, so this case
+proves provenance is ENCODED into the published identity and the cross-context keys are observably
+distinct — it does not inject a context-A `RequestKey` into context-B's authority path, because no
+production path accepts a foreign `RequestKey`. Cross-context authority rejection at the RequestKey level
+is a Phase F concern once a public RequestHandle exists.)
 
 `fake_stale_generation_event_harmless` and `tp_stale_generation_event_harmless` prove each backend's
-integration: after a slot is released (Completion reset) and reused by a NEW request on the SAME physical
-slot, stale-generation cancel attempts cannot act on the new occupant; the new request's Completion,
-result, and counters stay exactly intact. All identity is pointer-free (SlotHandle/RequestKey) — no
-Completion reverse map.
+integration that a stale-generation event cannot act on a LIVE N+1 occupant: the gen-N `SlotHandle` is
+captured before release, the slot is reused by a gen-N+1 request, and ONLY THEN is the stale handle
+injected through a narrow test-only `cancel_handle_for_test(SlotHandle)` seam that routes the handle
+through the REAL cancel authority path (`arena_.cancel(h)` under the backend's work domain, with tally on
+`terminal_won`). The stale handle resolves to `not_found` with zero side effect; the live occupant's
+Completion, result, counters, and state stay exactly intact. All identity is pointer-free
+(SlotHandle/RequestKey) — no Completion reverse map.
 
 ### 3.3 Cancel matrix (rows 5–6)
 
@@ -99,11 +107,15 @@ the terminal never tally; cancel of an unbound Completion resolves nothing.
 no `canceled_ops` tally; the real syscall result wins VERBATIM (never rewritten to canceled). A cancel
 after that ordinary winner is `already_terminal`.
 
-`tp_cancel_races_worker_terminal_exactly_one` provides genuine two-thread TSan evidence: a cancel issued
-concurrently with the worker's dispatch/syscall races for the single terminal transition. Each iteration
-asserts the exactly-one winner contract end to end: exactly one publication, one ready Completion; the
-result is EITHER canceled OR the real success; `canceled_ops` tallies exactly the canceled winners (never
-intent/losers); `syscall_count` tallies exactly the syscall winners (cancel-won iterations run no syscall).
+`tp_cancel_races_worker_terminal_exactly_one` provides causal two-thread TSan evidence: a
+`BeforeWorkerDequeuePauseGate` holds the worker in the pre-dequeue window on every iteration so the op is
+provably `enqueued` when the barrier releases, then the canceler and the worker-gate resume race for the
+single terminal transition under the backend's `work_mtx_` arbitration (the race is forced, not
+probabilistic). Each iteration asserts the exactly-one winner contract end to end: exactly one
+publication, one ready Completion; the result is EITHER canceled OR the real success; `canceled_ops`
+tallies exactly the canceled winners (never intent/losers); `syscall_count` tallies exactly the syscall
+winners (cancel-won iterations run no syscall). The iteration count (64) is bounded to keep thread-
+creation pressure benign under the full-test-suite run; both outcomes occur across the run.
 
 ### 3.4 Exactly-one backend-ready winner (row 7)
 
@@ -153,13 +165,15 @@ test-only nonconforming fixture for classes A/C/D/E would have required duplicat
 `RequestArena` internals, so each defect class was instead proven by a single-point temporary mutation of
 the real production logic, a focused filtered test run, and an immediate revert.
 
-Seven single-point production mutations (A–G) prove each detector case fails on deliberately
-nonconforming code:
+Eight single-point production mutations (A, B1, B2, C, D, E, F, G) prove each detector case fails on
+deliberately nonconforming code. Mutants B1 and B2 separately cover the cancel-intent counter
+invariant and the verbatim-result invariant (ADR Decision 11 / DIV-10):
 
 | Mutant | Deliberate defect (§13 class) | Expected failing case | Actual failing case |
 |---|---|---|---|
 | A | stale terminal delivered to a reused generation | `arena_stale_handle_leaves_live_occupant_untouched` | same |
-| B | cancel intent rewrites an ordinary success into canceled | `tp_running_cancel_intent_does_not_tally` | same |
+| B1 | cancel intent incorrectly tallies canceled_ops (counter invariant) | `tp_running_cancel_intent_does_not_tally` | same |
+| B2 | cancel intent rewrites an ordinary result to canceled (verbatim-result invariant) | `tp_running_cancel_intent_real_result_verbatim` | same |
 | C | second terminal overwrites the first winner | `exactly_one_terminal_winner` | same |
 | D | second terminal re-enters the ready ring | `tp_canceled_ops_tallied_only_on_terminal_won` | same |
 | E | reap by slot index instead of terminal-winner order | `arena_reap_preserves_terminal_winner_order` | same |
@@ -195,10 +209,11 @@ Full mutation matrix, commands, exit codes, and revert verification are recorded
 
 - **Fake = ELIGIBLE** — `c2b_fake_identity_integration=PASS` in the per-backend report.
 - **ThreadPool = ELIGIBLE** — `c2b_threadpool_identity_integration=PASS`.
-- **Uring = NOT CONFORMING** — `c2b_arena_state_identity_matrix=INCOMPLETE` (KernelIoProfile rule);
-  C2b coverage is the `not_implemented` manifest record, surfaced in the lifecycle layer AND in the
-  verdict reasons. Uring stays NOT CONFORMING until Phase D (RequestArena migration). This record
-  reinforces (does not replace) the existing KernelIoProfile-stays-NOT-CONFORMING rule.
+- **Uring = NOT CONFORMING** — `uring_c2b_identity_not_implemented=INCOMPLETE (not_implemented)`
+  is the authoritative C2b gap record, surfaced in the lifecycle layer AND in the verdict reasons
+  (alongside `uring_capacity_not_implemented`). Uring stays NOT CONFORMING until Phase D (RequestArena
+  migration). This record reinforces (does not replace) the existing KernelIoProfile-stays-NOT-CONFORMING
+  rule.
 
 ## 6. Profile applicability
 
@@ -235,7 +250,7 @@ Full mutation matrix, commands, exit codes, and revert verification are recorded
 
 ## 8. Validation matrix (full evidence)
 
-All rows below were executed on the current branch head (`2582e91`). `PASS` is recorded only for commands
+All rows below were executed on the current branch head (`d1812e2`). `PASS` is recorded only for commands
 that actually ran green.
 
 | Gate | Command | Result |
