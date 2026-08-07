@@ -292,6 +292,62 @@ EVIDENCE: tuple[Evidence, ...] = (
     ),
 
     # -----------------------------------------------------------------------
+    # Phase C2b — generation / stale-key / cancel-winner / identity-bearing reap.
+    # Rows 3–8 of Issue #68. The arena-level record proves the RequestSlot
+    # state/generation/stale-event contract (backend-agnostic); the Fake and
+    # ThreadPool integration records prove each backend actually uses the
+    # protocol (not a side-band path). Uring's gap is the not_implemented
+    # record below (Phase D pending). The C2b arena cases live within the
+    # existing request_lifecycle_scheme_b_test target alongside the pre-C2b
+    # Scheme-B cases; the gate drives the full target so both generations of
+    # cases run.
+    # -----------------------------------------------------------------------
+    Evidence(
+        evidence_id="c2b_arena_state_identity_matrix",
+        target="request_lifecycle_scheme_b_test",
+        layer="lifecycle",
+        backends=(),
+        notes="C2b rows 3-4: legal/illegal state-transition matrix, "
+              "generation +1 on both release authorities, stale-handle "
+              "leaves live occupant untouched, RequestKey context "
+              "provenance, reap terminal-winner order (arena-level).",
+    ),
+    Evidence(
+        evidence_id="c2b_fake_identity_integration",
+        target="backend_scheme_b_race_test",
+        layer="lifecycle",
+        backends=_F,
+        mandatory=True,
+        notes="C2b rows 5-8 Fake integration: canceled_ops tallied only "
+              "on terminal_won, binding identity A->A B->B, publication "
+              "boundary (poll gates ready), stale-generation cancel "
+              "harmless after release+reuse.",
+    ),
+    Evidence(
+        evidence_id="c2b_threadpool_identity_integration",
+        target="threadpool_backend_scheme_b_race_test",
+        layer="lifecycle",
+        backends=_TP,
+        mandatory=True,
+        notes="C2b rows 5-8 ThreadPool integration: enqueued cancel wins "
+              "(no syscall), running cancel intent only (real result "
+              "verbatim), stale-generation harmless, publication boundary "
+              "(reap gates ready), cancel-vs-worker exactly-one winner.",
+    ),
+    Evidence(
+        evidence_id="uring_c2b_identity_not_implemented",
+        target="threadpool_backend_scheme_b_race_test",
+        layer="lifecycle",
+        backends=_U,
+        mandatory=True,
+        status=STATUS_NOT_IMPLEMENTED,
+        notes="C2b rows 3-8 require RequestArena identity/generation/"
+              "cancel/reap integration; Uring remains legacy until "
+              "Phase D. Recorded as a known gap; not_implemented never "
+              "counts as PASS.",
+    ),
+
+    # -----------------------------------------------------------------------
     # Layer: backend-specific mechanism evidence.
     # -----------------------------------------------------------------------
     Evidence(
