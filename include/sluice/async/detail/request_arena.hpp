@@ -280,12 +280,29 @@ public:
         return {};
     }
 
-    // --- Stage 3: commit / accept (ADR Decision 5 / I2) ---
+    // --- Stage 3: commit / accept (ADR Decision 5 / I2) — the SLOT HALF -----
     // prepared -> pending; set the enqueue-in-flight pin; accepted_outstanding++;
     // begin the fd/buffer borrow (I7). The Completion's idle->binding->outstanding
     // transition is driven by the backend AROUND this call (the arena owns the
     // slot side; the backend owns the Completion side). This is the submit-success
-    // linearization point's slot half.
+    // linearization point's slot half: the FULL acceptance linearization point
+    // is the backend's `binding -> outstanding` release-store (ADR §"Commit /
+    // accept" Step 5 — "Step 5 is the commit/accept linearization point"; the
+    // winning submit performs the protocol "while retaining its own
+    // context/admission lock", :453-462).
+    //
+    // There is DELIBERATELY no admission_closed_ check here. ADR Decision 15
+    // ("close_admission atomically prevents new acceptance") gates NEW
+    // acceptance at reserve(); a slot already reserved/prepared when close
+    // lands is an IN-FLIGHT submission and completes its protocol. The backend
+    // serializes close_admission() against the whole Step 1-5 acceptance
+    // protocol under its admission transaction lock (ADR :453-462): a close
+    // that wins the lock makes every later reserve reject synchronously, and a
+    // submit already inside the protocol finishes its LP before close returns.
+    // Re-checking admission here would reject an in-flight submission the ADR
+    // requires to complete, and would place Decision-15 arbitration in the
+    // wrong domain (the arena is the leaf slot-lifecycle domain, not the
+    // backend admission authority).
     Result<void> commit(SlotHandle h) {
         std::lock_guard<std::mutex> lk(mutex_);
         RequestSlot* s = validate_(h);
