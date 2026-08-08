@@ -230,18 +230,25 @@ class UringAsyncBackend : public AsyncBackend {
     static Result<std::size_t> terminal_to_size(const detail::TerminalResult& t) noexcept;
     static Result<void> terminal_to_void(const detail::TerminalResult& t) noexcept;
 
-    // Dispatch one enqueued request: obtain an SQE, install routing, mark_running,
-    // unlink — one critical section (frozen design §4). Returns false if the
-    // request could not be dispatched this pass (SQ full) or was already
-    // terminalized (cancel won); true if it became ring-owned. Acquires
-    // dispatch_mtx_.
+    // Dispatch one enqueued request toward ring ownership (frozen design §4).
+    // Acquires dispatch_mtx_. Returns false if the request could not be
+    // dispatched this pass (SQ full / fatal); true if it became ring-owned.
     bool dispatch_one(detail::SlotHandle h) noexcept;
-    // Same as dispatch_one but assumes dispatch_mtx_ is already held (used by
-    // poll()'s drain loop to avoid recursive locking).
+    // P0-A peek protocol: assumes dispatch_mtx_ is held AND h == dispatch_
+    // ->front(). The caller peeks the front and does NOT remove it before this
+    // call; on a successful transfer this function removes h exactly once via
+    // dispatch_->remove_exact(h) (a miss is an invariant violation -> fail-fast).
+    // On a NULL SQE the function returns false WITHOUT mutating the queue (h
+    // stays at the front). Used by the poll()/wait_one() peek drains and by
+    // enqueue_after_commit's single-critical-section path.
     bool dispatch_one_locked(detail::SlotHandle h) noexcept;
 
-    // Unified enqueue + dispatch attempt under one dispatch_mtx_ critical
-    // section. noexcept; the caller has already committed.
+    // Unified enqueue + dispatch attempt under ONE dispatch_mtx_ critical
+    // section. noexcept; the caller has already committed. Holding the lock
+    // across push_back -> dispatch_one_locked is load-bearing: it closes the
+    // window in which a cancel() could terminalize h between enqueue and
+    // dispatch (cancel takes the same lock). Therefore mark_running(h)==false
+    // inside the transaction is an invariant violation, not a cancel-won race.
     void enqueue_after_commit(detail::SlotHandle h) noexcept;
 
     // Transport progress: io_uring_submit(). DOES NOT mutate RequestState.

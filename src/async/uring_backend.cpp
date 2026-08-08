@@ -160,6 +160,25 @@ class UringAsyncBackend::BoundedDispatchQueue {
     std::size_t size() const noexcept { return size_; }
     std::size_t capacity() const noexcept { return capacity_; }
 
+    // Peek the front entry WITHOUT removing it. The dispatch ownership model
+    // (frozen design §4.2 peek protocol) is "queue membership == local
+    // execution ownership": a request stays in the queue while the dispatcher
+    // attempts to transfer it to ring ownership, and is removed only by the
+    // successful transfer (dispatch_one_locked's remove_exact) or by cancel's
+    // remove_exact. Peeking — instead of pop_front→dispatch→(re-)push_back —
+    // removes the contradiction where remove_exact(h) would fail-fast because
+    // h was already popped. Caller MUST check empty() first; front() on an
+    // empty queue is an invariant violation.
+    detail::SlotHandle front() const noexcept {
+        if (size_ == 0) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch ring "
+                                 "front() on empty queue (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        return storage_[head_];
+    }
+
     // noexcept push. Caller guarantees room (dispatch capacity == request
     // capacity, and a committed request holds its slot); a full push is an
     // invariant fail-fast, not would_block (AGENTS.md §12).
@@ -499,24 +518,35 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
         outcome = arena_.enqueue(h); // pending -> enqueued OR terminal_noop
         if (outcome == detail::EnqueueOutcome::enqueued) {
             dispatch_->push_back(h);
+            // P0-A peek protocol: enqueue (push_back) and the best-effort
+            // ownership transfer (dispatch_one_locked) run under ONE
+            // dispatch_mtx_ critical section. This is load-bearing: cancel()
+            // acquires the SAME lock, so by holding it across push_back →
+            // mark_running there is no window where a cancel could terminalize
+            // h between enqueue and dispatch. Therefore mark_running == false
+            // inside dispatch_one_locked can ONLY be an invariant violation
+            // (handled there), never a legitimate cancel-won race. If the SQ is
+            // full, h stays at the tail of the dispatch queue and a later
+            // poll()/wait_one() retries via the peek drain loop. We do NOT
+            // pop_front→dispatch→push_back: that pattern contradicts the
+            // remove_exact(h) the successful transfer performs (it would
+            // fail-fast because h was already popped).
+            (void)dispatch_one_locked(h);
         }
         // terminal_noop: a pending cancel won first (Scheme B). No dispatch
         // linkage; that winner owns readiness.
     }
-    if (outcome == detail::EnqueueOutcome::enqueued) {
-        // Try to move the freshly-enqueued request toward ring ownership. If
-        // the SQ is full it stays enqueued and a later poll()/wait_one()
-        // retries dispatch. io_uring_submit() inside dispatch_one is transport.
-        (void)dispatch_one(h);
-    } else {
+    if (outcome != detail::EnqueueOutcome::enqueued) {
         // terminal_noop: re-arm the ready condition so the wake is not lost
-        // (ADR Decision 4 / I19).
+        // (ADR Decision 4 / I19). Done OUTSIDE the dispatch lock — it is a
+        // no-op seam in D1's single-driver model.
         signal_ready_progress();
     }
 }
 
-// Dispatch one enqueued request (acquires dispatch_mtx_). See
-// dispatch_one_locked for the ownership-transfer transaction.
+// Public dispatch entry (acquires dispatch_mtx_). Used only by the post-commit
+// fast path's neighbors; the peek drains in poll()/wait_one() call
+// dispatch_one_locked directly under a held lock.
 bool UringAsyncBackend::dispatch_one(detail::SlotHandle h) noexcept {
     std::lock_guard<std::mutex> lk(dispatch_mtx_);
     return dispatch_one_locked(h);
@@ -614,8 +644,19 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
         // next get_sqe at the same index after the kernel advances khead.)
         return false;
     }
-    // Unlink from the local dispatch ring (coordinated with cancel).
-    (void)dispatch_->remove_exact(h);
+    // Unlink from the local dispatch ring (coordinated with cancel). P0-A peek
+    // protocol: h was the front entry under dispatch_mtx_ (held by every caller
+    // of dispatch_one_locked), so a successful ownership transfer MUST retire it
+    // here. A miss is an invariant violation (h was not the queue front, or the
+    // queue was concurrently mutated without the lock) — fail-fast rather than
+    // leaving a dangling local-ownership entry.
+    if (!dispatch_->remove_exact(h)) {
+        std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch_one_locked "
+                             "remove_exact miss after mark_running (invariant "
+                             "violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
 
     // From here until the original operation CQE, the request cannot be
     // locally released. io_uring_submit() may happen now or later — it is
@@ -743,22 +784,22 @@ std::size_t UringAsyncBackend::poll() {
         return 0;
     // Re-dispatch enqueued requests toward ring ownership (best-effort; an
     // SQ-full request stays enqueued and retries next poll). Done under
-    // dispatch_mtx_; dispatch_one is the per-request ownership transfer.
+    // dispatch_mtx_; dispatch_one_locked assumes the lock is held.
     if (!fatal_error_.has_value()) {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        // Drain the dispatch ring: pop each entry and attempt to transfer it
-        // to ring ownership. dispatch_one_locked assumes the lock is held.
-        // Entries that cannot get an SQE are pushed back for a later poll.
-        std::size_t attempts = dispatch_->size();
-        for (std::size_t i = 0; i < attempts; ++i) {
-            detail::SlotHandle h;
-            if (!dispatch_->pop_front(h))
-                break;
-            if (!dispatch_one_locked(h)) {
-                // Could not transfer (SQ full or already terminal). If still
-                // enqueued/alive, put it back for the next poll.
-                dispatch_->push_back(h);
-            }
+        // P0-A peek protocol: the dispatch queue owns local execution. We PEEK
+        // the front, attempt the ownership transfer, and let the successful
+        // transfer's remove_exact(h) retire the entry. On NULL SQE we BREAK
+        // (ring-wide pressure: the next entry will not get an SQE either) and
+        // leave h at the front for the next poll. We never pop_front→dispatch→
+        // push_back: that would contradict the remove_exact(h) the successful
+        // transfer performs. cancel()'s remove_exact + arena.cancel() shares
+        // this same lock, so while we hold it the front cannot be canceled out
+        // from under us.
+        while (!dispatch_->empty()) {
+            detail::SlotHandle h = dispatch_->front();
+            if (!dispatch_one_locked(h))
+                break; // SQ full (or fatal); h remains at front for next poll
         }
     }
     // Flush transport (SQEs prepared but not yet submitted) so the kernel can
@@ -779,14 +820,14 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
     // (work already complete) without a kernel wait.
     if (!fatal_error_.has_value()) {
         // Re-dispatch enqueued work toward ring ownership before flushing.
+        // P0-A peek protocol (see poll() for the full rationale): peek the
+        // front, attempt the transfer, break on NULL SQE. Never pop→dispatch→
+        // push_back.
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        std::size_t attempts = dispatch_->size();
-        for (std::size_t i = 0; i < attempts; ++i) {
-            detail::SlotHandle h;
-            if (!dispatch_->pop_front(h))
-                break;
+        while (!dispatch_->empty()) {
+            detail::SlotHandle h = dispatch_->front();
             if (!dispatch_one_locked(h))
-                dispatch_->push_back(h);
+                break; // SQ full (or fatal); h remains at front for next call
         }
     }
     if (!fatal_error_.has_value())
