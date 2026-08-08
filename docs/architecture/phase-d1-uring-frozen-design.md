@@ -29,8 +29,11 @@ exists on the final implementation head.
   `pending_sqes`, integer-id `user_data`, single-step `try_claim`, CQE-direct `publish`);
 - make `io_uring_submit()` transport-only;
 - prove the new lifetime with failing-first detector tests;
-- fix P-D0-INF-01 (real-test link break) enough to run real-path evidence;
-- integrate `BackendWaitSource` for the blocking wait.
+- fix P-D0-INF-01 (real-test link break) enough to run real-path evidence.
+
+> **Scope correction (post-review):** `BackendWaitSource` integration (override `wait_source()`,
+> split-wait) is **moved to D4**, not D1. D1 retains the single-driver kernel-blocking wait
+> (`wait_one()` blocks in `io_uring_submit_and_wait` and reaps synchronously). See §11.1.
 
 **Out of scope (documented, not implemented):**
 - M:N runtime, shard scheduler, NUMA placement, `IORING_SETUP_ATTACH_WQ` topology;
@@ -116,53 +119,64 @@ free (generation++)
 The `enqueued → running / ring-owned` transfer is **one critical section** mirroring the
 ThreadPool dequeue+`mark_running` coordinated transfer.
 
+> **Repair note (post-review):** the original pseudocode described a "drop the prepared SQE without
+> submit" rollback when `mark_running` returned false. That rollback is **liburing-impossible**:
+> `io_uring_get_sqe()` advances the application-side `sqe_tail`, so the obtained SQE WILL be flushed
+> by the next `io_uring_submit()` and the kernel WILL see it (context7-confirmed). Abandoning it
+> would let it execute with a stale/wrong identity. The repaired transaction below has **no
+> recoverable failure after `get_sqe()`**: any post-`get_sqe` failure fail-fasts.
+
 ```text
-dispatch_one(h):                          [under dispatch domain lock]
+dispatch_one_locked(h):                   [under dispatch_mtx_, h == dispatch_.front()]
     require arena state == enqueued
 
+    # ---- pre-get_sqe region: recoverable ----
+    reserve a router ARRAY slot from the free-list      # exhaustion fail-fast
     sqe = io_uring_get_sqe(private_ring)
     if sqe == NULL:
-        flush transport progress           # io_uring_submit(); transport only
-        return RETRY_LATER                 # request stays enqueued; local cancel may still win
+        flush transport progress                         # io_uring_submit(); transport only
+        if still NULL:
+            push router slot back onto the free-list
+            return RETRY_LATER                           # h stays at queue front; no SQE obtained
 
-    op_cookie = cookie_domain.acquire()    # allocation-free, no-wrap, fail-fast
+    # ---- NO-FAIL REGION: get_sqe committed the SQE to the next flush ----
+    op_cookie = allocate_cookie_()                       # no-wrap; fail-fast on exhaustion
     fill SQE from RequestSlot descriptor/borrow
-    SQE.user_data = op_cookie
-    router_[op_cookie] = full SlotHandle{h.slot, h.generation}   # pre-reserved capacity
+    io_uring_sqe_set_data64(sqe, op_cookie)              # integer token, not pointer-cast
+    router_[slot] = {op_cookie, full SlotHandle{h.slot, h.generation}, in_use=true}
 
-    bool owns = arena.mark_running(h)      # enqueued -> running
+    owns = arena.mark_running(h)                         # enqueued -> running
     if !owns:
-        # terminal winner (e.g. enqueued cancel) won the race before dispatch.
-        # Disarm: free the SQE's cookie slot, drop the prepared SQE without submit.
-        router_.release(op_cookie)
-        cookie_domain.release(op_cookie)
-        return DISARMED                     # request already backend_ready; reap will publish
-    remove_exact(h) from local dispatch ring
-    [end dispatch domain lock]
+        FAIL-FAST                                        # invariant: cancel cannot have won
+                                                         # under the dispatch_mtx_ discipline
+    dispatch_->remove_exact(h)                           # MUST succeed (h is front); else fail-fast
+    [end dispatch_mtx_]
 ```
 
 ### 4.1 Invariant: no recoverable failure after `io_uring_get_sqe()` succeeds
 
 Once `io_uring_get_sqe()` returns a non-NULL SQE, the remainder of the ownership-transfer
-transaction MUST contain no recoverable failure, because there is no ordinary rollback for a
-half-created SQE. Therefore all of the following are **pre-reserved / pre-validated / noexcept**:
+transaction MUST contain no recoverable failure, because there is no ordinary rollback for an
+obtained SQE — `get_sqe()` already advanced liburing's application-side `sqe_tail`, so the SQE will
+be flushed by the next `io_uring_submit()`. Therefore all of the following are
+**pre-reserved / pre-validated / noexcept**:
 
 | Step | Guarantee |
 |---|---|
-| cookie acquisition | allocation-free, no-wrap; exhaustion fail-fasts before reuse |
-| `router_` slot | pre-reserved at construction (capacity == `request_capacity`); installation noexcept |
-| descriptor/native args | validated in `prepare()` (Stage 1.5), before dispatch |
-| `mark_running` | noexcept; after revalidation under the arena lock, failure is an invariant violation, not a recoverable error |
-| `remove_exact` | noexcept (dispatch ring is bounded, capacity-bounded); failure fail-fasts |
+| router ARRAY slot | reserved BEFORE `get_sqe` (recoverable: pushed back on NULL SQE); exhaustion fail-fasts |
+| cookie acquisition | no-wrap counter; reaching the reserved control range fail-fasts before reuse |
+| `router_` installation | pre-reserved at construction (capacity == `request_capacity`); installation noexcept |
+| descriptor/native args | validated in `prepare()` (Stage 1.5), before dispatch; native length normalized |
+| `mark_running` | noexcept; **`false` is an invariant violation, not a recoverable error** (see §4.2) |
+| `remove_exact` | noexcept; MUST succeed (h is the queue front under the held lock); failure fail-fasts |
 
-The single legitimate non-`owns` return is the **cancel-won-before-dispatch** race: a pending/enqueued
-cancel terminalized the request between enqueue and dispatch. In that case the SQE is dropped
-without submit and the cookie slot is released; the request is already `backend_ready` and reap will
-publish. This mirrors the ThreadPool `mark_running → false` back-off.
+There is **no legitimate `mark_running == false` return** in the repaired transaction. The
+"cancel-won-before-dispatch" race that the original design permitted is eliminated by §4.2's
+enqueue+dispatch single critical section.
 
 ### 4.2 Dispatch/cancel coordination (no observable both-state)
 
-Cancel and dispatch share ONE coordination domain (the dispatch lock) to prove:
+Cancel and dispatch share ONE coordination domain (`dispatch_mtx_`) to prove:
 
 ```text
 enqueued cancel:    DISARM LOCAL EXECUTION  →  arena.cancel() terminal winner
@@ -172,6 +186,31 @@ dispatch:           LOCAL OWNERSHIP         →  RING OWNERSHIP
 There is no observable state where both (a) cancel may terminalize locally and (b) a valid operation
 SQE may execute. This is the Uring analogue of the ThreadPool `work_mtx_`-held
 `dispatch_.remove_exact(h) + arena_.cancel(h)` pair.
+
+**`mark_running == false` is an invariant violation, not a back-off.** This holds because:
+
+1. **`enqueue_after_commit` holds `dispatch_mtx_` across `push_back(h) → dispatch_one_locked(h)`**
+   (one critical section). `cancel(h)` acquires the SAME lock, so it cannot interpose between
+   enqueue publication and `mark_running`. The original design released the lock between enqueue
+   and dispatch, opening a window where cancel could terminalize h first; that window is closed.
+2. **`poll()`/`wait_one()` use a peek protocol** (`while !empty: h=front(); dispatch_one_locked(h)`)
+   rather than `pop_front → dispatch → push_back`. The dispatch queue membership IS local execution
+   ownership: `h ∈ queue ⇔ backend owns h locally (cancel may disarm)`; `h leaves queue ⇒ h is
+   ring-owned`. The successful transfer's `remove_exact(h)` retires the entry exactly once; a `pop`
+   before dispatch would have contradicted that `remove_exact` (fail-fast).
+
+The single critical section + peek protocol together make `mark_running == false` structurally
+unreachable under valid operation; reaching it is a lifecycle invariant violation that fail-fasts
+in BOTH Debug and Release.
+
+### 4.3 Cancel target resolution before `get_sqe`
+
+`issue_running_cancel(h)` resolves the operation target cookie BEFORE calling `io_uring_get_sqe()`:
+scan the router for h's LIVE entry; if none exists, h is not ring-owned and there is nothing to
+cancel — return WITHOUT obtaining an SQE. Only after a target cookie is resolved does the function
+obtain an SQE, fill `IORING_OP_ASYNC_CANCEL(target=cookie)`, and set
+`io_uring_sqe_set_data64(sqe, CONTROL_CANCEL)`. This closes the `get_sqe`-then-discover-nothing-to-
+cancel hole (an obtained SQE cannot be abandoned).
 
 ---
 
@@ -219,6 +258,16 @@ transfer). The legacy unbounded `pending_sqes` container is eliminated regardles
 
 **Production implementation of the permanent-failure retirement path is FORBIDDEN until this policy
 is implemented exactly as frozen here.** This is the one remaining hard problem (D0 plan §8.2).
+
+> **Repair note (post-review): P0-D remains a HARD GATE.** A "poison new admission + treat all
+> in-flight work as Class-B and wait for CQEs" policy solves the *safety* problem (do not
+> prematurely release possibly-kernel-owned work) but NOT the *progress* problem (every accepted
+> request must have a provable terminal path). If the kernel never consumed the poisoned batch, no
+> CQE ever arrives and the request strands. The D1 repair therefore does NOT ship a production
+> poison implementation; the focused liburing/kernel audit that would license one is recorded in
+> `docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md`. Until that audit proves a
+> clean Class-A retirement path (or a `to_submit=0` drain + ring-teardown protocol), the
+> `fatal_error_` field remains read-only evidence plumbing and D1 is not merge-ready on this axis.
 
 ### 6.1 The kernel-consumption proof problem (liburing-grounded)
 
@@ -300,37 +349,64 @@ work completes via CQE.
 ### 7.1 Kernel boundary
 
 ```text
-SQE.user_data = opaque op_cookie          (operation) | reserved control value (control)
+SQE.user_data = op_cookie                 (operation, integer token via io_uring_sqe_set_data64)
+             | CONTROL_CANCEL             (control; cancel-SQE CQE is informational only)
 
-CQE.user_data
+CQE.user_data  (read via io_uring_cqe_get_data64)
    ↓ decode: control vs op cookie
    op cookie:
-       resolve construction-time bounded CqeRouter  →  full SlotHandle{slot, full uint64 generation}
+       bounded O(request_capacity) scan of the fixed router for the LIVE entry
+           whose cookie == cqe cookie              # KEYED BY COOKIE VALUE, not array index
+       no LIVE match → DROP (stale cookie; its entry was retired, the array slot may be reused)
+       LIVE match → full SlotHandle{slot, full uint64 generation}
        RequestArena full validation (context/slot/generation)
-       require ring-owned execution state
        convert cqe->res to TerminalResult
        arena.record_terminal(h, terminal)
-       retire transport routing/execution reference
+       retire transport routing/execution reference (free the router array slot; the cookie value
+           is NEVER reused, so a late duplicate CQE for the same cookie finds no LIVE entry)
    control cancel CQE:
        update only fixed cancel bookkeeping if needed
        NEVER record a request terminal
 ```
 
-`Completion*`, raw `SlotIndex`, and `RequestSlot*` are NOT sufficient kernel identity (ABA risk
-after slot reuse). The cookie resolves to a **full** `SlotHandle` (slot + full 64-bit generation)
-which the arena re-validates.
+`Completion*`, raw `SlotIndex`, `RequestSlot*`, and **router ARRAY INDEX** are NOT sufficient kernel
+identity (ABA risk after reuse). The cookie resolves to a **full** `SlotHandle` (slot + full 64-bit
+generation) which the arena re-validates. The router is keyed by the cookie VALUE (never reused), so
+a stale CQE whose cookie was retired matches no LIVE entry — the array slot having been recycled for
+a different cookie does not reopen the ABA window.
 
-### 7.2 Concrete D1 representation
+### 7.2 Concrete D1 representation (repaired)
 
-For D1, the **simplest provably bounded** representation is chosen first: a fixed-capacity
-`op_cookie → SlotHandle` router sized to `request_capacity`, with cookie values allocated from a
-no-wrap counter and a release/reuse free-list so cookies are unique within backend lifetime.
-Exhaustion fail-fasts before reuse (mirrors the arena's `UINT64_MAX` generation fail-fast).
+For D1, the **simplest provably bounded** representation is chosen first: a fixed-capacity router
+sized to `request_capacity`, keyed by cookie VALUE.
 
-Benchmark gate: an O(request_capacity) scan is acceptable as the correctness/reference first cut;
+```text
+struct RouterEntry {
+    std::uint64_t cookie;          // 0 = not live
+    SlotHandle    handle;          // full slot + full 64-bit generation
+    bool          in_use;
+};
+```
+
+- The SQE `user_data` carries the **cookie value** via `io_uring_sqe_set_data64` (the integer-token
+  API; no pointer round-trip). CQE read via `io_uring_cqe_get_data64`.
+- Cookie values are allocated from a **no-wrap 64-bit counter** (`allocate_cookie_()`). Domain is
+  `[1, UINT64_MAX-1]` (0 unused; `UINT64_MAX` = `CONTROL_CANCEL`). If the counter would reach
+  `CONTROL_CANCEL`, **fail-fast** (never wrap) — mirroring RequestArena generation no-wrap
+  discipline. A cookie is therefore **NEVER reused within backend lifetime**.
+- The router ARRAY slot is recycled via a free-list (only the array slot, never the cookie value).
+  Routing keys on the cookie value, so a stale CQE for a retired cookie cannot resolve through a
+  recycled array slot.
+- CQE routing is a bounded **O(request_capacity) scan** for the LIVE entry whose cookie matches
+  (D1 correctness/reference cut; no `unordered_map`).
+
+Benchmark gate: the O(request_capacity) scan is acceptable as the correctness/reference first cut;
 it must be benchmarked against a fixed O(1) open-addressed router at representative capacities
 (`request_capacity` ∈ {64, 256, 1024}) before adding a complicated hash structure. **Absolutely no
 unbounded `unordered_map`.**
+
+The stale-cookie detector (`uring_stale_cqe_cookie_dropped_not_misdelivered`, capacity=1 forcing
+array-slot reuse) proves a retired cookie is dropped and cannot misdeliver to the later occupant.
 
 ### 7.3 Reserved control values
 
@@ -444,26 +520,29 @@ All storage on that path is construction-time fixed/bounded.
 
 ## 10. Lock order (frozen) — Gate: lock/atomic authority
 
-Three distinct domains, each a leaf in its own scope (mirrors ThreadPool three-mutex discipline;
-AGENTS.md §13.1 forbids bidirectional lock order):
+**Repaired (post-review):** D1's production implementation uses TWO distinct domains, not three.
+Admission reuses `dispatch_mtx_` (a conservative choice; a separate `admission_mtx_` is not
+allocated). The `ready_wait_` domain does not exist in D1 (§11.1: `wait_source()` returns nullptr;
+`BackendWaitSource` is D4). Each domain is a leaf in its own scope; AGENTS.md §13.1 forbids
+bidirectional lock order.
 
 ```text
-admission_mtx_  (submit Stage 1–3c, close_admission)
-   order: admission_mtx_  ->  arena leaf only
-   released BEFORE enqueue
-
-dispatch_mtx_   (local dispatch ring + dispatch/cancel arbitration + cookie/router install)
+dispatch_mtx_   (admission submit Stage 1–3c, close_admission flag, local dispatch ring,
+                 dispatch/cancel arbitration, cookie/router install)
    order: dispatch_mtx_  ->  arena leaf only
-   the io_uring_get_sqe / SQE fill / mark_running critical section
-   io_uring_submit() may be called OUTSIDE dispatch_mtx_ (transport only, no arena mutation)
+   the io_uring_get_sqe / SQE fill / mark_running / remove_exact critical section
+   io_uring_submit() MAY be called under dispatch_mtx_ as transport progress (syscall); it
+       MUST NOT be called under the arena mutex.
+   enqueue_after_commit holds dispatch_mtx_ across push_back -> dispatch_one_locked (one CS).
 
 arena leaf mutex  (RequestArena mutex_)
    LEAF domain; holder MUST NOT call Scheduler/ReadySink/user code,
    join a thread, execute a syscall, or acquire dispatch_mtx_
-
-ready_wait_  (ReadyWaitSource — BackendWaitSource impl)
-   LEAF domain; never nested with dispatch_mtx_ or the arena lock
 ```
+
+`access_mtx_` (AsyncIoContext) is NOT a backend lock: it serializes ALL backend operations
+(submit/poll/wait_one/cancel) at the context layer, making D1 single-driver. It is held across a
+backend call but the backend's wait_one never blocks under it in the kernel-park path.
 
 **Critical rules (AGENTS.md §13.1):**
 - Code holding the arena leaf mutex MUST NOT acquire `dispatch_mtx_` or call backend progress.
@@ -477,29 +556,37 @@ ready_wait_  (ReadyWaitSource — BackendWaitSource impl)
 
 | Path | Locks acquired (in order) |
 |---|---|
-| submit (reserve→commit) | admission_mtx_ → arena leaf (transient, per method) → release admission_mtx_ before enqueue |
-| enqueue + dispatch | dispatch_mtx_ → arena leaf (transient) → release dispatch_mtx_ before submit syscall |
+| submit (reserve→commit) | dispatch_mtx_ → arena leaf (transient, per method) → [release dispatch_mtx_ before returning; enqueue re-acquires it] |
+| enqueue + dispatch | dispatch_mtx_ (held across push_back → dispatch_one_locked, one CS) → arena leaf (transient inside mark_running) → submit syscall may run under dispatch_mtx_ (transport) |
 | cancel pending/enqueued | dispatch_mtx_ → arena leaf (inside `arena.cancel`) |
-| cancel running | arena leaf (inside `arena.cancel`) → scratch write (lock-free or under dispatch_mtx_ for the cancel-queue bit) |
+| cancel running | dispatch_mtx_ (resolve target + scratch cancel_queued bit) → arena leaf (inside `arena.cancel`) |
 | CQE handler → record_terminal | arena leaf ALONE |
 | reap (poll/wait_one) | arena leaf → (released) → ReadySink invoked WITHOUT the lock |
-| wait_one park | ReadyWaitSource leaf (NO access_mtx_, NO dispatch_mtx_) |
+| wait_one park | kernel block in io_uring_submit_and_wait (NO dispatch_mtx_, NO arena lock) |
 
 ---
 
 ## 11. Wait / close / drain / destruction (frozen) — Gate: shutdown
 
-### 11.1 Wait (BackendWaitSource integration)
+### 11.1 Wait — D1 retains the single-driver kernel-blocking model
 
-The Uring backend MUST reuse the existing `detail::ReadyWaitSource` abstraction (as ThreadPool does)
-— it MUST NOT invent a new blocking wait under `AsyncIoContext::access_mtx_`.
+**Repaired (post-review):** the original §11.1 required D1 to integrate `BackendWaitSource`
+(override `wait_source()`). The production implementation deliberately does NOT, and that is the
+correct call for D1's topology:
 
-- override `wait_source()` to return `&ready_wait_`;
-- override `wait_one_is_nonblocking()` per the split-wait contract;
-- `signal_ready_progress()` (= `ready_wait_.signal_progress()`) is called after every
-  `record_terminal` and every Scheme-B `terminal_noop`;
-- `wait_one()` implements the snapshot → reap → park-in-`wait_for_change` loop (no access_mtx_
-  across the park).
+```text
+D1:  single-driver; wait_one() blocks in io_uring (io_uring_submit_and_wait) and reaps
+                 CQEs synchronously on the calling thread. There is no separate CQE-reaper
+                 thread to signal a ReadyWaitSource, so declaring split-wait capability would
+                 make AsyncIoContext::wait_one park in wait_for_change forever.
+      wait_source() returns nullptr (the default).
+      signal_ready_progress() is a no-op seam (kept for a future shard/M:N topology).
+```
+
+`BackendWaitSource` integration (override `wait_source()`, split-wait, eventfd/control wake,
+close/drain interruption) is moved to **D4** (full close/drain/wait redesign). D1 must NOT add
+`BackendWaitSource` merely to satisfy stale design prose. The frozen design is reconciled to the
+implementation here so the gate and the code agree.
 
 ### 11.2 Close / destruction (quiescent, ADR Decision 15)
 
@@ -652,18 +739,19 @@ implementation; all applicable AC-N rules identified per AGENTS.md §8).
 |---|---|
 | Gate 0 — scope & authority | DONE (this document) |
 | Gate 1 — state machine | DONE (§3) |
-| Gate 2 — lock/atomic authority | DONE (§10) |
+| Gate 2 — lock/atomic authority | DONE (§10, reconciled to the 2-domain production model) |
 | Gate 3 — resource capacity | DONE (§9) |
-| Gate 4 — wake/progress + shutdown | DONE (§11) |
-| Clang Debug | PENDING |
-| Clang Release | PENDING |
-| ASan + UBSan | PENDING |
-| TSan | PENDING |
-| negative-compile | PENDING |
-| conformance manifest | PENDING |
-| real liburing evidence | PENDING |
-| docs (check-doc-links, verify-architecture-docs) | PENDING |
+| Gate 4 — wake/progress + shutdown | DONE (§11; D1 wait_source()==nullptr, BackendWaitSource→D4) |
+| Clang Debug | PASS — 152/152, `xmake test -v` on the repaired head |
+| Clang Release | PENDING (final gate step) |
+| ASan + UBSan | PENDING (final gate step) |
+| TSan | PENDING (final gate step — modified race classes) |
+| negative-compile | PENDING (final gate step) |
+| conformance manifest | PENDING (final gate step) |
+| real liburing evidence | PASS — `xmake run uring_submit_failure_test`, 8/8 cases (incl. stale-cookie + length boundary + scripted-partial detectors) |
+| docs (check-doc-links, verify-architecture-docs) | PASS — `python3 scripts/check-doc-links.py`, `python3 scripts/verify-architecture-docs.py` on the repaired head |
 | D0.5 ADR amendment | DONE (`fa66ddf`) |
+| **P0-D permanent-submit-failure** | **BLOCKED** — see `docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md`; the §3.4 theorem holds but production poison/recovery (ledger + wait-path guard + teardown proof) is not implemented. D1 is READY FOR HUMAN REVIEW, NOT merge-ready on the provable-terminal-path axis. |
 
 ---
 
@@ -675,3 +763,12 @@ Not "new io_uring code compiles". It is:
 > no request lifecycle decision depends on `io_uring_submit()` accepted-prefix accounting;
 > cancellation cannot release ring-owned work; Completion publication is reap-only; storage is
 > bounded; and every accepted request has a provable terminal path.
+
+**Status (post-review repair):** the D1 repair achieves the first five clauses (private-ring
+ownership, no submit-prefix lifecycle authority, cancel cannot release ring-owned work, reap-only
+publication, bounded storage). The sixth clause — *every accepted request has a provable terminal
+path* — is **BLOCKED** on the permanent-submit-failure proof (P0-D, §6). Under a permanent
+`io_uring_submit()` failure with no kernel consumption, a ring-owned request has no CQE and no
+local retirement path, so it strands. D1 is therefore **READY FOR HUMAN REVIEW but NOT merge-ready**
+until the P0-D audit (`docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md`) proves
+a clean Class-A retirement path or drain+teardown protocol and a production implementation lands.
