@@ -183,7 +183,7 @@ fatal submit failure (process_submit_result):
 | `ops` (`unordered_map<__u64,OpRec>`) | **Yes** — the only mapping from kernel-visible id to request | partial | partial | indirect (via OpRec) | none | `ops.find(id)==end` → drop | **no bound** — grows with outstanding ops | `emplace` on every submit (post-claim, post-SQE-prep) | via OpRec.submitted | **Must disappear.** Replaced by RequestSlot (identity) + fixed per-slot scratch (bookkeeping) |
 | `comp_to_op` (`unordered_map<void*,__u64>`) | **Yes** — reverse Completion→id map (B3 O(1) cancel) | none | none | none | none | none | **no bound** | `emplace` on every submit | none | **Must disappear.** `RequestArena::resolve_completion` (bounded O(capacity) scan, allocation-free, generation-validated via the slot binding) replaces it |
 | `cancel_to_op` (`unordered_map<__u64,__u64>`) | **Yes** — second identity system for cancel ops (cancel-id → op-id) with no generation | cancel intent | none | none | none | none | **no bound** | `emplace` per cancel SQE | none | **Must disappear.** Cancel bookkeeping moves to per-slot scratch; the cancel SQE carries its own opaque cookie and targets the op by the op's cookie value (§7.3) |
-| `pending_sqes` (`deque<PendingSqe>`) | partial — ordered list of not-yet-accepted SQE ids (ops + cancels) | submit-order authority | **Yes** — "userspace-owned vs kernel-owned" split lives here | none | none | none | **no bound** | `push_back` per submit/cancel | `accept_submitted_prefix` pops the accepted prefix | **Must disappear.** Replaced by a construction-time bounded dispatch ring of `SlotHandle`s (mirroring ThreadPool's `BoundedDispatchQueue`) + per-slot SQE scratch (`sqe_prepared`, `kernel_owned`) |
+| `pending_sqes` (`deque<PendingSqe>`) | partial — ordered list of not-yet-accepted SQE ids (ops + cancels) | submit-order authority | **Yes** — "userspace-owned vs kernel-owned" split lives here | none | none | none | **no bound** | `push_back` per submit/cancel | `accept_submitted_prefix` pops the accepted prefix | **Split, not abolished.** Its *identity* and *unbounded-growth* roles disappear; its *physical-SQ submission-order* role — which `accept_submitted_prefix` used to consume the exact accepted prefix — is retained as a bounded `SqSubmissionLedger` (§5.6). Logical dispatch order moves to a construction-time bounded dispatch ring of `SlotHandle`s (mirroring ThreadPool's `BoundedDispatchQueue`); per-SQE bookkeeping (`sqe_prepared`, `kernel_owned`) moves to per-slot scratch. The ledger is necessary because neutral NOPs/cancel SQEs make the physical SQ order non-derivable from the dispatch ring. |
 | `next_id` (monotonic counter) | **Yes** — the kernel-visible identity source | none | none | none | none | none | none | none | none | **Eliminated as an identity.** user_data becomes a non-authoritative opaque cookie that routes a CQE back to a scratch slot carrying the authoritative full `SlotHandle` (§7.2) |
 | `OpRec.submitted` | no | no | **Yes** — kernel-ownership marker | no | no | no | no | no | set by `accept_submitted_prefix` | moves to per-slot scratch `kernel_owned` |
 | `OpRec.cancel_requested` / `cancel_op_id` | no | partial (cancel intent) | no | no | no | no | no | no | no | `cancel_requested` → arena `cancel_intent_` + scratch `cancel_pending`; `cancel_op_id` → scratch `cancel_token` |
@@ -325,7 +325,8 @@ of the target.
 | Completion-ready publication | `RequestArena::reap` (sole authority, through the slot binding) | poll/wait_one call `arena_.reap(sink)` only |
 | SQE dispatch bookkeeping | backend fixed per-slot scratch (keyed by slot, generation-gated) | scratch read only after arena-validated transitions |
 | Cancel intent/terminal | arena `cancel_intent_` / `cancel()` | scratch only mirrors intent for cancel-SQE bookkeeping |
-| Submit-order / dispatch queue | backend bounded dispatch ring (capacity == request_capacity) | §5 |
+| Submit-order / dispatch queue (logical) | backend bounded dispatch ring (capacity == request_capacity) | §5 |
+| Physical-SQ submission order | backend bounded `SqSubmissionLedger` (capacity == `uring_queue_depth`); non-authoritative — only the arena decides identity/terminal | §5.6 |
 | Capacity / accounting | arena (`slot_in_use`, `accepted_outstanding`, high-water, rejections) | §12 |
 
 ---
@@ -364,6 +365,7 @@ dispatch_pass():
     op_token = next_op_cookie()                       # §7.3 (monotonic, never reused)
     io_uring_sqe_set_data64(sqe, op_token)
     scratch[h] = { full_handle = h, op_token, sqe_prepared=true, kernel_owned=false }
+    sq_ledger.append({ kind=operation, handle=h, cookie=op_token })   # §5.6 — physical-SQ order
   # Phase 2 — submit the prepared batch.
   if no new prepared SQEs: return
   n = io_uring_submit()
@@ -373,22 +375,41 @@ dispatch_pass():
                  record_terminal(h, backend_error)   # the arena's terminal winner
                set submit_poisoned (new submissions reject synchronously with the error)
                return
-  if n > #prepared: invariant violation (impossible accepted count) -> poison + fail-fast
+  if n > sq_ledger.prepared_count: invariant violation (impossible accepted count) -> poison + fail-fast
   if n == 0 and previously zero: same policy as today (consecutive zero -> permanent)
-  # Phase 3 — the accepted prefix is kernel-owned: enqueued -> running.
-  for the first n prepared SQEs (in submission order):
-    if arena_.mark_running(h):  # current-generation slot; dequeue+running atomic with cancel (§5.4)
-        scratch[h].kernel_owned = true
-    else:
-        # mark_running returned false: a terminal winner (cancel, or the §9 permanent-failure path)
-        # already won for this exact generation. The SQE for h already went to the kernel in this
-        # batch, so a CQE carrying op_token WILL arrive — it is dropped harmlessly by §6.1
-        # (state != running / terminal-stored). This is a graceful backoff, mirroring
-        # ThreadPool's mark_running semantics; it is NOT fail-fast. (Genuine invariant violations
-        # — a stale handle or an already-completion_ready slot — fail-fast INSIDE mark_running.)
-  # suffix (prepared but not accepted) stays enqueued with sqe_prepared=true —
+  # Phase 3 — consume the EXACT physical-SQ accepted prefix from sq_ledger (§5.6), NOT from
+  # dispatch_ring. The accepted SQEs may be a mix of operation / cancellation / neutral entries
+  # (a neutralized NOP or a prepared cancel SQE interleaves with op SQEs in physical SQ order),
+  # so "the first n dispatch_ring handles" is NOT the accepted set. Only the ledger, which is
+  # 1:1 with the SQ in exact submission order, names which n SQEs the kernel took.
+  sq_ledger.consume_accepted_prefix(n):
+      operation  -> if arena_.mark_running(handle):                       # current-gen slot
+                        scratch[handle].kernel_owned = true
+                    else:
+                        # a terminal winner (cancel, or §9 permanent-failure) already won for this
+                        # exact generation. The op SQE already went to the kernel, so a CQE carrying
+                        # cookie WILL arrive — dropped harmlessly by §6.1 (graceful backoff, NOT
+                        # fail-fast; genuine invariant violations fail-fast INSIDE mark_running).
+      cancel     -> mark the cancel SQE kernel-owned in scratch bookkeeping (it is an auxiliary
+                    kernel op; it MUST NOT cause the target request to re-enter running, and its
+                    own CQE is informational only — §6.1)
+      neutral    -> no request transition (the request was already detached at neutralization)
+  # suffix (prepared but not accepted) stays in sq_ledger + scratch sqe_prepared=true —
   # allocation-free retry next pass. Its identity is preserved (scratch full_handle + op_token).
 ```
+
+**Why a separate SQ ledger (correction of the earlier draft):** once the SQ stream can contain
+neutral NOPs (from §5.4 neutralization) and cancel SQEs (from the running-cancel dispatch
+sub-path), the physical SQ order is **no longer derivable from `dispatch_ring`**: a neutralized
+NOP remains a pending SQE in the kernel's queue even though its request has been removed from
+`dispatch_ring` and its scratch cleared. Interpreting `io_uring_submit()`'s return value `n` as
+"the first n `dispatch_ring` handles" would then `mark_running` a request whose SQE was not
+actually accepted (the NOP was) — re-introducing exactly the dual authority
+(arena-state ≠ actual kernel ownership) Phase D exists to eliminate. The bounded
+`SqSubmissionLedger` (§5.6) is the 1:1 physical-SQ-order bookkeeping that makes the accepted
+prefix unambiguous. It is **not** a request-identity authority (identity stays in RequestArena);
+it is the kernel-submission-order ownership record the legacy `pending_sqes` carried — kept
+bounded and de-coupled from identity, not abolished.
 
 **Dispatch-pass state handling (correction of the earlier draft):** the earlier draft failed-fast
 the dispatch pass on any non-`enqueued` state except `backend_ready`, which under the draft's own
@@ -424,51 +445,72 @@ prepared-but-not-submitted cancel window is "unreachable under the serialized pr
 only for test seams" is withdrawn. The §5.4 neutral-cookie protocol therefore runs on the
 production path, and the §6.0 organizing invariant must hold for it.
 
-### 5.4 Enqueued-cancel dispatch-membership protocol (the §6.0 invariant, operationalized)
+### 5.4 Enqueued-cancel protocol — DISARM EXECUTION FIRST, terminal SECOND (§6.0 invariant)
 
 A cancel that wins `pending -> backend_ready(canceled)` or `enqueued -> backend_ready(canceled)`
-must prove the three clauses of §6.0 atomically. Mirroring `ThreadPoolBackend::cancel()` — which
-holds the dispatch lock across `dispatch_.remove_exact(handle)` AND `arena_.cancel(handle)` so
-the handle cannot be both off the ring and being dispatched — Uring's enqueued-cancel takes the
-backend dispatch lock and performs:
+must prove the three clauses of §6.0 **before** the terminal is published. The earlier draft of
+this section called `arena.cancel(h)` FIRST and then disarmed execution — that order is **wrong**
+and is corrected here. `arena.cancel(h)` on a `pending`/`enqueued` slot immediately performs the
+terminal transition (`state = backend_ready`, ready-ring push) under the arena leaf lock; once
+that has happened, `arena.reap()` (which takes only the arena leaf lock, NOT the dispatch lock)
+can publish `completion_ready` and the caller can `reset()`/release the slot — all before the
+disarm runs. The dispatch lock does not serialize `arena.reap()`, so "the terminal is not yet
+observable to reap" was never actually guaranteed by the old order.
+
+The correct order mirrors `ThreadPoolBackend::cancel()` (`threadpool_backend.cpp:894-899`):
+`remove_exact` **before** `arena.cancel`, both under the dispatch lock. For Uring this is:
 
 ```text
 lock(dispatch domain)
   h = arena.resolve_completion(&c)
-  disp = arena.cancel(h):                              # pending/enqueued -> terminal_won
-  if disp == terminal_won:
+  owned = classify_execution_ownership(h):             # userspace-owned | kernel-owned | none
+  if owned == userspace-owned:                         # pending/enqueued, SQE maybe prepared
       dispatch_ring.remove_exact(h)                    # clause 1: not present as executable work
       if scratch[h].sqe_prepared && !scratch[h].kernel_owned:
-          # clause 2: neutralize the userspace-owned prepared SQE so it cannot execute the op
-          io_uring_prep_nop(sqe_at(scratch[h]))
-          io_uring_sqe_set_data64(sqe_at(scratch[h]), NEUTRAL_COOKIE)   # §6.2 clause 3:
-          scratch[h].op_token = 0                       # detach op_token from any future CQE
-          # (the NOP CQE later carries NEUTRAL_COOKIE and is dropped at the top of §6.1)
+          # clause 2 + 3: neutralize the prepared SQE and detach the request cookie
+          sq_ledger.reclassify_entry(scratch[h].cookie, kind=neutral)   # §5.6 — physical-SQ entry
+          io_uring_prep_nop(sqe_at(scratch[h]))                         #   stays (kernel may still
+          io_uring_sqe_set_data64(sqe_at(scratch[h]), NEUTRAL_COOKIE)   #   submit it); only its
+          scratch[h].op_token = 0                                       #   kind flips to neutral
       scratch[h].clear()                               # cancel_token bookkeeping also cleared
+  # NOW the three §6.0 clauses are proven for userspace-owned requests:
+  #   (1) off dispatch_ring, (2) prepared SQE neutralized, (3) no future CQE carries op_cookie.
+  disp = arena.cancel(h)                               # FINALLY the terminal transition
+  # userspace-owned  -> terminal_won (canceled stored); clauses already proven, so a concurrent
+  #                     reap is now safe (the slot has no dispatch linkage / prepared SQE / cookie).
+  # kernel-owned     -> intent_recorded only (the running path below); no terminal stored here.
 unlock(dispatch domain)
 if disp == terminal_won: tally_canceled(); signal_ready_progress()
 ```
 
-The `remove_exact` + (conditional) neutralize + scratch-clear all happen **before** the arena
-terminal is observable to reap (the dispatch lock serializes this against the dispatch pass and
-the CQE handler), so by the time the slot reaches `backend_ready`/`completion_ready` the handle
-is already gone from the ring and no future CQE can carry its `op_token`. The dispatch pass's
-graceful-backoff state handling (§5.2) is the second line of defense: even if a compaction race
-left `h` briefly visible to a dispatch pass, it is skipped, not fail-fasted.
+The ordering principle — **execution-ownership cleanup FIRST, terminal publication SECOND** — is
+a frozen D1 invariant. It is what makes the §6.0 clauses provable at the moment the terminal
+becomes observable, rather than merely "probably true a moment later". The dispatch pass's
+graceful-backoff state handling (§5.2) remains a defense-in-depth: even if a race left `h`
+briefly visible to a dispatch pass, it is skipped, not fail-fasted.
 
-**Running cancel** (`disp == intent_recorded`): the op is kernel-owned, so the §6.0 invariant's
+Note the ledger interaction: when a prepared-suffix SQE is neutralized, its `SqSubmissionLedger`
+entry is **reclassified to `neutral`**, not removed (§5.6) — the physical SQE still occupies a
+slot in the kernel's SQ and may yet be submitted, so the ledger must keep recording it in exact
+SQ order; only its *kind* changes, so a later `consume_accepted_prefix` treats it as a no-op.
+This is precisely why the ledger cannot be reconstructed from `dispatch_ring` (the neutralized
+request is gone from the ring but its SQE is still in the kernel's queue).
+
+**Running cancel** (`owned == kernel-owned`): the op is kernel-owned, so the §6.0 invariant's
 clause-3 exception applies — the op's real CQE (possibly `-ECANCELED`) competes for the terminal.
-The cancel SQE itself is produced by the **unified dispatch machine**, NOT by an ad-hoc flush in
-the cancel path (an ad-hoc `io_uring_submit()` inside cancel would push prepared op SQEs into the
-kernel without the coordinated `mark_running`, re-introducing the dual authority this design
-eliminates). Concretely: `cancel()` records `cancel_intent_` + `scratch[h].cancel_pending=true`
-under the dispatch lock; a subsequent dispatch pass reserves one SQE (subject to the same
-ring-pressure backoff as op SQEs) for `io_uring_prep_cancel64(sqe, op_token, 0)` and submits it
-in the same batch as ordinary ops. If the cancel SQE cannot be prepared this pass (SQ pressure),
-it is retried next pass — the intent is already durably recorded in the slot. The cancel CQE is
-informational only (§6.1). **(Precise SQE-pressure / retry / ownership detail for the running
-cancel dispatch sub-path is a D1 frozen-design item; the principle — no ad-hoc submit in cancel —
-is fixed here.)**
+`remove_exact` is a no-op (already dequeued at `mark_running`) and the prepared SQE is NOT
+neutralized (it is already in the kernel). `arena.cancel(h)` records `intent_recorded` +
+`cancel_intent_=true` + `scratch[h].cancel_pending=true`. The cancel SQE itself is produced by
+the **unified dispatch machine**, NOT by an ad-hoc flush in the cancel path (an ad-hoc
+`io_uring_submit()` inside cancel would push prepared op SQEs into the kernel without the
+coordinated `mark_running`, re-introducing the dual authority this design eliminates). A
+subsequent dispatch pass reserves one SQE (subject to the same ring-pressure backoff as op SQEs)
+for `io_uring_prep_cancel64(sqe, op_cookie, 0)`, appends a `cancel` entry to `sq_ledger`, and
+submits it in the same batch as ordinary ops. If the cancel SQE cannot be prepared this pass (SQ
+pressure), it is retried next pass — the intent is already durably recorded in the slot. The
+cancel CQE is informational only (§6.1). **(Precise SQE-pressure / retry / ownership detail for
+the running-cancel dispatch sub-path is a D1 frozen-design item; the principle — no ad-hoc
+submit in cancel, disarm-before-terminal — is fixed here.)**
 
 ### 5.5 Why ring pressure is not admission `would_block`
 
@@ -480,6 +522,64 @@ execution. The two are distinguishable in stats: `would_block` → `queue_full_r
 `tally_submit`); SQ pressure → backend `queue_full_retries` bump on the dispatch flush (the
 existing Uring `queue_full_retries` semantics are retained for the dispatch flush, matching
 today's `get_sqe_with_pressure` bump).
+
+### 5.6 The bounded SQ submission-order ledger (`SqSubmissionLedger`)
+
+**Problem this solves.** Once the SQ stream can contain neutral NOPs (§5.4) and cancel SQEs
+(§5.4 running cancel), the physical SQ order is no longer 1:1 with `dispatch_ring` entries, and
+`io_uring_submit()`'s returned count `n` can no longer be interpreted as "the first n
+`dispatch_ring` handles" — a neutralized NOP is still a pending SQE in the kernel's queue after
+its request has left the ring. The accepted-prefix ownership transfer (`mark_running`) must
+therefore consume the **exact** physical-SQ prefix, which only a structure that is 1:1 with the
+SQ in submission order can name. The legacy `pending_sqes` deque carried exactly this
+"SQ execution-order ledger" responsibility (`accept_submitted_prefix(count)` consumed the exact
+prefix); what was wrong with it was being **unbounded, an identity authority, and coupled to
+`ops`/`cancel_to_op`** — not the submission-order concept itself. Phase D replaces it with a
+bounded, non-authoritative ledger.
+
+**Definition.** A construction-time bounded ring (capacity == `uring_queue_depth`) of entries,
+in exact physical-SQ submission order:
+
+```text
+struct SqLedgerEntry {
+    enum class Kind { operation, cancellation, neutral };
+    Kind        kind;
+    SlotHandle  handle;   // meaningful for operation (the op's slot) and cancellation (the
+                          //   target's slot); neutral entries carry the slot they were
+                          //   neutralized FROM for diagnostics only
+    uint64_t    cookie;   // the op_cookie / cancel_cookie / NEUTRAL_COOKIE this SQE carries
+};
+```
+
+**Lifecycle.**
+- The dispatch pass appends an `operation` entry each time it prepares an op SQE, and a
+  `cancellation` entry each time it prepares a cancel SQE (§5.4), in the exact order the SQEs
+  are written into the SQ ring.
+- §5.4 neutralization **reclassifies** the matching entry to `neutral` (by cookie) — it does NOT
+  remove it, because the physical SQE still occupies a kernel SQ slot and may be submitted; only
+  its kind flips.
+- On `io_uring_submit()` returning `n`, `consume_accepted_prefix(n)` pops the first `n` entries
+  and applies the per-kind transition (operation → `mark_running`; cancellation → cancel-SQE
+  kernel-owned bookkeeping; neutral → no-op). The remaining suffix stays for allocation-free
+  retry.
+- Capacity is bounded by `uring_queue_depth`: the number of simultaneously-userspace-owned SQEs
+  can never exceed the SQ ring depth (each prepared SQE occupies one SQ slot until accepted).
+
+**Authority.** `SqSubmissionLedger` is **NOT a request-identity authority**. It records only
+"which physical SQE corresponds to which request cookie, in what order". Request identity,
+lifecycle, generation, and terminal authority remain solely in `RequestArena`. The ledger is to
+io_uring's SQ what the dispatch ring is to logical dispatch order: a bounded, non-authoritative
+execution-side bookkeeping that the arena validates via full `SlotHandle` on every ownership
+transfer. This is the explicit retention of the legacy `pending_sqes` *correct* responsibility
+(submission-order bookkeeping) after removing its *incorrect* ones (unbounded growth, identity,
+coupling to `ops`/`cancel_to_op`).
+
+**SQPOLL is forbidden.** The entire accepted-prefix ownership proof depends on
+`io_uring_submit()`'s return value being the **exact** count of SQEs the kernel accepted, in
+order. That guarantee holds for the default (non-SQPOLL) mode; under `IORING_SETUP_SQPOLL` the
+return value may exceed the actually-accepted count (the kernel polls the SQ asynchronously).
+Phase D therefore does NOT use `IORING_SETUP_SQPOLL`; a future SQPOLL design would require a
+separate, proven ownership protocol and is explicitly out of scope.
 
 ---
 
@@ -609,7 +709,7 @@ ordering authority; CQEs only *store* terminals.
 | C. packed RequestKey fragment (slot + low generation bits) | defense-in-depth; residual ABA window 2^fragment releases | **wraps within the fragment** — contradicts the no-wrap generation contract | bound | shift/mask | direct | fits |
 | D. `RequestSlot*` pointer | **none** — same ABA as `Completion*`; no generation | — | bound | trivial | direct | fits (64-bit pointer) |
 | E. auxiliary stable operation record (token → fixed OpRec array) | depends on record's generation | — | bound | indirect | indirect | fits |
-| **F. opaque cookie → fixed per-slot scratch → full SlotHandle (cookie never reuses a value)** | **absolute** (I6 holds at full 64-bit generation; the cookie is never reissued) | full 64-bit, no wrap; cookie monotonic with fail-fast before exhaustion | bound | bounded O(capacity) scratch lookup, then trivial slot generation check | direct (cookie is the cancel target) | fits |
+| **F. opaque cookie → fixed per-slot scratch → full SlotHandle (cookie never reuses a value)** | **absolute** (I6 holds at full 64-bit generation; the cookie is never reissued) | full 64-bit generation, no wrap; cookie monotonic with fail-fast before 2^63 (bit 63 = kind) | bound | bounded O(capacity) scratch lookup, then trivial slot generation check | direct (cookie is the cancel target) | fits |
 
 ### 7.2 Selection: F — non-authoritative opaque cookie + fixed per-slot scratch
 
@@ -666,8 +766,9 @@ CQE arrival:
     -> RequestArena validates full_handle's generation against the slot (authoritative)
 ```
 
-The cookie is **never reissued** and **fail-fasts before its 64-bit space is exhausted** (a
-monotonic counter, mirroring the generation's own no-wrap/fail-fast discipline). The scratch
+The cookie is **never reissued** and **fail-fasts before its 63-bit payload space is
+exhausted** (a monotonic counter with bit 63 reserved as the kind marker; see §7.3 for the exact
+encoding and the `2^63` bound). The scratch
 entry is cleared on release, so a cookie from a released request matches nothing; and even a
 hypothetical future collision is the arena's full-generation `validate_` that rejects the stale
 `full_handle`, not the cookie alone. The cookie is therefore **non-authoritative**: it is a
@@ -684,21 +785,41 @@ arena's own `request_arena_generation_exhausted_fail_fast`).
 
 ```text
 64-bit user_data:
-  bit 63   : kind marker (0 = op SQE/CQE, 1 = cancel SQE/CQE)
-  bits [0,63): monotonic opaque cookie value (never reissued; fail-fast before wrap)
+  bit 63        : kind marker (0 = op SQE/CQE, 1 = cancel SQE/CQE)
+  bits [0, 63)  : monotonic opaque cookie PAYLOAD (63 bits; never reissued; fail-fast before wrap)
 ```
 
-- A prepared op SQE gets `op_token = (counter++ )`; a prepared cancel SQE gets
-  `cancel_token = (counter++) | (1 << 63)`. Both are stored in the target slot's scratch so a
+Because bit 63 is the kind bit, the **payload is 63 bits, not 64** — the allocation domain is
+`2^63`, not `2^64`. The encoding is frozen as:
+
+```text
+NEUTRAL_COOKIE = 0                                 # reserved; never an op or cancel cookie
+KIND_BIT       = 1ULL << 63
+counter        : starts at 1, monotonically incremented per prepared SQE (op or cancel)
+if counter > (KIND_BIT - 1):  fail_fast()          # payload exhaustion at 2^63 - 1, BEFORE the
+                                                   #   counter can reach the kind bit
+op_cookie     = counter                            # bit63 = 0 (op kind)
+cancel_cookie = KIND_BIT | counter                 # bit63 = 1 (cancel kind)
+```
+
+So an op cookie and a cancel cookie with the same payload are distinguishable by the kind bit,
+and the counter can never produce a value that collides with `NEUTRAL_COOKIE` (0) or bleeds into
+the kind bit. The payload is never reused; exhaustion (after `2^63 - 1` allocations) fail-fasts,
+mirroring the arena's `request_arena_generation_exhausted_fail_fast` but at the 63-bit payload
+bound. (At realistic allocation rates this is unreachable, but it is recorded as a hard bound
+rather than a wrap, consistent with the no-wrap discipline adopted for generation.)
+
+- A prepared op SQE gets `op_cookie = counter++`; a prepared cancel SQE gets
+  `cancel_cookie = KIND_BIT | (counter++)`. Both are stored in the target slot's scratch so a
   CQE resolves to the slot via a bounded scan, then to the authoritative full `SlotHandle`.
-- The cancel SQE targets the op by its cookie value: `io_uring_prep_cancel64(sqe, op_token, 0)`
-  (flags=0 cancels the first request whose user_data equals `op_token` — io_uring's default
+- The cancel SQE targets the op by its cookie value: `io_uring_prep_cancel64(sqe, op_cookie, 0)`
+  (flags=0 cancels the first request whose user_data equals `op_cookie` — io_uring's default
   `IORING_ASYNC_CANCEL_OP_USERDATA` lookup). No side-band `cancel_to_op` map is needed; the
-  scratch's `cancel_token` + the kind bit replace it.
-- A **neutral/control cookie** (`NEUTRAL_TOKEN`, a reserved never-op-never-cancel value) is used
-  when neutralizing a prepared-but-unsubmitted SQE (§6.2): the SQE is rewritten to a NOP and its
-  user_data is rewritten to the neutral cookie, detaching it from any request. The resulting NOP
-  CQE is unconditionally dropped as control bookkeeping and can never address a request slot.
+  scratch's `cancel_cookie` + the kind bit replace it.
+- A **neutral cookie** (`NEUTRAL_COOKIE = 0`) is used when neutralizing a prepared-but-
+  unsubmitted SQE (§6.2): the SQE is rewritten to a NOP and its user_data is rewritten to
+  `NEUTRAL_COOKIE`, detaching it from any request. The resulting NOP CQE is unconditionally
+  dropped as control bookkeeping and can never address a request slot.
 
 ### 7.4 Cross-backend consistency
 
@@ -768,7 +889,7 @@ error cannot be trusted for new work; per-slot terminalization covers the accept
 | `ops` (unordered_map) | per submit (post-SQE-prep) | eliminated — slot is the record | no |
 | `comp_to_op` (unordered_map) | per submit | eliminated — `resolve_completion` O(capacity) scan | no |
 | `cancel_to_op` (unordered_map) | per cancel SQE | eliminated — scratch `cancel_token` | no |
-| `pending_sqes` (deque) | per submit/cancel | dispatch ring (fixed array, capacity == request_capacity) + per-slot scratch | no |
+| `pending_sqes` (deque) | per submit/cancel | dispatch ring (fixed array, capacity == request_capacity) + `SqSubmissionLedger` (fixed array, capacity == `uring_queue_depth`, §5.6) + per-slot scratch | no |
 | — (new) `RequestArena` slots_/free_slots_ | construction | arena | no |
 | — (new) dispatch ring storage | construction | fixed array | no |
 | — (new) per-slot SQE scratch | construction | fixed array (`full_handle`, `op_token`, `cancel_token`, `sqe_prepared`, `kernel_owned`, `cancel_pending`) | no |
@@ -951,6 +1072,7 @@ are planned deliverables created in D2/D3, not current repository paths).
 | 12 | close returns before the Step-5 LP | close ‖ in-flight submit (pause between commit and LP) | admission pause gate | a submit after close returns completes an LP → case fails |
 | 13 | destructor silently drains/cancels | non-quiescent destruction | death test | destruction with accepted/kernel-owned work returns instead of fail-fast |
 | 14 | CQE path publishes Completion directly, bypassing reap | CQE-handler publish probe | injection | a Completion becomes ready without `arena_.reap` → case fails |
+| 14b | accepted-prefix `n` consumed from `dispatch_ring` instead of the SQ ledger (§5.6) | partial-submit then neutralize a prefix SQE, then `io_uring_submit()` returning a count that spans the neutral NOP | submit-count injection + neutralize seam | a request whose SQE was NOT accepted (a neutral NOP was accepted in its place) gets `mark_running` → arena-state ≠ kernel ownership → case fails (the ledger must consume the exact physical-SQ prefix by kind) |
 
 ---
 
@@ -1029,7 +1151,7 @@ enters any PR.
 |---|---|---|
 | **D1 — "refactor(async): Uring RequestArena admission + SQE ownership split"** | UringConfig; arena ownership; five-stage submit (reserve→validate→prepare→binding→commit→enqueue→ring push, allocation-free); dispatch ring + per-slot scratch; token user_data; dispatch pass (fill→submit→prefix mark_running→suffix retained; NOP neutralization; permanent-failure per-slot terminal + submit poison); CQE → record_terminal → reap; cancel via arena + cancel tokens; P-D0-INF-01 link fix; stub remains honest; 8-case shared suite real path; capacity driver case; basic unit + death tests; manifest `uring_capacity_not_implemented` flip (with real evidence) | no dual authority; I3/I9/I14/I17/I19 on the real path; token↔slot round-trip; suffix identity across partial submits; exactly-one terminal; reap-only publication |
 | **D2 — "test(async): Uring failure injection + accepted-terminal no-alloc (C2d)"** | SLUICE_URING_INTERNAL_TESTING seams on the D1 model (submit-stage injection at reserve/prepare/commit-boundary; post-commit dispatch-failure injection; pause gates); migrate `uring_submit_failure_test` onto the new seams (old UringBackendSubmitTestHooks retired); always-throw no-alloc accepted path; mutation detectors 1,5,6,7,10,11 | per-stage rollback zero-residue; dispatch-failure vs cancel exactly-one-winner; zero post-accept allocation; record flip `uring_c2d_failure_injection_not_implemented` |
-| **D3 — "test(async): Uring cancel/generation/stale race matrix (C2b/C2c)"** | Scheme-B pending-cancel window; enqueued-cancel no-execute; running-cancel intent + cancel-SQE; cancel-CQE race matrix (original vs cancel vs -ENOENT, both orders, duplicates); stale-CQE generation; borrow/waiter rows on the real path | mutation detectors 2,3,4,8,9; record flips `uring_c2b_identity_not_implemented`, `uring_c2c_borrow_waiter_not_implemented` |
+| **D3 — "test(async): Uring cancel/generation/stale race matrix (C2b/C2c)"** | Scheme-B pending-cancel window; enqueued-cancel no-execute (disarm-before-terminal, §5.4); running-cancel intent + cancel-SQE; cancel-CQE race matrix (original vs cancel vs -ENOENT, both orders, duplicates); stale-CQE generation; borrow/waiter rows on the real path | mutation detectors 2,3,4,4b,8,9,14b; record flips `uring_c2b_identity_not_implemented`, `uring_c2c_borrow_waiter_not_implemented` |
 | **D4 — "refactor(async): Uring close/drain/destruction + KernelIo conformance closure"** | `close_admission()` + admission_mtx_ arbitration; `BackendWaitSource` implementation (registered eventfd + pollable ring fd; §11.2 frozen design first); quiescent destruction + death tests; manifest flips `uring_c2e_close_drain_not_implemented`; gate lift (verify-backend-conformance.py KernelIo hard-code removal; stub-mode honest classification); real-liburing CI evidence; docs (design doc, gate ledger, divergence-registry DIV-02/DIV-14 updates, api-reference, roadmap status) | mutation detectors 12,13,14; aggregate gate runs Uring through normal evaluation; real-path verdict conforming; roadmap Phase D complete |
 
 ---
@@ -1129,7 +1251,8 @@ with zero residue; post-commit failures are terminal results, never rejections.
   partial-submit suffix/prefix splits (migrated submit hooks); token round-trip; exactly-once
   terminal; reap-only publication; cancel basic; death (non-quiescent destruction).
 - Stub path: existing stub subset continues to pass; driver stub case classified honestly.
-- Mutation detectors 1, 5, 6, 7, 10, 11 (RED on the single-point mutations).
+- Mutation detectors 1, 5, 6, 7, 10, 11, 14b (RED on the single-point mutations; 14b proves the
+  accepted-prefix is consumed from the SQ ledger, not `dispatch_ring`).
 
 **Manifest changes** — flip `uring_capacity_not_implemented` → `implemented` ONLY after the
 real-path `conformance_capacity_uring` evidence exists on the PR head; add the
@@ -1156,7 +1279,7 @@ D1 ledger fields PASS only after the commands ran.
    admits a future NOP CQE that can arrive after slot release (§6.2). The frozen selection is
    candidate F — a non-authoritative opaque cookie routing CQEs back to a scratch slot that carries
    the authoritative full `SlotHandle` (§7.2). I6 therefore holds in perpetuity (full-generation
-   validation on every CQE; cookies are never reused and fail-fast before their 64-bit space is
+   validation on every CQE; cookies are never reused and fail-fast before their 63-bit payload
    exhausted, mirroring the generation's own discipline). The only recorded bound is the cookie-
    space fail-fast; **no generation-fragment bound is recorded**.
 2. **`submit_poisoned` policy (P1):** after a permanent `io_uring_submit` error, is rejecting
@@ -1220,11 +1343,23 @@ if unavailable, Phase D completion on this environment must record
   the roadmap status section below; no `COMPLETE` claim.
 - No production source, header, build file, manifest, or test file modified.
 
-**Provenance (corrected):** this document and the roadmap edit are committed on the branch
-docs/phase-d-uring-migration-plan (head 90ebe0b) and pushed to origin as PR #76 (Draft). An
-earlier draft of this section stated "Not committed; not pushed" — that reflected the
-issue-generation moment and is no longer accurate. PR #76 is docs-only (2 files, +1030 lines);
-no production code is changed.
+**Provenance (stable facts only — live head / commit count / diff stats are left to the PR UI,
+which stays correct as the branch is revised; hard-coding them here would make this section
+stale on every edit):**
+
+```text
+Branch:    docs/phase-d-uring-migration-plan
+PR:        #76 (Draft)
+Baseline:  1349a6f  (origin/master at audit time)
+Scope:     docs-only (this file + remediation-roadmap.md); no production code
+```
+
+**D1 manifest-flip discipline (no gray area):** D1's exit criteria name the
+`uring_capacity_not_implemented` flip, but D1 also permits the real-liburing suite to be
+UNAVAILABLE on a host whose kernel refuses io_uring. To avoid a "D1 COMPLETE but the real-path
+evidence never ran and the manifest is in an unknown state" outcome, the rule is binary: **the
+record flips to `implemented` ONLY after command-backed real-path `conformance_capacity_uring`
+evidence exists on the PR head.** If the host cannot produce real-path evidence, D1 may still
 
 **D1 manifest-flip discipline (no gray area):** D1's exit criteria name the
 `uring_capacity_not_implemented` flip, but D1 also permits the real-liburing suite to be
