@@ -14,12 +14,14 @@
 //   3) control: close_admission -> complete -> reap -> reset -> destroy
 //      exits 0 (quiescent path).
 //
-// POSIX-only (fork/exec/waitpid via death_test_runner_posix.hpp). Each child
-// case declares the Completion BEFORE the backend (outside the backend's
-// scope) so the backend/arena destructor is the FIRST fail-fast authority;
-// a Completion destroyed first would release its own slot and mask the
-// intended non-quiescent-destruction violation (same discipline as
-// threadpool_backend_death_test).
+// POSIX-only (fork/exec/waitpid via death_test_runner_posix.hpp). The two
+// fail-fast child cases (unreaped, ready-unreset) declare the Completion
+// BEFORE the backend (outside the backend's scope) so the backend/arena
+// destructor is the FIRST fail-fast authority; a Completion destroyed first
+// would release its own slot and mask the intended non-quiescent-destruction
+// violation. The control case is exempt: it resets `c` before the backend
+// scope ends, releasing the slot explicitly, so its declaration order does
+// not matter (the same quiescent discipline as threadpool_backend_death_test).
 #include "harness.hpp"
 #include "death_test_runner_posix.hpp"
 

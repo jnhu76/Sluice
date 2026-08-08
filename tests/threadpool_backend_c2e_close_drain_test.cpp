@@ -19,6 +19,20 @@
 //   D2  void path (sync_data): same close-while-running contract.
 //   A2  void submit after close: invalid_state, Completion idle (the shared
 //       case A covers the size path; this pins the void path).
+//   C1b close || acceptance LP, submit wins: the submit pauses INSIDE the
+//       backend admission transaction, after the slot commit (Step 4) and
+//       before the `binding -> outstanding` release-store (ADR Step 5 — the
+//       commit/accept linearization point). close_admission() must BLOCK:
+//       after close returns no new acceptance LP may occur (Decision 15 +
+//       ADR :453-462 "the winning submit ... retaining its own
+//       context/admission lock"). The resumed submit completes its LP (submit
+//       wins), close returns after, the request completes verbatim, and a new
+//       submit after close rejects invalid_state.
+//   C1c close || acceptance, close wins: the submit pauses BEFORE taking the
+//       admission transaction lock; close_admission() completes with no
+//       contention; the resumed submit observes admission closed at reserve
+//       and rejects synchronously with invalid_state — Completion idle, zero
+//       residue.
 //   E1  close then pending cancel: cancel still WINS the canceled terminal
 //       (Scheme B) after close; enqueue no-ops; reap publishes canceled once;
 //       canceled_ops == 1; no dispatch linkage.
@@ -80,6 +94,14 @@ using sluice::Result;
 namespace {
 
 constexpr auto kWaitTimeout = std::chrono::seconds(5);
+// C2e (B1): failure-protection bound for the deterministic negative probe in
+// tp_c2e_close_waits_for_inflight_acceptance_lp (and the Fake driver case).
+// The probe observes "the closer's read must not complete while the submit is
+// paused": under the admission-transaction mutation the closer's close returns
+// in microseconds, so this window is >=1000x the defect latency; the ordering
+// proof itself is structural (the admission lock + the pause gate), not this
+// window.
+constexpr auto kCloseProbeTimeout = std::chrono::seconds(2);
 
 class TempPath {
 public:
@@ -482,6 +504,213 @@ SLUICE_TEST_CASE(tp_c2e_void_submit_after_close_rejected) {
     SLUICE_CHECK(!c.ready());
     SLUICE_CHECK(backend.outstanding() == 0);
     ::close(fd);
+}
+
+// ---- C1b: close || acceptance LP — submit wins; close must wait ------------
+// The submit path pauses INSIDE the backend admission transaction, AFTER the
+// slot commit (Step 4: prepared -> pending) and BEFORE the `binding ->
+// outstanding` release-store (ADR Step 5 — the commit/accept linearization
+// point). close_admission() must BLOCK on the transaction: after close
+// returns, no new acceptance LP may occur (ADR Decision 15 + §"Commit /
+// accept" :453-462 — "the winning submit ... retaining its own
+// context/admission lock"). The resumed submit completes its LP (submit
+// wins), close returns after, and the accepted request completes with its
+// real result. This is the deterministic detector for the "close drops the
+// admission transaction" mutation (M11): without the transaction, close
+// returns while the submit is paused before its LP — a new acceptance LP
+// after close (the Decision-15 violation this case must catch).
+SLUICE_TEST_CASE(tp_c2e_close_waits_for_inflight_acceptance_lp) {
+    ThreadPoolBackend::BeforeCommitBindingPauseGate gate;  // outlives backend
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_before_commit_binding_pause_gate(&gate);
+
+    TempPath tp("lpwin");
+    int fd = seeded_fd(tp, std::byte{0xB1});
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+    Completion<std::size_t> c2;
+    std::atomic<bool> submit_done{false};
+    std::atomic<bool> submit_ok{false};
+    std::atomic<bool> close_done{false};
+
+    std::thread submitter([&] {
+        auto r = backend.submit_read(ReadOp{fd, buf, 1, 0}, c);
+        submit_ok.store(r.has_value(), std::memory_order_release);
+        submit_done.store(true, std::memory_order_release);
+    });
+    ScopedGateAndThread<ThreadPoolBackend::BeforeCommitBindingPauseGate> guard(gate, submitter);
+
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+    const char* fail_msg = nullptr;
+    if (!wait_paused(gate, deadline)) {
+        fail_msg = "before-commit-binding gate did not pause in time";
+    } else if (submit_done.load(std::memory_order_acquire)) {
+        fail_msg = "submitter must still be paused";
+    } else if (c.outstanding()) {
+        fail_msg = "the Completion must still be `binding` at the pause "
+                   "(the LP is the binding -> outstanding release-store)";
+    }
+
+    // close_admission() must wait for the in-flight acceptance protocol.
+    std::atomic<bool> close_saw_outstanding{false};
+    std::thread closer;
+    if (fail_msg == nullptr) {
+        closer = std::thread([&] {
+            backend.close_admission();
+            // Decision-15 observable AT the close return: a submit that
+            // entered the protocol before close has already passed its
+            // acceptance LP (`binding -> outstanding` release-store, ADR
+            // Step 5). Under the fix the admission-lock handoff makes the
+            // submit's LP release-store visible to this read (mutex acquire
+            // after the submit's mutex release); under the mutation the read
+            // completes while the submitter is still paused and sees
+            // `binding` — the violation this case must catch.
+            close_saw_outstanding.store(c.outstanding(), std::memory_order_release);
+            close_done.store(true, std::memory_order_release);
+        });
+        // Deterministic negative probe (the 2 s window is failure protection
+        // only — see kCloseProbeTimeout): while the submit is paused before
+        // its LP, the closer's read must NOT complete — a completed read means
+        // close returned before the LP (the Decision-15 violation; mutant M11
+        // detector). The submitter cannot advance until the test resumes it
+        // (it spins on the gate), and under the fix the closer is blocked on
+        // the admission lock the paused submitter holds, so the probe can only
+        // fire under the mutation.
+        const auto probe_deadline = std::chrono::steady_clock::now() + kCloseProbeTimeout;
+        while (std::chrono::steady_clock::now() < probe_deadline) {
+            if (close_done.load(std::memory_order_acquire)) {
+                fail_msg = "close_admission returned before the in-flight "
+                           "acceptance LP (admission transaction violated)";
+                break;
+            }
+            std::this_thread::yield();
+        }
+    }
+
+    // Resume: the submit completes its LP (binding -> outstanding), submit
+    // returns success; then close acquires the admission lock and returns.
+    if (fail_msg == nullptr) {
+        guard.join();
+        if (!submit_done.load(std::memory_order_acquire) ||
+            !submit_ok.load(std::memory_order_acquire)) {
+            fail_msg = "submit must have succeeded (the in-flight LP wins)";
+        } else if (!wait_flag(close_done, deadline)) {
+            fail_msg = "close_admission must return after the in-flight submit's LP";
+        } else if (!close_saw_outstanding.load(std::memory_order_acquire)) {
+            fail_msg = "close_admission returned before the in-flight acceptance "
+                       "LP (admission transaction violated)";
+        } else if (!drain_bounded(backend,
+                                  std::chrono::steady_clock::now() + kWaitTimeout)) {
+            fail_msg = "the accepted request never drained after close";
+        } else if (!c.ready() || !c.result().has_value() || c.result().value() != 1) {
+            fail_msg = "result must be the real 1-byte read verbatim";
+        }
+    }
+
+    // After close returned, a NEW submit rejects synchronously (Decision 15).
+    if (fail_msg == nullptr) {
+        auto r2 = backend.submit_read(ReadOp{fd, buf, 1, 0}, c2);
+        if (r2.has_value()) {
+            fail_msg = "a submit after close returned must be rejected";
+        } else if (r2.error().code != IoError::Code::invalid_state) {
+            fail_msg = "the post-close rejection must be invalid_state";
+        } else if (!c2.idle() || c2.outstanding() || c2.ready()) {
+            fail_msg = "the rejected Completion must be idle (zero residue)";
+        }
+    }
+    // cleanup (both paths): resume + join the submitter FIRST (the closer may
+    // be blocked on the admission lock behind the paused submit), then join
+    // the closer; drain + reset so the backend destructor sees quiescence.
+    guard.join();
+    if (closer.joinable()) closer.join();
+    gate.resume.store(true, std::memory_order_release);
+    if (!drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout)) {
+        std::fprintf(stderr, "cleanup drain failed\n");
+    }
+    if (c.ready()) c.reset();
+    if (c2.ready()) c2.reset();
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---- C1c: close || acceptance — close wins; submit rejects at reserve ------
+// The submit path pauses BEFORE taking the backend admission transaction
+// lock. close_admission() completes with no contention (close wins); the
+// resumed submit acquires the lock, reserve observes admission closed and
+// rejects synchronously with invalid_state — Completion idle, zero residue
+// (ADR Decision 15).
+SLUICE_TEST_CASE(tp_c2e_close_wins_submit_started_before_close_rejected) {
+    ThreadPoolBackend::BeforeAdmissionLockPauseGate gate;  // outlives backend
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    backend.set_before_admission_lock_pause_gate(&gate);
+
+    TempPath tp("lpclose");
+    int fd = seeded_fd(tp, std::byte{0xB2});
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+    std::atomic<bool> submit_done{false};
+    std::atomic<bool> submit_accepted{false};
+    std::atomic<int> submit_code{0};
+
+    std::thread submitter([&] {
+        auto r = backend.submit_read(ReadOp{fd, buf, 1, 0}, c);
+        if (r.has_value()) {
+            submit_accepted.store(true, std::memory_order_release);
+        } else {
+            submit_code.store(static_cast<int>(r.error().code), std::memory_order_release);
+        }
+        submit_done.store(true, std::memory_order_release);
+    });
+    ScopedGateAndThread<ThreadPoolBackend::BeforeAdmissionLockPauseGate> guard(gate, submitter);
+
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+    const char* fail_msg = nullptr;
+    if (!wait_paused(gate, deadline)) {
+        fail_msg = "before-admission-lock gate did not pause in time";
+    } else if (submit_done.load(std::memory_order_acquire)) {
+        fail_msg = "submitter must still be paused";
+    } else if (backend.outstanding() != 0 || backend.arena_slot_in_use() != 0) {
+        fail_msg = "no acceptance may have started before the admission lock";
+    }
+
+    // close wins the admission transaction: it returns while the submit is
+    // still outside the lock (no contention).
+    if (fail_msg == nullptr) {
+        backend.close_admission();
+    }
+
+    // Resume: the submit acquires the lock; reserve observes admission closed
+    // -> synchronous invalid_state; Completion idle; zero residue.
+    if (fail_msg == nullptr) {
+        guard.join();
+        if (!submit_done.load(std::memory_order_acquire)) {
+            fail_msg = "submitter must finish";
+        } else if (submit_accepted.load(std::memory_order_acquire)) {
+            fail_msg = "a submit that entered after close must be rejected";
+        } else if (submit_code.load(std::memory_order_acquire) !=
+                   static_cast<int>(IoError::Code::invalid_state)) {
+            fail_msg = "the post-close rejection must be invalid_state";
+        } else if (!c.idle() || c.outstanding() || c.ready()) {
+            fail_msg = "the rejected Completion must be idle (zero residue)";
+        } else if (backend.outstanding() != 0) {
+            fail_msg = "no accepted request may exist";
+        } else if (backend.arena_slot_in_use() != 0) {
+            fail_msg = "no slot may be reserved";
+        }
+    }
+    guard.join();
+    // cleanup (both paths): if the submitter was NOT paused in time (gate
+    // timeout) it may have been accepted before close — drain + reset so the
+    // backend destructor sees quiescence and the failure stays this case, not
+    // a destructor fail-fast.
+    if (c.outstanding() || c.ready()) {
+        if (!drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout)) {
+            std::fprintf(stderr, "cleanup drain failed\n");
+        }
+        if (c.ready()) c.reset();
+    }
+    ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
 }
 
 // ---- E1: close then pending cancel — cancel still WINS the terminal ---------
@@ -1101,19 +1330,41 @@ SLUICE_TEST_CASE(tp_c2e_submit_races_close_linearization) {
     std::atomic<std::size_t> rejected{0};
     std::atomic<bool> submitter_done{false};
 
-    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
     std::thread submitter([&] {
         for (std::size_t i = 0; i < kAttempts; ++i) {
             auto r = backend.submit_read(ReadOp{fd, buf + i, 1, 0}, cs[i]);
             if (r.has_value()) {
                 accepted.fetch_add(1, std::memory_order_relaxed);
-            } else if (r.error().code == IoError::Code::invalid_state) {
-                rejected.fetch_add(1, std::memory_order_relaxed);
-                // Rejected: Completion must be idle, zero residue.
-                if (!cs[i].idle()) std::abort();
             } else {
-                // would_block (capacity pressure mid-stream) is a legal
-                // transient retry outcome while the accepted window is full.
+                // Any rejection MUST be one of the two legal admission outcomes:
+                //   invalid_state (admission closed — close won the linearization
+                //     race; ADR Decision 15), or
+                //   would_block (arena capacity full mid-stream — ADR Decision 13).
+                // Both MUST leave the Completion idle with ZERO residue: a
+                // half-accepted state (backend binds the Completion then returns
+                // an error) is the regression this case must catch.
+                const auto code = r.error().code;
+                if (code != IoError::Code::invalid_state &&
+                    code != IoError::Code::would_block) {
+                    std::fprintf(stderr,
+                        "tp_c2e_submit_races_close_linearization: unexpected "
+                        "reject code %d at attempt %zu\n",
+                        static_cast<int>(code), i);
+                    std::abort();
+                }
+                // Every rejection — not only invalid_state — must leave the
+                // Completion idle / not outstanding / not ready. A backend that
+                // illegally binds before returning an error is the half-accepted
+                // defect; cleanup would otherwise mask it.
+                if (!cs[i].idle() || cs[i].outstanding() || cs[i].ready()) {
+                    std::fprintf(stderr,
+                        "tp_c2e_submit_races_close_linearization: rejected "
+                        "attempt %zu left non-idle Completion (idle=%d "
+                        "outstanding=%d ready=%d)\n",
+                        i, (int)cs[i].idle(), (int)cs[i].outstanding(),
+                        (int)cs[i].ready());
+                    std::abort();
+                }
                 rejected.fetch_add(1, std::memory_order_relaxed);
             }
         }
@@ -1128,6 +1379,8 @@ SLUICE_TEST_CASE(tp_c2e_submit_races_close_linearization) {
         std::this_thread::yield();
     }
     if (accepted.load(std::memory_order_relaxed) == 0) {
+        backend.close_admission();
+        submitter.join();
         SLUICE_FAIL("submitter never accepted a request (harness error)");
     }
     backend.close_admission();
@@ -1136,12 +1389,15 @@ SLUICE_TEST_CASE(tp_c2e_submit_races_close_linearization) {
 
     // Every accepted request is driven to exactly one terminal via the
     // still-legal cancel path, reaped, and reset; every rejected Completion
-    // is idle.
+    // is idle. The drain deadline is computed FRESH here (after the submitter
+    // joined and the close + cancel setup finished) so the 256-iteration submit
+    // loop and the barrier wait do not eat into the drain's bounded window
+    // under a loaded/sanitizer CI (CodeRabbit finding).
     const char* fail_msg = nullptr;
     for (std::size_t i = 0; i < kAttempts; ++i) {
         if (cs[i].outstanding()) backend.cancel(cs[i]);
     }
-    if (!drain_bounded(backend, deadline)) {
+    if (!drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout)) {
         fail_msg = "accepted requests never all drained";
     }
     if (fail_msg == nullptr) {

@@ -190,9 +190,13 @@ SLUICE_TEST_CASE(conformance_close_drain_fake) {
     const sluice_test::conformance::MakeCloseDrainFixture make_fx = [] {
         auto backend = std::make_unique<FakeAsyncBackend>(4);
         auto* raw = backend.get();
-        sluice_test::conformance::CloseDrainFixture fx(std::move(backend));
-        fx.close = [raw] { raw->close_admission(); };
-        fx.slot_in_use = [raw] { return raw->arena_slot_in_use(); };
+        // Return via unique_ptr so the fixture's address (and the AsyncStats*
+        // the AsyncIoContext holds) is stable — a value return would move the
+        // fixture and dangle the stats pointer (AsyncIoContext's move ctor
+        // copies the raw stats_ pointer; NRVO is not guaranteed).
+        auto fx = std::make_unique<sluice_test::conformance::CloseDrainFixture>(std::move(backend));
+        fx->close = [raw] { raw->close_admission(); };
+        fx->slot_in_use = [raw] { return raw->arena_slot_in_use(); };
         return fx;
     };
     const std::string failed =
@@ -213,9 +217,9 @@ SLUICE_TEST_CASE(conformance_close_drain_threadpool) {
         cfg.worker_count = 1;
         auto backend = std::make_unique<ThreadPoolBackend>(cfg);
         auto* raw = backend.get();
-        sluice_test::conformance::CloseDrainFixture fx(std::move(backend));
-        fx.close = [raw] { raw->close_admission(); };
-        fx.slot_in_use = [raw] { return raw->arena_slot_in_use(); };
+        auto fx = std::make_unique<sluice_test::conformance::CloseDrainFixture>(std::move(backend));
+        fx->close = [raw] { raw->close_admission(); };
+        fx->slot_in_use = [raw] { return raw->arena_slot_in_use(); };
         return fx;
     };
     const std::string failed =

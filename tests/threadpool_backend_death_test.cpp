@@ -386,11 +386,14 @@ void child_destroy_with_pending() {
         ::close(fd);
     }
 
-    // The destructor did NOT fail-fast (or the submitter was joined first,
-    // which cannot happen — the destructor never resumes the paused submitter;
-    // reaching here means the destructor returned, the regression).
-    gate.resume.store(true, std::memory_order_release);
-    if (submitter.joinable()) submitter.join();
+    // Reaching here means the destructor returned WITHOUT fail-fast — the
+    // regression. Do NOT resume the gate or join the submitter: the backend
+    // (whose member `set_before_enqueue_lock_pause_gate` registered) and the
+    // `c` Completion it captured are already destroyed by the scope exit above,
+    // so resuming would let the paused submitter touch freed memory, and the
+    // gate object the destroyed backend pointed at may also be gone. _Exit
+    // immediately so the death runner reports the unexpected return; the whole
+    // child process is torn down by _Exit regardless of the joinable thread.
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 

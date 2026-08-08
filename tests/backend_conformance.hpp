@@ -372,7 +372,17 @@ std::string run_close_drain_case(CloseDrainFixture& fx, const char* backend_name
 // seams; the suite itself stays backend-agnostic). Returns the empty string
 // on full pass, or the stable name of the FIRST failing case. Implemented
 // out-of-line in backend_conformance_test.cpp.
-using MakeCloseDrainFixture = std::function<CloseDrainFixture()>;
+//
+// The factory returns a unique_ptr<CloseDrainFixture> (NOT a value) so the
+// fixture — and therefore its `AsyncStats stats` member, which the
+// AsyncIoContext holds a pointer to — has a STABLE address. Returning a value
+// would move the fixture, and AsyncIoContext's move ctor copies the stats_
+// pointer from the dying source, leaving the context/backend with a dangling
+// AsyncStats* (NRVO is a permitted, not guaranteed, optimization; correctness
+// must not rely on it). Returning a unique_ptr pins the address for the
+// fixture's whole lifetime, matching CapacityFixture's direct in-frame
+// construction.
+using MakeCloseDrainFixture = std::function<std::unique_ptr<CloseDrainFixture>()>;
 std::string run_close_drain_cases(const BackendFactory& factory,
                                   const MakeCloseDrainFixture& make_fx);
 

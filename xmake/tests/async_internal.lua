@@ -390,6 +390,34 @@ sluice_internal_async_test("threadpool_backend_c2d_failure_test", {platform_gate
 -- half-accepted). Gated to linux/macosx (POSIX syscalls).
 sluice_internal_async_test("threadpool_backend_c2e_close_drain_test", {platform_gate = {"linux", "macosx"}})
 
+-- fake_backend_c2e_close_drain_test — Phase C2e FakeAsyncBackend
+-- admission-transaction deterministic test (Issue #68 rows 15-16; ADR
+-- Decision 15 + §"Commit / accept" :453-462). The backend admission
+-- transaction domain serializes close_admission() against an in-flight
+-- submit's acceptance protocol: the fake's SubmitPauseGate pauses the submit
+-- path AFTER the slot commit (Step 4) and BEFORE the `binding -> outstanding`
+-- release-store (Step 5 — the commit/accept linearization point), INSIDE the
+-- transaction; close_admission() must block there (a returned close would
+-- permit a NEW acceptance LP after close). The resumed submit completes its
+-- LP (submit wins), close returns after, the accepted request completes
+-- normally, and a new submit after close rejects invalid_state. Mutant
+-- M11-fake detector.
+sluice_internal_async_test("fake_backend_c2e_close_drain_test")
+
+-- async_io_context_split_wait_c2e_test — Phase C2e context-level
+-- interrupt-vs-final-ready detector (Issue #68 rows 15-16; mutant M12).
+-- Drives the REAL AsyncIoContext::wait_one split-wait path (snapshot -> poll
+-- -> wait_for_change -> interrupted -> ONE final poll) with a TEST-ONLY
+-- split-wait backend + wait source (public AsyncBackend / BackendWaitSource
+-- interfaces; no production context seam): wait_for_change() pauses AFTER
+-- observing a control interrupt and BEFORE returning `interrupted`; the test
+-- records backend-ready in that window; the context's interrupted-branch
+-- final poll is the ONLY path that can reap it. Deleting that poll (mutant
+-- M12) makes wait_one return 0 — deterministic RED on the L1 production
+-- context code (the previous C2e interrupt-window evidence covered only the
+-- backend-level wait_one).
+sluice_internal_async_test("async_io_context_split_wait_c2e_test")
+
 -- reference_backend_arena_lifecycle_test — Phase B reference backend migration
 -- regression (commit 4). Proves FakeAsyncBackend + SyncBackend are actually
 -- driven by the bounded RequestArena + five-stage admission + the synchronous

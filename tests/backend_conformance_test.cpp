@@ -456,12 +456,7 @@ int run_conformance(const BackendFactory& f) {
     }
     const bool failed = conf_failures().size() != before;
     if (failed) {
-        for (std::size_t i = before; i < conf_failures().size(); ++i) {
-            const auto& fl = conf_failures()[i];
-            std::printf("[conformance] FAIL %s :: %s : %s (%s:%d)\n",
-                        fl.backend.c_str(), fl.case_name.c_str(),
-                        fl.expr.c_str(), fl.file.c_str(), fl.line);
-        }
+        print_conf_failures_since(before);
     }
     return failed ? 1 : 0;
 }
@@ -925,7 +920,10 @@ void CloseDrainFixture::cleanup_or_abort(const char* backend_name,
 std::string case_close_rejects_future_submit(const BackendFactory& f,
                                              const MakeCloseDrainFixture& make_fx) {
     constexpr const char* cname = "close_rejects_future_submit";
-    auto fx = make_fx();
+    // Hold the fixture via unique_ptr so its address (and therefore the
+    // AsyncStats* the AsyncIoContext holds) is stable for the case's lifetime.
+    auto fx_owner = make_fx();
+    auto& fx = *fx_owner;
     ScopedTempFd fd(capacity_temp_fd(f));
     // real_mode only: report a failed temp-fd setup separately (a ThreadPool
     // submit needs a valid fd to reach the admission path — descriptor
@@ -970,7 +968,10 @@ std::string case_close_rejects_future_submit(const BackendFactory& f,
 std::string case_close_preserves_accepted_terminal(const BackendFactory& f,
                                                    const MakeCloseDrainFixture& make_fx) {
     constexpr const char* cname = "close_preserves_accepted_terminal";
-    auto fx = make_fx();
+    // Hold the fixture via unique_ptr so its address (and therefore the
+    // AsyncStats* the AsyncIoContext holds) is stable for the case's lifetime.
+    auto fx_owner = make_fx();
+    auto& fx = *fx_owner;
     ScopedTempFd fd(capacity_temp_fd(f));
     if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
         !setup_err.empty()) {
@@ -1025,7 +1026,10 @@ std::string case_close_preserves_accepted_terminal(const BackendFactory& f,
 std::string case_drain_then_reset_releases_slot(const BackendFactory& f,
                                                 const MakeCloseDrainFixture& make_fx) {
     constexpr const char* cname = "drain_then_reset_releases_slot";
-    auto fx = make_fx();
+    // Hold the fixture via unique_ptr so its address (and therefore the
+    // AsyncStats* the AsyncIoContext holds) is stable for the case's lifetime.
+    auto fx_owner = make_fx();
+    auto& fx = *fx_owner;
     ScopedTempFd fd(capacity_temp_fd(f));
     if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
         !setup_err.empty()) {
@@ -1072,7 +1076,10 @@ std::string case_drain_then_reset_releases_slot(const BackendFactory& f,
 std::string case_slot_released_but_admission_stays_closed(const BackendFactory& f,
                                                           const MakeCloseDrainFixture& make_fx) {
     constexpr const char* cname = "slot_released_but_admission_stays_closed";
-    auto fx = make_fx();
+    // Hold the fixture via unique_ptr so its address (and therefore the
+    // AsyncStats* the AsyncIoContext holds) is stable for the case's lifetime.
+    auto fx_owner = make_fx();
+    auto& fx = *fx_owner;
     ScopedTempFd fd(capacity_temp_fd(f));
     if (auto setup_err = capacity_temp_fd_setup_error(f, fd);
         !setup_err.empty()) {
