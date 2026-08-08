@@ -19,6 +19,13 @@
 //   D2  void path (sync_data): same close-while-running contract.
 //   A2  void submit after close: invalid_state, Completion idle (the shared
 //       case A covers the size path; this pins the void path).
+//   A3  close then malformed descriptor: the Reserve-stage admission decision
+//       (closed -> invalid_state, Decision 15; capacity full -> would_block,
+//       Decision 13) wins over the Prepare-stage malformed-descriptor probe
+//       (invalid_argument, Decision 6) — descriptor validation runs INSIDE
+//       the admission transaction AFTER reserve (ADR Decision-5 stage order;
+//       review P1). Zero residue: idle Completion, outstanding == 0,
+//       slot_in_use == 0. Size + void paths, and the capacity-full case.
 //   C1b close || acceptance LP, submit wins: the submit pauses INSIDE the
 //       backend admission transaction, after the slot commit (Step 4) and
 //       before the `binding -> outstanding` release-store (ADR Step 5 — the
@@ -506,7 +513,82 @@ SLUICE_TEST_CASE(tp_c2e_void_submit_after_close_rejected) {
     ::close(fd);
 }
 
-// ---- C1b: close || acceptance LP — submit wins; close must wait ------------
+// ---- A3: close then malformed descriptor -> invalid_state (Reserve wins) ---
+// ADR Decision-5 stage order: descriptor validation (Prepare, Decision 6
+// invalid_argument) runs INSIDE the admission transaction AFTER reserve, so
+// the Reserve-stage admission decisions — closed -> invalid_state (Decision
+// 15) and capacity full -> would_block (Decision 13) — take precedence. A
+// post-close malformed submit (negative fd, nonzero length) must reject
+// invalid_state — NOT invalid_argument — with a completely idle Completion
+// and zero slot/borrow residue (review P1; size path).
+SLUICE_TEST_CASE(tp_c2e_close_then_malformed_read_rejected_invalid_state) {
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/2, /*workers=*/1});
+    backend.close_admission();
+
+    Completion<std::size_t> c;
+    std::byte buf[1]{};
+    auto r = backend.submit_read(ReadOp{-1, buf, 1, 0}, c);
+    SLUICE_CHECK(!r.has_value());
+    SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
+    SLUICE_CHECK(c.idle());
+    SLUICE_CHECK(!c.outstanding());
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
+// ---- A3b: same Reserve-over-Prepare precedence on the void path ------------
+SLUICE_TEST_CASE(tp_c2e_close_then_malformed_sync_rejected_invalid_state) {
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/2, /*workers=*/1});
+    backend.close_admission();
+
+    Completion<void> c;
+    auto r = backend.submit_sync_data(SyncDataOp{-1}, c);  // negative fd
+    SLUICE_CHECK(!r.has_value());
+    SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
+    SLUICE_CHECK(c.idle());
+    SLUICE_CHECK(!c.outstanding());
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
+// ---- A3c: capacity full + malformed descriptor -> would_block (Reserve wins
+// over Prepare validation) ----------------------------------------------------
+// The first submit holds the only slot (accepted, unreaped/unreset), so the
+// second submit's reserve fails would_block BEFORE the malformed descriptor
+// is even probed. Pins the ADR Decision-5 precedence: a Reserve-stage
+// rejection beats the Prepare-stage invalid_argument (review P1).
+SLUICE_TEST_CASE(tp_c2e_capacity_full_malformed_rejected_would_block) {
+    ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
+    TempPath tp("fullmalformed");
+    int fd = seeded_fd(tp, std::byte{0xC0});
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c1;
+    auto r1 = backend.submit_read(ReadOp{fd, buf, 1, 0}, c1);
+    SLUICE_CHECK(r1.has_value());
+
+    // The only slot is held by the accepted, unreaped c1 — reserve must fail
+    // would_block even though this descriptor is malformed (negative fd).
+    Completion<std::size_t> c2;
+    auto r2 = backend.submit_read(ReadOp{-1, buf, 1, 0}, c2);
+    SLUICE_CHECK(!r2.has_value());
+    SLUICE_CHECK(r2.error().code == IoError::Code::would_block);
+    SLUICE_CHECK(c2.idle());
+    SLUICE_CHECK(!c2.outstanding());
+    SLUICE_CHECK(!c2.ready());
+
+    // Drain + reset so destruction is quiescent.
+    SLUICE_CHECK(
+        drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout));
+    SLUICE_CHECK(c1.ready());
+    SLUICE_CHECK(c1.result().has_value());
+    c1.reset();
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    ::close(fd);
+}
 // The submit path pauses INSIDE the backend admission transaction, AFTER the
 // slot commit (Step 4: prepared -> pending) and BEFORE the `binding ->
 // outstanding` release-store (ADR Step 5 — the commit/accept linearization
