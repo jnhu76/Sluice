@@ -20,7 +20,9 @@ C2e closes row 15 for the Fake reference path and the real ThreadPoolBackend,
 strengthens row 16's already-FULL evidence with the `pending`-state death case
 and a Fake-type death target, records Uring's Phase-D gap as a
 `not_implemented` manifest record that enters Uring's verdict, and proves every
-detector case fails on deliberately nonconforming code (mutants M1–M12).
+non-neutral defect injection is mutation-sensitive: all detector cases fail on
+deliberately nonconforming code (mutants M1–M12; M6/M7 are documented
+redundant authorities, not detector lines).
 
 ---
 
@@ -312,6 +314,22 @@ public API change beyond the reference method below.
    reserved/prepared slot is an in-flight submission and completes its
    protocol; close gates NEW acceptance at reserve only.
 
+3. **Descriptor-validation precedence (review P1; ADR Decision 5/6/15)** —
+   `ThreadPoolBackend`'s malformed-descriptor probe now runs INSIDE the
+   admission transaction, AFTER reserve and BEFORE prepare (Stage 1.5). It
+   previously ran before any admission serialization, so a post-close
+   malformed submit returned `invalid_argument` instead of `invalid_state`
+   and a capacity-full malformed submit returned `invalid_argument` instead
+   of `would_block` — the Reserve-stage admission decisions (closed ->
+   `invalid_state`, Decision 15; full -> `would_block`, Decision 13) must
+   precede the Prepare-stage descriptor validation (`invalid_argument`,
+   Decision 6). A rejected descriptor rolls back the reserved slot through
+   the same `rollback_reserved_or_prepared` the prepare-failure path uses
+   (zero residue, generation++, capacity recyclable). The precedence is
+   pinned by `tp_c2e_close_then_malformed_read_rejected_invalid_state`,
+   `tp_c2e_close_then_malformed_sync_rejected_invalid_state`, and
+   `tp_c2e_capacity_full_malformed_rejected_would_block` (all new).
+
 ## 5. Test case ledger
 
 | Case (SLUICE_TEST_CASE) | Target | Status |
@@ -324,6 +342,9 @@ public API change beyond the reference method below.
 | `tp_c2e_close_while_running_result_verbatim` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_while_running_void_result_verbatim` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_void_submit_after_close_rejected` | threadpool_backend_c2e_close_drain_test | PASS |
+| `tp_c2e_close_then_malformed_read_rejected_invalid_state` | threadpool_backend_c2e_close_drain_test | PASS |
+| `tp_c2e_close_then_malformed_sync_rejected_invalid_state` | threadpool_backend_c2e_close_drain_test | PASS |
+| `tp_c2e_capacity_full_malformed_rejected_would_block` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_waits_for_inflight_acceptance_lp` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_wins_submit_started_before_close_rejected` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_then_pending_cancel_wins` | threadpool_backend_c2e_close_drain_test | PASS |
@@ -359,10 +380,11 @@ public API change beyond the reference method below.
 
 M1–M12 in
 [`docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md`](../verification/phase-c2e-close-drain-destruction-mutation-evidence.md):
-10 of 12 single-point production mutations made the targeted detector case(s)
-fail RED (M1–M5, M8, M9, M10, M11/M11-fake, M12 — M8 via the death child's
-hang instead of fail-fast, bounded by the death runner's 60 s watchdog); every
-mutation was restored and the case(s) re-ran GREEN. M6 (`slot_in_use` check)
+11 of 13 backend-specific mutation executions (10 of 12 defect classes;
+M11/M11-fake are one defect class exercised on two backends) made the targeted
+detector case(s) fail RED (M1–M5, M8, M9, M10, M11, M11-fake, M12 — M8 via the
+death child's hang instead of fail-fast, bounded by the death runner's 60 s
+watchdog); every mutation was restored and the case(s) re-ran GREEN. M6 (`slot_in_use` check)
 and M7 (`backend_ready` check) are documented BEHAVIOR-NEUTRAL mutants:
 defense-in-depth redundancy covered by other authorities — `~RequestArena`
 fail-fasts on any `slot_in_use != 0` (M6), and `backend_ready != 0` implies
@@ -379,7 +401,7 @@ new B1/B3 detectors. Final scan confirmed 0 mutation markers remain.
 
 | Gate | Command | Result |
 |---|---|---|
-| Focused ThreadPool | `xmake build threadpool_backend_c2e_close_drain_test && xmake run threadpool_backend_c2e_close_drain_test` | PASS (15 cases) |
+| Focused ThreadPool | `xmake build threadpool_backend_c2e_close_drain_test && xmake run threadpool_backend_c2e_close_drain_test` | PASS (18 cases) |
 | Focused admission-LP (arena boundary) | `SLUICE_TEST_FILTER=close_admission_gates_reserve_not_inflight_prepared_slot xmake run request_lifecycle_scheme_b_test` | PASS |
 | Focused admission-LP (ThreadPool transaction) | `xmake run threadpool_backend_c2e_close_drain_test` (cases `tp_c2e_close_waits_for_inflight_acceptance_lp`, `tp_c2e_close_wins_submit_started_before_close_rejected`) | PASS |
 | Focused admission-LP (Fake transaction) | `xmake run fake_backend_c2e_close_drain_test` | PASS (1 case) |
@@ -389,7 +411,7 @@ new B1/B3 detectors. Final scan confirmed 0 mutation markers remain.
 | Stability | 5× repeated runs of the C2e race cases (`close_races_workers`, `submit_races_close`, `wakes_parked_waiter`) | PASS (5/5, no flake) |
 | Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (152 cases, incl. 16 new C2e) |
 | Aggregate gate | `python3 scripts/verify-backend-conformance.py` | PASS (Fake/TP ELIGIBLE with C2e records PASS; Uring NOT CONFORMING with the C2e gap in its reasons) |
-| RED validity | 12 mutation rows (M1–M12 incl. M11-fake), focused filtered runs | 10 RED (M1–M5, M8, M9, M10, M11/M11-fake, M12); M6/M7 behavior-neutral (defense-in-depth redundancy, see §7 + mutation ledger); all mutations restored and re-run GREEN |
+| RED validity | 13 mutation executions across 12 defect classes (M1–M12 incl. M11-fake), focused filtered runs | 11 RED executions (M1–M5, M8, M9, M10, M11, M11-fake, M12) = 10 RED defect classes (M11/M11-fake count as one); M6/M7 behavior-neutral (defense-in-depth redundancy, see §7 + mutation ledger); all mutations restored and re-run GREEN |
 
 ## 9. Validation matrix (full evidence)
 

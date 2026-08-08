@@ -111,10 +111,34 @@ not be dropped" assertion.
 
 ## Summary
 
-- 10 of 12 mutants were proven RED → restored → GREEN (M1–M5, M8, M9, M10,
-  M11/M11-fake, M12).
-- M6 and M7 are documented behavior-neutral mutants (defense-in-depth
-  redundancy; covering-authority proof above).
+The matrix records **13 backend-specific mutation executions across 12 defect
+classes** (M11 and M11-fake exercise the same defect class on the two
+backends):
+
+- **11 RED → restored → GREEN executions** — M1, M2, M3, M4, M5, M8, M9, M10,
+  M11, M11-fake, M12;
+- **2 behavior-neutral executions** — M6, M7 (defense-in-depth redundancy;
+  covering-authority proof above).
+
+Equivalently, by defect class (counting M11/M11-fake as one class): **10 RED
+defect classes** (M1–M5, M8, M9, M10, M11/M11-fake, M12) and **2
+behavior-neutral defect classes** (M6, M7).
+
+**Post-review addition (review P1, PR #73 head `153638f`+):** the three
+descriptor-validation-precedence detectors
+(`tp_c2e_close_then_malformed_read_rejected_invalid_state`,
+`tp_c2e_close_then_malformed_sync_rejected_invalid_state`,
+`tp_c2e_capacity_full_malformed_rejected_would_block`) were added after the
+harness run. The two close-precedence cases are covered by the EXISTING M10
+defect class (close fails to reject: a post-close malformed submit then
+returns `invalid_argument` from the Prepare probe instead of the expected
+`invalid_state` — the detector fails). The capacity-full-precedence case
+(A3c) is a regression-pinned precedence assertion (Reserve's `would_block`
+must beat a malformed descriptor); no dedicated mutant exercises it because
+the defect (probing the descriptor before Reserve) has no separate M-row —
+it is covered by the production change in
+`docs/architecture/phase-c2e-compliance-gate.md` §4 item 3. Re-running the
+full harness to add an M13 row is a recorded follow-up (issue #74).
 - The harness force-rebuilds each target (`xmake build -r`) so the run binary
   always matches the applied mutation (an incremental-build hash skip in the
   first harness draft produced a false STILL_RED; fixed by forcing rebuilds).

@@ -54,7 +54,7 @@
   caller resets the ready Completion), slot-release vs admission-close
   orthogonality.
 - `tests/threadpool_backend_c2e_close_drain_test.cpp` — deterministic window
-  evidence on the real backend (15 cases): close while pending/enqueued/
+  evidence on the real backend (18 cases): close while pending/enqueued/
   running (real result verbatim, size + void), close then pending cancel
   winner, close then running cancel intent only, one-shot parked-waiter wake
   with no busy-spin, close ‖ final `record_terminal` in both orderings plus
@@ -69,7 +69,13 @@
   reserve). The linearization case asserts BOTH legal reject codes
   (`invalid_state`, `would_block`) leave the Completion
   idle/not-outstanding/not-ready (half-accepted detector), and computes its
-  drain deadline fresh after the submitter joins.
+  drain deadline fresh after the submitter joins. Descriptor-validation
+  precedence (review P1): `tp_c2e_close_then_malformed_read_rejected_invalid_state`
+  and `tp_c2e_close_then_malformed_sync_rejected_invalid_state` (post-close
+  malformed submit rejects `invalid_state`, not `invalid_argument` — the
+  Reserve-stage admission decision precedes the Prepare-stage descriptor
+  probe, zero residue) and `tp_c2e_capacity_full_malformed_rejected_would_block`
+  (capacity full beats a malformed descriptor).
 - `tests/request_lifecycle_scheme_b_test.cpp` — added
   `close_admission_gates_reserve_not_inflight_prepared_slot` (arena
   boundary: close gates NEW acceptance at reserve; an in-flight
