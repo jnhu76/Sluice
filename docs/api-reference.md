@@ -1499,7 +1499,7 @@ public:
     void complete_oldest_sync_error(IoError e);
 
     // Production admission close (ADR Decision 15; reference semantics).
-    void close_admission();
+    void close_admission() noexcept;
 
     // Phase B test-only introspection (the arena is a private detail).
     std::size_t arena_capacity() const noexcept;

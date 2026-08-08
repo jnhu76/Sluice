@@ -5,11 +5,14 @@
 **Issue #68:** https://github.com/jnhu76/Sluice/issues/68 — C2e scope (rows 15–16)
 **Branch:** test/phase-c2e-close-drain-destruction
 **Baseline:** `origin/master` @ `0b6c0b9126e6461d0317dee81e460f2abcc22f02` (PR #72, C2d merged)
-**Scope:** Tests + one additive reference-backend method
-(`FakeAsyncBackend::close_admission()`, mirroring the existing
-`ThreadPoolBackend::close_admission`) + manifest/gate records + docs. No
-change to any existing production behavior, no new public request handle, no
-Uring migration, no Scheduler/Batch/wake-phase work.
+**Scope:** Tests + the backend admission transaction domain (ADR §"Commit /
+accept" :453-462) on `ThreadPoolBackend` and `FakeAsyncBackend` — close
+serializes against an in-flight acceptance protocol and the acceptance
+linearization point is the Step 5 `binding -> outstanding` release-store — +
+`FakeAsyncBackend::close_admission()` (the C2e reference method) + a
+context-level interrupt-window detector (test-only split-wait backend; no
+production context seam) + manifest/gate records + docs. No new public request
+handle, no Uring migration, no Scheduler/Batch/wake-phase work.
 
 This is the PR-level evidence ledger for Phase C2e, the fifth C2 semantic-coverage
 slice: **admission close / drain / reset / quiescent destruction** (rows 15–16).
@@ -17,7 +20,7 @@ C2e closes row 15 for the Fake reference path and the real ThreadPoolBackend,
 strengthens row 16's already-FULL evidence with the `pending`-state death case
 and a Fake-type death target, records Uring's Phase-D gap as a
 `not_implemented` manifest record that enters Uring's verdict, and proves every
-detector case fails on deliberately nonconforming code (mutants M1–M10).
+detector case fails on deliberately nonconforming code (mutants M1–M12).
 
 ---
 
@@ -25,7 +28,7 @@ detector case fails on deliberately nonconforming code (mutants M1–M10).
 
 | Requirement (Issue #68 row) | Evidence |
 |---|---|
-| 15 — close/drain/reset sequence (close → new submit `invalid_state`; close → existing reap/cancel legal; reset releases slot) | Shared suite: `close_rejects_future_submit`, `close_preserves_accepted_terminal`, `drain_then_reset_releases_slot`, `slot_released_but_admission_stays_closed` (Fake + ThreadPool via `conformance_close_drain_fake` / `conformance_close_drain_threadpool`). ThreadPool windows: `tp_c2e_close_while_pending_preserves_accepted_request`, `tp_c2e_close_while_enqueued_preserves_dispatch`, `tp_c2e_close_while_running_result_verbatim`, `tp_c2e_close_while_running_void_result_verbatim`, `tp_c2e_void_submit_after_close_rejected`, `tp_c2e_close_then_pending_cancel_wins`, `tp_c2e_close_then_running_cancel_intent_only`, `tp_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin`, `tp_c2e_close_before_final_terminal_no_lost_ready`, `tp_c2e_final_terminal_before_close_not_affected`, `tp_c2e_close_races_workers_invariant_drain`, `tp_c2e_submit_races_close_linearization` |
+| 15 — close/drain/reset sequence (close → new submit `invalid_state`; close → existing reap/cancel legal; reset releases slot) | Shared suite: `close_rejects_future_submit`, `close_preserves_accepted_terminal`, `drain_then_reset_releases_slot`, `slot_released_but_admission_stays_closed` (Fake + ThreadPool via `conformance_close_drain_fake` / `conformance_close_drain_threadpool`). Admission-LP arbitration: `close_admission_gates_reserve_not_inflight_prepared_slot` (arena boundary — close gates NEW acceptance at reserve; an in-flight prepared slot completes its protocol) + `tp_c2e_close_waits_for_inflight_acceptance_lp` / `tp_c2e_close_wins_submit_started_before_close_rejected` (ThreadPool admission transaction) + `fake_c2e_close_waits_for_inflight_acceptance_lp` (Fake admission transaction; ADR §"Commit / accept" Step 5 — the `binding -> outstanding` release-store is the acceptance LP; the winning submit retains its admission lock through Step 5). ThreadPool windows: `tp_c2e_close_while_pending_preserves_accepted_request`, `tp_c2e_close_while_enqueued_preserves_dispatch`, `tp_c2e_close_while_running_result_verbatim`, `tp_c2e_close_while_running_void_result_verbatim`, `tp_c2e_void_submit_after_close_rejected`, `tp_c2e_close_then_pending_cancel_wins`, `tp_c2e_close_then_running_cancel_intent_only`, `tp_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin`, `tp_c2e_close_before_final_terminal_no_lost_ready`, `tp_c2e_final_terminal_before_close_not_affected`, `tp_c2e_close_races_workers_invariant_drain`, `tp_c2e_submit_races_close_linearization`, `ctx_wait_one_interrupt_final_poll_closes_ready_race` (context-level interrupted-branch final poll) |
 | 16 — quiescent destruction (accepted_outstanding == 0 / slot_in_use == 0 before destroy) | ThreadPool death matrix (now incl. `pending`): `tp_death_destroy_with_pending` + existing `tp_death_destroy_with_{enqueued,running,backend_ready,completion_ready}` + `tp_death_control_quiescent_destroy`; Fake-type death target: `fake_death_destroy_with_unreaped_request`, `fake_death_destroy_with_ready_unreset`, `fake_death_control_quiescent_destroy`; arena death (`arena_death_destroy_with_slot_in_use`), Completion ready-destruction release (`binding_release_capability_ready_destruction_releases_slot`) |
 
 **Out of scope (explicitly, unchanged from Issue #68):** rows 4b/12b/14b
@@ -57,7 +60,11 @@ consumption (Phase F), backend-ready wake bridge (Phase G), public
   Decision 11 (cancellation target and disposition — running cancel records
   intent only; the real result wins verbatim), Decision 13 (bounded capacity
   and observability — `slot_in_use` counts reserve through reset/ready-
-  destruction release).
+  destruction release), and §"Commit / accept" (the five-step submission
+  protocol: Step 5 — the `binding -> outstanding` release-store — is the
+  commit/accept linearization point, and "the winning submit performs this
+  protocol while retaining its own context/admission lock" — the backend
+  admission transaction domain that close serializes against).
 - **AGENTS.md** §10.7 (slot release: clears binding, increments generation,
   decrements slot-in-use, allocates nothing, waits for no asynchronous
   progress), §14 (shutdown and destruction: destructors do not implicitly
@@ -111,12 +118,52 @@ The key accounting distinction C2e pins with tests:
 
 ### 3.1 Close linearization
 
-The arena mutex is the sole admission authority: `close_admission()` and
-`reserve()` serialize on it, so submit‖close linearizes as either
-accept-then-close (the accepted request continues to exactly one terminal) or
-close-then-reject (`invalid_state`, Completion idle, zero residue). There is no
-half-accepted state (`tp_c2e_submit_races_close_linearization`: every attempt
-is accepted-then-terminal or synchronously rejected-idle).
+The acceptance linearization point is the `binding -> outstanding` release-store
+(ADR §"Commit / accept" Step 5 — "Step 5 is the commit/accept linearization
+point"; the arena's `commit()` is its SLOT HALF, Step 4: `prepared -> pending` +
+pin + accepted++ + borrow). Decision-15 arbitration ("close_admission atomically
+prevents new acceptance") lives in the BACKEND admission transaction domain
+(ADR :453-462 — "the winning submit performs this protocol while retaining its
+own context/admission lock"): the submit paths hold `admission_mtx_` across the
+whole Step 1-5 protocol (reserve -> prepare -> begin_binding -> arena commit ->
+install_binding -> commit_binding), and `close_admission()` takes the same lock
+before `arena_.close_admission()` (the ThreadPool additionally interrupts
+parked waiters AFTER the lock is released). Therefore after
+`close_admission()` returns NO new acceptance LP can occur, and submit‖close
+linearizes as either:
+
+- **submit wins** — the submit completes its Step 5 release-store before
+  releasing the lock; close blocks on the transaction until then and returns
+  after the LP; the accepted request continues to exactly one terminal; or
+- **close wins** — close sets the arena admission flag; a submit that acquires
+  the lock afterwards observes admission closed at reserve and rejects
+  synchronously with `invalid_state` (Completion idle, zero residue).
+
+There is deliberately no admission re-check inside `arena_.commit()`: a slot
+already reserved/prepared when close lands is an IN-FLIGHT submission and
+completes its protocol (the backend lock makes the close-vs-protocol
+interleaving unreachable inside a backend; the arena gates NEW acceptance at
+reserve only). The arena boundary is pinned by
+`close_admission_gates_reserve_not_inflight_prepared_slot`
+(`request_lifecycle_scheme_b_test`). Deterministic arbitration evidence:
+
+- `tp_c2e_close_waits_for_inflight_acceptance_lp` — the submit is paused
+  INSIDE the admission transaction between the slot commit (Step 4) and the
+  Step 5 release-store; the closer thread observes the Completion at the close
+  return (`close_saw_outstanding`): close must NOT have returned before the
+  in-flight LP (mutant M11 detector).
+- `tp_c2e_close_wins_submit_started_before_close_rejected` — the submit is
+  paused BEFORE the admission lock; close completes with no contention; the
+  resumed submit rejects at reserve with `invalid_state`, idle Completion,
+  zero residue.
+- `fake_c2e_close_waits_for_inflight_acceptance_lp` — the same close-waits
+  arbitration on the Fake driver (its SubmitPauseGate pauses in the same
+  Step 4→Step 5 window, inside the transaction; mutant M11-fake detector).
+- `tp_c2e_submit_races_close_linearization` (concurrent): every attempt is
+  accepted-then-terminal or synchronously rejected-idle; both legal reject
+  codes (`invalid_state`, `would_block`) are asserted to leave the Completion
+  idle / not outstanding / not ready, so a half-accepted regression cannot be
+  masked by cleanup.
 
 ### 3.2 Close never changes request terminal semantics
 
@@ -144,9 +191,14 @@ readiness is published — state first, then notify) and `control_generation`
 `wait_for_change()` reports `interrupted`; `AsyncIoContext::wait_one` (and the
 backend's raw `wait_one`) performs ONE final non-blocking reap to close the
 interrupt-vs-final-ready race, then returns 0 (I8: no fabricated completion).
-Future waits snapshot the advanced control generation and park normally — the
-control wake is one-shot by construction, so an admission-closed runtime with
-outstanding work never busy-spins.
+The CONTEXT-level final poll is pinned deterministically by
+`ctx_wait_one_interrupt_final_poll_closes_ready_race` (mutant M12 detector: a
+test-only split-wait backend pauses `wait_for_change()` after observing the
+interrupt; the test records backend-ready in that window; deleting the
+context's final poll makes wait_one return 0). Future waits snapshot the
+advanced control generation and park normally — the control wake is one-shot
+by construction, so an admission-closed runtime with outstanding work never
+busy-spins.
 
 Lost-wake closure per race:
 
@@ -191,26 +243,74 @@ case (the matrix listed it but no case drove it) and Fake-type death evidence
 
 ## 4. Test-only seams (all `SLUICE_ASYNC_INTERNAL_TESTING`-guarded)
 
-C2e introduces NO new production seam. It reuses the existing guarded pause
-gates (`BeforeEnqueueLockPauseGate` for `pending`, `BeforeWorkerDequeuePauseGate`
-for `enqueued`, `WorkerRunningPauseGate` for `running`,
-`TerminalPublicationPauseGate` for the pre-`record_terminal` window, the
-wait-phase flag for the parked-waiter observation) plus the existing method-only
-introspection (`handle_for_completion_for_test`, `observe_for_test`,
-`dispatch_size_for_test`, `active_workers_for_test`, `backend_ready_count_for_test`,
-`arena_slot_in_use`, `syscall_count_for_test`). The shared suite's
-`CloseDrainFixture` wires two INSTANCE-LEVEL closures (`close`,
-`slot_in_use`) over the concrete backends' PUBLIC `close_admission()` /
-`arena_slot_in_use()` — no new production member, no public API change beyond
-the reference method below.
+C2e reuses the existing guarded pause gates (`BeforeEnqueueLockPauseGate` for
+`pending`, `BeforeWorkerDequeuePauseGate` for `enqueued`,
+`WorkerRunningPauseGate` for `running`, `TerminalPublicationPauseGate` for the
+pre-`record_terminal` window, the wait-phase flag for the parked-waiter
+observation) plus the existing method-only introspection
+(`handle_for_completion_for_test`, `observe_for_test`, `dispatch_size_for_test`,
+`active_workers_for_test`, `backend_ready_count_for_test`, `arena_slot_in_use`,
+`syscall_count_for_test`).
 
-**Production change (the ONLY one):** `FakeAsyncBackend::close_admission()`
-— an additive public method mirroring `ThreadPoolBackend::close_admission()`
-(ADR Decision 15 reference semantics: `arena_.close_admission()`). The
-reference backend previously had NO admission-close surface at all, so no
-shared close evidence could exist; the C2e shared suite requires both backends
-to expose the same lifecycle control. It is documented on the method and in
-`docs/api-reference.md`-adjacent scope; no existing behavior changed.
+C2e adds THREE new `SLUICE_ASYNC_INTERNAL_TESTING`-only pause gates on
+`ThreadPoolBackend`:
+
+- `ControlWakeFinalReapPauseGate` — pauses `wait_one()` between the interrupted
+  control wake and its single final reap (the interrupt-vs-final-ready window;
+  `tp_c2e_interrupt_final_reap_closes_ready_race`; mutant M4 detector);
+- `BeforeCommitBindingPauseGate` — pauses the submit path INSIDE the admission
+  transaction, between `arena_.commit()` (Step 4) and the Step 5 release-store
+  (`tp_c2e_close_waits_for_inflight_acceptance_lp`; mutant M11 detector);
+- `BeforeAdmissionLockPauseGate` — pauses the submit path BEFORE taking
+  `admission_mtx_` (`tp_c2e_close_wins_submit_started_before_close_rejected`).
+
+All are compiled out of production `sluice_async` (0 symbols in
+`libsluice_async.a`; verified by `nm` scan) and add guarded `std::atomic`
+members only to the internal-testing build.
+
+The B3 context-level detector
+(`ctx_wait_one_interrupt_final_poll_closes_ready_race`) uses NO production seam
+at all: a test-only split-wait backend + wait source (public `AsyncBackend` /
+`BackendWaitSource` interfaces) pauses `wait_for_change()` after observing a
+control interrupt and before returning `interrupted`; the test records
+backend-ready in that window, and the context's interrupted-branch final poll
+(the real L1 `AsyncIoContext::wait_one` code) is the ONLY path that can reap
+it. Mutant M12 detector.
+
+The shared suite's `CloseDrainFixture` wires two INSTANCE-LEVEL closures
+(`close`, `slot_in_use`) over the concrete backends' PUBLIC
+`close_admission()` / `arena_slot_in_use()` — no new production member, no
+public API change beyond the reference method below.
+
+**Production changes:**
+
+1. `FakeAsyncBackend::close_admission()` — an additive public method mirroring
+   `ThreadPoolBackend::close_admission()` (ADR Decision 15 reference semantics:
+   `arena_.close_admission()` under the admission transaction lock). The
+   reference backend previously had NO admission-close surface at all, so no
+   shared close evidence could exist; the C2e shared suite requires both
+   backends to expose the same lifecycle control. It is documented on the
+   method and in `docs/api-reference.md`; the close/drain semantics are
+   unchanged from the C2e-start design.
+
+2. **Backend admission transaction domain (B1; ADR §"Commit / accept"
+   :453-462)** — both `ThreadPoolBackend` and `FakeAsyncBackend` now hold
+   `admission_mtx_` across the whole submit acceptance protocol (reserve ->
+   prepare -> begin_binding -> arena commit -> install_binding ->
+   commit_binding — the Step 5 acceptance LP), and `close_admission()` takes
+   the same lock before `arena_.close_admission()`. This replaces the previous
+   draft's attempt to gate `RequestArena::commit()` on `admission_closed_`:
+   per the ADR the acceptance LP is the `binding -> outstanding` release-store
+   (the arena's own `commit()` comment calls it "the submit-success
+   linearization point's slot half"), so Decision-15 arbitration belongs in the
+   backend transaction domain the ADR mandates ("the winning submit performs
+   this protocol while retaining its own context/admission lock"). The lock is
+   released before enqueue (no-fail, needs no admission serialization). Lock
+   order: `admission_mtx_` -> arena leaf only; never nested with `work_mtx_`
+   or the ready-wait mutex (no path takes `admission_mtx_` while holding
+   `work_mtx_`). `RequestArena::commit()` carries no admission check: a
+   reserved/prepared slot is an in-flight submission and completes its
+   protocol; close gates NEW acceptance at reserve only.
 
 ## 5. Test case ledger
 
@@ -218,11 +318,14 @@ to expose the same lifecycle control. It is documented on the method and in
 |---|---|---|
 | `conformance_close_drain_fake` (4 shared cases) | backend_conformance_test | PASS |
 | `conformance_close_drain_threadpool` (4 shared cases) | backend_conformance_test | PASS |
+| `close_admission_gates_reserve_not_inflight_prepared_slot` | request_lifecycle_scheme_b_test | PASS |
 | `tp_c2e_close_while_pending_preserves_accepted_request` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_while_enqueued_preserves_dispatch` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_while_running_result_verbatim` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_while_running_void_result_verbatim` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_void_submit_after_close_rejected` | threadpool_backend_c2e_close_drain_test | PASS |
+| `tp_c2e_close_waits_for_inflight_acceptance_lp` | threadpool_backend_c2e_close_drain_test | PASS |
+| `tp_c2e_close_wins_submit_started_before_close_rejected` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_then_pending_cancel_wins` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_then_running_cancel_intent_only` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin` | threadpool_backend_c2e_close_drain_test | PASS |
@@ -230,15 +333,17 @@ to expose the same lifecycle control. It is documented on the method and in
 | `tp_c2e_final_terminal_before_close_not_affected` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_races_workers_invariant_drain` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_submit_races_close_linearization` | threadpool_backend_c2e_close_drain_test | PASS |
+| `fake_c2e_close_waits_for_inflight_acceptance_lp` | fake_backend_c2e_close_drain_test | PASS |
+| `ctx_wait_one_interrupt_final_poll_closes_ready_race` | async_io_context_split_wait_c2e_test | PASS |
 | `tp_death_destroy_with_pending` | threadpool_backend_death_test | PASS |
 | `fake_death_destroy_with_unreaped_request` | fake_backend_death_test | PASS |
 | `fake_death_destroy_with_ready_unreset` | fake_backend_death_test | PASS |
 | `fake_death_control_quiescent_destroy` | fake_backend_death_test | PASS |
-| Python: `test_backend_conformance_manifest.py` (324 cases, incl. 16 new C2e) | unittest | PASS |
+| Python: `test_backend_conformance_manifest.py` (152 cases, incl. 16 new C2e) | unittest | PASS |
 
 ## 6. Fake / ThreadPool eligibility, Uring known gap
 
-- **Fake** — ELIGIBLE: `c2e_shared_close_drain_suite` (shared) + 
+- **Fake** — ELIGIBLE: `c2e_shared_close_drain_suite` (shared) +
   `c2e_fake_close_drain_death` (lifecycle) PASS; row 15 now FULL (shared suite
   + reference death path).
 - **ThreadPool** — ELIGIBLE: `c2e_shared_close_drain_suite` (shared) +
@@ -252,42 +357,50 @@ to expose the same lifecycle control. It is documented on the method and in
 
 ## 7. Validity evidence (mutations)
 
-M1–M10 in
+M1–M12 in
 [`docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md`](../verification/phase-c2e-close-drain-destruction-mutation-evidence.md):
-8 of 10 single-point production mutations made the targeted detector case(s)
-fail RED (M1–M5, M8, M9, M10 — M8 via the death child's hang instead of
-fail-fast, bounded by the death runner's 60 s watchdog); every mutation was
-restored and the case(s) re-ran GREEN. M6 (`slot_in_use` check) and M7
-(`backend_ready` check) are documented BEHAVIOR-NEUTRAL mutants: defense-in-depth
-redundancy covered by other authorities — `~RequestArena` fail-fasts on any
-`slot_in_use != 0` (M6), and `backend_ready != 0` implies
+10 of 12 single-point production mutations made the targeted detector case(s)
+fail RED (M1–M5, M8, M9, M10, M11/M11-fake, M12 — M8 via the death child's
+hang instead of fail-fast, bounded by the death runner's 60 s watchdog); every
+mutation was restored and the case(s) re-ran GREEN. M6 (`slot_in_use` check)
+and M7 (`backend_ready` check) are documented BEHAVIOR-NEUTRAL mutants:
+defense-in-depth redundancy covered by other authorities — `~RequestArena`
+fail-fasts on any `slot_in_use != 0` (M6), and `backend_ready != 0` implies
 `accepted_outstanding != 0` since reap is the sole accepted-outstanding
 decrementer (M7) — so the death matrix still fail-fasts under both mutants
 (recorded as negative results with the covering-authority proof, not
-fabricated REDs). Final scan confirmed 0 mutation markers remain.
+fabricated REDs). M11/M11-fake (close drops the admission transaction; the
+closer observes the in-flight submit's Completion still `binding` at the close
+return) and M12 (`AsyncIoContext::wait_one` drops the interrupted-branch final
+poll; the probe backend's ready stays unreaped and wait_one returns 0) are the
+new B1/B3 detectors. Final scan confirmed 0 mutation markers remain.
 
 ## 8. Commands run (validation) — see section 9 for the full matrix
 
 | Gate | Command | Result |
 |---|---|---|
-| Focused ThreadPool | `xmake build threadpool_backend_c2e_close_drain_test && xmake run threadpool_backend_c2e_close_drain_test` | PASS (12 cases) |
+| Focused ThreadPool | `xmake build threadpool_backend_c2e_close_drain_test && xmake run threadpool_backend_c2e_close_drain_test` | PASS (15 cases) |
+| Focused admission-LP (arena boundary) | `SLUICE_TEST_FILTER=close_admission_gates_reserve_not_inflight_prepared_slot xmake run request_lifecycle_scheme_b_test` | PASS |
+| Focused admission-LP (ThreadPool transaction) | `xmake run threadpool_backend_c2e_close_drain_test` (cases `tp_c2e_close_waits_for_inflight_acceptance_lp`, `tp_c2e_close_wins_submit_started_before_close_rejected`) | PASS |
+| Focused admission-LP (Fake transaction) | `xmake run fake_backend_c2e_close_drain_test` | PASS (1 case) |
+| Focused context final poll | `xmake run async_io_context_split_wait_c2e_test` | PASS (1 case) |
 | Focused shared | `SLUICE_TEST_FILTER=conformance_close_drain_fake xmake run backend_conformance_test` and `..._threadpool` | PASS (4 cases each) |
 | Death | `xmake run fake_backend_death_test`, `xmake run threadpool_backend_death_test` | PASS (3 + 6 cases) |
 | Stability | 5× repeated runs of the C2e race cases (`close_races_workers`, `submit_races_close`, `wakes_parked_waiter`) | PASS (5/5, no flake) |
-| Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (324 cases) |
+| Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (152 cases, incl. 16 new C2e) |
 | Aggregate gate | `python3 scripts/verify-backend-conformance.py` | PASS (Fake/TP ELIGIBLE with C2e records PASS; Uring NOT CONFORMING with the C2e gap in its reasons) |
-| RED validity | 10 mutations (M1–M10), focused filtered runs | all RED; all restored GREEN (see §7 + mutation ledger) |
+| RED validity | 12 mutation rows (M1–M12 incl. M11-fake), focused filtered runs | 10 RED (M1–M5, M8, M9, M10, M11/M11-fake, M12); M6/M7 behavior-neutral (defense-in-depth redundancy, see §7 + mutation ledger); all mutations restored and re-run GREEN |
 
 ## 9. Validation matrix (full evidence)
 
 | Configuration | Command | Result |
 |---|---|---|
-| Clang Debug full | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS (…/… targets) |
+| Clang Debug full | `xmake f -m debug --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS (151/151 tests passed) |
 | Clang Release full | `xmake f -m release --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake test -v` | PASS |
 | ASan + UBSan | `xmake f -m asanubsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS |
-| TSan | `xmake f -m tsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS (race classes: submit‖close, close‖enqueue/worker/terminal, close/control-wake‖wait-park, interrupt‖final-ready, reap‖reset) |
+| TSan | `xmake f -m tsan --toolchain=clang -y && xmake build sluice_core && xmake build sluice_async && xmake build -g test && xmake run -g test` | PASS (race classes: submit‖close incl. the in-flight acceptance-LP window, close‖enqueue/worker/terminal, close/control-wake‖wait-park, interrupt‖final-ready, context final-poll‖ready-record, reap‖reset) |
 | Aggregate gate | `python3 scripts/verify-backend-conformance.py` | PASS |
-| Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (324) |
+| Manifest self-test | `python3 scripts/tests/test_backend_conformance_manifest.py` | PASS (152) |
 | Negative compile | `verify-completion-authority-negative-compile.sh`, `verify-request-arena-negative-compile.sh` | PASS (no public authority change) |
 | Doc checks | `python3 scripts/check-doc-links.py`, `python3 scripts/verify-architecture-docs.py` | PASS |
 | Diff hygiene | `git diff --check` | PASS |
@@ -303,6 +416,27 @@ fabricated REDs). Final scan confirmed 0 mutation markers remain.
 - **Abort/cancel-on-shutdown mode** — deliberately NOT defined by ADR Decision
   15 ("there is no implicit mass-cancellation mode in this ADR"); requires a
   separate approved design if ever wanted.
+- **Recorded residual risks (issue
+  [#74](https://github.com/jnhu76/Sluice/issues/74))** — two documented
+  evidence caveats, deliberately not hidden (AGENTS.md §23):
+  1. The C1b/Fake negative probes
+     (`tp_c2e_close_waits_for_inflight_acceptance_lp` /
+     `fake_c2e_close_waits_for_inflight_acceptance_lp`) observe "the closer's
+     read must not complete while the submit is paused before its acceptance
+     LP" through a bounded 2 s window (`kCloseProbeTimeout`; failure-protection
+     only — the mutation's close returns in microseconds, >=1000x inside the
+     window). The ordering proof is structural (the admission lock + the pause
+     gate: the submitter cannot advance until the test resumes it, and under
+     the fix the closer is blocked on the held lock) — the window is NOT a
+     timing claim (§13.3). Follow-up trigger: if a future change alters the
+     admission protocol, the pause-gate shape, or the lock scope, the probe's
+     structural premise must be re-audited.
+  2. The mutation-harness coverage scope: mutants M1–M10/M12 were verified on
+     the final test code in the first full harness run, and M11/M11-fake were
+     re-verified 4/4 on the final code after the detector fix — the remaining
+     detector cases were byte-identical since the first run. Follow-up
+     trigger: any future edit to a C2e detector case requires re-running the
+     full harness (M1–M12) before claiming RED validity.
 
 ## 11. Phase status
 

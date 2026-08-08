@@ -15,6 +15,34 @@
   arena admission flag alone is the full reference semantics.
   (`include/sluice/async/fake_backend.hpp`)
 
+- **Backend admission transaction domain (ADR §"Commit / accept" :453-462)**
+  — `ThreadPoolBackend` and `FakeAsyncBackend` now hold `admission_mtx_`
+  across the whole submit acceptance protocol (reserve → prepare →
+  begin_binding → arena commit → install_binding → commit_binding), and
+  `close_admission()` takes the same lock before `arena_.close_admission()`
+  (the ThreadPool then interrupts parked waiters after the lock is released).
+  The commit/accept linearization point is the Step 5 `binding -> outstanding`
+  release-store; the winning submit "retains its own context/admission lock"
+  through it, so after `close_admission()` returns NO new acceptance LP can
+  occur (Decision 15): an in-flight submit either completes its LP before
+  close returns (submit wins) or observes admission closed at reserve and
+  rejects synchronously with `invalid_state` (close wins). The lock is
+  released before enqueue (no-fail) and is never nested with `work_mtx_` or
+  the ready-wait mutex. `RequestArena::commit()` itself carries no admission
+  check (a reserved/prepared slot is an in-flight submission and completes
+  its protocol; close gates NEW acceptance at reserve only) — the previous
+  draft's `commit()`-level gate was removed because the arena's `commit()` is
+  only the "submit-success linearization point's slot half", not the LP.
+  Pinned by `close_admission_gates_reserve_not_inflight_prepared_slot` +
+  `tp_c2e_close_waits_for_inflight_acceptance_lp` +
+  `tp_c2e_close_wins_submit_started_before_close_rejected` +
+  `fake_c2e_close_waits_for_inflight_acceptance_lp` +
+  `tp_c2e_submit_races_close_linearization`.
+  (`include/sluice/async/threadpool_backend.hpp`,
+  `src/async/threadpool_backend.cpp`,
+  `include/sluice/async/fake_backend.hpp`,
+  `include/sluice/async/detail/request_arena.hpp`)
+
 ### Tests
 
 - `tests/backend_conformance_test.cpp` — shared close/drain suite
@@ -26,12 +54,39 @@
   caller resets the ready Completion), slot-release vs admission-close
   orthogonality.
 - `tests/threadpool_backend_c2e_close_drain_test.cpp` — deterministic window
-  evidence on the real backend (13 cases): close while pending/enqueued/
+  evidence on the real backend (15 cases): close while pending/enqueued/
   running (real result verbatim, size + void), close then pending cancel
   winner, close then running cancel intent only, one-shot parked-waiter wake
   with no busy-spin, close ‖ final `record_terminal` in both orderings plus
   the interrupt-vs-final-ready window closed by `wait_one`'s final reap,
-  invariant race drain, submit ‖ close linearization.
+  invariant race drain, submit ‖ close linearization, and the admission
+  transaction arbitration: `tp_c2e_close_waits_for_inflight_acceptance_lp`
+  (submit paused between the slot commit and the Step 5 release-store, INSIDE
+  the transaction; the closer observes the Completion at the close return —
+  the LP must have happened before close returned) and
+  `tp_c2e_close_wins_submit_started_before_close_rejected` (submit paused
+  before the admission lock; close wins; the resumed submit rejects at
+  reserve). The linearization case asserts BOTH legal reject codes
+  (`invalid_state`, `would_block`) leave the Completion
+  idle/not-outstanding/not-ready (half-accepted detector), and computes its
+  drain deadline fresh after the submitter joins.
+- `tests/request_lifecycle_scheme_b_test.cpp` — added
+  `close_admission_gates_reserve_not_inflight_prepared_slot` (arena
+  boundary: close gates NEW acceptance at reserve; an in-flight
+  reserved/prepared slot completes its protocol — the arena is not the
+  admission authority, the backend admission transaction is).
+- `tests/fake_backend_c2e_close_drain_test.cpp` (new) — the Fake driver's
+  admission transaction: close blocks on an in-flight acceptance protocol
+  paused between the slot commit and the Step 5 release-store (the fake's
+  SubmitPauseGate), the resumed submit wins its LP, close returns after, and
+  a new submit after close rejects `invalid_state`.
+- `tests/async_io_context_split_wait_c2e_test.cpp` (new) — context-level
+  detector for `AsyncIoContext::wait_one`'s interrupted-branch final poll: a
+  test-only split-wait backend/wait source (public `AsyncBackend` /
+  `BackendWaitSource` interfaces; no production context seam) pauses
+  `wait_for_change()` after observing a control interrupt, the test records
+  backend-ready in that window, and the context's final poll is the only path
+  that can reap it (deleting it → wait_one returns 0).
 - `tests/threadpool_backend_death_test.cpp` — added the `pending`-state
   non-quiescent destruction death case.
 - `tests/fake_backend_death_test.cpp` (new) — Fake-type non-quiescent
@@ -47,9 +102,11 @@
   cases (records exist/applicable; missing close/drain run → INCOMPLETE;
   per-backend attribution isolation; Uring gap never PASS; drive exclusion).
 - `include/sluice/async/threadpool_backend.hpp` /
-  `src/async/threadpool_backend.cpp` — `ControlWakeFinalReapPauseGate`
+  `src/async/threadpool_backend.cpp` — `ControlWakeFinalReapPauseGate`,
+  `BeforeCommitBindingPauseGate`, and `BeforeAdmissionLockPauseGate`
   (guarded, compiled out of production; 0 symbols in `libsluice_async.a`)
-  making the interrupt-vs-final-ready window deterministic.
+  making the interrupt-vs-final-ready window and the admission-transaction
+  windows deterministic.
 
 ## Unreleased — Group Evented admission exception safety (P2-01)
 

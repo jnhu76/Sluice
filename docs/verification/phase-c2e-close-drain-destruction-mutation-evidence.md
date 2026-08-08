@@ -9,8 +9,10 @@ Method chosen: **local uncommitted single-point mutation** (the
 C2b/C2c/C2d-precedented alternative; a test-only nonconforming fixture would
 require duplicating the backend internals). Each defect class was proven by a
 temporary mutation — of the real production logic in
-`src/async/threadpool_backend.cpp`, `include/sluice/async/detail/request_arena.hpp`,
-or `include/sluice/async/detail/ready_wait_source.hpp` — a focused filtered test
+`src/async/threadpool_backend.cpp`, `src/async/async_io_context.cpp`,
+`include/sluice/async/detail/request_arena.hpp`,
+`include/sluice/async/fake_backend.hpp`, or
+`include/sluice/async/detail/ready_wait_source.hpp` — a focused filtered test
 run, and an immediate restore, applied by a local one-off harness
 (`/tmp/c2e_mutate.py`, kept out of the tree, matching the C2b/C2c/C2d
 precedent): snapshot → apply one exact replacement → build → run exactly the
@@ -22,7 +24,7 @@ base `0b6c0b9126e6461d0317dee81e460f2abcc22f02`). Toolchain: **Clang**, xmake,
 
 ## Method
 
-For each mutant M1–M10:
+For each mutant M1–M12:
 
 1. apply ONE single-point mutation to the production logic (exact string
    replacement via the harness);
@@ -52,6 +54,9 @@ For each mutant M1–M10:
 | M8 | destructor silently drains accepted work instead of fail-fast | `~ThreadPoolBackend()` cancels every slot instead of fail-fast | `tp_death_destroy_with_enqueued`, `tp_death_destroy_with_pending` | RED → GREEN (enqueued case: the destructor hangs joining the paused worker instead of fail-fast; the death runner's 60 s watchdog kills the child and the case fails — not exit 86. The pending case stays GREEN: the mass-cancel wins the canceled terminal but the slot stays bound, so the ARENA destructor fail-fasts — the covering authority; see the M6 note) |
 | M9 | reset does not release the slot | `RequestArena::free_slot_locked_()` stops decrementing `slot_in_use_` | `drain_then_reset_releases_slot` (Fake + ThreadPool drivers) | RED → GREEN |
 | M10 | close_admission is a no-op (admission never closes) | `RequestArena::close_admission()` no longer sets `admission_closed_` | `close_rejects_future_submit` (Fake + ThreadPool drivers) | RED → GREEN |
+| M11 | close no longer serializes against an in-flight acceptance protocol (a new acceptance LP — the Step 5 `binding -> outstanding` release-store — may occur after close returns; ADR Decision 15) | ThreadPool: `close_admission()` drops the `admission_mtx_` transaction | `tp_c2e_close_waits_for_inflight_acceptance_lp` | RED → GREEN |
+| M11-fake | same defect class on the reference backend | Fake: `close_admission()` drops the `admission_mtx_` transaction | `fake_c2e_close_waits_for_inflight_acceptance_lp` | RED → GREEN |
+| M12 | `AsyncIoContext::wait_one()` drops the interrupted-branch final poll (the control interrupt swallows a request that became backend-ready inside the interrupt window) | `AsyncIoContext::wait_one()` removes `final_n = backend_->poll()` | `ctx_wait_one_interrupt_final_poll_closes_ready_race` | RED → GREEN |
 
 ### M6 / M7 note (documented negative results — defense-in-depth redundancy)
 
@@ -90,16 +95,39 @@ M1/M2/M9/M10 fail on the case's own assertion text (the shared-suite CONF_CHECK
 lines and the `tp_c2e_*` fail messages). M3/M5 fail on the bounded wait-phase
 observation ("participant A never entered the backend ready wait" / "a FUTURE
 wait_one after close must park normally"). M4 fails on the "wait_one must
-return the reaped count (1), not 0" assertion.
+return the reaped count (1), not 0" assertion. M11/M11-fake fail on the
+deterministic negative probe: while the submit is paused between the slot
+commit and the Step 5 release-store, the closer's read (the Completion
+observed at the close return) must NOT complete — under the mutation close
+returns in microseconds while the submitter is still paused, so the probe
+fires "close_admission returned before the in-flight acceptance LP (admission
+transaction violated)"; under the transaction the closer is blocked on the
+admission lock the paused submitter holds (the ordering is structural — the
+probe window is failure protection only, and the post-resume positive
+assertion additionally proves the closer observed the Step 5 release-store
+through the admission-lock handoff). M12 fails on the "wait_one must return
+the reaped count (1), not 0 — the context's interrupted-branch final poll must
+not be dropped" assertion.
 
 ## Summary
 
-- 8 of 10 mutants were proven RED → restored → GREEN (M1–M5, M8, M9, M10).
+- 10 of 12 mutants were proven RED → restored → GREEN (M1–M5, M8, M9, M10,
+  M11/M11-fake, M12).
 - M6 and M7 are documented behavior-neutral mutants (defense-in-depth
   redundancy; covering-authority proof above).
 - The harness force-rebuilds each target (`xmake build -r`) so the run binary
   always matches the applied mutation (an incremental-build hash skip in the
   first harness draft produced a false STILL_RED; fixed by forcing rebuilds).
+- **Coverage scope (recorded residual risk, issue
+  [#74](https://github.com/jnhu76/Sluice/issues/74)):** mutants M1–M10/M12
+  were verified RED → GREEN in the first full harness run, on the final test
+  code; M11/M11-fake's first detector draft had a closer-read-vs-resume
+  ordering race (false-negative GREEN under the mutant — the timing class
+  §13.3 forbids), the detector was fixed with a deterministic gate handshake,
+  and M11/M11-fake were re-verified RED on 4/4 runs of the final code. The
+  remaining detector cases were byte-identical between the first run and the
+  final state. Any future edit to a C2e detector case requires re-running the
+  full harness before claiming RED validity.
 - Final scan: `grep -r C2E-MUTANT` → no matches (0 marker residue).
 - `git status --short` after the final restore shows only the intended C2e
   changes (no mutation residue).
