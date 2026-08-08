@@ -226,8 +226,10 @@ class FakeAsyncBackend : public AsyncBackend {
     // non-blocking by contract), so there is no parked participant to wake —
     // the arena admission flag alone is the full reference semantics, and the
     // shared close/drain suite (C2e) drives this identically for Fake and
-    // ThreadPool. Mirrors ThreadPoolBackend::close_admission.
-    void close_admission() noexcept {
+    // ThreadPool. Mirrors ThreadPoolBackend::close_admission. Not noexcept:
+    // acquiring admission_mtx_ (lock_guard) may throw std::system_error, and
+    // the ThreadPool mirror carries no noexcept either.
+    void close_admission() {
         std::lock_guard<std::mutex> lk(admission_mtx_);
         arena_.close_admission();
     }
