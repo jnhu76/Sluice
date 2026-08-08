@@ -175,20 +175,29 @@ class UringAsyncBackend : public AsyncBackend {
         std::uint64_t offset = 0;
     };
 
-    // Bounded opaque op_cookie -> full SlotHandle router. Construction-time
-    // capacity == request_capacity. NOT a request store: it is transport
-    // routing metadata (ADR Decision 3 backend scratch). The arena re-validates
-    // the full handle before any mutation. Cookies are unique within backend
-    // lifetime (no-wrap counter + free-list); exhaustion fail-fasts before
-    // reuse. Reserved control range (CONTROL_CANCEL) is outside the allocation
-    // domain.
+    // Bounded op_cookie -> full SlotHandle router (frozen design §7.2).
+    // Construction-time capacity == request_capacity. NOT a request store: it
+    // is transport routing metadata (ADR Decision 3 backend scratch). The arena
+    // re-validates the full handle before any mutation.
+    //
+    // Kernel-visible identity discipline (P0-B): the SQE user_data carries the
+    // COOKIE VALUE, not a router array index. The cookie is allocated from a
+    // no-wrap 64-bit counter and is NEVER reused within backend lifetime (mirors
+    // RequestArena generation no-wrap). The router ARRAY slot is recycled via a
+    // free-list, but because routing keys on the cookie value, a stale CQE
+    // (whose cookie belongs to a retired entry) no longer matches any live
+    // entry and is dropped — the ABA window that existed when user_data carried
+    // router_slot+1 is closed. The arena still re-validates the full generation
+    // as a second layer of defense. CONTROL_CANCEL (= UINT64_MAX) is reserved
+    // for cancel-SQE user_data outside the operation-cookie domain [1, UINT64_MAX-1].
     struct RouterEntry {
+        std::uint64_t cookie = 0; // 0 = not a live operation cookie
         detail::SlotHandle handle{};
         bool in_use = false;
     };
 
     // Bounded local dispatch ring (capacity == request_capacity). Stores
-    // SlotHandle only; push/pop/remove_exact are noexcept. Mirrors the
+    // SlotHandle only; push_back/front/remove_exact are noexcept. Mirrors the
     // ThreadPool BoundedDispatchQueue discipline.
     class BoundedDispatchQueue;
 
@@ -263,6 +272,20 @@ class UringAsyncBackend : public AsyncBackend {
 
     // Decode one CQE: op cookie -> record_terminal; control -> bookkeeping.
     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
+
+    // Allocate a unique operation cookie from the no-wrap counter. Domain is
+    // [1, UINT64_MAX-1]; 0 is unused and UINT64_MAX (CONTROL_CANCEL) is
+    // reserved. If the counter would reach CONTROL_CANCEL, fail-fast (mirrors
+    // RequestArena generation no-wrap discipline) — never wrap. The cookie is
+    // NEVER reused within backend lifetime, so a stale CQE's cookie cannot
+    // match a later LIVE entry.
+    std::uint64_t allocate_cookie_() noexcept;
+
+    // Find the router ARRAY index of the LIVE entry whose SlotHandle matches h
+    // (slot + full generation). Returns the index, or request_capacity (==
+    // router_.size()) if no live entry matches (h is not currently ring-owned).
+    // Bounded O(request_capacity) scan, allocation-free.
+    std::size_t find_live_router_index_(detail::SlotHandle h) const noexcept;
 
     // Per-slot backend cancel bookkeeping. The arena owns cancel_intent_
     // (intent authority); this struct only tracks whether an AsyncCancel SQE
