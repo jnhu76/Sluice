@@ -274,4 +274,116 @@ std::string run_capacity_case(CapacityFixture& fx, const char* backend_name,
     return {};  // success
 }
 
+// ===========================================================================
+// Phase C2e — shared close/drain/destruction cases (Issue #68 rows 15-16).
+//
+// CloseDrainFixture owns the AsyncIoContext + AsyncStats + the tracked-
+// Completion list for the shared close/drain cases. The DRIVER wires two
+// per-backend seams as instance-level closures (AGENTS.md §15 — production
+// builds carry nothing; the suite itself stays backend-agnostic):
+//   close       — routes to the concrete backend's public close_admission()
+//                 (FakeAsyncBackend / ThreadPoolBackend both expose it;
+//                 ADR Decision 15 reference semantics).
+//   slot_in_use — returns the backend arena's slot_in_use count, the ONLY
+//                 way to observe "reaped-but-unreset still holds the slot"
+//                 (drained != releasable backend destruction) at the shared
+//                 boundary.
+// The cases assert ONLY AsyncIoContext-observable state plus those two wired
+// counts; no downcast, no backend-specific mechanism.
+//
+// CLEANUP MODEL (CapacityFixture parity): cleanup_or_abort() is explicit,
+// time-bounded, and abort()s on timeout so the failure cause is the C2e case,
+// not a context-destructor fail-fast. Every submit (successful or
+// expected-rejection) goes through submit_and_track so a broken backend that
+// illegally binds a rejected Completion is still cleaned up. Cancel remains
+// legal after close (ADR Decision 15), so cleanup can always terminalize.
+// ===========================================================================
+
+struct CloseDrainFixture {
+    // stats declared BEFORE ctx (constructed first, destroyed LAST — the
+    // context holds a pointer to it for its whole lifetime; see
+    // CapacityFixture's declaration-order note).
+    sluice::AsyncStats stats;
+    sluice::async::AsyncIoContext ctx;
+    // Per-backend seams wired by the driver (see the struct header).
+    std::function<void()> close;
+    std::function<std::size_t()> slot_in_use;
+    std::vector<sluice::async::Completion<std::size_t>*> tracked;
+
+    explicit CloseDrainFixture(std::unique_ptr<sluice::async::AsyncBackend> backend)
+        : ctx(std::move(backend), &stats) {}
+
+    sluice::async::ReadOp make_read_op(int fd, std::byte* dst, std::size_t len) const {
+        return sluice::async::ReadOp{fd, dst, len, 0};
+    }
+
+    // Track a Completion into `tracked` exactly once (CapacityFixture parity:
+    // a repeat registration must not push a second entry, or cleanup would
+    // act on the same Completion twice).
+    void track_once(sluice::async::Completion<std::size_t>& c) {
+        if (std::find(tracked.begin(), tracked.end(), &c) == tracked.end()) {
+            tracked.push_back(&c);
+        }
+    }
+
+    // EVERY C2e-case submit MUST go through this helper (CapacityFixture
+    // cleanup principle: register BEFORE submit_read so a broken backend that
+    // binds a Completion before returning a rejection is still reachable by
+    // cleanup).
+    sluice::Result<void> submit_and_track(sluice::async::Completion<std::size_t>& c,
+                                          sluice::async::ReadOp op) {
+        track_once(c);
+        return ctx.submit_read(op, c);
+    }
+
+    // Explicit cleanup (CapacityFixture parity): cancel everything still
+    // outstanding, drive poll/reap with a real deadline, reset every ready
+    // Completion so the slots are released, then re-check. Abort()s with a
+    // precise diagnostic if the deadline passes with outstanding work — the
+    // AsyncIoContext destructor must never be the one to fire.
+    void cleanup_or_abort(const char* backend_name, const char* case_name);
+};
+
+// Uniform C2e-case wrapper: cleanup runs on BOTH success and exception paths
+// (same catch-all rationale as run_capacity_case).
+template <typename Body>
+std::string run_close_drain_case(CloseDrainFixture& fx, const char* backend_name,
+                                 const char* case_name, Body&& body) {
+    try {
+        body();
+    } catch (const case_bail&) {
+        fx.cleanup_or_abort(backend_name, case_name);
+        return case_name;
+    } catch (...) {
+        fx.cleanup_or_abort(backend_name, case_name);
+        throw;
+    }
+    fx.cleanup_or_abort(backend_name, case_name);
+    return {};
+}
+
+// The shared close/drain suite: drives the C2e cases against a FRESH fixture
+// per case (close_admission is irreversible, so a case can never reuse a
+// backend whose admission is already closed — CapacityFixture parity: each
+// case owns its fixture + Completions in the same frame). The DRIVER supplies
+// a fixture factory that builds a fresh backend at a small capacity and wires
+// the `close` / `slot_in_use` closures over the concrete backend's PUBLIC
+// close_admission() and arena_slot_in_use() (AGENTS.md §15 instance-level
+// seams; the suite itself stays backend-agnostic). Returns the empty string
+// on full pass, or the stable name of the FIRST failing case. Implemented
+// out-of-line in backend_conformance_test.cpp.
+//
+// The factory returns a unique_ptr<CloseDrainFixture> (NOT a value) so the
+// fixture — and therefore its `AsyncStats stats` member, which the
+// AsyncIoContext holds a pointer to — has a STABLE address. Returning a value
+// would move the fixture, and AsyncIoContext's move ctor copies the stats_
+// pointer from the dying source, leaving the context/backend with a dangling
+// AsyncStats* (NRVO is a permitted, not guaranteed, optimization; correctness
+// must not rely on it). Returning a unique_ptr pins the address for the
+// fixture's whole lifetime, matching CapacityFixture's direct in-frame
+// construction.
+using MakeCloseDrainFixture = std::function<std::unique_ptr<CloseDrainFixture>()>;
+std::string run_close_drain_cases(const BackendFactory& factory,
+                                  const MakeCloseDrainFixture& make_fx);
+
 }  // namespace sluice_test::conformance

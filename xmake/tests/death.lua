@@ -149,6 +149,17 @@ end
 -- running workers, backend-ready unreaped terminals, or completion-ready
 -- unreset Completions terminates (exit 86) in BOTH Debug and Release, while a
 -- quiescent close_admission + drain + reset path exits 0. Uses
--- SLUICE_ASYNC_INTERNAL_TESTING pause gates for the enqueued/running cases;
--- links sluice_async_internal_testing. POSIX-only.
+-- SLUICE_ASYNC_INTERNAL_TESTING pause gates for the enqueued/running/pending
+-- cases (the pending case is Phase C2e — destroying while a committed request
+-- sits between commit and enqueue); links sluice_async_internal_testing.
+-- POSIX-only.
 sluice_internal_async_test("threadpool_backend_death_test", {platform_gate = {"linux", "macosx"}})
+
+-- fake_backend_death_test — Phase C2e FakeAsyncBackend non-quiescent
+-- destruction fail-fast (Issue #68 row 16; ADR Decision 15). Proves the
+-- reference path through the CONCRETE FakeAsyncBackend type: destroying the
+-- backend with a bound unreaped request or with a ready-but-unreset Completion
+-- terminates (exit 86) in BOTH Debug and Release (the arena destructor is the
+-- fail-fast authority), while close_admission + drain + reset + destroy exits
+-- 0. POSIX-only.
+sluice_internal_async_test("fake_backend_death_test", {platform_gate = {"linux", "macosx"}})

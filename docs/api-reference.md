@@ -1473,6 +1473,14 @@ constructor argument bounds the arena (default 64). Test-only introspection
 (`arena_slot_in_use()`, `arena_capacity_rejections()`, `sink_deliveries()`)
 exposes the arena lifecycle for regression tests.
 
+Phase C2e (ADR Decision 15 reference semantics): `FakeAsyncBackend` exposes the
+same production admission close as `ThreadPoolBackend` — `close_admission()`
+rejects new `submit_*` with `invalid_state` (Completion idle, no borrow) while
+existing accepted requests continue; cancel/poll/wait_one/reap remain legal.
+Fake has no split wait capability (its `wait_one` is non-blocking by contract),
+so there is no parked participant to wake — the arena admission flag alone is
+the full reference semantics.
+
 ```cpp
 class FakeAsyncBackend : public AsyncBackend {
 public:
@@ -1489,6 +1497,9 @@ public:
     void complete_oldest_with_error(IoError e);
     void complete_oldest_sync_ok();
     void complete_oldest_sync_error(IoError e);
+
+    // Production admission close (ADR Decision 15; reference semantics).
+    void close_admission() noexcept;
 
     // Phase B test-only introspection (the arena is a private detail).
     std::size_t arena_capacity() const noexcept;

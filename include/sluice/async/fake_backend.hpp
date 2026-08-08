@@ -214,6 +214,26 @@ class FakeAsyncBackend : public AsyncBackend {
 
     std::size_t outstanding() const noexcept override { return arena_.accepted_outstanding(); }
 
+    // ADR Decision 15 (reference semantics): close admission. New reserve()
+    // returns invalid_state (Completion idle, no borrow) while existing accepted
+    // requests continue; cancel/poll/wait_one/reap remain legal. Idempotent.
+    // Takes the backend admission transaction lock (ADR §"Commit / accept"
+    // :453-462 — the winning submit retains its context/admission lock through
+    // the Step 5 `binding -> outstanding` release-store, the commit/accept
+    // linearization point), so after this returns no new acceptance LP can
+    // occur (Decision 15).
+    // FakeAsyncBackend has NO split wait capability (its wait_one is
+    // non-blocking by contract), so there is no parked participant to wake —
+    // the arena admission flag alone is the full reference semantics, and the
+    // shared close/drain suite (C2e) drives this identically for Fake and
+    // ThreadPool. Mirrors ThreadPoolBackend::close_admission. Not noexcept:
+    // acquiring admission_mtx_ (lock_guard) may throw std::system_error, and
+    // the ThreadPool mirror carries no noexcept either.
+    void close_admission() {
+        std::lock_guard<std::mutex> lk(admission_mtx_);
+        arena_.close_admission();
+    }
+
     // Phase B test-only introspection (the arena is a private detail).
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
     std::size_t arena_slot_in_use() const noexcept { return arena_.slot_in_use(); }
@@ -417,8 +437,10 @@ class FakeAsyncBackend : public AsyncBackend {
     // Five-stage admission for a byte-carrying op. No terminal is recorded: the
     // op stays enqueued until the test completes it or auto-mode fires.
     //   reserve -> prepare -> install publication binding -> begin_binding CAS
-    //   -> commit (submit-success LP) -> install release capability ->
-    //   commit_binding -> enqueue (noexcept).
+    //   -> commit (Step 4; the submit-success LP's slot half) -> install release
+    //   capability -> commit_binding (Step 5: `binding -> outstanding`
+    //   release-store — the commit/accept linearization point) -> enqueue
+    //   (noexcept).
     //
     // Transactional pre-commit path (review C1): every step before the commit
     // LP is rollback-able with ZERO side effects. The publication binding is
@@ -426,59 +448,76 @@ class FakeAsyncBackend : public AsyncBackend {
     // only electing step and a lost CAS rolls back ONLY this submit's slot (no
     // FIFO residue — there is no side-band FIFO anymore, review finding #1).
     // Nothing after commit_binding may throw (I9).
+    //
+    // The whole Stage 1-3 protocol runs under the backend admission
+    // transaction lock (ADR :453-462: the winning submit retains its
+    // context/admission lock through Step 5). close_admission() takes the same
+    // lock, so after it returns no new acceptance LP can occur (Decision 15):
+    // an in-flight submit either completes its LP before close returns (submit
+    // wins) or observes admission closed at reserve and rejects (close wins).
+    // The lock is released before enqueue (no-fail).
     template <class Op>
     Result<void> submit_size(Op op, Completion<std::size_t>& c, detail::OperationKind kind,
                              std::size_t len) {
-        // Stage 1: reserve. Arena full -> would_block; admission closed ->
-        // invalid_state (ADR Decision 6/13: capacity pressure is NEVER
-        // invalid_state).
-        auto rh = arena_.reserve();
-        if (!rh.has_value()) {
-            return make_unexpected<void>(rh.error());
-        }
-        detail::SlotHandle h = rh.value();
-        // Stage 2: prepare (writes the op kind + fd/buffer borrow metadata).
-        auto ph = arena_.prepare(h, kind, borrow_of(op));
-        if (!ph.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);  // roll back reservation
-            return make_unexpected<void>(ph.error());
-        }
-        // Stage 2.5: install the slot's Completion publication binding (review
-        // C2 — the slot is the identity carrier; reap publishes through it
-        // inside the leaf domain). A later CAS loss rolls the binding back
-        // with the slot.
-        auto bh = arena_.install_publication_binding(h, &c, len, &publish_size_ready);
-        if (!bh.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(bh.error());
-        }
-        // Stage 3a: Completion CAS idle -> binding elects ONE submitting
-        // context. Loser: roll back only our own slot + binding (zero residue —
-        // there is no side-band FIFO to contaminate).
-        if (!begin_binding(c)) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        // Stage 3b: commit (prepared -> pending, enqueue pin live, accepted++,
-        // borrow begins, submit_seq assigned — the submit-success LP's slot
-        // half).
-        auto ch = arena_.commit(h);
-        if (!ch.has_value()) {
-            rollback_binding_before_accept(c);
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
+        detail::SlotHandle h{};
+        {
+            std::lock_guard<std::mutex> admission_lk(admission_mtx_);
+            // Stage 1: reserve. Arena full -> would_block; admission closed ->
+            // invalid_state (ADR Decision 6/13: capacity pressure is NEVER
+            // invalid_state).
+            auto rh = arena_.reserve();
+            if (!rh.has_value()) {
+                return make_unexpected<void>(rh.error());
+            }
+            h = rh.value();
+            // Stage 2: prepare (writes the op kind + fd/buffer borrow metadata).
+            auto ph = arena_.prepare(h, kind, borrow_of(op));
+            if (!ph.has_value()) {
+                (void)arena_.rollback_reserved_or_prepared(h);  // roll back reservation
+                return make_unexpected<void>(ph.error());
+            }
+            // Stage 2.5: install the slot's Completion publication binding (review
+            // C2 — the slot is the identity carrier; reap publishes through it
+            // inside the leaf domain). A later CAS loss rolls the binding back
+            // with the slot.
+            auto bh = arena_.install_publication_binding(h, &c, len, &publish_size_ready);
+            if (!bh.has_value()) {
+                (void)arena_.rollback_reserved_or_prepared(h);
+                return make_unexpected<void>(bh.error());
+            }
+            // Stage 3a: Completion CAS idle -> binding elects ONE submitting
+            // context. Loser: roll back only our own slot + binding (zero residue —
+            // there is no side-band FIFO to contaminate).
+            if (!begin_binding(c)) {
+                (void)arena_.rollback_reserved_or_prepared(h);
+                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            }
+            // Stage 3b: commit (prepared -> pending, enqueue pin live, accepted++,
+            // borrow begins, submit_seq assigned — the submit-success LP's slot
+            // half; Step 4).
+            auto ch = arena_.commit(h);
+            if (!ch.has_value()) {
+                rollback_binding_before_accept(c);
+                (void)arena_.rollback_reserved_or_prepared(h);
+                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        // Deterministic causal seam: pause between commit and enqueue so a
-        // backend-level test can interleave cancel exactly in the Scheme-B
-        // window (the context's access_mtx_ serialization hides it otherwise).
-        wait_submit_pause_();
+            // Deterministic causal seam: pause between commit and enqueue so a
+            // backend-level test can interleave cancel exactly in the Scheme-B
+            // window (the context's access_mtx_ serialization hides it otherwise),
+            // and so a C2e test can interleave close_admission() against the
+            // in-flight acceptance protocol before the Step 5 LP
+            // (fake_c2e_close_waits_for_inflight_acceptance_lp; mutant M11
+            // detector — the pause is INSIDE the admission transaction, so a
+            // close that returned here would permit a new LP after close).
+            wait_submit_pause_();
 #endif
-        // Stage 3c: install the slot-release capability (ADR Decision 7), then
-        // publish outstanding. AFTER commit_binding NOTHING may throw: the
-        // remaining steps (enqueue) are noexcept.
-        install_binding(c, &arena_, h);
-        commit_binding(c);
+            // Stage 3c: install the slot-release capability (ADR Decision 7), then
+            // publish outstanding. AFTER commit_binding NOTHING may throw: the
+            // remaining steps (enqueue) are noexcept.
+            install_binding(c, &arena_, h);
+            commit_binding(c);
+        }
         // Stage 4: enqueue (pending -> enqueued OR terminal no-op; ack pin as
         // the final slot access). Allocation-free, noexcept.
         (void)arena_.enqueue(h);
@@ -487,36 +526,40 @@ class FakeAsyncBackend : public AsyncBackend {
 
     template <class Op>
     Result<void> submit_void(Op op, Completion<void>& c, detail::OperationKind kind) {
-        auto rh = arena_.reserve();
-        if (!rh.has_value()) {
-            return make_unexpected<void>(rh.error());
-        }
-        detail::SlotHandle h = rh.value();
-        auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
-        if (!ph.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(ph.error());
-        }
-        auto bh = arena_.install_publication_binding(h, &c, 0, &publish_void_ready);
-        if (!bh.has_value()) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(bh.error());
-        }
-        if (!begin_binding(c)) {
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
-        auto ch = arena_.commit(h);
-        if (!ch.has_value()) {
-            rollback_binding_before_accept(c);
-            (void)arena_.rollback_reserved_or_prepared(h);
-            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-        }
+        detail::SlotHandle h{};
+        {
+            std::lock_guard<std::mutex> admission_lk(admission_mtx_);
+            auto rh = arena_.reserve();
+            if (!rh.has_value()) {
+                return make_unexpected<void>(rh.error());
+            }
+            h = rh.value();
+            auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
+            if (!ph.has_value()) {
+                (void)arena_.rollback_reserved_or_prepared(h);
+                return make_unexpected<void>(ph.error());
+            }
+            auto bh = arena_.install_publication_binding(h, &c, 0, &publish_void_ready);
+            if (!bh.has_value()) {
+                (void)arena_.rollback_reserved_or_prepared(h);
+                return make_unexpected<void>(bh.error());
+            }
+            if (!begin_binding(c)) {
+                (void)arena_.rollback_reserved_or_prepared(h);
+                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            }
+            auto ch = arena_.commit(h);
+            if (!ch.has_value()) {
+                rollback_binding_before_accept(c);
+                (void)arena_.rollback_reserved_or_prepared(h);
+                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-        wait_submit_pause_();
+            wait_submit_pause_();
 #endif
-        install_binding(c, &arena_, h);
-        commit_binding(c);
+            install_binding(c, &arena_, h);
+            commit_binding(c);
+        }
         (void)arena_.enqueue(h);
         return {};
     }
@@ -676,6 +719,14 @@ class FakeAsyncBackend : public AsyncBackend {
 
     detail::RequestArena arena_;
     detail::ReferenceReadySink sink_;
+    // Backend admission transaction domain (ADR §"Commit / accept" :453-462:
+    // the winning submit retains its context/admission lock through Step 5 —
+    // the `binding -> outstanding` release-store, the commit/accept
+    // linearization point). close_admission() takes the same lock, so after it
+    // returns no new acceptance LP can occur (Decision 15). Acquired ONLY by
+    // the submit paths (reserve .. commit_binding) and close_admission();
+    // released before enqueue. Lock order: admission_mtx_ -> arena leaf only.
+    mutable std::mutex admission_mtx_;
     // No side-band HandleRing or staged_* deques (review findings #1, #2): the
     // submission-order selection is a bounded O(capacity) scan via the arena's
     // oldest_enqueued_of, and terminal evidence binds to a RequestKey at

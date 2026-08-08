@@ -641,6 +641,62 @@ SLUICE_TEST_CASE(close_admission_rejects_new_but_existing_reapable) {
     arena.release_completed_binding(h);
 }
 
+// ---- close_admission vs an in-flight prepared slot (arena boundary) ---------
+// ADR Decision 15 ("close_admission atomically prevents new acceptance") +
+// ADR §"Commit / accept" (Step 5: "release-store the Completion from binding
+// to outstanding ... Step 5 is the commit/accept linearization point"; :453:
+// the winning submit performs the protocol "while retaining its own
+// context/admission lock"). The arena's commit() is the SLOT HALF of that
+// linearization point (Step 4: prepared -> pending + pin + accepted++ +
+// borrow); the Completion side (Step 5: binding -> outstanding) is driven by
+// the backend. Decision-15 arbitration therefore lives in the BACKEND
+// admission transaction domain, NOT in arena.commit(): a slot already
+// reserved/prepared when close lands is an IN-FLIGHT submission and completes
+// its arena protocol (commit succeeds — there is deliberately no
+// admission_closed_ check in commit); close gates NEW acceptance at reserve
+// only. The end-to-end arbitration is proven deterministically by
+// tp_c2e_close_waits_for_inflight_acceptance_lp /
+// tp_c2e_close_wins_submit_started_before_close_rejected (ThreadPool) and
+// fake_c2e_close_waits_for_inflight_acceptance_lp (Fake).
+SLUICE_TEST_CASE(close_admission_gates_reserve_not_inflight_prepared_slot) {
+    RequestArena arena{ContextIdentity::for_testing(1), 2};
+
+    // reserve succeeds (admission open at reserve time): an in-flight
+    // submission that entered the protocol before close.
+    auto rh = arena.reserve();
+    SLUICE_CHECK(rh.has_value());
+    SlotHandle h = rh.value();
+    SLUICE_CHECK(arena.prepare(h, OperationKind::read, {}).has_value());
+    install_noop_binding(arena, h);
+    SLUICE_CHECK(arena.slot_in_use() == 1);
+
+    // close wins: admission is now closed.
+    arena.close_admission();
+    SLUICE_CHECK(arena.admission_closed());
+
+    // The in-flight submission completes its arena protocol: commit succeeds
+    // (the slot half; inside a backend the admission lock serializes close
+    // against the whole Step 1-5 protocol, so this ordering is unreachable
+    // there — here it pins the arena boundary: the arena gates NEW acceptance
+    // at reserve, it does NOT reject in-flight submissions).
+    SLUICE_CHECK(arena.commit(h).has_value());
+    SLUICE_CHECK(arena.accepted_outstanding() == 1);
+
+    // NEW acceptance is gated at reserve.
+    auto rh2 = arena.reserve();
+    SLUICE_CHECK_MSG(!rh2.has_value() && rh2.error().code == sluice::IoError::Code::invalid_state,
+                     "close_admission must reject new reserve");
+
+    // The in-flight submission completes its full lifecycle normally.
+    SLUICE_CHECK(arena.record_terminal(h, TerminalResult::ok_bytes(5)));
+    SLUICE_CHECK(arena.enqueue(h) == EnqueueOutcome::terminal_noop);
+    RecordingSink sink;
+    SLUICE_CHECK(arena.reap(sink) == 1);
+    SLUICE_CHECK(arena.accepted_outstanding() == 0);
+    arena.release_completed_binding(h);
+    SLUICE_CHECK(arena.slot_in_use() == 0);
+}
+
 // ---- allocation-free slot release: no I/O/Scheduler/backend-progress wait ----
 // The release path (called by Completion::reset() / ready-Completion
 // destruction) MUST NOT allocate, wait on I/O, reach upward into

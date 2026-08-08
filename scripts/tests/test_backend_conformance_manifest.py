@@ -280,19 +280,29 @@ def _stub_gate(shared_per_backend, *, shared_rc=None,
             g.capacity_by_backend[b.name] = G.RunResult(
                 f"shared_capacity_suite:{b.name}", "backend_conformance_test",
                 G.PASS, detail="stub capacity PASS")
+    # Phase C2e: per-backend shared CLOSE/DRAIN-suite state. Only backends
+    # with a close_admission seam (Fake, ThreadPool) are driven; default them
+    # to PASS so the ONLY variable under test is the shared-suite state. Uring
+    # has no close/drain driver case, so it is not seeded here.
+    g.close_drain_by_backend = {}
+    for b in M.BACKENDS:
+        if b.close_drain_driver_case:
+            g.close_drain_by_backend[b.name] = G.RunResult(
+                f"c2e_shared_close_drain_suite:{b.name}",
+                "backend_conformance_test", G.PASS, detail="stub close/drain PASS")
     return g
 
 
 def _stubbed_gate_with_recorded_runs():
     """Build a Gate with the shared-suite drive methods mocked, run it, and
-    return (gate, driven, shared_runs, capacity_runs).
+    return (gate, driven, shared_runs, capacity_runs, close_drain_runs).
 
-    `_drive` / `_run_shared_suite` / `_run_capacity_suite` are replaced by
-    recorders that also seed benign per-backend PASS results so `_report()`
-    stays valid. Gate.run()'s report output is suppressed with
-    contextlib.redirect_stdout (same pattern as the nearby
-    test_not_implemented_never_counts_as_pass), so the test runner does not
-    print the full gate report.
+    `_drive` / `_run_shared_suite` / `_run_capacity_suite` /
+    `_run_close_drain_suite` are replaced by recorders that also seed benign
+    per-backend PASS results so `_report()` stays valid. Gate.run()'s report
+    output is suppressed with contextlib.redirect_stdout (same pattern as the
+    nearby test_not_implemented_never_counts_as_pass), so the test runner does
+    not print the full gate report.
 
     Shared by SharedCapacitySuiteDriveExclusionTest and
     CapacityResultAuthorityTest (PR #69 regression D/E).
@@ -304,6 +314,7 @@ def _stubbed_gate_with_recorded_runs():
     driven: list[str] = []
     shared_runs: list[str] = []
     capacity_runs: list[str] = []
+    close_drain_runs: list[str] = []
 
     def fake_drive(ev):
         driven.append(ev.evidence_id)
@@ -327,13 +338,23 @@ def _stubbed_gate_with_recorded_runs():
                     f"{ev.evidence_id}:{b.name}", ev.target, G.PASS,
                     detail="stub capacity")
 
+    def fake_close_drain(ev):
+        close_drain_runs.append(ev.evidence_id)
+        for b in M.BACKENDS:
+            if b.close_drain_driver_case:
+                g.close_drain_by_backend[b.name] = G.RunResult(
+                    f"{ev.evidence_id}:{b.name}", ev.target, G.PASS,
+                    detail="stub close/drain")
+
     with mock.patch.object(g, "_drive", side_effect=fake_drive), \
          mock.patch.object(g, "_run_shared_suite", side_effect=fake_shared), \
          mock.patch.object(g, "_run_capacity_suite",
                            side_effect=fake_capacity), \
+         mock.patch.object(g, "_run_close_drain_suite",
+                           side_effect=fake_close_drain), \
          contextlib.redirect_stdout(io.StringIO()):
         g.run()
-    return g, driven, shared_runs, capacity_runs
+    return g, driven, shared_runs, capacity_runs, close_drain_runs
 
 
 class MetaParsingTest(unittest.TestCase):
@@ -987,7 +1008,7 @@ class SharedCapacitySuiteDriveExclusionTest(unittest.TestCase):
         gate construction + run + stdout suppression live in the module-level
         _stubbed_gate_with_recorded_runs helper (shared with
         CapacityResultAuthorityTest)."""
-        _, driven, shared_runs, capacity_runs = \
+        _, driven, shared_runs, capacity_runs, _ = \
             _stubbed_gate_with_recorded_runs()
         return driven, shared_runs, capacity_runs
 
@@ -1025,7 +1046,7 @@ class SharedCapacitySuiteDriveExclusionTest(unittest.TestCase):
         # results["shared_capacity_suite"]; the per-backend path populates
         # capacity_by_backend instead. After the fix the generic results dict
         # must NOT carry a shared_capacity_suite key.
-        g, _, _, _ = _stubbed_gate_with_recorded_runs()
+        g, _, _, _, _ = _stubbed_gate_with_recorded_runs()
         self.assertNotIn(
             "shared_capacity_suite", g.results,
             "shared_capacity_suite must not get a generic results[] entry; "
@@ -1061,7 +1082,7 @@ class CapacityResultAuthorityTest(unittest.TestCase):
         # capacity results. Reuses the module-level
         # _stubbed_gate_with_recorded_runs (same stubs as
         # SharedCapacitySuiteDriveExclusionTest).
-        g, _, _, _ = _stubbed_gate_with_recorded_runs()
+        g, _, _, _, _ = _stubbed_gate_with_recorded_runs()
         self.assertNotIn(
             "shared_capacity_suite", g.results,
             "shared_capacity_suite must not get a generic results[] entry; "
@@ -1671,6 +1692,209 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
         appl = M.applicable_evidence_for_backend("Uring")
         self.assertIn("uring_c2d_failure_injection_not_implemented",
                       {e.evidence_id for e in appl})
+
+
+# ---------------------------------------------------------------------------
+# Phase C2e — close / drain / reset / destruction (Issue #68 rows 15-16).
+#
+# The C2e slice adds four evidence records:
+#   * c2e_shared_close_drain_suite — shared layer, Fake+ThreadPool, driven
+#     per backend by the close_drain_driver_case (conformance_close_drain_fake /
+#     conformance_close_drain_threadpool);
+#   * c2e_threadpool_close_drain_race — lifecycle, ThreadPool (the
+#     deterministic window/race target);
+#   * c2e_fake_close_drain_death — lifecycle, Fake (the reference-path death
+#     target);
+#   * uring_c2e_close_drain_not_implemented — lifecycle, Uring, not_implemented
+#     (never PASS).
+#
+# The tests below prove (Issue #68 §"Manifest / conformance gate"):
+#   * implemented C2e evidence is the ONLY thing that can make a backend's
+#     C2e verdict PASS (a missing close/drain driver run is NOT_RUN ->
+#     INCOMPLETE, never ELIGIBLE);
+#   * Fake/ThreadPool verdicts read their OWN close_drain_by_backend result —
+#     one backend's close/drain RUN_FAIL does not contaminate the other;
+#   * a backend whose close/drain run is MISSING (harness error) is INCOMPLETE;
+#   * Uring's not_implemented C2e gap keeps Uring INCOMPLETE/NOT CONFORMING —
+#     never PASS, never skip-as-pass;
+#   * the gate drives _run_close_drain_suite exactly once and never routes the
+#     shared close/drain suite through the generic _drive() loop.
+# ---------------------------------------------------------------------------
+
+C2E_EVIDENCE_IDS = (
+    "c2e_shared_close_drain_suite",
+    "c2e_threadpool_close_drain_race",
+    "c2e_fake_close_drain_death",
+    "uring_c2e_close_drain_not_implemented",
+)
+
+
+class C2eEvidenceRecordTest(unittest.TestCase):
+    """C2e evidence records exist with correct attributes."""
+
+    def test_all_c2e_records_exist(self):
+        for eid in C2E_EVIDENCE_IDS:
+            self.assertIsNotNone(M.evidence_by_id(eid),
+                                 f"C2e evidence '{eid}' must exist in manifest")
+
+    def test_shared_suite_is_mandatory_implemented_shared_layer(self):
+        ev = M.evidence_by_id("c2e_shared_close_drain_suite")
+        self.assertIn("Fake", ev.backends)
+        self.assertIn("ThreadPool", ev.backends)
+        self.assertNotIn("Uring", ev.backends)
+        self.assertEqual(ev.layer, "shared")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+
+    def test_threadpool_race_is_mandatory_implemented_lifecycle(self):
+        ev = M.evidence_by_id("c2e_threadpool_close_drain_race")
+        self.assertIn("ThreadPool", ev.backends)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+
+    def test_fake_death_is_mandatory_implemented_lifecycle(self):
+        ev = M.evidence_by_id("c2e_fake_close_drain_death")
+        self.assertIn("Fake", ev.backends)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+
+    def test_uring_gap_is_not_implemented(self):
+        ev = M.evidence_by_id("uring_c2e_close_drain_not_implemented")
+        self.assertIn("Uring", ev.backends)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+
+    def test_c2e_ids_unique_in_manifest(self):
+        ids = [e.evidence_id for e in M.EVIDENCE]
+        for eid in C2E_EVIDENCE_IDS:
+            self.assertEqual(ids.count(eid), 1,
+                             f"C2e evidence '{eid}' must appear exactly once")
+
+    def test_every_close_drain_driver_backend_has_the_shared_record(self):
+        # Fail-closed wiring: any backend that declares a close_drain_driver_
+        # case MUST have the shared close/drain record applicable to it (the
+        # gate drives the suite per that backend).
+        ev = M.evidence_by_id("c2e_shared_close_drain_suite")
+        for b in M.BACKENDS:
+            if b.close_drain_driver_case:
+                self.assertIn(
+                    b.name, ev.backends,
+                    f"backend {b.name} declares a close_drain_driver_case but "
+                    f"c2e_shared_close_drain_suite does not cover it")
+
+
+class C2eVerdictIntegrationTest(unittest.TestCase):
+    """C2e evidence enters the per-backend verdict correctly."""
+
+    def test_fake_has_mandatory_c2e_evidence(self):
+        appl = M.applicable_evidence_for_backend("Fake")
+        c2e = [e for e in appl if e.evidence_id in C2E_EVIDENCE_IDS]
+        self.assertTrue(
+            any(e.mandatory and e.status == M.STATUS_IMPLEMENTED for e in c2e),
+            "Fake must have at least one mandatory implemented C2e record")
+
+    def test_threadpool_has_mandatory_c2e_evidence(self):
+        appl = M.applicable_evidence_for_backend("ThreadPool")
+        c2e = [e for e in appl if e.evidence_id in C2E_EVIDENCE_IDS]
+        self.assertTrue(
+            any(e.mandatory and e.status == M.STATUS_IMPLEMENTED for e in c2e),
+            "ThreadPool must have at least one mandatory implemented C2e record")
+
+    def test_uring_c2e_gap_enters_verdict_never_pass(self):
+        # Uring's C2e gap is a mandatory not_implemented record: the state the
+        # gate assigns it is INCOMPLETE (never PASS), and it appears in the
+        # applicable set so Uring's OWN verdict surfaces it.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        # Uring has no close_drain_by_backend entry (no seam) by construction.
+        self.assertNotIn("Uring", g.close_drain_by_backend)
+        # Seed the gap's results entry the way the gate run loop does
+        # (NotImplementedEntersVerdictTest pattern).
+        g.results["uring_c2e_close_drain_not_implemented"] = G.RunResult(
+            "uring_c2e_close_drain_not_implemented",
+            "backend_conformance_test", G.INCOMPLETE,
+            detail="manifest status not_implemented (Phase C2/D)")
+        state = g._backend_run_state(
+            M.evidence_by_id("uring_c2e_close_drain_not_implemented"),
+            "Uring", "KernelIoProfile")
+        self.assertEqual(state, G.INCOMPLETE,
+                         "not_implemented must map to INCOMPLETE, never PASS")
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("uring_c2e_close_drain_not_implemented" in r for r in reasons),
+            f"Uring C2e gap must surface in the verdict reasons: {reasons}")
+
+    def test_missing_close_drain_run_makes_backend_incomplete(self):
+        # A backend that declares a close_drain_driver_case but whose
+        # close_drain_by_backend entry is absent (the gate never drove it —
+        # a harness error) must be INCOMPLETE, never ELIGIBLE.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        del g.close_drain_by_backend["Fake"]
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Fake"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertTrue(
+            any("c2e_shared_close_drain_suite" in r for r in reasons),
+            f"missing close/drain run must surface in reasons: {reasons}")
+
+    def test_close_drain_run_fail_does_not_contaminate_other_backend(self):
+        # Fake's close/drain RUN_FAIL must make Fake NOT CONFORMING while
+        # ThreadPool (its own PASS) stays ELIGIBLE — per-backend attribution.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        g.close_drain_by_backend["Fake"] = G.RunResult(
+            "c2e_shared_close_drain_suite:Fake", "backend_conformance_test",
+            G.RUN_FAIL, detail="stub close/drain fail")
+        v_fake, reasons = g._backend_verdict(M.backend_by_name("Fake"))
+        self.assertEqual(v_fake, G.NOT_CONFORMING)
+        self.assertTrue(
+            any("c2e_shared_close_drain_suite" in r for r in reasons),
+            f"close/drain failure must surface in Fake reasons: {reasons}")
+        v_tp, _ = g._backend_verdict(M.backend_by_name("ThreadPool"))
+        self.assertEqual(v_tp, G.ELIGIBLE,
+                         "ThreadPool's own close/drain PASS must not be "
+                         "contaminated by Fake's failure")
+
+    def test_all_mandatory_close_drain_pass_is_eligible(self):
+        # Implemented evidence PASS is what makes the C2e verdict green: with
+        # every per-backend close/drain run PASS (the _stub_gate default), the
+        # migrated backends are ELIGIBLE.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        self.assertEqual(
+            g._backend_verdict(M.backend_by_name("Fake"))[0], G.ELIGIBLE)
+        self.assertEqual(
+            g._backend_verdict(M.backend_by_name("ThreadPool"))[0], G.ELIGIBLE)
+
+
+class C2eCloseDrainDriveExclusionTest(unittest.TestCase):
+    """_drive() never receives the shared close/drain suite; the per-backend
+    runs happen through _run_close_drain_suite (parity with the C2a capacity
+    suite fix)."""
+
+    def _run_gate_observing_drives(self):
+        _, driven, _, _, close_drain_runs = \
+            _stubbed_gate_with_recorded_runs()
+        return driven, close_drain_runs
+
+    def test_drive_never_receives_close_drain_suite(self):
+        driven, _ = self._run_gate_observing_drives()
+        self.assertNotIn("c2e_shared_close_drain_suite", driven,
+                         f"c2e_shared_close_drain_suite must not enter "
+                         f"_drive(): {driven}")
+
+    def test_run_close_drain_suite_executed_once(self):
+        _, close_drain_runs = self._run_gate_observing_drives()
+        self.assertEqual(close_drain_runs, ["c2e_shared_close_drain_suite"],
+                         f"_run_close_drain_suite must run exactly once: "
+                         f"{close_drain_runs}")
+
+    def test_no_generic_results_entry_for_close_drain_suite(self):
+        g, _, _, _, _ = _stubbed_gate_with_recorded_runs()
+        self.assertNotIn(
+            "c2e_shared_close_drain_suite", g.results,
+            "c2e_shared_close_drain_suite must not get a generic results[] "
+            "entry; its verdict is read from close_drain_by_backend")
 
 
 if __name__ == "__main__":

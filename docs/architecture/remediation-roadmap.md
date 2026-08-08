@@ -314,8 +314,40 @@ coverage).
     failure injection. See
     [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md).
 
-  - **C2e — close / drain / destruction: PENDING.** Row 15 (close/drain/reset
-    sequence) remains PARTIAL; row 16 (quiescent destruction) is already FULL.
+  - **C2e — close / drain / destruction: COMPLETE.** Row 15 (close/drain/reset
+    sequence) is now FULL and row 16 (quiescent destruction) is FULL
+    (re-audited at C2e start, then strengthened). The shared close/drain suite
+    (`run_close_drain_cases`, 4 cases) runs identically against Fake and
+    ThreadPool through the new `FakeAsyncBackend::close_admission()` reference
+    method and the driver-wired `close` / `slot_in_use` closures, and asserts
+    ONLY the shared boundary: close rejects future submit with `invalid_state`
+    (Completion idle, zero residue), accepted-before-close still reaches
+    exactly ONE defined terminal with cancel/poll/reap legal after close,
+    drained != releasable (`accepted_outstanding == 0` and Completion ready
+    but `slot_in_use == 1` until the caller resets, then `== 0`), and
+    slot-release vs admission-close orthogonality (a released slot does not
+    re-open admission). The deterministic ThreadPool target
+    (`threadpool_backend_c2e_close_drain_test`, 12 cases) pins every window
+    with the existing guarded pause gates: close while `pending` / `enqueued` /
+    `running` (real result verbatim, size + void), close then pending cancel
+    still WINS canceled (Scheme B; no dispatch linkage; no syscall), close
+    then running cancel records intent only, close wakes a parked wait_one as
+    a ONE-SHOT control wake (0, no fabricated completion; a future wait parks
+    normally — no busy-spin), close ‖ final `record_terminal` in BOTH
+    orderings (the control interrupt never swallows the final ready), an
+    invariant-only close-vs-workers race drain, and the submit ‖ close
+    concurrent linearization invariant (never half-accepted). Row 16 keeps its
+    FULL status with the added `pending`-state death case
+    (`tp_death_destroy_with_pending`) and a new Fake-type death target
+    (`fake_backend_death_test`: unreaped-bound, ready-unreset, quiescent
+    control — the reference path fail-fasts through the arena destructor in
+    Debug AND Release). Ten single-point production mutations (M1–M10) prove
+    each detector case fails on deliberately nonconforming behavior
+    (`docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md`).
+    Uring's Phase-D gap is the `uring_c2e_close_drain_not_implemented` record,
+    which enters Uring's verdict — Uring stays NOT CONFORMING and is never
+    skip-as-pass for close/drain/destruction. See
+    [`phase-c2e-compliance-gate.md`](phase-c2e-compliance-gate.md).
 
   The "must cover" scope below is broader than the 8-case shared suite: injected
   allocation/startup/dispatch failure, accepted-terminal under allocator

@@ -122,9 +122,13 @@ class ThreadPoolBackend : public AsyncBackend {
 
     // Production admission close (ADR Decision 15). New reserve() returns
     // invalid_state (Completion idle, no borrow); existing accepted requests
-    // continue; cancel/poll/wait_one/reap remain legal. Wakes any participant
-    // parked in the ready wait (issue #67) as a one-shot re-evaluation signal.
-    // Idempotent.
+    // continue; cancel/poll/wait_one/reap remain legal. Takes the backend
+    // admission transaction lock (ADR §"Commit / accept" :453-462 — the
+    // winning submit retains its context/admission lock through the Step 5
+    // `binding -> outstanding` release-store, the commit/accept linearization
+    // point), so after this returns no new acceptance LP can occur. Wakes any
+    // participant parked in the ready wait (issue #67) as a one-shot
+    // re-evaluation signal. Idempotent.
     void close_admission();
 
     // Phase E resource introspection (method-only seams; no member data exposed).
@@ -248,6 +252,17 @@ class ThreadPoolBackend : public AsyncBackend {
         std::atomic<bool> resume{false};
         std::atomic<bool> exited{true};
     };
+    // C2e (row 15): deterministic interrupt-vs-final-ready window. wait_one()
+    // pauses between the interrupted control wake and its ONE final reap, so a
+    // test can record the final terminal in that exact window and prove the
+    // final reap returns it (the control interrupt never swallows the last
+    // ready). Compiled out of production sluice_async (see
+    // tp_c2e_interrupt_final_reap_closes_ready_race; mutant M4 detector).
+    struct ControlWakeFinalReapPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
     // C2d (ADR Gate 4): deterministic commit/enqueue pause. The submit path
     // pauses AFTER commit (Completion outstanding, slot `pending`, enqueue pin
     // set) and BEFORE taking work_mtx_ — the exact state from which a pending
@@ -256,6 +271,28 @@ class ThreadPoolBackend : public AsyncBackend {
     // no-op with no dispatch linkage. See
     // `tp_c2d_cancel_wins_before_enqueue_injection_armed`.
     struct BeforeEnqueueLockPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
+    // C2e (row 15; B1): deterministic admission-transaction windows. The
+    // submit path pauses (a) BEFORE taking admission_mtx_ — the close-wins
+    // arbitration: close_admission() completes with no contention and the
+    // resumed submit must reject at reserve (ADR Decision 15); and (b) AFTER
+    // arena_.commit() and BEFORE install_binding/commit_binding — the
+    // close-waits arbitration: close_admission() must BLOCK on the in-flight
+    // Step 1-5 acceptance protocol, because the `binding -> outstanding`
+    // release-store (ADR §"Commit / accept" Step 5) is the commit/accept
+    // linearization point and no new acceptance LP may occur after close
+    // returns. See tp_c2e_close_waits_for_inflight_acceptance_lp /
+    // tp_c2e_close_wins_submit_started_before_close_rejected (mutant M11
+    // detector). Compiled out of production sluice_async.
+    struct BeforeAdmissionLockPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{true};
+    };
+    struct BeforeCommitBindingPauseGate {
         std::atomic<bool> paused{false};
         std::atomic<bool> resume{false};
         std::atomic<bool> exited{true};
@@ -275,9 +312,21 @@ class ThreadPoolBackend : public AsyncBackend {
         TerminalPublicationPauseGate* gate) noexcept {
         terminal_publication_gate_.store(gate, std::memory_order_release);
     }
+    void set_control_wake_final_reap_pause_gate(
+        ControlWakeFinalReapPauseGate* gate) noexcept {
+        control_wake_final_reap_gate_.store(gate, std::memory_order_release);
+    }
     void set_before_enqueue_lock_pause_gate(
         BeforeEnqueueLockPauseGate* gate) noexcept {
         before_enqueue_lock_gate_.store(gate, std::memory_order_release);
+    }
+    void set_before_admission_lock_pause_gate(
+        BeforeAdmissionLockPauseGate* gate) noexcept {
+        before_admission_lock_gate_.store(gate, std::memory_order_release);
+    }
+    void set_before_commit_binding_pause_gate(
+        BeforeCommitBindingPauseGate* gate) noexcept {
+        before_commit_binding_gate_.store(gate, std::memory_order_release);
     }
 
     // --- Phase C2d seams (rows 9-10): failure injection. Compiled out of
@@ -500,6 +549,16 @@ class ThreadPoolBackend : public AsyncBackend {
     static Result<void> validate_sync(SyncDataOp op);
     static Result<void> validate_sync(SyncAllOp op);
 
+    // Dispatch the malformed-descriptor probe by op kind. Called INSIDE the
+    // admission transaction, AFTER reserve (Stage 1.5) so the Reserve-stage
+    // rejections — admission closed (invalid_state, Decision 15) and capacity
+    // full (would_block) — take precedence over the Prepare-stage
+    // invalid_argument (ADR Decision 5 stage order; review P1). A rejected
+    // descriptor rolls back the reserved slot through
+    // rollback_reserved_or_prepared — zero residue.
+    template <class Op>
+    static Result<void> validate_op(const Op& op) noexcept;
+
     // Five-stage admission for a byte-carrying / void op (ADR Decision 5; mirrors
     // the SyncBackend reference). Records the fixed prepared op into per-slot
     // scratch so the worker can run the real syscall after mark_running.
@@ -556,6 +615,9 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_running_pause_() noexcept;
     void wait_terminal_publication_pause_() noexcept;
     void wait_before_enqueue_lock_pause_() noexcept;
+    void wait_control_wake_final_reap_pause_() noexcept;
+    void wait_before_admission_lock_pause_() noexcept;
+    void wait_before_commit_binding_pause_() noexcept;
 
     // The pre-commit admission stages that carry a synchronous rejection
     // (ADR Gate 4): reserve (capacity-full would_block / admission-closed
@@ -577,6 +639,17 @@ class ThreadPoolBackend : public AsyncBackend {
     detail::RequestArena arena_;
     detail::ReferenceReadySink sink_;
     std::vector<PreparedBlockingOp> prepared_ops_;  // size == request_capacity
+
+    // Backend admission transaction domain (ADR §"Commit / accept" :453-462:
+    // the winning submit retains its context/admission lock through Step 5 —
+    // the `binding -> outstanding` release-store, the commit/accept
+    // linearization point). close_admission() takes the same lock, so after it
+    // returns no new acceptance LP can occur (Decision 15). Acquired ONLY by
+    // the submit paths (reserve .. commit_binding) and close_admission();
+    // released BEFORE enqueue (no-fail, needs no admission serialization).
+    // Lock order: admission_mtx_ -> arena leaf only — never nested with
+    // work_mtx_ or the ready-wait mutex.
+    mutable std::mutex admission_mtx_;
 
     // Backend work domain: dispatch ring + dequeue/cancel arbitration.
     mutable std::mutex work_mtx_;
@@ -604,6 +677,13 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<WorkerRunningPauseGate*> running_gate_{nullptr};
     std::atomic<TerminalPublicationPauseGate*> terminal_publication_gate_{nullptr};
     std::atomic<BeforeEnqueueLockPauseGate*> before_enqueue_lock_gate_{nullptr};
+    // C2e: deterministic interrupt-vs-final-ready window in wait_one (see the
+    // public gate struct above). Compiled out of production builds.
+    std::atomic<ControlWakeFinalReapPauseGate*> control_wake_final_reap_gate_{nullptr};
+    // C2e (B1): deterministic admission-transaction windows (see the public
+    // gate structs above). Compiled out of production builds.
+    std::atomic<BeforeAdmissionLockPauseGate*> before_admission_lock_gate_{nullptr};
+    std::atomic<BeforeCommitBindingPauseGate*> before_commit_binding_gate_{nullptr};
     // Phase C2d: post-commit dispatch-failure injection control (see the
     // guarded setter above). Null when disarmed; never dereferenced by
     // production builds (the branch is compiled out).

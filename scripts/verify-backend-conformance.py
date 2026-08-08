@@ -253,6 +253,12 @@ class Gate:
     # Backends without a capacity seam (Uring) have no capacity driver case;
     # their gap is the manifest's uring_capacity_not_implemented record.
     capacity_by_backend: dict[str, RunResult] = field(default_factory=dict)
+    # Phase C2e: per-backend shared CLOSE/DRAIN-suite result, driven in its own
+    # subprocess (conformance_close_drain_fake / conformance_close_drain_threadpool).
+    # Backends without a close_admission seam (Uring before Phase D) have no
+    # close/drain driver case; their gap is the manifest's
+    # uring_c2e_close_drain_not_implemented record.
+    close_drain_by_backend: dict[str, RunResult] = field(default_factory=dict)
     meta: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def run(self) -> int:
@@ -270,8 +276,10 @@ class Gate:
                     ev.evidence_id, ev.target, NOT_APPLICABLE,
                     detail=ev.reason or "not applicable")
                 continue
-            # The shared base and capacity suites are driven per backend below.
-            if ev.evidence_id in ("shared_suite", "shared_capacity_suite"):
+            # The shared base, capacity, and close/drain suites are driven per
+            # backend below.
+            if ev.evidence_id in ("shared_suite", "shared_capacity_suite",
+                                  "c2e_shared_close_drain_suite"):
                 continue
             self.results[ev.evidence_id] = self._drive(ev)
 
@@ -291,6 +299,15 @@ class Gate:
         cap_ev = M.evidence_by_id("shared_capacity_suite")
         if cap_ev is not None:
             self._run_capacity_suite(cap_ev)
+
+        # Phase C2e: drive the shared CLOSE/DRAIN suite once per registered
+        # backend that HAS a close_admission driver case (Fake, ThreadPool).
+        # Backends without the seam (Uring before Phase D) have no driver case;
+        # their gap is the manifest's uring_c2e_close_drain_not_implemented
+        # record (never skip-as-pass).
+        cd_ev = M.evidence_by_id("c2e_shared_close_drain_suite")
+        if cd_ev is not None:
+            self._run_close_drain_suite(cd_ev)
 
         # Parse [conformance-meta] from every per-backend shared run for the
         # REPORT, keyed by the CANONICAL registered backend name (a variant
@@ -396,6 +413,51 @@ class Gate:
             state, detail = self._classify_shared_run(
                 b, rc, out, expected_case=b.capacity_driver_case)
             self.capacity_by_backend[b.name] = RunResult(
+                f"{ev.evidence_id}:{b.name}", ev.target, state,
+                detail=detail, stdout=out)
+
+    def _run_close_drain_suite(self, ev: M.Evidence) -> None:
+        """Phase C2e: drive the shared close/drain suite once per backend that
+        HAS a close_admission driver case (Fake, ThreadPool), each in its own
+        subprocess. Backends without the seam (Uring before Phase D) have no
+        close/drain driver case and are skipped here — their gap is the
+        manifest's uring_c2e_close_drain_not_implemented record, surfaced in
+        the verdict via applicable_evidence_for_backend(). Uses the same
+        preflight shape as _run_shared_suite / _run_capacity_suite (target
+        existence + build once).
+        """
+        if not xmake_target_exists(ev.target):
+            missing = RunResult(ev.evidence_id, ev.target, MISSING_TARGET,
+                                detail="xmake show -t reports not a valid target")
+            for b in M.BACKENDS:
+                if b.close_drain_driver_case:
+                    self.close_drain_by_backend[b.name] = missing
+            return
+        if self.args is not None and not getattr(self.args, "no_build", False):
+            ok, log = xmake_build_target(ev.target)
+            if not ok:
+                bf = RunResult(ev.evidence_id, ev.target, BUILD_FAIL,
+                               detail="xmake build failed", stdout=log)
+                for b in M.BACKENDS:
+                    if b.close_drain_driver_case:
+                        self.close_drain_by_backend[b.name] = bf
+                return
+
+        # One isolated subprocess per backend with a close/drain driver case.
+        # Same fail-closed classification as the shared/capacity suites: PASS
+        # only when the run provably executed exactly the driver case and
+        # emitted exactly one valid [conformance-meta] line. A run that
+        # reports a failing close/drain case prints
+        # "[conformance] close/drain FAIL <backend> :: <case>" and exits
+        # non-zero -> RUN_FAIL for that backend only.
+        for b in M.BACKENDS:
+            if not b.close_drain_driver_case:
+                continue  # Uring: no close seam; gap is the manifest record.
+            rc, out = xmake_run_target(ev.target,
+                                       env_filter=b.close_drain_driver_case)
+            state, detail = self._classify_shared_run(
+                b, rc, out, expected_case=b.close_drain_driver_case)
+            self.close_drain_by_backend[b.name] = RunResult(
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
                 detail=detail, stdout=out)
 
@@ -519,6 +581,20 @@ class Gate:
                 # (a harness error). A backend with NO seam has no applicable
                 # implemented record (only the uring_capacity_not_implemented
                 # not_implemented record), so this branch is not reached for it.
+                return NOT_RUN
+            return r.state
+
+        # Phase C2e: the shared CLOSE/DRAIN suite — this backend's OWN
+        # subprocess result (conformance_close_drain_fake /
+        # conformance_close_drain_threadpool).
+        if ev.evidence_id == "c2e_shared_close_drain_suite":
+            r = self.close_drain_by_backend.get(backend_name)
+            if r is None:
+                # A backend with a close/drain seam that the gate never drove:
+                # NOT_RUN (a harness error). A backend with NO seam (Uring)
+                # has no applicable implemented record (only the
+                # uring_c2e_close_drain_not_implemented not_implemented
+                # record), so this branch is not reached for it.
                 return NOT_RUN
             return r.state
 
@@ -749,6 +825,22 @@ class Gate:
                             f"mandatory evidence '{ev.evidence_id}' "
                             f"backend {b.name} ({ev.target}): {rr.state}")
                 continue
+            if ev.evidence_id == "c2e_shared_close_drain_suite":
+                # Phase C2e: per-backend shared CLOSE/DRAIN suite. Only
+                # backends with a close_admission seam (Fake, ThreadPool) are
+                # driven; Uring's gap is the
+                # uring_c2e_close_drain_not_implemented record, handled by
+                # applicable_evidence_for_backend in the verdict.
+                for b in M.BACKENDS:
+                    if not b.close_drain_driver_case:
+                        continue
+                    rr = self.close_drain_by_backend.get(b.name)
+                    if rr and rr.state in (MISSING_TARGET, BUILD_FAIL,
+                                           RUN_FAIL):
+                        overall_failures.append(
+                            f"mandatory evidence '{ev.evidence_id}' "
+                            f"backend {b.name} ({ev.target}): {rr.state}")
+                continue
             r = self.results.get(ev.evidence_id)
             if r is None:
                 overall_failures.append(
@@ -776,6 +868,16 @@ class Gate:
                 overall_failures.append(
                     f"registered backend {b.name} capacity-suite result MISSING "
                     f"(gate must evaluate every capacity-capable backend)")
+
+        # Phase C2e fail-closed: every backend with a close_admission seam MUST
+        # have a close/drain-suite result. A missing close_drain_by_backend
+        # entry for a backend that declares a close_drain_driver_case is a
+        # harness error.
+        for b in M.BACKENDS:
+            if b.close_drain_driver_case and b.name not in self.close_drain_by_backend:
+                overall_failures.append(
+                    f"registered backend {b.name} close/drain-suite result "
+                    f"MISSING (gate must evaluate every close-capable backend)")
 
         # --- Summary ---
         print("-" * 72)

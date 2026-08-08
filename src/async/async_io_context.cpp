@@ -213,9 +213,10 @@ Result<std::size_t> AsyncIoContext::wait_one() {
             continue;
         }
         // Control-plane interruption: one final non-blocking poll closes the
-        // interrupt-vs-final-ready race, then return 0 (interrupted, nothing
-        // reaped — I8: no fake completion, no completed_ops inflation). The
-        // poll + accounting form one critical section, same as the main reap.
+        // interrupt-vs-final-ready race and its reaped count is returned — 0
+        // only when that poll finds nothing (I8: no fake completion, no
+        // completed_ops inflation). The poll + accounting form one critical
+        // section, same as the main reap.
         std::size_t final_n = 0;
         {
             std::lock_guard<std::mutex> lk(access_mtx_);

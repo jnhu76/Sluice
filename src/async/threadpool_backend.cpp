@@ -214,115 +214,173 @@ Result<void> ThreadPoolBackend::validate_sync(SyncAllOp op) {
 // ---------------------------------------------------------------------------
 
 Result<void> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
-    auto v = validate_read(op);
-    if (!v.has_value()) return v;
     return submit_size(op, c, detail::OperationKind::read, op.len);
 }
 
 Result<void> ThreadPoolBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
-    auto v = validate_write(op);
-    if (!v.has_value()) return v;
     return submit_size(op, c, detail::OperationKind::write, op.len);
 }
 
 Result<void> ThreadPoolBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
-    auto v = validate_sync(op);
-    if (!v.has_value()) return v;
     return submit_void(op, c, detail::OperationKind::sync_data);
 }
 
 Result<void> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>& c) {
-    auto v = validate_sync(op);
-    if (!v.has_value()) return v;
     return submit_void(op, c, detail::OperationKind::sync_all);
+}
+
+// Dispatch the malformed-descriptor probe by op kind (see the declaration).
+// Defined next to the validate_* helpers it forwards to.
+template <class Op>
+Result<void> ThreadPoolBackend::validate_op(const Op& op) noexcept {
+    if constexpr (std::is_same_v<Op, ReadOp>) {
+        return validate_read(op);
+    } else if constexpr (std::is_same_v<Op, WriteOp>) {
+        return validate_write(op);
+    } else if constexpr (std::is_same_v<Op, SyncDataOp>) {
+        return validate_sync(op);
+    } else {
+        return validate_sync(op);  // SyncAllOp
+    }
 }
 
 template <class Op>
 Result<void> ThreadPoolBackend::submit_size(Op op, Completion<std::size_t>& c,
                                              detail::OperationKind kind, std::size_t len) {
-    // Stage 1: reserve. Arena full -> would_block; admission closed ->
-    // invalid_state (ADR Decision 6/13).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // C2d (ADR Gate 4): injected reserve failure. Returns the capacity-full
-    // rejection WITHOUT reserving a slot: the Completion stays idle and zero
-    // slot/borrow/dispatch residue exists by construction. Compiled out of
-    // production builds (no branch, no local, no symbol).
-    auto reserve_failure = injected_precommit_stage_failure_(SubmitStage::reserve);
-    if (reserve_failure.has_value()) {
-        return make_unexpected<void>(*reserve_failure);
-    }
+    // C2e (row 15; B1): deterministic close-wins window — the submit pauses
+    // BEFORE taking the admission transaction lock, so close_admission()
+    // completes with no contention and the resumed submit must observe
+    // admission closed at reserve and reject synchronously (ADR Decision 15;
+    // tp_c2e_close_wins_submit_started_before_close_rejected). Compiled out
+    // of production builds (no branch, no local, no symbol).
+    wait_before_admission_lock_pause_();
 #endif
-    auto rh = arena_.reserve();
-    if (!rh.has_value()) return make_unexpected<void>(rh.error());
-    detail::SlotHandle h = rh.value();
-
-    // Stage 2: prepare (op kind + fd/buffer borrow metadata).
+    // ADR §"Commit / accept" (:453-462): the winning submit retains its
+    // context/admission lock through Step 5 — the `binding -> outstanding`
+    // release-store, the commit/accept linearization point. The admission
+    // transaction below serializes the whole Stage 1-3 protocol against
+    // close_admission() (which takes the same lock): after close_admission()
+    // returns no new acceptance LP can occur (Decision 15), and a submit that
+    // enters the protocol before close either completes its LP before close
+    // returns (submit wins) or observes admission closed at reserve and
+    // rejects synchronously (close wins). The lock is released before
+    // enqueue_after_commit: the LP is done and enqueue is no-fail.
+    detail::SlotHandle h{};
+    {
+        std::lock_guard<std::mutex> admission_lk(admission_mtx_);
+        // Stage 1: reserve. Arena full -> would_block; admission closed ->
+        // invalid_state (ADR Decision 6/13).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // C2d (ADR Gate 4): injected prepare failure AFTER a successful reserve.
-    // The candidate slot is rolled back by the SAME rollback the natural
-    // prepare-failure path uses below (rollback_reserved_or_prepared): the
-    // slot returns to the free pool with generation++ and the capacity is
-    // immediately recyclable. Compiled out of production builds.
-    auto prepare_failure = injected_precommit_stage_failure_(SubmitStage::prepare);
-    if (prepare_failure.has_value()) {
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(*prepare_failure);
-    }
+        // C2d (ADR Gate 4): injected reserve failure. Returns the capacity-full
+        // rejection WITHOUT reserving a slot: the Completion stays idle and zero
+        // slot/borrow/dispatch residue exists by construction. Compiled out of
+        // production builds (no branch, no local, no symbol).
+        auto reserve_failure = injected_precommit_stage_failure_(SubmitStage::reserve);
+        if (reserve_failure.has_value()) {
+            return make_unexpected<void>(*reserve_failure);
+        }
 #endif
-    auto ph = arena_.prepare(h, kind, borrow_of(op));
-    if (!ph.has_value()) {
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(ph.error());
-    }
+        auto rh = arena_.reserve();
+        if (!rh.has_value()) return make_unexpected<void>(rh.error());
+        h = rh.value();
 
-    // Record the fixed prepared op into per-slot scratch (Scheme B). The worker
-    // reads this only after mark_running(h) succeeds (current-generation running).
-    prepared_ops_[h.slot.value] =
-        PreparedBlockingOp{kind, op.fd,
-                           static_cast<const std::byte*>(borrow_of(op).address),
-                           op.len, op.offset};
+        // Stage 1.5: descriptor validation (ADR Decision 6) INSIDE the
+        // admission transaction, AFTER reserve — so admission closed
+        // (invalid_state, Decision 15) and capacity full (would_block) take
+        // precedence over a malformed descriptor (invalid_argument) per the
+        // ADR Decision-5 stage order (Reserve precedes Prepare). A reserved
+        // slot rolls back through the SAME pre-commit rollback the
+        // prepare-failure path uses (rollback_reserved_or_prepared): zero
+        // residue, generation++, slot immediately recyclable (review P1 — a
+        // post-close malformed submit must reject invalid_state, not
+        // invalid_argument).
+        auto v = validate_op(op);
+        if (!v.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return v;
+        }
 
-    // Stage 2.5: install the slot's Completion publication binding.
-    auto bh = arena_.install_publication_binding(h, &c, len, &publish_size_ready);
-    if (!bh.has_value()) {
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(bh.error());
-    }
-
-    // Stage 3a: Completion CAS idle -> binding elects ONE submitter.
-    if (!begin_binding(c)) {
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
-    // Stage 3b: commit (pending + pin + accepted++ + borrow begins).
+        // Stage 2: prepare (op kind + fd/buffer borrow metadata).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // C2d (ADR Gate 4): injected COMMIT-BOUNDARY failure — the binding CAS
-    // already won (Completion in `binding`), so the submit path executes the
-    // REAL commit-failure rollback: rollback_binding_before_accept (binding ->
-    // idle, restoring a fully reusable Completion) followed by the slot
-    // rollback (publication binding cleared, generation++, capacity
-    // recyclable, accepted-outstanding untouched). This is the ONLY executable
-    // instance of rollback_binding_before_accept in the corpus: a natural
-    // commit failure (stale handle / non-prepared slot) is unreachable after a
-    // same-thread reserve -> prepare -> begin_binding (review P1). Compiled
-    // out of production builds (no branch, no local, no symbol).
-    auto commit_failure = injected_precommit_stage_failure_(SubmitStage::commit);
-    if (commit_failure.has_value()) {
-        rollback_binding_before_accept(c);
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(*commit_failure);
-    }
+        // C2d (ADR Gate 4): injected prepare failure AFTER a successful reserve.
+        // The candidate slot is rolled back by the SAME rollback the natural
+        // prepare-failure path uses below (rollback_reserved_or_prepared): the
+        // slot returns to the free pool with generation++ and the capacity is
+        // immediately recyclable. Compiled out of production builds.
+        auto prepare_failure = injected_precommit_stage_failure_(SubmitStage::prepare);
+        if (prepare_failure.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(*prepare_failure);
+        }
 #endif
-    auto ch = arena_.commit(h);
-    if (!ch.has_value()) {
-        rollback_binding_before_accept(c);
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        auto ph = arena_.prepare(h, kind, borrow_of(op));
+        if (!ph.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(ph.error());
+        }
+
+        // Record the fixed prepared op into per-slot scratch (Scheme B). The
+        // worker reads this only after mark_running(h) succeeds (current-generation
+        // running).
+        prepared_ops_[h.slot.value] =
+            PreparedBlockingOp{kind, op.fd,
+                               static_cast<const std::byte*>(borrow_of(op).address),
+                               op.len, op.offset};
+
+        // Stage 2.5: install the slot's Completion publication binding.
+        auto bh = arena_.install_publication_binding(h, &c, len, &publish_size_ready);
+        if (!bh.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(bh.error());
+        }
+
+        // Stage 3a: Completion CAS idle -> binding elects ONE submitter.
+        if (!begin_binding(c)) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        // Stage 3b: commit (pending + pin + accepted++ + borrow begins).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // C2d (ADR Gate 4): injected COMMIT-BOUNDARY failure — the binding CAS
+        // already won (Completion in `binding`), so the submit path executes the
+        // REAL commit-failure rollback: rollback_binding_before_accept (binding ->
+        // idle, restoring a fully reusable Completion) followed by the slot
+        // rollback (publication binding cleared, generation++, capacity
+        // recyclable, accepted-outstanding untouched). This is the ONLY executable
+        // instance of rollback_binding_before_accept in the corpus: a natural
+        // commit failure (stale handle / non-prepared slot) is unreachable after a
+        // same-thread reserve -> prepare -> begin_binding (review P1). Compiled
+        // out of production builds (no branch, no local, no symbol).
+        auto commit_failure = injected_precommit_stage_failure_(SubmitStage::commit);
+        if (commit_failure.has_value()) {
+            rollback_binding_before_accept(c);
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(*commit_failure);
+        }
+#endif
+        auto ch = arena_.commit(h);
+        if (!ch.has_value()) {
+            rollback_binding_before_accept(c);
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // C2e (row 15; B1): deterministic close-vs-LP window — the submit is
+        // inside the admission transaction, AFTER the slot commit (Step 4) and
+        // BEFORE the `binding -> outstanding` release-store (ADR Step 5, the
+        // commit/accept linearization point). close_admission() must BLOCK
+        // here: a close that returned in this window would permit a new
+        // acceptance LP after close (Decision 15 violation;
+        // tp_c2e_close_waits_for_inflight_acceptance_lp; mutant M11
+        // detector). Compiled out of production builds.
+        wait_before_commit_binding_pause_();
+#endif
+        // Stage 3c: install the slot-release capability, then publish outstanding.
+        // AFTER commit_binding nothing may throw (I9).
+        install_binding(c, &arena_, h);
+        commit_binding(c);
     }
-    // Stage 3c: install the slot-release capability, then publish outstanding.
-    // AFTER commit_binding nothing may throw (I9).
-    install_binding(c, &arena_, h);
-    commit_binding(c);
 
     // Stage 4: enqueue + dispatch publication under one work_mtx_ critical
     // section (P0). No gap between pin clear and ring visibility.
@@ -334,61 +392,83 @@ template <class Op>
 Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
                                             detail::OperationKind kind) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // C2d (ADR Gate 4): injected reserve failure — see submit_size.
-    auto reserve_failure = injected_precommit_stage_failure_(SubmitStage::reserve);
-    if (reserve_failure.has_value()) {
-        return make_unexpected<void>(*reserve_failure);
-    }
+    // C2e (row 15; B1): deterministic close-wins window — see submit_size.
+    wait_before_admission_lock_pause_();
 #endif
-    auto rh = arena_.reserve();
-    if (!rh.has_value()) return make_unexpected<void>(rh.error());
-    detail::SlotHandle h = rh.value();
+    detail::SlotHandle h{};
+    {
+        // Backend admission transaction domain (ADR :453-462) — see submit_size.
+        std::lock_guard<std::mutex> admission_lk(admission_mtx_);
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // C2d (ADR Gate 4): injected reserve failure — see submit_size.
+        auto reserve_failure = injected_precommit_stage_failure_(SubmitStage::reserve);
+        if (reserve_failure.has_value()) {
+            return make_unexpected<void>(*reserve_failure);
+        }
+#endif
+        auto rh = arena_.reserve();
+        if (!rh.has_value()) return make_unexpected<void>(rh.error());
+        h = rh.value();
+
+        // Stage 1.5: descriptor validation inside the admission transaction,
+        // after reserve — see submit_size (review P1: post-close malformed
+        // sync rejects invalid_state, not invalid_argument).
+        auto v = validate_op(op);
+        if (!v.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return v;
+        }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // C2d (ADR Gate 4): injected prepare failure — see submit_size.
-    auto prepare_failure = injected_precommit_stage_failure_(SubmitStage::prepare);
-    if (prepare_failure.has_value()) {
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(*prepare_failure);
-    }
+        // C2d (ADR Gate 4): injected prepare failure — see submit_size.
+        auto prepare_failure = injected_precommit_stage_failure_(SubmitStage::prepare);
+        if (prepare_failure.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(*prepare_failure);
+        }
 #endif
-    auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
-    if (!ph.has_value()) {
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(ph.error());
-    }
+        auto ph = arena_.prepare(h, kind, detail::BorrowMetadata{op.fd, nullptr, 0});
+        if (!ph.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(ph.error());
+        }
 
-    prepared_ops_[h.slot.value] =
-        PreparedBlockingOp{kind, op.fd, nullptr, std::size_t{0}, std::uint64_t{0}};
+        prepared_ops_[h.slot.value] =
+            PreparedBlockingOp{kind, op.fd, nullptr, std::size_t{0}, std::uint64_t{0}};
 
-    auto bh = arena_.install_publication_binding(h, &c, 0, &publish_void_ready);
-    if (!bh.has_value()) {
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(bh.error());
-    }
+        auto bh = arena_.install_publication_binding(h, &c, 0, &publish_void_ready);
+        if (!bh.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(bh.error());
+        }
 
-    if (!begin_binding(c)) {
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
+        if (!begin_binding(c)) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // C2d (ADR Gate 4): injected commit-boundary failure — the real
-    // rollback_binding_before_accept + slot rollback; see submit_size.
-    auto commit_failure = injected_precommit_stage_failure_(SubmitStage::commit);
-    if (commit_failure.has_value()) {
-        rollback_binding_before_accept(c);
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(*commit_failure);
-    }
+        // C2d (ADR Gate 4): injected commit-boundary failure — the real
+        // rollback_binding_before_accept + slot rollback; see submit_size.
+        auto commit_failure = injected_precommit_stage_failure_(SubmitStage::commit);
+        if (commit_failure.has_value()) {
+            rollback_binding_before_accept(c);
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(*commit_failure);
+        }
 #endif
-    auto ch = arena_.commit(h);
-    if (!ch.has_value()) {
-        rollback_binding_before_accept(c);
-        (void)arena_.rollback_reserved_or_prepared(h);
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        auto ch = arena_.commit(h);
+        if (!ch.has_value()) {
+            rollback_binding_before_accept(c);
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // C2e (row 15; B1): deterministic close-vs-LP window — see submit_size.
+        wait_before_commit_binding_pause_();
+#endif
+        install_binding(c, &arena_, h);
+        commit_binding(c);
     }
-    install_binding(c, &arena_, h);
-    commit_binding(c);
 
     enqueue_after_commit(h);
     return {};
@@ -636,6 +716,16 @@ Result<std::size_t> ThreadPoolBackend::wait_one() {
         std::size_t n = arena_.reap(sink_);
         if (n > 0) return n;
         if (ready_wait_.wait_for_change(token) == BackendWakeReason::interrupted) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // C2e (row 15): deterministic interrupt-vs-final-ready window. The
+            // pause lets a test record the final terminal in the exact window
+            // between the control wake and the final reap, proving the final
+            // reap returns it — the control interrupt never swallows the last
+            // ready (tp_c2e_interrupt_final_reap_closes_ready_race; mutant M4
+            // detector). Compiled out of production builds (no branch, no
+            // local, no symbol).
+            wait_control_wake_final_reap_pause_();
+#endif
             // One final non-blocking reap closes the interrupt-vs-final-ready
             // race, then report the interruption (0 = no completion reaped).
             n = arena_.reap(sink_);
@@ -750,6 +840,46 @@ void ThreadPoolBackend::wait_terminal_publication_pause_() noexcept {
     }
     g->exited.store(true, std::memory_order_release);
 }
+
+// C2e: pause between the interrupted control wake and wait_one's final reap
+// (see the public gate struct's comment). No-op when disarmed.
+void ThreadPoolBackend::wait_control_wake_final_reap_pause_() noexcept {
+    auto* g = control_wake_final_reap_gate_.load(std::memory_order_acquire);
+    if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
+
+// C2e (B1): pause BEFORE taking the admission transaction lock (see the
+// public gate struct's comment). No-op when disarmed.
+void ThreadPoolBackend::wait_before_admission_lock_pause_() noexcept {
+    auto* g = before_admission_lock_gate_.load(std::memory_order_acquire);
+    if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
+
+// C2e (B1): pause between arena_.commit() and the `binding -> outstanding`
+// release-store, INSIDE the admission transaction (see the public gate
+// struct's comment). No-op when disarmed.
+void ThreadPoolBackend::wait_before_commit_binding_pause_() noexcept {
+    auto* g = before_commit_binding_gate_.load(std::memory_order_acquire);
+    if (g == nullptr) return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
 #endif
 
 // ---------------------------------------------------------------------------
@@ -797,14 +927,24 @@ std::size_t ThreadPoolBackend::outstanding() const noexcept {
 }
 
 void ThreadPoolBackend::close_admission() {
-    // Close admission, THEN wake any participant parked in the ready wait so
-    // it re-evaluates (issue #67: the frozen design's "close does not signal"
+    // ADR §"Commit / accept" (:453-462) + Decision 15: close_admission()
+    // takes the backend admission transaction lock so it serializes against an
+    // in-flight submit's Stage 1-5 acceptance protocol (the `binding ->
+    // outstanding` release-store — Step 5 — is the commit/accept linearization
+    // point). After this returns, no new acceptance LP can occur: an in-flight
+    // submit either completed its LP first (submit wins) or a later submit
+    // observes admission closed at reserve and rejects synchronously (close
+    // wins). THEN wake any participant parked in the ready wait so it
+    // re-evaluates (issue #67: the frozen design's "close does not signal"
     // constraint starved a parked wait_one and deadlocked drain). The wake is
     // a one-shot control generation advance — a re-evaluation signal, not a
     // fabricated completion and not a persistent "never park again" state:
     // future waits snapshot the advanced generation and park normally, so an
     // admission-closed runtime with outstanding work never busy-spins.
-    arena_.close_admission();
+    {
+        std::lock_guard<std::mutex> lk(admission_mtx_);
+        arena_.close_admission();
+    }
     ready_wait_.interrupt_all();
 }
 
