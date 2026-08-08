@@ -51,6 +51,14 @@ using sluice::async::UringConfig;
 using sluice::async::WriteOp;
 
 constexpr int kRealSubmit = std::numeric_limits<int>::max();
+// Sentinel: perform a REAL io_uring_submit() (so the kernel actually receives
+// the SQEs and will produce real CQEs), but LIE to the backend and report 1
+// regardless of the true submitted count. This is the scripted-partial-return
+// lifecycle detector (reviewer §8.4): it proves the backend does NOT mutate
+// RequestState based on the reported submit count (no accepted-prefix lifecycle
+// authority) and that all original CQEs still retire normally. It is NOT a
+// deterministic kernel partial submit — the kernel may have consumed all N.
+constexpr int kRealSubmitReportOne = std::numeric_limits<int>::max() - 1;
 
 class TempFile {
   public:
@@ -91,6 +99,10 @@ class SubmitScript {
         const int step = self.steps_[self.next_++];
         if (step == kRealSubmit)
             return ::io_uring_submit(ring);
+        if (step == kRealSubmitReportOne) {
+            (void)::io_uring_submit(ring); // kernel really receives the SQEs
+            return 1;                      // lie to the backend: report a partial
+        }
         return step;
     }
 
@@ -225,6 +237,59 @@ SLUICE_TEST_CASE(uring_submit_partial_does_not_split_ownership) {
     SLUICE_CHECK(std::memcmp(on_disk.data() + first.size(), second.data(), second.size()) == 0);
 }
 
+// Scripted-partial-return lifecycle detector (reviewer §8.4). The hook
+// performs a REAL io_uring_submit() (kernel receives the SQEs) but LIES to the
+// backend, reporting 1 on every call regardless of how many SQEs were actually
+// submitted. This proves NO RequestState transition depends on the reported
+// submit count — there is no accepted-prefix lifecycle authority smuggled back
+// in — and that all original CQEs still retire normally. This is a lifecycle
+// mutation detector, NOT a deterministic kernel partial submit (the kernel may
+// have consumed all N SQEs); the assertion is about backend behavior on the
+// reported value.
+SLUICE_TEST_CASE(uring_scripted_partial_return_does_not_mutate_request_state) {
+    // capacity/depth 8 so both writes can be ring-owned concurrently. The hook
+    // reports 1 on each submit call.
+    constexpr std::array steps{kRealSubmitReportOne, kRealSubmitReportOne,
+                               kRealSubmitReportOne, kRealSubmitReportOne};
+    SubmitScript script(steps);
+    UringAsyncBackend backend(small_config(8), hooks_for(script));
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::byte, 4> first{std::byte{0x11}, std::byte{0x12}, std::byte{0x13},
+                                   std::byte{0x14}};
+    std::array<std::byte, 4> second{std::byte{0x21}, std::byte{0x22}, std::byte{0x23},
+                                    std::byte{0x24}};
+    Completion<std::size_t> first_completion;
+    Completion<std::size_t> second_completion;
+    SLUICE_CHECK(
+        backend.submit_write(WriteOp{file.fd(), first.data(), first.size(), 0}, first_completion)
+            .has_value());
+    SLUICE_CHECK(
+        backend.submit_write(WriteOp{file.fd(), second.data(), second.size(), 4}, second_completion)
+            .has_value());
+
+    // Both accepted and outstanding — the reported partial count did not
+    // terminalize or drop either request.
+    SLUICE_CHECK(backend.outstanding() == 2);
+
+    // Both complete from their real CQEs despite the backend being told each
+    // submit only progressed 1.
+    const std::size_t completed = poll_bounded(
+        backend, [&] { return first_completion.ready() && second_completion.ready(); });
+    SLUICE_CHECK(completed == 2);
+    SLUICE_CHECK(first_completion.ready());
+    SLUICE_CHECK(first_completion.result().has_value());
+    SLUICE_CHECK(first_completion.result().value() == first.size());
+    SLUICE_CHECK(second_completion.ready());
+    SLUICE_CHECK(second_completion.result().has_value());
+    SLUICE_CHECK(second_completion.result().value() == second.size());
+    SLUICE_CHECK(backend.outstanding() == 0);
+    first_completion.reset();
+    second_completion.reset();
+}
+
 // P1 length boundary detector: liburing's io_uring_prep_read/write take an
 // `unsigned nbytes`. A length > UINT_MAX MUST be rejected with invalid_argument
 // (no silent size_t->unsigned truncation), and a length == UINT_MAX MUST be
@@ -283,6 +348,132 @@ SLUICE_TEST_CASE(uring_length_uint_max_accepted_by_validation) {
     SLUICE_CHECK(backend.outstanding() == 0);
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);
 }
+
+// P0-B stale-cookie detector (frozen design §7.1/§7.2). This is the central
+// ABA proof. With request_capacity == 1, the CqeRouter has exactly ONE array
+// slot, so a second operation necessarily REUSES that array slot. Under the
+// old (pre-fix) encoding (user_data == router_slot+1), a stale CQE for op A
+// would resolve through the recycled slot to op B's NEW SlotHandle and
+// terminalize B with A's result. Under the cookie-keyed router (user_data ==
+// never-reused op_cookie), op A's stale cookie matches NO live entry and is
+// dropped; op B is unaffected and completes normally from its own CQE.
+//
+// Sequence:
+//   A = write, cookie = cA (predicted via peek_next_cookie_for_test)
+//   drive A to completion + reset (frees arena slot AND router array slot)
+//   B = write, cookie = cB (predicted; reuses the same router ARRAY slot)
+//   inject stale cookie cA  -> MUST be dropped (no live entry matches)
+//     assert: B not ready, B's slot not terminalized, outstanding unchanged
+//   then poll B to completion from its real CQE
+//
+// This detector FAILS against the old router_slot+1 encoding (B would be
+// terminalized by the injected stale CQE).
+SLUICE_TEST_CASE(uring_stale_cqe_cookie_dropped_not_misdelivered) {
+    // capacity == depth == 1 forces router array slot 0 reuse for B.
+    UringAsyncBackend backend(small_config(1));
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::byte, 4> a_bytes{std::byte{0xA1}, std::byte{0xA2}, std::byte{0xA3},
+                                     std::byte{0xA4}};
+
+    // Predict A's cookie: it is the value of next_cookie_ just before A is
+    // dispatched (allocate_cookie_ returns next_cookie_ then increments).
+    const std::uint64_t cookie_a = backend.peek_next_cookie_for_test();
+    Completion<std::size_t> a_completion;
+    SLUICE_CHECK(
+        backend.submit_write(WriteOp{file.fd(), a_bytes.data(), a_bytes.size(), 0}, a_completion)
+            .has_value());
+    // Drive A fully to completion so its router array slot is retired and the
+    // arena slot is released (allowing B to be accepted).
+    SLUICE_CHECK(poll_bounded(backend, [&] { return a_completion.ready(); }) == 1);
+    SLUICE_CHECK(a_completion.ready());
+    SLUICE_CHECK(a_completion.result().has_value());
+    SLUICE_CHECK(a_completion.result().value() == a_bytes.size());
+    a_completion.reset(); // release arena slot; router array slot already freed at CQE
+
+    // B reuses the same router ARRAY slot but gets a distinct, never-reused
+    // cookie value. Predict it the same way.
+    const std::uint64_t cookie_b = backend.peek_next_cookie_for_test();
+    SLUICE_CHECK(cookie_b != cookie_a); // cookie never reused
+    std::array<std::byte, 4> b_bytes{std::byte{0xB1}, std::byte{0xB2}, std::byte{0xB3},
+                                     std::byte{0xB4}};
+    Completion<std::size_t> b_completion;
+    SLUICE_CHECK(
+        backend.submit_write(WriteOp{file.fd(), b_bytes.data(), b_bytes.size(), 4}, b_completion)
+            .has_value());
+    SLUICE_CHECK(backend.outstanding() == 1);
+
+    // INJECT THE STALE COOKIE (A's). Under the cookie-keyed router this matches
+    // no LIVE entry (A's entry was retired) and MUST be dropped. B is currently
+    // ring-owned with cookie_b; it MUST NOT be affected.
+    backend.inject_cqe_for_test(cookie_a, /*res=*/999); // bogus result for A
+    SLUICE_CHECK(!b_completion.ready());           // B not terminalized by stale cookie
+    SLUICE_CHECK(backend.outstanding() == 1);      // B still outstanding
+    SLUICE_CHECK(backend.arena_accepted_outstanding() == 1);
+
+    // B completes normally from its own real CQE.
+    SLUICE_CHECK(poll_bounded(backend, [&] { return b_completion.ready(); }) == 1);
+    SLUICE_CHECK(b_completion.ready());
+    SLUICE_CHECK(b_completion.result().has_value());
+    SLUICE_CHECK(b_completion.result().value() == b_bytes.size());
+    b_completion.reset();
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+
+    // On-disk verification: A then B, A's stale CQE did not corrupt B's write.
+    std::array<std::byte, 8> on_disk{};
+    const ssize_t n = ::pread(file.fd(), on_disk.data(), on_disk.size(), 0);
+    SLUICE_CHECK(n == 8);
+    SLUICE_CHECK(std::memcmp(on_disk.data(), a_bytes.data(), 4) == 0);
+    SLUICE_CHECK(std::memcmp(on_disk.data() + 4, b_bytes.data(), 4) == 0);
+}
+
+// P0-C no-rollback detector (structural). After io_uring_get_sqe() succeeds,
+// dispatch_one_locked MUST NOT have an ordinary rollback path: mark_running(h)
+// == false is an invariant violation (the P0-A lock discipline means no cancel
+// can have terminalized h between enqueue and dispatch), so it MUST fail-fast
+// rather than "drop the prepared SQE". Constructing the illegal state in
+// production is not possible without a corrupting seam; the protection is
+// structural (the fail-fast is unconditional). This test documents that
+// invariant and verifies the happy path that exercises the no-fail region
+// (get_sqe -> fill -> mark_running succeeds -> remove_exact). A death-test
+// harness integration to force mark_running==false post-get_sqe is left to a
+// future shared death-runner wiring for the uring test target; the invariant
+// is enforced by the unconditional terminate in dispatch_one_locked.
+SLUICE_TEST_CASE(uring_no_rollback_region_happy_path_exercises_mark_running) {
+    UringAsyncBackend backend(small_config(4));
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::byte, 4> bytes{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
+    Completion<std::size_t> completion;
+    // submit + poll drives: get_sqe -> fill -> set_data64 -> mark_running
+    // (succeeds) -> remove_exact. The request becomes ring-owned and completes
+    // from its real CQE. (Mark_running==false would terminate here per P0-C.)
+    SLUICE_CHECK(backend.submit_write(WriteOp{file.fd(), bytes.data(), bytes.size(), 0}, completion)
+                     .has_value());
+    SLUICE_CHECK(backend.outstanding() == 1);
+    SLUICE_CHECK(poll_bounded(backend, [&] { return completion.ready(); }) == 1);
+    SLUICE_CHECK(completion.ready());
+    SLUICE_CHECK(completion.result().has_value());
+    SLUICE_CHECK(completion.result().value() == bytes.size());
+    completion.reset();
+    SLUICE_CHECK(backend.outstanding() == 0);
+}
+
+// Capability note (frozen design §4.2 / §8.1). The enqueue-after-commit race
+// window (cancel terminalizes h between dispatch_->push_back and
+// dispatch_one_locked) is CLOSED by holding dispatch_mtx_ across push_back →
+// dispatch_one_locked in enqueue_after_commit (cancel takes the same lock). A
+// deterministic cross-thread detector is not constructible in the current
+// AsyncIoContext model because access_mtx_ serializes ALL backend operations
+// (submit/poll/wait_one/cancel) at the context layer — there is no concurrent
+// producer of a cancel() against an in-flight submit(). The protection is
+// therefore verified structurally (the single critical section) and by TSan at
+// the backend-internal dispatch_mtx_ boundary.
 
 // NOTE: a deterministic permanent-submit-failure / ring-poison test is a
 // frozen-design HARD GATE (§6) that requires the Class-A proof (which

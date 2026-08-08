@@ -159,6 +159,20 @@ class UringAsyncBackend : public AsyncBackend {
     std::size_t live_cookies_for_test() const noexcept {
         return live_cookies_.load(std::memory_order_relaxed);
     }
+    // Test-only: route a synthetic CQE (cookie + res) through the same
+    // handle_one_cqe path a real CQE takes. Used by the stale-cookie detector
+    // to prove a retired cookie no longer matches any LIVE router entry and is
+    // dropped (P0-B ABA fix). Does NOT touch the io_uring ring; it injects the
+    // CQE directly into the routing/terminal layer.
+    void inject_cqe_for_test(std::uint64_t cookie, int res) noexcept {
+        handle_one_cqe(cookie, res);
+    }
+    // Test-only: read the next operation cookie that WILL be allocated by the
+    // next dispatch_one_locked without advancing the counter. Lets a test
+    // predict the cookie an in-flight op will carry so it can inject a stale
+    // cookie distinct from it. (next_cookie_ is mutated only under
+    // dispatch_mtx_; this snapshot is read single-driver.)
+    std::uint64_t peek_next_cookie_for_test() const noexcept { return next_cookie_; }
 #endif
 
   private:
