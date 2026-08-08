@@ -665,7 +665,12 @@ SLUICE_TEST_CASE(tp_c2e_close_waits_for_inflight_acceptance_lp) {
                            "acceptance LP (admission transaction violated)";
                 break;
             }
-            std::this_thread::yield();
+            // Loop pacing only (avoids burning the whole 2 s window on a
+            // passing run); the pass/fail decision is the condition check
+            // above, never a timing claim — the defect latency under the
+            // mutation is microseconds, far inside both this granularity and
+            // the deadline (§13.3).
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 

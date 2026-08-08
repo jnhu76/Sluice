@@ -115,6 +115,12 @@ public:
                 // AsyncIoContext::wait_one. The test records backend-ready
                 // here; only the context's interrupted-branch final poll can
                 // reap it (mutant M12 detector).
+                // `lk` is intentionally HELD across this spin: this is a
+                // test-only backend and the test never calls
+                // interrupt_all()/snapshot() while the spin is live, so no
+                // concurrent lock attempt can block on it. Holding the lock
+                // keeps the pause deterministic (the paused observation and
+                // the later resume store stay ordered under one mutex).
                 paused.store(true, std::memory_order_release);
                 while (!resume.load(std::memory_order_acquire)) {
                     std::this_thread::yield();
