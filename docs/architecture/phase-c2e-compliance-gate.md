@@ -30,7 +30,7 @@ redundant authorities, not detector lines).
 
 | Requirement (Issue #68 row) | Evidence |
 |---|---|
-| 15 — close/drain/reset sequence (close → new submit `invalid_state`; close → existing reap/cancel legal; reset releases slot) | Shared suite: `close_rejects_future_submit`, `close_preserves_accepted_terminal`, `drain_then_reset_releases_slot`, `slot_released_but_admission_stays_closed` (Fake + ThreadPool via `conformance_close_drain_fake` / `conformance_close_drain_threadpool`). Admission-LP arbitration: `close_admission_gates_reserve_not_inflight_prepared_slot` (arena boundary — close gates NEW acceptance at reserve; an in-flight prepared slot completes its protocol) + `tp_c2e_close_waits_for_inflight_acceptance_lp` / `tp_c2e_close_wins_submit_started_before_close_rejected` (ThreadPool admission transaction) + `fake_c2e_close_waits_for_inflight_acceptance_lp` (Fake admission transaction; ADR §"Commit / accept" Step 5 — the `binding -> outstanding` release-store is the acceptance LP; the winning submit retains its admission lock through Step 5). ThreadPool windows: `tp_c2e_close_while_pending_preserves_accepted_request`, `tp_c2e_close_while_enqueued_preserves_dispatch`, `tp_c2e_close_while_running_result_verbatim`, `tp_c2e_close_while_running_void_result_verbatim`, `tp_c2e_void_submit_after_close_rejected`, `tp_c2e_close_then_pending_cancel_wins`, `tp_c2e_close_then_running_cancel_intent_only`, `tp_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin`, `tp_c2e_close_before_final_terminal_no_lost_ready`, `tp_c2e_final_terminal_before_close_not_affected`, `tp_c2e_close_races_workers_invariant_drain`, `tp_c2e_submit_races_close_linearization`, `ctx_wait_one_interrupt_final_poll_closes_ready_race` (context-level interrupted-branch final poll) |
+| 15 — close/drain/reset sequence (close → new submit `invalid_state`; close → existing reap/cancel legal; reset releases slot) | Shared suite: `close_rejects_future_submit`, `close_preserves_accepted_terminal`, `drain_then_reset_releases_slot`, `slot_released_but_admission_stays_closed` (Fake + ThreadPool via `conformance_close_drain_fake` / `conformance_close_drain_threadpool`). Admission-LP arbitration: `close_admission_gates_reserve_not_inflight_prepared_slot` (arena boundary — close gates NEW acceptance at reserve; an in-flight prepared slot completes its protocol) + `tp_c2e_close_waits_for_inflight_acceptance_lp` / `tp_c2e_close_wins_submit_started_before_close_rejected` (ThreadPool admission transaction) + `fake_c2e_close_waits_for_inflight_acceptance_lp` (Fake admission transaction; ADR §"Commit / accept" Step 5 — the `binding -> outstanding` release-store is the acceptance LP; the winning submit retains its admission lock through Step 5). ThreadPool windows: `tp_c2e_close_while_pending_preserves_accepted_request`, `tp_c2e_close_while_enqueued_preserves_dispatch`, `tp_c2e_close_while_running_result_verbatim`, `tp_c2e_close_while_running_void_result_verbatim`, `tp_c2e_void_submit_after_close_rejected`, `tp_c2e_close_then_pending_cancel_wins`, `tp_c2e_close_then_running_cancel_intent_only`, `tp_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin`, `tp_c2e_close_before_final_terminal_no_lost_ready`, `tp_c2e_final_terminal_before_close_not_affected`, `tp_c2e_close_races_workers_invariant_drain`, `tp_c2e_submit_races_close_linearization`, `tp_c2e_interrupt_final_reap_closes_ready_race`, `ctx_wait_one_interrupt_final_poll_closes_ready_race` (context-level interrupted-branch final poll) |
 | 16 — quiescent destruction (accepted_outstanding == 0 / slot_in_use == 0 before destroy) | ThreadPool death matrix (now incl. `pending`): `tp_death_destroy_with_pending` + existing `tp_death_destroy_with_{enqueued,running,backend_ready,completion_ready}` + `tp_death_control_quiescent_destroy`; Fake-type death target: `fake_death_destroy_with_unreaped_request`, `fake_death_destroy_with_ready_unreset`, `fake_death_control_quiescent_destroy`; arena death (`arena_death_destroy_with_slot_in_use`), Completion ready-destruction release (`binding_release_capability_ready_destruction_releases_slot`) |
 
 **Out of scope (explicitly, unchanged from Issue #68):** rows 4b/12b/14b
@@ -192,7 +192,9 @@ readiness is published — state first, then notify) and `control_generation`
 `close_admission()` bumps the control epoch and notifies ALL parked waiters;
 `wait_for_change()` reports `interrupted`; `AsyncIoContext::wait_one` (and the
 backend's raw `wait_one`) performs ONE final non-blocking reap to close the
-interrupt-vs-final-ready race, then returns 0 (I8: no fabricated completion).
+interrupt-vs-final-ready race and returns that reap's reaped-completion count
+— `0` only when the final poll finds nothing (I8: no fabricated completion;
+the M4/M12 detectors assert the final reap can return 1).
 The CONTEXT-level final poll is pinned deterministically by
 `ctx_wait_one_interrupt_final_poll_closes_ready_race` (mutant M12 detector: a
 test-only split-wait backend pauses `wait_for_change()` after observing the
@@ -354,6 +356,7 @@ public API change beyond the reference method below.
 | `tp_c2e_final_terminal_before_close_not_affected` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_close_races_workers_invariant_drain` | threadpool_backend_c2e_close_drain_test | PASS |
 | `tp_c2e_submit_races_close_linearization` | threadpool_backend_c2e_close_drain_test | PASS |
+| `tp_c2e_interrupt_final_reap_closes_ready_race` | threadpool_backend_c2e_close_drain_test | PASS |
 | `fake_c2e_close_waits_for_inflight_acceptance_lp` | fake_backend_c2e_close_drain_test | PASS |
 | `ctx_wait_one_interrupt_final_poll_closes_ready_race` | async_io_context_split_wait_c2e_test | PASS |
 | `tp_death_destroy_with_pending` | threadpool_backend_death_test | PASS |
@@ -426,6 +429,30 @@ new B1/B3 detectors. Final scan confirmed 0 mutation markers remain.
 | Negative compile | `verify-completion-authority-negative-compile.sh`, `verify-request-arena-negative-compile.sh` | PASS (no public authority change) |
 | Doc checks | `python3 scripts/check-doc-links.py`, `python3 scripts/verify-architecture-docs.py` | PASS |
 | Diff hygiene | `git diff --check` | PASS |
+
+### 9.1 Completion report (commits / working tree)
+
+Final head for this gate: `2843058` — 11 commits on top of the baseline
+`0b6c0b9` (PR #73):
+
+```text
+2843058 docs(async): C2e mutation-evidence accounting (13 executions/11 RED/2 neutral) + P1 precedence record (review P1/P2)
+e510169 test(async): C2e post-close malformed-descriptor precedence detectors (review P1)
+c10d7d2 fix(async): ThreadPool descriptor validation inside the admission transaction (review P1)
+153638f docs(async): C2e gate/ledger/mutation-evidence + residual-risk records (issue #74)
+41e2840 test(async): C2e admission-transaction + context final-poll detectors (B1/B3) + B2/B4 hygiene
+a612a20 fix(async): backend admission transaction domain — close serializes against the Step-5 acceptance LP (B1)
+8de63bb docs(async): C2e compliance gate + mutation evidence + roadmap/registry updates
+6c7a46e test(gate): C2e manifest records, close/drain driver, and self-tests
+20bdefc test(gate): complete C2e destruction matrix — pending state + Fake death target
+eeab3f5 test(async): C2e ThreadPool deterministic close/drain window evidence
+b6a3bc8 test(async): add C2e shared close/drain suite + FakeAsyncBackend::close_admission
+```
+
+Working tree at the final gate run: clean — the C2e changes are exactly the
+11 commits above and no unrelated tracked/untracked/ignored files were
+modified (`git status --short` empty after the commit slice; `git diff
+--check` clean).
 
 ## 10. Remaining gaps
 
