@@ -549,6 +549,16 @@ class ThreadPoolBackend : public AsyncBackend {
     static Result<void> validate_sync(SyncDataOp op);
     static Result<void> validate_sync(SyncAllOp op);
 
+    // Dispatch the malformed-descriptor probe by op kind. Called INSIDE the
+    // admission transaction, AFTER reserve (Stage 1.5) so the Reserve-stage
+    // rejections — admission closed (invalid_state, Decision 15) and capacity
+    // full (would_block) — take precedence over the Prepare-stage
+    // invalid_argument (ADR Decision 5 stage order; review P1). A rejected
+    // descriptor rolls back the reserved slot through
+    // rollback_reserved_or_prepared — zero residue.
+    template <class Op>
+    static Result<void> validate_op(const Op& op) noexcept;
+
     // Five-stage admission for a byte-carrying / void op (ADR Decision 5; mirrors
     // the SyncBackend reference). Records the fixed prepared op into per-slot
     // scratch so the worker can run the real syscall after mark_running.

@@ -214,27 +214,34 @@ Result<void> ThreadPoolBackend::validate_sync(SyncAllOp op) {
 // ---------------------------------------------------------------------------
 
 Result<void> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>& c) {
-    auto v = validate_read(op);
-    if (!v.has_value()) return v;
     return submit_size(op, c, detail::OperationKind::read, op.len);
 }
 
 Result<void> ThreadPoolBackend::submit_write(WriteOp op, Completion<std::size_t>& c) {
-    auto v = validate_write(op);
-    if (!v.has_value()) return v;
     return submit_size(op, c, detail::OperationKind::write, op.len);
 }
 
 Result<void> ThreadPoolBackend::submit_sync_data(SyncDataOp op, Completion<void>& c) {
-    auto v = validate_sync(op);
-    if (!v.has_value()) return v;
     return submit_void(op, c, detail::OperationKind::sync_data);
 }
 
 Result<void> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>& c) {
-    auto v = validate_sync(op);
-    if (!v.has_value()) return v;
     return submit_void(op, c, detail::OperationKind::sync_all);
+}
+
+// Dispatch the malformed-descriptor probe by op kind (see the declaration).
+// Defined next to the validate_* helpers it forwards to.
+template <class Op>
+Result<void> ThreadPoolBackend::validate_op(const Op& op) noexcept {
+    if constexpr (std::is_same_v<Op, ReadOp>) {
+        return validate_read(op);
+    } else if constexpr (std::is_same_v<Op, WriteOp>) {
+        return validate_write(op);
+    } else if constexpr (std::is_same_v<Op, SyncDataOp>) {
+        return validate_sync(op);
+    } else {
+        return validate_sync(op);  // SyncAllOp
+    }
 }
 
 template <class Op>
@@ -277,6 +284,22 @@ Result<void> ThreadPoolBackend::submit_size(Op op, Completion<std::size_t>& c,
         auto rh = arena_.reserve();
         if (!rh.has_value()) return make_unexpected<void>(rh.error());
         h = rh.value();
+
+        // Stage 1.5: descriptor validation (ADR Decision 6) INSIDE the
+        // admission transaction, AFTER reserve — so admission closed
+        // (invalid_state, Decision 15) and capacity full (would_block) take
+        // precedence over a malformed descriptor (invalid_argument) per the
+        // ADR Decision-5 stage order (Reserve precedes Prepare). A reserved
+        // slot rolls back through the SAME pre-commit rollback the
+        // prepare-failure path uses (rollback_reserved_or_prepared): zero
+        // residue, generation++, slot immediately recyclable (review P1 — a
+        // post-close malformed submit must reject invalid_state, not
+        // invalid_argument).
+        auto v = validate_op(op);
+        if (!v.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return v;
+        }
 
         // Stage 2: prepare (op kind + fd/buffer borrow metadata).
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -386,6 +409,15 @@ Result<void> ThreadPoolBackend::submit_void(Op op, Completion<void>& c,
         auto rh = arena_.reserve();
         if (!rh.has_value()) return make_unexpected<void>(rh.error());
         h = rh.value();
+
+        // Stage 1.5: descriptor validation inside the admission transaction,
+        // after reserve — see submit_size (review P1: post-close malformed
+        // sync rejects invalid_state, not invalid_argument).
+        auto v = validate_op(op);
+        if (!v.has_value()) {
+            (void)arena_.rollback_reserved_or_prepared(h);
+            return v;
+        }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         // C2d (ADR Gate 4): injected prepare failure — see submit_size.
