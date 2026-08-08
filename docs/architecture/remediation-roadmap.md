@@ -412,6 +412,15 @@ incomplete backend prerequisite ahead of Phase F: F must not switch the common
 Scheduler/Batch identity consumption while Uring still reconstructs identity from
 side-band containers. The D → F dependency below is unchanged.
 
+**D0 audit / PR decomposition (2026-08-08):** PLAN READY FOR HUMAN REVIEW. The
+complete audit and the proposed D1–D4 decomposition are in
+[`docs/architecture/phase-d-uring-migration-plan.md`](phase-d-uring-migration-plan.md)
+(baseline `1349a6f`; 151/151 Clang Debug; Uring conformance verdict NOT CONFORMING
+with the five `uring_*_not_implemented` records; liburing 2.14 present — real-path
+link break in `uring_submit_failure_test` recorded as P-D0-INF-01; WSL2 real-path
+execution unverified). No production implementation is started; the manifest
+records remain `not_implemented`.
+
 **Work:**
 
 - map RequestKey to SQE `user_data` and CQE back to the same validated slot;
