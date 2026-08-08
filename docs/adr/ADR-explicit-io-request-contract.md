@@ -8,6 +8,8 @@ and lifecycle contracts
 **Accepted at:** Phase B implementation (`feat(async): add bounded RequestKey / RequestSlot
 reference lifecycle`), branch `feat/bounded-request-slot-reference`, working-tree change
 awaiting the user's review/commit.
+**Amended:** 2026-08-08 by Decision 18 (Uring private-ring execution-ownership clarification),
+which refines the `enqueued -> running` transition wording for the Uring execution domain only.
 
 ## Acceptance
 
@@ -1316,6 +1318,97 @@ declared-but-deferred vocabulary item for the reference backends — see the
 "Round-4 review closeout" section above and `docs/architecture/divergence-
 registry.md` for the recorded divergence (the reference backends perform no
 real I/O; enforcement lands in the full-backend prepare paths, Phase D/E).
+
+## Decision 18: execution-ownership clarification (Uring private-ring amendment)
+
+**Status:** Accepted (amendment)
+**Date:** 2026-08-08
+**Amends:** the binding wording of Decision 4 (transition `enqueued -> running/kernel-owned`),
+Decision 5 (Dispatch, partial submit), and the UringAsyncBackend mapping, *for the Uring execution
+domain only*. It does not alter the ThreadPool blocking-worker transition, the commit/accept linearization
+point, RequestKey `(context, slot, generation)`, generation validation, Scheme-B pending cancel,
+exactly-one terminal winner, reap-only Completion publication, borrow lifetime, waiter semantics,
+request capacity, or close/drain/destruction rules.
+
+### Motivation
+
+The original wording binds the `enqueued -> running` transition for the io_uring case to
+*kernel submission accounting* — i.e. the accepted prefix of `io_uring_submit()`. That couples
+the RequestArena lifecycle to liburing's transport progress and forces the request state machine
+to maintain a persistent `enqueued` / submission-pending production state and a submission-order
+ledger. Mature io_uring runtimes (Tokio's uring driver, tokio-uring, Monoio) instead treat the
+request as outstanding the moment a fully prepared SQE plus its stable CQE-routing metadata are
+installed into the application's ring, and treat `io_uring_submit()` as transport progress that
+cannot advance or regress request lifetime. This amendment adopts that model so the lifecycle no
+longer depends on the submit prefix, which is also a prerequisite for a later, non-disruptive
+SQPOLL enablement.
+
+### Refined semantics
+
+A request is `running` once it has left the cancelable local dispatch queue and the concrete
+backend owns an execution reference that must be retired before the RequestSlot may be released.
+The state name `running / kernel-owned` is read, for the Uring domain, as
+`running / backend-execution-owned`.
+
+Backend mappings under this amendment:
+
+```text
+ThreadPool:
+  worker dequeue  -> running
+
+Uring (private ring, one ring per backend instance):
+  fully prepared SQE
+  + stable CQE routing metadata installed
+  into this backend's private io_uring ring
+  -> running / ring-owned (backend-execution-owned)
+```
+
+Consequences:
+
+- For the Uring domain, `io_uring_get_sqe()` success begins the ownership-transfer transaction; the
+  remainder of that transaction (cookie acquisition, routing/scratch installation, `mark_running`,
+  dispatch unlink) MUST contain no recoverable failure, because there is no ordinary rollback for a
+  half-created SQE. Allocation-free/no-wrap cookie acquisition, pre-reserved routing capacity,
+  pre-validated descriptors, and noexcept scratch installation are therefore required before
+  `io_uring_get_sqe()`.
+- For the Uring domain, `io_uring_submit()`, `io_uring_enter()`, partial submit, zero progress,
+  retry, `EAGAIN`/`EBUSY`, and SQPOLL push are **transport progress only** and MUST NOT mutate
+  RequestState. A bounded transport ledger is permitted solely for transport recovery, diagnostics,
+  and metrics; it MUST NOT become request identity, lifecycle authority, terminal authority, or
+  Completion publication authority.
+- A request canceled while still locally `enqueued` (before its SQE is installed into the ring) has
+  the strong guarantee that its operation SQE was never installed and cannot execute.
+- A `running` / ring-owned cancel records intent and may append an `IORING_OP_ASYNC_CANCEL` whose
+  `user_data` is a reserved control value. The cancel CQE is control/informational only; it MUST
+  NOT own RequestKey, publish Completion, release the RequestSlot, overwrite an ordinary result, or
+  independently win the operation terminal. The original operation CQE decides success / ordinary
+  error / `-ECANCELED`. The RequestSlot and routing metadata remain live until the original CQE (or
+  a separately proven transport-failure retirement path).
+- CQE identity MUST NOT be a raw `Completion*`, raw `SlotIndex`, or `RequestSlot*`. The kernel
+  boundary uses an opaque operation cookie that resolves through a bounded backend router to a full
+  `SlotHandle` and is then re-validated by the arena under full generation. The operation cookie is
+  never reused during backend lifetime; exhaustion fails fast before reuse; explicit control values
+  are reserved outside the operation-cookie allocation domain.
+- Ring depth (`queue_depth`) remains distinct from `request_capacity`; `request_capacity >
+  queue_depth` MUST be legal.
+
+### Relationship to the superseded wording
+
+Decision 4's transition-table row and Decision 5's Dispatch paragraph retain their historical text
+as the recorded baseline they were at acceptance. This Decision 18 is the authoritative refinement
+for the Uring execution domain. Any future backend that binds `enqueued -> running` to kernel
+submission accounting remains bound by the original wording until its own amendment is accepted.
+
+### Frozen-design gate (Phase D1)
+
+Production implementation of the Uring private-ring migration MUST NOT land a permanent
+`io_uring_submit()` failure path until a precise policy distinguishes *definitely not kernel-consumed*
+from *possibly kernel-consumed* work, because `io_uring_submit()` advances the userspace SQ tail
+before the kernel enter and therefore a negative return value does not prove that zero SQEs were
+consumed. Only definitely-not-consumed work may receive local `backend_error` after a structural
+proof that no future original CQE can exist; possibly-kernel-owned work must remain bound for CQE
+recovery. See `docs/architecture/phase-d-uring-migration-plan.md` §8.2 and the Phase D1 frozen
+design for the binding policy.
 
 ## Open risks and deferred decisions
 
