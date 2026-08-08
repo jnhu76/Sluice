@@ -526,7 +526,8 @@ acceptable because the new lifecycle no longer depends on the non-SQPOLL prefix 
 SQPOLL later becomes a transport/recovery enhancement rather than a RequestArena redesign.
 
 **D1 implementation is forbidden until this permanent-failure proof is present in its frozen
-design.**
+design.** The frozen design and the Class-A proof policy live in
+`docs/architecture/phase-d1-uring-frozen-design.md` §6.
 
 ---
 
