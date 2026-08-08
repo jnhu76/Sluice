@@ -432,10 +432,13 @@ new B1/B3 detectors. Final scan confirmed 0 mutation markers remain.
 
 ### 9.1 Completion report (commits / working tree)
 
-Final head for this gate: `2843058` — 11 commits on top of the baseline
+Final head for this gate: `f33dcfc` — 14 commits on top of the baseline
 `0b6c0b9` (PR #73):
 
 ```text
+f33dcfc docs(async): C2e evidence reconcile — case inventory, final-reap wording, completion report
+65f8a2b test(async): C2e hygiene — gate lifetime ordering, probe-loop pacing, split-wait lock-hold comment
+9ae7e84 fix(async): FakeAsyncBackend::close_admission() not noexcept (matches ThreadPool) + wait_one final-reap comment
 2843058 docs(async): C2e mutation-evidence accounting (13 executions/11 RED/2 neutral) + P1 precedence record (review P1/P2)
 e510169 test(async): C2e post-close malformed-descriptor precedence detectors (review P1)
 c10d7d2 fix(async): ThreadPool descriptor validation inside the admission transaction (review P1)
