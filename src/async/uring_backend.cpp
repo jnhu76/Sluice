@@ -255,7 +255,14 @@ Result<void> UringAsyncBackend::validate_read(ReadOp op) {
     if (!off.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
-    if (op.len > static_cast<std::size_t>(std::numeric_limits<ssize_t>::max())) {
+    // liburing's io_uring_prep_read/write take `unsigned nbytes`. Validate
+    // against UINT_MAX (not SSIZE_MAX) so a >4GiB length is rejected here
+    // instead of being silently truncated by the implicit size_t->unsigned
+    // narrowing at SQE fill time. The shared checked_uring_length helper uses
+    // a different vocabulary (invalid_state); map to the Uring public
+    // validation vocabulary (invalid_argument) at this boundary.
+    auto nlen = sluice::detail::checked_uring_length(op.len);
+    if (!nlen.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
     return {};
@@ -270,7 +277,8 @@ Result<void> UringAsyncBackend::validate_write(WriteOp op) {
     if (!off.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
-    if (op.len > static_cast<std::size_t>(std::numeric_limits<ssize_t>::max())) {
+    auto nlen = sluice::detail::checked_uring_length(op.len);
+    if (!nlen.has_value()) {
         return make_unexpected<void>(IoError{IoError::Code::invalid_argument});
     }
     return {};
@@ -420,8 +428,12 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
         }
         // Record the fixed prepared op into per-slot scratch. Dispatch reads
         // this only after mark_running(h) succeeds (current-generation enqueued).
+        // Normalize the length to liburing's `unsigned nbytes` at prepare (the
+        // validation above already proved op.len <= UINT_MAX), so the dispatch
+        // fill uses prep.native_length directly with no implicit narrowing.
         prepared_ops_[h.slot.value] = PreparedUringOp{
-            kind, op.fd, static_cast<const std::byte*>(borrow_of(op).address), op.len, op.offset};
+            kind, op.fd, static_cast<const std::byte*>(borrow_of(op).address), op.len,
+            static_cast<unsigned>(op.len), op.offset};
 
         // Stage 2.5: install the slot's Completion publication binding.
         auto bh = arena_.install_publication_binding(h, &c, len, &publish_size_ready);
@@ -484,7 +496,8 @@ Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
             return make_unexpected<void>(ph.error());
         }
         prepared_ops_[h.slot.value] =
-            PreparedUringOp{kind, op.fd, nullptr, std::size_t{0}, std::uint64_t{0}};
+            PreparedUringOp{kind, op.fd, nullptr, std::size_t{0}, /*native_length=*/0u,
+                            std::uint64_t{0}};
 
         auto bh = arena_.install_publication_binding(h, &c, 0, &publish_void_ready);
         if (!bh.has_value()) {
@@ -623,11 +636,11 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     const PreparedUringOp& prep = prepared_ops_[h.slot.value];
     switch (prep.kind) {
     case detail::OperationKind::read:
-        ::io_uring_prep_read(sqe, prep.fd, const_cast<std::byte*>(prep.buffer), prep.length,
+        ::io_uring_prep_read(sqe, prep.fd, const_cast<std::byte*>(prep.buffer), prep.native_length,
                              static_cast<off_t>(static_cast<std::int64_t>(prep.offset)));
         break;
     case detail::OperationKind::write:
-        ::io_uring_prep_write(sqe, prep.fd, prep.buffer, prep.length,
+        ::io_uring_prep_write(sqe, prep.fd, prep.buffer, prep.native_length,
                               static_cast<off_t>(static_cast<int64_t>(prep.offset)));
         break;
     case detail::OperationKind::sync_data:

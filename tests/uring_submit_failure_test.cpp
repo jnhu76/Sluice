@@ -225,6 +225,65 @@ SLUICE_TEST_CASE(uring_submit_partial_does_not_split_ownership) {
     SLUICE_CHECK(std::memcmp(on_disk.data() + first.size(), second.data(), second.size()) == 0);
 }
 
+// P1 length boundary detector: liburing's io_uring_prep_read/write take an
+// `unsigned nbytes`. A length > UINT_MAX MUST be rejected with invalid_argument
+// (no silent size_t->unsigned truncation), and a length == UINT_MAX MUST be
+// accepted by validation. This kills the mutant where the old SSIZE_MAX check
+// let a >4GiB length through and the implicit narrowing at SQE fill silently
+// truncated it. We do NOT allocate a UINT_MAX-sized buffer: descriptor
+// validation checks representational form only (not buffer capacity), so a
+// valid small buffer pointer paired with a huge length exercises the length
+// rejection without any large allocation.
+SLUICE_TEST_CASE(uring_length_over_uint_max_rejected_no_residue) {
+    UringAsyncBackend backend(small_config());
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::byte, 1> one_byte{};
+    Completion<std::size_t> completion;
+    // UINT_MAX + 1: must be rejected with invalid_argument, Completion stays
+    // idle, no accepted slot, no borrow, zero residue.
+    const std::size_t over = static_cast<std::size_t>(std::numeric_limits<unsigned>::max()) + 1;
+    const auto r = backend.submit_write(
+        WriteOp{file.fd(), one_byte.data(), over, 0}, completion);
+    SLUICE_CHECK(!r.has_value());
+    SLUICE_CHECK(r.error().code == IoError::Code::invalid_argument);
+    SLUICE_CHECK(!completion.ready());
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
+SLUICE_TEST_CASE(uring_length_uint_max_accepted_by_validation) {
+    // UINT_MAX is the largest representable liburing nbytes; validation MUST
+    // accept it (the boundary is inclusive). We do NOT drive the request to
+    // completion (that would require a UINT_MAX buffer and real I/O) — we only
+    // assert the acceptance/no-residue-before-completion boundary. The request
+    // is then retired by resetting the Completion, releasing the slot.
+    UringAsyncBackend backend(small_config());
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::byte, 1> one_byte{};
+    Completion<std::size_t> completion;
+    const std::size_t at_max = static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
+    const auto r =
+        backend.submit_write(WriteOp{file.fd(), one_byte.data(), at_max, 0}, completion);
+    SLUICE_CHECK(r.has_value());
+    SLUICE_CHECK(backend.outstanding() == 1);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 1);
+    // The request is accepted and ring-owned; do not poll (no UINT_MAX I/O).
+    // Cancel it so the slot is released and the backend destructs quiescently.
+    backend.cancel(completion);
+    // Drive reap so the canceled terminal publishes and the slot can release.
+    (void)poll_bounded(backend, [&] { return completion.ready(); });
+    SLUICE_CHECK(completion.ready());
+    completion.reset();
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
 // NOTE: a deterministic permanent-submit-failure / ring-poison test is a
 // frozen-design HARD GATE (§6) that requires the Class-A proof (which
 // ring-owned SQEs are definitely not kernel-consumed) before any in-flight

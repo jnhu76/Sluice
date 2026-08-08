@@ -171,7 +171,8 @@ class UringAsyncBackend : public AsyncBackend {
         detail::OperationKind kind = detail::OperationKind::read;
         int fd = -1;
         const std::byte* buffer = nullptr; // dst (read) / src (write) / null (sync)
-        std::size_t length = 0;
+        std::size_t length = 0;            // requested length (for short-completion tally)
+        unsigned native_length = 0;        // liburing nbytes (validated <= UINT_MAX at prepare)
         std::uint64_t offset = 0;
     };
 
