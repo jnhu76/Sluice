@@ -209,6 +209,143 @@ class UringAsyncBackend : public AsyncBackend {
     std::size_t transport_ledger_size_for_test() const noexcept;
     std::size_t sq_ready_for_test() const noexcept;
     std::size_t live_control_entries_for_test() const noexcept;
+    // Test-only: number of backend_ready slots not yet reaped.
+    std::size_t backend_ready_count_for_test() const noexcept {
+        return arena_.backend_ready_count();
+    }
+    // Test-only: live tagged control execution references (submitted
+    // AsyncCancel SQEs not yet retired by their control CQE).
+    std::size_t live_control_sqes_for_test() const noexcept {
+        return live_control_sqes_.load(std::memory_order_relaxed);
+    }
+
+    // --- Phase D3 C2b/C2c seams (rows 3-8 / 11-14a): mirror the approved
+    // ThreadPool observation style. Every seam delegates to REAL production
+    // authority (RequestArena, ReferenceReadySink, the production cancel
+    // core). No test-side state machine, no side-band identity/waiter map, no
+    // second generation counter. Guarded; production builds carry nothing. ---
+
+    // Resolve a Completion pointer to its current slot+generation (the same
+    // bounded arena scan the public cancel path uses).
+    std::optional<detail::SlotHandle> handle_for_completion_for_test(
+        const void* completion) const noexcept {
+        return arena_.resolve_completion(completion);
+    }
+
+    // Single-lock observation that validates generation, context, and non-free
+    // state. Returns nullopt for a stale/released/unknown handle.
+    std::optional<detail::RequestArena::RequestObservation> observe_for_test(
+        detail::SlotHandle h) const noexcept {
+        return arena_.observe_for_test(h);
+    }
+
+    // Identity-injection seam (C2b row 4): drive a CAPTURED SlotHandle through
+    // the SAME production cancel core the public Completion-keyed cancel() uses
+    // (dispatch remove_exact + arena_.cancel + terminal_won tally/signal).
+    // Proves a stale-generation handle cannot act on a live N+1 occupant.
+    detail::CancelDisposition cancel_handle_for_test(detail::SlotHandle h) noexcept {
+        return cancel_handle_(h);
+    }
+
+    // Register one waiter on the slot bound to a real accepted Completion.
+    // Forwards verbatim to the arena authority (not_found for an unbound/stale
+    // Completion; invalid_state for a second registration or an
+    // already-reaped slot — registration is orthogonal to execution state,
+    // ADR Decision 10).
+    Result<void> register_waiter_for_test(Completion<std::size_t>& c,
+                                          detail::WaiterToken token,
+                                          detail::RoutingLease lease) {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<void>(IoError{IoError::Code::not_found});
+        }
+        return arena_.register_waiter(*h, token, std::move(lease));
+    }
+    Result<void> register_waiter_for_test(Completion<void>& c,
+                                          detail::WaiterToken token,
+                                          detail::RoutingLease lease) {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<void>(IoError{IoError::Code::not_found});
+        }
+        return arena_.register_waiter(*h, token, std::move(lease));
+    }
+
+    // Wait-cancel through the REAL arena authority: removes ONLY the waiter,
+    // never the I/O. Returns the moved-out RoutingLease, or not_found when no
+    // registered waiter remains.
+    Result<detail::RoutingLease> cancel_waiter_for_test(Completion<std::size_t>& c) {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<detail::RoutingLease>(
+                IoError{IoError::Code::not_found});
+        }
+        return arena_.cancel_waiter(*h);
+    }
+    Result<detail::RoutingLease> cancel_waiter_for_test(Completion<void>& c) {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<detail::RoutingLease>(
+                IoError{IoError::Code::not_found});
+        }
+        return arena_.cancel_waiter(*h);
+    }
+
+    // Stale-generation waiter injection (C2c row 14a): drive a CAPTURED
+    // SlotHandle through the REAL arena register/cancel_waiter authorities.
+    Result<void> register_waiter_handle_for_test(detail::SlotHandle h,
+                                                 detail::WaiterToken token,
+                                                 detail::RoutingLease lease) {
+        return arena_.register_waiter(h, token, std::move(lease));
+    }
+    Result<detail::RoutingLease> cancel_waiter_handle_for_test(detail::SlotHandle h) {
+        return arena_.cancel_waiter(h);
+    }
+
+    // Generation-validated by-value borrow snapshot for a captured SlotHandle.
+    std::optional<detail::RequestArena::BorrowSnapshot> borrow_for_test(
+        detail::SlotHandle h) const noexcept {
+        return arena_.borrow_for_test(h);
+    }
+
+    // Generation-validated by-value single-waiter registration observation.
+    std::optional<detail::RequestArena::WaiterObservation> waiter_for_test(
+        detail::SlotHandle h) const noexcept {
+        return arena_.waiter_for_test(h);
+    }
+
+    // C2c sink observation (fixed-size, allocation-free, test-only): the last
+    // delivered ReadyEvent's waiter payload + total delivery count.
+    std::size_t sink_deliveries() const noexcept { return sink_.deliveries(); }
+    bool sink_last_has_waiter() const noexcept { return sink_.last_has_waiter(); }
+    detail::WaiterToken sink_last_token() const noexcept { return sink_.last_token(); }
+    std::uint64_t sink_last_lease_id() const noexcept { return sink_.last_lease_id(); }
+
+    // Deterministic pause gates for the Uring race tests (mirror the
+    // ThreadPool pause-gate discipline; AGENTS.md §13.3 / §15). Each gate is
+    // a paused/resume atomic handshake; the production path spins on `paused`
+    // and waits on `resume`. Compiled out of production sluice_async; the
+    // layout cost in the internal-testing target is accepted and documented.
+    struct AfterCommitBeforeEnqueuePauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{false};
+    };
+    struct BeforeDispatchTransferPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{false};
+        // true iff the gate fired with dispatch_mtx_ RELEASED (mirrors the
+        // ThreadPool Gate-B discipline: the request stays enqueued while the
+        // test drives cancel() against it).
+        std::atomic<bool> dispatch_domain_released{false};
+    };
+    void set_after_commit_before_enqueue_pause_gate(AfterCommitBeforeEnqueuePauseGate* gate) noexcept {
+        after_commit_before_enqueue_gate_.store(gate, std::memory_order_release);
+    }
+    void set_before_dispatch_transfer_pause_gate(BeforeDispatchTransferPauseGate* gate) noexcept {
+        before_dispatch_transfer_gate_.store(gate, std::memory_order_release);
+    }
 #endif
 
   private:
@@ -395,6 +532,21 @@ class UringAsyncBackend : public AsyncBackend {
     // request. Idempotent per-slot (one cancel_queued bit).
     void issue_running_cancel(detail::SlotHandle h) noexcept;
 
+    // The production cancel core (ADR Decision 11 / Scheme B) shared by the
+    // public Completion-keyed cancel() overloads and the guarded
+    // cancel_handle_for_test seam: DISARM LOCAL EXECUTION FIRST (dispatch
+    // remove_exact under dispatch_mtx_), TERMINAL WIN SECOND (arena_.cancel),
+    // then tally + signal on terminal_won / append the bounded AsyncCancel on
+    // intent_recorded. Behavior-preserving refactor of the inline cancel()
+    // bodies; no test code reimplements state transitions.
+    detail::CancelDisposition cancel_handle_(detail::SlotHandle h) noexcept;
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic pause helpers (no-op when the matching gate is disarmed).
+    void wait_after_commit_before_enqueue_pause_() noexcept;
+    void wait_before_dispatch_transfer_pause_() noexcept;
+#endif
+
     // Wake the ready domain. D1 is single-driver (wait_one blocks in the
     // kernel and reaps synchronously), so there is no separate worker to wake;
     // this is a no-op kept as a seam for a future shard/M:N topology with a
@@ -433,6 +585,14 @@ class UringAsyncBackend : public AsyncBackend {
     std::atomic<std::uint64_t> submit_flushes_{0};
     std::atomic<std::size_t> live_cookies_{0};
     std::atomic<std::size_t> live_control_sqes_{0};
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // D3 deterministic pause gates (see the guarded setters above). Compiled
+    // out of production builds; the layout cost in the internal-testing target
+    // is accepted and documented (AGENTS.md §15).
+    std::atomic<AfterCommitBeforeEnqueuePauseGate*> after_commit_before_enqueue_gate_{nullptr};
+    std::atomic<BeforeDispatchTransferPauseGate*> before_dispatch_transfer_gate_{nullptr};
+#endif
 #endif // SLUICE_HAS_LIBURING
 
     bool available_ = false;

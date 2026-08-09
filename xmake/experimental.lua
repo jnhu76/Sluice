@@ -112,6 +112,53 @@ if os.isfile(R .. "tests/uring_d2_failure_noalloc_test.cpp") then
         add_tests("uring_d2_failure_noalloc_test")
 end
 
+-- Phase D3 C2b identity/generation/cancel integration evidence (real
+-- liburing only in real mode; stub mode proves build/API honesty). Mirrors
+-- the uring_d2 target: real mode compiles the authoritative production
+-- uring_backend.cpp + fail_fast.cpp with SLUICE_ASYNC_INTERNAL_TESTING; stub
+-- mode links production sluice_async.
+if os.isfile(R .. "tests/uring_backend_c2b_identity_test.cpp") then
+    target("uring_backend_c2b_identity_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_includedirs(R .. "include")
+        add_files(R .. "tests/uring_backend_c2b_identity_test.cpp")
+        if has_liburing then
+            add_deps("sluice_core")
+            add_files(R .. "src/async/uring_backend.cpp",
+                      R .. "src/async/fail_fast.cpp")
+            add_defines("SLUICE_HAS_LIBURING",
+                        "SLUICE_ASYNC_INTERNAL_TESTING")
+            add_packages("liburing")
+        else
+            add_deps("sluice_core", "sluice_async")
+        end
+        add_tests("uring_backend_c2b_identity_test")
+end
+
+-- Phase D3 C2c borrow/waiter/lease integration evidence (real liburing only
+-- in real mode). Same dual-mode shape as the C2b target.
+if os.isfile(R .. "tests/uring_backend_c2c_waiter_borrow_test.cpp") then
+    target("uring_backend_c2c_waiter_borrow_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_includedirs(R .. "include")
+        add_files(R .. "tests/uring_backend_c2c_waiter_borrow_test.cpp")
+        if has_liburing then
+            add_deps("sluice_core")
+            add_files(R .. "src/async/uring_backend.cpp",
+                      R .. "src/async/fail_fast.cpp")
+            add_defines("SLUICE_HAS_LIBURING",
+                        "SLUICE_ASYNC_INTERNAL_TESTING")
+            add_packages("liburing")
+        else
+            add_deps("sluice_core", "sluice_async")
+        end
+        add_tests("uring_backend_c2c_waiter_borrow_test")
+end
+
 -- Experimental uring library. Always defined so the headers/sources exist; the
 -- implementation compiles either the real uring path or the unsupported stub
 -- based on CPPIO_HAS_LIBURING.
