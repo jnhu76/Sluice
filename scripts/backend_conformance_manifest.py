@@ -107,10 +107,9 @@ class BackendEntry:
     close_drain_driver_case: str = ""  # Phase C2e: the SLUICE_TEST_CASE that
                                        # drives the shared close/drain cases for
                                        # this backend. "" when the backend has
-                                       # no close_admission seam (Uring before
-                                       # D4) — the gap is the
-                                       # uring_c2e_close_drain_not_implemented
-                                       # manifest record, never a skip-as-pass.
+                                       # no close_admission seam — the gap is
+                                       # the backend's not_implemented manifest
+                                       # record, never a skip-as-pass.
 
 
 # The C1 backend registry. Sync/Synthetic are intentionally absent.
@@ -122,7 +121,8 @@ BACKENDS: tuple[BackendEntry, ...] = (
                  capacity_driver_case="conformance_capacity_threadpool",
                  close_drain_driver_case="conformance_close_drain_threadpool"),
     BackendEntry("Uring", "KernelIoProfile", "conformance_uring",
-                 capacity_driver_case="conformance_capacity_uring"),
+                 capacity_driver_case="conformance_capacity_uring",
+                 close_drain_driver_case="conformance_close_drain_uring"),
 )
 
 
@@ -649,9 +649,9 @@ EVIDENCE: tuple[Evidence, ...] = (
         evidence_id="c2e_shared_close_drain_suite",
         target="backend_conformance_test",
         layer="shared",
-        backends=("Fake", "ThreadPool"),
+        backends=("Fake", "ThreadPool", "Uring"),
         mandatory=True,
-        notes="C2e rows 15-16 shared close/drain cases: close rejects future "
+        notes="C2e rows 15-16 shared close/drain cases (Uring added in D4): close rejects future "
               "submit with invalid_state (Completion idle, no borrow, no "
               "outstanding, no submitted_ops, no residue); accepted-before-"
               "close still reaches exactly ONE defined terminal with "
@@ -708,18 +708,51 @@ EVIDENCE: tuple[Evidence, ...] = (
               "0.",
     ),
     Evidence(
-        evidence_id="uring_c2e_close_drain_not_implemented",
-        target="backend_conformance_test",
+        evidence_id="uring_c2e_close_drain",
+        target="uring_backend_c2e_close_drain_test",
         layer="lifecycle",
         backends=_U,
         mandatory=True,
-        status=STATUS_NOT_IMPLEMENTED,
-        notes="C2e rows 15-16 (close_admission / drain / quiescent "
-              "destruction) remain D4 work for Uring. "
-              "Recorded as a known gap; not_implemented never counts as PASS. "
-              "(Target is the Uring-driving conformance binary, matching the "
-              "other uring_*_not_implemented records; the gap is not "
-              "executed.)",
+        required_modes=("real",),
+        cases=(
+            "uring_d4_c2e_evidence_mode",
+            "uring_c2e_close_while_pending_preserves_accepted",
+            "uring_c2e_close_while_enqueued_preserves_dispatch",
+            "uring_c2e_close_while_running_result_verbatim",
+            "uring_c2e_close_while_backend_ready",
+            "uring_c2e_void_submit_after_close_rejected",
+            "uring_c2e_malformed_submit_after_close_rejected",
+            "uring_c2e_close_waits_for_inflight_acceptance_lp",
+            "uring_c2e_close_wins_submit_started_before_close_rejected",
+            "uring_c2e_close_then_pending_cancel_wins",
+            "uring_c2e_close_then_running_cancel_intent_only",
+            "uring_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin",
+            "uring_c2e_multiple_parked_waiters_all_wake",
+            "uring_c2e_interrupt_final_reap_closes_ready_race",
+            "uring_c2e_drained_not_releasable",
+            "uring_c2e_poison_close_keeps_class_c",
+        ),
+        notes="C2e rows 15-16 Uring integration (Phase D4, real-liburing "
+              "only; stub mode is classified INCOMPLETE by required_modes): "
+              "close while pending/enqueued/running/backend_ready preserves "
+              "the accepted request (real result verbatim); submit-vs-close "
+              "acceptance LP in both orderings (close blocks on the in-flight "
+              "transaction through commit_binding; a submit that missed the "
+              "lock rejects invalid_state at Stage 0); post-close malformed "
+              "submit -> invalid_state (admission beats descriptor "
+              "validation); close-then-pending cancel still wins (Scheme B); "
+              "close-then-running cancel intent only; close wakes parked "
+              "wait_one(s) as a ONE-SHOT control wake (0, no fabricated "
+              "completion; N parked waiters all wake; future wait parks "
+              "normally - no busy-spin); interrupt-vs-final-ready race closed "
+              "by the context's final poll; drained != releasable "
+              "(slot_in_use stays 1 until Completion::reset); poison + close "
+              "keeps P0-D semantics (Class-A retained for teardown, nothing "
+              "quarantined is submitted). Death matrix (pending/enqueued/"
+              "running/ledger-residue/backend-ready/completion-ready/"
+              "live-control) is covered by uring_backend_c2e_death_test "
+              "(Debug + Release, exit 86 before io_uring_queue_exit; "
+              "quiescent close+drain+reset exits 0).",
     ),
 
     # -----------------------------------------------------------------------
@@ -758,10 +791,13 @@ EVIDENCE: tuple[Evidence, ...] = (
         target="uring_backend_test",
         layer="backend_specific",
         backends=_U,
-        # In a stub build the uring real-path cases are skipped inside the
-        # binary; the gate classifies the KernelIo profile as NOT CONFORMING
-        # regardless, so this record's per-mode outcome is informational.
-        notes="Stub + real io_uring contract (mode parsed from driver meta).",
+        required_modes=("real",),
+        notes="Stub + real io_uring contract (mode parsed from the driver's "
+              "[evidence-meta] line; the binary emits exactly one per run). "
+              "D4 lift audit: this backend-specific record is satisfiable "
+              "only by REAL kernel execution — a stub run is classified "
+              "INCOMPLETE by required_modes, never PASS, so a stub build can "
+              "never make the KernelIo backend conforming.",
     ),
 
     # -----------------------------------------------------------------------

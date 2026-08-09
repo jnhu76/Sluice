@@ -317,16 +317,22 @@ def _stub_gate(shared_per_backend, *, shared_rc=None,
             g.capacity_by_backend[b.name] = G.RunResult(
                 f"shared_capacity_suite:{b.name}", "backend_conformance_test",
                 state, detail=f"stub capacity {state}")
-    # Phase C2e: per-backend shared CLOSE/DRAIN-suite state. Only backends
-    # with a close_admission seam (Fake, ThreadPool) are driven; default them
-    # to PASS so the ONLY variable under test is the shared-suite state. Uring
-    # has no close/drain driver case, so it is not seeded here.
+    # Phase C2e: per-backend shared CLOSE/DRAIN-suite state. Every backend
+    # with a close_admission seam (Fake, ThreadPool, and — Phase D4 — Uring)
+    # defaults to PASS so the ONLY variable under test is the shared-suite
+    # state, EXCEPT a KernelIo close/drain run whose mode is not real: that is
+    # build/API evidence only and defaults to INCOMPLETE (the D4 lift's mode
+    # attribution, mirroring the capacity seeding below).
     g.close_drain_by_backend = {}
     for b in M.BACKENDS:
         if b.close_drain_driver_case:
+            mode = g.meta.get(b.name, {}).get("mode", "unknown")
+            state = (G.INCOMPLETE if b.profile == "KernelIoProfile" and mode != "real"
+                     else G.PASS)
             g.close_drain_by_backend[b.name] = G.RunResult(
                 f"c2e_shared_close_drain_suite:{b.name}",
-                "backend_conformance_test", G.PASS, detail="stub close/drain PASS")
+                "backend_conformance_test", state,
+                detail=f"stub close/drain {state}")
     return g
 
 
@@ -654,6 +660,10 @@ class D3DriftDetectorTest(unittest.TestCase):
         self._assert_source_matches_pin(
             "uring_c2c_borrow_waiter_integration", "uring_backend_c2c_waiter_borrow_test.cpp")
 
+    def test_c2e_pin_matches_source(self):
+        self._assert_source_matches_pin(
+            "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test.cpp")
+
 
 class D3EvidenceModeDriveTest(unittest.TestCase):
     """D3 (PR #83 review R1/R3): the evidence-mode metadata MUST exist in BOTH
@@ -752,9 +762,9 @@ class FailClosedMetadataTest(unittest.TestCase):
         # reference/blocking profiles the gate treats absence as not-seen.
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
                        meta_override={})
-        # KernelIo with unknown mode must be NOT CONFORMING (never ELIGIBLE).
+        # KernelIo with unknown mode must be INCOMPLETE (never ELIGIBLE).
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertEqual(verdict, G.INCOMPLETE)
 
     def test_unknown_mode_for_kernel_is_not_conforming(self):
         g = _stub_gate(
@@ -762,7 +772,7 @@ class FailClosedMetadataTest(unittest.TestCase):
             meta_override={"Uring": {"profile": "KernelIoProfile",
                                      "mode": "unknown"}})
         verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertEqual(verdict, G.INCOMPLETE)
 
 
 class ResultAttributionIsolationTest(unittest.TestCase):
@@ -780,8 +790,8 @@ class ResultAttributionIsolationTest(unittest.TestCase):
                          "Fake must report ELIGIBLE from its own evidence")
         self.assertEqual(v_tp, G.NOT_CONFORMING,
                          "ThreadPool must report its own failure")
-        self.assertEqual(v_uring, G.NOT_CONFORMING,
-                         "Uring must report its Phase-D gap independently")
+        self.assertEqual(v_uring, G.INCOMPLETE,
+                         "stub-mode Uring must be INCOMPLETE (mode attribution)")
         # Crucially: Fake is NOT dragged to RUN_FAIL by ThreadPool's failure.
         self.assertNotEqual(v_fake, G.NOT_CONFORMING)
 
@@ -805,7 +815,7 @@ class ResultAttributionIsolationTest(unittest.TestCase):
         self.assertEqual(v_fake, G.ELIGIBLE)
         self.assertEqual(v_tp, G.ELIGIBLE)
 
-    def test_all_pass_fake_and_tp_eligible_uring_not_conforming(self):
+    def test_all_pass_fake_and_tp_eligible_uring_stub_incomplete(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
                         "Uring": "PASS"})
         self.assertEqual(
@@ -813,7 +823,7 @@ class ResultAttributionIsolationTest(unittest.TestCase):
         self.assertEqual(
             g._backend_verdict(M.backend_by_name("ThreadPool"))[0], G.ELIGIBLE)
         self.assertEqual(
-            g._backend_verdict(M.backend_by_name("Uring"))[0], G.NOT_CONFORMING)
+            g._backend_verdict(M.backend_by_name("Uring"))[0], G.INCOMPLETE)
 
 
 class ClosedProfileMappingTest(unittest.TestCase):
@@ -828,45 +838,68 @@ class ClosedProfileMappingTest(unittest.TestCase):
         verdict, _ = g._backend_verdict(ghost)
         self.assertNotEqual(verdict, G.ELIGIBLE)
 
-    def test_kernel_profile_never_eligible_in_c1(self):
-        # Regardless of run state, KernelIoProfile lifecycle/backend_specific
-        # is INCOMPLETE (Phase D), so Uring is never ELIGIBLE in C1.
-        for state in ("PASS", "RUN_FAIL", "NOT_RUN"):
+    def test_kernel_profile_stub_or_undriven_never_eligible(self):
+        # After the D4 lift the KernelIo verdict comes from the ordinary
+        # machinery with mode attribution: a stub/undriven shared-suite run is
+        # INCOMPLETE (never ELIGIBLE); a RUN_FAIL is NOT CONFORMING.
+        for state in ("PASS", "NOT_RUN"):
             g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS",
                             "Uring": state})
             verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
-            self.assertEqual(verdict, G.NOT_CONFORMING,
-                             f"Uring must be NOT CONFORMING even if shared={state}")
+            self.assertEqual(verdict, G.INCOMPLETE,
+                             f"Uring must be INCOMPLETE even if shared={state}")
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "RUN_FAIL"})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
 
 
 class KernelIoFailClosedOverrideTest(unittest.TestCase):
-    """P1-B: required_modes alone is NOT KernelIo fail-closed override
-    authority.
+    """P1-B (D4-lift semantics): required_modes alone is NOT KernelIo
+    per-backend override authority.
 
     required_modes declares WHICH mode a target must execute in; it does not
-    declare that this evidence belongs to a given backend. Only a real-mode
-    record explicitly tagged to exactly this backend
-    (ev.backends == (backend_name,)) may report its own PASS for the KernelIo
-    profile. A backend-agnostic lifecycle record (backends == ()) with
-    required_modes set and PASS must stay INCOMPLETE for Uring, so a generic
-    contract record can never quietly lift the Phase-D fail-closed default.
+    declare that this evidence belongs to a given backend. After the D4 lift:
+
+      * a backend-agnostic record (backends == ()) is SHARED-CONTRACT
+        evidence — mode-independent, it reports its own run state (Uring
+        carries the RequestArena contract through its D1 migration);
+      * ONLY a real-mode record explicitly tagged to exactly this backend
+        (ev.backends == (backend_name,)) may report its own PASS as the
+        backend's phase record;
+      * a MULTI-BACKEND-tagged lifecycle record (e.g. backends == ("Fake",
+        "Uring")) can never lift Uring's per-backend obligation.
     """
 
-    def test_backend_agnostic_required_modes_cannot_lift_uring_fail_closed(self):
+    def test_backend_agnostic_contract_record_reports_its_own_state(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         generic = M.Evidence(
-            evidence_id="generic_lifecycle_required_real",
+            evidence_id="generic_lifecycle_contract",
             target="some_lifecycle_target",
             layer="lifecycle",
-            backends=(),                    # backend-agnostic
-            required_modes=("real",),
+            backends=(),                    # backend-agnostic contract record
         )
         g.results[generic.evidence_id] = G.RunResult(
             generic.evidence_id, generic.target, G.PASS, detail="stub PASS")
         state = g._backend_run_state(generic, "Uring", "KernelIoProfile")
+        self.assertEqual(state, G.PASS,
+                         "backend-agnostic contract records report their own "
+                         "state (shared contract, mode-independent)")
+
+    def test_multi_backend_tagged_cannot_lift_uring_per_backend_obligation(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        multi = M.Evidence(
+            evidence_id="multi_backend_lifecycle",
+            target="some_lifecycle_target",
+            layer="lifecycle",
+            backends=("Fake", "Uring"),     # NOT exactly this backend
+            required_modes=("real",),
+        )
+        g.results[multi.evidence_id] = G.RunResult(
+            multi.evidence_id, multi.target, G.PASS, detail="real PASS")
+        state = g._backend_run_state(multi, "Uring", "KernelIoProfile")
         self.assertEqual(state, G.INCOMPLETE,
-                         "backend-agnostic lifecycle PASS + required_modes must "
-                         "NOT report PASS for Uring")
+                         "multi-backend-tagged records must NOT report PASS "
+                         "for Uring (P1-B)")
 
     def test_multi_backend_tagged_required_modes_cannot_lift_uring(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -1307,23 +1340,40 @@ class ApplicableEvidenceHelpersTest(unittest.TestCase):
     """implemented_evidence_for_backend vs applicable_evidence_for_backend."""
 
     def test_implemented_excludes_not_implemented_and_not_applicable(self):
+        # After D3/D4 no Uring not_implemented record remains; use a synthetic
+        # gap to pin the helper split (implemented vs applicable).
+        synth = M.Evidence(
+            evidence_id="synthetic_uring_gap", target="t", layer="lifecycle",
+            backends=("Uring",), mandatory=True, status=M.STATUS_NOT_IMPLEMENTED)
         impl = M.implemented_evidence_for_backend("Uring")
         ids = {e.evidence_id for e in impl}
-        self.assertNotIn("uring_c2e_close_drain_not_implemented", ids)
+        self.assertNotIn("synthetic_uring_gap", ids)
+        # D4-closed: every mandatory Uring lifecycle record is implemented.
+        for eid in ("uring_c2b_identity_integration",
+                    "uring_c2c_borrow_waiter_integration",
+                    "uring_c2e_close_drain"):
+            self.assertIn(eid, ids, f"{eid} must be implemented after D3/D4")
 
-    def test_applicable_includes_not_implemented_for_tagged_backend(self):
+    def test_applicable_includes_uring_tagged_evidence(self):
+        # The Uring-tagged records (backends=("Uring",)) are in Uring's
+        # applicable set — the set the verdict iterates.
         appl = M.applicable_evidence_for_backend("Uring")
         ids = {e.evidence_id for e in appl}
-        self.assertIn("uring_c2e_close_drain_not_implemented", ids)
+        for eid in ("uring_c2b_identity_integration",
+                    "uring_c2c_borrow_waiter_integration",
+                    "uring_c2e_close_drain"):
+            self.assertIn(eid, ids)
 
-    def test_applicable_excludes_not_implemented_for_other_backend(self):
-        # The Uring C2e gap is tagged backends=("Uring",); it MUST NOT apply
-        # to Fake or ThreadPool.
+    def test_applicable_excludes_uring_tagged_for_other_backend(self):
+        # The Uring-tagged records MUST NOT apply to Fake or ThreadPool.
         for name in ("Fake", "ThreadPool"):
             appl = M.applicable_evidence_for_backend(name)
             ids = {e.evidence_id for e in appl}
-            self.assertNotIn("uring_c2e_close_drain_not_implemented", ids,
-                             f"{name} must not see the Uring C2e gap")
+            for eid in ("uring_c2b_identity_integration",
+                        "uring_c2c_borrow_waiter_integration",
+                        "uring_c2e_close_drain"):
+                self.assertNotIn(eid, ids,
+                                 f"{name} must not see the Uring-tagged {eid}")
 
     def test_applicable_includes_backend_agnostic_records(self):
         # Backend-agnostic records (backends == ()) apply to every backend in
@@ -1391,7 +1441,7 @@ class NotImplementedEntersVerdictTest(unittest.TestCase):
     def test_uring_capacity_gap_record_is_reconciled_away(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertEqual(verdict, G.INCOMPLETE)
         self.assertIsNone(M.evidence_by_id("uring_capacity_not_implemented"))
         self.assertFalse(any("uring_capacity_not_implemented" in r for r in reasons))
 
@@ -1477,7 +1527,7 @@ class CapacitySuiteAttributionTest(unittest.TestCase):
                                      "Uring", "KernelIoProfile")
         verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(state, G.INCOMPLETE)
-        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertEqual(verdict, G.INCOMPLETE)
 
     def test_shared_capacity_suite_evidence_tagged_for_all_backends(self):
         appl_fake = M.applicable_evidence_for_backend("Fake")
@@ -1601,7 +1651,7 @@ class CapacityResultAuthorityTest(unittest.TestCase):
                                      "Uring", "KernelIoProfile")
         verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(state, G.INCOMPLETE)
-        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertEqual(verdict, G.INCOMPLETE)
 
 
 # ---------------------------------------------------------------------------
@@ -1703,16 +1753,15 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
                             for e in c2b),
                         "Uring must have a mandatory implemented C2b record")
 
-    def test_uring_c2e_gap_still_surfaces_in_verdict(self):
-        # After D3 the C2b record is implemented/real-mode; the KernelIo
-        # verdict stays NOT CONFORMING (fail-closed hard-code + the remaining
-        # C2e not_implemented gap, D4 work).
+    def test_uring_stub_mode_never_eligible(self):
+        # D4 lift: the fail-closed hard-code is gone; mode attribution now
+        # drives the stub verdict — the stub gate's Uring meta is mode=stub,
+        # so the real-mode obligations (capacity/close-drain suites) stay
+        # INCOMPLETE and the verdict is INCOMPLETE, never ELIGIBLE.
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_c2e_close_drain_not_implemented" in r for r in reasons),
-            f"Uring C2e gap must appear in reasons: {reasons}")
+        self.assertEqual(verdict, G.INCOMPLETE,
+                         f"stub-mode Uring must be INCOMPLETE, never ELIGIBLE: {reasons}")
 
     def test_fake_c2b_failure_does_not_affect_threadpool(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -1751,9 +1800,7 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
             "request_lifecycle_scheme_b_test",
             G.PASS, detail="stub arena PASS")
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_c2e_close_drain_not_implemented" in r for r in reasons))
+        self.assertEqual(verdict, G.INCOMPLETE)
 
     def test_missing_c2b_target_fails_closed(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -1814,7 +1861,7 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
         self.assertEqual(ev.required_modes, ("real",))
         self.assertTrue(ev.cases)
         appl = M.applicable_evidence_for_backend("Uring")
-        self.assertIn("uring_c2e_close_drain_not_implemented",
+        self.assertIn("uring_c2e_close_drain",
                       {e.evidence_id for e in appl})
 
 
@@ -1920,16 +1967,12 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
                             for e in c2c),
                         "Uring must have a mandatory implemented C2c record")
 
-    def test_uring_c2e_gap_still_surfaces_in_c2c_verdict(self):
-        # After D3 the C2c record is implemented/real-mode; the KernelIo
-        # verdict stays NOT CONFORMING (fail-closed hard-code + the remaining
-        # C2e not_implemented gap, D4 work).
+    def test_uring_stub_verdict_incomplete_in_c2c(self):
+        # After D3/D4 the C2c record is implemented/real-mode; the stub-mode
+        # KernelIo verdict is INCOMPLETE (mode attribution), never ELIGIBLE.
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_c2e_close_drain_not_implemented" in r for r in reasons),
-            f"Uring C2e gap must appear in reasons: {reasons}")
+        self.assertEqual(verdict, G.INCOMPLETE)
 
     def test_fake_c2c_failure_does_not_affect_threadpool(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -1969,9 +2012,7 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
             "request_waiter_borrow_lease_test",
             G.PASS, detail="stub arena PASS")
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_c2e_close_drain_not_implemented" in r for r in reasons))
+        self.assertEqual(verdict, G.INCOMPLETE)
 
     def test_missing_c2c_target_fails_closed(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -2033,7 +2074,7 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
         self.assertEqual(ev.required_modes, ("real",))
         self.assertTrue(ev.cases)
         appl = M.applicable_evidence_for_backend("Uring")
-        self.assertIn("uring_c2e_close_drain_not_implemented",
+        self.assertIn("uring_c2e_close_drain",
                       {e.evidence_id for e in appl})
 
 
@@ -2111,7 +2152,7 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
     def test_uring_c2d_record_no_longer_surfaces_as_known_gap(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertEqual(verdict, G.INCOMPLETE)
         self.assertFalse(any("uring_c2d_failure_injection" in r for r in reasons),
                          f"implemented C2d evidence is not a known gap: {reasons}")
 
@@ -2162,8 +2203,11 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
             M.evidence_by_id("uring_c2d_failure_injection"),
             "Uring", "KernelIoProfile")
         self.assertEqual(state, G.PASS)
+        # D4 lift: with real-mode attribution for every mandatory record the
+        # ordinary machinery makes KernelIo ELIGIBLE (see the C2e positive
+        # test); the C2d record's own state is PASS either way.
         verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertEqual(verdict, G.ELIGIBLE)
 
     def test_missing_c2d_target_fails_closed(self):
         # A backend's mandatory implemented C2d record whose run state is not
@@ -2234,8 +2278,8 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
 #     deterministic window/race target);
 #   * c2e_fake_close_drain_death — lifecycle, Fake (the reference-path death
 #     target);
-#   * uring_c2e_close_drain_not_implemented — lifecycle, Uring, not_implemented
-#     (never PASS).
+#   * uring_c2e_close_drain — lifecycle, Uring, implemented, real-mode-only
+#     (Phase D4; the dedicated deterministic target + the death matrix).
 #
 # The tests below prove (Issue #68 §"Manifest / conformance gate"):
 #   * implemented C2e evidence is the ONLY thing that can make a backend's
@@ -2244,8 +2288,9 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
 #   * Fake/ThreadPool verdicts read their OWN close_drain_by_backend result —
 #     one backend's close/drain RUN_FAIL does not contaminate the other;
 #   * a backend whose close/drain run is MISSING (harness error) is INCOMPLETE;
-#   * Uring's not_implemented C2e gap keeps Uring INCOMPLETE/NOT CONFORMING —
-#     never PASS, never skip-as-pass;
+#   * Uring's C2e record is real-mode-only: a stub build can never satisfy it
+#     (required_modes + the shared-suite real-mode downgrade), so a stub
+#     KernelIo build stays NOT CONFORMING after the D4 lift;
 #   * the gate drives _run_close_drain_suite exactly once and never routes the
 #     shared close/drain suite through the generic _drive() loop.
 # ---------------------------------------------------------------------------
@@ -2254,7 +2299,7 @@ C2E_EVIDENCE_IDS = (
     "c2e_shared_close_drain_suite",
     "c2e_threadpool_close_drain_race",
     "c2e_fake_close_drain_death",
-    "uring_c2e_close_drain_not_implemented",
+    "uring_c2e_close_drain",
 )
 
 
@@ -2270,7 +2315,7 @@ class C2eEvidenceRecordTest(unittest.TestCase):
         ev = M.evidence_by_id("c2e_shared_close_drain_suite")
         self.assertIn("Fake", ev.backends)
         self.assertIn("ThreadPool", ev.backends)
-        self.assertNotIn("Uring", ev.backends)
+        self.assertIn("Uring", ev.backends)  # Phase D4: Uring gained the seam
         self.assertEqual(ev.layer, "shared")
         self.assertTrue(ev.mandatory)
         self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
@@ -2289,12 +2334,16 @@ class C2eEvidenceRecordTest(unittest.TestCase):
         self.assertTrue(ev.mandatory)
         self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
 
-    def test_uring_gap_is_not_implemented(self):
-        ev = M.evidence_by_id("uring_c2e_close_drain_not_implemented")
-        self.assertIn("Uring", ev.backends)
+    def test_uring_close_drain_is_implemented_real_mode(self):
+        # D4 closure: the Uring C2e record is now an implemented, real-mode-
+        # only, case-pinned evidence record (stub execution can never PASS it).
+        ev = M.evidence_by_id("uring_c2e_close_drain")
+        self.assertEqual(ev.backends, ("Uring",))
         self.assertEqual(ev.layer, "lifecycle")
         self.assertTrue(ev.mandatory)
-        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+        self.assertEqual(ev.required_modes, ("real",))
+        self.assertTrue(ev.cases and len(ev.cases) > 1)
 
     def test_c2e_ids_unique_in_manifest(self):
         ids = [e.evidence_id for e in M.EVIDENCE]
@@ -2332,29 +2381,44 @@ class C2eVerdictIntegrationTest(unittest.TestCase):
             any(e.mandatory and e.status == M.STATUS_IMPLEMENTED for e in c2e),
             "ThreadPool must have at least one mandatory implemented C2e record")
 
-    def test_uring_c2e_gap_enters_verdict_never_pass(self):
-        # Uring's C2e gap is a mandatory not_implemented record: the state the
-        # gate assigns it is INCOMPLETE (never PASS), and it appears in the
-        # applicable set so Uring's OWN verdict surfaces it.
+    def test_uring_incomplete_when_close_drain_not_driven(self):
+        # D4 lift: a registered close/drain driver case that the gate never
+        # drove is NOT_RUN -> INCOMPLETE (harness error, never ELIGIBLE,
+        # never skip-as-pass).
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
-        # Uring has no close_drain_by_backend entry (no seam) by construction.
-        self.assertNotIn("Uring", g.close_drain_by_backend)
-        # Seed the gap's results entry the way the gate run loop does
-        # (NotImplementedEntersVerdictTest pattern).
-        g.results["uring_c2e_close_drain_not_implemented"] = G.RunResult(
-            "uring_c2e_close_drain_not_implemented",
-            "backend_conformance_test", G.INCOMPLETE,
-            detail="manifest status not_implemented (Phase C2/D)")
+        g.close_drain_by_backend.pop("Uring", None)  # harness never drove it
         state = g._backend_run_state(
-            M.evidence_by_id("uring_c2e_close_drain_not_implemented"),
+            M.evidence_by_id("c2e_shared_close_drain_suite"),
             "Uring", "KernelIoProfile")
-        self.assertEqual(state, G.INCOMPLETE,
-                         "not_implemented must map to INCOMPLETE, never PASS")
+        self.assertEqual(state, G.NOT_RUN,
+                         "undriven close/drain must be NOT_RUN")
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
-        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertEqual(verdict, G.INCOMPLETE)
         self.assertTrue(
-            any("uring_c2e_close_drain_not_implemented" in r for r in reasons),
-            f"Uring C2e gap must surface in the verdict reasons: {reasons}")
+            any("shared_close_drain" in r for r in reasons),
+            f"undriven close/drain must surface in the verdict: {reasons}")
+
+    def test_uring_eligible_when_all_real_evidence_pass(self):
+        # D4 lift (positive): with REAL mode attribution and every mandatory
+        # record PASS (shared + capacity + close/drain suites + the tagged
+        # real-mode lifecycle records), the ordinary machinery makes KernelIo
+        # ELIGIBLE — the fail-closed hard-code is gone.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
+                       meta_override={
+                           "Fake": {"profile": "ReferenceProfile", "mode": "deterministic"},
+                           "ThreadPool": {"profile": "BlockingIoProfile", "mode": "real"},
+                           "Uring": {"profile": "KernelIoProfile", "mode": "real"},
+                       })
+        # Real-mode close/drain + capacity results.
+        g.close_drain_by_backend["Uring"] = G.RunResult(
+            "c2e_shared_close_drain_suite:Uring", "backend_conformance_test",
+            G.PASS, detail="real close/drain PASS")
+        g.capacity_by_backend["Uring"] = G.RunResult(
+            "shared_capacity_suite:Uring", "backend_conformance_test",
+            G.PASS, detail="real capacity PASS")
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.ELIGIBLE,
+                         f"all-real evidence must be ELIGIBLE after the lift: {reasons}")
 
     def test_missing_close_drain_run_makes_backend_incomplete(self):
         # A backend that declares a close_drain_driver_case but whose
