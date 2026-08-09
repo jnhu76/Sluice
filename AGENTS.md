@@ -301,10 +301,9 @@ Never hide a baseline failure by:
 
 A repository-managed local pre-push gate catches deterministic mechanical
 failures — documentation link validation, architecture-doc structure, the
-backend-conformance manifest self-test, generated/derived-file freshness, and
-whitespace damage — BEFORE a push consumes a GitHub CI round trip. It is
-developer tooling only and does NOT modify async/I/O production behavior or
-weaken GitHub CI.
+backend-conformance manifest self-test, and whitespace damage — BEFORE a push
+consumes a GitHub CI round trip. It is developer tooling only and does NOT
+modify async/I/O production behavior or weaken GitHub CI.
 
 Architecture (one authority):
 
@@ -323,9 +322,15 @@ without Git/Lefthook:
 bash scripts/gates/pre-push.sh
 ```
 
-Dependency: `lefthook` (language-neutral, no Node/npm). Git hooks are NOT
-installed automatically just because `lefthook.yml` exists. Each checkout must
-install them once:
+Dependency: `lefthook` >= 1.10.0 (language-neutral, no Node/npm). The 1.10.0
+floor is required because the configuration uses the `jobs:` key and the
+`use_stdin: true` option on the pre-push job; older releases only support the
+legacy `commands:` key and do not forward the pre-push stdin ref-pairs to the
+script (which would silently degrade the whitespace gate to a working-tree-only
+check). Check the installed version with `lefthook --version`.
+
+Git hooks are NOT installed automatically just because `lefthook.yml` exists.
+Each checkout must install them once:
 
 ```sh
 lefthook install
@@ -336,7 +341,7 @@ test suite, sanitizers, real-liburing, formal models, or fuzz loops — those
 remain CI or explicit developer gates. Conceptual split:
 
 ```text
-pre-push : docs, manifests, generated-file consistency, whitespace
+pre-push : docs, manifests, whitespace (pushed ranges)
 CI       : build, full tests, sanitizers, real liburing, negative compile,
            conformance, formal verification
 ```

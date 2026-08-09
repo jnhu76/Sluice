@@ -3,9 +3,9 @@
 #
 # PURPOSE
 #   Catch deterministic mechanical failures — documentation link validation,
-#   architecture-doc structure, the backend-conformance manifest self-test,
-#   generated/derived-file freshness, and whitespace damage — BEFORE a push
-#   consumes a GitHub CI round trip. This is developer tooling only.
+#   architecture-doc structure, the backend-conformance manifest self-test, and
+#   whitespace damage — BEFORE a push consumes a GitHub CI round trip. This is
+#   developer tooling only.
 #
 # AUTHORITY
 #   This script is the single source of truth for what the local pre-push gate
@@ -134,43 +134,72 @@ run_gate "backend-conformance manifest self-test" "${MANIFEST_REPRO}" \
     python3 scripts/tests/test_backend_conformance_manifest.py
 
 # ---------------------------------------------------------------------------
-# Gate 5: generated / derived-file freshness (contract B).
-#
-# A push hook must NOT silently mutate tracked source. The correct contract
-# for a VERIFICATION hook is: generated files must already be current; if they
-# are stale, fail with the exact remediation command. The developer regenerates
-# and commits — the hook never rewrites files on their behalf.
-#
-# Currently the repository has no committed generated documentation that this
-# gate can recompute and diff (doc-link validation above already covers tracked
-# Markdown freshness structurally). The block below is the hook point for the
-# first such artifact. When one is introduced, add a deterministic
-# `diff-and-fail-with-remediation` block here following the pattern:
-#
-#     if ! <regenerate-into-temp-and-diff>; then
-#         fail "generated docs stale" "<exact regenerate command>"
-#         cat <<EOF >&2
-# Generated documentation is stale.
-# Run: <exact repository command>
-# Then commit the generated changes before pushing.
-# EOF
-#         exit 1
-#     fi
-#
-# Until such an artifact exists, this gate is intentionally a no-op pass so
-# the hook remains honest: it does not pretend to verify something it cannot.
-
-# ---------------------------------------------------------------------------
-# Gate 6: whitespace / conflict-marker damage.
+# Gate 5: whitespace / conflict-marker damage across the PUSHED ranges.
 #
 # `git diff --check` reports trailing whitespace, indentation with spaces
-# before tabs, and unresolved merge conflict markers across the working tree.
-# This is the cheapest deterministic mechanical failure to catch before a push.
-# Operate against the staged + working tree so it catches damage whether or
-# not it has been staged yet.
-DIFF_CHECK_REPRO="git diff --check"
-run_gate "git diff --check" "${DIFF_CHECK_REPRO}" \
-    git diff --check
+# before tabs, and unresolved merge conflict markers.
+#
+# A real pre-push invocation receives the pushed ref-pairs on stdin, one line
+# per ref:
+#     <local-ref> <local-sha> <remote-ref> <remote-sha>
+# For each pair we check the actual pushed range "<remote-sha>..<local-sha>"
+# so damage in the commits being pushed is caught even when the working tree
+# happens to be clean (a working-tree-only check would miss it).
+#
+# When invoked manually (no stdin, e.g. `bash scripts/gates/pre-push.sh`) there
+# are no ref-pairs to read. In that case fall back to checking the staged +
+# working tree so the script stays a useful manual gate. Detect this by reading
+# stdin into an array; an empty array means manual invocation.
+DIFF_CHECK_LABEL="git diff --check (pushed ranges)"
+
+# Read all stdin ref-pair lines up front so we can decide range-vs-tree mode.
+# `mapfile` returns an empty array when stdin is not a pipe / is empty, which
+# is exactly the manual-invocation case.
+mapfile -t PUSH_REF_PAIRS
+
+# Build the set of `git diff --check` revisions to evaluate:
+#   - hook mode (ref-pairs present): one range per pair, "<remote>..<local>"
+#   - manual mode (no ref-pairs):    a single empty-args working-tree check
+DIFF_ARGS=()
+if [ "${#PUSH_REF_PAIRS[@]}" -gt 0 ]; then
+    for pair in "${PUSH_REF_PAIRS[@]}"; do
+        # pair = "<local-ref> <local-sha> <remote-ref> <remote-sha>"
+        # shellcheck disable=SC2086  # intentional word-splitting on 4 fields
+        set -- $pair
+        local_sha="${2:-}"
+        remote_sha="${4:-}"
+        # Skip refs being deleted (local_sha all zeros): no range to check.
+        case "$local_sha" in
+            0000000000000000000000000000000000000000) continue ;;
+        esac
+        # New branch (remote all zeros): diff against that local commit's full
+        # tree. Otherwise check the pushed range "<remote>..<local>".
+        if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+            DIFF_ARGS+=("$local_sha")
+        else
+            DIFF_ARGS+=("${remote_sha}..${local_sha}")
+        fi
+    done
+    # If every pair was a deletion, there is nothing to check; pass this gate.
+    if [ "${#DIFF_ARGS[@]}" -eq 0 ]; then
+        echo "==> pre-push gate: ${DIFF_CHECK_LABEL}"
+        echo "    (no pushable content: all refs deleted; nothing to check)"
+    else
+        # Reproduction for a hook-mode failure lists the exact ranges checked.
+        DIFF_CHECK_REPRO="git diff --check ${DIFF_ARGS[*]}"
+        run_gate "${DIFF_CHECK_LABEL}" "${DIFF_CHECK_REPRO}" \
+            git diff --check "${DIFF_ARGS[@]}"
+    fi
+else
+    # Manual invocation: no stdin ref-pairs. Fall back to the staged + working
+    # tree so `bash scripts/gates/pre-push.sh` remains a useful pre-push probe.
+    DIFF_CHECK_LABEL="git diff --check (working tree; manual invocation)"
+    DIFF_CHECK_REPRO="git diff --check"
+    echo "==> pre-push gate: ${DIFF_CHECK_LABEL}"
+    echo "    (no stdin ref-pairs; checking staged + working tree)"
+    run_gate "${DIFF_CHECK_LABEL}" "${DIFF_CHECK_REPRO}" \
+        git diff --check
+fi
 
 # ---------------------------------------------------------------------------
 echo "==> pre-push gate: ALL CHECKS PASSED"
