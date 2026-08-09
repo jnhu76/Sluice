@@ -173,6 +173,16 @@ class UringAsyncBackend : public AsyncBackend {
     // cookie distinct from it. (next_cookie_ is mutated only under
     // dispatch_mtx_; this snapshot is read single-driver.)
     std::uint64_t peek_next_cookie_for_test() const noexcept { return next_cookie_; }
+    // Test-only: validate a WriteOp through the EXACT production descriptor-
+    // validation logic, WITHOUT reserve/prepare/commit/enqueue/get_sqe/kernel.
+    // A read-only static wrapper over validate_write; it touches no instance
+    // state, performs no syscall, and never reaches the ring. Used by the
+    // UINT_MAX length-boundary detector to prove the inclusive validation
+    // boundary without driving a huge real I/O to completion (the unsafe
+    // ring-owned-then-cancel evidence it replaces).
+    static Result<void> validate_write_for_test(WriteOp op) noexcept {
+        return validate_write(op);
+    }
 #endif
 
   private:

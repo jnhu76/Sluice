@@ -290,63 +290,74 @@ SLUICE_TEST_CASE(uring_scripted_partial_return_does_not_mutate_request_state) {
     second_completion.reset();
 }
 
-// P1 length boundary detector: liburing's io_uring_prep_read/write take an
+// P1 length boundary detectors: liburing's io_uring_prep_read/write take an
 // `unsigned nbytes`. A length > UINT_MAX MUST be rejected with invalid_argument
 // (no silent size_t->unsigned truncation), and a length == UINT_MAX MUST be
 // accepted by validation. This kills the mutant where the old SSIZE_MAX check
 // let a >4GiB length through and the implicit narrowing at SQE fill silently
-// truncated it. We do NOT allocate a UINT_MAX-sized buffer: descriptor
-// validation checks representational form only (not buffer capacity), so a
-// valid small buffer pointer paired with a huge length exercises the length
-// rejection without any large allocation.
+// truncated it.
+//
+// The >UINT_MAX reject detector goes through the full admission path (submit_*),
+// proving invalid_argument leaves Completion idle with no accepted slot, no
+// borrow, and zero residue. The ==UINT_MAX accept detector uses a VALIDATION-
+// ONLY seam: it exercises the exact production descriptor-validation logic
+// without reserve/prepare/commit/enqueue/get_sqe/kernel touch. The previous
+// form accepted a UINT_MAX write (ring-owned) then best-effort-canceled it; that
+// was unsafe because submit_write immediately makes the operation ring-owned and
+// running cancellation is intent-only, so the poll could submit the huge
+// original operation before cancellation took effect. The validation-only seam
+// removes that hazard entirely.
 SLUICE_TEST_CASE(uring_length_over_uint_max_rejected_no_residue) {
-    UringAsyncBackend backend(small_config());
-    if (!backend.available())
-        return;
+    // 32-bit-safe: only run the >UINT_MAX reject detector on targets where
+    // size_t can actually express UINT_MAX + 1. On a 32-bit size_t target the
+    // value wraps back to 0 and there is no such input value to reject; the
+    // representational boundary is vacuous there and we skip rather than assert
+    // on a wrapped operand.
+    if constexpr (std::numeric_limits<std::size_t>::max() >
+                  static_cast<std::size_t>(std::numeric_limits<unsigned>::max())) {
+        UringAsyncBackend backend(small_config());
+        if (!backend.available())
+            return;
 
-    TempFile file;
-    std::array<std::byte, 1> one_byte{};
-    Completion<std::size_t> completion;
-    // UINT_MAX + 1: must be rejected with invalid_argument, Completion stays
-    // idle, no accepted slot, no borrow, zero residue.
-    const std::size_t over = static_cast<std::size_t>(std::numeric_limits<unsigned>::max()) + 1;
-    const auto r = backend.submit_write(
-        WriteOp{file.fd(), one_byte.data(), over, 0}, completion);
-    SLUICE_CHECK(!r.has_value());
-    SLUICE_CHECK(r.error().code == IoError::Code::invalid_argument);
-    SLUICE_CHECK(!completion.ready());
-    SLUICE_CHECK(backend.outstanding() == 0);
-    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+        TempFile file;
+        std::array<std::byte, 1> one_byte{};
+        Completion<std::size_t> completion;
+        // UINT_MAX + 1: must be rejected with invalid_argument, Completion stays
+        // idle, no accepted slot, no borrow, zero residue.
+        const std::size_t over =
+            static_cast<std::size_t>(std::numeric_limits<unsigned>::max()) + std::size_t{1};
+        const auto r = backend.submit_write(
+            WriteOp{file.fd(), one_byte.data(), over, 0}, completion);
+        SLUICE_CHECK(!r.has_value());
+        SLUICE_CHECK(r.error().code == IoError::Code::invalid_argument);
+        SLUICE_CHECK(!completion.ready());
+        SLUICE_CHECK(backend.outstanding() == 0);
+        SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    }
 }
 
-SLUICE_TEST_CASE(uring_length_uint_max_accepted_by_validation) {
+SLUICE_TEST_CASE(uring_length_uint_max_accepted_by_validation_only) {
     // UINT_MAX is the largest representable liburing nbytes; validation MUST
-    // accept it (the boundary is inclusive). We do NOT drive the request to
-    // completion (that would require a UINT_MAX buffer and real I/O) — we only
-    // assert the acceptance/no-residue-before-completion boundary. The request
-    // is then retired by resetting the Completion, releasing the slot.
-    UringAsyncBackend backend(small_config());
-    if (!backend.available())
-        return;
-
+    // accept it (the boundary is inclusive). The validation-only seam runs the
+    // EXACT production descriptor-validation logic with no ring, no reserve,
+    // no kernel touch — so a huge length is never made ring-owned and never
+    // needs cancellation. Runs on every target (no 32-bit wrap concern: UINT_MAX
+    // is representable in size_t on both 32-bit and 64-bit).
     TempFile file;
     std::array<std::byte, 1> one_byte{};
-    Completion<std::size_t> completion;
     const std::size_t at_max = static_cast<std::size_t>(std::numeric_limits<unsigned>::max());
-    const auto r =
-        backend.submit_write(WriteOp{file.fd(), one_byte.data(), at_max, 0}, completion);
-    SLUICE_CHECK(r.has_value());
-    SLUICE_CHECK(backend.outstanding() == 1);
-    SLUICE_CHECK(backend.arena_slot_in_use() == 1);
-    // The request is accepted and ring-owned; do not poll (no UINT_MAX I/O).
-    // Cancel it so the slot is released and the backend destructs quiescently.
-    backend.cancel(completion);
-    // Drive reap so the canceled terminal publishes and the slot can release.
-    (void)poll_bounded(backend, [&] { return completion.ready(); });
-    SLUICE_CHECK(completion.ready());
-    completion.reset();
-    SLUICE_CHECK(backend.outstanding() == 0);
-    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    SLUICE_CHECK(UringAsyncBackend::validate_write_for_test(
+                     WriteOp{file.fd(), one_byte.data(), at_max, 0})
+                     .has_value());
+    // And the reject boundary holds through the same seam on 64-bit targets.
+    if constexpr (std::numeric_limits<std::size_t>::max() >
+                  static_cast<std::size_t>(std::numeric_limits<unsigned>::max())) {
+        const std::size_t over = at_max + std::size_t{1};
+        const auto r = UringAsyncBackend::validate_write_for_test(
+            WriteOp{file.fd(), one_byte.data(), over, 0});
+        SLUICE_CHECK(!r.has_value());
+        SLUICE_CHECK(r.error().code == IoError::Code::invalid_argument);
+    }
 }
 
 // P0-B stale-cookie detector (frozen design §7.1/§7.2). This is the central
