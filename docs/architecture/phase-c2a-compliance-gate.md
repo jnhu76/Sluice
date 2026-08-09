@@ -13,6 +13,16 @@ suite that runs identically against Fake and ThreadPool, wiring it into the aggr
 per-backend, recording Uring's Phase-D capacity gap as a `not_implemented` manifest record, and
 proving the cases catch deliberately nonconforming capacity behavior.
 
+> **Phase D1 post-merge reconciliation (2026-08-09):** the text below records
+> the historical C2a PR state. PR #78 migrated Uring to the bounded
+> RequestArena and exposed `UringConfig::request_capacity`. The D2 audit wired
+> a test-only real-liburing `make_backend_with_capacity` factory to that
+> existing production configuration and ran the exact unchanged
+> `run_capacity_cases` suite successfully. The stale
+> `uring_capacity_not_implemented` record is therefore removed. Stub mode
+> remains build/API-only and is classified INCOMPLETE for real capacity
+> execution. No production implementation was needed for this reconciliation.
+
 ---
 
 ## 1. Scope

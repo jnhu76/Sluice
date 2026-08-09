@@ -84,6 +84,12 @@ STATUS_IMPLEMENTED = "implemented"           # has a target; gate runs it.
 STATUS_NOT_APPLICABLE = "not_applicable"     # legitimately skipped (needs reason).
 STATUS_NOT_IMPLEMENTED = "not_implemented"   # known gap; NEVER counts as PASS.
 
+# Real-only evidence declares its accepted execution mode explicitly. The
+# aggregate gate parses a target-emitted [evidence-meta] line and classifies a
+# disallowed mode as INCOMPLETE — a stub build can prove build/API honesty but
+# can never satisfy a real KernelIo requirement.
+EVIDENCE_MODES: tuple[str, ...] = ("deterministic", "real", "stub")
+
 
 # ---------------------------------------------------------------------------
 # Registry: which backends exist in C1
@@ -98,15 +104,11 @@ class BackendEntry:
                             # be "" if the shared suite does not cover it.
     capacity_driver_case: str = ""  # Phase C2a: the SLUICE_TEST_CASE that drives
                                     # the shared capacity cases for this backend.
-                                    # "" when the backend has no capacity seam
-                                    # (Uring before Phase D) — the gap is the
-                                    # not_implemented manifest record, never a
-                                    # skip-as-pass.
     close_drain_driver_case: str = ""  # Phase C2e: the SLUICE_TEST_CASE that
                                        # drives the shared close/drain cases for
                                        # this backend. "" when the backend has
                                        # no close_admission seam (Uring before
-                                       # Phase D) — the gap is the
+                                       # D4) — the gap is the
                                        # uring_c2e_close_drain_not_implemented
                                        # manifest record, never a skip-as-pass.
 
@@ -119,7 +121,8 @@ BACKENDS: tuple[BackendEntry, ...] = (
     BackendEntry("ThreadPool", "BlockingIoProfile", "conformance_threadpool",
                  capacity_driver_case="conformance_capacity_threadpool",
                  close_drain_driver_case="conformance_close_drain_threadpool"),
-    BackendEntry("Uring", "KernelIoProfile", "conformance_uring"),
+    BackendEntry("Uring", "KernelIoProfile", "conformance_uring",
+                 capacity_driver_case="conformance_capacity_uring"),
 )
 
 
@@ -131,8 +134,13 @@ BACKENDS: tuple[BackendEntry, ...] = (
 class Evidence:
     evidence_id: str                    # unique stable id
     target: str                         # xmake target name
-    cases: Optional[tuple[str, ...]] = None   # SLUICE_TEST_CASE names if the
-                                              # target is filtered by case.
+    cases: Optional[tuple[str, ...]] = None   # Exact SLUICE_TEST_CASE set required
+                                              # for this evidence record. When
+                                              # present, the aggregate gate MUST
+                                              # observe every case run exactly once
+                                              # and no unpinned case (the record's
+                                              # required runtime execution set);
+                                              # absence means no per-case claim.
     layer: str = "shared"               # one of LAYERS
     backends: tuple[str, ...] = ()      # which display backends this covers;
                                         # () means backend-agnostic (e.g.
@@ -141,6 +149,9 @@ class Evidence:
     status: str = STATUS_IMPLEMENTED
     reason: str = ""                    # required iff status == not_applicable.
     notes: str = ""
+    required_modes: tuple[str, ...] = () # empty: mode-independent target;
+                                         # otherwise exactly one target-emitted
+                                         # [evidence-meta] mode must be allowed.
 
 
 # Helper aliases for readability.
@@ -170,50 +181,27 @@ EVIDENCE: tuple[Evidence, ...] = (
     ),
 
     # -----------------------------------------------------------------------
-    # Phase C2a — shared capacity/admission/accounting conformance gap.
-    # The capacity cases (shared_capacity_suite, IMPLEMENTED for Fake/ThreadPool)
-    # land in commit 3 alongside the driver case + run_capacity_cases(). Uring
-    # has NOT migrated onto RequestArena (Phase D pending), so its capacity
-    # coverage is recorded here as a known not_implemented gap: a
-    # not_implemented MANDATORY record enters the verdict via
-    # applicable_evidence_for_backend() and forces the backend to INCOMPLETE,
-    # never skip-as-pass. This record reinforces (does not replace) the existing
-    # KernelIoProfile-stays-NOT-CONFORMING rule.
-    # -----------------------------------------------------------------------
-    Evidence(
-        evidence_id="uring_capacity_not_implemented",
-        target="backend_conformance_test",
-        layer="shared",
-        backends=_U,
-        status=STATUS_NOT_IMPLEMENTED,
-        mandatory=True,
-        notes="C2a: Uring has no RequestArena before Phase D; capacity "
-              "rejection/admission/accounting conformance is not implemented. "
-              "Recorded as a known gap; the driver does not execute the "
-              "capacity cases for Uring. Uring stays NOT CONFORMING.",
-    ),
-
-    # -----------------------------------------------------------------------
-    # Phase C2a — shared capacity/admission/accounting conformance (implemented
-    # for backends that have migrated onto RequestArena: Fake, ThreadPool). The
+    # Phase C2a — shared capacity/admission/accounting conformance. The
     # capacity cases live in the SAME target as shared_suite
     # (backend_conformance_test) and are driven by run_capacity_cases(), built
     # via make_backend_with_capacity. They assert ONLY AsyncIoContext-observable
-    # state. The gate drives this per-backend in isolated subprocesses
-    # (conformance_capacity_fake / conformance_capacity_threadpool). Uring's gap
-    # is the not_implemented record above.
+    # state. After the D1 merge, Uring's existing UringConfig/RequestArena path
+    # passes the exact suite in real-liburing mode. The gate drives every backend
+    # in an isolated subprocess; Uring stub mode is explicitly INCOMPLETE rather
+    # than a skip-as-pass.
     # -----------------------------------------------------------------------
     Evidence(
         evidence_id="shared_capacity_suite",
         target="backend_conformance_test",
         layer="shared",
-        backends=("Fake", "ThreadPool"),
+        backends=("Fake", "ThreadPool", "Uring"),
         notes="C2a capacity/admission/rejection/accounting cases: accepts "
               "exact capacity, (N+1)th rejects with would_block (rejected "
               "Completion stays idle; no async from a reject), exact stats "
               "split (submitted_ops committed-only; queue_full_retries vs "
               "invalid_state_rejections), max_outstanding <= capacity, "
-              "recycle after cancel->reap->reset. Shared-observable only.",
+              "recycle after cancel->reap->reset. Shared-observable only. Uring "
+              "execution evidence requires real mode; stub is build/API-only.",
     ),
 
     # -----------------------------------------------------------------------
@@ -365,12 +353,11 @@ EVIDENCE: tuple[Evidence, ...] = (
         backends=_U,
         mandatory=True,
         status=STATUS_NOT_IMPLEMENTED,
-        notes="C2b rows 3-8 require RequestArena identity/generation/"
-              "cancel/reap integration; Uring remains legacy until "
-              "Phase D. Recorded as a known gap; not_implemented never "
+        notes="C2b rows 3-8 still require complete Uring identity/generation/"
+              "cancel/reap integration evidence in D3. Recorded as a known "
+              "gap; not_implemented never "
               "counts as PASS. (Target is the Uring-driving conformance "
-              "binary, matching uring_capacity_not_implemented; the gap "
-              "is not executed.)",
+              "binary; the gap is not executed.)",
     ),
 
     # -----------------------------------------------------------------------
@@ -441,8 +428,8 @@ EVIDENCE: tuple[Evidence, ...] = (
         backends=_U,
         mandatory=True,
         status=STATUS_NOT_IMPLEMENTED,
-        notes="C2c rows 11-14 require RequestArena borrow/waiter/lease "
-              "lifecycle integration; Uring remains legacy until Phase D. "
+        notes="C2c rows 11-14 still require complete Uring borrow/waiter/lease "
+              "lifecycle evidence in D3. "
               "Recorded as a known gap; not_implemented never counts as "
               "PASS. (Target is the Uring-driving conformance binary, "
               "matching uring_c2b_identity_not_implemented; the gap is not "
@@ -529,20 +516,52 @@ EVIDENCE: tuple[Evidence, ...] = (
               "cases in the same target.",
     ),
     Evidence(
-        evidence_id="uring_c2d_failure_injection_not_implemented",
-        target="backend_conformance_test",
+        evidence_id="uring_c2d_failure_injection",
+        target="uring_d2_failure_noalloc_test",
         layer="lifecycle",
         backends=_U,
         mandatory=True,
-        status=STATUS_NOT_IMPLEMENTED,
-        notes="C2d rows 9-10 require RequestArena-based failure injection "
-              "(allocation / worker-spawn / dispatch-failure semantics under "
-              "the unified lifecycle); Uring remains legacy until Phase D "
-              "(its own submit-failure tests drive the pre-RequestArena SQE "
-              "model and do not satisfy the C2d contract). Recorded as a "
-              "known gap; not_implemented never counts as PASS. (Target is "
-              "the Uring-driving conformance binary, matching the other "
-              "uring_*_not_implemented records; the gap is not executed.)",
+        status=STATUS_IMPLEMENTED,
+        # Pinned required runtime case-set (Issue #81 P1 G2). The C++ source
+        # tests/uring_d2_failure_noalloc_test.cpp is the REGISTRATION authority
+        # (these SLUICE_TEST_CASE names); this tuple is the VERIFICATION
+        # authority the aggregate gate's _drive() enforces against the binary's
+        # actual [run] output. Without this pin, a mutant that deletes nine
+        # load-bearing cases — leaving only the metadata case — still exits 0,
+        # emits exactly one [evidence-meta] line, and is misclassified PASS.
+        # The gate does NOT parse C++; the source↔manifest drift detector in
+        # test_backend_conformance_manifest.py keeps the two authorities aligned.
+        cases=(
+            "uring_d2_evidence_mode",
+            "uring_d2_precommit_size_rejections_leave_zero_new_residue",
+            "uring_d2_precommit_void_rejections_leave_zero_new_residue",
+            "uring_d2_ordinary_size_path_is_allocation_free",
+            "uring_d2_ordinary_void_path_is_allocation_free",
+            "uring_d2_permanent_recovery_size_and_void_are_allocation_free",
+            "uring_d2_poison_rejects_after_capacity_is_recycled",
+            "uring_d2_pending_cancel_and_class_a_recovery_have_one_winner_each",
+            "uring_d2_poison_wait_never_submits_quarantined_write",
+            "uring_d2_repeated_cancel_control_is_bounded_and_allocation_free",
+        ),
+        required_modes=("real",),
+        notes="Phase D2 real-liburing C2d evidence: natural pre-commit reserve/"
+              "descriptor/binding rejection leaves Completion idle and no new "
+              "arena/dispatch/router/transport-ledger/SQE residue; existing D1 "
+              "tests retain requests across EINTR/EAGAIN/EBUSY, zero progress, "
+              "and positive partial transport reports without submit-prefix "
+              "RequestState authority; a deterministic injected negative submit "
+              "result (scripted -EIO; only kRealSubmit enters liburing) drives "
+              "the production P0-D recovery controller verbatim to retire only "
+              "proven Class-A work while older Class-C work remains bound for "
+              "its original CQE — this does NOT independently reproduce the "
+              "real kernel negative-enter physical state (that claim belongs "
+              "to the D1 liburing/kernel source proof); always-throw allocator "
+              "probes cover ordinary size/void accepted paths, Class-A "
+              "operation recovery, and Class-C plus Class-A cancel-control "
+              "recovery; pending cancel and repeated running cancel under "
+              "transient/poison pressure prove exactly one terminal "
+              "publication and one bounded live control reference. Stub mode is "
+              "build/API evidence only and is classified INCOMPLETE by required_modes.",
     ),
 
     # -----------------------------------------------------------------------
@@ -637,8 +656,7 @@ EVIDENCE: tuple[Evidence, ...] = (
         mandatory=True,
         status=STATUS_NOT_IMPLEMENTED,
         notes="C2e rows 15-16 (close_admission / drain / quiescent "
-              "destruction) require RequestArena admission-close + slot "
-              "lifecycle integration; Uring remains legacy until Phase D. "
+              "destruction) remain D4 work for Uring. "
               "Recorded as a known gap; not_implemented never counts as PASS. "
               "(Target is the Uring-driving conformance binary, matching the "
               "other uring_*_not_implemented records; the gap is not "

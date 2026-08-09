@@ -44,6 +44,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -97,6 +98,42 @@ def run_cmd(cmd: list[str], timeout: int = 600) -> tuple[int, str, str]:
         return 124, "", f"timeout after {timeout}s: {' '.join(cmd)}"
 
 
+# Repository test-selection variables that the in-binary harness honors and
+# that therefore MUST NOT leak from a developer's ambient shell into an
+# evidence subprocess. tests/harness.hpp is the authority for case selection
+# and honors exactly SLUICE_TEST_FILTER (an exact-case-name allowlist; a token
+# matching zero cases makes the binary exit non-zero). Other SLUICE_* names are
+# per-case behavior knobs read inside a case body or self-fork markers set by a
+# case itself — they cannot alter WHICH registered cases run, so they are not
+# selection variables and are intentionally NOT stripped here. Stripping only
+# the selection variable keeps the sanitizer narrow (PATH, toolchain, xmake,
+# and library-path variables are all preserved verbatim).
+TEST_SELECTION_ENV_VARS = ("SLUICE_TEST_FILTER",)
+
+
+def clean_test_env() -> dict[str, str]:
+    """A child environment with repository test-selection variables removed.
+
+    The conformance gate owns the execution environment of its evidence
+    targets. An ambient developer filter (e.g. a parent shell exporting
+    ``SLUICE_TEST_FILTER=uring_d2_evidence_mode``) would otherwise be inherited
+    by an ordinary evidence subprocess via ``env=None`` and silently reduce the
+    target's required execution set — a 10-case D2 target could run only its
+    metadata case, emit one evidence-meta line, exit 0, and be classified PASS.
+    That is a false-conformance path (Issue #81 P1).
+
+    This helper returns an EXPLICIT environment (a copy of ``os.environ``) so
+    the child never inherits via the ``env=None`` default; the only variables
+    removed are the known test-selection variables. Required PATH / toolchain /
+    xmake / library-path variables are preserved. Do not widen this set without
+    proving the new name alters registered case selection.
+    """
+    env = dict(os.environ)
+    for name in TEST_SELECTION_ENV_VARS:
+        env.pop(name, None)
+    return env
+
+
 def xmake_target_exists(target: str) -> bool:
     """Preflight: is `target` a valid xmake target? Uses `xmake show -t`."""
     rc, out, err = run_cmd(["xmake", "show", "-t", target], timeout=120)
@@ -124,8 +161,15 @@ def xmake_run_target(target: str, env_filter: Optional[str] = None
     registered backend's shared-suite case in a SEPARATE subprocess: one
     backend's failure cannot affect another backend's process exit code or
     [conformance-meta] emission.
+
+    The child ALWAYS receives an EXPLICIT environment from clean_test_env().
+    For an ordinary evidence run (env_filter is None) the ambient
+    SLUICE_TEST_FILTER is stripped so it cannot reduce the target's required
+    execution set (Issue #81 P1 false-green). For a shared-suite per-backend
+    run the gate sets SLUICE_TEST_FILTER to the exact driver case on top of the
+    cleaned environment, so a hostile parent value can never leak through.
     """
-    env = dict(os.environ) if env_filter else None
+    env = clean_test_env()
     if env_filter:
         env["SLUICE_TEST_FILTER"] = env_filter
     try:
@@ -161,6 +205,10 @@ def run_shell_script(script_rel: str) -> tuple[int, str]:
 
 META_RE = re.compile(
     r"^\[conformance-meta\]\s+backend=(\S+)\s+profile=(\S+)\s+mode=(\S+)\s*$"
+)
+
+EVIDENCE_META_RE = re.compile(
+    r"^\[evidence-meta\]\s+evidence=(\S+)\s+mode=(\S+)\s*$"
 )
 
 # Match the display name even when it contains "(stub)" — backend= value is
@@ -213,6 +261,51 @@ def parse_run_lines(driver_output: str) -> list[str]:
             if (m := RUN_RE.match(line.strip()))]
 
 
+def parse_evidence_meta_lines(driver_output: str) -> list[tuple[str, str]]:
+    """Every real-only evidence declaration in order, preserving duplicates."""
+    return [(m.group(1), m.group(2)) for line in driver_output.splitlines()
+            if (m := EVIDENCE_META_RE.match(line.strip()))]
+
+
+def classify_case_set(selected: list[str],
+                      required: tuple[str, ...]) -> tuple[str, str]:
+    """Classify an evidence target's observed runtime case-set.
+
+    Closes Issue #81 P1 G2: an ordinary evidence record that pins a `cases`
+    tuple in the manifest declares its REQUIRED runtime execution set. This
+    helper proves the binary actually executed every pinned case exactly once
+    and nothing else — a set-equivalence check, deliberately NOT order-
+    sensitive. Without it, a mutant that deletes nine load-bearing cases
+    (leaving only the metadata-emitting case) still exits 0, emits exactly one
+    [evidence-meta] line, and is misclassified PASS.
+
+    Distinct from _classify_shared_run (which proves ONE driver case ran via a
+    gate-owned SLUICE_TEST_FILTER): here the target runs UNFILTERED and we must
+    prove the full pinned set, not a single case. G1 (gate-owned env) and G2
+    (source-level case-set completeness) are separate invariants: G1 prevents a
+    hostile parent from shrinking the executed set; G2 proves the executed set
+    equals the required set even when the source itself shrinks.
+
+    Reports ALL present mismatch categories in one diagnostic (missing,
+    unexpected, duplicate, length) rather than picking one. A G2-D mutant — 9
+    distinct required cases plus one duplicate of another — has BOTH a missing
+    case AND a duplicate; showing both is more honest than forcing a single
+    classification. Order within each category is sorted for determinism.
+    """
+    selected_counts = Counter(selected)
+    duplicates = sorted(name for name, count in selected_counts.items()
+                        if count > 1)
+    missing = sorted(set(required) - set(selected))
+    unexpected = sorted(set(selected) - set(required))
+    if duplicates or missing or unexpected or len(selected) != len(required):
+        return INCOMPLETE, (
+            f"evidence case-set mismatch: missing={missing}, "
+            f"unexpected={unexpected}, duplicate={duplicates}, "
+            f"selected={len(selected)} required={len(required)}")
+    return PASS, (
+        f"exact pinned case-set ({len(required)} cases), each run exactly once")
+
+
 def canonical_backend_key(meta_backend: str, registered: list[str]) -> Optional[str]:
     """Map a meta backend= value to a registered backend name.
 
@@ -249,13 +342,12 @@ class Gate:
     # code, its [conformance-meta] line, and its [conformance] FAIL lines.
     shared_by_backend: dict[str, RunResult] = field(default_factory=dict)
     # Phase C2a: per-backend shared CAPACITY-suite result, driven in its own
-    # subprocess (conformance_capacity_fake / conformance_capacity_threadpool).
-    # Backends without a capacity seam (Uring) have no capacity driver case;
-    # their gap is the manifest's uring_capacity_not_implemented record.
+    # subprocess. Uring real mode runs the exact shared cases; Uring stub mode
+    # executes only build/API classification and is recorded INCOMPLETE.
     capacity_by_backend: dict[str, RunResult] = field(default_factory=dict)
     # Phase C2e: per-backend shared CLOSE/DRAIN-suite result, driven in its own
     # subprocess (conformance_close_drain_fake / conformance_close_drain_threadpool).
-    # Backends without a close_admission seam (Uring before Phase D) have no
+    # Backends without a close_admission seam (Uring before D4) have no
     # close/drain driver case; their gap is the manifest's
     # uring_c2e_close_drain_not_implemented record.
     close_drain_by_backend: dict[str, RunResult] = field(default_factory=dict)
@@ -293,16 +385,15 @@ class Gate:
             self._run_shared_suite(shared_ev)
 
         # Phase C2a: drive the shared CAPACITY suite once per registered backend
-        # that HAS a capacity driver case (Fake, ThreadPool). Backends without a
-        # capacity seam (Uring) have no capacity driver case; their gap is the
-        # manifest's uring_capacity_not_implemented record (not a skip-as-pass).
+        # that has a capacity driver case. Real Uring participates after D1;
+        # its stub branch is classified INCOMPLETE below.
         cap_ev = M.evidence_by_id("shared_capacity_suite")
         if cap_ev is not None:
             self._run_capacity_suite(cap_ev)
 
         # Phase C2e: drive the shared CLOSE/DRAIN suite once per registered
         # backend that HAS a close_admission driver case (Fake, ThreadPool).
-        # Backends without the seam (Uring before Phase D) have no driver case;
+        # Backends without the seam (Uring before D4) have no driver case;
         # their gap is the manifest's uring_c2e_close_drain_not_implemented
         # record (never skip-as-pass).
         cd_ev = M.evidence_by_id("c2e_shared_close_drain_suite")
@@ -374,12 +465,11 @@ class Gate:
                 detail=detail, stdout=out)
 
     def _run_capacity_suite(self, ev: M.Evidence) -> None:
-        """Phase C2a: drive the shared capacity suite once per backend that HAS
-        a capacity driver case, each in its own subprocess. Backends without a
-        capacity seam (Uring) have no capacity driver case and are skipped here
-        — their gap is the manifest's uring_capacity_not_implemented record,
-        surfaced in the verdict via applicable_evidence_for_backend(). Uses the
-        same preflight shape as _run_shared_suite (target existence + build).
+        """Phase C2a: drive the shared capacity suite once per backend that has
+        a capacity driver case, each in its own subprocess. Uring real mode runs
+        the shared semantics; its stub branch is build/API evidence and becomes
+        INCOMPLETE, never PASS. Uses the same preflight shape as
+        _run_shared_suite (target existence + build).
         """
         if not xmake_target_exists(ev.target):
             missing = RunResult(ev.evidence_id, ev.target, MISSING_TARGET,
@@ -407,11 +497,17 @@ class Gate:
         # -> RUN_FAIL for that backend only.
         for b in M.BACKENDS:
             if not b.capacity_driver_case:
-                continue  # Uring: no capacity seam; gap is the manifest record.
+                continue
             rc, out = xmake_run_target(ev.target,
                                        env_filter=b.capacity_driver_case)
             state, detail = self._classify_shared_run(
                 b, rc, out, expected_case=b.capacity_driver_case)
+            if state == PASS and b.profile == "KernelIoProfile":
+                metas = parse_meta_line_list(out)
+                if len(metas) == 1 and metas[0][2] != "real":
+                    state = INCOMPLETE
+                    detail = (f"capacity execution requires mode='real'; got "
+                              f"mode={metas[0][2]!r} (build/API evidence only)")
             self.capacity_by_backend[b.name] = RunResult(
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
                 detail=detail, stdout=out)
@@ -419,7 +515,7 @@ class Gate:
     def _run_close_drain_suite(self, ev: M.Evidence) -> None:
         """Phase C2e: drive the shared close/drain suite once per backend that
         HAS a close_admission driver case (Fake, ThreadPool), each in its own
-        subprocess. Backends without the seam (Uring before Phase D) have no
+        subprocess. Backends without the seam (Uring before D4) have no
         close/drain driver case and are skipped here — their gap is the
         manifest's uring_c2e_close_drain_not_implemented record, surfaced in
         the verdict via applicable_evidence_for_backend(). Uses the same
@@ -541,8 +637,42 @@ class Gate:
 
         rc, out = xmake_run_target(ev.target)
         state = _state_for_rc(rc)
+        detail = f"exit {rc}"
+        # G2 (Issue #81 P1): prove the target actually executed the manifest's
+        # pinned runtime case-set BEFORE trusting the [evidence-meta] line it
+        # emits. A record pins `cases` to declare its required execution set;
+        # without this check a mutant that deletes every load-bearing case
+        # (leaving only the metadata case) exits 0 and emits one evidence-meta
+        # line, but no longer proves the contract. This runs before the
+        # required_modes metadata check so an incomplete corpus is reported as
+        # an incomplete corpus, not masked behind a mode mismatch (e.g. a stub
+        # build that compiled only the metadata case).
+        if state == PASS and ev.cases:
+            cs_state, cs_detail = classify_case_set(
+                parse_run_lines(out), ev.cases)
+            if cs_state != PASS:
+                state, detail = cs_state, cs_detail
+        if state == PASS and ev.required_modes:
+            metas = parse_evidence_meta_lines(out)
+            if len(metas) != 1:
+                state = INCOMPLETE
+                detail = ("expected exactly one [evidence-meta] line for "
+                          f"{ev.evidence_id}, got {len(metas)}")
+            else:
+                evidence_id, mode = metas[0]
+                if evidence_id != ev.evidence_id:
+                    state = INCOMPLETE
+                    detail = (f"[evidence-meta] evidence={evidence_id!r} does not "
+                              f"match {ev.evidence_id!r}")
+                elif mode not in ev.required_modes:
+                    state = INCOMPLETE
+                    detail = (f"[evidence-meta] mode={mode!r} not in required "
+                              f"{list(ev.required_modes)!r}")
+                else:
+                    detail = (f"exit 0; [evidence-meta] evidence={evidence_id} "
+                              f"mode={mode}")
         return RunResult(ev.evidence_id, ev.target, state,
-                         detail=f"exit {rc}", stdout=out)
+                         detail=detail, stdout=out)
 
     # --- Per-backend verdict computation -----------------------------------
 
@@ -558,12 +688,13 @@ class Gate:
         RUN_FAIL therefore cannot become another backend's state.
 
         IMPORTANT: backend-agnostic arena/lifecycle evidence proves the
-        RequestSlot CONTRACT, NOT that a given backend conforms to it. The
-        Uring KernelIo backend has NOT been migrated onto RequestArena (Phase D
-        pending), so it MUST NOT claim lifecycle/backend_specific PASS — the
-        contract exists, but Uring does not yet implement it. We report
-        INCOMPLETE for KernelIoProfile lifecycle/backend_specific regardless of
-        the arena tests passing, because those tests do not exercise Uring.
+        RequestSlot CONTRACT, NOT that a given backend conforms to it. Uring
+        completed the D1 RequestArena migration, but its D3 identity/cancel/
+        borrow/waiter and D4 close/drain evidence are still incomplete. We
+        therefore report generic KernelIo lifecycle/backend-specific records
+        as INCOMPLETE unless a narrowly tagged real-mode phase record has its
+        own command-backed PASS. The hard-coded overall KernelIo verdict stays
+        fail-closed until D4.
         """
         # The shared suite: this backend's OWN subprocess result.
         if ev.evidence_id == "shared_suite":
@@ -577,10 +708,8 @@ class Gate:
         if ev.evidence_id == "shared_capacity_suite":
             r = self.capacity_by_backend.get(backend_name)
             if r is None:
-                # A backend with a capacity seam that the gate never drove: NOT_RUN
-                # (a harness error). A backend with NO seam has no applicable
-                # implemented record (only the uring_capacity_not_implemented
-                # not_implemented record), so this branch is not reached for it.
+                # A backend with a capacity seam that the gate never drove is
+                # a harness error.
                 return NOT_RUN
             return r.state
 
@@ -604,10 +733,20 @@ class Gate:
         if r.state in (MISSING_TARGET, BUILD_FAIL, NOT_RUN):
             return r.state
 
-        # KernelIoProfile lifecycle/backend_specific: the contract evidence is
-        # real but Uring does not implement it yet. Never report PASS.
+        # KernelIoProfile lifecycle/backend_specific evidence remains
+        # INCOMPLETE by default while D3/D4 are open. ONLY a real-mode phase
+        # record explicitly tagged to THIS exact backend may report its own
+        # PASS after _drive() validates the required evidence mode; a
+        # backend-agnostic record (backends == ()) or one tagged to several
+        # backends can never lift the fail-closed default. required_modes alone
+        # is NOT fail-closed-override authority (P1-B): it declares WHICH mode
+        # a target must execute in, not whether this evidence belongs to this
+        # backend. This branch does not lift the hard-coded overall KernelIo
+        # NOT CONFORMING verdict below.
         if (backend_profile == "KernelIoProfile"
                 and ev.layer in ("lifecycle", "backend_specific")):
+            if ev.required_modes and ev.backends == (backend_name,):
+                return r.state
             # The uring-specific backend contract target (uring_backend_test)
             # runs against the stub/real binary; in stub it covers only the
             # stub subset, so it is INCOMPLETE for the kernel profile.
@@ -634,28 +773,29 @@ class Gate:
         MISSING_TARGET is INCOMPLETE, not ELIGIBLE — one PASS per layer is
         not enough.
 
-        Phase C2a: the verdict iterates applicable_evidence_for_backend()
+        The verdict iterates applicable_evidence_for_backend()
         (implemented + not_implemented + not_applicable), so a not_implemented
         MANDATORY record forces INCOMPLETE in the backend's OWN verdict, not
-        just in the global results dict. This is how a known Phase-D gap
-        (e.g. uring_capacity_not_implemented) surfaces honestly.
+        just in the global results dict. This is how remaining D3/D4 known
+        gaps surface honestly.
         """
         reasons: list[str] = []
         # self.meta is keyed by canonical registered backend names (see run()).
         mode = self.meta.get(backend.name, {})
         mode_str = mode.get("mode", "unknown")
 
-        # KernelIo profile: never ELIGIBLE in C1 (Phase D not implemented).
+        # KernelIo profile remains fail-closed until D4 lifts this rule.
         if backend.profile == "KernelIoProfile":
             if mode_str == "stub":
-                reasons.append("kernel profile built as stub (Phase D not implemented)")
+                reasons.append("kernel profile built as stub (real execution unavailable)")
             elif mode_str == "real":
-                reasons.append("kernel profile real-path migration NOT IMPLEMENTED "
-                               "(Phase D: RequestArena/RequestKey identity)")
+                reasons.append("kernel profile gate remains fail-closed "
+                               "(D3 identity/cancel/borrow/waiter and D4 "
+                               "wait/close/drain remain pending)")
             else:
-                reasons.append(f"kernel profile mode={mode_str} (Phase D pending)")
+                reasons.append(f"kernel profile mode={mode_str} (Phase D incomplete)")
             # Still enumerate applicable not_implemented mandatory records so a
-            # Phase-D gap (e.g. capacity) appears in the reasons for the report,
+            # remaining Phase-D gaps appear in the reasons for the report,
             # reinforcing (not replacing) the KernelIo NOT CONFORMING rule.
             for ev in M.applicable_evidence_for_backend(backend.name):
                 if ev.mandatory and ev.status == M.STATUS_NOT_IMPLEMENTED:
@@ -811,10 +951,8 @@ class Gate:
                             f"backend {b.name} ({ev.target}): {rr.state}")
                 continue
             if ev.evidence_id == "shared_capacity_suite":
-                # Phase C2a: per-backend shared CAPACITY suite. Only backends
-                # with a capacity seam (Fake, ThreadPool) are driven; Uring's
-                # gap is the uring_capacity_not_implemented record, handled by
-                # applicable_evidence_for_backend in the verdict.
+                # Phase C2a: per-backend shared CAPACITY suite. Real Uring is
+                # driven after D1; its stub branch is classified INCOMPLETE.
                 for b in M.BACKENDS:
                     if not b.capacity_driver_case:
                         continue
@@ -886,8 +1024,8 @@ class Gate:
             for f in overall_failures:
                 print(f"  - {f}")
             return 1
-        print("RESULT: PASS (all mandatory gates satisfied; "
-              "KernelIo NOT CONFORMING is expected before Phase D).")
+        print("RESULT: PASS (all runnable mandatory gates satisfied; "
+              "KernelIo remains NOT CONFORMING until D3/D4 close).")
         return 0
 
 

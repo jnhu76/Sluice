@@ -31,6 +31,8 @@
 
 import importlib.util
 import os
+import re
+import subprocess
 import sys
 import unittest
 from unittest import mock
@@ -46,6 +48,9 @@ import backend_conformance_manifest as M  # noqa: E402
 _GATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "verify-backend-conformance.py")
+# Repository root (this file lives in <repo>/scripts/tests/).
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
 _spec = importlib.util.spec_from_file_location("verify_backend_conformance", _GATE_PATH)
 G = importlib.util.module_from_spec(_spec)
 sys.modules["verify_backend_conformance"] = G
@@ -144,6 +149,36 @@ class EvidenceRecordsTest(unittest.TestCase):
     def test_every_evidence_has_a_nonempty_target(self):
         for e in M.EVIDENCE:
             self.assertTrue(e.target, f"{e.evidence_id}: empty target")
+
+    def test_required_evidence_modes_are_closed_and_unique(self):
+        for e in M.EVIDENCE:
+            self.assertEqual(len(e.required_modes), len(set(e.required_modes)),
+                             f"{e.evidence_id}: duplicate required mode")
+            self.assertTrue(set(e.required_modes) <= set(M.EVIDENCE_MODES),
+                            f"{e.evidence_id}: unknown required mode")
+
+    def test_pinned_evidence_cases_are_nonempty_unique_strings(self):
+        # When an evidence record pins a `cases` set, that tuple is G2's
+        # VERIFICATION authority (the gate's _drive() proves the binary ran
+        # exactly these cases). The authority itself must therefore be
+        # well-formed: non-empty, no duplicates, no empty/non-string element.
+        # A malformed pin such as cases=("foo","foo") would otherwise let the
+        # gate under-verify a target that only registered one distinct case.
+        for e in M.EVIDENCE:
+            if e.cases is None:
+                continue
+            self.assertIsInstance(e.cases, tuple,
+                                  f"{e.evidence_id}: cases must be a tuple")
+            self.assertGreater(len(e.cases), 0,
+                               f"{e.evidence_id}: pinned cases must be non-empty")
+            self.assertEqual(len(e.cases), len(set(e.cases)),
+                             f"{e.evidence_id}: pinned cases must be unique: "
+                             f"{list(e.cases)}")
+            for case in e.cases:
+                self.assertIsInstance(case, str,
+                                      f"{e.evidence_id}: case name must be str")
+                self.assertTrue(case,
+                                f"{e.evidence_id}: case name must be non-empty")
 
     def test_not_implemented_never_counts_as_pass(self):
         # Behavioral: drive the gate with a not_implemented evidence record
@@ -270,16 +305,18 @@ def _stub_gate(shared_per_backend, *, shared_rc=None,
         g.shared_by_backend[name] = G.RunResult(
             f"shared_suite:{name}", "backend_conformance_test", state,
             detail=f"stub {state}")
-    # Phase C2a: per-backend shared CAPACITY-suite state. Only backends with a
-    # capacity seam (Fake, ThreadPool) are driven; default them to PASS so the
-    # ONLY variable under test (in the attribution tests) is the shared-suite
-    # state. Uring has no capacity driver case, so it is not seeded here.
+    # Phase C2a: per-backend shared CAPACITY-suite state. Stub KernelIo is
+    # build/API evidence only, so its real-capacity result defaults to
+    # INCOMPLETE; every other capacity-capable mode defaults to PASS.
     g.capacity_by_backend = {}
     for b in M.BACKENDS:
         if b.capacity_driver_case:
+            mode = g.meta.get(b.name, {}).get("mode", "unknown")
+            state = (G.INCOMPLETE if b.profile == "KernelIoProfile" and mode != "real"
+                     else G.PASS)
             g.capacity_by_backend[b.name] = G.RunResult(
                 f"shared_capacity_suite:{b.name}", "backend_conformance_test",
-                G.PASS, detail="stub capacity PASS")
+                state, detail=f"stub capacity {state}")
     # Phase C2e: per-backend shared CLOSE/DRAIN-suite state. Only backends
     # with a close_admission seam (Fake, ThreadPool) are driven; default them
     # to PASS so the ONLY variable under test is the shared-suite state. Uring
@@ -391,6 +428,197 @@ class MetaParsingTest(unittest.TestCase):
             G.canonical_backend_key("Mystery", REGISTERED))
 
 
+class EvidenceModeParsingTest(unittest.TestCase):
+    """Real-only evidence has a separate fail-closed mode declaration."""
+
+    def test_parses_exact_evidence_mode_line(self):
+        out = ("noise\n[evidence-meta] evidence=uring_c2d_failure_injection "
+               "mode=real\n")
+        self.assertEqual(G.parse_evidence_meta_lines(out),
+                         [("uring_c2d_failure_injection", "real")])
+
+    def test_malformed_evidence_mode_line_is_not_parsed(self):
+        self.assertEqual(G.parse_evidence_meta_lines(
+            "[evidence-meta] evidence=uring_c2d_failure_injection\n"), [])
+
+    def _d2_cases(self):
+        # Single source of truth: read the pinned set from the manifest, never
+        # duplicate the case names here. This couples the test's notion of the
+        # required corpus to the manifest authority.
+        return M.evidence_by_id("uring_c2d_failure_injection").cases
+
+    def _d2_output(self, cases=None, mode=None, meta_lines=None):
+        """Fabricate a target's stdout with the given [run] case-set and meta.
+
+        ``cases`` defaults to the manifest's authoritative pinned set, so the
+        positive path (exact 10-case set) is self-maintaining. ``mode`` emits a
+        single matching [evidence-meta] line (None disables it). ``meta_lines``
+        overrides the meta entirely (for duplicate / missing-meta mutants).
+        """
+        if cases is None:
+            cases = self._d2_cases()
+        run_lines = "".join(f"[run] {c}\n" for c in cases)
+        if meta_lines is not None:
+            return run_lines + meta_lines
+        if mode is not None:
+            return (run_lines + f"[evidence-meta] evidence="
+                    f"uring_c2d_failure_injection mode={mode}\n")
+        return run_lines
+
+    def _drive_c2d(self, output, rc=0):
+        ev = M.evidence_by_id("uring_c2d_failure_injection")
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(rc, output)):
+            return gate._drive(ev)
+
+    def test_real_mode_is_pass(self):
+        # Positive pin: the full pinned case-set runs and emits one real-mode
+        # [evidence-meta] line. This exercises the complete PASS chain through
+        # _drive: exit 0 -> exact case-set -> exact metadata.
+        result = self._drive_c2d(self._d2_output(mode="real"))
+        self.assertEqual(result.state, G.PASS)
+
+    def test_stub_mode_is_incomplete_not_pass(self):
+        # The case-set passes (full pinned set ran); the metadata then reports
+        # mode=stub, which is not in required_modes -> INCOMPLETE.
+        result = self._drive_c2d(self._d2_output(mode="stub"))
+        self.assertEqual(result.state, G.INCOMPLETE)
+
+    def test_missing_or_duplicate_mode_is_incomplete(self):
+        # Full pinned case-set ran, but zero / duplicate [evidence-meta] lines.
+        missing = self._drive_c2d(self._d2_output(meta_lines=""))
+        duplicate = self._drive_c2d(self._d2_output(meta_lines=(
+            "[evidence-meta] evidence=uring_c2d_failure_injection mode=real\n"
+            "[evidence-meta] evidence=uring_c2d_failure_injection mode=real\n")))
+        self.assertEqual(missing.state, G.INCOMPLETE)
+        self.assertEqual(duplicate.state, G.INCOMPLETE)
+
+    def test_nonzero_real_target_is_run_fail(self):
+        # rc != 0 short-circuits to RUN_FAIL before any case-set or meta check.
+        result = self._drive_c2d(self._d2_output(mode="real"), rc=1)
+        self.assertEqual(result.state, G.RUN_FAIL)
+
+
+class EvidenceCaseSetPinTest(unittest.TestCase):
+    """The aggregate gate proves an ordinary evidence target's pinned case-set.
+
+    Closes Issue #81 P1 G2. G1 (closed in the prior commit) owns the child
+    environment so a hostile parent filter cannot shrink the executed set. G2
+    is a DISTINCT invariant: even when the child runs unfiltered (G1 satisfied)
+    the gate must still prove the binary executed the manifest's pinned
+    required case-set — every case exactly once, nothing extra. Without this
+    check a mutant that deletes nine load-bearing cases (leaving only the
+    metadata-emitting case) exits 0, emits one [evidence-meta] line, and is
+    misclassified PASS.
+
+    Every mutation here traverses Gate._drive() end-to-end (not the helper in
+    isolation), so a future regression that drops the classify_case_set call
+    from _drive cannot slip through as a green pure-function test.
+    """
+
+    def setUp(self):
+        self.ev = M.evidence_by_id("uring_c2d_failure_injection")
+        self.required = list(self.ev.cases)
+        # Sanity: the manifest actually pins a non-trivial set for this record.
+        self.assertGreater(len(self.required), 1,
+                           "precondition: D2 record pins a real case-set")
+
+    def _drive(self, output, rc=0):
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(rc, output)):
+            return gate._drive(self.ev)
+
+    def _out(self, cases, mode="real"):
+        run = "".join(f"[run] {c}\n" for c in cases)
+        return (run + f"[evidence-meta] evidence=uring_c2d_failure_injection "
+                f"mode={mode}\n")
+
+    def test_positive_exact_pinned_set_is_pass(self):
+        # Exact 10-case set + real metadata -> PASS through the full chain.
+        result = self._drive(self._out(self.required, mode="real"))
+        self.assertEqual(result.state, G.PASS, result.detail)
+
+    def test_g2a_remove_one_load_bearing_case_is_incomplete(self):
+        # G2-A: delete exactly one load-bearing case. The binary no longer
+        # proves the contract, yet without the case-set check its exit 0 + one
+        # evidence-meta line would be misclassified PASS.
+        mutant = list(self.required)
+        # Drop a non-metadata load-bearing case (the second entry).
+        removed = mutant.pop(1)
+        result = self._drive(self._out(mutant, mode="real"))
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn(removed, result.detail,
+                      "detail must name the missing case")
+
+    def test_g2b_metadata_case_only_is_incomplete(self):
+        # G2-B: the load-bearing detector. Only the metadata-emitting case
+        # survives (e.g. a source-level deletion of the other nine cases).
+        result = self._drive(self._out([self.required[0]], mode="real"))
+        self.assertEqual(result.state, G.INCOMPLETE)
+        # The detail must report every other required case as missing.
+        for case in self.required[1:]:
+            self.assertIn(case, result.detail,
+                          f"detail must name missing case {case!r}")
+
+    def test_g2c_unexpected_extra_case_is_incomplete(self):
+        # G2-C: the pinned set ran, plus an unpinned/foreign case. The binary
+        # executed work the manifest did not authorize.
+        mutant = list(self.required) + ["a_case_the_manifest_did_not_pin"]
+        result = self._drive(self._out(mutant, mode="real"))
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn("a_case_the_manifest_did_not_pin", result.detail,
+                      "detail must name the unexpected case")
+
+    def test_g2d_duplicate_keeps_missing_and_duplicate_in_detail(self):
+        # G2-D: 9 distinct required cases run + one required case is repeated
+        # (= 10 selected), so exactly one required case never ran. This mutant
+        # has BOTH a missing case AND a duplicate. The diagnostic must report
+        # BOTH honestly rather than forcing a single category.
+        duplicated = self.required[1]
+        never_ran = self.required[-1]
+        mutant = [c for c in self.required if c != never_ran] + [duplicated]
+        self.assertEqual(len(mutant), len(self.required))  # same length
+        result = self._drive(self._out(mutant, mode="real"))
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn(never_ran, result.detail,
+                      "detail must name the missing case")
+        self.assertIn(duplicated, result.detail,
+                      "detail must name the duplicated case")
+
+    def test_classify_case_set_helper_is_order_insensitive(self):
+        # The required set is a SET equivalence, not a registration-order
+        # claim: any permutation of the exact set is PASS at the helper level.
+        import random
+        rng = random.Random(0)
+        permuted = list(self.required)
+        rng.shuffle(permuted)
+        self.assertNotEqual(permuted, self.required)  # actually permuted
+        state, _ = G.classify_case_set(permuted, self.ev.cases)
+        self.assertEqual(state, G.PASS)
+
+    def test_manifest_pin_matches_cpp_source_registration(self):
+        # DRIFT detector (auxiliary, not authoritative): the manifest's pinned
+        # set must match the case names actually registered as
+        # SLUICE_TEST_CASE macros in the C++ target source. The anchor only
+        # matches a real macro invocation at the start of a logical line, so a
+        # comment like `// SLUICE_TEST_CASE(foo)` is NOT counted. The
+        # authoritative check remains the runtime [run] set observed by _drive
+        # (above); this test catches manifest/source drift before the gate runs.
+        source_path = os.path.join(REPO_ROOT, "tests",
+                                   "uring_d2_failure_noalloc_test.cpp")
+        with open(source_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        found = re.findall(
+            r"^[ \t]*SLUICE_TEST_CASE\(([_A-Za-z][_A-Za-z0-9]*)\)",
+            source, flags=re.MULTILINE)
+        self.assertEqual(
+            set(found), set(self.ev.cases),
+            f"manifest pin {sorted(self.ev.cases)} does not match the case "
+            f"names registered in {source_path}: {sorted(found)}")
+
+
 class FailClosedMetadataTest(unittest.TestCase):
     """Missing/malformed metadata fails closed (NOT_RUN / unknown mode)."""
 
@@ -486,6 +714,63 @@ class ClosedProfileMappingTest(unittest.TestCase):
                              f"Uring must be NOT CONFORMING even if shared={state}")
 
 
+class KernelIoFailClosedOverrideTest(unittest.TestCase):
+    """P1-B: required_modes alone is NOT KernelIo fail-closed override
+    authority.
+
+    required_modes declares WHICH mode a target must execute in; it does not
+    declare that this evidence belongs to a given backend. Only a real-mode
+    record explicitly tagged to exactly this backend
+    (ev.backends == (backend_name,)) may report its own PASS for the KernelIo
+    profile. A backend-agnostic lifecycle record (backends == ()) with
+    required_modes set and PASS must stay INCOMPLETE for Uring, so a generic
+    contract record can never quietly lift the Phase-D fail-closed default.
+    """
+
+    def test_backend_agnostic_required_modes_cannot_lift_uring_fail_closed(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        generic = M.Evidence(
+            evidence_id="generic_lifecycle_required_real",
+            target="some_lifecycle_target",
+            layer="lifecycle",
+            backends=(),                    # backend-agnostic
+            required_modes=("real",),
+        )
+        g.results[generic.evidence_id] = G.RunResult(
+            generic.evidence_id, generic.target, G.PASS, detail="stub PASS")
+        state = g._backend_run_state(generic, "Uring", "KernelIoProfile")
+        self.assertEqual(state, G.INCOMPLETE,
+                         "backend-agnostic lifecycle PASS + required_modes must "
+                         "NOT report PASS for Uring")
+
+    def test_multi_backend_tagged_required_modes_cannot_lift_uring(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        shared_real = M.Evidence(
+            evidence_id="multi_backend_required_real",
+            target="some_lifecycle_target",
+            layer="lifecycle",
+            backends=("Uring", "ThreadPool"),
+            required_modes=("real",),
+        )
+        g.results[shared_real.evidence_id] = G.RunResult(
+            shared_real.evidence_id, shared_real.target, G.PASS,
+            detail="stub PASS")
+        state = g._backend_run_state(shared_real, "Uring", "KernelIoProfile")
+        self.assertEqual(state, G.INCOMPLETE,
+                         "a multi-backend tagged record cannot lift the "
+                         "KernelIo fail-closed default either")
+
+    def test_exactly_tagged_real_record_still_reports_its_own_pass(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        ev = M.evidence_by_id("uring_c2d_failure_injection")
+        self.assertIsNotNone(ev)
+        # The manifest must keep the real-mode phase record tagged to exactly
+        # Uring; otherwise this test's premise (and the C2d PASS) breaks.
+        self.assertEqual(ev.backends, ("Uring",))
+        self.assertEqual(g._backend_run_state(ev, "Uring", "KernelIoProfile"),
+                         G.PASS)
+
+
 class SubprocessOutcomeMappingTest(unittest.TestCase):
     """Cases 8 of task §4: subprocess non-zero / timeout map deterministically."""
 
@@ -496,6 +781,125 @@ class SubprocessOutcomeMappingTest(unittest.TestCase):
 
     def test_timeout_subprocess_is_run_fail(self):
         self.assertEqual(G._state_for_rc(124), G.RUN_FAIL)
+
+
+# ---------------------------------------------------------------------------
+# Issue #81 P1 — isolate conformance evidence from ambient test filters.
+#
+# The conformance gate MUST own the execution environment of its evidence
+# targets. Before the fix, xmake_run_target() passed env=None to subprocess.run
+# for ordinary (non-shared) evidence, which makes the child INHERIT the parent
+# os.environ verbatim. An ambient SLUICE_TEST_FILTER (e.g. a developer shell
+# exporting SLUICE_TEST_FILTER=uring_d2_evidence_mode) would then silently
+# reduce a 10-case D2 target to its single metadata case -> one evidence-meta
+# line -> exit 0 -> _drive() classifies PASS. That is a false-conformance
+# path. These tests capture the EXACT env dict handed to subprocess.run and
+# prove: (1) ordinary evidence strips the ambient filter; (2) the shared
+# per-backend suite sets the EXACT driver case on top of the cleaned env so a
+# hostile parent value cannot leak; (3) the no-filter normal case is unchanged;
+# (4) the sanitizer is narrow (PATH and unrelated foreign vars survive).
+# ---------------------------------------------------------------------------
+
+class EvidenceEnvIsolationTest(unittest.TestCase):
+    """xmake_run_target gives every evidence subprocess an explicit, owned env."""
+
+    def setUp(self):
+        # Snapshot and clear any real ambient filter so each test controls its
+        # own starting parent environment deterministically.
+        self._saved_filter = os.environ.pop("SLUICE_TEST_FILTER", None)
+        # A foreign, benign variable used to prove the sanitizer is narrow.
+        self._foreign_name = "SLUICE_PROBE_KEEP_G1"
+        self._foreign_val = "sentinel-g1"
+        os.environ[self._foreign_name] = self._foreign_val
+        # Record subprocess.run calls (do not actually exec xmake).
+        self._real_run = subprocess.run
+        self.captured_env = {}
+        self.captured_cmd = {}
+        outer = self
+
+        def fake_run(cmd, *args, **kwargs):
+            outer.captured_env["last"] = kwargs.get("env")
+            outer.captured_cmd["last"] = cmd
+
+            class _R:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            return _R()
+
+        subprocess.run = fake_run
+
+    def tearDown(self):
+        subprocess.run = self._real_run
+        os.environ.pop(self._foreign_name, None)
+        if self._saved_filter is not None:
+            os.environ["SLUICE_TEST_FILTER"] = self._saved_filter
+
+    def test_ordinary_evidence_always_gets_explicit_env(self):
+        # Regression for the P1 root cause: env=None meant 'inherit os.environ'.
+        G.xmake_run_target("uring_d2_failure_noalloc_test")
+        env = self.captured_env["last"]
+        self.assertIsNotNone(
+            env, "ordinary evidence must receive an EXPLICIT env dict, not "
+            "env=None (which inherits the parent's ambient test filters)")
+
+    def test_ambient_filter_stripped_for_ordinary_evidence(self):
+        # The load-bearing counterexample from Issue #81 P1: a hostile parent
+        # exports SLUICE_TEST_FILTER=uring_d2_evidence_mode; the 10-case D2
+        # target must NOT inherit it, or it runs only its metadata case.
+        os.environ["SLUICE_TEST_FILTER"] = "uring_d2_evidence_mode"
+        G.xmake_run_target("uring_d2_failure_noalloc_test")
+        env = self.captured_env["last"]
+        self.assertNotIn(
+            "SLUICE_TEST_FILTER", env,
+            "ambient SLUICE_TEST_FILTER leaked into ordinary evidence env")
+
+    def test_shared_suite_owns_exact_filter_no_parent_leak(self):
+        # Shared per-backend runs set the EXACT driver case on top of a cleaned
+        # env. A hostile parent value must not leak through.
+        os.environ["SLUICE_TEST_FILTER"] = "some_unrelated_case"
+        G.xmake_run_target("backend_conformance_test",
+                           env_filter="conformance_uring")
+        env = self.captured_env["last"]
+        self.assertIsNotNone(env)
+        self.assertEqual(
+            env.get("SLUICE_TEST_FILTER"), "conformance_uring",
+            "shared suite must set the EXACT driver case; parent value leaked")
+        self.assertNotEqual(
+            env.get("SLUICE_TEST_FILTER"), "some_unrelated_case")
+
+    def test_no_ambient_filter_ordinary_behavior_unchanged(self):
+        # Without an ambient filter, ordinary evidence behavior is unchanged:
+        # explicit env, no filter key present, exit-0 path still classified PASS.
+        self.assertNotIn("SLUICE_TEST_FILTER", os.environ)
+        G.xmake_run_target("uring_d2_failure_noalloc_test")
+        env = self.captured_env["last"]
+        self.assertIsNotNone(env)
+        self.assertNotIn("SLUICE_TEST_FILTER", env)
+        # The classifier still maps an exit-0 ordinary run to PASS.
+        self.assertEqual(G._state_for_rc(0), G.PASS)
+
+    def test_sanitizer_is_narrow_foreign_env_remains(self):
+        # Prove the sanitizer is narrow: PATH and an unrelated synthetic
+        # variable must survive, so evidence subprocesses do not run under an
+        # accidentally-empty/minimal environment.
+        os.environ["SLUICE_TEST_FILTER"] = "uring_d2_evidence_mode"
+        G.xmake_run_target("uring_d2_failure_noalloc_test")
+        env = self.captured_env["last"]
+        self.assertIn("PATH", env, "PATH must be preserved by clean_test_env")
+        self.assertEqual(
+            env.get(self._foreign_name), self._foreign_val,
+            f"unrelated variable {self._foreign_name} must survive the narrow "
+            f"sanitizer (only test-selection variables are stripped)")
+
+    def test_selection_var_set_is_exactly_sluice_test_filter(self):
+        # Guard against silently widening the sanitizer. tests/harness.hpp is
+        # the authority for case selection and honors exactly SLUICE_TEST_FILTER.
+        self.assertEqual(
+            set(G.TEST_SELECTION_ENV_VARS), {"SLUICE_TEST_FILTER"},
+            "TEST_SELECTION_ENV_VARS widened; only SLUICE_TEST_FILTER alters "
+            "registered case selection (see tests/harness.hpp)")
 
 
 class ProfileModesTest(unittest.TestCase):
@@ -778,25 +1182,23 @@ class ApplicableEvidenceHelpersTest(unittest.TestCase):
     """implemented_evidence_for_backend vs applicable_evidence_for_backend."""
 
     def test_implemented_excludes_not_implemented_and_not_applicable(self):
-        # The real Uring capacity gap record is not_implemented; implemented
-        # helper must NOT return it.
         impl = M.implemented_evidence_for_backend("Uring")
         ids = {e.evidence_id for e in impl}
-        self.assertNotIn("uring_capacity_not_implemented", ids)
+        self.assertNotIn("uring_c2b_identity_not_implemented", ids)
 
     def test_applicable_includes_not_implemented_for_tagged_backend(self):
         appl = M.applicable_evidence_for_backend("Uring")
         ids = {e.evidence_id for e in appl}
-        self.assertIn("uring_capacity_not_implemented", ids)
+        self.assertIn("uring_c2b_identity_not_implemented", ids)
 
     def test_applicable_excludes_not_implemented_for_other_backend(self):
-        # The Uring gap record is tagged backends=("Uring",); it MUST NOT apply
+        # The Uring identity gap is tagged backends=("Uring",); it MUST NOT apply
         # to Fake or ThreadPool.
         for name in ("Fake", "ThreadPool"):
             appl = M.applicable_evidence_for_backend(name)
             ids = {e.evidence_id for e in appl}
-            self.assertNotIn("uring_capacity_not_implemented", ids,
-                             f"{name} must not see the Uring capacity gap")
+            self.assertNotIn("uring_c2b_identity_not_implemented", ids,
+                             f"{name} must not see the Uring identity gap")
 
     def test_applicable_includes_backend_agnostic_records(self):
         # Backend-agnostic records (backends == ()) apply to every backend in
@@ -861,19 +1263,12 @@ class NotImplementedEntersVerdictTest(unittest.TestCase):
             self.assertEqual(v_tp, G.ELIGIBLE,
                              "ThreadPool must not be affected by Fake's gap")
 
-    def test_uring_capacity_gap_surfaces_in_verdict(self):
-        # The real uring_capacity_not_implemented record: Uring is NOT CONFORMING
-        # (KernelIoProfile rule), and the capacity gap MUST appear among the
-        # reasons. The KernelIoProfile branch of _backend_verdict derives the
-        # reason from the MANIFEST record status (mandatory + not_implemented)
-        # via applicable_evidence_for_backend, so no results[] seeding is
-        # needed or read.
+    def test_uring_capacity_gap_record_is_reconciled_away(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_capacity_not_implemented" in r for r in reasons),
-            f"Uring capacity gap must appear in reasons: {reasons}")
+        self.assertIsNone(M.evidence_by_id("uring_capacity_not_implemented"))
+        self.assertFalse(any("uring_capacity_not_implemented" in r for r in reasons))
 
     def test_not_implemented_never_counts_as_pass_in_verdict(self):
         # A not_implemented record can never satisfy a mandatory slot. Even
@@ -900,27 +1295,18 @@ class NotImplementedEntersVerdictTest(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Phase C2a: shared_capacity_suite is driven per-backend in isolated
 # subprocesses, and the verdict reads each backend's OWN capacity result.
-# Backends without a capacity seam (Uring) are not driven (their gap is the
-# manifest's not_implemented record, surfaced via applicable_evidence).
+# Uring is driven too after D1; stub mode is classified INCOMPLETE rather than
+# turning its build/API branch into a real-capacity PASS.
 # ---------------------------------------------------------------------------
 
 class CapacitySuiteDriverCaseTest(unittest.TestCase):
-    """The capacity_driver_case field: Fake/TP have one, Uring does not."""
+    """Every migrated backend has one isolated capacity driver case."""
 
-    def test_fake_and_threadpool_have_capacity_driver_case(self):
-        for name in ("Fake", "ThreadPool"):
+    def test_all_registered_backends_have_capacity_driver_case(self):
+        for name in ("Fake", "ThreadPool", "Uring"):
             b = M.backend_by_name(name)
             self.assertTrue(b.capacity_driver_case,
                             f"{name} must have a capacity_driver_case")
-
-    def test_uring_has_no_capacity_driver_case(self):
-        # Uring has not migrated onto RequestArena (Phase D pending); it has no
-        # capacity seam, so it has no capacity driver case. The gap is the
-        # uring_capacity_not_implemented record, never a skip-as-pass.
-        b = M.backend_by_name("Uring")
-        self.assertFalse(b.capacity_driver_case,
-                         "Uring must NOT have a capacity_driver_case "
-                         "(Phase D pending)")
 
     def test_capacity_driver_cases_are_unique(self):
         cases = [b.capacity_driver_case for b in M.BACKENDS
@@ -959,22 +1345,16 @@ class CapacitySuiteAttributionTest(unittest.TestCase):
         self.assertEqual(v_fake, G.NOT_CONFORMING)
         self.assertEqual(v_tp, G.ELIGIBLE)
 
-    def test_uring_verdict_unaffected_by_capacity_seam_absence(self):
-        # Uring has no capacity_driver_case, so it has no capacity_by_backend
-        # entry. Its verdict stays NOT CONFORMING (KernelIoProfile rule) and the
-        # uring_capacity_not_implemented record appears in its reasons.
-        g = self._stub_capacity({"Fake": "PASS", "ThreadPool": "PASS"})
-        g.results["uring_capacity_not_implemented"] = G.RunResult(
-            "uring_capacity_not_implemented", "backend_conformance_test",
-            G.INCOMPLETE, detail="not_implemented")
-        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+    def test_uring_stub_capacity_is_incomplete_not_pass(self):
+        g = self._stub_capacity(
+            {"Fake": "PASS", "ThreadPool": "PASS", "Uring": "INCOMPLETE"})
+        state = g._backend_run_state(M.evidence_by_id("shared_capacity_suite"),
+                                     "Uring", "KernelIoProfile")
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(state, G.INCOMPLETE)
         self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_capacity_not_implemented" in r for r in reasons))
 
-    def test_shared_capacity_suite_evidence_tagged_for_fake_and_tp(self):
-        # The implemented shared_capacity_suite record applies to Fake and
-        # ThreadPool only; it must NOT apply to Uring.
+    def test_shared_capacity_suite_evidence_tagged_for_all_backends(self):
         appl_fake = M.applicable_evidence_for_backend("Fake")
         appl_tp = M.applicable_evidence_for_backend("ThreadPool")
         appl_uring = M.applicable_evidence_for_backend("Uring")
@@ -983,9 +1363,7 @@ class CapacitySuiteAttributionTest(unittest.TestCase):
         ids_uring = {e.evidence_id for e in appl_uring}
         self.assertIn("shared_capacity_suite", ids_fake)
         self.assertIn("shared_capacity_suite", ids_tp)
-        self.assertNotIn("shared_capacity_suite", ids_uring,
-                         "Uring must not see the implemented capacity record "
-                         "(its gap is uring_capacity_not_implemented)")
+        self.assertIn("shared_capacity_suite", ids_uring)
 
 
 # ---------------------------------------------------------------------------
@@ -1054,11 +1432,9 @@ class SharedCapacitySuiteDriveExclusionTest(unittest.TestCase):
 
 
 class CapacityResultAuthorityTest(unittest.TestCase):
-    """Regression E: the Fake/ThreadPool verdict reads each backend's OWN
+    """Regression E: every capacity verdict reads that backend's OWN
     capacity result from capacity_by_backend; the generic
-    results['shared_capacity_suite'] does not exist and does not affect the
-    verdict; Uring reaches capacity INCOMPLETE only via
-    uring_capacity_not_implemented."""
+    results['shared_capacity_suite'] does not exist."""
 
     def test_fake_verdict_reads_its_own_capacity_state(self):
         # Fake capacity RUN_FAIL must make Fake NOT CONFORMING even when every
@@ -1092,20 +1468,15 @@ class CapacityResultAuthorityTest(unittest.TestCase):
         self.assertEqual(
             g._backend_verdict(M.backend_by_name("ThreadPool"))[0], G.ELIGIBLE)
 
-    def test_uring_capacity_incomplete_only_via_gap_record(self):
-        # Uring has no capacity_by_backend entry (no seam). Its capacity gap
-        # must come from the uring_capacity_not_implemented MANIFEST record
-        # status (mandatory + not_implemented) via applicable_evidence_for_
-        # backend — never from a phantom generic results key (the KernelIo
-        # branch of _backend_verdict does not read results[]).
+    def test_uring_capacity_state_comes_from_its_isolated_result(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
-        # Uring is seeded with NO capacity_by_backend entry by _stub_gate.
-        self.assertNotIn("Uring", g.capacity_by_backend)
-        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertIn("Uring", g.capacity_by_backend)
+        self.assertEqual(g.capacity_by_backend["Uring"].state, G.INCOMPLETE)
+        state = g._backend_run_state(M.evidence_by_id("shared_capacity_suite"),
+                                     "Uring", "KernelIoProfile")
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(state, G.INCOMPLETE)
         self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_capacity_not_implemented" in r for r in reasons),
-            f"Uring capacity gap must come from the gap record: {reasons}")
 
 
 # ---------------------------------------------------------------------------
@@ -1525,7 +1896,7 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
 C2D_EVIDENCE_IDS = (
     "c2d_threadpool_failure_injection",
     "c2d_fake_failure_injection_terminal",
-    "uring_c2d_failure_injection_not_implemented",
+    "uring_c2d_failure_injection",
 )
 
 
@@ -1551,12 +1922,14 @@ class C2dEvidenceRecordTest(unittest.TestCase):
         self.assertTrue(ev.mandatory)
         self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
 
-    def test_uring_c2d_gap_is_not_implemented(self):
-        ev = M.evidence_by_id("uring_c2d_failure_injection_not_implemented")
+    def test_uring_c2d_is_implemented_and_requires_real_mode(self):
+        ev = M.evidence_by_id("uring_c2d_failure_injection")
         self.assertIn("Uring", ev.backends)
         self.assertEqual(ev.layer, "lifecycle")
         self.assertTrue(ev.mandatory)
-        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+        self.assertEqual(ev.target, "uring_d2_failure_noalloc_test")
+        self.assertEqual(ev.required_modes, ("real",))
 
     def test_c2d_ids_unique_in_manifest(self):
         ids = [e.evidence_id for e in M.EVIDENCE]
@@ -1584,20 +1957,19 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
                         "ThreadPool must have at least one mandatory "
                         "implemented C2d lifecycle record")
 
-    def test_uring_has_mandatory_not_implemented_c2d_record(self):
+    def test_uring_has_mandatory_implemented_c2d_record(self):
         appl = M.applicable_evidence_for_backend("Uring")
         c2d = [e for e in appl if e.evidence_id in C2D_EVIDENCE_IDS]
-        self.assertTrue(any(e.mandatory and e.status == M.STATUS_NOT_IMPLEMENTED
+        self.assertTrue(any(e.mandatory and e.status == M.STATUS_IMPLEMENTED
                             for e in c2d),
-                        "Uring must have a mandatory not_implemented C2d record")
+                        "Uring must have mandatory implemented real-only C2d evidence")
 
-    def test_uring_c2d_gap_surfaces_in_verdict(self):
+    def test_uring_c2d_record_no_longer_surfaces_as_known_gap(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_c2d_failure_injection_not_implemented" in r for r in reasons),
-            f"Uring C2d gap must appear in reasons: {reasons}")
+        self.assertFalse(any("uring_c2d_failure_injection" in r for r in reasons),
+                         f"implemented C2d evidence is not a known gap: {reasons}")
 
     def test_fake_c2d_failure_does_not_affect_threadpool(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -1621,20 +1993,33 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
         self.assertEqual(v_fake, G.ELIGIBLE,
                          "Fake must stay ELIGIBLE when ThreadPool C2d fails")
 
-    def test_arena_pass_cannot_erase_uring_c2d_gap(self):
-        # The arena matrix record is backend-agnostic (backends=()); it applies
-        # to Uring but cannot satisfy Uring's C2d obligation because Uring's
-        # own tagged not_implemented record remains INCOMPLETE.
+    def test_stub_mode_cannot_satisfy_real_only_uring_c2d_record(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
-        g.results["c2c_arena_borrow_waiter_lease_matrix"] = G.RunResult(
-            "c2c_arena_borrow_waiter_lease_matrix",
-            "request_waiter_borrow_lease_test",
-            G.PASS, detail="stub arena PASS")
-        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        g.results["uring_c2d_failure_injection"] = G.RunResult(
+            "uring_c2d_failure_injection", "uring_d2_failure_noalloc_test",
+            G.INCOMPLETE, detail="mode=stub not allowed")
+        state = g._backend_run_state(
+            M.evidence_by_id("uring_c2d_failure_injection"),
+            "Uring", "KernelIoProfile")
+        self.assertEqual(state, G.INCOMPLETE)
+
+    def test_real_mode_satisfies_uring_c2d_record_without_lifting_kernelio(self):
+        g = _stub_gate(
+            {"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
+            meta_override={
+                "Fake": {"profile": "ReferenceProfile", "mode": "deterministic"},
+                "ThreadPool": {"profile": "BlockingIoProfile", "mode": "real"},
+                "Uring": {"profile": "KernelIoProfile", "mode": "real"},
+            })
+        g.results["uring_c2d_failure_injection"] = G.RunResult(
+            "uring_c2d_failure_injection", "uring_d2_failure_noalloc_test",
+            G.PASS, detail="mode=real")
+        state = g._backend_run_state(
+            M.evidence_by_id("uring_c2d_failure_injection"),
+            "Uring", "KernelIoProfile")
+        self.assertEqual(state, G.PASS)
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(verdict, G.NOT_CONFORMING)
-        self.assertTrue(
-            any("uring_c2d_failure_injection_not_implemented" in r for r in reasons),
-            "a generic arena PASS can never erase the Uring C2d gap")
 
     def test_missing_c2d_target_fails_closed(self):
         # A backend's mandatory implemented C2d record whose run state is not
@@ -1684,13 +2069,13 @@ class C2dVerdictIntegrationTest(unittest.TestCase):
                 any("ghost_c2d_gap_injected" in r for r in reasons),
                 f"gap record must appear in reasons: {reasons}")
 
-    def test_uring_c2d_gap_evidence_is_mandatory_not_implemented_applicable(self):
-        ev = M.evidence_by_id("uring_c2d_failure_injection_not_implemented")
+    def test_uring_c2d_evidence_is_mandatory_implemented_applicable(self):
+        ev = M.evidence_by_id("uring_c2d_failure_injection")
         self.assertIn("Uring", ev.backends)
         self.assertTrue(ev.mandatory)
-        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
         appl = M.applicable_evidence_for_backend("Uring")
-        self.assertIn("uring_c2d_failure_injection_not_implemented",
+        self.assertIn("uring_c2d_failure_injection",
                       {e.evidence_id for e in appl})
 
 
