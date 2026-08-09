@@ -57,6 +57,22 @@ Status values:
 > evidence and D4's C2e wait/close/drain evidence are pending; stub mode is
 > still build/API-only. No new Zig divergence or lifecycle authority is added.
 
+> **Phase D3/D4 reconciliation (2026-08-10):** D3 (draft PR #83, branch
+> test/phase-d3-uring-identity-waiter-conformance) closed the C2b/C2c
+> integration records with real-liburing evidence and D4 (branch
+> `feat/phase-d4-uring-wait-close-drain`) implemented the wait source
+> (ring-fd poll + control eventfd), `close_admission()` with accept-LP
+> serialization, the drained-vs-releasable destruction proof, the shared C2e
+> suite for Uring, and the death matrix, then lifted the KernelIo fail-closed
+> hard-code only after the complete mandatory real-mode evidence set passed.
+> The KernelIo profile is now decided by the ordinary machinery: ELIGIBLE on a
+> complete real-mode evidence set, INCOMPLETE on a stub/subset build (per-suite
+> KernelIo real-mode attribution; spec §41). The Uring entries that formerly
+> entered the verdict as `not_implemented` records (`uring_c2b_identity_*`,
+> `uring_c2c_borrow_waiter_*`, `uring_c2e_close_drain_*`) are replaced by
+> implemented real-mode evidence. No new Zig divergence or lifecycle authority
+> is added.
+
 ---
 
 ## DIV-03: ThreadPoolBackend is Thread-Per-Op, Not Thread-Per-Task

@@ -1,7 +1,11 @@
 # Phase D — UringAsyncBackend RequestArena Migration: SOTA-Aligned Plan
 
-**Status:** D0/D0.5 COMPLETE; D1 COMPLETE (PR #78); D2 COMPLETE; D3/D4 PENDING.
-**Date:** 2026-08-09
+**Status:** D0/D0.5 COMPLETE; D1 COMPLETE (PR #78); D2 COMPLETE; D3 COMPLETE
+(draft PR #83, branch test/phase-d3-uring-identity-waiter-conformance);
+D4 COMPLETE (draft PR stacked on the D3 head, branch
+`feat/phase-d4-uring-wait-close-drain` — wait/close/drain proof + KernelIo
+gate lift).
+**Date:** 2026-08-10
 **Author:** jnhu
 **Governing authority:** [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
 (Accepted), [Architecture Constitution](architecture-constitution.md),

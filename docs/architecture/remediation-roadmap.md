@@ -315,10 +315,15 @@ coverage).
     pre-commit zero residue, D1 transient/zero/partial transport preservation,
     P0-D Class-A recovery and Class-C retention, ordinary/permanent/control
     no-allocation windows, and cancel/recovery terminal arbitration. Stub mode
-    is explicitly INCOMPLETE. Uring remains NOT CONFORMING because D3's C2b/C2c
-    records and D4's C2e record remain open. See
-    [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md) and
-    [`phase-d2-uring-failure-noalloc-gate.md`](phase-d2-uring-failure-noalloc-gate.md).
+    is explicitly INCOMPLETE. The former NOT CONFORMING tail is now closed:
+    D3 (branch test/phase-d3-uring-identity-waiter-conformance) filled the
+    C2b/C2c integration records and D4 (branch
+    `feat/phase-d4-uring-wait-close-drain`) filled the C2e record and lifted
+    the KernelIo fail-closed gate only after the complete real-mode evidence
+    set passed. See
+    [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md),
+    [`phase-d2-uring-failure-noalloc-gate.md`](phase-d2-uring-failure-noalloc-gate.md)
+    and [`phase-d4-uring-wait-close-drain-gate.md`](phase-d4-uring-wait-close-drain-gate.md).
 
   - **C2e — close / drain / destruction: COMPLETE.** Row 15 (close/drain/reset
     sequence) is now FULL and row 16 (quiescent destruction) is FULL
@@ -411,25 +416,33 @@ the logical dependency remains B -> C.
 refactor(async): migrate UringBackend to RequestSlot identity
 ```
 
-**Status:** PARTIAL — D0/D0.5 are complete; D1 is complete via PR #78; D2 is
-complete with command-backed real-liburing evidence; D3 and D4 remain pending. The
-KernelIo profile remains fail-closed and NOT CONFORMING until those later slices
-close and D4 explicitly lifts the gate. Full Phase D is not complete.
+**Status:** COMPLETE — D0/D0.5 complete; D1 complete via PR #78; D2 complete
+with command-backed real-liburing evidence; D3 complete (draft PR #83,
+branch test/phase-d3-uring-identity-waiter-conformance) closing the C2b/C2c
+integration matrix; D4 complete (draft PR stacked on the D3 head, branch
+`feat/phase-d4-uring-wait-close-drain`) implementing the wait source,
+close/drain/destruction proof and lifting the KernelIo fail-closed gate only
+after the complete mandatory real-mode evidence set passed
+([`phase-d4-uring-wait-close-drain-gate.md`](phase-d4-uring-wait-close-drain-gate.md)).
+Full Phase D is complete; the KernelIo profile is ELIGIBLE in real mode and
+honestly INCOMPLETE in stub builds.
 
 **D0 audit / PR decomposition (2026-08-08):** COMPLETE. The complete audit and
 the D1–D4 decomposition are in
 [`docs/architecture/phase-d-uring-migration-plan.md`](phase-d-uring-migration-plan.md)
 (historical baseline `1349a6f`). PR #78 completed D1, including the private-ring
-RequestArena migration and permanent-submit P0-D recovery. D2 closes only the
-C2d failure/no-allocation record and reconciles the already-satisfied C2a
-capacity evidence; D3/D4 records remain `not_implemented`.
+RequestArena migration and permanent-submit P0-D recovery. D2 closed the
+C2d failure/no-allocation record and reconciled the already-satisfied C2a
+capacity evidence; D3 closed `uring_c2b_identity_not_implemented` and
+`uring_c2c_borrow_waiter_not_implemented`; D4 closed
+`uring_c2e_close_drain_not_implemented` and lifted the KernelIo hard-code.
 
 **Remaining work:**
 
-- D3: close the full Uring identity/cancel/borrow/waiter evidence matrix;
-- D4: implement wait/close/drain proof and lift the KernelIo gate only after all
-  mandatory real-liburing evidence passes; and
-- preserve honest stub/build evidence separately from real execution evidence.
+- review and merge of the two stacked draft PRs (D3 test/phase-d3-uring-identity-waiter-conformance,
+  D4 `feat/phase-d4-uring-wait-close-drain`) after human review; and
+- preserve honest stub/build evidence separately from real execution evidence
+  (maintained by the per-suite KernelIo real-mode attribution).
 
 **Dependencies:** Phase C. No Scheduler dependency.
 
