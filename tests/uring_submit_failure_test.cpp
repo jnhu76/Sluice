@@ -7,13 +7,11 @@
 //     RequestState. A transient error (EINTR/EAGAIN/EBUSY), zero progress, or
 //     partial progress leaves ring-owned requests alive and retryable; no
 //     terminal is fabricated and no RequestArena state changes.
-//   * A permanent submit failure poisons the ring for NEW admissions (new
-//     submit_* rejects synchronously with the stored backend error), but
-//     already ring-owned work remains bound for its CQE (Class-B/C: possibly
-//     or already kernel-consumed). Class-A (definitely not consumed) work may
-//     be retired with backend_error only after a structural proof — D1's
-//     conservative stance treats all in-flight work as Class-B and lets CQEs
-//     retire it.
+//   * A permanent negative submit result poisons NEW admission. The bounded
+//     physical ledger identifies the proven-zero-consumption Class-A suffix;
+//     the recovery controller retires it and the still-local FIFO with
+//     backend_error. Entries from an earlier positive submit remain bound for
+//     their CQEs and poison progress uses to_submit=0 only.
 //
 // The injected submit hook replaces io_uring_submit() with a scripted result so
 // the tests are deterministic. The hook does NOT touch io_uring_get_sqe (the
@@ -148,8 +146,10 @@ class TransientWaitScript {
         if (self.calls_ == 2)
             return -EAGAIN;
         if (self.calls_ == 3)
+            return -EBUSY;
+        if (self.calls_ == 4)
             return 0; // empty wake: no user CQE while one request is accepted
-        // The fourth call performs the real flush+wait, so the file-read CQE
+        // The fifth call performs the real flush+wait, so the file-read CQE
         // is guaranteed to exist only after every transient outcome was seen.
         return ::io_uring_submit_and_wait(ring, wait_nr);
     }
@@ -296,11 +296,11 @@ SLUICE_TEST_CASE(uring_wait_transients_never_return_false_drained_boundary) {
     const bool false_drained_boundary =
         waited.has_value() && waited.value() == 0 && backend.outstanding() == 1;
 
-    // Keep the RED run quiescent: old code returns after the scripted EINTR,
-    // so drive the remaining EAGAIN + empty-wake + real-wait steps before
-    // asserting the bug.
+    // Keep the RED run quiescent: old code returns on one of the scripted
+    // transients, so drive the remaining EAGAIN/EBUSY + empty-wake + real-wait
+    // steps before asserting the bug.
     if (!completion.ready()) {
-        while (!completion.ready() && script.calls() < 4)
+        while (!completion.ready() && script.calls() < 5)
             (void)backend.wait_one();
         (void)poll_bounded(backend, [&] { return completion.ready(); });
     }
@@ -311,7 +311,7 @@ SLUICE_TEST_CASE(uring_wait_transients_never_return_false_drained_boundary) {
     SLUICE_CHECK(waited_for_completion);
     SLUICE_CHECK(!false_drained_boundary);
     SLUICE_CHECK(backend.outstanding() == 0);
-    SLUICE_CHECK(script.calls() == 4);
+    SLUICE_CHECK(script.calls() == 5);
 }
 
 // Transient -EINTR must NOT mutate RequestState: the request stays alive and
@@ -466,6 +466,15 @@ SLUICE_TEST_CASE(uring_scripted_partial_return_does_not_mutate_request_state) {
     SLUICE_CHECK(second_completion.result().has_value());
     SLUICE_CHECK(second_completion.result().value() == second.size());
     SLUICE_CHECK(backend.outstanding() == 0);
+
+    // The hook deliberately violates the real syscall contract by reporting
+    // only one consumed SQE even though its real submit may consume both. If
+    // both CQEs arrive in the first reap, the lifecycle detector is already
+    // satisfied but the synthetic transport ledger still has one reported
+    // suffix. Drive exactly one more scripted prefix report so teardown
+    // evidence matches the lie deterministically, independent of CQE timing.
+    (void)backend.poll();
+    SLUICE_CHECK(script.calls() == 2);
     first_completion.reset();
     second_completion.reset();
 }
@@ -666,14 +675,236 @@ SLUICE_TEST_CASE(uring_no_rollback_region_happy_path_exercises_mark_running) {
 // therefore verified structurally (the single critical section) and by TSan at
 // the backend-internal dispatch_mtx_ boundary.
 
-// NOTE: a deterministic permanent-submit-failure / ring-poison test is a
-// frozen-design HARD GATE (§6) that requires the Class-A proof (which
-// ring-owned SQEs are definitely not kernel-consumed) before any in-flight
-// work can be locally retired. D1's conservative stance keeps all in-flight
-// work Class-B (bound for a CQE), so a poisoned ring with accepted work
-// cannot quiesce for destruction — constructing that state in a deterministic
-// test would require the very Class-A retirement path §6 freezes. The residual
-// is recorded in docs/architecture/phase-d1-uring-frozen-design.md §6.5 and
-// the completion report.
+// P0-D: queue_depth=3 is rounded by Linux to an actual four-entry SQ. Four
+// operation SQEs fill that physical ring; requests 5 and 6 remain in the local
+// FIFO after two scripted no-progress/permanent flushes. A correct ledger is
+// sized from ring.sq.ring_entries (4, not configured depth 3) and the poison
+// controller retires all six accepted requests: four proven Class-A ledger
+// entries plus two never-dispatched local entries. The cleanup branch lets the
+// pre-fix code submit and reap everything before the RED assertion is made, so
+// failure is attributable to missing recovery rather than destructor fail-fast.
+SLUICE_TEST_CASE(uring_permanent_submit_failure_retires_physical_batch_and_local_fifo) {
+    constexpr std::array steps{0, -EIO, kRealSubmit, kRealSubmit, kRealSubmit, kRealSubmit};
+    SubmitScript script(steps);
+    UringAsyncBackend backend(UringConfig{6, 3}, hooks_for(script));
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::array<std::byte, 1>, 7> bytes{};
+    std::array<Completion<std::size_t>, 7> completions;
+    for (std::size_t i = 0; i < 6; ++i) {
+        bytes[i][0] = static_cast<std::byte>(i + 1);
+        SLUICE_CHECK(backend.submit_write(WriteOp{file.fd(), bytes[i].data(), 1, i}, completions[i])
+                         .has_value());
+    }
+
+    const std::size_t first_reap = backend.poll();
+    bool all_recovered =
+        first_reap == 6 && backend.outstanding() == 0 && backend.live_cookies_for_test() == 0;
+    for (std::size_t i = 0; i < 6; ++i) {
+        all_recovered = all_recovered && completions[i].ready() &&
+                        !completions[i].result().has_value() &&
+                        completions[i].result().error().code == IoError::Code::backend_error &&
+                        completions[i].result().error().os_errno == EIO;
+    }
+
+    // Poison rejects a fresh operation synchronously with Completion idle and
+    // no accepted residue. The old implementation accepts it; keep that path
+    // quiescent before asserting RED.
+    const auto after_poison =
+        backend.submit_write(WriteOp{file.fd(), bytes[6].data(), 1, 6}, completions[6]);
+    const bool admission_rejected = !after_poison.has_value() &&
+                                    after_poison.error().code == IoError::Code::backend_error &&
+                                    after_poison.error().os_errno == EIO && !completions[6].ready();
+
+    if (!all_recovered || !admission_rejected) {
+        (void)poll_bounded(backend, [&] {
+            for (std::size_t i = 0; i < 7; ++i) {
+                if (completions[i].outstanding())
+                    return false;
+            }
+            return true;
+        });
+    }
+    for (auto& completion : completions) {
+        if (completion.ready())
+            completion.reset();
+    }
+
+    SLUICE_CHECK(all_recovered);
+    SLUICE_CHECK(admission_rejected);
+}
+
+// P0-D mixed Class-C/Class-A detector. A blocking pipe read is positively
+// submitted first (Class-C). A later file write is the sole member of a
+// permanent-failure batch (Class-A). Recovery must terminalize only the write;
+// after poison, wait_one must enter with to_submit=0 so the quarantined write
+// never executes while the older pipe read still completes from its real CQE.
+// A spare real-submit script step keeps pre-fix cleanup quiescent and makes its
+// forbidden resubmission visible as bytes written to the file.
+SLUICE_TEST_CASE(uring_poison_wait_drains_old_kernel_work_without_resubmitting_class_a) {
+    constexpr std::array steps{kRealSubmit, -EIO, kRealSubmit, kRealSubmit};
+    SubmitScript script(steps);
+    UringAsyncBackend backend(UringConfig{2, 2}, hooks_for(script));
+    if (!backend.available())
+        return;
+
+    int pipe_fds[2]{-1, -1};
+    SLUICE_CHECK(::pipe(pipe_fds) == 0);
+    TempFile file;
+    std::byte read_byte{};
+    std::array<std::byte, 4> write_bytes{std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
+    Completion<std::size_t> read_completion;
+    Completion<std::size_t> write_completion;
+
+    SLUICE_CHECK(
+        backend.submit_read(ReadOp{pipe_fds[0], &read_byte, 1, 0}, read_completion).has_value());
+    SLUICE_CHECK(backend.poll() == 0); // real submit: pipe read is now Class-C and blocked
+
+    SLUICE_CHECK(backend
+                     .submit_write(WriteOp{file.fd(), write_bytes.data(), write_bytes.size(), 0},
+                                   write_completion)
+                     .has_value());
+    const std::size_t poison_reap = backend.poll();
+    const bool write_recovered =
+        poison_reap == 1 && write_completion.ready() && !write_completion.result().has_value() &&
+        write_completion.result().error().code == IoError::Code::backend_error &&
+        write_completion.result().error().os_errno == EIO;
+
+    const unsigned char seed = 0x6b;
+    SLUICE_CHECK(::write(pipe_fds[1], &seed, 1) == 1);
+    const auto waited = backend.wait_one();
+    const bool old_kernel_work_drained =
+        waited.has_value() && waited.value() == 1 && read_completion.ready() &&
+        read_completion.result().has_value() && read_completion.result().value() == 1 &&
+        read_byte == std::byte{0x6b};
+
+    if (!write_completion.ready())
+        (void)poll_bounded(backend, [&] { return write_completion.ready(); });
+    std::array<std::byte, 4> on_disk{};
+    const ssize_t disk_bytes = ::pread(file.fd(), on_disk.data(), on_disk.size(), 0);
+    const bool quarantined_write_never_executed = disk_bytes == 0;
+
+    if (read_completion.ready())
+        read_completion.reset();
+    if (write_completion.ready())
+        write_completion.reset();
+    (void)::close(pipe_fds[0]);
+    (void)::close(pipe_fds[1]);
+
+    SLUICE_CHECK(write_recovered);
+    SLUICE_CHECK(old_kernel_work_drained);
+    SLUICE_CHECK(quarantined_write_never_executed);
+}
+
+// P0-D control-quiescence detector. A positively submitted AsyncCancel is a
+// backend execution reference even after the original operation CQE arrives.
+// The operation result must therefore remain outstanding (not caller-visible
+// ready/releasable) until the matching control CQE retires. The control identity
+// uses the frozen tagged-cookie encoding: high bit set, low bits = operation
+// cookie. This ordering is deliberately adversarial: original CQE first,
+// informational control CQE second.
+SLUICE_TEST_CASE(uring_original_cqe_waits_for_matching_control_quiescence) {
+    constexpr std::array steps{2}; // operation + AsyncCancel become Class-C
+    SubmitScript script(steps);
+    UringAsyncBackend backend(UringConfig{1, 2}, hooks_for(script));
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::byte, 1> byte{std::byte{0x41}};
+    Completion<std::size_t> completion;
+    const std::uint64_t operation_cookie = backend.peek_next_cookie_for_test();
+    constexpr std::uint64_t control_tag = std::uint64_t{1} << 63u;
+    const std::uint64_t control_cookie = control_tag | operation_cookie;
+
+    SLUICE_CHECK(backend.submit_write(WriteOp{file.fd(), byte.data(), byte.size(), 0}, completion)
+                     .has_value());
+    backend.cancel(completion);        // running -> intent + one AsyncCancel SQE
+    SLUICE_CHECK(backend.poll() == 0); // scripted positive submission of both SQEs
+
+    // Adversarial CQE order: the original operation reports first. A correct
+    // backend retains its terminal in bounded router scratch and withholds reap
+    // until the matching control reference is retired.
+    backend.inject_cqe_for_test(operation_cookie, /*res=*/1);
+    const std::size_t before_control = backend.poll();
+    const bool withheld_for_control = before_control == 0 && completion.outstanding() &&
+                                      !completion.ready() && backend.outstanding() == 1;
+
+    if (withheld_for_control) {
+        backend.inject_cqe_for_test(control_cookie, /*res=*/-ENOENT);
+    } else {
+        // Keep the pre-fix RED run quiescent: it uses the old global
+        // UINT64_MAX control identity and has already published the operation.
+        backend.inject_cqe_for_test(std::numeric_limits<std::uint64_t>::max(), /*res=*/-ENOENT);
+    }
+    const std::size_t after_control = backend.poll();
+    const bool published_after_control =
+        completion.ready() && completion.result().has_value() && completion.result().value() == 1;
+    if (completion.ready())
+        completion.reset();
+
+    SLUICE_CHECK(withheld_for_control);
+    SLUICE_CHECK(after_control == 1);
+    SLUICE_CHECK(published_after_control);
+}
+
+// A Class-C operation may have an original CQE while its later cancel-control
+// suffix is still application-side. If that control suffix then gets the
+// permanent-negative Class-A proof, recovery retires only the control reference
+// and publishes the already-proven operation result verbatim.
+SLUICE_TEST_CASE(uring_class_a_control_suffix_releases_deferred_class_c_operation) {
+    constexpr std::array steps{1, -EIO};
+    SubmitScript script(steps);
+    UringAsyncBackend backend(UringConfig{1, 2}, hooks_for(script));
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::byte, 1> byte{std::byte{0x51}};
+    Completion<std::size_t> completion;
+    const std::uint64_t operation_cookie = backend.peek_next_cookie_for_test();
+    SLUICE_CHECK(backend.submit_write(WriteOp{file.fd(), byte.data(), byte.size(), 0}, completion)
+                     .has_value());
+    SLUICE_CHECK(backend.poll() == 0); // operation is positively submitted Class-C
+
+    backend.cancel(completion); // later control remains in the physical ledger
+    backend.inject_cqe_for_test(operation_cookie, /*res=*/1); // original arrives first
+    SLUICE_CHECK(!completion.ready());
+    SLUICE_CHECK(backend.poll() == 1); // -EIO proves only the control suffix Class-A
+    SLUICE_CHECK(completion.ready());
+    SLUICE_CHECK(completion.result().has_value());
+    SLUICE_CHECK(completion.result().value() == 1);
+    completion.reset();
+}
+
+// When operation and its cancel control are both in one permanent-negative
+// batch, neither can execute. Recovery walks the monotonic ledger in order,
+// defers the operation terminal across its prepared control, retires that
+// control locally, and publishes exactly one backend_error.
+SLUICE_TEST_CASE(uring_class_a_operation_and_control_retire_exactly_once) {
+    constexpr std::array steps{-EIO};
+    SubmitScript script(steps);
+    UringAsyncBackend backend(UringConfig{1, 2}, hooks_for(script));
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::byte, 1> byte{std::byte{0x61}};
+    Completion<std::size_t> completion;
+    SLUICE_CHECK(backend.submit_write(WriteOp{file.fd(), byte.data(), byte.size(), 0}, completion)
+                     .has_value());
+    backend.cancel(completion);
+
+    SLUICE_CHECK(backend.poll() == 1);
+    SLUICE_CHECK(completion.ready());
+    SLUICE_CHECK(!completion.result().has_value());
+    SLUICE_CHECK(completion.result().error().code == IoError::Code::backend_error);
+    SLUICE_CHECK(completion.result().error().os_errno == EIO);
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(backend.live_cookies_for_test() == 0);
+    completion.reset();
+}
 
 SLUICE_MAIN()

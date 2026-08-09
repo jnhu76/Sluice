@@ -18,8 +18,9 @@
 //
 // Cancel (ADR Decision 11): pending/enqueued cancel may win directly (its SQE
 // was NEVER installed). running/ring-owned cancel records intent only; an
-// appended IORING_OP_ASYNC_CANCEL produces a CONTROL CQE that is informational
-// only — it never publishes a terminal. The original operation CQE decides.
+// appended IORING_OP_ASYNC_CANCEL produces a tagged control CQE that is
+// informational for terminal selection. The original operation CQE decides;
+// publication waits until both operation and control references retire.
 #include <sluice/async/uring_backend.hpp>
 
 #include <sluice/detail/io_validation.hpp>
@@ -94,7 +95,7 @@ bool UringAsyncBackend::available() const noexcept {
 // Real io_uring path — Phase D1 private-ring / ring-owned RequestArena model.
 //
 // Identity (P0-B): SQE.user_data = a 64-bit op_cookie (operation) or the
-// reserved CONTROL_CANCEL value (cancel). The op_cookie is allocated from a
+// high-bit-tagged target cookie (cancel). The op_cookie is allocated from a
 // no-wrap 64-bit counter and is NEVER reused within backend lifetime. The
 // CqeRouter is keyed by cookie VALUE: a CQE carries a cookie, we scan the
 // fixed router for the LIVE entry whose cookie matches, recover the full
@@ -118,7 +119,8 @@ bool UringAsyncBackend::available() const noexcept {
 // The submit return count is NOT lifecycle authority (a scalar count cannot
 // classify which SQEs the kernel consumed vs. not).
 //
-// CQE: the handler calls ONLY arena.record_terminal() (+ signal progress). It
+// CQE: the handler records an original terminal into RequestArena immediately,
+// or defers it in fixed router scratch while a matching control is live. It
 // never calls AsyncBackend::publish() directly — reap is the sole publisher.
 //
 // Threading: AsyncBackend is single-driver-thread (poll/wait_one/submit/cancel
@@ -143,10 +145,24 @@ struct UringRingState {
 
 namespace {
 
-// Reserved control user_data for an IORING_OP_ASYNC_CANCEL SQE. Its CQE is
-// informational only (res ∈ {0, -ENOENT, -EALREADY}) and never owns a
-// RequestKey. Modeled on liburing's LIBURING_UDATA_TIMEOUT = (__u64)-1.
-constexpr std::uint64_t CONTROL_CANCEL = static_cast<std::uint64_t>(-1);
+// Tagged control identity. Operation cookies occupy [1, 2^63-1]. An
+// IORING_OP_ASYNC_CANCEL CQE carries CONTROL_TAG | target_operation_cookie, so
+// the informational control reference can be retired against the exact bounded
+// router entry even when the original operation CQE arrives first.
+constexpr std::uint64_t CONTROL_TAG = std::uint64_t{1} << 63u;
+constexpr std::uint64_t COOKIE_MASK = CONTROL_TAG - 1u;
+
+constexpr bool is_control_cookie(std::uint64_t user_data) noexcept {
+    return (user_data & CONTROL_TAG) != 0;
+}
+
+constexpr std::uint64_t make_control_cookie(std::uint64_t operation_cookie) noexcept {
+    return CONTROL_TAG | operation_cookie;
+}
+
+constexpr std::uint64_t control_target_cookie(std::uint64_t user_data) noexcept {
+    return user_data & COOKIE_MASK;
+}
 
 // Toggle a stat counter if a sink is attached.
 inline void bump(sluice::AsyncStats* s, std::uint64_t sluice::AsyncStats::* field) {
@@ -238,6 +254,114 @@ class UringAsyncBackend::BoundedDispatchQueue {
     std::size_t head_ = 0;
     std::size_t size_ = 0;
     std::size_t capacity_;
+};
+
+// ---------------------------------------------------------------------------
+// Bounded physical transport ledger (P0-D).
+//
+// The ledger contains exactly the SQEs obtained via get_sqe() but not yet
+// confirmed consumed by a positive submit return. Its identity is a no-wrap
+// logical sequence; the masked SQ position is storage location only. On poison
+// the entries remain as quarantined teardown evidence and are individually
+// marked recovery-retired after the separate Class-A proof controller acts.
+// ---------------------------------------------------------------------------
+
+class UringAsyncBackend::TransportLedger {
+  public:
+    enum class Kind : std::uint8_t { operation, cancel_control };
+
+    struct Entry {
+        std::uint64_t sequence = 0;
+        std::uint32_t physical_position = 0;
+        Kind kind = Kind::operation;
+        std::uint64_t cookie = 0;
+        detail::SlotHandle handle{};
+        bool class_a_recovery_retired = false;
+    };
+
+    explicit TransportLedger(std::size_t capacity) : storage_(capacity), capacity_(capacity) {
+        if (capacity_ == 0) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: zero-capacity transport "
+                                 "ledger (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+    }
+
+    bool empty() const noexcept { return size_ == 0; }
+    std::size_t size() const noexcept { return size_; }
+    std::size_t capacity() const noexcept { return capacity_; }
+
+    void append(Kind kind, std::uint32_t physical_position, std::uint64_t cookie,
+                detail::SlotHandle handle) noexcept {
+        const std::uint32_t expected_physical =
+            last_sequence_ == 0
+                ? 0
+                : static_cast<std::uint32_t>(
+                      (static_cast<std::uint64_t>(last_physical_position_) + 1u) % capacity_);
+        if (size_ >= capacity_ || physical_position >= capacity_ || next_sequence_ == 0 ||
+            next_sequence_ == std::numeric_limits<std::uint64_t>::max() ||
+            physical_position != expected_physical || next_sequence_ != last_sequence_ + 1u) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: transport ledger "
+                                 "overflow/non-monotonic physical sequence/sequence exhaustion "
+                                 "(invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        storage_[(head_ + size_) % capacity_] =
+            Entry{next_sequence_++, physical_position, kind, cookie, handle, false};
+        last_sequence_ = next_sequence_ - 1u;
+        last_physical_position_ = physical_position;
+        ++size_;
+    }
+
+    Entry pop_front() noexcept {
+        if (size_ == 0) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: transport ledger "
+                                 "underflow (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        Entry out = storage_[head_];
+        if (out.sequence != retired_prefix_sequence_ + 1u) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: transport ledger retired a "
+                                 "non-monotonic logical prefix (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        retired_prefix_sequence_ = out.sequence;
+        head_ = (head_ + 1) % capacity_;
+        --size_;
+        return out;
+    }
+
+    Entry& at(std::size_t offset) noexcept {
+        if (offset >= size_) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: transport ledger index "
+                                 "out of range (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        return storage_[(head_ + offset) % capacity_];
+    }
+
+    bool all_class_a_recovery_retired() const noexcept {
+        for (std::size_t i = 0; i < size_; ++i) {
+            if (!storage_[(head_ + i) % capacity_].class_a_recovery_retired)
+                return false;
+        }
+        return true;
+    }
+
+  private:
+    std::vector<Entry> storage_;
+    std::size_t head_ = 0;
+    std::size_t size_ = 0;
+    std::size_t capacity_ = 0;
+    std::uint64_t next_sequence_ = 1;
+    std::uint64_t last_sequence_ = 0;
+    std::uint64_t retired_prefix_sequence_ = 0;
+    std::uint32_t last_physical_position_ = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -366,14 +490,24 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
     // free. The free-list recycles router ARRAY slots only (the bounded
     // router); it NEVER recycles cookie VALUES. Cookie uniqueness comes from
     // allocate_cookie_()'s no-wrap counter, which fail-fasts before ever
-    // reaching the reserved CONTROL_CANCEL range (mirrors RequestArena
-    // generation no-wrap discipline). next_cookie_ starts at 1 (0 is unused;
-    // CONTROL_CANCEL == UINT64_MAX).
+    // reaching the reserved high-bit control range (mirrors RequestArena
+    // generation no-wrap discipline). next_cookie_ starts at 1 (0 is unused).
     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
         cookie_free_list_[i] = detail::SlotIndex{i};
     }
     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
     if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, /*flags=*/0) == 0) {
+        // The physical ledger is sized from the ACTUAL SQ capacity returned by
+        // ring setup. Linux may round queue_depth up (e.g. 3 -> 4, 65 -> 128).
+        // If this construction-time allocation fails, release the already-
+        // initialized ring before propagating the exception.
+        try {
+            transport_ledger_ =
+                std::make_unique<TransportLedger>(ring_state_->ring.sq.ring_entries);
+        } catch (...) {
+            ::io_uring_queue_exit(&ring_state_->ring);
+            throw;
+        }
         have_ring_ = true;
         available_ = true;
     }
@@ -403,7 +537,11 @@ UringAsyncBackend::~UringAsyncBackend() {
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         const auto q = arena_.quiescence_snapshot();
+        const bool ledger_quiescent =
+            transport_ledger_ == nullptr || transport_ledger_->empty() ||
+            (fatal_error_.has_value() && transport_ledger_->all_class_a_recovery_retired());
         if (!dispatch_->empty() || live_cookies_.load(std::memory_order_relaxed) != 0 ||
+            live_control_sqes_.load(std::memory_order_relaxed) != 0 || !ledger_quiescent ||
             q.slot_in_use != 0 || q.accepted_outstanding != 0 || q.backend_ready != 0) {
             detail::uring_non_quiescent_destruction_fail_fast();
         }
@@ -642,7 +780,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     // here because get_sqe() had not yet succeeded.
     io_uring_sqe* sqe = ::io_uring_get_sqe(&ring_state_->ring);
     if (sqe == nullptr) {
-        (void)submit_transport(); // transport only; no RequestState change
+        (void)submit_transport_locked(); // transport only; no RequestState change
         if (fatal_error_.has_value()) {
             cookie_free_list_.push_back(router_slot);
             return false;
@@ -685,8 +823,16 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
     // The cookie is never reused, so a stale CQE cannot resolve through a
     // recycled router ARRAY slot (P0-B ABA fix).
     ::io_uring_sqe_set_data64(sqe, op_cookie);
-    router_[router_slot.value] = RouterEntry{op_cookie, h, /*in_use=*/true};
+    RouterEntry& route = router_[router_slot.value];
+    route = RouterEntry{};
+    route.cookie = op_cookie;
+    route.handle = h;
+    route.in_use = true;
     live_cookies_.fetch_add(1, std::memory_order_relaxed);
+    const auto& sq = ring_state_->ring.sq;
+    const std::uint32_t physical_position =
+        static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
+    transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_cookie, h);
 
     // mark_running: enqueued -> running (the ownership transfer). Under the
     // P0-A discipline (enqueue + dispatch share ONE dispatch_mtx_ critical
@@ -719,35 +865,166 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
 }
 
 // ---------------------------------------------------------------------------
-// Transport progress: io_uring_submit(). DOES NOT mutate RequestState.
+// Transport progress and P0-D recovery. submit itself remains transport-only;
+// the separate recovery controller consumes the zero-consumption proof.
 // ---------------------------------------------------------------------------
 
-int UringAsyncBackend::submit_transport() noexcept {
+int UringAsyncBackend::submit_transport_locked() noexcept {
+    if (fatal_error_.has_value() || transport_ledger_ == nullptr || transport_ledger_->empty())
+        return 0;
+
     submit_flushes_.fetch_add(1, std::memory_order_relaxed);
+    int rc = 0;
 #if defined(SLUICE_URING_INTERNAL_TESTING)
     if (ring_state_->test_hooks.submit != nullptr) {
-        return ring_state_->test_hooks.submit(ring_state_->test_hooks.context, &ring_state_->ring);
+        rc = ring_state_->test_hooks.submit(ring_state_->test_hooks.context, &ring_state_->ring);
+    } else {
+        rc = ::io_uring_submit(&ring_state_->ring);
     }
+#else
+    rc = ::io_uring_submit(&ring_state_->ring);
 #endif
-    return ::io_uring_submit(&ring_state_->ring);
+    account_transport_result_locked(rc, /*had_pending_transport=*/true);
+    return rc;
+}
+
+void UringAsyncBackend::account_transport_result_locked(int rc,
+                                                        bool had_pending_transport) noexcept {
+    if (!had_pending_transport)
+        return; // a to_submit=0 wait result is not submission evidence
+
+    if (rc > 0) {
+        const std::size_t consumed = static_cast<std::size_t>(rc);
+        if (consumed > transport_ledger_->size()) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: submit consumed more SQEs "
+                                 "than the physical ledger contains (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        for (std::size_t i = 0; i < consumed; ++i) {
+            const TransportLedger::Entry entry = transport_ledger_->pop_front();
+            if (entry.kind == TransportLedger::Kind::cancel_control) {
+                const std::size_t router_index = find_live_router_cookie_(entry.cookie);
+                if (router_index == router_.size() ||
+                    router_[router_index].handle.slot.value != entry.handle.slot.value ||
+                    router_[router_index].handle.generation.value !=
+                        entry.handle.generation.value ||
+                    router_[router_index].control_state != RouterEntry::ControlState::prepared) {
+                    std::fprintf(stderr, "sluice::async::UringAsyncBackend: consumed control "
+                                         "lost its exact prepared router reference "
+                                         "(invariant violation)\n");
+                    std::fflush(stderr);
+                    std::terminate();
+                }
+                router_[router_index].control_state = RouterEntry::ControlState::submitted;
+                live_control_sqes_.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+        return;
+    }
+    if (rc == 0)
+        return;
+
+    const int err = -rc;
+    if (err == EINTR || err == EAGAIN || err == EBUSY)
+        return; // transient transport evidence; retry without lifecycle mutation
+
+    // The syscall is still not terminal authority. The separate controller
+    // below consumes the Linux-6.1/liburing-2.14 theorem: permanent negative
+    // return + frozen D1 topology => zero entries from this ledger were
+    // consumed, hence every retained entry is execution-impossible Class-A.
+    poison_and_recover_locked(IoError{IoError::Code::backend_error, err});
+}
+
+void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
+    if (fatal_error_.has_value())
+        return;
+    fatal_error_ = error;
+    admission_closed_ = true;
+
+    for (std::size_t i = 0; i < transport_ledger_->size(); ++i) {
+        TransportLedger::Entry& physical = transport_ledger_->at(i);
+        if (physical.class_a_recovery_retired) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: duplicate Class-A "
+                                 "recovery retirement (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+
+        if (physical.kind == TransportLedger::Kind::operation) {
+            const std::size_t router_index = find_live_router_cookie_(physical.cookie);
+            if (router_index == router_.size() ||
+                router_[router_index].handle.slot.value != physical.handle.slot.value ||
+                router_[router_index].handle.generation.value != physical.handle.generation.value) {
+                std::fprintf(stderr, "sluice::async::UringAsyncBackend: Class-A operation "
+                                     "recovery lost identity "
+                                     "(invariant violation)\n");
+                std::fflush(stderr);
+                std::terminate();
+            }
+            RouterEntry& route = router_[router_index];
+            const detail::TerminalResult terminal = detail::TerminalResult::err(error);
+            if (route.control_state == RouterEntry::ControlState::none) {
+                finalize_operation_terminal_(router_index, terminal);
+            } else {
+                // A later control entry in this exact Class-A batch must retire
+                // before the logical operation becomes reap-eligible.
+                route.deferred_terminal = terminal;
+                route.deferred_terminal_stored = true;
+            }
+        } else {
+            const std::size_t router_index = find_live_router_cookie_(physical.cookie);
+            if (router_index == router_.size() ||
+                router_[router_index].handle.slot.value != physical.handle.slot.value ||
+                router_[router_index].handle.generation.value != physical.handle.generation.value ||
+                router_[router_index].control_state != RouterEntry::ControlState::prepared) {
+                std::fprintf(stderr, "sluice::async::UringAsyncBackend: Class-A control "
+                                     "recovery lost its exact prepared router reference "
+                                     "(invariant violation)\n");
+                std::fflush(stderr);
+                std::terminate();
+            }
+            RouterEntry& route = router_[router_index];
+            route.control_state = RouterEntry::ControlState::none;
+            cancel_scratch_[physical.handle.slot.value].cancel_queued = false;
+            if (route.deferred_terminal_stored)
+                finalize_operation_terminal_(router_index, route.deferred_terminal);
+        }
+        physical.class_a_recovery_retired = true;
+    }
+
+    // The local queue is exactly the never-dispatched set under the held
+    // front/peek/remove dispatch lock. It has no SQE or kernel identity.
+    detail::SlotHandle local{};
+    while (dispatch_->pop_front(local)) {
+        if (!arena_.record_terminal(local, detail::TerminalResult::err(error))) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: local poison retirement "
+                                 "lost terminal authority (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        cancel_scratch_[local.slot.value].cancel_queued = false;
+        bump(stats_, &AsyncStats::completion_errors);
+    }
+    signal_ready_progress();
 }
 
 // ---------------------------------------------------------------------------
-// Cookie allocator (P0-B). The operation-cookie domain is [1, UINT64_MAX-1];
-// 0 is unused and UINT64_MAX (CONTROL_CANCEL) is reserved. The counter never
-// wraps — reaching CONTROL_CANCEL fail-fasts, mirroring RequestArena
-// generation no-wrap discipline. Because the cookie is never reused, a stale
+// Cookie allocator (P0-B). The operation-cookie domain is [1, 2^63-1]; 0 is
+// unused and the high bit is reserved for tagged control identities. The
+// counter never enters the control range, mirroring RequestArena generation
+// no-wrap discipline. Because the cookie is never reused, a stale
 // CQE's cookie cannot match a later LIVE router entry.
 // ---------------------------------------------------------------------------
 std::uint64_t UringAsyncBackend::allocate_cookie_() noexcept {
     // The counter is mutated only under dispatch_mtx_ (dispatch_one_locked /
-    // the test seam). If next_cookie_ has reached the reserved control value,
-    // the operation-cookie domain is exhausted — fail-fast rather than wrap to
-    // 0 (which would reuse cookie 1's value on the first occupant and reopen
-    // the ABA window the cookie-keyed router exists to close).
-    if (next_cookie_ == 0 || next_cookie_ == CONTROL_CANCEL) {
+    // the test seam). If next_cookie_ has reached the tagged control range,
+    // the operation-cookie domain is exhausted — fail-fast rather than enter
+    // the tagged-control range or wrap to 0 (which would reuse cookie 1 and
+    // reopen the ABA window the cookie-keyed router exists to close).
+    if (next_cookie_ == 0 || next_cookie_ >= CONTROL_TAG) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: operation-cookie "
-                             "domain exhausted (would reach CONTROL_CANCEL / "
+                             "domain exhausted (would enter tagged control range / "
                              "wrap; invariant violation)\n");
         std::fflush(stderr);
         std::terminate();
@@ -769,37 +1046,107 @@ std::size_t UringAsyncBackend::find_live_router_index_(detail::SlotHandle h) con
     return router_.size();
 }
 
+std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) const noexcept {
+    for (std::size_t i = 0; i < router_.size(); ++i) {
+        if (router_[i].in_use && router_[i].cookie == cookie)
+            return i;
+    }
+    return router_.size();
+}
+
+void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept {
+    if (router_index >= router_.size() || !router_[router_index].in_use) {
+        std::fprintf(stderr, "sluice::async::UringAsyncBackend: invalid router retirement "
+                             "(invariant violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+    RouterEntry& entry = router_[router_index];
+    if (entry.control_state != RouterEntry::ControlState::none) {
+        std::fprintf(stderr, "sluice::async::UringAsyncBackend: router retired with a live "
+                             "control reference (invariant violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+    entry = RouterEntry{};
+    cookie_free_list_.push_back(detail::SlotIndex{static_cast<std::uint32_t>(router_index)});
+    live_cookies_.fetch_sub(1, std::memory_order_relaxed);
+}
+
 // ---------------------------------------------------------------------------
-// CQE reap. Route op cookies to full SlotHandles, validate generation,
-// record_terminal ONLY (never publish). Control cancel CQEs update only fixed
-// cancel bookkeeping. Returns the count of operation CQEs whose terminal was
-// recorded.
+// CQE reap. Route op cookies to full SlotHandles, validate generation, and
+// record_terminal only after all matching backend control references retire
+// (never publish directly). Returns the count of non-control CQEs observed.
 // ---------------------------------------------------------------------------
 
+void UringAsyncBackend::finalize_operation_terminal_(
+    std::size_t router_index, const detail::TerminalResult& terminal) noexcept {
+    if (router_index >= router_.size() || !router_[router_index].in_use ||
+        router_[router_index].control_state != RouterEntry::ControlState::none) {
+        std::fprintf(stderr, "sluice::async::UringAsyncBackend: invalid operation terminal "
+                             "finalization (invariant violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+
+    const detail::SlotHandle h = router_[router_index].handle;
+    if (!arena_.record_terminal(h, terminal)) {
+        std::fprintf(stderr, "sluice::async::UringAsyncBackend: operation terminal lost "
+                             "RequestArena winner authority (invariant violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+
+    const PreparedUringOp& prep = prepared_ops_[h.slot.value];
+    const bool is_byte_op =
+        prep.kind == detail::OperationKind::read || prep.kind == detail::OperationKind::write;
+    if (terminal.stored && terminal.is_error && terminal.error.code == IoError::Code::canceled) {
+        bump(stats_, &AsyncStats::canceled_ops);
+    } else if (terminal.stored && terminal.is_error) {
+        bump(stats_, &AsyncStats::completion_errors);
+    } else if (is_byte_op && terminal.bytes < prep.length) {
+        bump(stats_, &AsyncStats::short_completions);
+    }
+
+    cancel_scratch_[h.slot.value].cancel_queued = false;
+    retire_router_entry_(router_index);
+}
+
 void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcept {
-    // CONTROL_CANCEL is the informational cancel-SQE CQE; 0 is never emitted by
-    // us (allocate_cookie_ starts at 1).
-    if (user_data == CONTROL_CANCEL || user_data == 0) {
-        // Control cancel CQE (res ∈ {0, -ENOENT, -EALREADY}): informational
-        // only. It MUST NOT own a RequestKey, publish a terminal, release the
-        // slot, or overwrite the operation result (frozen design §8.2). The
-        // cancel_queued bit was already set when the cancel SQE was appended;
-        // nothing to update here.
+    // Tagged control CQE: informational with respect to terminal selection, but
+    // authoritative for retirement of one exact backend execution reference.
+    if (is_control_cookie(user_data)) {
+        const std::uint64_t target_cookie = control_target_cookie(user_data);
+        if (target_cookie == 0)
+            return; // never emitted; harmless unknown tagged control value
+        const std::size_t router_index = find_live_router_cookie_(target_cookie);
+        if (router_index == router_.size())
+            return; // stale duplicate control CQE; its exact router is already retired
+
+        RouterEntry& route = router_[router_index];
+        if (route.control_state != RouterEntry::ControlState::submitted ||
+            live_control_sqes_.load(std::memory_order_relaxed) == 0) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: control CQE without its "
+                                 "exact submitted control reference (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        route.control_state = RouterEntry::ControlState::none;
+        live_control_sqes_.fetch_sub(1, std::memory_order_relaxed);
+        cancel_scratch_[route.handle.slot.value].cancel_queued = false;
+        if (route.deferred_terminal_stored)
+            finalize_operation_terminal_(router_index, route.deferred_terminal);
         return;
     }
+    if (user_data == 0)
+        return; // never emitted by this backend; harmless unknown value
     // Operation CQE: route by COOKIE VALUE (P0-B). A bounded O(request_capacity)
     // scan of the fixed router finds the LIVE entry whose cookie matches. If no
     // live entry matches, this is a STALE cookie (its entry was retired and the
     // array slot may have been reused by a different cookie) — drop it. This is
     // the central ABA fix: the old router_slot+1 encoding resolved a stale CQE
     // to whatever NEW SlotHandle now occupied the recycled array slot.
-    std::size_t router_index = router_.size();
-    for (std::size_t i = 0; i < router_.size(); ++i) {
-        if (router_[i].in_use && router_[i].cookie == user_data) {
-            router_index = i;
-            break;
-        }
-    }
+    const std::size_t router_index = find_live_router_cookie_(user_data);
     if (router_index == router_.size())
         return; // stale/unknown cookie; no live execution reference matched
     RouterEntry& entry = router_[router_index];
@@ -814,7 +1161,6 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     const PreparedUringOp& prep = prepared_ops_[h.slot.value];
     const bool is_byte_op =
         (prep.kind == detail::OperationKind::read || prep.kind == detail::OperationKind::write);
-    const std::size_t requested = prep.length;
     detail::TerminalResult terminal;
     if (res < 0) {
         terminal = detail::TerminalResult::err(sluice::from_errno_value(-res));
@@ -823,72 +1169,19 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     } else {
         terminal = detail::TerminalResult::ok_void();
     }
-    // D1's AsyncIoContext access_mtx_ single-driver call domain serializes this
-    // router/free-list/scratch retirement against dispatch/cancel access.
-    // record_terminal itself takes the arena leaf lock ALONE (no dispatch_mtx_
-    // held); first caller wins, losers no-op (ADR Decision 12). The full
-    // SlotHandle is re-validated by the arena (context/slot/generation).
-    const bool won = arena_.record_terminal(h, terminal);
-    if (won) {
-        // Retire the transport routing/execution reference. The slot remains
-        // bound until reap publishes and the caller resets/releases.
-        entry.in_use = false;
-        entry.cookie = 0;
-        cookie_free_list_.push_back(detail::SlotIndex{static_cast<std::uint32_t>(router_index)});
-        live_cookies_.fetch_sub(1, std::memory_order_relaxed);
-        // Cancel bookkeeping cleanup (the slot is terminal now).
-        cancel_scratch_[h.slot.value].cancel_queued = false;
-        if (terminal.stored && terminal.is_error &&
-            terminal.error.code == IoError::Code::canceled) {
-            bump(stats_, &AsyncStats::canceled_ops);
-        } else if (terminal.stored && terminal.is_error) {
-            bump(stats_, &AsyncStats::completion_errors);
-        } else if (is_byte_op && static_cast<std::size_t>(res) < requested) {
-            bump(stats_, &AsyncStats::short_completions);
+    // A submitted/prepared AsyncCancel is a real backend reference. Preserve
+    // the original operation's terminal in bounded router scratch and keep the
+    // accepted request outstanding until the matching tagged control CQE (or a
+    // proven Class-A control recovery) retires. This closes the otherwise
+    // unobservable accepted_outstanding==0 / live-control>0 teardown gap.
+    if (entry.control_state != RouterEntry::ControlState::none) {
+        if (!entry.deferred_terminal_stored) {
+            entry.deferred_terminal = terminal;
+            entry.deferred_terminal_stored = true;
         }
-        return;
+        return; // duplicate original CQE while control is live is harmless
     }
-    // record_terminal returned false despite a LIVE cookie match. The only
-    // legitimate cause is a duplicate/late CQE for a slot that ALREADY has a
-    // stored terminal (e.g. a cancel-won-before-dispatch slot whose original
-    // SQE was never installed is impossible here since the cookie is LIVE —
-    // so this is a genuine duplicate original CQE, or a real CQE racing a
-    // cancel CQE that the kernel resolved as -ECANCELED first). In that case
-    // retire the transport reference so it does not leak.
-    //
-    // Generation-validated observation (the full SlotHandle, not just the
-    // SlotIndex): under the execution-reference pinning model a LIVE cookie
-    // pins the slot's generation until this CQE retires it, so the current-
-    // generation handle MUST still resolve. A nullopt here means the generation
-    // moved (slot released/reused) while a LIVE cookie pointed at it — an
-    // invariant violation, fail-fast. Using the SlotIndex-only accessor would
-    // let a future reused SlotIndex silently retire the wrong transport
-    // reference; the full-handle observation closes that future trap.
-    const std::optional<bool> already_terminal = arena_.terminal_stored(h);
-    if (!already_terminal.has_value()) {
-        // LIVE transport cookie but a stale logical handle (generation moved).
-        std::fprintf(stderr, "sluice::async::UringAsyncBackend: LIVE cookie matched "
-                             "but the slot generation moved (record_terminal rejected "
-                             "a non-current-generation handle — invariant violation)\n");
-        std::fflush(stderr);
-        std::terminate();
-    }
-    if (*already_terminal) {
-        entry.in_use = false;
-        entry.cookie = 0;
-        cookie_free_list_.push_back(detail::SlotIndex{static_cast<std::uint32_t>(router_index)});
-        live_cookies_.fetch_sub(1, std::memory_order_relaxed);
-        return;
-    }
-    // LIVE cookie matched, the generation is current, but the slot is not
-    // terminal and record_terminal rejected. That cannot happen under the
-    // dispatch/cancel lock discipline (a LIVE cookie pins the slot until this
-    // CQE retires it).
-    std::fprintf(stderr, "sluice::async::UringAsyncBackend: LIVE cookie matched "
-                         "but record_terminal rejected a non-terminal slot "
-                         "(invariant violation)\n");
-    std::fflush(stderr);
-    std::terminate();
+    finalize_operation_terminal_(router_index, terminal);
 }
 
 std::size_t UringAsyncBackend::reap_cqes() noexcept {
@@ -915,7 +1208,7 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
             ::io_uring_cqe_seen(&ring_state_->ring, cqe);
             // Snapshot whether this CQE is an operation (vs control) BEFORE
             // handle_one_cqe potentially retires the router entry.
-            const bool is_op = (user_data != CONTROL_CANCEL && user_data != 0);
+            const bool is_op = (!is_control_cookie(user_data) && user_data != 0);
             handle_one_cqe(user_data, res);
             if (is_op)
                 ++non_control_observed;
@@ -930,33 +1223,45 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
 // poll / wait_one — reap is the SOLE Completion-ready publication authority
 // ---------------------------------------------------------------------------
 
+int UringAsyncBackend::wait_cqe_without_submit() noexcept {
+    // Do not call any liburing helper that flushes sqe_head/sqe_tail here. On a
+    // poisoned ring the shared SQ tail still names the quarantined Class-A
+    // batch. to_submit=0 is the proof boundary that waits for old Class-C CQEs
+    // without ever consuming that batch.
+    return ::io_uring_enter(static_cast<unsigned>(ring_state_->ring.ring_fd), 0, 1,
+                            IORING_ENTER_GETEVENTS, nullptr);
+}
+
 std::size_t UringAsyncBackend::poll() {
     if (!have_ring_)
         return 0;
     // Re-dispatch enqueued requests toward ring ownership (best-effort; an
     // SQ-full request stays enqueued and retries next poll). Done under
     // dispatch_mtx_; dispatch_one_locked assumes the lock is held.
-    if (!fatal_error_.has_value()) {
+    {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        // P0-A peek protocol: the dispatch queue owns local execution. We PEEK
-        // the front, attempt the ownership transfer, and let the successful
-        // transfer's remove_exact(h) retire the entry. On NULL SQE we BREAK
-        // (ring-wide pressure: the next entry will not get an SQE either) and
-        // leave h at the front for the next poll. We never pop_front→dispatch→
-        // push_back: that would contradict the remove_exact(h) the successful
-        // transfer performs. cancel()'s remove_exact + arena.cancel() shares
-        // this same lock, so while we hold it the front cannot be canceled out
-        // from under us.
-        while (!dispatch_->empty()) {
-            detail::SlotHandle h = dispatch_->front();
-            if (!dispatch_one_locked(h))
-                break; // SQ full (or fatal); h remains at front for next poll
+        if (!fatal_error_.has_value()) {
+            // P0-A peek protocol: the dispatch queue owns local execution. We PEEK
+            // the front, attempt the ownership transfer, and let the successful
+            // transfer's remove_exact(h) retire the entry. On NULL SQE we BREAK
+            // (ring-wide pressure: the next entry will not get an SQE either) and
+            // leave h at the front for the next poll. We never pop_front→dispatch→
+            // push_back: that would contradict the remove_exact(h) the successful
+            // transfer performs. cancel()'s remove_exact + arena.cancel() shares
+            // this same lock, so while we hold it the front cannot be canceled out
+            // from under us.
+            while (!dispatch_->empty()) {
+                detail::SlotHandle h = dispatch_->front();
+                if (!dispatch_one_locked(h))
+                    break; // SQ full (or fatal); h remains at front for next poll
+            }
         }
+        // Flush transport while holding the ledger/dispatch domain. Positive
+        // results consume only the ledger prefix; permanent failure invokes
+        // the separate proof controller under this same frozen ownership view.
+        if (!fatal_error_.has_value())
+            (void)submit_transport_locked();
     }
-    // Flush transport (SQEs prepared but not yet submitted) so the kernel can
-    // complete them. TRANSPORT PROGRESS — does not change RequestState.
-    if (!fatal_error_.has_value())
-        (void)submit_transport();
     // Reap CQEs -> record_terminal ONLY. Then reap publishes Completion-ready
     // through the slot binding inside the leaf domain (ADR Decision 9 / I11).
     (void)reap_cqes();
@@ -969,30 +1274,29 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
     // First a non-blocking pass: flush transport, reap any already-ready CQEs,
     // and publish whatever is backend_ready. This resolves the common case
     // (work already complete) without a kernel wait.
-    if (!fatal_error_.has_value()) {
+    {
         // Re-dispatch enqueued work toward ring ownership before flushing.
         // P0-A peek protocol (see poll() for the full rationale): peek the
         // front, attempt the transfer, break on NULL SQE. Never pop→dispatch→
         // push_back.
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        while (!dispatch_->empty()) {
-            detail::SlotHandle h = dispatch_->front();
-            if (!dispatch_one_locked(h))
-                break; // SQ full (or fatal); h remains at front for next call
+        if (!fatal_error_.has_value()) {
+            while (!dispatch_->empty()) {
+                detail::SlotHandle h = dispatch_->front();
+                if (!dispatch_one_locked(h))
+                    break; // SQ full (or fatal); h remains at front for next call
+            }
+            if (!fatal_error_.has_value())
+                (void)submit_transport_locked();
         }
     }
-    if (!fatal_error_.has_value())
-        (void)submit_transport();
     (void)reap_cqes();
     std::size_t n = arena_.reap(sink_);
     if (n > 0)
         return n;
-    if (fatal_error_.has_value()) {
-        // Do not block indefinitely after a permanent transport failure:
-        // surface the stored backend error.
-        return make_unexpected<std::size_t>(*fatal_error_);
-    }
-    if (arena_.accepted_outstanding() == 0)
+    if (arena_.accepted_outstanding() == 0 &&
+        live_control_sqes_.load(std::memory_order_relaxed) == 0 &&
+        (fatal_error_.has_value() || transport_ledger_->empty()))
         return std::size_t{0};
 
     // Nothing ready yet but work is outstanding: block in the KERNEL until at
@@ -1011,22 +1315,44 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
     };
 
     for (;;) {
-        const int rc = sluice::detail::retry_uring_wait_on_eintr(submit_and_wait_once);
-        if (rc < 0 && rc != -EAGAIN) {
-            // A genuine wait error (not a transient interrupt). Do not
-            // fabricate a terminal; surface it so the caller can stop waiting.
+        int rc = 0;
+        bool poisoned_wait = false;
+        {
+            std::lock_guard<std::mutex> lk(dispatch_mtx_);
+            poisoned_wait = fatal_error_.has_value();
+            if (!poisoned_wait) {
+                const bool had_pending_transport = !transport_ledger_->empty();
+                rc = sluice::detail::retry_uring_wait_on_eintr(submit_and_wait_once);
+                account_transport_result_locked(rc, had_pending_transport);
+            }
+        }
+        if (poisoned_wait) {
+            rc = sluice::detail::retry_uring_wait_on_eintr(
+                [&]() noexcept { return wait_cqe_without_submit(); });
+        } else if (fatal_error_.has_value()) {
+            // A permanent negative submit just ran the Class-A recovery
+            // controller. Do not surface the transport error as an out-of-band
+            // wait failure; reap publishes the defined per-request terminals.
+            rc = 0;
+        }
+
+        if (rc < 0 && rc != -EAGAIN && rc != -EBUSY) {
+            // A genuine to_submit=0 wait error (or a wait error when no ledger
+            // was pending) has no Class-A proof. Surface it without fabricating
+            // a terminal for old kernel-owned work.
             return make_unexpected<std::size_t>(sluice::from_errno_value(-rc));
         }
         (void)reap_cqes();
         n = arena_.reap(sink_);
         if (n > 0)
             return n;
-        if (fatal_error_.has_value())
-            return make_unexpected<std::size_t>(*fatal_error_);
-        if (arena_.accepted_outstanding() == 0)
+        if (arena_.accepted_outstanding() == 0 &&
+            live_control_sqes_.load(std::memory_order_relaxed) == 0 &&
+            (fatal_error_.has_value() || transport_ledger_->empty()))
             return std::size_t{0};
-        // -EAGAIN, a spurious/empty wake, or a control-only CQE while user work
-        // remains outstanding: retry without reporting a false drain.
+        // -EAGAIN/-EBUSY, a spurious/empty wake, or a control-only CQE while
+        // user work remains outstanding: retry without reporting a false
+        // drain.
     }
 }
 
@@ -1057,7 +1383,7 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
         if (idx == router_.size())
             return; // not currently ring-owned; nothing to cancel
         target_cookie = router_[idx].cookie;
-        if (target_cookie == 0 || target_cookie == CONTROL_CANCEL) {
+        if (target_cookie == 0 || target_cookie >= CONTROL_TAG) {
             // Defensive: a LIVE entry must carry a valid operation cookie. A
             // zero/control cookie here is an invariant violation.
             std::fprintf(stderr, "sluice::async::UringAsyncBackend: issue_running_cancel "
@@ -1072,7 +1398,7 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
         // SQE and fill it.
         io_uring_sqe* sqe = ::io_uring_get_sqe(&ring_state_->ring);
         if (sqe == nullptr) {
-            (void)submit_transport();
+            (void)submit_transport_locked();
             if (fatal_error_.has_value())
                 return;
             sqe = ::io_uring_get_sqe(&ring_state_->ring);
@@ -1080,10 +1406,23 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
                 return; // SQ full; cancel retried on next poll (no SQE obtained)
         }
         // NO-FAIL REGION (P0-C): get_sqe committed the SQE. Fill it with the
-        // resolved target cookie and the reserved control user_data.
+        // resolved target cookie and its exact tagged control user_data.
         ::io_uring_prep_cancel64(sqe, target_cookie, /*flags=*/0);
-        ::io_uring_sqe_set_data64(sqe, CONTROL_CANCEL);
+        ::io_uring_sqe_set_data64(sqe, make_control_cookie(target_cookie));
         scratch.cancel_queued = true;
+        RouterEntry& route = router_[idx];
+        if (route.control_state != RouterEntry::ControlState::none) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: duplicate control state "
+                                 "before AsyncCancel append (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        route.control_state = RouterEntry::ControlState::prepared;
+        const auto& sq = ring_state_->ring.sq;
+        const std::uint32_t physical_position =
+            static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
+        transport_ledger_->append(TransportLedger::Kind::cancel_control, physical_position,
+                                  target_cookie, h);
     }
 }
 

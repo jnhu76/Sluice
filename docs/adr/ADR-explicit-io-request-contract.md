@@ -1410,6 +1410,45 @@ proof that no future original CQE can exist; possibly-kernel-owned work must rem
 recovery. See `docs/architecture/phase-d-uring-migration-plan.md` §8.2 and the Phase D1 frozen
 design for the binding policy.
 
+## Decision 19: io_uring permanent-submit recovery authority
+
+**Status:** Accepted (Phase D1 recovery amendment)
+**Date:** 2026-08-09
+**Amends:** Decision 18's frozen-design gate for the private, flags=0, single-driver Uring domain.
+
+The supported proof baseline is Linux 6.1 or newer with liburing 2.14. Under that exact domain
+(no SQPOLL, no SQ_REWIND, no concurrent enter), a permanent negative submit return proves that zero
+entries from the failing flushed batch were consumed: the Linux submit loop preserves every
+positive consumed prefix, and GETEVENTS can replace the syscall return only when the submit result
+was zero.
+
+The production recovery contract is:
+
+- a construction-time bounded physical ledger has capacity `ring.sq.ring_entries` and records each
+  prepared operation/control SQE in non-wrapping logical sequence order plus its masked storage
+  position;
+- a positive submit return drains that many ledger entries as transport evidence only; it never
+  mutates `RequestState` or chooses a terminal;
+- a permanent negative submit result poisons admission and licenses a distinct recovery controller
+  to mark the remaining ledger batch Class-A/execution-impossible, retire operation entries with a
+  defined `backend_error`, retire Class-A controls, and terminalize still-local enqueued requests;
+- entries already removed by a positive submit are Class-C and remain bound for their original
+  CQEs; after poison, progress uses only `io_uring_enter(to_submit=0, ..., GETEVENTS)`;
+- every positively submitted control SQE holds a bounded execution reference until its control CQE
+  retires; cancel controls use `CONTROL_TAG | target_op_cookie` so the CQE retires the exact router
+  reference. If the original operation CQE arrives first, its terminal remains in bounded router
+  scratch and is not recorded into RequestArena until the control retires, keeping the accepted
+  request visible to normal drain. Destruction requires zero live operation cookies, zero live
+  control SQEs, an empty local queue, a quiescent arena, and either an empty normal ledger or a
+  wholly proven/recovery-retired Class-A poisoned ledger;
+- ring teardown may discard only that final quarantined Class-A shared-SQ representation. It may
+  not stand in for user-request retirement, control-reference retirement, drain, or cancellation.
+
+Authority remains layered: `io_uring_submit()` is transport evidence only. Class-A terminal
+authority comes from the recovery controller's execution-impossibility proof, not from the syscall
+itself. The full source proof and implementation gate are recorded in
+`docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md`.
+
 ## Open risks and deferred decisions
 
 - Whether a future API should expose caller-owned `Operation.Storage` after measurement.

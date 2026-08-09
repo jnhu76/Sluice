@@ -157,22 +157,31 @@ void child_destroy_with_completion_ready() {
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
-// 2) Control: quiescent destroy. Submit, drive to ready, reset the Completion
-// (releases the slot), then destroy the backend. The preflight must observe a
-// quiescent arena and proceed to io_uring_queue_exit() cleanly -> exit 0.
+// 2) Control: quiescent destroy after a real running AsyncCancel. A blocked
+// pipe read becomes ring-owned, cancel appends its tagged control SQE, and the
+// pipe write guarantees the original operation can also retire if cancellation
+// loses. Drive until the public accepted count reaches zero; the production
+// backend must not publish that boundary before its exact control reference is
+// also retired. Reset then proves the destructor preflight and queue_exit path
+// are fully quiescent -> exit 0.
 void child_control_quiescent_destroy() {
     {
         UringAsyncBackend backend(UringConfig{1, 4});
         if (!backend.available())
             std::_Exit(sluice_death_test::kChildTestFailExit);
 
-        TempPath tp("control");
-        seed_one_byte(tp.path(), std::byte{0x55});
-
+        int pipe_fds[2]{-1, -1};
+        if (::pipe(pipe_fds) != 0)
+            std::_Exit(sluice_death_test::kChildTestFailExit);
         std::byte buf[1]{};
         Completion<std::size_t> c;
-        int fd = open_temp(tp.path(), false);
-        if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value())
+        if (!backend.submit_read(ReadOp{pipe_fds[0], buf, 1, 0}, c).has_value())
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        if (backend.poll() != 0)
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        backend.cancel(c);
+        const unsigned char seed = 0x55;
+        if (::write(pipe_fds[1], &seed, 1) != 1)
             std::_Exit(sluice_death_test::kChildTestFailExit);
 
         const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
@@ -184,14 +193,20 @@ void child_control_quiescent_destroy() {
         }
         if (!c.ready())
             std::_Exit(sluice_death_test::kChildTestFailExit);
-        if (buf[0] != std::byte{0x55})
+        const auto& result = c.result();
+        const bool read_won =
+            result.has_value() && result.value() == 1 && buf[0] == std::byte{0x55};
+        const bool cancel_won =
+            !result.has_value() && result.error().code == IoError::Code::canceled;
+        if (!read_won && !cancel_won)
             std::_Exit(sluice_death_test::kChildTestFailExit);
         c.reset(); // release the slot before destroy
         if (backend.arena_slot_in_use() != 0)
             std::_Exit(sluice_death_test::kChildTestFailExit);
 
         // backend destroyed here cleanly.
-        ::close(fd);
+        ::close(pipe_fds[0]);
+        ::close(pipe_fds[1]);
     }
 
     std::_Exit(0);

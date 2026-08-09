@@ -15,6 +15,7 @@ TLA+ formal models are used to verify abstract protocol properties of Sluice's s
 | Suite ID | Subsystem | Model location | Verification script |
 |----------|-----------|---------------|-------------------|
 | blocking-io-pool | BlockingIoPool | `spec/tla/blocking_io_pool/` | `scripts/formal/verify-blocking-io-pool.sh` |
+| d1-uring-poison | D1 io_uring Poison/Recovery | `spec/tla/d1_uring_poison/` | `scripts/formal/verify-d1-uring-poison.sh` |
 | e7-publication | E7 Publication | `spec/tla/e7_publication/` | `scripts/formal/verify-e7-publication.sh` |
 | e7-multiworker-progress | E7 MultiWorker Progress | `spec/tla/e7_multiworker_progress/` | `scripts/formal/verify-e7-multiworker-progress.sh` |
 | e8-ownership-transfer | E8 Ownership Transfer | `spec/tla/e8_ownership_transfer/` | `scripts/formal/verify-e8-ownership-transfer.sh` |

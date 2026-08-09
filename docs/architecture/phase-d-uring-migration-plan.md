@@ -1,8 +1,7 @@
 # Phase D — UringAsyncBackend RequestArena Migration: SOTA-Aligned Plan
 
-**Status:** PLAN REVISED FOR HUMAN REVIEW — Phase D is NOT implemented; D1 is BLOCKED on the
-narrow ADR amendment in §3.
-**Date:** 2026-08-08
+**Status:** D1 IMPLEMENTED AND VERIFIED — later Phase D slices remain planned.
+**Date:** 2026-08-09
 **Author:** jnhu
 **Governing authority:** [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
 (Accepted), [Architecture Constitution](architecture-constitution.md),
@@ -30,8 +29,8 @@ neutral-NOP request path, and does not make future SQPOLL support require anothe
 
 ## 1. Baseline and current gaps
 
-Phase D still starts from master baseline `1349a6fdf63f760d73cec9d567bb3fecd46fa695`.
-The current Uring implementation is the legacy model:
+Phase D started from master baseline `1349a6fdf63f760d73cec9d567bb3fecd46fa695`.
+The pre-D1 Uring implementation used the legacy model:
 
 ```text
 Completion*
@@ -43,25 +42,27 @@ Completion*
   + direct CQE -> Completion publication
 ```
 
-The migration still has to close the same structural gaps:
+The D1 implementation closed the request-lifecycle, bounded-storage, CQE-publication, and
+quiescent-destruction gaps that existed at entry:
 
-- RequestArena is not the sole request identity/lifecycle/terminal authority.
-- per-request maps/deques can allocate after acceptance and are not bounded by request capacity;
-- ring queue depth is incorrectly doing double duty as the only practical capacity control;
-- CQE handling publishes Completion directly instead of stopping at backend-ready and letting reap
-  publish;
-- cancellation is keyed through legacy Completion/id side maps;
-- Uring has no Phase-D close/drain/destruction proof;
-- real-liburing evidence is not yet available for the whole conformance suite.
+- RequestArena was not the sole request identity/lifecycle/terminal authority.
+- Per-request maps/deques could allocate after acceptance and were not bounded by request capacity.
+- Ring queue depth incorrectly did double duty as the only practical capacity control.
+- CQE handling published Completion directly instead of stopping at backend-ready and letting reap
+  publish.
+- Cancellation was keyed through legacy Completion/id side maps.
+- Uring had no Phase-D close/drain/destruction proof.
+- Real-liburing evidence was not available for the whole conformance suite.
 
-Two infrastructure findings from the first audit remain valid:
+Two infrastructure findings from the first audit were resolved in D1:
 
-1. **P-D0-INF-01:** real-liburing `uring_submit_failure_test` has a pre-existing link break and must
-   be repaired in D1 before it can be evidence.
-2. **P-D0-INF-02:** the WSL2 development host has not yet demonstrated the complete real-path test
-   matrix. Stub green never substitutes for real-liburing evidence.
+1. **P-D0-INF-01:** the real-liburing `uring_submit_failure_test` link break was repaired; the
+   production-linked fault suite now runs as real-path evidence.
+2. **P-D0-INF-02:** the development host completed the real-liburing test matrix. Stub green remains
+   separate build/API evidence and never substitutes for KernelIo execution evidence.
 
-The current PR is documentation/planning only. No production migration is implied by merging D0.
+The current PR implements and verifies D1. D2-D4 remain governed by their later-slice entry gates;
+merging D1 does not imply that those slices are complete.
 
 ---
 
@@ -464,7 +465,7 @@ The driver opportunistically appends:
 
 ```text
 IORING_OP_ASYNC_CANCEL(target = op_cookie)
-user_data = CONTROL_CANCEL
+user_data = CONTROL_TAG | op_cookie
 ```
 
 No ad-hoc request-state transition happens when that cancel SQE is submitted. If SQ capacity is
@@ -477,9 +478,12 @@ The original operation CQE decides the terminal:
 - original CQE `-ECANCELED` may record the canceled terminal;
 - cancel CQE success/`-ENOENT`/other informational results never overwrite the operation result.
 
-The RequestSlot and op cookie remain live until the original CQE (or a separately proven
-transport-failure retirement path). Repeated cancel calls must not enqueue an unbounded number of
-cancel SQEs; one fixed per-slot cancel_requested / cancel_queued bookkeeping bitset is sufficient.
+The RequestSlot and router entry remain live until the original CQE and any matching submitted
+control CQE have both retired (or a separately proven transport-failure retirement path acts). If
+the original CQE arrives first, its result is retained in fixed router scratch until the tagged
+control retires; the control result never chooses or overwrites the terminal. Repeated cancel calls
+must not enqueue an unbounded number of simultaneous cancel SQEs; one fixed per-slot
+cancel_requested / cancel_queued bit plus bounded router control state is sufficient.
 
 ### 7.3 What disappears
 

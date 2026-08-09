@@ -37,7 +37,10 @@ if has_config("with-liburing") then
     -- add_requires with optional=true lets xmake try to fetch liburing; if the
     -- user passed --with-liburing=true but it's unavailable, fail loudly here
     -- rather than silently building stubs.
-    add_requires("liburing", {alias = "liburing"})
+    -- P0-D's negative-submit Class-A theorem is audited and supported against
+    -- the tagged liburing 2.14 implementation. Do not silently float this
+    -- transport dependency without re-running the source-level proof.
+    add_requires("liburing 2.14", {alias = "liburing"})
     has_liburing = true
 end
 

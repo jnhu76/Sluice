@@ -234,11 +234,16 @@ class UringAsyncBackend : public AsyncBackend {
     // (whose cookie belongs to a retired entry) no longer matches any live
     // entry and is dropped — the ABA window that existed when user_data carried
     // router_slot+1 is closed. The arena still re-validates the full generation
-    // as a second layer of defense. CONTROL_CANCEL (= UINT64_MAX) is reserved
-    // for cancel-SQE user_data outside the operation-cookie domain [1, UINT64_MAX-1].
+    // as a second layer of defense. The high bit is reserved for tagged cancel-
+    // control user_data, so operation cookies occupy [1, 2^63-1].
     struct RouterEntry {
+        enum class ControlState : std::uint8_t { none, prepared, submitted };
+
         std::uint64_t cookie = 0; // 0 = not a live operation cookie
         detail::SlotHandle handle{};
+        detail::TerminalResult deferred_terminal{};
+        ControlState control_state = ControlState::none;
+        bool deferred_terminal_stored = false;
         bool in_use = false;
     };
 
@@ -246,6 +251,13 @@ class UringAsyncBackend : public AsyncBackend {
     // SlotHandle only; push_back/front/remove_exact are noexcept. Mirrors the
     // ThreadPool BoundedDispatchQueue discipline.
     class BoundedDispatchQueue;
+
+    // Bounded prepared-but-not-confirmed-consumed physical SQ ledger. Its
+    // capacity is the ACTUAL initialized ring.sq.ring_entries (not configured
+    // queue_depth); defined in the .cpp to keep liburing out of this header.
+    // It is transport evidence only and never owns RequestState/terminal/
+    // Completion authority.
+    class TransportLedger;
 
     // Process-wide monotonic id for ContextIdentity provenance (distinct per
     // UringAsyncBackend instance — ADR Decision 2).
@@ -307,9 +319,26 @@ class UringAsyncBackend : public AsyncBackend {
     // violation, not a cancel-won race.
     void enqueue_after_commit(detail::SlotHandle h) noexcept;
 
-    // Transport progress: io_uring_submit(). DOES NOT mutate RequestState.
-    // Returns the liburing result for diagnostics/ring-poison handling.
-    int submit_transport() noexcept;
+    // Transport progress under dispatch_mtx_. Positive results retire the
+    // physical-ledger prefix as transport evidence only. A permanent negative
+    // result invokes the separate proof-consuming recovery controller; the
+    // syscall itself remains lifecycle-neutral.
+    int submit_transport_locked() noexcept;
+
+    // Classify a submit/submit-and-wait result while dispatch_mtx_ is held.
+    // `had_pending_transport` distinguishes a submission failure (eligible for
+    // the D1 zero-consumption theorem) from a pure wait error with to_submit=0.
+    void account_transport_result_locked(int rc, bool had_pending_transport) noexcept;
+
+    // Consume the proven-zero-consumption theorem after a permanent negative
+    // submit: poison admission, locally retire the exact Class-A physical
+    // ledger and the never-dispatched FIFO, but leave positively submitted
+    // Class-C operation/control entries bound for their CQEs.
+    void poison_and_recover_locked(IoError error) noexcept;
+
+    // Poisoned wait progress. Direct enter with to_submit=0 is load-bearing:
+    // it may wait/reap old Class-C CQEs but cannot submit the quarantined tail.
+    int wait_cqe_without_submit() noexcept;
 
     // Reap all currently-ready CQEs: route op cookies to full SlotHandles,
     // validate generation, record_terminal ONLY (never publish). Control
@@ -319,15 +348,22 @@ class UringAsyncBackend : public AsyncBackend {
     // discard this value; it exists for bounded diagnostics only.
     std::size_t reap_cqes() noexcept;
 
-    // Decode one CQE: op cookie -> record_terminal; control -> bookkeeping.
+    // Decode one CQE: an operation terminal is recorded or deferred until its
+    // tagged control retires; a control may release that deferred terminal.
     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
 
+    // Publish a previously decoded operation terminal into RequestArena and
+    // retire its router entry. Called immediately when no control reference is
+    // live, or after the matching tagged control CQE/recovery retires it.
+    void finalize_operation_terminal_(std::size_t router_index,
+                                      const detail::TerminalResult& terminal) noexcept;
+
     // Allocate a unique operation cookie from the no-wrap counter. Domain is
-    // [1, UINT64_MAX-1]; 0 is unused and UINT64_MAX (CONTROL_CANCEL) is
-    // reserved. If the counter would reach CONTROL_CANCEL, fail-fast (mirrors
-    // RequestArena generation no-wrap discipline) — never wrap. The cookie is
-    // NEVER reused within backend lifetime, so a stale CQE's cookie cannot
-    // match a later LIVE entry.
+    // [1, 2^63-1]; 0 is unused and the high bit is reserved for tagged control
+    // identities. If the counter would reach the control tag, fail-fast
+    // (mirrors RequestArena generation no-wrap discipline) — never wrap. The
+    // cookie is NEVER reused within backend lifetime, so a stale CQE's cookie
+    // cannot match a later LIVE entry.
     std::uint64_t allocate_cookie_() noexcept;
 
     // Find the router ARRAY index of the LIVE entry whose SlotHandle matches h
@@ -335,6 +371,8 @@ class UringAsyncBackend : public AsyncBackend {
     // router_.size()) if no live entry matches (h is not currently ring-owned).
     // Bounded O(request_capacity) scan, allocation-free.
     std::size_t find_live_router_index_(detail::SlotHandle h) const noexcept;
+    std::size_t find_live_router_cookie_(std::uint64_t cookie) const noexcept;
+    void retire_router_entry_(std::size_t router_index) noexcept;
 
     // Per-slot backend cancel bookkeeping. The arena owns cancel_intent_
     // (intent authority); this struct only tracks whether an AsyncCancel SQE
@@ -361,12 +399,13 @@ class UringAsyncBackend : public AsyncBackend {
     std::vector<RouterEntry> router_;                 // size == request_capacity
     std::vector<CancelScratch> cancel_scratch_;       // size == request_capacity
     std::vector<detail::SlotIndex> cookie_free_list_; // free router slots
-    std::uint64_t next_cookie_ = 1;                   // 0 reserved; CONTROL_CANCEL = max
+    std::uint64_t next_cookie_ = 1; // 0 reserved; high bit reserved for tagged control identity
     unsigned queue_depth_ = 64;
 
     // The private io_uring instance (opaque pimpl — owns the io_uring + the
     // internal-testing transport hooks). One ring per backend (ADR Decision 18).
     std::unique_ptr<UringRingState> ring_state_;
+    std::unique_ptr<TransportLedger> transport_ledger_;
     bool have_ring_ = false;
     bool admission_closed_ = false;
     std::optional<IoError> fatal_error_; // permanent transport poison
@@ -384,6 +423,7 @@ class UringAsyncBackend : public AsyncBackend {
 
     std::atomic<std::uint64_t> submit_flushes_{0};
     std::atomic<std::size_t> live_cookies_{0};
+    std::atomic<std::size_t> live_control_sqes_{0};
 #endif // SLUICE_HAS_LIBURING
 
     bool available_ = false;

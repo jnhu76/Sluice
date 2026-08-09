@@ -1,12 +1,37 @@
 # Phase D1 — Permanent `io_uring_submit()` Failure Recovery Audit
 
-**Status:** HARD GATE AUDIT — input to a future D-x production implementation.
+**Status:** IMPLEMENTED AND VERIFIED — source audit and merge-gate evidence complete.
 **Date:** 2026-08-09
 **Author:** jnhu
 **Governing:** `docs/architecture/phase-d1-uring-frozen-design.md` §6 (HARD GATE)
 **Scope:** determine, from authoritative liburing + Linux-kernel sources, whether a clean Class-A
-local-retirement proof exists for D1's exact configuration, and whether a production poison/recovery
-implementation can be licensed. **No production poison is shipped by this audit.**
+local-retirement proof exists for D1's exact configuration, and freeze the production
+poison/recovery contract licensed by that proof.
+
+## 0. Supported baseline and implementation authority
+
+The production theorem is supported on **Linux 6.1 or newer** with **liburing 2.14**. The build
+gate pins liburing 2.14; Linux 6.1 is the minimum supported kernel family for this recovery path.
+The proof was checked against tagged upstream sources, not the local WSL2 version:
+
+- Linux v6.1 `io_submit_sqes()` preserves a positive consumed prefix and changes the result to
+  `-EAGAIN` only when zero requests were submitted;
+- Linux v6.1 `io_uring_enter()` returns early when that submit result differs from `to_submit`, and
+  a GETEVENTS result replaces the return value only when the submit result was zero;
+- liburing 2.14 `io_uring_submit()` performs `__io_uring_flush_sq()` before enter, while the poison
+  drain calls `io_uring_enter(fd, 0, 1, IORING_ENTER_GETEVENTS, nullptr)` and therefore cannot
+  consume the quarantined shared-SQ tail;
+- liburing 2.14 `io_uring_queue_exit()` unmaps the SQ/CQ and closes the ring fd; Linux v6.1 then
+  runs `io_ring_ctx_wait_and_kill()`. Teardown is licensed only after the §4.4/§5 preflight proves
+  backend progress ownership is zero.
+
+This is a source-level support contract, not runtime version parsing. Kernels older than Linux 6.1
+are outside the supported real-backend recovery contract.
+
+`submit_transport_locked()` remains transport evidence only. It updates the physical ledger, but it
+never mutates `RequestState`, chooses a terminal, or publishes a Completion. On a permanent
+negative result, a distinct recovery controller consumes the §3.4 proof, establishes execution
+impossibility for the failed ledger batch, and then invokes explicit recovery-retirement authority.
 
 ---
 
@@ -29,8 +54,8 @@ on the submit path. **Qualification:** current liburing MAY internally add
 the caller's wait count is zero. The theorem in §3.4 accounts for this and does
 not depend on "the syscall never carries GETEVENTS"; see §3.3.
 
-`io_uring_submit()` (liburing, in its `queue.c` source file — see
-<https://github.com/axboe/liburing/blob/master/src/queue.c>) first flushes the
+`io_uring_submit()` (liburing 2.14, in its `queue.c` source file — see
+<https://github.com/axboe/liburing/blob/liburing-2.14/src/queue.c>) first flushes the
 application-side `sqe_tail` to the shared SQ state (`__io_uring_flush_sq`
 advances `*ktail`), then issues
 `io_uring_enter(to_submit = N, min_complete = 0)`. The shared-SQ
@@ -68,7 +93,7 @@ A negative return is therefore a kernel-level/control error, distinct from per-S
 ### 3.2 `io_submit_sqes()` — the kernel submission loop (Linux io_uring source)
 
 The kernel's `io_submit_sqes(struct io_ring_ctx *ctx, unsigned int to_submit)` is the function
-`io_uring_enter` calls to drain the SQ. Its return logic (current mainline):
+`io_uring_enter` calls to drain the SQ. Its return logic in the audited Linux v6.1 source is:
 
 ```c
 ret = left = entries;          /* entries == min(to_submit, SQ-available) */
@@ -155,18 +180,15 @@ multi-issuer rings, a future private-shard topology, or an arbitrary future
 kernel/liburing implementation. It holds only for D1's frozen preconditions
 above.
 
-**Production-recovery prerequisite:** before relying on this theorem as a
-*portable* Sluice guarantee, define the supported kernel/liburing baseline and
-verify the theorem against the minimum supported kernel family (or identify the
-stable ABI / man-page guarantee that makes source-version inspection
-unnecessary). The local WSL2 kernel version alone is not a source-level
-portability proof.
+**Production-recovery prerequisite: SATISFIED.** Section 0 defines Linux 6.1 + liburing 2.14 and
+records the tagged-source verification. The local WSL2 kernel version is execution evidence only,
+not the source-level portability proof.
 
 ---
 
-## 4. Candidate recovery model (NOT implemented; requires further proof)
+## 4. Frozen production recovery model
 
-Given the §3.4 theorem, the candidate recovery model is:
+Given the §3.4 theorem, the production recovery model is:
 
 ```text
 negative permanent io_uring_submit()
@@ -180,17 +202,18 @@ negative permanent io_uring_submit()
     ├─ NEVER call io_uring_enter with to_submit > 0 on that ring again
     │      (prevents re-submitting the quarantined batch)
     │
-    ├─ drain ONLY previously-consumed/in-flight operations via
+    ├─ locally terminalize the quarantined Class-A requests with backend_error
+    │
+    ├─ drain ONLY previously-consumed/in-flight operation and control CQEs via
     │      io_uring_enter(to_submit=0, min_complete=K, GETEVENTS)   [wait-path audit §5]
     │
     ├─ once old kernel-owned work is quiescent (all CQEs reaped)
     │
-    ├─ locally terminalize the quarantined Class-A requests with backend_error
-    │
     └─ tear down the poisoned ring
 ```
 
-This is only a candidate. Each step below MUST be proven before any production implementation:
+The implementation satisfies each rule below; command-backed evidence is recorded in the frozen
+design's §18 ledger.
 
 ### 4.1 Bounded transport metadata
 
@@ -274,11 +297,12 @@ return (reviewer §6 — no submit-count correctness authority).
 
 ### 4.2 Cancel-control-SQE classification
 
-A cancel SQE (`IORING_OP_ASYNC_CANCEL`, user_data = CONTROL_CANCEL) may share the failed batch with
-operation SQEs. Under §3.4, a negative return means zero consumed, so a quarantined cancel SQE is
-also Class-A and simply never executes — its `cancel_queued` bit must be left set (no CQE will clear
-it) or retired alongside the batch. Prove this does not leave the per-slot `cancel_queued` bit
-stuck in a state that blocks a later cancel on a fresh ring.
+A cancel SQE (`IORING_OP_ASYNC_CANCEL`, `user_data = CONTROL_TAG | target_op_cookie`) may share the
+failed batch with operation SQEs. Under §3.4, a negative return means zero consumed, so a
+quarantined cancel SQE is also Class-A and never executes. Recovery resolves the exact bounded
+router entry from the target cookie, clears its `prepared` control state / `cancel_queued` bit, and
+releases any original terminal deferred behind that control. It never invents or overwrites the
+operation result.
 
 ### 4.3 Still-enqueued local dispatch requests
 
@@ -290,19 +314,31 @@ exactly the queue contents at the poison instant.
 
 ### 4.4 Control execution references and teardown quiescence
 
-A running-operation cancel may append an informational `IORING_OP_ASYNC_CANCEL`. The original
-operation CQE can retire its operation cookie and make the Completion ready before the control CQE
-arrives. Therefore `live_op_cookies == 0`, arena quiescence, and an empty local dispatch queue do
-not by themselves prove that the ring has no remaining control execution reference.
+A running-operation cancel may append an informational `IORING_OP_ASYNC_CANCEL`. Without an exact
+control identity, the original operation CQE could retire its operation cookie and make the
+Completion ready before the control CQE arrives. D1 closes that gap by tagging the control CQE with
+its target operation cookie and retaining the router entry until both references retire.
 
-The P0-D implementation MUST choose one of two explicit contracts:
+The frozen contract chooses the stronger first option: every positively submitted control entry
+transitions its exact router control state `prepared -> submitted`, increments bounded
+`live_control_sqes`, and only its tagged control CQE decrements that reference. If the original CQE
+arrives first, its terminal stays in fixed RouterEntry scratch and is not recorded into RequestArena
+until the control retires; public `accepted_outstanding` therefore cannot reach zero early. A control
+entry in the proven Class-A failed batch never increments the live count and its per-slot
+bookkeeping is retired by the recovery controller. Destruction preflight requires:
 
-1. keep a bounded `live_control_sqes`/physical-ledger reference until each control CQE retires; or
-2. prove that teardown may abandon informational control SQEs because they hold no user buffer,
-   RequestSlot release authority, reusable target cookie, or user-visible terminal authority.
+```text
+dispatch queue empty
+live operation cookies == 0
+live control SQEs == 0
+arena slot_in_use == accepted_outstanding == backend_ready == 0
+normal ring: transport ledger empty
+poisoned ring: every retained ledger entry is proven Class-A and recovery-retired
+```
 
-The chosen contract must appear in the destruction preflight/teardown proof and deterministic
-tests. `io_uring_queue_exit()` is not treated as an unmodeled no-op.
+`io_uring_queue_exit()` is not treated as an unmodeled no-op: it may discard only the final
+quarantined shared-SQ representation after all operation/control execution references and all user
+lifecycle ownership have already retired.
 
 ---
 
@@ -332,7 +368,7 @@ Required proof:
 
 ---
 
-## 6. Verdict
+## 6. Implementation verdict
 
 - **The §3.4 theorem holds** under D1's frozen preconditions (§3.4): a negative
   `io_uring_submit()` proves zero consumed SQEs. This is the Class-A proof basis
@@ -340,7 +376,7 @@ Required proof:
   and must NOT be generalized beyond those preconditions; relying on it as a
   portable Sluice guarantee requires defining the supported kernel/liburing
   baseline (§3.4 production-recovery prerequisite).
-- **A clean Class-A retirement path is therefore architecturally available**, BUT it requires:
+- **A clean Class-A retirement path is architecturally licensed** and production must implement:
   1. the bounded transport-metadata ledger (§4.1);
   2. the cancel-control-SQE classification (§4.2);
   3. the still-enqueued retirement (§4.3);
@@ -350,13 +386,9 @@ Required proof:
   6. a control-execution-reference/quiescence contract (§4.4); and
   7. a non-wrapping logical SQ sequence proof across masked-slot reuse (§4.1).
 
-- **D1 does NOT implement any of (1)–(7).** Production poison is therefore NOT shipped. The
-  `fatal_error_` field remains read-only evidence plumbing; submit/wait surface it but no
-  retirement/recovery runs.
-
-**P0-D status: BLOCKED on production implementation of (1)–(7).** This audit licenses the design;
-a follow-up D-x phase must implement and prove it. D1 is READY FOR HUMAN REVIEW but NOT merge-ready
-on the "every accepted request has a provable terminal path" axis until that implementation lands.
+**P0-D status: PASS.** The production implementation, deterministic C++ regressions, focused
+formal model, real/stub liburing gates, sanitizers, documentation checks, and adversarial review
+all pass on the final local diff. Pushed-head GitHub CI remains a separate repository merge gate.
 
 ---
 
@@ -365,9 +397,11 @@ on the "every accepted request has a provable terminal path" axis until that imp
 - `io_uring_enter(2)` — https://man7.org/linux/man-pages/man2/io_uring_enter.2.html
 - `io_uring(7)` — https://man7.org/linux/man-pages/man7/io_uring.7.html
 - `io_uring_get_sqe(3)` — https://man7.org/linux/man-pages/man3/io_uring_get_sqe.3.html
-- liburing `queue.c` source (`__io_uring_flush_sq`, `io_uring_submit`) —
-  https://github.com/axboe/liburing/blob/master/src/queue.c
-- Linux io_uring source (`io_submit_sqes`, `io_uring_enter`/`__io_uring_enter`) —
-  https://github.com/torvalds/linux/blob/master/io_uring/io_uring.c
+- liburing 2.14 `queue.c` source (`__io_uring_flush_sq`, `io_uring_submit`, `io_uring_get_events`) —
+  https://github.com/axboe/liburing/blob/liburing-2.14/src/queue.c
+- liburing 2.14 `setup.c` source (`io_uring_queue_exit`) —
+  https://github.com/axboe/liburing/blob/liburing-2.14/src/setup.c
+- Linux v6.1 io_uring source (`io_submit_sqes`, `io_uring_enter`, `io_ring_ctx_wait_and_kill`) —
+  https://github.com/torvalds/linux/blob/v6.1/io_uring/io_uring.c
 - Debian liburing-dev `io_uring_enter(2)` —
   https://manpages.debian.org/unstable/liburing-dev/io_uring_enter.2.en.html
