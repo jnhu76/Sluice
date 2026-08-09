@@ -764,12 +764,12 @@ on the final head. Do NOT imply GitHub CI ran a gate it did not.
 | Gate 2 — lock/atomic authority | DONE (§10, reconciled to the 2-domain production model) |
 | Gate 3 — resource capacity | DONE (§9) |
 | Gate 4 — wake/progress + shutdown | DONE (§11; D1 wait_source()==nullptr, BackendWaitSource→D4) |
-| Clang Debug | PASS — `xmake test -v` (GitHub-CI-enforced + local, liburing) on the repaired head |
-| Clang Release | PENDING (final gate step; run locally) |
-| ASan + UBSan | PENDING (final gate step; run locally) |
-| TSan | PENDING (final gate step — modified race classes; run locally) |
-| negative-compile | PENDING (final gate step; run locally) |
-| conformance manifest | PENDING (final gate step; run locally) |
+| Clang Debug | PASS — `xmake test -v`, 153/153 (GitHub-CI-enforced + local, `--with-liburing=true`) on the repaired head |
+| Clang Release | PASS — `xmake test`, 153/153 (local, `--with-liburing=true`) on the repaired head |
+| ASan + UBSan | PASS — `xmake test` under `-m asanubsan`, 153/153, 0 sanitizer errors (local, `--with-liburing=true`) |
+| TSan | PASS (modified race classes) — under `-m tsan`, `uring_submit_failure_test` + `uring_backend_test` + `uring_backend_death_test` (dispatch/cancel/CQE-router/destructor-preflight) + `backend_scheme_b_race_test` + `async_cancel_test` + `async_stats_wait_race_test` all clean. The full `-m tsan` suite run is not cited because two unrelated pre-existing flaky timeouts (`threadpool_backend_scheme_b_race_test`, `timer_wait_test`, both documented in the PR body and neither touching Uring code) hang under TSan load; they pass in isolation. (local, `--with-liburing=true`) |
+| negative-compile | PASS — `verify-completion-authority-negative-compile.sh` 12/12, `verify-request-arena-negative-compile.sh` 6/6 (local) |
+| conformance manifest | PASS — `backend_conformance_manifest.py`, `verify-backend-conformance.py` (local) |
 | real liburing evidence | PASS — `xmake run uring_submit_failure_test`, 8/8 cases + `xmake run uring_backend_death_test` (local, liburing) |
 | docs (check-doc-links, verify-architecture-docs) | PASS — `python3 scripts/check-doc-links.py`, `python3 scripts/verify-architecture-docs.py` (GitHub-CI-enforced + local) on the repaired head |
 | D0.5 ADR amendment | DONE (`fa66ddf`) |
