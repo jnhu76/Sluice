@@ -250,7 +250,10 @@ transfer). The legacy unbounded `pending_sqes` container is eliminated regardles
   failure. It advances the userspace SQ tail before the kernel enter.
 - `io_uring_get_sqe()` advances the application-side `sqe_tail` only; the kernel sees nothing until
   enter. Returns NULL if the SQ ring is full.
-- A negative `io_uring_submit()` result does NOT prove zero kernel consumption — see §6.
+- A negative `io_uring_submit()` result does NOT prove zero kernel consumption **in the general
+  case** — see §6. (A narrower D1-specific theorem DOES hold under frozen preconditions; see
+  `phase-d1-uring-permanent-submit-failure-audit.md` §3.4. The general statement here is the
+  conservative default that governs any configuration outside those preconditions.)
 
 ---
 
@@ -277,8 +280,12 @@ kernel of pending operations"). Consequences:
 
 - After the tail advance, the kernel may consume SQEs asynchronously;
 - A negative `io_uring_submit()` return (e.g. `-EAGAIN`, `-EBUSY`, `-EINTR`, `-ENOMEM`, `-EFAULT`,
-  `-EOVERFLOW`, `-EINVAL`) after the tail advance therefore CANNOT be interpreted as
-  "all ring-owned SQEs are definitely userspace-only and may be locally retired."
+  `-EOVERFLOW`, `-EINVAL`) after the tail advance therefore CANNOT be interpreted **in general** as
+  "all ring-owned SQEs are definitely userspace-only and may be locally retired." This is the
+  conservative reading. **Qualification:** under D1's exact frozen preconditions (no SQPOLL, no
+  SQ_REWIND, serialized one-driver private ring, plain `io_uring_submit()`, no concurrent enter,
+  current audited liburing/kernel — see the audit doc §3.4), a narrower theorem DOES prove zero
+  consumption on a negative return. Outside those preconditions this general statement governs.
 
 The proof must distinguish three classes of work:
 
@@ -492,9 +499,9 @@ terminal cancel.
 | local dispatch ring | `request_capacity` | construction | reserved before commit; no post-accept allocation | dispatch / cancel remove | dispatch ring size | backend destruction |
 | CqeRouter | `request_capacity` | construction | cookie exhaustion fail-fasts | record_terminal / disarm | live cookie count | backend destruction |
 | per-slot Uring scratch | `request_capacity` | construction | n/a (pre-reserved per slot) | reap leaves scratch for cancel bookkeeping | n/a | backend destruction |
-| transport ledger (if kept) | `request_capacity` | construction | n/a (diagnostics only) | n/a | n/a | backend destruction |
+| transport ledger (if kept) | actual SQ capacity (`ring.sq.ring_entries`; see §6 audit §4.1) | construction | n/a (TRANSPORT EVIDENCE ONLY) | n/a | n/a | backend destruction |
 | io_uring SQ/CQ | `queue_depth` | `io_uring_queue_init` | transport pressure; accepted request stays alive | kernel CQE | SQ pressure count | `io_uring_queue_exit` |
-| worker/driver thread | 1 (D1 single-driver) | construction | n/a | idle join on quiescent destroy | n/a | backend destruction |
+| owned backend worker threads | 0 (D1 has no dedicated driver thread; driver = serialized caller) | n/a | n/a | n/a | n/a | n/a |
 
 **Capacity equation:**
 
@@ -541,8 +548,14 @@ arena leaf mutex  (RequestArena mutex_)
 ```
 
 `access_mtx_` (AsyncIoContext) is NOT a backend lock: it serializes ALL backend operations
-(submit/poll/wait_one/cancel) at the context layer, making D1 single-driver. It is held across a
-backend call but the backend's wait_one never blocks under it in the kernel-park path.
+(submit/poll/wait_one/cancel) at the context layer, making D1 single-driver. **As-built for D1:**
+because `UringAsyncBackend::wait_source()` returns `nullptr`, `AsyncIoContext::wait_one()` takes
+its legacy branch and holds `access_mtx_` across `backend_->wait_one()`. Uring's `wait_one()`
+parks in `io_uring_submit_and_wait` inside that call, so **the D1 kernel park happens UNDER
+`access_mtx_`**. This is safe ONLY under the documented single-driver eligibility restriction (one
+caller drives the context; `ApplicationRuntime` rejects such backends at build time, so this path is
+reachable only when the context is driven manually). A split-wait-capable backend (D4
+`BackendWaitSource`) parks WITHOUT `access_mtx_`; D1 is not that backend.
 
 **Critical rules (AGENTS.md §13.1):**
 - Code holding the arena leaf mutex MUST NOT acquire `dispatch_mtx_` or call backend progress.
@@ -562,7 +575,7 @@ backend call but the backend's wait_one never blocks under it in the kernel-park
 | cancel running | dispatch_mtx_ (resolve target + scratch cancel_queued bit) → arena leaf (inside `arena.cancel`) |
 | CQE handler → record_terminal | arena leaf ALONE |
 | reap (poll/wait_one) | arena leaf → (released) → ReadySink invoked WITHOUT the lock |
-| wait_one park | kernel block in io_uring_submit_and_wait (NO dispatch_mtx_, NO arena lock) |
+| wait_one park | kernel block in io_uring_submit_and_wait UNDER AsyncIoContext::access_mtx_ (single-driver legacy path); NO dispatch_mtx_, NO arena lock |
 
 ---
 
@@ -599,7 +612,8 @@ implementation here so the gate and the code agree.
 - a persistent worker/driver join during quiescent destruction is teardown, not implicit I/O drain.
 
 D4 (full close/drain/destruction redesign) is separately scoped; D1 preserves the explicit
-quiescent contract and adds only the minimal `BackendWaitSource` adaptation required for correctness.
+quiescent contract and adds NO `BackendWaitSource` (see §11.1 — `BackendWaitSource` integration is
+D4 work). D1 destructors DO preflight quiescence before ring teardown (mirrors ThreadPoolBackend).
 
 ---
 
@@ -615,8 +629,9 @@ reserve
   → dispatch (§4)
 ```
 
-All under `admission_mtx_` through Stage 3c, released before enqueue — exactly the proven ThreadPool
-shape. Capacity full → synchronous `would_block`, Completion idle, no borrow, no SQE, zero residue.
+All under `dispatch_mtx_` through Stage 3c, released before enqueue — exactly the proven ThreadPool
+shape (D1 reuses `dispatch_mtx_` for admission; there is no separate `admission_mtx_`). Capacity
+full → synchronous `would_block`, Completion idle, no borrow, no SQE, zero residue.
 
 ### 12.1 Config (public API)
 
@@ -735,6 +750,13 @@ implementation; all applicable AC-N rules identified per AGENTS.md §8).
 
 ## 18. Evidence ledger (PENDING until executed)
 
+**Attribution:** GitHub Actions CI for this PR enforces ONLY the Linux Clang Debug
+documentation-verification + build + test path. Release / ASan+UBSan / TSan /
+real-liburing / negative-compile / conformance gates are NOT run by GitHub CI;
+their evidence below is LOCAL (run on the developer host with `--with-liburing=true`).
+A cell marked PASS cites the exact command; PENDING means it has not yet been run
+on the final head. Do NOT imply GitHub CI ran a gate it did not.
+
 | Field | Status |
 |---|---|
 | Gate 0 — scope & authority | DONE (this document) |
@@ -742,16 +764,16 @@ implementation; all applicable AC-N rules identified per AGENTS.md §8).
 | Gate 2 — lock/atomic authority | DONE (§10, reconciled to the 2-domain production model) |
 | Gate 3 — resource capacity | DONE (§9) |
 | Gate 4 — wake/progress + shutdown | DONE (§11; D1 wait_source()==nullptr, BackendWaitSource→D4) |
-| Clang Debug | PASS — 152/152, `xmake test -v` on the repaired head |
-| Clang Release | PENDING (final gate step) |
-| ASan + UBSan | PENDING (final gate step) |
-| TSan | PENDING (final gate step — modified race classes) |
-| negative-compile | PENDING (final gate step) |
-| conformance manifest | PENDING (final gate step) |
-| real liburing evidence | PASS — `xmake run uring_submit_failure_test`, 8/8 cases (incl. stale-cookie + length boundary + scripted-partial detectors) |
-| docs (check-doc-links, verify-architecture-docs) | PASS — `python3 scripts/check-doc-links.py`, `python3 scripts/verify-architecture-docs.py` on the repaired head |
+| Clang Debug | PASS — `xmake test -v` (GitHub-CI-enforced + local, liburing) on the repaired head |
+| Clang Release | PENDING (final gate step; run locally) |
+| ASan + UBSan | PENDING (final gate step; run locally) |
+| TSan | PENDING (final gate step — modified race classes; run locally) |
+| negative-compile | PENDING (final gate step; run locally) |
+| conformance manifest | PENDING (final gate step; run locally) |
+| real liburing evidence | PASS — `xmake run uring_submit_failure_test`, 8/8 cases + `xmake run uring_backend_death_test` (local, liburing) |
+| docs (check-doc-links, verify-architecture-docs) | PASS — `python3 scripts/check-doc-links.py`, `python3 scripts/verify-architecture-docs.py` (GitHub-CI-enforced + local) on the repaired head |
 | D0.5 ADR amendment | DONE (`fa66ddf`) |
-| **P0-D permanent-submit-failure** | **BLOCKED** — see `docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md`; the §3.4 theorem holds but production poison/recovery (ledger + wait-path guard + teardown proof) is not implemented. D1 is READY FOR HUMAN REVIEW, NOT merge-ready on the provable-terminal-path axis. |
+| **P0-D permanent-submit-failure** | **BLOCKED** — see `docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md`; the §3.4 theorem holds under frozen D1 preconditions but production poison/recovery (actual-SQ-capacity ledger + operation/control classification + wait-path guard + teardown proof) is not implemented. D1 is READY FOR HUMAN REVIEW, NOT merge-ready on the provable-terminal-path axis. |
 
 ---
 
