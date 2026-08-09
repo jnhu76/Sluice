@@ -86,6 +86,32 @@ if has_liburing and os.isfile(R .. "tests/uring_submit_failure_test.cpp") then
         add_tests("uring_submit_failure_test")
 end
 
+-- Phase D2 failure-injection / accepted-terminal no-allocation evidence. The
+-- target exists in both modes so the manifest can distinguish real execution
+-- from stub build/API evidence without turning a missing target or a skip into
+-- PASS. In real mode it compiles the authoritative production source with
+-- guarded internal-testing observations; in stub mode it links the ordinary
+-- production async library and runs only the explicit stub-classification case.
+if os.isfile(R .. "tests/uring_d2_failure_noalloc_test.cpp") then
+    target("uring_d2_failure_noalloc_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_includedirs(R .. "include")
+        add_files(R .. "tests/uring_d2_failure_noalloc_test.cpp")
+        if has_liburing then
+            add_deps("sluice_core")
+            add_files(R .. "src/async/uring_backend.cpp",
+                      R .. "src/async/fail_fast.cpp")
+            add_defines("SLUICE_HAS_LIBURING",
+                        "SLUICE_ASYNC_INTERNAL_TESTING")
+            add_packages("liburing")
+        else
+            add_deps("sluice_core", "sluice_async")
+        end
+        add_tests("uring_d2_failure_noalloc_test")
+end
+
 -- Experimental uring library. Always defined so the headers/sources exist; the
 -- implementation compiles either the real uring path or the unsupported stub
 -- based on CPPIO_HAS_LIBURING.

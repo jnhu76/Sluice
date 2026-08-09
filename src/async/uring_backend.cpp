@@ -552,6 +552,33 @@ UringAsyncBackend::~UringAsyncBackend() {
     }
 }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+std::size_t UringAsyncBackend::dispatch_size_for_test() const noexcept {
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    return dispatch_->size();
+}
+
+std::size_t UringAsyncBackend::transport_ledger_size_for_test() const noexcept {
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    return transport_ledger_ == nullptr ? 0 : transport_ledger_->size();
+}
+
+std::size_t UringAsyncBackend::sq_ready_for_test() const noexcept {
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    return have_ring_ ? static_cast<std::size_t>(::io_uring_sq_ready(&ring_state_->ring)) : 0;
+}
+
+std::size_t UringAsyncBackend::live_control_entries_for_test() const noexcept {
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    std::size_t live = 0;
+    for (const RouterEntry& entry : router_) {
+        if (entry.in_use && entry.control_state != RouterEntry::ControlState::none)
+            ++live;
+    }
+    return live;
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // Five-stage admission (ADR Decision 5; mirrors ThreadPoolBackend).
 // Stages 1–3c run under the dispatch admission path; the Completion
@@ -1228,6 +1255,10 @@ int UringAsyncBackend::wait_cqe_without_submit() noexcept {
     // poisoned ring the shared SQ tail still names the quarantined Class-A
     // batch. to_submit=0 is the proof boundary that waits for old Class-C CQEs
     // without ever consuming that batch.
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    if (ring_state_->test_hooks.before_poison_wait != nullptr)
+        ring_state_->test_hooks.before_poison_wait(ring_state_->test_hooks.context);
+#endif
     return ::io_uring_enter(static_cast<unsigned>(ring_state_->ring.ring_fd), 0, 1,
                             IORING_ENTER_GETEVENTS, nullptr);
 }

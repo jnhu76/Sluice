@@ -87,10 +87,12 @@ struct UringConfig {
 struct UringBackendSubmitTestHooks {
     using SubmitFn = int (*)(void*, ::io_uring*) noexcept;
     using SubmitAndWaitFn = int (*)(void*, ::io_uring*, unsigned) noexcept;
+    using BeforePoisonWaitFn = void (*)(void*) noexcept;
 
     void* context = nullptr;
     SubmitFn submit = nullptr;
     SubmitAndWaitFn submit_and_wait = nullptr;
+    BeforePoisonWaitFn before_poison_wait = nullptr;
 };
 #endif
 
@@ -200,6 +202,13 @@ class UringAsyncBackend : public AsyncBackend {
     static Result<void> validate_write_for_test(WriteOp op) noexcept {
         return validate_write(op);
     }
+    // Phase D2 read-only bounded-state observations. These expose no mutation
+    // authority and add no member data; their out-of-line definitions are
+    // compiled only into internal-testing builds.
+    std::size_t dispatch_size_for_test() const noexcept;
+    std::size_t transport_ledger_size_for_test() const noexcept;
+    std::size_t sq_ready_for_test() const noexcept;
+    std::size_t live_control_entries_for_test() const noexcept;
 #endif
 
   private:
