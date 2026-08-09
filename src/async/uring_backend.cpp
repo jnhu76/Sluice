@@ -83,6 +83,9 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
 }
 void UringAsyncBackend::cancel(Completion<std::size_t>&) {}
 void UringAsyncBackend::cancel(Completion<void>&) {}
+void UringAsyncBackend::close_admission() {
+    // Stub: admission never opened; nothing to close, no waiters to wake.
+}
 std::size_t UringAsyncBackend::outstanding() const noexcept {
     return 0;
 }
@@ -505,6 +508,8 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
         try {
             transport_ledger_ =
                 std::make_unique<TransportLedger>(ring_state_->ring.sq.ring_entries);
+            wait_source_ = std::make_unique<detail::UringWaitSource>();
+            wait_source_->set_ring_fd(ring_state_->ring.ring_fd);
         } catch (...) {
             ::io_uring_queue_exit(&ring_state_->ring);
             throw;
@@ -601,7 +606,26 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
 
     detail::SlotHandle h{};
     {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // D4 C2e (close-wins window): the submit pauses BEFORE taking the
+        // admission transaction lock, so close_admission() completes with no
+        // contention and the resumed submit must observe admission closed at
+        // Stage 0 and reject synchronously (ADR Decision 15). Compiled out of
+        // production builds.
+        wait_before_admission_lock_pause_();
+#endif
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        // Stage 0: admission closed -> invalid_state (ADR Decision 15). This
+        // check lives INSIDE the admission transaction lock so close_admission()
+        // (which takes the same lock) serializes against the whole Stage 1-5
+        // acceptance protocol: after close_admission() returns, no new
+        // acceptance LP can occur — an in-flight submit either completed its
+        // LP first (submit wins) or observes closed here and rejects (close
+        // wins). The pre-lock fast-path check above is a contention
+        // optimization only; this check is authoritative.
+        if (admission_closed_) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
         // Stage 1: reserve. Arena full -> would_block.
         auto rh = arena_.reserve();
         if (!rh.has_value())
@@ -651,6 +675,16 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
             (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // D4 C2e (submit-vs-close LP window): the submit pauses INSIDE the
+        // admission transaction (dispatch_mtx_ held) between the arena commit
+        // (the slot half of the accept LP) and the binding->outstanding
+        // release-store (the accept half). close_admission() takes the same
+        // lock, so it must BLOCK while the submit holds the transaction and
+        // only return after the LP completed (submit wins). Compiled out of
+        // production builds.
+        wait_before_commit_binding_pause_();
+#endif
         // Stage 3c: install slot-release capability, then publish outstanding.
         // AFTER commit_binding nothing may throw (I9).
         install_binding(c, &arena_, h);
@@ -686,7 +720,14 @@ Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
 
     detail::SlotHandle h{};
     {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        wait_before_admission_lock_pause_();
+#endif
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        // Stage 0: admission closed -> invalid_state (see submit_size).
+        if (admission_closed_) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
         auto rh = arena_.reserve();
         if (!rh.has_value())
             return make_unexpected<void>(rh.error());
@@ -721,6 +762,9 @@ Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
             (void)arena_.rollback_reserved_or_prepared(h);
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        wait_before_commit_binding_pause_();
+#endif
         install_binding(c, &arena_, h);
         commit_binding(c);
     }
@@ -1326,7 +1370,15 @@ std::size_t UringAsyncBackend::poll() {
     // Reap CQEs -> record_terminal ONLY. Then reap publishes Completion-ready
     // through the slot binding inside the leaf domain (ADR Decision 9 / I11).
     (void)reap_cqes();
-    return arena_.reap(sink_);
+    const std::size_t n = arena_.reap(sink_);
+    // Phase D4 (I4: state first, then notify): after real readiness is
+    // published, advance the split-phase wait's progress epoch and wake every
+    // parked participant so it re-polls (a concurrent wait_one must not sleep
+    // through a publication made by this poll).
+    if (n > 0) {
+        signal_ready_progress();
+    }
+    return n;
 }
 
 Result<std::size_t> UringAsyncBackend::wait_one() {
@@ -1353,8 +1405,10 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
     }
     (void)reap_cqes();
     std::size_t n = arena_.reap(sink_);
-    if (n > 0)
+    if (n > 0) {
+        signal_ready_progress();
         return n;
+    }
     if (arena_.accepted_outstanding() == 0 &&
         live_control_sqes_.load(std::memory_order_relaxed) == 0 &&
         (fatal_error_.has_value() || transport_ledger_->empty()))
@@ -1405,8 +1459,10 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
         }
         (void)reap_cqes();
         n = arena_.reap(sink_);
-        if (n > 0)
+        if (n > 0) {
+            signal_ready_progress();
             return n;
+        }
         if (arena_.accepted_outstanding() == 0 &&
             live_control_sqes_.load(std::memory_order_relaxed) == 0 &&
             (fatal_error_.has_value() || transport_ledger_->empty()))
@@ -1470,6 +1526,31 @@ void UringAsyncBackend::wait_before_dispatch_transfer_pause_() noexcept {
         return;
     g->exited.store(false, std::memory_order_release);
     g->dispatch_domain_released.store(true, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
+
+void UringAsyncBackend::wait_before_commit_binding_pause_() noexcept {
+    auto* g = before_commit_binding_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->admission_domain_held.store(true, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
+
+void UringAsyncBackend::wait_before_admission_lock_pause_() noexcept {
+    auto* g = before_admission_lock_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
@@ -1559,6 +1640,34 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
             static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
         transport_ledger_->append(TransportLedger::Kind::cancel_control, physical_position,
                                   target_cookie, h);
+    }
+}
+
+// Phase D4 admission close (ADR Decision 15; mirrors ThreadPoolBackend).
+// close_admission() takes the SAME lock the submit admission transaction
+// (reserve .. commit_binding, the `binding -> outstanding` release-store being
+// the accept linearization point) holds, so it serializes against an in-flight
+// submit: after this returns, no new acceptance LP can occur — an in-flight
+// submit either completed its LP first (submit wins) or a later submit
+// observes admission closed at Stage 0 inside the lock and rejects
+// synchronously with invalid_state (close wins). It does NOT cancel, rewrite,
+// discard, or release accepted work; cancel/poll/wait_one/reap remain legal.
+// THEN wakes every participant parked in the split-phase ready wait (issue
+// #67: close must not starve a parked wait_one). The wake is a one-shot
+// control generation advance — a re-evaluation signal, not a fabricated
+// completion and not a persistent "never park again" state: future waits
+// snapshot the advanced generation and park normally, so an admission-closed
+// backend with outstanding work never busy-spins.
+void UringAsyncBackend::close_admission() {
+    if (!have_ring_)
+        return;
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        arena_.close_admission();
+        admission_closed_ = true;
+    }
+    if (wait_source_) {
+        wait_source_->interrupt_all();
     }
 }
 

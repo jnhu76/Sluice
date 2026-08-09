@@ -43,6 +43,7 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_arena.hpp>
+#include <sluice/async/detail/uring_wait_source.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -135,16 +136,31 @@ class UringAsyncBackend : public AsyncBackend {
     // query, not a health query.
     bool available() const noexcept;
 
+    // Phase D4: admission close + drain (ADR Decision 15; mirrors
+    // ThreadPoolBackend::close_admission). Rejects new admission atomically:
+    // takes the same dispatch_mtx_ the submit admission transaction (reserve
+    // .. commit_binding) holds, so after this returns no new acceptance LP
+    // can occur (an in-flight submit either completed its LP first or rejects
+    // synchronously with invalid_state). Does NOT cancel, rewrite, discard, or
+    // release accepted work; cancel/poll/wait_one/reap remain legal. Then
+    // wakes every participant parked in the split-phase ready wait (one-shot
+    // control generation advance — a re-evaluation signal, never a fabricated
+    // completion and never a persistent "never park again" state). Idempotent.
+    // Stub mode: no-op (admission never opened).
+    void close_admission();
+
 #if defined(SLUICE_HAS_LIBURING)
-    // Phase D1 does NOT override wait_source(): Uring is a single-driver
-    // backend whose wait_one() blocks in the kernel (io_uring_submit_and_wait)
-    // and reaps CQEs synchronously on the calling thread. There is no separate
-    // worker thread to signal a ReadyWaitSource, so declaring split-wait
-    // capability would make AsyncIoContext::wait_one park in wait_for_change
-    // forever. A future shard/M:N topology with a dedicated CQE-reaper thread
-    // may revisit this; D1 leaves wait_source() returning nullptr (the default).
-    // close_admission() also remains the default (no-op) for D1; D4 owns the
-    // full close/drain redesign.
+    // Phase D4: split-phase readiness wait (issue #67). wait_for_change()
+    // parks in poll(2) on the private ring fd (POLLIN == CQEs pending) and a
+    // one-shot control eventfd; it NEVER reaps, records terminals, publishes
+    // Completions, mutates RequestArena state, cancels, or changes
+    // outstanding. The context keeps serialized poll/reap under access_mtx_.
+    // nullptr (the base default) when the ring is unavailable or the control
+    // eventfd could not be created — the legacy serialized wait_one contract
+    // then applies.
+    BackendWaitSource* wait_source() noexcept override {
+        return have_ring_ ? wait_source_.get() : nullptr;
+    }
 
     // Phase D1 resource introspection (method-only seams; no member data).
     std::size_t arena_capacity() const noexcept { return arena_.capacity(); }
@@ -343,8 +359,46 @@ class UringAsyncBackend : public AsyncBackend {
     void set_after_commit_before_enqueue_pause_gate(AfterCommitBeforeEnqueuePauseGate* gate) noexcept {
         after_commit_before_enqueue_gate_.store(gate, std::memory_order_release);
     }
+    // Phase D4 C2e split-phase-wait seams (forward to the wait source).
+    // Wait-phase entry flag: the wait source stores `true` immediately before
+    // it blocks in poll(2), so a test can deterministically observe "a
+    // participant has completed its empty reap and is now parked".
+    void set_wait_phase_flag_for_test(std::atomic<bool>* flag) noexcept {
+        if (wait_source_) {
+            wait_source_->set_wait_phase_flag(flag);
+        }
+    }
+    // Deterministic interrupt-vs-final-ready window (fires when a control
+    // wake is about to be reported; see UringWaitSource).
+    void set_wait_control_wake_final_reap_pause_gate(
+        detail::UringWaitSource::ControlWakeFinalReapPauseGate* gate) noexcept {
+        if (wait_source_) {
+            wait_source_->set_control_wake_final_reap_pause_gate(gate);
+        }
+    }
     void set_before_dispatch_transfer_pause_gate(BeforeDispatchTransferPauseGate* gate) noexcept {
         before_dispatch_transfer_gate_.store(gate, std::memory_order_release);
+    }
+    // Phase D4 C2e gates: close-vs-submit linearization windows (mirror the
+    // ThreadPool BeforeCommitBindingPauseGate / BeforeAdmissionLockPauseGate).
+    struct BeforeCommitBindingPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{false};
+        // true iff the gate fired INSIDE dispatch_mtx_ (the admission
+        // transaction lock — close_admission() blocks on it while paused).
+        std::atomic<bool> admission_domain_held{false};
+    };
+    struct BeforeAdmissionLockPauseGate {
+        std::atomic<bool> paused{false};
+        std::atomic<bool> resume{false};
+        std::atomic<bool> exited{false};
+    };
+    void set_before_commit_binding_pause_gate(BeforeCommitBindingPauseGate* gate) noexcept {
+        before_commit_binding_gate_.store(gate, std::memory_order_release);
+    }
+    void set_before_admission_lock_pause_gate(BeforeAdmissionLockPauseGate* gate) noexcept {
+        before_admission_lock_gate_.store(gate, std::memory_order_release);
     }
 #endif
 
@@ -545,13 +599,19 @@ class UringAsyncBackend : public AsyncBackend {
     // Deterministic pause helpers (no-op when the matching gate is disarmed).
     void wait_after_commit_before_enqueue_pause_() noexcept;
     void wait_before_dispatch_transfer_pause_() noexcept;
+    void wait_before_commit_binding_pause_() noexcept;
+    void wait_before_admission_lock_pause_() noexcept;
 #endif
 
-    // Wake the ready domain. D1 is single-driver (wait_one blocks in the
-    // kernel and reaps synchronously), so there is no separate worker to wake;
-    // this is a no-op kept as a seam for a future shard/M:N topology with a
-    // dedicated CQE-reaper thread.
-    void signal_ready_progress() noexcept {}
+    // Wake the ready domain (Phase D4). Advances the split-phase wait source's
+    // progress epoch and wakes every parked participant AFTER real readiness
+    // is published (I4: state first, then notify). No-op when no wait source
+    // exists (stub / no ring / eventfd unavailable).
+    void signal_ready_progress() noexcept {
+        if (wait_source_) {
+            wait_source_->signal_progress();
+        }
+    }
 
     // ---- members -----------------------------------------------------------
     detail::RequestArena arena_;
@@ -567,6 +627,10 @@ class UringAsyncBackend : public AsyncBackend {
     // internal-testing transport hooks). One ring per backend (ADR Decision 18).
     std::unique_ptr<UringRingState> ring_state_;
     std::unique_ptr<TransportLedger> transport_ledger_;
+    // Phase D4 split-phase readiness wait (observe-only). Created when the
+    // ring initializes; null in stub mode / ring-init failure / eventfd
+    // failure (wait_source() then returns nullptr — the base default).
+    std::unique_ptr<detail::UringWaitSource> wait_source_;
     bool have_ring_ = false;
     bool admission_closed_ = false;
     std::optional<IoError> fatal_error_; // permanent transport poison
@@ -587,11 +651,13 @@ class UringAsyncBackend : public AsyncBackend {
     std::atomic<std::size_t> live_control_sqes_{0};
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    // D3 deterministic pause gates (see the guarded setters above). Compiled
-    // out of production builds; the layout cost in the internal-testing target
-    // is accepted and documented (AGENTS.md §15).
+    // D3/D4 deterministic pause gates (see the guarded setters above).
+    // Compiled out of production builds; the layout cost in the
+    // internal-testing target is accepted and documented (AGENTS.md §15).
     std::atomic<AfterCommitBeforeEnqueuePauseGate*> after_commit_before_enqueue_gate_{nullptr};
     std::atomic<BeforeDispatchTransferPauseGate*> before_dispatch_transfer_gate_{nullptr};
+    std::atomic<BeforeCommitBindingPauseGate*> before_commit_binding_gate_{nullptr};
+    std::atomic<BeforeAdmissionLockPauseGate*> before_admission_lock_gate_{nullptr};
 #endif
 #endif // SLUICE_HAS_LIBURING
 
