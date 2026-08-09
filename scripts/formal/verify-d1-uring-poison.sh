@@ -34,10 +34,12 @@ cd "$workdir"
 run_tlc() {
   local cfg="$1" tag="$2"
   local metadir="$outroot/$tag.meta"
+  local rc_tlc=0
   mkdir -p "$metadir"
   java -XX:+UseParallelGC -cp "$jar" tlc2.TLC -nowarning \
        -workers "$workers" -metadir "$metadir" \
-       -config "$cfg" D1UringPoison >"$outroot/$tag.out" 2>&1 || true
+       -config "$cfg" D1UringPoison >"$outroot/$tag.out" 2>&1 || rc_tlc=$?
+  printf '%s\n' "$rc_tlc" >"$outroot/$tag.rc"
 }
 
 launched() { grep -q '^Starting\.\.\.' "$1"; }
@@ -47,28 +49,38 @@ named_violation() { grep -Eq "Invariant $2 is violated" "$1"; }
 expect_pass() {
   local label="$1" cfg="$2" tag="$3"
   local out="$outroot/$tag.out"
+  local status_file="$outroot/$tag.rc"
   run_tlc "$cfg" "$tag"
   if ! launched "$out"; then
-    echo "FAIL  $label (TLC did not launch)"; tail -20 "$out"; return 1
+    echo "FAIL  $label (TLC did not launch; exit=$(<"$status_file"))"
+    tail -20 "$out"
+    return 1
   fi
   if passed "$out"; then
     echo "PASS  $label"; return 0
   fi
-  echo "FAIL  $label (expected PASS)"; tail -20 "$out"; return 1
+  echo "FAIL  $label (expected PASS; exit=$(<"$status_file"))"
+  tail -20 "$out"
+  return 1
 }
 
 expect_fail() {
   local label="$1" cfg="$2" expected="$3" tag="$4"
   local out="$outroot/$tag.out"
+  local status_file="$outroot/$tag.rc"
   run_tlc "$cfg" "$tag"
   if ! launched "$out"; then
-    echo "FAIL  $label (TLC did not launch)"; tail -20 "$out"; return 1
+    echo "FAIL  $label (TLC did not launch; exit=$(<"$status_file"))"
+    tail -20 "$out"
+    return 1
   fi
   if passed "$out"; then
     echo "FAIL  $label (expected $expected violation, model passed)"; return 1
   fi
   if ! named_violation "$out" "$expected"; then
-    echo "FAIL  $label (expected $expected, got another failure)"; tail -12 "$out"; return 1
+    echo "FAIL  $label (expected $expected, got another failure; exit=$(<"$status_file"))"
+    tail -12 "$out"
+    return 1
   fi
   echo "CEX   $label ($expected violated, as expected)"
 }

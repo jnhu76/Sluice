@@ -124,7 +124,7 @@ int main() {
 
 ### Experimental
 
-- `UringAsyncBackend` — Linux 6.1+ io_uring with liburing 2.14 (build-gated behind `--with-liburing`; stub without liburing). Remains experimental; non-Linux builds use the unsupported stub.
+- `UringAsyncBackend` — Linux 6.1+ io_uring with liburing 2.14 (the current exact audited baseline; build-gated behind `--with-liburing`; stub without liburing). Remains experimental; non-Linux builds use the unsupported stub.
 
 ## Build and test
 

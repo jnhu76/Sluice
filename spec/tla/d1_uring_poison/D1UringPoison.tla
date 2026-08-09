@@ -29,14 +29,13 @@ VARIABLES nextSeq,
           poisoned,
           opState,
           controlState,
-          localOutstanding,
           submitCount,
           submitCountAtPoison
 
 vars == <<nextSeq, transportLedger, identityLedger, physicalLedger,
           sequenceHistory, identityHistory,
           confirmed, recovered, poisoned, opState, controlState,
-          localOutstanding, submitCount, submitCountAtPoison>>
+          submitCount, submitCountAtPoison>>
 
 OpStates == {"Outstanding", "Deferred", "ReadySuccess", "ReadyError"}
 ControlStates == {"None", "Prepared", "Submitted", "Retired", "Recovered"}
@@ -64,7 +63,6 @@ Init ==
     /\ poisoned = FALSE
     /\ opState = "Outstanding"
     /\ controlState = "None"
-    /\ localOutstanding = TRUE
     /\ submitCount = 0
     /\ submitCountAtPoison = 0
 
@@ -86,7 +84,7 @@ Prepare ==
          IF nextSeq = ControlSeq THEN "Prepared" ELSE controlState
     /\ nextSeq' = nextSeq + 1
     /\ UNCHANGED <<confirmed, recovered, poisoned, opState,
-                   localOutstanding, submitCount, submitCountAtPoison>>
+                   submitCount, submitCountAtPoison>>
 
 PositiveSubmit(count) ==
     /\ ~poisoned
@@ -101,7 +99,7 @@ PositiveSubmit(count) ==
     /\ submitCount' = submitCount + 1
     /\ UNCHANGED <<nextSeq, sequenceHistory, identityHistory,
                    recovered, poisoned, opState,
-                   localOutstanding, submitCountAtPoison>>
+                   submitCountAtPoison>>
 
 PermanentFailure ==
     /\ ~poisoned
@@ -116,7 +114,6 @@ PermanentFailure ==
          ELSE IF opState = "Deferred" /\ ControlSeq \in SeqSet(transportLedger)
               THEN "ReadySuccess"
               ELSE opState
-    /\ localOutstanding' = FALSE
     /\ submitCount' = submitCount + 1
     /\ submitCountAtPoison' = submitCount + 1
     /\ UNCHANGED <<nextSeq, transportLedger, identityLedger, physicalLedger,
@@ -133,7 +130,7 @@ OperationCQE ==
     /\ UNCHANGED <<nextSeq, transportLedger, identityLedger, physicalLedger,
                    sequenceHistory, identityHistory,
                    confirmed, recovered, poisoned, controlState,
-                   localOutstanding, submitCount, submitCountAtPoison>>
+                   submitCount, submitCountAtPoison>>
 
 ControlCQE ==
     /\ controlState = "Submitted"
@@ -141,7 +138,7 @@ ControlCQE ==
     /\ opState' = IF opState = "Deferred" THEN "ReadySuccess" ELSE opState
     /\ UNCHANGED <<nextSeq, transportLedger, identityLedger, physicalLedger,
                    sequenceHistory, identityHistory,
-                   confirmed, recovered, poisoned, localOutstanding,
+                   confirmed, recovered, poisoned,
                    submitCount, submitCountAtPoison>>
 
 PostPoisonSubmit ==
@@ -151,9 +148,12 @@ PostPoisonSubmit ==
     /\ UNCHANGED <<nextSeq, transportLedger, identityLedger, physicalLedger,
                    sequenceHistory, identityHistory,
                    confirmed, recovered, poisoned, opState, controlState,
-                   localOutstanding, submitCountAtPoison>>
+                   submitCountAtPoison>>
 
-Stutter == UNCHANGED vars
+Quiescent ==
+    /\ opState \in {"ReadySuccess", "ReadyError"}
+    /\ controlState \notin {"Prepared", "Submitted"}
+    /\ UNCHANGED vars
 
 Next ==
     \/ Prepare
@@ -162,7 +162,7 @@ Next ==
     \/ OperationCQE
     \/ ControlCQE
     \/ PostPoisonSubmit
-    \/ Stutter
+    \/ Quiescent
 
 Spec == Init /\ [][Next]_vars
 
@@ -178,7 +178,6 @@ TypeOK ==
     /\ poisoned \in BOOLEAN
     /\ opState \in OpStates
     /\ controlState \in ControlStates
-    /\ localOutstanding \in BOOLEAN
     /\ submitCount \in Nat
     /\ submitCountAtPoison \in Nat
 

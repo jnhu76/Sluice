@@ -79,6 +79,7 @@ class TempFile {
         path_.push_back('\0');
         fd_ = ::mkstemp(path_.data());
         path_.pop_back();
+        SLUICE_CHECK(fd_ >= 0);
     }
     ~TempFile() {
         if (fd_ >= 0)
@@ -784,6 +785,7 @@ SLUICE_TEST_CASE(uring_poison_wait_drains_old_kernel_work_without_resubmitting_c
         (void)poll_bounded(backend, [&] { return write_completion.ready(); });
     std::array<std::byte, 4> on_disk{};
     const ssize_t disk_bytes = ::pread(file.fd(), on_disk.data(), on_disk.size(), 0);
+    SLUICE_CHECK(disk_bytes >= 0);
     const bool quarantined_write_never_executed = disk_bytes == 0;
 
     if (read_completion.ready())

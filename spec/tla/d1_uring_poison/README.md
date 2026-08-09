@@ -29,3 +29,7 @@ Expected gates:
 
 This model does not prove the C++ implementation. The matching implementation
 detectors live in `tests/uring_submit_failure_test.cpp`.
+
+Deadlock detection remains active outside modeled terminal quiescence. The only
+explicit self-loop is guarded by a ready operation with no prepared/submitted
+control reference; it represents the completed system, not arbitrary progress.
