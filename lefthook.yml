@@ -1,0 +1,43 @@
+# Lefthook configuration for Sluice.
+#
+# Deliberately minimal: Lefthook is only the Git-hook dispatcher. The actual
+# quality-gate logic lives in scripts/gates/pre-push.sh so it can be invoked
+# the same way manually, in CI, or via the hook — there is one authority for
+# what the pre-push gate checks.
+#
+# Minimum version: Lefthook >= 1.10.0. This floor is required for the `jobs:`
+# key and the `use_stdin` option used below. Older releases only support the
+# legacy `commands:` key and do not pass the pre-push stdin ref-pairs to the
+# script, which would silently degrade the whitespace gate (Gate 5) back to a
+# working-tree-only check. Check with:
+#
+#     lefthook --version
+#
+# Scope policy (see AGENTS.md §6.1): the local pre-push gate catches
+# deterministic mechanical failures (docs, manifests, whitespace) BEFORE a push
+# consumes a CI round trip. It intentionally does NOT run the build, full test
+# suite, sanitizers, real-liburing, or formal models — those remain CI /
+# explicit developer gates. GitHub CI stays authoritative; this hook only
+# shortens feedback, it never replaces CI.
+#
+# A checkout does NOT auto-install hooks just because this file exists.
+# Each developer must run once per clone (after installing Lefthook >= 1.10.0):
+#
+#     lefthook install
+#
+# Emergency bypass (NOT normal workflow):
+#
+#     git push --no-verify
+
+pre-push:
+  jobs:
+    - name: sluice-pre-push
+      # use_stdin: true forwards the pre-push stdin ref-pairs
+      # (<local-ref> <local-sha> <remote-ref> <remote-sha> per line) to the
+      # script so Gate 5 can check the actual pushed ranges, not just the
+      # working tree. Without this Lefthook uses a pseudo-TTY whose stdin
+      # never closes and the script would hang on `while read`.
+      use_stdin: true
+      # Bash is invoked explicitly so the hook works on checkouts where the
+      # script lacks the executable bit or where GIT_DIR mangles PATH.
+      run: bash scripts/gates/pre-push.sh
