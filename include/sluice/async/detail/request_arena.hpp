@@ -814,6 +814,20 @@ public:
         std::lock_guard<std::mutex> lk(mutex_);
         return slots_[slot.value].terminal_.stored;
     }
+    // Generation-validated terminal observation. Returns nullopt if h is stale,
+    // out of range, free, or belongs to another arena domain (the slot was
+    // released/reused under a new generation while a caller still held the old
+    // handle); otherwise the current terminal.stored bit for THIS generation.
+    // Used by backend CQE handlers that must not retire a transport reference
+    // against a reused SlotIndex (a LIVE transport cookie pins the slot, so a
+    // nullopt here is an invariant violation at the caller, not normal input).
+    std::optional<bool> terminal_stored(SlotHandle h) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        const RequestSlot* s = validate_(h);
+        if (!s)
+            return std::nullopt;
+        return s->terminal_.stored;
+    }
     WaiterRegistration registration_of(SlotIndex slot) const noexcept {
         check_slot_in_range_(slot);
         std::lock_guard<std::mutex> lk(mutex_);

@@ -377,6 +377,24 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, UringBackendSubmitTestH
 #endif
 
 UringAsyncBackend::~UringAsyncBackend() {
+    // Quiescent preflight (AGENTS.md §14; mirrors ThreadPoolBackend). Fail-fast
+    // BEFORE io_uring_queue_exit() so a non-quiescent destroy is reported as a
+    // contract violation, not masked by ring teardown. This is quiescent
+    // teardown only — it does NOT cancel/drain/wait/reap. The preflight order is
+    // backend quiescence → ring teardown eligibility (matching ThreadPool: full
+    // quiescence check, then actual teardown), and dispatch_mtx_ → arena leaf is
+    // the existing frozen lock order, so this preflight is lock-order legal.
+    // live_cookies_ != 0 is structurally implied by slot_in_use != 0 (a ring-
+    // owned request keeps its slot bound), but the redundant check improves
+    // corruption detection.
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        const auto q = arena_.quiescence_snapshot();
+        if (!dispatch_->empty() || live_cookies_.load(std::memory_order_relaxed) != 0 ||
+            q.slot_in_use != 0 || q.accepted_outstanding != 0 || q.backend_ready != 0) {
+            detail::uring_non_quiescent_destruction_fail_fast();
+        }
+    }
     if (have_ring_) {
         ::io_uring_queue_exit(&ring_state_->ring);
         have_ring_ = false;
@@ -821,24 +839,36 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     // SQE was never installed is impossible here since the cookie is LIVE —
     // so this is a genuine duplicate original CQE, or a real CQE racing a
     // cancel CQE that the kernel resolved as -ECANCELED first). In that case
-    // retire the transport reference so it does not leak. Any OTHER state
-    // (slot released/reused, or terminal_state fail-fast territory) is, per
-    // frozen design §4, an invariant violation under a LIVE cookie — fail-fast
-    // rather than silently leaking the router entry. Inspect the arena: if the
-    // slot is still current-generation and already terminal, retire cleanly;
-    // otherwise fail-fast.
-    const bool already_terminal = arena_.terminal_stored(h.slot);
-    if (already_terminal) {
+    // retire the transport reference so it does not leak.
+    //
+    // Generation-validated observation (the full SlotHandle, not just the
+    // SlotIndex): under the execution-reference pinning model a LIVE cookie
+    // pins the slot's generation until this CQE retires it, so the current-
+    // generation handle MUST still resolve. A nullopt here means the generation
+    // moved (slot released/reused) while a LIVE cookie pointed at it — an
+    // invariant violation, fail-fast. Using the SlotIndex-only accessor would
+    // let a future reused SlotIndex silently retire the wrong transport
+    // reference; the full-handle observation closes that future trap.
+    const std::optional<bool> already_terminal = arena_.terminal_stored(h);
+    if (!already_terminal.has_value()) {
+        // LIVE transport cookie but a stale logical handle (generation moved).
+        std::fprintf(stderr, "sluice::async::UringAsyncBackend: LIVE cookie matched "
+                             "but the slot generation moved (record_terminal rejected "
+                             "a non-current-generation handle — invariant violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+    if (*already_terminal) {
         entry.in_use = false;
         entry.cookie = 0;
         cookie_free_list_.push_back(detail::SlotIndex{static_cast<std::uint32_t>(router_index)});
         live_cookies_.fetch_sub(1, std::memory_order_relaxed);
         return;
     }
-    // LIVE cookie matched but the slot is not terminal and record_terminal
-    // rejected — the generation moved (slot released/reused) while a LIVE
-    // cookie pointed at it. That cannot happen under the dispatch/cancel lock
-    // discipline (a LIVE cookie pins the slot until this CQE retires it).
+    // LIVE cookie matched, the generation is current, but the slot is not
+    // terminal and record_terminal rejected. That cannot happen under the
+    // dispatch/cancel lock discipline (a LIVE cookie pins the slot until this
+    // CQE retires it).
     std::fprintf(stderr, "sluice::async::UringAsyncBackend: LIVE cookie matched "
                          "but record_terminal rejected a non-terminal slot "
                          "(invariant violation)\n");
@@ -847,15 +877,25 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
 }
 
 std::size_t UringAsyncBackend::reap_cqes() noexcept {
-    std::size_t recorded = 0;
+    // Count of NON-CONTROL CQEs observed this pass. This is NOT "operation
+    // terminals recorded": handle_one_cqe drops an unknown/stale cookie without
+    // recording a terminal, but such a CQE is still a non-control CQE observed
+    // by the reap loop. Production callers (poll/wait_one) discard this value;
+    // it exists for bounded diagnostics only. (Renamed from `recorded` to make
+    // the observed-vs-recorded distinction explicit.)
+    std::size_t non_control_observed = 0;
     constexpr unsigned BATCH = 32;
     io_uring_cqe* cqes[BATCH];
     unsigned got = 0;
     while ((got = ::io_uring_peek_batch_cqe(&ring_state_->ring, cqes, BATCH)) > 0) {
         for (unsigned i = 0; i < got; ++i) {
             io_uring_cqe* cqe = cqes[i];
-            const std::uint64_t user_data = static_cast<std::uint64_t>(
-                reinterpret_cast<std::uintptr_t>(io_uring_cqe_get_data(cqe)));
+            // Integer user_data API end-to-end (P1-64BIT-CQE): the SQE side
+            // installs the op_cookie via io_uring_sqe_set_data64, so the CQE
+            // side reads it via io_uring_cqe_get_data64. No pointer/uintptr_t
+            // token round-trip — the kernel-visible identity is an integer at
+            // both ends, which is the contract on every liburing target.
+            const std::uint64_t user_data = ::io_uring_cqe_get_data64(cqe);
             const int res = cqe->res;
             ::io_uring_cqe_seen(&ring_state_->ring, cqe);
             // Snapshot whether this CQE is an operation (vs control) BEFORE
@@ -863,12 +903,12 @@ std::size_t UringAsyncBackend::reap_cqes() noexcept {
             const bool is_op = (user_data != CONTROL_CANCEL && user_data != 0);
             handle_one_cqe(user_data, res);
             if (is_op)
-                ++recorded;
+                ++non_control_observed;
         }
         if (got < BATCH)
             break;
     }
-    return recorded;
+    return non_control_observed;
 }
 
 // ---------------------------------------------------------------------------

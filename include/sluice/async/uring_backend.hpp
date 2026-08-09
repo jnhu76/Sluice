@@ -282,7 +282,9 @@ class UringAsyncBackend : public AsyncBackend {
     // Reap all currently-ready CQEs: route op cookies to full SlotHandles,
     // validate generation, record_terminal ONLY (never publish). Control
     // cancel CQEs update only fixed cancel bookkeeping. Returns the count of
-    // operation CQEs whose terminal was recorded.
+    // NON-CONTROL CQEs observed (a stale/unknown cookie is dropped without
+    // recording a terminal but is still counted here). Production callers
+    // discard this value; it exists for bounded diagnostics only.
     std::size_t reap_cqes() noexcept;
 
     // Decode one CQE: op cookie -> record_terminal; control -> bookkeeping.
