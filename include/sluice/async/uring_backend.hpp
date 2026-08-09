@@ -54,7 +54,7 @@
 #include <optional>
 #include <vector>
 
-#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_URING_INTERNAL_TESTING)
+#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
 struct io_uring;
 #endif
 
@@ -79,10 +79,10 @@ struct UringConfig {
 };
 #endif
 
-#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_URING_INTERNAL_TESTING)
+#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
 // Non-installed transport submit/wait seams used by the dedicated
 // real-liburing fault tests.
-// Production targets never define SLUICE_URING_INTERNAL_TESTING and therefore
+// Production targets never define SLUICE_ASYNC_INTERNAL_TESTING and therefore
 // expose neither this type nor the constructor overload below.
 struct UringBackendSubmitTestHooks {
     using SubmitFn = int (*)(void*, ::io_uring*) noexcept;
@@ -107,7 +107,7 @@ class UringAsyncBackend : public AsyncBackend {
     // rejected with std::invalid_argument before backend-state allocation.
     explicit UringAsyncBackend(UringConfig config);
 #endif
-#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_URING_INTERNAL_TESTING)
+#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
     UringAsyncBackend(UringConfig config, UringBackendSubmitTestHooks hooks);
 #endif
     ~UringAsyncBackend() override;
@@ -154,7 +154,7 @@ class UringAsyncBackend : public AsyncBackend {
     std::size_t configured_queue_depth() const noexcept { return queue_depth_; }
 #endif
 
-#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_URING_INTERNAL_TESTING)
+#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // Test-only: number of io_uring_submit() transport flushes actually issued
     // (proves submit is transport progress, decoupled from lifecycle).
     std::uint64_t submit_flushes_for_test() const noexcept {

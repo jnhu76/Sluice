@@ -138,7 +138,7 @@ bool UringAsyncBackend::available() const noexcept {
 // <liburing.h>.
 struct UringRingState {
     ::io_uring ring{};
-#if defined(SLUICE_URING_INTERNAL_TESTING)
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     UringBackendSubmitTestHooks test_hooks{};
 #endif
 };
@@ -516,7 +516,7 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
     // available()==false contract. submit_* will reject synchronously.
 }
 
-#if defined(SLUICE_URING_INTERNAL_TESTING)
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 UringAsyncBackend::UringAsyncBackend(UringConfig config, UringBackendSubmitTestHooks hooks)
     : UringAsyncBackend(config) {
     ring_state_->test_hooks = hooks;
@@ -875,7 +875,7 @@ int UringAsyncBackend::submit_transport_locked() noexcept {
 
     submit_flushes_.fetch_add(1, std::memory_order_relaxed);
     int rc = 0;
-#if defined(SLUICE_URING_INTERNAL_TESTING)
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     if (ring_state_->test_hooks.submit != nullptr) {
         rc = ring_state_->test_hooks.submit(ring_state_->test_hooks.context, &ring_state_->ring);
     } else {
@@ -1305,7 +1305,7 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
     // flushes pending SQEs and blocks for min_complete=1 CQE. A transient wake
     // is not a drained boundary: only accepted_outstanding()==0 may return 0.
     auto submit_and_wait_once = [&]() noexcept {
-#if defined(SLUICE_URING_INTERNAL_TESTING)
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         if (ring_state_->test_hooks.submit_and_wait != nullptr) {
             return ring_state_->test_hooks.submit_and_wait(ring_state_->test_hooks.context,
                                                            &ring_state_->ring, 1);
