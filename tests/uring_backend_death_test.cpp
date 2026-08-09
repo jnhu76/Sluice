@@ -9,7 +9,7 @@
 // Linkage: this target links the PRODUCTION sluice_async (the real
 // UringAsyncBackend destructor). The destruction contract needs no injection
 // hook, so this is a stronger proof than recompiling the backend source under
-// SLUICE_URING_INTERNAL_TESTING: the fail-fast under test is the exact
+// SLUICE_ASYNC_INTERNAL_TESTING: the fail-fast under test is the exact
 // production destructor preflight that runs before io_uring_queue_exit().
 //
 // Fail-fast authority: the Completion is declared BEFORE the backend (and

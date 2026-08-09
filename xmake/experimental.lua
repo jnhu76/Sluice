@@ -81,7 +81,7 @@ if has_liburing and os.isfile(R .. "tests/uring_submit_failure_test.cpp") then
                   R .. "src/async/fail_fast.cpp",
                   R .. "tests/uring_submit_failure_test.cpp")
         add_defines("SLUICE_HAS_LIBURING",
-                    "SLUICE_URING_INTERNAL_TESTING")
+                    "SLUICE_ASYNC_INTERNAL_TESTING")
         add_packages("liburing")
         add_tests("uring_submit_failure_test")
 end
