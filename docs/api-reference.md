@@ -1453,11 +1453,17 @@ Construct directly; there is no factory function.
 class UringAsyncBackend : public AsyncBackend {
 public:
     explicit UringAsyncBackend(unsigned queue_depth = 64);
+    explicit UringAsyncBackend(UringConfig config);
     ~UringAsyncBackend() override;
     // ... AsyncBackend implementation (real path gated by SLUICE_HAS_LIBURING)
     bool available() const noexcept;
 };
 ```
+
+`UringConfig::request_capacity` must be in `[1, UINT32_MAX]`, matching the
+internal `SlotIndex` domain; `queue_depth` must be nonzero. Invalid explicit
+configuration is rejected with `std::invalid_argument` before backend-state
+allocation. The legacy constructor preserves its `0 -> 64` mapping.
 
 ### `sluice::async::FakeAsyncBackend`
 

@@ -23,6 +23,25 @@
       "notes": "COVERAGE GAP: no negative model. Liveness checked via FairSpec temporal property."
     },
     {
+      "id": "d1-uring-poison",
+      "spec_dir": "spec/tla/d1_uring_poison",
+      "verifier": "scripts/formal/verify-d1-uring-poison.sh",
+      "tiers": [
+        "smoke"
+      ],
+      "positive_gate_count": 1,
+      "negative_gate_count": 3,
+      "reachability_gate_count": 0,
+      "owner_docs": [
+        "docs/architecture/phase-d1-uring-frozen-design.md",
+        "docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md"
+      ],
+      "implementation_bindings": [
+        "src/async/uring_backend.cpp"
+      ],
+      "notes": "Phase D1 P0-D bounded physical ledger, permanent poison recovery, and exact control-reference quiescence. Negative configs kill masked-slot identity, premature original-CQE publication, and post-poison transport submission."
+    },
+    {
       "id": "e7-publication",
       "spec_dir": "spec/tla/e7_publication",
       "verifier": "scripts/formal/verify-e7-publication.sh",

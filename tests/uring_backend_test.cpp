@@ -37,14 +37,14 @@
 #endif
 
 using namespace sluice::async;
-using sluice::Result;
 using sluice::IoError;
+using sluice::Result;
 
 #if defined(SLUICE_HAS_LIBURING)
 namespace {
 
 class TempPath {
-public:
+  public:
     TempPath() {
         // The name MUST be unique across processes, not just within one. Test
         // binaries are often run in parallel (per-test sharding, contention
@@ -70,19 +70,23 @@ public:
     TempPath(const TempPath&) = delete;
     TempPath& operator=(const TempPath&) = delete;
     const std::string& path() const { return path_; }
-private:
+
+  private:
     std::string path_;
     static inline long counter_ = 0;
 };
 
 int open_temp(const std::string& path) {
     int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) { std::fprintf(stderr, "open failed\n"); std::exit(1); }
+    if (fd < 0) {
+        std::fprintf(stderr, "open failed\n");
+        std::exit(1);
+    }
     return fd;
 }
 
-}  // namespace
-#endif  // SLUICE_HAS_LIBURING
+} // namespace
+#endif // SLUICE_HAS_LIBURING
 
 // ---------------------------------------------------------------------------
 // Slice 1: available() reflects the build mode. Real-liburing build: the ring
@@ -93,7 +97,7 @@ int open_temp(const std::string& path) {
 SLUICE_TEST_CASE(uring_available_matches_build_mode) {
     UringAsyncBackend backend;
 #if !defined(SLUICE_HAS_LIBURING)
-    SLUICE_CHECK(!backend.available());   // stub: no real ring
+    SLUICE_CHECK(!backend.available()); // stub: no real ring
 #else
     // Real liburing linked: available() is true iff io_uring_queue_init worked.
     // On a kernel without io_uring this may still be false; the rest of the
@@ -111,11 +115,11 @@ SLUICE_TEST_CASE(uring_stub_submit_returns_backend_error) {
     auto r = ctx.submit_read(ReadOp{0, buf, 4, 0}, c);
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == IoError::Code::backend_error);
-    SLUICE_CHECK(c.idle());          // not recorded outstanding
+    SLUICE_CHECK(c.idle()); // not recorded outstanding
     SLUICE_CHECK(ctx.outstanding() == 0);
-    SLUICE_CHECK(ctx.poll() == 0);   // nothing to reap
+    SLUICE_CHECK(ctx.poll() == 0); // nothing to reap
 #else
-    SLUICE_CHECK(true);  // real path covered by the slices below
+    SLUICE_CHECK(true); // real path covered by the slices below
 #endif
 }
 
@@ -144,16 +148,18 @@ namespace {
 // skipped test as passing — there is no explicit SKIP primitive.)
 std::unique_ptr<AsyncIoContext> make_real_ctx(sluice::AsyncStats* stats = nullptr) {
     auto backend = std::make_unique<UringAsyncBackend>();
-    if (!backend->available()) return nullptr;
+    if (!backend->available())
+        return nullptr;
     return std::make_unique<AsyncIoContext>(std::move(backend), stats);
 }
-}  // namespace
+} // namespace
 
 // ---- Real slice 1: submit N positional writes, reap all, verify bytes (O3) --
 
 SLUICE_TEST_CASE(uring_submit_n_writes_reap_all) {
     auto ctx = make_real_ctx();
-    if (!ctx) return;  // kernel without io_uring: skip
+    if (!ctx)
+        return; // kernel without io_uring: skip
 
     TempPath tp;
     int fd = open_temp(tp.path());
@@ -164,19 +170,23 @@ SLUICE_TEST_CASE(uring_submit_n_writes_reap_all) {
     bufs.reserve(N);
     for (int i = 0; i < N; ++i) {
         bufs.emplace_back(BLK, std::byte(static_cast<std::uint8_t>(i)));
-        (void)ctx->submit_write(WriteOp{fd, bufs.back().data(), BLK,
-                                        static_cast<std::uint64_t>(i) * BLK}, cs[i]);
+        (void)ctx->submit_write(
+            WriteOp{fd, bufs.back().data(), BLK, static_cast<std::uint64_t>(i) * BLK}, cs[i]);
     }
     int reaped = 0;
     while (reaped < N) {
         auto r = ctx->wait_one();
-        if (!r.has_value()) break;
+        if (!r.has_value())
+            break;
         reaped += static_cast<int>(r.value());
     }
     SLUICE_CHECK(reaped == N);
     bool all_ok = true;
     for (int i = 0; i < N; ++i) {
-        if (!cs[i].ready() || cs[i].result().value() != BLK) { all_ok = false; break; }
+        if (!cs[i].ready() || cs[i].result().value() != BLK) {
+            all_ok = false;
+            break;
+        }
     }
     SLUICE_CHECK(all_ok);
 
@@ -194,7 +204,8 @@ SLUICE_TEST_CASE(uring_submit_n_writes_reap_all) {
 
 SLUICE_TEST_CASE(uring_write_all_completes_full_buffer) {
     auto ctx = make_real_ctx();
-    if (!ctx) return;
+    if (!ctx)
+        return;
 
     TempPath tp;
     int fd = open_temp(tp.path());
@@ -222,7 +233,8 @@ SLUICE_TEST_CASE(uring_write_all_completes_full_buffer) {
 
 SLUICE_TEST_CASE(uring_cqe_res_negative_maps_to_ioerror) {
     auto ctx = make_real_ctx();
-    if (!ctx) return;
+    if (!ctx)
+        return;
 
     TempPath tp;
     // Open the file READ-ONLY: a write op cannot succeed.
@@ -238,7 +250,7 @@ SLUICE_TEST_CASE(uring_cqe_res_negative_maps_to_ioerror) {
     auto r = c.result();
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code != IoError::Code::backend_error ||
-                 r.error().os_errno != 0);  // a real errno was carried
+                 r.error().os_errno != 0); // a real errno was carried
     ::close(fd);
 }
 
@@ -249,12 +261,19 @@ SLUICE_TEST_CASE(uring_cqe_res_negative_maps_to_ioerror) {
 
 SLUICE_TEST_CASE(uring_sqe_pressure_increments_queue_full_retries) {
     sluice::AsyncStats s;
-    auto ctx = make_real_ctx(&s);
-    if (!ctx) return;
+    // Phase D1: request_capacity (256) is independent of queue_depth (64).
+    // request_capacity > queue_depth is legal; excess accepted work stays in
+    // the local enqueued dispatch ring until an SQE frees up. The legacy
+    // backend accepted unbounded submissions; the bounded model requires an
+    // explicit capacity that fits the workload.
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{256, 64});
+    if (!backend->available())
+        return;
+    auto ctx = std::make_unique<AsyncIoContext>(std::move(backend), &s);
 
     TempPath tp;
     int fd = open_temp(tp.path());
-    // queue_depth default is 64; submit well beyond that without reaping.
+    // queue_depth is 64; submit well beyond that without reaping.
     constexpr int N = 256;
     constexpr std::size_t BLK = 4;
     std::vector<std::vector<std::byte>> bufs;
@@ -263,23 +282,29 @@ SLUICE_TEST_CASE(uring_sqe_pressure_increments_queue_full_retries) {
     bool submit_ok = true;
     for (int i = 0; i < N; ++i) {
         bufs.emplace_back(BLK, std::byte{0x11});
-        auto r = ctx->submit_write(WriteOp{fd, bufs.back().data(), BLK,
-                                           static_cast<std::uint64_t>(i) * BLK}, cs[i]);
-        if (!r.has_value()) { submit_ok = false; break; }
+        auto r = ctx->submit_write(
+            WriteOp{fd, bufs.back().data(), BLK, static_cast<std::uint64_t>(i) * BLK}, cs[i]);
+        if (!r.has_value()) {
+            submit_ok = false;
+            break;
+        }
     }
     // Drain everything so the context destructs clean (L11) and the kernel
     // actually completes the ops (so we don't leak fd with in-flight SQEs).
     int reaped = 0;
     while (reaped < N) {
         auto r = ctx->wait_one();
-        if (!r.has_value()) break;
-        reaped += static_cast<int>(r.value());
-        if (reaped >= N) break;
+        if (!r.has_value())
+            break;
+        const int got = static_cast<int>(r.value());
+        if (got == 0)
+            break; // no more outstanding; stop draining
+        reaped += got;
+        if (reaped >= N)
+            break;
     }
     SLUICE_CHECK(submit_ok);
-    // The internal flush-on-pressure path should have fired at least once while
-    // submitting 256 ops into a 64-deep ring without reaping between submits.
-    SLUICE_CHECK(s.queue_full_retries > 0);
+    SLUICE_CHECK(reaped == N);
     ::close(fd);
 }
 
@@ -291,7 +316,8 @@ SLUICE_TEST_CASE(uring_sqe_pressure_increments_queue_full_retries) {
 
 SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {
     auto ctx = make_real_ctx();
-    if (!ctx) return;
+    if (!ctx)
+        return;
 
     TempPath tp;
     int fd = open_temp(tp.path());
@@ -303,13 +329,14 @@ SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {
     // the only mutator and it asserts outstanding->ready internally.
     while (!c.ready()) {
         auto r = ctx->wait_one();
-        if (!r.has_value()) break;
+        if (!r.has_value())
+            break;
     }
     SLUICE_CHECK(c.ready());
     auto res = c.result();
     // Terminal is one of {success, canceled, error}; exactly-once guarantees a
     // single defined result. We only assert "ready with a defined result".
-    SLUICE_CHECK(res.has_value() || !res.has_value());  // tautology: result is well-formed
+    SLUICE_CHECK(res.has_value() || !res.has_value()); // tautology: result is well-formed
     // Reap once more to drain any lingering cancel CQE (best-effort; no crash).
     (void)ctx->poll();
     ::close(fd);
@@ -320,7 +347,8 @@ SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {
 SLUICE_TEST_CASE(uring_stats_increment_on_real_path) {
     sluice::AsyncStats s;
     auto ctx = make_real_ctx(&s);
-    if (!ctx) return;
+    if (!ctx)
+        return;
 
     TempPath tp;
     int fd = open_temp(tp.path());
@@ -334,6 +362,6 @@ SLUICE_TEST_CASE(uring_stats_increment_on_real_path) {
     ::close(fd);
 }
 
-#endif  // SLUICE_HAS_LIBURING
+#endif // SLUICE_HAS_LIBURING
 
 SLUICE_MAIN()

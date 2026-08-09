@@ -316,4 +316,17 @@ bool evented_admission_check() noexcept;
 // Fail-fast in BOTH Debug and Release.
 [[noreturn]] void threadpool_non_quiescent_destruction_fail_fast() noexcept;
 
+// Phase D1 (UringAsyncBackend): non-quiescent destruction. The backend's
+// destructor is called while accepted work remains (an enqueued local dispatch
+// entry, a live operation cookie / ring-owned request, a backend-ready unreaped
+// terminal, an accepted-outstanding request, or a bound slot). Quiescent
+// teardown requires the caller to reap accepted requests and reset/destroy the
+// ready Completions so that slot_in_use == 0 and accepted_outstanding == 0.
+// Silent implicit cancel/drain/wait/reap would violate the explicit lifecycle
+// (AGENTS.md §14) and could strand caller-owned Completions or race a live
+// kernel request. The destructor preflights this BEFORE io_uring_queue_exit()
+// so a contract violation is reported as such, not masked by ring teardown.
+// Fail-fast in BOTH Debug and Release.
+[[noreturn]] void uring_non_quiescent_destruction_fail_fast() noexcept;
+
 }  // namespace sluice::async::detail

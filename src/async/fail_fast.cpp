@@ -208,6 +208,15 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// Phase D1 (UringAsyncBackend): non-quiescent destruction. The caller destroyed
+// the backend while accepted work remains (enqueued dispatch entry, live op
+// cookie / ring-owned request, backend-ready unreaped terminal, accepted-
+// outstanding request, or bound slot). Preflighted BEFORE io_uring_queue_exit().
+// Fail-fast in BOTH Debug and Release.
+[[noreturn]] void uring_non_quiescent_destruction_fail_fast() noexcept {
+    std::terminate();
+}
+
 // E14 D-E14-2: Evented admission check. Returns the effective fiber support
 // status. Production: fiber_ctx::supported (compile-time constant). Internal-
 // testing: may be overridden to simulate unsupported targets on x86_64.

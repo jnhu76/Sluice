@@ -163,3 +163,26 @@ sluice_internal_async_test("threadpool_backend_death_test", {platform_gate = {"l
 -- fail-fast authority), while close_admission + drain + reset + destroy exits
 -- 0. POSIX-only.
 sluice_internal_async_test("fake_backend_death_test", {platform_gate = {"linux", "macosx"}})
+
+-- uring_backend_death_test — Phase D1 UringAsyncBackend non-quiescent
+-- destruction fail-fast. The destruction contract needs NO injection hook, so
+-- this links the PRODUCTION sluice_async (the real UringAsyncBackend
+-- destructor), not the internal-testing variant. Proves that destroying a
+-- backend whose destructor preflight finds non-quiescence (a ready-but-unreset
+-- Completion with slot_in_use != 0) terminates (exit 86) in BOTH Debug and
+-- Release BEFORE io_uring_queue_exit() runs, while a quiescent destroy (drain +
+-- reset + destroy) exits 0. Real-liburing only (the production destructor
+-- preflights the live io_uring ring); POSIX-only (fork/exec/waitpid).
+if has_config("with-liburing") then
+    local p = R .. "tests/uring_backend_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("uring_backend_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(p)
+            add_tests("uring_backend_death_test")
+    end
+end
