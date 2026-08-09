@@ -15,17 +15,26 @@ implementation can be licensed. **No production poison is shipped by this audit.
 D1's `UringAsyncBackend` submits with:
 
 ```text
-flags        = 0                       (NO SQPOLL, NO SINGLE_ISSUER, NO DEFER_TASKRUN)
+app-call flags = 0                     (NO SQPOLL, NO SINGLE_ISSUER, NO DEFER_TASKRUN)
 one private io_uring per backend
 all backend entries serialized by AsyncIoContext::access_mtx_ (single driver)
 no concurrent io_uring_enter()
-io_uring_submit(ring)  ==  __io_uring_flush_sq()  +  io_uring_enter(to_submit = N, min_complete = 0, flags = 0)
+io_uring_submit(ring)  ==  __io_uring_flush_sq()  +  io_uring_enter(to_submit = N, min_complete = 0)
 ```
 
-`io_uring_submit()` (liburing `src/queue.c`) first flushes the application-side `sqe_tail` to the
-shared SQ state (`__io_uring_flush_sq` advances `*ktail`), then issues
-`io_uring_enter(to_submit = N, min_complete = 0, flags = 0)`. The shared-SQ tail advance happens
-**before** the `io_uring_enter` system call.
+The application never requests `IORING_ENTER_GETEVENTS` or `min_complete > 0`
+on the submit path. **Qualification:** current liburing MAY internally add
+`IORING_ENTER_GETEVENTS` to the underlying `io_uring_enter` during a plain
+`io_uring_submit()` when CQ flushing / task_work requires an enter, even though
+the caller's wait count is zero. The theorem in §3.4 accounts for this and does
+not depend on "the syscall never carries GETEVENTS"; see §3.3.
+
+`io_uring_submit()` (liburing, in its `queue.c` source file — see
+<https://github.com/axboe/liburing/blob/master/src/queue.c>) first flushes the
+application-side `sqe_tail` to the shared SQ state (`__io_uring_flush_sq`
+advances `*ktail`), then issues
+`io_uring_enter(to_submit = N, min_complete = 0)`. The shared-SQ
+tail advance happens **before** the `io_uring_enter` system call.
 
 ---
 
@@ -56,7 +65,7 @@ From `io_uring_enter(2)`:
 
 A negative return is therefore a kernel-level/control error, distinct from per-SQE CQE errors.
 
-### 3.2 `io_submit_sqes()` — the kernel submission loop (Linux `io_uring/io_uring.c`)
+### 3.2 `io_submit_sqes()` — the kernel submission loop (Linux io_uring source)
 
 The kernel's `io_submit_sqes(struct io_ring_ctx *ctx, unsigned int to_submit)` is the function
 `io_uring_enter` calls to drain the SQ. Its return logic (current mainline):
@@ -100,22 +109,58 @@ out:
     return ret;
 ```
 
-D1 sets `flags = 0` (no `IORING_ENTER_GETEVENTS`) and `min_complete = 0`. Therefore:
+D1 sets `flags = 0` (no `IORING_ENTER_GETEVENTS`) and `min_complete = 0` at the
+*application* call surface. **Caveat (qualification):** current liburing MAY
+internally add `IORING_ENTER_GETEVENTS` during a plain `io_uring_submit()` when
+CQ flushing/task_work requires an enter, even though the caller's `wait_nr` is
+zero. The theorem below therefore does NOT rely on "the syscall never carries
+GETEVENTS"; it relies on the kernel's submit-count-vs-wait-result precedence
+when GETEVENTS happens to be present. Therefore:
 
-- The wait/get-events phase is **gated off** (`if (flags & IORING_ENTER_GETEVENTS)` is false).
-- The early-exit `if (ret != to_submit) goto out;` preserves the (possibly partial-positive) submit
-  count and returns it directly.
-- **A wait/control error cannot overwrite a positive submit count** because there is no wait phase.
+- If the submit phase consumed ≥1 SQE, `io_submit_sqes` returns a **positive**
+  count and the early-exit `if (ret != to_submit) goto out;` preserves it (the
+  count is returned directly).
+- A GETEVENTS wait result, if present, replaces `ret` **only when the submit
+  `ret` was already zero** (no SQEs consumed). It cannot overwrite a positive
+  submit count.
+- A negative control error from the submit phase (`-EAGAIN` via the zero-
+  submitted path, or other `-errno` before the loop consumes anything) is
+  therefore not a mask for a positive partial submission.
 
 ### 3.4 Conclusion (the theorem)
 
-> **In D1's exact configuration (flags=0, no SQPOLL, no GETEVENTS, single driver), a negative
-> `io_uring_submit()` return proves ZERO SQEs from that flushed batch were consumed by the kernel.**
+> **In D1's exact configuration — no SQPOLL, no SQ_REWIND, a serialized
+> one-driver private ring, plain `io_uring_submit()` with no concurrent
+> `io_uring_enter()`, under the current audited liburing/kernel submit
+> semantics — a negative `io_uring_submit()` return proves ZERO SQEs from that
+> flushed batch were consumed by the kernel.**
+
+Proof sketch (the load-bearing precedence):
+
+```text
+io_submit_sqes:   partial consumption  =>  positive count preserved
+io_uring_enter:   if submission count != to_submit  =>  return that count/error
+                  (GETEVENTS may add a wait result, but only when submit ret == 0)
+therefore:        a negative plain-submit return cannot hide a positive
+                  partial submission
+```
 
 Corollary: those SQEs will never produce CQEs (the kernel never saw them as consumed requests).
 They are provably Class-A (definitely not kernel-consumed) and may be locally retired — provided
 the membership of the failed batch can be tracked with bounded metadata and the wait path is
 prevented from re-submitting it.
+
+**Scoping — the theorem MUST NOT be generalized to:** SQPOLL, SQ_REWIND,
+multi-issuer rings, a future private-shard topology, or an arbitrary future
+kernel/liburing implementation. It holds only for D1's frozen preconditions
+above.
+
+**Production-recovery prerequisite:** before relying on this theorem as a
+*portable* Sluice guarantee, define the supported kernel/liburing baseline and
+verify the theorem against the minimum supported kernel family (or identify the
+stable ABI / man-page guarantee that makes source-version inspection
+unnecessary). The local WSL2 kernel version alone is not a source-level
+portability proof.
 
 ---
 
@@ -156,11 +201,70 @@ tracking, per dispatch, the cookie → SlotHandle mapping that is already in the
 the physical SQ order. The CqeRouter alone is insufficient (it does not record which cookies were in
 the unflushed batch vs. already-entered in a prior successful submit).
 
-Required proof: a bounded construction-time ledger of "prepared-but-not-yet-confirmed-consumed"
-cookies, updated on each `get_sqe` (append) and each successful positive `io_uring_submit` return
-(drain the returned count from the front). This is **transport evidence only**; it MUST NOT drive
-RequestArena lifecycle (reviewer §6 — no submit-count correctness authority). It only identifies
-the quarantined set after a proven-zero-consumption negative return.
+**Capacity bound (frozen rule for the future ledger):**
+
+```text
+transport_ledger_capacity = actual initialized SQ entry capacity
+                          = ring.sq.ring_entries
+```
+
+The ledger is bounded by the **actual SQ entry capacity returned by ring setup**
+(`sq_entries` / `ring.sq.ring_entries`), NOT by `request_capacity` and NOT
+necessarily by the raw configured `UringConfig.queue_depth`: Linux rounds SQ
+entries to the actual ring size (normally a power of two). Counterexample:
+
+```text
+configured queue_depth = 65
+actual SQ capacity     = 128
+```
+
+A ledger sized to 65 (or to `request_capacity`) cannot represent all physical
+pending SQEs when the kernel rounded 65 up to 128. Use the real initialized
+ring capacity, queried from the live `ring.sq.ring_entries` after
+`io_uring_queue_init`.
+
+**Per-entry representation (physical SQ authority, distinct from RequestArena
+authority):** each ledger entry records, at minimum,
+
+```text
+physical sequence / order in the SQ
+kind:
+    operation
+        op_cookie
+        full SlotHandle (slot + generation)
+    cancel_control
+        target op_cookie / target SlotHandle
+```
+
+A scalar "pending operation count" is **forbidden**. The physical SQ sequence
+
+```text
+OP A
+CANCEL A
+OP B
+CANCEL B
+...
+```
+
+is a legal physical SQ order (a cancel SQE may share the failed batch with the
+operation SQEs it targets). A scalar count collapses operation and control
+entries and cannot represent that interleaving; only a per-entry ledger can.
+
+Required proof: a bounded construction-time ledger (capacity = actual SQ
+entries) of "prepared-but-not-yet-confirmed-consumed" entries, updated on each
+`get_sqe` (append, classified operation/control) and each successful positive
+`io_uring_submit` return (drain the returned count from the front). This is
+**TRANSPORT EVIDENCE ONLY**; it MUST NEVER drive:
+
+```text
+RequestState
+the terminal winner
+Completion publication
+the enqueued -> running transition
+```
+
+It only identifies the quarantined set after a proven-zero-consumption negative
+return (reviewer §6 — no submit-count correctness authority).
 
 ### 4.2 Cancel-control-SQE classification
 
@@ -208,8 +312,12 @@ Required proof:
 
 ## 6. Verdict
 
-- **The §3.4 theorem holds** for D1's configuration: a negative `io_uring_submit()` proves zero
-  consumed SQEs. This is the Class-A proof basis the original §6.5 deemed possibly unavailable.
+- **The §3.4 theorem holds** under D1's frozen preconditions (§3.4): a negative
+  `io_uring_submit()` proves zero consumed SQEs. This is the Class-A proof basis
+  the original §6.5 deemed possibly unavailable. The theorem is narrowly scoped
+  and must NOT be generalized beyond those preconditions; relying on it as a
+  portable Sluice guarantee requires defining the supported kernel/liburing
+  baseline (§3.4 production-recovery prerequisite).
 - **A clean Class-A retirement path is therefore architecturally available**, BUT it requires:
   1. the bounded transport-metadata ledger (§4.1);
   2. the cancel-control-SQE classification (§4.2);
@@ -233,8 +341,9 @@ on the "every accepted request has a provable terminal path" axis until that imp
 - `io_uring_enter(2)` — https://man7.org/linux/man-pages/man2/io_uring_enter.2.html
 - `io_uring(7)` — https://man7.org/linux/man-pages/man7/io_uring.7.html
 - `io_uring_get_sqe(3)` — https://man7.org/linux/man-pages/man3/io_uring_get_sqe.3.html
-- liburing `src/queue.c` (`__io_uring_flush_sq`, `io_uring_submit`) — https://github.com/axboe/liburing
-- Linux `io_uring/io_uring.c` (`io_submit_sqes`, `io_uring_enter`/`__io_uring_enter`) —
+- liburing `queue.c` source (`__io_uring_flush_sq`, `io_uring_submit`) —
+  https://github.com/axboe/liburing/blob/master/src/queue.c
+- Linux io_uring source (`io_submit_sqes`, `io_uring_enter`/`__io_uring_enter`) —
   https://github.com/torvalds/linux/blob/master/io_uring/io_uring.c
 - Debian liburing-dev `io_uring_enter(2)` —
   https://manpages.debian.org/unstable/liburing-dev/io_uring_enter.2.en.html
