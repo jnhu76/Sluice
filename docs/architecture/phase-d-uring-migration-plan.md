@@ -1,6 +1,6 @@
 # Phase D — UringAsyncBackend RequestArena Migration: SOTA-Aligned Plan
 
-**Status:** D1 IMPLEMENTED AND VERIFIED — later Phase D slices remain planned.
+**Status:** D0/D0.5 COMPLETE; D1 COMPLETE (PR #78); D2 COMPLETE; D3/D4 PENDING.
 **Date:** 2026-08-09
 **Author:** jnhu
 **Governing authority:** [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
@@ -61,8 +61,10 @@ Two infrastructure findings from the first audit were resolved in D1:
 2. **P-D0-INF-02:** the development host completed the real-liburing test matrix. Stub green remains
    separate build/API evidence and never substitutes for KernelIo execution evidence.
 
-The current PR implements and verifies D1. D2-D4 remain governed by their later-slice entry gates;
-merging D1 does not imply that those slices are complete.
+PR #78 implemented and verified D1. The current D2 change adds failure-injection and
+accepted-terminal no-allocation evidence without changing D1's state machine, private-ring
+topology, or P0-D recovery controller. D3 and D4 remain governed by their later-slice entry gates;
+neither D1 nor D2 makes the KernelIo profile conforming.
 
 ---
 
@@ -682,7 +684,7 @@ target architecture.
 
 ## 14. Revised PR decomposition
 
-### D0 — this PR
+### D0 — complete
 
 Planning only:
 
@@ -692,7 +694,7 @@ Planning only:
 - freeze the SOTA-aligned target at review level;
 - **do not start production D1 until the narrow ADR amendment is accepted.**
 
-### D0.5 — narrow ADR amendment
+### D0.5 — complete
 
 A documentation/ADR PR (or an explicit extension of this planning PR if governance permits) changes
 only the execution-ownership meaning described in §3:
@@ -706,7 +708,7 @@ running/backend-execution-owned
 and the Uring dispatch note from exact kernel-submit accounting to private-ring ownership.
 ThreadPool proofs remain valid and should be called out explicitly as unaffected.
 
-### D1 — Uring RequestArena + private-ring lifetime cut
+### D1 — complete (PR #78)
 
 One atomic production cut:
 
@@ -726,7 +728,7 @@ One atomic production cut:
 D1 must not add shared-ring multi-threading, SQPOLL, registered buffers/files, topology-aware worker
 placement, Scheduler routing, or a user-space runtime.
 
-### D2 — failure injection / no-allocation
+### D2 — complete
 
 Add deterministic seams and prove:
 
@@ -735,6 +737,13 @@ Add deterministic seams and prove:
 - transient submit pressure preserves operations;
 - permanent submit poison never terminalizes work that may still execute;
 - cancel/failure has exactly one terminal winner.
+
+The frozen design, pre-coding gap audit, pre-commit matrix, and command ledger are in
+[`phase-d2-uring-failure-noalloc-gate.md`](phase-d2-uring-failure-noalloc-gate.md). D2 reuses the
+D1 transport and P0-D tests where they already provide full evidence, and adds a real-liburing
+always-throw allocator window for ordinary size/void completion, permanent Class-A recovery, and
+bounded cancel/control recovery. The manifest record is real-mode-only; stub execution remains
+build/API evidence and cannot satisfy C2d.
 
 ### D3 — identity / cancel / borrow / waiter race matrix
 

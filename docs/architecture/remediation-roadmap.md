@@ -213,17 +213,19 @@ coverage).
 
   - **C2a — capacity / admission / rejection / accounting: COMPLETE.** The
     shared observable capacity suite (`run_capacity_cases`, 5 cases) runs
-    identically against Fake and ThreadPool via the `make_backend_with_capacity`
+    identically against Fake, ThreadPool, and real-liburing Uring via the
+    `make_backend_with_capacity`
     factory seam and asserts ONLY `AsyncIoContext`-observable state: accepts
     exact capacity, (N+1)th rejects with `would_block` (rejected Completion
     stays idle; no async from a reject), exact stats split (`submitted_ops`
     committed-only; `queue_full_retries` vs `invalid_state_rejections`),
     `max_outstanding <= capacity`, and recycle after cancel→reap→reset. The
     aggregate gate drives the capacity suite per-backend in isolated
-    subprocesses (`shared_capacity_suite` evidence) and a `not_implemented`
-    manifest record (`uring_capacity_not_implemented`) enters the verdict via
-    `applicable_evidence_for_backend()`, so Uring's Phase-D capacity gap
-    surfaces as INCOMPLETE in its own shared layer — never skip-as-pass.
+    subprocesses (`shared_capacity_suite` evidence). The D1 post-merge audit
+    confirmed that the production Uring capacity contract already satisfies
+    the exact shared suite, so the stale `uring_capacity_not_implemented`
+    record was removed without production changes. Uring stub mode remains
+    INCOMPLETE for this real execution requirement — never skip-as-pass.
     `NonConformingCapacityBackend` (test-only, `SLUICE_ASYNC_INTERNAL_TESTING`-
     guarded, NOT in the manifest) proves `run_capacity_cases()` returns the
     SPECIFIC failing case name for six injected violations (over-accept,
@@ -308,11 +310,15 @@ coverage).
     detector case fails on deliberately nonconforming behavior
     (`docs/verification/phase-c2d-failure-injection-mutation-evidence.md`).
     The ring-full invariant fail-fast path is untouched (never converted to a
-    recovery path). Uring's Phase-D gap is the
-    `uring_c2d_failure_injection_not_implemented` record, which enters Uring's
-    verdict — Uring stays NOT CONFORMING and is never skip-as-pass for
-    failure injection. See
-    [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md).
+    recovery path). Phase D2 replaces the former Uring known-gap record with
+    real-command-backed `uring_c2d_failure_injection` evidence covering
+    pre-commit zero residue, D1 transient/zero/partial transport preservation,
+    P0-D Class-A recovery and Class-C retention, ordinary/permanent/control
+    no-allocation windows, and cancel/recovery terminal arbitration. Stub mode
+    is explicitly INCOMPLETE. Uring remains NOT CONFORMING because D3's C2b/C2c
+    records and D4's C2e record remain open. See
+    [`phase-c2d-compliance-gate.md`](phase-c2d-compliance-gate.md) and
+    [`phase-d2-uring-failure-noalloc-gate.md`](phase-d2-uring-failure-noalloc-gate.md).
 
   - **C2e — close / drain / destruction: COMPLETE.** Row 15 (close/drain/reset
     sequence) is now FULL and row 16 (quiescent destruction) is FULL
@@ -405,37 +411,25 @@ the logical dependency remains B -> C.
 refactor(async): migrate UringBackend to RequestSlot identity
 ```
 
-**Status:** NOT IMPLEMENTED — `UringAsyncBackend` remains on the legacy maps/deques
-identity path (DIV-02 and DIV-14 remain open for Uring; the conformance map keeps
-its rows/notes at the pre-migration classification). This is the remaining
-incomplete backend prerequisite ahead of Phase F: F must not switch the common
-Scheduler/Batch identity consumption while Uring still reconstructs identity from
-side-band containers. The D → F dependency below is unchanged.
+**Status:** PARTIAL — D0/D0.5 are complete; D1 is complete via PR #78; D2 is
+complete with command-backed real-liburing evidence; D3 and D4 remain pending. The
+KernelIo profile remains fail-closed and NOT CONFORMING until those later slices
+close and D4 explicitly lifts the gate. Full Phase D is not complete.
 
-**D0 audit / PR decomposition (2026-08-08):** PLAN READY FOR HUMAN REVIEW. The
-complete audit and the proposed D1–D4 decomposition are in
+**D0 audit / PR decomposition (2026-08-08):** COMPLETE. The complete audit and
+the D1–D4 decomposition are in
 [`docs/architecture/phase-d-uring-migration-plan.md`](phase-d-uring-migration-plan.md)
-(baseline `1349a6f`; 151/151 Clang Debug; Uring conformance verdict NOT CONFORMING
-with the five `uring_*_not_implemented` records; liburing 2.14 present — real-path
-link break in `uring_submit_failure_test` recorded as P-D0-INF-01; WSL2 real-path
-execution unverified). No production implementation is started; the manifest
-records remain `not_implemented`.
+(historical baseline `1349a6f`). PR #78 completed D1, including the private-ring
+RequestArena migration and permanent-submit P0-D recovery. D2 closes only the
+C2d failure/no-allocation record and reconciles the already-satisfied C2a
+capacity evidence; D3/D4 records remain `not_implemented`.
 
-**Work:**
+**Remaining work:**
 
-- map RequestKey to SQE `user_data` and CQE back to the same validated slot;
-- reserve RequestSlot and bounded userspace dispatch-queue bookkeeping before
-  commit, then acquire/fill SQEs only during post-commit dispatch;
-- remove Completion reverse maps and parallel identity reconstruction where
-  RequestSlot suffices;
-- keep a partial `io_uring_submit` suffix bound and enqueued for allocation-free
-  retry rather than terminalizing it;
-- store dispatch failure in the same slot only after proving that no SQE,
-  kernel request, or future CQE can still reference the request;
-- target cancel SQEs by key/generation and reject stale CQEs;
-- keep ring queue depth distinct from request capacity; and
-- pass the Phase C suite on both default stub/off and real liburing paths where
-  available.
+- D3: close the full Uring identity/cancel/borrow/waiter evidence matrix;
+- D4: implement wait/close/drain proof and lift the KernelIo gate only after all
+  mandatory real-liburing evidence passes; and
+- preserve honest stub/build evidence separately from real execution evidence.
 
 **Dependencies:** Phase C. No Scheduler dependency.
 

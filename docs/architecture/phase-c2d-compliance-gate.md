@@ -271,7 +271,7 @@ is compiled out of the production class).
 | `fake_full_window_alloc_failure_defined_error_terminal` | reference_backend_no_alloc_test | PASS |
 | Python: `test_backend_conformance_manifest.py` (136 cases, incl. 16 C2d) | unittest | PASS |
 
-## 6. Fake / ThreadPool eligibility, Uring known gap
+## 6. Fake / ThreadPool eligibility, historical Uring gap
 
 - **Fake = ELIGIBLE** — `c2d_fake_failure_injection_terminal=PASS` in the
   per-backend report (defined-error terminal under a full-window always-throw
@@ -284,6 +284,24 @@ is compiled out of the production class).
   gaps). Uring's own `uring_submit_failure_test` drives the pre-RequestArena
   SQE model and does NOT satisfy the C2d contract; Uring stays NOT CONFORMING
   until Phase D.
+
+### Phase D2 reconciliation (2026-08-09)
+
+The paragraph above records the historical Phase C2d exit state; it is not the
+current Uring classification. After PR #78 completed D1, Phase D2 added the
+real-liburing `uring_d2_failure_noalloc_test` and replaced
+`uring_c2d_failure_injection_not_implemented` with the implemented, real-mode-only
+`uring_c2d_failure_injection` manifest record. The new target covers natural
+pre-commit rollback, ordinary size/void accepted no-allocation windows, permanent
+Class-A recovery, Class-C retention, bounded cancel/control recovery, and
+cancel/failure one-winner behavior. The existing D1 target remains the evidence
+for transient/zero/positive-prefix transport neutrality and the detailed P0-D
+classification cases.
+
+Stub mode remains build/API evidence and is mechanically INCOMPLETE for this
+record. KernelIo remains NOT CONFORMING because D3's C2b/C2c and D4's C2e gaps
+are unchanged. The D2 Gate 0–4 record and current command ledger are
+[`phase-d2-uring-failure-noalloc-gate.md`](phase-d2-uring-failure-noalloc-gate.md).
 
 ## 7. Validity evidence (mutations)
 
@@ -422,8 +440,10 @@ only for commands that actually ran green.
 
 - **C2e** — close/drain/reset (row 15; row 16 already FULL): PENDING, not closed.
 - **Rows 4b/12b/14b** — Phase F scope (unchanged).
-- **Phase D** — Uring RequestArena migration: PENDING; Uring C2d conformance is
-  the `uring_c2d_failure_injection_not_implemented` record, never skip-as-pass.
+- **Phase D** — D1 RequestArena/private-ring/P0-D and D2 failure/no-allocation
+  evidence are implemented; D3 identity/cancel/borrow/waiter and D4
+  wait/close/drain/KernelIo-lift remain pending. The historical Uring C2d gap
+  above is superseded by the Phase D2 reconciliation note.
 - **Phase G** — backend-ready progress wake bridge: PENDING (out of C2d scope).
 - **Formal models** — no TLA suite under `spec/tla/` binds the RequestArena /
   dispatch-failure lifecycle (manifest checked; the formal suites cover
