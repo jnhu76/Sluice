@@ -83,9 +83,12 @@ and documentation scripts.
 3. Ordinary size: arm before submit, drive real write -> submit -> CQE -> terminal -> reap -> reset,
    then prove allocation count zero.
 4. Ordinary void: arm before `submit_sync_data`, drive real CQE/reap/reset, then prove zero.
-5. Permanent recovery: arm before accepted size and void submissions, inject permanent `-EIO`,
-   drive the existing P0-D Class-A controller and reap/reset both defined backend errors, then prove
-   zero.
+5. Permanent recovery: arm before accepted size and void submissions, inject permanent `-EIO`
+   (a scripted replacement of the submit return — only `kRealSubmit` calls liburing), drive the
+   existing P0-D Class-A controller and reap/reset both defined backend errors, then prove zero.
+   The injected result exercises the production recovery controller; it does NOT independently
+   reproduce the real kernel negative-enter physical state (that claim stays with the D1
+   liburing/kernel source proof).
 6. Run the focused target in Debug, Release, and ASan+UBSan.
 
 ## Task 5: Prove cancel/recovery arbitration and bounded control work

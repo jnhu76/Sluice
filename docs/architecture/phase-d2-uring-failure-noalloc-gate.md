@@ -101,6 +101,33 @@ D2 stops as `BLOCKED` instead of weakening evidence if a failing detector shows 
 terminality requires unbounded post-accept storage, a new request-lifecycle authority,
 submit-prefix RequestState semantics, or release of possibly kernel-owned work.
 
+### 3.4 Claim layering — D1 proof vs D2 runtime evidence
+
+Phase D2 keeps the Class-A proof layered exactly where the authority lives. It must not be read
+as a second, independent reproduction of the real kernel negative-submit physical state:
+
+```text
+D1 proof (docs/architecture/phase-d1-uring-permanent-submit-failure-audit.md):
+  real non-SQPOLL negative io_uring_submit()
+  -> liburing/kernel source theorem: post-flush / zero-consumed
+  -> every retained ledger entry is execution-impossible Class-A
+
+D2 runtime (this gate):
+  deterministic injected negative submit result (SubmitScript returns the
+  staged step; only kRealSubmit calls liburing)
+  -> exercises the production P0-D recovery controller verbatim
+  -> proves accepted-terminal / no-allocation / cancel arbitration on it
+
+D2 does NOT independently reproduce the real kernel negative-enter
+physical state; that remains the D1 source proof's claim.
+```
+
+The scripted `-EIO` in `uring_d2_failure_noalloc_test.cpp` never enters `io_uring_submit()`; the
+quarantined SQE stays staged in the application-side SQ, which is exactly what the M8
+transport-state detector observes. D2 therefore upgrades the C2d record to IMPLEMENTED for the
+*recovery-controller behavior* the injected result drives, not for the kernel classification of a
+real negative enter.
+
 ## 4. Gate 1 — five-stage pre-commit failure matrix
 
 The table distinguishes production-triggerable failure from structurally unreachable defensive
