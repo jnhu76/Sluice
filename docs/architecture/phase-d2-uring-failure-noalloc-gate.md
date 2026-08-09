@@ -252,6 +252,7 @@ transport, terminal recording, reap/publication, and reset.
 | Evidence | Final result |
 |---|---|
 | focused Uring D2 real-liburing target | **PASS** — 10/10 cases; exact metadata `evidence=uring_c2d_failure_injection mode=real` |
+| G2 exact pinned case-set (Issue #81 P1) | **PASS** — the manifest now pins the D2 record's required 10-case runtime set; the aggregate gate's `_drive` proves the binary executed exactly that set (each case once, no missing/extra/duplicate) before trusting its `[evidence-meta]` line. Mutants G2-A (delete one case), G2-B (metadata case only), G2-C (extra unpinned case), and G2-D (9 distinct + 1 duplicate) all classify INCOMPLETE; disabling the `_drive` case-set check turns four of these green, proving the tests traverse `_drive` end-to-end |
 | pre-commit zero-residue matrix, size + void | **PASS** — natural capacity, descriptor-validation, and binding-CAS rejection; structurally infallible stages remain N/A |
 | ordinary accepted no-allocation, size + void | **PASS** — real write and `sync_data` reach original CQE/reap under the always-throw probe |
 | permanent Class-A recovery no-allocation | **PASS** — size and void operations use the production P0-D poison/classification/retirement controller |
@@ -259,7 +260,7 @@ transport, terminal recording, reap/publication, and reset.
 | pending cancel vs recovery one-winner | **PASS** — local execution is disarmed before cancel wins; recovery cannot overwrite its terminal |
 | repeated cancel/control boundedness under transient/poison | **PASS** — repeated cancel retains at most one live control execution reference and reaches one publication |
 | existing Uring submit-failure target on final head | **PASS** — 16/16 cases, including transient/zero/positive-prefix neutrality and P0-D Class-A/Class-C cases |
-| C2d manifest real-mode record and stub-incomplete classification | **PASS** — manifest self-test: 168/168 (Issue #81 P1 added 6 ambient-filter env-isolation regressions on top of the prior 162); aggregate real record PASS; stub record mechanically INCOMPLETE |
+| C2d manifest real-mode record and stub-incomplete classification | **PASS** — manifest self-test: 176/176 (Issue #81 P1 G1 added 6 ambient-filter env-isolation regressions on top of the prior 162; G2 added 8 — a manifest pin well-formedness check plus seven `EvidenceCaseSetPinTest` cases whose G2-A/B/C/D mutants traverse `_drive` end-to-end, with a source↔manifest drift detector); aggregate real record PASS; stub record mechanically INCOMPLETE |
 | C2a exact shared capacity audit | **PASS** — the existing `UringConfig` bounds satisfy the unchanged shared `run_capacity_cases`; no production work was needed |
 | Clang Debug real liburing | **PASS** — 154/154 test targets |
 | Clang Release real liburing | **PASS** — 154/154 test targets |

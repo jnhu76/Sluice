@@ -44,6 +44,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -264,6 +265,45 @@ def parse_evidence_meta_lines(driver_output: str) -> list[tuple[str, str]]:
     """Every real-only evidence declaration in order, preserving duplicates."""
     return [(m.group(1), m.group(2)) for line in driver_output.splitlines()
             if (m := EVIDENCE_META_RE.match(line.strip()))]
+
+
+def classify_case_set(selected: list[str],
+                      required: tuple[str, ...]) -> tuple[str, str]:
+    """Classify an evidence target's observed runtime case-set.
+
+    Closes Issue #81 P1 G2: an ordinary evidence record that pins a `cases`
+    tuple in the manifest declares its REQUIRED runtime execution set. This
+    helper proves the binary actually executed every pinned case exactly once
+    and nothing else — a set-equivalence check, deliberately NOT order-
+    sensitive. Without it, a mutant that deletes nine load-bearing cases
+    (leaving only the metadata-emitting case) still exits 0, emits exactly one
+    [evidence-meta] line, and is misclassified PASS.
+
+    Distinct from _classify_shared_run (which proves ONE driver case ran via a
+    gate-owned SLUICE_TEST_FILTER): here the target runs UNFILTERED and we must
+    prove the full pinned set, not a single case. G1 (gate-owned env) and G2
+    (source-level case-set completeness) are separate invariants: G1 prevents a
+    hostile parent from shrinking the executed set; G2 proves the executed set
+    equals the required set even when the source itself shrinks.
+
+    Reports ALL present mismatch categories in one diagnostic (missing,
+    unexpected, duplicate, length) rather than picking one. A G2-D mutant — 9
+    distinct required cases plus one duplicate of another — has BOTH a missing
+    case AND a duplicate; showing both is more honest than forcing a single
+    classification. Order within each category is sorted for determinism.
+    """
+    selected_counts = Counter(selected)
+    duplicates = sorted(name for name, count in selected_counts.items()
+                        if count > 1)
+    missing = sorted(set(required) - set(selected))
+    unexpected = sorted(set(selected) - set(required))
+    if duplicates or missing or unexpected or len(selected) != len(required):
+        return INCOMPLETE, (
+            f"evidence case-set mismatch: missing={missing}, "
+            f"unexpected={unexpected}, duplicate={duplicates}, "
+            f"selected={len(selected)} required={len(required)}")
+    return PASS, (
+        f"exact pinned case-set ({len(required)} cases), each run exactly once")
 
 
 def canonical_backend_key(meta_backend: str, registered: list[str]) -> Optional[str]:
@@ -598,6 +638,20 @@ class Gate:
         rc, out = xmake_run_target(ev.target)
         state = _state_for_rc(rc)
         detail = f"exit {rc}"
+        # G2 (Issue #81 P1): prove the target actually executed the manifest's
+        # pinned runtime case-set BEFORE trusting the [evidence-meta] line it
+        # emits. A record pins `cases` to declare its required execution set;
+        # without this check a mutant that deletes every load-bearing case
+        # (leaving only the metadata case) exits 0 and emits one evidence-meta
+        # line, but no longer proves the contract. This runs before the
+        # required_modes metadata check so an incomplete corpus is reported as
+        # an incomplete corpus, not masked behind a mode mismatch (e.g. a stub
+        # build that compiled only the metadata case).
+        if state == PASS and ev.cases:
+            cs_state, cs_detail = classify_case_set(
+                parse_run_lines(out), ev.cases)
+            if cs_state != PASS:
+                state, detail = cs_state, cs_detail
         if state == PASS and ev.required_modes:
             metas = parse_evidence_meta_lines(out)
             if len(metas) != 1:

@@ -31,6 +31,7 @@
 
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 import unittest
@@ -47,6 +48,9 @@ import backend_conformance_manifest as M  # noqa: E402
 _GATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "verify-backend-conformance.py")
+# Repository root (this file lives in <repo>/scripts/tests/).
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
 _spec = importlib.util.spec_from_file_location("verify_backend_conformance", _GATE_PATH)
 G = importlib.util.module_from_spec(_spec)
 sys.modules["verify_backend_conformance"] = G
@@ -152,6 +156,29 @@ class EvidenceRecordsTest(unittest.TestCase):
                              f"{e.evidence_id}: duplicate required mode")
             self.assertTrue(set(e.required_modes) <= set(M.EVIDENCE_MODES),
                             f"{e.evidence_id}: unknown required mode")
+
+    def test_pinned_evidence_cases_are_nonempty_unique_strings(self):
+        # When an evidence record pins a `cases` set, that tuple is G2's
+        # VERIFICATION authority (the gate's _drive() proves the binary ran
+        # exactly these cases). The authority itself must therefore be
+        # well-formed: non-empty, no duplicates, no empty/non-string element.
+        # A malformed pin such as cases=("foo","foo") would otherwise let the
+        # gate under-verify a target that only registered one distinct case.
+        for e in M.EVIDENCE:
+            if e.cases is None:
+                continue
+            self.assertIsInstance(e.cases, tuple,
+                                  f"{e.evidence_id}: cases must be a tuple")
+            self.assertGreater(len(e.cases), 0,
+                               f"{e.evidence_id}: pinned cases must be non-empty")
+            self.assertEqual(len(e.cases), len(set(e.cases)),
+                             f"{e.evidence_id}: pinned cases must be unique: "
+                             f"{list(e.cases)}")
+            for case in e.cases:
+                self.assertIsInstance(case, str,
+                                      f"{e.evidence_id}: case name must be str")
+                self.assertTrue(case,
+                                f"{e.evidence_id}: case name must be non-empty")
 
     def test_not_implemented_never_counts_as_pass(self):
         # Behavioral: drive the gate with a not_implemented evidence record
@@ -414,6 +441,30 @@ class EvidenceModeParsingTest(unittest.TestCase):
         self.assertEqual(G.parse_evidence_meta_lines(
             "[evidence-meta] evidence=uring_c2d_failure_injection\n"), [])
 
+    def _d2_cases(self):
+        # Single source of truth: read the pinned set from the manifest, never
+        # duplicate the case names here. This couples the test's notion of the
+        # required corpus to the manifest authority.
+        return M.evidence_by_id("uring_c2d_failure_injection").cases
+
+    def _d2_output(self, cases=None, mode=None, meta_lines=None):
+        """Fabricate a target's stdout with the given [run] case-set and meta.
+
+        ``cases`` defaults to the manifest's authoritative pinned set, so the
+        positive path (exact 10-case set) is self-maintaining. ``mode`` emits a
+        single matching [evidence-meta] line (None disables it). ``meta_lines``
+        overrides the meta entirely (for duplicate / missing-meta mutants).
+        """
+        if cases is None:
+            cases = self._d2_cases()
+        run_lines = "".join(f"[run] {c}\n" for c in cases)
+        if meta_lines is not None:
+            return run_lines + meta_lines
+        if mode is not None:
+            return (run_lines + f"[evidence-meta] evidence="
+                    f"uring_c2d_failure_injection mode={mode}\n")
+        return run_lines
+
     def _drive_c2d(self, output, rc=0):
         ev = M.evidence_by_id("uring_c2d_failure_injection")
         gate = G.Gate(args=mock.Mock(no_build=True))
@@ -422,28 +473,150 @@ class EvidenceModeParsingTest(unittest.TestCase):
             return gate._drive(ev)
 
     def test_real_mode_is_pass(self):
-        result = self._drive_c2d(
-            "[evidence-meta] evidence=uring_c2d_failure_injection mode=real\n")
+        # Positive pin: the full pinned case-set runs and emits one real-mode
+        # [evidence-meta] line. This exercises the complete PASS chain through
+        # _drive: exit 0 -> exact case-set -> exact metadata.
+        result = self._drive_c2d(self._d2_output(mode="real"))
         self.assertEqual(result.state, G.PASS)
 
     def test_stub_mode_is_incomplete_not_pass(self):
-        result = self._drive_c2d(
-            "[evidence-meta] evidence=uring_c2d_failure_injection mode=stub\n")
+        # The case-set passes (full pinned set ran); the metadata then reports
+        # mode=stub, which is not in required_modes -> INCOMPLETE.
+        result = self._drive_c2d(self._d2_output(mode="stub"))
         self.assertEqual(result.state, G.INCOMPLETE)
 
     def test_missing_or_duplicate_mode_is_incomplete(self):
-        missing = self._drive_c2d("ALL TESTS PASSED\n")
-        duplicate = self._drive_c2d(
+        # Full pinned case-set ran, but zero / duplicate [evidence-meta] lines.
+        missing = self._drive_c2d(self._d2_output(meta_lines=""))
+        duplicate = self._drive_c2d(self._d2_output(meta_lines=(
             "[evidence-meta] evidence=uring_c2d_failure_injection mode=real\n"
-            "[evidence-meta] evidence=uring_c2d_failure_injection mode=real\n")
+            "[evidence-meta] evidence=uring_c2d_failure_injection mode=real\n")))
         self.assertEqual(missing.state, G.INCOMPLETE)
         self.assertEqual(duplicate.state, G.INCOMPLETE)
 
     def test_nonzero_real_target_is_run_fail(self):
-        result = self._drive_c2d(
-            "[evidence-meta] evidence=uring_c2d_failure_injection mode=real\n",
-            rc=1)
+        # rc != 0 short-circuits to RUN_FAIL before any case-set or meta check.
+        result = self._drive_c2d(self._d2_output(mode="real"), rc=1)
         self.assertEqual(result.state, G.RUN_FAIL)
+
+
+class EvidenceCaseSetPinTest(unittest.TestCase):
+    """The aggregate gate proves an ordinary evidence target's pinned case-set.
+
+    Closes Issue #81 P1 G2. G1 (closed in the prior commit) owns the child
+    environment so a hostile parent filter cannot shrink the executed set. G2
+    is a DISTINCT invariant: even when the child runs unfiltered (G1 satisfied)
+    the gate must still prove the binary executed the manifest's pinned
+    required case-set — every case exactly once, nothing extra. Without this
+    check a mutant that deletes nine load-bearing cases (leaving only the
+    metadata-emitting case) exits 0, emits one [evidence-meta] line, and is
+    misclassified PASS.
+
+    Every mutation here traverses Gate._drive() end-to-end (not the helper in
+    isolation), so a future regression that drops the classify_case_set call
+    from _drive cannot slip through as a green pure-function test.
+    """
+
+    def setUp(self):
+        self.ev = M.evidence_by_id("uring_c2d_failure_injection")
+        self.required = list(self.ev.cases)
+        # Sanity: the manifest actually pins a non-trivial set for this record.
+        self.assertGreater(len(self.required), 1,
+                           "precondition: D2 record pins a real case-set")
+
+    def _drive(self, output, rc=0):
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(rc, output)):
+            return gate._drive(self.ev)
+
+    def _out(self, cases, mode="real"):
+        run = "".join(f"[run] {c}\n" for c in cases)
+        return (run + f"[evidence-meta] evidence=uring_c2d_failure_injection "
+                f"mode={mode}\n")
+
+    def test_positive_exact_pinned_set_is_pass(self):
+        # Exact 10-case set + real metadata -> PASS through the full chain.
+        result = self._drive(self._out(self.required, mode="real"))
+        self.assertEqual(result.state, G.PASS, result.detail)
+
+    def test_g2a_remove_one_load_bearing_case_is_incomplete(self):
+        # G2-A: delete exactly one load-bearing case. The binary no longer
+        # proves the contract, yet without the case-set check its exit 0 + one
+        # evidence-meta line would be misclassified PASS.
+        mutant = list(self.required)
+        # Drop a non-metadata load-bearing case (the second entry).
+        removed = mutant.pop(1)
+        result = self._drive(self._out(mutant, mode="real"))
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn(removed, result.detail,
+                      "detail must name the missing case")
+
+    def test_g2b_metadata_case_only_is_incomplete(self):
+        # G2-B: the load-bearing detector. Only the metadata-emitting case
+        # survives (e.g. a source-level deletion of the other nine cases).
+        result = self._drive(self._out([self.required[0]], mode="real"))
+        self.assertEqual(result.state, G.INCOMPLETE)
+        # The detail must report every other required case as missing.
+        for case in self.required[1:]:
+            self.assertIn(case, result.detail,
+                          f"detail must name missing case {case!r}")
+
+    def test_g2c_unexpected_extra_case_is_incomplete(self):
+        # G2-C: the pinned set ran, plus an unpinned/foreign case. The binary
+        # executed work the manifest did not authorize.
+        mutant = list(self.required) + ["a_case_the_manifest_did_not_pin"]
+        result = self._drive(self._out(mutant, mode="real"))
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn("a_case_the_manifest_did_not_pin", result.detail,
+                      "detail must name the unexpected case")
+
+    def test_g2d_duplicate_keeps_missing_and_duplicate_in_detail(self):
+        # G2-D: 9 distinct required cases run + one required case is repeated
+        # (= 10 selected), so exactly one required case never ran. This mutant
+        # has BOTH a missing case AND a duplicate. The diagnostic must report
+        # BOTH honestly rather than forcing a single category.
+        duplicated = self.required[1]
+        never_ran = self.required[-1]
+        mutant = [c for c in self.required if c != never_ran] + [duplicated]
+        self.assertEqual(len(mutant), len(self.required))  # same length
+        result = self._drive(self._out(mutant, mode="real"))
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn(never_ran, result.detail,
+                      "detail must name the missing case")
+        self.assertIn(duplicated, result.detail,
+                      "detail must name the duplicated case")
+
+    def test_classify_case_set_helper_is_order_insensitive(self):
+        # The required set is a SET equivalence, not a registration-order
+        # claim: any permutation of the exact set is PASS at the helper level.
+        import random
+        rng = random.Random(0)
+        permuted = list(self.required)
+        rng.shuffle(permuted)
+        self.assertNotEqual(permuted, self.required)  # actually permuted
+        state, _ = G.classify_case_set(permuted, self.ev.cases)
+        self.assertEqual(state, G.PASS)
+
+    def test_manifest_pin_matches_cpp_source_registration(self):
+        # DRIFT detector (auxiliary, not authoritative): the manifest's pinned
+        # set must match the case names actually registered as
+        # SLUICE_TEST_CASE macros in the C++ target source. The anchor only
+        # matches a real macro invocation at the start of a logical line, so a
+        # comment like `// SLUICE_TEST_CASE(foo)` is NOT counted. The
+        # authoritative check remains the runtime [run] set observed by _drive
+        # (above); this test catches manifest/source drift before the gate runs.
+        source_path = os.path.join(REPO_ROOT, "tests",
+                                   "uring_d2_failure_noalloc_test.cpp")
+        with open(source_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        found = re.findall(
+            r"^[ \t]*SLUICE_TEST_CASE\(([_A-Za-z][_A-Za-z0-9]*)\)",
+            source, flags=re.MULTILINE)
+        self.assertEqual(
+            set(found), set(self.ev.cases),
+            f"manifest pin {sorted(self.ev.cases)} does not match the case "
+            f"names registered in {source_path}: {sorted(found)}")
 
 
 class FailClosedMetadataTest(unittest.TestCase):

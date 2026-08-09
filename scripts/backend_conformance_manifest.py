@@ -134,8 +134,13 @@ BACKENDS: tuple[BackendEntry, ...] = (
 class Evidence:
     evidence_id: str                    # unique stable id
     target: str                         # xmake target name
-    cases: Optional[tuple[str, ...]] = None   # SLUICE_TEST_CASE names if the
-                                              # target is filtered by case.
+    cases: Optional[tuple[str, ...]] = None   # Exact SLUICE_TEST_CASE set required
+                                              # for this evidence record. When
+                                              # present, the aggregate gate MUST
+                                              # observe every case run exactly once
+                                              # and no unpinned case (the record's
+                                              # required runtime execution set);
+                                              # absence means no per-case claim.
     layer: str = "shared"               # one of LAYERS
     backends: tuple[str, ...] = ()      # which display backends this covers;
                                         # () means backend-agnostic (e.g.
@@ -517,6 +522,27 @@ EVIDENCE: tuple[Evidence, ...] = (
         backends=_U,
         mandatory=True,
         status=STATUS_IMPLEMENTED,
+        # Pinned required runtime case-set (Issue #81 P1 G2). The C++ source
+        # tests/uring_d2_failure_noalloc_test.cpp is the REGISTRATION authority
+        # (these SLUICE_TEST_CASE names); this tuple is the VERIFICATION
+        # authority the aggregate gate's _drive() enforces against the binary's
+        # actual [run] output. Without this pin, a mutant that deletes nine
+        # load-bearing cases — leaving only the metadata case — still exits 0,
+        # emits exactly one [evidence-meta] line, and is misclassified PASS.
+        # The gate does NOT parse C++; the source↔manifest drift detector in
+        # test_backend_conformance_manifest.py keeps the two authorities aligned.
+        cases=(
+            "uring_d2_evidence_mode",
+            "uring_d2_precommit_size_rejections_leave_zero_new_residue",
+            "uring_d2_precommit_void_rejections_leave_zero_new_residue",
+            "uring_d2_ordinary_size_path_is_allocation_free",
+            "uring_d2_ordinary_void_path_is_allocation_free",
+            "uring_d2_permanent_recovery_size_and_void_are_allocation_free",
+            "uring_d2_poison_rejects_after_capacity_is_recycled",
+            "uring_d2_pending_cancel_and_class_a_recovery_have_one_winner_each",
+            "uring_d2_poison_wait_never_submits_quarantined_write",
+            "uring_d2_repeated_cancel_control_is_bounded_and_allocation_free",
+        ),
         required_modes=("real",),
         notes="Phase D2 real-liburing C2d evidence: natural pre-commit reserve/"
               "descriptor/binding rejection leaves Completion idle and no new "
