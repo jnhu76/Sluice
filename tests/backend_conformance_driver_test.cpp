@@ -95,6 +95,13 @@ BackendFactory make_uring_factory() {
 #if defined(SLUICE_HAS_LIBURING)
     f.name = "Uring";
     f.make_backend = [] { return std::make_unique<UringAsyncBackend>(); };
+    // D1 post-merge C2a reconciliation: production already exposes independent
+    // request_capacity/queue_depth construction. This closure only lets the
+    // unchanged shared run_capacity_cases build a small real backend.
+    f.make_backend_with_capacity = [](std::size_t cap) {
+        return std::make_unique<UringAsyncBackend>(
+            UringConfig{cap, static_cast<unsigned>(cap)});
+    };
     f.make_temp_fd = &make_temp_fd;
     f.real_mode = true;
     f.profile = "KernelIoProfile";     // Phase C1 profile
@@ -112,11 +119,6 @@ BackendFactory make_uring_factory() {
     f.profile = "KernelIoProfile";     // Phase C1 profile
     f.mode = "stub";                   // Phase C1 mode
 #endif
-    // Phase C2a: Uring has NOT migrated onto RequestArena (Phase D pending), so
-    // make_backend_with_capacity stays null. The capacity cases do not execute
-    // for Uring's driver, and the authoritative gap is the manifest's
-    // uring_capacity_not_implemented record (added in commit 2). Uring is never
-    // skip-as-pass for capacity.
     return f;
 }
 
@@ -143,10 +145,10 @@ SLUICE_TEST_CASE(conformance_uring) {
 // Phase C2a — shared capacity/admission/rejection/accounting cases, driven
 // per-backend. Each runs run_capacity_cases() against a backend built at a
 // chosen small request_capacity via the factory's make_backend_with_capacity
-// seam. The cases assert ONLY AsyncIoContext-observable state. Uring has no
-// capacity seam (Phase D pending), so it has NO capacity driver case here —
-// the authoritative gap is the manifest's uring_capacity_not_implemented
-// record. The aggregate gate drives these per-backend in isolated subprocesses.
+// seam. The cases assert ONLY AsyncIoContext-observable state. After the D1
+// migration, real Uring uses the same suite; the stub branch remains build/API
+// evidence only. The aggregate gate drives these per-backend in isolated
+// subprocesses.
 SLUICE_TEST_CASE(conformance_capacity_fake) {
     const auto f = make_fake_factory();
     sluice_test::conformance::emit_meta(f);
@@ -171,6 +173,25 @@ SLUICE_TEST_CASE(conformance_capacity_threadpool) {
     SLUICE_CHECK(failed.empty());
 }
 
+SLUICE_TEST_CASE(conformance_capacity_uring) {
+    const auto f = make_uring_factory();
+    sluice_test::conformance::emit_meta(f);
+#if defined(SLUICE_HAS_LIBURING)
+    SLUICE_CHECK(sluice_test::conformance::factory_supports_capacity(f));
+    const std::string failed = sluice_test::conformance::run_capacity_cases(f);
+    if (!failed.empty()) {
+        std::fprintf(stderr, "[conformance] capacity FAIL Uring :: %s\n",
+                     failed.c_str());
+    }
+    SLUICE_CHECK(failed.empty());
+#else
+    // Build/API honesty only. The aggregate gate classifies KernelIo stub mode
+    // as INCOMPLETE for this real-capacity case; this branch is not a semantic
+    // capacity PASS.
+    SLUICE_CHECK(!sluice_test::conformance::factory_supports_capacity(f));
+#endif
+}
+
 // Phase C2e — shared close/drain/destruction cases (Issue #68 rows 15-16),
 // driven per-backend. The DRIVER builds the backend at a small capacity and
 // wires the two instance-level seams (AGENTS.md §15) as closures over the
@@ -178,7 +199,7 @@ SLUICE_TEST_CASE(conformance_capacity_threadpool) {
 // suite itself stays backend-agnostic. Each run asserts ONLY the shared
 // boundary; the aggregate gate drives these per-backend in isolated
 // subprocesses (conformance_close_drain_fake / conformance_close_drain_threadpool).
-// Uring has no close_admission before Phase D — its gap is the manifest's
+// Uring has no close_admission before D4 — its gap is the manifest's
 // uring_c2e_close_drain_not_implemented record (never skip-as-pass).
 SLUICE_TEST_CASE(conformance_close_drain_fake) {
     const auto f = make_fake_factory();
