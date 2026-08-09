@@ -97,6 +97,42 @@ def run_cmd(cmd: list[str], timeout: int = 600) -> tuple[int, str, str]:
         return 124, "", f"timeout after {timeout}s: {' '.join(cmd)}"
 
 
+# Repository test-selection variables that the in-binary harness honors and
+# that therefore MUST NOT leak from a developer's ambient shell into an
+# evidence subprocess. tests/harness.hpp is the authority for case selection
+# and honors exactly SLUICE_TEST_FILTER (an exact-case-name allowlist; a token
+# matching zero cases makes the binary exit non-zero). Other SLUICE_* names are
+# per-case behavior knobs read inside a case body or self-fork markers set by a
+# case itself — they cannot alter WHICH registered cases run, so they are not
+# selection variables and are intentionally NOT stripped here. Stripping only
+# the selection variable keeps the sanitizer narrow (PATH, toolchain, xmake,
+# and library-path variables are all preserved verbatim).
+TEST_SELECTION_ENV_VARS = ("SLUICE_TEST_FILTER",)
+
+
+def clean_test_env() -> dict[str, str]:
+    """A child environment with repository test-selection variables removed.
+
+    The conformance gate owns the execution environment of its evidence
+    targets. An ambient developer filter (e.g. a parent shell exporting
+    ``SLUICE_TEST_FILTER=uring_d2_evidence_mode``) would otherwise be inherited
+    by an ordinary evidence subprocess via ``env=None`` and silently reduce the
+    target's required execution set — a 10-case D2 target could run only its
+    metadata case, emit one evidence-meta line, exit 0, and be classified PASS.
+    That is a false-conformance path (Issue #81 P1).
+
+    This helper returns an EXPLICIT environment (a copy of ``os.environ``) so
+    the child never inherits via the ``env=None`` default; the only variables
+    removed are the known test-selection variables. Required PATH / toolchain /
+    xmake / library-path variables are preserved. Do not widen this set without
+    proving the new name alters registered case selection.
+    """
+    env = dict(os.environ)
+    for name in TEST_SELECTION_ENV_VARS:
+        env.pop(name, None)
+    return env
+
+
 def xmake_target_exists(target: str) -> bool:
     """Preflight: is `target` a valid xmake target? Uses `xmake show -t`."""
     rc, out, err = run_cmd(["xmake", "show", "-t", target], timeout=120)
@@ -124,8 +160,15 @@ def xmake_run_target(target: str, env_filter: Optional[str] = None
     registered backend's shared-suite case in a SEPARATE subprocess: one
     backend's failure cannot affect another backend's process exit code or
     [conformance-meta] emission.
+
+    The child ALWAYS receives an EXPLICIT environment from clean_test_env().
+    For an ordinary evidence run (env_filter is None) the ambient
+    SLUICE_TEST_FILTER is stripped so it cannot reduce the target's required
+    execution set (Issue #81 P1 false-green). For a shared-suite per-backend
+    run the gate sets SLUICE_TEST_FILTER to the exact driver case on top of the
+    cleaned environment, so a hostile parent value can never leak through.
     """
-    env = dict(os.environ) if env_filter else None
+    env = clean_test_env()
     if env_filter:
         env["SLUICE_TEST_FILTER"] = env_filter
     try:

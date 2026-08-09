@@ -31,6 +31,7 @@
 
 import importlib.util
 import os
+import subprocess
 import sys
 import unittest
 from unittest import mock
@@ -607,6 +608,125 @@ class SubprocessOutcomeMappingTest(unittest.TestCase):
 
     def test_timeout_subprocess_is_run_fail(self):
         self.assertEqual(G._state_for_rc(124), G.RUN_FAIL)
+
+
+# ---------------------------------------------------------------------------
+# Issue #81 P1 — isolate conformance evidence from ambient test filters.
+#
+# The conformance gate MUST own the execution environment of its evidence
+# targets. Before the fix, xmake_run_target() passed env=None to subprocess.run
+# for ordinary (non-shared) evidence, which makes the child INHERIT the parent
+# os.environ verbatim. An ambient SLUICE_TEST_FILTER (e.g. a developer shell
+# exporting SLUICE_TEST_FILTER=uring_d2_evidence_mode) would then silently
+# reduce a 10-case D2 target to its single metadata case -> one evidence-meta
+# line -> exit 0 -> _drive() classifies PASS. That is a false-conformance
+# path. These tests capture the EXACT env dict handed to subprocess.run and
+# prove: (1) ordinary evidence strips the ambient filter; (2) the shared
+# per-backend suite sets the EXACT driver case on top of the cleaned env so a
+# hostile parent value cannot leak; (3) the no-filter normal case is unchanged;
+# (4) the sanitizer is narrow (PATH and unrelated foreign vars survive).
+# ---------------------------------------------------------------------------
+
+class EvidenceEnvIsolationTest(unittest.TestCase):
+    """xmake_run_target gives every evidence subprocess an explicit, owned env."""
+
+    def setUp(self):
+        # Snapshot and clear any real ambient filter so each test controls its
+        # own starting parent environment deterministically.
+        self._saved_filter = os.environ.pop("SLUICE_TEST_FILTER", None)
+        # A foreign, benign variable used to prove the sanitizer is narrow.
+        self._foreign_name = "SLUICE_PROBE_KEEP_G1"
+        self._foreign_val = "sentinel-g1"
+        os.environ[self._foreign_name] = self._foreign_val
+        # Record subprocess.run calls (do not actually exec xmake).
+        self._real_run = subprocess.run
+        self.captured_env = {}
+        self.captured_cmd = {}
+        outer = self
+
+        def fake_run(cmd, *args, **kwargs):
+            outer.captured_env["last"] = kwargs.get("env")
+            outer.captured_cmd["last"] = cmd
+
+            class _R:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            return _R()
+
+        subprocess.run = fake_run
+
+    def tearDown(self):
+        subprocess.run = self._real_run
+        os.environ.pop(self._foreign_name, None)
+        if self._saved_filter is not None:
+            os.environ["SLUICE_TEST_FILTER"] = self._saved_filter
+
+    def test_ordinary_evidence_always_gets_explicit_env(self):
+        # Regression for the P1 root cause: env=None meant 'inherit os.environ'.
+        G.xmake_run_target("uring_d2_failure_noalloc_test")
+        env = self.captured_env["last"]
+        self.assertIsNotNone(
+            env, "ordinary evidence must receive an EXPLICIT env dict, not "
+            "env=None (which inherits the parent's ambient test filters)")
+
+    def test_ambient_filter_stripped_for_ordinary_evidence(self):
+        # The load-bearing counterexample from Issue #81 P1: a hostile parent
+        # exports SLUICE_TEST_FILTER=uring_d2_evidence_mode; the 10-case D2
+        # target must NOT inherit it, or it runs only its metadata case.
+        os.environ["SLUICE_TEST_FILTER"] = "uring_d2_evidence_mode"
+        G.xmake_run_target("uring_d2_failure_noalloc_test")
+        env = self.captured_env["last"]
+        self.assertNotIn(
+            "SLUICE_TEST_FILTER", env,
+            "ambient SLUICE_TEST_FILTER leaked into ordinary evidence env")
+
+    def test_shared_suite_owns_exact_filter_no_parent_leak(self):
+        # Shared per-backend runs set the EXACT driver case on top of a cleaned
+        # env. A hostile parent value must not leak through.
+        os.environ["SLUICE_TEST_FILTER"] = "some_unrelated_case"
+        G.xmake_run_target("backend_conformance_test",
+                           env_filter="conformance_uring")
+        env = self.captured_env["last"]
+        self.assertIsNotNone(env)
+        self.assertEqual(
+            env.get("SLUICE_TEST_FILTER"), "conformance_uring",
+            "shared suite must set the EXACT driver case; parent value leaked")
+        self.assertNotEqual(
+            env.get("SLUICE_TEST_FILTER"), "some_unrelated_case")
+
+    def test_no_ambient_filter_ordinary_behavior_unchanged(self):
+        # Without an ambient filter, ordinary evidence behavior is unchanged:
+        # explicit env, no filter key present, exit-0 path still classified PASS.
+        self.assertNotIn("SLUICE_TEST_FILTER", os.environ)
+        G.xmake_run_target("uring_d2_failure_noalloc_test")
+        env = self.captured_env["last"]
+        self.assertIsNotNone(env)
+        self.assertNotIn("SLUICE_TEST_FILTER", env)
+        # The classifier still maps an exit-0 ordinary run to PASS.
+        self.assertEqual(G._state_for_rc(0), G.PASS)
+
+    def test_sanitizer_is_narrow_foreign_env_remains(self):
+        # Prove the sanitizer is narrow: PATH and an unrelated synthetic
+        # variable must survive, so evidence subprocesses do not run under an
+        # accidentally-empty/minimal environment.
+        os.environ["SLUICE_TEST_FILTER"] = "uring_d2_evidence_mode"
+        G.xmake_run_target("uring_d2_failure_noalloc_test")
+        env = self.captured_env["last"]
+        self.assertIn("PATH", env, "PATH must be preserved by clean_test_env")
+        self.assertEqual(
+            env.get(self._foreign_name), self._foreign_val,
+            f"unrelated variable {self._foreign_name} must survive the narrow "
+            f"sanitizer (only test-selection variables are stripped)")
+
+    def test_selection_var_set_is_exactly_sluice_test_filter(self):
+        # Guard against silently widening the sanitizer. tests/harness.hpp is
+        # the authority for case selection and honors exactly SLUICE_TEST_FILTER.
+        self.assertEqual(
+            set(G.TEST_SELECTION_ENV_VARS), {"SLUICE_TEST_FILTER"},
+            "TEST_SELECTION_ENV_VARS widened; only SLUICE_TEST_FILTER alters "
+            "registered case selection (see tests/harness.hpp)")
 
 
 class ProfileModesTest(unittest.TestCase):

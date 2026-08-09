@@ -52,3 +52,24 @@ rg -n "D2 MUTANT|MUTANT M[0-9]" src include tests scripts docs
 
 returned no matches. The final full focused target and existing Uring submit-failure target remain
 part of the final-head gate; this document does not substitute for those clean-tree runs.
+
+## G1 — conformance-gate ambient-filter false-green (Issue #81 P1)
+
+G1 is a **conformance-gate** mutant, not an Uring lifecycle mutant, and is recorded separately per
+Issue #81 §11. The defect: `xmake_run_target()` handed `env=None` to `subprocess.run` for ordinary
+(non-shared) evidence, so the child inherited the parent `os.environ` verbatim. A developer shell
+exporting `SLUICE_TEST_FILTER=uring_d2_evidence_mode` would then reduce the 10-case
+`uring_d2_failure_noalloc_test` to its single metadata case — one `[evidence-meta]` line, exit 0 —
+and `_drive()` classified it PASS. That is a false-conformance path: 9 real D2 cases never ran.
+
+| Mutant | Temporary defect | Exact detector | Observed RED | Restored GREEN |
+|---|---|---|---|---|
+| G1 | restore `env = dict(os.environ) if env_filter else None` (inherit ambient filter for ordinary evidence) | `python3 -m unittest scripts.tests.test_backend_conformance_manifest.EvidenceEnvIsolationTest -v` | 2 failures + 3 errors (`test_ordinary_evidence_always_gets_explicit_env`, `test_ambient_filter_stripped_for_ordinary_evidence`, `test_sanitizer_is_narrow_foreign_env_remains`, `test_no_ambient_filter_ordinary_behavior_unchanged`, `test_shared_suite_owns_exact_filter_no_parent_leak` all hit the pre-fix `env=None` path) | PASS — 168/168 manifest self-tests |
+
+Required invariant restored: ambient developer test filters MUST NOT reduce an evidence target's
+required execution set. The conformance gate owns the execution environment of its evidence targets
+(`clean_test_env()` strips exactly `SLUICE_TEST_FILTER`; the shared per-backend suite sets the EXACT
+driver case on top of the cleaned env so a hostile parent value cannot leak through). The sanitizer
+is intentionally narrow — `PATH`, toolchain, xmake, and library-path variables are preserved, and
+only `SLUICE_TEST_FILTER` is stripped because `tests/harness.hpp` honors exactly that one name for
+case selection.

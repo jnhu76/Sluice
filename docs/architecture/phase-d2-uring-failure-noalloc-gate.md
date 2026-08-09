@@ -259,7 +259,7 @@ transport, terminal recording, reap/publication, and reset.
 | pending cancel vs recovery one-winner | **PASS** — local execution is disarmed before cancel wins; recovery cannot overwrite its terminal |
 | repeated cancel/control boundedness under transient/poison | **PASS** — repeated cancel retains at most one live control execution reference and reaches one publication |
 | existing Uring submit-failure target on final head | **PASS** — 16/16 cases, including transient/zero/positive-prefix neutrality and P0-D Class-A/Class-C cases |
-| C2d manifest real-mode record and stub-incomplete classification | **PASS** — 159 manifest self-tests; aggregate real record PASS; stub record mechanically INCOMPLETE |
+| C2d manifest real-mode record and stub-incomplete classification | **PASS** — manifest self-test: 168/168 (Issue #81 P1 added 6 ambient-filter env-isolation regressions on top of the prior 162); aggregate real record PASS; stub record mechanically INCOMPLETE |
 | C2a exact shared capacity audit | **PASS** — the existing `UringConfig` bounds satisfy the unchanged shared `run_capacity_cases`; no production work was needed |
 | Clang Debug real liburing | **PASS** — 154/154 test targets |
 | Clang Release real liburing | **PASS** — 154/154 test targets |
