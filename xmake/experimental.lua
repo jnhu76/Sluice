@@ -57,14 +57,16 @@ if has_liburing then
         end
 end
 
--- Dedicated real-liburing submit-failure state-machine tests. This target
--- compiles only the uring backend source with a private submit seam, so the
--- production sluice_async ABI and all other async tests remain hook-free.
+-- Dedicated real-liburing transport-failure/progress state-machine tests. This
+-- target compiles only the uring backend source with private submit/wait
+-- seams, so the production sluice_async ABI and all other async tests remain
+-- hook-free.
 -- Phase D1: uring_backend.cpp now drives RequestArena/Completion inline, which
 -- emit calls to the async fail-fast symbols in src/async/fail_fast.cpp. That
 -- source is compiled directly into this target (P-D0-INF-01: the real-liburing
 -- test target must link its own fail-fast symbols without depending on
--- production sluice_async, so the internal-testing submit seam stays private).
+-- production sluice_async, so the internal-testing transport seams stay
+-- private).
 if has_liburing and os.isfile(R .. "tests/uring_submit_failure_test.cpp") then
     target("uring_submit_failure_test")
         set_kind("binary")

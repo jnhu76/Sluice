@@ -85,8 +85,11 @@ private:
     static inline unsigned counter_ = 0;
 };
 
-int open_temp(const std::string& path) {
-    int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0600);
+int open_temp(const std::string& path, bool truncate = true) {
+    int flags = O_RDWR | O_CREAT;
+    if (truncate)
+        flags |= O_TRUNC;
+    int fd = ::open(path.c_str(), flags, 0600);
     if (fd < 0) {
         std::perror("open");
         std::_Exit(sluice_death_test::kChildTestFailExit);
@@ -126,7 +129,7 @@ void child_destroy_with_completion_ready() {
         seed_one_byte(tp.path(), std::byte{0x44});
 
         std::byte buf[1]{};
-        int fd = open_temp(tp.path());
+        int fd = open_temp(tp.path(), false);
         if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value())
             std::_Exit(sluice_death_test::kChildTestFailExit);
 
@@ -140,6 +143,8 @@ void child_destroy_with_completion_ready() {
                 std::this_thread::yield();
         }
         if (!c.ready())
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        if (buf[0] != std::byte{0x44})
             std::_Exit(sluice_death_test::kChildTestFailExit);
         // slot is bound until the caller resets/releases the ready Completion.
         if (backend.arena_slot_in_use() != 1)
@@ -166,7 +171,7 @@ void child_control_quiescent_destroy() {
 
         std::byte buf[1]{};
         Completion<std::size_t> c;
-        int fd = open_temp(tp.path());
+        int fd = open_temp(tp.path(), false);
         if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value())
             std::_Exit(sluice_death_test::kChildTestFailExit);
 
@@ -178,6 +183,8 @@ void child_control_quiescent_destroy() {
                 std::this_thread::yield();
         }
         if (!c.ready())
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        if (buf[0] != std::byte{0x55})
             std::_Exit(sluice_death_test::kChildTestFailExit);
         c.reset(); // release the slot before destroy
         if (backend.arena_slot_in_use() != 0)

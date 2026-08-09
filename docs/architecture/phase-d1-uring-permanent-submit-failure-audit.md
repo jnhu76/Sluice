@@ -227,7 +227,8 @@ ring capacity, queried from the live `ring.sq.ring_entries` after
 authority):** each ledger entry records, at minimum,
 
 ```text
-physical sequence / order in the SQ
+non-wrapping monotonic logical SQ sequence (or equivalent epoch + modular distance)
+masked physical SQ array position (storage location only)
 kind:
     operation
         op_cookie
@@ -249,6 +250,11 @@ CANCEL B
 is a legal physical SQ order (a cancel SQE may share the failed batch with the
 operation SQEs it targets). A scalar count collapses operation and control
 entries and cannot represent that interleaving; only a per-entry ledger can.
+
+The Class-A proof MUST NOT use `tail & ring_mask` as identity. That value wraps and is reused: for
+a 64-entry ring, logical sequences 5 and 69 both occupy masked position 5. Retirement must compare
+the non-wrapping logical sequence (or an explicitly proven wrap-safe epoch/distance invariant) so a
+consumed pre-wrap entry can never be reclassified as an unconsumed post-wrap entry.
 
 Required proof: a bounded construction-time ledger (capacity = actual SQ
 entries) of "prepared-but-not-yet-confirmed-consumed" entries, updated on each
@@ -281,6 +287,22 @@ trivially Class-A — they have no kernel identity at all. They may be locally t
 `backend_error` directly via the existing Scheme-B `record_terminal` path (no SQE was ever
 installed). Prove the dispatch-queue peek protocol (§4.2 of the frozen design) makes this set
 exactly the queue contents at the poison instant.
+
+### 4.4 Control execution references and teardown quiescence
+
+A running-operation cancel may append an informational `IORING_OP_ASYNC_CANCEL`. The original
+operation CQE can retire its operation cookie and make the Completion ready before the control CQE
+arrives. Therefore `live_op_cookies == 0`, arena quiescence, and an empty local dispatch queue do
+not by themselves prove that the ring has no remaining control execution reference.
+
+The P0-D implementation MUST choose one of two explicit contracts:
+
+1. keep a bounded `live_control_sqes`/physical-ledger reference until each control CQE retires; or
+2. prove that teardown may abandon informational control SQEs because they hold no user buffer,
+   RequestSlot release authority, reusable target cookie, or user-visible terminal authority.
+
+The chosen contract must appear in the destruction preflight/teardown proof and deterministic
+tests. `io_uring_queue_exit()` is not treated as an unmodeled no-op.
 
 ---
 
@@ -324,13 +346,15 @@ Required proof:
   3. the still-enqueued retirement (§4.3);
   4. the wait-path re-submission guard replacing `io_uring_submit_and_wait` with a
      `to_submit=0`/`get_events` drain (§5);
-  5. a ring-teardown proof that discards the quarantined batch.
+  5. a ring-teardown proof that discards the quarantined batch;
+  6. a control-execution-reference/quiescence contract (§4.4); and
+  7. a non-wrapping logical SQ sequence proof across masked-slot reuse (§4.1).
 
-- **D1 does NOT implement any of (1)–(5).** Production poison is therefore NOT shipped. The
+- **D1 does NOT implement any of (1)–(7).** Production poison is therefore NOT shipped. The
   `fatal_error_` field remains read-only evidence plumbing; submit/wait surface it but no
   retirement/recovery runs.
 
-**P0-D status: BLOCKED on production implementation of (1)–(5).** This audit licenses the design;
+**P0-D status: BLOCKED on production implementation of (1)–(7).** This audit licenses the design;
 a follow-up D-x phase must implement and prove it. D1 is READY FOR HUMAN REVIEW but NOT merge-ready
 on the "every accepted request has a provable terminal path" axis until that implementation lands.
 

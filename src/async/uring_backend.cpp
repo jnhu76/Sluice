@@ -123,13 +123,15 @@ bool UringAsyncBackend::available() const noexcept {
 //
 // Threading: AsyncBackend is single-driver-thread (poll/wait_one/submit/cancel
 // are serialized by AsyncIoContext::access_mtx_ at the context layer). The
-// dispatch_mtx_ below guards the local dispatch ring + router/scratch mutation
-// for the future multi-producer seam; D1 is single-driver but the lock makes
-// the coordination domain explicit and TSan-honest.
+// dispatch_mtx_ below guards the local dispatch ring, dispatch/cancel
+// arbitration, router installation, and cancel-side router/scratch access.
+// CQE lookup/retirement is serialized by AsyncIoContext::access_mtx_ under the
+// D1 single-driver call contract and deliberately does not take dispatch_mtx_
+// before arena.record_terminal().
 // ---------------------------------------------------------------------------
 
 // Opaque pimpl owning the private io_uring instance + the internal-testing
-// submit hook. Defined here (in the sluice::async namespace, matching the
+// transport hooks. Defined here (in the sluice::async namespace, matching the
 // header's forward declaration) so the public header never includes
 // <liburing.h>.
 struct UringRingState {
@@ -342,13 +344,24 @@ UringAsyncBackend::UringAsyncBackend(unsigned queue_depth)
                                     queue_depth > 0 ? queue_depth : 64}) {}
 
 UringAsyncBackend::UringAsyncBackend(UringConfig config)
+    : UringAsyncBackend(validate_config_(config), ValidatedConfigTag{}) {}
+
+UringConfig UringAsyncBackend::validate_config_(UringConfig config) {
+    constexpr std::size_t slot_index_max =
+        static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
+    if (config.request_capacity == 0 || config.request_capacity > slot_index_max ||
+        config.queue_depth == 0) {
+        throw std::invalid_argument(
+            "UringConfig request_capacity must be in [1, UINT32_MAX] and queue_depth must be > 0");
+    }
+    return config;
+}
+
+UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
     : arena_(detail::ContextIdentity::for_testing(next_backend_id()), config.request_capacity),
       prepared_ops_(config.request_capacity), router_(config.request_capacity),
       cancel_scratch_(config.request_capacity), cookie_free_list_(config.request_capacity),
       queue_depth_(config.queue_depth), ring_state_(std::make_unique<UringRingState>()) {
-    if (config.request_capacity == 0 || config.queue_depth == 0) {
-        throw std::invalid_argument("UringConfig fields must be > 0");
-    }
     // Seed the router ARRAY-slot free-list: every router slot is initially
     // free. The free-list recycles router ARRAY slots only (the bounded
     // router); it NEVER recycles cookie VALUES. Cookie uniqueness comes from
@@ -565,19 +578,19 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
         if (outcome == detail::EnqueueOutcome::enqueued) {
             dispatch_->push_back(h);
             // P0-A peek protocol: enqueue (push_back) and the best-effort
-            // ownership transfer (dispatch_one_locked) run under ONE
-            // dispatch_mtx_ critical section. This is load-bearing: cancel()
-            // acquires the SAME lock, so by holding it across push_back →
-            // mark_running there is no window where a cancel could terminalize
-            // h between enqueue and dispatch. Therefore mark_running == false
-            // inside dispatch_one_locked can ONLY be an invariant violation
-            // (handled there), never a legitimate cancel-won race. If the SQ is
-            // full, h stays at the tail of the dispatch queue and a later
-            // poll()/wait_one() retries via the peek drain loop. We do NOT
-            // pop_front→dispatch→push_back: that pattern contradicts the
-            // remove_exact(h) the successful transfer performs (it would
-            // fail-fast because h was already popped).
-            (void)dispatch_one_locked(h);
+            // FIFO ownership transfers run under ONE dispatch_mtx_ critical
+            // section. Always dispatch the current front: h is the newly
+            // appended tail and an older request may already be queued after
+            // SQ pressure. This is the same front/peek/remove_exact protocol
+            // used by poll()/wait_one(). Holding the lock across push_back and
+            // the drain also prevents cancel() from interposing before
+            // mark_running. On SQ pressure, the current front stays queued and
+            // the loop stops; no tail may bypass it.
+            while (!dispatch_->empty()) {
+                const detail::SlotHandle front = dispatch_->front();
+                if (!dispatch_one_locked(front))
+                    break;
+            }
         }
         // terminal_noop: a pending cancel won first (Scheme B). No dispatch
         // linkage; that winner owns readiness.
@@ -810,9 +823,11 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     } else {
         terminal = detail::TerminalResult::ok_void();
     }
-    // record_terminal takes the arena leaf lock ALONE (no dispatch_mtx_ held);
-    // first caller wins, losers no-op (ADR Decision 12). The full SlotHandle is
-    // re-validated by the arena (context/slot/generation).
+    // D1's AsyncIoContext access_mtx_ single-driver call domain serializes this
+    // router/free-list/scratch retirement against dispatch/cancel access.
+    // record_terminal itself takes the arena leaf lock ALONE (no dispatch_mtx_
+    // held); first caller wins, losers no-op (ADR Decision 12). The full
+    // SlotHandle is re-validated by the arena (context/slot/generation).
     const bool won = arena_.record_terminal(h, terminal);
     if (won) {
         // Retire the transport routing/execution reference. The slot remains
@@ -983,15 +998,36 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
     // Nothing ready yet but work is outstanding: block in the KERNEL until at
     // least one CQE arrives (single-driver model — there is no separate worker
     // thread to signal a ReadyWaitSource). io_uring_submit_and_wait both
-    // flushes pending SQEs and blocks for min_complete=1 CQE. On wake, reap.
-    const int rc = ::io_uring_submit_and_wait(&ring_state_->ring, 1);
-    if (rc < 0 && rc != -EINTR && rc != -EAGAIN) {
-        // A genuine wait error (not a transient interrupt). Do not fabricate a
-        // terminal; surface it so the caller can stop waiting.
-        return make_unexpected<std::size_t>(sluice::from_errno_value(-rc));
+    // flushes pending SQEs and blocks for min_complete=1 CQE. A transient wake
+    // is not a drained boundary: only accepted_outstanding()==0 may return 0.
+    auto submit_and_wait_once = [&]() noexcept {
+#if defined(SLUICE_URING_INTERNAL_TESTING)
+        if (ring_state_->test_hooks.submit_and_wait != nullptr) {
+            return ring_state_->test_hooks.submit_and_wait(ring_state_->test_hooks.context,
+                                                           &ring_state_->ring, 1);
+        }
+#endif
+        return ::io_uring_submit_and_wait(&ring_state_->ring, 1);
+    };
+
+    for (;;) {
+        const int rc = sluice::detail::retry_uring_wait_on_eintr(submit_and_wait_once);
+        if (rc < 0 && rc != -EAGAIN) {
+            // A genuine wait error (not a transient interrupt). Do not
+            // fabricate a terminal; surface it so the caller can stop waiting.
+            return make_unexpected<std::size_t>(sluice::from_errno_value(-rc));
+        }
+        (void)reap_cqes();
+        n = arena_.reap(sink_);
+        if (n > 0)
+            return n;
+        if (fatal_error_.has_value())
+            return make_unexpected<std::size_t>(*fatal_error_);
+        if (arena_.accepted_outstanding() == 0)
+            return std::size_t{0};
+        // -EAGAIN, a spurious/empty wake, or a control-only CQE while user work
+        // remains outstanding: retry without reporting a false drain.
     }
-    (void)reap_cqes();
-    return arena_.reap(sink_);
 }
 
 // ---------------------------------------------------------------------------
@@ -1030,9 +1066,10 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
             std::fflush(stderr);
             std::terminate();
         }
-        // From here, under the same lock, the target's cookie cannot change
-        // (only dispatch installs/retires router entries, and it takes this
-        // lock). Obtain the SQE and fill it.
+        // From here, the target's cookie cannot change: dispatch/cancel-side
+        // access holds this lock, while CQE retirement is excluded by D1's
+        // AsyncIoContext::access_mtx_ single-driver call domain. Obtain the
+        // SQE and fill it.
         io_uring_sqe* sqe = ::io_uring_get_sqe(&ring_state_->ring);
         if (sqe == nullptr) {
             (void)submit_transport();

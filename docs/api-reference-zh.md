@@ -960,9 +960,14 @@ Linux io_uring 后端（sluice-CORE-020B）。构建门控在 liburing 之后。
 ```cpp
 class UringAsyncBackend : public AsyncBackend {
 public:
-    UringAsyncBackend();
+    explicit UringAsyncBackend(unsigned queue_depth = 64);
+    explicit UringAsyncBackend(UringConfig config);
 };
 ```
+
+`UringConfig::request_capacity` 必须位于 `[1, UINT32_MAX]`，与内部
+`SlotIndex` 表示域一致；`queue_depth` 必须非零。显式配置无效时，构造器会在分配任何
+后端状态之前抛出 `std::invalid_argument`。旧构造器继续保留 `0 -> 64` 映射。
 
 工厂函数：
 

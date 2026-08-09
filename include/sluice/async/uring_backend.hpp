@@ -68,7 +68,9 @@ struct UringRingState;
 #endif
 
 #if defined(SLUICE_HAS_LIBURING)
-// Phase D1 configuration (AC-7, ADR Decision 13). Both MUST be > 0.
+// Phase D1 configuration (AC-7, ADR Decision 13). request_capacity MUST be in
+// [1, UINT32_MAX] (the SlotIndex domain); queue_depth MUST be > 0. Validation
+// completes before any backend-state allocation.
 // request_capacity is independent of queue_depth (ADR Decision 13 / 18);
 // request_capacity > queue_depth is legal.
 struct UringConfig {
@@ -78,14 +80,17 @@ struct UringConfig {
 #endif
 
 #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_URING_INTERNAL_TESTING)
-// Non-installed submit seam used by the dedicated real-liburing fault tests.
+// Non-installed transport submit/wait seams used by the dedicated
+// real-liburing fault tests.
 // Production targets never define SLUICE_URING_INTERNAL_TESTING and therefore
 // expose neither this type nor the constructor overload below.
 struct UringBackendSubmitTestHooks {
     using SubmitFn = int (*)(void*, ::io_uring*) noexcept;
+    using SubmitAndWaitFn = int (*)(void*, ::io_uring*, unsigned) noexcept;
 
     void* context = nullptr;
     SubmitFn submit = nullptr;
+    SubmitAndWaitFn submit_and_wait = nullptr;
 };
 #endif
 
@@ -97,8 +102,9 @@ class UringAsyncBackend : public AsyncBackend {
     explicit UringAsyncBackend(unsigned queue_depth = 64);
 
 #if defined(SLUICE_HAS_LIBURING)
-    // Phase D1 explicit bounded configuration. Both fields MUST be > 0; a 0
-    // value is rejected with std::invalid_argument.
+    // Phase D1 explicit bounded configuration. request_capacity MUST be in
+    // [1, UINT32_MAX] and queue_depth MUST be > 0. Invalid configuration is
+    // rejected with std::invalid_argument before backend-state allocation.
     explicit UringAsyncBackend(UringConfig config);
 #endif
 #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_URING_INTERNAL_TESTING)
@@ -173,6 +179,17 @@ class UringAsyncBackend : public AsyncBackend {
     // cookie distinct from it. (next_cookie_ is mutated only under
     // dispatch_mtx_; this snapshot is read single-driver.)
     std::uint64_t peek_next_cookie_for_test() const noexcept { return next_cookie_; }
+    // Test-only, single-driver read-only observation of the live router. Used
+    // to prove SQ-pressure enqueue dispatches the FIFO front rather than the
+    // newly appended tail. Offsets are unique in that detector.
+    std::optional<std::uint64_t>
+    live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept {
+        for (const auto& entry : router_) {
+            if (entry.in_use && prepared_ops_[entry.handle.slot.value].offset == offset)
+                return entry.cookie;
+        }
+        return std::nullopt;
+    }
     // Test-only: validate a WriteOp through the EXACT production descriptor-
     // validation logic, WITHOUT reserve/prepare/commit/enqueue/get_sqe/kernel.
     // A read-only static wrapper over validate_write; it touches no instance
@@ -187,6 +204,10 @@ class UringAsyncBackend : public AsyncBackend {
 
   private:
 #if defined(SLUICE_HAS_LIBURING)
+    struct ValidatedConfigTag {};
+    static UringConfig validate_config_(UringConfig config);
+    UringAsyncBackend(UringConfig config, ValidatedConfigTag);
+
     // ---- fixed tagged operation payload (per-slot scratch, Scheme B) -------
     // Sized to request_capacity at construction, indexed by SlotIndex (1:1 with
     // arena slots). Carries the SQE descriptor; filled in prepare(), read by
@@ -277,12 +298,13 @@ class UringAsyncBackend : public AsyncBackend {
     // enqueue_after_commit's single-critical-section path.
     bool dispatch_one_locked(detail::SlotHandle h) noexcept;
 
-    // Unified enqueue + dispatch attempt under ONE dispatch_mtx_ critical
-    // section. noexcept; the caller has already committed. Holding the lock
-    // across push_back -> dispatch_one_locked is load-bearing: it closes the
-    // window in which a cancel() could terminalize h between enqueue and
-    // dispatch (cancel takes the same lock). Therefore mark_running(h)==false
-    // inside the transaction is an invariant violation, not a cancel-won race.
+    // Unified enqueue + FIFO-front dispatch drain under ONE dispatch_mtx_
+    // critical section. noexcept; the caller has already committed. Holding
+    // the lock across push_back -> front/dispatch_one_locked is load-bearing:
+    // it closes the window in which cancel() could terminalize the front
+    // between enqueue and dispatch (cancel takes the same lock). Therefore
+    // mark_running(front)==false inside the transaction is an invariant
+    // violation, not a cancel-won race.
     void enqueue_after_commit(detail::SlotHandle h) noexcept;
 
     // Transport progress: io_uring_submit(). DOES NOT mutate RequestState.
@@ -343,14 +365,17 @@ class UringAsyncBackend : public AsyncBackend {
     unsigned queue_depth_ = 64;
 
     // The private io_uring instance (opaque pimpl — owns the io_uring + the
-    // internal-testing submit hook). One ring per backend (ADR Decision 18).
+    // internal-testing transport hooks). One ring per backend (ADR Decision 18).
     std::unique_ptr<UringRingState> ring_state_;
     bool have_ring_ = false;
     bool admission_closed_ = false;
     std::optional<IoError> fatal_error_; // permanent transport poison
 
     // Backend dispatch domain: local dispatch ring + dispatch/cancel
-    // arbitration + cookie/router/scratch mutation. Lock order:
+    // arbitration + cookie/router installation and cancel-side lookup/scratch
+    // mutation. CQE lookup/retirement is serialized by D1's documented
+    // AsyncIoContext single-driver call domain and intentionally does not take
+    // this mutex before arena.record_terminal(). Lock order:
     // dispatch_mtx_ -> arena leaf only — never nested with the ready-wait
     // mutex. io_uring_submit() (syscall) is transport progress and may be
     // called under dispatch_mtx_ but NEVER under the arena mutex.

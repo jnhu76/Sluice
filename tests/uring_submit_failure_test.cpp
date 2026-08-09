@@ -37,14 +37,28 @@
 #include <fcntl.h>
 #include <limits>
 #include <span>
+#include <stdexcept>
 #include <string>
+#include <sys/resource.h>
+#include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
+
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+constexpr bool kAddressSpaceProbeActive = false;
+#else
+constexpr bool kAddressSpaceProbeActive = true;
+#endif
+#else
+constexpr bool kAddressSpaceProbeActive = true;
+#endif
 
 namespace {
 
 using sluice::IoError;
 using sluice::async::Completion;
+using sluice::async::ReadOp;
 using sluice::async::UringAsyncBackend;
 using sluice::async::UringBackendSubmitTestHooks;
 using sluice::async::UringConfig;
@@ -118,6 +132,39 @@ UringBackendSubmitTestHooks hooks_for(SubmitScript& script) {
     return UringBackendSubmitTestHooks{&script, &SubmitScript::invoke};
 }
 
+class TransientWaitScript {
+  public:
+    static int submit(void*, io_uring*) noexcept {
+        // Keep the prepared file-read SQE application-side so wait_one's
+        // initial non-blocking pass cannot reap it before the scripted wait.
+        return 0;
+    }
+
+    static int invoke(void* context, io_uring* ring, unsigned wait_nr) noexcept {
+        auto& self = *static_cast<TransientWaitScript*>(context);
+        ++self.calls_;
+        if (self.calls_ == 1)
+            return -EINTR;
+        if (self.calls_ == 2)
+            return -EAGAIN;
+        if (self.calls_ == 3)
+            return 0; // empty wake: no user CQE while one request is accepted
+        // The fourth call performs the real flush+wait, so the file-read CQE
+        // is guaranteed to exist only after every transient outcome was seen.
+        return ::io_uring_submit_and_wait(ring, wait_nr);
+    }
+
+    std::size_t calls() const noexcept { return calls_; }
+
+  private:
+    std::size_t calls_ = 0;
+};
+
+UringBackendSubmitTestHooks wait_hooks_for(TransientWaitScript& script) {
+    return UringBackendSubmitTestHooks{&script, &TransientWaitScript::submit,
+                                       &TransientWaitScript::invoke};
+}
+
 UringConfig small_config(unsigned queue_depth = 8) {
     return UringConfig{static_cast<std::size_t>(queue_depth), queue_depth};
 }
@@ -133,6 +180,139 @@ template <class Predicate> std::size_t poll_bounded(UringAsyncBackend& backend, 
 }
 
 } // namespace
+
+SLUICE_TEST_CASE(uring_config_rejects_unrepresentable_capacity_before_allocation) {
+    bool zero_rejected = false;
+    try {
+        UringAsyncBackend backend(UringConfig{0, 1});
+    } catch (const std::invalid_argument&) {
+        zero_rejected = true;
+    }
+    SLUICE_CHECK(zero_rejected);
+
+    bool zero_queue_depth_rejected = false;
+    try {
+        UringAsyncBackend backend(UringConfig{1, 0});
+    } catch (const std::invalid_argument&) {
+        zero_queue_depth_rejected = true;
+    }
+    SLUICE_CHECK(zero_queue_depth_rejected);
+
+    if constexpr (std::numeric_limits<std::size_t>::max() >
+                  static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
+        if (!kAddressSpaceProbeActive)
+            return;
+
+        // Bound the child address space so the pre-fix constructor deterministically
+        // reports allocation failure instead of reserving/touching an enormous
+        // RequestArena. The fixed constructor rejects before that allocation.
+        const pid_t pid = ::fork();
+        SLUICE_CHECK(pid >= 0);
+        if (pid == 0) {
+            constexpr rlim_t limit = 256u * 1024u * 1024u;
+            const rlimit address_space{limit, limit};
+            if (::setrlimit(RLIMIT_AS, &address_space) != 0)
+                std::_Exit(90);
+            try {
+                const std::size_t oversized =
+                    static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max()) + 1u;
+                UringAsyncBackend backend(UringConfig{oversized, 1});
+            } catch (const std::invalid_argument&) {
+                std::_Exit(0);
+            } catch (...) {
+                std::_Exit(91);
+            }
+            std::_Exit(92);
+        }
+
+        int status = 0;
+        SLUICE_CHECK(::waitpid(pid, &status, 0) == pid);
+        SLUICE_CHECK(WIFEXITED(status));
+        SLUICE_CHECK(WEXITSTATUS(status) == 0);
+    }
+}
+
+SLUICE_TEST_CASE(uring_enqueue_sq_pressure_dispatches_fifo_front) {
+    constexpr std::array steps{0, kRealSubmit, kRealSubmit, kRealSubmit, kRealSubmit};
+    SubmitScript script(steps);
+    UringAsyncBackend backend(UringConfig{4, 2}, hooks_for(script));
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    std::array<std::array<std::byte, 4>, 4> bytes{};
+    std::array<Completion<std::size_t>, 4> completions;
+    for (std::size_t i = 0; i < 4; ++i) {
+        bytes[i].fill(static_cast<std::byte>(i + 1));
+        SLUICE_CHECK(backend
+                         .submit_write(WriteOp{file.fd(), bytes[i].data(), bytes[i].size(), i * 4},
+                                       completions[i])
+                         .has_value());
+    }
+
+    // The third request first met a full SQ and stayed at the FIFO front. The
+    // fourth enqueue's scripted real flush creates room. A correct fast path
+    // dispatches request 3 before (or together with) request 4; the buggy
+    // tail-specific call leaves request 3 enqueued despite available SQ room.
+    const auto older_front_cookie = backend.live_cookie_for_offset_for_test(8);
+    const auto newer_tail_cookie = backend.live_cookie_for_offset_for_test(12);
+    const bool fifo_dispatch_order = older_front_cookie.has_value() &&
+                                     newer_tail_cookie.has_value() &&
+                                     *older_front_cookie < *newer_tail_cookie;
+
+    (void)poll_bounded(backend, [&] {
+        for (const auto& completion : completions) {
+            if (!completion.ready())
+                return false;
+        }
+        return true;
+    });
+    for (auto& completion : completions) {
+        SLUICE_CHECK(completion.ready());
+        completion.reset();
+    }
+    // Cookies are allocated monotonically at the ring-ownership transfer.
+    // Merely observing both requests as ring-owned would let a tail-then-front
+    // implementation pass; their cookie order proves the older front crossed
+    // the ownership boundary first.
+    SLUICE_CHECK(fifo_dispatch_order);
+}
+
+SLUICE_TEST_CASE(uring_wait_transients_never_return_false_drained_boundary) {
+    TransientWaitScript script;
+    UringAsyncBackend backend(small_config(), wait_hooks_for(script));
+    if (!backend.available())
+        return;
+
+    TempFile file;
+    const unsigned char seed = 0x5a;
+    SLUICE_CHECK(::pwrite(file.fd(), &seed, 1, 0) == 1);
+    std::byte byte{};
+    Completion<std::size_t> completion;
+    SLUICE_CHECK(backend.submit_read(ReadOp{file.fd(), &byte, 1, 0}, completion).has_value());
+
+    const auto waited = backend.wait_one();
+    const bool waited_for_completion = waited.has_value() && waited.value() > 0;
+    const bool false_drained_boundary =
+        waited.has_value() && waited.value() == 0 && backend.outstanding() == 1;
+
+    // Keep the RED run quiescent: old code returns after the scripted EINTR,
+    // so drive the remaining EAGAIN + empty-wake + real-wait steps before
+    // asserting the bug.
+    if (!completion.ready()) {
+        while (!completion.ready() && script.calls() < 4)
+            (void)backend.wait_one();
+        (void)poll_bounded(backend, [&] { return completion.ready(); });
+    }
+    SLUICE_CHECK(completion.ready());
+    SLUICE_CHECK(byte == std::byte{0x5a});
+    completion.reset();
+
+    SLUICE_CHECK(waited_for_completion);
+    SLUICE_CHECK(!false_drained_boundary);
+    SLUICE_CHECK(backend.outstanding() == 0);
+    SLUICE_CHECK(script.calls() == 4);
+}
 
 // Transient -EINTR must NOT mutate RequestState: the request stays alive and
 // retries on the next driver call, completing from its real CQE. This proves
