@@ -533,6 +533,16 @@ SLUICE_TEST_CASE(uring_d2_poison_wait_never_submits_quarantined_write) {
     SLUICE_CHECK(backend.poll() == 1); // write is proven Class A and retired
     SLUICE_CHECK(backend_error_eio(quarantined));
 
+    // Transport-state proof: the scripted -EIO never entered io_uring_submit
+    // (SubmitScript returns the injected step verbatim; only kRealSubmit calls
+    // liburing), so the quarantined Class-A write SQE is still staged in the
+    // application-side SQ. A correct to_submit=0 wait must not consume or flush
+    // it; an M8 io_uring_submit() mutant flushes it and sq_ready drops. This is
+    // the deterministic invariant the M8 mutant is killed on — independent of
+    // when the kernel would settle a flushed write.
+    const std::size_t sq_before = backend.sq_ready_for_test();
+    SLUICE_CHECK(sq_before == 1);
+
     bool pipe_written = false;
     std::thread writer([&] {
         while (!script.poison_wait_entered())
@@ -545,10 +555,14 @@ SLUICE_TEST_CASE(uring_d2_poison_wait_never_submits_quarantined_write) {
     SLUICE_CHECK(waited.has_value() && waited.value() == 1);
     SLUICE_CHECK(old_class_c.ready() && old_class_c.result().has_value());
 
-    // A forbidden submitting wait may return on the older pipe CQE before the
-    // quarantined write's side effect is observable. Continue non-submitting
-    // poisoned polls so any already-submitted mutant SQE/CQE must settle before
-    // the disk assertion; the correct path has no kernel write to settle.
+    const std::size_t sq_after = backend.sq_ready_for_test();
+    SLUICE_CHECK(sq_after == sq_before);
+
+    // Auxiliary detector only: a forbidden submitting wait may return on the
+    // older pipe CQE before the quarantined write's side effect is observable,
+    // so the disk read alone is NOT deterministic evidence (the sq_ready
+    // invariant above is). Drain one non-submitting poisoned poll so any
+    // already-submitted mutant SQE/CQE has a chance to settle before the read.
     (void)backend.poll();
     std::byte observed{};
     const ssize_t disk_bytes = ::pread(file.fd(), &observed, 1, 0);
