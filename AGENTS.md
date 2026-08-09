@@ -297,6 +297,68 @@ Never hide a baseline failure by:
 
 ---
 
+## 6.1 Local pre-push gate (developer tooling)
+
+A repository-managed local pre-push gate catches deterministic mechanical
+failures — documentation link validation, architecture-doc structure, the
+backend-conformance manifest self-test, generated/derived-file freshness, and
+whitespace damage — BEFORE a push consumes a GitHub CI round trip. It is
+developer tooling only and does NOT modify async/I/O production behavior or
+weaken GitHub CI.
+
+Architecture (one authority):
+
+```text
+git pre-push
+    -> Lefthook (lefthook.yml, dispatcher only)
+    -> scripts/gates/pre-push.sh  (the quality-gate authority)
+    -> existing repository validators (same scripts CI runs)
+```
+
+The reusable shell script is the quality-gate authority; Lefthook is only the
+Git-hook dispatcher. The exact local pre-push gate is reproducible by hand
+without Git/Lefthook:
+
+```sh
+bash scripts/gates/pre-push.sh
+```
+
+Dependency: `lefthook` (language-neutral, no Node/npm). Git hooks are NOT
+installed automatically just because `lefthook.yml` exists. Each checkout must
+install them once:
+
+```sh
+lefthook install
+```
+
+Scope: fast + deterministic only. The local gate does NOT run the build, full
+test suite, sanitizers, real-liburing, formal models, or fuzz loops — those
+remain CI or explicit developer gates. Conceptual split:
+
+```text
+pre-push : docs, manifests, generated-file consistency, whitespace
+CI       : build, full tests, sanitizers, real liburing, negative compile,
+           conformance, formal verification
+```
+
+Fail-closed: the gate exits 0 only when every check passes and exits non-zero
+on the first failure, naming the failing gate and the exact reproduction
+command. No `|| true`, no warning-only required gates.
+
+Environment isolation: the gate unsets `SLUICE_TEST_FILTER` (and only that, for
+now) so an ambient filter cannot narrow a manifest/attribution check or match
+zero cases and misreport success. Do not blindly sanitize the whole
+environment; unset only variables known to weaken an invoked check, and justify
+each entry.
+
+GitHub CI remains authoritative. Local hooks reduce turnaround; they do not
+replace CI, because hooks can be bypassed (`git push --no-verify`), commits can
+be produced without Lefthook, and bots/automation may not install local hooks.
+
+`git push --no-verify` is an emergency/manual bypass, not normal workflow.
+
+---
+
 ## 7. Focused build and test workflow
 
 Use exact target names from `xmake.lua`.
