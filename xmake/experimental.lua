@@ -159,6 +159,32 @@ if os.isfile(R .. "tests/uring_backend_c2c_waiter_borrow_test.cpp") then
         add_tests("uring_backend_c2c_waiter_borrow_test")
 end
 
+-- Phase D4 C2e close/drain/destruction evidence (real liburing only in real
+-- mode). Compiles the authoritative production uring_backend.cpp +
+-- async_io_context.cpp (the split-phase wait the context path uses) +
+-- fail_fast.cpp with SLUICE_ASYNC_INTERNAL_TESTING; stub mode links
+-- production sluice_async (build/API honesty only).
+if os.isfile(R .. "tests/uring_backend_c2e_close_drain_test.cpp") then
+    target("uring_backend_c2e_close_drain_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_includedirs(R .. "include")
+        add_files(R .. "tests/uring_backend_c2e_close_drain_test.cpp")
+        if has_liburing then
+            add_deps("sluice_core")
+            add_files(R .. "src/async/uring_backend.cpp",
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/fail_fast.cpp")
+            add_defines("SLUICE_HAS_LIBURING",
+                        "SLUICE_ASYNC_INTERNAL_TESTING")
+            add_packages("liburing")
+        else
+            add_deps("sluice_core", "sluice_async")
+        end
+        add_tests("uring_backend_c2e_close_drain_test")
+end
+
 -- Experimental uring library. Always defined so the headers/sources exist; the
 -- implementation compiles either the real uring path or the unsupported stub
 -- based on CPPIO_HAS_LIBURING.

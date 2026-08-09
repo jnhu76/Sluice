@@ -186,3 +186,30 @@ if has_config("with-liburing") then
             add_tests("uring_backend_death_test")
     end
 end
+
+-- uring_backend_c2e_death_test — Phase D4 C2e non-quiescent destruction death
+-- matrix (Issue #68 row 16; ADR Decision 15). Compiles the authoritative
+-- production uring_backend.cpp + fail_fast.cpp under SLUICE_ASYNC_INTERNAL_
+-- TESTING (the deterministic pause gates / CQE injection are needed to reach
+-- the pending / enqueued / backend-ready / live-control windows). Proves
+-- destroying the backend with pending / enqueued / running (ring-owned) /
+-- transport-ledger residue / backend-ready unreaped / completion-ready
+-- unreset / live-control-reference state terminates (exit 86) in BOTH Debug
+-- and Release BEFORE io_uring_queue_exit(), while close_admission + drain +
+-- reset + destroy exits 0. Real-liburing only; POSIX-only.
+if has_config("with-liburing") then
+    local p = R .. "tests/uring_backend_c2e_death_test.cpp"
+    if os.isfile(p) and is_plat("linux", "macosx") then
+        target("uring_backend_c2e_death_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "tests")
+            add_files(p, R .. "src/async/uring_backend.cpp",
+                      R .. "src/async/fail_fast.cpp")
+            add_defines("SLUICE_HAS_LIBURING", "SLUICE_ASYNC_INTERNAL_TESTING")
+            add_packages("liburing")
+            add_tests("uring_backend_c2e_death_test")
+    end
+end

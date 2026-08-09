@@ -364,4 +364,19 @@ SLUICE_TEST_CASE(uring_stats_increment_on_real_path) {
 
 #endif // SLUICE_HAS_LIBURING
 
+// Phase D4 evidence-mode attribution (G2): exactly one [evidence-meta] line
+// per gate-driven run so the aggregate gate can attribute this backend-
+// specific contract record to the executed mode (real vs stub). The stub
+// branch proves build/API honesty only; required_modes=("real",) on the
+// manifest record classifies a stub run INCOMPLETE, never PASS.
+SLUICE_TEST_CASE(uring_backend_contract_evidence_mode) {
+#if defined(SLUICE_HAS_LIBURING)
+    std::printf("[evidence-meta] evidence=uring_backend_contract mode=real\n");
+    auto ctx = make_real_ctx();
+    SLUICE_CHECK(ctx != nullptr);
+#else
+    std::printf("[evidence-meta] evidence=uring_backend_contract mode=stub\n");
+#endif
+}
+
 SLUICE_MAIN()

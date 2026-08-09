@@ -229,6 +229,38 @@ SLUICE_TEST_CASE(conformance_close_drain_fake) {
     SLUICE_CHECK(failed.empty());
 }
 
+SLUICE_TEST_CASE(conformance_close_drain_uring) {
+    // Phase D4: Uring now has the public close_admission() seam, so it drives
+    // the UNCHANGED shared close/drain suite through its own fixture factory
+    // (the suite asserts only AsyncIoContext-observable state + the driver-
+    // wired close/slot_in_use closures). The shared C2e evidence record gains
+    // "Uring" in its backends tuple. Registered in BOTH modes: the real branch
+    // runs the suite; the stub branch emits the mode=stub meta line only —
+    // build/API honesty, classified INCOMPLETE by the gate (never skip-as-
+    // pass, never a semantic PASS).
+    const auto f = make_uring_factory();
+    sluice_test::conformance::emit_meta(f);
+#if defined(SLUICE_HAS_LIBURING)
+    const sluice_test::conformance::MakeCloseDrainFixture make_fx = [] {
+        auto backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 4});
+        auto* raw = backend.get();
+        auto fx = std::make_unique<sluice_test::conformance::CloseDrainFixture>(std::move(backend));
+        fx->close = [raw] { raw->close_admission(); };
+        fx->slot_in_use = [raw] { return raw->arena_slot_in_use(); };
+        return fx;
+    };
+    const std::string failed =
+        sluice_test::conformance::run_close_drain_cases(f, make_fx);
+    if (!failed.empty()) {
+        std::fprintf(stderr, "[conformance] close/drain FAIL Uring :: %s\n",
+                     failed.c_str());
+    }
+    SLUICE_CHECK(failed.empty());
+#else
+    // Stub: no close_admission seam; nothing to assert beyond build honesty.
+#endif
+}
+
 SLUICE_TEST_CASE(conformance_close_drain_threadpool) {
     const auto f = make_threadpool_factory();
     sluice_test::conformance::emit_meta(f);
