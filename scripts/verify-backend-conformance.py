@@ -637,13 +637,18 @@ class Gate:
             return r.state
 
         # KernelIoProfile lifecycle/backend_specific evidence remains
-        # INCOMPLETE by default while D3/D4 are open. A narrowly tagged,
-        # real-only phase record may report its own PASS after _drive() validates
-        # the required evidence mode; this does not lift the hard-coded overall
-        # KernelIo NOT CONFORMING verdict below.
+        # INCOMPLETE by default while D3/D4 are open. ONLY a real-mode phase
+        # record explicitly tagged to THIS exact backend may report its own
+        # PASS after _drive() validates the required evidence mode; a
+        # backend-agnostic record (backends == ()) or one tagged to several
+        # backends can never lift the fail-closed default. required_modes alone
+        # is NOT fail-closed-override authority (P1-B): it declares WHICH mode
+        # a target must execute in, not whether this evidence belongs to this
+        # backend. This branch does not lift the hard-coded overall KernelIo
+        # NOT CONFORMING verdict below.
         if (backend_profile == "KernelIoProfile"
                 and ev.layer in ("lifecycle", "backend_specific")):
-            if ev.required_modes:
+            if ev.required_modes and ev.backends == (backend_name,):
                 return r.state
             # The uring-specific backend contract target (uring_backend_test)
             # runs against the stub/real binary; in stub it covers only the

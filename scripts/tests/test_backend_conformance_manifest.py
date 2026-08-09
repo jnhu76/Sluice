@@ -540,6 +540,63 @@ class ClosedProfileMappingTest(unittest.TestCase):
                              f"Uring must be NOT CONFORMING even if shared={state}")
 
 
+class KernelIoFailClosedOverrideTest(unittest.TestCase):
+    """P1-B: required_modes alone is NOT KernelIo fail-closed override
+    authority.
+
+    required_modes declares WHICH mode a target must execute in; it does not
+    declare that this evidence belongs to a given backend. Only a real-mode
+    record explicitly tagged to exactly this backend
+    (ev.backends == (backend_name,)) may report its own PASS for the KernelIo
+    profile. A backend-agnostic lifecycle record (backends == ()) with
+    required_modes set and PASS must stay INCOMPLETE for Uring, so a generic
+    contract record can never quietly lift the Phase-D fail-closed default.
+    """
+
+    def test_backend_agnostic_required_modes_cannot_lift_uring_fail_closed(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        generic = M.Evidence(
+            evidence_id="generic_lifecycle_required_real",
+            target="some_lifecycle_target",
+            layer="lifecycle",
+            backends=(),                    # backend-agnostic
+            required_modes=("real",),
+        )
+        g.results[generic.evidence_id] = G.RunResult(
+            generic.evidence_id, generic.target, G.PASS, detail="stub PASS")
+        state = g._backend_run_state(generic, "Uring", "KernelIoProfile")
+        self.assertEqual(state, G.INCOMPLETE,
+                         "backend-agnostic lifecycle PASS + required_modes must "
+                         "NOT report PASS for Uring")
+
+    def test_multi_backend_tagged_required_modes_cannot_lift_uring(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        shared_real = M.Evidence(
+            evidence_id="multi_backend_required_real",
+            target="some_lifecycle_target",
+            layer="lifecycle",
+            backends=("Uring", "ThreadPool"),
+            required_modes=("real",),
+        )
+        g.results[shared_real.evidence_id] = G.RunResult(
+            shared_real.evidence_id, shared_real.target, G.PASS,
+            detail="stub PASS")
+        state = g._backend_run_state(shared_real, "Uring", "KernelIoProfile")
+        self.assertEqual(state, G.INCOMPLETE,
+                         "a multi-backend tagged record cannot lift the "
+                         "KernelIo fail-closed default either")
+
+    def test_exactly_tagged_real_record_still_reports_its_own_pass(self):
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        ev = M.evidence_by_id("uring_c2d_failure_injection")
+        self.assertIsNotNone(ev)
+        # The manifest must keep the real-mode phase record tagged to exactly
+        # Uring; otherwise this test's premise (and the C2d PASS) breaks.
+        self.assertEqual(ev.backends, ("Uring",))
+        self.assertEqual(g._backend_run_state(ev, "Uring", "KernelIoProfile"),
+                         G.PASS)
+
+
 class SubprocessOutcomeMappingTest(unittest.TestCase):
     """Cases 8 of task §4: subprocess non-zero / timeout map deterministically."""
 
