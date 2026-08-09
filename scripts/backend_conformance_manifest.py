@@ -347,17 +347,39 @@ EVIDENCE: tuple[Evidence, ...] = (
               "(reap gates ready), cancel-vs-worker exactly-one winner.",
     ),
     Evidence(
-        evidence_id="uring_c2b_identity_not_implemented",
-        target="backend_conformance_test",
+        evidence_id="uring_c2b_identity_integration",
+        target="uring_backend_c2b_identity_test",
         layer="lifecycle",
         backends=_U,
         mandatory=True,
-        status=STATUS_NOT_IMPLEMENTED,
-        notes="C2b rows 3-8 still require complete Uring identity/generation/"
-              "cancel/reap integration evidence in D3. Recorded as a known "
-              "gap; not_implemented never "
-              "counts as PASS. (Target is the Uring-driving conformance "
-              "binary; the gap is not executed.)",
+        required_modes=("real",),
+        cases=(
+            "uring_d3_c2b_evidence_mode",
+            "uring_c2b_full_slothandle_identity_chain",
+            "uring_c2b_generation_reuse_plus_one",
+            "uring_c2b_stale_cookie_cqe_dropped",
+            "uring_c2b_stale_slothandle_cancel_harmless",
+            "uring_c2b_pending_cancel_wins_no_sqe",
+            "uring_c2b_enqueued_cancel_wins_no_sqe",
+            "uring_c2b_running_cancel_intent_real_result",
+            "uring_c2b_original_cqe_before_control_cqe",
+            "uring_c2b_control_cqe_before_original_cqe",
+            "uring_c2b_publication_boundary_reap_gates_ready",
+        ),
+        notes="C2b rows 3-8 Uring integration (Phase D3, real-liburing only; "
+              "stub mode is classified INCOMPLETE by required_modes): full "
+              "SlotHandle identity chain Completion -> RequestArena binding -> "
+              "slot + full generation + context provenance with cookie -> "
+              "bounded router -> full SlotHandle -> arena generation "
+              "validation; generation reuse +1 on slot release; stale "
+              "cookie CQE dropped without touching the N+1 occupant; stale "
+              "SlotHandle cancel resolves not_found with zero side effect; "
+              "pending cancel wins (Scheme B, no SQE/cookie/ledger/syscall); "
+              "enqueued cancel wins (dispatch linkage removed FIRST, no future "
+              "SQE); running cancel records intent only (original operation "
+              "CQE decides, verbatim or effective -ECANCELED); original-vs-"
+              "control CQE in BOTH orders with the control CQE never choosing "
+              "the terminal; reap is the sole publication boundary.",
     ),
 
     # -----------------------------------------------------------------------
@@ -422,18 +444,45 @@ EVIDENCE: tuple[Evidence, ...] = (
               "occupant.",
     ),
     Evidence(
-        evidence_id="uring_c2c_borrow_waiter_not_implemented",
-        target="backend_conformance_test",
+        evidence_id="uring_c2c_borrow_waiter_integration",
+        target="uring_backend_c2c_waiter_borrow_test",
         layer="lifecycle",
         backends=_U,
         mandatory=True,
-        status=STATUS_NOT_IMPLEMENTED,
-        notes="C2c rows 11-14 still require complete Uring borrow/waiter/lease "
-              "lifecycle evidence in D3. "
-              "Recorded as a known gap; not_implemented never counts as "
-              "PASS. (Target is the Uring-driving conformance binary, "
-              "matching uring_c2b_identity_not_implemented; the gap is not "
-              "executed.)",
+        required_modes=("real",),
+        cases=(
+            "uring_d3_c2c_evidence_mode",
+            "uring_c2c_borrow_active_through_lifecycle",
+            "uring_c2c_borrow_active_pending_window",
+            "uring_c2c_borrow_active_enqueued_window",
+            "uring_c2c_borrow_sync_no_buffer_shape",
+            "uring_c2c_waiter_registration_enqueued",
+            "uring_c2c_waiter_registration_running",
+            "uring_c2c_waiter_registration_backend_ready",
+            "uring_c2c_second_waiter_registration_rejected",
+            "uring_c2c_wait_cancel_keeps_io",
+            "uring_c2c_io_cancel_keeps_waiter",
+            "uring_c2c_waiter_delivery_exactly_once",
+            "uring_c2c_stale_waiter_authority_harmless",
+            "uring_c2c_register_waiter_after_record_terminal_before_reap",
+        ),
+        notes="C2c rows 11-14a Uring integration (Phase D3, real-liburing only; "
+              "stub mode is classified INCOMPLETE by required_modes): borrow "
+              "active from commit through pending/enqueued/running/backend_"
+              "ready with the EXACT submitted fd/address/length (sync ops "
+              "carry the no-buffer shape) and ending ONLY at reap; waiter "
+              "registration orthogonal to execution state (enqueued/running/"
+              "backend_ready) with single-waiter cardinality (second "
+              "registration rejected, first untouched); wait-cancel removes "
+              "only the waiter and moves the RoutingLease (I/O continues, real "
+              "result terminal, no waiter delivered); enqueued I/O cancel "
+              "keeps the waiter (canceled terminal + waiter delivered at "
+              "reap); sink delivers token+lease exactly once; stale waiter "
+              "authority (generation N handle) cannot touch the N+1 occupant; "
+              "register-after-record_terminal-before-reap is legal and "
+              "delivered. All seams forward to the REAL RequestArena / "
+              "ReferenceReadySink authorities — no Uring-specific waiter "
+              "storage.",
     ),
 
     # -----------------------------------------------------------------------
