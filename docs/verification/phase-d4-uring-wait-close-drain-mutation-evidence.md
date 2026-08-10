@@ -10,13 +10,22 @@ Every mutant below was applied as a TEMPORARY production edit, the focused
 evidence case was rebuilt and run (expect RED), the edit was reverted
 byte-for-byte, and the same case was rebuilt and run again (expect GREEN). All
 thirteen D4 implementation mutants (D4-M1..M13) plus the D4-L1 lift mutant
-were executed on the final D4 implementation; all nine repair mutants
-(D4-RM1..RM9) were executed on the final PR #84 repair head, and the G2 drift
-closure finding (2026-08-10) was fixed with its own regression self-test. All
-RED→GREEN transitions were confirmed by the actual binary exit codes (the
-evidence targets fail non-zero on any `SLUICE_CHECK` violation or fail-fast; a
-RED that manifests as a hang is bounded by a watchdog deadline — hang
-watchdogs only, never ordering proof).
+were executed on the final D4 implementation; the round-2 repair mutants
+(D4-RM1..RM9, round-1; D4-RM10..RM12 plus the pre-poll-barrier-uniqueness and
+close-LP shared-lock mutants, round-2) were executed on the final PR #84
+repair head, and the G2 drift closure finding (2026-08-10) was fixed with its
+own regression self-test. All RED→GREEN transitions were confirmed by the
+actual binary exit codes (the evidence targets fail non-zero on any
+`SLUICE_CHECK` violation or fail-fast; a RED that manifests as a hang is
+bounded by a watchdog deadline — hang watchdogs only, never ordering proof).
+
+Round-2 (2026-08-10) added: D4-RM10 (post-poll ring-ready bypasses control
+reclassification), D4-RM11 (destructor preflight bypassed before queue_exit),
+D4-RM12 (non-EINTR poll failure treated as retryable), the pre-poll-barrier-
+uniqueness mutant (one waiter double-counts participant arrivals), and the
+close-LP shared-lock mutant revisited (D4-RM8 mutant now caught by a
+source-drift self-test). The round-2 head SHA and case counts are recorded
+in the Confirmation commands block.
 
 Command shapes:
 
@@ -368,6 +377,96 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
   `uring_c2e_quiescent_destruction=PASS`, `overall ELIGIBLE`, `RESULT: PASS`
   (rm9-agg-green.txt).
 
+## D4-RM10 — post-poll ring-ready branch bypasses control epoch reclassification (P0, round-2)
+
+- Mutated: `include/sluice/async/detail/uring_wait_source.hpp` —
+  `wait_for_change()`: restored the old `if (pfds[0].revents & POLLIN) return
+  BackendWakeReason::progress;` BEFORE the post-poll control-epoch recheck, so a
+  co-ready ring + control wake returns progress and swallows the control wake.
+- Detectors: `uring_c2e_control_wins_over_co_ready_ring` (single-waiter co-ready)
+  and `uring_c2e_two_waiter_consumer_strand` (production-bug detector: A+B
+  outstanding, A reaped by a concurrent consumer, T1 reparks on B forever).
+- RED (rm10-red-a.txt): `uring_c2e_control_wins: waiter never returned (strand
+  on stale token after ring POLLIN)` — the single waiter re-loops on a stale
+  token after the override "ring" is drained and the interrupt was swallowed.
+- RED (rm10-red-b.txt): `uring_c2e_two_waiter_strand: T1 never returned (reparked
+  on B after swallowing the control wake)` — the exact production interleaving.
+- GREEN after revert: both cases PASS (control recheck wins, the waiter observes
+  the interrupt, the final poll reaps nothing; returns 0).
+
+## D4-RM11 — destructor preflight bypassed before io_uring_queue_exit (P0, round-2)
+
+- Mutated: `src/async/uring_backend.cpp` — `~UringAsyncBackend()`: commented out
+  the `detail::uring_non_quiescent_destruction_fail_fast();` call so a non-
+  quiescent destroy proceeds past the preflight to the `io_uring_queue_exit`
+  teardown boundary.
+- Detector: `uring_c2e_death_preflight_before_queue_exit_order` (new pinned
+  case). The death child installs a `BeforeQueueExit` hook (raw `void(*)(void*)`
+  + ctx) that `_Exit(90)`. Under the fix the preflight fires first (exit 86) and
+  the hook is NEVER reached; under the mutant the hook IS reached (exit 90).
+  `expect_terminated_via_fail_fast` recognizes 86 only, so exit 90 is RED and is
+  named exactly (distinct from 86 fail-fast / 87 unexpected-return / 88 child-
+  setup-fail).
+- RED (rm11-red.txt): `[death] preflight-order: FAIL (exit=90; expected terminate
+  exit 86. exit=87 means the call returned instead of terminating)` — the
+  teardown boundary was reached before the preflight would have run.
+- GREEN after revert: `[death] preflight-order: PASS (terminated via Mutex
+  fail-fast boundary, exit=86)`; full death suite 10/10 PASS.
+
+## D4-RM12 — non-EINTR poll(2) failure treated as retryable (P1, round-2)
+
+- Mutated: `include/sluice/async/detail/uring_wait_source.hpp` —
+  `wait_for_change()`: added `continue;` for ALL `rc < 0` (including non-EINTR),
+  so a physical poll failure busy-spins instead of fail-fasting.
+- Detector: `uring_c2e_non_eintr_poll_failure_failfast` (new pinned case). A
+  fork/exec child creates a fresh backend, installs a test-only `PollFn` seam
+  that returns -1 with `errno=EIO`, submits a blocked read, and calls wait_one.
+  Under the fix the wait source terminates (child `_Exit(86)` via a deterministic
+  terminate handler); under the mutant the child busy-spins and the parent's
+  8-second watchdog SIGKILLs it (RED). The PollFn seam avoids relying on an
+  invalid fd (poll reports POLLNVAL via revents, not `rc<0`).
+- RED (rm12-red.txt): `uring_c2e: non-EINTR poll watchdog fired (child busy-
+  spinning, D4-RM12 mutant)` then `!watchdog` check fails.
+- GREEN after revert: child `_Exit(86)`; case PASSes.
+
+## Pre-poll barrier uniqueness mutant (P1, round-2)
+
+- Mutated: `include/sluice/async/detail/uring_wait_source.hpp` — restored the
+  loop-reentered `prepark_counter_.fetch_add(1)` as the SOLE park-arrival signal
+  and removed the `BeforePhysicalPollPauseGate` barrier, so one waiter retrying
+  on EINTR can contribute multiple arrivals and `arrivals == N` no longer proves
+  N distinct participants parked.
+- Detector: the multi-waiter cases rely on the barrier (`arrivals == N` is the
+  deterministic pre-condition for driving the control wake); a mutant that lets
+  one waiter double-count can report `arrivals == N` with fewer than N distinct
+  parked participants, degrading the deterministic proof into a timing one. The
+  barrier is the structural fix (it blocks a participant at the poll boundary
+  until released, so the same thread cannot arrive twice before release).
+- RED: a barrier-less build lets `arrivals` advance past the distinct-participant
+  bound (the proof no longer pins N distinct parked waiters).
+- GREEN after revert: the barrier guarantees one arrival per distinct
+  participant; multi-waiter cases PASS.
+
+## Close-LP shared-lock mutant revisited (D4-RM8, round-2 source-drift detector)
+
+- Mutated: `src/async/uring_backend.cpp` — `close_admission()`: removed the
+  `std::lock_guard<std::mutex> lk(dispatch_mtx_)` critical section so
+  `arena_.close_admission()` and `admission_closed_ = true` are written
+  unlocked (the submit-vs-close shared-lock arbitration is gone).
+- Detector: `D4DriftDetectorTest.test_close_admission_uses_dispatch_mtx` (new
+  source-drift self-test). It parses `uring_backend.cpp`, locates the real
+  `close_admission()` body (the one that calls `arena_.close_admission()`), and
+  asserts both writes sit INSIDE a `lock_guard(dispatch_mtx_)` critical section.
+  This is the DETERMINISTIC authority for the submit-vs-close linearization
+  (a runtime "closer blocked on mutex" observation cannot be made without
+  scheduler timing — the rewritten `uring_c2e_close_waits_for_inflight_
+  acceptance_lp` case makes no mutex-blocking claim). Focused TSan on
+  submit||close and `uring_c2e_submit_races_close_linearization` complete the
+  evidence.
+- RED (rm8-red.txt): `AssertionError: close_admission() has no lock_guard
+  (dispatch_mtx_) critical section (D4-RM8 mutant: shared lock removed)`.
+- GREEN after revert: self-test PASSes; close-drain suite PASSes.
+
 ## G2 drift closure (found during the final gate cycle, 2026-08-10)
 
 - Finding: `uring_c2e_close_drain` pinned 16 cases while the current source
@@ -387,21 +486,27 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
 
 ---
 
-## Confirmation commands (final head, mutations reverted)
+## Confirmation commands (round-2 head, mutations reverted)
+
+Round-2 head: `471e4fb` (feat/phase-d4-uring-wait-close-drain); the round-2
+slices added the post-poll control-priority reclassification (D4-RM10), the
+non-EINTR poll fail-fast (D4-RM12), the pre-poll participant-uniqueness
+barrier, the honest close-LP evidence + source-drift detector, the
+genuine-state destruction + BeforeQueueExit order probe (D4-RM11), and the
+SQE-pressure case rename. Case counts below are the round-2 numbers.
 
 ```sh
 xmake build -r uring_backend_c2e_close_drain_test uring_backend_c2e_death_test
 xmake run uring_backend_c2e_close_drain_test
-# 17/17 PASS (close while pending/enqueued/running/backend_ready, post-close
-#            size+void+malformed rejection, submit-vs-close LP both orderings,
-#            concurrent submit-vs-close linearization (256 relaxed-atomic
-#            attempts), close-then-pending/running cancel, one-shot parked-
-#            waiter wake, multi-waiter interrupt, interrupt-vs-final-ready
-#            race, drained != releasable, poison + close)
+# 21/21 PASS (round-2 adds: control-wins-over-co-ready-ring,
+#            two-waiter-consumer-strand, non-eintr-poll-failure-failfast;
+#            the rewritten close-waits-for-inflight-acceptance-lp makes no
+#            mutex-blocking claim)
 
 xmake run uring_backend_c2e_death_test
-# 9/9 PASS (7 non-quiescent states fail-fast exit 86; quiescent control exit
-#           0; evidence-mode case emits mode=real in both-build registration)
+# 10/10 PASS (round-2 adds: preflight-before-queue-exit-order; the pending/
+#             enqueued children now destroy in the GENUINE state via a leaked
+#             thread; preflight fires exit 86 before io_uring_queue_exit)
 
 SLUICE_TEST_FILTER=conformance_close_drain_uring xmake run backend_conformance_test
 # shared C2e suite for Uring: PASS, [conformance-meta] backend=Uring
@@ -410,13 +515,14 @@ SLUICE_TEST_FILTER=conformance_close_drain_uring xmake run backend_conformance_t
 # slot_released_but_admission_stays_closed)
 ```
 
-Aggregate gate (real liburing, final head, 2026-08-10): shared /
+Aggregate gate (real liburing, round-2 head, 2026-08-10): shared /
 shared_capacity / c2e_shared_close_drain suites PASS, lifecycle PASS (incl.
-`uring_c2e_close_drain` with the full 17-case pin and
-`uring_c2e_quiescent_destruction` with the 9-case pin), backend_specific PASS
-(`uring_backend_contract` 10-case pin), `overall ELIGIBLE` (KernelIo), RESULT:
-PASS. Stub build (same final head): 156/156 tests PASS, Uring
-`mode=stub` — shared/lifecycle/backend_specific INCOMPLETE, `overall
-INCOMPLETE` (aggregate PASS only for the stub-mode run; a stub build can never
-make KernelIo ELIGIBLE). Python manifest self-test suite: 375 tests PASS
-(`python3 -m unittest discover -v scripts/tests`).
+`uring_c2e_close_drain` with the full 21-case pin and
+`uring_c2e_quiescent_destruction` with the 10-case pin), backend_specific PASS
+(`uring_backend_contract` 10-case pin, SQE-pressure case renamed to
+`uring_sqe_pressure_retains_accepted_work`), `overall ELIGIBLE` (KernelIo),
+RESULT: PASS. Stub build (same round-2 head): full test group builds and runs
+clean, Uring `mode=stub` — shared/lifecycle/backend_specific INCOMPLETE,
+`overall INCOMPLETE` (aggregate PASS only for the stub-mode run; a stub build
+can never make KernelIo ELIGIBLE). Python manifest self-test suite: 376 tests
+PASS (`python3 -m unittest discover -v scripts/tests`).

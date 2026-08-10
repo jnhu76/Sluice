@@ -734,6 +734,7 @@ EVIDENCE: tuple[Evidence, ...] = (
             "uring_c2e_submit_races_close_linearization",
             "uring_c2e_control_wins_over_co_ready_ring",
             "uring_c2e_two_waiter_consumer_strand",
+            "uring_c2e_non_eintr_poll_failure_failfast",
         ),
         notes="C2e rows 15-16 Uring integration (Phase D4, real-liburing "
               "only; stub mode is classified INCOMPLETE by required_modes): "
@@ -793,8 +794,12 @@ EVIDENCE: tuple[Evidence, ...] = (
               "mode. Matrix: 7 non-quiescent destroy states "
               "(pending/enqueued/running/ledger-residue/backend-ready/"
               "completion-ready/live-control) fail-fast exit 86 in Debug "
-              "AND Release BEFORE io_uring_queue_exit; the quiescent control "
-              "(close_admission + drain + reset + destroy) exits 0.",
+              "AND Release BEFORE io_uring_queue_exit (the pending/enqueued "
+              "children destroy in the GENUINE state via a leaked thread); "
+              "the round-2 preflight-order case proves the preflight wins "
+              "BEFORE queue_exit (exit 86, the BeforeQueueExit hook must NOT "
+              "be reached); the quiescent control (close_admission + drain + "
+              "reset + destroy) exits 0.",
     ),
 
     # -----------------------------------------------------------------------

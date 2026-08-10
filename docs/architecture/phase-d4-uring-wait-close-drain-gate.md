@@ -284,7 +284,12 @@ admission_closed_ read under TSan, P0-C destruction evidence INCOMPLETE,
 P1-B pinned backend-contract case deletion, P1-A C2e evidence-mode compile-out,
 P1-D unconditional wait-source include, P1-C multi-waiter under-count /
 single-wake and close-lock-removal detectors, P0-C death target
-fail/disappear).
+fail/disappear), plus round-2 repair mutations D4-RM10 (post-poll ring-ready
+bypasses control-epoch reclassification), D4-RM11 (destructor preflight
+bypassed before io_uring_queue_exit), D4-RM12 (non-EINTR poll failure treated
+as retryable), the pre-poll participant-uniqueness barrier mutant, and the
+close-LP shared-lock mutant revisited (now caught by a source-drift self-test,
+not a timing-based mutex-blocking claim).
 
 ## Lock / atomic authority table
 
@@ -352,19 +357,34 @@ stub aggregate gate       : PASS — Uring shared=INCOMPLETE (all three suites
                             lifecycle=INCOMPLETE, backend_specific=INCOMPLETE,
                             overall INCOMPLETE (spec §41 — stub never
                             satisfies real obligations)
-manifest self-tests       : PASS 375/375 (python3 -m unittest discover -v
+manifest self-tests       : PASS 376/376 (python3 -m unittest discover -v
                             scripts/tests — incl. KernelIo lift semantics:
                             stub->INCOMPLETE, complete real set->ELIGIBLE;
                             close-drain real-mode downgrade; D4 drift and
-                            evidence-mode drive tests)
-focused C2e real target   : PASS 17/17 (uring_backend_c2e_close_drain_test)
-death matrix              : PASS 9/9 (uring_backend_c2e_death_test — 8 semantic
-                            + both-builds evidence-mode case)
+                            evidence-mode drive tests; round-2 adds the
+                            close_admission dispatch_mtx_ source-drift detector)
+focused C2e real target   : PASS 21/21 (uring_backend_c2e_close_drain_test;
+                            round-2 adds control-wins-over-co-ready-ring,
+                            two-waiter-consumer-strand,
+                            non-eintr-poll-failure-failfast; the rewritten
+                            close-waits-for-inflight-acceptance-lp makes no
+                            mutex-blocking claim)
+death matrix              : PASS 10/10 (uring_backend_c2e_death_test — 8 semantic
+                            + both-builds evidence-mode case + round-2
+                            preflight-before-queue-exit-order; pending/enqueued
+                            children now destroy in the GENUINE state via a
+                            leaked thread)
 shared C2e driver (Uring) : PASS (SLUICE_TEST_FILTER=conformance_close_drain_uring;
                             [conformance-meta] backend=Uring profile=KernelIoProfile
                             mode=real)
 mutations                 : PASS 13/13 RED->GREEN (D4-M1..D4-M13) + D4-L1 lift
                             + 9/9 RED->GREEN (D4-RM1..D4-RM9) + G2 drift closure
+                            + round-2 RED->GREEN: D4-RM10 (post-poll ring-ready
+                            bypasses control reclassification), D4-RM11
+                            (destructor preflight bypassed before queue_exit),
+                            D4-RM12 (non-EINTR poll treated as retryable),
+                            pre-poll barrier uniqueness, close-LP shared-lock
+                            (D4-RM8 revisited via source-drift detector)
                             (see phase-d4 mutation evidence doc)
 real liburing Debug full  : PASS 158/158 (xmake test -v)
 real liburing Release full: PASS 158/158 (xmake f -m release --toolchain=clang

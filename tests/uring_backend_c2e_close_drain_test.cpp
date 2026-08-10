@@ -28,7 +28,10 @@
 #include <liburing.h>
 
 #include <cerrno>
+#include <csignal>
 #include <cstring>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 #endif
 
@@ -1170,6 +1173,90 @@ SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {
     SLUICE_CHECK(ctx.outstanding() == 0);
 }
 
+// ---------------------------------------------------------------------------
+// C2e §43 — non-EINTR poll(2) failure must fail-fast, not spin (D4-RM12).
+// wait_for_change is noexcept with no Result<> channel, so a physical poll
+// failure that is NOT EINTR cannot be reported up; the production fix
+// terminates (stderr + std::terminate) rather than busy-spinning or
+// fabricating a reason. This case proves the fail-fast deterministically via
+// a fork/exec child that re-creates a FRESH backend (not a fork-inherited
+// context, which would carry stale lock/thread state). The child installs a
+// test-only PollFn that returns -1 with errno=EIO, submits a blocked read,
+// and calls wait_one. Under the fix the wait source terminates (the child's
+// deterministic terminate handler _Exit(86)); under the D4-RM12 mutant (all
+// errno treated as retryable EINTR) the child busy-spins forever and the
+// parent's watchdog SIGKILLs it (exit by signal -> RED).
+// ---------------------------------------------------------------------------
+namespace {
+int failing_poll_fn(struct pollfd*, unsigned long, int, void*) {
+    errno = EIO;
+    return -1;
+}
+
+constexpr int kD4Rm12ExpectedExit = 86;
+constexpr int kD4Rm12MutantExit = 90; // unused; the mutant busy-spins (SIGKILL)
+
+int d4_rm12_child_main() {
+    // Fresh backend in the child (no fork-inherited state).
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 4});
+    if (!backend->available()) {
+        std::_Exit(88);
+    }
+    PipePair pipe;
+    if (!pipe.valid()) {
+        std::_Exit(88);
+    }
+    std::byte buf[4]{};
+    Completion<std::size_t> c;
+    if (!backend->submit_read(ReadOp{pipe.read_fd(), buf, 4, 0}, c).has_value()) {
+        std::_Exit(88);
+    }
+    // Install the failing PollFn BEFORE the waiter could park.
+    backend->set_wait_poll_fn_for_test(failing_poll_fn, nullptr);
+    AsyncIoContext ctx(std::move(backend));
+    // A non-EINTR poll failure must terminate (set_terminate -> _Exit(86)),
+    // not return. If it returns, the fail-fast boundary did NOT fire (mutant).
+    std::set_terminate([]() noexcept { std::_Exit(kD4Rm12ExpectedExit); });
+    (void)ctx.wait_one();
+    std::_Exit(87); // unexpected return
+}
+} // namespace
+
+SLUICE_TEST_CASE(uring_c2e_non_eintr_poll_failure_failfast) {
+    // fork/exec a fresh child (not fork-in-place) so the child has a clean
+    // process state (no inherited threads/locks). The child re-execs this
+    // binary with a marker argv to run d4_rm12_child_main.
+    pid_t pid = ::fork();
+    SLUICE_CHECK(pid >= 0);
+    if (pid == 0) {
+        int rc = d4_rm12_child_main();
+        std::_Exit(rc);
+    }
+    int status = 0;
+    const auto start = std::chrono::steady_clock::now();
+    constexpr auto kTimeout = std::chrono::seconds(8);
+    bool watchdog = false;
+    for (;;) {
+        pid_t w = ::waitpid(pid, &status, WNOHANG);
+        if (w == pid) break;
+        if (w < 0 && errno == EINTR) continue;
+        if (std::chrono::steady_clock::now() - start >= kTimeout) {
+            std::fprintf(stderr, "uring_c2e: non-EINTR poll watchdog fired "
+                                 "(child busy-spinning, D4-RM12 mutant)\n");
+            std::fflush(stderr);
+            (void)::kill(pid, SIGKILL);
+            (void)::waitpid(pid, &status, 0);
+            watchdog = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    SLUICE_CHECK(!watchdog); // watchdog == mutant detector (RED)
+    SLUICE_CHECK(WIFEXITED(status));
+    SLUICE_CHECK(WEXITSTATUS(status) == kD4Rm12ExpectedExit); // fail-fast won
+    (void)kD4Rm12MutantExit;
+}
+
 #else // !SLUICE_HAS_LIBURING — stub mode: build/API honesty only.
 
 SLUICE_TEST_CASE(uring_c2e_close_while_pending_preserves_accepted) {}
@@ -1190,6 +1277,7 @@ SLUICE_TEST_CASE(uring_c2e_poison_close_keeps_class_c) {}
 SLUICE_TEST_CASE(uring_c2e_submit_races_close_linearization) {}
 SLUICE_TEST_CASE(uring_c2e_control_wins_over_co_ready_ring) {}
 SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {}
+SLUICE_TEST_CASE(uring_c2e_non_eintr_poll_failure_failfast) {}
 
 #endif // SLUICE_HAS_LIBURING
 
