@@ -27,6 +27,13 @@
 //   kChildTestFailExit      (88)
 //       child internal assertion failed (e.g. control-path lock did not
 //       succeed). Distinct from kUnexpectedReturnExit so logs name the cause.
+//   kQueueExitHookExit      (90)
+//       D4-RM11 detector only: the destructor's BeforeQueueExit test hook was
+//       reached, which means the quiescent preflight did NOT fire first. The
+//       death child installs a hook fn that _Exit(90), so a mutant that
+//       removes/bypasses the preflight is caught at the teardown boundary
+//       (exit 90) instead of being masked by another fail-fast authority.
+//       Distinct from 86/87/88 so the detector names the exact cause.
 //   other exit code / signal
 //       unexpected crash or exec failure; reported verbatim by the parent.
 #pragma once
@@ -49,6 +56,7 @@ namespace sluice_death_test {
 inline constexpr int kExpectedTerminateExit = 86;
 inline constexpr int kUnexpectedReturnExit  = 87;
 inline constexpr int kChildTestFailExit      = 88;
+inline constexpr int kQueueExitHookExit      = 90;
 
 // Marker argv[1] prefix that selects child-mode dispatch.
 inline constexpr const char* kChildArgPrefix = "--death-child=";

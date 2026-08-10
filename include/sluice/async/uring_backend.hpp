@@ -440,6 +440,18 @@ class UringAsyncBackend : public AsyncBackend {
     void set_before_admission_lock_pause_gate(BeforeAdmissionLockPauseGate* gate) noexcept {
         before_admission_lock_gate_.store(gate, std::memory_order_release);
     }
+    // Deterministic destructor-order probe (D4-RM11 detector): an allocation-
+    // free function pointer + context invoked in the destructor BETWEEN the
+    // quiescent preflight and io_uring_queue_exit(). The death child installs
+    // a fn that _Exit(90) so a mutant that removes/bypasses the preflight is
+    // caught AT the teardown boundary (exit 90), distinct from exit 86
+    // (preflight fail-fast), 87 (unexpected return), 88 (child setup fail).
+    // Production behavior is unchanged when no fn is installed.
+    using BeforeQueueExitFn = void (*)(void*);
+    void set_before_queue_exit_hook_for_test(BeforeQueueExitFn fn, void* ctx) noexcept {
+        before_queue_exit_fn_.store(fn, std::memory_order_release);
+        before_queue_exit_ctx_.store(ctx, std::memory_order_release);
+    }
 #endif
 
   private:
@@ -700,6 +712,8 @@ class UringAsyncBackend : public AsyncBackend {
     std::atomic<BeforeDispatchTransferPauseGate*> before_dispatch_transfer_gate_{nullptr};
     std::atomic<BeforeCommitBindingPauseGate*> before_commit_binding_gate_{nullptr};
     std::atomic<BeforeAdmissionLockPauseGate*> before_admission_lock_gate_{nullptr};
+    std::atomic<BeforeQueueExitFn> before_queue_exit_fn_{nullptr};
+    std::atomic<void*> before_queue_exit_ctx_{nullptr};
 #endif
 #endif // SLUICE_HAS_LIBURING
 

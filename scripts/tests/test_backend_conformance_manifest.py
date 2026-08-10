@@ -720,8 +720,9 @@ class D4DriftDetectorTest(unittest.TestCase):
         self.assertEqual(ev.target, "uring_backend_c2e_death_test")
         # The old unrelated stub-only skip case must NOT be part of the corpus.
         self.assertNotIn("uring_c2e_death_skip_non_posix_or_stub", ev.cases)
-        # The corpus is the exact pinned set (evidence-mode + 8 semantic).
-        self.assertEqual(len(ev.cases), 9)
+        # The corpus is the exact pinned set (evidence-mode + 8 semantic + the
+        # D4-RM11 destructor-order probe).
+        self.assertEqual(len(ev.cases), 10)
         self.assertEqual(ev.cases[0], "uring_d4_c2e_death_evidence_mode")
 
     def test_uring_backend_contract_record_is_pinned(self):

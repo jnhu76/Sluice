@@ -119,96 +119,101 @@ class PipePair {
 
 } // namespace
 
-// 1) Destroy with a `pending` request (committed, before enqueue).
+// 1) Destroy with a genuinely `pending` request (committed, before enqueue).
+//
+// Genuine-state proof (review correction): the backend is destroyed WHILE the
+// submitter is still paused at the AfterCommitBeforeEnqueuePauseGate, so the
+// request is deterministically in the `pending` state (committed, no SQE, no
+// dispatch entry). The submitter thread is intentionally `new`-allocated and
+// NEVER joined or destroyed in this death child — a joinable automatic
+// std::thread whose destructor runs std::terminate would mask the backend-
+// preflight authority. The leaked pointer is acceptable: the process exits
+// via _Exit(86) from the preflight terminate handler (or 87 if the destructor
+// unexpectedly returned). The Completion c outlives the backend (declared
+// before it) so the backend's preflight sees a still-bound slot.
 void child_destroy_with_pending() {
     sluice_death_test::install_deterministic_terminate_handler();
 
-    std::byte buf[1]{};
-    Completion<std::size_t> c;
-    UringAsyncBackend::AfterCommitBeforeEnqueuePauseGate gate;
-
-    {
-        UringAsyncBackend backend{UringConfig{1, 1}};
-        if (!backend.available()) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-        backend.set_after_commit_before_enqueue_pause_gate(&gate);
-        TempFile file;
-        if (!file.valid()) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-
-        std::thread submitter([&] {
-            (void)backend.submit_write(WriteOp{file.fd(), buf, 1, 0}, c);
-        });
-        if (!wait_paused(gate.paused)) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-        // Deterministic state: accepted, pending, no SQE.
-        auto h = backend.handle_for_completion_for_test(&c);
-        if (!h.has_value()) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-        auto obs = backend.observe_for_test(*h);
-        if (!obs.has_value() || obs->state != detail::RequestState::pending) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-        // Release the submit thread before destroying (the gate is disarmed
-        // by the backend's destruction path? No — the gate is a test object;
-        // resume it so the thread completes, THEN destroy with the slot still
-        // bound... the request must remain accepted at destroy time. Resume
-        // the gate and let the submit complete its enqueue (still outstanding
-        // — the SQE is never flushed) so the destructor preflight sees
-        // slot_in_use != 0.
-        gate.resume.store(true, std::memory_order_release);
-        submitter.join();
-        // backend destroyed here while a slot is still bound -> fail-fast.
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{1, 1});
+    if (!backend->available()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
     }
+    UringAsyncBackend::AfterCommitBeforeEnqueuePauseGate gate;
+    backend->set_after_commit_before_enqueue_pause_gate(&gate);
+    TempFile file;
+    if (!file.valid()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    std::byte buf[1]{};
+    Completion<std::size_t> c; // outlives backend (declared before reset)
+
+    // Intentionally leaked: never joined, never destroyed in this child. The
+    // thread spins on the gate, holding the submit inside its admission
+    // transaction with the request at `pending`.
+    auto* submitter = new std::thread([&] {
+        (void)backend->submit_write(WriteOp{file.fd(), buf, 1, 0}, c);
+    });
+    if (!wait_paused(gate.paused)) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    // Deterministic state assertion: accepted, pending, no SQE, no dispatch.
+    auto h = backend->handle_for_completion_for_test(&c);
+    if (!h.has_value()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    auto obs = backend->observe_for_test(*h);
+    if (!obs.has_value() || obs->state != detail::RequestState::pending) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    // Destroy the backend NOW, while the request is genuinely `pending`. The
+    // destructor preflight sees slot_in_use != 0 / accepted_outstanding != 0
+    // -> fail-fast (exit 86). The submitter thread is leaked (never joined).
+    (void)submitter;
+    backend.reset();
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
-// 2) Destroy with an `enqueued` request (dispatch ring, no SQE installed).
+// 2) Destroy with a genuinely `enqueued` request (dispatch ring, no SQE
+// installed). Same genuine-state discipline as the pending case: the backend
+// is destroyed while the submitter is paused at BeforeDispatchTransferPauseGate
+// (request on the dispatch ring, no SQE). Leaked thread, never joined.
 void child_destroy_with_enqueued() {
     sluice_death_test::install_deterministic_terminate_handler();
 
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{1, 1});
+    if (!backend->available()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    UringAsyncBackend::BeforeDispatchTransferPauseGate gate;
+    backend->set_before_dispatch_transfer_pause_gate(&gate);
+    TempFile file;
+    if (!file.valid()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
     std::byte buf[1]{};
     Completion<std::size_t> c;
-    UringAsyncBackend::BeforeDispatchTransferPauseGate gate;
 
-    {
-        UringAsyncBackend backend{UringConfig{1, 1}};
-        if (!backend.available()) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-        backend.set_before_dispatch_transfer_pause_gate(&gate);
-        TempFile file;
-        if (!file.valid()) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-
-        std::thread submitter([&] {
-            (void)backend.submit_write(WriteOp{file.fd(), buf, 1, 0}, c);
-        });
-        if (!wait_paused(gate.paused)) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-        auto h = backend.handle_for_completion_for_test(&c);
-        if (!h.has_value()) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-        auto obs = backend.observe_for_test(*h);
-        if (!obs.has_value() || obs->state != detail::RequestState::enqueued) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-        if (backend.dispatch_size_for_test() != 1) {
-            std::_Exit(sluice_death_test::kChildTestFailExit);
-        }
-        gate.resume.store(true, std::memory_order_release);
-        submitter.join();
-        // The resumed drain installs the SQE (still ring-owned, never
-        // flushed): the destructor preflight sees a live cookie + ledger
-        // entry + slot_in_use -> fail-fast.
+    auto* submitter = new std::thread([&] {
+        (void)backend->submit_write(WriteOp{file.fd(), buf, 1, 0}, c);
+    });
+    if (!wait_paused(gate.paused)) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
     }
+    auto h = backend->handle_for_completion_for_test(&c);
+    if (!h.has_value()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    auto obs = backend->observe_for_test(*h);
+    if (!obs.has_value() || obs->state != detail::RequestState::enqueued) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    if (backend->dispatch_size_for_test() != 1) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    // Destroy while genuinely `enqueued` (dispatch ring, no SQE). Preflight
+    // sees the live dispatch entry + slot_in_use -> fail-fast. Leaked thread.
+    (void)submitter;
+    backend.reset();
     std::_Exit(sluice_death_test::kUnexpectedReturnExit);
 }
 
@@ -424,6 +429,42 @@ void child_control_quiescent_destroy() {
     std::_Exit(0);
 }
 
+// 9) D4-RM11 detector child: non-quiescent destroy with a BeforeQueueExit hook
+// that _Exit(90). Under the fix the preflight terminates first (exit 86) and
+// the hook is NEVER reached; under a mutant that removes/bypasses the
+// preflight the hook IS reached (exit 90). Uses a simple non-quiescent state
+// (a submitted, never-reset write — slot_in_use != 0 at destroy).
+void queue_exit_hook_signal(void* /*ctx*/) {
+    std::_Exit(sluice_death_test::kQueueExitHookExit);
+}
+
+void child_preflight_order() {
+    sluice_death_test::install_deterministic_terminate_handler();
+
+    std::byte buf[1]{};
+    Completion<std::size_t> c;
+    {
+        UringAsyncBackend backend{UringConfig{1, 1}};
+        if (!backend.available()) {
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        }
+        // Install the teardown-boundary probe: reached ONLY if the preflight
+        // above did NOT fire. _Exit(90) distinguishes this from the preflight
+        // fail-fast (86) and the unexpected-return (87) paths.
+        backend.set_before_queue_exit_hook_for_test(queue_exit_hook_signal, nullptr);
+        TempFile file;
+        if (!file.valid()) {
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        }
+        if (!backend.submit_write(WriteOp{file.fd(), buf, 1, 0}, c).has_value()) {
+            std::_Exit(sluice_death_test::kChildTestFailExit);
+        }
+        // backend destroyed here with a bound slot -> preflight MUST fire
+        // FIRST (exit 86). The hook at the teardown boundary must NOT run.
+    }
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
 SLUICE_TEST_CASE(uring_c2e_death_destroy_with_pending) {
     auto r = sluice_death_test::run_death_case("pending");
     SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
@@ -472,6 +513,23 @@ SLUICE_TEST_CASE(uring_c2e_death_control_quiescent_destroy) {
                      "quiescent destroy after close + drain + reset must exit 0");
 }
 
+// 9) D4-RM11 detector: prove the destructor preflight fires BEFORE
+// io_uring_queue_exit. The child installs a BeforeQueueExit hook that
+// _Exit(90), then destroys a non-quiescent backend. Under the fix the
+// preflight terminates first (exit 86) and the hook is NEVER reached; under a
+// mutant that removes/bypasses the preflight, the hook IS reached (exit 90).
+// This case asserts the CORRECT behavior (exit 86 = preflight won); the
+// hook-reached path (90) is the mutant-only detector signal, verified by the
+// mutation ledger (not a pinned case). Without this case the death suite
+// could only prove "process terminated" — not that the preflight authority
+// specifically won before teardown.
+SLUICE_TEST_CASE(uring_c2e_death_preflight_before_queue_exit_order) {
+    auto r = sluice_death_test::run_death_case("preflight-order");
+    SLUICE_CHECK_MSG(sluice_death_test::expect_terminated_via_fail_fast(r),
+                     "destructor preflight must fire BEFORE io_uring_queue_exit "
+                     "(exit 86; the BeforeQueueExit hook must NOT be reached)");
+}
+
 int main(int argc, char** argv) {
     std::string child_case = sluice_death_test::parse_child_case(argc, argv);
     if (!child_case.empty()) {
@@ -491,6 +549,8 @@ int main(int argc, char** argv) {
             child_destroy_with_live_control();
         } else if (child_case == "control") {
             child_control_quiescent_destroy();
+        } else if (child_case == "preflight-order") {
+            child_preflight_order();
         } else {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
@@ -514,6 +574,7 @@ SLUICE_TEST_CASE(uring_c2e_death_destroy_with_backend_ready) {}
 SLUICE_TEST_CASE(uring_c2e_death_destroy_with_completion_ready) {}
 SLUICE_TEST_CASE(uring_c2e_death_destroy_with_live_control) {}
 SLUICE_TEST_CASE(uring_c2e_death_control_quiescent_destroy) {}
+SLUICE_TEST_CASE(uring_c2e_death_preflight_before_queue_exit_order) {}
 
 SLUICE_MAIN()
 

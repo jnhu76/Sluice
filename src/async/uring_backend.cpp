@@ -552,6 +552,19 @@ UringAsyncBackend::~UringAsyncBackend() {
             detail::uring_non_quiescent_destruction_fail_fast();
         }
     }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic destructor-order probe (D4-RM11 detector): reached ONLY
+    // when the preflight above PASSED (a non-quiescent destroy terminated
+    // before this point). A death child installs a fn that _Exit(90) so a
+    // mutant that removes/bypasses the preflight is caught at this teardown
+    // boundary instead of being masked by another fail-fast authority. The
+    // hook is allocation-free (raw fn pointer + ctx) and production behavior
+    // is unchanged when no fn is installed. It does NOT alter queue_exit
+    // semantics.
+    if (auto* fn = before_queue_exit_fn_.load(std::memory_order_acquire)) {
+        fn(before_queue_exit_ctx_.load(std::memory_order_acquire));
+    }
+#endif
     if (have_ring_) {
         ::io_uring_queue_exit(&ring_state_->ring);
         have_ring_ = false;

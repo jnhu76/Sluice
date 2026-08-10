@@ -778,6 +778,7 @@ EVIDENCE: tuple[Evidence, ...] = (
             "uring_c2e_death_destroy_with_completion_ready",
             "uring_c2e_death_destroy_with_live_control",
             "uring_c2e_death_control_quiescent_destroy",
+            "uring_c2e_death_preflight_before_queue_exit_order",
         ),
         notes="C2e row 16 Uring destruction evidence (Phase D4 repair, "
               "real-liburing only; stub mode is classified INCOMPLETE by "
