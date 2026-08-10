@@ -24,14 +24,25 @@
 //   completion-ready   — reaped but the caller never reset the Completion;
 //   live-control       — running + a prepared AsyncCancel (control reference);
 //   quiescent control  — close_admission + drain + reset -> exit 0.
+//
+// Evidence discipline (P0-C): the evidence-mode case is registered in BOTH
+// real and stub builds (stub emits mode=stub — build/API honesty only), and
+// the stub build registers the SAME eight semantic case names as empty
+// bodies, so the manifest's exact pinned case-set holds in every mode. The
+// death matrix is a MANDATORY real-mode evidence record
+// (uring_c2e_quiescent_destruction) consumed by the aggregate verdict — a
+// missing/failing death target fails the real KernelIo gate.
 #include "harness.hpp"
 #include "death_test_runner_posix.hpp"
+
+// The Uring public header compiles in BOTH modes (real ring vs stub); the
+// evidence-mode case at the bottom is registered in both builds (G2).
+#include <sluice/async/uring_backend.hpp>
 
 #if defined(__unix__) && defined(SLUICE_HAS_LIBURING) && \
     defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
 #include <sluice/async/completion.hpp>
-#include <sluice/async/uring_backend.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -490,9 +501,39 @@ int main(int argc, char** argv) {
 
 #else  // !defined(__unix__) || !SLUICE_HAS_LIBURING || !internal-testing
 
-SLUICE_TEST_CASE(uring_c2e_death_skip_non_posix_or_stub) {
-    // Death matrix requires POSIX + the real liburing internal-testing build.
-}
+// Stub / non-POSIX build: the SAME pinned semantic case names register as
+// empty build/API-only bodies so the manifest's exact case-set holds in EVERY
+// mode (G2). The death matrix itself requires the real liburing
+// internal-testing build; there is deliberately NO unrelated skip case
+// substituting for the pinned corpus (P0-C).
+SLUICE_TEST_CASE(uring_c2e_death_destroy_with_pending) {}
+SLUICE_TEST_CASE(uring_c2e_death_destroy_with_enqueued) {}
+SLUICE_TEST_CASE(uring_c2e_death_destroy_with_running) {}
+SLUICE_TEST_CASE(uring_c2e_death_destroy_with_ledger_residue) {}
+SLUICE_TEST_CASE(uring_c2e_death_destroy_with_backend_ready) {}
+SLUICE_TEST_CASE(uring_c2e_death_destroy_with_completion_ready) {}
+SLUICE_TEST_CASE(uring_c2e_death_destroy_with_live_control) {}
+SLUICE_TEST_CASE(uring_c2e_death_control_quiescent_destroy) {}
+
 SLUICE_MAIN()
 
 #endif
+
+// ---------------------------------------------------------------------------
+// Evidence-meta (G2): exactly one [evidence-meta] line per gate-driven run.
+// Registered in BOTH real and stub builds (the internal #if/#else picks the
+// emitted mode), so the manifest's pinned case-set holds in every mode; a
+// stub run emits mode=stub (build/API honesty only) and is classified
+// INCOMPLETE by required_modes=("real",), never PASS.
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(uring_d4_c2e_death_evidence_mode) {
+#if defined(SLUICE_HAS_LIBURING)
+    sluice::async::UringAsyncBackend backend{sluice::async::UringConfig{4, 4}};
+    std::printf("[evidence-meta] evidence=uring_c2e_quiescent_destruction "
+                "mode=real\n");
+    SLUICE_CHECK(backend.available());
+#else
+    std::printf("[evidence-meta] evidence=uring_c2e_quiescent_destruction "
+                "mode=stub\n");
+#endif
+}

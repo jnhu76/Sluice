@@ -662,6 +662,103 @@ class D3DriftDetectorTest(unittest.TestCase):
 
     def test_c2e_pin_matches_source(self):
         self._assert_source_matches_pin(
+            "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test.cpp")
+
+
+class D4DriftDetectorTest(unittest.TestCase):
+    """D4 (PR #84 repair, P1-B/P0-C): every D4 multi-case Uring evidence target
+    used in the KernelIo lift must have an exact pinned runtime case-set, and
+    the manifest pin must equal the actual SLUICE_TEST_CASE registrations in
+    the source (both builds register the same names — real bodies plus the
+    stub-mode empty bodies — so set-equality is the meaningful drift check).
+    """
+
+    def _assert_source_matches_pin(self, evidence_id, source_name):
+        ev = M.evidence_by_id(evidence_id)
+        self.assertIsNotNone(ev.cases, f"{evidence_id} must pin a case-set")
+        source_path = os.path.join(REPO_ROOT, "tests", source_name)
+        with open(source_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        found = re.findall(
+            r"^[ \t]*SLUICE_TEST_CASE\(([_A-Za-z][_A-Za-z0-9]*)\)",
+            source, flags=re.MULTILINE)
+        self.assertEqual(
+            set(found), set(ev.cases),
+            f"manifest pin {sorted(ev.cases)} does not match the case names "
+            f"registered in {source_path}: {sorted(found)}")
+
+    def test_uring_backend_contract_pin_matches_source(self):
+        self._assert_source_matches_pin(
+            "uring_backend_contract", "uring_backend_test.cpp")
+
+    def test_uring_quiescent_destruction_pin_matches_source(self):
+        self._assert_source_matches_pin(
+            "uring_c2e_quiescent_destruction", "uring_backend_c2e_death_test.cpp")
+
+    def test_uring_close_drain_pin_matches_source(self):
+        # P1-B drift closure: EVERY pinned multi-case D4 Uring record must
+        # match its source registrations (both builds register the same names).
+        # The uring_c2e_submit_races_close_linearization case was added after
+        # the pin was first written; without this test the strict set-
+        # equivalence gate classifies the record INCOMPLETE (unexpected case)
+        # while the binary itself passes — a source<->manifest drift that the
+        # mechanical check turns into a RED self-test instead of a late
+        # aggregate-gate surprise.
+        self._assert_source_matches_pin(
+            "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test.cpp")
+
+    def test_quiescent_destruction_record_is_mandatory_and_real(self):
+        # P0-C: the destruction evidence is a MANDATORY real-mode lifecycle
+        # record (a mechanical gate input), not prose in another record's notes.
+        ev = M.evidence_by_id("uring_c2e_quiescent_destruction")
+        self.assertIsNotNone(ev)
+        self.assertTrue(ev.mandatory)
+        self.assertEqual(ev.layer, "lifecycle")
+        self.assertEqual(ev.backends, ("Uring",))
+        self.assertEqual(ev.required_modes, ("real",))
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+        self.assertEqual(ev.target, "uring_backend_c2e_death_test")
+        # The old unrelated stub-only skip case must NOT be part of the corpus.
+        self.assertNotIn("uring_c2e_death_skip_non_posix_or_stub", ev.cases)
+        # The corpus is the exact pinned set (evidence-mode + 8 semantic).
+        self.assertEqual(len(ev.cases), 9)
+        self.assertEqual(ev.cases[0], "uring_d4_c2e_death_evidence_mode")
+
+    def test_uring_backend_contract_record_is_pinned(self):
+        # P1-B: the backend-contract record must be fully pinned (no unpinned
+        # multi-case mandatory real-mode record in the lift).
+        ev = M.evidence_by_id("uring_backend_contract")
+        self.assertIsNotNone(ev)
+        self.assertIsNotNone(ev.cases)
+        self.assertGreaterEqual(len(ev.cases), 10)
+
+    def test_wait_source_include_guarded_for_stub_public_header(self):
+        # P1-D (D4-RM6 detector): the Uring STUB/OFF public header must not
+        # pull Linux/POSIX-only wait-source headers (<poll.h>, <sys/eventfd.h>,
+        # <unistd.h>). The include of uring_wait_source.hpp must sit INSIDE an
+        # #if defined(SLUICE_HAS_LIBURING) guard. A mutant that restores the
+        # unconditional include breaks the stub/off build on non-Linux POSIX
+        # (macOS has no sys/eventfd.h) and this mechanical source check.
+        p = os.path.join(REPO_ROOT, "include", "sluice", "async",
+                         "uring_backend.hpp")
+        with open(p, "r", encoding="utf-8") as f:
+            src = f.read()
+        lines = src.splitlines()
+        idx = next(i for i, l in enumerate(lines)
+                   if "uring_wait_source.hpp" in l)
+        # Walk upward to the nearest enclosing #if directive.
+        guard = None
+        for j in range(idx - 1, -1, -1):
+            if lines[j].lstrip().startswith("#if"):
+                guard = lines[j]
+                break
+        self.assertIsNotNone(guard, "wait-source include has no enclosing #if")
+        self.assertIn("SLUICE_HAS_LIBURING", guard,
+                      "wait-source include must be inside the "
+                      "SLUICE_HAS_LIBURING guard (stub public header portability; "
+                      f"nearest guard is {guard!r})")
+
+
 class D4EvidenceModeDriveTest(unittest.TestCase):
     """P1-A (PR #84 repair — the D3 R1/R3 defect reapplied to D4): the C2e
     evidence-mode metadata MUST exist in BOTH build modes. Before the repair

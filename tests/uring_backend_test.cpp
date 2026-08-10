@@ -10,7 +10,10 @@
 //     only as "CQE reap order" (O3), never per-fd FIFO.
 //
 // Skip-clean: the default build runs the three stub tests below and passes with
-// the backend absent (ADR §15 AB1, AB8).
+// the backend absent (ADR §15 AB1, AB8). P1-B: the real-only semantic cases
+// ALSO register in the stub build as empty build/API-only bodies, so the
+// manifest's exact pinned case-set (uring_backend_contract) holds in every
+// mode; the evidence-mode case attributes the run (real vs stub).
 #include "harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>
@@ -312,10 +315,13 @@ SLUICE_TEST_CASE(uring_sqe_pressure_increments_queue_full_retries) {
 // Submit a write, request cancel, reap. The Completion resolves exactly once
 // (success/error/canceled — any is valid per ADR §7 X3); the key assertion is
 // exactly-once and no use-after-free (the buffer stays live until ready; ASan
-// in the sanitizer matrix is the real guard).
+// in the sanitizer matrix is the real guard). Exactly-once is proven by REAL
+// observable invariants, not a tautology: the stored terminal is stable
+// across repeated reads, and the stats record exactly one completed op.
 
 SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {
-    auto ctx = make_real_ctx();
+    sluice::AsyncStats s;
+    auto ctx = make_real_ctx(&s);
     if (!ctx)
         return;
 
@@ -334,9 +340,22 @@ SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {
     }
     SLUICE_CHECK(c.ready());
     auto res = c.result();
-    // Terminal is one of {success, canceled, error}; exactly-once guarantees a
-    // single defined result. We only assert "ready with a defined result".
-    SLUICE_CHECK(res.has_value() || !res.has_value()); // tautology: result is well-formed
+    // Defined terminal (ADR §7 X3): success, or an error carrying a real
+    // kernel errno (canceled / EBADF / ...) — never a fabricated zero-errno
+    // error. This is a real observable invariant, NOT the historical
+    // tautology `res.has_value() || !res.has_value()`.
+    SLUICE_CHECK(res.has_value() || res.error().os_errno != 0);
+    // Exactly-once publication: the stored terminal is stable across reads
+    // and the stats record exactly ONE completed op.
+    auto again = c.result();
+    SLUICE_CHECK(res.has_value() == again.has_value());
+    if (res.has_value()) {
+        SLUICE_CHECK(res.value() == again.value());
+    } else {
+        SLUICE_CHECK(res.error().code == again.error().code);
+        SLUICE_CHECK(res.error().os_errno == again.error().os_errno);
+    }
+    SLUICE_CHECK(s.completed_ops == 1);
     // Reap once more to drain any lingering cancel CQE (best-effort; no crash).
     (void)ctx->poll();
     ::close(fd);
@@ -363,6 +382,20 @@ SLUICE_TEST_CASE(uring_stats_increment_on_real_path) {
 }
 
 #endif // SLUICE_HAS_LIBURING
+
+#if !defined(SLUICE_HAS_LIBURING)
+// Stub build: the SAME pinned semantic case names register as empty
+// build/API-only bodies so the manifest's exact case-set for
+// uring_backend_contract holds in BOTH modes (G2; P1-B). The mode attribution
+// comes from uring_backend_contract_evidence_mode below (stub -> mode=stub ->
+// INCOMPLETE by required_modes=("real",), never PASS).
+SLUICE_TEST_CASE(uring_submit_n_writes_reap_all) {}
+SLUICE_TEST_CASE(uring_write_all_completes_full_buffer) {}
+SLUICE_TEST_CASE(uring_cqe_res_negative_maps_to_ioerror) {}
+SLUICE_TEST_CASE(uring_sqe_pressure_increments_queue_full_retries) {}
+SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {}
+SLUICE_TEST_CASE(uring_stats_increment_on_real_path) {}
+#endif // !SLUICE_HAS_LIBURING
 
 // Phase D4 evidence-mode attribution (G2): exactly one [evidence-meta] line
 // per gate-driven run so the aggregate gate can attribute this backend-

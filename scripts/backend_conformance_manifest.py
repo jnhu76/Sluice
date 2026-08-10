@@ -731,6 +731,7 @@ EVIDENCE: tuple[Evidence, ...] = (
             "uring_c2e_interrupt_final_reap_closes_ready_race",
             "uring_c2e_drained_not_releasable",
             "uring_c2e_poison_close_keeps_class_c",
+            "uring_c2e_submit_races_close_linearization",
         ),
         notes="C2e rows 15-16 Uring integration (Phase D4, real-liburing "
               "only; stub mode is classified INCOMPLETE by required_modes): "
@@ -738,21 +739,59 @@ EVIDENCE: tuple[Evidence, ...] = (
               "the accepted request (real result verbatim); submit-vs-close "
               "acceptance LP in both orderings (close blocks on the in-flight "
               "transaction through commit_binding; a submit that missed the "
-              "lock rejects invalid_state at Stage 0); post-close malformed "
-              "submit -> invalid_state (admission beats descriptor "
-              "validation); close-then-pending cancel still wins (Scheme B); "
+              "lock rejects invalid_state at Stage 0; the concurrent "
+              "submit-vs-close linearization case runs 256 relaxed-atomic "
+              "attempts with NO pause-gate handshake, so TSan can observe an "
+              "unsynchronized fast-path read — the in-lock Stage-0 authority "
+              "is the only reader); post-close malformed submit -> "
+              "invalid_state (admission beats descriptor validation); "
+              "close-then-pending cancel still wins (Scheme B); "
               "close-then-running cancel intent only; close wakes parked "
               "wait_one(s) as a ONE-SHOT control wake (0, no fabricated "
-              "completion; N parked waiters all wake; future wait parks "
-              "normally - no busy-spin); interrupt-vs-final-ready race closed "
-              "by the context's final poll; drained != releasable "
+              "completion; N parked waiters all wake — proven by a "
+              "per-participant pre-poll park count, never a sleep; future "
+              "wait parks normally - no busy-spin); interrupt-vs-final-ready "
+              "race closed by the context's final poll; drained != releasable "
               "(slot_in_use stays 1 until Completion::reset); poison + close "
               "keeps P0-D semantics (Class-A retained for teardown, nothing "
-              "quarantined is submitted). Death matrix (pending/enqueued/"
-              "running/ledger-residue/backend-ready/completion-ready/"
-              "live-control) is covered by uring_backend_c2e_death_test "
-              "(Debug + Release, exit 86 before io_uring_queue_exit; "
-              "quiescent close+drain+reset exits 0).",
+              "quarantined is submitted). Row 16 (quiescent destruction) is "
+              "attributed by the SEPARATE mandatory uring_c2e_quiescent_"
+              "destruction record (death matrix target) — never by prose in "
+              "these notes.",
+    ),
+    Evidence(
+        evidence_id="uring_c2e_quiescent_destruction",
+        target="uring_backend_c2e_death_test",
+        layer="lifecycle",
+        backends=_U,
+        mandatory=True,
+        required_modes=("real",),
+        cases=(
+            "uring_d4_c2e_death_evidence_mode",
+            "uring_c2e_death_destroy_with_pending",
+            "uring_c2e_death_destroy_with_enqueued",
+            "uring_c2e_death_destroy_with_running",
+            "uring_c2e_death_destroy_with_ledger_residue",
+            "uring_c2e_death_destroy_with_backend_ready",
+            "uring_c2e_death_destroy_with_completion_ready",
+            "uring_c2e_death_destroy_with_live_control",
+            "uring_c2e_death_control_quiescent_destroy",
+        ),
+        notes="C2e row 16 Uring destruction evidence (Phase D4 repair, "
+              "real-liburing only; stub mode is classified INCOMPLETE by "
+              "required_modes): the death target is a MANDATORY evidence "
+              "record consumed by the aggregate verdict — the death matrix "
+              "disappearing, failing, losing Release fail-fast, or breaking "
+              "quiescent destruction now fails the real KernelIo gate "
+              "mechanically (mechanical attribution), not by prose. The "
+              "pinned case-set registers in BOTH builds (stub bodies are "
+              "empty build/API-only registrations of the SAME names; the "
+              "evidence-mode case emits mode=stub) so G2 holds in every "
+              "mode. Matrix: 7 non-quiescent destroy states "
+              "(pending/enqueued/running/ledger-residue/backend-ready/"
+              "completion-ready/live-control) fail-fast exit 86 in Debug "
+              "AND Release BEFORE io_uring_queue_exit; the quiescent control "
+              "(close_admission + drain + reset + destroy) exits 0.",
     ),
 
     # -----------------------------------------------------------------------
@@ -792,12 +831,34 @@ EVIDENCE: tuple[Evidence, ...] = (
         layer="backend_specific",
         backends=_U,
         required_modes=("real",),
+        cases=(
+            "uring_available_matches_build_mode",
+            "uring_stub_submit_returns_backend_error",
+            "uring_stub_wait_one_reaps_nothing",
+            "uring_submit_n_writes_reap_all",
+            "uring_write_all_completes_full_buffer",
+            "uring_cqe_res_negative_maps_to_ioerror",
+            "uring_sqe_pressure_increments_queue_full_retries",
+            "uring_cancel_resolves_exactly_once",
+            "uring_stats_increment_on_real_path",
+            "uring_backend_contract_evidence_mode",
+        ),
         notes="Stub + real io_uring contract (mode parsed from the driver's "
               "[evidence-meta] line; the binary emits exactly one per run). "
               "D4 lift audit: this backend-specific record is satisfiable "
               "only by REAL kernel execution — a stub run is classified "
               "INCOMPLETE by required_modes, never PASS, so a stub build can "
-              "never make the KernelIo backend conforming.",
+              "never make the KernelIo backend conforming. P1-B repair: the "
+              "record is FULLY PINNED — the exact case-set above registers in "
+              "BOTH builds (the stub build compiles the real-only semantic "
+              "cases as empty build/API-only bodies of the SAME names), so "
+              "deleting/compiling out a semantic real case makes the record "
+              "INCOMPLETE (G2 case-set mismatch) and fails the real KernelIo "
+              "aggregate (D4-RM3). The tautological "
+              "'SLUICE_CHECK(res.has_value() || !res.has_value())' in "
+              "uring_cancel_resolves_exactly_once was replaced by real "
+              "observable invariants (defined terminal with real errno, "
+              "stable across reads, completed_ops == 1).",
     ),
 
     # -----------------------------------------------------------------------
