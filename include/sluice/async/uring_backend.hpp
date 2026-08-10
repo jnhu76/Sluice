@@ -394,6 +394,28 @@ class UringAsyncBackend : public AsyncBackend {
             wait_source_->set_control_wake_final_reap_pause_gate(gate);
         }
     }
+    // Deterministic pre-poll barrier (see UringWaitSource): one arrival per
+    // distinct participant reaching the physical-poll boundary.
+    void set_wait_before_physical_poll_pause_gate(
+        detail::UringWaitSource::BeforePhysicalPollPauseGate* gate) noexcept {
+        if (wait_source_) {
+            wait_source_->set_before_physical_poll_pause_gate(gate);
+        }
+    }
+    // Test-only ring-fd override (see UringWaitSource): poll this fd instead of
+    // the production ring fd. Install BEFORE launching the waiter.
+    void set_wait_poll_ring_fd_override_for_test(int fd) noexcept {
+        if (wait_source_) {
+            wait_source_->set_poll_ring_fd_override_for_test(fd);
+        }
+    }
+    // Test-only poll(2) seam (see UringWaitSource): inject a deterministic
+    // poll outcome (e.g. non-EINTR failure) without an invalid fd.
+    void set_wait_poll_fn_for_test(detail::UringWaitSource::PollFn fn, void* ctx) noexcept {
+        if (wait_source_) {
+            wait_source_->set_poll_fn_for_test(fn, ctx);
+        }
+    }
     void set_before_dispatch_transfer_pause_gate(BeforeDispatchTransferPauseGate* gate) noexcept {
         before_dispatch_transfer_gate_.store(gate, std::memory_order_release);
     }
