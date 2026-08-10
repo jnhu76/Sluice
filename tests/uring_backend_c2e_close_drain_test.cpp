@@ -1001,7 +1001,11 @@ SLUICE_TEST_CASE(uring_c2e_control_wins_over_co_ready_ring) {
     SLUICE_CHECK(ctx.submit_read(ReadOp{op_pipe.read_fd(), buf, 4, 0}, c).has_value());
 
     Result<std::size_t> w{std::size_t{999}};
-    std::thread waiter([&] { w = ctx.wait_one(); });
+    std::atomic<bool> waiter_done{false};
+    std::thread waiter([&] {
+        w = ctx.wait_one();
+        waiter_done.store(true, std::memory_order_release);
+    });
 
     // Deterministic pre-condition: the waiter reached the physical-poll
     // boundary (one distinct arrival). The bounded deadline is a hang watchdog
@@ -1037,7 +1041,10 @@ SLUICE_TEST_CASE(uring_c2e_control_wins_over_co_ready_ring) {
     // classification directly.
     const auto join_deadline =
         std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
-    while (w.value_or(999) == 999) {
+    // Poll the atomic done flag (NOT the Result w directly — that would be a
+    // TSan data race between the waiter's write and this read). The Result is
+    // read ONLY after waiter.join() establishes happens-before.
+    while (!waiter_done.load(std::memory_order_acquire)) {
         if (std::chrono::steady_clock::now() > join_deadline) {
             std::fprintf(stderr, "uring_c2e_control_wins: waiter never returned "
                                  "(strand on stale token after ring POLLIN)\n");
@@ -1111,7 +1118,11 @@ SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {
     SLUICE_CHECK(ctx.submit_read(ReadOp{pipe_b.read_fd(), buf_b, 4, 0}, cb).has_value());
 
     Result<std::size_t> w1{std::size_t{999}};
-    std::thread t1([&] { w1 = ctx.wait_one(); });
+    std::atomic<bool> t1_done{false};
+    std::thread t1([&] {
+        w1 = ctx.wait_one();
+        t1_done.store(true, std::memory_order_release);
+    });
 
     // Deterministic pre-condition: T1 reached the physical-poll boundary.
     const auto arrive_deadline =
@@ -1148,7 +1159,7 @@ SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {
 
     const auto join_deadline =
         std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
-    while (w1.value_or(999) == 999) {
+    while (!t1_done.load(std::memory_order_acquire)) {
         if (std::chrono::steady_clock::now() > join_deadline) {
             std::fprintf(stderr, "uring_c2e_two_waiter_strand: T1 never returned "
                                  "(reparked on B after swallowing the control wake)\n");
