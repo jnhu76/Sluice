@@ -261,7 +261,16 @@ SLUICE_TEST_CASE(uring_c2b_generation_reuse_plus_one) {
 // C2b row 4a + P0-B — stale operation CQE / cookie after slot reuse: A retired,
 // slot reused by B; a late/stale A cookie must be DROPPED at the router, B
 // untouched (state, generation, Completion, terminal, borrow), B reaches its
-// own terminal.
+// own terminal through a REAL kernel CQE.
+//
+// Deterministic construction (Issue #85): B is a REAL kernel-blocked pipe read
+// (empty pipe, write end open), NOT a fast tmpfs write. A blocked pipe read
+// cannot legitimately terminalize before its write end closes, so the detector
+// never depends on unrelated real-kernel completion timing (a fast B write
+// legitimately completing between submit and poll() must not break the
+// proof). The stale-cookie theorem is B's authoritative state BEFORE and
+// AFTER the injection — never a poll()==0 count that a legitimate B CQE could
+// break.
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_c2b_stale_cookie_cqe_dropped) {
     UringAsyncBackend backend{UringConfig{4, 4}};
@@ -269,52 +278,104 @@ SLUICE_TEST_CASE(uring_c2b_stale_cookie_cqe_dropped) {
         return;
     TempFile file;
     SLUICE_CHECK(file.valid());
+    PipePair pipe;
+    SLUICE_CHECK(pipe.valid());
 
-    std::byte buf[8]{std::byte{0x43}};
+    // A: ordinary real operation used to obtain Slot(S,N) / cookie A. The
+    // cookie comes from the authoritative router counter, not a magic constant.
+    const auto cookie_a = backend.peek_next_cookie_for_test();
+    std::byte buf_a[8]{std::byte{0x43}};
     Completion<std::size_t> ca;
-    SLUICE_CHECK(backend.submit_write(WriteOp{file.fd(), buf, 8, 0}, ca).has_value());
+    SLUICE_CHECK(backend.submit_write(WriteOp{file.fd(), buf_a, 8, 0}, ca).has_value());
     auto hA = backend.handle_for_completion_for_test(&ca);
     SLUICE_CHECK(hA.has_value());
     const auto slot = hA->slot;
     const auto gen_a = hA->generation;
 
-    backend.inject_cqe_for_test(1, 8); // A terminal (cookie 1)
+    // Synthetic A terminal + reap + caller release: slot S released (generation
+    // incremented), A's router cookie retired.
+    backend.inject_cqe_for_test(cookie_a, 8);
     SLUICE_CHECK(backend.poll() == 1);
     SLUICE_CHECK(ca.ready());
+    SLUICE_CHECK(backend.sink_deliveries() == 1); // A published exactly once
     ca.reset();
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);
 
-    // B occupies the same physical slot at generation N+1 with cookie 2.
+    // B: REAL pipe read on the same physical slot S at generation N+1 with a
+    // NEW cookie (cookie values are never recycled within the backend
+    // lifetime). The pipe write end stays OPEN and empty: B is
+    // kernel-owned/running and CANNOT legitimately terminalize until the
+    // write end closes.
+    const auto cookie_b = backend.peek_next_cookie_for_test();
+    SLUICE_CHECK(cookie_b != cookie_a); // distinct, non-recycled cookie
+    std::byte buf_b[4]{};
     Completion<std::size_t> cb;
-    SLUICE_CHECK(backend.submit_write(WriteOp{file.fd(), buf, 8, 0}, cb).has_value());
+    SLUICE_CHECK(backend.submit_read(ReadOp{pipe.read_fd(), buf_b, 4, 0}, cb).has_value());
     auto hB = backend.handle_for_completion_for_test(&cb);
     SLUICE_CHECK(hB.has_value());
     SLUICE_CHECK(hB->slot.value == slot.value);
     SLUICE_CHECK(hB->generation.value == gen_a.value + 1);
+    // Flush the SQE so the kernel actually blocks the read. poll() returns 0
+    // deterministically: B cannot complete, and A's own real late CQE (if it
+    // already arrived) is dropped as a stale cookie and publishes nothing.
+    SLUICE_CHECK(backend.poll() == 0);
 
-    // Late/stale A cookie: no live router entry carries cookie 1 (A's entry
-    // was retired; the array slot was recycled by B but the COOKIE VALUE is
-    // never reused). The CQE is dropped — it must not resolve to B.
+    // B is genuinely live: running/ring-owned, no terminal, borrow active with
+    // the pipe read metadata, Completion not ready, own router cookie live.
     const auto before = backend.observe_for_test(*hB);
     SLUICE_CHECK(before.has_value());
-    backend.inject_cqe_for_test(1, /*res=*/999); // would-be stale terminal
-    SLUICE_CHECK(backend.poll() == 0);           // dropped: nothing published
+    SLUICE_CHECK(before->state == detail::RequestState::running);
+    SLUICE_CHECK(before->terminal_stored == false);
+    const auto before_borrow = backend.borrow_for_test(*hB);
+    SLUICE_CHECK(before_borrow.has_value());
+    SLUICE_CHECK(before_borrow->active);
+    SLUICE_CHECK(before_borrow->fd == pipe.read_fd());
+    SLUICE_CHECK(before_borrow->address == static_cast<const void*>(buf_b));
+    SLUICE_CHECK(before_borrow->length == 4);
+    SLUICE_CHECK(!cb.ready());
+    SLUICE_CHECK(backend.live_cookies_for_test() == 1); // B's own entry live
+
+    // Late/stale A cookie: no live router entry carries cookie_a (A's entry
+    // was retired; the router array slot was recycled by B but the COOKIE
+    // VALUE is never reused). handle_one_cqe drops it — it must not resolve
+    // to B. NO poll() follows the injection: poll() advances the REAL ring
+    // and unrelated kernel CQEs must not serve as the proof. The proof is B's
+    // authoritative state, read again immediately.
+    backend.inject_cqe_for_test(cookie_a, /*res=*/999); // would-be stale terminal
     const auto after = backend.observe_for_test(*hB);
     SLUICE_CHECK(after.has_value());
-    SLUICE_CHECK(after->state == before->state);              // B state unchanged
+    SLUICE_CHECK(after->state == before->state); // B state unchanged
     SLUICE_CHECK(after->handle.generation.value == before->handle.generation.value);
-    SLUICE_CHECK(after->terminal_stored == false);            // B terminal not overwritten
-    SLUICE_CHECK(!cb.ready());                                // B Completion not spuriously ready
-    SLUICE_CHECK(backend.live_cookies_for_test() == 1);       // B's own entry still live
+    SLUICE_CHECK(after->terminal_stored == false); // B terminal not overwritten
+    const auto after_borrow = backend.borrow_for_test(*hB);
+    SLUICE_CHECK(after_borrow.has_value());
+    SLUICE_CHECK(after_borrow->active == before_borrow->active);
+    SLUICE_CHECK(after_borrow->fd == before_borrow->fd);
+    SLUICE_CHECK(after_borrow->address == before_borrow->address);
+    SLUICE_CHECK(after_borrow->length == before_borrow->length);
+    SLUICE_CHECK(!cb.ready()); // B Completion not spuriously ready
+    SLUICE_CHECK(backend.live_cookies_for_test() == 1); // B's entry still live
 
-    // B reaches its own terminal with its own result.
-    backend.inject_cqe_for_test(2, 8);
-    SLUICE_CHECK(backend.poll() == 1);
+    // B completes through its OWN real kernel CQE: closing the write end gives
+    // the blocked read a deterministic 0-byte EOF terminal. wait_one() flushes,
+    // reaps, and blocks in the kernel until the real CQE arrives — no
+    // synthetic terminal is injected for B.
+    pipe.close_write();
+    auto waited = backend.wait_one();
+    SLUICE_CHECK(waited.has_value());
+    SLUICE_CHECK(waited.value() == 1); // exactly one publication: B's real terminal
     SLUICE_CHECK(cb.ready());
     const auto resb = cb.result();
-    SLUICE_CHECK(resb.has_value() && resb.value() == 8);
+    SLUICE_CHECK(resb.has_value());
+    SLUICE_CHECK(resb.value() == 0); // 0-byte EOF — NOT the stale 999, not canceled
+    SLUICE_CHECK(backend.sink_deliveries() == 2); // A's 1 + B's exactly-once
+    SLUICE_CHECK(backend.live_cookies_for_test() == 0); // B router entry retired
+    // Reap published but did NOT release the slot: it stays bound until the
+    // caller resets the ready Completion.
+    SLUICE_CHECK(backend.arena_slot_in_use() == 1);
     cb.reset();
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+    SLUICE_CHECK(backend.outstanding() == 0);
 }
 
 // ---------------------------------------------------------------------------
