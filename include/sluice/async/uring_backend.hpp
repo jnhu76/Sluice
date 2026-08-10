@@ -368,6 +368,14 @@ class UringAsyncBackend : public AsyncBackend {
             wait_source_->set_wait_phase_flag(flag);
         }
     }
+    // Per-participant pre-poll park counter: counts EACH waiter reaching the
+    // final pre-poll point, so the multi-waiter detector can wait for count ==
+    // N (bounded deadline = hang watchdog only) instead of a sleep.
+    void set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
+        if (wait_source_) {
+            wait_source_->set_wait_prepark_counter(counter);
+        }
+    }
     // Deterministic interrupt-vs-final-ready window (fires when a control
     // wake is about to be reported; see UringWaitSource).
     void set_wait_control_wake_final_reap_pause_gate(

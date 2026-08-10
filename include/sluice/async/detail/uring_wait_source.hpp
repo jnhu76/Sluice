@@ -53,7 +53,9 @@
 #include <sluice/async/async_io_context.hpp>
 
 #include <atomic>
+#include <cstdio>   // fprintf / fflush / stderr
 #include <cstdint>
+#include <exception> // std::terminate
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -67,9 +69,10 @@ namespace sluice::async::detail {
 class UringWaitSource final : public BackendWaitSource {
   public:
     // Creates the control eventfd (EFD_NONBLOCK). Construction may throw
-    // std::runtime_error if eventfd(2) fails — the Uring backend then has no
-    // split-wait capability (wait_source() returns nullptr and the legacy
-    // serialized wait_one contract applies).
+    // std::runtime_error if eventfd(2) fails. The Uring backend constructs the
+    // wait source inside its ring-init try block, so a throw tears down the
+    // ring and propagates: backend construction FAILS (truthful construction
+    // failure — there is no silent "no wait source" capability downgrade).
     UringWaitSource() {
         control_fd_ = ::eventfd(0, EFD_NONBLOCK);
         if (control_fd_ < 0) {
@@ -135,6 +138,20 @@ class UringWaitSource final : public BackendWaitSource {
                     return BackendWakeReason::progress;
                 }
                 drain_eventfd_nolock_();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                // Deterministic multi-participant park observation: count EACH
+                // participant reaching the final pre-poll point (snapshot done,
+                // empty serialized poll done, epochs checked, eventfd drained,
+                // about to call poll(2)). A single bool cannot prove N waiters
+                // parked; the count does. The test waits for count == N using a
+                // bounded deadline ONLY as a hang watchdog, then drives the
+                // control wake — no sleep is ever the ordering proof
+                // (AGENTS.md §13.3). One-way latch; disarm by null. Compiled
+                // out of production builds.
+                if (auto* c = prepark_counter_.load(std::memory_order_acquire)) {
+                    c->fetch_add(1, std::memory_order_relaxed);
+                }
+#endif
             }
 
             struct pollfd pfds[2];
@@ -204,6 +221,12 @@ class UringWaitSource final : public BackendWaitSource {
     void set_wait_phase_flag(std::atomic<bool>* flag) noexcept {
         wait_phase_flag_.store(flag, std::memory_order_release);
     }
+    // Per-participant park counter (see wait_for_change): counts every waiter
+    // reaching the final pre-poll point. Observe-only; the wait source owns no
+    // lifecycle state.
+    void set_wait_prepark_counter(std::atomic<int>* counter) noexcept {
+        prepark_counter_.store(counter, std::memory_order_release);
+    }
     // Deterministic interrupt-vs-final-ready window (see wait_for_change).
     struct ControlWakeFinalReapPauseGate {
         std::atomic<bool> paused{false};
@@ -243,6 +266,7 @@ class UringWaitSource final : public BackendWaitSource {
     // out of production builds; the layout cost in the internal-testing target
     // is accepted and documented (AGENTS.md §15).
     std::atomic<std::atomic<bool>*> wait_phase_flag_{nullptr};
+    std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
     std::atomic<ControlWakeFinalReapPauseGate*> control_wake_final_reap_gate_{nullptr};
 #endif
 };

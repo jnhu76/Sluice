@@ -143,19 +143,6 @@ class PipePair {
 } // namespace
 
 // ---------------------------------------------------------------------------
-// Evidence-meta (G2): exactly one [evidence-meta] line per gate-driven run.
-// ---------------------------------------------------------------------------
-SLUICE_TEST_CASE(uring_d4_c2e_evidence_mode) {
-#if defined(SLUICE_HAS_LIBURING)
-    UringAsyncBackend backend{UringConfig{4, 4}};
-    std::printf("[evidence-meta] evidence=uring_c2e_close_drain mode=real\n");
-    SLUICE_CHECK(backend.available());
-#else
-    std::printf("[evidence-meta] evidence=uring_c2e_close_drain mode=stub\n");
-#endif
-}
-
-// ---------------------------------------------------------------------------
 // C2e row 15 — close while the accepted request is still `pending` (after the
 // accept LP, before enqueue): close does NOT retroactively reject/cancel/
 // discard; the request reaches its REAL terminal; reap works after close.
@@ -369,6 +356,19 @@ SLUICE_TEST_CASE(uring_c2e_malformed_submit_after_close_rejected) {
 // transaction lock through the `binding -> outstanding` release-store.
 // close_admission() must BLOCK while the submit is paused inside the
 // transaction and only return AFTER the LP completed (submit wins).
+//
+// Deterministic lock-domain proof (no sleep is the ordering proof; AGENTS.md
+// §13.3): the closer reads `c.outstanding()` AFTER close_admission() returns.
+// Under the fix, close acquires dispatch_mtx_ only after the paused submit
+// released it — and the mutex release->acquire handoff makes the submit's
+// `binding -> outstanding` release-store visible to that read, so the closer
+// deterministically sees the LP completed (outstanding == true). Under the
+// mutation (close/submit shared-lock arbitration removed — D4-RM8) close
+// returns while the submitter is still paused at the gate, so the closer's
+// read sees `binding` (outstanding == false) -> RED. The bounded probe window
+// below is failure protection ONLY (it cannot fire under the fix — the closer
+// is blocked on the lock the paused submitter holds); the pass/fail decision
+// is the outstanding() state assertion, never a timing claim.
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_c2e_close_waits_for_inflight_acceptance_lp) {
     constexpr int kCloseProbeTimeoutMs = 1500;
@@ -390,22 +390,60 @@ SLUICE_TEST_CASE(uring_c2e_close_waits_for_inflight_acceptance_lp) {
     SLUICE_CHECK(wait_until([&] { return gate.paused.load(std::memory_order_acquire); }));
     SLUICE_CHECK(gate.admission_domain_held.load(std::memory_order_acquire));
 
-    // The closer must block on the in-flight admission transaction.
-    std::atomic<bool> close_returned{false};
+    // The closer must block on the in-flight admission transaction. It
+    // records the Completion's outstanding() state AT its own return — the
+    // lock-domain proof (see above).
+    std::atomic<bool> close_started{false};
+    std::atomic<bool> close_saw_outstanding{false};
+    std::atomic<bool> close_done{false};
     std::thread closer([&] {
+        close_started.store(true, std::memory_order_release);
         backend.close_admission();
-        close_returned.store(true, std::memory_order_release);
+        // Decision-15 observable AT the close return: a submit that entered
+        // the protocol before close has already passed its acceptance LP
+        // (`binding -> outstanding` release-store). Under the fix the
+        // dispatch_mtx_ handoff makes the submit's LP release-store visible
+        // to this read (mutex acquire after the submit's mutex release);
+        // under the mutation the read completes while the submitter is still
+        // paused and sees `binding` — the violation this case must catch.
+        close_saw_outstanding.store(c.outstanding(), std::memory_order_release);
+        close_done.store(true, std::memory_order_release);
     });
-    // Negative probe: close must NOT return while the submit holds the LP.
-    std::this_thread::sleep_for(std::chrono::milliseconds(kCloseProbeTimeoutMs));
-    SLUICE_CHECK(!close_returned.load(std::memory_order_acquire));
+    SLUICE_CHECK(wait_until([&] { return close_started.load(std::memory_order_acquire); }));
 
-    // Resume: the submit completes its LP, then close acquires the lock and
-    // returns with admission closed.
+    // Deterministic negative probe (the bounded window is failure protection
+    // only — see kCloseProbeTimeoutMs): while the submit is paused before
+    // its LP, the closer's close_admission() MUST NOT complete — a completed
+    // close means it returned before the LP (the Decision-15 violation;
+    // D4-RM8 detector). The submitter cannot advance until the test resumes
+    // it (it spins on the gate), and under the fix the closer is blocked on
+    // the dispatch_mtx_ the paused submitter holds, so the probe can only
+    // fire under the mutation.
+    const auto probe_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(kCloseProbeTimeoutMs);
+    while (std::chrono::steady_clock::now() < probe_deadline) {
+        if (close_done.load(std::memory_order_acquire)) {
+            std::fprintf(stderr, "uring_c2e: close_admission returned before the "
+                                 "in-flight acceptance LP (admission transaction "
+                                 "violated)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        // Loop pacing only (avoids burning the whole window on a passing
+        // run); the pass/fail decision is the condition check above, never a
+        // timing claim — the defect latency under the mutation is
+        // microseconds, far inside both this granularity and the deadline
+        // (§13.3).
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    // Resume: the submit completes its LP (binding -> outstanding), submit
+    // returns success; then close acquires the lock and returns.
     gate.resume.store(true, std::memory_order_release);
     submitter.join();
     closer.join();
-    SLUICE_CHECK(close_returned.load(std::memory_order_acquire));
+    SLUICE_CHECK(close_done.load(std::memory_order_acquire));
+    SLUICE_CHECK(close_saw_outstanding.load(std::memory_order_acquire));
     SLUICE_CHECK(c.outstanding()); // submit won the LP
 
     // Post-close: no new acceptance LP can occur.
@@ -587,15 +625,24 @@ SLUICE_TEST_CASE(uring_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin) {
 
 // ---------------------------------------------------------------------------
 // C2e §23 — interrupt_all() wakes ALL parked participants (N=3), not one.
+// Deterministic proof (AGENTS.md §13.3 — NO sleep is the ordering proof): a
+// guarded per-participant pre-poll park counter records EACH waiter reaching
+// the final pre-poll point (epoch checked, eventfd drained, about to poll).
+// The test waits for count == N using a bounded deadline ONLY as a hang
+// watchdog, then drives the interrupt; every participant must return
+// interrupted (0, nothing fabricated). A mutant that wakes only one waiter
+// strands the others (bounded join deadline -> RED); a mutant that
+// under-counts participants never reaches count == N (deadline -> RED).
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_c2e_multiple_parked_waiters_all_wake) {
     constexpr int kWaiters = 3;
+    constexpr int kDeadlineMs = 5000;
 
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 4});
     if (!backend->available())
         return;
-    std::atomic<bool> wait_phase{false};
-    backend->set_wait_phase_flag_for_test(&wait_phase);
+    std::atomic<int> prepark_count{0};
+    backend->set_wait_prepark_counter_for_test(&prepark_count);
     AsyncIoContext ctx(std::move(backend));
 
     // Three kernel-blocked reads, three participants.
@@ -618,15 +665,39 @@ SLUICE_TEST_CASE(uring_c2e_multiple_parked_waiters_all_wake) {
             returned.fetch_add(1, std::memory_order_release);
         });
     }
-    // All three reach the park (the wait-phase flag is set on every park;
-    // poll the flag after each thread has had a chance to enter).
-    SLUICE_CHECK(wait_until([&] { return wait_phase.load(std::memory_order_acquire); }));
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    SLUICE_CHECK(returned.load(std::memory_order_acquire) == 0); // all parked
+    // Deterministic pre-condition: EVERY participant reached the final
+    // pre-poll point (the per-participant park count == N). The bounded
+    // deadline is a hang watchdog only — the park count is the ordering
+    // proof, never a sleep. A prepark detector that under-counts
+    // participants (D4-RM7) never reaches N and this watchdog fires.
+    const auto park_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(kDeadlineMs);
+    while (prepark_count.load(std::memory_order_acquire) != kWaiters) {
+        if (std::chrono::steady_clock::now() > park_deadline) {
+            std::fprintf(stderr, "uring_c2e: only %d of %d participants reached "
+                                 "the pre-poll park point (deadline)\n",
+                         prepark_count.load(std::memory_order_acquire), kWaiters);
+            std::fflush(stderr);
+            std::terminate();
+        }
+        std::this_thread::yield();
+    }
 
-    // One interrupt must wake ALL parked participants (bounded join deadline =
-    // hang watchdog; a single-wake mutant strands the others -> timeout).
+    // One interrupt must wake ALL parked participants. The bounded join
+    // deadline is a hang watchdog: a single-wake mutant strands the others.
     ctx.interrupt_backend_waiters();
+    const auto wake_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(kDeadlineMs);
+    while (returned.load(std::memory_order_acquire) != kWaiters) {
+        if (std::chrono::steady_clock::now() > wake_deadline) {
+            std::fprintf(stderr, "uring_c2e: only %d of %d waiters returned after "
+                                 "interrupt_all (single-wake mutant)\n",
+                         returned.load(std::memory_order_acquire), kWaiters);
+            std::fflush(stderr);
+            std::terminate();
+        }
+        std::this_thread::yield();
+    }
     for (int i = 0; i < kWaiters; ++i) {
         waiters[i].join();
     }
@@ -924,3 +995,32 @@ SLUICE_TEST_CASE(uring_c2e_close_then_running_cancel_intent_only) {}
 SLUICE_TEST_CASE(uring_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin) {}
 SLUICE_TEST_CASE(uring_c2e_multiple_parked_waiters_all_wake) {}
 SLUICE_TEST_CASE(uring_c2e_interrupt_final_reap_closes_ready_race) {}
+SLUICE_TEST_CASE(uring_c2e_drained_not_releasable) {}
+SLUICE_TEST_CASE(uring_c2e_poison_close_keeps_class_c) {}
+SLUICE_TEST_CASE(uring_c2e_submit_races_close_linearization) {}
+
+#endif // SLUICE_HAS_LIBURING
+
+// ---------------------------------------------------------------------------
+// Evidence-meta (G2): exactly one [evidence-meta] line per gate-driven run.
+// Registered in BOTH real and stub builds (P1-A): before this repair the
+// metadata case was compiled out in stub builds, so a stub run printed the
+// full pinned [run] set MINUS this case and ZERO evidence-meta lines — the
+// target became INCOMPLETE for the WRONG reason (a missing case) instead of
+// "mode=stub not allowed by required_modes=(\"real\",)". The internal
+// #if/#else emits mode=real (with a real-kernel availability check) in the
+// real build and mode=stub (build/API honesty only) in the stub build; both
+// modes execute the FULL pinned case-set (17 cases incl. the concurrent
+// submit-||-close linearization case).
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(uring_d4_c2e_evidence_mode) {
+#if defined(SLUICE_HAS_LIBURING)
+    UringAsyncBackend backend{UringConfig{4, 4}};
+    std::printf("[evidence-meta] evidence=uring_c2e_close_drain mode=real\n");
+    SLUICE_CHECK(backend.available());
+#else
+    std::printf("[evidence-meta] evidence=uring_c2e_close_drain mode=stub\n");
+#endif
+}
+
+SLUICE_MAIN()

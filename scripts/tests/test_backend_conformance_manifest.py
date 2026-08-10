@@ -662,7 +662,98 @@ class D3DriftDetectorTest(unittest.TestCase):
 
     def test_c2e_pin_matches_source(self):
         self._assert_source_matches_pin(
-            "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test.cpp")
+class D4EvidenceModeDriveTest(unittest.TestCase):
+    """P1-A (PR #84 repair — the D3 R1/R3 defect reapplied to D4): the C2e
+    evidence-mode metadata MUST exist in BOTH build modes. Before the repair
+    the metadata case was compiled out in stub builds, so a stub run printed
+    the full pinned [run] set MINUS one case and ZERO [evidence-meta] lines —
+    the gate classified it INCOMPLETE for the WRONG reason (a missing required
+    case), not the intended "disallowed mode".
+
+    These tests drive the uring_c2e_close_drain evidence record end-to-end
+    through Gate._drive() with fabricated target stdout, proving:
+      * real mode (full pinned 16-case set + one mode=real meta)  -> PASS;
+      * stub mode (full pinned set + one mode=stub meta)  -> INCOMPLETE by
+        required_modes (NOT by a missing case);
+      * full pinned set but ZERO [evidence-meta] lines     -> INCOMPLETE
+        (missing metadata);
+      * stub run missing exactly the evidence-mode case   -> INCOMPLETE
+        (case-set mismatch) — the re-compile-out regression is still caught
+        independently.
+    """
+
+    @staticmethod
+    def _ev():
+        ev = M.evidence_by_id("uring_c2e_close_drain")
+        assert ev is not None and ev.cases, "c2e record must pin a case-set"
+        return ev
+
+    def _out(self, cases, mode=None, meta_lines=None):
+        run = "".join(f"[run] {c}\n" for c in cases)
+        if meta_lines is not None:
+            return run + meta_lines
+        if mode is not None:
+            return run + f"[evidence-meta] evidence=uring_c2e_close_drain mode={mode}\n"
+        return run
+
+    def _drive(self, output, rc=0):
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(rc, output)):
+            return gate._drive(self._ev())
+
+    def test_c2e_real_full_set_is_pass(self):
+        ev = self._ev()
+        result = self._drive(self._out(list(ev.cases), mode="real"))
+        self.assertEqual(result.state, G.PASS, result.detail)
+
+    def test_c2e_stub_full_set_incomplete_by_mode_not_case(self):
+        ev = self._ev()
+        result = self._drive(self._out(list(ev.cases), mode="stub"))
+        self.assertEqual(result.state, G.INCOMPLETE, result.detail)
+        self.assertIn("mode", result.detail)
+        self.assertIn("required", result.detail)
+        self.assertNotIn("case-set mismatch", result.detail)
+        self.assertNotIn("missing=", result.detail)
+
+    def test_c2e_full_set_missing_meta_incomplete(self):
+        ev = self._ev()
+        result = self._drive(self._out(list(ev.cases)))
+        self.assertEqual(result.state, G.INCOMPLETE, result.detail)
+        self.assertIn("evidence-meta", result.detail)
+
+    def test_c2e_stub_missing_evidence_mode_case_is_case_set_incomplete(self):
+        # The original D3 R1/R3 defect shape: the stub build compiled the
+        # evidence-mode case out (truncated set, zero meta). The gate must
+        # classify it as a CASE-SET mismatch, not as a pass.
+        ev = self._ev()
+        evidence_case = ev.cases[0]  # uring_d4_c2e_evidence_mode is pinned first
+        truncated = [c for c in ev.cases if c != evidence_case]
+        result = self._drive(self._out(truncated))
+        self.assertEqual(result.state, G.INCOMPLETE, result.detail)
+        self.assertIn(evidence_case, result.detail,
+                      "detail must name the missing evidence-mode case")
+        self.assertIn("case-set mismatch", result.detail)
+
+    def test_c2e_death_evidence_mode_registered_in_both_builds(self):
+        # P0-C: the death target's evidence-mode case must be registered
+        # unconditionally in the source (the internal #if/#else picks the
+        # emitted mode), mirroring the C2e close/drain target.
+        source_path = os.path.join(REPO_ROOT, "tests",
+                                   "uring_backend_c2e_death_test.cpp")
+        with open(source_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        # The case registration must sit OUTSIDE the liburing guard: find the
+        # SLUICE_TEST_CASE line and prove the nearest enclosing #if/#else
+        # structure around it contains an internal #if defined(SLUICE_HAS_LIBURING).
+        lines = source.splitlines()
+        idx = next(i for i, l in enumerate(lines)
+                   if l.startswith("SLUICE_TEST_CASE(uring_d4_c2e_death_evidence_mode)"))
+        # Inside the case body there must be a real/stub mode split.
+        body = "\n".join(lines[idx:idx + 12])
+        self.assertIn("mode=real", body)
+        self.assertIn("mode=stub", body)
+        self.assertIn("SLUICE_HAS_LIBURING", body)
 
 
 class D3EvidenceModeDriveTest(unittest.TestCase):
