@@ -786,9 +786,14 @@ SLUICE_TEST_CASE(uring_c2b_cancel_control_never_authors_terminal) {
         SLUICE_CHECK(!c.ready()); // control CQE published nothing
 
         // Close the pipe's write end so the original read receives a
-        // deterministic REAL EOF CQE (0 bytes).
+        // deterministic REAL EOF CQE (0 bytes). wait_one() flushes, reaps,
+        // and blocks in the kernel until the original CQE arrives — a bare
+        // c.ready() spin would never publish (single-driver reap) and would
+        // leave the request outstanding into quiescence fail-fast.
         pipe.close_write();
-        SLUICE_CHECK(wait_until([&] { return c.ready(); }));
+        auto waited = backend.wait_one();
+        SLUICE_CHECK(waited.has_value());
+        SLUICE_CHECK(waited.value() == 1); // exactly one publication: B's real terminal
 
         // The original operation CQE owns the terminal: verbatim success, no
         // cancel rewrite. Exactly one publication; router finally retires.

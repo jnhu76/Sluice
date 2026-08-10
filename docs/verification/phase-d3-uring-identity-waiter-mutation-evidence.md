@@ -171,6 +171,5 @@ xmake build uring_backend_c2c_waiter_borrow_test && xmake run uring_backend_c2c_
 
 Aggregate gate (real liburing): `uring_c2b_identity_integration=PASS`,
 `uring_c2c_borrow_waiter_integration=PASS` (exact pinned case-sets, exactly one
-`[evidence-meta] evidence=... mode=real` per run); `uring_c2e_close_drain_
-not_implemented` still INCOMPLETE; KernelIo overall still NOT CONFORMING
+`[evidence-meta] evidence=... mode=real` per run); `uring_c2e_close_drain_not_implemented` still INCOMPLETE; KernelIo overall still NOT CONFORMING
 (hard-code retained — D4).

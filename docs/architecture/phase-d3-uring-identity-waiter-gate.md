@@ -1,6 +1,6 @@
 # Phase D3 — Uring C2b / C2c Identity, Cancel, Borrow and Waiter Integration Gate
 
-Status: COMPLETE (2026-08-09, branch branch test/phase-d3-uring-identity-waiter-conformance)
+Status: COMPLETE (2026-08-09, branch test/phase-d3-uring-identity-waiter-conformance)
 
 Governing authority chain (AGENTS.md §3):
 
@@ -145,7 +145,7 @@ D3-M11 stale waiter handle mutates the N+1 occupant               -> stale waite
 
 ## 6. Gate evidence (actual commands)
 
-Actual results on the final D3 head (branch branch test/phase-d3-uring-identity-waiter-conformance,
+Actual results on the final D3 head (branch test/phase-d3-uring-identity-waiter-conformance,
 base SHA `126612a`, kernel 6.18.33.2-microsoft-standard-WSL2, liburing 2.14,
 Clang Debug with `--with-liburing`):
 
