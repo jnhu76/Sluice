@@ -257,12 +257,17 @@ SLUICE_TEST_CASE(uring_cqe_res_negative_maps_to_ioerror) {
     ::close(fd);
 }
 
-// ---- Real slice 4: SQE pressure increments queue_full_retries ----------------
-// Submit many more ops than the ring depth without reaping; the internal
-// flush-on-pressure path bumps queue_full_retries. Asserted as a lower bound
-// (exact counts depend on kernel timing), not an equality.
+// ---- Real slice 4: SQE pressure retains accepted work -----------------------
+// Submit many more ops than the ring depth without reaping; request_capacity
+// (256) > queue_depth (64) is legal, and excess accepted work is RETAINED in
+// the local enqueued dispatch ring (not synchronously rejected as a queue-full
+// error). Proves: all N submits are accepted, none is lost, all N eventually
+// reap, and outstanding returns to zero with clean slot/resource state. This
+// case does NOT assert queue_full_retries (the internal flush-on-pressure
+// counter is a backend-internal statistic whose exact value depends on kernel
+// timing and is not part of the retained-work contract).
 
-SLUICE_TEST_CASE(uring_sqe_pressure_increments_queue_full_retries) {
+SLUICE_TEST_CASE(uring_sqe_pressure_retains_accepted_work) {
     sluice::AsyncStats s;
     // Phase D1: request_capacity (256) is independent of queue_depth (64).
     // request_capacity > queue_depth is legal; excess accepted work stays in
@@ -392,7 +397,7 @@ SLUICE_TEST_CASE(uring_stats_increment_on_real_path) {
 SLUICE_TEST_CASE(uring_submit_n_writes_reap_all) {}
 SLUICE_TEST_CASE(uring_write_all_completes_full_buffer) {}
 SLUICE_TEST_CASE(uring_cqe_res_negative_maps_to_ioerror) {}
-SLUICE_TEST_CASE(uring_sqe_pressure_increments_queue_full_retries) {}
+SLUICE_TEST_CASE(uring_sqe_pressure_retains_accepted_work) {}
 SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {}
 SLUICE_TEST_CASE(uring_stats_increment_on_real_path) {}
 #endif // !SLUICE_HAS_LIBURING

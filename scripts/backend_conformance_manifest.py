@@ -841,7 +841,7 @@ EVIDENCE: tuple[Evidence, ...] = (
             "uring_submit_n_writes_reap_all",
             "uring_write_all_completes_full_buffer",
             "uring_cqe_res_negative_maps_to_ioerror",
-            "uring_sqe_pressure_increments_queue_full_retries",
+            "uring_sqe_pressure_retains_accepted_work",
             "uring_cancel_resolves_exactly_once",
             "uring_stats_increment_on_real_path",
             "uring_backend_contract_evidence_mode",
