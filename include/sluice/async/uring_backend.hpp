@@ -43,9 +43,17 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_arena.hpp>
-#include <sluice/async/detail/uring_wait_source.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
+
+#if defined(SLUICE_HAS_LIBURING)
+// The split-phase wait source uses Linux/POSIX-only headers (<poll.h>,
+// <sys/eventfd.h>, <unistd.h>). The Uring STUB/OFF public header must remain
+// usable without real liburing, so the wait source is visible only when the
+// real path is compiled; every UringWaitSource reference below stays inside
+// the SLUICE_HAS_LIBURING guard.
+#include <sluice/async/detail/uring_wait_source.hpp>
+#endif
 
 #include <atomic>
 #include <cstddef>
@@ -155,9 +163,11 @@ class UringAsyncBackend : public AsyncBackend {
     // one-shot control eventfd; it NEVER reaps, records terminals, publishes
     // Completions, mutates RequestArena state, cancels, or changes
     // outstanding. The context keeps serialized poll/reap under access_mtx_.
-    // nullptr (the base default) when the ring is unavailable or the control
-    // eventfd could not be created — the legacy serialized wait_one contract
-    // then applies.
+    // nullptr (the base default) when the ring is unavailable — construction
+    // fails (no silent capability downgrade) if the control eventfd cannot be
+    // created, so there is no legacy-fallback-on-eventfd-failure state; the
+    // legacy serialized wait_one contract applies only when there is no ring
+    // at all.
     BackendWaitSource* wait_source() noexcept override {
         return have_ring_ ? wait_source_.get() : nullptr;
     }
@@ -636,8 +646,10 @@ class UringAsyncBackend : public AsyncBackend {
     std::unique_ptr<UringRingState> ring_state_;
     std::unique_ptr<TransportLedger> transport_ledger_;
     // Phase D4 split-phase readiness wait (observe-only). Created when the
-    // ring initializes; null in stub mode / ring-init failure / eventfd
-    // failure (wait_source() then returns nullptr — the base default).
+    // ring initializes; null only in stub mode / ring-init failure (no ring —
+    // wait_source() then returns nullptr, the base default). eventfd
+    // construction failure THROWS from the ring-init try block (ring torn
+    // down, construction fails) — there is no silent capability downgrade.
     std::unique_ptr<detail::UringWaitSource> wait_source_;
     bool have_ring_ = false;
     bool admission_closed_ = false;
