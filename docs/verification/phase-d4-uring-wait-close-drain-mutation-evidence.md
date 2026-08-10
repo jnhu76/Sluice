@@ -1,19 +1,22 @@
 # Phase D4 — Uring Wait / Close / Drain Mutation Evidence
 
-Date: 2026-08-10. Branch: test/phase-d3-uring-identity-waiter-conformance (D4
-work-in-progress; final branch feat/phase-d4-uring-wait-close-drain stacked on
-the D3 head). Baseline SHA: `4cc4789` (D3 head). Kernel:
+Date: 2026-08-10. Branch: feat/phase-d4-uring-wait-close-drain. D3 is MERGED
+into master; the D4 branch base is current master `259f0bd2dc5d027fd463132b65db1bef9c33f08f`
+(the D3 merge commit) — no D3-branch stacking remains. Kernel:
 6.18.33.2-microsoft-standard-WSL2. liburing: 2.14 (pinned). Build: Clang Debug
 with `--with-liburing` (real mode).
 
 Every mutant below was applied as a TEMPORARY production edit, the focused
 evidence case was rebuilt and run (expect RED), the edit was reverted
 byte-for-byte, and the same case was rebuilt and run again (expect GREEN). All
-thirteen mutants were executed on the final D4 implementation; all RED→GREEN
-transitions were confirmed by the actual binary exit codes (the evidence
-targets fail non-zero on any `SLUICE_CHECK` violation or fail-fast; a RED that
-manifests as a hang is bounded by a watchdog deadline — hang watchdogs only,
-never ordering proof).
+thirteen D4 implementation mutants (D4-M1..M13) plus the D4-L1 lift mutant
+were executed on the final D4 implementation; all nine repair mutants
+(D4-RM1..RM9) were executed on the final PR #84 repair head, and the G2 drift
+closure finding (2026-08-10) was fixed with its own regression self-test. All
+RED→GREEN transitions were confirmed by the actual binary exit codes (the
+evidence targets fail non-zero on any `SLUICE_CHECK` violation or fail-fast; a
+RED that manifests as a hang is bounded by a watchdog deadline — hang
+watchdogs only, never ordering proof).
 
 Command shapes:
 
@@ -53,12 +56,19 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
   transaction). This is the migration plan §13 priority mutant "close returns
   before acceptance LP arbitration".
 - Detector: `uring_c2e_close_waits_for_inflight_acceptance_lp` (submit paused
-  INSIDE the transaction between arena commit and `binding -> outstanding`;
-  the closer must block until the LP completes).
-- RED: the negative probe fails — `close_returned` is true while the submit
-  still holds the transaction (rc=255 fail-fast from the racing state).
+  INSIDE the transaction between arena commit and `binding -> outstanding`).
+  The detector is the PR #84 lock-domain proof: the closer reads
+  `c.outstanding()` AT its own return. Under the fix the dispatch_mtx_
+  handoff makes the submit's LP release-store visible to that read
+  (outstanding == true). Under the mutation close returns while the submitter
+  is still paused and the read sees `binding` (outstanding == false) -> RED.
+  The bounded probe window is failure protection only — the pass/fail
+  decision is the outstanding() state assertion, never a timing claim.
+- RED: the closer's post-return `c.outstanding()` is false — close returned
+  before the LP release-store (rc=255).
 - GREEN after revert: close blocks until the LP release-store, then returns;
-  the LP-winning request still completes; a later submit is rejected.
+  the closer observes outstanding == true; the LP-winning request still
+  completes; a later submit is rejected.
 
 ## D4-M3 — close cancels the enqueued request
 
@@ -226,19 +236,172 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
 
 ---
 
+## D4-RM1 — unlocked plain-bool fast-path reads re-introduced (P0-B)
+
+- Mutated: `src/async/uring_backend.cpp`, `submit_size`/`submit_void` — the
+  in-lock Stage-0 admission/poison authority replaced by the pre-repair
+  unlocked fast-path reads of `fatal_error_`/`admission_closed_` (plain bools
+  read outside `dispatch_mtx_`).
+- Detector: TSan, focused set (`uring_c2e_close_waits_for_inflight_
+  acceptance_lp`, `uring_c2e_close_wins_submit_started_before_close_rejected`,
+  `uring_c2e_multiple_parked_waiters_all_wake`, `uring_c2e_close_wakes_parked_
+  waiter_one_shot_no_busy_spin`, `uring_c2e_submit_races_close_linearization`).
+  The pause-gate cases cannot expose the race (the gate handshake orders the
+  read before the close write), so `uring_c2e_submit_races_close_linearization`
+  runs 256 relaxed-atomic submit-vs-close attempts with NO happens-before edge:
+  TSan observes the unsynchronized access directly.
+- RED (tsan-fixed2.txt): `ThreadSanitizer: data race` — `Write of size 1` at
+  `close_admission()` (`uring_backend.cpp:1669`) vs the unlocked read in
+  `submit_size` (both one-byte stack locations).
+- GREEN after revert (tsan-green.txt): the same focused set passes under TSan
+  with zero race reports; the only readers of the admission/poison flags now
+  run inside `dispatch_mtx_` (in-lock Stage-0 authority, D2 poison precedence
+  preserved).
+
+## D4-RM2 — death evidence case-set registration removed (P0-C, source side)
+
+- Mutated: `tests/uring_backend_c2e_death_test.cpp` — one pinned death case
+  registration removed from the real branch, so the driven run prints 8
+  `[run]` lines instead of the pinned 9.
+- Detector (aggregate-level): `python3 scripts/verify-backend-conformance.py`
+  (real mode).
+- RED (rm2-red3.txt): `uring_c2e_quiescent_destruction=INCOMPLETE`, lifecycle
+  `INCOMPLETE`, `overall INCOMPLETE`, `RESULT: FAIL (1 mandatory issue)` — the
+  death matrix no longer proves the full pinned corpus.
+- GREEN after revert (rm2-green3.txt): `uring_c2e_quiescent_destruction=PASS`,
+  `overall ELIGIBLE`, `RESULT: PASS`.
+
+## D4-RM3 — backend-contract pin registration removed (P1-B)
+
+- Mutated: `tests/uring_backend_test.cpp` — one pinned
+  `uring_backend_contract` case registration removed from the real branch.
+- Detector (aggregate-level, real mode).
+- RED (rm3-red.txt): `uring_backend_contract=INCOMPLETE`, backend_specific
+  `INCOMPLETE`, `overall INCOMPLETE`, `RESULT: FAIL` — the backend-specific
+  record can no longer prove the stub+real contract corpus.
+- GREEN after revert (rm3-green.txt): `uring_backend_contract=PASS`,
+  `overall ELIGIBLE`.
+
+## D4-RM4 — death evidence-mode case moved back inside the liburing guard (P1-A)
+
+- Mutated: `tests/uring_backend_c2e_death_test.cpp` —
+  `SLUICE_TEST_CASE(uring_d4_c2e_death_evidence_mode)` wrapped in
+  `#if defined(SLUICE_HAS_LIBURING)` — the D3 R1/R3 defect shape re-applied to
+  the D4 death target: the stub build registers 8 cases and emits no
+  `[evidence-meta]`.
+- Detector: `D4EvidenceModeDriveTest.test_c2e_death_evidence_mode_registered_
+  in_both_builds` (mechanical source check).
+- RED (rm4-red.txt): `AssertionError: 'mode=stub' not found in ...` — the
+  both-builds registration is gone (1 failed, 9 passed).
+- GREEN after revert: all 10 D4 self-tests pass; the death target registers
+  the evidence-mode case in BOTH builds, emitting `mode=real` / `mode=stub`
+  via the internal `#if/#else` (a stub run is INCOMPLETE by
+  `required_modes=("real",)`, never by a missing case).
+
+## D4-RM5 — c2e evidence-mode case registration removed (P1-A)
+
+- Mutated: `tests/uring_backend_c2e_close_drain_test.cpp` — the
+  `SLUICE_TEST_CASE(uring_d4_c2e_evidence_mode)` registration removed from
+  both branches (the run prints the semantic set and zero meta lines).
+- Detector (aggregate-level, real mode).
+- RED (rm5-red.txt): `uring_c2e_close_drain=INCOMPLETE`, lifecycle
+  `INCOMPLETE`, `overall INCOMPLETE`, `RESULT: FAIL`.
+- GREEN after revert (rm5-green.txt): `uring_c2e_close_drain=PASS`,
+  `overall ELIGIBLE`. The re-compile-out shape is additionally pinned at the
+  gate level by `D4EvidenceModeDriveTest.test_c2e_stub_missing_evidence_mode_
+  case_is_case_set_incomplete` (classified INCOMPLETE as a case-set mismatch,
+  never PASS).
+
+## D4-RM6 — wait-source include moved out of the liburing guard (P1-D)
+
+- Mutated: `include/sluice/async/uring_backend.hpp` — the
+  `#include <sluice/async/detail/uring_wait_source.hpp>` placed outside
+  `#if defined(SLUICE_HAS_LIBURING)` (the stub/OFF public header would pull
+  the Linux/POSIX-only `<poll.h>` / `<sys/eventfd.h>` / `<unistd.h>` chain).
+- Detector: `D4DriftDetectorTest.test_wait_source_include_guarded_for_stub_
+  public_header` (mechanical source check).
+- RED (rm6-red.txt): `AssertionError: unexpectedly None: wait-source include
+  has no enclosing #if`.
+- GREEN after revert: the include sits inside the guard; the stub/OFF public
+  header stays portable and the mechanical check passes.
+
+## D4-RM7 — pre-poll park counter removed (P1-C)
+
+- Mutated: `include/sluice/async/detail/uring_wait_source.hpp` — the guarded
+  `prepark_counter_` increment removed from the observe-phase park.
+- Detector: `uring_c2e_multiple_parked_waiters_all_wake` — a deterministic
+  per-participant pre-poll park count; the bounded deadline is a hang watchdog
+  ONLY, the pass/fail decision is the state assertion (all participants
+  reached the park point), never a timing claim.
+- RED (rm7-red.txt): `uring_c2e: only 1 of 3 participants reached the pre-poll
+  park point (deadline)` — rc=255.
+- GREEN after revert: exactly 3 participants are observed at the park point;
+  the single control wake releases all three and each returns 0 (nothing
+  fabricated).
+
+## D4-RM8 — close-admission lock serialization removed (P1-C)
+
+- Mutated: `src/async/uring_backend.cpp`, `close_admission()` — the
+  `dispatch_mtx_` guard removed (close no longer serializes against the submit
+  admission transaction; the D4-M2 defect shape, re-proven without any sleep).
+- Detector: `uring_c2e_close_waits_for_inflight_acceptance_lp` — the PR #84
+  lock-domain proof: the closer reads `c.outstanding()` AT its own return. The
+  bounded probe window is failure protection only; the pass/fail decision is
+  the `outstanding()` state assertion, never a timing claim.
+- RED (rm8-red.txt): `uring_c2e: close_admission returned before the in-flight
+  acceptance LP (admission transaction violated)` — rc=255.
+- GREEN after revert: close blocks until the LP release-store; the closer
+  observes `outstanding() == true`; the LP-winning request completes; a later
+  submit rejects `invalid_state`.
+
+## D4-RM9 — destruction record pin drifted from source (P0-C, manifest side)
+
+- Mutated: `scripts/backend_conformance_manifest.py` —
+  `uring_d4_c2e_death_evidence_mode` removed from the
+  `uring_c2e_quiescent_destruction` cases pin (manifest 8 vs source 9).
+- Detectors: (a) `D4DriftDetectorTest.test_uring_quiescent_destruction_pin_
+  matches_source` — RED (set mismatch: the source still registers the case the
+  pin lost); (b) aggregate gate (real mode) — RED (rm9-red.txt /
+  rm9-agg-red.txt): `uring_c2e_quiescent_destruction=INCOMPLETE`, `overall
+  INCOMPLETE`, `RESULT: FAIL (1 mandatory issue)`.
+- GREEN after revert: the drift self-test passes; the aggregate reports
+  `uring_c2e_quiescent_destruction=PASS`, `overall ELIGIBLE`, `RESULT: PASS`
+  (rm9-agg-green.txt).
+
+## G2 drift closure (found during the final gate cycle, 2026-08-10)
+
+- Finding: `uring_c2e_close_drain` pinned 16 cases while the current source
+  registers 17 — `uring_c2e_submit_races_close_linearization` (added for the
+  P0-B TSan linearization evidence) was never added to the pin. The strict
+  set-equivalence gate (Issue #81 P1 G2) classifies a current-build real run
+  as `INCOMPLETE` (`unexpected=[uring_c2e_submit_races_close_linearization]`)
+  even though the binary itself passes — the earlier aggregate PASS files had
+  been produced by pre-case binaries and were stale.
+- Fix: the pin now lists all 17 cases; the record notes document the
+  linearization case; `D4DriftDetectorTest.test_uring_close_drain_pin_matches_
+  source` turns this drift class into a RED self-test for every pinned D4
+  multi-case Uring record (close/drain, backend contract, quiescent
+  destruction — D3 c2b/c2c pins verified matching as well). 375 self-tests
+  pass; the fresh real-mode aggregate reports `uring_c2e_close_drain=PASS`,
+  `overall ELIGIBLE`.
+
+---
+
 ## Confirmation commands (final head, mutations reverted)
 
 ```sh
 xmake build -r uring_backend_c2e_close_drain_test uring_backend_c2e_death_test
 xmake run uring_backend_c2e_close_drain_test
-# 16/16 PASS (close while pending/enqueued/running/backend_ready, post-close
+# 17/17 PASS (close while pending/enqueued/running/backend_ready, post-close
 #            size+void+malformed rejection, submit-vs-close LP both orderings,
-#            close-then-pending/running cancel, one-shot parked-waiter wake,
-#            multi-waiter interrupt, interrupt-vs-final-ready race, drained !=
-#            releasable, poison + close)
+#            concurrent submit-vs-close linearization (256 relaxed-atomic
+#            attempts), close-then-pending/running cancel, one-shot parked-
+#            waiter wake, multi-waiter interrupt, interrupt-vs-final-ready
+#            race, drained != releasable, poison + close)
 
 xmake run uring_backend_c2e_death_test
-# 8/8 PASS (7 non-quiescent states fail-fast exit 86; quiescent control exit 0)
+# 9/9 PASS (7 non-quiescent states fail-fast exit 86; quiescent control exit
+#           0; evidence-mode case emits mode=real in both-build registration)
 
 SLUICE_TEST_FILTER=conformance_close_drain_uring xmake run backend_conformance_test
 # shared C2e suite for Uring: PASS, [conformance-meta] backend=Uring
@@ -247,7 +410,13 @@ SLUICE_TEST_FILTER=conformance_close_drain_uring xmake run backend_conformance_t
 # slot_released_but_admission_stays_closed)
 ```
 
-Aggregate gate (real liburing): shared / shared_capacity / c2e_shared_close_drain
-suites PASS, lifecycle PASS, backend_specific PASS, `overall ELIGIBLE`
-(KernelIo). Stub build: all three suites INCOMPLETE, `overall INCOMPLETE` —
-stub evidence never satisfies the real-mode obligations (spec §41).
+Aggregate gate (real liburing, final head, 2026-08-10): shared /
+shared_capacity / c2e_shared_close_drain suites PASS, lifecycle PASS (incl.
+`uring_c2e_close_drain` with the full 17-case pin and
+`uring_c2e_quiescent_destruction` with the 9-case pin), backend_specific PASS
+(`uring_backend_contract` 10-case pin), `overall ELIGIBLE` (KernelIo), RESULT:
+PASS. Stub build (same final head): 156/156 tests PASS, Uring
+`mode=stub` — shared/lifecycle/backend_specific INCOMPLETE, `overall
+INCOMPLETE` (aggregate PASS only for the stub-mode run; a stub build can never
+make KernelIo ELIGIBLE). Python manifest self-test suite: 375 tests PASS
+(`python3 -m unittest discover -v scripts/tests`).

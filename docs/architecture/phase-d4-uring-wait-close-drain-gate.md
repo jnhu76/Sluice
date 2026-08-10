@@ -1,7 +1,9 @@
 # Phase D4 — Uring Wait / Close / Drain / Destruction Gate
 
-Status: COMPLETE (2026-08-10, branch feat/phase-d4-uring-wait-close-drain
-stacked on the D3 head `4cc4789`)
+Status: COMPLETE (2026-08-10, branch feat/phase-d4-uring-wait-close-drain;
+D3 is MERGED into master, so this branch's base is current master
+`259f0bd2dc5d027fd463132b65db1bef9c33f08f`, the D3 merge commit — no D3-branch
+stacking remains).
 
 Governing authority chain (AGENTS.md §3):
 
@@ -80,7 +82,9 @@ Transitions:
   closed → drained
     Authority:      reap path only (arena_.reap — sole Completion-ready
                     publication authority)
-    Lock domain:    dispatch_mtx_ (reap serialization) + arena leaf
+    Lock domain:    AsyncIoContext::access_mtx_ (the context's serialized
+                    poll/reap domain — reap_cqes()/arena_.reap run WITHOUT
+                    dispatch_mtx_) + arena leaf
     Allocation:     none
     Failure:        terminal winner / record_terminal invariants fail-fast
     Wake:           signal_ready_progress() after a non-empty reap
@@ -128,8 +132,13 @@ serialized poll/reap under `access_mtx_`.
 ```text
 Construction-time resources:
   - control eventfd: one fd, created in UringWaitSource ctor; failure ->
-    std::runtime_error, wait_source() then returns nullptr (legacy serialized
-    wait_one contract applies; no partial wait capability)
+    std::runtime_error THROWN from backend construction (the wait source is
+    created inside the ring-init try block; the catch tears down the ring and
+    rethrows). There is NO silent capability downgrade and NO "wait_source()
+    returns nullptr" fallback for eventfd failure — backend construction
+    fails truthfully. wait_source() returns nullptr only when there is no
+    ring at all (stub / ring-init failure), where the legacy serialized
+    wait_one contract applies.
   - wait source object: one unique_ptr member, created after
     io_uring_queue_init succeeds; ring fd installed once before any park
 
@@ -137,7 +146,9 @@ Submit-time resources:
   - unchanged from D1/D2 (bounded RequestArena, bounded dispatch ring, bounded
     router/ledger); close adds no allocation
   - post-accept allocation: NONE (I9) — close cannot make an accepted request
-    lost; admission_closed_ is a plain bool under dispatch_mtx_
+    lost; admission_closed_ is a plain bool read/written ONLY under
+    dispatch_mtx_ (P0-B: no unlocked fast-path read; the in-lock Stage-0
+    check is the single authority)
 
 Completion-time resources:
   - reap publishes through the slot-bound publication capability; no
@@ -204,7 +215,12 @@ Deterministic causal tests (`uring_backend_c2e_close_drain_test`, real mode):
 - uring_c2e_close_waits_for_inflight_acceptance_lp:
     submit-vs-close LP — close blocks while the submit holds the transaction
     (pause between arena commit and binding->outstanding), returns only after
-    the LP completed (submit wins)
+    the LP completed (submit wins). Lock-domain proof: the closer reads
+    c.outstanding() AT its own return — the dispatch_mtx_ handoff makes the
+    submit's LP release-store visible (a mutation that removes the shared-lock
+    arbitration lets close return while the submitter is still paused and the
+    read sees `binding` -> RED). No sleep is the ordering proof; the bounded
+    probe window is failure protection only.
 - uring_c2e_close_wins_submit_started_before_close_rejected:
     close-wins — a submit paused before the admission lock observes closed at
     Stage 0 and rejects synchronously (idle Completion, zero residue)
@@ -227,7 +243,12 @@ Deterministic causal tests (`uring_backend_c2e_close_drain_test`, real mode):
     fabricated); a future wait parks again (no busy-spin) and wakes on real
     progress
 - uring_c2e_multiple_parked_waiters_all_wake:
-    one interrupt_all() wakes ALL N=3 parked participants; nothing fabricated
+    one interrupt_all() wakes ALL N=3 parked participants; nothing fabricated.
+    Deterministic proof: a guarded per-participant pre-poll park counter
+    records EACH waiter reaching the final pre-poll point (epoch checked,
+    eventfd drained, about to poll); the test waits for count == N with a
+    bounded deadline ONLY as a hang watchdog — no sleep is the ordering proof
+    (AGENTS.md §13.3)
 - uring_c2e_interrupt_final_reap_closes_ready_race:
     a terminal recorded in the interrupt-vs-final-poll window is reaped by the
     final poll — wait_one returns the actual count, never 0
@@ -243,7 +264,12 @@ Deterministic causal tests (`uring_backend_c2e_close_drain_test`, real mode):
 Death matrix (`uring_backend_c2e_death_test`): 7 non-quiescent destroy states
 (pending / enqueued / running / ledger residue / backend-ready /
 completion-ready / live control) fail-fast exit 86; the quiescent control
-(close -> drain -> reset -> destroy) exits 0.
+(close -> drain -> reset -> destroy) exits 0. P0-C: the death target is a
+MANDATORY real-mode evidence record (`uring_c2e_quiescent_destruction`) with
+an exact pinned case-set registered in BOTH builds (the stub build compiles
+the same case names as empty bodies + an evidence-mode case emitting
+mode=stub) — a missing/failing death target, lost Release fail-fast, or
+broken quiescent control now fails the real KernelIo aggregate mechanically.
 
 Shared C2e suite: `conformance_close_drain_uring` drives the UNCHANGED shared
 cases through the public `close_admission()` / `arena_slot_in_use()` seams —
@@ -252,21 +278,29 @@ cases through the public `close_admission()` / `arena_slot_in_use()` seams —
 
 Mutations: D4-M1..D4-M13 RED→GREEN (see
 `docs/verification/phase-d4-uring-wait-close-drain-mutation-evidence.md`) plus
-the final lift mutation D4-L1 (KernelIo hard-code removal, gated on the
-complete real-mode evidence set).
+the lift mutation D4-L1 (KernelIo hard-code removal) and the PR #84 repair
+mutations D4-RM1..D4-RM9 (P0-A aggregate fail-closed, P0-B unlocked
+admission_closed_ read under TSan, P0-C destruction evidence INCOMPLETE,
+P1-B pinned backend-contract case deletion, P1-A C2e evidence-mode compile-out,
+P1-D unconditional wait-source include, P1-C multi-waiter under-count /
+single-wake and close-lock-removal detectors, P0-C death target
+fail/disappear).
 
 ## Lock / atomic authority table
 
 | Domain | Guards | Held while | MUST NOT |
 | ------ | ------ | ---------- | -------- |
-| `dispatch_mtx_` (backend) | admission transaction Stage 1-5, close_admission, poll re-dispatch, cancel remove_exact, destructor preflight | submit LP; close; front peek/transfer | call arena leaf (it is acquired separately, frozen order dispatch -> arena); wait for worker progress; join threads |
+| `dispatch_mtx_` (backend) | admission transaction Stage 1-5, close_admission, poll re-dispatch, cancel remove_exact, destructor preflight | submit LP; close; front peek/transfer | call the arena leaf OUTSIDE the frozen order `dispatch_mtx_ -> arena leaf` (production calls arena_.reserve/prepare/commit/record_terminal/quiescence_snapshot in exactly that order); wait for worker progress; join threads |
 | wait-source `mtx_` (LEAF) | progress/control epochs, eventfd drain | snapshot; epoch check + drain | call Scheduler; publish Completions; call user code; touch request state |
 | arena leaf mutex | slot lifecycle, terminal winner, ready-ring | record_terminal / reap / release | call Scheduler; call ReadySink (sink runs outside); publish outside the leaf (the ready release-store IS the linearization point) |
 | `access_mtx_` (context) | serialized poll/reap + stats accounting | poll; accounting | the PARK (park is outside the lock — I1) |
 
 Order: `access_mtx_ -> dispatch_mtx_ -> arena leaf -> wait-source mtx_` (leaf).
 Wait-source `mtx_` never acquired while holding any other lock (signal/
-interrupt are called outside the backend lock). No bidirectional cycles.
+interrupt are called outside the backend lock). Reap (reap_cqes + arena_.reap)
+runs under `access_mtx_` WITHOUT `dispatch_mtx_` (the D1 single-driver call
+domain); `dispatch_mtx_` is released before reap in poll()/wait_one(). No
+bidirectional cycles.
 
 ## Wake / progress model (AGENTS.md §13.2)
 
@@ -318,20 +352,24 @@ stub aggregate gate       : PASS — Uring shared=INCOMPLETE (all three suites
                             lifecycle=INCOMPLETE, backend_specific=INCOMPLETE,
                             overall INCOMPLETE (spec §41 — stub never
                             satisfies real obligations)
-manifest self-tests       : PASS 181/181 (incl. KernelIo lift semantics:
+manifest self-tests       : PASS 375/375 (python3 -m unittest discover -v
+                            scripts/tests — incl. KernelIo lift semantics:
                             stub->INCOMPLETE, complete real set->ELIGIBLE;
-                            close-drain real-mode downgrade)
-focused C2e real target   : PASS 16/16 (uring_backend_c2e_close_drain_test)
-death matrix              : PASS 8/8 (uring_backend_c2e_death_test)
+                            close-drain real-mode downgrade; D4 drift and
+                            evidence-mode drive tests)
+focused C2e real target   : PASS 17/17 (uring_backend_c2e_close_drain_test)
+death matrix              : PASS 9/9 (uring_backend_c2e_death_test — 8 semantic
+                            + both-builds evidence-mode case)
 shared C2e driver (Uring) : PASS (SLUICE_TEST_FILTER=conformance_close_drain_uring;
                             [conformance-meta] backend=Uring profile=KernelIoProfile
                             mode=real)
 mutations                 : PASS 13/13 RED->GREEN (D4-M1..D4-M13) + D4-L1 lift
+                            + 9/9 RED->GREEN (D4-RM1..D4-RM9) + G2 drift closure
                             (see phase-d4 mutation evidence doc)
 real liburing Debug full  : PASS 158/158 (xmake test -v)
 real liburing Release full: PASS 158/158 (xmake f -m release --toolchain=clang
                             --with-liburing=true -y; xmake test -v)
-stub/off suite            : PASS 155/155 (xmake f --with-liburing=false; xmake test -v)
+stub/off suite            : PASS 156/156 (xmake f --with-liburing=false; xmake test -v)
 ASan+UBSan                : PASS (xmake f -m asanubsan --toolchain=clang -y;
                             xmake run -g test; zero sanitizer reports)
 TSan                      : PASS (xmake f -m tsan --toolchain=clang -y;
@@ -340,7 +378,11 @@ negative compile          : PASS 5/5 probes (completion-authority,
                             request-arena, async-api, async-identity,
                             external-backend-authority)
 formal models             : PASS 18/18 (python3 scripts/formal/verify.py all;
-                            45 positive, 93 negative, 55 reachability)
+                            45 positive, 93 negative, 55 reachability;
+                            executed in full on the final head 2026-08-10 —
+                            e13-select-core 1605s, e13-select-safety 331s,
+                            the earlier local timeouts were model size, not
+                            failures)
 pre-push gate             : PASS (bash scripts/gates/pre-push.sh; and the
                             Lefthook pre-push hook on the branch push)
 ```
