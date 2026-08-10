@@ -787,6 +787,128 @@ SLUICE_TEST_CASE(uring_c2e_poison_close_keeps_class_c) {
     SLUICE_CHECK(backend.outstanding() == 0);
 }
 
+// ---------------------------------------------------------------------------
+// C2e §15 — submit || close concurrent linearization (P0-B TSan window).
+// A submitter loops on fresh Completions while a closer closes admission
+// mid-stream — NO pause gate orders them, so this is the genuine unsynchronized
+// submit-vs-close window the D4 arbitration claims to support (and the TSan
+// coverage for it; a reintroduced unlocked admission_closed_ fast-path read
+// races here — D4-RM1). Every submit must linearize as either:
+//   * accepted — later driven to EXACTLY ONE terminal via the still-legal
+//     cancel path, reaped, and reset, or
+//   * synchronously rejected with invalid_state (admission closed — close
+//     won the linearization race) or would_block (capacity full mid-stream),
+//     leaving the Completion idle with ZERO residue — never half-accepted.
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(uring_c2e_submit_races_close_linearization) {
+    constexpr std::size_t kAttempts = 256;
+    UringAsyncBackend backend{UringConfig{8, 4}};
+    if (!backend.available())
+        return;
+    TempFile file;
+    SLUICE_CHECK(file.valid());
+    const std::byte seed{0xAA};
+    SLUICE_CHECK(::pwrite(file.fd(), &seed, 1, 0) == 1);
+
+    std::byte buf[kAttempts]{};
+    Completion<std::size_t> cs[kAttempts];
+    std::atomic<std::size_t> accepted{0};
+    std::atomic<std::size_t> rejected{0};
+
+    std::thread submitter([&] {
+        for (std::size_t i = 0; i < kAttempts; ++i) {
+            auto r = backend.submit_read(ReadOp{file.fd(), buf + i, 1, 0}, cs[i]);
+            if (r.has_value()) {
+                accepted.fetch_add(1, std::memory_order_relaxed);
+            } else {
+                // Any rejection MUST be one of the two legal admission
+                // outcomes: invalid_state (admission closed — close won the
+                // linearization race; ADR Decision 15) or would_block
+                // (arena capacity full mid-stream — ADR Decision 13). Both
+                // MUST leave the Completion idle with ZERO residue — a
+                // half-accepted state is the regression this case catches.
+                const auto code = r.error().code;
+                if (code != IoError::Code::invalid_state &&
+                    code != IoError::Code::would_block) {
+                    std::fprintf(stderr,
+                                 "uring_c2e_submit_races_close_linearization: "
+                                 "unexpected reject code %d at attempt %zu\n",
+                                 static_cast<int>(code), i);
+                    std::fflush(stderr);
+                    std::terminate();
+                }
+                if (!cs[i].idle() || cs[i].outstanding() || cs[i].ready()) {
+                    std::fprintf(stderr,
+                                 "uring_c2e_submit_races_close_linearization: "
+                                 "rejected attempt %zu left non-idle Completion\n",
+                                 i);
+                    std::fflush(stderr);
+                    std::terminate();
+                }
+                rejected.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    });
+
+    // Close after at least one accept has happened (barrier only; the exact
+    // accept/reject split is unconstrained). The atomic counter is relaxed,
+    // so this barrier creates NO happens-before edge between the submitter's
+    // entry reads and close's write — the TSan race window stays open.
+    const auto first_accept_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+    while (accepted.load(std::memory_order_relaxed) == 0 &&
+           std::chrono::steady_clock::now() < first_accept_deadline) {
+        std::this_thread::yield();
+    }
+    if (accepted.load(std::memory_order_relaxed) == 0) {
+        backend.close_admission();
+        submitter.join();
+        std::fprintf(stderr, "uring_c2e_submit_races_close_linearization: "
+                             "submitter never accepted a request (harness "
+                             "error)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+    backend.close_admission();
+    submitter.join();
+    SLUICE_CHECK(accepted.load(std::memory_order_relaxed) +
+                     rejected.load(std::memory_order_relaxed) == kAttempts);
+
+    // Every accepted request is driven to exactly one terminal via the
+    // still-legal cancel path, reaped, and reset; every rejected Completion
+    // is idle.
+    for (std::size_t i = 0; i < kAttempts; ++i) {
+        if (cs[i].outstanding())
+            backend.cancel(cs[i]);
+    }
+    drain_bounded(backend);
+    std::size_t ready_count = 0;
+    for (std::size_t i = 0; i < kAttempts; ++i) {
+        if (cs[i].outstanding()) {
+            std::fprintf(stderr, "uring_c2e_submit_races_close_linearization: "
+                                 "no Completion may remain outstanding after "
+                                 "drain (attempt %zu)\n", i);
+            std::fflush(stderr);
+            std::terminate();
+        }
+        if (cs[i].ready()) {
+            ++ready_count;
+            const auto res = cs[i].result();
+            if (!(res.has_value() ||
+                  res.error().code == IoError::Code::canceled ||
+                  res.error().code == IoError::Code::eof)) {
+                std::fprintf(stderr, "uring_c2e_submit_races_close_linearization: "
+                                     "undefined terminal on accepted attempt %zu\n", i);
+                std::fflush(stderr);
+                std::terminate();
+            }
+            cs[i].reset();
+        }
+    }
+    SLUICE_CHECK(ready_count == accepted.load(std::memory_order_relaxed));
+    SLUICE_CHECK(backend.arena_slot_in_use() == 0);
+}
+
 #else // !SLUICE_HAS_LIBURING — stub mode: build/API honesty only.
 
 SLUICE_TEST_CASE(uring_c2e_close_while_pending_preserves_accepted) {}
@@ -802,9 +924,3 @@ SLUICE_TEST_CASE(uring_c2e_close_then_running_cancel_intent_only) {}
 SLUICE_TEST_CASE(uring_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin) {}
 SLUICE_TEST_CASE(uring_c2e_multiple_parked_waiters_all_wake) {}
 SLUICE_TEST_CASE(uring_c2e_interrupt_final_reap_closes_ready_race) {}
-SLUICE_TEST_CASE(uring_c2e_drained_not_releasable) {}
-SLUICE_TEST_CASE(uring_c2e_poison_close_keeps_class_c) {}
-
-#endif // SLUICE_HAS_LIBURING
-
-SLUICE_MAIN()

@@ -598,11 +598,6 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
                                             detail::OperationKind kind, std::size_t len) {
     if (!have_ring_)
         return no_ring();
-    if (fatal_error_.has_value())
-        return make_unexpected<void>(*fatal_error_);
-    if (admission_closed_) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
 
     detail::SlotHandle h{};
     {
@@ -615,14 +610,18 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
         wait_before_admission_lock_pause_();
 #endif
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        // Stage 0: admission closed -> invalid_state (ADR Decision 15). This
-        // check lives INSIDE the admission transaction lock so close_admission()
-        // (which takes the same lock) serializes against the whole Stage 1-5
-        // acceptance protocol: after close_admission() returns, no new
-        // acceptance LP can occur — an in-flight submit either completed its
-        // LP first (submit wins) or observes closed here and rejects (close
-        // wins). The pre-lock fast-path check above is a contention
-        // optimization only; this check is authoritative.
+        // Stage 0: admission/poison authority is read ONLY inside
+        // dispatch_mtx_ — the SAME lock close_admission() and
+        // poison_and_recover_locked() write under. There is deliberately NO
+        // unlocked fast-path read of admission_closed_ / fatal_error_ here:
+        // both are written under this mutex, so an unlocked read would be a
+        // C++ data race on the exact submit-vs-close arbitration D4 supports
+        // (P0-B; mutant D4-RM1). This in-lock check is the single authority.
+        // Poison precedence (D4-M5): a poisoned backend reports its permanent
+        // backend_error verbatim even after close_admission(); admission-closed
+        // alone rejects invalid_state. Either way no acceptance LP occurs.
+        if (fatal_error_.has_value())
+            return make_unexpected<void>(*fatal_error_);
         if (admission_closed_) {
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
@@ -712,11 +711,6 @@ Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
                                             detail::OperationKind kind) {
     if (!have_ring_)
         return no_ring();
-    if (fatal_error_.has_value())
-        return make_unexpected<void>(*fatal_error_);
-    if (admission_closed_) {
-        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
-    }
 
     detail::SlotHandle h{};
     {
@@ -724,7 +718,12 @@ Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
         wait_before_admission_lock_pause_();
 #endif
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        // Stage 0: admission closed -> invalid_state (see submit_size).
+        // Stage 0: admission/poison authority read ONLY under dispatch_mtx_
+        // (see submit_size): no unlocked fast-path read of admission_closed_ /
+        // fatal_error_ (P0-B; D4-RM1). Poison precedence, then admission
+        // closed -> invalid_state.
+        if (fatal_error_.has_value())
+            return make_unexpected<void>(*fatal_error_);
         if (admission_closed_) {
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
