@@ -619,6 +619,131 @@ class EvidenceCaseSetPinTest(unittest.TestCase):
             f"names registered in {source_path}: {sorted(found)}")
 
 
+class D3DriftDetectorTest(unittest.TestCase):
+    """D3 (PR #80 G2 discipline): every dedicated D3 evidence target's pinned
+    manifest case-set must equal its actual SLUICE_TEST_CASE registrations.
+
+    One record per new dedicated target (uring_backend_c2b_identity_test /
+    uring_backend_c2c_waiter_borrow_test), anchored macro regex, exact set
+    equality. The runtime [run]-set check in _drive remains authoritative.
+    """
+
+    def _assert_source_matches_pin(self, evidence_id, source_name):
+        ev = M.evidence_by_id(evidence_id)
+        self.assertIsNotNone(ev.cases, f"{evidence_id} must pin a case-set")
+        source_path = os.path.join(REPO_ROOT, "tests", source_name)
+        with open(source_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        found = re.findall(
+            r"^[ \t]*SLUICE_TEST_CASE\(([_A-Za-z][_A-Za-z0-9]*)\)",
+            source, flags=re.MULTILINE)
+        self.assertEqual(
+            set(found), set(ev.cases),
+            f"manifest pin {sorted(ev.cases)} does not match the case names "
+            f"registered in {source_path}: {sorted(found)}")
+        # NOTE: no duplicate-registration assertion — these dual-mode targets
+        # legitimately register every real case TWICE (the real body and the
+        # stub-mode empty body), so the set-equality above is the meaningful
+        # drift check.
+
+    def test_c2b_pin_matches_source(self):
+        self._assert_source_matches_pin(
+            "uring_c2b_identity_integration", "uring_backend_c2b_identity_test.cpp")
+
+    def test_c2c_pin_matches_source(self):
+        self._assert_source_matches_pin(
+            "uring_c2c_borrow_waiter_integration", "uring_backend_c2c_waiter_borrow_test.cpp")
+
+
+class D3EvidenceModeDriveTest(unittest.TestCase):
+    """D3 (PR #83 review R1/R3): the evidence-mode metadata MUST exist in BOTH
+    build modes. Before the repair the evidence-mode case was compiled out in
+    stub builds, so a stub run printed the full pinned [run] set MINUS one
+    (10 for C2b, 13 for C2c) and ZERO [evidence-meta] lines — the gate
+    classified it INCOMPLETE for the WRONG reason (a missing required case),
+    not the intended "disallowed mode".
+
+    These tests drive the evidence records end-to-end through Gate._drive()
+    with fabricated target stdout, proving for BOTH D3 records:
+      * real mode (full pinned set + one mode=real meta)  -> PASS;
+      * stub mode (full pinned set + one mode=stub meta)  -> INCOMPLETE by
+        required_modes (NOT by a missing case);
+      * full pinned set but ZERO [evidence-meta] lines     -> INCOMPLETE
+        (missing metadata), proving the G2 "exactly one [evidence-meta]
+        line per gate-driven run" invariant is enforced at the gate;
+      * stub run missing exactly the evidence-mode case   -> INCOMPLETE
+        (case-set mismatch), proving a future regression that re-compiles
+        the evidence-mode case out is still caught independently.
+
+    Runtime observation is the compiled-binary execution authority; the
+    source<->pin drift detector above is an auxiliary registration-name
+    detector that cannot see preprocessor guards (the very hole this repair
+    closed).
+    """
+
+    @staticmethod
+    def _ev(evidence_id):
+        ev = M.evidence_by_id(evidence_id)
+        assert ev is not None and ev.cases, evidence_id
+        return ev
+
+    def _out(self, ev, cases, mode=None, meta_lines=None):
+        run = "".join(f"[run] {c}\n" for c in cases)
+        if meta_lines is not None:
+            return run + meta_lines
+        if mode is not None:
+            return run + f"[evidence-meta] evidence={ev.evidence_id} mode={mode}\n"
+        return run
+
+    def _drive(self, ev, output, rc=0):
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(rc, output)):
+            return gate._drive(ev)
+
+    def _assert_both_modes(self, evidence_id):
+        ev = self._ev(evidence_id)
+        pinned = list(ev.cases)
+
+        # Real mode: full pinned set + mode=real -> PASS.
+        real = self._drive(ev, self._out(ev, pinned, mode="real"))
+        self.assertEqual(real.state, G.PASS, real.detail)
+
+        # Stub mode: full pinned set + mode=stub -> INCOMPLETE solely because
+        # mode=stub is not in required_modes=("real",), NOT a missing case.
+        # The detail must be mode-centric ("mode=... not in required"), NOT a
+        # case-set mismatch ("missing=...").
+        stub = self._drive(ev, self._out(ev, pinned, mode="stub"))
+        self.assertEqual(stub.state, G.INCOMPLETE, stub.detail)
+        self.assertIn("mode", stub.detail)
+        self.assertIn("required", stub.detail)
+        self.assertNotIn("case-set mismatch", stub.detail)
+        self.assertNotIn("missing=", stub.detail)
+
+        # Missing [evidence-meta] entirely (full pinned set) -> INCOMPLETE by
+        # metadata count, NOT by case-set (the G2 one-meta-per-run invariant).
+        no_meta = self._drive(ev, self._out(ev, pinned))
+        self.assertEqual(no_meta.state, G.INCOMPLETE, no_meta.detail)
+        self.assertIn("evidence-meta", no_meta.detail)
+
+        # Stub regression guard: a stub build that RE-COMPILES the
+        # evidence-mode case out (the original bug) would run the full pinned
+        # set MINUS the evidence-mode case with zero meta. The gate MUST
+        # catch that as a case-set mismatch, independently of the meta check.
+        evidence_case = pinned[0]  # the evidence-mode case is pinned first
+        truncated = [c for c in pinned if c != evidence_case]
+        regressed = self._drive(ev, self._out(ev, truncated))
+        self.assertEqual(regressed.state, G.INCOMPLETE, regressed.detail)
+        self.assertIn(evidence_case, regressed.detail,
+                      "detail must name the missing evidence-mode case")
+
+    def test_c2b_evidence_mode_present_in_both_modes(self):
+        self._assert_both_modes("uring_c2b_identity_integration")
+
+    def test_c2c_evidence_mode_present_in_both_modes(self):
+        self._assert_both_modes("uring_c2c_borrow_waiter_integration")
+
+
 class FailClosedMetadataTest(unittest.TestCase):
     """Missing/malformed metadata fails closed (NOT_RUN / unknown mode)."""
 
@@ -1184,21 +1309,21 @@ class ApplicableEvidenceHelpersTest(unittest.TestCase):
     def test_implemented_excludes_not_implemented_and_not_applicable(self):
         impl = M.implemented_evidence_for_backend("Uring")
         ids = {e.evidence_id for e in impl}
-        self.assertNotIn("uring_c2b_identity_not_implemented", ids)
+        self.assertNotIn("uring_c2e_close_drain_not_implemented", ids)
 
     def test_applicable_includes_not_implemented_for_tagged_backend(self):
         appl = M.applicable_evidence_for_backend("Uring")
         ids = {e.evidence_id for e in appl}
-        self.assertIn("uring_c2b_identity_not_implemented", ids)
+        self.assertIn("uring_c2e_close_drain_not_implemented", ids)
 
     def test_applicable_excludes_not_implemented_for_other_backend(self):
-        # The Uring identity gap is tagged backends=("Uring",); it MUST NOT apply
+        # The Uring C2e gap is tagged backends=("Uring",); it MUST NOT apply
         # to Fake or ThreadPool.
         for name in ("Fake", "ThreadPool"):
             appl = M.applicable_evidence_for_backend(name)
             ids = {e.evidence_id for e in appl}
-            self.assertNotIn("uring_c2b_identity_not_implemented", ids,
-                             f"{name} must not see the Uring identity gap")
+            self.assertNotIn("uring_c2e_close_drain_not_implemented", ids,
+                             f"{name} must not see the Uring C2e gap")
 
     def test_applicable_includes_backend_agnostic_records(self):
         # Backend-agnostic records (backends == ()) apply to every backend in
@@ -1501,7 +1626,7 @@ C2B_EVIDENCE_IDS = (
     "c2b_arena_state_identity_matrix",
     "c2b_fake_identity_integration",
     "c2b_threadpool_identity_integration",
-    "uring_c2b_identity_not_implemented",
+    "uring_c2b_identity_integration",
 )
 
 
@@ -1534,12 +1659,16 @@ class C2bEvidenceRecordTest(unittest.TestCase):
         self.assertTrue(ev.mandatory)
         self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
 
-    def test_uring_c2b_gap_is_not_implemented(self):
-        ev = M.evidence_by_id("uring_c2b_identity_not_implemented")
-        self.assertIn("Uring", ev.backends)
+    def test_uring_c2b_integration_is_implemented_real_mode(self):
+        # D3 closure: the Uring C2b record is now an implemented, real-mode-
+        # only, case-pinned evidence record (stub execution can never PASS it).
+        ev = M.evidence_by_id("uring_c2b_identity_integration")
+        self.assertEqual(ev.backends, ("Uring",))
         self.assertEqual(ev.layer, "lifecycle")
         self.assertTrue(ev.mandatory)
-        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+        self.assertEqual(ev.required_modes, ("real",))
+        self.assertTrue(ev.cases and len(ev.cases) > 1)
 
     def test_c2b_ids_unique_in_manifest(self):
         ids = [e.evidence_id for e in M.EVIDENCE]
@@ -1567,20 +1696,23 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
                         "ThreadPool must have at least one mandatory "
                         "implemented C2b lifecycle record")
 
-    def test_uring_has_mandatory_not_implemented_c2b_record(self):
+    def test_uring_has_mandatory_implemented_c2b_record(self):
         appl = M.applicable_evidence_for_backend("Uring")
         c2b = [e for e in appl if e.evidence_id in C2B_EVIDENCE_IDS]
-        self.assertTrue(any(e.mandatory and e.status == M.STATUS_NOT_IMPLEMENTED
+        self.assertTrue(any(e.mandatory and e.status == M.STATUS_IMPLEMENTED
                             for e in c2b),
-                        "Uring must have a mandatory not_implemented C2b record")
+                        "Uring must have a mandatory implemented C2b record")
 
-    def test_uring_c2b_gap_surfaces_in_verdict(self):
+    def test_uring_c2e_gap_still_surfaces_in_verdict(self):
+        # After D3 the C2b record is implemented/real-mode; the KernelIo
+        # verdict stays NOT CONFORMING (fail-closed hard-code + the remaining
+        # C2e not_implemented gap, D4 work).
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(verdict, G.NOT_CONFORMING)
         self.assertTrue(
-            any("uring_c2b_identity_not_implemented" in r for r in reasons),
-            f"Uring C2b gap must appear in reasons: {reasons}")
+            any("uring_c2e_close_drain_not_implemented" in r for r in reasons),
+            f"Uring C2e gap must appear in reasons: {reasons}")
 
     def test_fake_c2b_failure_does_not_affect_threadpool(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -1609,10 +1741,10 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
         self.assertTrue(
             any("c2b_threadpool_identity_integration" in r for r in reasons_tp))
 
-    def test_arena_pass_cannot_erase_uring_c2b_gap(self):
+    def test_arena_pass_cannot_erase_uring_c2e_gap(self):
         # The arena matrix record is backend-agnostic (backends=()); it applies
-        # to Uring but cannot satisfy Uring's C2b obligation because Uring's
-        # own tagged not_implemented record remains INCOMPLETE.
+        # to Uring but cannot satisfy Uring's own tagged obligation because the
+        # tagged not_implemented C2e record remains INCOMPLETE (D4 work).
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         g.results["c2b_arena_state_identity_matrix"] = G.RunResult(
             "c2b_arena_state_identity_matrix",
@@ -1621,7 +1753,7 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(verdict, G.NOT_CONFORMING)
         self.assertTrue(
-            any("uring_c2b_identity_not_implemented" in r for r in reasons))
+            any("uring_c2e_close_drain_not_implemented" in r for r in reasons))
 
     def test_missing_c2b_target_fails_closed(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -1670,17 +1802,19 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
                 any("ghost_c2b_gap_injected" in r for r in reasons),
                 f"gap record must appear in reasons: {reasons}")
 
-    def test_uring_c2b_gap_evidence_is_mandatory_not_implemented_applicable(self):
+    def test_uring_c2b_integration_record_properties(self):
         # Direct manifest-level assertions (no verdict loop involved): the
-        # Uring C2b gap is mandatory + not_implemented and enters Uring's
-        # applicable evidence set — the properties the C2b gap record must
-        # carry regardless of the KernelIoProfile verdict early-return.
-        ev = M.evidence_by_id("uring_c2b_identity_not_implemented")
-        self.assertIn("Uring", ev.backends)
+        # Uring C2b record is mandatory + implemented + real-mode-only with a
+        # pinned case set; the REMAINING Uring not_implemented gap (C2e, D4)
+        # still enters Uring's applicable evidence set.
+        ev = M.evidence_by_id("uring_c2b_identity_integration")
+        self.assertEqual(ev.backends, ("Uring",))
         self.assertTrue(ev.mandatory)
-        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+        self.assertEqual(ev.required_modes, ("real",))
+        self.assertTrue(ev.cases)
         appl = M.applicable_evidence_for_backend("Uring")
-        self.assertIn("uring_c2b_identity_not_implemented",
+        self.assertIn("uring_c2e_close_drain_not_implemented",
                       {e.evidence_id for e in appl})
 
 
@@ -1709,7 +1843,7 @@ C2C_EVIDENCE_IDS = (
     "c2c_arena_borrow_waiter_lease_matrix",
     "c2c_fake_borrow_waiter_integration",
     "c2c_threadpool_borrow_waiter_integration",
-    "uring_c2c_borrow_waiter_not_implemented",
+    "uring_c2c_borrow_waiter_integration",
 )
 
 
@@ -1742,12 +1876,16 @@ class C2cEvidenceRecordTest(unittest.TestCase):
         self.assertTrue(ev.mandatory)
         self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
 
-    def test_uring_c2c_gap_is_not_implemented(self):
-        ev = M.evidence_by_id("uring_c2c_borrow_waiter_not_implemented")
-        self.assertIn("Uring", ev.backends)
+    def test_uring_c2c_integration_is_implemented_real_mode(self):
+        # D3 closure: the Uring C2c record is now an implemented, real-mode-
+        # only, case-pinned evidence record (stub execution can never PASS it).
+        ev = M.evidence_by_id("uring_c2c_borrow_waiter_integration")
+        self.assertEqual(ev.backends, ("Uring",))
         self.assertEqual(ev.layer, "lifecycle")
         self.assertTrue(ev.mandatory)
-        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+        self.assertEqual(ev.required_modes, ("real",))
+        self.assertTrue(ev.cases and len(ev.cases) > 1)
 
     def test_c2c_ids_unique_in_manifest(self):
         ids = [e.evidence_id for e in M.EVIDENCE]
@@ -1775,20 +1913,23 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
                         "ThreadPool must have at least one mandatory "
                         "implemented C2c lifecycle record")
 
-    def test_uring_has_mandatory_not_implemented_c2c_record(self):
+    def test_uring_has_mandatory_implemented_c2c_record(self):
         appl = M.applicable_evidence_for_backend("Uring")
         c2c = [e for e in appl if e.evidence_id in C2C_EVIDENCE_IDS]
-        self.assertTrue(any(e.mandatory and e.status == M.STATUS_NOT_IMPLEMENTED
+        self.assertTrue(any(e.mandatory and e.status == M.STATUS_IMPLEMENTED
                             for e in c2c),
-                        "Uring must have a mandatory not_implemented C2c record")
+                        "Uring must have a mandatory implemented C2c record")
 
-    def test_uring_c2c_gap_surfaces_in_verdict(self):
+    def test_uring_c2e_gap_still_surfaces_in_c2c_verdict(self):
+        # After D3 the C2c record is implemented/real-mode; the KernelIo
+        # verdict stays NOT CONFORMING (fail-closed hard-code + the remaining
+        # C2e not_implemented gap, D4 work).
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(verdict, G.NOT_CONFORMING)
         self.assertTrue(
-            any("uring_c2c_borrow_waiter_not_implemented" in r for r in reasons),
-            f"Uring C2c gap must appear in reasons: {reasons}")
+            any("uring_c2e_close_drain_not_implemented" in r for r in reasons),
+            f"Uring C2e gap must appear in reasons: {reasons}")
 
     def test_fake_c2c_failure_does_not_affect_threadpool(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -1820,8 +1961,8 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
 
     def test_arena_pass_cannot_erase_uring_c2c_gap(self):
         # The arena matrix record is backend-agnostic (backends=()); it applies
-        # to Uring but cannot satisfy Uring's C2c obligation because Uring's
-        # own tagged not_implemented record remains INCOMPLETE.
+        # to Uring but cannot satisfy Uring's own tagged obligation because the
+        # tagged not_implemented C2e record remains INCOMPLETE (D4 work).
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         g.results["c2c_arena_borrow_waiter_lease_matrix"] = G.RunResult(
             "c2c_arena_borrow_waiter_lease_matrix",
@@ -1830,7 +1971,7 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
         verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(verdict, G.NOT_CONFORMING)
         self.assertTrue(
-            any("uring_c2c_borrow_waiter_not_implemented" in r for r in reasons))
+            any("uring_c2e_close_drain_not_implemented" in r for r in reasons))
 
     def test_missing_c2c_target_fails_closed(self):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
@@ -1880,16 +2021,19 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
                 any("ghost_c2c_gap_injected" in r for r in reasons),
                 f"gap record must appear in reasons: {reasons}")
 
-    def test_uring_c2c_gap_evidence_is_mandatory_not_implemented_applicable(self):
+    def test_uring_c2c_integration_record_properties(self):
         # Direct manifest-level assertions (no verdict loop involved): the
-        # Uring C2c gap is mandatory + not_implemented and enters Uring's
-        # applicable evidence set.
-        ev = M.evidence_by_id("uring_c2c_borrow_waiter_not_implemented")
-        self.assertIn("Uring", ev.backends)
+        # Uring C2c record is mandatory + implemented + real-mode-only with a
+        # pinned case set; the REMAINING Uring not_implemented gap (C2e, D4)
+        # still enters Uring's applicable evidence set.
+        ev = M.evidence_by_id("uring_c2c_borrow_waiter_integration")
+        self.assertEqual(ev.backends, ("Uring",))
         self.assertTrue(ev.mandatory)
-        self.assertEqual(ev.status, M.STATUS_NOT_IMPLEMENTED)
+        self.assertEqual(ev.status, M.STATUS_IMPLEMENTED)
+        self.assertEqual(ev.required_modes, ("real",))
+        self.assertTrue(ev.cases)
         appl = M.applicable_evidence_for_backend("Uring")
-        self.assertIn("uring_c2c_borrow_waiter_not_implemented",
+        self.assertIn("uring_c2e_close_drain_not_implemented",
                       {e.evidence_id for e in appl})
 
 

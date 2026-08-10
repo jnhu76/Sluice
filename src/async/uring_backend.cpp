@@ -39,6 +39,7 @@
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
+#include <thread>
 #endif
 
 namespace sluice::async {
@@ -656,6 +657,16 @@ Result<void> UringAsyncBackend::submit_size(Op op, Completion<std::size_t>& c,
         commit_binding(c);
     } // dispatch_mtx_ released BEFORE enqueue (no-fail, needs no serialization).
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // D3 C2b row 5 (Scheme-B pending cancel): deterministic pause between the
+    // commit/accept linearization point (Completion outstanding, slot pending,
+    // dispatch_mtx_ FREE) and enqueue. A test drives cancel() in this exact
+    // window and proves it wins the canceled terminal with no SQE / no router
+    // cookie / no transport ledger entry / no syscall. Compiled out of
+    // production builds.
+    wait_after_commit_before_enqueue_pause_();
+#endif
+
     // Stage 4: enqueue + dispatch attempt under one dispatch_mtx_ critical
     // section (frozen design §4.2).
     enqueue_after_commit(h);
@@ -714,6 +725,10 @@ Result<void> UringAsyncBackend::submit_void(Op op, Completion<void>& c,
         commit_binding(c);
     }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    wait_after_commit_before_enqueue_pause_();
+#endif
+
     enqueue_after_commit(h);
     return {};
 }
@@ -738,7 +753,7 @@ Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
 void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
     detail::EnqueueOutcome outcome;
     {
-        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        std::unique_lock<std::mutex> lk(dispatch_mtx_);
         outcome = arena_.enqueue(h); // pending -> enqueued OR terminal_noop
         if (outcome == detail::EnqueueOutcome::enqueued) {
             dispatch_->push_back(h);
@@ -751,7 +766,22 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
             // the drain also prevents cancel() from interposing before
             // mark_running. On SQ pressure, the current front stays queued and
             // the loop stops; no tail may bypass it.
-            while (!dispatch_->empty()) {
+            for (;;) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                if (before_dispatch_transfer_gate_.load(std::memory_order_acquire) !=
+                    nullptr) {
+                    // D3 C2b row 6 (enqueued cancel): Gate-B analogue — release
+                    // dispatch_mtx_ while paused so a test can drive cancel()
+                    // (remove_exact + arena.cancel) against the enqueued front.
+                    // The front is RE-READ after resume, so a cancel-won
+                    // request (removed from the queue) is never dispatched.
+                    lk.unlock();
+                    wait_before_dispatch_transfer_pause_();
+                    lk.lock();
+                }
+#endif
+                if (dispatch_->empty())
+                    break;
                 const detail::SlotHandle front = dispatch_->front();
                 if (!dispatch_one_locked(front))
                     break;
@@ -1391,6 +1421,81 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
 // cancel — Completion-keyed, drives the shared state machine (ADR Decision 11)
 // ---------------------------------------------------------------------------
 
+// The production cancel core shared by the public Completion-keyed cancel()
+// overloads and the guarded cancel_handle_for_test seam: DISARM LOCAL
+// EXECUTION FIRST (remove from the local dispatch ring under dispatch_mtx_, so
+// a pending/enqueued request cannot both be terminalized locally and have its
+// SQE installed — frozen design §8.1), TERMINAL WIN SECOND (drive the shared
+// state machine). On terminal_won the canceled terminal is already stored and
+// readiness is signaled so reap publishes once; on intent_recorded a bounded
+// best-effort AsyncCancel SQE is appended (frozen design §8.2).
+detail::CancelDisposition UringAsyncBackend::cancel_handle_(
+    detail::SlotHandle handle) noexcept {
+    detail::CancelDisposition disp;
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        (void)dispatch_->remove_exact(handle);
+        disp = arena_.cancel(handle);
+    }
+    if (disp == detail::CancelDisposition::terminal_won) {
+        // pending/enqueued cancel won: its SQE was NEVER installed and cannot
+        // execute. Signal readiness so reap publishes the canceled terminal.
+        bump(stats_, &AsyncStats::canceled_ops);
+        signal_ready_progress();
+    } else if (disp == detail::CancelDisposition::intent_recorded) {
+        // running/ring-owned: intent only. Best-effort AsyncCancel; the slot
+        // is retained to the original CQE (frozen design §8.2).
+        issue_running_cancel(handle);
+    }
+    // already_terminal / not_found / not_supported: no-op.
+    return disp;
+}
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+void UringAsyncBackend::wait_after_commit_before_enqueue_pause_() noexcept {
+    auto* g = after_commit_before_enqueue_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
+
+void UringAsyncBackend::wait_before_dispatch_transfer_pause_() noexcept {
+    auto* g = before_dispatch_transfer_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->dispatch_domain_released.store(true, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    while (!g->resume.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    g->exited.store(true, std::memory_order_release);
+}
+#endif
+
+void UringAsyncBackend::cancel(Completion<std::size_t>& c) {
+    if (!have_ring_)
+        return;
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value())
+        return;
+    (void)cancel_handle_(*h);
+}
+
+void UringAsyncBackend::cancel(Completion<void>& c) {
+    if (!have_ring_)
+        return;
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value())
+        return;
+    (void)cancel_handle_(*h);
+}
+
 void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
     // The arena already recorded cancel intent (cancel_intent_). We only need
     // to append a best-effort AsyncCancel SQE if one has not already been
@@ -1454,57 +1559,6 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
             static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
         transport_ledger_->append(TransportLedger::Kind::cancel_control, physical_position,
                                   target_cookie, h);
-    }
-}
-
-void UringAsyncBackend::cancel(Completion<std::size_t>& c) {
-    if (!have_ring_)
-        return;
-    auto h = arena_.resolve_completion(&c);
-    if (!h.has_value())
-        return;
-    detail::SlotHandle handle = *h;
-    detail::CancelDisposition disp;
-    {
-        std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        // DISARM LOCAL EXECUTION FIRST: remove from the local dispatch ring if
-        // present, so a pending/enqueued request cannot both be terminalized
-        // locally and have its SQE installed (frozen design §8.1).
-        (void)dispatch_->remove_exact(handle);
-        // TERMINAL WIN SECOND: drive the shared state machine.
-        disp = arena_.cancel(handle);
-    }
-    if (disp == detail::CancelDisposition::terminal_won) {
-        // pending/enqueued cancel won: its SQE was NEVER installed and cannot
-        // execute. Signal readiness so reap publishes the canceled terminal.
-        bump(stats_, &AsyncStats::canceled_ops);
-        signal_ready_progress();
-    } else if (disp == detail::CancelDisposition::intent_recorded) {
-        // running/ring-owned: intent only. Best-effort AsyncCancel; the slot
-        // is retained to the original CQE (frozen design §8.2).
-        issue_running_cancel(handle);
-    }
-    // already_terminal / not_found / not_supported: no-op.
-}
-
-void UringAsyncBackend::cancel(Completion<void>& c) {
-    if (!have_ring_)
-        return;
-    auto h = arena_.resolve_completion(&c);
-    if (!h.has_value())
-        return;
-    detail::SlotHandle handle = *h;
-    detail::CancelDisposition disp;
-    {
-        std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        (void)dispatch_->remove_exact(handle);
-        disp = arena_.cancel(handle);
-    }
-    if (disp == detail::CancelDisposition::terminal_won) {
-        bump(stats_, &AsyncStats::canceled_ops);
-        signal_ready_progress();
-    } else if (disp == detail::CancelDisposition::intent_recorded) {
-        issue_running_cancel(handle);
     }
 }
 
