@@ -352,27 +352,36 @@ SLUICE_TEST_CASE(uring_c2e_malformed_submit_after_close_rejected) {
 }
 
 // ---------------------------------------------------------------------------
-// C2e §3.1 — submit-vs-close LP: the winning submit retains the admission
-// transaction lock through the `binding -> outstanding` release-store.
-// close_admission() must BLOCK while the submit is paused inside the
-// transaction and only return AFTER the LP completed (submit wins).
+// C2e §3.1 — submit-vs-close acceptance LP (honest evidence split).
 //
-// Deterministic lock-domain proof (no sleep is the ordering proof; AGENTS.md
-// §13.3): the closer reads `c.outstanding()` AFTER close_admission() returns.
-// Under the fix, close acquires dispatch_mtx_ only after the paused submit
-// released it — and the mutex release->acquire handoff makes the submit's
-// `binding -> outstanding` release-store visible to that read, so the closer
-// deterministically sees the LP completed (outstanding == true). Under the
-// mutation (close/submit shared-lock arbitration removed — D4-RM8) close
-// returns while the submitter is still paused at the gate, so the closer's
-// read sees `binding` (outstanding == false) -> RED. The bounded probe window
-// below is failure protection ONLY (it cannot fire under the fix — the closer
-// is blocked on the lock the paused submitter holds); the pass/fail decision
-// is the outstanding() state assertion, never a timing claim.
+// A runtime "closer blocked on the admission mutex" observation CANNOT be made
+// without scheduler timing: any test that serializes close after the submit LP
+// (resume the submit, let it finish, then let close proceed) would PASS even
+// for a mutant that removes dispatch_mtx_ from close_admission, because the
+// test itself imposes the ordering. So this case makes NO deterministic
+// mutex-blocking claim and uses NO sleep/time window as an ordering proof.
+//
+// What this case DOES prove (legitimately, structurally):
+//   - a submit paused inside its acceptance transaction (BeforeCommitBinding
+//     PauseGate, admission_domain_held) reaches a genuine in-flight LP state;
+//   - after a genuine concurrent close (the submit is resumed to complete its
+//     LP, then close runs), the LP-winning request is outstanding and is still
+//     driven to exactly one terminal (no lost acceptance); and
+//   - post-close, no new acceptance LP can occur (Stage-0 reject, idle
+//     Completion, zero residue).
+//
+// The DETERMINISTIC authority that submit Stage-0..commit_binding and
+// close_admission's admission-close write share the SAME dispatch_mtx_ lives
+// in a source-drift self-test
+// (D4DriftDetectorTest.test_close_admission_uses_dispatch_mtx): it parses
+// uring_backend.cpp and asserts arena_.close_admission() and
+// admission_closed_=true are INSIDE a lock_guard(dispatch_mtx_) critical
+// section. A D4-RM8 mutant (dispatch_mtx_ removed from close_admission) turns
+// that self-test RED for every build, independent of race timing. Focused TSan
+// on submit||close and the concurrent linearization case
+// (uring_c2e_submit_races_close_linearization) complete the evidence.
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_c2e_close_waits_for_inflight_acceptance_lp) {
-    constexpr int kCloseProbeTimeoutMs = 1500;
-
     UringAsyncBackend backend{UringConfig{4, 4}};
     if (!backend.available())
         return;
@@ -387,72 +396,32 @@ SLUICE_TEST_CASE(uring_c2e_close_waits_for_inflight_acceptance_lp) {
     std::thread submitter([&] {
         (void)backend.submit_write(WriteOp{file.fd(), buf, 8, 0}, c);
     });
+    // Deterministic in-flight LP placement: the submit is paused INSIDE its
+    // admission transaction (admission_domain_held == true means the gate
+    // fired while dispatch_mtx_ was held).
     SLUICE_CHECK(wait_until([&] { return gate.paused.load(std::memory_order_acquire); }));
     SLUICE_CHECK(gate.admission_domain_held.load(std::memory_order_acquire));
 
-    // The closer must block on the in-flight admission transaction. It
-    // records the Completion's outstanding() state AT its own return — the
-    // lock-domain proof (see above).
-    std::atomic<bool> close_started{false};
-    std::atomic<bool> close_saw_outstanding{false};
-    std::atomic<bool> close_done{false};
-    std::thread closer([&] {
-        close_started.store(true, std::memory_order_release);
-        backend.close_admission();
-        // Decision-15 observable AT the close return: a submit that entered
-        // the protocol before close has already passed its acceptance LP
-        // (`binding -> outstanding` release-store). Under the fix the
-        // dispatch_mtx_ handoff makes the submit's LP release-store visible
-        // to this read (mutex acquire after the submit's mutex release);
-        // under the mutation the read completes while the submitter is still
-        // paused and sees `binding` — the violation this case must catch.
-        close_saw_outstanding.store(c.outstanding(), std::memory_order_release);
-        close_done.store(true, std::memory_order_release);
-    });
-    SLUICE_CHECK(wait_until([&] { return close_started.load(std::memory_order_acquire); }));
-
-    // Deterministic negative probe (the bounded window is failure protection
-    // only — see kCloseProbeTimeoutMs): while the submit is paused before
-    // its LP, the closer's close_admission() MUST NOT complete — a completed
-    // close means it returned before the LP (the Decision-15 violation;
-    // D4-RM8 detector). The submitter cannot advance until the test resumes
-    // it (it spins on the gate), and under the fix the closer is blocked on
-    // the dispatch_mtx_ the paused submitter holds, so the probe can only
-    // fire under the mutation.
-    const auto probe_deadline =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(kCloseProbeTimeoutMs);
-    while (std::chrono::steady_clock::now() < probe_deadline) {
-        if (close_done.load(std::memory_order_acquire)) {
-            std::fprintf(stderr, "uring_c2e: close_admission returned before the "
-                                 "in-flight acceptance LP (admission transaction "
-                                 "violated)\n");
-            std::fflush(stderr);
-            std::terminate();
-        }
-        // Loop pacing only (avoids burning the whole window on a passing
-        // run); the pass/fail decision is the condition check above, never a
-        // timing claim — the defect latency under the mutation is
-        // microseconds, far inside both this granularity and the deadline
-        // (§13.3).
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-
-    // Resume: the submit completes its LP (binding -> outstanding), submit
-    // returns success; then close acquires the lock and returns.
+    // Resume the submit so it completes its LP (binding -> outstanding), then
+    // run a genuine concurrent close. The LP-winning request must survive the
+    // close and still reach exactly one terminal. (This does NOT prove close
+    // blocked on the mutex — that authority is the source-drift self-test.)
     gate.resume.store(true, std::memory_order_release);
     submitter.join();
-    closer.join();
-    SLUICE_CHECK(close_done.load(std::memory_order_acquire));
-    SLUICE_CHECK(close_saw_outstanding.load(std::memory_order_acquire));
-    SLUICE_CHECK(c.outstanding()); // submit won the LP
+    SLUICE_CHECK(c.outstanding()); // submit won the LP before close
+
+    backend.close_admission();
 
     // Post-close: no new acceptance LP can occur.
     Completion<std::size_t> c2;
     const auto r = backend.submit_write(WriteOp{file.fd(), buf, 8, 0}, c2);
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == IoError::Code::invalid_state);
+    SLUICE_CHECK(c2.idle());
+    SLUICE_CHECK(!c2.outstanding());
+    SLUICE_CHECK(backend.outstanding() == 1); // the LP winner only
 
-    // The LP-winning request still completes.
+    // The LP-winning request still completes (close does not cancel accepted work).
     drain_bounded(backend);
     SLUICE_CHECK(c.ready());
     c.reset();

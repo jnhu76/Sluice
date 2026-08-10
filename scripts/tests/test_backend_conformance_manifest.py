@@ -758,6 +758,90 @@ class D4DriftDetectorTest(unittest.TestCase):
                       "SLUICE_HAS_LIBURING guard (stub public header portability; "
                       f"nearest guard is {guard!r})")
 
+    def test_close_admission_uses_dispatch_mtx(self):
+        # P0 (D4-RM8 revisited — honest close-vs-acceptance LP evidence): the
+        # submit admission transaction (Stage 0..commit_binding) and
+        # close_admission()'s admission-close write use the SAME dispatch_mtx_.
+        # This source-level invariant is the deterministic authority for the
+        # submit-vs-close linearization — a runtime "closer blocked on mutex"
+        # observation cannot be made without scheduler timing (the test itself
+        # serializes close after the submit LP). A mutant that removes
+        # dispatch_mtx_ from close_admission (so arena_.close_admission() and
+        # admission_closed_=true are written unlocked) turns this self-test RED
+        # deterministically for EVERY build, independent of race timing. The
+        # parser locates the close_admission() body and asserts both writes sit
+        # inside a std::lock_guard<std::mutex> lk(dispatch_mtx_) critical
+        # section in that function.
+        p = os.path.join(REPO_ROOT, "src", "async", "uring_backend.cpp")
+        with open(p, "r", encoding="utf-8") as f:
+            src = f.read()
+        # close_admission() has two definitions: a stub (no-liburing) body and
+        # the real liburing body. Enumerate every definition's balanced-brace
+        # body and locate the REAL one — the body that calls
+        # arena_.close_admission() (the stub does not).
+        bodies = []
+        for m in re.finditer(
+                r"void\s+UringAsyncBackend::close_admission\s*\(\s*\)\s*\{",
+                src):
+            start = src.index("{", m.start())
+            depth = 0
+            end = None
+            for i in range(start, len(src)):
+                if src[i] == "{":
+                    depth += 1
+                elif src[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            self.assertIsNotNone(end, "close_admission() body is unbalanced")
+            bodies.append(src[start:end])
+        self.assertTrue(bodies, "close_admission() definition not found")
+        body = next((b for b in bodies if "arena_.close_admission()" in b),
+                    None)
+        self.assertIsNotNone(
+            body,
+            "no close_admission() body calls arena_.close_admission() "
+            "(real-liburing definition missing?)")
+        self.assertIn("admission_closed_ = true",
+                      body,
+                      "close_admission() must set admission_closed_ = true")
+        self.assertIn("dispatch_mtx_",
+                      body,
+                      "close_admission() must acquire dispatch_mtx_")
+        # Both writes must sit INSIDE a lock_guard(dispatch_mtx_) critical
+        # section (not merely in the same function before/after a lock). The
+        # lock_guard is declared at the top of its block, so the block's open
+        # brace is the LAST '{' at or before the lock_guard text. Find that
+        # open brace, then its matching close brace, and assert both writes
+        # are within that critical section.
+        lg_idx = body.find("std::lock_guard<std::mutex> lk(dispatch_mtx_)")
+        self.assertGreater(lg_idx, -1,
+                           "close_admission() has no lock_guard(dispatch_mtx_) "
+                           "critical section (D4-RM8 mutant: shared lock removed)")
+        cs_start = body.rfind("{", 0, lg_idx)
+        self.assertGreater(cs_start, -1,
+                           "lock_guard(dispatch_mtx_) has no enclosing block")
+        depth = 0
+        cs_end = None
+        for i in range(cs_start, len(body)):
+            if body[i] == "{":
+                depth += 1
+            elif body[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    cs_end = i
+                    break
+        self.assertIsNotNone(cs_end,
+                             "close_admission() lock_guard block is unbalanced")
+        cs = body[cs_start:cs_end + 1]
+        self.assertIn("arena_.close_admission()", cs,
+                      "arena_.close_admission() must be INSIDE the "
+                      "dispatch_mtx_ critical section (D4-RM8 mutant)")
+        self.assertIn("admission_closed_ = true", cs,
+                      "admission_closed_ = true must be INSIDE the "
+                      "dispatch_mtx_ critical section (D4-RM8 mutant)")
+
 
 class D4EvidenceModeDriveTest(unittest.TestCase):
     """P1-A (PR #84 repair — the D3 R1/R3 defect reapplied to D4): the C2e
