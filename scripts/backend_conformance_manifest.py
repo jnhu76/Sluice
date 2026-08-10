@@ -732,6 +732,8 @@ EVIDENCE: tuple[Evidence, ...] = (
             "uring_c2e_drained_not_releasable",
             "uring_c2e_poison_close_keeps_class_c",
             "uring_c2e_submit_races_close_linearization",
+            "uring_c2e_control_wins_over_co_ready_ring",
+            "uring_c2e_two_waiter_consumer_strand",
         ),
         notes="C2e rows 15-16 Uring integration (Phase D4, real-liburing "
               "only; stub mode is classified INCOMPLETE by required_modes): "

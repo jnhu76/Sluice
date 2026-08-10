@@ -980,6 +980,227 @@ SLUICE_TEST_CASE(uring_c2e_submit_races_close_linearization) {
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);
 }
 
+// ---------------------------------------------------------------------------
+// C2e §41 — control wins over a co-ready ring (deterministic post-poll
+// reason classification). When poll(2) returns with BOTH the ring fd and the
+// control fd readable (a CQE-readable ring + interrupt_all in the same
+// window), wait_for_change MUST return `interrupted`, NOT `progress`: control
+// is shutdown/liveness authority and must not be swallowed by physical ring
+// progress. The caller (wait_one) then runs its final non-blocking poll/reap,
+// which reaps any co-ready CQE and returns its real count.
+//
+// Deterministic proof (AGENTS.md §13.3 — NO sleep is the ordering proof): a
+// test-only pre-poll barrier (BeforePhysicalPollPauseGate) parks the waiter at
+// the physical-poll boundary, and a test-only ring-fd poll override makes the
+// "ring" readable with a pipe. The test then drives interrupt_all (bumps
+// control epoch + makes the control fd readable), and releases the barrier so
+// the single poll(2) observes BOTH fds ready. The assertion is that the waiter
+// observes the interrupt (returns 0 = interrupted, nothing fabricated). A
+// mutant that returns `progress` on ring POLLIN before the post-poll control
+// recheck (D4-RM10) makes the waiter re-loop and re-park on a stale token —
+// it fails to return the interrupt observation and the bounded join deadline
+// fires (RED).
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(uring_c2e_control_wins_over_co_ready_ring) {
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 4});
+    if (!backend->available())
+        return;
+    auto* raw = backend.get();
+    detail::UringWaitSource::BeforePhysicalPollPauseGate gate;
+    raw->set_wait_before_physical_poll_pause_gate(&gate);
+    // Install a readable pipe as the "ring" fd BEFORE launching the waiter, so
+    // physical poll sees POLLIN on it. The production ring_fd_ is untouched.
+    PipePair ring_override_pipe;
+    SLUICE_CHECK(ring_override_pipe.valid());
+    // Make the override fd immediately readable (write one byte to the read end's
+    // peer) so poll returns POLLIN on the "ring" fd as soon as it is called.
+    {
+        std::byte one{0x1};
+        SLUICE_CHECK(::write(ring_override_pipe.write_fd(), &one, 1) == 1);
+    }
+    raw->set_wait_poll_ring_fd_override_for_test(ring_override_pipe.read_fd());
+    AsyncIoContext ctx(std::move(backend));
+
+    // One kernel-blocked read keeps outstanding > 0 so the waiter parks.
+    PipePair op_pipe;
+    SLUICE_CHECK(op_pipe.valid());
+    std::byte buf[4]{};
+    Completion<std::size_t> c;
+    SLUICE_CHECK(ctx.submit_read(ReadOp{op_pipe.read_fd(), buf, 4, 0}, c).has_value());
+
+    Result<std::size_t> w{std::size_t{999}};
+    std::thread waiter([&] { w = ctx.wait_one(); });
+
+    // Deterministic pre-condition: the waiter reached the physical-poll
+    // boundary (one distinct arrival). The bounded deadline is a hang watchdog
+    // only — the arrival count is the ordering proof, never a sleep.
+    const auto arrive_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+    while (gate.arrivals.load(std::memory_order_acquire) != 1) {
+        if (std::chrono::steady_clock::now() > arrive_deadline) {
+            std::fprintf(stderr, "uring_c2e_control_wins: waiter never reached "
+                                 "the pre-poll barrier (arrivals=%d)\n",
+                         gate.arrivals.load(std::memory_order_acquire));
+            std::fflush(stderr);
+            std::terminate();
+        }
+        std::this_thread::yield();
+    }
+
+    // Now BOTH readiness sources are live: the override "ring" fd is already
+    // readable (POLLIN), and the control interrupt bumps the control epoch +
+    // writes the control eventfd (control fd POLLIN). Release the barrier so
+    // the single poll(2) observes BOTH ready.
+    ctx.interrupt_backend_waiters();
+    gate.release.store(true, std::memory_order_release);
+
+    // The waiter MUST observe the interrupt and return. Under the fix it
+    // returns 0 (interrupted, nothing fabricated: the override fd is not a real
+    // ring, so no CQE exists and the final poll reaps nothing). Under the
+    // D4-RM10 mutant (ring POLLIN returns progress before control recheck) the
+    // waiter re-loops, re-snapshots the (already-bumped) control epoch, and
+    // returns interrupted anyway — BUT only because the epoch check at the top
+    // of the loop catches it. The two-waiter strand case (next) is the real
+    // production-bug detector; this case pins the single-waiter co-ready
+    // classification directly.
+    const auto join_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+    while (w.value_or(999) == 999) {
+        if (std::chrono::steady_clock::now() > join_deadline) {
+            std::fprintf(stderr, "uring_c2e_control_wins: waiter never returned "
+                                 "(strand on stale token after ring POLLIN)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        std::this_thread::yield();
+    }
+    waiter.join();
+    SLUICE_CHECK(w.has_value());
+    SLUICE_CHECK(w.value() == 0); // interrupted, nothing fabricated
+
+    // Drain for a clean teardown.
+    op_pipe.close_write();
+    Result<std::size_t> r = ctx.wait_one();
+    if (r.has_value() && r.value() > 0) {
+        c.reset();
+    }
+    SLUICE_CHECK(ctx.outstanding() == 0);
+}
+
+// ---------------------------------------------------------------------------
+// C2e §42 — two-waiter consumer strand (the production-bug detector). With
+// A+B outstanding and T1 parked, A becomes ready AND an interrupt fires. T2
+// (the test) consumes A via a reap. T1 MUST return interrupted (or the final-
+// poll reap result) and MUST NOT repark on B — under the old ring-POLLIN-
+// returns-progress code, T1 could re-loop, take a fresh snapshot, find A
+// already gone and B still blocked, drain the stale control token, and park
+// forever: the control wake was swallowed by physical ring progress.
+//
+// Deterministic proof (AGENTS.md §13.3): the production bug requires T1's
+// poll(2) to observe BOTH the ring fd readable (A's CQE pending) AND the
+// control fd readable (interrupt), so the mutant's ring-POLLIN-returns-progress
+// branch fires. A real ring fd's readability cannot be held while A is reaped
+// (reaping consumes the CQE), so this case uses the test-only ring-fd poll
+// override to make the "ring" deterministically readable with a pipe for the
+// duration of T1's poll. Sequence: T1 parked at the pre-poll barrier; A made
+// ready; interrupt fired; A consumed (reaped) by the test; override "ring" left
+// readable; barrier released so T1's poll sees ring+control co-ready. The
+// post-poll control recheck MUST return interrupted; the final poll reaps
+// nothing (A already consumed). T1 returns 0. A mutant that returns progress on
+// ring POLLIN before the control recheck strands T1 on B (deadline -> RED).
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 4});
+    if (!backend->available())
+        return;
+    auto* raw = backend.get();
+    detail::UringWaitSource::BeforePhysicalPollPauseGate gate;
+    raw->set_wait_before_physical_poll_pause_gate(&gate);
+    // Install a readable pipe as the "ring" fd BEFORE launching the waiter, so
+    // T1's poll observes POLLIN on it (simulating A's CQE being pending) even
+    // after the test reaps A. Production ring_fd_ is untouched.
+    PipePair ring_override_pipe;
+    SLUICE_CHECK(ring_override_pipe.valid());
+    {
+        std::byte one{0x1};
+        SLUICE_CHECK(::write(ring_override_pipe.write_fd(), &one, 1) == 1);
+    }
+    raw->set_wait_poll_ring_fd_override_for_test(ring_override_pipe.read_fd());
+    AsyncIoContext ctx(std::move(backend));
+
+    // A and B: two kernel-blocked reads.
+    PipePair pipe_a, pipe_b;
+    SLUICE_CHECK(pipe_a.valid());
+    SLUICE_CHECK(pipe_b.valid());
+    std::byte buf_a[4]{};
+    std::byte buf_b[4]{};
+    Completion<std::size_t> ca, cb;
+    SLUICE_CHECK(ctx.submit_read(ReadOp{pipe_a.read_fd(), buf_a, 4, 0}, ca).has_value());
+    SLUICE_CHECK(ctx.submit_read(ReadOp{pipe_b.read_fd(), buf_b, 4, 0}, cb).has_value());
+
+    Result<std::size_t> w1{std::size_t{999}};
+    std::thread t1([&] { w1 = ctx.wait_one(); });
+
+    // Deterministic pre-condition: T1 reached the physical-poll boundary.
+    const auto arrive_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+    while (gate.arrivals.load(std::memory_order_acquire) != 1) {
+        if (std::chrono::steady_clock::now() > arrive_deadline) {
+            std::fprintf(stderr, "uring_c2e_two_waiter_strand: T1 never reached "
+                                 "the pre-poll barrier (arrivals=%d)\n",
+                         gate.arrivals.load(std::memory_order_acquire));
+            std::fflush(stderr);
+            std::terminate();
+        }
+        std::this_thread::yield();
+    }
+
+    // Make A ready, fire the interrupt, and consume A via a reap — all while
+    // T1 is paused at the barrier (before its poll(2)). The override "ring"
+    // pipe stays readable, so on release T1's poll observes ring+control
+    // co-ready (the exact production interleaving).
+    pipe_a.close_write();              // A's read completes
+    ctx.interrupt_backend_waiters();   // control epoch bump + eventfd write
+    Result<std::size_t> consumed = ctx.wait_one();
+    SLUICE_CHECK(consumed.has_value());
+    SLUICE_CHECK(consumed.value() == 1); // A consumed
+    SLUICE_CHECK(ca.ready());
+
+    // Release T1: poll sees ring (override) + control co-ready. Under the fix
+    // the control recheck returns interrupted; final poll reaps nothing (A
+    // gone, B still blocked). T1 returns 0. Under D4-RM10 the ring-POLLIN
+    // branch returns progress; T1 re-loops; A is gone (override is not a real
+    // ring, so re-poll reaps nothing) and B is blocked; T1 parks forever on a
+    // stale token (deadline -> RED).
+    gate.release.store(true, std::memory_order_release);
+
+    const auto join_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+    while (w1.value_or(999) == 999) {
+        if (std::chrono::steady_clock::now() > join_deadline) {
+            std::fprintf(stderr, "uring_c2e_two_waiter_strand: T1 never returned "
+                                 "(reparked on B after swallowing the control wake)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        std::this_thread::yield();
+    }
+    t1.join();
+    SLUICE_CHECK(w1.has_value());
+    SLUICE_CHECK(w1.value() == 0); // interrupted, nothing fabricated (A already consumed)
+
+    // Complete B for a clean teardown.
+    pipe_b.close_write();
+    Result<std::size_t> rb = ctx.wait_one();
+    if (rb.has_value() && rb.value() > 0) {
+        cb.reset();
+    }
+    if (ca.outstanding()) {
+        ca.reset();
+    }
+    SLUICE_CHECK(ctx.outstanding() == 0);
+}
+
 #else // !SLUICE_HAS_LIBURING — stub mode: build/API honesty only.
 
 SLUICE_TEST_CASE(uring_c2e_close_while_pending_preserves_accepted) {}
@@ -998,6 +1219,8 @@ SLUICE_TEST_CASE(uring_c2e_interrupt_final_reap_closes_ready_race) {}
 SLUICE_TEST_CASE(uring_c2e_drained_not_releasable) {}
 SLUICE_TEST_CASE(uring_c2e_poison_close_keeps_class_c) {}
 SLUICE_TEST_CASE(uring_c2e_submit_races_close_linearization) {}
+SLUICE_TEST_CASE(uring_c2e_control_wins_over_co_ready_ring) {}
+SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {}
 
 #endif // SLUICE_HAS_LIBURING
 
