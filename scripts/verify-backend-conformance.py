@@ -20,7 +20,11 @@
 #     evidence is INCOMPLETE; only provably-satisfied mandatory layers make a
 #     backend ELIGIBLE;
 #   * exits non-zero on any mandatory MISSING_TARGET / BUILD_FAIL / RUN_FAIL,
-#     any INCOMPLETE verdict for a non-kernel backend, or when a registered
+#     any INCOMPLETE verdict for a non-kernel backend, any KernelIo verdict
+#     other than a STUB-mode INCOMPLETE (the D4 lift: a REAL KernelIo run may
+#     pass only when ELIGIBLE — one mandatory detector INCOMPLETE fails the
+#     aggregate; a stub run may pass only as INCOMPLETE and can never be
+#     ELIGIBLE; an unknown/missing mode fails closed), or when a registered
 #     backend's mandatory case-set is not covered.
 #
 # Usage:
@@ -30,10 +34,13 @@
 #                                                            # already built)
 #
 # Exit codes:
-#   0 — every mandatory gate PASS / NOT_APPLICABLE; all profiles honest.
+#   0 — every mandatory gate PASS / NOT_APPLICABLE; all profiles honest
+#       (including a STUB KernelIo INCOMPLETE aggregate run).
 #   1 — at least one mandatory gate did not pass (target missing, build/run
-#       failure, an INCOMPLETE verdict for a non-kernel backend, or a
-#       backend's mandatory case-set uncovered).
+#       failure, an INCOMPLETE verdict for a non-kernel backend, a REAL
+#       KernelIo INCOMPLETE/NOT CONFORMING, a STUB KernelIo NOT CONFORMING or
+#       ELIGIBLE, an unknown KernelIo mode, or a backend's mandatory case-set
+#       uncovered).
 #   2 — harness error (xmake unavailable, manifest import failure).
 """Phase C1 aggregate backend-conformance gate."""
 
@@ -708,12 +715,18 @@ class Gate:
 
         IMPORTANT: backend-agnostic arena/lifecycle evidence proves the
         RequestSlot CONTRACT, NOT that a given backend conforms to it. Uring
-        completed the D1 RequestArena migration, but its D3 identity/cancel/
-        borrow/waiter and D4 close/drain evidence are still incomplete. We
-        therefore report generic KernelIo lifecycle/backend-specific records
-        as INCOMPLETE unless a narrowly tagged real-mode phase record has its
-        own command-backed PASS. The hard-coded overall KernelIo verdict stays
-        fail-closed until D4.
+        carries the RequestArena contract through its D1 migration, but its
+        kernel obligations (C2b identity, C2c waiter/borrow, C2d failure
+        injection, C2e close/drain/destruction, backend-specific contract)
+        are satisfied only by real-mode phase records. We therefore report
+        generic KernelIo lifecycle/backend-specific records as INCOMPLETE
+        unless a narrowly tagged real-mode phase record has its own
+        command-backed PASS. After the D4 lift there is NO hard-coded overall
+        KernelIo verdict: the ordinary machinery decides, with mode
+        attribution (a stub-mode shared/capacity/close-drain PASS is
+        downgraded to INCOMPLETE) and the aggregate fail-closed rule in
+        _report() (real KernelIo must be ELIGIBLE; stub may only be
+        INCOMPLETE; unknown mode fails closed).
         """
         # The shared suite: this backend's OWN subprocess result.
         if ev.evidence_id == "shared_suite":
@@ -821,10 +834,11 @@ class Gate:
         # close-drain KernelIo PASS requires mode='real') and the
         # _backend_run_state rule (KernelIo lifecycle/backend_specific records
         # report their own state only when real-mode and tagged to exactly
-        # this backend). A stub build therefore still yields INCOMPLETE ->
-        # NOT CONFORMING; a complete real-mode evidence set yields ELIGIBLE.
-        # Mode-independent authority records (negative compile etc.) can never
-        # lift the real-mode obligations.
+        # this backend). A stub build therefore yields INCOMPLETE (never
+        # ELIGIBLE, and tolerated by the aggregate only as stub INCOMPLETE); a
+        # complete real-mode evidence set yields ELIGIBLE (the only real-mode
+        # aggregate-passing verdict). Mode-independent authority records
+        # (negative compile etc.) can never lift the real-mode obligations.
 
         # Mandatory APPLICABLE evidence only (implemented + not_implemented +
         # not_applicable). Non-mandatory records are diagnostic.
@@ -923,16 +937,38 @@ class Gate:
                 print(f"    reason: {r}")
             print()
 
-            if verdict != ELIGIBLE:
-                # KernelIo NOT CONFORMING / INCOMPLETE is EXPECTED in a stub
-                # build (stub subset evidence cannot satisfy the real-mode
-                # obligations; real-liburing CI is the authoritative mode) and
-                # is not a gate failure. A Reference/BlockingIo verdict other
-                # than ELIGIBLE IS a gate failure.
-                if backend.profile != "KernelIoProfile":
+            if backend.profile == "KernelIoProfile":
+                # D4 lift fail-closed boundary (the P0-A repair). The KernelIo
+                # aggregate outcome depends on the ATTRIBUTED execution mode
+                # (from the backend's [conformance-meta] line):
+                #   * mode=real : ELIGIBLE is the ONLY passing verdict. A REAL
+                #     run with any mandatory detector INCOMPLETE / NOT
+                #     CONFORMING (missing pinned case, missing/wrong
+                #     evidence-meta, undriven close/drain suite, dead death
+                #     target, ...) MUST fail the aggregate — a real-mode
+                #     INCOMPLETE can never exit 0.
+                #   * mode=stub : INCOMPLETE is the honest expected outcome
+                #     (build/API-only evidence cannot satisfy the real-mode
+                #     obligations) and is NOT a gate failure; NOT CONFORMING
+                #     (a mandatory evidence proved a violation) still fails;
+                #     ELIGIBLE in stub is impossible and fails closed.
+                #   * unknown / missing mode: fail closed (aggregate FAIL).
+                if verdict == ELIGIBLE:
+                    if mode_seen != "real":
+                        overall_failures.append(
+                            f"{backend.name} ({backend.profile}): {verdict} with "
+                            f"mode={mode_seen!r} — KernelIo may be ELIGIBLE only "
+                            f"on a complete REAL-mode evidence set")
+                elif not (mode_seen == "stub" and verdict == INCOMPLETE):
                     overall_failures.append(
                         f"{backend.name} ({backend.profile}): {verdict} — "
                         + "; ".join(reasons))
+            elif verdict != ELIGIBLE:
+                # A Reference/BlockingIo verdict other than ELIGIBLE IS a gate
+                # failure (their obligations are fully real and mode-fixed).
+                overall_failures.append(
+                    f"{backend.name} ({backend.profile}): {verdict} — "
+                    + "; ".join(reasons))
 
         # --- External admission probe (NOT conformance) ---
         ext = self.results.get("external_backend_admission")
@@ -1051,7 +1087,9 @@ class Gate:
             return 1
         print("RESULT: PASS (all runnable mandatory gates satisfied; KernelIo "
               "verdict decided by the ordinary machinery: complete real-mode "
-              "evidence set -> ELIGIBLE, stub/subset build -> INCOMPLETE).")
+              "evidence set -> ELIGIBLE and aggregate PASS, stub/subset build "
+              "-> INCOMPLETE and aggregate PASS only for a stub-mode run, "
+              "real-mode INCOMPLETE / unknown mode -> aggregate FAIL).")
         return 0
 
 

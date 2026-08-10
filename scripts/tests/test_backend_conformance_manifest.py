@@ -775,6 +775,161 @@ class FailClosedMetadataTest(unittest.TestCase):
         self.assertEqual(verdict, G.INCOMPLETE)
 
 
+class KernelIoAggregateFailClosedTest(unittest.TestCase):
+    """P0-A (D4 repair): the AGGREGATE gate fails closed on a REAL KernelIo
+    INCOMPLETE / NOT CONFORMING, tolerates ONLY a stub-mode INCOMPLETE, and
+    fails closed on an unknown/missing mode.
+
+    Every scenario (GATE-L1..L7) runs the real aggregate/report path —
+    Gate._report() over a fabricated per-backend run state — and asserts the
+    exit code the gate returns, NOT merely _backend_verdict() in isolation.
+    The _stub_gate() fabricator seeds every non-shared IMPLEMENTED evidence
+    PASS and per-backend shared/capacity/close-drain PASS (with the KernelIo
+    mode-attribution downgrade), so the only variable under test is the
+    evidence/verdict/mode combination each scenario names.
+    """
+
+    @staticmethod
+    def _report_rc(g):
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            return g._report()
+
+    @staticmethod
+    def _real_gate(extra_results=None):
+        """A fully-PASSing REAL KernelIo gate (mode=real, all evidence PASS)."""
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
+                       meta_override={
+                           "Fake": {"profile": "ReferenceProfile",
+                                    "mode": "deterministic"},
+                           "ThreadPool": {"profile": "BlockingIoProfile",
+                                          "mode": "real"},
+                           "Uring": {"profile": "KernelIoProfile",
+                                     "mode": "real"},
+                       })
+        for k, v in (extra_results or {}).items():
+            g.results[k] = v
+        return g
+
+    def test_gate_l1_real_all_mandatory_pass_returns_zero(self):
+        # GATE-L1: real mode + every mandatory evidence PASS -> KernelIo
+        # ELIGIBLE and the aggregate exits 0.
+        g = self._real_gate()
+        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.ELIGIBLE, reasons)
+        self.assertEqual(self._report_rc(g), 0)
+
+    def test_gate_l2_real_close_drain_incomplete_returns_nonzero(self):
+        # GATE-L2: real mode + uring_c2e_close_drain INCOMPLETE (e.g. a
+        # missing pinned case) -> KernelIo INCOMPLETE and the aggregate exits
+        # non-zero. Before the P0-A repair the KernelIo exemption let this
+        # return 0 (the false-green this repair closes).
+        ev = M.evidence_by_id("uring_c2e_close_drain")
+        g = self._real_gate(extra_results={
+            ev.evidence_id: G.RunResult(
+                ev.evidence_id, ev.target, G.INCOMPLETE,
+                detail="evidence case-set mismatch: "
+                       "missing=uring_c2e_multiple_parked_waiters_all_wake, "
+                       "unexpected=[], duplicate=[]")})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertNotEqual(self._report_rc(g), 0)
+
+    def test_gate_l3_real_backend_contract_incomplete_returns_nonzero(self):
+        # GATE-L3: real mode + uring_backend_contract INCOMPLETE -> KernelIo
+        # INCOMPLETE and the aggregate exits non-zero.
+        ev = M.evidence_by_id("uring_backend_contract")
+        g = self._real_gate(extra_results={
+            ev.evidence_id: G.RunResult(
+                ev.evidence_id, ev.target, G.INCOMPLETE,
+                detail="evidence case-set mismatch: "
+                       "missing=uring_stats_increment_on_real_path, "
+                       "unexpected=[], duplicate=[]")})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertNotEqual(self._report_rc(g), 0)
+
+    def test_gate_l4_real_required_c2b_case_missing_returns_nonzero(self):
+        # GATE-L4: real mode + a required pinned C2b case missing. The G2
+        # case-set machinery itself classifies the truncated run INCOMPLETE
+        # (driven end-to-end through _drive, not a hand-built state), and the
+        # aggregate then fails. (C2c/C2e share the identical mechanism; the
+        # representative C2b drives the path.)
+        ev = M.evidence_by_id("uring_c2b_identity_integration")
+        self.assertIsNotNone(ev)
+        truncated = [c for c in ev.cases if c != ev.cases[1]]
+        out = "".join(f"[run] {c}\n" for c in truncated)
+        out += f"[evidence-meta] evidence={ev.evidence_id} mode=real\n"
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(0, out)):
+            result = gate._drive(ev)
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn("case-set mismatch", result.detail)
+        g = self._real_gate(extra_results={ev.evidence_id: result})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertNotEqual(self._report_rc(g), 0)
+
+    def test_gate_l5_real_wrong_missing_evidence_meta_returns_nonzero(self):
+        # GATE-L5: real mode + a mandatory detector emits zero/wrong
+        # [evidence-meta] lines. _drive() classifies the run INCOMPLETE
+        # (metadata-count failure), and the aggregate exits non-zero.
+        ev = M.evidence_by_id("uring_c2e_close_drain")
+        out = "".join(f"[run] {c}\n" for c in ev.cases)  # no meta line at all
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(0, out)):
+            result = gate._drive(ev)
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn("evidence-meta", result.detail)
+        g = self._real_gate(extra_results={ev.evidence_id: result})
+        self.assertNotEqual(self._report_rc(g), 0)
+
+    def test_gate_l6_stub_incomplete_returns_zero_never_eligible(self):
+        # GATE-L6: stub mode + real-only evidence INCOMPLETE -> the aggregate
+        # may PASS (build/API-only honesty), KernelIo is INCOMPLETE and can
+        # never be ELIGIBLE.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertNotEqual(verdict, G.ELIGIBLE)
+        self.assertEqual(self._report_rc(g), 0)
+
+    def test_gate_l7_unknown_kernel_mode_fails_closed(self):
+        # GATE-L7: an unknown/missing KernelIo mode fails closed — the
+        # aggregate exits non-zero because only a STUB-mode INCOMPLETE is
+        # tolerable, and 'unknown' / missing is neither 'stub' nor 'real'.
+        g = _stub_gate(
+            {"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
+            meta_override={"Uring": {"profile": "KernelIoProfile",
+                                     "mode": "unknown"}})
+        self.assertNotEqual(self._report_rc(g), 0)
+        g2 = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
+                        meta_override={})
+        self.assertNotEqual(self._report_rc(g2), 0)
+
+    def test_gate_stub_not_conforming_still_fails(self):
+        # STUB KernelIo NOT CONFORMING (a mandatory evidence proved a
+        # violation — a genuinely broken stub build) must fail the aggregate
+        # too; only stub INCOMPLETE is tolerated.
+        g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "RUN_FAIL"})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertNotEqual(self._report_rc(g), 0)
+
+    def test_gate_real_not_conforming_fails(self):
+        # REAL KernelIo NOT CONFORMING -> aggregate FAIL.
+        g = self._real_gate(extra_results={
+            "uring_c2e_close_drain": G.RunResult(
+                "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test",
+                G.RUN_FAIL, detail="exit 1")})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.NOT_CONFORMING)
+        self.assertNotEqual(self._report_rc(g), 0)
+
+
 class ResultAttributionIsolationTest(unittest.TestCase):
     """The core corrective: a backend failure never contaminates the others."""
 
