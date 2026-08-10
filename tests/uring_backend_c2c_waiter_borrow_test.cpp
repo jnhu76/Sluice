@@ -36,6 +36,28 @@ using sluice::IoError;
 using detail::WaiterRegistration;
 using detail::WaiterToken;
 
+// ---------------------------------------------------------------------------
+// Evidence-meta (G2): exactly one [evidence-meta] line per gate-driven run.
+//
+// This case MUST be registered in BOTH build modes. It sits OUTSIDE the outer
+// `#if defined(SLUICE_HAS_LIBURING)` guard so a stub build also emits its
+// mode=stub line: every gate-driven target run emits exactly one evidence
+// metadata line (G2 protocol). The stub line is NOT a PASS — it lets the
+// aggregate gate attribute the run to mode=stub and classify it INCOMPLETE via
+// required_modes=("real",), instead of an accidental INCOMPLETE from a missing
+// case. That distinction is load-bearing: the classification reason must be
+// "disallowed mode", never "required case disappeared".
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(uring_d3_c2c_evidence_mode) {
+#if defined(SLUICE_HAS_LIBURING)
+    UringAsyncBackend backend{UringConfig{4, 4}};
+    std::printf("[evidence-meta] evidence=uring_c2c_borrow_waiter_integration mode=real\n");
+    SLUICE_CHECK(backend.available());
+#else
+    std::printf("[evidence-meta] evidence=uring_c2c_borrow_waiter_integration mode=stub\n");
+#endif
+}
+
 #if defined(SLUICE_HAS_LIBURING)
 
 namespace {
@@ -123,19 +145,6 @@ class PipePair {
 };
 
 } // namespace
-
-// ---------------------------------------------------------------------------
-// Evidence-meta (G2): exactly one [evidence-meta] line per gate-driven run.
-// ---------------------------------------------------------------------------
-SLUICE_TEST_CASE(uring_d3_c2c_evidence_mode) {
-#if defined(SLUICE_HAS_LIBURING)
-    UringAsyncBackend backend{UringConfig{4, 4}};
-    std::printf("[evidence-meta] evidence=uring_c2c_borrow_waiter_integration mode=real\n");
-    SLUICE_CHECK(backend.available());
-#else
-    std::printf("[evidence-meta] evidence=uring_c2c_borrow_waiter_integration mode=stub\n");
-#endif
-}
 
 // ---------------------------------------------------------------------------
 // C2c row 11 — borrow lifetime: active at `pending` (commit began the borrow)

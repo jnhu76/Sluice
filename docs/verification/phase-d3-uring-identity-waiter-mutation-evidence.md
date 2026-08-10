@@ -1,6 +1,9 @@
 # Phase D3 — Uring C2b/C2c Integration Mutation Evidence
 
-Date: 2026-08-09. Branch: branch test/phase-d3-uring-identity-waiter-conformance.
+Date: 2026-08-09 (initial); updated 2026-08-10 for the PR #83 review repair
+(R1/R3 evidence-metadata honesty, R2 cancel-control-authority kernel
+portability — D3-M6 re-confirmed). Branch:
+test/phase-d3-uring-identity-waiter-conformance.
 Baseline SHA: `126612a` (master, PR #80 merge). Kernel: 6.18.33.2-microsoft-standard-WSL2.
 liburing: 2.14 (pinned). Build: Clang Debug with `--with-liburing` (real mode).
 
@@ -9,7 +12,10 @@ focused evidence case was rebuilt and run (expect RED), the edit was reverted
 byte-for-byte, and the same case was rebuilt and run again (expect GREEN). All
 eleven mutants were executed on the final D3 head; all RED→GREEN transitions
 were confirmed by the actual binary exit codes (the evidence targets fail
-non-zero on any `SLUICE_CHECK` violation or fail-fast).
+non-zero on any `SLUICE_CHECK` violation or fail-fast). The R2 repair renamed
+the control-before-original detector to
+`uring_c2b_cancel_control_never_authors_terminal` (kernel-portable); D3-M6 was
+re-confirmed RED→GREEN against the renamed corpus on the repaired head.
 
 Command shapes:
 
@@ -81,10 +87,16 @@ xmake build <target> && SLUICE_TEST_FILTER=<case> xmake run <target>
   deferred ORIGINAL terminal replaced by a fabricated `canceled` terminal when
   the control CQE retires.
 - Detector: `uring_c2b_original_cqe_before_control_cqe` (order B: original CQE
-  first, control second).
-- RED: the control CQE overwrites the deferred 0-byte original result; the
-  verbatim-result detector fails (rc=255 via the double-terminal fail-fast).
-- GREEN after revert: original result verbatim, control CQE informational only.
+  first, control second). Also covered by the kernel-portable
+  `uring_c2b_cancel_control_never_authors_terminal` detector's Path B (control
+  retires, original verbatim) on a kernel where the cancel is ineffective.
+- RED: the control CQE overwrites the deferred 0-byte original result with a
+  fabricated canceled terminal; the verbatim-result detector fails
+  (`FAILED 1 check(s): res.has_value()`, rc=1).
+- GREEN after revert: original result verbatim (0 bytes), control CQE
+  informational only. Re-confirmed on the R2 (kernel-portable) D3 head: mutant
+  RED (`res.has_value()` fail at `uring_backend_c2b_identity_test.cpp`), revert
+  GREEN.
 
 ## D3-M7 — borrow ends at original CQE / record_terminal instead of reap
 
@@ -146,10 +158,12 @@ xmake build <target> && SLUICE_TEST_FILTER=<case> xmake run <target>
 ```sh
 xmake build uring_backend_c2b_identity_test && xmake run uring_backend_c2b_identity_test
 # 11/11 PASS (identity chain, generation reuse, stale cookie, stale handle,
-#            pending/enqueued/running cancel, both CQE orders, reap boundary)
+#            pending/enqueued/running cancel, original-vs-control CQE order
+#            (B) + kernel-portable cancel-control-authority detector, reap
+#            boundary)
 
 xmake build uring_backend_c2c_waiter_borrow_test && xmake run uring_backend_c2c_waiter_borrow_test
-# 13/13 PASS (borrow lifecycle/exact metadata/no-buffer shape, registration
+# 14/14 PASS (borrow lifecycle/exact metadata/no-buffer shape, registration
 #            enqueued/running/backend_ready, cardinality, wait-cancel vs
 #            I/O-cancel independence, exactly-once delivery, stale waiter,
 #            register-after-record_terminal-before-reap)

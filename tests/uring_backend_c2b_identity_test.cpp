@@ -36,6 +36,28 @@
 using namespace sluice::async;
 using sluice::IoError;
 
+// ---------------------------------------------------------------------------
+// Evidence-meta (G2): exactly one [evidence-meta] line per gate-driven run.
+//
+// This case MUST be registered in BOTH build modes. It sits OUTSIDE the outer
+// `#if defined(SLUICE_HAS_LIBURING)` guard so a stub build also emits its
+// mode=stub line: every gate-driven target run emits exactly one evidence
+// metadata line (G2 protocol). The stub line is NOT a PASS — it lets the
+// aggregate gate attribute the run to mode=stub and classify it INCOMPLETE via
+// required_modes=("real",), instead of an accidental INCOMPLETE from a missing
+// case. That distinction is load-bearing: the classification reason must be
+// "disallowed mode", never "required case disappeared".
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(uring_d3_c2b_evidence_mode) {
+#if defined(SLUICE_HAS_LIBURING)
+    UringAsyncBackend backend{UringConfig{4, 4}};
+    std::printf("[evidence-meta] evidence=uring_c2b_identity_integration mode=real\n");
+    SLUICE_CHECK(backend.available());
+#else
+    std::printf("[evidence-meta] evidence=uring_c2b_identity_integration mode=stub\n");
+#endif
+}
+
 #if defined(SLUICE_HAS_LIBURING)
 
 namespace {
@@ -133,19 +155,6 @@ class PipePair {
 };
 
 } // namespace
-
-// ---------------------------------------------------------------------------
-// Evidence-meta (G2): exactly one [evidence-meta] line per gate-driven run.
-// ---------------------------------------------------------------------------
-SLUICE_TEST_CASE(uring_d3_c2b_evidence_mode) {
-#if defined(SLUICE_HAS_LIBURING)
-    UringAsyncBackend backend{UringConfig{4, 4}};
-    std::printf("[evidence-meta] evidence=uring_c2b_identity_integration mode=real\n");
-    SLUICE_CHECK(backend.available());
-#else
-    std::printf("[evidence-meta] evidence=uring_c2b_identity_integration mode=stub\n");
-#endif
-}
 
 // ---------------------------------------------------------------------------
 // C2b row 3 — full SlotHandle identity chain on a REAL accepted op:
@@ -553,11 +562,15 @@ SLUICE_TEST_CASE(uring_c2b_running_cancel_intent_real_result) {
 
 // ---------------------------------------------------------------------------
 // C2b §7 Order B — original operation CQE FIRST, cancel-control CQE second.
-// The read completes (0 bytes) before the appended cancel SQE is flushed, so
-// the kernel retires the cancel with -ENOENT. The original terminal is stored
-// in bounded router scratch while the control reference is live, published
-// only after the control retires. Exactly one arena terminal, one reap
-// publication, router entry retired, control state zero.
+// The read completes (0 bytes) before the appended cancel SQE is resolved, so
+// the original terminal is stored in bounded router scratch while the control
+// reference is live, published only after the control retires. The control
+// result may reflect not-found / already-completed / raced cancellation
+// according to kernel timing (per the io_uring LOTI: 0 / -ENOENT / -EALREADY
+// are all possible); it is informational and cannot author the request
+// terminal. The detector asserts only the invariant it owns: the original
+// result is verbatim, exactly one arena terminal, one reap publication,
+// router entry retired, control state zero.
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_c2b_original_cqe_before_control_cqe) {
     UringAsyncBackend backend{UringConfig{4, 4}};
@@ -597,16 +610,39 @@ SLUICE_TEST_CASE(uring_c2b_original_cqe_before_control_cqe) {
 }
 
 // ---------------------------------------------------------------------------
-// C2b §7 Order A — cancel-control CQE FIRST, original operation CQE second.
-// The cancel SQE is flushed while the read is kernel-blocked: on this kernel
-// the cancel is EFFECTIVE — the kernel interrupts the blocked read, so the
-// original operation CQE arrives with -ECANCELED (a legal original-CQE
-// terminal, ADR Decision 12) and the control CQE is control-informational
-// only. Invariants asserted: the terminal is produced by the ORIGINAL CQE
-// (effective cancellation), never chosen or overwritten by the control CQE;
-// exactly one arena terminal, one reap publication, control state zero.
+// C2b §7 — portable cancel-control-authority detector (kernel-portable).
+//
+// A REAL kernel-blocked pipe read is submitted; the request reaches `running`.
+// A cancel is then requested through the REAL production cancel path. Whether
+// IORING_OP_ASYNC_CANCEL effectively interrupts a kernel-blocked pipe read is
+// kernel-version/timing-dependent (per the io_uring LOTI: socket-style I/O is
+// interruptible, disk I/O is not; a blocked pipe read is in between). This
+// detector does NOT assume effectiveness. It drives the transport with
+// deterministic state observations and a bounded hang-watchdog (NEVER sleep as
+// ordering proof) and branches on the REAL kernel outcome:
+//
+//   Path A — effective cancellation: the ORIGINAL operation CQE arrives with
+//     -ECANCELED (a legal original-CQE terminal, ADR Decision 12). The
+//     cancel-control CQE is informational only. result == canceled; control
+//     state retired; router entry retired; exactly one publication.
+//
+//   Path B — ineffective / raced cancellation: the control attempt retires
+//     (control result one of 0 / -ENOENT / -EALREADY per the io_uring LOTI —
+//     informational, not asserted) while the original operation is still
+//     kernel-owned. Completion NOT ready; original router/cookie still live;
+//     control state retired; the control CQE did NOT choose a terminal; the
+//     canceled tally remains zero. Closing the pipe's write end then delivers
+//     a deterministic REAL original-operation EOF CQE (0 bytes): result is
+//     verbatim success — no cancel rewrite — exactly one publication.
+//
+// In BOTH paths the load-bearing invariant is the SAME: the ORIGINAL operation
+// CQE owns the request terminal; the cancel-control CQE is informational and
+// can never independently author or overwrite the terminal; exactly one reap
+// publication; the slot is released only after the caller resets the ready
+// Completion. This is NOT a tautology — the control-authority mutant (D3-M6:
+// the control CQE fabricates the terminal) is RED against this detector.
 // ---------------------------------------------------------------------------
-SLUICE_TEST_CASE(uring_c2b_control_cqe_before_original_cqe) {
+SLUICE_TEST_CASE(uring_c2b_cancel_control_never_authors_terminal) {
     UringAsyncBackend backend{UringConfig{4, 4}};
     if (!backend.available())
         return;
@@ -615,30 +651,98 @@ SLUICE_TEST_CASE(uring_c2b_control_cqe_before_original_cqe) {
     sluice::AsyncStats stats;
     backend.attach_stats(&stats);
 
+    // 1. Submit a REAL kernel-blocked pipe read.
     std::byte buf[4]{};
     Completion<std::size_t> c;
     SLUICE_CHECK(backend.submit_read(ReadOp{pipe.read_fd(), buf, 4, 0}, c).has_value());
-    SLUICE_CHECK(backend.poll() == 0); // kernel blocks the read
+    SLUICE_CHECK(backend.poll() == 0); // flush: kernel blocks the read
 
+    // 2. Confirm RequestState == running.
     auto h = backend.handle_for_completion_for_test(&c);
     SLUICE_CHECK(h.has_value());
+    {
+        auto obs = backend.observe_for_test(*h);
+        SLUICE_CHECK(obs.has_value());
+        SLUICE_CHECK(obs->state == detail::RequestState::running);
+    }
+    SLUICE_CHECK(backend.live_cookies_for_test() == 1); // original router entry live
+
+    // 3. Request cancel through the REAL production cancel path.
     SLUICE_CHECK(backend.cancel_handle_for_test(*h) ==
                   detail::CancelDisposition::intent_recorded);
 
-    // Flush the cancel SQE while the read is still blocked: the control CQE
-    // retires with a control-only result and the original operation CQE
-    // reports the effective cancellation (-ECANCELED). The control CQE never
-    // chooses or overwrites the terminal; the slot-bound publication happens
-    // exactly once through reap.
-    SLUICE_CHECK(backend.poll() == 1);
-    SLUICE_CHECK(c.ready());
-    auto res = c.result();
-    SLUICE_CHECK(!res.has_value());
-    SLUICE_CHECK(res.error().code == IoError::Code::canceled);
-    SLUICE_CHECK(stats.canceled_ops == 1); // effective cancellation tallied once
-    SLUICE_CHECK(backend.live_control_entries_for_test() == 0);
+    // 4. Confirm: disposition was intent-only; the Completion is NOT ready from
+    //    the cancel intent alone; exactly one bounded control execution
+    //    reference (the per-slot bit) and one prepared (not yet flushed)
+    //    control SQE.
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(stats.canceled_ops == 0);
+    SLUICE_CHECK(backend.live_control_entries_for_test() == 1);
+    // The control SQE is PREPARED but NOT yet flushed by transport: there is
+    // no live submitted control SQE yet (it is counted once submit consumes
+    // it; a CQE retires it back to zero). This mirrors the running-cancel
+    // detector: intent sets the per-slot control bit; a transport flush
+    // submits it; its control CQE retires the bit.
     SLUICE_CHECK(backend.live_control_sqes_for_test() == 0);
-    SLUICE_CHECK(backend.live_cookies_for_test() == 0); // router entry retired
+
+    // 5. Drive the transport until the cancel-control attempt itself has
+    //    retired (control bit clears) OR the original request already
+    //    terminalized — a persistent-state predicate (the per-slot control
+    //    entry), not a sleep-based ordering proof. The bounded deadline is a
+    //    hang-watchdog only.
+    SLUICE_CHECK(wait_until([&] {
+        (void)backend.poll(); // flush transport + reap any kernel-ready CQEs
+        return c.ready() || backend.live_control_entries_for_test() == 0;
+    }));
+    SLUICE_CHECK(backend.live_control_entries_for_test() == 0); // control retired
+
+    // 6. Branch on the REAL kernel outcome.
+    if (c.ready()) {
+        // Path A — effective cancellation: the ORIGINAL operation CQE reported
+        // -ECANCELED (a legal original-CQE terminal). The control CQE never
+        // chose or overwrote it; reap published exactly once.
+        auto res = c.result();
+        SLUICE_CHECK(!res.has_value());
+        SLUICE_CHECK(res.error().code == IoError::Code::canceled);
+        SLUICE_CHECK(stats.canceled_ops == 1); // effective cancellation tallied once
+        SLUICE_CHECK(backend.live_control_entries_for_test() == 0);
+        SLUICE_CHECK(backend.live_control_sqes_for_test() == 0);
+        SLUICE_CHECK(backend.live_cookies_for_test() == 0); // router entry retired
+    } else {
+        // Path B — ineffective / raced cancellation: the control attempt
+        // retired but the original operation is still kernel-owned. The
+        // control CQE did NOT choose a terminal.
+        SLUICE_CHECK(stats.canceled_ops == 0);                // no canceled tally
+        SLUICE_CHECK(backend.live_control_entries_for_test() == 0); // control retired
+        SLUICE_CHECK(backend.live_control_sqes_for_test() == 0);
+        SLUICE_CHECK(backend.live_cookies_for_test() == 1);   // original cookie still live
+        {
+            auto obs = backend.observe_for_test(*h);
+            SLUICE_CHECK(obs.has_value());
+            SLUICE_CHECK(obs->state == detail::RequestState::running); // still running
+            SLUICE_CHECK(obs->terminal_stored == false);               // no terminal
+        }
+        SLUICE_CHECK(!c.ready()); // control CQE published nothing
+
+        // Close the pipe's write end so the original read receives a
+        // deterministic REAL EOF CQE (0 bytes).
+        pipe.close_write();
+        SLUICE_CHECK(wait_until([&] { return c.ready(); }));
+
+        // The original operation CQE owns the terminal: verbatim success, no
+        // cancel rewrite. Exactly one publication; router finally retires.
+        SLUICE_CHECK(c.ready());
+        auto res = c.result();
+        SLUICE_CHECK(res.has_value());
+        SLUICE_CHECK(res.value() == 0); // original result verbatim
+        SLUICE_CHECK(stats.canceled_ops == 0); // still zero — no cancel rewrite
+        SLUICE_CHECK(backend.live_control_entries_for_test() == 0);
+        SLUICE_CHECK(backend.live_control_sqes_for_test() == 0);
+        SLUICE_CHECK(backend.live_cookies_for_test() == 0); // router entry retired
+    }
+
+    // Both paths: slot released only after the caller resets the ready
+    // Completion; exactly one publication throughout.
     c.reset();
     SLUICE_CHECK(backend.outstanding() == 0);
     SLUICE_CHECK(backend.arena_slot_in_use() == 0);
@@ -701,7 +805,7 @@ SLUICE_TEST_CASE(uring_c2b_pending_cancel_wins_no_sqe) {}
 SLUICE_TEST_CASE(uring_c2b_enqueued_cancel_wins_no_sqe) {}
 SLUICE_TEST_CASE(uring_c2b_running_cancel_intent_real_result) {}
 SLUICE_TEST_CASE(uring_c2b_original_cqe_before_control_cqe) {}
-SLUICE_TEST_CASE(uring_c2b_control_cqe_before_original_cqe) {}
+SLUICE_TEST_CASE(uring_c2b_cancel_control_never_authors_terminal) {}
 SLUICE_TEST_CASE(uring_c2b_publication_boundary_reap_gates_ready) {}
 
 #endif // SLUICE_HAS_LIBURING

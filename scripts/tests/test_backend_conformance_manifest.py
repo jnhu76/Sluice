@@ -655,6 +655,95 @@ class D3DriftDetectorTest(unittest.TestCase):
             "uring_c2c_borrow_waiter_integration", "uring_backend_c2c_waiter_borrow_test.cpp")
 
 
+class D3EvidenceModeDriveTest(unittest.TestCase):
+    """D3 (PR #83 review R1/R3): the evidence-mode metadata MUST exist in BOTH
+    build modes. Before the repair the evidence-mode case was compiled out in
+    stub builds, so a stub run printed the full pinned [run] set MINUS one
+    (10 for C2b, 13 for C2c) and ZERO [evidence-meta] lines — the gate
+    classified it INCOMPLETE for the WRONG reason (a missing required case),
+    not the intended "disallowed mode".
+
+    These tests drive the evidence records end-to-end through Gate._drive()
+    with fabricated target stdout, proving for BOTH D3 records:
+      * real mode (full pinned set + one mode=real meta)  -> PASS;
+      * stub mode (full pinned set + one mode=stub meta)  -> INCOMPLETE by
+        required_modes (NOT by a missing case);
+      * full pinned set but ZERO [evidence-meta] lines     -> INCOMPLETE
+        (missing metadata), proving the G2 "exactly one [evidence-meta]
+        line per gate-driven run" invariant is enforced at the gate;
+      * stub run missing exactly the evidence-mode case   -> INCOMPLETE
+        (case-set mismatch), proving a future regression that re-compiles
+        the evidence-mode case out is still caught independently.
+
+    Runtime observation is the compiled-binary execution authority; the
+    source<->pin drift detector above is an auxiliary registration-name
+    detector that cannot see preprocessor guards (the very hole this repair
+    closed).
+    """
+
+    @staticmethod
+    def _ev(evidence_id):
+        ev = M.evidence_by_id(evidence_id)
+        assert ev is not None and ev.cases, evidence_id
+        return ev
+
+    def _out(self, ev, cases, mode=None, meta_lines=None):
+        run = "".join(f"[run] {c}\n" for c in cases)
+        if meta_lines is not None:
+            return run + meta_lines
+        if mode is not None:
+            return run + f"[evidence-meta] evidence={ev.evidence_id} mode={mode}\n"
+        return run
+
+    def _drive(self, ev, output, rc=0):
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(rc, output)):
+            return gate._drive(ev)
+
+    def _assert_both_modes(self, evidence_id):
+        ev = self._ev(evidence_id)
+        pinned = list(ev.cases)
+
+        # Real mode: full pinned set + mode=real -> PASS.
+        real = self._drive(ev, self._out(ev, pinned, mode="real"))
+        self.assertEqual(real.state, G.PASS, real.detail)
+
+        # Stub mode: full pinned set + mode=stub -> INCOMPLETE solely because
+        # mode=stub is not in required_modes=("real",), NOT a missing case.
+        # The detail must be mode-centric ("mode=... not in required"), NOT a
+        # case-set mismatch ("missing=...").
+        stub = self._drive(ev, self._out(ev, pinned, mode="stub"))
+        self.assertEqual(stub.state, G.INCOMPLETE, stub.detail)
+        self.assertIn("mode", stub.detail)
+        self.assertIn("required", stub.detail)
+        self.assertNotIn("case-set mismatch", stub.detail)
+        self.assertNotIn("missing=", stub.detail)
+
+        # Missing [evidence-meta] entirely (full pinned set) -> INCOMPLETE by
+        # metadata count, NOT by case-set (the G2 one-meta-per-run invariant).
+        no_meta = self._drive(ev, self._out(ev, pinned))
+        self.assertEqual(no_meta.state, G.INCOMPLETE, no_meta.detail)
+        self.assertIn("evidence-meta", no_meta.detail)
+
+        # Stub regression guard: a stub build that RE-COMPILES the
+        # evidence-mode case out (the original bug) would run the full pinned
+        # set MINUS the evidence-mode case with zero meta. The gate MUST
+        # catch that as a case-set mismatch, independently of the meta check.
+        evidence_case = pinned[0]  # the evidence-mode case is pinned first
+        truncated = [c for c in pinned if c != evidence_case]
+        regressed = self._drive(ev, self._out(ev, truncated))
+        self.assertEqual(regressed.state, G.INCOMPLETE, regressed.detail)
+        self.assertIn(evidence_case, regressed.detail,
+                      "detail must name the missing evidence-mode case")
+
+    def test_c2b_evidence_mode_present_in_both_modes(self):
+        self._assert_both_modes("uring_c2b_identity_integration")
+
+    def test_c2c_evidence_mode_present_in_both_modes(self):
+        self._assert_both_modes("uring_c2c_borrow_waiter_integration")
+
+
 class FailClosedMetadataTest(unittest.TestCase):
     """Missing/malformed metadata fails closed (NOT_RUN / unknown mode)."""
 

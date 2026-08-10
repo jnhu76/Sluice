@@ -151,8 +151,16 @@ Clang Debug with `--with-liburing`):
 
 ```text
 pre-push gate              : PASS (bash scripts/gates/pre-push.sh — "ALL CHECKS PASSED")
-focused C2b real target    : PASS 11/11 (uring_backend_c2b_identity_test)
-focused C2c real target    : PASS 13/13 (uring_backend_c2c_waiter_borrow_test)
+focused C2b real target    : PASS 11/11 (uring_backend_c2b_identity_test;
+                             evidence-meta mode=real; exact pinned case-set)
+focused C2c real target    : PASS 14/14 (uring_backend_c2c_waiter_borrow_test;
+                             evidence-meta mode=real; exact pinned case-set)
+focused C2b stub target    : PASS 11/11 + exactly one evidence-meta mode=stub
+                             (INCOMPLETE by required_modes=("real",) — never a
+                             missing-case accidental INCOMPLETE)
+focused C2c stub target    : PASS 14/14 + exactly one evidence-meta mode=stub
+                             (INCOMPLETE by required_modes=("real",) — never a
+                             missing-case accidental INCOMPLETE)
 existing D1 submit-failure : PASS (uring_submit_failure_test)
 existing D2 target         : PASS 10/10 (uring_d2_failure_noalloc_test; evidence-meta mode=real)
 backend_conformance_test   : PASS (per-backend isolated subprocess runs)
@@ -161,7 +169,7 @@ aggregate conformance      : PASS — uring_c2b_identity_integration=PASS,
                              uring_c2d_failure_injection=PASS,
                              uring_c2e_close_drain_not_implemented=INCOMPLETE,
                              KernelIo overall NOT CONFORMING (fail-closed retained)
-manifest self-tests        : PASS 178/178 (scripts/tests/test_backend_conformance_manifest.py,
+manifest self-tests        : PASS 180/180 (scripts/tests/test_backend_conformance_manifest.py,
                              incl. D3 source<->pin drift detectors)
 real liburing Debug full   : PASS (xmake test -v — full group)
 real liburing Release full : PASS (xmake f -m release --toolchain=clang -y; xmake test -v)
@@ -173,3 +181,29 @@ formal d1-uring-poison     : PASS (python3 scripts/formal/verify.py)
 docs / git diff --check    : PASS (check-doc-links --self-test, check-doc-links,
                              verify-architecture-docs, git diff --check)
 ```
+
+### Cancel-control authority (kernel-portable)
+
+The C2b §7 cancel-control detector (`uring_c2b_cancel_control_never_authors_terminal`)
+does NOT assume `IORING_OP_ASYNC_CANCEL` effectively interrupts a kernel-blocked
+pipe read. Whether the cancel is effective is a kernel-version/timing outcome
+(per the io_uring LOTI, a blocked pipe read is interruptible on some kernels
+and not on others). The detector drives the transport with a persistent-state
+predicate (the per-slot control entry retires) and a bounded hang-watchdog, and
+branches on the REAL kernel outcome:
+
+- effective cancellation — the ORIGINAL operation CQE reports `-ECANCELED` (a
+  legal original-CQE terminal); result == canceled;
+- ineffective/raced cancellation — the control retires while the original op is
+  still kernel-owned; closing the write end then delivers a verbatim 0-byte
+  original EOF CQE; result is verbatim success, no cancel rewrite.
+
+In BOTH paths the ORIGINAL operation CQE owns the terminal; the cancel-control
+CQE is informational and can never independently author or overwrite it. The
+control-authority mutant (D3-M6) is RED against this corpus (captured by the
+original-before-control detector `uring_c2b_original_cqe_before_control_cqe`,
+where the control CQE retires after a deferred verbatim original terminal).
+
+Evidence was recorded on kernel 6.18 WSL2 (the observed environment); that is
+distinct from the portable contract above — an observed kernel behavior is never
+turned into an API theorem.

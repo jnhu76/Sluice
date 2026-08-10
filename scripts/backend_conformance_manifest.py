@@ -363,7 +363,7 @@ EVIDENCE: tuple[Evidence, ...] = (
             "uring_c2b_enqueued_cancel_wins_no_sqe",
             "uring_c2b_running_cancel_intent_real_result",
             "uring_c2b_original_cqe_before_control_cqe",
-            "uring_c2b_control_cqe_before_original_cqe",
+            "uring_c2b_cancel_control_never_authors_terminal",
             "uring_c2b_publication_boundary_reap_gates_ready",
         ),
         notes="C2b rows 3-8 Uring integration (Phase D3, real-liburing only; "
@@ -377,9 +377,19 @@ EVIDENCE: tuple[Evidence, ...] = (
               "pending cancel wins (Scheme B, no SQE/cookie/ledger/syscall); "
               "enqueued cancel wins (dispatch linkage removed FIRST, no future "
               "SQE); running cancel records intent only (original operation "
-              "CQE decides, verbatim or effective -ECANCELED); original-vs-"
-              "control CQE in BOTH orders with the control CQE never choosing "
-              "the terminal; reap is the sole publication boundary.",
+              "CQE decides, verbatim or effective -ECANCELED). "
+              "Cancel-control authority is KERNEL-PORTABLE: running "
+              "cancellation records intent only; a real AsyncCancel attempt "
+              "is exercised, but whether it effectively interrupts the "
+              "blocked operation is a kernel/runtime outcome. In either "
+              "effective (-ECANCELED original CQE) or ineffective/raced "
+              "(later ordinary original CQE, e.g. 0-byte EOF) outcome, only "
+              "the ORIGINAL operation CQE supplies request terminal "
+              "semantics; the cancel-control CQE is informational and "
+              "cannot overwrite the terminal. Evidence was recorded on "
+              "kernel 6.18 WSL2 (the observed environment); that is "
+              "distinct from the portable contract above. Reap is the sole "
+              "publication boundary.",
     ),
 
     # -----------------------------------------------------------------------
