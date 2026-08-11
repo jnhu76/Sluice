@@ -1276,6 +1276,31 @@ class KernelIoAggregateFailClosedTest(unittest.TestCase):
             extra_results={ev.evidence_id: result})
         self.assertNotEqual(self._report_rc(g), 0)
 
+    def test_gate_l11_stub_expected_requires_mode_stub(self):
+        # GATE-L11 (P1-2 round-5): the EXPECTED stub incompleteness is the
+        # stub build and ONLY the stub build. A clean real-only target run
+        # whose single evidence-meta mode is "deterministic" (neither stub
+        # nor real — e.g. a driver regression that mislabels a non-kernel
+        # run) must NOT be tolerated: stub_expected stays False and the stub
+        # aggregate fails. Before this repair `metas[0][1] not in
+        # required_modes` also matched mode=deterministic for
+        # required_modes=("real",), so the aggregate could exit 0 on a run
+        # that proved nothing about the stub build.
+        ev = M.evidence_by_id("uring_c2e_close_drain")
+        out = "".join(f"[run] {c}\n" for c in ev.cases)
+        out += "[evidence-meta] evidence=uring_c2e_close_drain mode=deterministic\n"
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(0, out)):
+            result = gate._drive(ev)
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn("mode='deterministic'", result.detail)
+        self.assertFalse(result.stub_expected)
+        g = _stub_gate(
+            {"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
+            extra_results={ev.evidence_id: result})
+        self.assertNotEqual(self._report_rc(g), 0)
+
 class ResultAttributionIsolationTest(unittest.TestCase):
     """The core corrective: a backend failure never contaminates the others."""
 

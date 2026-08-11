@@ -500,9 +500,12 @@ class Gate:
                 # the single meta mode is "real". This downgrade is the
                 # EXPECTED stub incompleteness (D4-RM14 P1-2): a clean stub
                 # run with valid meta may not pass, but it is not a
-                # malformation either.
+                # malformation either. Only mode=="stub" qualifies — any
+                # other non-real mode is unexpected and must fail the stub
+                # aggregate (P1-2 round-5: mode=deterministic is neither stub
+                # nor real and proves nothing about the stub build).
                 metas = parse_meta_line_list(out)
-                if len(metas) == 1 and metas[0][2] != "real":
+                if len(metas) == 1 and metas[0][2] == "stub":
                     state = INCOMPLETE
                     detail = (f"shared-suite execution requires mode='real'; got "
                               f"mode={metas[0][2]!r} (build/API evidence only)")
@@ -552,12 +555,13 @@ class Gate:
             stub_expected = False
             if state == PASS and b.profile == "KernelIoProfile":
                 metas = parse_meta_line_list(out)
-                if len(metas) == 1 and metas[0][2] != "real":
+                if len(metas) == 1 and metas[0][2] == "stub":
                     state = INCOMPLETE
                     detail = (f"capacity execution requires mode='real'; got "
                               f"mode={metas[0][2]!r} (build/API evidence only)")
                     # round-4 (P1-2): expected stub incompleteness (see
-                    # _run_shared_suite).
+                    # _run_shared_suite); only mode=="stub" qualifies (P1-2
+                    # round-5 — a non-stub mode must fail the aggregate).
                     stub_expected = True
             self.capacity_by_backend[b.name] = RunResult(
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
@@ -609,9 +613,11 @@ class Gate:
                 # PASS is a build/API subset only (the driver's stub branch
                 # emits the mode=stub meta and runs no cases). Downgrade to
                 # INCOMPLETE unless the single meta mode is "real". This is
-                # the EXPECTED stub incompleteness (D4-RM14 P1-2).
+                # the EXPECTED stub incompleteness (D4-RM14 P1-2); only
+                # mode=="stub" qualifies (P1-2 round-5 — a non-stub mode must
+                # fail the aggregate).
                 metas = parse_meta_line_list(out)
-                if len(metas) == 1 and metas[0][2] != "real":
+                if len(metas) == 1 and metas[0][2] == "stub":
                     state = INCOMPLETE
                     detail = (f"close/drain execution requires mode='real'; got "
                               f"mode={metas[0][2]!r} (build/API evidence only)")
@@ -739,12 +745,15 @@ class Gate:
         # ("mode=stub not in required_modes") — but ONLY when the run is
         # otherwise clean: exit 0, the FULL exact pinned case-set executed
         # (G2), and exactly one valid [evidence-meta] line whose mode is
-        # disallowed by required_modes. Any other INCOMPLETE reason (case-set
-        # mismatch, zero/extra/malformed metadata, wrong evidence id) means
-        # the stub run is malformed and must fail the stub aggregate too — a
-        # stub run must never be green "for the wrong reason" (e.g. a
-        # compiled-out evidence-mode case reporting as mode=real would pass
-        # the old aggregate for exactly the wrong reason).
+        # EXACTLY "stub" and disallowed by required_modes. Any other
+        # INCOMPLETE reason (case-set mismatch, zero/extra/malformed
+        # metadata, wrong evidence id) or any other mode (e.g. a
+        # deterministic-mode run of a real-only target) means the run is
+        # malformed and must fail the stub aggregate too — a stub run must
+        # never be green "for the wrong reason" (e.g. a compiled-out
+        # evidence-mode case reporting as mode=real would pass the old
+        # aggregate for exactly the wrong reason; mode=deterministic is
+        # neither stub nor real and proves nothing about the stub build).
         stub_expected = False
         if state == INCOMPLETE and ev.required_modes and rc == 0:
             cs_state = (classify_case_set(parse_run_lines(out), ev.cases)[0]
@@ -752,6 +761,7 @@ class Gate:
             metas = parse_evidence_meta_lines(out)
             if (cs_state == PASS and len(metas) == 1 and
                     metas[0][0] == ev.evidence_id and
+                    metas[0][1] == "stub" and
                     metas[0][1] not in ev.required_modes):
                 stub_expected = True
         return RunResult(ev.evidence_id, ev.target, state,
