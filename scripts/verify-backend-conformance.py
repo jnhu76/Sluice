@@ -26,6 +26,14 @@
 #     aggregate; a stub run may pass only as INCOMPLETE and can never be
 #     ELIGIBLE; an unknown/missing mode fails closed), or when a registered
 #     backend's mandatory case-set is not covered.
+#     round-4 (P1-2): the stub tolerance is narrowed to the EXPECTED stub
+#     incompleteness — every insufficient mandatory record must be
+#     manifest-declared (not_implemented), a mode-downgraded shared/capacity/
+#     close-drain record, or a _drive record that executed the full exact
+#     pinned corpus with exactly one valid mode=stub metadata (stub_expected).
+#     A stub run that is INCOMPLETE for ANY other reason (case-set mismatch,
+#     malformed/missing metadata, wrong evidence id, undriven suite) fails the
+#     aggregate too: a stub run must never be green for the wrong reason.
 #
 # Usage:
 #   python3 scripts/verify-backend-conformance.py
@@ -86,6 +94,17 @@ class RunResult:
     state: str
     detail: str = ""
     stdout: str = ""
+    # round-4 (P1-2): True when this INCOMPLETE is the EXPECTED stub
+    # incompleteness — a stub run that executed the full exact pinned
+    # case-set and emitted exactly one valid [evidence-meta] line whose mode
+    # is not allowed by required_modes (or the equivalent shared/capacity/
+    # close-drain mode downgrade, or a manifest-declared not_implemented
+    # gap). ONLY such INCOMPLETE records may keep a stub KernelIo aggregate
+    # green; any other INCOMPLETE reason (case-set mismatch, malformed/
+    # missing metadata, wrong evidence id, undriven suite) fails the stub
+    # aggregate too. Meaningless (and never consulted) for non-INCOMPLETE
+    # states.
+    stub_expected: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -368,7 +387,13 @@ class Gate:
             if ev.status == M.STATUS_NOT_IMPLEMENTED:
                 self.results[ev.evidence_id] = RunResult(
                     ev.evidence_id, ev.target, INCOMPLETE,
-                    detail="manifest status not_implemented (Phase C2/D)")
+                    detail="manifest status not_implemented (Phase C2/D)",
+                    # round-4 (P1-2): a manifest-declared gap is EXPECTED
+                    # incompleteness — tolerated in a stub aggregate (it is
+                    # still INCOMPLETE in real mode, where it fails the
+                    # ELIGIBLE requirement). It never masks a malformed
+                    # runtime observation.
+                    stub_expected=True)
                 continue
             if ev.status == M.STATUS_NOT_APPLICABLE:
                 self.results[ev.evidence_id] = RunResult(
@@ -467,19 +492,24 @@ class Gate:
                 continue
             rc, out = xmake_run_target(ev.target, env_filter=b.driver_case)
             state, detail = self._classify_shared_run(b, rc, out)
+            stub_expected = False
             if state == PASS and b.profile == "KernelIoProfile":
                 # Mode attribution (D4 lift audit): the KernelIo shared suite
                 # must be satisfied by REAL kernel execution; a stub-mode PASS
                 # is a build/API subset only. Downgrade to INCOMPLETE unless
-                # the single meta mode is "real".
+                # the single meta mode is "real". This downgrade is the
+                # EXPECTED stub incompleteness (D4-RM14 P1-2): a clean stub
+                # run with valid meta may not pass, but it is not a
+                # malformation either.
                 metas = parse_meta_line_list(out)
                 if len(metas) == 1 and metas[0][2] != "real":
                     state = INCOMPLETE
                     detail = (f"shared-suite execution requires mode='real'; got "
                               f"mode={metas[0][2]!r} (build/API evidence only)")
+                    stub_expected = True
             self.shared_by_backend[b.name] = RunResult(
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
-                detail=detail, stdout=out)
+                detail=detail, stdout=out, stub_expected=stub_expected)
 
     def _run_capacity_suite(self, ev: M.Evidence) -> None:
         """Phase C2a: drive the shared capacity suite once per backend that has
@@ -519,15 +549,19 @@ class Gate:
                                        env_filter=b.capacity_driver_case)
             state, detail = self._classify_shared_run(
                 b, rc, out, expected_case=b.capacity_driver_case)
+            stub_expected = False
             if state == PASS and b.profile == "KernelIoProfile":
                 metas = parse_meta_line_list(out)
                 if len(metas) == 1 and metas[0][2] != "real":
                     state = INCOMPLETE
                     detail = (f"capacity execution requires mode='real'; got "
                               f"mode={metas[0][2]!r} (build/API evidence only)")
+                    # round-4 (P1-2): expected stub incompleteness (see
+                    # _run_shared_suite).
+                    stub_expected = True
             self.capacity_by_backend[b.name] = RunResult(
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
-                detail=detail, stdout=out)
+                detail=detail, stdout=out, stub_expected=stub_expected)
 
     def _run_close_drain_suite(self, ev: M.Evidence) -> None:
         """Phase C2e: drive the shared close/drain suite once per backend that
@@ -568,20 +602,23 @@ class Gate:
                                        env_filter=b.close_drain_driver_case)
             state, detail = self._classify_shared_run(
                 b, rc, out, expected_case=b.close_drain_driver_case)
+            stub_expected = False
             if state == PASS and b.profile == "KernelIoProfile":
                 # Mode attribution (D4 lift audit): the KernelIo close/drain
                 # suite must be satisfied by REAL kernel execution; a stub-mode
                 # PASS is a build/API subset only (the driver's stub branch
                 # emits the mode=stub meta and runs no cases). Downgrade to
-                # INCOMPLETE unless the single meta mode is "real".
+                # INCOMPLETE unless the single meta mode is "real". This is
+                # the EXPECTED stub incompleteness (D4-RM14 P1-2).
                 metas = parse_meta_line_list(out)
                 if len(metas) == 1 and metas[0][2] != "real":
                     state = INCOMPLETE
                     detail = (f"close/drain execution requires mode='real'; got "
                               f"mode={metas[0][2]!r} (build/API evidence only)")
+                    stub_expected = True
             self.close_drain_by_backend[b.name] = RunResult(
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
-                detail=detail, stdout=out)
+                detail=detail, stdout=out, stub_expected=stub_expected)
 
     def _classify_shared_run(self, backend: M.BackendEntry, rc: int, out: str,
                              expected_case: str = "") -> tuple[str, str]:
@@ -697,10 +734,43 @@ class Gate:
                 else:
                     detail = (f"exit 0; [evidence-meta] evidence={evidence_id} "
                               f"mode={mode}")
+        # round-4 (P1-2): expected-stub-incomplete classification. A stub
+        # build of a real-only evidence target legitimately ends INCOMPLETE
+        # ("mode=stub not in required_modes") — but ONLY when the run is
+        # otherwise clean: exit 0, the FULL exact pinned case-set executed
+        # (G2), and exactly one valid [evidence-meta] line whose mode is
+        # disallowed by required_modes. Any other INCOMPLETE reason (case-set
+        # mismatch, zero/extra/malformed metadata, wrong evidence id) means
+        # the stub run is malformed and must fail the stub aggregate too — a
+        # stub run must never be green "for the wrong reason" (e.g. a
+        # compiled-out evidence-mode case reporting as mode=real would pass
+        # the old aggregate for exactly the wrong reason).
+        stub_expected = False
+        if state == INCOMPLETE and ev.required_modes and rc == 0:
+            cs_state = (classify_case_set(parse_run_lines(out), ev.cases)[0]
+                        if ev.cases else PASS)
+            metas = parse_evidence_meta_lines(out)
+            if (cs_state == PASS and len(metas) == 1 and
+                    metas[0][0] == ev.evidence_id and
+                    metas[0][1] not in ev.required_modes):
+                stub_expected = True
         return RunResult(ev.evidence_id, ev.target, state,
-                         detail=detail, stdout=out)
+                         detail=detail, stdout=out, stub_expected=stub_expected)
 
     # --- Per-backend verdict computation -----------------------------------
+
+    def _result_for_evidence(self, ev: M.Evidence,
+                             backend_name: str) -> Optional[RunResult]:
+        """The per-backend RunResult behind one evidence record (the shared
+        suites are per-backend subprocess results, not global). Returns None
+        when the record was never driven for this backend."""
+        if ev.evidence_id == "shared_suite":
+            return self.shared_by_backend.get(backend_name)
+        if ev.evidence_id == "shared_capacity_suite":
+            return self.capacity_by_backend.get(backend_name)
+        if ev.evidence_id == "c2e_shared_close_drain_suite":
+            return self.close_drain_by_backend.get(backend_name)
+        return self.results.get(ev.evidence_id)
 
     def _backend_run_state(self, ev: M.Evidence, backend_name: str,
                            backend_profile: str = "") -> str:
@@ -953,13 +1023,45 @@ class Gate:
                 #     (a mandatory evidence proved a violation) still fails;
                 #     ELIGIBLE in stub is impossible and fails closed.
                 #   * unknown / missing mode: fail closed (aggregate FAIL).
+                #   round-4 (P1-2): the stub tolerance covers ONLY the
+                #     EXPECTED stub incompleteness — every insufficient
+                #     mandatory record must be manifest-declared
+                #     (not_implemented), a mode-downgraded shared/capacity/
+                #     close-drain record, or a _drive record that ran the full
+                #     exact pinned corpus with exactly one valid mode=stub
+                #     metadata (stub_expected). Any other INCOMPLETE reason
+                #     (case-set mismatch, malformed/missing metadata, wrong
+                #     evidence id, undriven suite) fails the stub aggregate
+                #     too — a stub run must never be green for the wrong
+                #     reason (e.g. an evidence-mode case compiled out of a
+                #     stub build).
                 if verdict == ELIGIBLE:
                     if mode_seen != "real":
                         overall_failures.append(
                             f"{backend.name} ({backend.profile}): {verdict} with "
                             f"mode={mode_seen!r} — KernelIo may be ELIGIBLE only "
                             f"on a complete REAL-mode evidence set")
-                elif not (mode_seen == "stub" and verdict == INCOMPLETE):
+                elif mode_seen == "stub" and verdict == INCOMPLETE:
+                    unexpected = []
+                    for ev in M.applicable_evidence_for_backend(backend.name):
+                        if not ev.mandatory:
+                            continue
+                        st = self._backend_run_state(
+                            ev, backend.name, backend.profile)
+                        if st != INCOMPLETE:
+                            continue
+                        r = self._result_for_evidence(ev, backend.name)
+                        if r is not None and r.stub_expected:
+                            continue
+                        unexpected.append(ev.evidence_id)
+                    if unexpected:
+                        overall_failures.append(
+                            f"{backend.name} ({backend.profile}): stub "
+                            f"INCOMPLETE for an UNEXPECTED reason — evidence "
+                            f"{', '.join(sorted(unexpected))} — a stub run may "
+                            f"pass only with full exact pinned corpora and "
+                            f"valid mode=stub metadata (D4-RM14 P1-2)")
+                else:
                     overall_failures.append(
                         f"{backend.name} ({backend.profile}): {verdict} — "
                         + "; ".join(reasons))

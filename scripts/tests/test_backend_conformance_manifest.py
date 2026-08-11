@@ -316,7 +316,10 @@ def _stub_gate(shared_per_backend, *, shared_rc=None,
                      else G.PASS)
             g.capacity_by_backend[b.name] = G.RunResult(
                 f"shared_capacity_suite:{b.name}", "backend_conformance_test",
-                state, detail=f"stub capacity {state}")
+                state, detail=f"stub capacity {state}",
+                # round-4 (P1-2): the KernelIo mode-downgrade IS the expected
+                # stub incompleteness — it must not fail the stub aggregate.
+                stub_expected=(state == G.INCOMPLETE))
     # Phase C2e: per-backend shared CLOSE/DRAIN-suite state. Every backend
     # with a close_admission seam (Fake, ThreadPool, and — Phase D4 — Uring)
     # defaults to PASS so the ONLY variable under test is the shared-suite
@@ -332,7 +335,9 @@ def _stub_gate(shared_per_backend, *, shared_rc=None,
             g.close_drain_by_backend[b.name] = G.RunResult(
                 f"c2e_shared_close_drain_suite:{b.name}",
                 "backend_conformance_test", state,
-                detail=f"stub close/drain {state}")
+                detail=f"stub close/drain {state}",
+                # round-4 (P1-2): see the capacity seeding above.
+                stub_expected=(state == G.INCOMPLETE))
     return g
 
 
@@ -1202,6 +1207,74 @@ class KernelIoAggregateFailClosedTest(unittest.TestCase):
         self.assertEqual(verdict, G.NOT_CONFORMING)
         self.assertNotEqual(self._report_rc(g), 0)
 
+
+    def test_gate_l8_stub_unexpected_incomplete_fails_closed(self):
+        # GATE-L8 (D4-RM14 P1-2): the stub tolerance covers ONLY the EXPECTED
+        # stub incompleteness. A stub _drive record that is INCOMPLETE for a
+        # NON-stub-expected reason (here: a case-set mismatch — e.g. the
+        # evidence-mode case compiled out of the stub build) must fail the
+        # stub aggregate too: a stub run must never be green for the wrong
+        # reason.
+        ev = M.evidence_by_id("uring_c2e_close_drain")
+        # A stub run whose corpus is missing the evidence-mode case (the
+        # P1-4/P1-2 malformation shape) exits 0 but is INCOMPLETE for the
+        # WRONG reason (missing case), not for "mode=stub not allowed".
+        truncated = [c for c in ev.cases if c != "uring_d4_c2e_evidence_mode"]
+        out = "".join(f"[run] {c}\n" for c in truncated)
+        out += "[evidence-meta] evidence=uring_c2e_close_drain mode=stub\n"
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(0, out)):
+            result = gate._drive(ev)
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn("case-set mismatch", result.detail)
+        self.assertFalse(result.stub_expected)
+        g = _stub_gate(
+            {"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
+            extra_results={ev.evidence_id: result})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertNotEqual(self._report_rc(g), 0)
+
+    def test_gate_l9_stub_expected_incomplete_still_passes(self):
+        # GATE-L9 (D4-RM14 P1-2): a clean stub _drive record — full exact
+        # pinned corpus + exactly one valid mode=stub metadata — is the
+        # EXPECTED stub incompleteness and keeps the stub aggregate green.
+        ev = M.evidence_by_id("uring_c2e_close_drain")
+        out = "".join(f"[run] {c}\n" for c in ev.cases)
+        out += "[evidence-meta] evidence=uring_c2e_close_drain mode=stub\n"
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(0, out)):
+            result = gate._drive(ev)
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn("mode='stub'", result.detail)
+        self.assertTrue(result.stub_expected)
+        g = _stub_gate(
+            {"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
+            extra_results={ev.evidence_id: result})
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
+        self.assertEqual(verdict, G.INCOMPLETE)
+        self.assertEqual(self._report_rc(g), 0)
+
+    def test_gate_l10_stub_malformed_meta_fails_closed(self):
+        # GATE-L10 (D4-RM14 P1-2): a stub run with the full corpus but a
+        # malformed metadata line (wrong evidence id) is an UNEXPECTED
+        # incompleteness — the stub aggregate must fail.
+        ev = M.evidence_by_id("uring_c2e_close_drain")
+        out = "".join(f"[run] {c}\n" for c in ev.cases)
+        out += "[evidence-meta] evidence=some_other_evidence mode=stub\n"
+        gate = G.Gate(args=mock.Mock(no_build=True))
+        with mock.patch.object(G, "xmake_target_exists", return_value=True), \
+             mock.patch.object(G, "xmake_run_target", return_value=(0, out)):
+            result = gate._drive(ev)
+        self.assertEqual(result.state, G.INCOMPLETE)
+        self.assertIn("does not match", result.detail)
+        self.assertFalse(result.stub_expected)
+        g = _stub_gate(
+            {"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
+            extra_results={ev.evidence_id: result})
+        self.assertNotEqual(self._report_rc(g), 0)
 
 class ResultAttributionIsolationTest(unittest.TestCase):
     """The core corrective: a backend failure never contaminates the others."""
