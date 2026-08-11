@@ -736,6 +736,7 @@ EVIDENCE: tuple[Evidence, ...] = (
             "uring_c2e_two_waiter_consumer_strand",
             "uring_c2e_future_waiter_cannot_steal_old_wake",
             "uring_c2e_non_eintr_poll_failure_failfast",
+            "uring_c2e_running_cancel_poison_deferred_wake",
         ),
         notes="C2e rows 15-16 Uring integration (Phase D4, real-liburing "
               "only; stub mode is classified INCOMPLETE by required_modes): "
@@ -763,7 +764,14 @@ EVIDENCE: tuple[Evidence, ...] = (
               "(D4-RM15 durable broadcast: the drain is gated on the "
               "parked-at-publish waiter's acknowledgement — an old waiter "
               "woken but not yet rechecked re-sleeps if a future waiter "
-              "drains the single consumable token). Row 16 (quiescent "
+              "drains the single consumable token). A cancel-side transport "
+              "flush that permanently poisons the backend must STILL wake a "
+              "parked wait_one (D4-RM17: the SQ-full cancel flush retires "
+              "the retained ledger entries via Class-A recovery, and the "
+              "deferred signal_ready_progress() after dispatch_mtx_ is "
+              "released is the parked waiter's ONLY wake — a scripted "
+              "permanent -EIO proves the poison came from the cancel path "
+              "under test). Row 16 (quiescent "
               "destruction) is "
               "attributed by the SEPARATE mandatory uring_c2e_quiescent_"
               "destruction record (death matrix target) — never by prose in "

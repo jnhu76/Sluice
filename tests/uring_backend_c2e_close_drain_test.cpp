@@ -1067,13 +1067,17 @@ SLUICE_TEST_CASE(uring_c2e_control_wins_over_co_ready_ring) {
     SLUICE_CHECK(w.has_value());
     SLUICE_CHECK(w.value() == 0); // interrupted, nothing fabricated
 
-    // Drain for a clean teardown.
+    // Drain for a clean teardown. Explicit ready()->reset() per Completion
+    // authority — drained != releasable: a drained request is only
+    // releasable after its ready Completion is reset, and slot_in_use == 0
+    // proves the slot was actually returned (C2e evidence).
     op_pipe.close_write();
     Result<std::size_t> r = ctx.wait_one();
-    if (r.has_value() && r.value() > 0) {
+    if (c.ready()) {
         c.reset();
     }
     SLUICE_CHECK(ctx.outstanding() == 0);
+    SLUICE_CHECK(raw->arena_slot_in_use() == 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1205,16 +1209,20 @@ SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {
     SLUICE_CHECK(w1.has_value());
     SLUICE_CHECK(w1.value() == 0); // interrupted, nothing fabricated (A already consumed)
 
-    // Complete B for a clean teardown.
+    // Complete B for a clean teardown. Explicit ready()->reset() per
+    // Completion authority — drained != releasable (C2e evidence): ca was
+    // already proven ready above (line 1183), cb becomes ready after the
+    // wait; slot_in_use == 0 proves both slots were actually returned.
     pipe_b.close_write();
     Result<std::size_t> rb = ctx.wait_one();
-    if (rb.has_value() && rb.value() > 0) {
+    if (cb.ready()) {
         cb.reset();
     }
-    if (ca.outstanding()) {
+    if (ca.ready()) {
         ca.reset();
     }
     SLUICE_CHECK(ctx.outstanding() == 0);
+    SLUICE_CHECK(raw->arena_slot_in_use() == 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1373,14 +1381,18 @@ SLUICE_TEST_CASE(uring_c2e_future_waiter_cannot_steal_old_wake) {
     SLUICE_CHECK(w2.value() == 1); // A reaped
     SLUICE_CHECK(ca.ready());
 
-    // Complete B for a clean teardown (drained != releasable).
+    // Complete B for a clean teardown. Explicit ready()->reset() per
+    // Completion authority — drained != releasable (C2e evidence); ca.ready()
+    // was asserted above, and slot_in_use == 0 proves both slots were
+    // actually returned.
     pipe_b.close_write();
     Result<std::size_t> rb = ctx.wait_one();
-    if (rb.has_value() && rb.value() > 0) {
+    if (cb.ready()) {
         cb.reset();
     }
     ca.reset();
     SLUICE_CHECK(ctx.outstanding() == 0);
+    SLUICE_CHECK(raw->arena_slot_in_use() == 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1389,8 +1401,9 @@ SLUICE_TEST_CASE(uring_c2e_future_waiter_cannot_steal_old_wake) {
 // failure that is NOT EINTR cannot be reported up; the production fix
 // terminates (stderr + std::terminate) rather than busy-spinning or
 // fabricating a reason. This case proves the fail-fast deterministically via
-// a fork/exec child that re-creates a FRESH backend (not a fork-inherited
-// context, which would carry stale lock/thread state). The child installs a
+// a forked child that re-creates a FRESH backend in-place (not a
+// fork-inherited context, which would carry stale lock/thread state). The
+// child installs a
 // test-only PollFn that returns -1 with errno=EIO, submits a blocked read,
 // and calls wait_one. Under the fix the wait source terminates (the child's
 // deterministic terminate handler _Exit(86)); under the D4-RM12 mutant (all
@@ -1433,9 +1446,10 @@ int d4_rm12_child_main() {
 } // namespace
 
 SLUICE_TEST_CASE(uring_c2e_non_eintr_poll_failure_failfast) {
-    // fork/exec a fresh child (not fork-in-place) so the child has a clean
-    // process state (no inherited threads/locks). The child re-execs this
-    // binary with a marker argv to run d4_rm12_child_main.
+    // Fork a fresh child (no exec — the child runs d4_rm12_child_main
+    // in-place) so the child has a clean single-threaded process state (no
+    // inherited threads/locks from earlier cases in this binary) and a
+    // terminate() in the child cannot abort the whole test run.
     pid_t pid = ::fork();
     SLUICE_CHECK(pid >= 0);
     if (pid == 0) {
@@ -1467,6 +1481,126 @@ SLUICE_TEST_CASE(uring_c2e_non_eintr_poll_failure_failfast) {
     (void)kD4Rm12MutantExit;
 }
 
+// ---------------------------------------------------------------------------
+// C2e §45 — D4-RM17 (P0): a cancel-side transport flush that permanently
+// poisons the backend MUST still wake a parked wait_one. issue_running_cancel
+// appends the best-effort AsyncCancel SQE; when the SQ is full it flushes
+// transport, and a permanent negative flush runs the Class-A recovery (the
+// retained ledger entries become backend-ready terminals). No reap runs on
+// the cancel path, so the ONLY wake for a parked waiter is the deferred
+// signal_ready_progress() AFTER dispatch_mtx_ is released (D4-RM16). The
+// pre-fix code early-returned on the newly-set fatal_error_ and skipped the
+// wake — the parked waiter slept forever on published terminals (AGENTS.md
+// §13.2: state published, wake obligation missing).
+//
+// Deterministic construction: A+B fill the SQ (queue_depth 2) and reach the
+// kernel via the waiter's first flush (scripted submit #1 succeeds); the
+// waiter then parks with outstanding=2 (prepark-count observation, bounded
+// watchdog). C+D refill the SQ WITHOUT a flush (the enqueue path never
+// flushes). cancel(A) reaches issue_running_cancel with a full SQ: its flush
+// is scripted submit #2 = permanent -EIO -> poison -> Class-A recovery
+// retires C+D to backend-ready. The parked waiter's ONLY wake is the
+// deferred signal_ready_progress(); under the mutant it parks forever (join
+// deadline -> RED). The scripted flush order (exactly two invocations, the
+// second poisoning) proves the poison came from the cancel path under test.
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(uring_c2e_running_cancel_poison_deferred_wake) {
+    struct Script {
+        std::atomic<std::size_t> next{0};
+        static int invoke(void* context, io_uring* ring) noexcept {
+            auto& self = *static_cast<Script*>(context);
+            const std::size_t index = self.next.fetch_add(1, std::memory_order_relaxed);
+            if (index == 0)
+                return ::io_uring_submit(ring); // waiter's flush: A+B reach the kernel
+            return -EIO;                        // cancel's flush: permanent poison
+        }
+    };
+    Script script;
+    UringBackendSubmitTestHooks hooks{&script, &Script::invoke, nullptr};
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 2}, hooks);
+    if (!backend->available())
+        return;
+    auto* raw = backend.get();
+    std::atomic<int> prepark_count{0};
+    raw->set_wait_prepark_counter_for_test(&prepark_count);
+    AsyncIoContext ctx(std::move(backend));
+
+    // A+B: two kernel-blocked reads that fill the SQ and reach the kernel on
+    // the waiter's first flush. C+D: two more that refill the SQ unflushed,
+    // so cancel(A)'s get_sqe fails and its flush is the one that poisons.
+    PipePair pipe_a, pipe_b, pipe_c, pipe_d;
+    SLUICE_CHECK(pipe_a.valid());
+    SLUICE_CHECK(pipe_b.valid());
+    SLUICE_CHECK(pipe_c.valid());
+    SLUICE_CHECK(pipe_d.valid());
+    std::byte buf[4]{};
+    Completion<std::size_t> ca, cb, cc, cd;
+    SLUICE_CHECK(ctx.submit_read(ReadOp{pipe_a.read_fd(), buf, 4, 0}, ca).has_value());
+    SLUICE_CHECK(ctx.submit_read(ReadOp{pipe_b.read_fd(), buf, 4, 0}, cb).has_value());
+
+    // The waiter parks after its flush consumed A+B (nothing ready yet).
+    Result<std::size_t> w{std::size_t{999}};
+    std::atomic<bool> waiter_done{false};
+    std::thread waiter([&] {
+        w = ctx.wait_one();
+        waiter_done.store(true, std::memory_order_release);
+    });
+    if (!wait_until([&] { return prepark_count.load(std::memory_order_acquire) == 1; })) {
+        std::fprintf(stderr, "uring_c2e_running_cancel_poison: waiter never parked "
+                             "(prepark=%d)\n",
+                     prepark_count.load(std::memory_order_acquire));
+        std::fflush(stderr);
+        std::terminate();
+    }
+
+    // C+D refill the SQ (queue_depth 2) without a flush.
+    SLUICE_CHECK(ctx.submit_read(ReadOp{pipe_c.read_fd(), buf, 4, 0}, cc).has_value());
+    SLUICE_CHECK(ctx.submit_read(ReadOp{pipe_d.read_fd(), buf, 4, 0}, cd).has_value());
+
+    // cancel(A): running -> intent_recorded -> issue_running_cancel. Its
+    // get_sqe fails on the full SQ; its flush (scripted -EIO) poisons; the
+    // Class-A recovery retires C+D to backend-ready terminals. The parked
+    // waiter MUST be woken by the deferred wake (mutant: never -> RED).
+    ctx.cancel(ca);
+    if (!wait_until([&] { return waiter_done.load(std::memory_order_acquire); })) {
+        std::fprintf(stderr, "uring_c2e_running_cancel_poison: parked waiter never "
+                             "woke after the cancel-side poison (deferred wake "
+                             "missing)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+    waiter.join();
+    SLUICE_CHECK(w.has_value());
+    SLUICE_CHECK(w.value() == 2); // C+D retired by the Class-A recovery
+    SLUICE_CHECK(cc.ready());
+    SLUICE_CHECK(cd.ready());
+    auto rc = cc.result();
+    SLUICE_CHECK(!rc.has_value());
+    SLUICE_CHECK(rc.error().code == IoError::Code::backend_error);
+    SLUICE_CHECK(rc.error().os_errno == EIO);
+    SLUICE_CHECK(script.next.load(std::memory_order_relaxed) == 2); // exactly two flushes
+
+    // A+B are kernel-owned reads; the cancel intent never rewrites the real
+    // result — complete them for a clean teardown (poisoned wait path,
+    // to_submit=0, never submits the quarantined batch).
+    pipe_a.close_write();
+    Result<std::size_t> ra = ctx.wait_one();
+    SLUICE_CHECK(ra.has_value());
+    SLUICE_CHECK(ra.value() == 1);
+    SLUICE_CHECK(ca.ready());
+    pipe_b.close_write();
+    Result<std::size_t> rb = ctx.wait_one();
+    SLUICE_CHECK(rb.has_value());
+    SLUICE_CHECK(rb.value() == 1);
+    SLUICE_CHECK(cb.ready());
+    ca.reset();
+    cb.reset();
+    cc.reset();
+    cd.reset();
+    SLUICE_CHECK(ctx.outstanding() == 0);
+    SLUICE_CHECK(raw->arena_slot_in_use() == 0);
+}
+
 #else // !SLUICE_HAS_LIBURING — stub mode: build/API honesty only.
 
 SLUICE_TEST_CASE(uring_c2e_close_while_pending_preserves_accepted) {}
@@ -1489,6 +1623,7 @@ SLUICE_TEST_CASE(uring_c2e_control_wins_over_co_ready_ring) {}
 SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {}
 SLUICE_TEST_CASE(uring_c2e_future_waiter_cannot_steal_old_wake) {}
 SLUICE_TEST_CASE(uring_c2e_non_eintr_poll_failure_failfast) {}
+SLUICE_TEST_CASE(uring_c2e_running_cancel_poison_deferred_wake) {}
 
 #endif // SLUICE_HAS_LIBURING
 
@@ -1501,9 +1636,10 @@ SLUICE_TEST_CASE(uring_c2e_non_eintr_poll_failure_failfast) {}
 // "mode=stub not allowed by required_modes=(\"real\",)". The internal
 // #if/#else emits mode=real (with a real-kernel availability check) in the
 // real build and mode=stub (build/API honesty only) in the stub build; both
-// modes execute the FULL pinned case-set (21 cases incl. the concurrent
-// submit-||-close linearization case and the D4-RM14 future-waiter steal
-// detector — the manifest's cases tuple is the authority).
+// modes execute the FULL pinned case-set (22 cases incl. the concurrent
+// submit-||-close linearization case, the D4-RM14 future-waiter steal
+// detector, and the D4-RM17 cancel-side-poison deferred-wake detector — the
+// manifest's cases tuple is the authority).
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_d4_c2e_evidence_mode) {
 #if defined(SLUICE_HAS_LIBURING)
