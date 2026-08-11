@@ -25,6 +25,8 @@
 #include <memory>
 #include <mutex>
 
+#include <atomic>
+
 namespace sluice::async {
 
 // --- Op descriptors (ADR §3). All read/write ops are POSITIONAL (P1): they
@@ -285,13 +287,27 @@ public:
     // returned (an empty wait is a no-progress boundary, never a park).
     // Without the capability the legacy serialized contract applies (the whole
     // call, including a backend-side block, runs under access_mtx_).
+    //
+    // D4-RM13 (control-wake theorem): the CONTROL baseline is captured ONCE
+    // at the start of this external invocation and held fixed for its whole
+    // duration — a control-plane wake landing any time after the call began
+    // (including the inter-iteration window between wait_for_change() returning
+    // `progress` and the next internal snapshot) is observed as interrupted
+    // and the call terminates with its final poll. The PROGRESS baseline may
+    // refresh per internal loop. A FUTURE wait_one() captures a fresh baseline,
+    // so the interrupt stays one-shot — never a sticky shutdown flag, never a
+    // busy-spin (the one-shot control-generation contract).
     Result<std::size_t> wait_one();
 
     // Control-plane wake for a split-phase wait in progress (issue #67): wakes
     // every participant parked in wait_one()'s observe phase so shutdown /
-    // admission close can re-evaluate. No-op for backends without the wait
-    // capability. Never fabricates readiness, never touches request state, and
-    // never blocks on access_mtx_.
+    // admission close can re-evaluate. Per the D4-RM13 control-wake theorem
+    // the wake is observed by ANY wait_one() invocation in flight at the time
+    // of the interrupt (control baseline is per-invocation), including one
+    // that has just returned from a progress wake and is between internal
+    // iterations. No-op for backends without the wait capability. Never
+    // fabricates readiness, never touches request state, and never blocks on
+    // access_mtx_.
     void interrupt_backend_waiters() noexcept;
 
     void cancel(Completion<std::size_t>& c);
@@ -299,6 +315,26 @@ public:
 
     std::size_t outstanding() const noexcept;
     const AsyncStats* stats() const noexcept { return stats_; }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic context-level pause (D4-RM13 detector seam): the
+    // inter-iteration control-wake detector
+    // (ctx_wait_one_inter_iteration_control_wake_not_lost in
+    // async_io_context_split_wait_c2e_test) pauses wait_one AFTER
+    // wait_for_change reports `progress` and BEFORE the next internal
+    // snapshot — the exact inter-iteration window where a control wake used
+    // to be absorbed into a fresh snapshot (rebaselined away), drained, and
+    // reparked forever. Compiled out of production builds; the layout cost in
+    // the internal-testing target is accepted and documented (AGENTS.md §15).
+    struct WaitSourceProgressPauseGate {
+        std::atomic<bool> paused{false};  // reached the pause point
+        std::atomic<bool> resume{false};  // test sets to release the loop
+        std::atomic<bool> exited{false};  // pause exited (for RAII release)
+    };
+    void set_wait_source_progress_pause_gate_for_test(WaitSourceProgressPauseGate* gate) noexcept {
+        wait_source_progress_gate_.store(gate, std::memory_order_release);
+    }
+#endif
 
 private:
     std::unique_ptr<AsyncBackend> backend_;
@@ -311,6 +347,14 @@ private:
     // operations. No context-level lock is ever held across an unbounded
     // block (issue #67).
     mutable std::mutex access_mtx_;
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // D4-RM13 detector seam state (see WaitSourceProgressPauseGate). Compiled
+    // out of production builds; the layout cost in the internal-testing target
+    // is accepted and documented (AGENTS.md §15).
+    std::atomic<WaitSourceProgressPauseGate*> wait_source_progress_gate_{nullptr};
+    void pause_after_wait_source_progress_() noexcept;
+#endif
 };
 
 }  // namespace sluice::async

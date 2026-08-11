@@ -20,6 +20,10 @@
 
 #include <utility>
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+#include <thread>  // std::this_thread::yield (D4-RM13 pause gate spin)
+#endif
+
 namespace sluice::async {
 
 AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats)
@@ -181,8 +185,28 @@ Result<std::size_t> AsyncIoContext::wait_one() {
         std::lock_guard<std::mutex> lk(access_mtx_);
         if (stats_) ++stats_->wait_calls;
     }
+    // D4-RM13 (P0): the CONTROL baseline belongs to the whole external
+    // wait_one() invocation, not to one internal progress iteration. A
+    // control-plane wake (close_admission / interrupt_backend_waiters) that
+    // lands ANY time after this call began must be observed by THIS call —
+    // including the window between wait_for_change() returning `progress` and
+    // the next internal snapshot, where a fresh snapshot used to absorb the
+    // control bump (rebaseline it into the observed token), drain its eventfd,
+    // and repark forever. The PROGRESS baseline may refresh every internal
+    // loop; the CONTROL baseline stays fixed for the invocation, so
+    // wait_for_change reports interrupted on any control advance and this call
+    // terminates with its final poll. A FUTURE wait_one() captures a fresh
+    // baseline, so the interrupt stays one-shot — never a sticky shutdown
+    // flag, never a busy-spin.
+    const BackendWaitToken invocation_start = ws->snapshot();
+    const std::uint64_t control_baseline = invocation_start.control_generation;
     for (;;) {
         BackendWaitToken token = ws->snapshot();
+        // Refresh the progress baseline per internal loop; preserve the
+        // invocation-level control baseline (D4-RM13 invariant: one external
+        // wait invocation cannot forget a control epoch that advanced during
+        // that invocation).
+        token.control_generation = control_baseline;
         std::size_t n = 0;
         std::size_t outstanding_now = 0;
         {
@@ -210,6 +234,15 @@ Result<std::size_t> AsyncIoContext::wait_one() {
         // predicate wait does not park (I5). Spurious wakes only re-check the
         // predicate and re-loop (I10).
         if (ws->wait_for_change(token) == BackendWakeReason::progress) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+            // D4-RM13 detector seam: pause AFTER wait_for_change reported
+            // progress, BEFORE the next internal snapshot — the exact window
+            // where a control wake used to be rebaselined away and the
+            // participant reparked forever. Compiled out of production builds
+            // (AGENTS.md §15); the layout cost in the internal-testing target
+            // is accepted and documented.
+            pause_after_wait_source_progress_();
+#endif
             continue;
         }
         // Control-plane interruption: one final non-blocking poll closes the
@@ -256,5 +289,22 @@ std::size_t AsyncIoContext::outstanding() const noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
     return backend_ ? backend_->outstanding() : 0;
 }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+void AsyncIoContext::pause_after_wait_source_progress_() noexcept {
+    // D4-RM13 detector seam (see WaitSourceProgressPauseGate in the header):
+    // holds NO lock (the context is between wait_for_change's return and the
+    // next internal snapshot — no access_mtx_ is held on this path). No-op
+    // when no gate is installed. Compiled out of production builds.
+    if (auto* g = wait_source_progress_gate_.load(std::memory_order_acquire)) {
+        g->exited.store(false, std::memory_order_release);
+        g->paused.store(true, std::memory_order_release);
+        while (!g->resume.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+        g->exited.store(true, std::memory_order_release);
+    }
+}
+#endif
 
 }  // namespace sluice::async

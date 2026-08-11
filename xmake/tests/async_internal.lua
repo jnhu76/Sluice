@@ -404,18 +404,28 @@ sluice_internal_async_test("threadpool_backend_c2e_close_drain_test", {platform_
 -- M11-fake detector.
 sluice_internal_async_test("fake_backend_c2e_close_drain_test")
 
--- async_io_context_split_wait_c2e_test — Phase C2e context-level
--- interrupt-vs-final-ready detector (Issue #68 rows 15-16; mutant M12).
--- Drives the REAL AsyncIoContext::wait_one split-wait path (snapshot -> poll
--- -> wait_for_change -> interrupted -> ONE final poll) with a TEST-ONLY
+-- async_io_context_split_wait_c2e_test — Phase C2e context-level detectors.
+-- Case 1 (Issue #68 rows 15-16; mutant M12): the interrupted-branch final
+-- poll. Drives the REAL AsyncIoContext::wait_one split-wait path (snapshot ->
+-- poll -> wait_for_change -> interrupted -> ONE final poll) with a TEST-ONLY
 -- split-wait backend + wait source (public AsyncBackend / BackendWaitSource
--- interfaces; no production context seam): wait_for_change() pauses AFTER
--- observing a control interrupt and BEFORE returning `interrupted`; the test
--- records backend-ready in that window; the context's interrupted-branch
--- final poll is the ONLY path that can reap it. Deleting that poll (mutant
--- M12) makes wait_one return 0 — deterministic RED on the L1 production
--- context code (the previous C2e interrupt-window evidence covered only the
--- backend-level wait_one).
+-- interfaces): wait_for_change() pauses AFTER observing a control interrupt
+-- and BEFORE returning `interrupted`; the test records backend-ready in that
+-- window; the context's interrupted-branch final poll is the ONLY path that
+-- can reap it. Deleting that poll (mutant M12) makes wait_one return 0 —
+-- deterministic RED on the L1 production context code.
+--
+-- Case 2 (round-3 P0, mutant D4-RM13): the inter-iteration control-wake
+-- detector. The CONTROL baseline belongs to the whole external wait_one()
+-- invocation, not one internal progress iteration. A test-only context-level
+-- pause seam (AsyncIoContext::WaitSourceProgressPauseGate, compiled out of
+-- production) parks the waiter in the exact window between wait_for_change()
+-- returning `progress` and the next internal snapshot; the test fires
+-- interrupt_all() there. Under the fix the invocation-level control baseline
+-- is preserved and the waiter returns interrupted (0). Under the D4-RM13
+-- mutant (control rebaselined per internal iteration) the fresh snapshot
+-- absorbs the control bump, the stale event is drained, and the waiter
+-- reparks forever (bounded watchdog -> RED).
 sluice_internal_async_test("async_io_context_split_wait_c2e_test")
 
 -- reference_backend_arena_lifecycle_test — Phase B reference backend migration
