@@ -5,7 +5,7 @@
 D4 COMPLETE (draft PR stacked on the D3 head, branch
 `feat/phase-d4-uring-wait-close-drain` — wait/close/drain proof + KernelIo
 gate lift).
-**Date:** 2026-08-10
+**Date:** 2026-08-11
 **Author:** jnhu
 **Governing authority:** [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
 (Accepted), [Architecture Constitution](architecture-constitution.md),

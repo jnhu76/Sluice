@@ -1,6 +1,6 @@
 # Phase D4 — Uring Wait / Close / Drain Mutation Evidence
 
-Date: 2026-08-10. Branch: feat/phase-d4-uring-wait-close-drain. D3 is MERGED
+Date: 2026-08-08 to 2026-08-11 (round-3 work recorded 2026-08-11). Branch: feat/phase-d4-uring-wait-close-drain. D3 is MERGED
 into master; the D4 branch base is current master `259f0bd2dc5d027fd463132b65db1bef9c33f08f`
 (the D3 merge commit) — no D3-branch stacking remains. Kernel:
 6.18.33.2-microsoft-standard-WSL2. liburing: 2.14 (pinned). Build: Clang Debug
@@ -270,17 +270,20 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
   quiescence preflight's fail-fast replaced by an unbounded wait loop (the
   migration plan §13 priority mutant "destructor drains/cancels implicitly" —
   AGENTS.md §14 prohibits destructors that wait for async progress).
-- Detector: `uring_c2e_death_destroy_with_pending` (the 8-case death matrix,
-  `uring_backend_c2e_death_test`; a representative child case was used for the
-  RED run — the 60s child watchdog makes a full-matrix hang run impractical).
+- Detector: `uring_c2e_death_destroy_with_pending` (the pinned 10-case death
+  matrix, `uring_backend_c2e_death_test`; a representative child case was used
+  for the RED run — the 60s child watchdog makes a full-matrix hang run
+  impractical).
 - RED: the child exceeds the death-runner watchdog — "child exceeded watchdog
   timeout and was killed; the destructor likely hung instead of fail-fasting"
   (case fails, rc=255). Note: a pure preflight-REMOVAL mutant is masked by the
   `Completion` destructor contract (destruction of a non-idle Completion also
   fail-fasts), so the D4 mutation targets the wait/progress prohibition, which
   is the behavior the preflight exists to prevent.
-- GREEN after revert: the full 8-case matrix passes — 7 non-quiescent states
-  fail-fast with exit 86, the quiescent control case exits 0.
+- GREEN after revert: the full pinned 10-case matrix passes — 9 non-quiescent
+  cases (7 destroy states + the round-2 preflight-order case) fail-fast with
+  exit 86, the 1 quiescent control case exits 0 (the 10th case is the
+  evidence-mode metadata case).
 
 ---
 
