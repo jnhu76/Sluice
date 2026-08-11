@@ -213,14 +213,20 @@ Deterministic causal tests (`uring_backend_c2e_close_drain_test`, real mode):
 
 ```text
 - uring_c2e_close_waits_for_inflight_acceptance_lp:
-    submit-vs-close LP — close blocks while the submit holds the transaction
-    (pause between arena commit and binding->outstanding), returns only after
-    the LP completed (submit wins). Lock-domain proof: the closer reads
-    c.outstanding() AT its own return — the dispatch_mtx_ handoff makes the
-    submit's LP release-store visible (a mutation that removes the shared-lock
-    arbitration lets close return while the submitter is still paused and the
-    read sees `binding` -> RED). No sleep is the ordering proof; the bounded
-    probe window is failure protection only.
+    submit-vs-close LP (honest evidence split). A runtime "closer blocked on
+    the admission mutex" observation CANNOT be made without scheduler timing,
+    so this case makes NO deterministic mutex-blocking claim and uses NO
+    sleep/time window as an ordering proof. What it DOES prove (structurally):
+    a submit paused inside its acceptance transaction (BeforeCommitBinding
+    PauseGate) reaches a genuine in-flight LP state; after a genuine concurrent
+    close the LP-winning request is outstanding and is still driven to exactly
+    one terminal (no lost acceptance); post-close no new acceptance LP can
+    occur (Stage-0 reject, idle Completion, zero residue). The DETERMINISTIC
+    authority that submit Stage 0..commit_binding and close_admission's
+    admission-close write share the same dispatch_mtx_ lives in a source-drift
+    self-test (D4DriftDetectorTest.test_close_admission_uses_dispatch_mtx);
+    focused TSan on submit||close and the concurrent linearization case
+    (uring_c2e_submit_races_close_linearization) complete the evidence.
 - uring_c2e_close_wins_submit_started_before_close_rejected:
     close-wins — a submit paused before the admission lock observes closed at
     Stage 0 and rejects synchronously (idle Completion, zero residue)
@@ -244,9 +250,13 @@ Deterministic causal tests (`uring_backend_c2e_close_drain_test`, real mode):
     progress
 - uring_c2e_multiple_parked_waiters_all_wake:
     one interrupt_all() wakes ALL N=3 parked participants; nothing fabricated.
-    Deterministic proof: a guarded per-participant pre-poll park counter
-    records EACH waiter reaching the final pre-poll point (epoch checked,
-    eventfd drained, about to poll); the test waits for count == N with a
+    Deterministic proof: a guarded per-participant pre-poll barrier
+    (BeforePhysicalPollPauseGate) records ONE arrival per distinct participant
+    at the physical-poll boundary (the same waiter cannot double-count by
+    retrying on EINTR — the barrier blocks it at the boundary until release,
+    so arrivals == N proves N distinct parked participants); the plain
+    prepark counter remains as an additional reach observation but is no
+    longer the uniqueness authority. The test waits for arrivals == N with a
     bounded deadline ONLY as a hang watchdog — no sleep is the ordering proof
     (AGENTS.md §13.3)
 - uring_c2e_interrupt_final_reap_closes_ready_race:
@@ -289,7 +299,10 @@ bypasses control-epoch reclassification), D4-RM11 (destructor preflight
 bypassed before io_uring_queue_exit), D4-RM12 (non-EINTR poll failure treated
 as retryable), the pre-poll participant-uniqueness barrier mutant, and the
 close-LP shared-lock mutant revisited (now caught by a source-drift self-test,
-not a timing-based mutex-blocking claim).
+not a timing-based mutex-blocking claim), plus the round-3 repair mutation
+D4-RM13 (inter-iteration control wake rebaselined per internal progress
+iteration — the P0 control-wake-theorem gap; authority moved to the context:
+control baseline is per external wait_one invocation).
 
 ## Lock / atomic authority table
 
@@ -320,6 +333,16 @@ Commit-to-sleep:   epoch check + eventfd drain under mtx_, then poll (any write
                    wakes the park — the three-window theorem)
 Worst case:        kernel CQE -> POLLIN (direct); control write -> poll return
 Shutdown:          interrupt_all is one-shot; no persistent "never park" state
+
+Control-wake scope (D4-RM13): the CONTROL baseline is captured ONCE at the
+start of an external wait_one() invocation and held fixed for its whole
+duration; the PROGRESS baseline may refresh per internal loop. A control-plane
+wake landing in the inter-iteration window (between wait_for_change() returning
+`progress` and the next internal snapshot) is observed as interrupted by THIS
+invocation — it is NOT absorbed into the fresh snapshot. A FUTURE wait_one()
+captures a fresh control baseline, so the interrupt stays one-shot. The
+control-wake theorem's scope is ONE EXTERNAL wait_one invocation, not one
+internal wait_for_change loop.
 ```
 
 ## Shutdown / destruction semantics (AGENTS.md §14)

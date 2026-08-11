@@ -13,11 +13,13 @@ thirteen D4 implementation mutants (D4-M1..M13) plus the D4-L1 lift mutant
 were executed on the final D4 implementation; the round-2 repair mutants
 (D4-RM1..RM9, round-1; D4-RM10..RM12 plus the pre-poll-barrier-uniqueness and
 close-LP shared-lock mutants, round-2) were executed on the final PR #84
-repair head, and the G2 drift closure finding (2026-08-10) was fixed with its
-own regression self-test. All RED→GREEN transitions were confirmed by the
-actual binary exit codes (the evidence targets fail non-zero on any
-`SLUICE_CHECK` violation or fail-fast; a RED that manifests as a hang is
-bounded by a watchdog deadline — hang watchdogs only, never ordering proof).
+repair head, the round-3 repair mutant D4-RM13 (inter-iteration control wake)
+was executed on the round-3 head, and the G2 drift closure finding
+(2026-08-10) was fixed with its own regression self-test. All RED→GREEN
+transitions were confirmed by the actual binary exit codes (the evidence
+targets fail non-zero on any `SLUICE_CHECK` violation or fail-fast; a RED that
+manifests as a hang is bounded by a watchdog deadline — hang watchdogs only,
+never ordering proof).
 
 Round-2 (2026-08-10) added: D4-RM10 (post-poll ring-ready bypasses control
 reclassification), D4-RM11 (destructor preflight bypassed before queue_exit),
@@ -26,6 +28,14 @@ uniqueness mutant (one waiter double-counts participant arrivals), and the
 close-LP shared-lock mutant revisited (D4-RM8 mutant now caught by a
 source-drift self-test). The round-2 head SHA and case counts are recorded
 in the Confirmation commands block.
+
+Round-3 (2026-08-11) added: D4-RM13 (inter-iteration control wake
+rebaselined per internal progress iteration) — the P0 control-wake-theorem
+gap found by review. The CONTROL baseline belongs to the whole external
+`wait_one()` invocation, not one internal `wait_for_change` loop; the
+context-level `AsyncIoContext::WaitSourceProgressPauseGate` seam pins the
+exact inter-iteration window. The round-3 head SHA and case counts are
+recorded in the Confirmation commands block.
 
 Command shapes:
 
@@ -66,18 +76,23 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
   before acceptance LP arbitration".
 - Detector: `uring_c2e_close_waits_for_inflight_acceptance_lp` (submit paused
   INSIDE the transaction between arena commit and `binding -> outstanding`).
-  The detector is the PR #84 lock-domain proof: the closer reads
-  `c.outstanding()` AT its own return. Under the fix the dispatch_mtx_
-  handoff makes the submit's LP release-store visible to that read
-  (outstanding == true). Under the mutation close returns while the submitter
-  is still paused and the read sees `binding` (outstanding == false) -> RED.
-  The bounded probe window is failure protection only — the pass/fail
-  decision is the outstanding() state assertion, never a timing claim.
-- RED: the closer's post-return `c.outstanding()` is false — close returned
-  before the LP release-store (rc=255).
-- GREEN after revert: close blocks until the LP release-store, then returns;
-  the closer observes outstanding == true; the LP-winning request still
-  completes; a later submit is rejected.
+  The case makes NO deterministic mutex-blocking claim (a runtime "closer
+  blocked on the admission mutex" observation cannot be made without scheduler
+  timing). The DETERMINISTIC authority that the submit Stage 0..commit_binding
+  path and close_admission's admission-close write share the same
+  `dispatch_mtx_` lives in the source-drift self-test
+  `D4DriftDetectorTest.test_close_admission_uses_dispatch_mtx` (round-2, the
+  D4-RM8 mutant revisited): it parses `uring_backend.cpp`, locates the real
+  `close_admission()` body, and asserts both `arena_.close_admission()` and
+  `admission_closed_ = true` sit INSIDE a `lock_guard(dispatch_mtx_)` critical
+  section. Focused TSan on submit||close and the concurrent linearization
+  case `uring_c2e_submit_races_close_linearization` complete the evidence.
+- RED: the source-drift self-test reports the missing critical section
+  (rc=255); the runtime case observes the in-flight LP state and the
+  post-close reject at the contract level.
+- GREEN after revert: the self-test passes; close blocks until the LP
+  release-store; the closer observes outstanding == true; the LP-winning
+  request still completes; a later submit is rejected.
 
 ## D4-M3 — close cancels the enqueued request
 
@@ -466,6 +481,34 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
 - RED (rm8-red.txt): `AssertionError: close_admission() has no lock_guard
   (dispatch_mtx_) critical section (D4-RM8 mutant: shared lock removed)`.
 - GREEN after revert: self-test PASSes; close-drain suite PASSes.
+
+## D4-RM13 — inter-iteration control wake rebaselined per internal progress iteration (P0, round-3)
+
+- Mutated: `src/async/async_io_context.cpp` — `wait_one()`: the
+  `token.control_generation = control_baseline` pin removed (the CONTROL
+  baseline is rebaselined to the fresh snapshot on every internal progress
+  iteration, restoring the pre-fix behavior; `(void)control_baseline;` keeps
+  the unused-variable warning quiet).
+- Detector: `ctx_wait_one_inter_iteration_control_wake_not_lost`
+  (`async_io_context_split_wait_c2e_test`, new pinned case). The round-3 P0
+  found by review: the control wake lands in the inter-iteration window
+  BETWEEN `wait_for_change()` returning `progress` and the next internal
+  `snapshot()`. A test-only context-level pause seam
+  (`AsyncIoContext::WaitSourceProgressPauseGate`, compiled out of production)
+  parks T1 at the exact window; the test drives `signal_progress` (first
+  wake), parks T1, then fires `interrupt_all` (control wake) and resumes T1.
+  Under the fix the invocation-level control baseline (C0) is preserved, so
+  the second `wait_for_change({P_now, C0})` sees the control delta and
+  returns interrupted -> final poll -> 0. Under the mutant the fresh snapshot
+  absorbs C1 into the observed token, the stale control event is drained, and
+  T1 reparks on the blocked op forever (bounded watchdog -> RED).
+- RED (rm13-red.txt): `T1 never returned after resume — the inter-iteration
+  control wake was rebaselined away and T1 reparked (D4-RM13 mutant:
+  control_generation pinned per loop)` — rc=255.
+- GREEN after revert: `ctx_wait_one_inter_iteration_control_wake_not_lost`
+  PASSes; the full split-wait target (2 cases) PASSes. This is the last real
+  protocol blocker on the D4 wait path: the control-wake theorem's scope is
+  one EXTERNAL wait_one invocation, not one internal wait_for_change loop.
 
 ## G2 drift closure (found during the final gate cycle, 2026-08-10)
 
