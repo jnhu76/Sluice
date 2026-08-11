@@ -120,10 +120,11 @@ public:
     void attach_stats(AsyncStats* s) { stats_ = s; }
 
     // Hand an op to the backend against the caller-owned Completion. The backend
-    // claims the Completion via try_claim() (ADR-explicit-io-completion-authority:
-    // the backend is the claiming authority). Returns Result<void>: submit-time
-    // errors (queue full, invalid op, Completion not idle — L8) are synchronous
-    // (ADR E5).
+    // claims the Completion through the two-stage binding (ADR-explicit-io-
+    // completion-authority + ADR-explicit-io-request-contract Decision 5: the
+    // backend is the claiming authority; `binding -> outstanding` is the
+    // acceptance LP). Returns Result<void>: submit-time errors (queue full,
+    // invalid op, Completion not idle — L8) are synchronous (ADR E5).
     virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
@@ -181,15 +182,20 @@ protected:
         return c.try_claim_for_backend();
     }
 
-    // Phase B/E (ADR-explicit-io-request-contract, Accepted, Decision 5): the
+    // Phase B/E/D (ADR-explicit-io-request-contract, Accepted, Decision 5): the
     // accepted request lifecycle splits the claim into a private two-stage
     // binding so the winning backend can install RequestKey/context/release
-    // capability before the Completion becomes observable as outstanding.
-    // Migrated backends (Fake, Sync in Phase B; ThreadPool in Phase E) use this
-    // protocol; the legacy single-step try_claim above remains for the
-    // not-yet-migrated backend (Uring), which is out of Phase B/E scope. The two
-    // paths share the same private-access boundary (friend AsyncBackend); they
-    // do not race because a given Completion is driven by exactly one backend.
+    // capability before the Completion becomes observable as outstanding. All
+    // production backends (Fake, Sync in Phase B; ThreadPool in Phase E; Uring
+    // in Phase D) now use this protocol — the `binding -> outstanding`
+    // release-store is the acceptance LP (ADR §"Commit / accept" Step 5). The
+    // legacy single-step `try_claim` above is retained ONLY as a protected
+    // helper for the external-backend-authority negative-compile probe
+    // (tests/external_backend_authority_negative_probe.cpp), which exercises
+    // the simplest claim shape to prove the protected-access boundary; no
+    // production backend uses it for acceptance. The two helpers share the
+    // same private-access boundary (friend AsyncBackend); they do not race
+    // because a given Completion is driven by exactly one backend.
     template <class T>
     static bool begin_binding(Completion<T>& c) noexcept {
         return c.begin_binding_for_backend();
