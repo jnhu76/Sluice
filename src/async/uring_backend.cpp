@@ -807,10 +807,14 @@ Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
 // ---------------------------------------------------------------------------
 
 void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
-    const bool poisoned_before = fatal_error_.has_value();
+    bool newly_poisoned = false; // set iff THIS call poisons the backend
     detail::EnqueueOutcome outcome;
     {
         std::unique_lock<std::mutex> lk(dispatch_mtx_);
+        // fatal_error_ is dispatch_mtx_-authority: read the before/after pair
+        // ONLY inside the lock (D4-RM16/P1-1 — no unlocked reads, the same
+        // discipline as the Stage-0 admission check).
+        const bool poisoned_before = fatal_error_.has_value();
         outcome = arena_.enqueue(h); // pending -> enqueued OR terminal_noop
         if (outcome == detail::EnqueueOutcome::enqueued) {
             dispatch_->push_back(h);
@@ -846,6 +850,12 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
         }
         // terminal_noop: a pending cancel won first (Scheme B). No dispatch
         // linkage; that winner owns readiness.
+        // D4-RM16/RM17: a permanent transport failure during the
+        // enqueue-dispatch loop retired the local queue / Class-A ledger to
+        // backend-ready terminals under this lock. The before/after poison
+        // pair is snapshotted HERE (inside dispatch_mtx_); the wake itself is
+        // deferred until the lock is released below (state first, then wake).
+        newly_poisoned = !poisoned_before && fatal_error_.has_value();
     }
     if (outcome != detail::EnqueueOutcome::enqueued) {
         // terminal_noop: re-arm the ready condition so the wake is not lost
@@ -859,10 +869,9 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
     // poll), so the split-phase waiters must be woken HERE — but only after
     // dispatch_mtx_ is released (state first, then wake; the wait-source
     // mutex is a leaf never acquired under dispatch_mtx_ — frozen lock
-    // order). fatal_error_ is read under the access_mtx_ single-driver domain
-    // (all writers hold dispatch_mtx_ inside it), so the before/after compare
-    // is exact.
-    if (!poisoned_before && fatal_error_.has_value()) {
+    // order). fatal_error_ was snapshotted under the lock above (P1-1), so
+    // the before/after compare is exact.
+    if (newly_poisoned) {
         signal_ready_progress();
     }
 }
@@ -1615,10 +1624,14 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
     // to append a best-effort AsyncCancel SQE if one has not already been
     // appended for this slot (frozen design §8.2: one fixed per-slot
     // cancel_queued bit, no unbounded cancel SQEs).
-    const bool poisoned_before = fatal_error_.has_value();
+    bool newly_poisoned = false; // set iff THIS call poisons the backend
     std::uint64_t target_cookie = 0;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        // fatal_error_ is dispatch_mtx_-authority: every read here is inside
+        // the lock (D4-RM16/P1-1 — no unlocked reads). An already-poisoned
+        // backend returns without a wake: the path that set the poison owns
+        // the deferred wake.
         if (fatal_error_.has_value())
             return;
         CancelScratch& scratch = cancel_scratch_[h.slot.value];
@@ -1650,39 +1663,54 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
         io_uring_sqe* sqe = ::io_uring_get_sqe(&ring_state_->ring);
         if (sqe == nullptr) {
             (void)submit_transport_locked();
-            if (fatal_error_.has_value())
-                return;
-            sqe = ::io_uring_get_sqe(&ring_state_->ring);
-            if (sqe == nullptr)
-                return; // SQ full; cancel retried on next poll (no SQE obtained)
+            if (fatal_error_.has_value()) {
+                // D4-RM17 (P0): THIS call's transport flush permanently
+                // poisoned the backend and retired the retained ledger
+                // entries to backend-ready terminals. No reap runs on this
+                // path, so the parked split-phase waiters MUST still be woken
+                // — the wake is deferred past the lock scope below instead of
+                // being dropped by an early return (state published, wake
+                // obligation missing would strand a parked wait_one forever;
+                // AGENTS.md §13.2).
+                newly_poisoned = true;
+            } else {
+                sqe = ::io_uring_get_sqe(&ring_state_->ring);
+            }
         }
-        // NO-FAIL REGION (P0-C): get_sqe committed the SQE. Fill it with the
-        // resolved target cookie and its exact tagged control user_data.
-        ::io_uring_prep_cancel64(sqe, target_cookie, /*flags=*/0);
-        ::io_uring_sqe_set_data64(sqe, make_control_cookie(target_cookie));
-        scratch.cancel_queued = true;
-        RouterEntry& route = router_[idx];
-        if (route.control_state != RouterEntry::ControlState::none) {
-            std::fprintf(stderr, "sluice::async::UringAsyncBackend: duplicate control state "
-                                 "before AsyncCancel append (invariant violation)\n");
-            std::fflush(stderr);
-            std::terminate();
+        if (sqe != nullptr) {
+            // NO-FAIL REGION (P0-C): get_sqe committed the SQE. Fill it with
+            // the resolved target cookie and its exact tagged control
+            // user_data. (When sqe is still nullptr — SQ full without a new
+            // poison, or the newly-poisoned branch above — there is no SQE to
+            // fill: the cancel retries on the next poll, and the deferred
+            // wake below covers the poison case.)
+            ::io_uring_prep_cancel64(sqe, target_cookie, /*flags=*/0);
+            ::io_uring_sqe_set_data64(sqe, make_control_cookie(target_cookie));
+            scratch.cancel_queued = true;
+            RouterEntry& route = router_[idx];
+            if (route.control_state != RouterEntry::ControlState::none) {
+                std::fprintf(stderr, "sluice::async::UringAsyncBackend: duplicate control state "
+                                     "before AsyncCancel append (invariant violation)\n");
+                std::fflush(stderr);
+                std::terminate();
+            }
+            route.control_state = RouterEntry::ControlState::prepared;
+            const auto& sq = ring_state_->ring.sq;
+            const std::uint32_t physical_position =
+                static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
+            transport_ledger_->append(TransportLedger::Kind::cancel_control, physical_position,
+                                      target_cookie, h);
         }
-        route.control_state = RouterEntry::ControlState::prepared;
-        const auto& sq = ring_state_->ring.sq;
-        const std::uint32_t physical_position =
-            static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
-        transport_ledger_->append(TransportLedger::Kind::cancel_control, physical_position,
-                                  target_cookie, h);
     }
     // D4-RM16 (P1-3): a permanent transport failure during the cancel-SQE
     // append retired ledger/queue entries to backend-ready terminals. No reap
     // runs on this path, so wake the split-phase waiters here, AFTER
     // dispatch_mtx_ is released (state first, then wake; the wait-source
     // mutex is a leaf never acquired under dispatch_mtx_ — frozen lock
-    // order). This method returns early when the backend is already poisoned,
-    // so any fatal_error_ observed here was set by THIS call.
-    if (!poisoned_before && fatal_error_.has_value()) {
+    // order). fatal_error_ was snapshotted under the lock above (P1-1), so
+    // newly_poisoned is exact: an already-poisoned backend returned at the
+    // top of the lock scope and its poisoner owns the wake.
+    if (newly_poisoned) {
         signal_ready_progress();
     }
 }
