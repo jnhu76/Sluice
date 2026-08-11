@@ -586,9 +586,17 @@ SLUICE_MAIN()
 // emitted mode), so the manifest's pinned case-set holds in every mode; a
 // stub run emits mode=stub (build/API honesty only) and is classified
 // INCOMPLETE by required_modes=("real",), never PASS.
+//
+// round-4 (P1-4): the mode guard MUST be the EXACT same guard as the
+// semantic bodies above (__unix__ && SLUICE_HAS_LIBURING &&
+// SLUICE_ASYNC_INTERNAL_TESTING). A build that defines SLUICE_HAS_LIBURING
+// but misses SLUICE_ASYNC_INTERNAL_TESTING (or __unix__) compiles EMPTY stub
+// bodies; emitting mode=real for them would let the aggregate attribute an
+// empty evidence set as real destruction evidence.
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_d4_c2e_death_evidence_mode) {
-#if defined(SLUICE_HAS_LIBURING)
+#if defined(__unix__) && defined(SLUICE_HAS_LIBURING) && \
+    defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice::async::UringAsyncBackend backend{sluice::async::UringConfig{4, 4}};
     std::printf("[evidence-meta] evidence=uring_c2e_quiescent_destruction "
                 "mode=real\n");

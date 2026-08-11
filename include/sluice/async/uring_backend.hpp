@@ -694,9 +694,12 @@ class UringAsyncBackend : public AsyncBackend {
     // mutation. CQE lookup/retirement is serialized by D1's documented
     // AsyncIoContext single-driver call domain and intentionally does not take
     // this mutex before arena.record_terminal(). Lock order:
-    // dispatch_mtx_ -> arena leaf only — never nested with the ready-wait
-    // mutex. io_uring_submit() (syscall) is transport progress and may be
-    // called under dispatch_mtx_ but NEVER under the arena mutex.
+    // dispatch_mtx_ -> arena leaf only — the ready-wait mutex is a LEAF domain
+    // and is NEVER acquired while holding dispatch_mtx_ (D4-RM14 / P1-3:
+    // signal_ready_progress() is called only after dispatch_mtx_ is released —
+    // state first, then wake). io_uring_submit() (syscall) is transport
+    // progress and may be called under dispatch_mtx_ but NEVER under the
+    // arena mutex.
     mutable std::mutex dispatch_mtx_;
     std::unique_ptr<BoundedDispatchQueue> dispatch_;
 

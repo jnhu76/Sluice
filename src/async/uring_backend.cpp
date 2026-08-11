@@ -807,6 +807,7 @@ Result<void> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>& 
 // ---------------------------------------------------------------------------
 
 void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
+    const bool poisoned_before = fatal_error_.has_value();
     detail::EnqueueOutcome outcome;
     {
         std::unique_lock<std::mutex> lk(dispatch_mtx_);
@@ -850,6 +851,18 @@ void UringAsyncBackend::enqueue_after_commit(detail::SlotHandle h) noexcept {
         // terminal_noop: re-arm the ready condition so the wake is not lost
         // (ADR Decision 4 / I19). Done OUTSIDE the dispatch lock — it is a
         // no-op seam in D1's single-driver model.
+        signal_ready_progress();
+    }
+    // D4-RM16 (P1-3): a permanent transport failure during this enqueue-
+    // dispatch retired the local queue / Class-A ledger to backend-ready
+    // terminals. No reap runs on this path (the caller is a submit, not a
+    // poll), so the split-phase waiters must be woken HERE — but only after
+    // dispatch_mtx_ is released (state first, then wake; the wait-source
+    // mutex is a leaf never acquired under dispatch_mtx_ — frozen lock
+    // order). fatal_error_ is read under the access_mtx_ single-driver domain
+    // (all writers hold dispatch_mtx_ inside it), so the before/after compare
+    // is exact.
+    if (!poisoned_before && fatal_error_.has_value()) {
         signal_ready_progress();
     }
 }
@@ -1119,7 +1132,15 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         cancel_scratch_[local.slot.value].cancel_queued = false;
         bump(stats_, &AsyncStats::completion_errors);
     }
-    signal_ready_progress();
+    // NOTE (D4-RM16 / P1-3): NO wake here. poison_and_recover_locked always
+    // runs under dispatch_mtx_, and the wait-source mutex is a LEAF domain
+    // that must never be acquired while holding dispatch_mtx_ (frozen lock
+    // order: access_mtx_ -> dispatch_mtx_ -> arena leaf -> wait-source mtx_).
+    // The retired entries are backend-ready terminals that the next
+    // poll()/wait_one() reap publishes (its n>0 path signals); the two paths
+    // with NO following reap — enqueue_after_commit and issue_running_cancel
+    // — defer the wake past their own dispatch_mtx_ release (state first,
+    // then wake).
 }
 
 // ---------------------------------------------------------------------------
@@ -1594,6 +1615,7 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
     // to append a best-effort AsyncCancel SQE if one has not already been
     // appended for this slot (frozen design §8.2: one fixed per-slot
     // cancel_queued bit, no unbounded cancel SQEs).
+    const bool poisoned_before = fatal_error_.has_value();
     std::uint64_t target_cookie = 0;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
@@ -1652,6 +1674,16 @@ void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {
             static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
         transport_ledger_->append(TransportLedger::Kind::cancel_control, physical_position,
                                   target_cookie, h);
+    }
+    // D4-RM16 (P1-3): a permanent transport failure during the cancel-SQE
+    // append retired ledger/queue entries to backend-ready terminals. No reap
+    // runs on this path, so wake the split-phase waiters here, AFTER
+    // dispatch_mtx_ is released (state first, then wake; the wait-source
+    // mutex is a leaf never acquired under dispatch_mtx_ — frozen lock
+    // order). This method returns early when the backend is already poisoned,
+    // so any fatal_error_ observed here was set by THIS call.
+    if (!poisoned_before && fatal_error_.has_value()) {
+        signal_ready_progress();
     }
 }
 
