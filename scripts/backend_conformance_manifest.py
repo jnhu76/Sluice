@@ -734,6 +734,7 @@ EVIDENCE: tuple[Evidence, ...] = (
             "uring_c2e_submit_races_close_linearization",
             "uring_c2e_control_wins_over_co_ready_ring",
             "uring_c2e_two_waiter_consumer_strand",
+            "uring_c2e_future_waiter_cannot_steal_old_wake",
             "uring_c2e_non_eintr_poll_failure_failfast",
         ),
         notes="C2e rows 15-16 Uring integration (Phase D4, real-liburing "
@@ -757,7 +758,13 @@ EVIDENCE: tuple[Evidence, ...] = (
               "race closed by the context's final poll; drained != releasable "
               "(slot_in_use stays 1 until Completion::reset); poison + close "
               "keeps P0-D semantics (Class-A retained for teardown, nothing "
-              "quarantined is submitted). Row 16 (quiescent destruction) is "
+              "quarantined is submitted); a FUTURE-generation waiter cannot "
+              "consume the eventfd token that wakes an OLD-generation waiter "
+              "(D4-RM15 durable broadcast: the drain is gated on the "
+              "parked-at-publish waiter's acknowledgement — an old waiter "
+              "woken but not yet rechecked re-sleeps if a future waiter "
+              "drains the single consumable token). Row 16 (quiescent "
+              "destruction) is "
               "attributed by the SEPARATE mandatory uring_c2e_quiescent_"
               "destruction record (death matrix target) — never by prose in "
               "these notes.",

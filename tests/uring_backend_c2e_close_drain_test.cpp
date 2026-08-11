@@ -613,6 +613,7 @@ SLUICE_TEST_CASE(uring_c2e_multiple_parked_waiters_all_wake) {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 4});
     if (!backend->available())
         return;
+    auto* raw = backend.get();
     std::atomic<int> prepark_count{0};
     backend->set_wait_prepark_counter_for_test(&prepark_count);
     AsyncIoContext ctx(std::move(backend));
@@ -679,17 +680,26 @@ SLUICE_TEST_CASE(uring_c2e_multiple_parked_waiters_all_wake) {
     }
     SLUICE_CHECK(returned.load(std::memory_order_acquire) == kWaiters);
 
-    // Drain for a clean teardown.
+    // Drain for a clean teardown. Each Completion is released by its OWN
+    // ready() — a single wait_one() can reap MORE than one completion at
+    // once, so resetting by the aggregate count would leave ready-but-
+    // unreset Completions (drained != releasable, D4). The slot_in_use == 0
+    // check proves every reaped slot was actually released by the caller,
+    // not silently returned by a Completion destructor.
     for (int i = 0; i < kWaiters; ++i) {
         pipes[i].close_write();
     }
-    for (int i = 0; i < kWaiters; ++i) {
+    while (ctx.outstanding() != 0) {
         Result<std::size_t> r = ctx.wait_one();
-        if (r.has_value() && r.value() > 0) {
+        SLUICE_CHECK(r.has_value());
+    }
+    for (int i = 0; i < kWaiters; ++i) {
+        if (comps[i].ready()) {
             comps[i].reset();
         }
     }
     SLUICE_CHECK(ctx.outstanding() == 0);
+    SLUICE_CHECK(raw->arena_slot_in_use() == 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1144,10 +1154,33 @@ SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {
     // co-ready (the exact production interleaving).
     pipe_a.close_write();              // A's read completes
     ctx.interrupt_backend_waiters();   // control epoch bump + eventfd write
-    Result<std::size_t> consumed = ctx.wait_one();
-    SLUICE_CHECK(consumed.has_value());
-    SLUICE_CHECK(consumed.value() == 1); // A consumed
-    SLUICE_CHECK(ca.ready());
+
+    // round-4 (P1-1): consume A with a BOUNDED NONBLOCKING poll() loop —
+    // never a second wait_one(). The controller owns gate.release below; a
+    // wait_one() here would enter wait_for_change() and hit the SAME
+    // BeforePhysicalPollPauseGate that only THIS controller can release (and,
+    // with the durable-broadcast gate, additionally block on T1's pending
+    // acknowledgement while T1 waits at the barrier) — the test would
+    // deadlock on itself regardless of whether A's CQE had already arrived
+    // (the historical "WSL2 flake" misattribution; the hang is the test's own
+    // design). poll() takes access_mtx_ (the serialized reap domain) without
+    // ever parking, so it cannot enter the barrier. The deadline is a hang
+    // watchdog only — the reap observation (ca.ready()) is the ordering
+    // proof.
+    {
+        const auto reap_deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+        while (!ca.ready()) {
+            if (std::chrono::steady_clock::now() > reap_deadline) {
+                std::fprintf(stderr, "uring_c2e_two_waiter_strand: A was never "
+                                     "reaped by the controller's poll loop\n");
+                std::fflush(stderr);
+                std::terminate();
+            }
+            (void)ctx.poll(); // non-blocking: flush transport + reap A's CQE
+        }
+    }
+    SLUICE_CHECK(ca.ready()); // A consumed
 
     // Release T1: poll sees ring (override) + control co-ready. Under the fix
     // the control recheck returns interrupted; final poll reaps nothing (A
@@ -1181,6 +1214,172 @@ SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {
     if (ca.outstanding()) {
         ca.reset();
     }
+    SLUICE_CHECK(ctx.outstanding() == 0);
+}
+
+// ---------------------------------------------------------------------------
+// C2e §44 — D4-RM15 (P0-2): a FUTURE-generation waiter must not consume the
+// eventfd token that wakes an OLD-generation waiter (durable broadcast).
+//
+// Linux eventfd(2) without EFD_SEMAPHORE: read() returns the whole counter
+// and resets it; POLLIN holds while counter > 0. A wake callback only makes
+// the poller runnable — do_poll() re-runs the fd readiness check after the
+// wake, and a poller whose recheck finds an empty counter goes back to
+// sleep. A single shared consumable token therefore does NOT implement
+// notify_all once a future-generation waiter drains it: interrupt_all() can
+// lose a wake for a parked waiter that was woken but has not finished its
+// readiness recheck.
+//
+// Deterministic construction: T1 (old generation) submits A and parks —
+// registered as a parked participant, held at the pre-poll barrier (its
+// poll(2) has not run yet, but the interrupt's token is already in the
+// counter — the exact "woken-but-not-rechecked" transport state). The
+// interrupt publishes control C0 -> C1 and writes the single token. T2
+// (future generation) starts wait_one() AFTER the interrupt: its control
+// baseline is C1, its epoch check passes, and under the pre-fix code it
+// drains the token (stealing T1's wake) and parks; T1's poll(2) then finds
+// an empty counter and re-sleeps forever — the interrupt is lost.
+//
+// Under the fix the drain is GATED on T1's acknowledgement: T2 blocks in
+// wait_for_change (never reaching the shared pre-poll barrier), T1's poll
+// returns on the still-present token, T1 rechecks C1 != C0 and returns
+// interrupted (0) — its single acknowledgement releases the gate — and T2
+// then drains the stale token, parks, and wakes on REAL progress.
+//
+// Ordering proof (AGENTS.md §13.3 — deadlines are hang watchdogs only): T1
+// returning interrupted within a bounded join (the pre-fix code strands it
+// forever: its poll finds an empty counter and re-sleeps), and T2 returning
+// the reaped count only after real progress. The barrier-arrival
+// observation is a fast-fail diagnostic for the steal, not the proof.
+// ---------------------------------------------------------------------------
+SLUICE_TEST_CASE(uring_c2e_future_waiter_cannot_steal_old_wake) {
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 4});
+    if (!backend->available())
+        return;
+    auto* raw = backend.get();
+    detail::UringWaitSource::BeforePhysicalPollPauseGate gate;
+    raw->set_wait_before_physical_poll_pause_gate(&gate);
+    AsyncIoContext ctx(std::move(backend));
+
+    // A (old-generation waiter T1) and B (future-generation waiter T2):
+    // two kernel-blocked reads.
+    PipePair pipe_a, pipe_b;
+    SLUICE_CHECK(pipe_a.valid());
+    SLUICE_CHECK(pipe_b.valid());
+    std::byte buf_a[4]{};
+    std::byte buf_b[4]{};
+    Completion<std::size_t> ca, cb;
+    SLUICE_CHECK(ctx.submit_read(ReadOp{pipe_a.read_fd(), buf_a, 4, 0}, ca).has_value());
+    SLUICE_CHECK(ctx.submit_read(ReadOp{pipe_b.read_fd(), buf_b, 4, 0}, cb).has_value());
+
+    Result<std::size_t> w1{std::size_t{999}};
+    std::atomic<bool> t1_done{false};
+    std::thread t1([&] {
+        w1 = ctx.wait_one();
+        t1_done.store(true, std::memory_order_release);
+    });
+
+    // Deterministic pre-condition: T1 parked (registered) and stopped at the
+    // pre-poll barrier — the old-generation waiter whose wake transport must
+    // survive a future-generation drain.
+    const auto arrive_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+    while (gate.arrivals.load(std::memory_order_acquire) != 1) {
+        if (std::chrono::steady_clock::now() > arrive_deadline) {
+            std::fprintf(stderr, "uring_c2e_future_waiter_steal: T1 never "
+                                 "reached the pre-poll barrier (arrivals=%d)\n",
+                         gate.arrivals.load(std::memory_order_acquire));
+            std::fflush(stderr);
+            std::terminate();
+        }
+        std::this_thread::yield();
+    }
+
+    // The interrupt: control C0 -> C1 plus the single transport token. T1 is
+    // parked-but-not-polling; the token is the wake transport for its
+    // imminent poll.
+    ctx.interrupt_backend_waiters();
+
+    // T2: the FUTURE-generation waiter — its invocation starts AFTER the
+    // interrupt, so its control baseline is C1 and its epoch check passes
+    // (the interrupt is a past event for its OWN invocation).
+    Result<std::size_t> w2{std::size_t{999}};
+    std::atomic<bool> t2_done{false};
+    std::thread t2([&] {
+        w2 = ctx.wait_one();
+        t2_done.store(true, std::memory_order_release);
+    });
+
+    // D4-RM14: T2 must NOT reach the shared pre-poll barrier while T1 is
+    // still parked. Under the pre-fix code it drains the token and arrives
+    // (arrivals == 2, within microseconds — nothing blocks it); under the fix
+    // it is gated on T1's acknowledgement and stays blocked in
+    // wait_for_change. The bounded window is a fast-fail diagnostic only —
+    // the ordering proof is T1's interrupted return below (a stolen token
+    // strands T1 forever -> join deadline RED).
+    const auto steal_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (gate.arrivals.load(std::memory_order_acquire) == 1) {
+        if (std::chrono::steady_clock::now() > steal_deadline) {
+            break; // fixed code: T2 never arrives (blocked on the gate)
+        }
+        std::this_thread::yield();
+    }
+    if (gate.arrivals.load(std::memory_order_acquire) != 1) {
+        std::fprintf(stderr, "uring_c2e_future_waiter_steal: future waiter "
+                             "reached the pre-poll barrier (token drained)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+
+    // Release T1: its poll(2) returns on the STILL-PRESENT token (the gate
+    // blocked T2 from draining it), it rechecks C1 != C0, acknowledges its
+    // wake, and returns interrupted (0) — nothing fabricated (A still
+    // blocked).
+    gate.release.store(true, std::memory_order_release);
+    const auto t1_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+    while (!t1_done.load(std::memory_order_acquire)) {
+        if (std::chrono::steady_clock::now() > t1_deadline) {
+            std::fprintf(stderr, "uring_c2e_future_waiter_steal: T1 never "
+                                 "returned (wake stolen by the future "
+                                 "waiter)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        std::this_thread::yield();
+    }
+    t1.join();
+    SLUICE_CHECK(w1.has_value());
+    SLUICE_CHECK(w1.value() == 0); // interrupted, nothing fabricated
+
+    // Real progress for T2: complete A. T2 (released by T1's acknowledgement)
+    // drains the now-stale token, parks, and wakes on the REAL CQE, returning
+    // the reaped count (1).
+    pipe_a.close_write();
+    const auto t2_deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+    while (!t2_done.load(std::memory_order_acquire)) {
+        if (std::chrono::steady_clock::now() > t2_deadline) {
+            std::fprintf(stderr, "uring_c2e_future_waiter_steal: T2 never "
+                                 "returned after real progress\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        std::this_thread::yield();
+    }
+    t2.join();
+    SLUICE_CHECK(w2.has_value());
+    SLUICE_CHECK(w2.value() == 1); // A reaped
+    SLUICE_CHECK(ca.ready());
+
+    // Complete B for a clean teardown (drained != releasable).
+    pipe_b.close_write();
+    Result<std::size_t> rb = ctx.wait_one();
+    if (rb.has_value() && rb.value() > 0) {
+        cb.reset();
+    }
+    ca.reset();
     SLUICE_CHECK(ctx.outstanding() == 0);
 }
 
@@ -1288,6 +1487,7 @@ SLUICE_TEST_CASE(uring_c2e_poison_close_keeps_class_c) {}
 SLUICE_TEST_CASE(uring_c2e_submit_races_close_linearization) {}
 SLUICE_TEST_CASE(uring_c2e_control_wins_over_co_ready_ring) {}
 SLUICE_TEST_CASE(uring_c2e_two_waiter_consumer_strand) {}
+SLUICE_TEST_CASE(uring_c2e_future_waiter_cannot_steal_old_wake) {}
 SLUICE_TEST_CASE(uring_c2e_non_eintr_poll_failure_failfast) {}
 
 #endif // SLUICE_HAS_LIBURING
@@ -1301,8 +1501,9 @@ SLUICE_TEST_CASE(uring_c2e_non_eintr_poll_failure_failfast) {}
 // "mode=stub not allowed by required_modes=(\"real\",)". The internal
 // #if/#else emits mode=real (with a real-kernel availability check) in the
 // real build and mode=stub (build/API honesty only) in the stub build; both
-// modes execute the FULL pinned case-set (17 cases incl. the concurrent
-// submit-||-close linearization case).
+// modes execute the FULL pinned case-set (21 cases incl. the concurrent
+// submit-||-close linearization case and the D4-RM14 future-waiter steal
+// detector — the manifest's cases tuple is the authority).
 // ---------------------------------------------------------------------------
 SLUICE_TEST_CASE(uring_d4_c2e_evidence_mode) {
 #if defined(SLUICE_HAS_LIBURING)
