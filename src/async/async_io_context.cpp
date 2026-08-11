@@ -198,7 +198,16 @@ Result<std::size_t> AsyncIoContext::wait_one() {
     // terminates with its final poll. A FUTURE wait_one() captures a fresh
     // baseline, so the interrupt stays one-shot — never a sticky shutdown
     // flag, never a busy-spin.
-    const BackendWaitToken invocation_start = ws->snapshot();
+    //
+    // D4-RM14 (P0-1, commit-to-park handshake): the invocation baseline comes
+    // from consume_committed_wait() instead of a bare snapshot(). A Scheduler
+    // MW-S2 participant that armed a committed-wait registration at its
+    // Phase-B commit (under global_mtx_, before releasing the admission
+    // authority) gets the ARMED control generation as its baseline — a stop
+    // published after the commit is observed by THIS call even though it
+    // landed before the call entered. With no registration the consume
+    // degenerates to a fresh snapshot (unchanged behavior).
+    const BackendWaitToken invocation_start = ws->consume_committed_wait();
     const std::uint64_t control_baseline = invocation_start.control_generation;
     for (;;) {
         BackendWaitToken token = ws->snapshot();
@@ -272,6 +281,26 @@ void AsyncIoContext::interrupt_backend_waiters() noexcept {
     if (backend_) {
         if (auto* ws = backend_->wait_source()) {
             ws->interrupt_all();
+        }
+    }
+}
+
+void AsyncIoContext::arm_backend_wait_commit() noexcept {
+    // D4-RM14 (P0-1, commit-to-park handshake): register the mandatory
+    // control-observation baseline for the NEXT wait_one() invocation. Called
+    // by the Scheduler's MW-S2 participant under global_mtx_ at its Phase-B
+    // commit — BEFORE the backend-park commitment is exposed and the
+    // admission lock is released — so a control wake (request_stop ->
+    // interrupt_backend_waiters) landing in the commit-to-wait_one window is
+    // observed by that invocation (its control baseline is the armed
+    // generation, D4-RM13 invocation-begin semantics). One-shot: consumed by
+    // the next wait_one(); a FUTURE invocation captures a fresh baseline, so
+    // the interrupt stays one-shot. No-op for backends without the split wait
+    // capability. Pure registration: no backend state is consumed, no
+    // access_mtx_ is taken, never blocks.
+    if (backend_) {
+        if (auto* ws = backend_->wait_source()) {
+            (void)ws->arm_committed_wait();
         }
     }
 }

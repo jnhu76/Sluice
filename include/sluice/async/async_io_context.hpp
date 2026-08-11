@@ -95,6 +95,28 @@ public:
     // cancel real I/O. One-shot: future waits snapshot the advanced control
     // generation and park normally again.
     virtual void interrupt_all() noexcept = 0;
+
+    // D4-RM14 (P0-1, commit-to-park handshake): arm a ONE-SHOT mandatory
+    // control-observation baseline for the NEXT wait_one() invocation. Called
+    // by the committing authority (the Scheduler's MW-S2 Phase-B commit,
+    // under global_mtx_) BEFORE the participant is exposed as about-to-park.
+    // A control-plane wake (close_admission / interrupt_backend_waiters)
+    // published AFTER this call is then guaranteed observed by that wait_one()
+    // invocation even when it lands in the commit-to-wait_one window, before
+    // the invocation captured its own snapshot — without the registration the
+    // wake is rebaselined as a past event and the participant can park
+    // forever (the P0-1 runtime shutdown race). The default (no registration)
+    // behaves exactly like snapshot(); split-wait backends that must not lose
+    // a pre-snapshot interrupt override both methods (ReadyWaitSource /
+    // UringWaitSource).
+    virtual BackendWaitToken arm_committed_wait() noexcept { return snapshot(); }
+    // One-shot consume of a previously armed baseline; without one, behaves
+    // like snapshot(). wait_one() calls this at invocation start INSTEAD of
+    // snapshot() so the commit-to-park registration wins over the entry
+    // snapshot (D4-RM13: the control baseline is captured once per external
+    // invocation, and the commit is the invocation-begin for a Scheduler
+    // participant).
+    virtual BackendWaitToken consume_committed_wait() noexcept { return snapshot(); }
 };
 
 // The internal backend boundary (ADR §4) — and simultaneously a PUBLIC
@@ -303,6 +325,14 @@ public:
     // refresh per internal loop. A FUTURE wait_one() captures a fresh baseline,
     // so the interrupt stays one-shot — never a sticky shutdown flag, never a
     // busy-spin (the one-shot control-generation contract).
+    //
+    // D4-RM14 (commit-to-park handshake): the invocation baseline comes from
+    // consume_committed_wait() — a Scheduler MW-S2 participant that armed a
+    // committed-wait registration at its Phase-B commit (under global_mtx_,
+    // before this call) uses the ARMED control generation as its baseline, so
+    // a control wake published after the commit is observed even if it landed
+    // before this call entered. Without a registration the behavior is
+    // unchanged (a fresh snapshot at entry).
     Result<std::size_t> wait_one();
 
     // Control-plane wake for a split-phase wait in progress (issue #67): wakes
@@ -315,6 +345,20 @@ public:
     // fabricates readiness, never touches request state, and never blocks on
     // access_mtx_.
     void interrupt_backend_waiters() noexcept;
+
+    // D4-RM14 (P0-1, commit-to-park handshake): register the mandatory
+    // control-observation baseline with the backend wait source for the NEXT
+    // wait_one() invocation. Called by the Scheduler's MW-S2 participant at
+    // its Phase-B commit, under global_mtx_ and BEFORE releasing the
+    // admission authority — so a runtime stop (request_stop ->
+    // interrupt_backend_waiters) landing between the commit and the
+    // participant's wait_one() entry is observed by that invocation instead
+    // of being rebaselined as a past event. One-shot: consumed by the next
+    // wait_one(); a future invocation captures a fresh baseline (the
+    // interrupt stays one-shot). No-op for backends without the split wait
+    // capability; never blocks on access_mtx_. Internal-use counterpart of
+    // interrupt_backend_waiters().
+    void arm_backend_wait_commit() noexcept;
 
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);

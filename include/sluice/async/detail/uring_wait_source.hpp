@@ -29,14 +29,34 @@
 // (both signal_progress() and interrupt_all() publish the epoch under mtx_
 // BEFORE writing).
 //
-// Multi-waiter: eventfd counter semantics + level-triggered poll(2) wake ALL
-// parked pollers on one write (empirically verified: one 8-byte write woke
-// both pollers). Every woken waiter re-checks the epochs under mtx_; the
-// pre-park drain is idempotent (EAGAIN on empty).
+// Multi-waiter / durable broadcast (D4-RM14, P0-2): a single eventfd write
+// DOES wake every poller parked at that moment (Linux wakes the poll
+// waitqueue), but the counter is a single CONSUMABLE token, not a notify_all:
+// after the wake, do_poll() re-runs each fd's poll handler, and a poller whose
+// readiness recheck finds an empty counter can go back to sleep. A FUTURE-
+// generation waiter draining the counter therefore cannot be allowed to steal
+// the wake of an OLD-generation waiter that was woken but has not finished its
+// recheck. The wait source closes this with a generation-scoped
+// register/acknowledge gate:
+//   * every waiter registers (parked_count_++) atomically with its pre-park
+//     drain, under mtx_;
+//   * every publish (interrupt_all / signal_progress) sets
+//     pending_wake_count_ = parked_count_ — the set of waiters that were
+//     parked at publish time and MUST reach their recheck;
+//   * a waiter that observes the epoch delta after its poll returns
+//     acknowledges exactly once (pending_wake_count_--), releasing the gate
+//     when the last parked-at-publish waiter acknowledges;
+//   * a future-generation waiter's drain is GATED on pending_wake_count_ == 0
+//     (a persistent predicate + CV notify, AGENTS.md §13.2 — no lost wake, no
+//     busy-spin): it cannot consume the transport token while any old-
+//     generation waiter still needs it, and it re-checks the epochs after the
+//     gate so a wake that belongs to ITS invocation is reported (D4-RM13).
+// The token therefore stays in the level-triggered counter until every waiter
+// it was published for has rechecked, after which the next park drains it.
 //
-// Spurious wakes: poll(2) EINTR re-loops (epochs unchanged -> drain -> park
-// again). A NON-EINTR poll(2) failure is a real wait-domain failure with no
-// Result<> channel here, so it fail-fasts (stderr + terminate) instead of
+// Spurious wakes: poll(2) EINTR re-loops (epochs unchanged -> gate -> drain ->
+// park again). A NON-EINTR poll(2) failure is a real wait-domain failure with
+// no Result<> channel here, so it fail-fasts (stderr + terminate) instead of
 // busy-spinning or fabricating a reason. POLLNVAL on either fd means the fd
 // was torn down while a waiter was parked — a caller contract violation
 // (parked waiters imply outstanding > 0, and quiescent destruction requires
@@ -70,6 +90,7 @@
 
 #include <atomic>
 #include <cerrno>    // errno / EINTR
+#include <condition_variable>
 #include <cstdio>    // fprintf / fflush / stderr
 #include <cstdint>
 #include <exception> // std::terminate
@@ -118,7 +139,7 @@ class UringWaitSource final : public BackendWaitSource {
     BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept override {
         for (;;) {
             {
-                std::lock_guard<std::mutex> lk(mtx_);
+                std::unique_lock<std::mutex> lk(mtx_);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                 // Announce the imminent park so a test can observe the exact
                 // "empty reap done, about to block in the ring/control wait"
@@ -128,9 +149,9 @@ class UringWaitSource final : public BackendWaitSource {
                 }
 #endif
                 // Epoch check FIRST (a bump before this point is a wake we
-                // must report), then drain the wake counter so the park below
-                // blocks. Any write AFTER this drain belongs to a bump the
-                // next epoch check will see.
+                // must report), then the durable-broadcast gate, then the
+                // pre-park drain so the park below blocks. Any write AFTER
+                // the drain belongs to a bump the next epoch check will see.
                 if (control_epoch_ != observed.control_generation) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                     // C2e (row 15): deterministic interrupt-vs-final-ready
@@ -142,17 +163,57 @@ class UringWaitSource final : public BackendWaitSource {
                 if (progress_epoch_ != observed.progress_generation) {
                     return BackendWakeReason::progress;
                 }
+                // D4-RM15 (P0-2, durable-broadcast gate): an eventfd token
+                // written by a publish is the TRANSPORT for the wake of every
+                // waiter that was parked when it was published. This waiter is
+                // a FUTURE generation relative to any pending token (its
+                // epochs were checked above), so it must not drain the counter
+                // while an old-generation waiter is still woken-but-not-
+                // rechecked — draining would let that poller's readiness
+                // recheck find an empty counter and re-sleep, losing the
+                // interrupt. Block until every parked-at-publish waiter
+                // acknowledged (persistent predicate + notify; the CV wait
+                // releases mtx_, and the acknowledged waiters need only mtx_
+                // to return). No lost wake (AGENTS.md §13.2).
+                cv_.wait(lk, [this] { return pending_wake_count_ == 0; });
+                // A publish may have landed while THIS waiter was blocked on
+                // the gate: re-check the epochs BEFORE draining, so a wake
+                // that belongs to this invocation is reported (D4-RM13), not
+                // drained away as if it were a past event.
+                if (control_epoch_ != observed.control_generation) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                    // Same deterministic interrupt-vs-final-ready window as
+                    // the pre-poll branch (see pause_for_control_wake_final_
+                    // reap_nolock_): a control wake observed via the gate
+                    // re-check must also expose the window so the final poll
+                    // can be proven to reap a co-ready CQE.
+                    pause_for_control_wake_final_reap_nolock_();
+#endif
+                    return BackendWakeReason::interrupted;
+                }
+                if (progress_epoch_ != observed.progress_generation) {
+                    return BackendWakeReason::progress;
+                }
                 drain_eventfd_nolock_();
+                // Register this park: the waiter is now a parked participant
+                // counted by the next publish (pending_wake_count_ =
+                // parked_count_), and its later acknowledgement releases the
+                // gate for future-generation waiters. The registration is
+                // atomic with the drain (both under mtx_), so a publish either
+                // preceded it (this waiter's observed token is already fresh —
+                // it parks normally) or follows it (this waiter is counted
+                // and woken by the token).
+                ++parked_count_;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                 // Deterministic multi-participant park observation: count EACH
                 // participant reaching the final pre-poll point (snapshot done,
                 // empty serialized poll done, epochs checked, eventfd drained,
-                // about to call poll(2)). A single bool cannot prove N waiters
-                // parked; the count does. The test waits for count == N using a
-                // bounded deadline ONLY as a hang watchdog, then drives the
-                // control wake — no sleep is ever the ordering proof
-                // (AGENTS.md §13.3). One-way latch; disarm by null. Compiled
-                // out of production builds.
+                // parked registration made, about to call poll(2)). A single
+                // bool cannot prove N waiters parked; the count does. The test
+                // waits for count == N using a bounded deadline ONLY as a hang
+                // watchdog, then drives the control wake — no sleep is ever the
+                // ordering proof (AGENTS.md §13.3). One-way latch; disarm by
+                // null. Compiled out of production builds.
                 if (auto* c = prepark_counter_.load(std::memory_order_acquire)) {
                     c->fetch_add(1, std::memory_order_relaxed);
                 }
@@ -199,43 +260,74 @@ class UringWaitSource final : public BackendWaitSource {
             pfds[1].events = POLLIN;
             pfds[1].revents = 0;
             const int rc = poll_nolock_(pfds, 2, -1);
-            if (rc < 0) {
-                // EINTR: re-check epochs and park again (no state changed).
-                // Any OTHER poll failure is a real wait-domain failure with no
-                // Result<> channel here: fail-fast (stderr + terminate) rather
-                // than busy-spin or fabricate a reason (mutant D4-RM12).
-                if (errno == EINTR) {
+            {
+                std::unique_lock<std::mutex> lk(mtx_);
+                // Unregister: this waiter is no longer a parked participant
+                // (the next publish will not count it).
+                --parked_count_;
+                if (rc < 0) {
+                    // EINTR: re-check the epochs under mtx_ (a publish may
+                    // have landed during the park — it must be reported, and
+                    // this parked waiter acknowledges its wake exactly once),
+                    // else re-loop through gate + drain + re-register. EINTR
+                    // changes no state.
+                    // Any OTHER poll failure is a real wait-domain failure
+                    // with no Result<> channel here: fail-fast (stderr +
+                    // terminate) rather than busy-spin or fabricate a reason
+                    // (mutant D4-RM12).
+                    if (errno != EINTR) {
+                        std::fprintf(stderr,
+                                     "sluice::async::detail::UringWaitSource: "
+                                     "poll(2) failed with errno=%d "
+                                     "(wait-domain failure)\n",
+                                     errno);
+                        std::fflush(stderr);
+                        std::terminate();
+                    }
+                    if (control_epoch_ != observed.control_generation) {
+                        acknowledge_parked_wake_locked_();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                        pause_for_control_wake_final_reap_nolock_();
+#endif
+                        return BackendWakeReason::interrupted;
+                    }
+                    if (progress_epoch_ != observed.progress_generation) {
+                        acknowledge_parked_wake_locked_();
+                        return BackendWakeReason::progress;
+                    }
                     continue;
                 }
-                std::fprintf(stderr,
-                             "sluice::async::detail::UringWaitSource: poll(2) "
-                             "failed with errno=%d (wait-domain failure)\n",
-                             errno);
-                std::fflush(stderr);
-                std::terminate();
-            }
-            if ((pfds[0].revents & POLLNVAL) != 0 ||
-                (pfds[1].revents & POLLNVAL) != 0) {
-                // A parked waiter with a torn-down ring/control fd is a caller
-                // contract violation (quiescent destruction requires zero
-                // outstanding, and a parked waiter implies outstanding > 0).
-                std::fprintf(stderr,
-                             "sluice::async::detail::UringWaitSource: parked "
-                             "wait observed a closed fd (contract violation)\n");
-                std::fflush(stderr);
-                std::terminate();
-            }
-            // Post-poll reason classification (control > progress > ring
-            // readiness). Re-read BOTH epochs under mtx_ (the same lock
-            // interrupt_all/signal_progress publish under) so a control or
-            // progress bump that landed during poll() is observed. Ring POLLIN
-            // alone (no epoch delta) is progress; control ALWAYS wins when both
-            // fired, because the caller's final poll reaps the co-ready CQE
-            // and control is shutdown/liveness authority (must not be swallowed
-            // by physical ring progress).
-            {
-                std::lock_guard<std::mutex> lk(mtx_);
+                if ((pfds[0].revents & POLLNVAL) != 0 ||
+                    (pfds[1].revents & POLLNVAL) != 0) {
+                    // A parked waiter with a torn-down ring/control fd is a
+                    // caller contract violation (quiescent destruction
+                    // requires zero outstanding, and a parked waiter implies
+                    // outstanding > 0).
+                    std::fprintf(stderr,
+                                 "sluice::async::detail::UringWaitSource: "
+                                 "parked wait observed a closed fd (contract "
+                                 "violation)\n");
+                    std::fflush(stderr);
+                    std::terminate();
+                }
+                // Post-poll reason classification (control > progress > ring
+                // readiness). Re-read BOTH epochs under mtx_ (the same lock
+                // interrupt_all/signal_progress publish under) so a control or
+                // progress bump that landed during poll() is observed. Ring
+                // POLLIN alone (no epoch delta) is progress; control ALWAYS
+                // wins when both fired, because the caller's final poll reaps
+                // the co-ready CQE and control is shutdown/liveness authority
+                // (must not be swallowed by physical ring progress).
+                //
+                // An epoch delta here means a publish landed while THIS
+                // waiter was parked: the waiter acknowledges the wake it was
+                // counted for (pending_wake_count_ was set to the parked count
+                // at publish, this waiter included), releasing the durable-
+                // broadcast gate for future-generation waiters. Exactly one
+                // acknowledgment per parked-at-publish waiter; waiters blocked
+                // on the gate are notified when the count reaches zero.
                 if (control_epoch_ != observed.control_generation) {
+                    acknowledge_parked_wake_locked_();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
                     // Same deterministic interrupt-vs-final-ready window as the
                     // pre-poll branch (see pause_for_control_wake_final_reap_
@@ -247,13 +339,15 @@ class UringWaitSource final : public BackendWaitSource {
                     return BackendWakeReason::interrupted;
                 }
                 if (progress_epoch_ != observed.progress_generation) {
+                    acknowledge_parked_wake_locked_();
                     return BackendWakeReason::progress;
                 }
                 if ((pfds[0].revents & POLLIN) != 0) {
                     return BackendWakeReason::progress;
                 }
             }
-            // Spurious / control-fd-only wake: loop (epochs re-checked, drain).
+            // Spurious / control-fd-only wake: loop (epochs re-checked, gate
+            // re-checked, drain).
         }
     }
 
@@ -267,6 +361,12 @@ class UringWaitSource final : public BackendWaitSource {
         {
             std::lock_guard<std::mutex> lk(mtx_);
             ++control_epoch_;
+            // D4-RM15 (P0-2): every waiter parked right now is an OLD-
+            // generation waiter that this wake must reach. It is counted by
+            // the durable-broadcast gate; the gate blocks future-generation
+            // waiters from draining the transport token until each counted
+            // waiter acknowledges its wake (see wait_for_change).
+            pending_wake_count_ = parked_count_;
         }
         wake_pollers_();
     }
@@ -280,8 +380,34 @@ class UringWaitSource final : public BackendWaitSource {
         {
             std::lock_guard<std::mutex> lk(mtx_);
             ++progress_epoch_;
+            // D4-RM15 (P0-2): same durable-broadcast gate as interrupt_all —
+            // a progress token must reach every parked-at-publish waiter too.
+            pending_wake_count_ = parked_count_;
         }
         wake_pollers_();
+    }
+
+    // D4-RM14 (P0-1, commit-to-park handshake): one-shot committed-wait
+    // registration (see BackendWaitSource). Called by the Scheduler's MW-S2
+    // Phase-B commit under global_mtx_ BEFORE the participant is exposed as
+    // about-to-park; the consumed floor makes the NEXT wait_one() invocation
+    // observe any control wake published after the registration, even when it
+    // lands before the invocation's own snapshot (D4-RM13 invocation-begin
+    // semantics). One-shot: a FUTURE invocation captures a fresh baseline, so
+    // the interrupt stays one-shot.
+    BackendWaitToken arm_committed_wait() noexcept override {
+        std::lock_guard<std::mutex> lk(mtx_);
+        armed_control_generation_ = control_epoch_;
+        armed_ = true;
+        return BackendWaitToken{progress_epoch_, control_epoch_};
+    }
+    BackendWaitToken consume_committed_wait() noexcept override {
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (armed_) {
+            armed_ = false;
+            return BackendWaitToken{progress_epoch_, armed_control_generation_};
+        }
+        return BackendWaitToken{progress_epoch_, control_epoch_};
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -336,9 +462,29 @@ class UringWaitSource final : public BackendWaitSource {
 
   private:
     // Empty the eventfd counter (non-blocking; EAGAIN when already empty).
+    // Must be called under mtx_ and only when pending_wake_count_ == 0 (the
+    // durable-broadcast gate): every token in the counter is then stale (all
+    // its parked-at-publish waiters have rechecked), so draining cannot steal
+    // an old-generation wake.
     void drain_eventfd_nolock_() noexcept {
         std::uint64_t value = 0;
         while (::read(control_fd_, &value, sizeof(value)) == sizeof(value)) {
+        }
+    }
+
+    // D4-RM15 (P0-2): acknowledge one parked waiter's wake (see
+    // wait_for_change). Decrements the durable-broadcast gate and notifies
+    // future-generation waiters blocked on it when the last parked-at-publish
+    // waiter acknowledges. Must be called under mtx_, from a post-poll path
+    // that observed an epoch delta — the acknowledgment of the wake this
+    // waiter was counted for (pending_wake_count_ was set to the parked count
+    // at publish, this waiter included).
+    void acknowledge_parked_wake_locked_() noexcept {
+        if (pending_wake_count_ > 0) {
+            --pending_wake_count_;
+            if (pending_wake_count_ == 0) {
+                cv_.notify_all();
+            }
         }
     }
 
@@ -374,16 +520,31 @@ class UringWaitSource final : public BackendWaitSource {
         return ::poll(pfds, static_cast<nfds_t>(nfds), timeout);
     }
 
-    // Write one counter unit: level-triggered POLLIN wakes every parked
-    // poll(2). Called AFTER the epoch was published under mtx_.
+    // Write one counter unit: level-triggered POLLIN wakes every poller parked
+    // at this moment. Called AFTER the epoch was published under mtx_. The
+    // token stays in the counter until every parked-at-publish waiter
+    // rechecked (the durable-broadcast gate blocks draining), so a woken
+    // poller's readiness recheck always finds it readable — the wake is never
+    // stolen by a future-generation waiter.
     void wake_pollers_() noexcept {
         const std::uint64_t one = 1;
         (void)::write(control_fd_, &one, sizeof(one));
     }
 
     mutable std::mutex mtx_;
+    std::condition_variable cv_;
     std::uint64_t progress_epoch_ = 0;
     std::uint64_t control_epoch_ = 0;
+    // D4-RM15 (P0-2, durable-broadcast gate): parked_count_ = waiters currently
+    // registered in poll; pending_wake_count_ = waiters that were parked when
+    // the last wake was published and have not yet acknowledged it. All
+    // guarded by mtx_.
+    std::size_t parked_count_ = 0;
+    std::size_t pending_wake_count_ = 0;
+    // D4-RM14 (P0-1, commit-to-park handshake): one-shot armed control floor
+    // (see arm_committed_wait / consume_committed_wait). Guarded by mtx_.
+    std::uint64_t armed_control_generation_ = 0;
+    bool armed_ = false;
     int ring_fd_ = -1;
     int control_fd_ = -1;
 

@@ -66,6 +66,14 @@ class ReadyWaitSource final : public BackendWaitSource {
         if (auto* f = wait_phase_flag_.load(std::memory_order_acquire)) {
             f->store(true, std::memory_order_release);
         }
+        // D4-RM14 (P0-1) re-entry counter: counts EVERY wait_for_change entry
+        // (monotonic — no reset race). The commit-to-park detector uses it to
+        // prove the run terminated and re-entered after a stop injected in the
+        // commit-to-wait_one window (the second entry parks; a single entry
+        // means the first wait parked THROUGH the interrupt — the mutant).
+        if (auto* c = prepark_counter_.load(std::memory_order_acquire)) {
+            c->fetch_add(1, std::memory_order_relaxed);
+        }
 #endif
         ready_cv_.wait(lk, [&] {
             return ready_epoch_ != observed.progress_generation ||
@@ -91,6 +99,33 @@ class ReadyWaitSource final : public BackendWaitSource {
         ready_cv_.notify_all();
     }
 
+    // D4-RM14 (P0-1, commit-to-park handshake): one-shot committed-wait
+    // registration. arm_committed_wait() records the current control
+    // generation as the mandatory observation floor for the NEXT wait_one()
+    // invocation; consume_committed_wait() hands that floor back exactly once
+    // (then behaves like snapshot()). Called by the Scheduler's MW-S2 Phase-B
+    // commit under global_mtx_ BEFORE the participant is exposed as about-to-
+    // park, so a runtime stop landing between the commit and wait_one()'s own
+    // snapshot is observed by that invocation (D4-RM13 invocation-begin
+    // semantics) instead of being rebaselined as a past event. The CV
+    // predicate below is persistent (per-waiter observed token), so a future
+    // waiter can never consume another waiter's wake — no transport token to
+    // steal; the arm/consume only closes the pre-snapshot window.
+    BackendWaitToken arm_committed_wait() noexcept override {
+        std::lock_guard<std::mutex> lk(mtx_);
+        armed_control_generation_ = control_epoch_;
+        armed_ = true;
+        return BackendWaitToken{ready_epoch_, control_epoch_};
+    }
+    BackendWaitToken consume_committed_wait() noexcept override {
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (armed_) {
+            armed_ = false;
+            return BackendWaitToken{ready_epoch_, armed_control_generation_};
+        }
+        return BackendWaitToken{ready_epoch_, control_epoch_};
+    }
+
     // Real readiness publication: the caller must have published the request
     // lifecycle state (backend_ready) FIRST (I4); this bumps the progress
     // epoch under the mutex and notifies. notify_all (not notify_one): with
@@ -108,6 +143,11 @@ class ReadyWaitSource final : public BackendWaitSource {
     void set_wait_phase_flag(std::atomic<bool>* flag) noexcept {
         wait_phase_flag_.store(flag, std::memory_order_release);
     }
+    // Per-entry wait counter (see wait_for_change): counts every wait_for_change
+    // entry. Observe-only; compiled out of production builds.
+    void set_wait_prepark_counter(std::atomic<int>* counter) noexcept {
+        prepark_counter_.store(counter, std::memory_order_release);
+    }
 #endif
 
   private:
@@ -115,12 +155,18 @@ class ReadyWaitSource final : public BackendWaitSource {
     std::condition_variable ready_cv_;
     std::uint64_t ready_epoch_ = 0;
     std::uint64_t control_epoch_ = 0;
+    // D4-RM14 (P0-1): one-shot armed control floor (see arm_committed_wait /
+    // consume_committed_wait). Guarded by mtx_.
+    std::uint64_t armed_control_generation_ = 0;
+    bool armed_ = false;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // Deterministic wait-phase entry flag (see set_wait_phase_flag). Compiled
     // out of production builds; the layout cost in the internal-testing target
     // is accepted and documented (AGENTS.md §8).
     std::atomic<std::atomic<bool>*> wait_phase_flag_{nullptr};
+    // D4-RM14: per-entry wait counter (see set_wait_prepark_counter).
+    std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
 #endif
 };
 
