@@ -1,5 +1,5 @@
-// Phase C2e — AsyncIoContext::wait_one interrupted-branch final poll detector
-// (Issue #68 rows 15-16; mutant M12 evidence).
+// Phase C2e — AsyncIoContext::wait_one CONTEXT-LEVEL detectors
+// (Issue #68 rows 15-16 mutant M12 + round-3 P0 mutant D4-RM13 evidence).
 //
 // The L1 production split-wait path (AsyncIoContext::wait_one, issue #67):
 //
@@ -25,6 +25,26 @@
 //
 // The interleaving is fully gated (parked flag, paused-after-interrupt flag,
 // explicit resume) — no sleep_for, no timing proof.
+//
+// D4-RM13 (P0, round-3): the INTER-ITERATION control-wake detector. The
+// control baseline belongs to the whole external wait_one() invocation, not
+// one internal progress iteration. A control wake that lands between
+// wait_for_change() returning `progress` and the next internal snapshot used
+// to be absorbed into the fresh snapshot (rebaselined away), drained, and
+// reparked forever. This file's second case pins that invariant on the REAL
+// production context loop with a test-only pause at the exact window
+// (AsyncIoContext::WaitSourceProgressPauseGate, compiled out of production):
+//
+//   T1: wait_one begins, Cbase=C0, first wait_for_change returns progress
+//       -> PAUSED before the next snapshot
+//   T2: consumes A (the next poll finds nothing); B remains blocked
+//   controller: interrupt_all(), C0 -> C1
+//   resume T1: progress baseline may refresh; control baseline stays C0
+//       -> wait_for_change sees C1 != C0 -> interrupted -> final poll -> 0
+//
+// Under the D4-RM13 mutant (control rebaselined per internal iteration) the
+// fresh snapshot captures C1, no epoch delta remains, the stale control
+// eventfd is drained, and T1 reparks on B forever (bounded watchdog -> RED).
 #include "harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>
@@ -262,6 +282,157 @@ SLUICE_TEST_CASE(ctx_wait_one_interrupt_final_poll_closes_ready_race) {
     // clear outstanding before the context destructor's L11 check.
     ws->resume.store(true, std::memory_order_release);
     (void)join_bounded(waiter, a_finished, deadline);
+    raw->outstanding_ops.store(0);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// ---------------------------------------------------------------------------
+// D4-RM13 — inter-iteration control-wake detector (the round-3 P0).
+//
+// Scenario (fully deterministic, no timing proof):
+//
+//   T1: external wait_one begins, Cbase = C0
+//       poll -> 0, outstanding > 0
+//       wait_for_change({P0, C0}) -> parks in the ready wait
+//   controller: signal_progress() -> progress_epoch P0 -> P1, cv notify
+//   T1: wait_for_change returns progress (P1 != P0, C still C0)
+//       -> PAUSED at the context's WaitSourceProgressPauseGate (the exact
+//          inter-iteration window: wait_for_change returned, the next
+//          snapshot has not run)
+//   controller: consume A (ready_pending set + signal_progress so T2's poll
+//       returns 1; here we instead just set outstanding to leave one blocked
+//       op, and drive a progress that T1 will NOT see because the next poll
+//       finds nothing ready)
+//   controller: interrupt_all() -> control_epoch C0 -> C1
+//   resume T1: the next snapshot sees {P_now, C1}. The fix pins control to
+//       Cbase=C0, so wait_for_change({P_now, C0}) sees C1 != C0 and returns
+//       interrupted -> final poll -> 0. Under the D4-RM13 mutant (control
+//       rebaselined per internal iteration) the snapshot absorbs C1 into the
+//       observed token, the stale control event is drained, and wait_for_
+//       change finds no delta and reparks forever (bounded watchdog -> RED).
+//
+// The control wake is delivered AFTER the first progress wake has already
+// returned to the context — this is the inter-iteration window the round-2
+// UringWaitSource fix could not close (the race is past wait_for_change's
+// return), so the authority lives at the context.
+//
+// The waiter keeps one blocked op outstanding so it parks (and stays parked
+// under the mutant); a clean teardown resets outstanding to 0 before the L11
+// destructor check.
+SLUICE_TEST_CASE(ctx_wait_one_inter_iteration_control_wake_not_lost) {
+    auto backend = std::make_unique<SplitWaitProbeBackend>();
+    SplitWaitProbeBackend* raw = backend.get();
+    SplitWaitProbeBackend::ProbeWaitSource* ws = &backend->ws;
+    // One blocked op keeps outstanding > 0 so the waiter parks.
+    raw->outstanding_ops.store(1);
+    AsyncIoContext ctx(std::move(backend));
+
+    AsyncIoContext::WaitSourceProgressPauseGate gate;
+    ctx.set_wait_source_progress_pause_gate_for_test(&gate);
+
+    Result<std::size_t> w{std::size_t{999}};
+    std::atomic<bool> done{false};
+    std::thread waiter([&] {
+        w = ctx.wait_one();
+        done.store(true, std::memory_order_release);
+    });
+
+    const auto deadline = std::chrono::steady_clock::now() + kWaitTimeout;
+    const char* fail_msg = nullptr;
+
+    // Step 1: T1 must park in the ready wait (empty reap, about to block).
+    if (!wait_flag(ws->parked, deadline)) {
+        fail_msg = "T1 never entered the ready wait";
+    }
+
+    // Step 2: drive a PROGRESS wake so wait_for_change returns progress. T1
+    // then reaches the context-level inter-iteration pause gate.
+    if (fail_msg == nullptr) {
+        ws->signal_progress();
+        if (!wait_flag(gate.paused, deadline)) {
+            fail_msg = "T1 never reached the inter-iteration pause after a "
+                       "progress wake (the pause seam may be mis-wired)";
+        } else if (done.load(std::memory_order_acquire)) {
+            fail_msg = "T1 must still be paused, not finished";
+        }
+    }
+
+    // Step 3: while T1 is paused at the inter-iteration window, fire a
+    // CONTROL wake. No ready op is recorded, so T1's next poll reaps nothing
+    // and the blocked op stays outstanding.
+    if (fail_msg == nullptr) {
+        ctx.interrupt_backend_waiters();
+    }
+
+    // Step 4: release T1. Under the fix the control baseline (C0) is
+    // preserved across the internal loop, so wait_for_change sees C1 != C0
+    // and returns interrupted -> final poll -> 0. Under the D4-RM13 mutant
+    // (control rebaselined per internal iteration) the fresh snapshot absorbs
+    // C1, no delta remains, and T1 reparks on the blocked op forever.
+    //
+    // NOTE on the second pause: the ProbeWaitSource pauses AGAIN when its
+    // wait_for_change observes the interrupt and is about to return
+    // `interrupted` (this is the close-the-interrupt-vs-final-ready-race gate
+    // reused by the probe — it does NOT affect which branch wait_for_change
+    // takes). For D4-RM13 the load-bearing observation is that T1 REACHES
+    // this second pause at all: under the mutant T1 never re-enters
+    // wait_for_change with a control delta (it absorbed C1 into the token and
+    // reparks), so `ws->paused` never fires the SECOND time. We wait for the
+    // second ws->paused here, then release the probe so T1 can return
+    // `interrupted` -> final poll -> 0.
+    if (fail_msg == nullptr) {
+        gate.resume.store(true, std::memory_order_release);
+        // The first wait_for_change returns `progress` (P0 -> P1), which takes
+        // the progress branch and does NOT set ws->paused (only the interrupt
+        // branch sets paused). The reset is therefore DEFENSIVE: it clears any
+        // stale observation so wait_flag(ws->paused, ...) below observes ONLY
+        // the second pause — the interrupt-branch pause that proves T1 reached
+        // the inter-iteration control-wake recheck.
+        ws->paused.store(false, std::memory_order_release);
+        if (!wait_flag(ws->paused, deadline)) {
+            fail_msg = "T1 never returned after resume — the inter-iteration "
+                       "control wake was rebaselined away and T1 reparked "
+                       "(D4-RM13 mutant: control_generation pinned per loop)";
+        }
+    }
+
+    // Release the probe's interrupt-window pause so T1 can finish (interrupted
+    // -> final poll -> 0). The probe gate is the LAST thing holding T1.
+    if (fail_msg == nullptr) {
+        ws->resume.store(true, std::memory_order_release);
+        if (!wait_flag(done, deadline)) {
+            fail_msg = "T1 never finished after the probe release";
+        } else if (!w.has_value() || w.value() != 0) {
+            fail_msg = "wait_one must return 0 (interrupted, nothing "
+                       "fabricated) after the inter-iteration control wake";
+        }
+    }
+
+    // cleanup (both paths): release the pauses (idempotent), clear the
+    // inter-iteration gate, and FORCE-wake any stranded parker before joining
+    // (the D4-RM13 mutant leaves T1 reparked on the blocked op; without a
+    // force-wake the waiter would strand and the std::thread destructor would
+    // terminate instead of reporting the failure cleanly). The cleanup uses a
+    // FRESH deadline so a 5s RED observation does not starve the join. clear
+    // outstanding before the L11 destructor check.
+    //
+    // Ordering note: ws->resume MUST be set true BEFORE ws->signal_progress()
+    // or ws->interrupt_all(). ProbeWaitSource::wait_for_change spins on
+    // `resume` while HOLDING mtx_ (the test-only lock-during-pause exception),
+    // and signal_progress()/interrupt_all() both acquire mtx_ to bump their
+    // epoch + notify the cv. If resume were set AFTER the wake, a parker still
+    // spinning under mtx_ would block the wake's lock acquisition and strand —
+    // so the resume-before-wake order is an intentional exception to the normal
+    // "set persistent state before signaling" expectation, and it is preserved
+    // here.
+    gate.resume.store(true, std::memory_order_release);
+    ws->resume.store(true, std::memory_order_release);
+    ws->signal_progress();  // nudge a stranded parker's cv predicate
+    ws->interrupt_all();    // bump control so a parked cv returns
+    ctx.set_wait_source_progress_pause_gate_for_test(nullptr);
+    const auto cleanup_deadline =
+        std::chrono::steady_clock::now() + kWaitTimeout;
+    (void)join_bounded(waiter, done, cleanup_deadline);
     raw->outstanding_ops.store(0);
     if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
 }

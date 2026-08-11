@@ -54,6 +54,12 @@ enum class PhaseTag : unsigned char {
     worker_topology_joined_before_unpublish,
     // E7-T11: worker paused at MW-S2 Phase-B commit boundary.
     mw_admission_phase_b,
+    // D4-RM14 (P0-1): MW-S2 participant paused AFTER its commit-to-park
+    // registration (arm under global_mtx_) and BEFORE entering ctx_.wait_one().
+    // Runs OUTSIDE global_mtx_. A test injects request_stop() here and proves
+    // the armed baseline makes the upcoming wait_one() observe the interrupt
+    // (register -> publish -> release -> wait with the registered baseline).
+    mw_s2_committed_before_wait_one,
     // E9-CORRECTIVE: worker paused at ParkCandidate boundary (pre-physical-wait).
     scheduler_park_candidate,
     // E9-CORRECTIVE: worker paused at park commit boundary (pre-wake_cv.wait).

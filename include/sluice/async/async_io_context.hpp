@@ -25,6 +25,8 @@
 #include <memory>
 #include <mutex>
 
+#include <atomic>
+
 namespace sluice::async {
 
 // --- Op descriptors (ADR §3). All read/write ops are POSITIONAL (P1): they
@@ -93,6 +95,28 @@ public:
     // cancel real I/O. One-shot: future waits snapshot the advanced control
     // generation and park normally again.
     virtual void interrupt_all() noexcept = 0;
+
+    // D4-RM14 (P0-1, commit-to-park handshake): arm a ONE-SHOT mandatory
+    // control-observation baseline for the NEXT wait_one() invocation. Called
+    // by the committing authority (the Scheduler's MW-S2 Phase-B commit,
+    // under global_mtx_) BEFORE the participant is exposed as about-to-park.
+    // A control-plane wake (close_admission / interrupt_backend_waiters)
+    // published AFTER this call is then guaranteed observed by that wait_one()
+    // invocation even when it lands in the commit-to-wait_one window, before
+    // the invocation captured its own snapshot — without the registration the
+    // wake is rebaselined as a past event and the participant can park
+    // forever (the P0-1 runtime shutdown race). The default (no registration)
+    // behaves exactly like snapshot(); split-wait backends that must not lose
+    // a pre-snapshot interrupt override both methods (ReadyWaitSource /
+    // UringWaitSource).
+    virtual BackendWaitToken arm_committed_wait() noexcept { return snapshot(); }
+    // One-shot consume of a previously armed baseline; without one, behaves
+    // like snapshot(). wait_one() calls this at invocation start INSTEAD of
+    // snapshot() so the commit-to-park registration wins over the entry
+    // snapshot (D4-RM13: the control baseline is captured once per external
+    // invocation, and the commit is the invocation-begin for a Scheduler
+    // participant).
+    virtual BackendWaitToken consume_committed_wait() noexcept { return snapshot(); }
 };
 
 // The internal backend boundary (ADR §4) — and simultaneously a PUBLIC
@@ -118,10 +142,11 @@ public:
     void attach_stats(AsyncStats* s) { stats_ = s; }
 
     // Hand an op to the backend against the caller-owned Completion. The backend
-    // claims the Completion via try_claim() (ADR-explicit-io-completion-authority:
-    // the backend is the claiming authority). Returns Result<void>: submit-time
-    // errors (queue full, invalid op, Completion not idle — L8) are synchronous
-    // (ADR E5).
+    // claims the Completion through the two-stage binding (ADR-explicit-io-
+    // completion-authority + ADR-explicit-io-request-contract Decision 5: the
+    // backend is the claiming authority; `binding -> outstanding` is the
+    // acceptance LP). Returns Result<void>: submit-time errors (queue full,
+    // invalid op, Completion not idle — L8) are synchronous (ADR E5).
     virtual Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_write(WriteOp op, Completion<std::size_t>& c) = 0;
     virtual Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) = 0;
@@ -179,15 +204,20 @@ protected:
         return c.try_claim_for_backend();
     }
 
-    // Phase B/E (ADR-explicit-io-request-contract, Accepted, Decision 5): the
+    // Phase B/E/D (ADR-explicit-io-request-contract, Accepted, Decision 5): the
     // accepted request lifecycle splits the claim into a private two-stage
     // binding so the winning backend can install RequestKey/context/release
-    // capability before the Completion becomes observable as outstanding.
-    // Migrated backends (Fake, Sync in Phase B; ThreadPool in Phase E) use this
-    // protocol; the legacy single-step try_claim above remains for the
-    // not-yet-migrated backend (Uring), which is out of Phase B/E scope. The two
-    // paths share the same private-access boundary (friend AsyncBackend); they
-    // do not race because a given Completion is driven by exactly one backend.
+    // capability before the Completion becomes observable as outstanding. All
+    // production backends (Fake, Sync in Phase B; ThreadPool in Phase E; Uring
+    // in Phase D) now use this protocol — the `binding -> outstanding`
+    // release-store is the acceptance LP (ADR §"Commit / accept" Step 5). The
+    // legacy single-step `try_claim` above is retained ONLY as a protected
+    // helper for the external-backend-authority negative-compile probe
+    // (tests/external_backend_authority_negative_probe.cpp), which exercises
+    // the simplest claim shape to prove the protected-access boundary; no
+    // production backend uses it for acceptance. The two helpers share the
+    // same private-access boundary (friend AsyncBackend); they do not race
+    // because a given Completion is driven by exactly one backend.
     template <class T>
     static bool begin_binding(Completion<T>& c) noexcept {
         return c.begin_binding_for_backend();
@@ -285,20 +315,76 @@ public:
     // returned (an empty wait is a no-progress boundary, never a park).
     // Without the capability the legacy serialized contract applies (the whole
     // call, including a backend-side block, runs under access_mtx_).
+    //
+    // D4-RM13 (control-wake theorem): the CONTROL baseline is captured ONCE
+    // at the start of this external invocation and held fixed for its whole
+    // duration — a control-plane wake landing any time after the call began
+    // (including the inter-iteration window between wait_for_change() returning
+    // `progress` and the next internal snapshot) is observed as interrupted
+    // and the call terminates with its final poll. The PROGRESS baseline may
+    // refresh per internal loop. A FUTURE wait_one() captures a fresh baseline,
+    // so the interrupt stays one-shot — never a sticky shutdown flag, never a
+    // busy-spin (the one-shot control-generation contract).
+    //
+    // D4-RM14 (commit-to-park handshake): the invocation baseline comes from
+    // consume_committed_wait() — a Scheduler MW-S2 participant that armed a
+    // committed-wait registration at its Phase-B commit (under global_mtx_,
+    // before this call) uses the ARMED control generation as its baseline, so
+    // a control wake published after the commit is observed even if it landed
+    // before this call entered. Without a registration the behavior is
+    // unchanged (a fresh snapshot at entry).
     Result<std::size_t> wait_one();
 
     // Control-plane wake for a split-phase wait in progress (issue #67): wakes
     // every participant parked in wait_one()'s observe phase so shutdown /
-    // admission close can re-evaluate. No-op for backends without the wait
-    // capability. Never fabricates readiness, never touches request state, and
-    // never blocks on access_mtx_.
+    // admission close can re-evaluate. Per the D4-RM13 control-wake theorem
+    // the wake is observed by ANY wait_one() invocation in flight at the time
+    // of the interrupt (control baseline is per-invocation), including one
+    // that has just returned from a progress wake and is between internal
+    // iterations. No-op for backends without the wait capability. Never
+    // fabricates readiness, never touches request state, and never blocks on
+    // access_mtx_.
     void interrupt_backend_waiters() noexcept;
+
+    // D4-RM14 (P0-1, commit-to-park handshake): register the mandatory
+    // control-observation baseline with the backend wait source for the NEXT
+    // wait_one() invocation. Called by the Scheduler's MW-S2 participant at
+    // its Phase-B commit, under global_mtx_ and BEFORE releasing the
+    // admission authority — so a runtime stop (request_stop ->
+    // interrupt_backend_waiters) landing between the commit and the
+    // participant's wait_one() entry is observed by that invocation instead
+    // of being rebaselined as a past event. One-shot: consumed by the next
+    // wait_one(); a future invocation captures a fresh baseline (the
+    // interrupt stays one-shot). No-op for backends without the split wait
+    // capability; never blocks on access_mtx_. Internal-use counterpart of
+    // interrupt_backend_waiters().
+    void arm_backend_wait_commit() noexcept;
 
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);
 
     std::size_t outstanding() const noexcept;
     const AsyncStats* stats() const noexcept { return stats_; }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Deterministic context-level pause (D4-RM13 detector seam): the
+    // inter-iteration control-wake detector
+    // (ctx_wait_one_inter_iteration_control_wake_not_lost in
+    // async_io_context_split_wait_c2e_test) pauses wait_one AFTER
+    // wait_for_change reports `progress` and BEFORE the next internal
+    // snapshot — the exact inter-iteration window where a control wake used
+    // to be absorbed into a fresh snapshot (rebaselined away), drained, and
+    // reparked forever. Compiled out of production builds; the layout cost in
+    // the internal-testing target is accepted and documented (AGENTS.md §15).
+    struct WaitSourceProgressPauseGate {
+        std::atomic<bool> paused{false};  // reached the pause point
+        std::atomic<bool> resume{false};  // test sets to release the loop
+        std::atomic<bool> exited{false};  // pause exited (for RAII release)
+    };
+    void set_wait_source_progress_pause_gate_for_test(WaitSourceProgressPauseGate* gate) noexcept {
+        wait_source_progress_gate_.store(gate, std::memory_order_release);
+    }
+#endif
 
 private:
     std::unique_ptr<AsyncBackend> backend_;
@@ -311,6 +397,14 @@ private:
     // operations. No context-level lock is ever held across an unbounded
     // block (issue #67).
     mutable std::mutex access_mtx_;
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // D4-RM13 detector seam state (see WaitSourceProgressPauseGate). Compiled
+    // out of production builds; the layout cost in the internal-testing target
+    // is accepted and documented (AGENTS.md §15).
+    std::atomic<WaitSourceProgressPauseGate*> wait_source_progress_gate_{nullptr};
+    void pause_after_wait_source_progress_() noexcept;
+#endif
 };
 
 }  // namespace sluice::async

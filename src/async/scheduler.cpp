@@ -762,6 +762,25 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                     ws->park_domain = external_wake_possible_locked()
                                           ? WorkerState::ParkDomain::Scheduler
                                           : WorkerState::ParkDomain::Backend;
+                    // D4-RM14 (P0-1, commit-to-park handshake): register the
+                    // mandatory control-observation baseline with the backend
+                    // wait source NOW — under the admission authority, BEFORE
+                    // the backend-park commitment is exposed and global_mtx_
+                    // is released. A runtime stop (request_stop ->
+                    // interrupt_backend_waiters) landing between this commit
+                    // and the participant's ctx_.wait_one() entry would
+                    // otherwise be rebaselined into the entry snapshot as a
+                    // past event: the participant would park in the BACKEND
+                    // domain (which the Scheduler wake domain cannot
+                    // interrupt) and, with backend I/O that never completes,
+                    // the run could never reach its stop-predicate boundary —
+                    // drain_complete_ unreachable (shutdown liveness). The
+                    // armed baseline makes the upcoming wait_one() observe the
+                    // interrupt and return (register -> publish -> release ->
+                    // wait with the registered baseline).
+                    if (ws->park_domain == WorkerState::ParkDomain::Backend) {
+                        ctx_.arm_backend_wait_commit();
+                    }
                 }
 
                 // Phase C: release global_mtx_ (held only inside the blocks above)
@@ -800,6 +819,21 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
 
                     // BACKEND domain: the E7 path. Backend progress only.
                     ws->park_domain = WorkerState::ParkDomain::Backend;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                    // D4-RM14 detector seam: the committed participant paused
+                    // between its commit-to-park registration (the arm above,
+                    // under global_mtx_) and entering ctx_.wait_one(). A test
+                    // injects request_stop() here; on release the armed
+                    // baseline must make the upcoming wait_one() observe the
+                    // interrupt (return 0), the run terminate, and the driver
+                    // re-enter — the pre-fix code rebaselines the stop into
+                    // the entry snapshot and the participant parks forever.
+                    // Runs OUTSIDE global_mtx_ (released at Phase B block
+                    // end). Compiled out of production builds.
+                    sluice_async_test::test_phase(
+                        *this,
+                        sluice_async_test::PhaseTag::mw_s2_committed_before_wait_one);
+#endif
                     auto wr = ctx_.wait_one();
                     ws->park_domain = WorkerState::ParkDomain::None;
                     // E6/E7 reap semantics: wait_one()==0 means the backend made

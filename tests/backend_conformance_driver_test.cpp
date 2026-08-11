@@ -35,8 +35,32 @@
 
 using namespace sluice::async;
 using sluice_test::conformance::BackendFactory;
+using sluice_test::conformance::CloseDrainFixture;
+using sluice_test::conformance::MakeCloseDrainFixture;
 
 namespace {
+
+// Shared close/drain fixture setup (Phase C2e). Each backend driver builds its
+// concrete backend at a small capacity, then wires the two instance-level seams
+// (AGENTS.md §15) over the backend's PUBLIC close_admission() and
+// arena_slot_in_use() — the suite itself stays backend-agnostic. This helper
+// factors the common raw-pointer capture + CloseDrainFixture construction +
+// close/slot_in_use closure wiring shared by the Fake / ThreadPool / Uring
+// drivers; each passes only its backend-construction callable.
+//
+// The returned unique_ptr keeps the fixture (and the AsyncStats* the
+// AsyncIoContext holds) address-stable: a value return would move the fixture
+// and dangle the stats pointer (AsyncIoContext's move ctor copies the raw
+// stats_ pointer; NRVO is not guaranteed).
+template <typename MakeBackend>
+std::unique_ptr<CloseDrainFixture> make_close_drain_fixture(MakeBackend make_backend) {
+    auto backend = make_backend();
+    auto* raw = backend.get();
+    auto fx = std::make_unique<CloseDrainFixture>(std::move(backend));
+    fx->close = [raw] { raw->close_admission(); };
+    fx->slot_in_use = [raw] { return raw->arena_slot_in_use(); };
+    return fx;
+}
 
 long& temp_counter() { static long c = 0; return c; }
 
@@ -209,16 +233,8 @@ SLUICE_TEST_CASE(conformance_close_drain_fake) {
     // PUBLIC close_admission() / arena_slot_in_use(). The suite stays
     // backend-agnostic; these are instance-level test seams (AGENTS.md §15).
     const sluice_test::conformance::MakeCloseDrainFixture make_fx = [] {
-        auto backend = std::make_unique<FakeAsyncBackend>(4);
-        auto* raw = backend.get();
-        // Return via unique_ptr so the fixture's address (and the AsyncStats*
-        // the AsyncIoContext holds) is stable — a value return would move the
-        // fixture and dangle the stats pointer (AsyncIoContext's move ctor
-        // copies the raw stats_ pointer; NRVO is not guaranteed).
-        auto fx = std::make_unique<sluice_test::conformance::CloseDrainFixture>(std::move(backend));
-        fx->close = [raw] { raw->close_admission(); };
-        fx->slot_in_use = [raw] { return raw->arena_slot_in_use(); };
-        return fx;
+        return make_close_drain_fixture(
+            [] { return std::make_unique<FakeAsyncBackend>(4); });
     };
     const std::string failed =
         sluice_test::conformance::run_close_drain_cases(f, make_fx);
@@ -229,19 +245,44 @@ SLUICE_TEST_CASE(conformance_close_drain_fake) {
     SLUICE_CHECK(failed.empty());
 }
 
+SLUICE_TEST_CASE(conformance_close_drain_uring) {
+    // Phase D4: Uring now has the public close_admission() seam, so it drives
+    // the UNCHANGED shared close/drain suite through its own fixture factory
+    // (the suite asserts only AsyncIoContext-observable state + the driver-
+    // wired close/slot_in_use closures). The shared C2e evidence record gains
+    // "Uring" in its backends tuple. Registered in BOTH modes: the real branch
+    // runs the suite; the stub branch emits the mode=stub meta line only —
+    // build/API honesty, classified INCOMPLETE by the gate (never skip-as-
+    // pass, never a semantic PASS).
+    const auto f = make_uring_factory();
+    sluice_test::conformance::emit_meta(f);
+#if defined(SLUICE_HAS_LIBURING)
+    const sluice_test::conformance::MakeCloseDrainFixture make_fx = [] {
+        return make_close_drain_fixture(
+            [] { return std::make_unique<UringAsyncBackend>(UringConfig{4, 4}); });
+    };
+    const std::string failed =
+        sluice_test::conformance::run_close_drain_cases(f, make_fx);
+    if (!failed.empty()) {
+        std::fprintf(stderr, "[conformance] close/drain FAIL Uring :: %s\n",
+                     failed.c_str());
+    }
+    SLUICE_CHECK(failed.empty());
+#else
+    // Stub: no close_admission seam; nothing to assert beyond build honesty.
+#endif
+}
+
 SLUICE_TEST_CASE(conformance_close_drain_threadpool) {
     const auto f = make_threadpool_factory();
     sluice_test::conformance::emit_meta(f);
     const sluice_test::conformance::MakeCloseDrainFixture make_fx = [] {
-        ThreadPoolConfig cfg;
-        cfg.request_capacity = 4;
-        cfg.worker_count = 1;
-        auto backend = std::make_unique<ThreadPoolBackend>(cfg);
-        auto* raw = backend.get();
-        auto fx = std::make_unique<sluice_test::conformance::CloseDrainFixture>(std::move(backend));
-        fx->close = [raw] { raw->close_admission(); };
-        fx->slot_in_use = [raw] { return raw->arena_slot_in_use(); };
-        return fx;
+        return make_close_drain_fixture([] {
+            ThreadPoolConfig cfg;
+            cfg.request_capacity = 4;
+            cfg.worker_count = 1;
+            return std::make_unique<ThreadPoolBackend>(cfg);
+        });
     };
     const std::string failed =
         sluice_test::conformance::run_close_drain_cases(f, make_fx);

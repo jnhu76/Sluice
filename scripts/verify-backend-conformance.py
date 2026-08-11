@@ -20,8 +20,20 @@
 #     evidence is INCOMPLETE; only provably-satisfied mandatory layers make a
 #     backend ELIGIBLE;
 #   * exits non-zero on any mandatory MISSING_TARGET / BUILD_FAIL / RUN_FAIL,
-#     any INCOMPLETE verdict for a non-kernel backend, or when a registered
+#     any INCOMPLETE verdict for a non-kernel backend, any KernelIo verdict
+#     other than a STUB-mode INCOMPLETE (the D4 lift: a REAL KernelIo run may
+#     pass only when ELIGIBLE — one mandatory detector INCOMPLETE fails the
+#     aggregate; a stub run may pass only as INCOMPLETE and can never be
+#     ELIGIBLE; an unknown/missing mode fails closed), or when a registered
 #     backend's mandatory case-set is not covered.
+#     round-4 (P1-2): the stub tolerance is narrowed to the EXPECTED stub
+#     incompleteness — every insufficient mandatory record must be
+#     manifest-declared (not_implemented), a mode-downgraded shared/capacity/
+#     close-drain record, or a _drive record that executed the full exact
+#     pinned corpus with exactly one valid mode=stub metadata (stub_expected).
+#     A stub run that is INCOMPLETE for ANY other reason (case-set mismatch,
+#     malformed/missing metadata, wrong evidence id, undriven suite) fails the
+#     aggregate too: a stub run must never be green for the wrong reason.
 #
 # Usage:
 #   python3 scripts/verify-backend-conformance.py
@@ -30,10 +42,13 @@
 #                                                            # already built)
 #
 # Exit codes:
-#   0 — every mandatory gate PASS / NOT_APPLICABLE; all profiles honest.
+#   0 — every mandatory gate PASS / NOT_APPLICABLE; all profiles honest
+#       (including a STUB KernelIo INCOMPLETE aggregate run).
 #   1 — at least one mandatory gate did not pass (target missing, build/run
-#       failure, an INCOMPLETE verdict for a non-kernel backend, or a
-#       backend's mandatory case-set uncovered).
+#       failure, an INCOMPLETE verdict for a non-kernel backend, a REAL
+#       KernelIo INCOMPLETE/NOT CONFORMING, a STUB KernelIo NOT CONFORMING or
+#       ELIGIBLE, an unknown KernelIo mode, or a backend's mandatory case-set
+#       uncovered).
 #   2 — harness error (xmake unavailable, manifest import failure).
 """Phase C1 aggregate backend-conformance gate."""
 
@@ -79,6 +94,17 @@ class RunResult:
     state: str
     detail: str = ""
     stdout: str = ""
+    # round-4 (P1-2): True when this INCOMPLETE is the EXPECTED stub
+    # incompleteness — a stub run that executed the full exact pinned
+    # case-set and emitted exactly one valid [evidence-meta] line whose mode
+    # is not allowed by required_modes (or the equivalent shared/capacity/
+    # close-drain mode downgrade, or a manifest-declared not_implemented
+    # gap). ONLY such INCOMPLETE records may keep a stub KernelIo aggregate
+    # green; any other INCOMPLETE reason (case-set mismatch, malformed/
+    # missing metadata, wrong evidence id, undriven suite) fails the stub
+    # aggregate too. Meaningless (and never consulted) for non-INCOMPLETE
+    # states.
+    stub_expected: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -346,10 +372,9 @@ class Gate:
     # executes only build/API classification and is recorded INCOMPLETE.
     capacity_by_backend: dict[str, RunResult] = field(default_factory=dict)
     # Phase C2e: per-backend shared CLOSE/DRAIN-suite result, driven in its own
-    # subprocess (conformance_close_drain_fake / conformance_close_drain_threadpool).
-    # Backends without a close_admission seam (Uring before D4) have no
-    # close/drain driver case; their gap is the manifest's
-    # uring_c2e_close_drain_not_implemented record.
+    # subprocess (conformance_close_drain_fake / conformance_close_drain_threadpool
+    # / conformance_close_drain_uring). After the D4 lift every registered backend
+    # declares a close_drain_driver_case, so this field holds a result for each.
     close_drain_by_backend: dict[str, RunResult] = field(default_factory=dict)
     meta: dict[str, dict[str, str]] = field(default_factory=dict)
 
@@ -361,7 +386,13 @@ class Gate:
             if ev.status == M.STATUS_NOT_IMPLEMENTED:
                 self.results[ev.evidence_id] = RunResult(
                     ev.evidence_id, ev.target, INCOMPLETE,
-                    detail="manifest status not_implemented (Phase C2/D)")
+                    detail="manifest status not_implemented (Phase C2/D)",
+                    # round-4 (P1-2): a manifest-declared gap is EXPECTED
+                    # incompleteness — tolerated in a stub aggregate (it is
+                    # still INCOMPLETE in real mode, where it fails the
+                    # ELIGIBLE requirement). It never masks a malformed
+                    # runtime observation.
+                    stub_expected=True)
                 continue
             if ev.status == M.STATUS_NOT_APPLICABLE:
                 self.results[ev.evidence_id] = RunResult(
@@ -392,10 +423,9 @@ class Gate:
             self._run_capacity_suite(cap_ev)
 
         # Phase C2e: drive the shared CLOSE/DRAIN suite once per registered
-        # backend that HAS a close_admission driver case (Fake, ThreadPool).
-        # Backends without the seam (Uring before D4) have no driver case;
-        # their gap is the manifest's uring_c2e_close_drain_not_implemented
-        # record (never skip-as-pass).
+        # backend that HAS a close_admission driver case (Fake, ThreadPool,
+        # Uring after the D4 lift). A backend without the seam would declare
+        # no driver case; today every registered backend declares one.
         cd_ev = M.evidence_by_id("c2e_shared_close_drain_suite")
         if cd_ev is not None:
             self._run_close_drain_suite(cd_ev)
@@ -460,9 +490,27 @@ class Gate:
                 continue
             rc, out = xmake_run_target(ev.target, env_filter=b.driver_case)
             state, detail = self._classify_shared_run(b, rc, out)
+            stub_expected = False
+            if state == PASS and b.profile == "KernelIoProfile":
+                # Mode attribution (D4 lift audit): the KernelIo shared suite
+                # must be satisfied by REAL kernel execution; a stub-mode PASS
+                # is a build/API subset only. Downgrade to INCOMPLETE unless
+                # the single meta mode is "real". This downgrade is the
+                # EXPECTED stub incompleteness (D4-RM14 P1-2): a clean stub
+                # run with valid meta may not pass, but it is not a
+                # malformation either. Only mode=="stub" qualifies — any
+                # other non-real mode is unexpected and must fail the stub
+                # aggregate (P1-2 round-5: mode=deterministic is neither stub
+                # nor real and proves nothing about the stub build).
+                metas = parse_meta_line_list(out)
+                if len(metas) == 1 and metas[0][2] == "stub":
+                    state = INCOMPLETE
+                    detail = (f"shared-suite execution requires mode='real'; got "
+                              f"mode={metas[0][2]!r} (build/API evidence only)")
+                    stub_expected = True
             self.shared_by_backend[b.name] = RunResult(
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
-                detail=detail, stdout=out)
+                detail=detail, stdout=out, stub_expected=stub_expected)
 
     def _run_capacity_suite(self, ev: M.Evidence) -> None:
         """Phase C2a: drive the shared capacity suite once per backend that has
@@ -502,25 +550,28 @@ class Gate:
                                        env_filter=b.capacity_driver_case)
             state, detail = self._classify_shared_run(
                 b, rc, out, expected_case=b.capacity_driver_case)
+            stub_expected = False
             if state == PASS and b.profile == "KernelIoProfile":
                 metas = parse_meta_line_list(out)
-                if len(metas) == 1 and metas[0][2] != "real":
+                if len(metas) == 1 and metas[0][2] == "stub":
                     state = INCOMPLETE
                     detail = (f"capacity execution requires mode='real'; got "
                               f"mode={metas[0][2]!r} (build/API evidence only)")
+                    # round-4 (P1-2): expected stub incompleteness (see
+                    # _run_shared_suite); only mode=="stub" qualifies (P1-2
+                    # round-5 — a non-stub mode must fail the aggregate).
+                    stub_expected = True
             self.capacity_by_backend[b.name] = RunResult(
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
-                detail=detail, stdout=out)
+                detail=detail, stdout=out, stub_expected=stub_expected)
 
     def _run_close_drain_suite(self, ev: M.Evidence) -> None:
         """Phase C2e: drive the shared close/drain suite once per backend that
-        HAS a close_admission driver case (Fake, ThreadPool), each in its own
-        subprocess. Backends without the seam (Uring before D4) have no
-        close/drain driver case and are skipped here — their gap is the
-        manifest's uring_c2e_close_drain_not_implemented record, surfaced in
-        the verdict via applicable_evidence_for_backend(). Uses the same
-        preflight shape as _run_shared_suite / _run_capacity_suite (target
-        existence + build once).
+        HAS a close_admission driver case (Fake, ThreadPool, and Uring since
+        Phase D4), each in its own subprocess. Same preflight shape as
+        _run_shared_suite / _run_capacity_suite (target existence + build
+        once). A backend without the seam is recorded through its manifest
+        not_implemented record, never a skip-as-pass.
         """
         if not xmake_target_exists(ev.target):
             missing = RunResult(ev.evidence_id, ev.target, MISSING_TARGET,
@@ -548,14 +599,30 @@ class Gate:
         # non-zero -> RUN_FAIL for that backend only.
         for b in M.BACKENDS:
             if not b.close_drain_driver_case:
-                continue  # Uring: no close seam; gap is the manifest record.
+                continue  # No close seam; the gap is the manifest record.
             rc, out = xmake_run_target(ev.target,
                                        env_filter=b.close_drain_driver_case)
             state, detail = self._classify_shared_run(
                 b, rc, out, expected_case=b.close_drain_driver_case)
+            stub_expected = False
+            if state == PASS and b.profile == "KernelIoProfile":
+                # Mode attribution (D4 lift audit): the KernelIo close/drain
+                # suite must be satisfied by REAL kernel execution; a stub-mode
+                # PASS is a build/API subset only (the driver's stub branch
+                # emits the mode=stub meta and runs no cases). Downgrade to
+                # INCOMPLETE unless the single meta mode is "real". This is
+                # the EXPECTED stub incompleteness (D4-RM14 P1-2); only
+                # mode=="stub" qualifies (P1-2 round-5 — a non-stub mode must
+                # fail the aggregate).
+                metas = parse_meta_line_list(out)
+                if len(metas) == 1 and metas[0][2] == "stub":
+                    state = INCOMPLETE
+                    detail = (f"close/drain execution requires mode='real'; got "
+                              f"mode={metas[0][2]!r} (build/API evidence only)")
+                    stub_expected = True
             self.close_drain_by_backend[b.name] = RunResult(
                 f"{ev.evidence_id}:{b.name}", ev.target, state,
-                detail=detail, stdout=out)
+                detail=detail, stdout=out, stub_expected=stub_expected)
 
     def _classify_shared_run(self, backend: M.BackendEntry, rc: int, out: str,
                              expected_case: str = "") -> tuple[str, str]:
@@ -671,10 +738,47 @@ class Gate:
                 else:
                     detail = (f"exit 0; [evidence-meta] evidence={evidence_id} "
                               f"mode={mode}")
+        # round-4 (P1-2): expected-stub-incomplete classification. A stub
+        # build of a real-only evidence target legitimately ends INCOMPLETE
+        # ("mode=stub not in required_modes") — but ONLY when the run is
+        # otherwise clean: exit 0, the FULL exact pinned case-set executed
+        # (G2), and exactly one valid [evidence-meta] line whose mode is
+        # EXACTLY "stub" and disallowed by required_modes. Any other
+        # INCOMPLETE reason (case-set mismatch, zero/extra/malformed
+        # metadata, wrong evidence id) or any other mode (e.g. a
+        # deterministic-mode run of a real-only target) means the run is
+        # malformed and must fail the stub aggregate too — a stub run must
+        # never be green "for the wrong reason" (e.g. a compiled-out
+        # evidence-mode case reporting as mode=real would pass the old
+        # aggregate for exactly the wrong reason; mode=deterministic is
+        # neither stub nor real and proves nothing about the stub build).
+        stub_expected = False
+        if state == INCOMPLETE and ev.required_modes and rc == 0:
+            cs_state = (classify_case_set(parse_run_lines(out), ev.cases)[0]
+                        if ev.cases else PASS)
+            metas = parse_evidence_meta_lines(out)
+            if (cs_state == PASS and len(metas) == 1 and
+                    metas[0][0] == ev.evidence_id and
+                    metas[0][1] == "stub" and
+                    metas[0][1] not in ev.required_modes):
+                stub_expected = True
         return RunResult(ev.evidence_id, ev.target, state,
-                         detail=detail, stdout=out)
+                         detail=detail, stdout=out, stub_expected=stub_expected)
 
     # --- Per-backend verdict computation -----------------------------------
+
+    def _result_for_evidence(self, ev: M.Evidence,
+                             backend_name: str) -> Optional[RunResult]:
+        """The per-backend RunResult behind one evidence record (the shared
+        suites are per-backend subprocess results, not global). Returns None
+        when the record was never driven for this backend."""
+        if ev.evidence_id == "shared_suite":
+            return self.shared_by_backend.get(backend_name)
+        if ev.evidence_id == "shared_capacity_suite":
+            return self.capacity_by_backend.get(backend_name)
+        if ev.evidence_id == "c2e_shared_close_drain_suite":
+            return self.close_drain_by_backend.get(backend_name)
+        return self.results.get(ev.evidence_id)
 
     def _backend_run_state(self, ev: M.Evidence, backend_name: str,
                            backend_profile: str = "") -> str:
@@ -689,12 +793,18 @@ class Gate:
 
         IMPORTANT: backend-agnostic arena/lifecycle evidence proves the
         RequestSlot CONTRACT, NOT that a given backend conforms to it. Uring
-        completed the D1 RequestArena migration, but its D3 identity/cancel/
-        borrow/waiter and D4 close/drain evidence are still incomplete. We
-        therefore report generic KernelIo lifecycle/backend-specific records
-        as INCOMPLETE unless a narrowly tagged real-mode phase record has its
-        own command-backed PASS. The hard-coded overall KernelIo verdict stays
-        fail-closed until D4.
+        carries the RequestArena contract through its D1 migration, but its
+        kernel obligations (C2b identity, C2c waiter/borrow, C2d failure
+        injection, C2e close/drain/destruction, backend-specific contract)
+        are satisfied only by real-mode phase records. We therefore report
+        generic KernelIo lifecycle/backend-specific records as INCOMPLETE
+        unless a narrowly tagged real-mode phase record has its own
+        command-backed PASS. After the D4 lift there is NO hard-coded overall
+        KernelIo verdict: the ordinary machinery decides, with mode
+        attribution (a stub-mode shared/capacity/close-drain PASS is
+        downgraded to INCOMPLETE) and the aggregate fail-closed rule in
+        _report() (real KernelIo must be ELIGIBLE; stub may only be
+        INCOMPLETE; unknown mode fails closed).
         """
         # The shared suite: this backend's OWN subprocess result.
         if ev.evidence_id == "shared_suite":
@@ -720,10 +830,10 @@ class Gate:
             r = self.close_drain_by_backend.get(backend_name)
             if r is None:
                 # A backend with a close/drain seam that the gate never drove:
-                # NOT_RUN (a harness error). A backend with NO seam (Uring)
-                # has no applicable implemented record (only the
-                # uring_c2e_close_drain_not_implemented not_implemented
-                # record), so this branch is not reached for it.
+                # NOT_RUN (a harness error). After the D4 lift every registered
+                # backend (Fake, ThreadPool, Uring) declares a close_drain_
+                # driver_case, so this branch is a genuine harness error if
+                # reached for a seam-declaring backend.
                 return NOT_RUN
             return r.state
 
@@ -745,11 +855,23 @@ class Gate:
         # NOT CONFORMING verdict below.
         if (backend_profile == "KernelIoProfile"
                 and ev.layer in ("lifecycle", "backend_specific")):
-            if ev.required_modes and ev.backends == (backend_name,):
+            if ev.backends == ():
+                # Backend-agnostic arena/lifecycle records prove the SHARED
+                # RequestSlot CONTRACT, which Uring carries through its D1
+                # RequestArena migration — mode-independent, so the record's
+                # own run state stands (PASS is legitimate in any mode).
                 return r.state
-            # The uring-specific backend contract target (uring_backend_test)
-            # runs against the stub/real binary; in stub it covers only the
-            # stub subset, so it is INCOMPLETE for the kernel profile.
+            if ev.required_modes and ev.backends == (backend_name,):
+                # A real-mode phase record explicitly tagged to THIS exact
+                # backend reports its own _drive() state (PASS only after the
+                # required evidence mode was executed and the pinned case-set
+                # ran exactly once).
+                return r.state
+            # Tagged to several backends / no required mode: cannot lift the
+            # per-backend obligation (P1-B). The uring-specific backend
+            # contract target (uring_backend_test) runs against the stub/real
+            # binary; in stub it covers only the stub subset, so it is
+            # INCOMPLETE for the kernel profile.
             return INCOMPLETE
 
         return r.state
@@ -784,25 +906,17 @@ class Gate:
         mode = self.meta.get(backend.name, {})
         mode_str = mode.get("mode", "unknown")
 
-        # KernelIo profile remains fail-closed until D4 lifts this rule.
-        if backend.profile == "KernelIoProfile":
-            if mode_str == "stub":
-                reasons.append("kernel profile built as stub (real execution unavailable)")
-            elif mode_str == "real":
-                reasons.append("kernel profile gate remains fail-closed "
-                               "(D3 identity/cancel/borrow/waiter and D4 "
-                               "wait/close/drain remain pending)")
-            else:
-                reasons.append(f"kernel profile mode={mode_str} (Phase D incomplete)")
-            # Still enumerate applicable not_implemented mandatory records so a
-            # remaining Phase-D gaps appear in the reasons for the report,
-            # reinforcing (not replacing) the KernelIo NOT CONFORMING rule.
-            for ev in M.applicable_evidence_for_backend(backend.name):
-                if ev.mandatory and ev.status == M.STATUS_NOT_IMPLEMENTED:
-                    reasons.append(
-                        f"known gap: mandatory evidence '{ev.evidence_id}' "
-                        f"({ev.target}): not_implemented")
-            return NOT_CONFORMING, reasons
+        # Phase D4 lift: the KernelIo fail-closed hard-code is REMOVED. The
+        # ordinary evidence machinery now decides, with mode attribution
+        # enforced by the per-suite real-mode downgrades (shared / capacity /
+        # close-drain KernelIo PASS requires mode='real') and the
+        # _backend_run_state rule (KernelIo lifecycle/backend_specific records
+        # report their own state only when real-mode and tagged to exactly
+        # this backend). A stub build therefore yields INCOMPLETE (never
+        # ELIGIBLE, and tolerated by the aggregate only as stub INCOMPLETE); a
+        # complete real-mode evidence set yields ELIGIBLE (the only real-mode
+        # aggregate-passing verdict). Mode-independent authority records
+        # (negative compile etc.) can never lift the real-mode obligations.
 
         # Mandatory APPLICABLE evidence only (implemented + not_implemented +
         # not_applicable). Non-mandatory records are diagnostic.
@@ -901,13 +1015,70 @@ class Gate:
                 print(f"    reason: {r}")
             print()
 
-            if verdict != ELIGIBLE:
-                # KernelIo NOT CONFORMING is EXPECTED in C1 (not a gate failure),
-                # but a Reference/BlockingIo NOT CONFORMING IS a gate failure.
-                if backend.profile != "KernelIoProfile":
+            if backend.profile == "KernelIoProfile":
+                # D4 lift fail-closed boundary (the P0-A repair). The KernelIo
+                # aggregate outcome depends on the ATTRIBUTED execution mode
+                # (from the backend's [conformance-meta] line):
+                #   * mode=real : ELIGIBLE is the ONLY passing verdict. A REAL
+                #     run with any mandatory detector INCOMPLETE / NOT
+                #     CONFORMING (missing pinned case, missing/wrong
+                #     evidence-meta, undriven close/drain suite, dead death
+                #     target, ...) MUST fail the aggregate — a real-mode
+                #     INCOMPLETE can never exit 0.
+                #   * mode=stub : INCOMPLETE is the honest expected outcome
+                #     (build/API-only evidence cannot satisfy the real-mode
+                #     obligations) and is NOT a gate failure; NOT CONFORMING
+                #     (a mandatory evidence proved a violation) still fails;
+                #     ELIGIBLE in stub is impossible and fails closed.
+                #   * unknown / missing mode: fail closed (aggregate FAIL).
+                #   round-4 (P1-2): the stub tolerance covers ONLY the
+                #     EXPECTED stub incompleteness — every insufficient
+                #     mandatory record must be manifest-declared
+                #     (not_implemented), a mode-downgraded shared/capacity/
+                #     close-drain record, or a _drive record that ran the full
+                #     exact pinned corpus with exactly one valid mode=stub
+                #     metadata (stub_expected). Any other INCOMPLETE reason
+                #     (case-set mismatch, malformed/missing metadata, wrong
+                #     evidence id, undriven suite) fails the stub aggregate
+                #     too — a stub run must never be green for the wrong
+                #     reason (e.g. an evidence-mode case compiled out of a
+                #     stub build).
+                if verdict == ELIGIBLE:
+                    if mode_seen != "real":
+                        overall_failures.append(
+                            f"{backend.name} ({backend.profile}): {verdict} with "
+                            f"mode={mode_seen!r} — KernelIo may be ELIGIBLE only "
+                            f"on a complete REAL-mode evidence set")
+                elif mode_seen == "stub" and verdict == INCOMPLETE:
+                    unexpected = []
+                    for ev in M.applicable_evidence_for_backend(backend.name):
+                        if not ev.mandatory:
+                            continue
+                        st = self._backend_run_state(
+                            ev, backend.name, backend.profile)
+                        if st != INCOMPLETE:
+                            continue
+                        r = self._result_for_evidence(ev, backend.name)
+                        if r is not None and r.stub_expected:
+                            continue
+                        unexpected.append(ev.evidence_id)
+                    if unexpected:
+                        overall_failures.append(
+                            f"{backend.name} ({backend.profile}): stub "
+                            f"INCOMPLETE for an UNEXPECTED reason — evidence "
+                            f"{', '.join(sorted(unexpected))} — a stub run may "
+                            f"pass only with full exact pinned corpora and "
+                            f"valid mode=stub metadata (D4-RM14 P1-2)")
+                else:
                     overall_failures.append(
                         f"{backend.name} ({backend.profile}): {verdict} — "
                         + "; ".join(reasons))
+            elif verdict != ELIGIBLE:
+                # A Reference/BlockingIo verdict other than ELIGIBLE IS a gate
+                # failure (their obligations are fully real and mode-fixed).
+                overall_failures.append(
+                    f"{backend.name} ({backend.profile}): {verdict} — "
+                    + "; ".join(reasons))
 
         # --- External admission probe (NOT conformance) ---
         ext = self.results.get("external_backend_admission")
@@ -964,11 +1135,10 @@ class Gate:
                             f"backend {b.name} ({ev.target}): {rr.state}")
                 continue
             if ev.evidence_id == "c2e_shared_close_drain_suite":
-                # Phase C2e: per-backend shared CLOSE/DRAIN suite. Only
-                # backends with a close_admission seam (Fake, ThreadPool) are
-                # driven; Uring's gap is the
-                # uring_c2e_close_drain_not_implemented record, handled by
-                # applicable_evidence_for_backend in the verdict.
+                # Phase C2e: per-backend shared CLOSE/DRAIN suite. After the D4
+                # lift every registered backend (Fake, ThreadPool, Uring) is
+                # driven via its own close_drain_driver_case
+                # (conformance_close_drain_fake / _threadpool / _uring).
                 for b in M.BACKENDS:
                     if not b.close_drain_driver_case:
                         continue
@@ -1024,8 +1194,11 @@ class Gate:
             for f in overall_failures:
                 print(f"  - {f}")
             return 1
-        print("RESULT: PASS (all runnable mandatory gates satisfied; "
-              "KernelIo remains NOT CONFORMING until D3/D4 close).")
+        print("RESULT: PASS (all runnable mandatory gates satisfied; KernelIo "
+              "verdict decided by the ordinary machinery: complete real-mode "
+              "evidence set -> ELIGIBLE and aggregate PASS, stub/subset build "
+              "-> INCOMPLETE and aggregate PASS only for a stub-mode run, "
+              "real-mode INCOMPLETE / unknown mode -> aggregate FAIL).")
         return 0
 
 

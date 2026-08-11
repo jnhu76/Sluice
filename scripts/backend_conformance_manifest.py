@@ -107,10 +107,9 @@ class BackendEntry:
     close_drain_driver_case: str = ""  # Phase C2e: the SLUICE_TEST_CASE that
                                        # drives the shared close/drain cases for
                                        # this backend. "" when the backend has
-                                       # no close_admission seam (Uring before
-                                       # D4) — the gap is the
-                                       # uring_c2e_close_drain_not_implemented
-                                       # manifest record, never a skip-as-pass.
+                                       # no close_admission seam — the gap is
+                                       # the backend's not_implemented manifest
+                                       # record, never a skip-as-pass.
 
 
 # The C1 backend registry. Sync/Synthetic are intentionally absent.
@@ -122,7 +121,8 @@ BACKENDS: tuple[BackendEntry, ...] = (
                  capacity_driver_case="conformance_capacity_threadpool",
                  close_drain_driver_case="conformance_close_drain_threadpool"),
     BackendEntry("Uring", "KernelIoProfile", "conformance_uring",
-                 capacity_driver_case="conformance_capacity_uring"),
+                 capacity_driver_case="conformance_capacity_uring",
+                 close_drain_driver_case="conformance_close_drain_uring"),
 )
 
 
@@ -649,9 +649,9 @@ EVIDENCE: tuple[Evidence, ...] = (
         evidence_id="c2e_shared_close_drain_suite",
         target="backend_conformance_test",
         layer="shared",
-        backends=("Fake", "ThreadPool"),
+        backends=("Fake", "ThreadPool", "Uring"),
         mandatory=True,
-        notes="C2e rows 15-16 shared close/drain cases: close rejects future "
+        notes="C2e rows 15-16 shared close/drain cases (Uring added in D4): close rejects future "
               "submit with invalid_state (Completion idle, no borrow, no "
               "outstanding, no submitted_ops, no residue); accepted-before-"
               "close still reaches exactly ONE defined terminal with "
@@ -708,18 +708,113 @@ EVIDENCE: tuple[Evidence, ...] = (
               "0.",
     ),
     Evidence(
-        evidence_id="uring_c2e_close_drain_not_implemented",
-        target="backend_conformance_test",
+        evidence_id="uring_c2e_close_drain",
+        target="uring_backend_c2e_close_drain_test",
         layer="lifecycle",
         backends=_U,
         mandatory=True,
-        status=STATUS_NOT_IMPLEMENTED,
-        notes="C2e rows 15-16 (close_admission / drain / quiescent "
-              "destruction) remain D4 work for Uring. "
-              "Recorded as a known gap; not_implemented never counts as PASS. "
-              "(Target is the Uring-driving conformance binary, matching the "
-              "other uring_*_not_implemented records; the gap is not "
-              "executed.)",
+        required_modes=("real",),
+        cases=(
+            "uring_d4_c2e_evidence_mode",
+            "uring_c2e_close_while_pending_preserves_accepted",
+            "uring_c2e_close_while_enqueued_preserves_dispatch",
+            "uring_c2e_close_while_running_result_verbatim",
+            "uring_c2e_close_while_backend_ready",
+            "uring_c2e_void_submit_after_close_rejected",
+            "uring_c2e_malformed_submit_after_close_rejected",
+            "uring_c2e_close_waits_for_inflight_acceptance_lp",
+            "uring_c2e_close_wins_submit_started_before_close_rejected",
+            "uring_c2e_close_then_pending_cancel_wins",
+            "uring_c2e_close_then_running_cancel_intent_only",
+            "uring_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin",
+            "uring_c2e_multiple_parked_waiters_all_wake",
+            "uring_c2e_interrupt_final_reap_closes_ready_race",
+            "uring_c2e_drained_not_releasable",
+            "uring_c2e_poison_close_keeps_class_c",
+            "uring_c2e_submit_races_close_linearization",
+            "uring_c2e_control_wins_over_co_ready_ring",
+            "uring_c2e_two_waiter_consumer_strand",
+            "uring_c2e_future_waiter_cannot_steal_old_wake",
+            "uring_c2e_non_eintr_poll_failure_failfast",
+            "uring_c2e_running_cancel_poison_deferred_wake",
+        ),
+        notes="C2e rows 15-16 Uring integration (Phase D4, real-liburing "
+              "only; stub mode is classified INCOMPLETE by required_modes): "
+              "close while pending/enqueued/running/backend_ready preserves "
+              "the accepted request (real result verbatim); submit-vs-close "
+              "acceptance LP in both orderings (close blocks on the in-flight "
+              "transaction through commit_binding; a submit that missed the "
+              "lock rejects invalid_state at Stage 0; the concurrent "
+              "submit-vs-close linearization case runs 256 relaxed-atomic "
+              "attempts with NO pause-gate handshake, so TSan can observe an "
+              "unsynchronized fast-path read — the in-lock Stage-0 authority "
+              "is the only reader); post-close malformed submit -> "
+              "invalid_state (admission beats descriptor validation); "
+              "close-then-pending cancel still wins (Scheme B); "
+              "close-then-running cancel intent only; close wakes parked "
+              "wait_one(s) as a ONE-SHOT control wake (0, no fabricated "
+              "completion; N parked waiters all wake — proven by a "
+              "per-participant pre-poll park count, never a sleep; future "
+              "wait parks normally - no busy-spin); interrupt-vs-final-ready "
+              "race closed by the context's final poll; drained != releasable "
+              "(slot_in_use stays 1 until Completion::reset); poison + close "
+              "keeps P0-D semantics (Class-A retained for teardown, nothing "
+              "quarantined is submitted); a FUTURE-generation waiter cannot "
+              "consume the eventfd token that wakes an OLD-generation waiter "
+              "(D4-RM15 durable broadcast: the drain is gated on the "
+              "parked-at-publish waiter's acknowledgement — an old waiter "
+              "woken but not yet rechecked re-sleeps if a future waiter "
+              "drains the single consumable token). A cancel-side transport "
+              "flush that permanently poisons the backend must STILL wake a "
+              "parked wait_one (D4-RM17: the SQ-full cancel flush retires "
+              "the retained ledger entries via Class-A recovery, and the "
+              "deferred signal_ready_progress() after dispatch_mtx_ is "
+              "released is the parked waiter's ONLY wake — a scripted "
+              "permanent -EIO proves the poison came from the cancel path "
+              "under test). Row 16 (quiescent "
+              "destruction) is "
+              "attributed by the SEPARATE mandatory uring_c2e_quiescent_"
+              "destruction record (death matrix target) — never by prose in "
+              "these notes.",
+    ),
+    Evidence(
+        evidence_id="uring_c2e_quiescent_destruction",
+        target="uring_backend_c2e_death_test",
+        layer="lifecycle",
+        backends=_U,
+        mandatory=True,
+        required_modes=("real",),
+        cases=(
+            "uring_d4_c2e_death_evidence_mode",
+            "uring_c2e_death_destroy_with_pending",
+            "uring_c2e_death_destroy_with_enqueued",
+            "uring_c2e_death_destroy_with_running",
+            "uring_c2e_death_destroy_with_ledger_residue",
+            "uring_c2e_death_destroy_with_backend_ready",
+            "uring_c2e_death_destroy_with_completion_ready",
+            "uring_c2e_death_destroy_with_live_control",
+            "uring_c2e_death_control_quiescent_destroy",
+            "uring_c2e_death_preflight_before_queue_exit_order",
+        ),
+        notes="C2e row 16 Uring destruction evidence (Phase D4 repair, "
+              "real-liburing only; stub mode is classified INCOMPLETE by "
+              "required_modes): the death target is a MANDATORY evidence "
+              "record consumed by the aggregate verdict — the death matrix "
+              "disappearing, failing, losing Release fail-fast, or breaking "
+              "quiescent destruction now fails the real KernelIo gate "
+              "mechanically (mechanical attribution), not by prose. The "
+              "pinned case-set registers in BOTH builds (stub bodies are "
+              "empty build/API-only registrations of the SAME names; the "
+              "evidence-mode case emits mode=stub) so G2 holds in every "
+              "mode. Matrix: 7 non-quiescent destroy states "
+              "(pending/enqueued/running/ledger-residue/backend-ready/"
+              "completion-ready/live-control) fail-fast exit 86 in Debug "
+              "AND Release BEFORE io_uring_queue_exit (the pending/enqueued "
+              "children destroy in the GENUINE state via a leaked thread); "
+              "the round-2 preflight-order case proves the preflight wins "
+              "BEFORE queue_exit (exit 86, the BeforeQueueExit hook must NOT "
+              "be reached); the quiescent control (close_admission + drain + "
+              "reset + destroy) exits 0.",
     ),
 
     # -----------------------------------------------------------------------
@@ -758,10 +853,35 @@ EVIDENCE: tuple[Evidence, ...] = (
         target="uring_backend_test",
         layer="backend_specific",
         backends=_U,
-        # In a stub build the uring real-path cases are skipped inside the
-        # binary; the gate classifies the KernelIo profile as NOT CONFORMING
-        # regardless, so this record's per-mode outcome is informational.
-        notes="Stub + real io_uring contract (mode parsed from driver meta).",
+        required_modes=("real",),
+        cases=(
+            "uring_available_matches_build_mode",
+            "uring_stub_submit_returns_backend_error",
+            "uring_stub_wait_one_reaps_nothing",
+            "uring_submit_n_writes_reap_all",
+            "uring_write_all_completes_full_buffer",
+            "uring_cqe_res_negative_maps_to_ioerror",
+            "uring_sqe_pressure_retains_accepted_work",
+            "uring_cancel_resolves_exactly_once",
+            "uring_stats_increment_on_real_path",
+            "uring_backend_contract_evidence_mode",
+        ),
+        notes="Stub + real io_uring contract (mode parsed from the driver's "
+              "[evidence-meta] line; the binary emits exactly one per run). "
+              "D4 lift audit: this backend-specific record is satisfiable "
+              "only by REAL kernel execution — a stub run is classified "
+              "INCOMPLETE by required_modes, never PASS, so a stub build can "
+              "never make the KernelIo backend conforming. P1-B repair: the "
+              "record is FULLY PINNED — the exact case-set above registers in "
+              "BOTH builds (the stub build compiles the real-only semantic "
+              "cases as empty build/API-only bodies of the SAME names), so "
+              "deleting/compiling out a semantic real case makes the record "
+              "INCOMPLETE (G2 case-set mismatch) and fails the real KernelIo "
+              "aggregate (D4-RM3). The tautological "
+              "'SLUICE_CHECK(res.has_value() || !res.has_value())' in "
+              "uring_cancel_resolves_exactly_once was replaced by real "
+              "observable invariants (defined terminal with real errno, "
+              "stable across reads, completed_ops == 1).",
     ),
 
     # -----------------------------------------------------------------------

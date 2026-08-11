@@ -10,7 +10,10 @@
 //     only as "CQE reap order" (O3), never per-fd FIFO.
 //
 // Skip-clean: the default build runs the three stub tests below and passes with
-// the backend absent (ADR §15 AB1, AB8).
+// the backend absent (ADR §15 AB1, AB8). P1-B: the real-only semantic cases
+// ALSO register in the stub build as empty build/API-only bodies, so the
+// manifest's exact pinned case-set (uring_backend_contract) holds in every
+// mode; the evidence-mode case attributes the run (real vs stub).
 #include "harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>
@@ -254,12 +257,17 @@ SLUICE_TEST_CASE(uring_cqe_res_negative_maps_to_ioerror) {
     ::close(fd);
 }
 
-// ---- Real slice 4: SQE pressure increments queue_full_retries ----------------
-// Submit many more ops than the ring depth without reaping; the internal
-// flush-on-pressure path bumps queue_full_retries. Asserted as a lower bound
-// (exact counts depend on kernel timing), not an equality.
+// ---- Real slice 4: SQE pressure retains accepted work -----------------------
+// Submit many more ops than the ring depth without reaping; request_capacity
+// (256) > queue_depth (64) is legal, and excess accepted work is RETAINED in
+// the local enqueued dispatch ring (not synchronously rejected as a queue-full
+// error). Proves: all N submits are accepted, none is lost, all N eventually
+// reap, and outstanding returns to zero with clean slot/resource state. This
+// case does NOT assert queue_full_retries (the internal flush-on-pressure
+// counter is a backend-internal statistic whose exact value depends on kernel
+// timing and is not part of the retained-work contract).
 
-SLUICE_TEST_CASE(uring_sqe_pressure_increments_queue_full_retries) {
+SLUICE_TEST_CASE(uring_sqe_pressure_retains_accepted_work) {
     sluice::AsyncStats s;
     // Phase D1: request_capacity (256) is independent of queue_depth (64).
     // request_capacity > queue_depth is legal; excess accepted work stays in
@@ -312,10 +320,13 @@ SLUICE_TEST_CASE(uring_sqe_pressure_increments_queue_full_retries) {
 // Submit a write, request cancel, reap. The Completion resolves exactly once
 // (success/error/canceled — any is valid per ADR §7 X3); the key assertion is
 // exactly-once and no use-after-free (the buffer stays live until ready; ASan
-// in the sanitizer matrix is the real guard).
+// in the sanitizer matrix is the real guard). Exactly-once is proven by REAL
+// observable invariants, not a tautology: the stored terminal is stable
+// across repeated reads, and the stats record exactly one completed op.
 
 SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {
-    auto ctx = make_real_ctx();
+    sluice::AsyncStats s;
+    auto ctx = make_real_ctx(&s);
     if (!ctx)
         return;
 
@@ -334,9 +345,28 @@ SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {
     }
     SLUICE_CHECK(c.ready());
     auto res = c.result();
-    // Terminal is one of {success, canceled, error}; exactly-once guarantees a
-    // single defined result. We only assert "ready with a defined result".
-    SLUICE_CHECK(res.has_value() || !res.has_value()); // tautology: result is well-formed
+    // Defined terminal (ADR §7 X3): success, or an error carrying a real
+    // kernel errno (EBADF / ...) — never a fabricated zero-errno error. A pure
+    // request cancellation is the one zero-errno exception: record_canceled()
+    // stores IoError{Code::canceled} with os_errno==0 (no kernel errno exists
+    // for an in-userspace cancel), so it is accepted as a defined terminal here
+    // while every other error code still requires a non-zero os_errno. This is
+    // a real observable invariant, NOT the historical tautology
+    // `res.has_value() || !res.has_value()`.
+    SLUICE_CHECK(res.has_value() ||
+                 res.error().code == IoError::Code::canceled ||
+                 res.error().os_errno != 0);
+    // Exactly-once publication: the stored terminal is stable across reads
+    // and the stats record exactly ONE completed op.
+    auto again = c.result();
+    SLUICE_CHECK(res.has_value() == again.has_value());
+    if (res.has_value()) {
+        SLUICE_CHECK(res.value() == again.value());
+    } else {
+        SLUICE_CHECK(res.error().code == again.error().code);
+        SLUICE_CHECK(res.error().os_errno == again.error().os_errno);
+    }
+    SLUICE_CHECK(s.completed_ops == 1);
     // Reap once more to drain any lingering cancel CQE (best-effort; no crash).
     (void)ctx->poll();
     ::close(fd);
@@ -363,5 +393,34 @@ SLUICE_TEST_CASE(uring_stats_increment_on_real_path) {
 }
 
 #endif // SLUICE_HAS_LIBURING
+
+#if !defined(SLUICE_HAS_LIBURING)
+// Stub build: the SAME pinned semantic case names register as empty
+// build/API-only bodies so the manifest's exact case-set for
+// uring_backend_contract holds in BOTH modes (G2; P1-B). The mode attribution
+// comes from uring_backend_contract_evidence_mode below (stub -> mode=stub ->
+// INCOMPLETE by required_modes=("real",), never PASS).
+SLUICE_TEST_CASE(uring_submit_n_writes_reap_all) {}
+SLUICE_TEST_CASE(uring_write_all_completes_full_buffer) {}
+SLUICE_TEST_CASE(uring_cqe_res_negative_maps_to_ioerror) {}
+SLUICE_TEST_CASE(uring_sqe_pressure_retains_accepted_work) {}
+SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {}
+SLUICE_TEST_CASE(uring_stats_increment_on_real_path) {}
+#endif // !SLUICE_HAS_LIBURING
+
+// Phase D4 evidence-mode attribution (G2): exactly one [evidence-meta] line
+// per gate-driven run so the aggregate gate can attribute this backend-
+// specific contract record to the executed mode (real vs stub). The stub
+// branch proves build/API honesty only; required_modes=("real",) on the
+// manifest record classifies a stub run INCOMPLETE, never PASS.
+SLUICE_TEST_CASE(uring_backend_contract_evidence_mode) {
+#if defined(SLUICE_HAS_LIBURING)
+    std::printf("[evidence-meta] evidence=uring_backend_contract mode=real\n");
+    auto ctx = make_real_ctx();
+    SLUICE_CHECK(ctx != nullptr);
+#else
+    std::printf("[evidence-meta] evidence=uring_backend_contract mode=stub\n");
+#endif
+}
 
 SLUICE_MAIN()

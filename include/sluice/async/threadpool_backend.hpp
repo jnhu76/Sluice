@@ -180,6 +180,17 @@ class ThreadPoolBackend : public AsyncBackend {
         ready_wait_.set_wait_phase_flag(flag);
     }
 
+    // Test-only: per-entry wait counter (D4-RM14 commit-to-park re-entry
+    // detector). Counts every wait_for_change entry of the ready wait domain
+    // (monotonic — no reset race), so a test can prove the run terminated and
+    // RE-ENTERED after a stop injected in the commit-to-wait_one window: the
+    // re-entered participant's second entry parks; a single entry means the
+    // first wait parked THROUGH the interrupt (the P0-1 mutant). Disarm by
+    // passing nullptr. Compiled out of production sluice_async.
+    void set_wait_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
+        ready_wait_.set_wait_prepark_counter(counter);
+    }
+
     // Test-only: resolve a Completion pointer to its current slot+generation.
     // Returns nullopt if the Completion is not bound to any slot.
     std::optional<detail::SlotHandle> handle_for_completion_for_test(

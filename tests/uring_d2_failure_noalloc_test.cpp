@@ -624,6 +624,24 @@ SLUICE_TEST_CASE(uring_d2_repeated_cancel_control_is_bounded_and_allocation_free
     SLUICE_CHECK(backend.outstanding() == 0 && backend.arena_slot_in_use() == 0);
 }
 
+#else // !SLUICE_HAS_LIBURING — stub mode: build/API honesty only.
+
+// round-4 (P1-2): the SAME pinned semantic case names register as empty
+// build/API-only bodies so the manifest's exact case-set holds in EVERY mode
+// (G2, the C2b/C2c/C2e pattern). Before this repair the stub build ran only
+// the evidence-mode case, so a stub run was INCOMPLETE for the WRONG reason
+// (case-set mismatch) instead of "mode=stub not allowed by required_modes" —
+// and the aggregate could not distinguish a clean stub from a malformed one.
+SLUICE_TEST_CASE(uring_d2_precommit_size_rejections_leave_zero_new_residue) {}
+SLUICE_TEST_CASE(uring_d2_precommit_void_rejections_leave_zero_new_residue) {}
+SLUICE_TEST_CASE(uring_d2_ordinary_size_path_is_allocation_free) {}
+SLUICE_TEST_CASE(uring_d2_ordinary_void_path_is_allocation_free) {}
+SLUICE_TEST_CASE(uring_d2_permanent_recovery_size_and_void_are_allocation_free) {}
+SLUICE_TEST_CASE(uring_d2_poison_rejects_after_capacity_is_recycled) {}
+SLUICE_TEST_CASE(uring_d2_pending_cancel_and_class_a_recovery_have_one_winner_each) {}
+SLUICE_TEST_CASE(uring_d2_poison_wait_never_submits_quarantined_write) {}
+SLUICE_TEST_CASE(uring_d2_repeated_cancel_control_is_bounded_and_allocation_free) {}
+
 #endif // SLUICE_HAS_LIBURING
 
 SLUICE_MAIN()
