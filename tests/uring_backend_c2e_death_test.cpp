@@ -39,6 +39,11 @@
 // evidence-mode case at the bottom is registered in both builds (G2).
 #include <sluice/async/uring_backend.hpp>
 
+// <cstdio> is included UNCONDITIONALLY so the evidence-mode case's stub branch
+// (outside the __unix__ && SLUICE_HAS_LIBURING && SLUICE_ASYNC_INTERNAL_TESTING
+// block below) has std::printf available in every build configuration.
+#include <cstdio>
+
 #if defined(__unix__) && defined(SLUICE_HAS_LIBURING) && \
     defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -50,9 +55,9 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
+#include <memory>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -129,8 +134,9 @@ class PipePair {
 // std::thread whose destructor runs std::terminate would mask the backend-
 // preflight authority. The leaked pointer is acceptable: the process exits
 // via _Exit(86) from the preflight terminate handler (or 87 if the destructor
-// unexpectedly returned). The Completion c outlives the backend (declared
-// before it) so the backend's preflight sees a still-bound slot.
+// unexpectedly returned). Completion c is destroyed by backend.reset() below
+// (c is declared before backend and outlives the reset), so the backend's
+// preflight sees a still-bound slot at the point of destruction.
 void child_destroy_with_pending() {
     sluice_death_test::install_deterministic_terminate_handler();
 

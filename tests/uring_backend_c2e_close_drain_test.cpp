@@ -22,6 +22,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>     // std::_Exit
+#include <exception>   // std::set_terminate, std::terminate
+#include <memory>      // std::make_unique
 #include <thread>
 
 #if defined(SLUICE_HAS_LIBURING)
@@ -81,7 +84,18 @@ struct ScopedGateResume {
     ~ScopedGateResume() {
         if (!done) {
             resume.store(true, std::memory_order_release);
-            (void)wait_until([&] { return exited.load(std::memory_order_acquire); });
+            // The destructor MUST check the wait_until result just like
+            // release(): if the gate-exit condition times out, the paused
+            // production thread is still blocked on this scope's gate. Letting
+            // the enclosing gate (and the production thread it gates) outlive
+            // this scope would be an unsafe-lifetime violation, so fail fast
+            // instead of allowing the scope to exit with a live gate.
+            if (!wait_until([&] { return exited.load(std::memory_order_acquire); })) {
+                std::fprintf(stderr, "uring_c2e: pause gate exit timeout "
+                                     "(ScopedGateResume destructor)\n");
+                std::fflush(stderr);
+                std::terminate();
+            }
             done = true;
         }
     }

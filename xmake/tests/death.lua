@@ -204,6 +204,7 @@ end
 -- aggregate gate can attribute the mandatory uring_c2e_quiescent_destruction
 -- record honestly (stub -> INCOMPLETE by required_modes=("real",), never
 -- PASS).
+do
 local p = R .. "tests/uring_backend_c2e_death_test.cpp"
 if os.isfile(p) and is_plat("linux", "macosx") then
     target("uring_backend_c2e_death_test")
@@ -219,4 +220,5 @@ if os.isfile(p) and is_plat("linux", "macosx") then
             add_packages("liburing")
         end
         add_tests("uring_backend_c2e_death_test")
+end
 end

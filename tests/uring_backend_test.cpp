@@ -346,10 +346,16 @@ SLUICE_TEST_CASE(uring_cancel_resolves_exactly_once) {
     SLUICE_CHECK(c.ready());
     auto res = c.result();
     // Defined terminal (ADR §7 X3): success, or an error carrying a real
-    // kernel errno (canceled / EBADF / ...) — never a fabricated zero-errno
-    // error. This is a real observable invariant, NOT the historical
-    // tautology `res.has_value() || !res.has_value()`.
-    SLUICE_CHECK(res.has_value() || res.error().os_errno != 0);
+    // kernel errno (EBADF / ...) — never a fabricated zero-errno error. A pure
+    // request cancellation is the one zero-errno exception: record_canceled()
+    // stores IoError{Code::canceled} with os_errno==0 (no kernel errno exists
+    // for an in-userspace cancel), so it is accepted as a defined terminal here
+    // while every other error code still requires a non-zero os_errno. This is
+    // a real observable invariant, NOT the historical tautology
+    // `res.has_value() || !res.has_value()`.
+    SLUICE_CHECK(res.has_value() ||
+                 res.error().code == IoError::Code::canceled ||
+                 res.error().os_errno != 0);
     // Exactly-once publication: the stored terminal is stable across reads
     // and the stats record exactly ONE completed op.
     auto again = c.result();

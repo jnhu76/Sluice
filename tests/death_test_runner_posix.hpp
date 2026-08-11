@@ -213,7 +213,11 @@ inline bool expect_terminated_via_fail_fast(const DeathResult& r) {
         std::cerr << "[death] " << r.case_name << ": FAIL (exit=" << r.exit_code
                   << "; expected terminate exit " << kExpectedTerminateExit
                   << ". exit=" << kUnexpectedReturnExit
-                  << " means the call returned instead of terminating)\n";
+                  << " means the call returned instead of terminating; exit="
+                  << kQueueExitHookExit
+                  << " means the destructor's BeforeQueueExit test hook was "
+                     "reached, i.e. the quiescent preflight was bypassed or "
+                     "removed and teardown proceeded past it)\n";
         return false;
     }
     std::cerr << "[death] " << r.case_name
