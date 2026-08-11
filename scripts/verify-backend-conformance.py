@@ -372,10 +372,9 @@ class Gate:
     # executes only build/API classification and is recorded INCOMPLETE.
     capacity_by_backend: dict[str, RunResult] = field(default_factory=dict)
     # Phase C2e: per-backend shared CLOSE/DRAIN-suite result, driven in its own
-    # subprocess (conformance_close_drain_fake / conformance_close_drain_threadpool).
-    # Backends without a close_admission seam (Uring before D4) have no
-    # close/drain driver case; their gap is the manifest's
-    # uring_c2e_close_drain_not_implemented record.
+    # subprocess (conformance_close_drain_fake / conformance_close_drain_threadpool
+    # / conformance_close_drain_uring). After the D4 lift every registered backend
+    # declares a close_drain_driver_case, so this field holds a result for each.
     close_drain_by_backend: dict[str, RunResult] = field(default_factory=dict)
     meta: dict[str, dict[str, str]] = field(default_factory=dict)
 
@@ -424,10 +423,9 @@ class Gate:
             self._run_capacity_suite(cap_ev)
 
         # Phase C2e: drive the shared CLOSE/DRAIN suite once per registered
-        # backend that HAS a close_admission driver case (Fake, ThreadPool).
-        # Backends without the seam (Uring before D4) have no driver case;
-        # their gap is the manifest's uring_c2e_close_drain_not_implemented
-        # record (never skip-as-pass).
+        # backend that HAS a close_admission driver case (Fake, ThreadPool,
+        # Uring after the D4 lift). A backend without the seam would declare
+        # no driver case; today every registered backend declares one.
         cd_ev = M.evidence_by_id("c2e_shared_close_drain_suite")
         if cd_ev is not None:
             self._run_close_drain_suite(cd_ev)
@@ -832,10 +830,10 @@ class Gate:
             r = self.close_drain_by_backend.get(backend_name)
             if r is None:
                 # A backend with a close/drain seam that the gate never drove:
-                # NOT_RUN (a harness error). A backend with NO seam (Uring)
-                # has no applicable implemented record (only the
-                # uring_c2e_close_drain_not_implemented not_implemented
-                # record), so this branch is not reached for it.
+                # NOT_RUN (a harness error). After the D4 lift every registered
+                # backend (Fake, ThreadPool, Uring) declares a close_drain_
+                # driver_case, so this branch is a genuine harness error if
+                # reached for a seam-declaring backend.
                 return NOT_RUN
             return r.state
 
@@ -1137,11 +1135,10 @@ class Gate:
                             f"backend {b.name} ({ev.target}): {rr.state}")
                 continue
             if ev.evidence_id == "c2e_shared_close_drain_suite":
-                # Phase C2e: per-backend shared CLOSE/DRAIN suite. Only
-                # backends with a close_admission seam (Fake, ThreadPool) are
-                # driven; Uring's gap is the
-                # uring_c2e_close_drain_not_implemented record, handled by
-                # applicable_evidence_for_backend in the verdict.
+                # Phase C2e: per-backend shared CLOSE/DRAIN suite. After the D4
+                # lift every registered backend (Fake, ThreadPool, Uring) is
+                # driven via its own close_drain_driver_case
+                # (conformance_close_drain_fake / _threadpool / _uring).
                 for b in M.BACKENDS:
                     if not b.close_drain_driver_case:
                         continue

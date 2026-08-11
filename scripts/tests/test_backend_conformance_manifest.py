@@ -630,6 +630,33 @@ class EvidenceCaseSetPinTest(unittest.TestCase):
             f"names registered in {source_path}: {sorted(found)}")
 
 
+def _assert_source_matches_pin(test_case, evidence_id, source_name):
+    """Shared manifest-pin-vs-source drift check (D3 + D4 drift detectors).
+
+    Asserts that the manifest's pinned case-set for `evidence_id` equals the
+    set of case names registered as SLUICE_TEST_CASE macros in the C++ target
+    source `source_name`. The anchor only matches a real macro invocation at
+    the start of a logical line, so a comment like `// SLUICE_TEST_CASE(foo)`
+    is NOT counted. No duplicate-registration assertion is made — these
+    dual-mode targets legitimately register every real case TWICE (the real
+    body and the stub-mode empty body), so set-equality is the meaningful
+    drift check. The authoritative check remains the runtime [run] set
+    observed by Gate._drive.
+    """
+    ev = M.evidence_by_id(evidence_id)
+    test_case.assertIsNotNone(ev.cases, f"{evidence_id} must pin a case-set")
+    source_path = os.path.join(REPO_ROOT, "tests", source_name)
+    with open(source_path, "r", encoding="utf-8") as f:
+        source = f.read()
+    found = re.findall(
+        r"^[ \t]*SLUICE_TEST_CASE\(([_A-Za-z][_A-Za-z0-9]*)\)",
+        source, flags=re.MULTILINE)
+    test_case.assertEqual(
+        set(found), set(ev.cases),
+        f"manifest pin {sorted(ev.cases)} does not match the case names "
+        f"registered in {source_path}: {sorted(found)}")
+
+
 class D3DriftDetectorTest(unittest.TestCase):
     """D3 (PR #80 G2 discipline): every dedicated D3 evidence target's pinned
     manifest case-set must equal its actual SLUICE_TEST_CASE registrations.
@@ -639,35 +666,17 @@ class D3DriftDetectorTest(unittest.TestCase):
     equality. The runtime [run]-set check in _drive remains authoritative.
     """
 
-    def _assert_source_matches_pin(self, evidence_id, source_name):
-        ev = M.evidence_by_id(evidence_id)
-        self.assertIsNotNone(ev.cases, f"{evidence_id} must pin a case-set")
-        source_path = os.path.join(REPO_ROOT, "tests", source_name)
-        with open(source_path, "r", encoding="utf-8") as f:
-            source = f.read()
-        found = re.findall(
-            r"^[ \t]*SLUICE_TEST_CASE\(([_A-Za-z][_A-Za-z0-9]*)\)",
-            source, flags=re.MULTILINE)
-        self.assertEqual(
-            set(found), set(ev.cases),
-            f"manifest pin {sorted(ev.cases)} does not match the case names "
-            f"registered in {source_path}: {sorted(found)}")
-        # NOTE: no duplicate-registration assertion — these dual-mode targets
-        # legitimately register every real case TWICE (the real body and the
-        # stub-mode empty body), so the set-equality above is the meaningful
-        # drift check.
-
     def test_c2b_pin_matches_source(self):
-        self._assert_source_matches_pin(
-            "uring_c2b_identity_integration", "uring_backend_c2b_identity_test.cpp")
+        _assert_source_matches_pin(
+            self, "uring_c2b_identity_integration", "uring_backend_c2b_identity_test.cpp")
 
     def test_c2c_pin_matches_source(self):
-        self._assert_source_matches_pin(
-            "uring_c2c_borrow_waiter_integration", "uring_backend_c2c_waiter_borrow_test.cpp")
+        _assert_source_matches_pin(
+            self, "uring_c2c_borrow_waiter_integration", "uring_backend_c2c_waiter_borrow_test.cpp")
 
     def test_c2e_pin_matches_source(self):
-        self._assert_source_matches_pin(
-            "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test.cpp")
+        _assert_source_matches_pin(
+            self, "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test.cpp")
 
 
 class D4DriftDetectorTest(unittest.TestCase):
@@ -678,27 +687,13 @@ class D4DriftDetectorTest(unittest.TestCase):
     stub-mode empty bodies — so set-equality is the meaningful drift check).
     """
 
-    def _assert_source_matches_pin(self, evidence_id, source_name):
-        ev = M.evidence_by_id(evidence_id)
-        self.assertIsNotNone(ev.cases, f"{evidence_id} must pin a case-set")
-        source_path = os.path.join(REPO_ROOT, "tests", source_name)
-        with open(source_path, "r", encoding="utf-8") as f:
-            source = f.read()
-        found = re.findall(
-            r"^[ \t]*SLUICE_TEST_CASE\(([_A-Za-z][_A-Za-z0-9]*)\)",
-            source, flags=re.MULTILINE)
-        self.assertEqual(
-            set(found), set(ev.cases),
-            f"manifest pin {sorted(ev.cases)} does not match the case names "
-            f"registered in {source_path}: {sorted(found)}")
-
     def test_uring_backend_contract_pin_matches_source(self):
-        self._assert_source_matches_pin(
-            "uring_backend_contract", "uring_backend_test.cpp")
+        _assert_source_matches_pin(
+            self, "uring_backend_contract", "uring_backend_test.cpp")
 
     def test_uring_quiescent_destruction_pin_matches_source(self):
-        self._assert_source_matches_pin(
-            "uring_c2e_quiescent_destruction", "uring_backend_c2e_death_test.cpp")
+        _assert_source_matches_pin(
+            self, "uring_c2e_quiescent_destruction", "uring_backend_c2e_death_test.cpp")
 
     def test_uring_close_drain_pin_matches_source(self):
         # P1-B drift closure: EVERY pinned multi-case D4 Uring record must
@@ -709,8 +704,8 @@ class D4DriftDetectorTest(unittest.TestCase):
         # while the binary itself passes — a source<->manifest drift that the
         # mechanical check turns into a RED self-test instead of a late
         # aggregate-gate surprise.
-        self._assert_source_matches_pin(
-            "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test.cpp")
+        _assert_source_matches_pin(
+            self, "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test.cpp")
 
     def test_quiescent_destruction_record_is_mandatory_and_real(self):
         # P0-C: the destruction evidence is a MANDATORY real-mode lifecycle
@@ -750,8 +745,8 @@ class D4DriftDetectorTest(unittest.TestCase):
         with open(p, "r", encoding="utf-8") as f:
             src = f.read()
         lines = src.splitlines()
-        idx = next(i for i, l in enumerate(lines)
-                   if "uring_wait_source.hpp" in l)
+        idx = next(i for i, line in enumerate(lines)
+                   if "uring_wait_source.hpp" in line)
         # Walk upward to the nearest enclosing #if directive.
         guard = None
         for j in range(idx - 1, -1, -1):
@@ -820,11 +815,20 @@ class D4DriftDetectorTest(unittest.TestCase):
         # lock_guard is declared at the top of its block, so the block's open
         # brace is the LAST '{' at or before the lock_guard text. Find that
         # open brace, then its matching close brace, and assert both writes
-        # are within that critical section.
-        lg_idx = body.find("std::lock_guard<std::mutex> lk(dispatch_mtx_)")
-        self.assertGreater(lg_idx, -1,
-                           "close_admission() has no lock_guard(dispatch_mtx_) "
-                           "critical section (D4-RM8 mutant: shared lock removed)")
+        # are within that critical section. The guard is matched by a regex so
+        # the detector survives a local-variable rename (lk -> guard, etc.) or
+        # a qualifying lock type change (std::lock_guard / std::unique_lock /
+        # std::scoped_lock) — it requires only the std mutex guard over
+        # dispatch_mtx_, not the exact token string.
+        guard_re = re.compile(
+            r"std::(?:lock_guard|unique_lock|scoped_lock)"
+            r"<std::mutex>\s+\w+\s*\(\s*dispatch_mtx_\s*\)")
+        guard_match = guard_re.search(body)
+        self.assertIsNotNone(
+            guard_match,
+            "close_admission() has no lock_guard(dispatch_mtx_) critical "
+            "section (D4-RM8 mutant: shared lock removed)")
+        lg_idx = guard_match.start()
         cs_start = body.rfind("{", 0, lg_idx)
         self.assertGreater(cs_start, -1,
                            "lock_guard(dispatch_mtx_) has no enclosing block")
@@ -859,7 +863,7 @@ class D4EvidenceModeDriveTest(unittest.TestCase):
 
     These tests drive the uring_c2e_close_drain evidence record end-to-end
     through Gate._drive() with fabricated target stdout, proving:
-      * real mode (full pinned 16-case set + one mode=real meta)  -> PASS;
+      * real mode (full pinned 22-case set + one mode=real meta)  -> PASS;
       * stub mode (full pinned set + one mode=stub meta)  -> INCOMPLETE by
         required_modes (NOT by a missing case);
       * full pinned set but ZERO [evidence-meta] lines     -> INCOMPLETE
@@ -934,8 +938,8 @@ class D4EvidenceModeDriveTest(unittest.TestCase):
         # SLUICE_TEST_CASE line and prove the nearest enclosing #if/#else
         # structure around it contains an internal #if defined(SLUICE_HAS_LIBURING).
         lines = source.splitlines()
-        idx = next(i for i, l in enumerate(lines)
-                   if l.startswith("SLUICE_TEST_CASE(uring_d4_c2e_death_evidence_mode)"))
+        idx = next(i for i, line in enumerate(lines)
+                   if line.startswith("SLUICE_TEST_CASE(uring_d4_c2e_death_evidence_mode)"))
         # Inside the case body there must be a real/stub mode split.
         body = "\n".join(lines[idx:idx + 12])
         self.assertIn("mode=real", body)
@@ -1041,10 +1045,10 @@ class FailClosedMetadataTest(unittest.TestCase):
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
                        meta_override={})
         # KernelIo with unknown mode must be INCOMPLETE (never ELIGIBLE).
-        verdict, reasons = g._backend_verdict(M.backend_by_name("Uring"))
+        verdict, _ = g._backend_verdict(M.backend_by_name("Uring"))
         self.assertEqual(verdict, G.INCOMPLETE)
 
-    def test_unknown_mode_for_kernel_is_not_conforming(self):
+    def test_unknown_mode_for_kernel_is_incomplete(self):
         g = _stub_gate(
             {"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"},
             meta_override={"Uring": {"profile": "KernelIoProfile",
@@ -2318,8 +2322,12 @@ class C2bVerdictIntegrationTest(unittest.TestCase):
 
     def test_arena_pass_cannot_erase_uring_c2e_gap(self):
         # The arena matrix record is backend-agnostic (backends=()); it applies
-        # to Uring but cannot satisfy Uring's own tagged obligation because the
-        # tagged not_implemented C2e record remains INCOMPLETE (D4 work).
+        # to Uring but cannot satisfy Uring's own tagged obligation. After the
+        # D4 lift the C2e close/drain suite is IMPLEMENTED for Uring (driven
+        # via conformance_close_drain_uring), but a STUB build still reports
+        # overall INCOMPLETE — the real-mode obligations (required_modes=
+        # ("real",)) can never be satisfied by stub/subset evidence (matches
+        # test_gate_l6_stub_incomplete_returns_zero_never_eligible).
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         g.results["c2b_arena_state_identity_matrix"] = G.RunResult(
             "c2b_arena_state_identity_matrix",
@@ -2530,8 +2538,11 @@ class C2cVerdictIntegrationTest(unittest.TestCase):
 
     def test_arena_pass_cannot_erase_uring_c2c_gap(self):
         # The arena matrix record is backend-agnostic (backends=()); it applies
-        # to Uring but cannot satisfy Uring's own tagged obligation because the
-        # tagged not_implemented C2e record remains INCOMPLETE (D4 work).
+        # to Uring but cannot satisfy Uring's own tagged obligation. After the
+        # D4 lift the C2c suite is IMPLEMENTED for Uring, but a STUB build
+        # still reports overall INCOMPLETE — the real-mode obligations can
+        # never be satisfied by stub/subset evidence (matches
+        # test_gate_l6_stub_incomplete_returns_zero_never_eligible).
         g = _stub_gate({"Fake": "PASS", "ThreadPool": "PASS", "Uring": "PASS"})
         g.results["c2c_arena_borrow_waiter_lease_matrix"] = G.RunResult(
             "c2c_arena_borrow_waiter_lease_matrix",
