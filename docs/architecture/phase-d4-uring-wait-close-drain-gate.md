@@ -373,29 +373,55 @@ runtime-shutdown race; detector
 `stop_between_mw_s2_commit_and_backend_wait_registration`), D4-RM15
 (durable-broadcast gate removed — the P0-2 future-waiter eventfd steal;
 detector `uring_c2e_future_waiter_cannot_steal_old_wake`, the 21st pinned C2e
-case), and D4-RM16 (poison wake inside dispatch_mtx_ — the P1-3 lock-order
+case), D4-RM16 (poison wake inside dispatch_mtx_ — the P1-3 lock-order
 violation; the wake is deferred past the dispatch lock, state first then
-wake).
+wake), and the round-5 repair mutation D4-RM17 (the cancel-path
+newly-poisoned early return in `issue_running_cancel()` skipped the deferred
+wake entirely — state published, wake obligation missing, AC-6/AGENTS §13.2;
+detector `uring_c2e_running_cancel_poison_deferred_wake`, the 22nd pinned C2e
+case; the poisoned flush order is scripted so the wake under test provably
+comes from the cancel path).
 
 ## Lock / atomic authority table
 
 | Domain | Guards | Held while | MUST NOT |
 | ------ | ------ | ---------- | -------- |
 | `dispatch_mtx_` (backend) | admission transaction Stage 1-5, close_admission, poll re-dispatch, cancel remove_exact, destructor preflight | submit LP; close; front peek/transfer | call the arena leaf OUTSIDE the frozen order `dispatch_mtx_ -> arena leaf` (production calls arena_.reserve/prepare/commit/record_terminal/quiescence_snapshot in exactly that order); wait for worker progress; join threads; ACQUIRE the wait-source mutex (D4-RM16/P1-3: signal_ready_progress is called only after dispatch_mtx_ is released — state first, then wake) |
-| wait-source `mtx_` (LEAF) | progress/control epochs, eventfd drain | snapshot; epoch check + drain | call Scheduler; publish Completions; call user code; touch request state |
+| wait-source `mtx_` (LEAF) | progress/control epochs, eventfd drain, committed-wait registration | snapshot; epoch check + drain; arm_committed_wait | call Scheduler; publish Completions; call user code; touch request state; ACQUIRE the Scheduler `global_mtx_` (the one edge is the reverse: `global_mtx_ -> wait-source mtx_` for `arm_committed_wait()`, D4-RM14); block on asynchronous progress; call Scheduler/user/sink/request-lifecycle code |
 | arena leaf mutex | slot lifecycle, terminal winner, ready-ring | record_terminal / reap / release | call Scheduler; call ReadySink (sink runs outside); publish outside the leaf (the ready release-store IS the linearization point) |
 | `access_mtx_` (context) | serialized poll/reap + stats accounting | poll; accounting | the PARK (park is outside the lock — I1) |
+| Scheduler `global_mtx_` | scheduler state, MW-S2 Phase-B admission authority | MW-S2 commit (incl. `ctx_.arm_backend_wait_commit()`) | hold while parking a backend wait |
 
 Order: `access_mtx_ -> dispatch_mtx_ -> arena leaf -> wait-source mtx_` (leaf).
-Wait-source `mtx_` is never acquired while holding any other lock:
-`signal_ready_progress()` / `interrupt_all()` are called only OUTSIDE
-`dispatch_mtx_` — D4-RM16 (P1-3) removed the poison path's in-lock signal
-(`poison_and_recover_locked` no longer wakes; `enqueue_after_commit()` and
-`issue_running_cancel()` defer the wake past their own dispatch_mtx_ scope —
-state first, then wake), and the reap paths signal via their n>0 path already
-outside the lock. Reap (reap_cqes + arena_.reap) runs under `access_mtx_`
-WITHOUT `dispatch_mtx_` (the D1 single-driver call domain); `dispatch_mtx_`
-is released before reap in poll()/wait_one(). No bidirectional cycles.
+The ONE exception to "wait-source `mtx_` is a leaf acquired only with no other
+lock held" is the D4-RM14 commit-to-park registration edge:
+
+```text
+Scheduler global_mtx_ -> wait-source mtx_   (arm_committed_wait() only)
+```
+
+`arm_committed_wait()` is a BOUNDED registration: it reads/writes only the
+armed epoch/state under the wait-source mutex, never waits on a condition
+variable, never calls the Scheduler, user code, a sink, or the request
+lifecycle, and never takes `access_mtx_` / `dispatch_mtx_` — so the edge is
+acyclic (the wait-source leaf MUST NOT acquire Scheduler `global_mtx_` or any
+other lock, and nothing acquires wait-source `mtx_` then `global_mtx_`).
+Do NOT move `arm_backend_wait_commit()` out of the Scheduler's `global_mtx_`
+scope: that would reopen the D4-RM14 commit-to-park window (a stop published
+between the commit and the wait registration would be rebaselined away).
+
+All other wait-source entry points (`signal_ready_progress()` /
+`interrupt_all()`) are called with NO other lock held: the backend calls
+`signal_ready_progress()` only OUTSIDE `dispatch_mtx_` — D4-RM16 (P1-3)
+removed the poison path's in-lock signal (`poison_and_recover_locked` no
+longer wakes; `enqueue_after_commit()` and `issue_running_cancel()` defer the
+wake past their own dispatch_mtx_ scope — state first, then wake; the
+D4-RM17 round-5 repair additionally closes the cancel-path early return that
+skipped that deferred wake), and the reap paths signal via their n>0 path
+already outside the lock. Reap (reap_cqes + arena_.reap) runs under
+`access_mtx_` WITHOUT `dispatch_mtx_` (the D1 single-driver call domain);
+`dispatch_mtx_` is released before reap in poll()/wait_one(). No bidirectional
+cycles.
 
 ## Wake / progress model (AGENTS.md §13.2)
 
@@ -467,15 +493,18 @@ stub aggregate gate       : PASS — Uring shared=INCOMPLETE (all three suites
                             lifecycle=INCOMPLETE, backend_specific=INCOMPLETE,
                             overall INCOMPLETE (spec §41 — stub never
                             satisfies real obligations)
-manifest self-tests       : PASS 379/379 (python3 -m unittest discover -v
+manifest self-tests       : PASS 380/380 (python3 -m unittest discover -v
                             scripts/tests — incl. KernelIo lift semantics:
                             stub->INCOMPLETE, complete real set->ELIGIBLE;
                             close-drain real-mode downgrade; D4 drift and
                             evidence-mode drive tests; round-2 adds the
                             close_admission dispatch_mtx_ source-drift
                             detector; round-4 adds the P1-2 stub
-                            expected-vs-unexpected gate cases GATE-L8/L9/L10)
-focused C2e real target   : PASS 21/21 (uring_backend_c2e_close_drain_test —
+                            expected-vs-unexpected gate cases GATE-L8/L9/L10;
+                            round-5 adds GATE-L11: stub_expected requires
+                            mode==\"stub\" — a deterministic-mode run of a
+                            real-only target fails the stub aggregate)
+focused C2e real target   : PASS 22/22 (uring_backend_c2e_close_drain_test —
                             the manifest's pinned cases tuple is the
                             authority; round-2 adds control-wins-over-co-ready-
                             ring, two-waiter-consumer-strand, non-eintr-poll-
@@ -484,7 +513,9 @@ focused C2e real target   : PASS 21/21 (uring_backend_c2e_close_drain_test —
                             the two-waiter controller to a bounded nonblocking
                             poll loop — the rewritten
                             close-waits-for-inflight-acceptance-lp makes no
-                            mutex-blocking claim)
+                            mutex-blocking claim; round-5 adds
+                            running-cancel-poison-deferred-wake — the D4-RM17
+                            detector)
 death matrix              : PASS 10/10 (uring_backend_c2e_death_test — 8 semantic
                             + both-builds evidence-mode case + round-2
                             preflight-before-queue-exit-order; pending/enqueued
@@ -512,6 +543,11 @@ mutations                 : PASS 13/13 RED->GREEN (D4-M1..D4-M13) + D4-L1 lift
                             (poison wake inside dispatch_mtx_ — P1-3; the
                             lock-order repair restores the frozen
                             state-first-then-wake structure)
+                            + round-5 RED->GREEN: D4-RM17
+                            (issue_running_cancel newly-poisoned early return
+                            skipped the deferred wake — P0; the wake is
+                            deferred past the lock scope on every poison
+                            path)
                             (see phase-d4 mutation evidence doc)
 real liburing Debug full  : PASS 158/158 (xmake test -v)
 real liburing Release full: PASS 158/158 (xmake f -m release --toolchain=clang
@@ -534,15 +570,18 @@ formal models             : PASS 18/18 (python3 scripts/formal/verify.py all;
                             e13-select-core 1605s, e13-select-safety 331s,
                             the earlier local timeouts were model size, not
                             failures)
-                            FORMAL COVERAGE GAP (round-4): the D4-RM14/RM15
-                            wait-source protocol — the commit-to-park
-                            registration and the eventfd durable-broadcast
-                            gate — is NOT modeled by any TLA+ suite (the e16
-                            model covers the Runtime lifecycle at the epoch
-                            level, not the wait source's transport). The
-                            C++ detectors (stop_between_mw_s2_commit_and_
-                            backend_wait_registration,
-                            uring_c2e_future_waiter_cannot_steal_old_wake)
+                            FORMAL COVERAGE GAP (round-4/round-5): the
+                            D4-RM14/RM15/RM17 wait-source protocol — the
+                            commit-to-park registration, the eventfd
+                            durable-broadcast gate, and the poison-path
+                            deferred wake (RM16/RM17) — is NOT modeled by any
+                            TLA+ suite (the e16 model covers the Runtime
+                            lifecycle at the epoch level, not the wait
+                            source's transport). The C++ detectors
+                            (stop_between_mw_s2_commit_and_backend_wait_
+                            registration,
+                            uring_c2e_future_waiter_cannot_steal_old_wake,
+                            uring_c2e_running_cancel_poison_deferred_wake)
                             carry the regression evidence. REVISIT TRIGGER: a
                             future wait-source/control-wake protocol change
                             must either add a focused model (the smallest

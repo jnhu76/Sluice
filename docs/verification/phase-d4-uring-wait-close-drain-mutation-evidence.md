@@ -623,6 +623,40 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
   `uring_c2e_poison_close_keeps_class_c` and the D2 poison matrix cases);
   the race classes are covered by the round-4 TSan evidence.
 
+## D4-RM17 — issue_running_cancel newly-poisoned early return skips the
+##         deferred wake (P0, round-5)
+
+- Finding (round-5 review): after the D4-RM16 deferral,
+  `issue_running_cancel()` still early-returned inside its dispatch_mtx_
+  scope when its transport flush set `fatal_error_` (the SQ-full branch:
+  `submit_transport_locked()` -> permanent negative -> poison -> Class-A
+  recovery retires the retained ledger entries to backend-ready). The
+  deferred wake at the function tail was therefore SKIPPED on the
+  newly-poisoned path: a waiter already parked in the split-phase ready
+  wait could sleep forever on published terminals — state published, wake
+  obligation missing (AC-6 / AGENTS.md §13.2). `enqueue_after_commit()`
+  had no such hole (its poison path falls through to the tail wake).
+- Repaired: `src/async/uring_backend.cpp` — the newly-poisoned branch no
+  longer returns; it records `newly_poisoned` and falls out of the lock
+  scope so the deferred `signal_ready_progress()` fires. P1-1 (round-5):
+  the before/after `fatal_error_` snapshots in BOTH
+  `enqueue_after_commit()` and `issue_running_cancel()` are now read inside
+  dispatch_mtx_ (the field is dispatch_mtx_-authority; the round-4 deferral
+  had re-introduced unlocked reads).
+- Detector: `uring_c2e_running_cancel_poison_deferred_wake` (the 22nd
+  pinned C2e case). Deterministic construction: A+B fill the SQ (queue
+  depth 2) and reach the kernel via the waiter's first flush (scripted
+  submit #1 succeeds); the waiter parks (prepark-count observation); C+D
+  refill the SQ unflushed; cancel(A) reaches `issue_running_cancel` with a
+  full SQ and its flush (scripted submit #2 = permanent -EIO) poisons,
+  retiring C+D to backend-ready. The parked waiter's ONLY wake is the
+  deferred signal_ready_progress(); under the mutant it parks forever (join
+  deadline -> RED). The scripted flush order (exactly two invocations, the
+  second poisoning) proves the wake obligation arose on the cancel path
+  under test.
+- GREEN after revert: the case PASSes; the full C2e real target (22/22)
+  PASSes.
+
 ## G2 drift closure (found during the final gate cycle, 2026-08-10)
 
 - Finding: `uring_c2e_close_drain` pinned 16 cases while the current source

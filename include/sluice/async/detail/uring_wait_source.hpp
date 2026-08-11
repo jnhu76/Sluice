@@ -78,7 +78,15 @@
 //
 // Lock order: mtx_ is a LEAF domain; signal_progress() / interrupt_all() are
 // called without holding any other lock (the backend calls signal_ready_
-// progress() after reap, outside dispatch_mtx_ and the arena leaf).
+// progress() after reap, outside dispatch_mtx_ and the arena leaf — and the
+// poison paths defer their wake past dispatch_mtx_, D4-RM16/RM17). The ONE
+// exception is the D4-RM14 commit-to-park registration: arm_committed_wait()
+// IS called while the Scheduler holds its global_mtx_ (MW-S2 Phase-B commit,
+// via AsyncIoContext::arm_backend_wait_commit). That edge is bounded and
+// acyclic — arm_committed_wait() only reads/writes the armed epoch/state
+// under mtx_, never blocks, and never calls the Scheduler, user code, a
+// sink, or the request lifecycle — and the reverse edge (wait-source mtx_
+// -> Scheduler global_mtx_) is forbidden.
 //
 // The wait source is observe-only (issue #67 / D4 §21): it NEVER reaps,
 // records terminals, publishes Completions, mutates RequestArena state,
