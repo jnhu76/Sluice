@@ -37,6 +37,47 @@ context-level `AsyncIoContext::WaitSourceProgressPauseGate` seam pins the
 exact inter-iteration window. The round-3 head SHA and case counts are
 recorded in the Confirmation commands block.
 
+Round-4 (2026-08-11, PR #84 round-4 review) added the two remaining P0
+mutants and the P1 lock-order repair, each with its own RED→GREEN detector:
+
+- D4-RM14 (P0-1): the commit-to-park handshake — the Scheduler's MW-S2
+  participant registers its mandatory control-observation baseline with the
+  backend wait source under global_mtx_ (arm_committed_wait) BEFORE the
+  backend-park commitment is exposed, and wait_one() consumes that baseline
+  (consume_committed_wait) instead of a bare entry snapshot. Mutant = the arm
+  removed from the Phase-B commit; detector =
+  `stop_between_mw_s2_commit_and_backend_wait_registration`
+  (application_runtime_drain_starvation_test), which injects
+  request_stop() in the commit-to-wait_one window via the
+  `mw_s2_committed_before_wait_one` phase seam and proves the run terminates
+  and RE-ENTERS (the monotonic per-entry wait counter reaches 2). RED: the
+  first wait parks through the interrupt, the run never re-enters, and the
+  detector fails with the re-entry message. GREEN after revert: the run
+  re-enters and drain()/join() converge.
+- D4-RM15 (P0-2): the durable-broadcast gate — a FUTURE-generation waiter's
+  eventfd drain is gated on the parked-at-publish waiters' acknowledgement
+  (a single consumable eventfd token cannot implement notify_all once a
+  future waiter drains it; a woken poller whose readiness recheck finds an
+  empty counter re-sleeps). Mutant = the gate removed from wait_for_change;
+  detector = `uring_c2e_future_waiter_cannot_steal_old_wake` (new pinned C2e
+  case, the 21st): an old waiter held at the pre-poll barrier, an interrupt,
+  and a future waiter that must NOT drain the token; the old waiter returns
+  interrupted (0) and the future waiter wakes only on real progress. RED:
+  the future waiter drains the token and reaches the barrier (fast-fail
+  diagnostic), and the old waiter's poll re-sleeps forever. GREEN after
+  revert: old waiter interrupted, future waiter reaps real progress.
+- D4-RM16 (P1-3): the poison wake deferred past dispatch_mtx_ — the
+  wait-source mutex is a LEAF domain and must never be acquired while
+  holding dispatch_mtx_ (frozen lock order: access_mtx_ -> dispatch_mtx_ ->
+  arena leaf -> wait-source mtx_). The in-lock signal in
+  poison_and_recover_locked was removed; the two paths with NO following
+  reap (enqueue_after_commit, issue_running_cancel) now defer the wake past
+  their own dispatch_mtx_ scope (state first, then wake). No new mutant
+  detector is needed: the repair is covered by the restored lock-order
+  contract comment, the full race-class TSan evidence, and the poison
+  semantics tests (uring_c2e_poison_close_keeps_class_c and the D2 poison
+  matrix) that prove the terminal/ready state is unchanged.
+
 Command shapes:
 
 ```sh
@@ -90,9 +131,16 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
 - RED: the source-drift self-test reports the missing critical section
   (rc=255); the runtime case observes the in-flight LP state and the
   post-close reject at the contract level.
-- GREEN after revert: the self-test passes; close blocks until the LP
-  release-store; the closer observes outstanding == true; the LP-winning
-  request still completes; a later submit is rejected.
+- GREEN after revert: the self-test passes; the runtime case proves the
+  in-flight LP-winning request is accepted, driven to exactly one terminal,
+  and that post-close submission rejects — the LP-window semantics are
+  covered by the source-drift authority (the shared dispatch_mtx_ critical
+  section) plus TSan on submit||close. NOTE (D4-RM16 / round-4): the runtime
+  case deliberately does NOT claim a concurrent closer blocked on the
+  admission mutex — the current case resumes + joins the submitter before
+  the main thread calls close, so no "closer observes outstanding == true"
+  statement is provable from it; the deterministic lock-sharing authority is
+  the source-drift self-test.
 
 ## D4-M3 — close cancels the enqueued request
 
@@ -510,6 +558,71 @@ xmake build -r <target> && timeout 60 SLUICE_TEST_FILTER=<case> xmake run <targe
   protocol blocker on the D4 wait path: the control-wake theorem's scope is
   one EXTERNAL wait_one invocation, not one internal wait_for_change loop.
 
+## D4-RM14 — commit-to-park handshake removed (P0-1, round-4)
+
+- Mutated: `src/async/scheduler.cpp` — the MW-S2 Phase-B commit block: the
+  `ctx_.arm_backend_wait_commit()` call removed (the participant no longer
+  registers its mandatory control-observation baseline under global_mtx_
+  before the backend-park commitment is exposed; wait_one() falls back to a
+  bare entry snapshot, so a request_stop() landing between the commit and
+  the wait_one() entry is rebaselined as a past event and the participant
+  parks through it).
+- Detector: `stop_between_mw_s2_commit_and_backend_wait_registration`
+  (application_runtime_drain_starvation_test, new case). The
+  `mw_s2_committed_before_wait_one` phase seam (compiled out of production)
+  pauses the committed participant between the registration and
+  `ctx_.wait_one()`; the test fires `request_stop()` in that exact window,
+  releases the seam, and requires the run to terminate and RE-ENTER (the
+  monotonic per-entry wait counter of the ThreadPool ready wait reaches 2).
+  The wait-source arm/consume (`BackendWaitSource::arm_committed_wait` /
+  `consume_committed_wait`, implemented by both ReadyWaitSource and
+  UringWaitSource) is the fix under test.
+- RED (mutant applied): `FAILED 1 check(s): the run never re-entered the
+  backend wait after the stop (commit-to-park registration lost)` — the
+  first wait parks through the interrupt (baseline = post-stop snapshot).
+- GREEN after revert: the case PASSes; drain()/join() converge; the full
+  runtime drain-starvation target (2 cases) PASSes.
+
+## D4-RM15 — durable-broadcast gate removed (P0-2, round-4)
+
+- Mutated: `include/sluice/async/detail/uring_wait_source.hpp` —
+  `wait_for_change()`: the `cv_.wait(lk, pending_wake_count_ == 0)` gate
+  removed (the pre-park drain runs unconditionally, so a FUTURE-generation
+  waiter can consume the single eventfd token that an OLD-generation waiter
+  was woken by but has not yet rechecked — the woken poller's readiness
+  recheck then finds an empty counter and re-sleeps; interrupt_all() loses
+  the wake).
+- Detector: `uring_c2e_future_waiter_cannot_steal_old_wake` (new pinned C2e
+  case, the 21st in `uring_c2e_close_drain`): an old waiter (T1) parks and
+  is held at the pre-poll barrier; the interrupt publishes C0 -> C1 and the
+  single token; a future waiter (T2, baseline C1) must NOT drain the token —
+  under the fix it blocks on the gate, T1's poll returns on the still-present
+  token, T1 rechecks C1 != C0 and returns interrupted (0) (its single
+  acknowledgement releases the gate), and T2 then drains the stale token,
+  parks, and wakes on REAL progress (1).
+- RED (mutant applied): `uring_c2e_future_waiter_steal: future waiter
+  reached the pre-poll barrier (token drained)` — the future waiter drained
+  the token; the old waiter's poll re-slept forever (rc=255).
+- GREEN after revert: the case PASSes; the full C2e real target (21/21)
+  PASSes.
+
+## D4-RM16 — poison wake inside dispatch_mtx_ (P1-3, round-4)
+
+- Repaired: `src/async/uring_backend.cpp` —
+  `poison_and_recover_locked()` no longer calls `signal_ready_progress()`
+  while holding dispatch_mtx_ (the wait-source mutex is a LEAF domain; the
+  frozen lock order is access_mtx_ -> dispatch_mtx_ -> arena leaf ->
+  wait-source mtx_). The two paths with NO following reap —
+  `enqueue_after_commit()` and `issue_running_cancel()` — defer the wake
+  past their own dispatch_mtx_ scope (state first, then wake, D4-RM16). The
+  poll()/wait_one() paths already signal outside the lock via their n>0
+  reap path (poison always retires >= 1 ledger/queue entry).
+- Evidence: the pre-fix code nested wait-source mtx_ under dispatch_mtx_
+  (the header's lock-order comment and the gate doc now agree with the
+  code); the poison semantics are unchanged (proven by
+  `uring_c2e_poison_close_keeps_class_c` and the D2 poison matrix cases);
+  the race classes are covered by the round-4 TSan evidence.
+
 ## G2 drift closure (found during the final gate cycle, 2026-08-10)
 
 - Finding: `uring_c2e_close_drain` pinned 16 cases while the current source
@@ -569,3 +682,22 @@ clean, Uring `mode=stub` — shared/lifecycle/backend_specific INCOMPLETE,
 `overall INCOMPLETE` (aggregate PASS only for the stub-mode run; a stub build
 can never make KernelIo ELIGIBLE). Python manifest self-test suite: 376 tests
 PASS (`python3 -m unittest discover -v scripts/tests`).
+
+Round-4 confirmation (2026-08-11, PR #84 round-4 head, mutations reverted):
+
+```sh
+# P0-1 detector (GREEN):
+SLUICE_TEST_FILTER=stop_between_mw_s2_commit_and_backend_wait_registration \
+  xmake run application_runtime_drain_starvation_test   # ALL TESTS PASSED
+# P0-2 detector (GREEN):
+SLUICE_TEST_FILTER=uring_c2e_future_waiter_cannot_steal_old_wake \
+  xmake run uring_backend_c2e_close_drain_test          # ALL TESTS PASSED
+# P1-1 fixed strand case (GREEN):
+SLUICE_TEST_FILTER=uring_c2e_two_waiter_consumer_strand \
+  xmake run uring_backend_c2e_close_drain_test          # ALL TESTS PASSED
+# Full real Debug suite: 158/158 PASS (xmake test -v, --with-liburing=true)
+# Stub suite: 156/156 PASS; stub aggregate PASS with the P1-2 strict rule
+#   (expected stub INCOMPLETE only; malformed stub case-set/meta -> FAIL)
+# Python manifest self-tests: 379 PASS
+#   (incl. new GATE-L8/L9/L10 stub expected-vs-unexpected cases)
+```
