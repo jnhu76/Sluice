@@ -1403,12 +1403,12 @@ SLUICE_TEST_CASE(uring_c2e_future_waiter_cannot_steal_old_wake) {
 // fabricating a reason. This case proves the fail-fast deterministically via
 // a forked child that re-creates a FRESH backend in-place (not a
 // fork-inherited context, which would carry stale lock/thread state). The
-// child installs a
-// test-only PollFn that returns -1 with errno=EIO, submits a blocked read,
-// and calls wait_one. Under the fix the wait source terminates (the child's
-// deterministic terminate handler _Exit(86)); under the D4-RM12 mutant (all
-// errno treated as retryable EINTR) the child busy-spins forever and the
-// parent's watchdog SIGKILLs it (exit by signal -> RED).
+// child installs a test-only PollFn that returns -1 with errno=EIO, submits
+// a blocked read, and calls wait_one. Under the fix the wait source
+// terminates (the child's deterministic terminate handler _Exit(86)); under
+// the D4-RM12 mutant (all errno treated as retryable EINTR) the child
+// busy-spins forever and the parent's watchdog SIGKILLs it (exit by signal
+// -> RED).
 // ---------------------------------------------------------------------------
 namespace {
 int failing_poll_fn(struct pollfd*, unsigned long, int, void*) {
