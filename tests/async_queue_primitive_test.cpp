@@ -36,12 +36,15 @@
 #include <sluice/async/fake_backend.hpp>
 #include <sluice/async/scheduler.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <stdexcept>  // std::invalid_argument (P8 capacity-0 rejection)
 #include <string>
+#include <thread>
 #include <type_traits>  // static_asserts (PR #12 review)
 #include <utility>
+#include <vector>
 
 using namespace sluice::async;
 using namespace sluice::async::detail;
@@ -1145,5 +1148,63 @@ SLUICE_TEST_CASE(queue_h4_pop_until_already_due_empty_ring_expired) {
     SLUICE_CHECK(session.empty());
 }
 #endif  // x86_64 (Phase G timed + multi-worker + already-due precedence)
+
+// ---- #86-A regression: concurrent ordinary calls stress the
+// active_port_calls_ synchronization (TSan target). -----------------------
+//
+// Pre-fix the CallGuard dtor decremented active_port_calls_ with NO lock,
+// racing with the G+S increment on every concurrent ordinary entry (and the
+// G+S read in begin_teardown) — a non-atomic write outside the lifecycle
+// synchronization domain. Post-fix the increment and the dtor decrement are
+// both under G+S, so concurrent ordinary calls observe a consistent counter.
+//
+// This runs from plain std::threads: the fast paths try_push / try_pop do not
+// require a Fiber (only the blocking push/pop/*_until do) and, with no parked
+// waiters, the reconciliation grant seams return nullptr without touching any
+// Fiber or g_worker. It AMPLIFIES the race for TSan; it is sanitizer evidence,
+// NOT an ordering proof. The deterministic lifecycle-ordering proof is the
+// queue_port_lifecycle death test.
+SLUICE_TEST_CASE(queue_active_port_calls_concurrent_stress) {
+    Fixture f{4};
+    constexpr int kThreads = 4;
+    constexpr int kIters = 20000;
+
+    auto worker = [&]() {
+        int v = 0;
+        for (int i = 0; i < kIters; ++i) {
+            // Every try_push + try_pop constructs and destroys a CallGuard,
+            // exercising the active_port_calls_ increment (G+S) / decrement
+            // (dtor) on this thread concurrent with the other threads.
+            auto lease = make_lease<int>(*f.port, v);
+            auto r = f.port->try_push(std::move(lease));
+            if (r.status() == QueueOpaquePushStatus::committed) {
+                ++v;
+            } else {
+                release_failed<int>(*f.port, std::move(r));  // reclaim exact T
+            }
+            auto rp = f.port->try_pop();
+            if (rp.status() == QueueOpaquePopStatus::item) {
+                release_popped<int>(*f.port, std::move(rp));
+            }
+        }
+    };
+
+    std::vector<std::thread> ts;
+    ts.reserve(kThreads);
+    for (int i = 0; i < kThreads; ++i) ts.emplace_back(worker);
+    for (auto& t : ts) t.join();
+
+    // Drain any buffered items so teardown observes an empty ring.
+    for (;;) {
+        auto rp = f.port->try_pop();
+        if (rp.status() != QueueOpaquePopStatus::item) break;
+        release_popped<int>(*f.port, std::move(rp));
+    }
+    // All threads joined => active_port_calls_ == 0. begin_teardown MUST
+    // succeed (a stale counter from an unsynchronized decrement would fail-
+    // fast here under the pre-fix bug).
+    QueueTeardownSession session = f.port->begin_teardown();
+    SLUICE_CHECK(session.empty());
+}
 
 SLUICE_MAIN();

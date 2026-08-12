@@ -144,6 +144,16 @@ do
     end
 end
 
+-- async_queue_lifecycle_death_test — #86-A QueuePort lifecycle serialization
+-- (active_port_calls_). Proves begin_teardown fail-fasts (exit 86) while an
+-- ordinary QueuePort call is in flight (a parked consumer Fiber leaves
+-- active_port_calls_ == 1), plus a control case (begin_teardown succeeds,
+-- exit 0, after an ordinary call has returned). Deterministic via single-
+-- worker run(1) FIFO scheduling. Links sluice_async_internal_testing (the
+-- test drives the non-template detail::QueuePort authority directly).
+-- POSIX-only (fork/exec/waitpid).
+sluice_internal_async_test("async_queue_lifecycle_death_test", {platform_gate = {"linux", "macosx"}})
+
 -- threadpool_backend_death_test — Phase E ThreadPoolBackend non-quiescent
 -- destruction fail-fast. Verifies that destroying a backend with enqueued ops,
 -- running workers, backend-ready unreaped terminals, or completion-ready
