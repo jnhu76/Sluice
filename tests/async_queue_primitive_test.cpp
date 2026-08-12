@@ -220,20 +220,26 @@ SLUICE_TEST_CASE(queue_oneshot_lease_move_empties_source) {
 // #90 review follow-up — const-correctness regression for the public typed API.
 //
 // The three snapshot projections (is_closed / capacity / size) are ordinary
-// lifecycle-gated QueuePort calls that MUST compile AND execute through a
-// genuinely const public AsyncQueue<T>. This guards the contract that a const
-// AsyncQueue does not require casting away constness to observe its state:
-// state_mtx_ and active_port_calls_ are mutable so the const snapshot path
-// locks the structural lock and bumps the ordinary-call counter directly. If a
-// future change makes state_mtx_ non-mutable (and drops the const_cast), these
-// const snapshot calls fail to compile here; if the lifecycle gate is removed
-// from the const path, the death suite (teardown-while-snapshot-active) fails.
+// lifecycle-gated QueuePort calls that MUST compile AND execute when invoked
+// through a const AsyncQueue<T>&. This guards the contract that observing an
+// AsyncQueue through a const reference needs no const_cast: state_mtx_ and
+// active_port_calls_ are mutable, so the const snapshot path locks the
+// structural lock and bumps the ordinary-call counter directly. If a future
+// change makes state_mtx_ non-mutable, the const snapshot calls fail to
+// compile here; if the lifecycle gate is removed from the const path, the
+// death suite (teardown-while-snapshot-active) fails.
+//
+// The underlying object is deliberately non-const: the destruction contract
+// requires begin_teardown() (a non-const call) before ~AsyncQueue, so a fully
+// const AsyncQueue object is not constructible by contract. What this case
+// proves is const-reference access to the snapshot API — the exact surface the
+// earlier const_cast workaround endangered — not a fully const object.
 SLUICE_TEST_CASE(queue_snapshot_through_const_asyncqueue) {
     AsyncIoContext ctx(std::make_unique<IdleBackend>());
     Scheduler sched(ctx);
     AsyncQueue<int> q(sched, 2);
 
-    // Bind to a genuinely const reference and observe the empty, open state.
+    // Observe the empty, open state through a const reference.
     const AsyncQueue<int>& cq = q;
     SLUICE_CHECK(!cq.is_closed());
     SLUICE_CHECK(cq.capacity() == 2);
