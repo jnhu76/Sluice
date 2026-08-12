@@ -745,8 +745,18 @@ void ThreadPoolBackend::signal_ready_progress() noexcept {
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 // Deterministic pause helpers. Each is a no-op when the corresponding gate is
-// disarmed. The gate itself is a simple paused/resume atomic handshake; the
-// test is responsible for setting resume only after observing paused.
+// disarmed. The gate is a paused/resume/exited atomic handshake.
+//
+// Issue #86-B: paused and exited now call notify_one() after their release-store
+// so a test thread may block on atomic::wait (zero-CPU, no scheduler-contention
+// spin) instead of yield-busy-spinning. notify_one is a harmless no-op when no
+// thread is in atomic::wait, so test files that still yield-spin on the same
+// atomics are unaffected. The resume side RETAINS the yield-spin: switching it to
+// resume.wait(false) would require every test file that sets resume.store(true)
+// to also call resume.notify_one() (≈30 sites across 6 files) — a scope expansion
+// beyond #86-B. The test-side blocking wait on paused alone removes the
+// scheduler-latency false-failure: the test thread releases its time slice while
+// waiting, so the worker is scheduled and reaches the pause point promptly.
 
 void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(
     bool inside_work_mtx) noexcept {
@@ -756,10 +766,12 @@ void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(
     g->work_domain_held.store(inside_work_mtx, std::memory_order_release);
     g->dispatch_push_completed.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
+    g->paused.notify_one();
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
     g->exited.store(true, std::memory_order_release);
+    g->exited.notify_one();
 }
 
 void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
@@ -767,10 +779,12 @@ void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
+    g->paused.notify_one();
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
     g->exited.store(true, std::memory_order_release);
+    g->exited.notify_one();
 }
 
 void ThreadPoolBackend::wait_before_enqueue_lock_pause_() noexcept {
@@ -778,10 +792,12 @@ void ThreadPoolBackend::wait_before_enqueue_lock_pause_() noexcept {
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
+    g->paused.notify_one();
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
     g->exited.store(true, std::memory_order_release);
+    g->exited.notify_one();
 }
 
 // C2d (ADR Gate 4): pre-commit stage-failure injection. Returns the stage's
@@ -824,10 +840,12 @@ void ThreadPoolBackend::wait_running_pause_() noexcept {
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
+    g->paused.notify_one();
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
     g->exited.store(true, std::memory_order_release);
+    g->exited.notify_one();
 }
 
 void ThreadPoolBackend::wait_terminal_publication_pause_() noexcept {
@@ -835,10 +853,12 @@ void ThreadPoolBackend::wait_terminal_publication_pause_() noexcept {
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
+    g->paused.notify_one();
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
     g->exited.store(true, std::memory_order_release);
+    g->exited.notify_one();
 }
 
 // C2e: pause between the interrupted control wake and wait_one's final reap
@@ -848,10 +868,12 @@ void ThreadPoolBackend::wait_control_wake_final_reap_pause_() noexcept {
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
+    g->paused.notify_one();
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
     g->exited.store(true, std::memory_order_release);
+    g->exited.notify_one();
 }
 
 // C2e (B1): pause BEFORE taking the admission transaction lock (see the
@@ -861,10 +883,12 @@ void ThreadPoolBackend::wait_before_admission_lock_pause_() noexcept {
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
+    g->paused.notify_one();
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
     g->exited.store(true, std::memory_order_release);
+    g->exited.notify_one();
 }
 
 // C2e (B1): pause between arena_.commit() and the `binding -> outstanding`
@@ -875,10 +899,12 @@ void ThreadPoolBackend::wait_before_commit_binding_pause_() noexcept {
     if (g == nullptr) return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
+    g->paused.notify_one();
     while (!g->resume.load(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
     g->exited.store(true, std::memory_order_release);
+    g->exited.notify_one();
 }
 #endif
 

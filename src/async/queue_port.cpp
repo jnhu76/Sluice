@@ -62,32 +62,51 @@ QueueItemLease::~QueueItemLease() noexcept {
 // ===========================================================================
 
 // Ordinary CallGuard: brackets the time inside the non-template QueuePort
-// authority. Enters AFTER the lifecycle check (so a tearing_down port never
-// increments the counter) and decrements on EVERY return path (normal return,
-// failed result, exception unwind). It does NOT cover begin_teardown /
-// take_next / typed conversion / typed destruction (§7).
+// authority. The caller (every ordinary entry) increments active_port_calls_
+// under G+S atomically with the lifecycle gate (F.4), then constructs the
+// guard with adopt_tag. The guard's dtor owns the matching decrement. It does
+// NOT cover begin_teardown / take_next / typed conversion / typed destruction
+// (§7).
 //
 // The guard is fail-fast on a non-operational lifecycle: ordinary entry into
 // a tearing_down port is an invariant violation (the lifecycle transition
 // serializes against this counter — once tearing_down, active_port_calls_ is
 // frozen at 0 and any ordinary entry is rejected before construction).
+//
+// #86-A corrective: the decrement MUST run in the SAME synchronization domain
+// (G+S) as the increment and the begin_teardown read. A lock-free decrement
+// here was BOTH (a) a C++ data race — the unsynchronized non-atomic write
+// raced with the G+S increment on a concurrent ordinary call and with the
+// G+S read in begin_teardown — and (b) a lifecycle-protocol break, since
+// begin_teardown could observe a stale counter (e.g. still 1 after a call had
+// returned, causing a spurious fail-fast in a correctly-serialized caller).
+// Moving only active_port_calls_ to std::atomic would silence TSan but would
+// NOT restore the single-synchronization-domain serialization the lifecycle
+// protocol requires (§7); the design calls for serialization, not just atomic
+// visibility. The dtor therefore reacquires G+S to decrement.
+//
+// Deadlock-safety of reacquiring G+S in the dtor (Mutex is NON-RECURSIVE, so
+// this is load-bearing): the dtor runs at scope exit, and at every ordinary
+// entry site the CallGuard is the LAST lock-bearing automatic on the return
+// path — the function-scope G+S LockGuards are declared AFTER the guard, so
+// C++ reverse-destruction order releases them BEFORE the guard runs; the
+// blocking admit seams (push/pop/*_until) release G+S+role before they return
+// (suspend happens with no lock held; the post-resume granted_not_resumed_
+// decrement takes and releases G before returning). So no thread holds G or S
+// when the dtor runs, and reacquiring G->S (the documented lock order) cannot
+// self-deadlock. The dtor performs no callout under G+S (no Scheduler/user/
+// sink code), so it cannot introduce a lock-order cycle either.
 struct QueuePort::CallGuard final {
-    // F.4 corrective: an ordinary entry increments active_port_calls_ under
-    // G+S in the caller (so the increment is atomic with the lifecycle gate
-    // and observed by begin_teardown), then constructs the guard with the
-    // adopt_tag (no second increment). The guard's dtor always decrements.
     struct adopt_tag {};
-    // Increment-then-manage form (untimed fast paths that do NOT take G before
-    // the lifecycle check — kept for the snapshot projections where the
-    // lifecycle check is structurally inside the same scope).
-    explicit CallGuard(QueuePort& port) noexcept : port_(&port) {
-        ++port_->active_port_calls_;
-    }
-    // Adopt form: the caller has ALREADY incremented under G+S; the guard
-    // owns the decrement at scope exit.
+    // Adopt form: the caller has ALREADY incremented active_port_calls_ under
+    // G+S; the guard owns the matching decrement (under G+S) at scope exit.
+    // (The legacy increment-then-manage ctor that incremented WITHOUT G+S is
+    // removed — it embodied the #86-A race pattern and had no callers.)
     CallGuard(QueuePort& port, adopt_tag) noexcept : port_(&port) {}
     ~CallGuard() noexcept {
         if (port_ != nullptr) {
+            LockGuard glk(port_->scheduler_.global_mtx_);  // G
+            LockGuard lk(port_->state_mtx_);               // S (under G)
             --port_->active_port_calls_;
         }
     }
