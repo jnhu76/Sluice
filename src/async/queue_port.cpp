@@ -13,6 +13,7 @@
 // place. Typed `Node<T>` and the public `AsyncQueue<T>` are header-only.
 #include <sluice/async/detail/queue_item.hpp>
 #include <sluice/async/detail/queue_port.hpp>
+#include <sluice/async/detail/queue_test_seam.hpp>  // internal-testing pause seam
 #include <sluice/async/lock_guard.hpp>  // LockGuard
 #include <sluice/async/scheduler.hpp>   // Scheduler (full def for seam calls)
 
@@ -102,11 +103,18 @@ struct QueuePort::CallGuard final {
     // G+S; the guard owns the matching decrement (under G+S) at scope exit.
     // (The legacy increment-then-manage ctor that incremented WITHOUT G+S is
     // removed — it embodied the #86-A race pattern and had no callers.)
-    CallGuard(QueuePort& port, adopt_tag) noexcept : port_(&port) {}
+    //
+    // The ctor accepts a const QueuePort& because the snapshot projections
+    // are const methods that participate in the same lifecycle entry; the
+    // bookkeeping they touch (active_port_calls_) and the structural lock
+    // (state_mtx_) are both mutable (see header), so the const path reaches
+    // them directly without casting away constness. All seven non-const
+    // ordinary entries bind `*this` to the const ref unchanged.
+    CallGuard(const QueuePort& port, adopt_tag) noexcept : port_(&port) {}
     ~CallGuard() noexcept {
         if (port_ != nullptr) {
             LockGuard glk(port_->scheduler_.global_mtx_);  // G
-            LockGuard lk(port_->state_mtx_);               // S (under G)
+            LockGuard lk(port_->state_mtx_);  // S (under G); mutable, no const_cast
             --port_->active_port_calls_;
         }
     }
@@ -116,7 +124,7 @@ struct QueuePort::CallGuard final {
     CallGuard& operator=(CallGuard&&) = delete;
 
    private:
-    QueuePort* port_;
+    const QueuePort* port_;
 };
 
 QueuePort::QueuePort(Scheduler& sched, std::size_t capacity)
@@ -151,28 +159,84 @@ QueuePort::~QueuePort() {
     }
 }
 
-// --- snapshot projections (CallGuard-covered; lock-free observation) -------
+// --- snapshot projections (ordinary lifecycle-gated calls; P3) --------------
 //
-// These observe close state and counts. is_closed / capacity are stable or
-// monotonic and need no lock for the projection itself; size reads
-// ring_count_ which is mutated under state_mtx_, so a cheap lock makes the
-// observation consistent. (Snapshot is in the CallGuard list per §7.)
+// #86-D corrective: the three snapshots are ordinary QueuePort calls per §7
+// and MUST obey the same lifecycle arbitration as every other ordinary entry:
+// the F.4-style G+S entry (lifecycle check + active_port_calls_ increment
+// atomic w.r.t. begin_teardown), then the adopt CallGuard whose dtor decrements
+// under G+S. Before this corrective the bodies performed no lifecycle entry,
+// so a snapshot could execute during/after teardown with active_port_calls_
+// frozen at 0 — a lifecycle-protocol violation (§6 admits no snapshot once
+// tearing_down; adversarial trace #29) that also let begin_teardown pass while
+// an ordinary call was in flight.
+//
+// The projections themselves:
+//   - is_closed reads the F.5 atomic close state (acquire load retained);
+//   - capacity reads the immutable construction-time bound;
+//   - size reads ring_count_ under state_mtx_ for a consistent observation.
+//
+// Note on lock-freedom: is_closed() is no longer a completely lock-free
+// operation — the lifecycle gate takes G+S briefly. F.5's authority was
+// "closed state must be race-free across OS threads", which is preserved (the
+// atomic + acquire/release pairing remains, now doubly synchronized under the
+// gate). No authority required lock-free or post-teardown snapshot entry.
 bool QueuePort::is_closed() const noexcept {
-    // F.5 corrective: lock-free acquire load. close() does the matching release
-    // store under G+S. Callers may invoke this from any OS thread.
+    // F.4 lifecycle entry: gate + increment under G+S, then adopt the guard.
+    {
+        LockGuard glk(scheduler_.global_mtx_);
+        LockGuard lk(state_mtx_);  // mutable; same G+S domain as non-const entries
+        if (lifecycle_ != QueueLifecycle::operational) {
+            queue_lease_fail_fast();
+        }
+        ++active_port_calls_;  // mutable bookkeeping; observed under G+S
+    }
+    CallGuard guard(*this, CallGuard::adopt_tag{});
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    maybe_pause_queue_snapshot();  // test-only deterministic pause seam
+#endif
+    // F.5 corrective retained: acquire load pairs with the release store in
+    // close(). Under the G+S gate the mutex alone would synchronize, but the
+    // atomic is the F.5 authority for race-free close state and is preserved
+    // verbatim (also safe for any future lock-free reader).
     return closed_.load(std::memory_order::acquire);
 }
 
 std::size_t QueuePort::capacity() const noexcept {
+    {
+        LockGuard glk(scheduler_.global_mtx_);
+        LockGuard lk(state_mtx_);  // mutable; same G+S domain as non-const entries
+        if (lifecycle_ != QueueLifecycle::operational) {
+            queue_lease_fail_fast();
+        }
+        ++active_port_calls_;
+    }
+    CallGuard guard(*this, CallGuard::adopt_tag{});
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    maybe_pause_queue_snapshot();  // test-only deterministic pause seam
+#endif
     return capacity_;
 }
 
 std::size_t QueuePort::size() const noexcept {
-    // state_mtx_ is mutable; const-method lock.
-    const_cast<Mutex&>(state_mtx_).lock();
-    const std::size_t n = ring_count_;
-    const_cast<Mutex&>(state_mtx_).unlock();
-    return n;
+    {
+        LockGuard glk(scheduler_.global_mtx_);
+        LockGuard lk(state_mtx_);  // mutable; same G+S domain as non-const entries
+        if (lifecycle_ != QueueLifecycle::operational) {
+            queue_lease_fail_fast();
+        }
+        ++active_port_calls_;
+    }
+    CallGuard guard(*this, CallGuard::adopt_tag{});
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    maybe_pause_queue_snapshot();  // test-only deterministic pause seam
+#endif
+    // ring_count_ is mutated under state_mtx_ only; a brief lock makes the
+    // observation consistent. The CallGuard interval — not this lock — is what
+    // excludes teardown: begin_teardown cannot pass while active_port_calls_
+    // != 0, and once tearing_down no new snapshot may enter.
+    LockGuard lk(state_mtx_);  // mutable; same lock as the lifecycle entry above
+    return ring_count_;
 }
 
 // --- fast paths (P3) -------------------------------------------------------

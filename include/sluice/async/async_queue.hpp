@@ -54,6 +54,7 @@
 // queue_lease_fail_fast):
 //   - capacity == 0                       -> ctor throws std::invalid_argument
 //   - ordinary op after begin_teardown    -> fail-fast before CallGuard
+//     (including is_closed/capacity/size snapshots)
 //   - second begin_teardown               -> fail-fast (lifecycle != operational)
 //   - QueueTeardownSession dtor with a
 //     non-empty ring                      -> fail-fast
@@ -271,8 +272,11 @@ public:
     //   - each parked producer is granted `closed` with its lease retained
     void close() noexcept { port_.close(); }
 
-    // --- snapshot projections (lock-free or briefly-locked observation) ---
-
+    // --- snapshot projections (ordinary lifecycle-gated calls) ---
+    // is_closed / capacity / size are ordinary QueuePort calls: each enters
+    // through the G+S lifecycle gate + CallGuard like every other ordinary
+    // entry, so a snapshot after begin_teardown fail-fasts (std::terminate)
+    // and a concurrent snapshot excludes teardown (active_port_calls_ != 0).
     [[nodiscard]] bool is_closed() const noexcept { return port_.is_closed(); }
     [[nodiscard]] std::size_t capacity() const noexcept {
         return port_.capacity();

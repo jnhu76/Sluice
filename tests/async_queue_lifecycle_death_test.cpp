@@ -32,15 +32,18 @@
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/detail/queue_item.hpp>
 #include <sluice/async/detail/queue_port.hpp>
+#include <sluice/async/detail/queue_test_seam.hpp>
 #include <sluice/async/fake_backend.hpp>
 #include <sluice/async/fiber.hpp>
 #include <sluice/async/fiber_ctx.hpp>
 #include <sluice/async/scheduler.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace sluice::async;
@@ -173,6 +176,133 @@ void child_teardown_after_call_returns() {
     std::_Exit(0);
 }
 
+// ---- Child: snapshot after teardown MUST fail-fast (one child per projection)
+//
+// begin_teardown() succeeds on the quiet port; a LATER snapshot is an ordinary
+// call whose lifecycle entry rejects tearing_down before CallGuard
+// construction (Corrective-2 §6/§7, adversarial trace #29). Each projection
+// gets its own child so every fail-fast path is exercised independently. If
+// the snapshot returned, the lifecycle gate failed and the child reports
+// kUnexpectedReturnExit (87).
+void child_snapshot_after_teardown_is_closed() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 2);
+
+    QueueTeardownSession session = port.begin_teardown();  // MUST succeed
+    if (!session.empty()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    (void)port.is_closed();  // MUST fail-fast (tearing_down)
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);  // unreachable
+}
+
+void child_snapshot_after_teardown_capacity() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 2);
+
+    QueueTeardownSession session = port.begin_teardown();  // MUST succeed
+    if (!session.empty()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    (void)port.capacity();  // MUST fail-fast (tearing_down)
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);  // unreachable
+}
+
+void child_snapshot_after_teardown_size() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 2);
+
+    QueueTeardownSession session = port.begin_teardown();  // MUST succeed
+    if (!session.empty()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    (void)port.size();  // MUST fail-fast (tearing_down)
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);  // unreachable
+}
+
+// ---- Child: begin_teardown MUST fail-fast while a snapshot is active ------
+//
+// The main thread arms the internal-testing pause gate and calls size(). The
+// snapshot performs its G+S lifecycle admission (active_port_calls_ == 1),
+// constructs its CallGuard, then pauses at the seam (paused published AFTER
+// admission). A second OS thread waits for `paused` — provably after the
+// snapshot is inside the ordinary-call interval — and calls begin_teardown():
+// with active_port_calls_ == 1 the quiet precondition is violated, so teardown
+// MUST fail-fast. Deterministic: the teardown thread cannot run before the
+// snapshot is admitted, and the snapshot cannot retire before the teardown
+// thread runs (it spins on the gate). No sleeps; the pause protocol is the
+// ordering proof (AGENTS.md §13.3).
+//
+// Pre-fix (snapshot without lifecycle entry): size() never increments
+// active_port_calls_, begin_teardown returns a session, the teardown thread
+// releases the gate, size() returns, and the child exits 87 — the regression
+// fails for the intended reason.
+void child_teardown_while_snapshot_active() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 2);  // empty, open ring
+
+    QueueSnapshotPauseGate gate;
+    test_hooks::arm_queue_snapshot_pause(gate);
+
+    std::atomic<bool> teardown_returned{false};
+    std::thread teardown_thread([&] {
+        // Wait until the snapshot has published `paused` (after its G+S
+        // admission; active_port_calls_ == 1), then teardown MUST fail-fast.
+        test_hooks::queue_snapshot_wait_paused(gate);
+        port.begin_teardown();
+        // Reachable only when the lifecycle gate failed to exclude the active
+        // snapshot (pre-fix). Release the paused snapshot so the child can
+        // report the violation and exit cleanly.
+        teardown_returned.store(true, std::memory_order_release);
+        test_hooks::release_queue_snapshot_pause(gate);
+    });
+
+    const std::size_t n = port.size();  // admits, increments, pauses at seam
+    (void)n;
+    if (teardown_returned.load(std::memory_order_acquire)) {
+        // begin_teardown returned while the snapshot was inside QueuePort —
+        // the lifecycle gate failed to exclude it.
+        std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+    }
+    // Fixed path unreachable: begin_teardown terminates the process from the
+    // teardown thread while this thread still spins in the seam.
+    test_hooks::release_queue_snapshot_pause(gate);
+    teardown_thread.join();
+    std::_Exit(sluice_death_test::kUnexpectedReturnExit);
+}
+
+// ---- Child (control): snapshot returns -> CallGuard retires -> teardown OK -
+//
+// After a snapshot has fully returned, its CallGuard dtor has decremented
+// active_port_calls_ back to 0 under G+S. begin_teardown must then succeed —
+// proving the "ordinary call exits -> teardown follows the documented
+// contract" half of the lifecycle ordering for the snapshot class. A leaked
+// guard would surface as exit 86 (spurious fail-fast).
+void child_snapshot_then_teardown() {
+    sluice_death_test::install_deterministic_terminate_handler();
+    AsyncIoContext ctx(std::make_unique<IdleBackend>());
+    Scheduler sched(ctx);
+    QueuePort port(sched, 2);
+
+    // All three projections while operational; values must be correct.
+    if (port.is_closed() || port.capacity() != 2 || port.size() != 0) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    QueueTeardownSession session = port.begin_teardown();  // MUST succeed
+    if (!session.empty()) {
+        std::_Exit(sluice_death_test::kChildTestFailExit);
+    }
+    std::_Exit(0);
+}
+
 }  // namespace
 
 // ---- Parent test cases ------------------------------------------------------
@@ -193,6 +323,50 @@ SLUICE_TEST_CASE(queue_lifecycle_death_control_teardown_after_call) {
         "(active_port_calls_ == 0)");
 }
 
+// #86-D — Queue snapshot lifecycle compliance: snapshots are ordinary
+// lifecycle-gated calls (Corrective-2 §7), so a snapshot after teardown MUST
+// fail-fast and a snapshot inside the port MUST exclude begin_teardown.
+
+SLUICE_TEST_CASE(queue_lifecycle_death_snapshot_is_closed_after_teardown) {
+    auto r = sluice_death_test::run_death_case("snapshot-after-teardown-is-closed");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "is_closed() after begin_teardown must fail-fast (snapshots are "
+        "ordinary lifecycle-gated calls)");
+}
+
+SLUICE_TEST_CASE(queue_lifecycle_death_snapshot_capacity_after_teardown) {
+    auto r = sluice_death_test::run_death_case("snapshot-after-teardown-capacity");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "capacity() after begin_teardown must fail-fast (snapshots are "
+        "ordinary lifecycle-gated calls)");
+}
+
+SLUICE_TEST_CASE(queue_lifecycle_death_snapshot_size_after_teardown) {
+    auto r = sluice_death_test::run_death_case("snapshot-after-teardown-size");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "size() after begin_teardown must fail-fast (snapshots are ordinary "
+        "lifecycle-gated calls)");
+}
+
+SLUICE_TEST_CASE(queue_lifecycle_death_teardown_while_snapshot_active) {
+    auto r = sluice_death_test::run_death_case("teardown-while-snapshot-active");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_terminated_via_fail_fast(r),
+        "begin_teardown must fail-fast while a snapshot is inside QueuePort "
+        "(active_port_calls_ == 1)");
+}
+
+SLUICE_TEST_CASE(queue_lifecycle_death_control_snapshot_then_teardown) {
+    auto r = sluice_death_test::run_death_case("control-snapshot-then-teardown");
+    SLUICE_CHECK_MSG(
+        sluice_death_test::expect_normal_exit_zero(r),
+        "begin_teardown must succeed after snapshots have returned "
+        "(active_port_calls_ == 0)");
+}
+
 int main(int argc, char** argv) {
     std::string child_case = sluice_death_test::parse_child_case(argc, argv);
     if (!child_case.empty()) {
@@ -200,6 +374,16 @@ int main(int argc, char** argv) {
             child_teardown_while_call_active();
         } else if (child_case == "control-teardown-after-call") {
             child_teardown_after_call_returns();
+        } else if (child_case == "snapshot-after-teardown-is-closed") {
+            child_snapshot_after_teardown_is_closed();
+        } else if (child_case == "snapshot-after-teardown-capacity") {
+            child_snapshot_after_teardown_capacity();
+        } else if (child_case == "snapshot-after-teardown-size") {
+            child_snapshot_after_teardown_size();
+        } else if (child_case == "teardown-while-snapshot-active") {
+            child_teardown_while_snapshot_active();
+        } else if (child_case == "control-snapshot-then-teardown") {
+            child_snapshot_then_teardown();
         } else {
             std::cerr << "[death] unknown child case: " << child_case << "\n";
             std::_Exit(sluice_death_test::kChildTestFailExit);

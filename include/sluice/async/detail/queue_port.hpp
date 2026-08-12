@@ -379,7 +379,11 @@ public:
     QueueOpaquePopResult try_pop();
     void close() noexcept;
 
-    // --- snapshot projections (CallGuard-covered; P3) ---
+    // --- snapshot projections (ordinary lifecycle-gated calls; P3) ---
+    // is_closed / capacity / size are ordinary QueuePort calls per §7: they
+    // enter through the same G+S lifecycle gate + CallGuard as every other
+    // ordinary entry, so begin_teardown serializes against them and a
+    // snapshot after tearing_down fail-fasts before CallGuard construction.
     bool is_closed() const noexcept;
     std::size_t capacity() const noexcept;
     std::size_t size() const noexcept;
@@ -408,11 +412,21 @@ private:
     // state_mtx_ is the Queue's own structural lock; global_mtx_ is the
     // Scheduler coordination domain (acquired BEFORE state_mtx_ when both
     // are held: G -> S -> exactly one role WaitQueue).
-    Mutex state_mtx_;
+    //
+    // `mutable`: the const snapshot projections (is_closed/capacity/size) are
+    // ordinary lifecycle-gated calls that participate in the same G+S entry +
+    // active_port_calls_ accounting as every other ordinary call. They must
+    // take the structural lock under the same synchronization domain; a
+    // genuinely const QueuePort must not require casting away constness to do
+    // so. The mutation is logically-mutable bookkeeping/protection, and the
+    // synchronization domain is unchanged (always G+S).
+    mutable Mutex state_mtx_;
     QueueLifecycle lifecycle_{QueueLifecycle::operational};
-    // F.5 corrective: closed_ is read lock-free by is_closed() (a public
-    // projection) from any OS thread, so it MUST be atomic. Mutated under
-    // G+S only in close() (release store); is_closed() does an acquire load.
+    // F.5 corrective (preserved): closed_ MUST be atomic — close() stores
+    // under G+S (release), is_closed() loads (acquire). is_closed() now runs
+    // under the G+S lifecycle gate too, so the mutex alone would synchronize;
+    // the atomic + acquire/release pairing is retained verbatim so the F.5
+    // authority (race-free close state across OS threads) cannot regress.
     std::atomic<bool> closed_{false};
 
     // Two role waiter FIFOs. Producer waiters park on push/push_until when
@@ -425,7 +439,11 @@ private:
 
     // Counter ledger (§7). active_port_calls_ counts ordinary QueuePort
     // call intervals ONLY (not typed conversion / arbitrary callers).
-    std::size_t active_port_calls_{0};
+    // `mutable`: the const snapshot projections (is_closed/capacity/size)
+    // perform the same G+S lifecycle entry + increment as every other
+    // ordinary call; the mutation is logically-mutable bookkeeping, and the
+    // synchronization domain is unchanged (always G+S).
+    mutable std::size_t active_port_calls_{0};
     std::size_t active_wait_associations_{0};
     std::size_t active_queue_timers_{0};
     std::size_t granted_not_resumed_{0};
