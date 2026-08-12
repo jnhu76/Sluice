@@ -61,18 +61,68 @@ namespace {
 // is the sole deadlock guard for the gate handshakes.
 constexpr auto kDrainDeadline = std::chrono::seconds(5);
 
-// Issue #86-B case-level deadlock watchdog. The gate handshakes now use
-// blocking atomic::wait (zero-CPU), so under correct protocol every test case
-// completes in seconds — even the 64-iteration race loop takes well under 15s
-// under TSan. The deadline is NOT a correctness deadline; it is a last-resort
-// boundedness guard. Correctness is proven by the deterministic atomic::wait
-// handshake + the test assertions; the watchdog only converts a genuine
-// protocol stall (mutated-away pause point, real deadlock, lost wakeup) into a
-// bounded abort instead of a hung CI. It ABORTs (not FAILs) because a stuck
+// Issue #92: case phase attribution. Each case owns a PhaseProbe (stack-local)
+// and advances `phase` across its transitions; on watchdog expiry the watchdog
+// thread prints case + phase + the bound gate's lock-free atomics. The watchdog
+// thread reads ONLY atomics (and the immutable name pointer) — it MUST NOT call
+// any backend diagnostic that takes work_mtx_/arena, because a watchdog cannot
+// block behind the defect it is diagnosing. The gate atomics are bound once the
+// gate is armed; a case with no gate leaves them null and only case/phase print.
+enum class CasePhase : std::uint8_t {
+    setup,       submit,    wait_paused, inspect,
+    resume,      wait_exited, barrier,   join_canceler,
+    drain,       reset,     teardown,    done,
+};
+
+inline const char* phase_name(CasePhase p) noexcept {
+    switch (p) {
+    case CasePhase::setup:        return "setup";
+    case CasePhase::submit:       return "submit";
+    case CasePhase::wait_paused:  return "wait_paused";
+    case CasePhase::inspect:      return "inspect";
+    case CasePhase::resume:       return "resume";
+    case CasePhase::wait_exited:  return "wait_exited";
+    case CasePhase::barrier:      return "barrier";
+    case CasePhase::join_canceler:return "join_canceler";
+    case CasePhase::drain:        return "drain";
+    case CasePhase::reset:        return "reset";
+    case CasePhase::teardown:     return "teardown";
+    case CasePhase::done:         return "done";
+    }
+    return "?";
+}
+
+struct PhaseProbe {
+    const char* name = nullptr;
+    std::atomic<CasePhase> phase{CasePhase::setup};
+    const std::atomic<bool>* gate_paused = nullptr;
+    const std::atomic<bool>* gate_resume = nullptr;
+    const std::atomic<bool>* gate_exited = nullptr;
+
+    void set(CasePhase p) noexcept { phase.store(p, std::memory_order_release); }
+    void bind_gate(const std::atomic<bool>& paused,
+                   const std::atomic<bool>& resume,
+                   const std::atomic<bool>& exited) noexcept {
+        gate_paused = &paused;
+        gate_resume = &resume;
+        gate_exited = &exited;
+    }
+};
+
+// Issue #86-B / #92 case-level last-resort watchdog. The gate handshakes are
+// fully bidirectional blocking atomic::wait (zero-CPU), so under correct
+// protocol every case completes in seconds — even the 64-iteration race loop
+// takes well under 15s under TSan. The deadline is NOT a correctness deadline
+// and NOT a root-cause classifier: a wall-clock bound cannot distinguish a
+// genuine protocol deadlock from complete host-scheduler starvation. It is a
+// last-resort boundedness guard that converts an unbounded hang into a bounded
+// abort WITH phase attribution so the next failure points at the stalled phase
+// instead of reporting only "30s elapsed". It ABORTs (not FAILs) because a stuck
 // protocol is a catastrophic defect, not a Scheme-B correctness assertion.
 class Watchdog {
 public:
-    explicit Watchdog(std::chrono::seconds timeout) {
+    explicit Watchdog(std::chrono::seconds timeout, const PhaseProbe& probe)
+        : probe_(&probe) {
         deadline_ = std::chrono::steady_clock::now() + timeout;
         try {
             thread_ = std::thread([this] {
@@ -81,11 +131,7 @@ public:
                     return done_.load(std::memory_order_acquire);
                 });
                 if (!done_.load(std::memory_order_acquire)) {
-                    std::fprintf(stderr,
-                                 "ThreadPool test watchdog: test case exceeded "
-                                 "the last-resort boundedness deadline; aborting "
-                                 "on a genuine protocol stall\n");
-                    std::abort();
+                    diagnose_and_abort();
                 }
             });
         } catch (...) {
@@ -111,11 +157,29 @@ public:
     Watchdog(const Watchdog&) = delete;
     Watchdog& operator=(const Watchdog&) = delete;
 private:
+    // Reads ONLY atomics and the immutable name pointer; never touches
+    // work_mtx_/arena, so the watchdog cannot deadlock behind the defect.
+    void diagnose_and_abort() noexcept {
+        const CasePhase ph = probe_->phase.load(std::memory_order_acquire);
+        std::fprintf(stderr,
+                     "ThreadPool test watchdog: case exceeded the last-resort "
+                     "boundedness deadline; aborting for diagnostics\n");
+        std::fprintf(stderr, "  case=%s\n  phase=%s\n",
+                     probe_->name ? probe_->name : "?", phase_name(ph));
+        if (probe_->gate_resume != nullptr) {
+            std::fprintf(stderr, "  gate: paused=%d resume=%d exited=%d\n",
+                         probe_->gate_paused->load(std::memory_order_acquire),
+                         probe_->gate_resume->load(std::memory_order_acquire),
+                         probe_->gate_exited->load(std::memory_order_acquire));
+        }
+        std::abort();
+    }
     std::mutex mtx_;
     std::condition_variable cv_;
     std::chrono::steady_clock::time_point deadline_;
     std::atomic<bool> done_{false};
     std::thread thread_;
+    const PhaseProbe* probe_;
 };
 
 // Watchdog timeout: generous enough that it does not fire under correct
@@ -151,15 +215,17 @@ int open_temp(const std::string& path) {
     return fd;
 }
 
-// Deterministic, zero-CPU gate handshake (issue #86-B): block on atomic::wait
-// until the production path reaches the exact pause point and calls
-// paused.notify_one(). Replaces the old yield-busy-spin + 5s deadline, which
-// treated OS scheduler latency as a correctness deadline. The case-level
-// Watchdog is the last-resort boundedness guard against genuine protocol
-// deadlock.
+// Deterministic, zero-CPU gate handshake (issue #86-B / #92): block on
+// atomic::wait until the production path reaches the exact pause point and calls
+// paused.notify_one(). The probe is advanced across the blocking transition so a
+// watchdog expiry attributes the stall to wait_paused (worker never reached the
+// pause) vs inspect (past the pause). The case-level Watchdog is the last-resort
+// boundedness guard; correctness is the deterministic atomic::wait handshake.
 template <class Gate>
-void wait_paused(Gate& gate) {
+void wait_paused(Gate& gate, PhaseProbe& probe) {
+    probe.set(CasePhase::wait_paused);
     gate.paused.wait(false, std::memory_order_acquire);
+    probe.set(CasePhase::inspect);
 }
 
 // Drain outstanding ops through the real reaper with a bounded total time.
@@ -190,7 +256,7 @@ public:
         : gate_(&gate), thread_(&t) {}
     void join() {
         if (joined_) return;
-        gate_->resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(*gate_);
         thread_->join();
         joined_ = true;
     }
@@ -222,7 +288,7 @@ public:
         : gate_(&gate) {}
     void resume() {
         if (resumed_) return;
-        gate_->resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(*gate_);
         resumed_ = true;
     }
     ~ScopedGateResume() { cleanup(); }
@@ -248,10 +314,13 @@ SLUICE_MAIN()
 // No cancel is issued in this case: a canceled terminal would be a backend
 // defect, so only a real success (value==1, exactly one syscall) is accepted.
 SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
-    Watchdog wd(kWatchdog);
+    PhaseProbe probe;
+    probe.name = "tp_enqueue_push_share_one_work_domain";
+    Watchdog wd(kWatchdog, probe);
     // Gate must outlive backend (destroyed after it by C++ reverse declaration
     // order), so the worker never accesses a destroyed atomic.
     ThreadPoolBackend::AfterArenaEnqueueBeforeDispatchPushPauseGate gate;
+    probe.bind_gate(gate.paused, gate.resume, gate.exited);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_after_enqueue_before_push_pause_gate(&gate);
 
@@ -272,7 +341,7 @@ SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
     const char* fail_msg = nullptr;
     std::uint64_t syscalls_before = 0;
 
-    wait_paused(gate);
+    wait_paused(gate, probe);
     if (!gate.work_domain_held.load(std::memory_order_acquire)) {
         fail_msg = "Gate A must fire inside the work_mtx_ critical section";
     } else if (gate.dispatch_push_completed.load(std::memory_order_acquire)) {
@@ -324,10 +393,13 @@ SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
 
 // Gate B: enqueued cancel wins before the worker dequeues; no syscall runs.
 SLUICE_TEST_CASE(tp_enqueued_cancel_wins_no_syscall) {
-    Watchdog wd(kWatchdog);
+    PhaseProbe probe;
+    probe.name = "tp_enqueued_cancel_wins_no_syscall";
+    Watchdog wd(kWatchdog, probe);
     // Gate must outlive backend (destroyed after it by C++ reverse declaration
     // order), so the worker never accesses a destroyed atomic.
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    probe.bind_gate(gate.paused, gate.resume, gate.exited);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_before_dequeue_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -344,7 +416,7 @@ SLUICE_TEST_CASE(tp_enqueued_cancel_wins_no_syscall) {
 
     const char* fail_msg = nullptr;
 
-    wait_paused(gate);
+    wait_paused(gate, probe);
     {
         const std::uint64_t syscalls_before = backend.syscall_count_for_test();
         if (backend.dispatch_size_for_test() != 1) {
@@ -385,10 +457,13 @@ SLUICE_TEST_CASE(tp_enqueued_cancel_wins_no_syscall) {
 
 // Gate C: running cancel records intent only; the real syscall result wins verbatim.
 SLUICE_TEST_CASE(tp_running_cancel_intent_real_result_verbatim) {
-    Watchdog wd(kWatchdog);
+    PhaseProbe probe;
+    probe.name = "tp_running_cancel_intent_real_result_verbatim";
+    Watchdog wd(kWatchdog, probe);
     // Gate must outlive backend (destroyed after it by C++ reverse declaration
     // order), so the worker never accesses a destroyed atomic.
     ThreadPoolBackend::WorkerRunningPauseGate gate;
+    probe.bind_gate(gate.paused, gate.resume, gate.exited);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_running_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -405,7 +480,7 @@ SLUICE_TEST_CASE(tp_running_cancel_intent_real_result_verbatim) {
 
     const char* fail_msg = nullptr;
 
-    wait_paused(gate);
+    wait_paused(gate, probe);
     {
         const std::uint64_t syscalls_before = backend.syscall_count_for_test();
         if (backend.active_workers_for_test() != 1) {
@@ -446,10 +521,13 @@ SLUICE_TEST_CASE(tp_running_cancel_intent_real_result_verbatim) {
 
 // Gate D: terminal publication happens after worker bookkeeping is complete.
 SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
-    Watchdog wd(kWatchdog);
+    PhaseProbe probe;
+    probe.name = "tp_terminal_publication_after_bookkeeping";
+    Watchdog wd(kWatchdog, probe);
     // Gate must outlive backend (destroyed after it by C++ reverse declaration
     // order), so the worker never accesses a destroyed atomic.
     ThreadPoolBackend::TerminalPublicationPauseGate gate;
+    probe.bind_gate(gate.paused, gate.resume, gate.exited);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_terminal_publication_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -466,7 +544,7 @@ SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
 
     const char* fail_msg = nullptr;
 
-    wait_paused(gate);
+    wait_paused(gate, probe);
     {
         // Post-fix invariant: bookkeeping is done, but reap has not yet published.
         if (backend.active_workers_for_test() != 0) {
@@ -513,8 +591,11 @@ SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
 // cancel on the already-terminal (still bound) Completion is already_terminal
 // and never tallies again; the worker runs no syscall.
 SLUICE_TEST_CASE(tp_canceled_ops_tallied_only_on_terminal_won) {
-    Watchdog wd(kWatchdog);
+    PhaseProbe probe;
+    probe.name = "tp_canceled_ops_tallied_only_on_terminal_won";
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    probe.bind_gate(gate.paused, gate.resume, gate.exited);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_before_dequeue_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -533,7 +614,7 @@ SLUICE_TEST_CASE(tp_canceled_ops_tallied_only_on_terminal_won) {
 
     const char* fail_msg = nullptr;
 
-    wait_paused(gate);
+    wait_paused(gate, probe);
     {
         const std::uint64_t syscalls_before = backend.syscall_count_for_test();
         backend.cancel(c);  // enqueued -> terminal_won
@@ -587,8 +668,11 @@ SLUICE_TEST_CASE(tp_canceled_ops_tallied_only_on_terminal_won) {
 // no canceled_ops tally; the real syscall result wins VERBATIM (never rewritten
 // to canceled). A cancel after that ordinary winner is already_terminal.
 SLUICE_TEST_CASE(tp_running_cancel_intent_does_not_tally) {
-    Watchdog wd(kWatchdog);
+    PhaseProbe probe;
+    probe.name = "tp_running_cancel_intent_does_not_tally";
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend::WorkerRunningPauseGate gate;
+    probe.bind_gate(gate.paused, gate.resume, gate.exited);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_running_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -607,7 +691,7 @@ SLUICE_TEST_CASE(tp_running_cancel_intent_does_not_tally) {
 
     const char* fail_msg = nullptr;
 
-    wait_paused(gate);
+    wait_paused(gate, probe);
     {
         backend.cancel(c);  // running -> intent_recorded
         if (stats.canceled_ops != 0) {
@@ -664,8 +748,11 @@ SLUICE_TEST_CASE(tp_running_cancel_intent_does_not_tally) {
 // not_found. All identity is pointer-free (SlotHandle/RequestKey) — no
 // Completion reverse map.
 SLUICE_TEST_CASE(tp_stale_generation_event_harmless) {
-    Watchdog wd(kWatchdog);
+    PhaseProbe probe;
+    probe.name = "tp_stale_generation_event_harmless";
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    probe.bind_gate(gate.paused, gate.resume, gate.exited);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     // The gate is NOT armed for the gen-N lifecycle (it must drain freely); it
     // is armed only for the gen-N+1 submit so that occupant stays enqueued.
@@ -710,7 +797,7 @@ SLUICE_TEST_CASE(tp_stale_generation_event_harmless) {
         if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
             fail_msg = "second submit must reuse the released slot";
         } else {
-            wait_paused(gate);
+            wait_paused(gate, probe);
             h1 = backend.handle_for_completion_for_test(&c);
             if (!h1.has_value()) {
                 fail_msg = "new occupant must resolve to a slot handle";
@@ -749,7 +836,7 @@ SLUICE_TEST_CASE(tp_stale_generation_event_harmless) {
     if (fail_msg == nullptr) {
         // Resume the worker; the live N+1 occupant completes with ITS OWN
         // result. The stale injection left no residue.
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         // Wait for the production path to leave the gate before unbinding it.
         gate.exited.wait(false, std::memory_order_acquire);
     }
@@ -772,7 +859,7 @@ SLUICE_TEST_CASE(tp_stale_generation_event_harmless) {
         c.reset();
         SLUICE_CHECK(backend.arena_slot_in_use() == 0);
     } else {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         gate.exited.wait(false, std::memory_order_acquire);
         (void)drain_bounded(backend,
                             std::chrono::steady_clock::now() + kDrainDeadline);
@@ -791,7 +878,9 @@ SLUICE_TEST_CASE(tp_stale_generation_event_harmless) {
 // backend_ready window (terminal stored, not yet reaped) because only the
 // main thread reaps.
 SLUICE_TEST_CASE(tp_publication_boundary_reap_gates_ready) {
-    Watchdog wd(kWatchdog);
+    PhaseProbe probe;
+    probe.name = "tp_publication_boundary_reap_gates_ready";
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
 
     TempPath tp("H");
@@ -861,9 +950,12 @@ SLUICE_TEST_CASE(tp_publication_boundary_reap_gates_ready) {
 //     run no syscall)
 // No sleep_for, no timing assumptions.
 SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
-    Watchdog wd(kWatchdog);
+    PhaseProbe probe;
+    probe.name = "tp_cancel_races_worker_terminal_exactly_one";
+    Watchdog wd(kWatchdog, probe);
     constexpr std::size_t kIters = 64;
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    probe.bind_gate(gate.paused, gate.resume, gate.exited);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_before_dequeue_pause_gate(&gate);
     sluice::AsyncStats stats;
@@ -887,7 +979,7 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     // resumed so the worker is never stranded, and the gate-exit is awaited so
     // the next iteration (or the final backend destruction) sees a stable gate.
     auto cleanup_iteration = [&](Completion<std::size_t>& c) noexcept {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         gate.exited.wait(false, std::memory_order_acquire);
         if (!drain_bounded(backend,
                            std::chrono::steady_clock::now() + kDrainDeadline)) {
@@ -919,7 +1011,7 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
         }
         // Force the worker into the pre-dequeue window so the op is provably
         // `enqueued` before the race is released.
-        wait_paused(gate);
+        wait_paused(gate, probe);
         // Barrier synchronizes TWO threads: the main thread (which resumes the
         // worker gate) and the canceler. Both release together AFTER the worker
         // is confirmed paused, so cancel and dequeue genuinely race. The
@@ -933,6 +1025,7 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
         // created inside a try block and joined before scope exit so a
         // thread-creation failure under load cannot leave a joinable thread
         // (which would std::terminate the process at scope end).
+        probe.set(CasePhase::barrier);
         std::barrier sync{2};
         std::thread canceler;
         try {
@@ -947,21 +1040,25 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
             break;
         }
         sync.arrive_and_wait();
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
+        probe.set(CasePhase::join_canceler);
         canceler.join();
         // Wait for the worker to leave the gate before the next iteration arms
         // it again (the gate struct is reused).
         gate.exited.wait(false, std::memory_order_acquire);
-        // Re-arm the gate for the next iteration.
-        gate.paused.store(false, std::memory_order_release);
-        gate.resume.store(false, std::memory_order_release);
-        gate.exited.store(true, std::memory_order_release);
+        // Re-arm the gate for the next iteration. Safe only AFTER exited was
+        // observed true: a production thread reaches resume.wait() only after
+        // setting exited=false, so resetting resume=false here cannot drop a
+        // wake under a still-waiting epoch.
+        probe.set(CasePhase::reset);
+        rearm_threadpool_gate(gate);
 
         // Drain through the real reaper, counting publications. The loop
         // condition is `!c.ready()` (not just `outstanding() > 0`) so the
         // `c.ready()`/`result()` assertions below are never racy: the Completion
         // is published exactly by the reap inside poll(), and we only proceed
         // once that publication is observed.
+        probe.set(CasePhase::drain);
         std::size_t published = 0;
         const auto deadline = std::chrono::steady_clock::now() + kDrainDeadline;
         while (!c.ready()) {
@@ -1024,7 +1121,7 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     // Safety: ensure the gate is resumed and the worker has exited it before
     // the backend (and its worker thread) is destroyed. The case-level Watchdog
     // catches a genuinely stuck worker.
-    gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(gate);
     gate.exited.wait(false, std::memory_order_acquire);
 
     ::close(fd);

@@ -142,7 +142,7 @@ public:
     explicit ScopedGateResume(Gate& gate) : gate_(&gate) {}
     void resume() {
         if (resumed_) return;
-        gate_->resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(*gate_);
         resumed_ = true;
     }
     ~ScopedGateResume() { cleanup(); }

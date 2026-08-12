@@ -174,7 +174,7 @@ public:
         : gate_(&gate), thread_(&t) {}
     void join() {
         if (joined_) return;
-        gate_->resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(*gate_);
         thread_->join();
         joined_ = true;
     }
@@ -364,7 +364,7 @@ SLUICE_TEST_CASE(tp_c2e_close_while_enqueued_preserves_dispatch) {
 
     // Resume: the worker dequeues and runs the syscall; result verbatim.
     if (fail_msg == nullptr) {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         if (!drain_bounded(backend, deadline)) {
             fail_msg = "enqueued request never drained after close";
         } else if (!c.ready() || !c.result().has_value() || c.result().value() != 1) {
@@ -374,7 +374,7 @@ SLUICE_TEST_CASE(tp_c2e_close_while_enqueued_preserves_dispatch) {
         }
     }
     // cleanup path (runs on both success and failure): resume, drain, reset.
-    gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(gate);
     backend.set_before_dequeue_pause_gate(nullptr);
     if (!drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout)) {
         std::fprintf(stderr, "cleanup drain failed\n");
@@ -423,7 +423,7 @@ SLUICE_TEST_CASE(tp_c2e_close_while_running_result_verbatim) {
 
     // Resume: the syscall returns its REAL result; verbatim (not canceled).
     if (fail_msg == nullptr) {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         if (!drain_bounded(backend, deadline)) {
             fail_msg = "running request never drained after close";
         } else if (!c.ready()) {
@@ -435,7 +435,7 @@ SLUICE_TEST_CASE(tp_c2e_close_while_running_result_verbatim) {
             fail_msg = "exactly one syscall must have executed";
         }
     }
-    gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(gate);
     backend.set_running_pause_gate(nullptr);
     if (!drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout)) {
         std::fprintf(stderr, "cleanup drain failed\n");
@@ -474,7 +474,7 @@ SLUICE_TEST_CASE(tp_c2e_close_while_running_void_result_verbatim) {
     }
 
     if (fail_msg == nullptr) {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         if (!drain_bounded(backend, deadline)) {
             fail_msg = "running void request never drained after close";
         } else if (!c.ready()) {
@@ -483,7 +483,7 @@ SLUICE_TEST_CASE(tp_c2e_close_while_running_void_result_verbatim) {
             fail_msg = "void result must be the real fdatasync success verbatim";
         }
     }
-    gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(gate);
     backend.set_running_pause_gate(nullptr);
     if (!drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout)) {
         std::fprintf(stderr, "cleanup drain failed\n");
@@ -710,7 +710,7 @@ SLUICE_TEST_CASE(tp_c2e_close_waits_for_inflight_acceptance_lp) {
     // the closer; drain + reset so the backend destructor sees quiescence.
     guard.join();
     if (closer.joinable()) closer.join();
-    gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(gate);
     if (!drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout)) {
         std::fprintf(stderr, "cleanup drain failed\n");
     }
@@ -925,7 +925,7 @@ SLUICE_TEST_CASE(tp_c2e_close_then_running_cancel_intent_only) {
     }
 
     if (fail_msg == nullptr) {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         if (!drain_bounded(backend, deadline)) {
             fail_msg = "request never drained after close + running cancel";
         } else if (!c.ready()) {
@@ -934,7 +934,7 @@ SLUICE_TEST_CASE(tp_c2e_close_then_running_cancel_intent_only) {
             fail_msg = "running cancel after close must yield the REAL result verbatim";
         }
     }
-    gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(gate);
     backend.set_running_pause_gate(nullptr);
     if (!drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout)) {
         std::fprintf(stderr, "cleanup drain failed\n");
@@ -1034,7 +1034,7 @@ SLUICE_TEST_CASE(tp_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin) {
         // parked B is woken by real progress and reaps op1.
         if (fail_msg == nullptr) {
             raw->set_running_pause_gate(nullptr);
-            gate.resume.store(true, std::memory_order_release);
+            resume_threadpool_gate(gate);
             if (!wait_flag(b_finished, deadline)) {
                 fail_msg = "participant B was never woken by real progress";
             } else if (!b_wait.has_value() || b_wait.value() != 1) {
@@ -1047,7 +1047,7 @@ SLUICE_TEST_CASE(tp_c2e_close_wakes_parked_waiter_one_shot_no_busy_spin) {
         // cleanup (both paths): disarm, resume, join A/B, drain, reset.
         raw->set_running_pause_gate(nullptr);
         raw->set_wait_phase_flag_for_test(nullptr);
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         (void)join_bounded(participant_a, a_finished,
                            std::chrono::steady_clock::now() + kWaitTimeout);
         if (participant_b.joinable()) {
@@ -1138,7 +1138,7 @@ SLUICE_TEST_CASE(tp_c2e_close_before_final_terminal_no_lost_ready) {
     // The NEXT wait_one reaps the final ready — the interrupt must not have
     // swallowed it.
     if (fail_msg == nullptr) {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         backend.set_terminal_publication_pause_gate(nullptr);
         auto wr2 = backend.wait_one();
         if (!wr2.has_value() || wr2.value() != 1) {
@@ -1149,7 +1149,7 @@ SLUICE_TEST_CASE(tp_c2e_close_before_final_terminal_no_lost_ready) {
         }
     }
     // cleanup (both paths): resume, disarm, join the waiter, drain, reset.
-    gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(gate);
     backend.set_terminal_publication_pause_gate(nullptr);
     backend.set_wait_phase_flag_for_test(nullptr);
     (void)join_bounded(waiter, a_finished,
@@ -1219,7 +1219,7 @@ SLUICE_TEST_CASE(tp_c2e_interrupt_final_reap_closes_ready_race) {
     // NOW the final terminal is recorded (the worker resumes and stores the
     // real result + progress signal) — inside the interrupt window.
     if (fail_msg == nullptr) {
-        worker_gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(worker_gate);
         backend.set_terminal_publication_pause_gate(nullptr);
         const auto recorded_deadline = std::chrono::steady_clock::now() + kWaitTimeout;
         while (backend.backend_ready_count_for_test() != 1 &&
@@ -1234,7 +1234,7 @@ SLUICE_TEST_CASE(tp_c2e_interrupt_final_reap_closes_ready_race) {
     // Release the final reap: wait_one's final reap finds the terminal and
     // returns 1 — the control interrupt never swallows the final ready.
     if (fail_msg == nullptr) {
-        reap_gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(reap_gate);
         if (!wait_flag(a_finished, deadline)) {
             fail_msg = "waiter never finished after the final-reap release";
         } else if (!a_wait.has_value() || a_wait.value() != 1) {
@@ -1245,8 +1245,8 @@ SLUICE_TEST_CASE(tp_c2e_interrupt_final_reap_closes_ready_race) {
         }
     }
     // cleanup (both paths): resume both gates, disarm, join, drain, reset.
-    worker_gate.resume.store(true, std::memory_order_release);
-    reap_gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(worker_gate);
+    resume_threadpool_gate(reap_gate);
     backend.set_terminal_publication_pause_gate(nullptr);
     backend.set_control_wake_final_reap_pause_gate(nullptr);
     backend.set_wait_phase_flag_for_test(nullptr);
@@ -1285,7 +1285,7 @@ SLUICE_TEST_CASE(tp_c2e_final_terminal_before_close_not_affected) {
 
     // Release the worker: record_terminal + progress wake land FIRST.
     if (fail_msg == nullptr) {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         backend.set_terminal_publication_pause_gate(nullptr);
         const auto ready_deadline = std::chrono::steady_clock::now() + kWaitTimeout;
         while (backend.backend_ready_count_for_test() != 1 &&
@@ -1309,7 +1309,7 @@ SLUICE_TEST_CASE(tp_c2e_final_terminal_before_close_not_affected) {
                        "(close must not affect an already-stored terminal)";
         }
     }
-    gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(gate);
     backend.set_terminal_publication_pause_gate(nullptr);
     if (!drain_bounded(backend, std::chrono::steady_clock::now() + kWaitTimeout)) {
         std::fprintf(stderr, "cleanup drain failed\n");

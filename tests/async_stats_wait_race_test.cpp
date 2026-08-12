@@ -366,7 +366,7 @@ SLUICE_TEST_CASE(wait_one_and_poll_concurrent_no_stats_race) {
         poller_may_start.store(true, std::memory_order_release);
         // Release any armed gate so a paused worker can run and the op can be
         // reaped by the drain below (otherwise the worker is stuck forever).
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         backend_raw->set_running_pause_gate(nullptr);
         backend_raw->set_wait_phase_flag_for_test(nullptr);
         // Wake any parked waiter so it observes stop and exits; re-interrupt
@@ -475,7 +475,7 @@ SLUICE_TEST_CASE(wait_one_and_poll_concurrent_no_stats_race) {
     // goes to the parked waiter; the poller starts once waiter_reaped > 0.
     backend_raw->set_running_pause_gate(nullptr);
     backend_raw->set_wait_phase_flag_for_test(nullptr);
-    gate.resume.store(true, std::memory_order_release);
+    resume_threadpool_gate(gate);
 
     // Wait for the waiter to deterministically reap op0 BEFORE the main thread
     // polls. Otherwise the main thread wins the race for op0 and waiter_reaped
