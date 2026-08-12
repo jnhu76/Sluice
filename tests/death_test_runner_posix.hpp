@@ -49,7 +49,10 @@
 #include <sys/wait.h>
 #include <iostream>
 #include <string>
-#include <vector>
+
+#if defined(__APPLE__) && defined(__MACH__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace sluice_death_test {
 
@@ -60,6 +63,33 @@ inline constexpr int kQueueExitHookExit      = 90;
 
 // Marker argv[1] prefix that selects child-mode dispatch.
 inline constexpr const char* kChildArgPrefix = "--death-child=";
+
+// Resolve this executable's filesystem path for self-re-exec. MUST be called in
+// the parent BEFORE fork(): readlink (Linux) and _NSGetExecutablePath (macOS)
+// are not guaranteed async-signal-safe, so the post-fork child is restricted to
+// close/dup2/execv/_Exit. Linux resolves /proc/self/exe; macOS has no /proc and
+// uses _NSGetExecutablePath (the returned path may be non-canonical but is
+// execv-valid). Returns an empty string on failure so callers can fail loudly.
+// Shared by fork_exec_child below and by the watchdog diagnostic self-test in
+// threadpool_backend_scheme_b_race_test.cpp (the established self-exec
+// convention; both resolve before fork and keep the child async-signal-safe).
+inline std::string resolve_self_executable_path() noexcept {
+    char buf[4096];
+#if defined(__APPLE__) && defined(__MACH__)
+    uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) != 0) {
+        return {};
+    }
+    return std::string(buf);
+#else
+    ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (n <= 0) {
+        return {};
+    }
+    buf[n] = '\0';
+    return std::string(buf);
+#endif
+}
 
 // Install the deterministic terminate handler in the child. The handler MUST
 // NOT return (§F3): std::_Exit never returns. Using std::_Exit (not exit)
@@ -94,6 +124,14 @@ inline std::string parse_child_case(int argc, char** argv) {
 // target forever. The watchdog sends SIGKILL on timeout.
 inline int fork_exec_child(const std::string& case_name, bool& timed_out) {
     timed_out = false;
+    // Resolve self BEFORE fork: readlink/_NSGetExecutablePath are not guaranteed
+    // async-signal-safe, so the post-fork child is restricted to
+    // close/dup2/execv/_Exit (see resolve_self_executable_path).
+    std::string self_path = resolve_self_executable_path();
+    if (self_path.empty()) {
+        std::perror("death_test: resolve_self_executable_path");
+        return -1;
+    }
     pid_t pid = fork();
     if (pid < 0) {
         std::perror("death_test: fork");
@@ -102,23 +140,11 @@ inline int fork_exec_child(const std::string& case_name, bool& timed_out) {
     if (pid == 0) {
         // Child: re-exec self so the child process is the same binary, linked
         // against the same library, with the production Mutex entry under test.
-        std::vector<char*> argv;
-        std::string self_buf;
-        {
-            char buf[4096];
-            ssize_t n = ::readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-            if (n <= 0) {
-                std::perror("death_test: readlink /proc/self/exe");
-                std::_Exit(kChildTestFailExit);
-            }
-            buf[n] = '\0';
-            self_buf = buf;
-        }
+        // ONLY async-signal-safe work here: build argv from the pre-resolved
+        // path, execv, _Exit on failure.
         std::string arg1 = child_arg(case_name);
-        argv.push_back(const_cast<char*>(self_buf.c_str()));
-        argv.push_back(const_cast<char*>(arg1.c_str()));
-        argv.push_back(nullptr);
-        execv(argv[0], argv.data());
+        char* argv[] = {self_path.data(), arg1.data(), nullptr};
+        execv(argv[0], argv);
         std::perror("death_test: execv");
         std::_Exit(kChildTestFailExit);
     }

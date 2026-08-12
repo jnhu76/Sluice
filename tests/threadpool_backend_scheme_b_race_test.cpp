@@ -23,6 +23,7 @@
 //
 // Links sluice_async_internal_testing (the seams are guarded by
 // SLUICE_ASYNC_INTERNAL_TESTING; production sluice_async has no seams).
+#include "death_test_runner_posix.hpp"
 #include "harness.hpp"
 
 #include <sluice/async/completion.hpp>
@@ -1288,17 +1289,16 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
 // fails, so a stuck child can never hang the test on an unbounded
 // read()/waitpid(). POSIX only.
 SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
-    // Resolve this binary's path in the PARENT (readlink is not guaranteed
-    // async-signal-safe), so the post-fork child performs ONLY async-signal-safe
-    // calls (close/dup2/execv) before exec. Matches the self-exec idiom in
-    // tests/death_test_runner_posix.hpp.
-    char self_buf[4096];
-    ssize_t self_len =
-        ::readlink("/proc/self/exe", self_buf, sizeof(self_buf) - 1);
-    if (self_len <= 0) {
-        SLUICE_FAIL("readlink(/proc/self/exe) failed; cannot exec child");
+    // Resolve this binary's path in the PARENT, BEFORE fork, via the shared
+    // portable self-exec resolver (Linux: readlink /proc/self/exe; macOS:
+    // _NSGetExecutablePath). readlink/_NSGetExecutablePath are not guaranteed
+    // async-signal-safe, so the post-fork child performs ONLY async-signal-safe
+    // calls (close/dup2/execv/_Exit). Matches the self-exec idiom in
+    // tests/death_test_runner_posix.hpp (which also resolves before fork).
+    std::string self_path = sluice_death_test::resolve_self_executable_path();
+    if (self_path.empty()) {
+        SLUICE_FAIL("self-executable path resolution failed; cannot exec child");
     }
-    self_buf[self_len] = '\0';
 
     int pipefd[2];
     if (::pipe(pipefd) != 0) {
@@ -1325,7 +1325,7 @@ SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
         ::close(pipefd[0]);
         if (::dup2(pipefd[1], STDERR_FILENO) < 0) std::_Exit(127);
         ::close(pipefd[1]);
-        char* child_argv[] = {self_buf,
+        char* child_argv[] = {self_path.data(),
                               const_cast<char*>("--watchdog-diagnostic-child"),
                               nullptr};
         ::execv(child_argv[0], child_argv);
@@ -1394,7 +1394,9 @@ SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
     // timed out or failed, is about to be killed (SIGKILL). A WNOHANG poll loop
     // with a deadline ensures even a pathologically stuck child cannot hang the
     // parent on an unbounded blocking waitpid. waitpid's own EINTR is handled by
-    // retry_on_eintr.
+    // retry_on_eintr. If the reap deadline itself expires with the child still
+    // uncollectable, SIGKILL and perform a final bounded reap so no diagnostic
+    // child can escape cleanup.
     if (pipe_timed_out || capture_failed) {
         ::kill(pid, SIGKILL);
     }
@@ -1409,7 +1411,22 @@ SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
         if (w < 0) break;                   // error (e.g. ECHILD); fail below
         // w == 0: child not yet collectable.
         if (std::chrono::steady_clock::now() >= reap_deadline) {
-            w = 0;
+            // Deadline expired with the child still uncollectable: SIGKILL
+            // (idempotent; harmless if already dead) and a final bounded reap so
+            // no diagnostic child can escape cleanup.
+            ::kill(pid, SIGKILL);
+            const auto kill_reap_deadline =
+                std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            for (;;) {
+                w = sluice::detail::retry_on_eintr(
+                    [&] { return ::waitpid(pid, &status, WNOHANG); });
+                if (w == pid || w < 0) break;
+                if (std::chrono::steady_clock::now() >= kill_reap_deadline) {
+                    w = 0;
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
             break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
