@@ -33,8 +33,10 @@
 
 #include <atomic>
 #include <barrier>
+#include <cerrno>
 #include <chrono>
 #include <condition_variable>
+#include <csignal>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -44,6 +46,7 @@
 #include <mutex>
 #include <string>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <thread>
 #include <type_traits>
 #include <unistd.h>
@@ -316,11 +319,13 @@ SLUICE_MAIN()
 SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
     PhaseProbe probe;
     probe.name = "tp_enqueue_push_share_one_work_domain";
-    Watchdog wd(kWatchdog, probe);
-    // Gate must outlive backend (destroyed after it by C++ reverse declaration
-    // order), so the worker never accesses a destroyed atomic.
+    // #93 review: gate before watchdog, bind before thread start. Thread
+    // creation publishes the non-atomic probe pointer writes; reverse
+    // destruction (backend -> watchdog joined -> gate -> probe) keeps the gate
+    // alive across the watchdog's diagnostic atomic reads.
     ThreadPoolBackend::AfterArenaEnqueueBeforeDispatchPushPauseGate gate;
     probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_after_enqueue_before_push_pause_gate(&gate);
 
@@ -395,11 +400,13 @@ SLUICE_TEST_CASE(tp_enqueue_push_share_one_work_domain) {
 SLUICE_TEST_CASE(tp_enqueued_cancel_wins_no_syscall) {
     PhaseProbe probe;
     probe.name = "tp_enqueued_cancel_wins_no_syscall";
-    Watchdog wd(kWatchdog, probe);
-    // Gate must outlive backend (destroyed after it by C++ reverse declaration
-    // order), so the worker never accesses a destroyed atomic.
+    // #93 review: gate before watchdog, bind before thread start. Thread
+    // creation publishes the non-atomic probe pointer writes; reverse
+    // destruction (backend -> watchdog joined -> gate -> probe) keeps the gate
+    // alive across the watchdog's diagnostic atomic reads.
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
     probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_before_dequeue_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -459,11 +466,13 @@ SLUICE_TEST_CASE(tp_enqueued_cancel_wins_no_syscall) {
 SLUICE_TEST_CASE(tp_running_cancel_intent_real_result_verbatim) {
     PhaseProbe probe;
     probe.name = "tp_running_cancel_intent_real_result_verbatim";
-    Watchdog wd(kWatchdog, probe);
-    // Gate must outlive backend (destroyed after it by C++ reverse declaration
-    // order), so the worker never accesses a destroyed atomic.
+    // #93 review: gate before watchdog, bind before thread start. Thread
+    // creation publishes the non-atomic probe pointer writes; reverse
+    // destruction (backend -> watchdog joined -> gate -> probe) keeps the gate
+    // alive across the watchdog's diagnostic atomic reads.
     ThreadPoolBackend::WorkerRunningPauseGate gate;
     probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_running_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -523,11 +532,13 @@ SLUICE_TEST_CASE(tp_running_cancel_intent_real_result_verbatim) {
 SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
     PhaseProbe probe;
     probe.name = "tp_terminal_publication_after_bookkeeping";
-    Watchdog wd(kWatchdog, probe);
-    // Gate must outlive backend (destroyed after it by C++ reverse declaration
-    // order), so the worker never accesses a destroyed atomic.
+    // #93 review: gate before watchdog, bind before thread start. Thread
+    // creation publishes the non-atomic probe pointer writes; reverse
+    // destruction (backend -> watchdog joined -> gate -> probe) keeps the gate
+    // alive across the watchdog's diagnostic atomic reads.
     ThreadPoolBackend::TerminalPublicationPauseGate gate;
     probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_terminal_publication_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -593,9 +604,13 @@ SLUICE_TEST_CASE(tp_terminal_publication_after_bookkeeping) {
 SLUICE_TEST_CASE(tp_canceled_ops_tallied_only_on_terminal_won) {
     PhaseProbe probe;
     probe.name = "tp_canceled_ops_tallied_only_on_terminal_won";
-    Watchdog wd(kWatchdog, probe);
+    // #93 review: gate before watchdog, bind before thread start. Thread
+    // creation publishes the non-atomic probe pointer writes; reverse
+    // destruction (backend -> watchdog joined -> gate -> probe) keeps the gate
+    // alive across the watchdog's diagnostic atomic reads.
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
     probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_before_dequeue_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -670,9 +685,13 @@ SLUICE_TEST_CASE(tp_canceled_ops_tallied_only_on_terminal_won) {
 SLUICE_TEST_CASE(tp_running_cancel_intent_does_not_tally) {
     PhaseProbe probe;
     probe.name = "tp_running_cancel_intent_does_not_tally";
-    Watchdog wd(kWatchdog, probe);
+    // #93 review: gate before watchdog, bind before thread start. Thread
+    // creation publishes the non-atomic probe pointer writes; reverse
+    // destruction (backend -> watchdog joined -> gate -> probe) keeps the gate
+    // alive across the watchdog's diagnostic atomic reads.
     ThreadPoolBackend::WorkerRunningPauseGate gate;
     probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_running_pause_gate(&gate);
     ScopedGateResume guard(gate);
@@ -750,9 +769,13 @@ SLUICE_TEST_CASE(tp_running_cancel_intent_does_not_tally) {
 SLUICE_TEST_CASE(tp_stale_generation_event_harmless) {
     PhaseProbe probe;
     probe.name = "tp_stale_generation_event_harmless";
-    Watchdog wd(kWatchdog, probe);
+    // #93 review: gate before watchdog, bind before thread start. Thread
+    // creation publishes the non-atomic probe pointer writes; reverse
+    // destruction (backend -> watchdog joined -> gate -> probe) keeps the gate
+    // alive across the watchdog's diagnostic atomic reads.
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
     probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    Watchdog wd(kWatchdog, probe);
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     // The gate is NOT armed for the gen-N lifecycle (it must drain freely); it
     // is armed only for the gen-N+1 submit so that occupant stays enqueued.
@@ -952,10 +975,14 @@ SLUICE_TEST_CASE(tp_publication_boundary_reap_gates_ready) {
 SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     PhaseProbe probe;
     probe.name = "tp_cancel_races_worker_terminal_exactly_one";
-    Watchdog wd(kWatchdog, probe);
-    constexpr std::size_t kIters = 64;
+    // #93 review: gate before watchdog, bind before thread start. Thread
+    // creation publishes the non-atomic probe pointer writes; reverse
+    // destruction (backend -> watchdog joined -> gate -> probe) keeps the gate
+    // alive across the watchdog's diagnostic atomic reads.
     ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
     probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    Watchdog wd(kWatchdog, probe);
+    constexpr std::size_t kIters = 64;
     ThreadPoolBackend backend(ThreadPoolConfig{/*capacity=*/1, /*workers=*/1});
     backend.set_before_dequeue_pause_gate(&gate);
     sluice::AsyncStats stats;
@@ -1125,5 +1152,97 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     gate.exited.wait(false, std::memory_order_acquire);
 
     ::close(fd);
+    if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// #93 review follow-up — TSan diagnostic-path coverage. A normal (green) run
+// never fires the case-level Watchdog, so diagnose_and_abort() — and its reads
+// of the bound gate atomics — are never executed; a plain TSan run therefore
+// instruments none of those reads. This case FORCES the diagnostic path: a
+// forked child constructs probe + gate + bind + Watchdog in the review-mandated
+// order (gate before watchdog; bind before thread start) with a SHORT timeout,
+// then blocks without resuming. The watchdog fires, reads the bound gate
+// atomics, prints the `gate: paused=…` line, and aborts. The parent asserts the
+// child was terminated by SIGABRT AND that the `gate:` line was printed (proving
+// the diagnostic branch actually dereferenced the bound gate atomics). Under
+// TSan this is the only run that exercises those reads, so a race on them would
+// be reported here rather than hidden behind a green normal run. POSIX only.
+SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
+    int pipefd[2];
+    if (::pipe(pipefd) != 0) {
+        SLUICE_FAIL("pipe() failed for watchdog diagnostic-path test");
+    }
+
+    pid_t pid = ::fork();
+    if (pid < 0) {
+        ::close(pipefd[0]);
+        ::close(pipefd[1]);
+        SLUICE_FAIL("fork() failed for watchdog diagnostic-path test");
+    }
+
+    if (pid == 0) {
+        // Child: send stderr (the watchdog diagnostic output) down the pipe.
+        ::close(pipefd[0]);
+        ::dup2(pipefd[1], STDERR_FILENO);
+        ::close(pipefd[1]);
+
+        // Review-mandated order: declare the gate and bind it BEFORE starting
+        // the watchdog thread. std::thread creation publishes the non-atomic
+        // probe pointer writes; reverse-declaration destruction
+        // (watchdog joined -> gate -> probe) keeps the gate alive across the
+        // diagnostic reads.
+        PhaseProbe probe;
+        probe.name = "tp_watchdog_diagnostic_path_reads_bound_gate";
+        ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+        probe.bind_gate(gate.paused, gate.resume, gate.exited);
+        // Deliberately short timeout: this child is constructed to FIRE the
+        // diagnostic path. The case-level 30s kWatchdog is intentionally not
+        // used — a normal run never reaches diagnose_and_abort, so a plain TSan
+        // run instruments none of its gate-atomic reads; this is the only run
+        // that does.
+        Watchdog wd(std::chrono::seconds(1), probe);
+
+        // Never resume: the watchdog must fire, read the bound gate atomics,
+        // print the diagnostic, and abort. Block until that happens.
+        for (;;) {
+            std::this_thread::sleep_for(std::chrono::seconds(60));
+        }
+    }
+
+    // Parent: close the write end so read() sees EOF when the child aborts.
+    ::close(pipefd[1]);
+    std::string captured;
+    for (;;) {
+        char buf[256];
+        ssize_t n = ::read(pipefd[0], buf, sizeof(buf));
+        if (n > 0) {
+            captured.append(buf, static_cast<std::size_t>(n));
+        } else if (n == 0) {
+            break;
+        } else if (errno == EINTR) {
+            continue;
+        } else {
+            break;
+        }
+    }
+    ::close(pipefd[0]);
+
+    int status = 0;
+    pid_t w;
+    do {
+        w = ::waitpid(pid, &status, 0);
+    } while (w < 0 && errno == EINTR);
+
+    const char* fail_msg = nullptr;
+    if (w != pid) {
+        fail_msg = "waitpid for the watchdog diagnostic child failed";
+    } else if (!WIFSIGNALED(status) || WTERMSIG(status) != SIGABRT) {
+        fail_msg = "watchdog diagnostic child must abort via SIGABRT";
+    } else if (captured.find("gate: paused=") == std::string::npos) {
+        fail_msg = "watchdog must read+print the bound gate atomics";
+    } else if (captured.find("tp_watchdog_diagnostic_path_reads_bound_gate") ==
+               std::string::npos) {
+        fail_msg = "watchdog must print the bound case name";
+    }
     if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
 }

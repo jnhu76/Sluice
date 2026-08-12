@@ -719,9 +719,12 @@ class ThreadPoolBackend : public AsyncBackend {
 // `resume.wait(false, acquire)`; therefore EVERY test-side resume publisher
 // MUST perform the release-store AND the matching notification. Calling these
 // helpers is the only supported way to resume a ThreadPoolBackend gate, so the
-// store+notify pair cannot be forgotten at a call site. notify_all is used
-// because some gates (e.g. BeforeWorkerDequeuePauseGate) can fire on more than
-// one worker; notify_all is a harmless no-op when no thread is in atomic::wait.
+// store+notify pair cannot be forgotten at a call site. notify_all is used so
+// the resume notification does not depend on a permanent single-waiter
+// assumption; it is a harmless no-op when no thread is in atomic::wait. This
+// does NOT make the bool-based {paused,resume,exited} protocol a general
+// multi-waiter rearm barrier: reusable gate protocols still require their
+// documented exit/rearm discipline (observe exited==true, then rearm).
 // SLUICE_ASYNC_INTERNAL_TESTING behavior only — production sluice_async carries
 // no pause symbol and its ThreadPool semantics are unchanged.
 template <class Gate>
