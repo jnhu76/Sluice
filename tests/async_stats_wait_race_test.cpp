@@ -50,6 +50,7 @@
 #include <filesystem>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 using namespace sluice::async;
