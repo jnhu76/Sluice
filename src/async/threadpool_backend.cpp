@@ -747,16 +747,19 @@ void ThreadPoolBackend::signal_ready_progress() noexcept {
 // Deterministic pause helpers. Each is a no-op when the corresponding gate is
 // disarmed. The gate is a paused/resume/exited atomic handshake.
 //
-// Issue #86-B: paused and exited now call notify_one() after their release-store
-// so a test thread may block on atomic::wait (zero-CPU, no scheduler-contention
-// spin) instead of yield-busy-spinning. notify_one is a harmless no-op when no
-// thread is in atomic::wait, so test files that still yield-spin on the same
-// atomics are unaffected. The resume side RETAINS the yield-spin: switching it to
-// resume.wait(false) would require every test file that sets resume.store(true)
-// to also call resume.notify_one() (≈30 sites across 6 files) — a scope expansion
-// beyond #86-B. The test-side blocking wait on paused alone removes the
-// scheduler-latency false-failure: the test thread releases its time slice while
-// waiting, so the worker is scheduled and reaches the pause point promptly.
+// Issue #92 (completing #86-B): the handshake is now fully bidirectional.
+// paused and exited publish with notify_one(); resume BLOCKS on
+// resume.wait(false, acquire) instead of yield-busy-spinning. Under parallel
+// Debug oversubscription the old resume yield-spin could starve the very test
+// thread that publishes resume (the worker burned its time slice re-checking
+// resume while the resumer waited for CPU), producing the intermittent 30s
+// case-level watchdog abort with no phase attribution. The test side now
+// resumes ONLY through resume_threadpool_gate() (release-store + notify_all),
+// so every resume publisher provably pairs its store with a notification. A
+// missing notify would leave the production thread blocked in resume.wait and
+// is caught by the case-level watchdog instead of hanging forever. This is
+// SLUCE_ASYNC_INTERNAL_TESTING behavior only; production ThreadPool semantics
+// are unchanged.
 
 void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(
     bool inside_work_mtx) noexcept {
@@ -767,9 +770,7 @@ void ThreadPoolBackend::wait_after_enqueue_before_push_pause_(
     g->dispatch_push_completed.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     g->paused.notify_one();
-    while (!g->resume.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-    }
+    g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
     g->exited.notify_one();
 }
@@ -780,9 +781,7 @@ void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     g->paused.notify_one();
-    while (!g->resume.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-    }
+    g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
     g->exited.notify_one();
 }
@@ -793,9 +792,7 @@ void ThreadPoolBackend::wait_before_enqueue_lock_pause_() noexcept {
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     g->paused.notify_one();
-    while (!g->resume.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-    }
+    g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
     g->exited.notify_one();
 }
@@ -841,9 +838,7 @@ void ThreadPoolBackend::wait_running_pause_() noexcept {
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     g->paused.notify_one();
-    while (!g->resume.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-    }
+    g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
     g->exited.notify_one();
 }
@@ -854,9 +849,7 @@ void ThreadPoolBackend::wait_terminal_publication_pause_() noexcept {
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     g->paused.notify_one();
-    while (!g->resume.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-    }
+    g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
     g->exited.notify_one();
 }
@@ -869,9 +862,7 @@ void ThreadPoolBackend::wait_control_wake_final_reap_pause_() noexcept {
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     g->paused.notify_one();
-    while (!g->resume.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-    }
+    g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
     g->exited.notify_one();
 }
@@ -884,9 +875,7 @@ void ThreadPoolBackend::wait_before_admission_lock_pause_() noexcept {
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     g->paused.notify_one();
-    while (!g->resume.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-    }
+    g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
     g->exited.notify_one();
 }
@@ -900,9 +889,7 @@ void ThreadPoolBackend::wait_before_commit_binding_pause_() noexcept {
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);
     g->paused.notify_one();
-    while (!g->resume.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-    }
+    g->resume.wait(false, std::memory_order_acquire);
     g->exited.store(true, std::memory_order_release);
     g->exited.notify_one();
 }

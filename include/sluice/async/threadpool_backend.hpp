@@ -229,15 +229,22 @@ class ThreadPoolBackend : public AsyncBackend {
         return disp;
     }
 
-    // Deterministic pause gates for the ThreadPoolBackend race tests. Each gate
-    // is armed by the test; the production path sets `paused` (and calls
-    // paused.notify_one) to mark the exact observation window, yield-spins on
-    // `resume`, then sets `exited` (and calls exited.notify_one) when it leaves.
-    // A test thread MAY block on paused.wait(false)/exited.wait(false) instead of
-    // yield-spinning — notify_one is a no-op when no thread is in atomic::wait, so
-    // test files that still yield-spin are unaffected (issue #86-B). These are
-    // compiled out of production sluice_async; the layout cost in the
-    // internal-testing target is accepted and documented (AGENTS.md §15).
+    // Deterministic pause gates for the ThreadPoolBackend race tests. The
+    // PRODUCTION side of the protocol is universally blocking (issue #92,
+    // completing #86-B): the production path sets `paused` (and calls
+    // paused.notify_one) to mark the exact observation window, BLOCKS on
+    // `resume.wait(false)` until the test resumes it, then sets `exited` (and
+    // calls exited.notify_one) when it leaves. The production resume side is the
+    // one part that is blocking everywhere; test consumers are NOT required to
+    // block on paused.wait/exited.wait uniformly — a consumer may pair the
+    // blocking waits (paused.wait / exited.wait) OR use an existing bounded
+    // observation loop (e.g. yield + poll). When a test does resume the gate it
+    // MUST do so ONLY through resume_threadpool_gate() (release-store +
+    // notify_all), so every resume publisher provably pairs its store with a
+    // notification — a missing notify would leave the production thread blocked
+    // in resume.wait and is caught by the case-level watchdog, never a silent
+    // spin. These are compiled out of production sluice_async; the layout cost
+    // in the internal-testing target is accepted and documented (AGENTS.md §15).
     struct AfterArenaEnqueueBeforeDispatchPushPauseGate {
         std::atomic<bool> paused{false};
         std::atomic<bool> resume{false};
@@ -709,5 +716,40 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<SubmitStageFailureInjection*> submit_stage_failure_injection_{nullptr};
 #endif
 };
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+// Issue #92: the bidirectional wait/notify helpers for the ThreadPoolBackend
+// pause gates. The production seam (wait_*_pause_) blocks on
+// `resume.wait(false, acquire)`; therefore EVERY test-side resume publisher
+// MUST perform the release-store AND the matching notification. Calling these
+// helpers is the only supported way to resume a ThreadPoolBackend gate, so the
+// store+notify pair cannot be forgotten at a call site. notify_all is used so
+// the resume notification does not depend on a permanent single-waiter
+// assumption; it is a harmless no-op when no thread is in atomic::wait. This
+// does NOT make the bool-based {paused,resume,exited} protocol a general
+// multi-waiter rearm barrier: reusable gate protocols still require their
+// documented exit/rearm discipline (observe exited==true, then rearm).
+// SLUICE_ASYNC_INTERNAL_TESTING behavior only — production sluice_async carries
+// no pause symbol and its ThreadPool semantics are unchanged.
+template <class Gate>
+void resume_threadpool_gate(Gate& gate) noexcept {
+    gate.resume.store(true, std::memory_order_release);
+    gate.resume.notify_all();
+}
+
+// Re-arm a gate for reuse AFTER the test has observed `exited == true` (the
+// production path has fully left the gate). Resets to the constructed state
+// {paused=false, resume=false, exited=true}. resume=false is safe here because
+// no production thread can be blocked in resume.wait(false) once exited was
+// observed true: a production thread only reaches resume.wait AFTER setting
+// exited=false. Centralizing the order locks the re-arm invariant so a future
+// reuse site cannot reset resume=false under a still-waiting epoch.
+template <class Gate>
+void rearm_threadpool_gate(Gate& gate) noexcept {
+    gate.paused.store(false, std::memory_order_release);
+    gate.resume.store(false, std::memory_order_release);
+    gate.exited.store(true, std::memory_order_release);
+}
+#endif
 
 }  // namespace sluice::async

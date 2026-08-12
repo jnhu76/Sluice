@@ -183,7 +183,7 @@ SLUICE_TEST_CASE(final_backend_ready_request_drains_at_shutdown) {
         if (fail_msg == nullptr) {
             raw->set_running_pause_gate(nullptr);
             raw->set_wait_phase_flag_for_test(nullptr);
-            gate.resume.store(true, std::memory_order_release);
+            resume_threadpool_gate(gate);
         }
 
         // E. drain() must return (drain_complete_ satisfied), then join().
@@ -243,7 +243,7 @@ SLUICE_TEST_CASE(final_backend_ready_request_drains_at_shutdown) {
         // ---- cleanup (runs on both success and failure paths) ----
         // NOTE: after a successful join() the backend is DESTROYED — `raw`
         // must not be touched here; the gate object is separate and safe.
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         // Unblock a stuck drain/join so the threads can finish.
         rt.request_stop();
         (void)join_bounded(drainer, drain_done, std::chrono::steady_clock::now() + kWaitTimeout);
@@ -398,7 +398,7 @@ SLUICE_TEST_CASE(stop_between_mw_s2_commit_and_backend_wait_registration) {
         //    backend, so `raw` must not be touched afterwards.
         raw->set_running_pause_gate(nullptr);
         raw->set_wait_prepark_counter_for_test(nullptr);
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
 
         // E. drain() must return (drain_complete_ satisfied), then join().
         Result<void> drain_result = make_unexpected_void(IoError{IoError::Code::backend_error});
@@ -466,7 +466,7 @@ SLUICE_TEST_CASE(stop_between_mw_s2_commit_and_backend_wait_registration) {
         sluice_async_test::release(
             sched,
             sluice_async_test::PhaseTag::mw_s2_committed_before_wait_one);
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         // Unblock a stuck drain/join so the threads can finish.
         rt.request_stop();
         (void)join_bounded(drainer, drain_done, std::chrono::steady_clock::now() + kWaitTimeout);

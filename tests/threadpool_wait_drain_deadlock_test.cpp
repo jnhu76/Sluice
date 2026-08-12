@@ -237,7 +237,7 @@ SLUICE_TEST_CASE(wait_one_does_not_starve_poll_or_drain) {
         //    across the backend wait), and the context drains to zero.
         if (fail_msg == nullptr) {
             raw->set_running_pause_gate(nullptr);
-            gate.resume.store(true, std::memory_order_release);
+            resume_threadpool_gate(gate);
             const auto reap_deadline = std::chrono::steady_clock::now() + kWaitTimeout;
             while (!c1.ready() || !c2.ready()) {
                 if (std::chrono::steady_clock::now() >= reap_deadline) {
@@ -267,7 +267,7 @@ SLUICE_TEST_CASE(wait_one_does_not_starve_poll_or_drain) {
         // ---- cleanup (runs on both success and failure paths) ----
         raw->set_running_pause_gate(nullptr);
         raw->set_wait_phase_flag_for_test(nullptr);
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         // If A is still parked (failure path), the release above lets op1
         // complete and A's wait_one return, unblocking any stuck probe too.
         (void)join_bounded(participant_a, a_finished,

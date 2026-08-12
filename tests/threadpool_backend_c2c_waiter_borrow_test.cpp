@@ -135,7 +135,7 @@ public:
         : gate_(&gate) {}
     void resume() {
         if (resumed_) return;
-        gate_->resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(*gate_);
         resumed_ = true;
     }
     ~ScopedGateResume() { cleanup(); }
@@ -815,7 +815,7 @@ SLUICE_TEST_CASE(tp_stale_waiter_authority_harmless) {
     }
 
     if (fail_msg == nullptr) {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         wait_gate_exit(gate, "tp_stale_waiter_authority_harmless");
     }
 
@@ -841,7 +841,7 @@ SLUICE_TEST_CASE(tp_stale_waiter_authority_harmless) {
         c.reset();
         SLUICE_CHECK(backend.arena_slot_in_use() == 0);
     } else {
-        gate.resume.store(true, std::memory_order_release);
+        resume_threadpool_gate(gate);
         wait_gate_exit(gate, "tp_stale_waiter_authority_harmless cleanup");
         (void)drain_bounded(backend,
                             std::chrono::steady_clock::now() + kWaitTimeout);
