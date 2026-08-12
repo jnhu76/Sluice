@@ -230,13 +230,17 @@ class ThreadPoolBackend : public AsyncBackend {
     }
 
     // Deterministic pause gates for the ThreadPoolBackend race tests. The
-    // protocol is fully bidirectional (issue #92, completing #86-B): the
-    // production path sets `paused` (and calls paused.notify_one) to mark the
-    // exact observation window, BLOCKS on `resume.wait(false)` until the test
-    // resumes it, then sets `exited` (and calls exited.notify_one) when it
-    // leaves. The test thread blocks on paused.wait(false)/exited.wait(false)
-    // and resumes the gate ONLY through resume_threadpool_gate() (release-store
-    // + notify_all), so every resume publisher provably pairs its store with a
+    // PRODUCTION side of the protocol is universally blocking (issue #92,
+    // completing #86-B): the production path sets `paused` (and calls
+    // paused.notify_one) to mark the exact observation window, BLOCKS on
+    // `resume.wait(false)` until the test resumes it, then sets `exited` (and
+    // calls exited.notify_one) when it leaves. The production resume side is the
+    // one part that is blocking everywhere; test consumers are NOT required to
+    // block on paused.wait/exited.wait uniformly — a consumer may pair the
+    // blocking waits (paused.wait / exited.wait) OR use an existing bounded
+    // observation loop (e.g. yield + poll). When a test does resume the gate it
+    // MUST do so ONLY through resume_threadpool_gate() (release-store +
+    // notify_all), so every resume publisher provably pairs its store with a
     // notification — a missing notify would leave the production thread blocked
     // in resume.wait and is caught by the case-level watchdog, never a silent
     // spin. These are compiled out of production sluice_async; the layout cost
