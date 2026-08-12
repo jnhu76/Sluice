@@ -27,6 +27,7 @@
 
 #include <sluice/async/completion.hpp>
 #include <sluice/async/threadpool_backend.hpp>
+#include <sluice/detail/posix_retry.hpp>
 #include <sluice/error.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
@@ -41,6 +42,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <filesystem>
 #include <mutex>
@@ -332,9 +334,56 @@ private:
     bool resumed_ = false;
 };
 
+// #93 review follow-up: the watchdog diagnostic-path coverage now runs in a
+// FRESH EXEC IMAGE. The parent fork()s and performs ONLY async-signal-safe
+// work (close/dup2/execv) before execv; main() dispatches here when argv[1]
+// == "--watchdog-diagnostic-child". The old implementation constructed
+// PhaseProbe + gate + Watchdog (which spawns a std::thread) as post-fork C++
+// work inside the forked image of the multithreaded parent — unsafe under a
+// multithreaded/sanitizer runtime. The fresh exec image is single-threaded at
+// origin, so constructing the Watchdog here is ordinary program startup. The
+// body is otherwise identical to the prior in-child body: declare the gate,
+// bind it, start a short-timeout Watchdog, then block without resuming. The
+// watchdog fires, reads ONLY the bound gate atomics, prints the
+// `gate: paused=...` diagnostic to stderr, and aborts (SIGABRT). It never
+// returns; main guards the call with a fallback _Exit.
+[[noreturn]] void run_watchdog_diagnostic_child() {
+    PhaseProbe probe;
+    probe.name = "tp_watchdog_diagnostic_path_reads_bound_gate";
+    ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
+    probe.bind_gate(gate.paused, gate.resume, gate.exited);
+    // Deliberately short timeout: this child is constructed to FIRE the
+    // diagnostic path. The case-level 30s kWatchdog is intentionally not used
+    // — a normal run never reaches diagnose_and_abort, so a plain TSan run
+    // instruments none of its gate-atomic reads; this is the only run that does.
+    Watchdog wd(std::chrono::seconds(1), probe);
+    // Never resume: the watchdog must fire, read the bound gate atomics, print
+    // the diagnostic, and abort. Block until that happens.
+    for (;;) {
+        std::this_thread::sleep_for(std::chrono::seconds(60));
+    }
+}
+
 }  // namespace
 
-SLUICE_MAIN()
+// Custom main (not SLUICE_MAIN) so the binary can re-exec itself in watchdog
+// diagnostic-child mode (see tp_watchdog_diagnostic_path_reads_bound_gate and
+// run_watchdog_diagnostic_child). This mirrors the established death-test
+// self-exec convention (tests/death_test_runner_posix.hpp): argv selects child
+// dispatch; otherwise the normal registered cases run via sluice_test::run_all.
+// SLUICE_TEST_FILTER / case registration are unaffected.
+int main(int argc, char** argv) {
+    if (argc > 1 &&
+        std::strcmp(argv[1], "--watchdog-diagnostic-child") == 0) {
+        // Fresh exec image: construct the Watchdog and block until it fires.
+        run_watchdog_diagnostic_child();  // never returns (aborts via watchdog)
+        std::fputs("watchdog diagnostic child: unexpected return from "
+                   "run_watchdog_diagnostic_child\n",
+                   stderr);
+        std::_Exit(1);
+    }
+    return sluice_test::run_all();
+}
 
 // Gate A: the pause between enqueue and dispatch push fires INSIDE work_mtx_.
 // No cancel is issued in this case: a canceled terminal would be a backend
@@ -1221,19 +1270,36 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
 // #93 review follow-up — TSan diagnostic-path coverage. A normal (green) run
 // never fires the case-level Watchdog, so diagnose_and_abort() — and its reads
 // of the bound gate atomics — are never executed; a plain TSan run therefore
-// instruments none of those reads. This case FORCES the diagnostic path: a
-// forked child constructs probe + gate + bind + Watchdog in the review-mandated
-// order (gate before watchdog; bind before thread start) with a SHORT timeout,
-// then blocks without resuming. The watchdog fires, reads the bound gate
-// atomics, prints the `gate: paused=…` line, and aborts. The parent asserts the
-// child was terminated by SIGABRT AND that the `gate:` line was printed (proving
-// the diagnostic branch actually dereferenced the bound gate atomics). Under
-// TSan this is the only run that exercises those reads, so a race on them would
-// be reported here rather than hidden behind a green normal run. The parent
-// reads the child's stderr with a BOUNDED poll() and reaps with a bounded
-// WNOHANG loop; on timeout it kills + reaps the child and fails, so a stuck
-// child can never hang the test on an unbounded read()/waitpid(). POSIX only.
+// instruments none of those reads. This case FORCES the diagnostic path: the
+// parent fork()s and re-execs THIS binary in child mode
+// (--watchdog-diagnostic-child; see run_watchdog_diagnostic_child), so the
+// Watchdog is constructed in a FRESH EXEC IMAGE (single-threaded at origin) —
+// never as post-fork C++ work in the multithreaded parent image. The child
+// blocks without resuming; the watchdog fires, reads the bound gate atomics,
+// prints the `gate: paused=` line, and aborts. The parent asserts the child was
+// terminated by SIGABRT AND that the `gate:` line was printed (proving the
+// diagnostic branch actually dereferenced the bound gate atomics). Under TSan
+// this is the only run that exercises those reads, so a race on them would be
+// reported here rather than hidden behind a green normal run. The parent
+// captures the child's stderr with a BOUNDED poll()/read() (read via the
+// repository retry_on_eintr helper; a permanent read/poll error is recorded and
+// fails the test rather than accepting partial output) and reaps with a bounded
+// WNOHANG loop; on timeout or capture failure it kills + reaps the child and
+// fails, so a stuck child can never hang the test on an unbounded
+// read()/waitpid(). POSIX only.
 SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
+    // Resolve this binary's path in the PARENT (readlink is not guaranteed
+    // async-signal-safe), so the post-fork child performs ONLY async-signal-safe
+    // calls (close/dup2/execv) before exec. Matches the self-exec idiom in
+    // tests/death_test_runner_posix.hpp.
+    char self_buf[4096];
+    ssize_t self_len =
+        ::readlink("/proc/self/exe", self_buf, sizeof(self_buf) - 1);
+    if (self_len <= 0) {
+        SLUICE_FAIL("readlink(/proc/self/exe) failed; cannot exec child");
+    }
+    self_buf[self_len] = '\0';
+
     int pipefd[2];
     if (::pipe(pipefd) != 0) {
         SLUICE_FAIL("pipe() failed for watchdog diagnostic-path test");
@@ -1247,48 +1313,44 @@ SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
     }
 
     if (pid == 0) {
-        // Child: send stderr (the watchdog diagnostic output) down the pipe.
+        // Child: ONLY async-signal-safe work before execv — no C++ runtime, no
+        // object construction, no thread creation in this forked image of the
+        // multithreaded parent (#93). Redirect stderr to the pipe (dup2 survives
+        // exec; fd 2 is not close-on-exec), close the rest, then re-exec THIS
+        // binary in child mode. The fresh exec image (run_watchdog_diagnostic_
+        // child, dispatched from main) constructs the Watchdog and blocks; the
+        // watchdog fires, reads the bound gate atomics, prints the `gate:`
+        // diagnostic to stderr (the pipe), and aborts. _Exit(127) is the exec
+        // convention for "exec failed".
         ::close(pipefd[0]);
-        ::dup2(pipefd[1], STDERR_FILENO);
+        if (::dup2(pipefd[1], STDERR_FILENO) < 0) std::_Exit(127);
         ::close(pipefd[1]);
-
-        // Review-mandated order: declare the gate and bind it BEFORE starting
-        // the watchdog thread. std::thread creation publishes the non-atomic
-        // probe pointer writes; reverse-declaration destruction
-        // (watchdog joined -> gate -> probe) keeps the gate alive across the
-        // diagnostic reads.
-        PhaseProbe probe;
-        probe.name = "tp_watchdog_diagnostic_path_reads_bound_gate";
-        ThreadPoolBackend::BeforeWorkerDequeuePauseGate gate;
-        probe.bind_gate(gate.paused, gate.resume, gate.exited);
-        // Deliberately short timeout: this child is constructed to FIRE the
-        // diagnostic path. The case-level 30s kWatchdog is intentionally not
-        // used — a normal run never reaches diagnose_and_abort, so a plain TSan
-        // run instruments none of its gate-atomic reads; this is the only run
-        // that does.
-        Watchdog wd(std::chrono::seconds(1), probe);
-
-        // Never resume: the watchdog must fire, read the bound gate atomics,
-        // print the diagnostic, and abort. Block until that happens.
-        for (;;) {
-            std::this_thread::sleep_for(std::chrono::seconds(60));
-        }
+        char* child_argv[] = {self_buf,
+                              const_cast<char*>("--watchdog-diagnostic-child"),
+                              nullptr};
+        ::execv(child_argv[0], child_argv);
+        std::_Exit(127);  // execv failed
     }
 
     // Parent: close the write end so a poll/read sees EOF when the child
     // aborts (its dup'd stderr is closed on SIGABRT).
     ::close(pipefd[1]);
 
-    // BOUNDED pipe read: poll() with a deadline, never an unblocking read().
-    // A stuck child must not hang the parent (and the whole test process): if
-    // the child has not closed stderr within the bound it is killed, reaped,
-    // and the test fails. The child is constructed to fire its 1s watchdog and
-    // abort, so this generous bound is a safety net, not a correctness proof.
+    // BOUNDED diagnostic capture. poll() uses a deadline; its own EINTR is
+    // handled by `continue` so remaining_ms is recomputed each iteration
+    // (wrapping poll in retry_on_eintr would re-pass a stale timeout). read()
+    // goes through the repository sluice::detail::retry_on_eintr helper. A
+    // permanent (non-EINTR) poll or read error is RECORDED and fails the test —
+    // partial captured output is never silently accepted. The child is built to
+    // fire its 1s watchdog and abort, so this generous bound is a safety net,
+    // not a correctness proof.
     constexpr auto kChildDeadline = std::chrono::seconds(10);
     const auto read_deadline =
         std::chrono::steady_clock::now() + kChildDeadline;
     std::string captured;
     bool pipe_timed_out = false;
+    bool capture_failed = false;
+    int capture_errno = 0;
     for (;;) {
         struct ::pollfd pfd;
         pfd.fd = pipefd[0];
@@ -1304,32 +1366,36 @@ SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
         }
         int pr = ::poll(&pfd, 1, static_cast<int>(remaining_ms));
         if (pr < 0) {
-            if (errno == EINTR) continue;
-            break;  // unrecoverable poll error; fall through to reap + assert
+            if (errno == EINTR) continue;   // recompute remaining_ms at top
+            capture_failed = true;          // poll blew up: record, do not hide
+            capture_errno = errno;
+            break;
         }
         if (pr == 0) {
             pipe_timed_out = true;
-            break;  // deadline exceeded without EOF
+            break;                          // deadline exceeded without EOF
         }
         char buf[256];
-        ssize_t n = ::read(pipefd[0], buf, sizeof(buf));
-        if (n > 0) {
-            captured.append(buf, static_cast<std::size_t>(n));
-        } else if (n == 0) {
-            break;  // EOF: child closed/aborted its stderr write end
-        } else if (errno == EINTR) {
-            continue;
+        ssize_t rd = sluice::detail::retry_on_eintr(
+            [&] { return ::read(pipefd[0], buf, sizeof(buf)); });
+        if (rd > 0) {
+            captured.append(buf, static_cast<std::size_t>(rd));
+        } else if (rd == 0) {
+            break;                          // EOF: child closed/aborted stderr
         } else {
-            break;  // unexpected after a ready poll; fall through to reap
+            capture_failed = true;          // permanent read error: record + fail
+            capture_errno = errno;
+            break;
         }
     }
     ::close(pipefd[0]);
 
-    // BOUNDED reap. The child either already aborted (SIGABRT) or, if the pipe
-    // read timed out, is about to be killed (SIGKILL). A WNOHANG poll loop with
-    // a deadline ensures even a pathologically stuck child cannot hang the
-    // parent on an unbounded blocking waitpid.
-    if (pipe_timed_out) {
+    // BOUNDED reap. The child either already aborted (SIGABRT) or, if capture
+    // timed out or failed, is about to be killed (SIGKILL). A WNOHANG poll loop
+    // with a deadline ensures even a pathologically stuck child cannot hang the
+    // parent on an unbounded blocking waitpid. waitpid's own EINTR is handled by
+    // retry_on_eintr.
+    if (pipe_timed_out || capture_failed) {
         ::kill(pid, SIGKILL);
     }
     int status = 0;
@@ -1337,12 +1403,10 @@ SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
     const auto reap_deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(5);
     for (;;) {
-        w = ::waitpid(pid, &status, WNOHANG);
+        w = sluice::detail::retry_on_eintr(
+            [&] { return ::waitpid(pid, &status, WNOHANG); });
         if (w == pid) break;
-        if (w < 0) {
-            if (errno == EINTR) continue;
-            break;  // error (e.g. ECHILD); leave w != pid to fail below
-        }
+        if (w < 0) break;                   // error (e.g. ECHILD); fail below
         // w == 0: child not yet collectable.
         if (std::chrono::steady_clock::now() >= reap_deadline) {
             w = 0;
@@ -1352,7 +1416,12 @@ SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
     }
 
     const char* fail_msg = nullptr;
-    if (pipe_timed_out) {
+    if (capture_failed) {
+        std::fprintf(stderr,
+                     "watchdog diagnostic pipe capture failed: errno=%d (%s)\n",
+                     capture_errno, std::strerror(capture_errno));
+        fail_msg = "watchdog diagnostic pipe capture failed (non-EINTR error)";
+    } else if (pipe_timed_out) {
         fail_msg =
             "watchdog diagnostic child did not close stderr within the bound";
     } else if (w != pid) {
