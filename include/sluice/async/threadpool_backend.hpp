@@ -230,10 +230,14 @@ class ThreadPoolBackend : public AsyncBackend {
     }
 
     // Deterministic pause gates for the ThreadPoolBackend race tests. Each gate
-    // is armed by the test, the production path spins on `paused` and waits on
-    // `resume`, giving the test an exact observation window. These are compiled
-    // out of production sluice_async; the layout cost in the internal-testing
-    // target is accepted and documented (AGENTS.md §15).
+    // is armed by the test; the production path sets `paused` (and calls
+    // paused.notify_one) to mark the exact observation window, yield-spins on
+    // `resume`, then sets `exited` (and calls exited.notify_one) when it leaves.
+    // A test thread MAY block on paused.wait(false)/exited.wait(false) instead of
+    // yield-spinning — notify_one is a no-op when no thread is in atomic::wait, so
+    // test files that still yield-spin are unaffected (issue #86-B). These are
+    // compiled out of production sluice_async; the layout cost in the
+    // internal-testing target is accepted and documented (AGENTS.md §15).
     struct AfterArenaEnqueueBeforeDispatchPushPauseGate {
         std::atomic<bool> paused{false};
         std::atomic<bool> resume{false};
