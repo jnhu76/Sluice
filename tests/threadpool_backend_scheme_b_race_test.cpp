@@ -34,12 +34,14 @@
 #include <atomic>
 #include <barrier>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <sys/types.h>
 #include <thread>
@@ -62,11 +64,12 @@ constexpr auto kDrainDeadline = std::chrono::seconds(5);
 // Issue #86-B case-level deadlock watchdog. The gate handshakes now use
 // blocking atomic::wait (zero-CPU), so under correct protocol every test case
 // completes in seconds — even the 64-iteration race loop takes well under 15s
-// under TSan. This watchdog fires ONLY on a genuine protocol stall (a
-// mutated-away pause point, a real deadlock, or a lost wakeup) and NEVER on OS
-// scheduler latency. It ABORTs (not FAILs) because a stuck protocol is a
-// catastrophic defect, not a Scheme-B correctness assertion: correctness is
-// proven by the deterministic atomic::wait handshake + the test assertions.
+// under TSan. The deadline is NOT a correctness deadline; it is a last-resort
+// boundedness guard. Correctness is proven by the deterministic atomic::wait
+// handshake + the test assertions; the watchdog only converts a genuine
+// protocol stall (mutated-away pause point, real deadlock, lost wakeup) into a
+// bounded abort instead of a hung CI. It ABORTs (not FAILs) because a stuck
+// protocol is a catastrophic defect, not a Scheme-B correctness assertion.
 class Watchdog {
 public:
     explicit Watchdog(std::chrono::seconds timeout) {
@@ -80,18 +83,21 @@ public:
                 if (!done_.load(std::memory_order_acquire)) {
                     std::fprintf(stderr,
                                  "ThreadPool test watchdog: test case exceeded "
-                                 "the deadlock deadline; aborting (genuine "
-                                 "protocol stall, not OS scheduler latency)\n");
+                                 "the last-resort boundedness deadline; aborting "
+                                 "on a genuine protocol stall\n");
                     std::abort();
                 }
             });
         } catch (...) {
-            // If the watchdog thread cannot be created (extreme system load),
-            // the test runs without a deadlock guard. The gate handshakes use
-            // atomic::wait which is correct; the watchdog is only a CI net.
+            // Fail-closed: the watchdog is the only bound on the blocking
+            // atomic::wait handshakes, so a thread-creation failure must fail
+            // the test. Continuing without a guard would let a genuinely
+            // stalled protocol hang the test in unbounded atomic::wait instead
+            // of failing loudly.
             std::fprintf(stderr,
                          "ThreadPool test watchdog: thread creation failed; "
-                         "running without deadlock guard\n");
+                         "aborting (fail-closed: no unbounded atomic::wait)\n");
+            std::abort();
         }
     }
     ~Watchdog() {
@@ -112,9 +118,10 @@ private:
     std::thread thread_;
 };
 
-// Watchdog timeout: generous enough that it NEVER fires under correct protocol
-// (even under TSan + full-suite oversubscription), short enough that a CI
-// deadlock is caught promptly.
+// Watchdog timeout: generous enough that it does not fire under correct
+// protocol (even under TSan + full-suite oversubscription), short enough that
+// a CI deadlock is caught promptly. A last-resort boundedness guard, not a
+// correctness deadline.
 constexpr auto kWatchdog = std::chrono::seconds(30);
 
 class TempPath {
@@ -146,9 +153,10 @@ int open_temp(const std::string& path) {
 
 // Deterministic, zero-CPU gate handshake (issue #86-B): block on atomic::wait
 // until the production path reaches the exact pause point and calls
-// paused.notify_one(). Replaces the old yield-busy-spin + 5s deadline which
-// conflated OS-scheduler latency with Scheme-B correctness. The case-level
-// Watchdog guards against genuine protocol deadlock.
+// paused.notify_one(). Replaces the old yield-busy-spin + 5s deadline, which
+// treated OS scheduler latency as a correctness deadline. The case-level
+// Watchdog is the last-resort boundedness guard against genuine protocol
+// deadlock.
 template <class Gate>
 void wait_paused(Gate& gate) {
     gate.paused.wait(false, std::memory_order_acquire);
