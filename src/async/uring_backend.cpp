@@ -83,6 +83,26 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
 }
 void UringAsyncBackend::cancel(Completion<std::size_t>&) {}
 void UringAsyncBackend::cancel(Completion<void>&) {}
+// Stub: no request can ever be accepted, so no waiter can ever be registered.
+Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>&,
+                                                detail::WaiterToken,
+                                                detail::RoutingLease) {
+    return make_unexpected<void>(IoError{IoError::Code::not_supported});
+}
+Result<void> UringAsyncBackend::register_waiter(Completion<void>&,
+                                                detail::WaiterToken,
+                                                detail::RoutingLease) {
+    return make_unexpected<void>(IoError{IoError::Code::not_supported});
+}
+Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(
+    Completion<std::size_t>&) {
+    return make_unexpected<detail::RoutingLease>(
+        IoError{IoError::Code::not_supported});
+}
+Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(Completion<void>&) {
+    return make_unexpected<detail::RoutingLease>(
+        IoError{IoError::Code::not_supported});
+}
 void UringAsyncBackend::close_admission() {
     // Stub: admission never opened; nothing to close, no waiters to wake.
 }
@@ -1412,7 +1432,8 @@ std::size_t UringAsyncBackend::poll() {
     // Reap CQEs -> record_terminal ONLY. Then reap publishes Completion-ready
     // through the slot binding inside the leaf domain (ADR Decision 9 / I11).
     (void)reap_cqes();
-    const std::size_t n = arena_.reap(sink_);
+    const std::size_t n =
+        arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
     // Phase D4 (I4: state first, then notify): after real readiness is
     // published, advance the split-phase wait's progress epoch and wake every
     // parked participant so it re-polls (a concurrent wait_one must not sleep
@@ -1446,7 +1467,7 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
         }
     }
     (void)reap_cqes();
-    std::size_t n = arena_.reap(sink_);
+    std::size_t n = arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
     if (n > 0) {
         signal_ready_progress();
         return n;
@@ -1500,7 +1521,7 @@ Result<std::size_t> UringAsyncBackend::wait_one() {
             return make_unexpected<std::size_t>(sluice::from_errno_value(-rc));
         }
         (void)reap_cqes();
-        n = arena_.reap(sink_);
+        n = arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
         if (n > 0) {
             signal_ready_progress();
             return n;
@@ -1617,6 +1638,52 @@ void UringAsyncBackend::cancel(Completion<void>& c) {
     if (!h.has_value())
         return;
     (void)cancel_handle_(*h);
+}
+
+// Phase F1: production waiter registration / cancellation (ADR Decision 10).
+// The waiter registration is ORTHOGONAL to the execution state: it needs no
+// ring interaction (no SQE, no dispatch lock) — the arena leaf serializes
+// registration against reap extraction and cancel_waiter against reap, and
+// CQE/transport progress never reads waiter state. The candidate lease is
+// consumed at the by-value boundary on any failure.
+Result<void> UringAsyncBackend::register_waiter(Completion<std::size_t>& c,
+                                                detail::WaiterToken token,
+                                                detail::RoutingLease lease) {
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value()) {
+        return make_unexpected<void>(IoError{IoError::Code::not_found});
+    }
+    return arena_.register_waiter(*h, token, std::move(lease));
+}
+
+Result<void> UringAsyncBackend::register_waiter(Completion<void>& c,
+                                                detail::WaiterToken token,
+                                                detail::RoutingLease lease) {
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value()) {
+        return make_unexpected<void>(IoError{IoError::Code::not_found});
+    }
+    return arena_.register_waiter(*h, token, std::move(lease));
+}
+
+Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(
+    Completion<std::size_t>& c) {
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value()) {
+        return make_unexpected<detail::RoutingLease>(
+            IoError{IoError::Code::not_found});
+    }
+    return arena_.cancel_waiter(*h);
+}
+
+Result<detail::RoutingLease> UringAsyncBackend::cancel_waiter(
+    Completion<void>& c) {
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value()) {
+        return make_unexpected<detail::RoutingLease>(
+            IoError{IoError::Code::not_found});
+    }
+    return arena_.cancel_waiter(*h);
 }
 
 void UringAsyncBackend::issue_running_cancel(detail::SlotHandle h) noexcept {

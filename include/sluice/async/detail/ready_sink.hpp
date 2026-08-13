@@ -57,20 +57,34 @@ struct WaiterToken {
     friend bool operator==(const WaiterToken&, const WaiterToken&) noexcept = default;
 };
 
-// Phase B fake routing lease (ADR Decision 10). Move-only authority that, in
-// Phase F, will pin a Scheduler routing record until the winning delivery path
-// acknowledges it. Phase B uses a move-only token to prove the exactly-once
-// transfer (a lease cannot be duplicated; the winner consumes it).
+// Move-only routing lease (ADR Decision 10). Phase B proved the abstract
+// exactly-once transfer with an id-only lease; Phase F (issue #98 F1) makes it
+// pin the Scheduler routing record it was created for: the record index +
+// generation identify the Scheduler-side WaitRecord that must not be retired
+// or reused while a slot or synchronous ReadySink owns this lease. The arena
+// treats the lease opaquely (stores/moves it into the slot and the ReadyEvent);
+// only the Scheduler creates it (pinning()) and reads the pin on the winning
+// delivery path (reap sink or waiter cancel).
 class RoutingLease {
 public:
     RoutingLease() = default;
     explicit RoutingLease(std::uint64_t id) noexcept : lease_id_(id) {}
     RoutingLease(RoutingLease&& other) noexcept
-        : lease_id_(other.lease_id_) { other.lease_id_ = 0; }
+        : lease_id_(other.lease_id_),
+          record_index_(other.record_index_),
+          record_generation_(other.record_generation_) {
+        other.lease_id_ = 0;
+        other.record_index_ = 0;
+        other.record_generation_ = 0;
+    }
     RoutingLease& operator=(RoutingLease&& other) noexcept {
         if (this != &other) {
             lease_id_ = other.lease_id_;
+            record_index_ = other.record_index_;
+            record_generation_ = other.record_generation_;
             other.lease_id_ = 0;
+            other.record_index_ = 0;
+            other.record_generation_ = 0;
         }
         return *this;
     }
@@ -80,8 +94,24 @@ public:
     bool valid() const noexcept { return lease_id_ != 0; }
     std::uint64_t id() const noexcept { return lease_id_; }
 
+    // Phase F: create a lease that pins the Scheduler routing record
+    // (record_index, record_generation). The id remains a unique lease
+    // identity; the pin is what the Scheduler's winning delivery path uses to
+    // locate and retire the record exactly once.
+    static RoutingLease pinning(std::uint64_t id, std::uint32_t record_index,
+                                std::uint32_t record_generation) noexcept {
+        RoutingLease lease{id};
+        lease.record_index_ = record_index;
+        lease.record_generation_ = record_generation;
+        return lease;
+    }
+    std::uint32_t record_index() const noexcept { return record_index_; }
+    std::uint32_t record_generation() const noexcept { return record_generation_; }
+
 private:
     std::uint64_t lease_id_ = 0;
+    std::uint32_t record_index_ = 0;        // Scheduler WaitRecord index (pin)
+    std::uint32_t record_generation_ = 0;   // Scheduler WaitRecord generation (pin)
 };
 
 // The by-value delivery carried out of the reap critical section. `has_waiter`

@@ -158,6 +158,25 @@ bool evented_admission_check() noexcept;
 // Same contract as the other fail-fast entries.
 [[noreturn]] void scheduler_missing_fiber_owner_fail_fast() noexcept;
 
+// Phase F1: wait-registry invariant fail-fast (issue #98). Called when the
+// Scheduler wait registry's record state machine is violated (a retire on a
+// non-registered record, an out-of-range record index from a lease pin, ...).
+// The registry is a leaf domain whose state transitions are exactly
+// free -> registered -> {delivered | cancelled} -> free; any other transition
+// is an impossible protocol state. Process-fatal in Debug AND Release.
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void scheduler_wait_registry_invariant_fail_fast() noexcept;
+
+// Phase F1: non-quiescent wait-registry fail-fast. Called from ~Scheduler
+// when wait_record_live_count_ != 0 — a registered Completion waiter was
+// neither delivered (drained) nor cancelled, i.e. a suspended Fiber's wake
+// obligation was abandoned before the Scheduler was destroyed. Process-fatal
+// in Debug AND Release (mirrors select_invariant_fail_fast).
+//
+// Same contract as the other fail-fast entries.
+[[noreturn]] void scheduler_wait_registry_nonempty_fail_fast() noexcept;
+
 // Completion publication authority fail-fast. Called when a Completion state
 // transition violates the authority model (ADR-explicit-io-completion-authority):
 //   - reset() on an outstanding or publishing Completion

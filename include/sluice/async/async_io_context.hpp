@@ -16,6 +16,7 @@
 #pragma once
 
 #include <sluice/async/completion.hpp>
+#include <sluice/async/detail/ready_sink.hpp>
 #include <sluice/error.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
@@ -141,6 +142,53 @@ public:
     // to re-scan results after poll(). Null = no counting (default).
     void attach_stats(AsyncStats* s) { stats_ = s; }
 
+    // Phase F1 (issue #98): optional identity-bearing ReadySink attachment.
+    // When set, every reap (poll/wait_one) delivers by-value ReadyEvents to
+    // this sink instead of the backend's internal no-op ReferenceReadySink.
+    // The sink runs with NO slot/backend/admission lock held (arena contract)
+    // and MUST NOT acquire backend-progress locks; the Scheduler-owned sink
+    // only marks routing records under its own leaf domain (design
+    // docs/design/phase-f1-scheduler-ready-sink.md §5). Null restores the
+    // no-op default. Mirrors attach_stats: a narrow, non-virtual, non-owning
+    // setter. The Scheduler installs its sink at construction and detaches at
+    // destruction; a standalone context (no Scheduler) keeps the no-op sink.
+    void attach_ready_sink(detail::SynchronousReadySink* sink) noexcept {
+        routing_sink_ = sink;
+    }
+
+    // Phase F1: production waiter registration / cancellation (ADR Decision
+    // 10). Registers ONE waiter (token + routing lease) on the slot bound to
+    // the accepted Completion. A second registration returns invalid_state
+    // without overwriting the first (I13); an unresolvable Completion
+    // (unbound / cross-context / stale) returns invalid_state (provenance
+    // misuse, Decision 6). cancel_waiter removes ONLY the waiter — never the
+    // I/O, never the borrow — and returns the moved-out lease on success
+    // (not_found when reap already closed the registration). Default
+    // implementations return not_supported for backends without the
+    // RequestArena waiter machinery.
+    virtual Result<void> register_waiter(Completion<std::size_t>& c,
+                                         detail::WaiterToken token,
+                                         detail::RoutingLease lease) {
+        (void)c; (void)token; (void)lease;
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    virtual Result<void> register_waiter(Completion<void>& c,
+                                         detail::WaiterToken token,
+                                         detail::RoutingLease lease) {
+        (void)c; (void)token; (void)lease;
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    virtual Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c) {
+        (void)c;
+        return make_unexpected<detail::RoutingLease>(
+            IoError{IoError::Code::not_supported});
+    }
+    virtual Result<detail::RoutingLease> cancel_waiter(Completion<void>& c) {
+        (void)c;
+        return make_unexpected<detail::RoutingLease>(
+            IoError{IoError::Code::not_supported});
+    }
+
     // Hand an op to the backend against the caller-owned Completion. The backend
     // claims the Completion through the two-stage binding (ADR-explicit-io-
     // completion-authority + ADR-explicit-io-request-contract Decision 5: the
@@ -192,6 +240,12 @@ public:
 protected:
     AsyncBackend() = default;
     AsyncStats* stats_ = nullptr;
+    // Phase F1: the identity-bearing ReadySink the backend delivers reap
+    // events to, when a consumer (the Scheduler) attached one. Null = the
+    // backend's internal no-op ReferenceReadySink. Read by the backend's reap
+    // call sites; written only by attach_ready_sink (Scheduler construction /
+    // destruction, never concurrent with a reap of the same backend).
+    detail::SynchronousReadySink* routing_sink_ = nullptr;
 
     // ADR-explicit-io-completion-authority §9/§10: protected publication
     // helpers. Derived backends (the trusted backend-author role) use these to
@@ -362,6 +416,26 @@ public:
 
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);
+
+    // Phase F1: attach the identity-bearing ReadySink the backend delivers
+    // reap events to (null restores the no-op default). Serialized under
+    // access_mtx_ so attachment never races an in-flight poll/reap of the same
+    // backend. The Scheduler installs its routing sink here at construction
+    // and detaches at destruction (ApplicationRuntime destroys sched_ before
+    // io_ctx_; standalone contexts keep the no-op sink).
+    void set_ready_sink(detail::SynchronousReadySink* sink);
+
+    // Phase F1: production waiter registration / cancellation (ADR Decision
+    // 10). See AsyncBackend::register_waiter / cancel_waiter for semantics;
+    // these forward under access_mtx_ (the serialized backend domain).
+    Result<void> register_waiter(Completion<std::size_t>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease);
+    Result<void> register_waiter(Completion<void>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease);
+    Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c);
+    Result<detail::RoutingLease> cancel_waiter(Completion<void>& c);
 
     std::size_t outstanding() const noexcept;
     const AsyncStats* stats() const noexcept { return stats_; }
