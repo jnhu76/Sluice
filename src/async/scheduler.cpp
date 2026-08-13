@@ -4450,6 +4450,7 @@ void Scheduler::attach_ready_wake(const std::atomic<bool>& ready,
     // wh must be bound to this Scheduler. (Contract; not enforced here to
     // avoid coupling — a foreign handle's notify no-ops harmlessly if the
     // Scheduler differs, but that is a caller bug.)
+    (void)wh;  // contract-assertion parameter, see header (ADR §9.4.10)
     if (need_signal) {
         signal_wake_locked();
     }
