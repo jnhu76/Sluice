@@ -54,7 +54,7 @@ Worker (all four drains under G):                               worker_loop site
 
 | Wait kind | Registration | Wake path | F1 disposition |
 |---|---|---|---|
-| Completion wait (`await_completion_size/void`) | `waiting_size_`/`waiting_void_` (Completion\*-keyed) | scan `c->ready()` after `ctx_.poll()` | **Replaced by identity routing (this design)** |
+| Completion wait (`Scheduler::await_completion_size/void`) | `waiting_size_`/`waiting_void_` (Completion\*-keyed) | scan `c->ready()` after `ctx_.poll()` | **Replaced by identity routing (this design)** |
 | Ready-flag wait (`await_ready_flag`, `waiting_ready_`) | flag-address-keyed map | `wake_ready_flags_locked` | Unchanged (Future/EventedWaitPolicy are not arena requests; no RequestKey exists) |
 | E10 WaitQueue waits (`waiting_waitq_count_`) | count | `wake_wait_one`/`cancel_wait` | Unchanged |
 | E13 Select (`waiting_select_count_`) | count | `select_publish_locked` | Unchanged |
