@@ -125,6 +125,17 @@ jobs:
           CXX: clang++
         run: bash scripts/verify-request-arena-negative-compile.sh
 
+      - name: RequestHandle authority negative-compile (Phase F3)
+        # ADR-public-request-handle — proves the public RequestHandle is
+        # construction-controlled (non-forgeable): ordinary application code
+        # cannot manufacture a valid handle, read its private identity
+        # components, or flip validity. Mirrors the completion/arena authority
+        # gates so the non-forgeability claim is merge-enforced.
+        # CXX is pinned to clang++ to match the required Linux Clang Debug gate.
+        env:
+          CXX: clang++
+        run: bash scripts/verify-request-handle-authority-negative-compile.sh
+
       - name: Build and run acceptance consumers
         # Proves the public async-foundation surface is usable from consumers
         # that see only the installed public headers. Build AND execute: a

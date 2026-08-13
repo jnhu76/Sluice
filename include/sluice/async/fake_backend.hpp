@@ -124,6 +124,16 @@ class FakeAsyncBackend : public AsyncBackend {
         return submit_void(op, c, detail::OperationKind::sync_all);
     }
 
+    // Phase F3 (ADR-public-request-handle): this backend uses the RequestArena
+    // identity contract, so it produces and resolves public RequestHandles.
+    bool supports_request_identity() const noexcept override { return true; }
+    Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
+                                                      std::uint64_t gen) const override {
+        return arena_.identity_handle_state(detail::SlotIndex{slot},
+                                            detail::Generation{gen},
+                                            detail::ContextIdentity{ctx});
+    }
+
     // --- test-driving helpers: resolve a terminal result for the OLDEST
     // outstanding op of the matching kind. The result is bound IMMEDIATELY to
     // that op's RequestKey (arena_.record_terminal); the Completion is published
