@@ -138,12 +138,19 @@ class UringAsyncBackend : public AsyncBackend {
     // not_supported), consistent with the non-arena-backend policy.
 #if defined(SLUICE_HAS_LIBURING)
     bool supports_request_identity() const noexcept override { return true; }
+
+  private:
+    // Sealed override of the private virtual in AsyncBackend: reached only via
+    // AsyncIoContext::request_state -> AsyncBackend::request_handle_state. A raw
+    // backend pointer must not expose the raw identity-tuple consumer.
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override {
         return arena_.identity_handle_state(detail::SlotIndex{slot},
                                             detail::Generation{gen},
                                             detail::ContextIdentity{ctx});
     }
+
+  public:
 #endif
 
     std::size_t poll() override;

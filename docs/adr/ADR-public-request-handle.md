@@ -101,6 +101,19 @@ its public API. A caller who separately includes the internal
 but cannot turn it into a `RequestHandle` (private ctor) and has no public entry
 point that accepts a raw `RequestKey`.
 
+**As-built access control (F3 corrective, PR #106):** the construction authority
+is sealed at the class level, not by usage convention. `AsyncBackend::identity_of`,
+`AsyncBackend::request_handle_state`, and the virtual `resolve_identity_state`
+are PRIVATE (the latter is a private virtual; derived backends override it
+privately), and `AsyncIoContext` is the sole `friend`. A raw `AsyncBackend*`
+(the backend is a public extension point) therefore cannot mint a handle from a
+Completion or feed a raw `(context, slot, generation)` tuple into the resolver:
+the only handle producer is `submit_*_request`, and the only resolver entry is
+`request_state`. The negative-compile gate
+(`scripts/verify-request-handle-authority-negative-compile.sh`, 9 cases) proves
+all four bypasses (forge ctor, read privates, RequestKey conversion, backend
+seam) fail to compile.
+
 ## Decision 3: derived from the Completion's private binding (no second registry)
 
 The handle is derived from the **already-bound** `Completion`, not from a new

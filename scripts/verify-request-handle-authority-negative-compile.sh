@@ -5,10 +5,13 @@
 #
 # Verifies that the public RequestHandle is construction-controlled
 # (non-forgeable): ordinary application code cannot manufacture a valid handle,
-# read its private identity components (context/slot/generation), or flip
-# validity. Each NEG_<KIND> macro in the probe selects one forbidden usage; the
-# script asserts compiling the probe with that macro defined FAILS with the
-# EXPECTED private-access / inaccessible diagnostic.
+# read its private identity components (context/slot/generation), flip validity,
+# convert an internal detail::RequestKey into a handle, or reach the sealed
+# AsyncBackend identity seam (identity_of / request_handle_state / a concrete
+# backend's resolve_identity_state) through a raw backend pointer. Each
+# NEG_<KIND> macro in the probe selects one forbidden usage; the script asserts
+# compiling the probe with that macro defined FAILS with the EXPECTED
+# private-access / no-conversion diagnostic.
 #
 # Usage:
 #   scripts/verify-request-handle-authority-negative-compile.sh
@@ -40,15 +43,20 @@ common_flags=(
   -I"$repo_root/include"
 )
 
-# Each negative case is "NEG_MACRO:diagnostic_regex". The identity ctor and the
-# private members are friend-AsyncBackend only; a public caller gets a private /
-# inaccessible / no-conversion diagnostic.
+# Each negative case is "NEG_MACRO:diagnostic_regex". The identity ctor, the
+# private members, and the sealed AsyncBackend seam are friend-AsyncIoContext /
+# friend-AsyncBackend only; a public caller gets a private / inaccessible /
+# no-conversion diagnostic.
 negative_cases=(
   "NEG_FORGE_HANDLE_CTOR:private|inaccessible|no matching constructor|cannot be referenced"
   "NEG_READ_HANDLE_CONTEXT:private|inaccessible|no member|not a member"
   "NEG_READ_HANDLE_SLOT:private|inaccessible|no member|not a member"
   "NEG_READ_HANDLE_GENERATION:private|inaccessible|no member|not a member"
   "NEG_SET_HANDLE_VALID:private|inaccessible|no member|not a member"
+  "NEG_CONVERT_REQUEST_KEY:no viable conversion|no matching constructor|private|inaccessible|cannot be referenced"
+  "NEG_CALL_BACKEND_IDENTITY_OF:private|inaccessible|protected"
+  "NEG_CALL_BACKEND_REQUEST_HANDLE_STATE:private|inaccessible|protected"
+  "NEG_CALL_CONCRETE_RESOLVE_IDENTITY_STATE:private|inaccessible|protected"
 )
 
 echo "=== ADR-public-request-handle negative-compile gate ==="

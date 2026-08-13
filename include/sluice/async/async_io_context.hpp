@@ -239,23 +239,38 @@ public:
     virtual bool wait_one_is_nonblocking() const noexcept { return false; }
 
     // Phase F3 (ADR-public-request-handle): public accepted-request identity.
-    //
-    // supports_request_identity(): whether this backend can produce/resolve a
-    // RequestHandle. Default false — external/legacy backends that do not use
-    // the RequestArena identity contract truthfully opt out. The four
-    // production arena backends override to true. submit_*_request checks this
-    // BEFORE accepting: false => not_supported with no side effect, so the
-    // Decision-4 contract ("successful acceptance => exactly one valid handle")
-    // holds without leaving an accepted-but-handleless operation.
+    // supports_request_identity() is the only PUBLIC part of the seam: whether
+    // this backend can produce/resolve a RequestHandle. Default false —
+    // external/legacy backends that do not use the RequestArena identity
+    // contract truthfully opt out. The four production arena backends override
+    // to true. submit_*_request checks this BEFORE accepting: false =>
+    // not_supported with no side effect, so the Decision-4 contract
+    // ("successful acceptance => exactly one valid handle") holds without
+    // leaving an accepted-but-handleless operation.
     virtual bool supports_request_identity() const noexcept { return false; }
+
+private:
+    // Sealed identity seam (ADR-public-request-handle Decision 2 — non-forgeable
+    // construction authority). AsyncIoContext is the ONLY consumer: its
+    // submit_*_request mints the handle from the just-bound Completion and its
+    // request_state resolves it. Ordinary code — even code holding a raw
+    // AsyncBackend* (the backend is a public extension point) — must not be able
+    // to mint a handle from a Completion (identity_of) or feed a raw
+    // (context, slot, generation) tuple into the resolver (request_handle_state
+    // / resolve_identity_state): either would bypass the submit_*_request
+    // construction authority and expose the internal identity tuple.
+    friend class AsyncIoContext;
 
     // Virtual hook for request_state(): resolve a public identity tuple
     // (context, slot, generation) to the slot's current state, or not_supported
-    // for backends without the identity contract. Takes PLAIN scalars so derived
-    // backends need no friendship (friendship is not inherited). Arena backends
-    // override with a one-line delegation to their arena. not_found is a state,
-    // not an error, for valid handles whose slot was released/reused or whose
-    // context does not match.
+    // for backends without the identity contract. PRIVATE virtual: derived
+    // backends override it (override access is checked at the call site, so
+    // their overrides are private too) and are reached only through
+    // request_handle_state, never through a raw backend pointer. Takes PLAIN
+    // scalars so derived backends need no friendship (friendship is not
+    // inherited). Arena backends override with a one-line delegation to their
+    // arena. not_found is a state, not an error, for valid handles whose slot
+    // was released/reused or whose context does not match.
     virtual Result<RequestHandleState> resolve_identity_state(std::uint64_t context,
                                                               std::uint32_t slot,
                                                               std::uint64_t generation) const {
@@ -271,9 +286,10 @@ public:
     RequestHandle identity_of(Completion<std::size_t>& c) const noexcept;
     RequestHandle identity_of(Completion<void>& c) const noexcept;
 
-    // Non-virtual public entry for request_state(): extracts the handle's
-    // private components (friend of RequestHandle) and delegates to the virtual
-    // resolve_identity_state(). An invalid handle short-circuits to not_found.
+    // Non-virtual entry for request_state() (AsyncIoContext, friend): extracts
+    // the handle's private components (friend of RequestHandle) and delegates to
+    // the virtual resolve_identity_state(). An invalid handle short-circuits to
+    // not_found.
     Result<RequestHandleState> request_handle_state(const RequestHandle& h) const noexcept;
 
 protected:
