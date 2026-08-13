@@ -86,7 +86,7 @@ bridge, which is Phase G (separate, untouched).
 | TSan | `-m tsan`; `xmake run -g test` | ALL PASS, 0 warnings |
 | ASan/UBSan | `xmake f -c -m asanubsan --toolchain=clang -y; xmake build -g test; xmake run -g test` | ALL TESTS PASSED, 0 errors (run 2026-08-14) |
 | Real liburing | `xmake f -c -m debug --toolchain=clang --with-liburing=true -y; xmake build -g test; xmake test` | 164/164 PASS (committed verification `0e7367b`; local sandbox re-run is mode=stub — CI/committed record authoritative) |
-| Backend conformance | `scripts/verify-backend-conformance.py` + manifest self-test | RESULT: PASS — Fake ELIGIBLE, ThreadPool ELIGIBLE, Uring stub INCOMPLETE (manifest-declared); 47 PASS + 10 expected-stub INCOMPLETE rows; external probe PASS (quiet full run) |
+| Backend conformance | `scripts/verify-backend-conformance.py` + manifest self-test | RESULT: PASS — manifest self-test 209/209 OK; Fake ELIGIBLE, ThreadPool ELIGIBLE, Uring stub INCOMPLETE (manifest-declared); 47 PASS + 10 expected-stub INCOMPLETE rows; external probe PASS (quiet full run) |
 | Negative compile | `scripts/verify-request-handle-authority-negative-compile.sh` | 9/9 PASS |
 | Public acceptance | `tests/request_handle_test.cpp` (public headers only) | 6/6 PASS |
 | Docs/arch | `check-doc-links.py`, `verify-architecture-docs.py`, `pre-push.sh` | green |

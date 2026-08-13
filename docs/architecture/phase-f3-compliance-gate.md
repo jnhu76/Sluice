@@ -84,10 +84,10 @@ contract; this gate records the as-built evidence.
   sandbox re-runs `--with-liburing=true` as mode=stub (xmake package fetch),
   so the committed record + GitHub CI are the authoritative real-mode evidence.
 - [x] Backend conformance manifest self-test + `scripts/verify-backend-
-  conformance.py` (quiet full run) — RESULT: PASS; Fake ELIGIBLE; ThreadPool
-  ELIGIBLE (incl. `threadpool_scheme_b_race`); Uring INCOMPLETE (stub,
-  manifest-declared); 47 PASS + 10 expected-stub INCOMPLETE evidence rows;
-  external-backend probe PASS.
+  conformance.py` (quiet full run) — RESULT: PASS; manifest self-test 209/209
+  OK; Fake ELIGIBLE; ThreadPool ELIGIBLE (incl. `threadpool_scheme_b_race`);
+  Uring INCOMPLETE (stub, manifest-declared); 47 PASS + 10 expected-stub
+  INCOMPLETE evidence rows; external-backend probe PASS.
 - [x] Negative-compile authority gate: `scripts/verify-request-handle-authority-
   negative-compile.sh` — 9/9 PASS: 5 handle forge/read cases +
   `NEG_CONVERT_REQUEST_KEY` (internal RequestKey has no conversion) + 3 sealed
