@@ -835,7 +835,8 @@ public:
     // ================================================================
     // Supported user API
     // ================================================================
-    explicit Scheduler(AsyncIoContext& ctx) noexcept;
+    explicit Scheduler(AsyncIoContext& ctx,
+                       std::size_t wait_capacity = 256);
     ~Scheduler();
     Scheduler(const Scheduler&) = delete;
     Scheduler& operator=(const Scheduler&) = delete;

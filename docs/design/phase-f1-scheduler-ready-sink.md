@@ -133,13 +133,17 @@ struct WaitRecord {
 };
 ```
 
-- Storage: `std::vector<std::unique_ptr<WaitRecord>>` + a free list of indices.
-  Records are address-stable for the Scheduler lifetime; a freed record is
-  reused with `generation++` (I6-style ABA guard for stale tokens).
-- Growth: one allocation per newly concurrent waiter, on the registration path
-  (pre-wait allocation — the existing `unordered_map` insert already allocated
-  there; **no allocation is added to the accepted -> terminal -> reap -> route
-  path** — see §8).
+- Storage: `std::vector<std::unique_ptr<WaitRecord>>` + an intrusive free list
+  of `WaitRecord*` pointers (through `next_free`). Records are address-stable
+  for the Scheduler lifetime; a freed record is reused with `generation++`
+  (I6-style ABA guard for stale tokens).
+- Capacity: the pool is **preallocated at construction** to exactly
+  `wait_capacity` records (default 256). Once constructed,
+  `wait_records_.size() == wait_capacity` and never grows. When all N records
+  are live (registered or delivered), `acquire_wait_record_locked` returns
+  `nullptr` and `await_completion` surfaces `IoError::no_space` synchronously.
+  **No allocation is on the registration path or the accepted -> terminal ->
+  reap -> route path** — see §8.
 
 ### 4.2 `WaiterToken` (ready_sink.hpp:52-58) — now real
 
@@ -308,8 +312,12 @@ unchanged. All routing authority stays in the G-protected drain.
 
 ```text
 {G:
-   R: acquire record (free-list pop or grow), generation++,
-      state=registered, fiber/owner/completion stored
+   R: acquire record (free-list pop or nullptr)
+      if nullptr:
+        return IoError::no_space synchronously (pool exhausted;
+        no record installed, no token/lease created, I/O untouched)
+      else:
+        generation++, state=registered, fiber/owner/completion stored
    (release R)
    A: backend->register_waiter(c, token, lease)     // L inside the backend
    outcome:
@@ -522,6 +530,11 @@ two-phase admission, D4-RM13/14 control-wake protocol.
 | T8 | duplicate reap / double ReadyEvent -> no double wake | I16/I4 | second reap delivers nothing |
 | T9 | shutdown convergence: control wake + pending delivery + registry empty at destruction | Race D / shutdown | D4-RM13/14 seams |
 | T10 | all four backends (Fake/Sync/ThreadPool/Uring) route through the same contract | backend-agnostic conformance | per-backend registration |
+| T-capacity-1 | wait capacity exhaustion: `Scheduler(ctx, 1)` with two simultaneous waits -> second gets `no_space`, storage stays at 1 | AC-7 bounded capacity; synchronous exhaustion | deterministic no-space return |
+| T-capacity-2 | accepted I/O survives wait no_space: after `no_space`, Completion remains outstanding, I/O terminals/reaps normally | wait admission failure ≠ I/O submission failure | deterministic backend completion |
+| T-capacity-3 | pool reuse + generation: with capacity 1, record reuse bumps generation; stale token from prior occupant cannot route | I6 ABA safety on preallocated pool | deterministic stale-token rejection |
+| T-capacity-4 | fixed storage never grows: `storage_size == configured capacity` at construction, after cycles, after exhaustion | pool never grows beyond configured bound | diagnostic introspection |
+| T-legacy-cancel | legacy not_supported cancellation: non-arena backend exercises `waiting_size_` map fallback with cancel_waiter; frozen canceled, fiber resumes once, I/O completes | P2 legacy cancel path | deterministic LegacyFallbackBackend |
 
 Existing suites re-run: full Clang Debug, backend conformance, negative
 compile, TSan, ASan/UBSan, real-liburing suite.

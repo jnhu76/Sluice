@@ -33,7 +33,8 @@ ApplicationRuntime (E16)
 │   ├── global_mtx_ (coordination domain)
 │   ├── WorkerState[] (per-worker execution state)
 │   ├── wake_cv_ / wake_mtx_ / wake_epoch_ (E9 park/wake)
-│   ├── waiting_completion_ map (Completion-backed waits)
+│   ├── WaitRecord pool (preallocated, identity-bearing waits, Phase F1)
+│   ├── waiting_completion_ map (legacy fallback, non-arena backends only)
 │   ├── waiting_ready_ map (persistent-readiness waits)
 │   ├── WaitQueue / WaitNode (E10 cancellation-safe waits)
 │   ├── TimerRegistration heap (E11 deadlines)
@@ -267,22 +268,26 @@ RuntimeTaskFn(RuntimeTaskContext& ctx)
 → ctx.await_completion(c)
     → Scheduler::await_completion_size(c)
         → lock global_mtx_
-        → if c.ready(): return inline (no suspend)
-        → register in waiting_completion_ map {&c → WaitReg{fiber, owner_worker}}
-        → make_waiting(fiber)
+        → acquire WaitRecord from preallocated pool (free-list pop)
+           if nullptr: return IoError::no_space (pool exhausted)
+        → register arena waiter (WaiterToken + RoutingLease)
+           legacy fallback: waiting_size_ map if backend returns not_supported
+        → commit_suspend_locked(fiber)
         → context_switch(fiber → scheduler continuation)
         → (Fiber suspended)
 
 ... later, on backend progress ...
 
 Scheduler worker loop:
-→ ctx_.poll() (under access_mtx_)
-→ wake_ready_completions_locked()
-    → scan waiting_completion_ map
-    → for each: if c.ready(): erase registration, make_runnable(fiber), route
+→ drain_routed_completion_waits_locked() (under global_mtx_)
+    → ctx_.poll() (under access_mtx_)
+       → arena.reap(sink) invokes ReadyRoutingSink.on_ready()
+       → sink marks record delivered under wait_registry_mtx_
+    → pop delivered list under wait_registry_mtx_
+    → per record: make_runnable(fiber), route_runnable_locked(fiber, owner)
 → (routed Fiber resumes on owning worker)
 → Fiber returns from context_switch
-→ await_completion returns
+→ await_completion returns (reads frozen CompletionWaitOutcome)
 → task reads c.result()
 ```
 
@@ -417,7 +422,8 @@ shutdown()
 | Completion objects | Caller | caller-managed | caller decides | caller | No (by contract) | No | N/A | caller |
 | workers_ vector | ThreadPoolBackend | backend lifetime | UNBOUNDED | **No** | Yes (cumulative ops) | No (reap-time) | N/A | destructor |
 | ready_size_/ready_void_ deques | ThreadPoolBackend | backend lifetime | outstanding ops | Bounded by outstanding | Yes | **Yes** (push_back) | bad_alloc (unhandled) | drained at reap |
-| waiting_completion_ map | Scheduler | Scheduler lifetime | outstanding waits | Bounded by fibers | Yes | Yes (registration) | N/A | assert empty |
+| WaitRecord pool (`wait_records_` + free list, R) | Scheduler | Scheduler lifetime | `wait_capacity` (default 256) | Yes (fixed) | No (preallocated) | No (free-list pop) | `no_space` on exhaustion | all records freed at `~Scheduler` (assert) |
+| waiting_completion_ map (legacy fallback) | Scheduler | Scheduler lifetime | outstanding waits | Bounded by fibers | Yes (legacy only) | Yes (registration, legacy path only) | N/A | assert empty |
 | waiting_ready_ map | Scheduler | Scheduler lifetime | registered waits | Bounded by fibers | Yes | Yes (registration) | N/A | assert empty |
 | wake_cv_ / wake_mtx_ | Scheduler | Scheduler lifetime | 1 | Yes | No | No | N/A | destructor |
 | Fiber stacks | Group / caller | per-task | 64 KiB each | Bounded by tasks | Yes (per task) | Yes (new) | bad_alloc | Group destructor |

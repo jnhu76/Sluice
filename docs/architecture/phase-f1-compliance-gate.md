@@ -44,7 +44,7 @@ cancelled -> (sink)        : impossible (no delivery exists)
 
 | Transition | Authority | Lock domain | Alloc | Failure | Wake | Shutdown |
 |---|---|---|---|---|---|---|
-| `free -> registered` | Scheduler registration (await_completion) | G -> R (record), G -> A -> L (arena register_waiter) | none after first record creation (pre-wait path) | register_waiter `invalid_state` + `c.ready()` -> inline success; `invalid_state` otherwise -> record retired, await returns it; `not_found` -> record retired, await returns `invalid_state` | none (fiber about to suspend) | record retired on failed register; live registrations must resolve before quiescent destruction |
+| `free -> registered` | Scheduler registration (await_completion) | G -> R (record), G -> A -> L (arena register_waiter) | none (all records preallocated at construction) | pool exhausted (nullptr) -> await returns `no_space` synchronously; no record installed; register_waiter `invalid_state` + `c.ready()` -> inline success; `invalid_state` otherwise -> record retired, await returns it; `not_found` -> record retired, await returns `invalid_state` | none (fiber about to suspend) | record retired on failed register; live registrations must resolve before quiescent destruction |
 | `registered -> delivered` | ReadyRoutingSink (reap) | A -> R | none | stale token/generation or cancelled state -> lease dropped, no route (loser) | drain routes the fiber in the same or next pass | delivery still routed during stop; control wake only interrupts backend park |
 | `delivered -> free` | drain (worker_loop) | G -> R | none | none (extraction is unconditional after pop) | fiber made runnable exactly once (E7-T2) then `route_runnable_locked` | drained before termination; records must be free at `~Scheduler` (assert) |
 | `registered -> cancelled` | `Scheduler::cancel_waiter` (winner) | G -> R (record), G -> A -> L (arena cancel_waiter) | none | loser (`not_found`): no record access, return false | fiber resumed exactly once with `canceled` outcome | legal during stop; I/O/borrow untouched |
@@ -91,15 +91,16 @@ inbound edges only (`{G,A} -> {R,L}`); the sink's R access during `poll`
 
 | Resource | Capacity / allocation | Full behavior | Reclamation |
 |---|---|---|---|
-| WaitRecord registry (`wait_records_` + free list, R) | grows by **concurrent** waiters (caller-owned pipeline bound, AC-7); one `unique_ptr` per newly concurrent waiter on the pre-wait registration path; address-stable | new record allocation is on the caller path (same as the removed `unordered_map` insert); **never** on the accepted -> route path | free-list reuse with generation bump; registry empty at `~Scheduler` (assert) |
+| WaitRecord registry (`wait_records_` + free list, R) | **fixed capacity** at `wait_capacity` (default 256), preallocated at `Scheduler` construction; never grows beyond configured bound (AC-7); address-stable | **zero allocation** after construction — `acquire_wait_record_locked` pops from free list or returns `nullptr` (synchronous `no_space`); **never** on the accepted -> route path | free-list reuse with generation bump; registry empty at `~Scheduler` (assert) |
 | Delivered list (intrusive through records) | bounded by live records; each record delivered at most once | impossible to overflow (single lease per record; drained every pass) | popped + freed every drain pass |
 | Token/lease | one per registration; moved slot -> event -> sink (or cancel) exactly once | loser consumes at the by-value boundary | lease destruction = acknowledgement |
 | Sink / drain / route path | **zero allocation** after acceptance | n/a | n/a |
 | Backend `routing_sink_` pointer | one pointer per backend | no-op fallback when unset | detached at `~Scheduler` |
 
-OOM at each stage: registration-path record allocation failure propagates as
-a synchronous `no_space`-class `Result` from `await_completion` (record never
-installed; no token/lease created — nothing to leak). No accepted request's
+OOM at each stage: WaitRecord pool exhaustion (all `wait_capacity` records
+live) propagates as a synchronous `no_space`-class `Result` from
+`await_completion` (record never installed; no token/lease created — nothing
+to leak). No accepted request's
 terminal path depends on an allocation (I9).
 
 ---
