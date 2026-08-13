@@ -356,13 +356,14 @@ SLUICE_TEST_CASE(f1_cancel_waiter_vs_reap_race) {
         sched.run_until_idle();  // route whichever path won
         SLUICE_CHECK_MSG(outcome == 1 || outcome == 2,
                          "exactly one legal outcome (reap-won or cancel-won)");
-        // Protocol consistency across the arena winner:
-        //   - reap won (cancel_result == false): the sink delivered exactly
-        //     once and the fiber observed success (c.ready() at resume).
-        //   - cancel won (cancel_result == true): the sink never delivered;
-        //     the fiber observed canceled — OR success when the I/O's
-        //     publication landed before its resume (the resume ready-check
-        //     decides, and reading the result is then safe).
+        // Protocol consistency across the arena winner (P1-1 strict):
+        //   - reap won (cancel_result == 2): the sink delivered exactly
+        //     once, the frozen outcome is completed, and the fiber
+        //     observed success.
+        //   - cancel won (cancel_result == 1): the sink never delivered,
+        //     the frozen outcome is canceled, and the fiber observed
+        //     canceled — regardless of whether c.ready() happened to be
+        //     true at resume time.
         SLUICE_CHECK(AsyncTestAccess::ready_sink_routed(sched) <= 1);
         if (cancel_result == 2) {  // reap won the arena extraction
             SLUICE_CHECK(AsyncTestAccess::ready_sink_routed(sched) == 1);
@@ -371,13 +372,10 @@ SLUICE_TEST_CASE(f1_cancel_waiter_vs_reap_race) {
             SLUICE_CHECK(c.result().value_or(0) == 8);
         } else if (cancel_result == 1) {  // cancel won the arena extraction
             SLUICE_CHECK(AsyncTestAccess::ready_sink_routed(sched) == 0);
-            if (outcome == 1) {
-                // The completion published before the fiber resumed.
-                SLUICE_CHECK(c.ready());
-            } else {
-                SLUICE_CHECK(outcome == 2);
-                SLUICE_CHECK(!c.ready());
-            }
+            // P1-1 strict: cancel won => outcome is ALWAYS canceled.
+            // The frozen CompletionWaitOutcome eliminates the race where
+            // c.ready() could be true at resume time.
+            SLUICE_CHECK(outcome == 2);
         } else {
             SLUICE_CHECK_MSG(false, "cancel_waiter must return true or false");
         }

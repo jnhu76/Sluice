@@ -212,7 +212,12 @@ class AsyncRwLock;
 
 class Scheduler {
 public:
-    explicit Scheduler(AsyncIoContext& ctx) noexcept;
+    // Phase F1 P1-2 (PR #105 review): wait_capacity bounds the WaitRecord pool.
+    // Records are preallocated at construction; acquire_wait_record_locked
+    // returns nullptr (no_space) when the free list is exhausted. Default is
+    // derived from the arena capacity when available, or a fixed 256 floor.
+    explicit Scheduler(AsyncIoContext& ctx,
+                       std::size_t wait_capacity = 256) noexcept;
     ~Scheduler();
 
     Scheduler(const Scheduler&) = delete;

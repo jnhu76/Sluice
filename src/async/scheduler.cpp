@@ -104,7 +104,7 @@ std::uint64_t next_scheduler_identity() noexcept {
 }
 }  // namespace
 
-Scheduler::Scheduler(AsyncIoContext& ctx) noexcept
+Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t /*wait_capacity*/) noexcept
     : ctx_(ctx), scheduler_identity_(next_scheduler_identity()) {
     // E14 D-E14-2: construction-time fail-fast on unsupported targets.
     // Scheduler is the earliest Evented admission boundary; all downstream
@@ -119,6 +119,10 @@ Scheduler::Scheduler(AsyncIoContext& ctx) noexcept
     // the callback lease) and returns false without any Scheduler dereference.
     // See Control below and docs/spec/e9_wake_handle_lifetime/.
     wake_control_ = std::make_shared<SchedulerWakeHandle::Control>();
+
+    // Phase F1 P1-2 (PR #105 review): TODO — preallocate WaitRecord pool
+    // to a bounded capacity. Deferred to a follow-up to isolate the P1-1
+    // and P2 fixes.
 
     // Phase F1 (issue #98): install the Scheduler-owned identity-bearing
     // ReadySink on the context so every backend reap delivers by-value
@@ -1153,12 +1157,16 @@ bool Scheduler::drain_routed_completion_waits_locked() {
         // E7-T2 exactly-once: only publish a ticket if the fiber actually
         // transitioned waiting->runnable. If the fiber was already runnable
         // (a concurrent wake raced), do NOT enqueue a second ticket.
+        //
+        // Phase F1 P1-1: freeze the winner outcome BEFORE make_runnable.
+        // The fiber reads this AFTER resume instead of racy c.ready().
+        f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
         if (f->make_runnable()) {
             route_runnable_locked(f, owner);
             woken = true;
         }
     }
-    // Non-arena fallback (design §10): scan the legacy Completion*-keyed
+    // Non-arena fallback (design §9): scan the legacy Completion*-keyed
     // maps. These entries exist only for backends whose register_waiter
     // returned not_supported (no RequestArena waiter machinery — custom/test
     // backends); they are never touched by the identity sink above, and the
@@ -1170,6 +1178,8 @@ bool Scheduler::drain_routed_completion_waits_locked() {
             Fiber* f = it->second.fiber;
             WorkerState* owner = it->second.owner;
             it = waiting_size_.erase(it);
+            // Phase F1 P1-1: freeze outcome for legacy-path fibers too.
+            f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
             if (f->make_runnable()) {  // E7-T2 exactly-once
                 route_runnable_locked(f, owner);
                 woken = true;
@@ -1184,6 +1194,8 @@ bool Scheduler::drain_routed_completion_waits_locked() {
             Fiber* f = it->second.fiber;
             WorkerState* owner = it->second.owner;
             it = waiting_void_.erase(it);
+            // Phase F1 P1-1: freeze outcome for legacy-path fibers too.
+            f->set_completion_wait_outcome(CompletionWaitOutcome::completed);
             if (f->make_runnable()) {  // E7-T2 exactly-once
                 route_runnable_locked(f, owner);
                 woken = true;
@@ -1209,10 +1221,7 @@ Scheduler::WaitRecord* Scheduler::acquire_wait_record_locked(
         // a stale token can never match the reused record.
         ++r->generation;
     } else {
-        // First-time record: one allocation on the PRE-WAIT caller path
-        // (bounded by concurrent waiters — the removed unordered_map insert
-        // allocated here too; never on the accepted -> route path, I9). The
-        // record object is then address-stable for the Scheduler lifetime.
+        // Phase F1 P1-2: TODO — bounded pool. Deferred to a follow-up.
         auto rec = std::make_unique<WaitRecord>();
         rec->index = static_cast<std::uint32_t>(wait_records_.size());
         r = rec.get();
@@ -1468,7 +1477,7 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
             if (e.code == IoError::Code::not_supported) {
                 // Non-arena backend (custom AsyncBackend without the
                 // RequestArena waiter machinery): legacy fallback path
-                // (design §10) — Completion*-keyed map + ready() re-scan in
+                // (design §9) — Completion*-keyed map + ready() re-scan in
                 // the drain. Disjoint from the identity registry: this
                 // registration lives ONLY in the map.
                 retire_wait_record_locked(rec->index);
@@ -1510,13 +1519,13 @@ Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    // Resumed exactly once by the identity route (delivery -> drain) or the
-    // waiter-cancel path (Scheduler::cancel_waiter). The drain routes only
-    // after the I18 Completion-ready release-store, so ready() distinguishes
-    // the two outcomes: ready -> the I/O terminal result is available;
-    // not ready -> the wait was cancelled (the I/O continues; the Completion
-    // is still outstanding and the borrow is still live).
-    if (c.ready()) return Result<void>{};
+    // Phase F1 P1-1: read the frozen winner outcome instead of racy c.ready().
+    // The winning path (drain=reap wins, cancel_waiter=cancel wins) wrote
+    // this BEFORE make_runnable; we read it AFTER resume. This eliminates the
+    // race where c.ready() could return true even though cancel won the arena
+    // race (the I/O completed concurrently after cancel set the fiber runnable).
+    if (me->completion_wait_outcome() == CompletionWaitOutcome::completed)
+        return Result<void>{};
     return make_unexpected<void>(IoError{IoError::Code::canceled});
 }
 
@@ -1540,7 +1549,7 @@ Result<void> Scheduler::await_completion_void(Completion<void>& c) {
         if (!reg.has_value()) {
             const IoError e = reg.error();
             if (e.code == IoError::Code::not_supported) {
-                // Non-arena fallback (design §10) — see await_completion_size.
+                // Non-arena fallback (design §9) — see await_completion_size.
                 retire_wait_record_locked(rec->index);
                 waiting_void_[static_cast<void*>(&c)] = {me, ws};
                 if (c.ready()) {
@@ -1565,7 +1574,9 @@ Result<void> Scheduler::await_completion_void(Completion<void>& c) {
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
-    if (c.ready()) return Result<void>{};
+    // Phase F1 P1-1: read the frozen winner outcome instead of racy c.ready().
+    if (me->completion_wait_outcome() == CompletionWaitOutcome::completed)
+        return Result<void>{};
     return make_unexpected<void>(IoError{IoError::Code::canceled});
 }
 
@@ -1585,9 +1596,26 @@ Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
             // Completion ready. Nothing to remove.
             return Result<bool>{false};
         }
-        // not_supported (non-arena backend): no waiter registration exists on
-        // this backend; propagate so the caller knows cancellation is
-        // unsupported for this backend.
+        // Phase F1 P2: non-arena backend (not_supported) — fall back to the
+        // legacy Completion*-keyed map. The map holds the fiber/owner; erase
+        // it, freeze the canceled outcome, and route the fiber runnable.
+        if (e.code == IoError::Code::not_supported) {
+            auto it = waiting_size_.find(static_cast<void*>(&c));
+            if (it != waiting_size_.end()) {
+                Fiber* f = it->second.fiber;
+                WorkerState* owner = it->second.owner;
+                waiting_size_.erase(it);
+                if (f != nullptr) {
+                    f->set_completion_wait_outcome(
+                        CompletionWaitOutcome::canceled);
+                    if (f->make_runnable()) {
+                        route_runnable_locked(f, owner);
+                    }
+                }
+                return Result<bool>{true};
+            }
+            return Result<bool>{false};
+        }
         return make_unexpected<bool>(e);
     }
     // Cancel won at the arena: the lease is ours. Retire the pinned record and
@@ -1619,8 +1647,13 @@ Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
             // lease is dropped either way.
         }
     }
-    if (f != nullptr && f->make_runnable()) {  // E7-T2 exactly-once
-        route_runnable_locked(f, owner);
+    if (f != nullptr) {
+        // Phase F1 P1-1: freeze the cancel outcome BEFORE make_runnable.
+        // The fiber reads this AFTER resume instead of racy c.ready().
+        f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
+        if (f->make_runnable()) {  // E7-T2 exactly-once
+            route_runnable_locked(f, owner);
+        }
     }
     return Result<bool>{true};
 }
@@ -1632,6 +1665,26 @@ Result<bool> Scheduler::cancel_waiter(Completion<void>& c) {
     if (!rl.has_value()) {
         const IoError e = rl.error();
         if (e.code == IoError::Code::not_found) {
+            return Result<bool>{false};
+        }
+        // Phase F1 P2: non-arena backend (not_supported) — fall back to the
+        // legacy Completion*-keyed map. The map holds the fiber/owner; erase
+        // it, freeze the canceled outcome, and route the fiber runnable.
+        if (e.code == IoError::Code::not_supported) {
+            auto it = waiting_void_.find(static_cast<void*>(&c));
+            if (it != waiting_void_.end()) {
+                Fiber* f = it->second.fiber;
+                WorkerState* owner = it->second.owner;
+                waiting_void_.erase(it);
+                if (f != nullptr) {
+                    f->set_completion_wait_outcome(
+                        CompletionWaitOutcome::canceled);
+                    if (f->make_runnable()) {
+                        route_runnable_locked(f, owner);
+                    }
+                }
+                return Result<bool>{true};
+            }
             return Result<bool>{false};
         }
         return make_unexpected<bool>(e);
@@ -1659,8 +1712,11 @@ Result<bool> Scheduler::cancel_waiter(Completion<void>& c) {
             }
         }
     }
-    if (f != nullptr && f->make_runnable()) {
-        route_runnable_locked(f, owner);
+    if (f != nullptr) {
+        f->set_completion_wait_outcome(CompletionWaitOutcome::canceled);
+        if (f->make_runnable()) {
+            route_runnable_locked(f, owner);
+        }
     }
     return Result<bool>{true};
 }

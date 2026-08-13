@@ -468,11 +468,11 @@ progress when no external wake is registered (unchanged; Phase G removes it).
 
 ---
 
-## 8. Allocation / boundedness (AGENTS.md §12, I8, I9)
+## 8. Allocation / boundedness (AGENTS.md §12, I8, I9, AC-7)
 
 | Path | Allocation | Classification |
 |---|---|---|
-| wait registration (record acquire) | first-time `unique_ptr` per newly concurrent waiter; free-list reuse afterwards | **pre-wait / caller-path** — the existing `unordered_map` insert already allocated here; bounded by concurrent waiters (caller-owned pipeline depth, AC-7). Documented, not new. |
+| wait registration (record acquire) | **none** — the WaitRecord pool is preallocated at Scheduler construction to `wait_capacity` records (default 256); `acquire_wait_record_locked` pops from the free list or returns `nullptr` (synchronous `no_space`). No allocation on the hot path. | **pre-wait / caller-path** — bounded by explicit capacity, AC-7. Pool exhaustion returns a synchronous reportable result. |
 | accepted -> terminal -> reap -> route | none | the sink marks under R (no alloc); the drain pops + routes (no alloc); the delivered list is intrusive through the records themselves (no separate container) |
 | `register_waiter`/`cancel_waiter` | none (arena leaf) | unchanged |
 | backend poll/wait_one | none (arena ready-ring, pre-reserved) | unchanged |
@@ -484,18 +484,23 @@ container grows by cumulative historical submissions.
 
 ---
 
-## 9. What is deleted
+## 9. What is deleted and what is retained as fallback
 
-- `waiting_size_` / `waiting_void_` maps and `WaitReg` (scheduler.hpp:1035-1038,
-  1195-1198) — the Completion\*-keyed wait identity.
-- `Scheduler::wake_ready_completions_locked` (scheduler.cpp:1083-1119) — the
-  O(N) `Completion::ready()` re-scan. The drain call sites remain but call the
+- `Scheduler::wake_ready_completions_locked` (scheduler.cpp) — the O(N)
+  `Completion::ready()` re-scan. The drain call sites remain but call the
   identity drain.
 - The four backends' no-op-only sink usage in production Scheduler runs
   (the `ReferenceReadySink` remains as the default for standalone contexts).
 - `register_waiter`/`cancel_waiter` `*_for_test` seams on the backends become
   thin wrappers over the new production methods (they stay for arena-level
   tests but are no longer the only path).
+
+Retained as fallback (non-arena backends returning `not_supported`):
+- `waiting_size_` / `waiting_void_` maps and `WaitReg` — the
+  Completion\*-keyed wait identity for backends without RequestArena waiter
+  machinery. These maps are the exclusive fallback; each registration takes
+  exactly ONE path (identity registry or legacy map, never both). The drain
+  scans the legacy maps after the identity drain.
 
 Kept: `waiting_ready_` flag waits, E10 WaitQueue waits, Select waits, the 2ms
 backstop, `classify_locked`'s `ctx_.outstanding()` under G, the MW-S2
