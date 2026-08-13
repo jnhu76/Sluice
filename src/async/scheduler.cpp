@@ -104,8 +104,10 @@ std::uint64_t next_scheduler_identity() noexcept {
 }
 }  // namespace
 
-Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t /*wait_capacity*/) noexcept
-    : ctx_(ctx), scheduler_identity_(next_scheduler_identity()) {
+Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t wait_capacity)
+    : ctx_(ctx),
+      wait_capacity_(wait_capacity == 0 ? 1 : wait_capacity),
+      scheduler_identity_(next_scheduler_identity()) {
     // E14 D-E14-2: construction-time fail-fast on unsupported targets.
     // Scheduler is the earliest Evented admission boundary; all downstream
     // primitives (E12 Event/Semaphore/Mutex/Condition/Queue/RwLock, Select,
@@ -120,9 +122,37 @@ Scheduler::Scheduler(AsyncIoContext& ctx, std::size_t /*wait_capacity*/) noexcep
     // See Control below and docs/spec/e9_wake_handle_lifetime/.
     wake_control_ = std::make_shared<SchedulerWakeHandle::Control>();
 
-    // Phase F1 P1-2 (PR #105 review): TODO — preallocate WaitRecord pool
-    // to a bounded capacity. Deferred to a follow-up to isolate the P1-1
-    // and P2 fixes.
+    // Phase F1 P1-2: preallocate the WaitRecord pool to exactly
+    // wait_capacity_ records. Once constructed, wait_records_.size() == N and
+    // never grows. All N records start in the free list with generation 0.
+    // The pool is address-stable (unique_ptr per element) and allocation-free
+    // on the hot path (only free-list pops/pushes).
+    //
+    // Generation protocol: generation starts at 0 for every record. When a
+    // record is reused from the free list, acquire_wait_record_locked bumps
+    // generation BEFORE making the new occupant visible (I6). This ensures
+    // that a stale WaiterToken from occupant K cannot match occupant K+1,
+    // even though every record started with the same initial generation.
+    // No pointer identity alone is authority (I6).
+    wait_records_.reserve(wait_capacity_);
+    for (std::size_t i = 0; i < wait_capacity_; ++i) {
+        auto rec = std::make_unique<WaitRecord>();
+        rec->index = static_cast<std::uint32_t>(i);
+        // generation = 0 (default); next_free = nullptr (linked below)
+        wait_records_.push_back(std::move(rec));
+    }
+    // Link all records into the free list in FIFO order (record 0 at head).
+    // The free list is intrusive (WaitRecord::next_free), so the drain/route
+    // path never allocates (I9). FIFO order ensures the first acquire returns
+    // record 0, matching the old on-demand creation behavior where record 0
+    // was always the first created.
+    WaitRecord** tail = &wait_record_free_head_;
+    for (std::size_t i = 0; i < wait_capacity_; ++i) {
+        WaitRecord* r = wait_records_[i].get();
+        *tail = r;
+        tail = &r->next_free;
+    }
+    *tail = nullptr;
 
     // Phase F1 (issue #98): install the Scheduler-owned identity-bearing
     // ReadySink on the context so every backend reap delivers by-value
@@ -1218,14 +1248,15 @@ Scheduler::WaitRecord* Scheduler::acquire_wait_record_locked(
         wait_record_free_head_ = r->next_free;
         r->next_free = nullptr;
         // Reuse bumps the generation BEFORE the new occupant is visible (I6):
-        // a stale token can never match the reused record.
+        // a stale token can never match the reused record. First use from the
+        // initial free list also bumps (generation 0 -> 1), so the first
+        // occupant's token always differs from any future occupant's token.
         ++r->generation;
     } else {
-        // Phase F1 P1-2: TODO — bounded pool. Deferred to a follow-up.
-        auto rec = std::make_unique<WaitRecord>();
-        rec->index = static_cast<std::uint32_t>(wait_records_.size());
-        r = rec.get();
-        wait_records_.push_back(std::move(rec));
+        // Phase F1 P1-2: pool exhausted — synchronous no_space. The
+        // configured capacity has been reached; all N records are live
+        // (registered or delivered). No allocation is used as recovery.
+        return nullptr;
     }
     r->state = WaitRecordState::registered;
     r->fiber = fiber;

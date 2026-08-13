@@ -215,9 +215,11 @@ public:
     // Phase F1 P1-2 (PR #105 review): wait_capacity bounds the WaitRecord pool.
     // Records are preallocated at construction; acquire_wait_record_locked
     // returns nullptr (no_space) when the free list is exhausted. Default is
-    // derived from the arena capacity when available, or a fixed 256 floor.
+    // 256 (a fixed floor; see design §8). Construction MAY allocate for the
+    // pool and is therefore NOT noexcept — a failure is construction failure,
+    // not a silent no-space Scheduler.
     explicit Scheduler(AsyncIoContext& ctx,
-                       std::size_t wait_capacity = 256) noexcept;
+                       std::size_t wait_capacity = 256);
     ~Scheduler();
 
     Scheduler(const Scheduler&) = delete;
@@ -1353,8 +1355,13 @@ private:
     // a backend-progress lock. Inbound edges only: {global_mtx_, access_mtx_}
     // -> registry (registration/drain/cancel under G; ReadyRoutingSink under
     // access_mtx_ during poll/wait_one). Records are address-stable
-    // unique_ptrs; reuse bumps generation before the new occupant is visible.
+    // unique_ptrs; the pool is preallocated at construction to exactly
+    // wait_capacity_ records and NEVER grows beyond that bound (P1-2).
+    // Reuse bumps generation before the new occupant is visible (I6).
     mutable Mutex wait_registry_mtx_;
+    // Phase F1 P1-2: configured maximum number of WaitRecords. Once
+    // constructed, wait_records_.size() == wait_capacity_ and never changes.
+    const std::size_t wait_capacity_ SLUICE_GUARDED_BY(wait_registry_mtx_){0};
     std::vector<std::unique_ptr<WaitRecord>> wait_records_
         SLUICE_GUARDED_BY(wait_registry_mtx_);
     // Intrusive free list through the records (a vector free-list would
@@ -2036,6 +2043,16 @@ public:
         }
         static std::uint64_t scheduler_identity(const Scheduler& s) noexcept {
             return s.scheduler_identity_;
+        }
+
+        // Phase F1 P1-2: bounded WaitRecord pool introspection (test-only).
+        static std::size_t configured_wait_capacity(const Scheduler& s) {
+            LockGuard rlk(s.wait_registry_mtx_);
+            return s.wait_capacity_;
+        }
+        static std::size_t wait_record_storage_size(const Scheduler& s) {
+            LockGuard rlk(s.wait_registry_mtx_);
+            return s.wait_records_.size();
         }
 
         // Enable the deterministic logical clock (test mode).
