@@ -251,7 +251,7 @@ SLUICE_TEST_CASE(mwcoord_serialized_backend_access) {
             (void)ctx.submit_read(ReadOp{-1, buf, 4, 0}, comps[i]);
             I47_PHASE_F("I47-P06 fiber-submit-return", i);
             I47_PHASE_F("I47-P07 fiber-await-enter", i);
-            sched.await_completion_size(comps[i]);
+            (void)sched.await_completion_size(comps[i]);
             I47_PHASE_F("I47-P08 fiber-await-return", i);
             ops_done.fetch_add(1, std::memory_order_acq_rel);
             I47_PHASE_F("I47-P09 fiber-op-done", i);
@@ -471,7 +471,7 @@ SLUICE_TEST_CASE(mwcoord_no_wait_one_under_mw_s1) {
     fa.set_entry([&](Fiber&) {
         (void)ctx.submit_read(ReadOp{-1, a_buf, 4, 0}, a_c);  // Fake holds pending
         a_suspended.store(true, std::memory_order_release);
-        sched.await_completion_size(a_c);  // suspends
+        (void)sched.await_completion_size(a_c);  // suspends
     });
 
     // Fiber B: runs on worker 1 (round-robin). Spins until A has suspended,
@@ -615,7 +615,7 @@ SLUICE_TEST_CASE(mwcoord_wait_one_under_mw_s2) {
     Fiber fa;
     fa.set_entry([&](Fiber&) {
         SLUICE_CHECK(ctx.submit_read(ReadOp{-1, a_buf, 8, 0}, a_c).has_value());
-        sched.await_completion_size(a_c);
+        (void)sched.await_completion_size(a_c);
         if (a_c.ready()) a_bytes = a_c.result().value_or(0);
     });
 
@@ -733,7 +733,7 @@ SLUICE_TEST_CASE(mwcoord_completion_readiness_not_gated_by_reap) {
     Fiber f;
     f.set_entry([&](Fiber&) {
         SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 4, 0}, c1).has_value());
-        sched.await_completion_size(c1);
+        (void)sched.await_completion_size(c1);
         resumed.store(true, std::memory_order_release);
     });
     FiberStack s;
@@ -820,7 +820,7 @@ SLUICE_TEST_CASE(mwcoord_coordinated_mw_s2_admission_race) {
         // Resumed via the routed flag. Now await the (staged) read so a_c drains
         // to done within the run — no leftover outstanding op.
         a_awaiting_c.store(true, std::memory_order_release);
-        sched.await_completion_size(a_c);
+        (void)sched.await_completion_size(a_c);
     });
 
     FiberStack sa;

@@ -174,6 +174,14 @@ sluice_internal_async_test("threadpool_backend_death_test", {platform_gate = {"l
 -- 0. POSIX-only.
 sluice_internal_async_test("fake_backend_death_test", {platform_gate = {"linux", "macosx"}})
 
+-- scheduler_identity_wake_death_test — Phase F1 (issue #98) Scheduler
+-- wait-registry quiescence death tests. Proves ~Scheduler fail-fasts
+-- (scheduler_wait_registry_nonempty_fail_fast, Debug AND Release) when a
+-- registered Completion waiter is neither delivered (drained) nor cancelled
+-- at destruction — an abandoned wake obligation — while the drained quiescent
+-- path exits 0. POSIX-only.
+sluice_internal_async_test("scheduler_identity_wake_death_test", {platform_gate = {"linux", "macosx"}})
+
 -- uring_backend_death_test — Phase D1 UringAsyncBackend non-quiescent
 -- destruction fail-fast. The destruction contract needs NO injection hook, so
 -- this links the PRODUCTION sluice_async (the real UringAsyncBackend

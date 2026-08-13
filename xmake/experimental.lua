@@ -159,6 +159,26 @@ if os.isfile(R .. "tests/uring_backend_c2c_waiter_borrow_test.cpp") then
         add_tests("uring_backend_c2c_waiter_borrow_test")
 end
 
+-- Phase F1 (issue #98): the PRODUCTION Scheduler consumes identity-bearing
+-- reap on the real liburing path. Links the PRODUCTION sluice_async (which
+-- carries SLUICE_HAS_LIBURING + liburing publicly when the gate is on) — the
+-- whole path is authoritative production code, no internal-testing seams.
+-- Stub mode links the same library with the stub uring backend (build/API
+-- honesty only; the manifest classifies mode=stub INCOMPLETE).
+if os.isfile(R .. "tests/uring_f1_scheduler_routing_test.cpp") then
+    target("uring_f1_scheduler_routing_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_includedirs(R .. "include")
+        add_deps("sluice_core", "sluice_async")
+        add_files(R .. "tests/uring_f1_scheduler_routing_test.cpp")
+        if has_liburing then
+            add_packages("liburing")
+        end
+        add_tests("uring_f1_scheduler_routing_test")
+end
+
 -- Phase D4 C2e close/drain/destruction evidence (real liburing only in real
 -- mode). Compiles the authoritative production uring_backend.cpp +
 -- async_io_context.cpp (the split-phase wait the context path uses) +

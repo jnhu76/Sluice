@@ -678,6 +678,15 @@ class D3DriftDetectorTest(unittest.TestCase):
         _assert_source_matches_pin(
             self, "uring_c2e_close_drain", "uring_backend_c2e_close_drain_test.cpp")
 
+    def test_f1_pin_matches_source(self):
+        # Phase F1 (issue #98): dedicated real-liburing Scheduler-routing
+        # target. Both builds register the same two case names (the routing
+        # body is real-mode-only inside #if SLUICE_HAS_LIBURING, with an empty
+        # registration in stub mode), so set-equality is the meaningful drift
+        # check — same discipline as the D3 c2b/c2c records.
+        _assert_source_matches_pin(
+            self, "uring_f1_scheduler_routing_integration", "uring_f1_scheduler_routing_test.cpp")
+
 
 class D4DriftDetectorTest(unittest.TestCase):
     """D4 (PR #84 repair, P1-B/P0-C): every D4 multi-case Uring evidence target

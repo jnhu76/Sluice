@@ -89,7 +89,7 @@ SLUICE_TEST_CASE(runtime_wait_size_unresolved_suspends_and_resumes_once) {
         std::byte buf[8]{};
         auto sr = ctx.submit_read(ReadOp{fd, buf, 8, 0}, c);
         SLUICE_CHECK(sr.has_value());
-        ctx.await_completion(c);          // suspend; driver poll completes it
+        (void)ctx.await_completion(c);          // suspend; driver poll completes it
         task_resumed.store(1, std::memory_order_release);
         if (c.ready()) observed_bytes = c.result().value_or(0);
     }).has_value());
@@ -138,7 +138,7 @@ SLUICE_TEST_CASE(runtime_wait_void_unresolved_suspends_and_resumes) {
         Completion<void> c;
         auto sr = ctx.submit_sync_data(SyncDataOp{fd}, c);
         SLUICE_CHECK(sr.has_value());
-        ctx.await_completion(c);
+        (void)ctx.await_completion(c);
         resumed.store(1, std::memory_order_release);
         if (c.ready()) observed_ok = c.result().has_value() ? 1 : 0;
     }).has_value());
@@ -182,7 +182,7 @@ SLUICE_TEST_CASE(runtime_wait_completes_and_result_consumed) {
         Completion<std::size_t> c;
         std::byte buf[4]{};
         SLUICE_CHECK(ctx.submit_read(ReadOp{fd, buf, 4, 0}, c).has_value());
-        ctx.await_completion(c);
+        (void)ctx.await_completion(c);
         SLUICE_CHECK(c.ready());
         SLUICE_CHECK(c.result().value_or(0) == 4);
         // reset + reuse after ready + result consumption.
@@ -190,7 +190,7 @@ SLUICE_TEST_CASE(runtime_wait_completes_and_result_consumed) {
         SLUICE_CHECK(c.idle());
         // Reuse for a second op.
         SLUICE_CHECK(ctx.submit_read(ReadOp{fd, buf, 4, 0}, c).has_value());
-        ctx.await_completion(c);
+        (void)ctx.await_completion(c);
         SLUICE_CHECK(c.result().value_or(0) == 4);
         done.store(1, std::memory_order_release);
     }).has_value());
@@ -225,7 +225,7 @@ SLUICE_TEST_CASE(runtime_wait_completion_error_observable) {
         Completion<std::size_t> c;
         std::byte buf[4]{};
         SLUICE_CHECK(ctx.submit_write(WriteOp{fd, buf, 4, 0}, c).has_value());
-        ctx.await_completion(c);
+        (void)ctx.await_completion(c);
         // The completion error must remain observable.
         auto r = c.result();
         if (!r.has_value() && r.error().code == IoError::Code::no_space) {
@@ -277,7 +277,7 @@ SLUICE_TEST_CASE(runtime_wait_multiple_outstanding_depth4_any_order) {
         // Await in REVERSE order to prove no submit-order serialization.
         int ok = 0;
         for (int i = 3; i >= 0; --i) {
-            ctx.await_completion(*comps[i]);
+            (void)ctx.await_completion(*comps[i]);
             if (comps[i]->result().value_or(0) == 4) ++ok;
         }
         all_ok.store(ok, std::memory_order::release);
@@ -313,7 +313,7 @@ SLUICE_TEST_CASE(runtime_wait_two_tasks_independent) {
         Completion<std::size_t> c;
         std::byte buf[4]{};
         SLUICE_CHECK(ctx.submit_read(ReadOp{-1 /*unused by fake*/, buf, 4, 0}, c).has_value());
-        ctx.await_completion(c);
+        (void)ctx.await_completion(c);
         if (c.result().value_or(0) == 4) done_count.fetch_add(1, std::memory_order_relaxed);
     };
 
@@ -350,7 +350,7 @@ SLUICE_TEST_CASE(runtime_wait_one_worker_no_deadlock) {
         Completion<std::size_t> c;
         std::byte buf[4]{};
         SLUICE_CHECK(ctx.submit_read(ReadOp{fd, buf, 4, 0}, c).has_value());
-        ctx.await_completion(c);
+        (void)ctx.await_completion(c);
         done.store(1, std::memory_order::release);
     }).has_value());
 
@@ -388,7 +388,7 @@ SLUICE_TEST_CASE(runtime_wait_real_backend_threadpool_resumes) {
     SLUICE_CHECK(rt.submit([&](RuntimeTaskContext& ctx) {
         Completion<std::size_t> c;
         SLUICE_CHECK(ctx.submit_read(ReadOp{fd, buf, 4, 0}, c).has_value());
-        ctx.await_completion(c);
+        (void)ctx.await_completion(c);
         resumed.store(1, std::memory_order::release);
         if (c.ready() && c.result().value_or(0) == 4) bytes_ok.store(1, std::memory_order::release);
     }).has_value());
@@ -428,10 +428,10 @@ SLUICE_TEST_CASE(runtime_wait_outstanding_reaped_before_close) {
         Completion<std::size_t> c;
         std::byte buf[16]{};
         SLUICE_CHECK(ctx.submit_read(ReadOp{fd, buf, 16, 0}, c).has_value());
-        ctx.await_completion(c);
+        (void)ctx.await_completion(c);
         c.reset();
         SLUICE_CHECK(ctx.submit_read(ReadOp{fd, buf, 16, 0}, c).has_value());
-        ctx.await_completion(c);
+        (void)ctx.await_completion(c);
         done.store(1, std::memory_order::release);
     }).has_value());
 

@@ -148,7 +148,7 @@ SLUICE_TEST_CASE(final_backend_ready_request_drains_at_shutdown) {
         SLUICE_CHECK(rt.submit([&](RuntimeTaskContext& rctx) {
             auto sr = rctx.submit_read(ReadOp{fd, buf, 1, 0}, c);
             if (sr.has_value()) {
-                rctx.await_completion(c);
+                (void)rctx.await_completion(c);
             }
             task_done.store(true, std::memory_order_release);
         }).has_value());
@@ -330,7 +330,7 @@ SLUICE_TEST_CASE(stop_between_mw_s2_commit_and_backend_wait_registration) {
         SLUICE_CHECK(rt.submit([&](RuntimeTaskContext& rctx) {
             auto sr = rctx.submit_read(ReadOp{fd, buf, 1, 0}, c);
             if (sr.has_value()) {
-                rctx.await_completion(c);
+                (void)rctx.await_completion(c);
             }
             task_done.store(true, std::memory_order_release);
         }).has_value());

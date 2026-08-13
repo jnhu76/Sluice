@@ -552,7 +552,7 @@ SLUICE_TEST_CASE(wake_backend_only_progress_preserved) {
         Completion<std::size_t> c;
         std::byte buf[8];
         (void)ctx.submit_read(ReadOp{-1, buf, 8, 0}, c);
-        sched.await_completion_size(c);
+        (void)sched.await_completion_size(c);
         resumed.fetch_add(1, std::memory_order_acq_rel);
     });
     FiberStack fs;
