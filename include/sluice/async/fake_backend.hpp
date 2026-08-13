@@ -174,6 +174,52 @@ class FakeAsyncBackend : public AsyncBackend {
     // so ApplicationRuntime accepts it without a wait source (D3).
     bool wait_one_is_nonblocking() const noexcept override { return true; }
 
+    // Phase F1 (issue #98): production waiter registration / cancellation
+    // (ADR Decision 10). The Completion is resolved to its current SlotHandle
+    // by the arena's own bounded scan — the same identity bridge the public
+    // cancel path uses — and the call is forwarded verbatim to the REAL arena
+    // authorities. No side-band waiter map, no reimplementation of the waiter
+    // state machine. register_waiter: success, or invalid_state for a second
+    // registration / a non-accepted-or-already-reaped slot; not_found for an
+    // unresolvable (unbound, cross-context, stale) Completion. cancel_waiter:
+    // removes ONLY the waiter (never the I/O, never the borrow) and returns
+    // the moved-out lease, or not_found when reap already closed the
+    // registration.
+    Result<void> register_waiter(Completion<std::size_t>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease) override {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<void>(IoError{IoError::Code::not_found});
+        }
+        return arena_.register_waiter(*h, token, std::move(lease));
+    }
+    Result<void> register_waiter(Completion<void>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease) override {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<void>(IoError{IoError::Code::not_found});
+        }
+        return arena_.register_waiter(*h, token, std::move(lease));
+    }
+    Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c) override {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<detail::RoutingLease>(
+                IoError{IoError::Code::not_found});
+        }
+        return arena_.cancel_waiter(*h);
+    }
+    Result<detail::RoutingLease> cancel_waiter(Completion<void>& c) override {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<detail::RoutingLease>(
+                IoError{IoError::Code::not_found});
+        }
+        return arena_.cancel_waiter(*h);
+    }
+
     // Minimal cancel (ADR §7 X2): REQUESTS cancel. The op stays outstanding and
     // is completed (exactly-once, X3) at the next poll()/wait_one() with
     // IoError::canceled. We do NOT complete here — A3/O1: completions are
@@ -587,7 +633,9 @@ class FakeAsyncBackend : public AsyncBackend {
         }
         // Non-auto: complete_*/cancel already recorded their terminals directly
         // (review finding #2 — no staging step here). Just reap.
-        return arena_.reap(sink_);
+        // Phase F1: deliver identity events to the attached Scheduler-owned
+        // routing sink when one is set; otherwise the no-op reference sink.
+        return arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
     }
 
     void drain_auto_size() {

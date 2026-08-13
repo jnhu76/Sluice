@@ -496,6 +496,35 @@ EVIDENCE: tuple[Evidence, ...] = (
     ),
 
     # -----------------------------------------------------------------------
+    # Phase F1 (issue #98) — the PRODUCTION Scheduler consumes identity-
+    # bearing reap on the real liburing path. Links the production
+    # sluice_async (which carries SLUICE_HAS_LIBURING + liburing publicly);
+    # no internal-testing seams — the whole path is authoritative production
+    # code. Stub mode is classified INCOMPLETE via required_modes.
+    # -----------------------------------------------------------------------
+    Evidence(
+        evidence_id="uring_f1_scheduler_routing_integration",
+        target="uring_f1_scheduler_routing_test",
+        layer="lifecycle",
+        backends=_U,
+        mandatory=True,
+        required_modes=("real",),
+        cases=(
+            "uring_f1_evidence_mode",
+            "uring_f1_scheduler_routing",
+        ),
+        notes="Phase F1 (issue #98), real liburing only: a fiber submits a "
+              "real ring read; Scheduler::await_completion registers an arena "
+              "waiter (WaiterToken + RoutingLease) plus a Scheduler routing "
+              "record; the ring CQE reaches a terminal; the Uring reap calls "
+              "the Scheduler-owned ReadyRoutingSink with the by-value "
+              "ReadyEvent; the drain routes the fiber exactly once with the "
+              "real result (ADR Decisions 9/10). The legacy Completion*-keyed "
+              "re-scan is not on this path. Stub mode is classified "
+              "INCOMPLETE (required_modes=real).",
+    ),
+
+    # -----------------------------------------------------------------------
     # Phase C2d — failure injection / accepted-terminal under allocator
     # failure (Issue #68 rows 9-10). The ThreadPool record proves, on the REAL
     # blocking backend with deterministic guarded injection seams (compiled

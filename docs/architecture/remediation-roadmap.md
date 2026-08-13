@@ -499,23 +499,6 @@ refactor(runtime): consume identity-bearing reap events
 
 **Work (re-baselined by audit issue #94; runtime decomposition in issue #98):**
 
-- **F1 (MVP)** — Scheduler consumes identity-bearing reap: a production
-  identity-bearing ReadySink that routes `ReadyEvent{key, token, lease}` to the
-  registered Scheduler wait record while preserving Scheduler-owned runnable
-  routing. The arena machinery (`request_arena.hpp` `register_waiter` /
-  `cancel_waiter` / `WaiterToken` / `RoutingLease`) exists but is exercised only
-  by `SLUICE_ASYNC_INTERNAL_TESTING` seams — never by production reap→Scheduler
-  handoff;
-- **F1** — remove the O(N) `Completion::ready()` re-scan from the
-  completion-progress path (`scheduler.cpp` `wake_ready_completions_locked`
-  scanning the `Completion*`-keyed `waiting_size_`/`waiting_void_` maps);
-- **F1** — enforce context provenance and synchronous duplicate-waiter
-  `invalid_state` on the Scheduler side (C2b row 4b / C2c rows 12b+14b:
-  arena-level single-waiter is proven; cross-context rejection and real
-  Scheduler routing-record lifetime are the Accepted ADR's own Phase F
-  deferral);
-- **F1** — waiter cancellation removes only the waiter, not the I/O (arena
-  `cancel_waiter` proven; no production Scheduler caller yet);
 - **F2** — Batch origin flag: distinguish `rejected` at submit from
   `accepted_and_completed` explicitly. Submit-time errors already surface with
   `reap_seq 0` and `wait_err` precedence (`batch.cpp:133`); the residual is the
@@ -523,9 +506,31 @@ refactor(runtime): consume identity-bearing reap events
 - **F3** (optional, API ADR required) — public RequestHandle/waiter API surface
   (ADR rows 12b/14b). AGENTS.md notes RequestKey is currently internal.
 
-The exact `wait_one`/cancel concurrency lock design must be completed before
-changing L1 synchronization. The request contract fixes target identity and
-disposition, but does not authorize an incidental lock redesign.
+**Implemented by F1 (issue #98):**
+
+- production Scheduler consumes identity-bearing reap: the Scheduler-owned
+  `ReadyRoutingSink` routes the by-value `ReadyEvent{key, token, lease}` from
+  every arena-backed backend reap to the pinned Scheduler wait record; the
+  drain routes the resumed fiber exactly once under `global_mtx_` (design:
+  `docs/design/phase-f1-scheduler-ready-sink.md`; gate:
+  `docs/architecture/phase-f1-compliance-gate.md`);
+- the O(N) `Completion::ready()` re-scan is removed from the
+  completion-progress path for arena backends. The legacy
+  `Completion*`-keyed `waiting_size_`/`waiting_void_` maps remain ONLY as a
+  disjoint fallback for non-arena backends whose `register_waiter` returns
+  `not_supported` — never a second authority on the identity path;
+- context provenance and duplicate-waiter enforcement on the Scheduler side:
+  a second waiter on one Completion, or a Completion not bound to this
+  context, surfaces as synchronous `invalid_state` without touching the first
+  waiter (C2c rows 12b/14b Scheduler-side enforcement);
+- waiter cancellation: `Scheduler::cancel_waiter` plus the production
+  `RuntimeTaskContext::cancel_waiter` caller remove only the waiter; the I/O,
+  borrow, and terminal result are untouched (arena `cancel_waiter` moved from
+  seam-only to a production caller);
+- the F1 concurrency lock design: the wait registry adds the leaf
+  `wait_registry_mtx_` (R); lock order is G→A and G→R (R never precedes
+  G/A in the opposite direction); the sink takes only R; no join/alloc/
+  syscall under R (full table in the design doc).
 
 **Already implemented (removed from Phase F scope):** the backend half of
 identity-bearing reap — all four backends reap through the arena's

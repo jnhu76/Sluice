@@ -835,7 +835,8 @@ public:
     // ================================================================
     // Supported user API
     // ================================================================
-    explicit Scheduler(AsyncIoContext& ctx) noexcept;
+    explicit Scheduler(AsyncIoContext& ctx,
+                       std::size_t wait_capacity = 256);
     ~Scheduler();
     Scheduler(const Scheduler&) = delete;
     Scheduler& operator=(const Scheduler&) = delete;
@@ -1606,8 +1607,20 @@ public:
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
     // M1-A: cooperative Completion wait.
-    void await_completion(Completion<std::size_t>& c);
-    void await_completion(Completion<void>& c);
+    // Phase F1 (issue #98): now returns Result<void> — success means the
+    // Completion reached a terminal result (read it via c.result());
+    // canceled means the WAIT was cancelled (waiter cancellation, not I/O
+    // cancellation: the I/O continues and c remains outstanding).
+    Result<void> await_completion(Completion<std::size_t>& c);
+    Result<void> await_completion(Completion<void>& c);
+
+    // Phase F1 (ADR Decision 10): waiter cancellation. Removes ONLY the
+    // Scheduler wait registration for `c`; the I/O, the borrow, and the
+    // terminal result are untouched. Returns true when this call won the
+    // waiter (the task's await will resume with canceled); false when the
+    // reap already delivered (the await resumes with the real result).
+    Result<bool> cancel_waiter(Completion<std::size_t>& c);
+    Result<bool> cancel_waiter(Completion<void>& c);
 };
 using RuntimeTaskFn = std::function<void(RuntimeTaskContext&)>;
 ```
@@ -1621,6 +1634,17 @@ terminal result. The result stays in the `Completion` — read it via
 `c.result()` after this returns, then `c.reset()` before reuse (`Completion`
 L7/L9 lifecycle).
 
+Phase F1 (issue #98): the wait is now a REAL arena waiter registration plus a
+Scheduler routing record, resumed by the identity-bearing reap through the
+Scheduler-owned `ReadyRoutingSink` (ADR Decisions 9/10) — the legacy
+`Completion*`-keyed re-scan is gone from the production path. The return value
+is `Result<void>`:
+
+- `has_value()` — the `Completion` reached its terminal result (`c.ready()`
+  is true; read via `c.result()`);
+- `canceled` — the WAIT was cancelled by `cancel_waiter` (the I/O continues:
+  `c` remains outstanding and later reaches a terminal result normally).
+
 Backed by the already-audited `Scheduler::await_completion_*` primitive; the
 `Scheduler*` is private and never escapes to task code.
 
@@ -1631,6 +1655,25 @@ Preconditions:
   documents).
 - called only from within a Runtime task (the `RuntimeTaskContext&` lifetime is
   the task invocation).
+- at most one waiter per `Completion` (a second concurrent `await_completion`
+  on the same `Completion` is a synchronous `invalid_state`, not a suspend).
+
+#### `cancel_waiter`
+
+Phase F1 (ADR Decision 10) waiter cancellation: removes only the Scheduler
+wait registration — never the I/O operation, never the borrow, never a
+terminal result. Callable from any thread while the task's await is suspended
+(the Scheduler wakes the task with the `canceled` outcome; the I/O still
+completes normally and `c` publishes its real result).
+
+- returns `true` — this call won the waiter: the awaited task resumes with
+  `canceled`;
+- returns `false` — the reap already delivered: the task resumes with the real
+  result (the call was a no-op);
+- `not_found` — no registration exists (the Completion was never awaited, or
+  already reset);
+- `not_supported` — the backend has no waiter machinery (custom non-arena
+  `AsyncBackend`; there is nothing to cancel).
 
 Authority: submit-time errors stay synchronous (from `submit_*`); completion
 errors stay terminal results in the `Completion`. Zero per-op allocation, zero

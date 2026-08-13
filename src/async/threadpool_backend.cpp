@@ -700,7 +700,9 @@ detail::TerminalResult ThreadPoolBackend::run_syscall(const PreparedBlockingOp& 
 std::size_t ThreadPoolBackend::poll() {
     // Reap publishes Completion-ready through the slot binding inside the leaf
     // domain (ADR Decision 9 / I11). The worker only recorded backend-ready.
-    return arena_.reap(sink_);
+    // Phase F1: deliver identity events to the attached Scheduler-owned
+    // routing sink when one is set; otherwise the no-op reference sink.
+    return arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
 }
 
 Result<std::size_t> ThreadPoolBackend::wait_one() {
@@ -713,7 +715,7 @@ Result<std::size_t> ThreadPoolBackend::wait_one() {
     // stop waiting by tracking outstanding() or using close_admission().
     for (;;) {
         BackendWaitToken token = ready_wait_.snapshot();
-        std::size_t n = arena_.reap(sink_);
+        std::size_t n = arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
         if (n > 0) return n;
         if (ready_wait_.wait_for_change(token) == BackendWakeReason::interrupted) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -728,7 +730,7 @@ Result<std::size_t> ThreadPoolBackend::wait_one() {
 #endif
             // One final non-blocking reap closes the interrupt-vs-final-ready
             // race, then report the interruption (0 = no completion reaped).
-            n = arena_.reap(sink_);
+            n = arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
             if (n > 0) return n;
             return std::size_t{0};
         }
@@ -933,6 +935,55 @@ void ThreadPoolBackend::cancel(Completion<void>& c) {
         tally_canceled();
         signal_ready_progress();
     }
+}
+
+// ---------------------------------------------------------------------------
+// Phase F1: production waiter registration / cancellation (ADR Decision 10)
+// ---------------------------------------------------------------------------
+// The waiter registration is ORTHOGONAL to the execution state, so no
+// work_mtx_/dispatch interaction is needed: the arena leaf serializes
+// registration against reap extraction and cancel_waiter against reap, and
+// the I/O path never reads waiter state. The candidate lease is consumed at
+// the by-value boundary on any failure (never transferred to the slot).
+
+Result<void> ThreadPoolBackend::register_waiter(Completion<std::size_t>& c,
+                                                detail::WaiterToken token,
+                                                detail::RoutingLease lease) {
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value()) {
+        return make_unexpected<void>(IoError{IoError::Code::not_found});
+    }
+    return arena_.register_waiter(*h, token, std::move(lease));
+}
+
+Result<void> ThreadPoolBackend::register_waiter(Completion<void>& c,
+                                                detail::WaiterToken token,
+                                                detail::RoutingLease lease) {
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value()) {
+        return make_unexpected<void>(IoError{IoError::Code::not_found});
+    }
+    return arena_.register_waiter(*h, token, std::move(lease));
+}
+
+Result<detail::RoutingLease> ThreadPoolBackend::cancel_waiter(
+    Completion<std::size_t>& c) {
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value()) {
+        return make_unexpected<detail::RoutingLease>(
+            IoError{IoError::Code::not_found});
+    }
+    return arena_.cancel_waiter(*h);
+}
+
+Result<detail::RoutingLease> ThreadPoolBackend::cancel_waiter(
+    Completion<void>& c) {
+    auto h = arena_.resolve_completion(&c);
+    if (!h.has_value()) {
+        return make_unexpected<detail::RoutingLease>(
+            IoError{IoError::Code::not_found});
+    }
+    return arena_.cancel_waiter(*h);
 }
 
 std::size_t ThreadPoolBackend::outstanding() const noexcept {

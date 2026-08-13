@@ -97,7 +97,7 @@ SLUICE_TEST_CASE(progress_real_backend_completion_resumes_via_wait_one) {
     Fiber fa;
     fa.set_entry([&](Fiber&) {
         SLUICE_CHECK(ctx.submit_read(ReadOp{fd, a_buf, 8, 0}, a_c).has_value());
-        sched.await_completion_size(a_c);   // suspend; op runs on a ThreadPool worker
+        (void)sched.await_completion_size(a_c);   // suspend; op runs on a ThreadPool worker
         a_resumed = 1;
         if (a_c.ready()) a_bytes = a_c.result().value_or(0);
     });
@@ -149,7 +149,7 @@ SLUICE_TEST_CASE(progress_evented_group_task_awaits_real_backend) {
     g.async([&](CancelToken&) {
         Completion<std::size_t> c;
         SLUICE_CHECK(ctx.submit_read(ReadOp{fd, buf, 4, 0}, c).has_value());
-        sched.await_completion_size(c);
+        (void)sched.await_completion_size(c);
         ++task_ran;
         if (c.ready()) task_observed_bytes = static_cast<int>(c.result().value_or(0));
     });
@@ -224,7 +224,7 @@ SLUICE_TEST_CASE(progress_completion_path_unchanged) {
     Fiber f;
     f.set_entry([&](Fiber&) {
         SLUICE_CHECK(ctx.submit_read(ReadOp{fd, buf, 4, 0}, c).has_value());
-        sched.await_completion_size(c);
+        (void)sched.await_completion_size(c);
         ++resumed;
     });
     FiberStack s;

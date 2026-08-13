@@ -126,6 +126,50 @@ class SyncBackend : public AsyncBackend {
         }
     }
 
+    // Phase F1 (issue #98): production waiter registration / cancellation
+    // (ADR Decision 10), forwarded verbatim to the REAL arena authorities
+    // through the same resolve_completion identity bridge as cancel. No
+    // side-band waiter map. register_waiter: success, or invalid_state for a
+    // second registration / a non-accepted-or-already-reaped slot; not_found
+    // for an unresolvable (unbound, cross-context, stale) Completion.
+    // cancel_waiter: removes ONLY the waiter (never the I/O, never the borrow)
+    // and returns the moved-out lease, or not_found when reap already closed
+    // the registration.
+    Result<void> register_waiter(Completion<std::size_t>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease) override {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<void>(IoError{IoError::Code::not_found});
+        }
+        return arena_.register_waiter(*h, token, std::move(lease));
+    }
+    Result<void> register_waiter(Completion<void>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease) override {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<void>(IoError{IoError::Code::not_found});
+        }
+        return arena_.register_waiter(*h, token, std::move(lease));
+    }
+    Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c) override {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<detail::RoutingLease>(
+                IoError{IoError::Code::not_found});
+        }
+        return arena_.cancel_waiter(*h);
+    }
+    Result<detail::RoutingLease> cancel_waiter(Completion<void>& c) override {
+        auto h = arena_.resolve_completion(&c);
+        if (!h.has_value()) {
+            return make_unexpected<detail::RoutingLease>(
+                IoError{IoError::Code::not_found});
+        }
+        return arena_.cancel_waiter(*h);
+    }
+
     std::size_t outstanding() const noexcept override { return arena_.accepted_outstanding(); }
 
     // Phase B test-only introspection (the arena is a private detail).
@@ -283,7 +327,9 @@ class SyncBackend : public AsyncBackend {
 
     std::size_t dispatch_and_reap() {
         dispatch_enqueued();
-        return arena_.reap(sink_);
+        // Phase F1: deliver identity events to the attached Scheduler-owned
+        // routing sink when one is set; otherwise the no-op reference sink.
+        return arena_.reap(routing_sink_ ? *routing_sink_ : sink_);
     }
 
     // --- Completion publication (review C2/C3) ---

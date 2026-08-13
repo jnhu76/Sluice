@@ -12,6 +12,7 @@
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/queue_port.hpp>  // detail::QueuePort / QueueRole (E12-E Queue seams)
+#include <sluice/async/detail/ready_sink.hpp>  // detail::SynchronousReadySink / ReadyEvent (Phase F1)
 #include <sluice/async/detail/select_registration.hpp>  // detail::DeadlineHeapEntry, SelectTimerRegistration (E13 P3)
 #include <sluice/async/select_fwd.hpp>  // E13 P5 CORRECTIVE: select() template declaration + forward decls
 #include <sluice/async/fiber.hpp>
@@ -211,7 +212,14 @@ class AsyncRwLock;
 
 class Scheduler {
 public:
-    explicit Scheduler(AsyncIoContext& ctx) noexcept;
+    // Phase F1 P1-2 (PR #105 review): wait_capacity bounds the WaitRecord pool.
+    // Records are preallocated at construction; acquire_wait_record_locked
+    // returns nullptr (no_space) when the free list is exhausted. Default is
+    // 256 (a fixed floor; see design §8). Construction MAY allocate for the
+    // pool and is therefore NOT noexcept — a failure is construction failure,
+    // not a silent no-space Scheduler.
+    explicit Scheduler(AsyncIoContext& ctx,
+                       std::size_t wait_capacity = 256);
     ~Scheduler();
 
     Scheduler(const Scheduler&) = delete;
@@ -269,9 +277,43 @@ public:
     void run_until_idle() { run(1); }
 
     // ---- E5/E6 suspension primitives (called from Fiber bodies) ----
-    void await_completion_size(Completion<std::size_t>& c);
-    void await_completion_void(Completion<void>& c);
+    // Phase F1 (issue #98): the Completion wait now registers a real
+    // Scheduler routing record + arena waiter (ADR Decision 10) instead of a
+    // Completion*-keyed map entry, and the wake arrives through the
+    // identity-bearing ReadySink instead of an O(N) ready() re-scan.
+    //
+    // Returns:
+    //   - success        — the Completion reached its terminal result (already
+    //                      ready at registration, or the fiber was resumed by
+    //                      the identity route); read c.result() then c.reset().
+    //   - invalid_state  — synchronous rejection: a second waiter is already
+    //                      registered on this Completion (I13), or the
+    //                      Completion is not bound to this context's backend
+    //                      (cross-context / idle / stale — provenance misuse,
+    //                      Decision 6). The fiber is NOT suspended.
+    //   - canceled       — the wait was cancelled by Scheduler::cancel_waiter
+    //                      while the fiber was suspended; the I/O continues
+    //                      (wait-cancel ≠ I/O cancel). The Completion is NOT
+    //                      ready; reset it only after the I/O completes and
+    //                      reaps (borrow lifetime, Decision 8).
+    Result<void> await_completion_size(Completion<std::size_t>& c);
+    Result<void> await_completion_void(Completion<void>& c);
     void await_ready_flag(const std::atomic<bool>& ready);
+
+    // ---- Phase F1: waiter cancellation (ADR Decision 10) ----
+    // Removes ONLY the waiter registration for `c` (arena cancel_waiter) and
+    // retires the Scheduler routing record. It NEVER cancels the I/O, never
+    // ends the fd/buffer borrow, and never chooses a terminal result.
+    // Returns:
+    //   - true   — this call removed the waiter (cancel won); the suspended
+    //              fiber is resumed exactly once with the wait-cancelled
+    //              outcome (its await_completion returns IoError::canceled).
+    //   - false  — the reap delivery already won (the waiter registration was
+    //              already closed); the fiber is (or will be) resumed by the
+    //              identity route with the Completion ready. Nothing removed.
+    //   - not_found — the Completion is not bound to this context's backend.
+    Result<bool> cancel_waiter(Completion<std::size_t>& c);
+    Result<bool> cancel_waiter(Completion<void>& c);
 
     // ---- E10 WaitQueue suspension (sluice-CORE-E10) ----
     // Suspend the calling Fiber on `q`, registering `node`. `node` must be
@@ -922,8 +964,12 @@ public:
     std::size_t runnable_count() const;
     std::size_t waiting_count() const {
         LockGuard lk(global_mtx_);
-        return waiting_size_.size() + waiting_void_.size() + waiting_ready_.size() +
-               waiting_waitq_count_;
+        // Phase F1: Completion waits live in the wait registry (live records);
+        // flag/E10 waits remain counted here. G -> registry is the documented
+        // lock order.
+        LockGuard rlk(wait_registry_mtx_);
+        return wait_record_live_count_ + waiting_size_.size() + waiting_void_.size() +
+               waiting_ready_.size() + waiting_waitq_count_;
     }
     std::size_t waiting_ready_count() const {
         LockGuard lk(global_mtx_);
@@ -1031,11 +1077,99 @@ private:
         SLUICE_REQUIRES(global_mtx_);
 
     // Wait registration with owner Worker (E7-B will use owner; E7-A stores
-    // the Fiber only).
+    // the Fiber only). Used by the ready-FLAG waits (waiting_ready_); the
+    // Completion waits moved to the identity-bearing WaitRecord registry in
+    // Phase F1.
     struct WaitReg {
         Fiber* fiber;
         WorkerState* owner;
     };
+
+    // ---- Phase F1: identity-bearing waiter routing (ADR Decisions 9/10) ----
+    // One routing record per registered Scheduler Completion-waiter. Records
+    // are address-stable for the Scheduler lifetime (never destroyed; reused
+    // from a free list with a generation bump so a stale token cannot match a
+    // new occupant — I6). The routing lease pins the record: the record is
+    // NOT retired while a request slot or the synchronous ReadySink owns its
+    // lease, and it is consumed exactly once by the winning delivery path
+    // (reap sink -> delivered -> drain, or waiter cancel -> cancelled).
+    //
+    // State machine (guarded by wait_registry_mtx_):
+    //   free -> registered        registration (under global_mtx_)
+    //   registered -> delivered   ReadyRoutingSink (during poll/wait_one)
+    //   registered -> cancelled   cancel_waiter winner (under global_mtx_)
+    //   delivered -> free         drain consume (under global_mtx_)
+    enum class WaitRecordState : std::uint8_t {
+        free,
+        registered,
+        delivered,
+        cancelled,
+    };
+
+    struct WaitRecord {
+        std::uint32_t index = 0;         // self index (free-list return)
+        std::uint32_t generation = 0;    // bumped on reuse before visibility
+        WaitRecordState state = WaitRecordState::free;
+        Fiber* fiber = nullptr;          // caller-owned; valid while suspended
+        WorkerState* owner = nullptr;    // address-stable across runs
+        const void* completion = nullptr;  // diagnostics / cancel identity
+        WaitRecord* next_delivered = nullptr;  // intrusive delivered-list link
+        WaitRecord* next_free = nullptr;       // intrusive free-list link
+    };
+
+    // The Scheduler-owned identity-bearing ReadySink (Phase F1). The arena
+    // invokes it during backend poll/wait_one with NO slot/backend lock held;
+    // it acquires NO Scheduler lock — it marks the matching WaitRecord
+    // delivered under the registry leaf and links it into the delivered list
+    // for the drain (under global_mtx_) to route. It consumes (acknowledges)
+    // the routing lease in every path. Stale/cross-Scheduler tokens and
+    // already-cancelled records drop the lease without routing (Race B/C).
+    class ReadyRoutingSink final : public detail::SynchronousReadySink {
+    public:
+        explicit ReadyRoutingSink(Scheduler* scheduler) noexcept
+            : scheduler_(scheduler) {}
+        void on_ready(detail::ReadyEvent event) noexcept override;
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        // Phase F1 diagnostics (layout cost accepted, AGENTS.md §15): the
+        // identity-route counters. deliveries = events carrying a waiter;
+        // routed = records marked delivered (the fiber will be woken by the
+        // drain); stale_dropped = generation/scheduler-identity mismatches;
+        // cancel_lost = the waiter was already cancelled. Tests use these to
+        // prove the identity path fired and no legacy scan was involved.
+        std::size_t deliveries() const noexcept { return deliveries_; }
+        std::size_t routed() const noexcept { return routed_; }
+        std::size_t stale_dropped() const noexcept { return stale_dropped_; }
+        std::size_t cancel_lost() const noexcept { return cancel_lost_; }
+#endif
+
+    private:
+        Scheduler* scheduler_;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        std::size_t deliveries_ = 0;
+        std::size_t routed_ = 0;
+        std::size_t stale_dropped_ = 0;
+        std::size_t cancel_lost_ = 0;
+#endif
+    };
+
+    // Wake-path drain (Phase F1): polls the backend — the Scheduler-owned
+    // sink marks delivered records during reap — then pops the delivered list
+    // and routes each waiter exactly once (E7-T2 make_runnable + owner
+    // routing). Replaces the O(N) Completion::ready() re-scan. Caller MUST
+    // hold global_mtx_ (the drain's poll runs under G; the sink takes only
+    // the registry leaf, so no deadlock — design §5.3).
+    bool drain_routed_completion_waits_locked() SLUICE_REQUIRES(global_mtx_);
+
+    // Registry helpers. `wait_registry_mtx_` is a leaf domain: code holding
+    // it MUST NOT acquire global_mtx_, access_mtx_, a worker inbox, the wake
+    // mutex, or a backend-progress lock (design §5.2). All callers hold G.
+    WaitRecord* acquire_wait_record_locked(Fiber* fiber, WorkerState* owner,
+                                           const void* completion,
+                                           std::uint64_t& lease_id_out)
+        SLUICE_REQUIRES(global_mtx_);
+    void retire_wait_record_locked(std::uint32_t index) SLUICE_REQUIRES(global_mtx_);
+    std::size_t wait_record_live_count_locked() const SLUICE_REQUIRES(global_mtx_);
 
     // E7-C fixup: explicit global MW-state classification (ADR §9.2.6).
     // Physical run termination may occur for both MW_S3_UNRESOLVED and
@@ -1059,7 +1193,6 @@ private:
         committed,
     };
 
-    bool wake_ready_completions_locked() SLUICE_REQUIRES(global_mtx_);
     bool wake_ready_flags_locked() SLUICE_REQUIRES(global_mtx_);
     void route_runnable(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
     void route_runnable_locked(Fiber* f, WorkerState* owner) SLUICE_REQUIRES(global_mtx_);
@@ -1194,6 +1327,14 @@ private:
 
     // Global coordination state (protected by global_mtx_).
     mutable Mutex global_mtx_;
+    // Phase F1: Completion waits are identity-bearing on RequestArena-backed
+    // backends (the wait registry below, routed via the ReadySink). For a
+    // NON-arena backend (custom AsyncBackend that returns not_supported from
+    // register_waiter — e.g. test-support backends), the Scheduler falls back
+    // to the legacy Completion*-keyed maps + ready() re-scan. The fallback is
+    // provably non-dual: each registration chooses exactly ONE path by the
+    // register_waiter result, a fiber lives in exactly one registry, and the
+    // sink never touches map entries while the scan never touches records.
     std::unordered_map<void*, WaitReg> waiting_size_ SLUICE_GUARDED_BY(global_mtx_){};
     std::unordered_map<void*, WaitReg> waiting_void_ SLUICE_GUARDED_BY(global_mtx_){};
     std::unordered_map<const std::atomic<bool>*, WaitReg> waiting_ready_ SLUICE_GUARDED_BY(global_mtx_){};
@@ -1207,6 +1348,37 @@ private:
     // unresolved for MW classification, and the per-node fiber is recovered
     // from the winning node at resolution time.
     std::size_t waiting_waitq_count_ SLUICE_GUARDED_BY(global_mtx_){0};
+
+    // ---- Phase F1 wait registry (ADR Decision 10; design §4.1/§5) ----
+    // The registry is a LEAF domain: wait_registry_mtx_ is never held while
+    // acquiring global_mtx_, access_mtx_, a worker inbox, the wake mutex, or
+    // a backend-progress lock. Inbound edges only: {global_mtx_, access_mtx_}
+    // -> registry (registration/drain/cancel under G; ReadyRoutingSink under
+    // access_mtx_ during poll/wait_one). Records are address-stable
+    // unique_ptrs; the pool is preallocated at construction to exactly
+    // wait_capacity_ records and NEVER grows beyond that bound (P1-2).
+    // Reuse bumps generation before the new occupant is visible (I6).
+    mutable Mutex wait_registry_mtx_;
+    // Phase F1 P1-2: configured maximum number of WaitRecords. Once
+    // constructed, wait_records_.size() == wait_capacity_ and never changes.
+    const std::size_t wait_capacity_ SLUICE_GUARDED_BY(wait_registry_mtx_){0};
+    std::vector<std::unique_ptr<WaitRecord>> wait_records_
+        SLUICE_GUARDED_BY(wait_registry_mtx_);
+    // Intrusive free list through the records (a vector free-list would
+    // allocate on the drain/route path — banned after acceptance, I9).
+    WaitRecord* wait_record_free_head_ SLUICE_GUARDED_BY(wait_registry_mtx_) = nullptr;
+    WaitRecord* wait_delivered_head_ SLUICE_GUARDED_BY(wait_registry_mtx_) = nullptr;
+    // Live records = registered + delivered (diagnostics / destructor assert).
+    std::size_t wait_record_live_count_ SLUICE_GUARDED_BY(wait_registry_mtx_){0};
+    // Monotonic lease-id serial (0 is the invalid lease id). Guarded by the
+    // registry leaf (lease creation happens under G -> registry).
+    std::uint64_t wait_lease_serial_ SLUICE_GUARDED_BY(wait_registry_mtx_){1};
+    // Per-Scheduler identity stamped into every WaiterToken; distinguishes
+    // Schedulers so a token from another Scheduler can never route here.
+    const std::uint64_t scheduler_identity_;
+    // The Scheduler-owned sink, installed on the context at construction and
+    // detached at destruction.
+    ReadyRoutingSink ready_sink_{this};
 
     // E13 P6: count of SelectGroups whose callers have committed Waiting and
     // whose phase is Armed, but which are not yet Completed (docs/e13-select-
@@ -1841,6 +2013,48 @@ public:
     // Internal-testing access surface. Reached only via the non-installed
     // test-support controller; not part of the public API.
     struct AsyncTestAccess {
+        // Phase F1 (issue #98): identity-routing diagnostics. The
+        // Scheduler-owned ReadyRoutingSink counts deliveries/routes under the
+        // internal-testing build (layout cost accepted, AGENTS.md §15); the
+        // legacy-map probe proves a registration took the identity path (no
+        // Completion*-keyed fallback entry).
+        static std::size_t ready_sink_deliveries(const Scheduler& s) noexcept {
+            return s.ready_sink_.deliveries();
+        }
+        static std::size_t ready_sink_routed(const Scheduler& s) noexcept {
+            return s.ready_sink_.routed();
+        }
+        static std::size_t ready_sink_stale_dropped(const Scheduler& s) noexcept {
+            return s.ready_sink_.stale_dropped();
+        }
+        static std::size_t ready_sink_cancel_lost(const Scheduler& s) noexcept {
+            return s.ready_sink_.cancel_lost();
+        }
+        static std::size_t legacy_completion_wait_count(Scheduler& s) {
+            LockGuard lk(s.global_mtx_);
+            return s.waiting_size_.size() + s.waiting_void_.size();
+        }
+        static std::size_t wait_registry_live_count(Scheduler& s) {
+            LockGuard rlk(s.wait_registry_mtx_);
+            return s.wait_record_live_count_;
+        }
+        static detail::SynchronousReadySink& ready_sink(Scheduler& s) noexcept {
+            return s.ready_sink_;
+        }
+        static std::uint64_t scheduler_identity(const Scheduler& s) noexcept {
+            return s.scheduler_identity_;
+        }
+
+        // Phase F1 P1-2: bounded WaitRecord pool introspection (test-only).
+        static std::size_t configured_wait_capacity(const Scheduler& s) {
+            LockGuard rlk(s.wait_registry_mtx_);
+            return s.wait_capacity_;
+        }
+        static std::size_t wait_record_storage_size(const Scheduler& s) {
+            LockGuard rlk(s.wait_registry_mtx_);
+            return s.wait_records_.size();
+        }
+
         // Enable the deterministic logical clock (test mode).
         static void enable_test_clock(Scheduler& s) noexcept {
             s.test_clock_mode_.store(true, std::memory_order::release);

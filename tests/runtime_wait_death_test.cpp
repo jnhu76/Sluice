@@ -58,7 +58,7 @@ void child_idle_await() {
     auto sub_r = rt->submit([&](RuntimeTaskContext& ctx) {
         Completion<T> c;  // default-idle
         barrier.store(true, std::memory_order::release);
-        ctx.await_completion(c);  // assert fires here; never returns
+        (void)ctx.await_completion(c);  // assert fires here; never returns
         std::_Exit(sluice_death_test::kUnexpectedReturnExit);
     });
     if (!sub_r.has_value()) {
@@ -110,7 +110,7 @@ void child_ctl_valid_await() {
         if (!rsr.has_value()) {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }
-        ctx.await_completion(c);  // valid: outstanding, completed by backend
+        (void)ctx.await_completion(c);  // valid: outstanding, completed by backend
         if (!c.ready()) {
             std::_Exit(sluice_death_test::kChildTestFailExit);
         }

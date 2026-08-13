@@ -33,7 +33,8 @@ ApplicationRuntime (E16)
 │   ├── global_mtx_ (coordination domain)
 │   ├── WorkerState[] (per-worker execution state)
 │   ├── wake_cv_ / wake_mtx_ / wake_epoch_ (E9 park/wake)
-│   ├── waiting_completion_ map (Completion-backed waits)
+│   ├── WaitRecord pool (preallocated, identity-bearing waits, Phase F1)
+│   ├── waiting_completion_ map (legacy fallback, non-arena backends only)
 │   ├── waiting_ready_ map (persistent-readiness waits)
 │   ├── WaitQueue / WaitNode (E10 cancellation-safe waits)
 │   ├── TimerRegistration heap (E11 deadlines)
@@ -267,22 +268,26 @@ RuntimeTaskFn(RuntimeTaskContext& ctx)
 → ctx.await_completion(c)
     → Scheduler::await_completion_size(c)
         → lock global_mtx_
-        → if c.ready(): return inline (no suspend)
-        → register in waiting_completion_ map {&c → WaitReg{fiber, owner_worker}}
-        → make_waiting(fiber)
+        → acquire WaitRecord from preallocated pool (free-list pop)
+           if nullptr: return IoError::no_space (pool exhausted)
+        → register arena waiter (WaiterToken + RoutingLease)
+           legacy fallback: waiting_size_ map if backend returns not_supported
+        → commit_suspend_locked(fiber)
         → context_switch(fiber → scheduler continuation)
         → (Fiber suspended)
 
 ... later, on backend progress ...
 
 Scheduler worker loop:
-→ ctx_.poll() (under access_mtx_)
-→ wake_ready_completions_locked()
-    → scan waiting_completion_ map
-    → for each: if c.ready(): erase registration, make_runnable(fiber), route
+→ drain_routed_completion_waits_locked() (under global_mtx_)
+    → ctx_.poll() (under access_mtx_)
+       → arena.reap(sink) invokes ReadyRoutingSink.on_ready()
+       → sink marks record delivered under wait_registry_mtx_
+    → pop delivered list under wait_registry_mtx_
+    → per record: make_runnable(fiber), route_runnable_locked(fiber, owner)
 → (routed Fiber resumes on owning worker)
 → Fiber returns from context_switch
-→ await_completion returns
+→ await_completion returns (reads frozen CompletionWaitOutcome)
 → task reads c.result()
 ```
 
@@ -338,6 +343,16 @@ In the current implementation:
   - `wait_one()` return during MW-S2 backend-domain park
   - 2ms observation interval expiry during MIXED-WAKE Scheduler-domain park
 - External producers signal via `SchedulerWakeHandle::notify()` → wake epoch
+- **Phase F1 (issue #98) identity route:** an arena-backed reap with a
+  registered Scheduler waiter calls the Scheduler-owned `ReadyRoutingSink`
+  with the by-value `ReadyEvent`; the sink only marks the record delivered
+  (leaf `wait_registry_mtx_`, allocation-free). The worker-loop drain then
+  pops the delivered records under `global_mtx_` and routes each fiber via
+  `route_runnable_locked` (which signals the wake epoch) — the reap itself
+  never wakes the Scheduler directly, and a delivery is never lost to the
+  drain: delivered-list publication happens under `wait_registry_mtx_`, and
+  both the MW-S1 loop-top drain and the MW-S2/MW-S3 park-return drains
+  observe it before parking/terminating.
 
 ---
 
@@ -407,7 +422,8 @@ shutdown()
 | Completion objects | Caller | caller-managed | caller decides | caller | No (by contract) | No | N/A | caller |
 | workers_ vector | ThreadPoolBackend | backend lifetime | UNBOUNDED | **No** | Yes (cumulative ops) | No (reap-time) | N/A | destructor |
 | ready_size_/ready_void_ deques | ThreadPoolBackend | backend lifetime | outstanding ops | Bounded by outstanding | Yes | **Yes** (push_back) | bad_alloc (unhandled) | drained at reap |
-| waiting_completion_ map | Scheduler | Scheduler lifetime | outstanding waits | Bounded by fibers | Yes | Yes (registration) | N/A | assert empty |
+| WaitRecord pool (`wait_records_` + free list, R) | Scheduler | Scheduler lifetime | `wait_capacity` (default 256) | Yes (fixed) | No (preallocated) | No (free-list pop) | `no_space` on exhaustion | all records freed at `~Scheduler` (assert) |
+| waiting_completion_ map (legacy fallback) | Scheduler | Scheduler lifetime | outstanding waits | Bounded by fibers | Yes (legacy only) | Yes (registration, legacy path only) | N/A | assert empty |
 | waiting_ready_ map | Scheduler | Scheduler lifetime | registered waits | Bounded by fibers | Yes | Yes (registration) | N/A | assert empty |
 | wake_cv_ / wake_mtx_ | Scheduler | Scheduler lifetime | 1 | Yes | No | No | N/A | destructor |
 | Fiber stacks | Group / caller | per-task | 64 KiB each | Bounded by tasks | Yes (per task) | Yes (new) | bad_alloc | Group destructor |
@@ -454,7 +470,7 @@ wake_mtx_ (Scheduler park/wake)
 | Completion publication to ready | poll()/wait_one() ONLY (A3/O1) | ADR-async-io-model §6 |
 | Request identity | Completion pointer and backend-specific records; no common context/slot/generation key | `completion.hpp`; backend sources; **`b20bcc7` baseline row** — P1-06 is since CLOSED (Phase B reference, Phase E ThreadPool, Phase D Uring: per-slot Generation + stale-key rejection) and the request-contract ADR is ACCEPTED (`ADR-explicit-io-request-contract`); the current identity owner is the shared `detail::RequestArena` / `RequestSlot` on all four backends (§9, §2.2/§2.3). |
 | Request capacity | No common bounded RequestSlot arena | ThreadPool is unbounded; ring depth is not request capacity; Fake/Sync have no configured capacity. |
-| Identity-bearing reap | Not implemented; poll/wait_one return a count | Scheduler and Batch recover identity by scanning/reap sequence; P1-07 remains open. |
+| Identity-bearing reap | Not implemented at the `b20bcc7` baseline; poll/wait_one return a count | Scheduler and Batch recover identity by scanning/reap sequence; P1-07 was open. **Since closed**: the arena owns identity-bearing reap on all four backends (§9) and Phase F1 makes the PRODUCTION Scheduler its consumer (§9 F1 delta, `docs/design/phase-f1-scheduler-ready-sink.md`). |
 | Backend admission gate | ThreadPoolBackend::accepting_new_work() | `threadpool_backend.hpp:159` |
 | Scheduler wake (external) | SchedulerWakeHandle::notify() | `scheduler.hpp:107` |
 | Scheduler wake (internal) | route_runnable_locked → wake epoch | E9 ADR §9.4.4 |
@@ -500,6 +516,54 @@ P1-09 (arena), P1-10, P2-03. See `current-architecture-findings.md` summary
 table and `phase-b-compliance-gate.md` for the evidence ledger. Production
 backend migration is complete: ThreadPool in Phase E (PR #64 — see
 `phase-e-compliance-gate.md` and §2.2) and Uring in Phase D (PR #78/#80/#83/#84
-— see `phase-d4-uring-wait-close-drain-gate.md` and §2.3). The remaining
-integration work is Scheduler/Batch consumption of the identity-bearing reap
-(Phase F, issue #98) and the backend-ready wake bridge (Phase G).
+— see `phase-d4-uring-wait-close-drain-gate.md` and §2.3).
+
+### 9.1 Phase F1 delta — production Scheduler consumes identity-bearing reap
+
+> Added by Phase F1 (issue #98; `docs/design/phase-f1-scheduler-ready-sink.md`,
+> `docs/architecture/phase-f1-compliance-gate.md`). This is the first
+> PRODUCTION consumer of the arena's identity-bearing reap: the Scheduler no
+> longer recovers identity by scanning `Completion*`-keyed maps and re-checking
+> `c->ready()`.
+
+- **Registration.** `Scheduler::await_completion_size/void` now creates a
+  Scheduler wait record (`WaitRecord` in a bounded intrusive free-list
+  registry) and registers a REAL arena waiter on the accepted request:
+  `WaiterToken{scheduler_identity, record_index, record_generation}` plus a
+  `RoutingLease::pinning` that pins the record. The arena leaf (under
+  `global_mtx_` → `access_mtx_`) arbitrates registration against reap
+  extraction exactly once. Non-arena backends (`register_waiter` →
+  `not_supported`) keep the legacy `Completion*`-keyed maps as a DISJOINT
+  fallback — never a second authority on the identity path.
+- **Delivery.** The backend reap (Fake/Sync/ThreadPool/Uring) calls the
+  Scheduler-owned `ReadyRoutingSink` (installed via
+  `AsyncIoContext::set_ready_sink`) with the by-value `ReadyEvent{key, kind,
+  OptionalWaiterDelivery{token, lease}}`; the sink validates scheduler
+  identity + record generation, then links the record into the delivered list
+  (allocation-free; no user code under the sink lock).
+- **Routing.** The worker-loop drain (`drain_routed_completion_waits_locked`,
+  under `global_mtx_`) pops delivered records and routes the fiber exactly
+  once via the canonical `route_runnable_locked` — the Scheduler remains the
+  sole fiber-routing authority. Reap-won and cancel-won races resolve through
+  the same record terminality (I16/I4).
+- **Waiter cancellation.** `Scheduler::cancel_waiter` (and the production
+  caller `RuntimeTaskContext::cancel_waiter`, ADR Decision 10) removes ONLY
+  the waiter: the arena leaf races cancel against reap; on cancel-win the
+  pinned record is retired and the fiber is woken with the wait-cancelled
+  outcome while the I/O, borrow, and terminal result stay untouched (I5).
+- **Lock order.** The registry adds the LEAF `wait_registry_mtx_` (R):
+  G→A (existing), G→R (registration/drain/cancel); the sink takes only R;
+  R never precedes G/A. No join, allocation, syscall, or user code under R.
+- **Shutdown.** `~Scheduler` fail-fasts when `wait_record_live_count_ != 0`
+  (a registered waiter neither delivered nor cancelled — abandoned wake
+  obligation; Debug and Release).
+- **Tests.** `tests/scheduler_identity_wake_test.cpp` (T1–T10: routing,
+  completion-before-registration inline return, exactly-once wake,
+  waiter-cancel keeps I/O, cancel-vs-reap race, stale-generation drop,
+  duplicate-waiter invalid_state, shutdown convergence, SyncBackend and
+  ThreadPoolBackend routing), `tests/scheduler_identity_wake_death_test.cpp`
+  (registry-nonempty destruction fail-fast), and the real-liburing
+  `uring_f1_scheduler_routing` case.
+
+Remaining after F1: F2 (Batch origin flag), F3 (public RequestHandle/waiter
+API surface — API ADR required), and the backend-ready wake bridge (Phase G).

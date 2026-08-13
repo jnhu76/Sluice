@@ -63,7 +63,7 @@ SLUICE_TEST_CASE(sched_single_worker_scheduler_liveness) {
         SLUICE_CHECK(ctx.submit_read(ReadOp{-1, a_buf, 4, 0}, a_c).has_value());
         SLUICE_CHECK(a_c.outstanding());
         a_pre_token = 0xABCD1234;  // local that must survive suspension
-        sched.await_completion_size(a_c);
+        (void)sched.await_completion_size(a_c);
         // RESUMED here after the scheduler observed completion.
         a_post_token = a_pre_token;
         a_resumed = 1;
@@ -126,7 +126,7 @@ SLUICE_TEST_CASE(sched_completion_resumes_waiting_fiber) {
     fiber_a.set_entry([&](Fiber&) {
         SLUICE_CHECK(ctx.submit_read(ReadOp{-1, a_buf, 4, 0}, a_c).has_value());
         a_pre = 0xBEEF;
-        sched.await_completion_size(a_c);
+        (void)sched.await_completion_size(a_c);
         a_post = a_pre;       // RESUME FIDELITY: local survived
         a_resumed = 1;
         if (a_c.ready()) a_observed = static_cast<int>(a_c.result().value_or(0));
@@ -177,7 +177,7 @@ SLUICE_TEST_CASE(sched_exactly_once_runnable_transition) {
     fiber_a.set_entry([&](Fiber&) {
         ++a_entry_runs;
         SLUICE_CHECK(ctx.submit_read(ReadOp{-1, a_buf, 4, 0}, a_c).has_value());
-        sched.await_completion_size(a_c);
+        (void)sched.await_completion_size(a_c);
         ++a_suspension_resumes;  // should fire exactly once
     });
     // Release A's op from the scheduler's perspective: we arrange it so that
@@ -223,7 +223,7 @@ SLUICE_TEST_CASE(sched_runnable_not_starved_by_pending) {
     Fiber fiber_a;
     fiber_a.set_entry([&](Fiber&) {
         SLUICE_CHECK(ctx.submit_read(ReadOp{-1, a_buf, 4, 0}, a_c).has_value());
-        sched.await_completion_size(a_c);  // never released in this test
+        (void)sched.await_completion_size(a_c);  // never released in this test
     });
     Fiber fiber_b;
     fiber_b.set_entry([&](Fiber&) {

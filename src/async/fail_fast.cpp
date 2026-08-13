@@ -78,6 +78,19 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+// Phase F1: wait-registry invariant violation (issue #98). A record state
+// transition outside free -> registered -> {delivered | cancelled} -> free,
+// or an out-of-range record index from a lease pin. Impossible protocol state.
+[[noreturn]] void scheduler_wait_registry_invariant_fail_fast() noexcept {
+    std::terminate();
+}
+
+// Phase F1: Scheduler destroyed with a non-quiescent wait registry — a
+// registered Completion waiter was neither delivered nor cancelled.
+[[noreturn]] void scheduler_wait_registry_nonempty_fail_fast() noexcept {
+    std::terminate();
+}
+
 // Completion publication authority fail-fast. A Completion state transition
 // violated the authority model (reset on outstanding/publishing, destroy
 // outstanding/publishing, losing publish CAS, rollback on a non-outstanding

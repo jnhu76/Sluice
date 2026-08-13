@@ -112,6 +112,24 @@ class ThreadPoolBackend : public AsyncBackend {
     void cancel(Completion<std::size_t>& c) override;
     void cancel(Completion<void>& c) override;
 
+    // Phase F1 (issue #98): production waiter registration / cancellation
+    // (ADR Decision 10), forwarded verbatim to the REAL arena authorities
+    // through the same resolve_completion identity bridge as cancel. No
+    // side-band waiter map. register_waiter: success, or invalid_state for a
+    // second registration / a non-accepted-or-already-reaped slot; not_found
+    // for an unresolvable (unbound, cross-context, stale) Completion.
+    // cancel_waiter: removes ONLY the waiter (never the I/O, never the borrow)
+    // and returns the moved-out lease, or not_found when reap already closed
+    // the registration.
+    Result<void> register_waiter(Completion<std::size_t>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease) override;
+    Result<void> register_waiter(Completion<void>& c,
+                                 detail::WaiterToken token,
+                                 detail::RoutingLease lease) override;
+    Result<detail::RoutingLease> cancel_waiter(Completion<std::size_t>& c) override;
+    Result<detail::RoutingLease> cancel_waiter(Completion<void>& c) override;
+
     std::size_t outstanding() const noexcept override;
 
     // Issue #67 split-phase wait capability: the backend's ready wait is a

@@ -317,6 +317,22 @@ sluice_internal_async_test("backend_scheme_b_race_test")
 -- borrow_for_test / waiter_for_test observation seams.
 sluice_internal_async_test("request_waiter_borrow_lease_test")
 
+-- scheduler_identity_wake_test — Phase F1 (issue #98): the production
+-- Scheduler consumes identity-bearing reap. Proves: await_completion registers
+-- a REAL arena waiter (token + routing lease) + Scheduler routing record and
+-- the wake arrives through the Scheduler-owned ReadyRoutingSink (no
+-- Completion*-keyed map, no O(N) ready() re-scan on the production path);
+-- completion-before-registration inline return (Race A, no lost wake);
+-- exactly-once routing with no double wake on repeat reap; cancel_waiter
+-- removes ONLY the waiter (I5) while the I/O still terminals + reaps;
+-- cancel_waiter-vs-reap exactly-once (200-iteration soak); stale record
+-- generation cannot wake a new occupant (Race C); duplicate waiter ->
+-- synchronous invalid_state (I13); shutdown convergence (registry empty at
+-- destruction); and the same identity contract on Fake/Sync/ThreadPool.
+-- Links sluice_async_internal_testing for the ReadySink route counters and
+-- the legacy-map probe (AsyncTestAccess).
+sluice_internal_async_test("scheduler_identity_wake_test")
+
 -- backend_c2c_waiter_borrow_test — Phase C2c FakeAsyncBackend integration
 -- (rows 11-14). Proves the REAL Fake submit path carries the exact borrow
 -- metadata active, that the waiter seam routes a real accepted Completion

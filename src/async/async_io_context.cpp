@@ -314,6 +314,48 @@ void AsyncIoContext::cancel(Completion<void>& c) {
     backend_->cancel(c);
 }
 
+void AsyncIoContext::set_ready_sink(detail::SynchronousReadySink* sink) {
+    // Serialized against an in-flight poll/reap (the sink is read by the
+    // backend's reap call sites under access_mtx_).
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (backend_) backend_->attach_ready_sink(sink);
+}
+
+Result<void> AsyncIoContext::register_waiter(Completion<std::size_t>& c,
+                                             detail::WaiterToken token,
+                                             detail::RoutingLease lease) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    return backend_->register_waiter(c, token, std::move(lease));
+}
+Result<void> AsyncIoContext::register_waiter(Completion<void>& c,
+                                             detail::WaiterToken token,
+                                             detail::RoutingLease lease) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+    }
+    return backend_->register_waiter(c, token, std::move(lease));
+}
+Result<detail::RoutingLease> AsyncIoContext::cancel_waiter(Completion<std::size_t>& c) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<detail::RoutingLease>(
+            IoError{IoError::Code::invalid_state});
+    }
+    return backend_->cancel_waiter(c);
+}
+Result<detail::RoutingLease> AsyncIoContext::cancel_waiter(Completion<void>& c) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_) {
+        return make_unexpected<detail::RoutingLease>(
+            IoError{IoError::Code::invalid_state});
+    }
+    return backend_->cancel_waiter(c);
+}
+
 std::size_t AsyncIoContext::outstanding() const noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
     return backend_ ? backend_->outstanding() : 0;

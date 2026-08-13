@@ -45,6 +45,17 @@ enum class FiberState : std::uint8_t {
     done,       // terminal; result published; never scheduled again
 };
 
+// Phase F1 P1-1 (issue #98, PR #105 review): frozen wait-outcome carrier.
+// The winning path (reap drain or cancel_waiter) writes the outcome BEFORE
+// calling make_runnable; the fiber reads it AFTER resume. This eliminates the
+// race where c.ready() may return true even though cancel won the arena race
+// (the I/O completed concurrently after cancel set the fiber runnable).
+enum class CompletionWaitOutcome : std::uint8_t {
+    pending,    // default / not yet resolved by a winner
+    completed,  // reap won — Completion is ready
+    canceled,   // cancel_waiter won — wait was cancelled
+};
+
 // A minimal user task: state + entry + cancel state + a context slot.
 //
 // The entry function is the task body. On a real scheduler (E4), a worker
@@ -139,15 +150,30 @@ public:
     // is_runtime_task() self-close detection. Do NOT add a public setter.
     void* execution_tag() const noexcept { return execution_tag_; }
 
+    // Phase F1 P1-1: read the frozen wait-outcome after resume. The winner
+    // (drain or cancel_waiter) wrote this BEFORE make_runnable; the fiber reads
+    // it AFTER context_switch returns. This replaces the racy c.ready() check.
+    CompletionWaitOutcome completion_wait_outcome() const noexcept {
+        return completion_wait_outcome_;
+    }
+
 private:
     friend class Scheduler;  // C2: sole write authority for execution_tag_.
     void set_execution_tag(void* tag) noexcept { execution_tag_ = tag; }
+
+    // Phase F1 P1-1: sole write authority for the frozen wait-outcome.
+    // Written by the Scheduler's winning path (drain or cancel_waiter) BEFORE
+    // make_runnable; read by the fiber after resume. Never written by user code.
+    void set_completion_wait_outcome(CompletionWaitOutcome o) noexcept {
+        completion_wait_outcome_ = o;
+    }
 
     std::atomic<FiberState> state_{FiberState::created};
     Entry entry_{};
     CancelToken token_{};
     CancelState cstate_{};
     void* execution_tag_{nullptr};
+    CompletionWaitOutcome completion_wait_outcome_{CompletionWaitOutcome::pending};
 public:
     // The fiber's saved CPU context (sp/fp/pc). Filled by fiber_ctx::init_context
     // before the first run; updated by context_switch each time the fiber
