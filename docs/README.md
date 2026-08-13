@@ -11,6 +11,8 @@ semantics.
 | **Public API contract** | [`docs/api-reference.md`](api-reference.md) |
 | **Accepted Architecture Decisions** | [`docs/adr/README.md`](adr/README.md) |
 | **Current architecture** | [`docs/architecture/overview.md`](architecture/overview.md) |
+| **Zig `std.Io` conformance map** | [`docs/architecture/zig-io-conformance-map.md`](architecture/zig-io-conformance-map.md) |
+| **Remediation roadmap** | [`docs/architecture/remediation-roadmap.md`](architecture/remediation-roadmap.md) |
 | **Proposed/unapproved designs** | [`docs/design/README.md`](design/README.md) |
 | **Testing and verification** | [`docs/verification/README.md`](verification/README.md) |
 | **Active roadmap** | [`docs/roadmap/README.md`](roadmap/README.md) |
@@ -49,6 +51,7 @@ Statuses: **Implemented** (production headers + sources + tests), **Experimental
 | Future / Group | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`future_test`](../tests/future_test.cpp), [`group_test`](../tests/group_test.cpp) | Implemented |
 | Completion / AsyncIoContext | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`async_io_context_test`](../tests/async_io_context_test.cpp) | Implemented |
 | Batch | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`batch_test`](../tests/batch_test.cpp) | Implemented |
+| ApplicationRuntime / RuntimeTaskContext | [`async-io-foundation.md`](architecture/async-io-foundation.md) | [ADR-application-runtime.md](adr/ADR-application-runtime.md) | [`application_runtime_test`](../tests/application_runtime_test.cpp) | Implemented |
 | ThreadPoolBackend | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`threadpool_backend_test`](../tests/threadpool_backend_test.cpp) | Implemented |
 | UringAsyncBackend | [`async-io-foundation.md`](architecture/async-io-foundation.md) | ADR-async-io-model | [`uring_backend_test`](../tests/uring_backend_test.cpp) | Experimental |
 

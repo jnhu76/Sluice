@@ -2,8 +2,9 @@
 
 **Baseline:** `b20bcc7` (master, including PR #60 and PR #61). Findings retain
 their original audit evidence where useful and include explicit resolved notes
-for PR #61, the Phase B reference layer (PR #63), and the Phase E blocking
-backend (PR #64). No target contract is treated as implementation evidence.
+for PR #61, the Phase B reference layer (PR #63), the Phase E blocking
+backend (PR #64), and the Phase D Uring migration (PR #78/#80/#83/#84,
+2026-08-09..11). No target contract is treated as implementation evidence.
 
 Severity:
 - **P0** — correctness/liveness: accepted op may be permanently lost or process
@@ -18,15 +19,15 @@ Severity:
 
 [ADR-explicit-io-request-contract](../adr/ADR-explicit-io-request-contract.md)
 now supplies a concrete target for the remaining request-lifecycle findings.
-The ADR is Accepted (2026-08-02); the reference layer (Phase B, PR #63) and
-`ThreadPoolBackend` (Phase E, PR #64) implement it, and findings resolved by
-those merges carry resolution notes below (see the Summary table). Open
-findings remain open.
+The ADR is Accepted (2026-08-02); the reference layer (Phase B, PR #63),
+`ThreadPoolBackend` (Phase E, PR #64), and `UringAsyncBackend` (Phase D,
+PR #78/#80/#83/#84) implement it, and findings resolved by those merges carry
+resolution notes below (see the Summary table). Open findings remain open.
 
 | Open finding | Target decision | Required follow-up evidence |
 |---|---|---|
 | P0-01, P2-03 | Pre-reserved result/ready linkage; no post-accept unbounded-allocation dependency | RESOLVED — Phase B/C reference terminal-path proof + Phase E (PR #64): ThreadPool post-commit path is allocation-free (see P0-01/P2-03 notes) |
-| P0-02, P1-04 | Five-stage admission; pre-commit failure rejects, post-commit dispatch failure completes | RESOLVED at the reference layer (Phase B) and for ThreadPool (Phase E, PR #64); Uring remains open (Phase D) — see P0-02/P1-04 notes |
+| P0-02, P1-04 | Five-stage admission; pre-commit failure rejects, post-commit dispatch failure completes | RESOLVED at the reference layer (Phase B), for ThreadPool (Phase E, PR #64), and for Uring (Phase D, PR #78/#80/#83/#84) — see P0-02/P1-04 notes |
 | P1-02, P1-07 | Distinct backend-ready/completion-ready plus synchronous pointer-free `ReadyEvent`/`ReadySink` delivery | Phase B/C reset/reuse-during-sink proof, Phase F Scheduler/Batch consumption |
 | P1-05 | `invalid_state`, `would_block`, and `no_space` are distinct; capacity rejects have their own metric | Phase B implementation and stats contract tests |
 | P1-06, P1-10 | `(context, slot, generation)` identity, private Completion `binding` transient, RequestSlot-owned stable waiter token/routing lease | Phase B/C cross-context binding/generation/fake-lease tests; Phase F Runtime/Scheduler lifetime and routing |
@@ -160,6 +161,18 @@ Scheduler/Batch consumption. The ADR decision alone is not resolution evidence.
 ---
 
 ## P0-02: Cross-Backend Transactional Submit Defect (No Unified Admission Contract)
+
+> **Phase D resolution (PR #78/#80/#83/#84):** RESOLVED for Uring. The
+> post-claim `register_op` allocation window is gone: Uring now runs the same
+> five-stage `RequestArena` admission as the other backends (reserve → prepare →
+> Stage 1.5 descriptor validation → two-stage binding → commit → enqueue →
+> dispatch) with generation-safe cookie-routed `user_data` on a single private
+> ring, a `TransportLedger` preserving unsubmitted suffixes after partial submit
+> (P0-D recovery), and accepted-terminal paths that allocate nothing. The
+> finding text below describes the pre-Phase-D legacy model and is retained as
+> the historical audit record. Evidence: `docs/architecture/phase-d2-uring-failure-noalloc-gate.md`,
+> `phase-d4-uring-wait-close-drain-gate.md`; real-liburing conformance run
+> (audit issue #94): KernelIo ELIGIBLE.
 
 **Current finding:** PR #61 made claim authority atomic and added a narrow
 pre-accept rollback capability, but the backend family still lacks one bounded
@@ -388,6 +401,14 @@ authority leak.
 ---
 
 ## P1-06: No Request Generation — ABA on Completion Reuse
+
+> **Phase D resolution (PR #83):** RESOLVED for Uring. Generation safety now
+> covers all four backends: `SQE.user_data` carries a 64-bit op cookie
+> (generation-safe; `uring_backend.cpp:101-119`), and the arena's per-slot
+> `Generation` increment-on-release rejects stale keys across every post-reserve
+> authority (C2b real-mode evidence, `phase-d3-uring-identity-waiter-gate.md`).
+> The finding text below describes the pre-Phase-B/D state and is retained as
+> the historical audit record.
 
 **Finding:** Completion address is the sole logical identity for an operation
 across all async phases. Completions can be reset and reused. The same address
@@ -806,14 +827,14 @@ with subsystem prefix in documentation.
 | ID | Severity | Area | Status |
 |----|----------|------|--------|
 | P0-01 | P0 | Worker OOM → terminate | RESOLVED — Phase E (PR #64): fixed construction-time worker pool; worker post-commit terminal path allocates nothing (see section note; phase-e gate Slices 5/12) |
-| P0-02 | P0 | Cross-backend transactional submit | Reference-layer CLOSED (Phase B round 2: bounded RequestArena + five-stage admission on Fake/Sync; the Completion publication binding lives IN the RequestSlot record (no parallel map), the fake's submission-order FIFO is a construction-time bounded ring, and the Completion-ready release-store happens INSIDE the leaf domain (single-domain reap) — pre-commit bookkeeping is transactional and the accepted path performs ZERO allocations (proven by counting + always-throw operator new in `reference_backend_no_alloc_test.cpp`); a lost binding CAS leaves Completion/slot/FIFO/counters untouched with no result contamination); ThreadPool transactional admission RESOLVED (Phase E, PR #64 — `would_block` at capacity, pre-commit rollback, no borrow); Uring open (Phase D — register_op allocation after claim) |
+| P0-02 | P0 | Cross-backend transactional submit | Reference-layer CLOSED (Phase B round 2: bounded RequestArena + five-stage admission on Fake/Sync; the Completion publication binding lives IN the RequestSlot record (no parallel map), the fake's submission-order FIFO is a construction-time bounded ring, and the Completion-ready release-store happens INSIDE the leaf domain (single-domain reap) — pre-commit bookkeeping is transactional and the accepted path performs ZERO allocations (proven by counting + always-throw operator new in `reference_backend_no_alloc_test.cpp`); a lost binding CAS leaves Completion/slot/FIFO/counters untouched with no result contamination); ThreadPool transactional admission RESOLVED (Phase E, PR #64 — `would_block` at capacity, pre-commit rollback, no borrow); Uring RESOLVED (Phase D, PR #78/#80/#83/#84 — five-stage arena admission, cookie-routed `user_data`, TransportLedger partial-submit preservation, allocation-free accepted terminal; real-mode evidence, KernelIo ELIGIBLE) |
 | P0-03 | P0 | Completion publication authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 |
 | P1-01 | P1 | Completion claim authority | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (backend is claim authority) |
 | P1-02 | P1 | Backend-ready vs completion-ready | Reference-layer CLOSED (Phase B: distinct `backend_ready` vs `completion_ready` slot states + enqueue-in-flight pin reap-ineligibility); Phase F Scheduler integration pending |
 | P1-03 | P1 | SyncBackend cancel publication | RESOLVED — ADR-explicit-io-completion-authority / PR #61 (cancel records intent; reap publishes) |
 | P1-04 | P1 | Spawn failure lacks explicit admission boundary | RESOLVED — Phase E (PR #64): workers created only at construction; ctor failure stops/joins started workers and rethrows (see section note; phase-e gate Slice 11) |
 | P1-05 | P1 | queue_full_retries semantic conflation | Reference-layer CLOSED (Phase B round 2: distinct `slot_in_use` vs `accepted_outstanding` vs `capacity_rejections` counters on the arena; capacity pressure propagates as `would_block` — never `invalid_state` — and tallies `queue_full_retries`, while caller lifecycle violations (`invalid_state`) tally the new `AsyncStats::invalid_state_rejections` — the two are never conflated); Phase C metrics integration pending |
-| P1-06 | P1 | No request generation (ABA) | Reference-layer CLOSED (Phase B: per-slot Generation incremented on release before reuse; stale-key rejection proven across every post-reserve authority); ThreadPool generation-safe as of Phase E (PR #64); Uring migration open for Phase D |
+| P1-06 | P1 | No request generation (ABA) | Reference-layer CLOSED (Phase B: per-slot Generation incremented on release before reuse; stale-key rejection proven across every post-reserve authority); ThreadPool generation-safe as of Phase E (PR #64); Uring RESOLVED (Phase D, PR #83 — C2b real-mode evidence; cookie-routed `user_data`) |
 | P1-07 | P1 | Reap API discards completion identity | Reference-layer CLOSED (Phase B: identity-bearing SynchronousReadySink delivers by-value ReadyEvent{RequestKey, OperationKind, OptionalWaiterDelivery}); Phase F Scheduler integration pending |
 | P1-08 | P1 | wait_one holds lock, blocks cancel | Focused concurrency design before Phase F L1 integration |
 | P1-09 | P1 | Cancel API not explicit | Reference-layer CLOSED at arena (Phase B: RequestKey-targeted cancel returns CancelDisposition); public-API change deferred to a later ADR |
