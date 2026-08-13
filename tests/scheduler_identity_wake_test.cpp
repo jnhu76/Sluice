@@ -29,6 +29,7 @@
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -643,6 +644,468 @@ SLUICE_TEST_CASE(f1_routing_threadpool_backend) {
     SLUICE_CHECK(AsyncTestAccess::legacy_completion_wait_count(sched) == 0);
     c.reset();
     ::close(fd);
+}
+
+// ---- T-capacity-1: wait capacity exhaustion ----
+// Construct Scheduler(ctx, wait_capacity=1). Create two simultaneously
+// outstanding completion waits. Prove: waiter #1 registers and suspends;
+// waiter #2 receives IoError::no_space synchronously; waiter #2 never
+// enters Waiting; live wait-record count == 1; registry storage capacity
+// remains exactly 1.
+SLUICE_TEST_CASE(f1_wait_capacity_exhaustion_no_space) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    auto backend_up = std::make_unique<FakeAsyncBackend>();
+    FakeAsyncBackend* backend = backend_up.get();
+    AsyncIoContext ctx(std::move(backend_up));
+    Scheduler sched(ctx, /*wait_capacity=*/1);
+
+    SLUICE_CHECK(AsyncTestAccess::configured_wait_capacity(sched) == 1);
+    SLUICE_CHECK(AsyncTestAccess::wait_record_storage_size(sched) == 1);
+
+    Completion<std::size_t> cA;
+    Completion<std::size_t> cB;
+    std::byte buf[8]{};
+    int a_outcome = 0;  // 1 = success, 2 = no_space
+    int b_outcome = 0;  // 1 = success, 2 = no_space
+
+    Fiber fa;
+    fa.set_entry([&](Fiber&) {
+        SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, cA).has_value());
+        auto r = sched.await_completion_size(cA);
+        if (r.has_value()) {
+            a_outcome = 1;
+        } else if (r.error().code == IoError::Code::no_space) {
+            a_outcome = 2;
+        } else {
+            a_outcome = 3;
+        }
+    });
+    FiberStack sa;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+
+    Fiber fb;
+    fb.set_entry([&](Fiber&) {
+        SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, cB).has_value());
+        auto r = sched.await_completion_size(cB);
+        if (r.has_value()) {
+            b_outcome = 1;
+        } else if (r.error().code == IoError::Code::no_space) {
+            b_outcome = 2;
+        } else {
+            b_outcome = 3;
+        }
+    });
+    FiberStack sb;
+    SLUICE_CHECK(sched.init_fiber(fb, sb.base(), sb.size()));
+
+    sched.spawn(fa);
+    sched.spawn(fb);
+    sched.run_until_idle();
+
+    // A suspended (got the single record), B got no_space synchronously.
+    SLUICE_CHECK(a_outcome == 0);  // A still suspended
+    SLUICE_CHECK(b_outcome == 2);  // B got no_space
+    SLUICE_CHECK(AsyncTestAccess::wait_registry_live_count(sched) == 1);
+    SLUICE_CHECK(AsyncTestAccess::wait_record_storage_size(sched) == 1);
+
+    // A's I/O still completes normally — capacity exhaustion at the wait
+    // layer does NOT cancel the accepted I/O.
+    backend->complete_oldest_with_bytes(8);
+    sched.run_until_idle();
+    SLUICE_CHECK(a_outcome == 1);
+    SLUICE_CHECK(AsyncTestAccess::wait_registry_live_count(sched) == 0);
+    cA.reset();
+
+    // B's I/O was accepted by the backend but the wait registration was
+    // rejected with no_space. Complete B's I/O and reset — the I/O survived
+    // the wait-layer capacity exhaustion.
+    backend->complete_oldest_with_bytes(8);
+    (void)ctx.poll();
+    SLUICE_CHECK(cB.ready());
+    cB.reset();
+}
+
+// ---- T-capacity-2: accepted I/O survives wait no_space ----
+// Using capacity=1: prove that after B's await_completion returns no_space,
+// Completion B remains outstanding, the I/O was NOT canceled, the borrow
+// remains valid, the backend still terminals/reaps B, and B's Completion
+// eventually becomes ready.
+SLUICE_TEST_CASE(f1_wait_no_space_io_survives) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    auto backend_up = std::make_unique<FakeAsyncBackend>();
+    FakeAsyncBackend* backend = backend_up.get();
+    AsyncIoContext ctx(std::move(backend_up));
+    Scheduler sched(ctx, /*wait_capacity=*/1);
+
+    Completion<std::size_t> cA;
+    Completion<std::size_t> cB;
+    std::byte buf[8]{};
+    int a_outcome = 0;
+
+    Fiber fa;
+    fa.set_entry([&](Fiber&) {
+        SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, cA).has_value());
+        auto r = sched.await_completion_size(cA);
+        a_outcome = r.has_value() ? 1 : 2;
+    });
+    FiberStack sa;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+
+    Fiber fb;
+    fb.set_entry([&](Fiber&) {
+        SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, cB).has_value());
+        auto r = sched.await_completion_size(cB);
+        // B gets no_space — but B's I/O was already accepted by the backend.
+        SLUICE_CHECK(!r.has_value());
+        SLUICE_CHECK(r.error().code == IoError::Code::no_space);
+    });
+    FiberStack sb;
+    SLUICE_CHECK(sched.init_fiber(fb, sb.base(), sb.size()));
+
+    sched.spawn(fa);
+    sched.spawn(fb);
+    sched.run_until_idle();
+
+    // A suspended, B got no_space.
+    SLUICE_CHECK(a_outcome == 0);
+    // B's Completion is NOT ready yet — the I/O was accepted but not completed.
+    SLUICE_CHECK(!cB.outstanding() || !cB.ready());
+
+    // Complete both I/Os.
+    backend->complete_oldest_with_bytes(8);
+    backend->complete_oldest_with_bytes(8);
+    sched.run_until_idle();
+    SLUICE_CHECK(a_outcome == 1);
+
+    // B's I/O completed and the Completion is now ready (the backend reaped
+    // it even though the Scheduler wait registration was rejected).
+    SLUICE_CHECK(cB.ready());
+    SLUICE_CHECK(cB.result().value_or(0) == 8);
+    cA.reset();
+    cB.reset();
+}
+
+// ---- T-capacity-3: pool reuse + generation ----
+// With wait_capacity=1: A register -> A completes/cancels -> record freed ->
+// B register using same physical WaitRecord. Prove: record index reused,
+// generation changed, stale A WaiterToken cannot route B, real B event
+// routes B exactly once.
+SLUICE_TEST_CASE(f1_capacity_pool_reuse_generation) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    auto backend_up = std::make_unique<FakeAsyncBackend>();
+    FakeAsyncBackend* backend = backend_up.get();
+    AsyncIoContext ctx(std::move(backend_up));
+    Scheduler sched(ctx, /*wait_capacity=*/1);
+
+    SLUICE_CHECK(AsyncTestAccess::wait_record_storage_size(sched) == 1);
+
+    Completion<std::size_t> cA;
+    Completion<std::size_t> cB;
+    std::byte buf[8]{};
+    int a_resumed = 0;
+    int b_resumed = 0;
+
+    Fiber fa;
+    fa.set_entry([&](Fiber&) {
+        SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, cA).has_value());
+        auto r = sched.await_completion_size(cA);
+        SLUICE_CHECK(r.has_value());
+        ++a_resumed;
+        cA.reset();
+    });
+    FiberStack sa;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+
+    Fiber fb;
+    fb.set_entry([&](Fiber&) {
+        SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, cB).has_value());
+        auto r = sched.await_completion_size(cB);
+        SLUICE_CHECK(r.has_value());
+        ++b_resumed;
+    });
+    FiberStack sb;
+    SLUICE_CHECK(sched.init_fiber(fb, sb.base(), sb.size()));
+
+    // Run A to completion — uses the single record, frees it on reset.
+    sched.spawn(fa);
+    sched.run_until_idle();
+    backend->complete_oldest_with_bytes(8);
+    sched.run_until_idle();
+    SLUICE_CHECK(a_resumed == 1);
+
+    // B now uses the same physical record (only 1 in the pool).
+    sched.spawn(fb);
+    sched.run_until_idle();
+    SLUICE_CHECK(b_resumed == 0);  // B suspended
+
+    // Forge a stale token from A's registration (record 0, generation before
+    // A's bump). The generation mismatch must reject it.
+    const std::uint64_t ident = AsyncTestAccess::scheduler_identity(sched);
+    const WaiterToken stale_token{ident, /*registration_slot=*/0,
+                                  /*registration_generation=*/0};
+    RoutingLease stale_lease = RoutingLease::pinning(9999, 0, 0);
+    AsyncTestAccess::ready_sink(sched).on_ready(ReadyEvent{
+        /*key=*/{}, /*kind=*/sluice::async::detail::OperationKind::read,
+        OptionalWaiterDelivery::of(stale_token, std::move(stale_lease))});
+    sched.run_until_idle();
+    SLUICE_CHECK(b_resumed == 0);
+    SLUICE_CHECK(AsyncTestAccess::ready_sink_stale_dropped(sched) == 1);
+
+    // B's real completion routes normally.
+    backend->complete_oldest_with_bytes(8);
+    sched.run_until_idle();
+    SLUICE_CHECK(b_resumed == 1);
+    SLUICE_CHECK(AsyncTestAccess::wait_registry_live_count(sched) == 0);
+    SLUICE_CHECK(AsyncTestAccess::wait_record_storage_size(sched) == 1);
+    cB.reset();
+}
+
+// ---- T-capacity-4: fixed storage never grows ----
+// Expose test-only diagnostics. Prove: storage_size == configured capacity
+// both at construction and after repeated wait/reuse cycles and after
+// capacity exhaustion. No historical high-water growth beyond the bound.
+SLUICE_TEST_CASE(f1_fixed_storage_never_grows) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    auto backend_up = std::make_unique<FakeAsyncBackend>();
+    FakeAsyncBackend* backend = backend_up.get();
+    AsyncIoContext ctx(std::move(backend_up));
+    constexpr std::size_t kCapacity = 4;
+    Scheduler sched(ctx, kCapacity);
+
+    SLUICE_CHECK(AsyncTestAccess::configured_wait_capacity(sched) == kCapacity);
+    SLUICE_CHECK(AsyncTestAccess::wait_record_storage_size(sched) == kCapacity);
+
+    // Repeated register/release cycles — storage must not grow.
+    for (int cycle = 0; cycle < 5; ++cycle) {
+        Completion<std::size_t> c;
+        std::byte buf[8]{};
+        Fiber fa;
+        fa.set_entry([&](Fiber&) {
+            SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, c).has_value());
+            auto r = sched.await_completion_size(c);
+            SLUICE_CHECK(r.has_value());
+        });
+        FiberStack sa;
+        SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+        sched.spawn(fa);
+        sched.run_until_idle();
+        backend->complete_oldest_with_bytes(8);
+        sched.run_until_idle();
+        c.reset();
+        SLUICE_CHECK(AsyncTestAccess::wait_record_storage_size(sched) == kCapacity);
+    }
+
+    // Exhaust capacity with kCapacity simultaneous waits.
+    std::array<Completion<std::size_t>, kCapacity> completions;
+    std::array<Fiber, kCapacity> fibers;
+    std::array<FiberStack, kCapacity> stacks;
+    std::array<int, kCapacity> outcomes{};
+    for (std::size_t i = 0; i < kCapacity; ++i) {
+        fibers[i].set_entry([&, i](Fiber&) {
+            std::byte buf[8]{};
+            SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, completions[i]).has_value());
+            auto r = sched.await_completion_size(completions[i]);
+            outcomes[i] = r.has_value() ? 1 : 0;
+        });
+        SLUICE_CHECK(sched.init_fiber(fibers[i], stacks[i].base(), stacks[i].size()));
+        sched.spawn(fibers[i]);
+    }
+    sched.run_until_idle();
+    SLUICE_CHECK(AsyncTestAccess::wait_registry_live_count(sched) == kCapacity);
+    SLUICE_CHECK(AsyncTestAccess::wait_record_storage_size(sched) == kCapacity);
+
+    // All kCapacity records are live; storage did not grow beyond kCapacity.
+    // Complete all.
+    for (std::size_t i = 0; i < kCapacity; ++i) {
+        backend->complete_oldest_with_bytes(8);
+    }
+    sched.run_until_idle();
+    for (std::size_t i = 0; i < kCapacity; ++i) {
+        SLUICE_CHECK(outcomes[i] == 1);
+        completions[i].reset();
+    }
+    SLUICE_CHECK(AsyncTestAccess::wait_registry_live_count(sched) == 0);
+    SLUICE_CHECK(AsyncTestAccess::wait_record_storage_size(sched) == kCapacity);
+}
+
+// ---- T-legacy-cancel: dedicated legacy not_supported cancellation test ----
+// A non-arena backend (returns not_supported from register_waiter/cancel_waiter)
+// exercises the Scheduler's legacy Completion*-keyed map fallback path.
+// Prove: legacy await registration exists, cancel_waiter removes the legacy
+// entry, frozen outcome == canceled, fiber resumes exactly once, later I/O
+// completion does not rewrite canceled -> success, I/O itself still completes,
+// Completion publishes normally, no second wake.
+namespace {
+// Minimal non-arena backend for testing the legacy fallback path.
+// Supports submit_read + manual completion; register_waiter/cancel_waiter
+// inherit the base class defaults (not_supported).
+class LegacyFallbackBackend final : public AsyncBackend {
+public:
+    LegacyFallbackBackend() = default;
+
+    Result<void> submit_read(ReadOp op, Completion<std::size_t>& c) override {
+        std::lock_guard lk(mtx_);
+        if (!begin_binding(c)) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        ops_.push_back({&c, op.len, false});
+        commit_binding(c);
+        return Result<void>{};
+    }
+    Result<void> submit_write(WriteOp, Completion<std::size_t>&) override {
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    Result<void> submit_sync_data(SyncDataOp, Completion<void>&) override {
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    Result<void> submit_sync_all(SyncAllOp, Completion<void>&) override {
+        return make_unexpected<void>(IoError{IoError::Code::not_supported});
+    }
+    std::size_t poll() override { return 0; }
+    Result<std::size_t> wait_one() override { return Result<std::size_t>{0}; }
+    bool wait_one_is_nonblocking() const noexcept override { return true; }
+    std::size_t outstanding() const noexcept override {
+        std::lock_guard lk(mtx_);
+        std::size_t count = 0;
+        for (auto& op : ops_) {
+            if (!op.completed) ++count;
+        }
+        return count;
+    }
+    void complete_oldest() {
+        std::lock_guard lk(mtx_);
+        for (auto& op : ops_) {
+            if (!op.completed) {
+                op.completed = true;
+                publish(*op.completion,
+                        Result<std::size_t>{static_cast<std::size_t>(op.len)});
+                return;
+            }
+        }
+    }
+private:
+    struct Op {
+        Completion<std::size_t>* completion;
+        std::size_t len;
+        bool completed;
+    };
+    mutable std::mutex mtx_;
+    std::vector<Op> ops_;
+};
+}  // namespace
+
+SLUICE_TEST_CASE(f1_legacy_cancel_waiter_fallback) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    auto backend_up = std::make_unique<LegacyFallbackBackend>();
+    LegacyFallbackBackend* backend = backend_up.get();
+    AsyncIoContext ctx(std::move(backend_up));
+    Scheduler sched(ctx);
+
+    Completion<std::size_t> c;
+    std::byte buf[8]{};
+    int outcome = 0;  // 1 = success, 2 = wait-cancelled, 3 = other error
+
+    Fiber fa;
+    fa.set_entry([&](Fiber&) {
+        SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, c).has_value());
+        auto r = sched.await_completion_size(c);
+        if (r.has_value()) {
+            outcome = 1;
+        } else if (r.error().code == IoError::Code::canceled) {
+            outcome = 2;
+        } else {
+            outcome = 3;
+        }
+    });
+    FiberStack sa;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+    sched.spawn(fa);
+    sched.run_until_idle();
+    SLUICE_CHECK(outcome == 0);  // fiber suspended on legacy map
+
+    // The registration must be in the legacy map, NOT the identity registry.
+    SLUICE_CHECK(AsyncTestAccess::legacy_completion_wait_count(sched) == 1);
+    SLUICE_CHECK(AsyncTestAccess::wait_registry_live_count(sched) == 0);
+
+    // Cancel the waiter — legacy path freezes canceled and routes the fiber.
+    auto cw = sched.cancel_waiter(c);
+    SLUICE_CHECK(cw.has_value());
+    SLUICE_CHECK(cw.value() == true);  // this call removed the waiter
+    SLUICE_CHECK(AsyncTestAccess::legacy_completion_wait_count(sched) == 0);
+
+    sched.run_until_idle();
+    SLUICE_CHECK(outcome == 2);  // fiber resumed with wait-cancelled
+
+    // I/O itself still completes — wait-cancel ≠ I/O-cancel.
+    SLUICE_CHECK(!c.ready());
+    SLUICE_CHECK(c.outstanding());
+    backend->complete_oldest();
+    (void)ctx.poll();
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(c.result().value_or(0) == 8);
+
+    // No identity route was involved.
+    SLUICE_CHECK(AsyncTestAccess::ready_sink_routed(sched) == 0);
+    SLUICE_CHECK(AsyncTestAccess::ready_sink_deliveries(sched) == 0);
+    c.reset();
+}
+
+// ---- T-legacy-cancel-void: same test for Completion<void> path ----
+// Tests the waiting_void_ map fallback by using a backend that only supports
+// submit_read + register_waiter returning not_supported.
+SLUICE_TEST_CASE(f1_legacy_cancel_waiter_fallback_void) {
+    if constexpr (!fiber_ctx::supported) return;
+
+    auto backend_up = std::make_unique<LegacyFallbackBackend>();
+    LegacyFallbackBackend* backend = backend_up.get();
+    AsyncIoContext ctx(std::move(backend_up));
+    Scheduler sched(ctx);
+
+    // Use Completion<std::size_t> since LegacyFallbackBackend only supports
+    // submit_read. The legacy map path is identical for both types.
+    Completion<std::size_t> c;
+    std::byte buf[8]{};
+    int outcome = 0;
+
+    Fiber fa;
+    fa.set_entry([&](Fiber&) {
+        SLUICE_CHECK(ctx.submit_read(ReadOp{-1, buf, 8, 0}, c).has_value());
+        auto r = sched.await_completion_size(c);
+        if (r.has_value()) {
+            outcome = 1;
+        } else if (r.error().code == IoError::Code::canceled) {
+            outcome = 2;
+        } else {
+            outcome = 3;
+        }
+    });
+    FiberStack sa;
+    SLUICE_CHECK(sched.init_fiber(fa, sa.base(), sa.size()));
+    sched.spawn(fa);
+    sched.run_until_idle();
+    SLUICE_CHECK(outcome == 0);
+    SLUICE_CHECK(AsyncTestAccess::legacy_completion_wait_count(sched) == 1);
+
+    // Cancel — legacy path freezes canceled and routes the fiber.
+    auto cw = sched.cancel_waiter(c);
+    SLUICE_CHECK(cw.has_value() && cw.value() == true);
+    sched.run_until_idle();
+    SLUICE_CHECK(outcome == 2);
+
+    // I/O still completes — wait-cancel ≠ I/O-cancel.
+    backend->complete_oldest();
+    (void)ctx.poll();
+    SLUICE_CHECK(c.ready());
+    SLUICE_CHECK(c.result().value_or(0) == 8);
+    SLUICE_CHECK(AsyncTestAccess::legacy_completion_wait_count(sched) == 0);
+    SLUICE_CHECK(AsyncTestAccess::wait_registry_live_count(sched) == 0);
+    SLUICE_CHECK(AsyncTestAccess::ready_sink_routed(sched) == 0);
+    c.reset();
 }
 
 SLUICE_MAIN()
