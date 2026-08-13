@@ -69,6 +69,20 @@ public:
     // Completion — read it via c.result() after this returns, then c.reset()
     // before reuse (L7/L9 lifecycle).
     //
+    // Phase F1 (issue #98): the wait is an identity-bearing arena waiter
+    // registration routed through the Scheduler-owned ReadySink. Returns:
+    //   - success       — the Completion is ready (c.result() valid).
+    //   - invalid_state — synchronous rejection: a second waiter is already
+    //                     registered on this Completion (I13), or the
+    //                     Completion is not bound to THIS Runtime's context
+    //                     (cross-context / idle — provenance misuse). The
+    //                     task is NOT suspended.
+    //   - canceled      — the wait was cancelled via cancel_waiter while the
+    //                     task was suspended; the I/O continues and the
+    //                     Completion stays outstanding (wait-cancel !=
+    //                     I/O cancel). Do NOT reset the Completion until the
+    //                     I/O completes and reaps (borrow lifetime).
+    //
     // Preconditions:
     //   - `c` is outstanding against THIS Runtime's AsyncIoContext (a prior
     //     submit_* on this context marked it outstanding). Awaiting an idle
@@ -82,8 +96,19 @@ public:
     // Authority: delegates to the private Scheduler*; the pointer never
     // escapes. submit-time errors stay synchronous (from submit_*); completion
     // errors stay terminal results in the Completion.
-    void await_completion(Completion<std::size_t>& c);
-    void await_completion(Completion<void>& c);
+    Result<void> await_completion(Completion<std::size_t>& c);
+    Result<void> await_completion(Completion<void>& c);
+
+    // Phase F1: waiter cancellation (ADR Decision 10). Removes ONLY this
+    // Runtime's waiter registration for `c` — never the I/O, never the
+    // borrow. The suspended task (if any) resumes exactly once with the
+    // wait-cancelled outcome (its await_completion returns IoError::canceled).
+    // Returns true when this call removed the waiter; false when the reap
+    // delivery already won (the task is or will be resumed with the
+    // Completion ready). not_found / invalid_state when the Completion is not
+    // bound to this Runtime's context.
+    Result<bool> cancel_waiter(Completion<std::size_t>& c);
+    Result<bool> cancel_waiter(Completion<void>& c);
 
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
     // Suspend the current Fiber until `flag` becomes true. Uses the Scheduler's

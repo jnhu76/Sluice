@@ -164,7 +164,8 @@ struct PipelinedCopyTask {
     Result<void> await_slot_read(RuntimeTaskContext& ctx, PipelineSlot& s,
                                  CopyStats& stats, bool& saw_eof) {
         for (;;) {
-            ctx.await_completion(s.read_c);
+            auto wr = ctx.await_completion(s.read_c);
+            if (!wr.has_value()) return make_unexpected<void>(wr.error());
             auto rr = s.read_c.result();
             s.read_c.reset();
             if (!rr.has_value()) return make_unexpected<void>(rr.error());
@@ -194,7 +195,8 @@ struct PipelinedCopyTask {
     Result<void> await_slot_write(RuntimeTaskContext& ctx, PipelineSlot& s,
                                   CopyStats& stats) {
         for (;;) {
-            ctx.await_completion(s.write_c);
+            auto wr = ctx.await_completion(s.write_c);
+            if (!wr.has_value()) return make_unexpected<void>(wr.error());
             auto wr_res = s.write_c.result();
             s.write_c.reset();
             if (!wr_res.has_value()) return make_unexpected<void>(wr_res.error());
@@ -370,13 +372,15 @@ struct PipelinedCopyTask {
         for (auto& s : slots) {
             // Drain an outstanding read.
             if (s->read_c.outstanding()) {
-                ctx.await_completion(s->read_c);
+                auto wr = ctx.await_completion(s->read_c);
+                if (!wr.has_value()) return make_unexpected<CopyStats>(wr.error());
                 (void)s->read_c.result();  // consume; ignore secondary errors
                 s->read_c.reset();
             }
             // Drain an outstanding write.
             if (s->write_c.outstanding()) {
-                ctx.await_completion(s->write_c);
+                auto wr = ctx.await_completion(s->write_c);
+                if (!wr.has_value()) return make_unexpected<CopyStats>(wr.error());
                 (void)s->write_c.result();
                 s->write_c.reset();
             }
@@ -390,13 +394,15 @@ struct PipelinedCopyTask {
         if (sync == SyncPolicy::data) {
             auto ssr = ctx.submit_sync_data(SyncDataOp{dst_fd}, sync_c);
             if (!ssr.has_value()) return make_unexpected<CopyStats>(ssr.error());
-            ctx.await_completion(sync_c);
+            auto wr = ctx.await_completion(sync_c);
+            if (!wr.has_value()) return make_unexpected<CopyStats>(wr.error());
             auto sr = sync_c.result();
             if (!sr.has_value()) return make_unexpected<CopyStats>(sr.error());
         } else if (sync == SyncPolicy::all) {
             auto ssr = ctx.submit_sync_all(SyncAllOp{dst_fd}, sync_c);
             if (!ssr.has_value()) return make_unexpected<CopyStats>(ssr.error());
-            ctx.await_completion(sync_c);
+            auto wr = ctx.await_completion(sync_c);
+            if (!wr.has_value()) return make_unexpected<CopyStats>(wr.error());
             auto sr = sync_c.result();
             if (!sr.has_value()) return make_unexpected<CopyStats>(sr.error());
         }

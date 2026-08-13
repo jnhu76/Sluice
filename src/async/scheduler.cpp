@@ -95,7 +95,17 @@ struct SchedulerWakeHandle::Control {
 #endif
 };
 
-Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
+// Phase F1: per-Scheduler identity for waiter tokens (0 reserved — the
+// default WaiterToken is all-zeros and must never match a live Scheduler).
+namespace {
+std::uint64_t next_scheduler_identity() noexcept {
+    static std::atomic<std::uint64_t> counter{0};
+    return ++counter;
+}
+}  // namespace
+
+Scheduler::Scheduler(AsyncIoContext& ctx) noexcept
+    : ctx_(ctx), scheduler_identity_(next_scheduler_identity()) {
     // E14 D-E14-2: construction-time fail-fast on unsupported targets.
     // Scheduler is the earliest Evented admission boundary; all downstream
     // primitives (E12 Event/Semaphore/Mutex/Condition/Queue/RwLock, Select,
@@ -109,9 +119,23 @@ Scheduler::Scheduler(AsyncIoContext& ctx) noexcept : ctx_(ctx) {
     // the callback lease) and returns false without any Scheduler dereference.
     // See Control below and docs/spec/e9_wake_handle_lifetime/.
     wake_control_ = std::make_shared<SchedulerWakeHandle::Control>();
+
+    // Phase F1 (issue #98): install the Scheduler-owned identity-bearing
+    // ReadySink on the context so every backend reap delivers by-value
+    // ReadyEvents here instead of to the no-op reference sink (ADR Decision
+    // 9). Detached in ~Scheduler. No workers exist yet, so the attachment
+    // cannot race a reap.
+    ctx_.set_ready_sink(&ready_sink_);
 }
 
 Scheduler::~Scheduler() {
+    // Phase F1: detach the routing sink BEFORE this Scheduler's address can
+    // be referenced again. ApplicationRuntime destroys sched_ before io_ctx_
+    // (close_resources: group.reset(); sched.reset(); io_ctx.reset();), and
+    // workers are joined before ~Scheduler, so no reap can be in flight; a
+    // later poll on the same context delivers to the no-op reference sink.
+    ctx_.set_ready_sink(nullptr);
+
     // E9-LIFETIME-CORRECTIVE: invalidate the control block under Control::mtx.
     //
     // Control::mtx is held from the validity check through the Scheduler
@@ -187,6 +211,19 @@ Scheduler::~Scheduler() {
            "~Scheduler: waiting_select_count_ != 0 (a suspended SelectGroup "
            "remains Armed — an Event-only Select with no active Timer escapes "
            "the timer teardown checks; caller contract violation)");
+    // Phase F1: the wait registry must be quiescent — every registered waiter
+    // was delivered (drained) or cancelled before destruction. A leftover
+    // record means a suspended Fiber's wake obligation was abandoned.
+    {
+        LockGuard rlk(wait_registry_mtx_);
+        assert(wait_record_live_count_ == 0 &&
+               "~Scheduler: wait_record_live_count_ != 0 (a registered "
+               "Completion waiter was neither delivered nor cancelled — "
+               "abandoned wake obligation)");
+        if (wait_record_live_count_ != 0) {
+            detail::scheduler_wait_registry_nonempty_fail_fast();
+        }
+    }
     if (any_active_select || active_deadline_count_ != 0 ||
         waiting_select_count_ != 0) {
         // Destruction cannot safely recover live caller-frame Select authority,
@@ -675,7 +712,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         MwState state;
         {
             LockGuard lk(global_mtx_);
-            (void)wake_ready_completions_locked();
+            (void)drain_routed_completion_waits_locked();
             (void)wake_ready_flags_locked();
             (void)pump_deadlines_locked();
             state = classify_locked(run_workers);
@@ -739,7 +776,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         continue;
                     }
                     // Re-drain readiness + reclassify.
-                    (void)wake_ready_completions_locked();
+                    (void)drain_routed_completion_waits_locked();
                     (void)wake_ready_flags_locked();
                     (void)pump_deadlines_locked();
                     MwState s2 = classify_locked(run_workers);
@@ -803,7 +840,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             LockGuard lk(global_mtx_);
                             admission_ = AdmissionState::none;
                             admission_owner_ = static_cast<unsigned>(-1);
-                            (void)wake_ready_completions_locked();
+                            (void)drain_routed_completion_waits_locked();
                             (void)wake_ready_flags_locked();
                             (void)pump_deadlines_locked();
                         }
@@ -851,7 +888,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         LockGuard lk(global_mtx_);
                         admission_ = AdmissionState::none;
                         admission_owner_ = static_cast<unsigned>(-1);
-                        (void)wake_ready_completions_locked();
+                        (void)drain_routed_completion_waits_locked();
                         (void)wake_ready_flags_locked();
                         (void)pump_deadlines_locked();
                     }
@@ -1080,20 +1117,60 @@ void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
     }
 }
 
-bool Scheduler::wake_ready_completions_locked() {
-    // Called with global_mtx_ held. Polls backend + scans Completion waits.
-    bool woken = false;
+bool Scheduler::drain_routed_completion_waits_locked() {
+    // Phase F1 (issue #98): identity-bearing completion drain. Polls the
+    // backend — the Scheduler-owned ReadyRoutingSink marks delivered records
+    // during reap under the registry leaf (no G, no deadlock: the sink never
+    // acquires a Scheduler lock, design §5.3) — then pops the delivered list
+    // and routes each waiter exactly once under G. Replaces the O(N)
+    // Completion::ready() re-scan of the Completion*-keyed maps (the maps are
+    // gone; the sink carries the identity). Work per drain is O(delivered).
     (void)ctx_.poll();
+    bool woken = false;
+    WaitRecord* head = nullptr;
+    {
+        LockGuard rlk(wait_registry_mtx_);
+        head = wait_delivered_head_;
+        wait_delivered_head_ = nullptr;
+    }
+    while (head != nullptr) {
+        WaitRecord* r = head;
+        head = r->next_delivered;
+        r->next_delivered = nullptr;
+        // The record is pinned (delivered) — only the drain may consume it.
+        Fiber* f = r->fiber;
+        WorkerState* owner = r->owner;
+        {
+            LockGuard rlk(wait_registry_mtx_);
+            r->state = WaitRecordState::free;
+            r->fiber = nullptr;
+            r->owner = nullptr;
+            r->completion = nullptr;
+            r->next_free = wait_record_free_head_;
+            wait_record_free_head_ = r;
+            --wait_record_live_count_;
+        }
+        // E7-T2 exactly-once: only publish a ticket if the fiber actually
+        // transitioned waiting->runnable. If the fiber was already runnable
+        // (a concurrent wake raced), do NOT enqueue a second ticket.
+        if (f->make_runnable()) {
+            route_runnable_locked(f, owner);
+            woken = true;
+        }
+    }
+    // Non-arena fallback (design §10): scan the legacy Completion*-keyed
+    // maps. These entries exist only for backends whose register_waiter
+    // returned not_supported (no RequestArena waiter machinery — custom/test
+    // backends); they are never touched by the identity sink above, and the
+    // identity records are never touched by this scan — each registration
+    // lives in exactly one registry (non-dual authority).
     for (auto it = waiting_size_.begin(); it != waiting_size_.end();) {
         auto* c = static_cast<Completion<std::size_t>*>(it->first);
         if (c->ready()) {
             Fiber* f = it->second.fiber;
             WorkerState* owner = it->second.owner;
             it = waiting_size_.erase(it);
-            // E7-T2 exactly-once: only publish a ticket if the fiber actually
-            // transitioned waiting->runnable. If the fiber was already runnable
-            // (e.g. a concurrent wake raced), do NOT enqueue a second ticket.
-            if (f->make_runnable()) {
+            if (f->make_runnable()) {  // E7-T2 exactly-once
                 route_runnable_locked(f, owner);
                 woken = true;
             }
@@ -1116,6 +1193,117 @@ bool Scheduler::wake_ready_completions_locked() {
         }
     }
     return woken;
+}
+
+// ---- Phase F1 registry helpers (leaf domain, callers hold G) ----
+
+Scheduler::WaitRecord* Scheduler::acquire_wait_record_locked(
+    Fiber* fiber, WorkerState* owner, const void* completion,
+    std::uint64_t& lease_id_out) {
+    LockGuard rlk(wait_registry_mtx_);
+    WaitRecord* r = wait_record_free_head_;
+    if (r != nullptr) {
+        wait_record_free_head_ = r->next_free;
+        r->next_free = nullptr;
+        // Reuse bumps the generation BEFORE the new occupant is visible (I6):
+        // a stale token can never match the reused record.
+        ++r->generation;
+    } else {
+        // First-time record: one allocation on the PRE-WAIT caller path
+        // (bounded by concurrent waiters — the removed unordered_map insert
+        // allocated here too; never on the accepted -> route path, I9). The
+        // record object is then address-stable for the Scheduler lifetime.
+        auto rec = std::make_unique<WaitRecord>();
+        rec->index = static_cast<std::uint32_t>(wait_records_.size());
+        r = rec.get();
+        wait_records_.push_back(std::move(rec));
+    }
+    r->state = WaitRecordState::registered;
+    r->fiber = fiber;
+    r->owner = owner;
+    r->completion = completion;
+    ++wait_record_live_count_;
+    lease_id_out = wait_lease_serial_++;
+    return r;
+}
+
+void Scheduler::retire_wait_record_locked(std::uint32_t index) {
+    LockGuard rlk(wait_registry_mtx_);
+    if (index >= wait_records_.size()) {
+        detail::scheduler_wait_registry_invariant_fail_fast();
+    }
+    WaitRecord* r = wait_records_[index].get();
+    if (r->state != WaitRecordState::registered) {
+        detail::scheduler_wait_registry_invariant_fail_fast();
+    }
+    r->state = WaitRecordState::free;
+    r->fiber = nullptr;
+    r->owner = nullptr;
+    r->completion = nullptr;
+    r->next_free = wait_record_free_head_;
+    wait_record_free_head_ = r;
+    --wait_record_live_count_;
+}
+
+std::size_t Scheduler::wait_record_live_count_locked() const {
+    LockGuard rlk(wait_registry_mtx_);
+    return wait_record_live_count_;
+}
+
+// ---- Phase F1: Scheduler-owned identity-bearing ReadySink ----
+
+void Scheduler::ReadyRoutingSink::on_ready(detail::ReadyEvent event) noexcept {
+    Scheduler* s = scheduler_;
+    if (s == nullptr) return;  // detached (destruction)
+    if (!event.waiter.has_waiter) {
+        // No registered waiter for this request (or a waiter-cancel already
+        // removed it) — nothing to route; the I/O/Completion lifecycle is
+        // unaffected.
+        return;
+    }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    ++deliveries_;
+#endif
+    const detail::WaiterToken& t = event.waiter.token;
+    LockGuard rlk(s->wait_registry_mtx_);
+    // Identity validation (Race C, defense-in-depth): the arena only extracts
+    // the current generation's token, but a stale/cross-Scheduler token must
+    // never route — drop the lease and return.
+    if (t.scheduler_identity != s->scheduler_identity_) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        ++stale_dropped_;
+#endif
+        return;
+    }
+    if (t.registration_slot >= s->wait_records_.size()) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        ++stale_dropped_;
+#endif
+        return;
+    }
+    WaitRecord* r = s->wait_records_[t.registration_slot].get();
+    if (r->generation != t.registration_generation) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        ++stale_dropped_;
+#endif
+        return;
+    }
+    if (r->state != WaitRecordState::registered) {
+        // The waiter-cancel path already retired this record (Race B loser).
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        ++cancel_lost_;
+#endif
+        return;  // cancel won first
+    }
+    r->state = WaitRecordState::delivered;
+    r->next_delivered = s->wait_delivered_head_;
+    s->wait_delivered_head_ = r;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    ++routed_;
+#endif
+    // The routing lease is destroyed at scope exit = acknowledged (ADR
+    // Decision 10). The record stays pinned (delivered) until the drain
+    // consumes it, so the cancel path cannot retire it in between.
 }
 
 bool Scheduler::wake_ready_flags_locked() {
@@ -1229,6 +1417,11 @@ Scheduler::MwState Scheduler::classify_locked(const WorkerSnapshot& run_workers)
     if (any_outstanding)
         return MwState::mw_s2;
 
+    // Phase F1: identity Completion waits live in the wait registry; a
+    // registered record implies an accepted, unreaped backend op
+    // (outstanding >= 1), so those classify as MW-S2 above and never reach
+    // this check. Legacy fallback Completion waits (non-arena backends) and
+    // flag/E10/Select waits can be unresolved with zero backend work.
     const bool any_wait = !waiting_size_.empty() || !waiting_void_.empty() ||
                           !waiting_ready_.empty() || waiting_waitq_count_ > 0 ||
                           waiting_select_count_ > 0;
@@ -1238,31 +1431,72 @@ Scheduler::MwState Scheduler::classify_locked(const WorkerSnapshot& run_workers)
     return MwState::quiescent;
 }
 
-void Scheduler::await_completion_size(Completion<std::size_t>& c) {
+Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
-    // E7/E8 SuspendFiber refinement obligation: register + readiness recheck +
-    // commit_suspend_locked MUST be one atomic transition with respect to the
-    // wake path (wake_ready_completions_locked runs under global_mtx_). Doing
-    // make_waiting before registering (the old shape) left a window in which
-    // the wake path could not see this fiber; doing the recheck outside the
-    // lock could miss a wake that landed between register-release and recheck.
-    // Both admitted a lost wake / permanent park.
+    // Phase F1 (issue #98): the Completion wait is now a REAL arena waiter
+    // registration (ADR Decision 10) + a Scheduler routing record, and the
+    // wake arrives through the identity-bearing ReadySink — no Completion*-
+    // keyed map entry, no O(N) ready() re-scan.
+    //
+    // Atomicity (Race A closure): record creation + arena register_waiter +
+    // inline-ready recheck + commit_suspend_locked are ONE transition with
+    // respect to the wake path. The drain (poll -> sink mark -> delivered-pop
+    // -> route) runs under global_mtx_, so it cannot interleave this G-scope;
+    // the arena leaf serializes registration against reap extraction (C2c
+    // arena_register_waiter_vs_reap_race, now on the production path).
     //
     // I47-F2: commit_suspend_locked raises suspend_switch_pending BEFORE
-    // make_waiting, both under global_mtx_. This closes the suspend-before-
-    // switch race: a resolver that wins after G unlock routes a Runnable
-    // ticket, but a thief sees suspend_switch_pending==true and refuses the
-    // steal until run_next_on clears it (scheduler-side, after the physical
-    // context switch saves the Fiber CPU context).
+    // make_waiting, both under global_mtx_, closing the suspend-before-switch
+    // race exactly as before.
     {
         LockGuard lk(global_mtx_);
-        waiting_size_[static_cast<void*>(&c)] = {me, ws};
-        if (c.ready()) {
-            waiting_size_.erase(static_cast<void*>(&c));
-            return;
+        std::uint64_t lease_id = 0;
+        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, lease_id);
+        if (rec == nullptr) {
+            // Record creation failed (pre-wait caller path allocation).
+            return make_unexpected<void>(IoError{IoError::Code::no_space});
         }
-        commit_suspend_locked(ws, me);
+        const detail::WaiterToken token{scheduler_identity_, rec->index,
+                                        rec->generation};
+        detail::RoutingLease lease = detail::RoutingLease::pinning(
+            lease_id, rec->index, rec->generation);
+        // Transfer the lease into the request slot (arena leaf under G).
+        auto reg = ctx_.register_waiter(c, token, std::move(lease));
+        if (!reg.has_value()) {
+            const IoError e = reg.error();
+            if (e.code == IoError::Code::not_supported) {
+                // Non-arena backend (custom AsyncBackend without the
+                // RequestArena waiter machinery): legacy fallback path
+                // (design §10) — Completion*-keyed map + ready() re-scan in
+                // the drain. Disjoint from the identity registry: this
+                // registration lives ONLY in the map.
+                retire_wait_record_locked(rec->index);
+                waiting_size_[static_cast<void*>(&c)] = {me, ws};
+                if (c.ready()) {
+                    waiting_size_.erase(static_cast<void*>(&c));
+                    return Result<void>{};
+                }
+                commit_suspend_locked(ws, me);
+            } else {
+                // The registration lost: reap already closed it
+                // (completion_ready) or the Completion is not bound to this
+                // context's backend (cross-context / idle / stale —
+                // provenance misuse). Retire the record; the candidate lease
+                // was consumed at the by-value boundary by the arena.
+                retire_wait_record_locked(rec->index);
+                if (c.ready()) {
+                    // Reap won (I18 release-store): return WITHOUT suspending
+                    // — no wake is lost, the Completion is ready.
+                    return Result<void>{};
+                }
+                // Duplicate waiter (I13) or provenance misuse (Decision 6):
+                // synchronous invalid_state.
+                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            }
+        } else {
+            commit_suspend_locked(ws, me);
+        }
     }
     // I47-F1: generic suspension phase seam. AFTER wait registration committed
     // + suspend authority raised + Fiber Waiting + global_mtx_ released,
@@ -1276,22 +1510,52 @@ void Scheduler::await_completion_size(Completion<std::size_t>& c) {
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+    // Resumed exactly once by the identity route (delivery -> drain) or the
+    // waiter-cancel path (Scheduler::cancel_waiter). The drain routes only
+    // after the I18 Completion-ready release-store, so ready() distinguishes
+    // the two outcomes: ready -> the I/O terminal result is available;
+    // not ready -> the wait was cancelled (the I/O continues; the Completion
+    // is still outstanding and the borrow is still live).
+    if (c.ready()) return Result<void>{};
+    return make_unexpected<void>(IoError{IoError::Code::canceled});
 }
 
-void Scheduler::await_completion_void(Completion<void>& c) {
+Result<void> Scheduler::await_completion_void(Completion<void>& c) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
-    // I47-F2: see await_completion_size for the unified suspend protocol.
-    // register + recheck + commit_suspend_locked under global_mtx_; only
-    // context_switch is outside.
+    // Phase F1: see await_completion_size for the unified identity
+    // registration + suspend protocol.
     {
         LockGuard lk(global_mtx_);
-        waiting_void_[static_cast<void*>(&c)] = {me, ws};
-        if (c.ready()) {
-            waiting_void_.erase(static_cast<void*>(&c));
-            return;
+        std::uint64_t lease_id = 0;
+        WaitRecord* rec = acquire_wait_record_locked(me, ws, &c, lease_id);
+        if (rec == nullptr) {
+            return make_unexpected<void>(IoError{IoError::Code::no_space});
         }
-        commit_suspend_locked(ws, me);
+        const detail::WaiterToken token{scheduler_identity_, rec->index,
+                                        rec->generation};
+        detail::RoutingLease lease = detail::RoutingLease::pinning(
+            lease_id, rec->index, rec->generation);
+        auto reg = ctx_.register_waiter(c, token, std::move(lease));
+        if (!reg.has_value()) {
+            const IoError e = reg.error();
+            if (e.code == IoError::Code::not_supported) {
+                // Non-arena fallback (design §10) — see await_completion_size.
+                retire_wait_record_locked(rec->index);
+                waiting_void_[static_cast<void*>(&c)] = {me, ws};
+                if (c.ready()) {
+                    waiting_void_.erase(static_cast<void*>(&c));
+                    return Result<void>{};
+                }
+                commit_suspend_locked(ws, me);
+            } else {
+                retire_wait_record_locked(rec->index);
+                if (c.ready()) return Result<void>{};
+                return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+            }
+        } else {
+            commit_suspend_locked(ws, me);
+        }
     }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     sluice_async_test::test_phase(*this,
@@ -1301,6 +1565,104 @@ void Scheduler::await_completion_void(Completion<void>& c) {
     s.old = &me->ctx;
     s.new_ = &ws->sched_ctx;
     (void)fiber_ctx::context_switch(&s);
+    if (c.ready()) return Result<void>{};
+    return make_unexpected<void>(IoError{IoError::Code::canceled});
+}
+
+Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
+    // Phase F1 (ADR Decision 10): waiter cancellation removes ONLY the waiter
+    // registration — never the I/O, never the borrow, never a terminal result
+    // (I5). The arena leaf races cancel_waiter against reap extraction exactly
+    // once (C2c arena_cancel_waiter_vs_reap_race); the record mirrors the
+    // winner.
+    LockGuard lk(global_mtx_);
+    auto rl = ctx_.cancel_waiter(c);  // G -> access_mtx_ -> arena leaf
+    if (!rl.has_value()) {
+        const IoError e = rl.error();
+        if (e.code == IoError::Code::not_found) {
+            // The delivery already won (reap closed the registration): the
+            // fiber is or will be resumed by the identity route with the
+            // Completion ready. Nothing to remove.
+            return Result<bool>{false};
+        }
+        // not_supported (non-arena backend): no waiter registration exists on
+        // this backend; propagate so the caller knows cancellation is
+        // unsupported for this backend.
+        return make_unexpected<bool>(e);
+    }
+    // Cancel won at the arena: the lease is ours. Retire the pinned record and
+    // wake the suspended fiber exactly once with the wait-cancelled outcome.
+    detail::RoutingLease lease = std::move(rl.value());
+    Fiber* f = nullptr;
+    WorkerState* owner = nullptr;
+    {
+        LockGuard rlk(wait_registry_mtx_);
+        const std::uint32_t idx = lease.record_index();
+        const std::uint32_t gen = lease.record_generation();
+        if (idx < wait_records_.size()) {
+            WaitRecord* r = wait_records_[idx].get();
+            if (r->generation == gen && r->state == WaitRecordState::registered) {
+                // Retire the record (cancelled is terminal; no drain visit).
+                r->state = WaitRecordState::cancelled;
+                f = r->fiber;
+                owner = r->owner;
+                r->state = WaitRecordState::free;
+                r->fiber = nullptr;
+                r->owner = nullptr;
+                r->completion = nullptr;
+                r->next_free = wait_record_free_head_;
+                wait_record_free_head_ = r;
+                --wait_record_live_count_;
+            }
+            // A generation mismatch or non-registered state is unreachable
+            // (the lease pins the record; delivery is single-owner) — the
+            // lease is dropped either way.
+        }
+    }
+    if (f != nullptr && f->make_runnable()) {  // E7-T2 exactly-once
+        route_runnable_locked(f, owner);
+    }
+    return Result<bool>{true};
+}
+
+Result<bool> Scheduler::cancel_waiter(Completion<void>& c) {
+    // Phase F1: see the size-twin for semantics; identical protocol.
+    LockGuard lk(global_mtx_);
+    auto rl = ctx_.cancel_waiter(c);
+    if (!rl.has_value()) {
+        const IoError e = rl.error();
+        if (e.code == IoError::Code::not_found) {
+            return Result<bool>{false};
+        }
+        return make_unexpected<bool>(e);
+    }
+    detail::RoutingLease lease = std::move(rl.value());
+    Fiber* f = nullptr;
+    WorkerState* owner = nullptr;
+    {
+        LockGuard rlk(wait_registry_mtx_);
+        const std::uint32_t idx = lease.record_index();
+        const std::uint32_t gen = lease.record_generation();
+        if (idx < wait_records_.size()) {
+            WaitRecord* r = wait_records_[idx].get();
+            if (r->generation == gen && r->state == WaitRecordState::registered) {
+                r->state = WaitRecordState::cancelled;
+                f = r->fiber;
+                owner = r->owner;
+                r->state = WaitRecordState::free;
+                r->fiber = nullptr;
+                r->owner = nullptr;
+                r->completion = nullptr;
+                r->next_free = wait_record_free_head_;
+                wait_record_free_head_ = r;
+                --wait_record_live_count_;
+            }
+        }
+    }
+    if (f != nullptr && f->make_runnable()) {
+        route_runnable_locked(f, owner);
+    }
+    return Result<bool>{true};
 }
 
 void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {

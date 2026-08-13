@@ -57,18 +57,32 @@ Result<void> RuntimeTaskContext::submit_sync_all(SyncAllOp op, Completion<void>&
 // the Fiber for wake and, if the Completion is idle, nothing will ever
 // complete it and the Fiber parks permanently. Enforce the documented
 // "Debug asserts; Release documents" contract here (M1-A Known limitations).
-void RuntimeTaskContext::await_completion(Completion<std::size_t>& c) {
+Result<void> RuntimeTaskContext::await_completion(Completion<std::size_t>& c) {
     assert(!c.idle() &&
            "await_completion requires a submitted or ready Completion "
            "(idle-await is a caller contract violation: M1-A)");
-    sched_->await_completion_size(c);
+    // Phase F1: the Scheduler primitive now returns the wait outcome (success,
+    // synchronous invalid_state for duplicate/provenance misuse, or canceled
+    // when the wait was cancelled via cancel_waiter). Forward verbatim so task
+    // code can distinguish "completion ready" from "wait cancelled".
+    return sched_->await_completion_size(c);
 }
 
-void RuntimeTaskContext::await_completion(Completion<void>& c) {
+Result<void> RuntimeTaskContext::await_completion(Completion<void>& c) {
     assert(!c.idle() &&
            "await_completion requires a submitted or ready Completion "
            "(idle-await is a caller contract violation: M1-A)");
-    sched_->await_completion_void(c);
+    return sched_->await_completion_void(c);
+}
+
+Result<bool> RuntimeTaskContext::cancel_waiter(Completion<std::size_t>& c) {
+    // Phase F1: production waiter-cancel caller (ADR Decision 10). Removes
+    // ONLY the waiter — the I/O continues; the Completion stays outstanding.
+    return sched_->cancel_waiter(c);
+}
+
+Result<bool> RuntimeTaskContext::cancel_waiter(Completion<void>& c) {
+    return sched_->cancel_waiter(c);
 }
 
 #ifdef SLUICE_ASYNC_INTERNAL_TESTING
