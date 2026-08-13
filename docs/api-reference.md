@@ -1296,6 +1296,34 @@ struct SyncDataOp{ int fd = -1; };
 struct SyncAllOp { int fd = -1; };
 ```
 
+### `sluice::async::RequestHandle` / `sluice::async::RequestHandleState`
+
+Opaque public identity for one accepted I/O request (Phase F3 /
+ADR-public-request-handle). **Identity, not ownership**: copying a handle
+allocates nothing and does not extend the Completion, fd/buffer borrow, slot,
+or routing-lease lifetime. Construction-controlled (non-forgeable): the only
+producer of a valid handle is a successful `submit_*_request`; the identity
+components are private (enforced by a negative-compile gate). A handle stays
+valid while its generation is the current occupant of its slot in its context;
+after the Completion is reset/destroyed or the slot is reused, the handle is
+inert (`request_state() == not_found`).
+
+```cpp
+enum class RequestHandleState : std::uint8_t {
+    outstanding,        // accepted, not yet terminal
+    backend_ready,      // terminal won, not yet reaped to Completion-ready
+    completion_ready,   // reaped; Completion::ready()
+    not_found,          // stale / wrong context / released / invalid
+};
+
+class RequestHandle {
+public:
+    constexpr RequestHandle() noexcept = default;          // invalid handle
+    constexpr bool valid() const noexcept;
+    friend bool operator==(const RequestHandle&, const RequestHandle&) noexcept = default;
+};
+```
+
 ### `sluice::async::AsyncIoContext`
 
 Public L1 async API surface (E17). Owns an `AsyncBackend` via
@@ -1319,6 +1347,23 @@ public:
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
+
+    // Identity-returning submission (Phase F3 / ADR-public-request-handle).
+    // Additive: on success returns the accepted request's RequestHandle
+    // (Decision 4: success => exactly one valid handle); on synchronous
+    // rejection returns the error and NO handle; not_supported (with no side
+    // effect) if the backend lacks the identity contract
+    // (supports_request_identity() == false).
+    Result<RequestHandle> submit_read_request(ReadOp op, Completion<std::size_t>& c);
+    Result<RequestHandle> submit_write_request(WriteOp op, Completion<std::size_t>& c);
+    Result<RequestHandle> submit_sync_data_request(SyncDataOp op, Completion<void>& c);
+    Result<RequestHandle> submit_sync_all_request(SyncAllOp op, Completion<void>& c);
+
+    // Read-only identity consumer: the request's lifecycle state, or not_found
+    // for a stale / cross-context / released / invalid handle. not_supported
+    // for a backend without the identity contract. Never mutates the request,
+    // registers a waiter, or cancels I/O.
+    Result<RequestHandleState> request_state(const RequestHandle& h) const;
 
     // Reap
     std::size_t poll();              // non-blocking
@@ -1366,8 +1411,19 @@ struct BatchOp {
     enum class Kind : std::uint8_t { read, write, sync_data, sync_all } kind = Kind::read;
 };
 
+// Admission origin (Phase F2 / ADR Decision 9): orthogonal to success/error.
+//   rejected               — submit failed before commit/accept (no accepted
+//                            request existed). The Result carries the rejection.
+//   accepted_and_completed — submit crossed commit and later reached a terminal
+//                            result via reap (success, error, or canceled).
+enum class BatchResultOrigin : std::uint8_t {
+    rejected,
+    accepted_and_completed,
+};
+
 struct BatchResult {
     std::size_t index = 0;
+    BatchResultOrigin origin = BatchResultOrigin::accepted_and_completed;
     bool is_void = false;
     std::optional<Result<std::size_t>> size_res;
     std::optional<Result<void>> void_res;

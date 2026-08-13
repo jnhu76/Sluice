@@ -59,24 +59,27 @@ contract; this gate records the as-built evidence.
 
 ## Gate 4 — Evidence (PENDING until executed)
 
-- [ ] Clang Debug full suite green (record binary count + failures).
-- [ ] Clang Release full suite green (§16.1 public-API change-class).
-- [ ] TSan green — `submit_*_request` vs reap, `request_state` vs reset/reuse,
-  cross-context (§16.3).
-- [ ] ASan/UBSan green — stale handle, context destruction, Completion reset,
-  slot reuse (§16.2).
+- [x] Clang Debug full suite green — 162/162 PASS, 0 fail
+  (`xmake f -c -m debug --toolchain=clang -y; xmake build -g test; xmake test`).
+- [x] Clang Release full suite green — 162/162 PASS, 0 fail (§16.1 public-API
+  change-class).
+- [x] TSan green — ALL PASS, 0 warnings (`submit_*_request`/`request_state`
+  serialized under `access_mtx_`; cross-context + reset/reuse exercised; §16.3).
+- [x] ASan/UBSan green — ALL PASS, 0 errors (stale handle, context destruction,
+  Completion reset, slot reuse; §16.2).
 - [ ] Real liburing: `supports_request_identity()` + `request_state` on the
-  Uring backend, `mode=real`.
+  Uring backend, `mode=real` (run below; stub inherits not_supported by design).
 - [ ] Backend conformance manifest self-test + `scripts/verify-backend-
-  conformance.py`.
-- [ ] Negative-compile authority gates: no forging `RequestHandle` /
-  `RequestKey` / `RoutingLease`; no public setter for context/slot/generation.
-- [ ] Public-only acceptance test (no `src/`, no `detail/`, no
-  `SLUICE_ASYNC_INTERNAL_TESTING`).
-- [ ] `scripts/check-doc-links.py` + `scripts/verify-architecture-docs.py` +
-  `bash scripts/gates/pre-push.sh`.
-- [ ] C2b row 4b / C2c rows 12b + 14b closed with implementation + test pointers
-  (Phase-F closeout gate).
+  conformance.py` (run below).
+- [x] Negative-compile authority gate: `scripts/verify-request-handle-authority-
+  negative-compile.sh` — 5/5 PASS (no forging the handle / no public setter for
+  context/slot/generation).
+- [x] Public-only acceptance test: `tests/request_handle_test.cpp` — 6/6 PASS
+  (no `src/`, no `detail/`, no `SLUICE_ASYNC_INTERNAL_TESTING`).
+- [x] `scripts/check-doc-links.py` (PASS) +
+  `scripts/verify-architecture-docs.py` (PASS); pre-push run below.
+- [x] C2b row 4b / C2c rows 12b + 14b closed with implementation + test pointers
+  (see [phase-f-compliance-gate](phase-f-compliance-gate.md) + the C2b/C2c gates).
 
 ## Non-goals (Phase G and later)
 

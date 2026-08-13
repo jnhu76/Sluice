@@ -28,10 +28,10 @@ nonconforming code (mutants A–I).
 |---|---|
 | 11 — fd/buffer borrow lifetime: commit owns, reap releases; survives every intermediate state and every cancel/wait-cancel path | `c2c_arena_borrow_waiter_lease_matrix` (arena), `c2c_fake_borrow_waiter_integration` (Fake), `c2c_threadpool_borrow_waiter_integration` (ThreadPool) |
 | 12a — single-waiter registration + abstract delivery mechanics (C2c scope) | `arena_waiter_registration_state_matrix`, `arena_single_waiter_first_registration_survives`, `arena_register_waiter_vs_reap_race`; Fake/TP integration cases |
-| 12b — real public waiter / RequestHandle / Scheduler registration consumer (**Phase F scope**) | not in C2c — see §3.2; no public waiter API exists (ADR Decision 7/10) |
+| 12b — real public waiter / RequestHandle / Scheduler registration consumer (**CLOSED by Phase F3**) | not in C2c — see §3.2/§9; Phase F1 closed the Scheduler half, Phase F3 closed the public-API surface (`submit_*_request` + `request_state`; `tests/request_handle_test.cpp`) |
 | 13 — waiter-cancel independence: wait-cancel ≠ I/O cancel; cancel_waiter vs reap exactly-once | `arena_waiter_cancel_removes_only_the_waiter`, `arena_io_cancel_keeps_waiter_registration`, `arena_cancel_waiter_vs_reap_race`; Fake/TP integration cases |
 | 14a — abstract move-only delivery lease ownership / exactly-once transfer (C2c scope) | `arena_lease_type_properties`, `arena_lease_transfer_chain_reap_path`, `arena_lease_transfer_chain_wait_cancel_path`, `arena_ready_event_waiter_survives_slot_reuse`, `arena_cancel_waiter_vs_reap_race`; Fake/TP integration cases |
-| 14b — real Scheduler routing-record lifetime / real lease acknowledgement (**Phase F scope**) | not in C2c — see §3.2; fake leases prove the transfer mechanics only (ADR Decision 10) |
+| 14b — real Scheduler routing-record lifetime / real lease acknowledgement (**CLOSED: F1 + F3**) | not in C2c — see §3.2/§9; F1 closed the Scheduler routing-record lifetime; F3's `request_state` proves the public handle tracks the real lifetime (stale-after-reuse → not_found; `tests/request_handle_test.cpp`) |
 
 **Row decomposition.** Like C2b's row 4a/4b split, rows 12 and 14 each conflate two distinct authority
 layers, and the Accepted ADR already draws the boundary (Decision 10: "Phase B proves the abstract
@@ -377,9 +377,18 @@ actually ran green.
 - **C2d** — failure injection + post-commit allocator terminal (rows 9–10): PENDING, not closed.
 - **C2e** — close/drain/reset (row 15; row 16 already FULL): PENDING, not closed.
 - **Rows 12b/14b** — real public waiter / RequestHandle / Scheduler registration consumer and real
-  Scheduler routing-record lifetime + lease acknowledgement: Phase F scope (no public waiter API
-  exists; the fake leases prove the abstract transfer mechanics only — ADR Decision 10's own
-  boundary).
+  Scheduler routing-record lifetime + lease acknowledgement: **CLOSED.** The Scheduler half was
+  implemented by Phase F1 (issue #98: `Scheduler::await_completion_*` registers a real arena waiter;
+  the Scheduler-owned `ReadyRoutingSink` consumes the identity-bearing reap; `Scheduler::cancel_waiter`
+  removes only the waiter). The public-API residual is closed by Phase F3 (ADR
+  `docs/adr/ADR-public-request-handle.md`): the public `RequestHandle` is the identity consumer —
+  `submit_*_request -> Result<RequestHandle>` mints it from the commit-time binding, and
+  `request_state()` resolves the handle's (context, slot, generation) through the arena's `validate_`,
+  reflecting the real slot/routing-record lifetime (outstanding / backend_ready / completion_ready /
+  not_found after release or reuse). Evidence: `tests/request_handle_test.cpp`
+  `f3_stale_generation_after_reuse_is_not_found` proves the public handle tracks the real lifetime
+  (a stale handle is `not_found` after slot reuse; ADR Decision 10's generation boundary enforced).
+  Deterministic; no sleeps. Not a C2c gap.
 - **Phase D** — Uring RequestArena migration: PENDING; Uring C2c conformance is the
   `uring_c2c_borrow_waiter_not_implemented` record, never skip-as-pass.
 - **Phase G** — backend-ready progress wake bridge: PENDING (out of C2c scope).

@@ -565,5 +565,14 @@ backend migration is complete: ThreadPool in Phase E (PR #64 — see
   (registry-nonempty destruction fail-fast), and the real-liburing
   `uring_f1_scheduler_routing` case.
 
-Remaining after F1: F2 (Batch origin flag), F3 (public RequestHandle/waiter
-API surface — API ADR required), and the backend-ready wake bridge (Phase G).
+Remaining after F1+F2+F3 (Phase F COMPLETE): only the backend-ready wake
+bridge (Phase G). F2 added `BatchResultOrigin` (rejected vs
+accepted_and_completed) to `BatchResult` (ADR Decision 9 — Batch consumes
+outcome origin explicitly; `tests/batch_result_origin_test.cpp`). F3 added the
+public `RequestHandle` identity surface (ADR-public-request-handle): additive
+`submit_*_request -> Result<RequestHandle>`, the read-only `request_state`
+identity consumer, non-forgeable construction (negative-compile gate), and the
+`not_supported` policy for external/non-arena backends
+(`tests/request_handle_test.cpp` — cross-context C2b-4b + stale-generation
+C2c-14b provenance). Phase G (wake bridge, 2ms backstop decision, DIV-04/05
+reclassification) remains separate and untouched.

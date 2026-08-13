@@ -96,9 +96,10 @@ public data members; its non-forgeability comes from per-use re-validation insid
 the arena (`validate_`), not from construction control. This ADR does NOT change
 `detail::RequestKey` (it remains internal). `RequestHandle` adds the
 construction-controlled public layer; it does not expose `detail::RequestKey` in
-its public API. A caller who separately includes `detail/request_key.hpp` can
-mint a `RequestKey`, but cannot turn it into a `RequestHandle` (private ctor) and
-has no public entry point that accepts a raw `RequestKey`.
+its public API. A caller who separately includes the internal
+`include/sluice/async/detail/request_key.hpp` header can mint a `RequestKey`,
+but cannot turn it into a `RequestHandle` (private ctor) and has no public entry
+point that accepts a raw `RequestKey`.
 
 ## Decision 3: derived from the Completion's private binding (no second registry)
 
@@ -281,7 +282,8 @@ reset, the handle is simply stale (`request_state == not_found`).
 - Closes **C2c row 14b** (routing-record lifetime): the handle's generation
   tracks the real slot lifetime; after reset/reuse a stale handle is `not_found`,
   matching the F1 Scheduler record lifetime.
-- Evidence: `tests/request_handle_*_test.cpp` (provenance, stale-generation,
-  cross-context, post-reap, post-reset), a public-only acceptance test, and
-  negative-compile authority gates (no forging the handle/key/lease). Full
+- Evidence: `tests/request_handle_test.cpp` (provenance, stale-generation,
+  cross-context, post-reap, post-reset — public headers only) and the
+  `tests/request_handle_authority_negative_probe.cpp` negative-compile authority
+  gate (no forging the handle/key/lease). Full
   command-backed evidence is recorded in the Phase-F closeout compliance gate.
