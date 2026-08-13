@@ -13,6 +13,22 @@ xmake test -v
 This is the minimum CI gate (Linux Clang Debug). All production libraries must
 build warning-clean.
 
+## Compiler floor
+
+Sluice's minimum language standard is **C++20** and every build path enforces
+it (root `set_languages("c++20")`; every script that compiles C++ passes
+`-std=c++20` explicitly; as-built `compile_commands.json` is 100% `-std=c++20`).
+
+Supported compiler floor (recommendation, 2026-08 audit —
+`docs/verification/audit-cpp20-baseline-legacy-2026-08.md`):
+
+- **GCC >= 11** (libstdc++ 11: concepts, `std::span`, `std::atomic::wait`);
+- **Clang >= 14** (full C++20 library support; Ubuntu 22.04 default pairing).
+
+The floor is enforced by CI only for the current ubuntu-latest Clang; a
+nightly gcc-11 / clang-14 floor job is the pending follow-up before the floor
+is frozen.
+
 ## Change-class-specific gates
 
 ### Public headers, templates, noexcept, assertions, API contracts

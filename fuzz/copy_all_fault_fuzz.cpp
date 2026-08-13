@@ -159,6 +159,7 @@ static void check_universal(const CopyConfig& cfg, std::span<const std::byte> so
                             const ReaderView& rv, const ModelWriter& writer,
                             const sluice::Result<std::uint64_t>& result,
                             const sluice::CopyStats& stats) {
+    (void)result;  // reserved for result-specific checks; universal invariants above
     const auto& sink = writer.bytes();
     const std::uint64_t sink_size = sink.size();
 
