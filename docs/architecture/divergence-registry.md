@@ -57,9 +57,9 @@ Status values:
 > evidence and D4's C2e wait/close/drain evidence are pending; stub mode is
 > still build/API-only. No new Zig divergence or lifecycle authority is added.
 
-> **Phase D3/D4 reconciliation (2026-08-10):** D3 (draft PR #83, branch
+> **Phase D3/D4 reconciliation (2026-08-10):** D3 (PR #83, branch
 > test/phase-d3-uring-identity-waiter-conformance) closed the C2b/C2c
-> integration records with real-liburing evidence and D4 (branch
+> integration records with real-liburing evidence and D4 (PR #84, branch
 > `feat/phase-d4-uring-wait-close-drain`) implemented the wait source
 > (ring-fd poll + control eventfd), `close_admission()` with accept-LP
 > serialization, the drained-vs-releasable destruction proof, the shared C2e
