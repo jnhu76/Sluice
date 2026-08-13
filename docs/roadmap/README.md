@@ -13,15 +13,10 @@ The following phases are **complete** and no longer active:
 - **E13 Select** — multi-arm Event/Timer select with deterministic causal tests
 - **E14 Threaded/Evented parity** — semantic parity between Threaded and Evented execution strategies
 - **E15 Runtime Foundation** — Mutex noexcept/fail-fast, Queue production implementation, cross-primitive closure, Future/Group/Batch
+- **E16 Application Runtime** — `ApplicationRuntime` / `RuntimeTaskContext` lifecycle layer ([ADR-application-runtime](../adr/ADR-application-runtime.md), Accepted; `api-reference.md` §`sluice::async::ApplicationRuntime`)
 - **Sync runtime** — positional I/O, BlockingIoPool, W1–W4 benchmarks (ADR-024S)
 
 ## Future work
-
-### E16 Application Runtime
-
-- **Status:** Proposed — design only, not implemented.
-- **Preconditions not met:** See `docs/adr/ADR-application-runtime.md` §15, §17.
-- **Do not present as accepted or implemented.**
 
 ### v0.1.x hardening / bug hunt
 

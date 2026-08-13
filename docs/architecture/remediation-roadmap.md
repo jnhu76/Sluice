@@ -7,7 +7,10 @@ architecture audit. A phase may not claim completion without its named evidence.
 governed by the current findings, divergence registry, Zig conformance map, and
 the Accepted
 [Unified Explicit I/O Request Contract](../adr/ADR-explicit-io-request-contract.md).
-Statuses below reflect master as of PR #64 (merge commit `a8178d8`).
+Statuses below reflect master `5e5ec36` (2026-08-12, merge of PR #93;
+re-baselined by audit issue #94). Phase A–E and D are complete; the remaining
+implementation work is Phase F (Scheduler/Batch identity consumption, issue
+#98) and Phase G (backend-ready wake integration).
 
 **Ordering rule:** Stabilize bottom-layer request identity, admission, and reap
 before higher-layer Scheduler/Batch/wake migration. Do not make a persistent
@@ -60,8 +63,9 @@ docs(adr): define unified Explicit I/O Request Contract
 **Status:** Complete — `ADR-explicit-io-request-contract.md` is Accepted
 (2026-08-02). Documentation-only — no production behavior was changed by the ADR
 itself. Its target contract is implemented for the reference backends by Phase B
-and for `ThreadPoolBackend` by Phase E; Uring migration remains Phase D, while
-Scheduler/Batch identity consumption and wake integration remain Phases F and G.
+(PR #63), for `ThreadPoolBackend` by Phase E (PR #64), and for
+`UringAsyncBackend` by Phase D (PR #78/#80/#83/#84); Scheduler/Batch identity
+consumption remains Phase F and wake integration remains Phase G.
 
 **Decisions made:**
 
@@ -188,7 +192,9 @@ coverage).
   Fake = ELIGIBLE, ThreadPool = ELIGIBLE, **Uring = NOT CONFORMING**
   (KernelIo lifecycle/backend-specific INCOMPLETE — Phase D migration not
   implemented), external probe = admission PASS / conformance NOT ASSESSED.
-  `Uring` is never marked conforming.
+  `Uring` is never marked conforming. *(C1-era report — superseded: D3/D4
+  closed the KernelIo records and lifted the fail-closed gate; see the C2d
+  text below and Phase D.)*
 
   - **C1 corrective (PR #66 review):** the first C1 push had two latent defects
     surfaced by GitHub CI (run `30972306135`): (1) the manifest self-test called
@@ -240,7 +246,9 @@ coverage).
     evidence for cancel-winner and publication-boundary semantics (rows 5–8).
     Uring's Phase-D identity gap is recorded as a `not_implemented` manifest
     record (`uring_c2b_identity_not_implemented`), which enters Uring's verdict
-    via `applicable_evidence_for_backend()`. Eight single-point production
+    via `applicable_evidence_for_backend()`. *(Superseded: D3 closed this
+    record with real-liburing evidence — see C2d below and Phase D.)* Eight
+    single-point production
     mutations (A, B1, B2, C, D, E, F, G) prove each detector case fails on
     deliberately nonconforming identity behavior. **Row 4b — cross-context
     `RequestKey` authority rejection — is Phase F scope**, not a C2b gap: the
@@ -271,7 +279,8 @@ coverage).
     Phase F scope** — the Accepted ADR's own Decision 10 boundary (Phase B
     proves abstract transfer; Phase F proves real Scheduler lifetime); C2c
     adds no public waiter API. Uring's Phase-D gap is the
-    `uring_c2c_borrow_waiter_not_implemented` record. See
+    `uring_c2c_borrow_waiter_not_implemented` record. *(Superseded: D3 closed
+    this record with real-liburing evidence — see C2d below and Phase D.)* See
     [`phase-c2c-compliance-gate.md`](phase-c2c-compliance-gate.md).
 
   - **C2d — failure injection / accepted-terminal under allocator failure:
@@ -357,7 +366,8 @@ coverage).
     (`docs/verification/phase-c2e-close-drain-destruction-mutation-evidence.md`).
     Uring's Phase-D gap is the `uring_c2e_close_drain_not_implemented` record,
     which enters Uring's verdict — Uring stays NOT CONFORMING and is never
-    skip-as-pass for close/drain/destruction. See
+    skip-as-pass for close/drain/destruction. *(Superseded: D4 closed this
+    record with real-liburing evidence — see C2d below and Phase D.)* See
     [`phase-c2e-compliance-gate.md`](phase-c2e-compliance-gate.md).
 
   The "must cover" scope below is broader than the 8-case shared suite: injected
@@ -417,9 +427,9 @@ refactor(async): migrate UringBackend to RequestSlot identity
 ```
 
 **Status:** COMPLETE — D0/D0.5 complete; D1 complete via PR #78; D2 complete
-with command-backed real-liburing evidence; D3 complete (draft PR #83,
-branch test/phase-d3-uring-identity-waiter-conformance) closing the C2b/C2c
-integration matrix; D4 complete (draft PR stacked on the D3 head, branch
+via PR #80 with command-backed real-liburing evidence; D3 complete via PR #83
+(branch test/phase-d3-uring-identity-waiter-conformance) closing the C2b/C2c
+integration matrix; D4 complete via PR #84 (branch
 `feat/phase-d4-uring-wait-close-drain`) implementing the wait source,
 close/drain/destruction proof and lifting the KernelIo fail-closed gate only
 after the complete mandatory real-mode evidence set passed
@@ -437,12 +447,9 @@ capacity evidence; D3 closed `uring_c2b_identity_not_implemented` and
 `uring_c2c_borrow_waiter_not_implemented`; D4 closed
 `uring_c2e_close_drain_not_implemented` and lifted the KernelIo hard-code.
 
-**Remaining work:**
-
-- review and merge of the two stacked draft PRs (D3 test/phase-d3-uring-identity-waiter-conformance,
-  D4 `feat/phase-d4-uring-wait-close-drain`) after human review; and
-- preserve honest stub/build evidence separately from real execution evidence
-  (maintained by the per-suite KernelIo real-mode attribution).
+**Remaining work:** none. D3 (PR #83) and D4 (PR #84) were merged on
+2026-08-10/11; the stub/build-vs-real evidence separation is maintained by the
+per-suite KernelIo real-mode attribution (unchanged requirement).
 
 **Dependencies:** Phase C. No Scheduler dependency.
 
@@ -490,23 +497,42 @@ command-backed evidence and the resolution notes in `current-architecture-findin
 refactor(runtime): consume identity-bearing reap events
 ```
 
-**Work:**
+**Work (re-baselined by audit issue #94; runtime decomposition in issue #98):**
 
-- migrate all selected backends to identity-bearing reap before switching the
-  common Scheduler path; do not run a mixed scan/event authority indefinitely;
-- route a ReadyEvent/RequestKey to the one registered waiter while preserving
-  Scheduler-owned runnable routing;
-- remove O(N) `Completion::ready()` scans from completion progress;
-- enforce context provenance and synchronous duplicate-waiter `invalid_state`;
-- make waiter cancellation remove only the waiter, not cancel the I/O;
-- make Batch distinguish `rejected` from `accepted_and_completed` explicitly;
-- remove or demote process-global `reap_seq` from ordering authority; and
-- preserve Runtime ownership and current shutdown sequencing unless a separate
-  approved design changes them.
+- **F1 (MVP)** — Scheduler consumes identity-bearing reap: a production
+  identity-bearing ReadySink that routes `ReadyEvent{key, token, lease}` to the
+  registered Scheduler wait record while preserving Scheduler-owned runnable
+  routing. The arena machinery (`request_arena.hpp` `register_waiter` /
+  `cancel_waiter` / `WaiterToken` / `RoutingLease`) exists but is exercised only
+  by `SLUICE_ASYNC_INTERNAL_TESTING` seams — never by production reap→Scheduler
+  handoff;
+- **F1** — remove the O(N) `Completion::ready()` re-scan from the
+  completion-progress path (`scheduler.cpp` `wake_ready_completions_locked`
+  scanning the `Completion*`-keyed `waiting_size_`/`waiting_void_` maps);
+- **F1** — enforce context provenance and synchronous duplicate-waiter
+  `invalid_state` on the Scheduler side (C2b row 4b / C2c rows 12b+14b:
+  arena-level single-waiter is proven; cross-context rejection and real
+  Scheduler routing-record lifetime are the Accepted ADR's own Phase F
+  deferral);
+- **F1** — waiter cancellation removes only the waiter, not the I/O (arena
+  `cancel_waiter` proven; no production Scheduler caller yet);
+- **F2** — Batch origin flag: distinguish `rejected` at submit from
+  `accepted_and_completed` explicitly. Submit-time errors already surface with
+  `reap_seq 0` and `wait_err` precedence (`batch.cpp:133`); the residual is the
+  missing explicit `BatchResult` origin flag;
+- **F3** (optional, API ADR required) — public RequestHandle/waiter API surface
+  (ADR rows 12b/14b). AGENTS.md notes RequestKey is currently internal.
 
 The exact `wait_one`/cancel concurrency lock design must be completed before
 changing L1 synchronization. The request contract fixes target identity and
 disposition, but does not authorize an incidental lock redesign.
+
+**Already implemented (removed from Phase F scope):** the backend half of
+identity-bearing reap — all four backends reap through the arena's
+identity-bearing `SynchronousReadySink` with by-value `ReadyEvent`; and the
+process-global `reap_seq` ordering authority was removed/demoted (F-02
+closeout, `completion.hpp:113` — internal ordering mechanism consumed only by
+`Batch::next()`, not public API).
 
 **Dependencies:** Phases C, D, and E for the backends selected into the unified
 production path. No wake-bridge dependency.
@@ -558,13 +584,13 @@ current type is named `ThreadPoolBackend`.
 | Finding/divergence | Target phase |
 |---|---|
 | P0-01, P1-04, P2-01, P2-02, P2-03, DIV-03, DIV-12 | E, after B/C — **resolved in Phase E (PR #64)** |
-| residual P0-02 | B/C reference (closed); D Uring — open; E ThreadPool — resolved (PR #64) |
-| P1-02, P1-06, P1-07 | B/C, then D/E/F |
+| residual P0-02 | B/C reference (closed); E ThreadPool — resolved (PR #64); D Uring — resolved (PR #78/#80/#83/#84) |
+| P1-02, P1-06, P1-07 | B/C reference CLOSED; D/E production backends RESOLVED; F Scheduler/Batch consumption |
 | P1-05 | B/C vocabulary and metrics |
 | P1-08, P1-09, P1-10 | B/C target semantics; focused lock design and F integration |
-| P2-05 | F |
+| P2-05 | F (Batch origin flag — F2) |
 | P2-04, DIV-04, DIV-05 | G |
-| DIV-02 target ownership | A; implementation B–E; revisit only on measured trigger |
+| DIV-02 target ownership | A; implementation B–E + D; revisit only on measured trigger |
 | DIV-13 public backend conformance | C, enforced for D/E and future backends |
 
 ## Global rules for every implementation phase

@@ -105,8 +105,24 @@ struct PhaseProbe {
     const std::atomic<bool>* gate_paused = nullptr;
     const std::atomic<bool>* gate_resume = nullptr;
     const std::atomic<bool>* gate_exited = nullptr;
+    // Issue #101 corrective (2026-08-13): progress checkpoints. `progress_epoch`
+    // is bumped at every phase transition and every race-loop iteration;
+    // `iteration` is the current race-loop index. The watchdog polls these
+    // lock-free counters and uses them to distinguish State A (progress
+    // continued until the case-total deadline — budget exhaustion / slow
+    // execution) from State B (no progress for a bounded interval — a genuine
+    // stall). Diagnostic-only: relaxed stores; the watchdog reads with acquire.
+    std::atomic<std::uint64_t> progress_epoch{0};
+    std::atomic<std::uint64_t> iteration{0};
 
-    void set(CasePhase p) noexcept { phase.store(p, std::memory_order_release); }
+    void set(CasePhase p) noexcept {
+        phase.store(p, std::memory_order_release);
+        progress_epoch.fetch_add(1, std::memory_order_relaxed);
+    }
+    void note_iteration(std::uint64_t iter) noexcept {
+        iteration.store(iter, std::memory_order_relaxed);
+        progress_epoch.fetch_add(1, std::memory_order_relaxed);
+    }
     void bind_gate(const std::atomic<bool>& paused,
                    const std::atomic<bool>& resume,
                    const std::atomic<bool>& exited) noexcept {
@@ -116,31 +132,38 @@ struct PhaseProbe {
     }
 };
 
-// Issue #86-B / #92 case-level last-resort watchdog. The gate handshakes are
-// fully bidirectional blocking atomic::wait (zero-CPU), so under correct
+// Issue #86-B / #92 / #101 case-level last-resort watchdog. The gate handshakes
+// are fully bidirectional blocking atomic::wait (zero-CPU), so under correct
 // protocol every case completes in seconds — even the 64-iteration race loop
-// takes well under 15s under TSan. The deadline is NOT a correctness deadline
-// and NOT a root-cause classifier: a wall-clock bound cannot distinguish a
-// genuine protocol deadlock from complete host-scheduler starvation. It is a
-// last-resort boundedness guard that converts an unbounded hang into a bounded
-// abort WITH phase attribution so the next failure points at the stalled phase
-// instead of reporting only "30s elapsed". It ABORTs (not FAILs) because a stuck
-// protocol is a catastrophic defect, not a Scheme-B correctness assertion.
+// takes well under 15s under TSan. The deadline is NOT a correctness deadline:
+// a wall-clock bound cannot distinguish a genuine protocol deadlock from
+// complete host-scheduler starvation. It is a last-resort boundedness guard
+// that converts an unbounded hang into a bounded abort.
+//
+// Two-tier diagnosis (issue #101, 2026-08-13): the watchdog polls the probe's
+// progress checkpoints (lock-free atomics only) every kPollInterval and
+// records when the progress epoch last moved. On deadline expiry it CLASSIFIES
+// the failure instead of printing a bare "30s elapsed":
+//
+//   - State B — STALLED: the progress epoch has not moved for a bounded
+//     interval (kNoProgressThreshold). Only this supports a true no-progress
+//     diagnosis.
+//   - State A — PROGRESS CONTINUED: the epoch moved shortly before the
+//     case-total deadline expired. This is case-total budget exhaustion / slow
+//     execution, NOT stall evidence.
+//
+// The abort is retained in both states (fail-closed process containment; the
+// gate is not weakened). It ABORTs (not FAILs) because a stuck protocol is a
+// catastrophic defect, not a Scheme-B correctness assertion.
 class Watchdog {
 public:
     explicit Watchdog(std::chrono::seconds timeout, const PhaseProbe& probe)
-        : probe_(&probe) {
-        deadline_ = std::chrono::steady_clock::now() + timeout;
+        : probe_(&probe),
+          timeout_ms_(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)),
+          start_(std::chrono::steady_clock::now()) {
+        deadline_ = start_ + timeout;
         try {
-            thread_ = std::thread([this] {
-                std::unique_lock<std::mutex> lk(mtx_);
-                (void)cv_.wait_until(lk, deadline_, [this] {
-                    return done_.load(std::memory_order_acquire);
-                });
-                if (!done_.load(std::memory_order_acquire)) {
-                    diagnose_and_abort();
-                }
-            });
+            thread_ = std::thread([this] { run(); });
         } catch (...) {
             // Fail-closed: the watchdog is the only bound on the blocking
             // atomic::wait handshakes, so a thread-creation failure must fail
@@ -164,15 +187,74 @@ public:
     Watchdog(const Watchdog&) = delete;
     Watchdog& operator=(const Watchdog&) = delete;
 private:
+    // Poll cadence for the progress checkpoints, and the bounded interval that
+    // defines "no progress" at expiry: min(5s, timeout/2). The 1s
+    // diagnostic-path child (never progresses) still classifies as STALLED;
+    // a 30s case needs ~5s of frozen progress for a stall verdict, so a case
+    // that moved its progress epoch shortly before expiry is reported as
+    // budget exhaustion, not deadlock.
+    static constexpr auto kPollInterval = std::chrono::milliseconds(100);
+
+    void run() noexcept {
+        std::unique_lock<std::mutex> lk(mtx_);
+        auto last_progress_at = start_;
+        auto last_epoch = probe_->progress_epoch.load(std::memory_order_acquire);
+        while (true) {
+            const bool done = cv_.wait_until(
+                lk, std::chrono::steady_clock::now() + kPollInterval, [this] {
+                    return done_.load(std::memory_order_acquire);
+                });
+            if (done) return;
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline_) {
+                diagnose_and_abort(now, last_progress_at);
+            }
+            const auto epoch = probe_->progress_epoch.load(std::memory_order_acquire);
+            if (epoch != last_epoch) {
+                last_epoch = epoch;
+                last_progress_at = now;
+            }
+        }
+    }
+
     // Reads ONLY atomics and the immutable name pointer; never touches
     // work_mtx_/arena, so the watchdog cannot deadlock behind the defect.
-    void diagnose_and_abort() noexcept {
+    [[noreturn]] void diagnose_and_abort(
+        std::chrono::steady_clock::time_point now,
+        std::chrono::steady_clock::time_point last_progress_at) noexcept {
         const CasePhase ph = probe_->phase.load(std::memory_order_acquire);
+        const auto elapsed_since_progress = std::chrono::duration_cast<
+            std::chrono::milliseconds>(now - last_progress_at);
+        const auto total_elapsed = std::chrono::duration_cast<
+            std::chrono::milliseconds>(now - start_);
+        const auto no_progress_threshold = std::chrono::milliseconds(
+            std::min<std::int64_t>(5000, timeout_ms_.count() / 2));
+        const bool stalled = elapsed_since_progress >= no_progress_threshold;
         std::fprintf(stderr,
                      "ThreadPool test watchdog: case exceeded the last-resort "
                      "boundedness deadline; aborting for diagnostics\n");
+        std::fprintf(stderr,
+                     "  classification=%s\n",
+                     stalled
+                         ? "STALLED (progress epoch frozen for >= the no-progress "
+                           "interval — true no-progress evidence)"
+                         : "PROGRESS CONTINUED (progress epoch moved within the "
+                           "no-progress interval — case-total budget exhaustion / "
+                           "slow execution, NOT stall evidence)");
         std::fprintf(stderr, "  case=%s\n  phase=%s\n",
                      probe_->name ? probe_->name : "?", phase_name(ph));
+        std::fprintf(stderr, "  iteration=%llu\n  progress_epoch=%llu\n",
+                     static_cast<unsigned long long>(
+                         probe_->iteration.load(std::memory_order_acquire)),
+                     static_cast<unsigned long long>(
+                         probe_->progress_epoch.load(std::memory_order_acquire)));
+        std::fprintf(stderr,
+                     "  elapsed_since_last_progress=%lldms\n"
+                     "  no_progress_interval=%lldms\n"
+                     "  total_elapsed=%lldms\n",
+                     static_cast<long long>(elapsed_since_progress.count()),
+                     static_cast<long long>(no_progress_threshold.count()),
+                     static_cast<long long>(total_elapsed.count()));
         if (probe_->gate_resume != nullptr) {
             std::fprintf(stderr, "  gate: paused=%d resume=%d exited=%d\n",
                          probe_->gate_paused->load(std::memory_order_acquire),
@@ -187,6 +269,8 @@ private:
     std::atomic<bool> done_{false};
     std::thread thread_;
     const PhaseProbe* probe_;
+    std::chrono::milliseconds timeout_ms_;
+    std::chrono::steady_clock::time_point start_;
 };
 
 // Watchdog timeout: generous enough that it does not fire under correct
@@ -1138,6 +1222,7 @@ SLUICE_TEST_CASE(tp_cancel_races_worker_terminal_exactly_one) {
     };
 
     for (std::size_t iter = 0; iter < kIters && fail_msg == nullptr; ++iter) {
+        probe.note_iteration(iter);  // progress checkpoint for the watchdog
         Completion<std::size_t> c;
         if (!backend.submit_read(ReadOp{fd, buf, 1, 0}, c).has_value()) {
             // Submit rejected: c is idle, nothing to clean up.

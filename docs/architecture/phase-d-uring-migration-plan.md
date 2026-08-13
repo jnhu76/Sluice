@@ -1,5 +1,11 @@
 # Phase D — UringAsyncBackend RequestArena Migration: SOTA-Aligned Plan
 
+> **Historical document.** This is the Phase D plan as of 2026-08-11; its
+> "draft PR" wording reflects the pre-merge state at that date. Current status:
+> Phase D is **COMPLETE** — D1 merged via PR #78, D2 via PR #80, D3 via PR #83,
+> D4 via PR #84; KernelIo is ELIGIBLE in real mode. See
+> [remediation-roadmap.md](remediation-roadmap.md) Phase D and audit issue #94.
+
 **Status:** D0/D0.5 COMPLETE; D1 COMPLETE (PR #78); D2 COMPLETE; D3 COMPLETE
 (draft PR #83, branch test/phase-d3-uring-identity-waiter-conformance);
 D4 COMPLETE (draft PR stacked on the D3 head, branch

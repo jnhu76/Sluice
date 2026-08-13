@@ -1,138 +1,170 @@
 # Zig std.Io → Sluice Conformance Map
 
-**Baseline:** `b20bcc7` (master, including PR #60 and PR #61). Zig sources:
-`zig/lib/std/Io.zig` and the local `Io/{Threaded,Uring,Kqueue,Dispatch,fiber}.zig`
-reference files.
+This map is a **comparator**, not a compatibility promise. A row classified
+faithful (`F`) means a Sluice caller can express the Zig capability, not that
+Sluice implements Zig's mechanism or ABI.
 
-The primary matrix classifies the **current accepted architecture and
-implementation**, not a Proposed target. Target-design decisions that would
-change a classification are listed separately in “Proposed target deltas”;
-they are not current conformance evidence until implemented.
+**Sluice baseline SHA:** `5e5ec3663d69f09b5b571ea01c9f4200c75aec98` (master,
+2026-08-12, merge of PR #93).
+**Zig baseline SHA:** vendored `zig/lib/std/Io.zig` is a gitignored Zig
+**0.16.0-dev** snapshot ≈ 2026-04-14 (no SHA in-tree); "still current" claims
+were verified against Codeberg `ziglang/zig` master `89e0881f` (2026-08-11).
+The GitHub mirror is frozen at `738d2be9`; Zig now lives on Codeberg.
+**Audit issue:** [#94](https://github.com/jnhu76/Sluice/issues/94)
+(re-baseline scope: issue #95).
+**Last reconciled:** 2026-08-13.
 
 Classification key:
-- **F** — Faithful: core semantic preserved, C++ expression differs
+- **F** — Faithful enough: core semantic preserved, C++ expression differs
 - **I** — Intentional Divergence: approved by ADR/design/test
-- **A** — Accidental Drift: no explicit decision, emerged during implementation
-- **M** — Missing: Zig capability absent in Sluice
-- **O** — Obsolete: doc/implementation no longer represents architecture
+- **M** — Missing within intended scope: Zig capability absent in Sluice
+- **P** — Partial / evidence incomplete: protocol faithful, domain narrowed
+- **O** — Obsolete comparison axis: no longer represents current Zig
 - **U** — Unresolved: evidence insufficient or contradictory
+- **X** — Outside current Sluice scope: deliberately not targeted
+
+Two axes are used per row:
+
+- **Semantic class** — can a Sluice caller express the Zig behavior?
+- **Mechanism class** — does Sluice implement it via a similar mechanism?
+
+The former `A` (Accidental Drift) class is retired: the three rows that carried
+it (`Operation.Storage`, `Pending.Userdata`, resource bounds — all Uring) were
+resolved by the Phase D migration (PR #78/#80/#83/#84) and now carry their
+target classes with implementation evidence.
+
+---
+
+## Two-tier Zig taxonomy (verified against both baselines)
+
+- **Low-level tier:** `Operation` (tagged union, **7 tags** at `Io.zig:246` on
+  Codeberg master — it *grew* from 4 tags by folding `netSend`/`netRead`/
+  `netWrite` into `Operation` tags) + `operate` + caller-owned
+  `Operation.Storage` (`:490`, unused/submission/pending/completion) +
+  `Pending.Userdata = [7]usize` backend scratch (`:506`) + `Batch` (`:565`,
+  4 intrusive lists).
+- **High-level tier:** `Io.async`/`concurrent`/`await`/`cancel`/
+  `cancelRequested`; `Future`; `Group` (`groupAsync`/`groupConcurrent`/
+  `groupWait`/`groupCancel`); `Select`; `CancelProtection`/`recancel`/
+  `swapCancelProtection`/`checkCancel` + `*Uncancelable` sync-wait twins;
+  `futexWait`/`futexWake` family.
+- **Vtable surface (≈106 entries):** async/concurrency, group, select,
+  cancelable + uncancelable mutex/condition/event/queue/semaphore/rwlock,
+  clock (`now`/`sleep`/`Timeout`/duration/deadline), file (open/close/stat/
+  access/create/read/write/seek, streaming + positional), dir ops, net ops,
+  process ops, device ioctl.
+- **Backends:** `Threaded` (thread pool, `async_limit` default `cpu_count-1`),
+  `Uring` (struct `Evented`; work-stealing stackful fibers + per-thread
+  io_uring, `IORING_SETUP_COOP_TASKRUN|SINGLE_ISSUER`), `Kqueue` (same shape),
+  `Dispatch` (fibers + GCD).
 
 ---
 
 ## Conformance Matrix
 
-| Zig concept | Zig semantic purpose | Sluice equivalent | Class | Evidence | Consequence |
+| Zig concept | Zig purpose | Sluice equivalent | Sem | Mech | Evidence |
 |---|---|---|---|---|---|
-| `Io` (userdata + vtable) | Lightweight copyable capability; any holder can submit ops | `AsyncIoContext` (move-only, owning, mutex-serialized) | **I** | ADR-async-io-model §3 A6; `async_io_context.hpp:118-158` | Sluice context is an owner, not a borrowed capability. Runtime injects it. Acceptable for the current single-runtime model; a lightweight façade is deferred. |
-| `Operation` (tagged union) | Explicit op descriptor with typed result | `ReadOp/WriteOp/SyncDataOp/SyncAllOp` structs | **F** | `async_io_context.hpp:32-49`; ADR §3 | Same semantic: explicit positional ops, typed results. C++ uses separate structs instead of a tagged union. |
-| `Operation.Storage` (caller-owned reusable slot with intrusive lifecycle lists) | Caller allocates stable bounded storage for submission→pending→completion and identity-preserving reuse | Accepted API structure keeps Completion caller-owned and submission machinery context/backend-owned; Uring per-request records remain backend-specific, dynamic, and identity-fragmented, while Fake/Sync (Phase B, PR #63) and ThreadPool (Phase E, PR #64) use the bounded `RequestArena` / `RequestSlot` identity | **A** (Uring) | ADR-async-io-model caller/Completion ownership; backend sources; P1-06; DIV-02 Active transitional | **A** applies to the missing stable bounded request record and fragmented identity on Uring, not to the accepted caller/Completion ownership split. The Accepted contract selects a transitional storage target; its implementation status is shown below. |
-| `Pending.Userdata` (7×usize backend scratch per op) | Backend-private bounded scratch in stable operation storage | Fake/Sync and (Phase E) ThreadPool use a bounded `RequestSlot` per op; Uring still uses maps/deques rather than common bounded per-request scratch | **I** (Fake/Sync/ThreadPool); **A** (Uring) | Phase B/E backend sources; DIV-02 | Phase B/E moved the reference + blocking backends onto a bounded `RequestArena` of reusable `RequestSlot`s with fixed per-slot backend scratch (`ThreadPoolBackend::PreparedBlockingOp`). Uring remains on the legacy maps/deques path until Phase D. The exact Zig fixed-word ABI is not required (DIV-02). |
-| `operate` (blocking-shaped I/O on current task) | Submit + await on the current concurrency unit; returns result inline | `op_helpers::read_all/write_all` (poll-loop) or `RuntimeTaskContext::submit_* + await_completion` (Fiber suspend) | **F** | `op_helpers.hpp:1-64`; `application_runtime.hpp:60-86` | Both paths preserve blocking-shaped semantics. The Runtime path is the Evented equivalent; op_helpers is the Threaded equivalent. |
-| `Batch` (caller storage + concurrent await + intrusive lists) | N ops submitted together; await ≥1; iterate in completion order; cancel as a whole | `Batch` class (driver over AsyncIoContext; `vector<unique_ptr<Slot>>`) | **I** | `batch.hpp:1-137` | Semantic contract preserved (submit N, await ≥1, iterate reap order, cancel). Implementation is a driver over per-op submit, NOT a native backend batchAwait vtable. Documented as deliberate narrowing in Batch header. The mechanism diverges from Zig (no native batch vtable entry) but the caller-visible semantics are equivalent. |
-| `Threaded` (thread-per-task execution strategy) | Each async task gets a dedicated OS thread; blocking waits are natural | `Group()` default mode (thread-per-task via `std::thread`) + `ThreadPoolBackend` (Phase E: bounded persistent blocking-I/O workers) | **I** | `group.hpp:49-51`; ADR-execution-model §2 | Zig Threaded = thread-per-TASK. Sluice Group Threaded = thread-per-task (faithful). ThreadPoolBackend is a blocking-I/O OFFLOAD mechanism (a fixed pool of persistent workers + a bounded dispatch ring, as of Phase E), NOT an implementation of Zig Threaded — it is a different concept at a different layer. The historical per-op-thread model (DIV-03) is resolved; the name is retained for API continuity. |
-| `Evented` / `Uring` (scheduler + fiber + ring) | Suspend task/fiber on wait; scheduler worker remains free; kernel ring for I/O; backend owns completion wake; per-thread backend state | `Scheduler` + `Fiber` + `UringAsyncBackend` (gated) + `AsyncIoContext` + `ApplicationRuntime` | **I** | ADR-execution-model §2; `scheduler.hpp:212-265` | Execution semantics (Fiber suspends, worker free, task resumes) are faithful. But backend architecture diverges: Zig integrates scheduler + backend + wake in one Io vtable; Sluice splits into 4 independent components connected by a polling bridge. Uring integration topology also diverges (standalone backend vs. per-thread ring). Classified **I** overall: execution semantic F, backend boundary I, wake integration I. |
-| Completion wake (backend-owned wake integration) | Backend completion directly makes the waiting task runnable via the Io vtable | Scheduler polling bridge: `poll()`/`wait_one()` → `wake_ready_completions_locked()` → route Fiber | **I** | ADR §9.4.1 P3 (decoupled wake domains); ADR §9.4.12 (BACKEND-WAKE-SEAM-GAP) | Sluice backend does NOT directly wake the Scheduler. The Scheduler observes backend readiness via polling. Explicitly accepted as P3; P5 (interruptible backend wait) deferred. |
-| Durability ops (`fileSync` / direct vtable method) | Durability as a property of write ops or explicit Io call | `SyncDataOp`/`SyncAllOp` as first-class async operations with own Completion | **I** | ADR-async-io-model §3; `async_io_context.hpp:32-49` | Zig models durability inline; Sluice makes it a schedulable, cancellable, observable operation. Semantic enrichment, not loss. See DIV-06. |
-| Cancellation region (`CancelProtection`) | Structured cancel protection: protected/unprotected regions; `recancel`; `swapCancelProtection` | `CancelToken` (cooperative, single-shot) + `check_cancel`; no protection regions | **M** | ADR-async-io-model §7 X6 (deferred to job 021); `cancel.hpp` | Structured cancellation (protection regions, recancel) not implemented. Current model is minimal best-effort. |
-| Futex / sync capabilities (Io-aware waits) | `futexWait`, `futexWake`, Mutex, Condition, Event, Semaphore, RwLock — all Io-aware (suspend fiber, not thread) | E10–E12 primitives: `AsyncMutex`, `Event`, `AsyncCondition`, `AsyncQueue`, `Semaphore`, `AsyncRwLock` via `WaitQueue`/`WaitNode` + Scheduler | **F** | `scheduler.hpp:276-500`; ADR-execution-model §9 frontier E10-E12 | Full set implemented. All suspend the Fiber (not the OS thread) under Evented. Threaded fallback uses Future/WaitPolicy. |
-| Resource bounds (`Io.Limit`, `async_limit`, `concurrent_limit`) | Explicit concurrency limits and observable admission pressure | Fake/Sync and (Phase E) ThreadPool have bounded `request_capacity` with synchronous `would_block` admission; Uring has ring depth but no unified request capacity | **I** (Fake/Sync/ThreadPool); **A** (Uring) | Phase B/E backend headers; DIV-12 (Resolved for ThreadPool) | Phase B/E gave the reference + blocking backends explicit `request_capacity` and `would_block` admission via the bounded `RequestArena`. Uring still lacks a unified request capacity until Phase D. |
-| `Group` (cancel-propagation boundary; swallows Cancel) | Unordered task set; await/cancel as a whole; tasks swallow `error.Canceled` | `Group` class (Threaded + Evented modes) | **F** | `group.hpp:1-258` | Semantic preserved: cancel-propagation boundary, tasks swallow exceptions, await waits for all. |
-| `Select` (multi-wait winner protocol) | Wait on multiple sources; exactly-once winner | E13 `select()` template + `SelectGroup`/`SelectPort`/`SelectArmSlot` | **F** | `scheduler.hpp:16`; `select_fwd.hpp`; E13 spec | Implemented with exactly-once winner CAS. |
-| Registered buffers / files | Kernel-pinned buffers for zero-copy io_uring | Not implemented | **M** | ADR-async-io-model §5 (deferred); §14 | Explicitly deferred pending lifetime contract. |
-| Signal-based blocking syscall cancellation | `pthread_kill`/`tgkill` to interrupt blocking I/O | Not implemented | **M** | `threadpool_backend.hpp:29-33` | Portable cancel of in-flight blocking syscall deferred. Cancel is best-effort (op completes with real result). |
-| `AsyncBackend` (L0 internal seam) | Backend implementations are library-internal; caller never subclasses or sees backend internals | Public `AsyncBackend` extension point with trusted backend-author contract. `Completion` mutation stays private; derived backends receive protected `try_claim` / `publish` / `rollback_claim_before_accept` capabilities | **I** | ADR-explicit-io-completion-authority §3; DIV-13 (Accepted); `completion.hpp` (private mutators + friend AsyncBackend); `scripts/verify-completion-authority-negative-compile.sh` | Custom/test backends remain injectable without exposing mutation APIs to ordinary callers. Backend subclasses enter the trusted computing base and must satisfy the conformance contract; the current shared suite exercises the built-in backends, and a standardized conformance entry mechanism for external/custom backends remains incomplete Phase C work. |
-
----
+| `Io` (userdata + vtable) | Lightweight copyable capability; any holder can submit ops | `AsyncIoContext` (move-only owner, mutex-serialized) | I | I | DIV-01 Approved; `async_io_context.hpp:118-158` |
+| `Operation` (tagged union) | Explicit op descriptor with typed result | `ReadOp`/`WriteOp`/`SyncDataOp`/`SyncAllOp` structs + `BatchOp` variant | F | I | `async_io_context.hpp:32-49` |
+| `Operation.Storage` (caller-owned slot) | Caller allocates stable bounded storage for submission→pending→completion and identity-preserving reuse | Backend-owned `RequestSlot` arena (`detail::RequestArena`); Completion stays caller-owned (DIV-02 — **implemented on all four backends**, Phase B/E/D) | I | I | `request_arena.hpp`; `request_slot.hpp`; DIV-02 implemented |
+| `Pending.Userdata` (7×usize backend scratch per op) | Backend-private bounded scratch in stable operation storage | Fixed per-slot `TerminalResult` / `PreparedBlockingOp` / Uring cookie+router scratch | I | I | `request_slot.hpp`; `uring_backend.cpp:101-119` (cookie-routed `user_data`) |
+| `operate` (blocking-shaped I/O on current task) | Submit + await on the current concurrency unit; returns result inline | `op_helpers::read_all/write_all` (poll-loop) or `RuntimeTaskContext::submit_* + await_completion` (Fiber suspend) | F | I | `op_helpers.hpp:1-64`; `application_runtime.hpp:60-86` |
+| `Batch` + `batchAwait` | N ops submitted together; await ≥1; iterate in completion order; cancel as a whole | `Batch` driver over `AsyncIoContext` (reap order via internal `reap_seq`) | I | I | `batch.hpp:1-137`; documented narrowing (no native batch vtable) |
+| `Future` / `async` / `await` / `cancel` | Generic async computation | **Public `Future<T>`** (caller-owned value channel: producer `complete_with`, idempotent `await()`/`cancel()`, `cancel_token()` cooperative cancel) + `Group::async` task spawn + `RuntimeTaskContext::submit_* + await_completion` (op-level await); the physical wait delegates to a `WaitPolicy&` (Threaded = block thread, Evented = Fiber suspend via Scheduler) | F | I | `future.hpp` / `future_test.cpp` (public, sluice-CORE-028 T2); `group.hpp:58`; `wait_policy.hpp`; `fiber.hpp:60`; `scheduler.hpp:272`; `application_runtime.hpp:60-86` |
+| `Group` (`groupAsync`/`Concurrent`/`Wait`/`Cancel`) | Structured concurrency, cancel propagation | `Group` (Threaded = thread-per-task, Evented = Fiber); await/cancel/size; tasks swallow cancellation | F | I | `group.hpp:58`; DIV-03 |
+| `Select` | Multi-source exactly-one winner | `select()` over **Event + Timer cases only** — no I/O-Completion case | P | I | `select.hpp:40-43`; `select_fwd.hpp:34-36`; design issue [#99](https://github.com/jnhu76/Sluice/issues/99) |
+| `CancelProtection` / `recancel` / `swapCancelProtection` / `checkCancel` | Delivery-blocking protection regions + re-arm | `CancelProtection` enum, `CancelState::swap_protection`, `CancelGuard` RAII, `CancelToken::rearm` (= Zig `recancel`; request-epoch re-arm, ADR-cancel-request-epoch), `check_cancel` | F | F | `cancel.hpp` / `cancel.cpp` (request-epoch representation); `tests/cancel_token_test.cpp` (T-CANCEL-REARM-1, T-CANCEL-PROTECTION-2, T-CANCEL-CLEAR-3, T-CANCEL-SHARED-4, T-CANCEL-FUTURE-5 — rearm, protection+rearm, clear+request reuse, shared-token, Future consumer); DIV-11 Resolved |
+| I/O cancellation (pending/enqueued/running) | Cancel op, explicit disposition | Arena `cancel(SlotHandle)` Scheme-B: pending/enqueued → canceled terminal, running → intent only; reap publishes | F | F | `request_arena.hpp:655` |
+| cancelable/uncancelable sync waits (`futexWait` + twin) | Wait cancelable by default + uncancelable twin | Wait-cancel via `WaitQueue::cancel_locked`; **no explicit uncancelable twin** | P | I | `wait_queue.hpp:119` |
+| Io-aware sync primitives (Mutex/Condition/Event/Semaphore/RwLock/Queue) | Suspend fiber, not thread | `AsyncMutex`/`AsyncCondition`/`Event`/`Semaphore`/`AsyncRwLock`/`AsyncQueue` via WaitQueue+WaitNode | F | I | `async_mutex.hpp:86`; `condition.hpp:100`; `event.hpp:76`; `semaphore.hpp:80`; `async_rwlock.hpp:63` |
+| clock / `now` / `sleep` / `Timeout` | Scheduler-integrated time | Monotonic `deadline_t`, `advance_clock`, `*_until` waits, `TimerRegistration`, `TimerSelectCase`; **no standalone public `sleep_for`/`Timeout` type** | F | I | `scheduler.hpp:325-371`; `timer_registration.hpp` |
+| file open/close/stat/access/seek/streaming/dir | General filesystem I/O | **Not present** (positional read/write/sync_data/sync_all only) | X | X | DIV-08 Approved (file-only scope) |
+| networking (net ops, incl. the new `Operation` tags) | Sockets | **Not present** | X | X | DIV-08 Approved |
+| `Threaded` backend | Thread-per-task execution | `Group()` default mode (thread-per-task); **`ThreadPoolBackend` is a different concept** (bounded blocking-I/O offload) | I | I | DIV-03 Resolved |
+| `Uring` backend | Fibers + per-thread io_uring | `UringAsyncBackend` (single private ring, cookie-routed `user_data`, Scheduler fibers) | I | I | `uring_backend.cpp:481-490`; Phase D (PR #78/#80/#83/#84) |
+| `Kqueue` backend | BSD kevent | **Not present**; portable fallback = blocking ThreadPool path (macOS-validated, PR #93) | X | X | Intentional Linux-first portability choice |
+| Registered buffers / files | Kernel-pinned zero-copy | **Not present** | M | M | DIV-09 Accepted (deferred, lifetime contract) |
+| Signal-based blocking-syscall cancel | Interrupt in-flight syscall | **Not present**; running cancel = best-effort intent | M | M | DIV-10 Accepted |
+| Durability ops (`fileSync`) | Durability as a property of write ops or explicit Io call | `SyncDataOp`/`SyncAllOp` as first-class async operations | I | I | DIV-06; `async_io_context.hpp:32-49` |
+| Completion wake (backend-owned) | Backend completion directly makes the waiting task runnable | Scheduler polling bridge + 2ms MIXED-WAKE backstop | I | I | DIV-04/DIV-05; `scheduler.cpp:362`; Phase G |
+| `AsyncBackend` (L0 seam) | Library-internal backend boundary | Public `AsyncBackend` extension point with trusted backend-author contract | I | I | DIV-13 (Accepted); protected `try_claim`/`publish`/`rollback_claim_before_accept`; negative-compile gate |
 
 ## Summary by Classification
 
-| Class | Count | Key areas |
-|-------|-------|-----------|
-| F (Faithful) | 5 | Operation, operate, futex/sync, Group, Select |
-| I (Intentional) | 7 | Io capability shape, Batch driver, Threaded naming, Evented topology, completion wake bridge, SyncDataOp/SyncAllOp, AsyncBackend extension point |
-| A (Accidental) | 1 | Uring Pending.Userdata heap model (Phase D pending). Operation.Storage identity is now bounded `RequestArena` (Fake/Sync/ThreadPool); resource bounds are explicit for Fake/Sync/ThreadPool (Uring pending). |
-| M (Missing) | 3 | CancelProtection, registered buffers, signal-based syscall cancel |
+Semantic axis (can a caller express the behavior):
+
+| Class | Count | Areas |
+|-------|-------|-------|
+| F (Faithful) | 8 | Operation, operate, Future/async/await, Group, CancelProtection, I/O cancellation, Io-aware sync primitives, clock |
+| I (Intentional) | 9 | Io shape, Operation.Storage, Pending.Userdata, Batch, Threaded naming, Uring topology, durability ops, completion wake bridge, AsyncBackend extension |
+| M (Missing in scope) | 2 | Registered buffers, signal-based syscall cancel |
+| P (Partial) | 2 | Select case domain, uncancelable wait twins |
 | O (Obsolete) | 0 | — |
 | U (Unresolved) | 0 | — |
+| X (Out of scope) | 3 | file/dir/seek I/O, networking, Kqueue |
+
+Mechanism axis: F = 2 (CancelProtection family, I/O cancellation), I = 17,
+M = 2, X = 3, P = 0, O = 0, U = 0.
 
 ---
 
-## Proposed Target Deltas
+## Obsolete comparison axes from the previous map
 
-These rows show what acceptance and later implementation of
-ADR-explicit-io-request-contract would change (the ADR is now **Accepted**;
-per-row implementation status is listed). They are intentionally excluded
-from the current summary counts above.
+**None.** The previous map's axes (`Operation`, `Operation.Storage`,
+`Pending.Userdata`, `Batch`, `CancelProtection`, `futexWait`/`futexWake`,
+`Io {userdata, vtable}`, `Future`/`Group`/`Select`) were verified against the
+pinned snapshot AND Codeberg master `89e0881` — all remain present and
+load-bearing in current Zig. See the two-tier taxonomy above.
 
-> **Implementation status (Phase B, PR #63; Phase E, PR #64):**
-> ADR-explicit-io-request-contract is **Accepted**, and the reference layer
-> (Phase B) plus `ThreadPoolBackend` (Phase E) implement the
-> `Operation.Storage` identity/ownership adaptation, bounded `request_capacity`
-> admission, and the allocation-independent terminal path via the shared
-> `detail::RequestArena`. For Fake/Sync/ThreadPool these three rows advance to
-> their target class (**I** / **I** / **F**); `UringAsyncBackend` remains at the
-> baseline classification pending Phase D migration. The matrix above stays
-> anchored to the `b20bcc7` baseline until Uring migrates; see
-> `docs/architecture/phase-b-compliance-gate.md` and
-> `docs/architecture/phase-e-compliance-gate.md` for the evidence ledgers.
-
-| Concept | Current class | Proposed target class | Decision status | Implementation status |
-|---|---:|---:|---|---|
-| `Operation.Storage` ownership and identity | **A** | **I** | Accepted (ADR-explicit-io-request-contract); DIV-02 Active transitional | Reference-layer implemented (Phase B: `detail::RequestArena` + `RequestKey`/`Generation`) + ThreadPool (Phase E, PR #64); Uring pending Phase D |
-| `Pending.Userdata` bounded per-request scratch | **A** | **I** | Accepted; bounded semantic requirement specified | Reference-layer implemented (Phase B: pre-reserved per-slot `TerminalResult` storage + waiter registration) + ThreadPool (Phase E: fixed `PreparedBlockingOp` per slot); Uring pending Phase D |
-| Resource bounds | **A** | **F** | Accepted; bounded `request_capacity` with `would_block` | Reference-layer implemented (Phase B: arena capacity + `capacity_rejections`) + ThreadPool (Phase E, PR #64: `ThreadPoolConfig{request_capacity, worker_count}` + `would_block` admission); Uring pending Phase D |
+**Only structural drift recorded:** `netSend`/`netRead`/`netWrite` moved out of
+dedicated VTable slots into `Operation` tags (3 slots → 3 tags, plus
+`net_receive` already there). This *strengthens* `Operation` as a comparison
+axis; it does not obsolete anything. Sluice's networking rows are `X` by
+DIV-08 regardless of how Zig encodes the op.
 
 ---
 
 ## Notes
 
-1. The largest current implementation gap is **resource bounds for
-   `UringAsyncBackend`**: the Accepted request contract selects bounded
-   `request_capacity` and synchronous `would_block`, and Fake/Sync (Phase B) and
-   ThreadPool (Phase E) now implement the common bounded `RequestArena`; Uring
-   still has ring depth but no unified request capacity. The Uring rows stay
-   **A** until Phase D implementation evidence exists.
+1. **This map is a comparator, not a compatibility promise.** A faithful row
+   does not mean Sluice replicates Zig's ABI, vtable, or storage layout; it
+   means the caller-visible behavior is expressible.
 
-2. The **completion wake bridge** (polling instead of direct backend→Scheduler
-   wake) is an explicit, documented, accepted decision (E9 P3). It is classified
-   **I** despite being a significant structural difference from Zig.
+2. **Old-map concepts are still current.** The seed assumption behind the
+   original map (that `Operation`/`Operation.Storage`/`Pending.Userdata`/
+   `CancelProtection` belonged to an older Zig design) is incorrect — all of
+   them exist in Codeberg master today. Do not reclassify them `O`.
 
-3. **Operation.Storage** was current class **A** for the absence of common
-   stable bounded request storage and identity. Caller-owned Completion and
-   context/backend submission machinery are already accepted API structure;
-   they are not accidental. The Accepted ADR and DIV-02 (Active transitional)
-   select target class **I** for the backend/context-owned bounded RequestSlot
-   adaptation; Fake/Sync (Phase B) and ThreadPool (Phase E) implement it, and
-   Uring (Phase D) remains the outstanding production backend.
+3. **`ThreadPoolBackend` is a blocking-I/O offload mechanism** — a fixed pool
+   of persistent blocking-I/O workers + a construction-time bounded dispatch
+   ring — NOT an implementation of Zig's `Threaded` execution strategy
+   (thread-per-task). `Group` Threaded mode is the faithful Zig Threaded
+   equivalent (DIV-03, Resolved). Conflating these leads to incorrect capacity
+   reasoning.
 
-4. **Pending.Userdata** heap mechanics remain **A** (Accidental Drift) for
-   `UringAsyncBackend`. The target bounded RequestSlot scratch and
-   intrusive/pre-reserved linkage are implemented for Fake/Sync (Phase B) and
-   ThreadPool (Phase E, `PreparedBlockingOp` per slot); Uring still uses
-   maps/deques until Phase D.
+4. **Uring topology diverges intentionally.** Zig `Uring` uses per-thread
+   io_uring instances with work-stealing stackful fibers; Sluice uses a single
+   private ring with cookie-routed `user_data` (`uring_backend.cpp:101-119`)
+   under the Scheduler's fibers. Phase D (PR #78/#80/#83/#84) completed the
+   bounded `RequestArena` migration, descriptor validation before commit
+   (`uring_backend.cpp:378-433`), and `UringConfig{request_capacity=64,
+   queue_depth=64}` with `would_block` admission. KernelIo is ELIGIBLE in real
+   mode; stub builds honestly report INCOMPLETE.
 
-5. **ThreadPoolBackend** is a blocking-I/O offload mechanism — as of Phase E
-   (PR #64) a fixed pool of persistent blocking-I/O workers + a construction-
-   time bounded dispatch ring — NOT an implementation of Zig's `Threaded`
-   execution strategy (thread-per-task). Group Threaded mode is the faithful
-   Zig Threaded equivalent. Conflating these leads to incorrect capacity
-   reasoning. (The historical thread-per-op model is DIV-03, Resolved.)
+5. **The completion wake bridge is still polling-based.** Backend readiness is
+   observed via `poll()`/`wait_one()` and the 2ms MIXED-WAKE backstop
+   (`scheduler.cpp:362`); backend completion does not directly make the
+   Scheduler park domain runnable. Classified **I** (DIV-04/DIV-05, Accepted).
+   Phase G owns any change.
 
-6. **Evented** is no longer classified as a single **F**. The execution
-   semantic (Fiber suspends, worker free) is faithful, but the backend
-   architecture (4 independent components + polling bridge vs. Zig's
-   integrated Io vtable) is an intentional structural divergence. The
-   coarse single-F classification masked these differences.
+6. **`P` rows are domain-narrowing, not mechanism gaps.** `Select` implements
+   the exactly-one-winner protocol faithfully but over Event + Timer cases
+   only (no I/O-Completion case — issue #99); sync waits have wait-cancellation
+   but no `*Uncancelable` twin; the clock row lacks a standalone public
+   `sleep_for`/`Timeout` convenience type.
 
-7. **AsyncBackend** is classified **I** (Intentional Divergence), not **U**.
-   DIV-13 is Accepted: the ADR claim that L0 is an internal seam is superseded
-   by the public extension point decision (ADR-explicit-io-completion-authority
-   §3). Publication mutators stay private on `Completion<T>`; derived backends
-   receive the protected `try_claim` / `publish` / `rollback_claim_before_accept`
-   helpers as the sanctioned backend-author capability. Ordinary non-backend
-   callers still cannot forge publication (negative-compile gate). The shared
-   backend conformance suite (`tests/backend_conformance.hpp` +
-   `backend_conformance_driver_test.cpp`, target `backend_conformance_test`)
-   currently exercises the built-in backends (Fake, ThreadPool, Uring); a
-   standardized conformance entry requirement for external/custom
-   `AsyncBackend` implementations remains incomplete Phase C work.
+7. **DIV-02 is fully implemented.** The backend-owned `RequestSlot` adaptation
+   of Zig's caller-owned `Operation.Storage` now covers all four backends
+   (Fake/Sync Phase B, ThreadPool Phase E, Uring Phase D); the revisit trigger
+   (measured per-request overhead vs. public-API migration cost) is preserved
+   in the divergence registry.
