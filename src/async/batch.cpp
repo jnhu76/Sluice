@@ -45,12 +45,16 @@ Result<std::size_t> Batch::await_one(AsyncIoContext& ctx) {
                 break;
         }
         if (!sr.has_value()) {
-            // Submit-time error: surface as a ready completion carrying it.
+            // F2: submit failed BEFORE commit/accept. No accepted request
+            // existed (never outstanding, never reaped). Record the admission
+            // origin explicitly so BatchResult distinguishes a submit rejection
+            // from an accepted request that later terminated with an error.
             if (s.is_void) {
                 s.void_res = sr;
             } else {
                 s.size_res = sluice::make_unexpected<std::size_t>(sr.error());
             }
+            s.submit_rejected = true;
             s.ready = true;
         }
     }
@@ -149,6 +153,10 @@ std::optional<BatchResult> Batch::next() noexcept {
     ++popped_;
     BatchResult r;
     r.index = best;
+    // F2: expose the admission origin recorded at submit time. A submit-rejected
+    // slot never reached publish_from_reap; every other ready slot did.
+    r.origin = s.submit_rejected ? BatchResultOrigin::rejected
+                                 : BatchResultOrigin::accepted_and_completed;
     r.is_void = s.is_void;
     if (s.is_void) {
         r.void_res = std::move(*s.void_res);
