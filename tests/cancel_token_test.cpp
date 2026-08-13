@@ -106,14 +106,14 @@ SLUICE_TEST_CASE(cancel_protection_blocks_delivery_not_request) {
         SLUICE_CHECK(check_cancel(t, s).has_value());
         SLUICE_CHECK(check_cancel(t, s).has_value());
         SLUICE_CHECK(t.is_requested());  // request still pending, not consumed
-        SLUICE_CHECK(!s.acknowledged());  // nothing acknowledged
+        SLUICE_CHECK(!s.acknowledged(t));  // nothing acknowledged
     }  // guard restores unblocked
 
     // After the region: the next cancel point delivers (request was pending).
     auto r = check_cancel(t, s);
     SLUICE_CHECK(!r.has_value());
     SLUICE_CHECK(r.error().code == IoError::Code::canceled);
-    SLUICE_CHECK(s.acknowledged());  // the request was delivered
+    SLUICE_CHECK(s.acknowledged(t));  // the request was delivered
 }
 
 // ---- Slice 5 (T-CANCEL-PROTECTION-2): protection + rearm compose -----------

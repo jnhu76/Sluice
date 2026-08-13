@@ -972,7 +972,11 @@ public:
 ### `sluice::async::CancelToken` / `sluice::async::CancelState` / `sluice::async::CancelGuard`
 
 Cooperative cancellation primitives. `CancelToken` is the cancel-request
-state; `CancelState` is per-consumer protection/acknowledge state.
+state; `CancelState` is per-consumer protection/acknowledge state. The token
+carries a request **epoch** (generation) alongside the pending bit
+(ADR-cancel-request-epoch): acknowledgement is relative to a specific request,
+so `rearm()` re-arms delivery for every consumer of a shared token, while
+`CancelState::reset_acknowledgement()` re-arms a single consumer.
 
 ```cpp
 class CancelToken {
@@ -983,10 +987,11 @@ public:
     CancelToken(CancelToken&&) = delete;
     CancelToken& operator=(CancelToken&&) = delete;
 
-    void request() noexcept;       // idempotent cancel request
+    void request() noexcept;       // idempotent cancel request (no re-arm when already pending)
     bool is_requested() const noexcept;
-    void rearm() noexcept;
-    void clear() noexcept;
+    std::uint64_t epoch() const noexcept;  // identity of the current request
+    void rearm() noexcept;         // re-arm delivery of the pending request (Zig recancel)
+    void clear() noexcept;         // remove the pending request (token reuse)
 };
 
 enum class CancelProtection : std::uint8_t { unblocked, blocked };
@@ -995,9 +1000,9 @@ class CancelState {
 public:
     CancelProtection protection() const noexcept;
     CancelProtection swap_protection(CancelProtection next) noexcept;
-    bool acknowledged() const noexcept;
-    void acknowledge() noexcept;
-    void reset_acknowledgement() noexcept;
+    bool acknowledged(const CancelToken& token) const noexcept;  // delivered the token's current request?
+    void acknowledge(const CancelToken& token) noexcept;         // record delivery of the token's current request
+    void reset_acknowledgement() noexcept;                       // per-consumer re-arm
 };
 
 class CancelGuard {

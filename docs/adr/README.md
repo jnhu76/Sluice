@@ -21,6 +21,7 @@ Architecture Decision Records for Sluice.
 | [ADR-explicit-io-completion-authority](ADR-explicit-io-completion-authority.md) | Completion Publication Authority | **Accepted** | Async I/O foundation | selected portions of ADR-async-io-model | ADR-explicit-io-request-contract (claim/rollback details, direct claim transition) |
 | [ADR-explicit-io-request-contract](ADR-explicit-io-request-contract.md) | Unified Explicit I/O Request Contract | **Accepted** | Async I/O request lifecycle | selected portions of ADR-async-io-model and Completion Authority claim/rollback details | — |
 | [ADR-execution-model](ADR-execution-model.md) | Dual Threaded/Evented Execution Model | **Accepted** | Async runtime | — | — |
+| [ADR-cancel-request-epoch](ADR-cancel-request-epoch.md) | Cancel Request Epoch (rearm semantics) | **Accepted** | Async runtime (T1 cooperative cancellation) | delivery-acknowledgement representation of the cancellation primitive described in ADR-execution-model | — |
 | [ADR-application-runtime](ADR-application-runtime.md) | Application Runtime Architecture | **Accepted** | Async runtime (E16) | — | — |
 
 ## ADR details
@@ -83,6 +84,26 @@ Architecture Decision Records for Sluice.
 - **Superseded by:** none
 - **Current authority?** Yes — defines the Threaded/Evented execution strategy contract.
 - **Implementation:** E10–E13 (scheduler, timer, primitives) complete. Evented (E14+) deferred.
+
+### ADR-cancel-request-epoch (T1): Cancel Request Epoch (rearm semantics)
+
+- **Status:** Accepted
+- **Subsystem:** Async runtime (T1 cooperative cancellation)
+- **Supersedes:** the delivery-acknowledgement representation of the
+  cancellation primitive described in ADR-execution-model (single-shot cancel
+  delivery contract, unchanged in effect)
+- **Superseded by:** none
+- **Current authority?** Yes — request epoch (generation) on `CancelToken`;
+  per-consumer acknowledgement records the last delivered epoch; `rearm()`
+  re-arms delivery for every consumer of a shared token (Zig `recancel`
+  generalized); `clear()` + `request()` is a fresh request.
+- **Why:** the pre-fix representation (bare acknowledgement bool) made `rearm()`
+  a no-op and made `clear()`+`request()` undeliverable to previously-acked
+  consumers (2026-08-13 corrective audit finding).
+- **Implementation:** `include/sluice/async/cancel.hpp`, `src/async/cancel.cpp`.
+- **Verification:** `tests/cancel_token_test.cpp` (T-CANCEL-REARM-1,
+  T-CANCEL-PROTECTION-2, T-CANCEL-CLEAR-3, T-CANCEL-SHARED-4,
+  T-CANCEL-FUTURE-5); regression cases fail on the pre-fix code.
 
 ### ADR-application-runtime (E16): Application Runtime Architecture
 
