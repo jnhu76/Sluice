@@ -10,9 +10,11 @@ discrepancy.
 is Accepted (2026-08-02). Its `RequestKey`, bounded `RequestSlot`, identity-bearing
 reap, capacity, cancel disposition, and close-admission lifecycle were **not**
 present in the `b20bcc7` baseline; they are implemented today at the reference
-layer (Phase B, PR #63 — see §9) and for `ThreadPoolBackend` (Phase E, PR #64 —
-see §2.2). `UringAsyncBackend` remains at the baseline classification until the
-Phase D migration.
+layer (Phase B, PR #63 — see §9), for `ThreadPoolBackend` (Phase E, PR #64 —
+see §2.2), and for `UringAsyncBackend` (Phase D, PR #78/#80/#83/#84 — see §2.3).
+Sections 1–8 below remain the `b20bcc7` baseline record; the current state of
+each subsystem is carried by the update blocks in §2.2/§2.3 and the delta table
+in §9. Re-baselined by audit issue #94 (2026-08-13).
 
 ---
 
@@ -141,6 +143,35 @@ wait_one()
 
 ### 2.3 UringAsyncBackend (gated, SLUICE_HAS_LIBURING)
 
+> **Phase D update (merged to master: D1 PR #78, D2 PR #80, D3 PR #83,
+> D4 PR #84):** the `pending_sqes`/`comp_to_op`/`ops` model, the `id`-based
+> `user_data`, and the legacy `try_claim` admission described below are the
+> **pre-Phase-D legacy** record. Phase D replaced them with: the five-stage
+> `RequestArena` admission shared with the other backends (reserve → prepare →
+> Stage 1.5 descriptor validation → begin_binding/commit_binding → commit →
+> enqueue → dispatch); a **single private ring** whose `SQE.user_data` carries
+> a 64-bit op cookie (generation-safe, `uring_backend.cpp:101-119`), not a
+> `Completion*`; `UringConfig{request_capacity=64, queue_depth=64}` with
+> `would_block` admission at capacity (capacity independent of ring depth, ADR
+> Decision 13/18); `TransportLedger` physical-SQ tracking preserving unsubmitted
+> suffixes after partial submit (P0-D recovery); descriptor validation of the
+> Decision-6 `invalid_argument` causes before commit (`uring_backend.cpp:378-433`);
+> workers/CQE handlers that record `backend-ready` ONLY via `record_terminal`;
+> reap-only Completion-ready publication; a wait source (ring-fd poll + control
+> eventfd, D4) with split-phase `wait_one`; `close_admission()` with accept-LP
+> serialization; and quiescent destruction fail-fast. The C2b/C2c/C2d/C2e
+> conformance records are closed with real-liburing evidence; KernelIo is
+> ELIGIBLE in real mode and honestly INCOMPLETE in stub builds. See
+> `docs/architecture/phase-d-uring-migration-plan.md`,
+> `phase-d2-uring-failure-noalloc-gate.md`,
+> `phase-d3-uring-identity-waiter-gate.md`, and
+> `phase-d4-uring-wait-close-drain-gate.md`. P0-02, P1-06, and DIV-14 are
+> resolved for Uring (see §9, `current-architecture-findings.md`, and
+> `divergence-registry.md`).
+
+The pseudocode and transactional note below describe the **pre-Phase-D legacy
+record** and are retained for history:
+
 ```text
 submit_*(op, c)
 → check impl_, fatal_error
@@ -171,11 +202,13 @@ wait_one()
 → (then drain CQEs as poll)
 ```
 
-**Transactional admission note (ADR §10):** the backend claims BEFORE
-acquiring the SQE and rolls the claim back if SQE acquisition fails (null-SQE
-branch only — no untracked SQE on that path). P0-02 REMAINS: `register_op`
-container allocations (comp_to_op, ops, pending_sqes) happen AFTER the SQE is
-prepared and are still non-transactional — deferred to the RequestSlot PR.
+**Transactional admission note (ADR §10) — pre-Phase-D legacy:** the backend
+claims BEFORE acquiring the SQE and rolls the claim back if SQE acquisition
+fails (null-SQE branch only — no untracked SQE on that path). P0-02 REMAINED
+at the baseline: `register_op` container allocations (comp_to_op, ops,
+pending_sqes) happened AFTER the SQE was prepared and were non-transactional —
+deferred to the RequestSlot PR, and closed by the Phase D RequestArena
+migration (see the update block above).
 
 ### 2.4 FakeAsyncBackend
 
@@ -407,6 +440,12 @@ wake_mtx_ (Scheduler park/wake)
 
 ## 8. Key Authority Assignments (as-built)
 
+> The rows below describe the `b20bcc7` baseline. Current owners after Phase B
+> (reference layer), Phase E (ThreadPool), and Phase D (Uring) are listed in §9
+> and the §2.2/§2.3 update blocks: request identity, capacity, identity-bearing
+> reap, and publication binding are now the shared `detail::RequestArena` /
+> `RequestSlot` authorities on all four backends.
+
 | Authority | As-built owner | Evidence |
 |-----------|---------------|----------|
 | Completion claim (idle → outstanding) | Each backend, via protected `AsyncBackend::try_claim()` (CAS) | ADR-explicit-io-completion-authority §6; `async_io_context.hpp` (`try_claim` helper); all backends check the claim return value. Context does NOT claim (it routes the call). Header comment at `async_io_context.hpp` names the backend as the claim authority (P1-01 resolved by PR #61). |
@@ -458,7 +497,9 @@ see §2.2):
 
 Findings closed at the reference layer: P0-02, P1-02, P1-05, P1-06, P1-07,
 P1-09 (arena), P1-10, P2-03. See `current-architecture-findings.md` summary
-table and `phase-b-compliance-gate.md` for the evidence ledger. Production-
-backend migration (Uring) remains open for Phase D (ThreadPool completed in
-Phase E, PR #64 — see `phase-e-compliance-gate.md`); Scheduler/
-Batch/Runtime integration for Phase F/G.
+table and `phase-b-compliance-gate.md` for the evidence ledger. Production
+backend migration is complete: ThreadPool in Phase E (PR #64 — see
+`phase-e-compliance-gate.md` and §2.2) and Uring in Phase D (PR #78/#80/#83/#84
+— see `phase-d4-uring-wait-close-drain-gate.md` and §2.3). The remaining
+integration work is Scheduler/Batch consumption of the identity-bearing reap
+(Phase F, issue #98) and the backend-ready wake bridge (Phase G).
