@@ -452,7 +452,7 @@ wake_mtx_ (Scheduler park/wake)
 | Completion publish (outstanding → ready) | Backend reap path, via protected `AsyncBackend::publish()` (single-winner CAS through `publishing` transient) | ADR-explicit-io-completion-authority §7; publish confined to `poll()`/`wait_one()` drain. |
 | Completion rollback (outstanding → idle) | Backend, via `AsyncBackend::rollback_claim_before_accept()` (pre-acceptance only) | ADR-explicit-io-completion-authority §10; io_uring SQE-acquisition-after-claim gap. |
 | Completion publication to ready | poll()/wait_one() ONLY (A3/O1) | ADR-async-io-model §6 |
-| Request identity | Completion pointer and backend-specific records; no common context/slot/generation key | `completion.hpp`; backend sources; P1-06 remains open. The Proposed request-contract ADR is target design only. |
+| Request identity | Completion pointer and backend-specific records; no common context/slot/generation key | `completion.hpp`; backend sources; **`b20bcc7` baseline row** — P1-06 is since CLOSED (Phase B reference, Phase E ThreadPool, Phase D Uring: per-slot Generation + stale-key rejection) and the request-contract ADR is ACCEPTED (`ADR-explicit-io-request-contract`); the current identity owner is the shared `detail::RequestArena` / `RequestSlot` on all four backends (§9, §2.2/§2.3). |
 | Request capacity | No common bounded RequestSlot arena | ThreadPool is unbounded; ring depth is not request capacity; Fake/Sync have no configured capacity. |
 | Identity-bearing reap | Not implemented; poll/wait_one return a count | Scheduler and Batch recover identity by scanning/reap sequence; P1-07 remains open. |
 | Backend admission gate | ThreadPoolBackend::accepting_new_work() | `threadpool_backend.hpp:159` |
