@@ -5,7 +5,8 @@
 **Final head:** branch `feat/phase-f-remaining` (this PR): F2 commit `d096f1f`,
 F3 docs commit `1f1e178`, F3 impl commit `95e3a2a`, F3 corrective `0e7367b`
 (c2e real-liburing target lists `request_handle.cpp`), F3 authority-seal
-corrective (this PR, see commit history).
+corrective `c593ce4` (private seam + friend `AsyncIoContext`), F4 evidence
+reconciliation `9948776` + `433c4a7`.
 **Authority:** `ADR-explicit-io-request-contract` (Decisions 7, 9, 10);
 `ADR-public-request-handle` (Accepted, this PR); Constitution AC-2 / AC-7 /
 AC-13 / AC-14 / AC-15; AGENTS.md §4, §8, §10, §12, §16.
