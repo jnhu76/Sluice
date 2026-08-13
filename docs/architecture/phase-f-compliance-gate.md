@@ -3,7 +3,9 @@
 **Phase:** F (issue #98) — F1 + F2 + F3. **Status: COMPLETE.**
 **Baseline:** `e2b9f37` (`master`, PR #105 / Phase F1 merged).
 **Final head:** branch `feat/phase-f-remaining` (this PR): F2 commit `d096f1f`,
-F3 docs commit `1f1e178`, F3 impl commit `95e3a2a`.
+F3 docs commit `1f1e178`, F3 impl commit `95e3a2a`, F3 corrective `0e7367b`
+(c2e real-liburing target lists `request_handle.cpp`), F3 authority-seal
+corrective (this PR, see commit history).
 **Authority:** `ADR-explicit-io-request-contract` (Decisions 7, 9, 10);
 `ADR-public-request-handle` (Accepted, this PR); Constitution AC-2 / AC-7 /
 AC-13 / AC-14 / AC-15; AGENTS.md §4, §8, §10, §12, §16.
@@ -24,9 +26,13 @@ bridge, which is Phase G (separate, untouched).
 - **F2 (commit `d096f1f`):** `BatchResultOrigin` (`rejected` vs
   `accepted_and_completed`) on `BatchResult` — ADR Decision 9 (Batch consumes
   outcome origin explicitly, orthogonal to success/error).
-- **F3 (commits `1f1e178`, `95e3a2a`):** public `RequestHandle` identity surface
-  — `ADR-public-request-handle`. Gate:
-  [phase-f3-compliance-gate](phase-f3-compliance-gate.md).
+- **F3 (commits `1f1e178`, `95e3a2a`, `0e7367b`, + seal corrective):** public
+  `RequestHandle` identity surface — `ADR-public-request-handle`. The
+  construction/resolution seam is sealed class-level (private
+  `identity_of` / `request_handle_state` / private virtual
+  `resolve_identity_state`, sole friend `AsyncIoContext`; overrides private;
+  negative-compile 9/9). Gate:
+  [phase-f3-compliance-gate](phase-f3-compliance-gate.md) (COMPLETE).
 
 ## Gate 0 — scope and authority
 
@@ -78,10 +84,10 @@ bridge, which is Phase G (separate, untouched).
 | Clang Debug | `xmake f -c -m debug --toolchain=clang -y; xmake build -g test; xmake test` | 162/162 PASS, 0 fail |
 | Clang Release | same with `-m release` | 162/162 PASS, 0 fail |
 | TSan | `-m tsan`; `xmake run -g test` | ALL PASS, 0 warnings |
-| ASan/UBSan | `-m asanubsan`; `xmake run -g test` | (filled from the run below) |
-| Real liburing | `-m debug --with-liburing=true` | Uring `supports_request_identity()`/`request_state` covered (stub inherits not_supported by design) |
-| Backend conformance | `scripts/verify-backend-conformance.py` + manifest self-test | green |
-| Negative compile | `scripts/verify-request-handle-authority-negative-compile.sh` | 5/5 PASS |
+| ASan/UBSan | `xmake f -c -m asanubsan --toolchain=clang -y; xmake build -g test; xmake run -g test` | ALL TESTS PASSED, 0 errors (run 2026-08-14) |
+| Real liburing | `xmake f -c -m debug --toolchain=clang --with-liburing=true -y; xmake build -g test; xmake test` | 164/164 PASS (committed verification `0e7367b`; local sandbox re-run is mode=stub — CI/committed record authoritative) |
+| Backend conformance | `scripts/verify-backend-conformance.py` + manifest self-test | RESULT: PASS — Fake ELIGIBLE, ThreadPool ELIGIBLE, Uring stub INCOMPLETE (manifest-declared); 47 PASS + 10 expected-stub INCOMPLETE rows; external probe PASS (quiet full run) |
+| Negative compile | `scripts/verify-request-handle-authority-negative-compile.sh` | 9/9 PASS |
 | Public acceptance | `tests/request_handle_test.cpp` (public headers only) | 6/6 PASS |
 | Docs/arch | `check-doc-links.py`, `verify-architecture-docs.py`, `pre-push.sh` | green |
 

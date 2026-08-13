@@ -580,6 +580,18 @@ tokens and duplicate rejection, followed by Phase F Runtime/Scheduler routing.
 
 ## P2-05: Batch Conflates Submit Rejection with Terminal Completion
 
+> **Phase F resolution (branch `feat/phase-f-remaining`, Phase F2, commit
+> `d096f1f`):** RESOLVED. `BatchResult` now carries an explicit admission-origin
+> discriminator — `BatchResultOrigin` (`rejected` vs `accepted_and_completed`)
+> on `BatchResult` (ADR-explicit-io-request-contract's batch admission-origin
+> requirement; `tests/batch_result_origin_test.cpp`). Production sets
+> `submit_rejected = true` on the ONLY synchronous submit-failure path; an
+> accepted op — success, error, or canceled — reaches the caller through the
+> ordinary Completion/reap path with `origin == accepted_and_completed`, so
+> admission origin stays orthogonal to success/error and `reap_seq` remains a
+> pure completion-ordering discriminator. The summary table at the top of this
+> document is updated; the detail below is the historical pre-F2 audit record.
+
 **Finding:** When Batch submit fails, it fabricates a ready result in the
 slot (with `reap_seq == 0`) and returns it via `next()` as if it were a
 completion. This conflates admission rejection with terminal completion —

@@ -1,7 +1,7 @@
 # Phase F3 Compliance Gate — Public RequestHandle
 
 **Phase:** F3 (issue #98) — public accepted-request identity surface.
-**Status:** PENDING — Gate 4 evidence to be filled from executed runs.
+**Status:** COMPLETE.
 **Authority:** `docs/adr/ADR-public-request-handle.md` (Accepted, this PR);
 `ADR-explicit-io-request-contract` Decision 7; Constitution AC-2 / AC-13 / AC-14
 / AC-15; AGENTS.md §4.1, §8, §10, §12, §16.1.
@@ -18,6 +18,12 @@ contract; this gate records the as-built evidence.
 - **Layer:** `sluice::async` public headers (`request_handle.hpp`,
   `async_io_context.hpp`, `application_runtime.hpp`) + `AsyncBackend`
   non-pure/non-virtual additions + the four arena backends' thin overrides.
+- **Authority sealing (F3 corrective, PR #106):** the construction/resolution
+  seam is class-level, not convention: `AsyncBackend::identity_of`,
+  `request_handle_state`, and the virtual `resolve_identity_state` are PRIVATE
+  (private virtual; derived overrides private), `AsyncIoContext` is the sole
+  `friend`. A raw backend pointer (the backend is a public extension point)
+  cannot mint a handle or feed a raw identity tuple into the resolver.
 - **Classification:** additive public API; identity-only (no ownership/lifecycle
   authority change).
 - **Governing ADR:** `ADR-public-request-handle.md`.
@@ -34,6 +40,8 @@ contract; this gate records the as-built evidence.
   (AGENTS.md §4.1, §26).
 - **Construction state machine:** default ctor → invalid; private identity ctor
   (friend `AsyncBackend`) → valid bound to one `(context, slot, generation)`.
+  The ONLY handle producer is `AsyncIoContext::submit_*_request` (sealed seam);
+  the ONLY resolver entry is `AsyncIoContext::request_state`.
 - **Handle validity over the request lifecycle (observed via `request_state`):**
   `outstanding` → `backend_ready` → `completion_ready` → `not_found` (after
   reset/reuse). Cross-context or stale-generation → `not_found`.
@@ -67,15 +75,29 @@ contract; this gate records the as-built evidence.
   serialized under `access_mtx_`; cross-context + reset/reuse exercised; §16.3).
 - [x] ASan/UBSan green — ALL PASS, 0 errors (stale handle, context destruction,
   Completion reset, slot reuse; §16.2).
-- [ ] Real liburing: `supports_request_identity()` + `request_state` on the
-  Uring backend, `mode=real` (run below; stub inherits not_supported by design).
-- [ ] Backend conformance manifest self-test + `scripts/verify-backend-
-  conformance.py` (run below).
+- [x] Real liburing (committed verification, `0e7367b`): clean
+  `xmake f -c -m debug --toolchain=clang --with-liburing=true -y` +
+  `xmake build -g test` + `xmake test` — 164/164 PASS (the 2 extra cases over
+  the 162 debug corpus are real-mode uring cases);
+  `supports_request_identity()` + `request_state` exercised on the real Uring
+  backend; the stub build inherits `not_supported` by design. Note: this
+  sandbox re-runs `--with-liburing=true` as mode=stub (xmake package fetch),
+  so the committed record + GitHub CI are the authoritative real-mode evidence.
+- [x] Backend conformance manifest self-test + `scripts/verify-backend-
+  conformance.py` (quiet full run) — RESULT: PASS; Fake ELIGIBLE; ThreadPool
+  ELIGIBLE (incl. `threadpool_scheme_b_race`); Uring INCOMPLETE (stub,
+  manifest-declared); 47 PASS + 10 expected-stub INCOMPLETE evidence rows;
+  external-backend probe PASS.
 - [x] Negative-compile authority gate: `scripts/verify-request-handle-authority-
-  negative-compile.sh` — 5/5 PASS (no forging the handle / no public setter for
-  context/slot/generation).
+  negative-compile.sh` — 9/9 PASS: 5 handle forge/read cases +
+  `NEG_CONVERT_REQUEST_KEY` (internal RequestKey has no conversion) + 3 sealed
+  seam bypass cases (`identity_of` / `request_handle_state` / concrete
+  `resolve_identity_state` through a raw backend pointer).
 - [x] Public-only acceptance test: `tests/request_handle_test.cpp` — 6/6 PASS
   (no `src/`, no `detail/`, no `SLUICE_ASYNC_INTERNAL_TESTING`).
+- [x] F3 corrective (PR #106): authority seam sealed (private + friend
+  `AsyncIoContext`; overrides private); negative-compile expanded 5 → 9 cases;
+  c2e real-liburing target lists `request_handle.cpp` (`0e7367b`).
 - [x] `scripts/check-doc-links.py` (PASS) +
   `scripts/verify-architecture-docs.py` (PASS); pre-push run below.
 - [x] C2b row 4b / C2c rows 12b + 14b closed with implementation + test pointers
