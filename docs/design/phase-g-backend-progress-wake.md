@@ -168,14 +168,21 @@ drain remains the ONLY Fiber-routing authority (G-I1, G-I2).
 ```text
 Let W be the elected MW-S2 participant (E7 two-phase admission COMMITTED).
 
-IF the backend exposes a split wait source (wait_source() != nullptr):
+bounded_park_needed = ready-flag waits registered OR an active deadline
+bounded_park_ok     = (no bound needed) OR wait source bounds its parks
+
+IF the backend exposes a split wait source (wait_source() != nullptr)
+   AND bounded_park_ok:
     park domain = BACKEND  (ctx_.wait_one()), for BOTH backend-only and
                            MIXED-WAKE. External wake publications reach the
                            park through the interrupt bridge (§3).
-ELSE (reference / legacy backends: Fake, Sync, test backends):
-    park domain = SCHEDULER when an external-wake-capable wait is registered
-                 (MIXED-WAKE; bounded observation park, E9 behavior unchanged),
-                 else BACKEND (unchanged).
+ELSE IF the backend has NO split wait source AND no external-wake-capable
+     wait is registered:
+    park domain = BACKEND  (legacy serialized wait_one — unchanged)
+ELSE:
+    park domain = SCHEDULER (bounded observation park: MIXED-WAKE for
+                           reference/legacy backends, E9 behavior unchanged;
+                           and the bounded-capability fallback below).
 ```
 
 Rationale: with a split wait source, `wait_one()` blocks on the backend's own
@@ -185,6 +192,33 @@ publications observable (the E9 GAP-2 closure, now on the backend domain).
 Reference backends have no progress transport; their readiness is poll-driven,
 so the bounded Scheduler-domain observation park remains their progress path
 (G4 classification).
+
+**Bounded-wait capability (PR #108 review P1b).** The Phase G bounded
+overload originally had a base implementation that silently discarded
+`max_park` — a third-party wait source implementing only the one-argument
+`wait_for_change` was classified split-wait capable, parked in the backend
+domain under a deadline expectation, and actually parked indefinitely (an
+E11 deadline-liveness hole in the interface contract). The contract is now
+explicit:
+
+- `BackendWaitSource::supports_bounded_wait()` (default false) truthfully
+  reports whether the bounded overload bounds the physical park; the in-tree
+  sources (ReadyWaitSource: `cv.wait_for`; UringWaitSource: poll timeout)
+  override it to true;
+- `AsyncIoContext::has_bounded_split_wait_capability()` composes split wait
+  AND bounded transport; the MW-S2 Phase-B commit uses it in the domain
+  decision above — a FINITE cap (active deadline / ready-flag observation) is
+  only committed to the backend domain when the capability holds, otherwise
+  the park uses the Scheduler wake domain whose cv timeout the Scheduler
+  itself bounds;
+- `AsyncIoContext::wait_one(max_park)` fails fast (`not_supported`,
+  synchronously, no park) when handed a finite cap by a wait source without
+  the capability — never a silent unbounded fallback;
+- a deadline that becomes active between the Phase-B commit and the max_park
+  computation is handled by a defensive clamp (park unbounded; the
+  registration's own wake publication crosses the bridge and re-drains into a
+  fresh domain decision) so the fail-fast contract is never hit from the
+  Scheduler path.
 
 ### 2.4 The interrupt bridge
 
@@ -229,9 +263,13 @@ wait must return in time for the deadline pump:
   `wait_one(std::chrono::nanoseconds max_park)` (additive; the no-arg form is
   unchanged and unbounded).
 - `BackendWaitSource::wait_for_change` gains an additive bounded overload
-  `wait_for_change(observed, max_park)` (default: unbounded — existing
-  behavior; ReadyWaitSource: `cv.wait_for`; UringWaitSource: poll timeout,
-  clamped to poll's int ms range).
+  `wait_for_change(observed, max_park)`. The base implementation does NOT
+  honor the bound — bounded parking is the SEPARATE capability
+  `supports_bounded_wait()` (§2.3, PR #108 review P1b): ReadyWaitSource
+  (`cv.wait_for`) and UringWaitSource (poll timeout, clamped to poll's int ms
+  range) override both; a wait source without the capability receives finite
+  caps only as a synchronous `not_supported` from `wait_one(max_park)`, never
+  as a silently discarded bound.
 - The Scheduler computes `max_park` from the existing lock-free
   `earliest_active_deadline_` cache: no deadline -> unbounded; deadline due ->
   immediate re-drain; test clock mode -> the short test poll bound (E11
@@ -400,49 +438,87 @@ failure, reproduced on the HEAD baseline worktree.)
 ### 8.1 Instrumentation (this change — test-only, no behavioral fix)
 
 Per the park-window audit directive, `SLUICE_ASYNC_INTERNAL_TESTING`-guarded
-instrumentation was added (production layout unchanged):
+instrumentation was added (production layout unchanged). The PR #108 review
+(P2a/P2b) hardened the facility itself: every cross-thread diagnostic field is
+now an atomic (a "best-effort" racy read is still UB and would be worthless
+under sanitizers), and classify evidence is per-worker (a Scheduler-global
+last-classify value mis-attributes when another worker classifies between the
+parking worker's decision and its park commit):
 
 - a bounded park ledger (ring, 64) recorded at every wake-domain park commit
   in `park_on_wake_source`: park sequence, worker id, wake-epoch baseline,
   backend wait-source (ready, control) generations, backend outstanding,
   registered-wait count, idle/terminate/backend-wait-active state, the
-  park-time classification (`classify_locked` result), and the bounded flag;
-- a per-worker `loop_exit_reason` written at every `worker_loop` break path;
-- `AsyncIoContext::backend_wait_token_for_test()` (wait-source snapshot);
-- `Scheduler::dump_park_forensics_for_test()` — watchdog-callable dump of live
-  state (wake epoch, token, outstanding, admission, waiting sets,
+  bounded flag, and the PARKING worker's own classify pair
+  (`WorkerState::last_classify` + `classify_seq`);
+- per-worker atomic diagnostics: `loop_exit_reason` (enum, written at every
+  `worker_loop` break path), `loop_exited` (written at worker_loop RETURN —
+  the causal worker-is-dead point), `last_classify`/`classify_seq`, plus
+  production `park_domain`/`current` made atomic (read cross-thread by the
+  dump);
+- `AsyncIoContext::backend_wait_token_for_test()` (wait-source snapshot) and
+  `Scheduler::AsyncTestAccess::backend_wait_token` (test-side observation of
+  the backend ready publication);
+- a `worker_park_returned` causal seam (PhaseTag, controller-driven):
+  pauses a worker immediately AFTER its wake-domain park returns, BEFORE the
+  loop-top re-drain/classify. Deliberately excluded from
+  `release_all_phases` — a terminating sibling's release must not destroy a
+  reproducer's hold (the arming test's own watchdog is the escape hatch);
+- `Scheduler::dump_park_forensics_for_test()` — watchdog-callable dump of
+  live state (wake epoch, token, outstanding, admission, waiting sets,
   running-fiber count, per-worker domain/baseline/inbox/current-fiber/exit
-  reason) plus the ledger ring;
-- `phase_g_park_window_forensics_drain_stall` — the drain-shutdown scenario
-  with a bounded watchdog that dumps and exits fail-closed (rc 70) instead of
-  aborting via joinable-thread teardown.
+  reason/loop-exited/last-classify) plus the ledger ring;
+- `phase_g_g1_stranded_runnable_park_stall_reproducer` — the DETERMINISTIC
+  (causal-seam) reproducer that replaced the yield-ordered high-probability
+  canary. It first pins the parked configuration (participant worker 0
+  `park_domain == Backend` AND survivor worker 1
+  `park_domain == Scheduler`, both stable while the read is gated), THEN
+  arms the post-park recheck seam and fires request_stop: the survivor's
+  park is guaranteed to return through the stop wake and be held at the
+  seam while worker 0 dies and the backend completes. Releasing it reaps
+  the request and routes the continuation onto the dead worker; a bounded
+  drain watchdog proves the stall and exits fail-closed (rc 70). Because
+  the watchdog exits BEFORE any teardown (and the caller resets the ready
+  Completion before join, ADR Decision 15), the old rc 134 teardown abort
+  (`request_arena_invalid_terminal_fail_fast`) and the rc 124
+  cleanup-hang no longer compete as exit modes — 10/10 runs exit rc 70
+  through the primary stranded-runnable construction (the no-participant
+  manifestation, when the task fiber lands on worker 1 via spawn/steal
+  racing, fails closed EARLY with its own dump tag, also rc 70).
 
-The case reproduced the stall on its first filtered run. Captured dump
-(tests/phase_g_backend_progress_wake_test, 2026-08-14):
-
-A second failure mode appears under repetition (rc 134, no dump): the
-scenario tears the runtime down while the read is still outstanding and
-`ThreadPoolBackend::~ThreadPoolBackend` trips
-`request_arena_invalid_terminal_fail_fast` — the AGENTS.md §14
-destruction-with-accepted-work contract firing because the stalled path
-never completes/cancels the accepted request. Both exit codes are defect
-evidence: rc 70 carries the full ledger dump, rc 134 leaves a coredump.
+The deterministic reproducer (2026-08-14, pre-fix; identical structure on
+every repetition — see the compliance gate's determinism row) reproduces the
+exact §8.2 end state:
 
 ```text
+FORENSICS: stranded-runnable observed=1 (ready_count=0 w0_runnable=1)
 [park-forensics] wake_epoch=5 token=(ready=1,ctrl=2) outstanding=0 admission=none
-                idle_workers=0 terminate=0 backend_wait_active=0 running_fibers=0
+                idle_workers=0 terminate=0 backend_wait_active=0
 [park-forensics] worker id=0 domain=None observed_epoch=0 local_runnable=1
-                current_fiber=(nil) exit_reason=mw_s2_no_progress_terminate
+                current_fiber=(nil) fiber_state=- exit_reason=mw_s2_no_progress_terminate
+                loop_exited=1 last_classify=1
 [park-forensics] worker id=1 domain=SCHEDULER observed_epoch=5 local_runnable=0
-                current_fiber=(nil) exit_reason=(live)
-[park-forensics] ledger seq=1 worker=1 epoch_at_commit=5 ready=1 ctrl=2
-                outstanding=0 classify=mw_s1 bounded=0 term=0 bwait=0
+                current_fiber=(nil) fiber_state=- exit_reason=(live)
+                loop_exited=0 last_classify=0
+[park-forensics] ledger seq=2 worker=1 epoch_at_commit=5 ready=1 ctrl=2
+                outstanding=0 waiting=0 classify=mw_s1 classify_seq=4 bounded=0
+                idle=0 term=0 extwake=0 bwait=0
 ```
 
-gdb on the same stall (6 threads): main (watchdog), drainer
+Every §8.2 timeline step is now a causally OBSERVED transition in the test
+(backend gate flag -> participant wait-phase flag -> request_stop ->
+`loop_exited[0]` -> ready-publication token -> seam release -> reap count 0 +
+stranded runnable depth 1 -> drain watchdog), not a statistical outcome: no
+`yield()`-as-ordering, no sleep as proof (production-test-plan §1).
+
+gdb on the original stress stall (6 threads): main (watchdog), drainer
 (`ApplicationRuntime::drain()` cv wait), driver (`run_impl` joining),
 TWO idle ThreadPoolBackend workers, and exactly ONE scheduler worker thread
-(worker 1, parked). Worker 0's OS thread no longer exists.
+(worker 1, parked). Worker 0's OS thread no longer exists. The deterministic
+reproducer constructs this thread picture by causality: worker 0's thread
+exits through the observed `mw_s2_no_progress_terminate` break, the driver
+remains inside `run_live`'s join, and the sole survivor parks in the wake
+domain.
 
 ### 8.2 Reconstructed timeline (each step evidence-backed)
 
