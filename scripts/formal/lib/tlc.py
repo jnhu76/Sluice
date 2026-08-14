@@ -186,7 +186,7 @@ def named_violation(output: str, name: str) -> bool:
     """Return True when TLC reports a violation of the named property.
 
     TLC's emitted phrasing depends on the property kind and toolchain version
-    (lock pins tla2tools v1.8.0 / 2026.07.18):
+    (lock pins tla2tools v1.7.4 / TLC 2.19):
       - safety invariant : "Invariant <Name> is violated"
       - temporal property: "Temporal property <Name> was violated"
     """

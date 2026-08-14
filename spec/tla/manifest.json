@@ -297,5 +297,54 @@
       "implementation_bindings": [],
       "notes": "E16 Application Runtime lifecycle. Saturated epoch token (E0/E1). Safety + liveness (Live1/Live2/Live3/Live5/Live6) + wide-domain. NEG-E16-1 BoundaryWake (temporal), NEG-E16-2 StopClose, NEG-E16-3 StartupAbort, NEG-E16-4 CloseOwner, NEG-E16-5 EarlyCloseBeforeDrain, NEG-E16-6 DirectStoppedWithResources. Reachability witnesses R2,R3,R11-R15,R17,R18,R19 all REACH (10 scenes). R17 REACH after the C3 corrective unblocked the Running/Draining path (the previous 'NOT-REACH / latent model defect' note was stale; the verifier already reached it). R19 (E16-POST-MERGE-CORRECTIVE-2) witnesses the production-reachable post-stop admission-commit path enabled by removing the admission_open guard on SubmitGroupCommit. See spec/tla/e16_application_runtime/README.md."
     }
+  ],
+  "coverage_gaps": [
+    {
+      "id": "request-arena-lifecycle",
+      "status": "ACCEPTED FORMAL-DEBT GAP (AGENTS.md §17 path B: justified gap + revisit trigger)",
+      "protocol": "RequestArena / RequestSlot explicit-I/O request lifecycle — the load-bearing accepted-request protocol since Phase B.",
+      "scope_a_model_would_encode": [
+        "five-stage admission (reserve -> prepare -> commit -> enqueue -> dispatch)",
+        "Scheme-B enqueue/cancel arbitration (cancel-wins vs enqueue-wins, exactly one terminal)",
+        "terminal-winner exactly-once (first valid backend-ready wins)",
+        "generation increment before slot reuse; stale-key rejection",
+        "ready-ring FIFO preserving backend-known terminal order",
+        "reap-only Completion publication (single leaf-domain pass)",
+        "borrow-through-reap (fd/buffer borrow ends at completion-ready publication)",
+        "enqueue-in-flight pin and reap-ineligibility",
+        "quiescent destruction conditions (accepted_outstanding==0, slot_in_use==0)"
+      ],
+      "why_no_model_yet": "The smallest meaningful isolated protocol has not been modeled. Per AGENTS.md §17 ('Do not invent a model merely for ceremonial coverage. Model the smallest protocol that captures the load-bearing race.'), this gap is accepted as formal debt rather than a blocker. The protocol's correctness is currently established by the executable evidence below, not by a TLA+ abstraction.",
+      "current_executable_evidence": [
+        "deterministic RequestArena state-machine matrix (request_arena_test)",
+        "request_lifecycle_scheme_b_test (Scheme-B enqueue/cancel arbitration, terminal winner, generation/reuse)",
+        "request_waiter_borrow_lease_test (register-vs-reap, cancel_waiter-vs-reap, borrow-through-reap)",
+        "per-backend C2 integration tests (C2b/C2c/C2d/C2e rows on Fake + ThreadPool)",
+        "8-13 single-point production mutation executions per C2 class",
+        "death tests (fail-fast rollback, stale handle, live pin, open registration)"
+      ],
+      "implementation_bindings": [
+        "include/sluice/async/detail/request_arena.hpp",
+        "include/sluice/async/detail/request_slot.hpp"
+      ],
+      "regression_test_cross_links": [
+        "tests/request_arena_test.cpp",
+        "tests/request_lifecycle_scheme_b_test.cpp",
+        "tests/request_waiter_borrow_lease_test.cpp",
+        "tests/threadpool_backend_scheme_b_race_test.cpp"
+      ],
+      "not_covered_by_existing_suites": "No suite in this manifest binds request_arena.hpp/request_slot.hpp. The adjacent e7-publication/e8-ownership-transfer suites model Completion claim/publish CAS and ownership transfer (a different protocol — the publication object, not the slot lifecycle); e9-park-wake/e10-waitnode model Scheduler wake/wait-queue primitives; e16-application-runtime models the runtime epoch. None of these models the arena slot state machine, Scheme-B arbitration, generation/reuse, ready-ring, or reap-only publication. Do not read these adjacent suites as RequestArena coverage.",
+      "revisit_triggers": [
+        "before materially changing RequestArena / RequestSlot lifecycle authority",
+        "before changing generation/reuse rules",
+        "before introducing a second waiter or multi-wait abstraction into the arena",
+        "before splitting the terminal-winner or reap-only-publication authority across a second domain",
+        "when a future concurrency defect demonstrates that the existing executable evidence does not distinguish the faulty protocol"
+      ],
+      "owner_docs": [
+        "docs/verification/formal-models.md"
+      ],
+      "notes": "Recorded for issue #100 (audit umbrella #94). This is the consolidated, authoritative gap record; per-slice gap notes also appear in the Phase C2c/C2d and Phase E compliance gates. Adding this entry does NOT create a model and does NOT claim formal verification of the C++ implementation (AGENTS.md §17)."
+    }
   ]
 }

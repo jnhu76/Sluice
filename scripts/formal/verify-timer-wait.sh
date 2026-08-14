@@ -83,6 +83,21 @@ named_violation() {  # named_violation OUTFILE EXPECTED_PROPERTY
   || grep -Eq "Property ${expected} is violated" "$outfile"
 }
 
+# TLC 2.19 (stable v1.7.4 pin) reports temporal-property violations with the
+# GENERIC message "Temporal properties were violated." and does NOT name the
+# property (newer rolling builds print "Temporal property <X> was violated").
+# For a liveness negative whose config declares EXACTLY ONE PROPERTY, the
+# generic message can only refer to that property, so the named assertion is
+# preserved by binding it to the config instead of the output phrasing; a
+# deadlock (a different defect class) is still rejected.
+liveness_named_by_config() {  # liveness_named_by_config CFG OUTFILE EXPECTED
+  local cfg="$1" outfile="$2" expected="$3"
+  grep -q 'Temporal properties were violated' "$outfile" \
+    && ! grep -q 'Deadlock reached' "$outfile" \
+    && [[ "$(grep -c '^PROPERTY ' "$cfg")" == "1" ]] \
+    && grep -q "^PROPERTY ${expected}$" "$cfg"
+}
+
 expect_pass() {  # expect_pass LABEL MODEL CFG OUTFILE_TAG
   local label="$1" model="$2" cfg="$3" tag="${4:-$2}" outfile
   outfile="$outroot/${tag}.out"
@@ -114,7 +129,8 @@ expect_fail() {
            "$label" "$expected"
     return 1
   fi
-  if ! named_violation "$outfile" "$expected"; then
+  if ! named_violation "$outfile" "$expected" \
+     && ! liveness_named_by_config "$workdir/$cfg" "$outfile" "$expected"; then
     printf 'FAIL  %s (expected property %s NOT the violation)\n' "$label" "$expected"
     printf '  --- first violation in output: ---\n'
     grep -m1 -E 'Invariant .+ is violated|Property .+ is violated|Temporal property' "$outfile" || true

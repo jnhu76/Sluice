@@ -10,6 +10,8 @@ A design document is active only when:
 - **Proposed** — under review, not yet binding.
 - **Accepted and awaiting implementation** — approved but not started.
 - **Draft** — an early proposal not yet ready for review.
+- **Decision — intentional defer** — a scope decision retained until a
+  documented revisit trigger fires; it does not authorize implementation.
 
 Completed implementation designs are **not** kept here. They are historical
 records under `docs/history/implementation-plans/` (implementation designs),
@@ -26,6 +28,7 @@ The following future-phase proposals may exist:
 | Design | Status | Related ADR |
 |--------|--------|-------------|
 | [E16 Application Runtime](e16-application-runtime.md) | Proposed | [ADR-application-runtime](../adr/ADR-application-runtime.md) |
+| [Selectable / awaitable composability](selectable-async-composability-decision.md) | Decision — intentional defer (issue #99); no production work authorized | [ADR-async-io-model](../adr/ADR-async-io-model.md), [ADR-execution-model](../adr/ADR-execution-model.md) |
 | Fuzz infrastructure | Not yet proposed | — |
 
 If no actual design document exists for a row above, it is a placeholder for
