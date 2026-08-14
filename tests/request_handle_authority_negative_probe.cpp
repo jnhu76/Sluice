@@ -41,7 +41,7 @@ void positive_control() {
 // The identity constructor is PRIVATE (friend AsyncBackend only). Ordinary code
 // cannot construct a valid handle from raw (context, slot, generation).
 void neg_forge_handle_ctor() {
-    RequestHandle h{1, 7, 4};  // ERROR: calling a private constructor
+    RequestHandle h{1, 7, 4};  // expected compile failure
     (void)h;
 }
 #endif
@@ -51,7 +51,7 @@ void neg_forge_handle_ctor() {
 // (which would let it forge or cross-check authority out-of-band).
 void neg_read_handle_context() {
     RequestHandle h;
-    auto v = h.context_;  // ERROR: 'context_' is private
+    auto v = h.context_;  // expected compile failure
     (void)v;
 }
 #endif
@@ -59,7 +59,7 @@ void neg_read_handle_context() {
 #if defined(NEG_READ_HANDLE_SLOT)
 void neg_read_handle_slot() {
     RequestHandle h;
-    auto v = h.slot_;  // ERROR: 'slot_' is private
+    auto v = h.slot_;  // expected compile failure
     (void)v;
 }
 #endif
@@ -67,7 +67,7 @@ void neg_read_handle_slot() {
 #if defined(NEG_READ_HANDLE_GENERATION)
 void neg_read_handle_generation() {
     RequestHandle h;
-    auto v = h.generation_;  // ERROR: 'generation_' is private
+    auto v = h.generation_;  // expected compile failure
     (void)v;
 }
 #endif
@@ -76,7 +76,7 @@ void neg_read_handle_generation() {
 // valid_ is private; a caller cannot flip an invalid handle to valid.
 void neg_set_handle_valid() {
     RequestHandle h;
-    h.valid_ = true;  // ERROR: 'valid_' is private
+    h.valid_ = true;  // expected compile failure
 }
 #endif
 
@@ -87,7 +87,7 @@ void neg_set_handle_valid() {
 void neg_convert_request_key() {
     detail::RequestKey key{detail::ContextIdentity{1}, detail::SlotIndex{7},
                            detail::Generation{4}};
-    RequestHandle h = key;  // ERROR: no viable conversion from RequestKey
+    RequestHandle h = key;  // expected compile failure
     (void)h;
 }
 #endif
@@ -99,7 +99,7 @@ void neg_convert_request_key() {
 void neg_call_backend_identity_of() {
     AsyncBackend* b = nullptr;
     Completion<std::size_t> c;
-    (void)b->identity_of(c);  // ERROR: 'identity_of' is private
+    (void)b->identity_of(c);  // expected compile failure
 }
 #endif
 
@@ -109,7 +109,7 @@ void neg_call_backend_identity_of() {
 void neg_call_backend_request_handle_state() {
     AsyncBackend* b = nullptr;
     RequestHandle h;
-    (void)b->request_handle_state(h);  // ERROR: 'request_handle_state' is private
+    (void)b->request_handle_state(h);  // expected compile failure
 }
 #endif
 
@@ -121,7 +121,7 @@ void neg_call_backend_request_handle_state() {
 // derived class (ADR Decision 2: no raw identity-tuple consumer).
 void neg_call_concrete_resolve_identity_state() {
     FakeAsyncBackend* b = nullptr;
-    (void)b->resolve_identity_state(1, 7, 4);  // ERROR: 'resolve_identity_state' is private
+    (void)b->resolve_identity_state(1, 7, 4);  // expected compile failure
 }
 #endif
 
