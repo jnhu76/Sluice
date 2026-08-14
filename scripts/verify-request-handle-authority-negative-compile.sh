@@ -53,7 +53,7 @@ negative_cases=(
   "NEG_READ_HANDLE_SLOT:private|inaccessible|no member|not a member"
   "NEG_READ_HANDLE_GENERATION:private|inaccessible|no member|not a member"
   "NEG_SET_HANDLE_VALID:private|inaccessible|no member|not a member"
-  "NEG_CONVERT_REQUEST_KEY:no viable conversion|no matching constructor|private|inaccessible|cannot be referenced"
+  "NEG_CONVERT_REQUEST_KEY:no viable conversion|no matching constructor|conversion from.*RequestKey.*RequestHandle|private|inaccessible|cannot be referenced"
   "NEG_CALL_BACKEND_IDENTITY_OF:private|inaccessible|protected"
   "NEG_CALL_BACKEND_REQUEST_HANDLE_STATE:private|inaccessible|protected"
   "NEG_CALL_CONCRETE_RESOLVE_IDENTITY_STATE:private|inaccessible|protected"
