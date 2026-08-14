@@ -100,11 +100,24 @@ void release_all_phases(sluice::async::Scheduler& s) noexcept {
     if (c == nullptr) return;
     // Disarm every phase so any paused worker observes termination.
     for (std::size_t i = 0; i < std::size(c->phases); ++i) {
-        // This phase is reached only after every worker has joined. It cannot
-        // strand a worker during termination, and preserving its armed state
-        // lets the coordinator inspect the post-join publication boundary.
+        // These phases are reached only after every worker has joined (or
+        // hold a survivor that a sibling's termination must NOT silently
+        // release). They cannot strand a worker during termination in the
+        // seam's own right, and preserving their armed state lets the
+        // coordinator control the boundary:
+        //   - worker_topology_joined_before_unpublish: post-join, so pausing
+        //     there is inherently safe;
+        //   - worker_park_returned (Phase G review P2b): the G1 deterministic
+        //     reproducer holds the SURVIVOR of a sibling worker's
+        //     mw_s2_no_progress_terminate exit exactly at its post-park
+        //     recheck; that exit path calls release_all_phases, and releasing
+        //     the hold would destroy the reproduction (the survivor would
+        //     proceed before the test published the backend completion). The
+        //     arming test owns releasing it — its bounded watchdog is the
+        //     escape hatch, mirroring the forensic-stall fail-closed pattern.
         if (i == static_cast<std::size_t>(
-                     PhaseTag::worker_topology_joined_before_unpublish)) {
+                     PhaseTag::worker_topology_joined_before_unpublish) ||
+            i == static_cast<std::size_t>(PhaseTag::worker_park_returned)) {
             continue;
         }
         PhaseState& p = c->phases[i];

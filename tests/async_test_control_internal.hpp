@@ -64,6 +64,18 @@ enum class PhaseTag : unsigned char {
     scheduler_park_candidate,
     // E9-CORRECTIVE: worker paused at park commit boundary (pre-wake_cv.wait).
     scheduler_park_commit,
+    // Phase G review P2b (G1 deterministic reproducer): worker paused
+    // immediately AFTER park_on_wake_source returns in worker_loop — it has
+    // woken from a wake-domain park and is about to re-enter the loop top
+    // (pop own inbox -> try_steal -> global_mtx_ drain -> classify). A test
+    // holding a worker here can publish backend readiness / routes /
+    // terminate-flag changes deterministically BEFORE the worker re-checks
+    // them. EXCLUDED from release_all_phases by design (see
+    // async_test_control.cpp): a terminating sibling's release must not
+    // destroy the reproducer's hold — the G1 stall is exactly a run where a
+    // terminated worker leaves a survivor mid-recheck. A test that arms this
+    // seam MUST release it (its own watchdog is the escape hatch).
+    worker_park_returned,
     // E12-A: setter paused after SET store, holding global_mtx_, before drain.
     event_set_store_before_drain,
     // E12-A-EVENT-CORRECTIVE-2 (T31): admission attempt marker, BEFORE taking

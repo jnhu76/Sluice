@@ -64,6 +64,10 @@ class ReadyWaitSource final : public BackendWaitSource {
         return wait_for_change(observed, std::chrono::nanoseconds::max());
     }
 
+    // Phase G review P1b: cv.wait_for is a native bounded transport —
+    // truthfully report the capability (BackendWaitSource contract).
+    bool supports_bounded_wait() const noexcept override { return true; }
+
     BackendWakeReason wait_for_change(BackendWaitToken observed,
                                       std::chrono::nanoseconds max_park) noexcept override {
         std::unique_lock<std::mutex> lk(mtx_);

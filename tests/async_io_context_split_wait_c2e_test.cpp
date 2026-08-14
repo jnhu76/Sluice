@@ -436,3 +436,50 @@ SLUICE_TEST_CASE(ctx_wait_one_inter_iteration_control_wake_not_lost) {
     raw->outstanding_ops.store(0);
     if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
 }
+
+// Phase G review P1b (PR #108): the bounded-park capability contract. A
+// third-party BackendWaitSource that implements only the one-argument
+// unbounded wait_for_change (like this file's ProbeWaitSource — it overrides
+// neither the bounded overload nor supports_bounded_wait) must NEVER receive
+// a finite park cap as a silently-discarded bound: AsyncIoContext::
+// wait_one(max_park) rejects it synchronously with not_supported BEFORE any
+// park or accounting side effect, while the capability queries report the
+// truthful split-without-bounded state. The unbounded no-argument form keeps
+// its documented behavior (empty wait -> 0, no park). No threads, no timing.
+SLUICE_TEST_CASE(ctx_wait_one_bounded_cap_requires_capability) {
+    auto backend = std::make_unique<SplitWaitProbeBackend>();
+    SplitWaitProbeBackend::ProbeWaitSource* ws = &backend->ws;
+    AsyncIoContext ctx(std::move(backend));
+
+    if (!ctx.has_split_wait_capability()) SLUICE_FAIL("split capability expected");
+    if (ctx.has_bounded_split_wait_capability()) {
+        SLUICE_FAIL("probe wait source must not report bounded capability");
+    }
+
+    // Finite cap without the bounded transport: synchronous not_supported —
+    // never a silently unbounded park (the base wait_for_change would
+    // discard the bound and park past the caller's deadline).
+    auto bounded = ctx.wait_one(std::chrono::milliseconds(1));
+    if (bounded.has_value()) {
+        SLUICE_FAIL("finite cap on a capability-less wait source must not succeed");
+    }
+    if (bounded.error().code != IoError::Code::not_supported) {
+        SLUICE_FAIL("finite cap rejection must be not_supported");
+    }
+    // The rejection happens BEFORE the observe phase: the source never
+    // parked (its parked flag is set only inside wait_for_change).
+    if (ws->parked.load(std::memory_order_acquire)) {
+        SLUICE_FAIL("rejected bounded wait must not park the wait source");
+    }
+
+    // The unbounded no-argument form is unchanged: nothing outstanding ->
+    // the empty wait is a no-progress boundary, returned as 0 without
+    // parking.
+    auto unbounded = ctx.wait_one();
+    if (!unbounded.has_value() || unbounded.value() != 0) {
+        SLUICE_FAIL("unbounded empty wait must return 0");
+    }
+    if (ws->parked.load(std::memory_order_acquire)) {
+        SLUICE_FAIL("empty wait must not park the wait source");
+    }
+}

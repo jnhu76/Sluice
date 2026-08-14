@@ -126,6 +126,27 @@ struct SchedulerParkSeam {
     }
 };
 
+// ---- Phase G review P2b: post-park recheck seam (G1 deterministic
+// reproducer). Pauses a worker immediately AFTER its wake-domain park
+// returns, BEFORE the loop-top re-drain/classify. Excluded from
+// release_all_phases (see async_test_control_internal.hpp) so a sibling
+// worker's termination does not silently destroy the hold — the arming test
+// must release it (its watchdog is the escape hatch).
+struct WorkerParkReturnSeam {
+    static void arm(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::arm(s, PhaseTag::worker_park_returned);
+    }
+    static void wait_paused(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::wait_paused(s, PhaseTag::worker_park_returned);
+    }
+    static bool is_paused(sluice::async::Scheduler& s) noexcept {
+        return sluice_async_test::is_paused(s, PhaseTag::worker_park_returned);
+    }
+    static void release(sluice::async::Scheduler& s) noexcept {
+        sluice_async_test::release(s, PhaseTag::worker_park_returned);
+    }
+};
+
 // ---- E11 clock/timer control (was TimerCtl) ----
 // Routes through Scheduler::AsyncTestAccess (guarded accessor). The clock/
 // timer fields are dual-use production state; only the WRITE/observation

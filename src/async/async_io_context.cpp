@@ -245,6 +245,20 @@ Result<std::size_t> AsyncIoContext::wait_one(std::chrono::nanoseconds max_park) 
         if (r.has_value() && stats_) stats_->completed_ops += r.value();
         return r;
     }
+    // Phase G review P1b (PR #108): a finite park cap is a REAL contract
+    // only when the wait source implements the bounded transport. A wait
+    // source that only provides the unbounded one-argument contract would
+    // silently discard `max_park` in the base wait_for_change overload and
+    // park indefinitely past the caller's deadline (the E11 liveness hole).
+    // Fail synchronously instead — no park, no accounting side effect, no
+    // silent fallback; the caller (the Scheduler) routes deadline-bound
+    // parks away from such backends via has_bounded_split_wait_capability()
+    // BEFORE reaching this point.
+    if (max_park != std::chrono::nanoseconds::max() &&
+        !ws->supports_bounded_wait()) {
+        return make_unexpected<std::size_t>(
+            IoError{IoError::Code::not_supported});
+    }
     // wait_calls counts ONE external invocation (I9), not one loop iteration.
     // Account it once under access_mtx_ before entering the reap/park loop;
     // spurious-wake re-scans MUST NOT bump it again.
@@ -409,6 +423,15 @@ bool AsyncIoContext::has_split_wait_capability() const noexcept {
     // this — see the header comment. Const and lock-free (the backend pointer
     // and its wait_source are construction-stable).
     return backend_ && backend_->wait_source() != nullptr;
+}
+
+bool AsyncIoContext::has_bounded_split_wait_capability() const noexcept {
+    // Phase G review P1b: split wait AND a bounded physical park. The
+    // Scheduler may commit an MW-S2 participant to a FINITE-cap backend
+    // domain park (active deadline / ready-flag observation) only when this
+    // holds — see the header contract. Lock-free and construction-stable.
+    return backend_ && backend_->wait_source() != nullptr &&
+           backend_->wait_source()->supports_bounded_wait();
 }
 
 void AsyncIoContext::arm_backend_wait_commit() noexcept {

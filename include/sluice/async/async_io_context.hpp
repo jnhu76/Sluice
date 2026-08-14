@@ -96,9 +96,14 @@ public:
     // physical park capped at `max_park` so the caller can guarantee a
     // re-drain before an active deadline (the E11 timer pump) — the MW-S2
     // MIXED-WAKE participant now parks in wait_one() for split-wait backends.
-    // The default implementation ignores the bound (unbounded park — existing
-    // behavior); split-wait backends override it with their native bounded
-    // transport (ReadyWaitSource: cv.wait_for; UringWaitSource: poll timeout).
+    // Bounded parking is a SEPARATE capability (supports_bounded_wait): the
+    // base implementation does NOT honor the bound — it parks on the
+    // unbounded one-argument contract — so a caller with a deadline
+    // obligation MUST query supports_bounded_wait() first and MUST NOT
+    // silently fall back to this overload expecting a bounded park (a
+    // discarded timeout is a liveness hole, not a degraded mode). In-tree
+    // split-wait sources (ReadyWaitSource: cv.wait_for; UringWaitSource:
+    // poll timeout) override both the overload and the capability.
     // `max_park` must be finite (nanoseconds::max() is the unbounded
     // sentinel and MUST NOT be passed — call the one-argument form instead).
     virtual BackendWakeReason wait_for_change(BackendWaitToken observed,
@@ -106,6 +111,15 @@ public:
         (void)max_park;
         return wait_for_change(observed);
     }
+
+    // Phase G review P1b (PR #108): whether the bounded overload above
+    // actually bounds the physical park. Default false — an external
+    // BackendWaitSource that only implements the one-argument unbounded
+    // contract truthfully reports no bounded support. Consumers with a
+    // deadline-driven park cap (AsyncIoContext::wait_one(max_park), the
+    // Scheduler's MW-S2 bounded park) must check this BEFORE relying on a
+    // finite bound; the base-class overload never fabricates the capability.
+    virtual bool supports_bounded_wait() const noexcept { return false; }
 
     // Control-plane wake: unblocks ALL parked waiters (notify_all). Must NOT
     // fabricate readiness, change request state, publish Completions, or
@@ -488,7 +502,12 @@ public:
     // return in time for pump_deadlines_locked). `max_park` must be finite
     // (pass nanoseconds::max() only through the no-argument form, which is
     // unbounded). Backends without the split wait capability ignore the bound
-    // (legacy serialized contract, unchanged).
+    // (legacy serialized contract, unchanged). A backend WITH a wait source
+    // but WITHOUT the bounded transport (BackendWaitSource::
+    // supports_bounded_wait() == false) returns not_supported SYNCHRONOUSLY:
+    // a silently discarded deadline cap is a liveness hole, never a degraded
+    // mode (Phase G review P1b). Callers with a deadline obligation check
+    // has_bounded_split_wait_capability() first.
     Result<std::size_t> wait_one(std::chrono::nanoseconds max_park);
 
     // Phase G: does the backend expose the split-phase readiness wait? The
@@ -499,6 +518,14 @@ public:
     // Scheduler-domain bounded observation park in MIXED-WAKE (its readiness
     // is poll-driven and cannot self-notify).
     bool has_split_wait_capability() const noexcept;
+
+    // Phase G review P1b: split wait AND a bounded physical park
+    // (BackendWaitSource::supports_bounded_wait()). The Scheduler's MW-S2
+    // participant may park in the BACKEND domain with a finite cap only when
+    // this holds; otherwise a deadline-bound park uses the Scheduler wake
+    // domain, whose transport the Scheduler itself bounds. Lock-free and
+    // construction-stable, like has_split_wait_capability().
+    bool has_bounded_split_wait_capability() const noexcept;
 
     // Control-plane wake for a split-phase wait in progress (issue #67): wakes
     // every participant parked in wait_one()'s observe phase so shutdown /

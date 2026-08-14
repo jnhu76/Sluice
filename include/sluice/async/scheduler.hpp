@@ -158,7 +158,12 @@ enum class RunMode : unsigned char {
 // publication (E7-B).
 struct WorkerState {
     fiber_ctx::Context sched_ctx{};   // this worker's saved scheduler continuation
-    Fiber* current = nullptr;          // the Fiber currently running on this worker
+    // Phase G review P2a: `current` is read cross-thread ONLY by the
+    // internal-testing forensics dump; the atomic closes that data race
+    // (Fiber::state() is itself atomic, so the dump's follow-up read is
+    // defined). Same-thread uses (run_next_on, the await/select paths) are
+    // unchanged by the atomic.
+    std::atomic<Fiber*> current{nullptr};  // the Fiber currently running on this worker
     std::deque<Fiber*> local_runnable{};  // owner-local runnable queue
     unsigned id = 0;
 
@@ -191,17 +196,43 @@ struct WorkerState {
     // predicate is "wake_epoch != observed_epoch OR wake-worthy persistent
     // state OR terminate" — this closes the commit-to-physical-wait window.
     // park_domain records which domain this worker is parked in (SCHEDULER
-    // vs BACKEND) for diagnostics + the at-most-one-backend-participant rule.
+    // vs BACKEND) for diagnostics + the at-most-one-backend-participant
+    // rule. Phase G review P2a: written by the owning worker outside any
+    // lock and read cross-thread by the forensics dump — atomic, never a
+    // plain field (a "best-effort" racy read is still UB).
     std::uint64_t observed_epoch{0};
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     // Phase G park-window forensics: which worker_loop break path this
     // worker exited through (written once at exit, read by the dump after
-    // the thread is gone). Null while the loop is live.
-    const char* loop_exit_reason = nullptr;
+    // the thread is gone). Atomic enum — the watchdog dump reads it from
+    // another thread (a plain `const char*` would be a data race).
+    enum class LoopExitReason : unsigned char {
+        live,  // never written: the loop has not exited
+        mw_s1_terminate_observed,
+        mw_s2_no_progress_terminate,
+        e14f1_last_idle_terminate,
+        last_idle_terminate,
+        final_park_terminate,
+    };
+    std::atomic<LoopExitReason> loop_exit_reason{LoopExitReason::live};
+    // Causal seam evidence (G1 reproducer): set at worker_loop RETURN —
+    // after this store the thread will never touch WorkerState again (the
+    // run_impl thread lambda only clears `active`). A test waiting on this
+    // flag knows the worker is causally dead, not merely "wrote its exit
+    // reason" (the exit-reason write precedes the final Phase-D drain).
+    std::atomic<bool> loop_exited{false};
+    // Per-worker classify evidence (Phase G review P2a): the LAST
+    // classify_locked result this worker observed, with a monotonic
+    // sequence. The park ledger reads the parking worker's OWN pair, so a
+    // park record attributes the classification the parking worker trusted
+    // — a Scheduler-global value would mis-attribute under interleaved
+    // classifies from other workers.
+    std::atomic<int> last_classify{-1};  // 0 mw_s1, 1 mw_s2, 2 mw_s3, 3 quiescent
+    std::atomic<std::uint64_t> classify_seq{0};
 #endif
     enum class ParkDomain : unsigned char { None, Scheduler, Backend };
-    ParkDomain park_domain{ParkDomain::None};
+    std::atomic<ParkDomain> park_domain{ParkDomain::None};
 
     // E13: owner Scheduler identity. Set exactly once when WorkerState is
     // attached to a Scheduler. Immutable by contract; not used for routing.
@@ -999,7 +1030,8 @@ public:
     // public for narrow introspection (is_runtime_task).
     static void* current_fiber_execution_tag() {
         WorkerState* w = current_worker();
-        return w ? w->current ? w->current->execution_tag() : nullptr : nullptr;
+        Fiber* cur = w ? w->current.load(std::memory_order_acquire) : nullptr;
+        return cur ? cur->execution_tag() : nullptr;
     }
 
 private:
@@ -1012,8 +1044,10 @@ private:
     friend class ApplicationRuntime;
     static void set_current_fiber_execution_tag(void* tag) {
         WorkerState* w = current_worker();
-        if (w && w->current) {
-            w->current->set_execution_tag(tag);
+        if (w) {
+            if (Fiber* cur = w->current.load(std::memory_order_acquire)) {
+                cur->set_execution_tag(tag);
+            }
         }
     }
 
@@ -1313,8 +1347,14 @@ private:
     // exist with no outstanding backend op (MW-S3). ctx_.outstanding()
     // acquires access_mtx_ internally; global_mtx_→access_mtx_ is the
     // accepted lock order.
-    MwState classify_locked(const WorkerSnapshot& run_workers) const SLUICE_REQUIRES(global_mtx_);
-    // classify_locked body. classify_locked wraps it to record the last
+    // `classify_ws` (the calling worker, when known) receives the per-worker
+    // classify evidence (WorkerState::last_classify / classify_seq) used by
+    // the internal-testing park ledger — the ledger must attribute the
+    // classification the PARKING worker trusted, not a Scheduler-global
+    // last-writer value (Phase G review P2a).
+    MwState classify_locked(const WorkerSnapshot& run_workers,
+                            WorkerState* classify_ws = nullptr) const SLUICE_REQUIRES(global_mtx_);
+    // classify_locked body. classify_locked wraps it to record the per-worker
     // classification (internal-testing park-ledger forensics only); in
     // production the wrapper is a pure forward.
     MwState classify_locked_impl(const WorkerSnapshot& run_workers) const SLUICE_REQUIRES(global_mtx_);
@@ -1509,6 +1549,11 @@ private:
     // from a publication that never crosses the park boundary (AGENTS.md
     // §13.2 wake-obligation audit; design doc
     // docs/design/phase-g-backend-progress-wake.md park-window finding).
+    // `last_classify` is the PARKING worker's own per-worker classify pair
+    // (WorkerState::last_classify / classify_seq) captured at park time —
+    // never a Scheduler-global last-writer value (Phase G review P2a: a
+    // global field mis-attributes when another worker classifies between
+    // this worker's classify and its park commit).
     // Layout cost accepted for the internal-testing build only
     // (AGENTS.md §15); absent from production.
     struct ParkLedgerRecord {
@@ -1525,6 +1570,7 @@ private:
         bool global_terminate = false;
         bool external_wake_possible = false;
         int last_classify = -1;  // 0 mw_s1, 1 mw_s2, 2 mw_s3_unresolved, 3 quiescent
+        std::uint64_t classify_seq = 0;  // parking worker's classify_seq at park time
     };
     static constexpr std::size_t kParkLedgerCapacity = 64;
     // Off by default: the park-commit snapshot takes global_mtx_ /
@@ -1539,8 +1585,6 @@ private:
     std::size_t park_ledger_count_{0};
     std::size_t park_ledger_next_{0};
     std::uint64_t park_ledger_total_{0};  // monotonic park sequence (ring wraps)
-    // Last classify_locked result (set on every classify; read by the ledger).
-    mutable std::atomic<int> last_classify_state_{-1};
 
     // Stall forensics dump (stderr): live scheduler state (wake epoch, wait
     // token, outstanding, admission, waiting sets, per-worker park domain)
@@ -2111,6 +2155,55 @@ public:
         // flaky when always-on); only the forensics case arms it.
         static void set_park_forensics(Scheduler& s, bool enabled) noexcept {
             s.park_forensics_enabled_.store(enabled, std::memory_order_release);
+        }
+        // Backend wait-source token (observe-only; no access_mtx_): the G1
+        // deterministic reproducer observes the backend READY publication
+        // (progress_generation advance) before releasing a held worker, so
+        // the worker's re-drain deterministically reaps it.
+        static BackendWaitToken backend_wait_token(const Scheduler& s) noexcept {
+            return s.ctx_.backend_wait_token_for_test();
+        }
+
+        // Phase G review P2b (G1 deterministic reproducer): causal state
+        // observations on live workers. `worker_loop_exited` is the
+        // worker-is-dead point (worker_loop returned; the thread will never
+        // touch this WorkerState again). `worker_local_runnable` reads the
+        // owner-local runnable depth under inbox_mtx (a stranded continuation
+        // on a DEAD worker's queue is the G1 violation being observed).
+        // `worker_park_domain` / `worker_last_classify` expose the per-worker
+        // diagnostic fields for assertions. All four take global_mtx_ for the
+        // workers_ read (the vector is mutated only under it; the same
+        // global_mtx_ -> inbox_mtx order try_steal uses — no inversion).
+        // worker_id beyond the retained topology returns false / 0 / None.
+        static bool worker_loop_exited(const Scheduler& s,
+                                       unsigned worker_id) noexcept {
+            LockGuard lk(s.global_mtx_);
+            return worker_id < s.workers_.size() &&
+                   s.workers_[worker_id]->loop_exited.load(
+                       std::memory_order_acquire);
+        }
+        static std::size_t worker_local_runnable(const Scheduler& s,
+                                                 unsigned worker_id) {
+            LockGuard lk(s.global_mtx_);
+            if (worker_id >= s.workers_.size()) return 0;
+            std::lock_guard<std::mutex> ilk(s.workers_[worker_id]->inbox_mtx);
+            return s.workers_[worker_id]->local_runnable.size();
+        }
+        static WorkerState::ParkDomain worker_park_domain(
+            const Scheduler& s, unsigned worker_id) noexcept {
+            LockGuard lk(s.global_mtx_);
+            if (worker_id >= s.workers_.size())
+                return WorkerState::ParkDomain::None;
+            return s.workers_[worker_id]->park_domain.load(
+                std::memory_order_acquire);
+        }
+        static int worker_last_classify(const Scheduler& s,
+                                        unsigned worker_id) noexcept {
+            LockGuard lk(s.global_mtx_);
+            return worker_id < s.workers_.size()
+                       ? s.workers_[worker_id]->last_classify.load(
+                             std::memory_order_acquire)
+                       : -1;
         }
 
         // Phase F1 (issue #98): identity-routing diagnostics. The
