@@ -22,12 +22,12 @@
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
-
-#include <atomic>
 
 namespace sluice::async {
 
@@ -91,6 +91,21 @@ public:
     // readiness advanced, interrupted when the control plane woke the wait.
     // Spurious wakes only re-check the predicate (no state change).
     virtual BackendWakeReason wait_for_change(BackendWaitToken observed) noexcept = 0;
+
+    // Phase G (bounded-park variant): identical epoch protocol, with the
+    // physical park capped at `max_park` so the caller can guarantee a
+    // re-drain before an active deadline (the E11 timer pump) — the MW-S2
+    // MIXED-WAKE participant now parks in wait_one() for split-wait backends.
+    // The default implementation ignores the bound (unbounded park — existing
+    // behavior); split-wait backends override it with their native bounded
+    // transport (ReadyWaitSource: cv.wait_for; UringWaitSource: poll timeout).
+    // `max_park` must be finite (nanoseconds::max() is the unbounded
+    // sentinel and MUST NOT be passed — call the one-argument form instead).
+    virtual BackendWakeReason wait_for_change(BackendWaitToken observed,
+                                              std::chrono::nanoseconds max_park) noexcept {
+        (void)max_park;
+        return wait_for_change(observed);
+    }
 
     // Control-plane wake: unblocks ALL parked waiters (notify_all). Must NOT
     // fabricate readiness, change request state, publish Completions, or
@@ -465,6 +480,26 @@ public:
     // unchanged (a fresh snapshot at entry).
     Result<std::size_t> wait_one();
 
+    // Phase G (bounded-park variant): identical split-phase semantics to
+    // wait_one(), with each physical park inside the observe phase capped at
+    // `max_park` so the caller can guarantee a re-drain before an active
+    // deadline (the E11 timer pump drives the Scheduler's deadline set; the
+    // MIXED-WAKE progress participant now parks in wait_one() and must still
+    // return in time for pump_deadlines_locked). `max_park` must be finite
+    // (pass nanoseconds::max() only through the no-argument form, which is
+    // unbounded). Backends without the split wait capability ignore the bound
+    // (legacy serialized contract, unchanged).
+    Result<std::size_t> wait_one(std::chrono::nanoseconds max_park);
+
+    // Phase G: does the backend expose the split-phase readiness wait? The
+    // Scheduler selects the MW-S2 park domain with this: a split-wait backend
+    // parks the progress participant in wait_one() for BOTH backend-only and
+    // MIXED-WAKE (external wake publications reach the park through
+    // interrupt_backend_waiters); a non-split-wait backend keeps the
+    // Scheduler-domain bounded observation park in MIXED-WAKE (its readiness
+    // is poll-driven and cannot self-notify).
+    bool has_split_wait_capability() const noexcept;
+
     // Control-plane wake for a split-phase wait in progress (issue #67): wakes
     // every participant parked in wait_one()'s observe phase so shutdown /
     // admission close can re-evaluate. Per the D4-RM13 control-wake theorem
@@ -517,6 +552,13 @@ public:
     const AsyncStats* stats() const noexcept { return stats_; }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    // Phase G park-window forensics: the backend wait source's current
+    // (progress_generation, control_generation) pair — the backend
+    // publication sequence and the control-interrupt sequence compared
+    // against a park ledger baseline. Zeros when the backend has no wait
+    // source (non-split-wait).
+    BackendWaitToken backend_wait_token_for_test() const noexcept;
+
     // Deterministic context-level pause (D4-RM13 detector seam): the
     // inter-iteration control-wake detector
     // (ctx_wait_one_inter_iteration_control_wake_not_lost in
