@@ -66,6 +66,7 @@
 #include <sluice/async/detail/ready_sink.hpp>
 #include <sluice/async/detail/request_key.hpp>
 #include <sluice/async/detail/request_slot.hpp>
+#include <sluice/async/request_handle.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
@@ -154,6 +155,38 @@ public:
 
     std::size_t capacity() const noexcept { return capacity_; }
     ContextIdentity context() const noexcept { return context_; }
+
+    // Phase F3 (ADR-public-request-handle): resolve a public identity tuple to
+    // the slot's current RequestHandleState, or not_found if the slot is free,
+    // the generation has advanced (stale/reused), or the context does not match
+    // (cross-context). Read-only; leaf slot-lifecycle domain. Encapsulates the
+    // detail::RequestState -> public RequestHandleState mapping so every arena
+    // backend shares one implementation. A handle only ever exists for a
+    // post-commit slot, so reserved/prepared map to outstanding for safety.
+    RequestHandleState identity_handle_state(SlotIndex slot, Generation gen,
+                                             ContextIdentity ctx) const noexcept {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (slot.value >= capacity_) return RequestHandleState::not_found;
+        const RequestSlot& s = slots_[slot.value];
+        if (s.state_ == RequestState::free) return RequestHandleState::not_found;
+        if (s.generation_ != gen) return RequestHandleState::not_found;  // stale/reused
+        if (s.key_.context != ctx) return RequestHandleState::not_found;  // cross-context
+        switch (s.state_) {
+            case RequestState::pending:
+            case RequestState::enqueued:
+            case RequestState::running:
+            case RequestState::reserved:
+            case RequestState::prepared:
+                return RequestHandleState::outstanding;
+            case RequestState::backend_ready:
+                return RequestHandleState::backend_ready;
+            case RequestState::completion_ready:
+                return RequestHandleState::completion_ready;
+            case RequestState::free:
+            default:
+                return RequestHandleState::not_found;
+        }
+    }
 
     // --- accounting (Decision 13) ---
     std::size_t slot_in_use() const noexcept {

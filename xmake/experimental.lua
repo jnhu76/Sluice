@@ -195,7 +195,8 @@ if os.isfile(R .. "tests/uring_backend_c2e_close_drain_test.cpp") then
             add_deps("sluice_core")
             add_files(R .. "src/async/uring_backend.cpp",
                       R .. "src/async/async_io_context.cpp",
-                      R .. "src/async/fail_fast.cpp")
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/request_handle.cpp")
             add_defines("SLUICE_HAS_LIBURING",
                         "SLUICE_ASYNC_INTERNAL_TESTING")
             add_packages("liburing")

@@ -79,6 +79,23 @@ class SyncBackend : public AsyncBackend {
         return submit_void(op, c, detail::OperationKind::sync_all);
     }
 
+    // Phase F3 (ADR-public-request-handle): this backend uses the RequestArena
+    // identity contract, so it produces and resolves public RequestHandles.
+    bool supports_request_identity() const noexcept override { return true; }
+
+  private:
+    // Sealed override of the private virtual in AsyncBackend: reached only via
+    // AsyncIoContext::request_state -> AsyncBackend::request_handle_state. A raw
+    // backend pointer must not expose the raw identity-tuple consumer.
+    Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
+                                                      std::uint64_t gen) const override {
+        return arena_.identity_handle_state(detail::SlotIndex{slot},
+                                            detail::Generation{gen},
+                                            detail::ContextIdentity{ctx});
+    }
+
+  public:
+
     // Dispatch (enqueued -> backend_ready for every outstanding slot) then reap.
     // The synthetic terminal is decided at dispatch time: full requested length
     // for read/write, void-success for sync — UNLESS a cancel already won the

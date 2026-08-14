@@ -7,10 +7,10 @@ architecture audit. A phase may not claim completion without its named evidence.
 governed by the current findings, divergence registry, Zig conformance map, and
 the Accepted
 [Unified Explicit I/O Request Contract](../adr/ADR-explicit-io-request-contract.md).
-Statuses below reflect master `5e5ec36` (2026-08-12, merge of PR #93;
-re-baselined by audit issue #94). Phase A–E and D are complete; the remaining
-implementation work is Phase F (Scheduler/Batch identity consumption, issue
-#98) and Phase G (backend-ready wake integration).
+Statuses below reflect the Phase-F closeout (F1 PR #105; F2 + F3 implemented
+on branch `feat/phase-f-remaining`, issue #98). Phase A–F are complete; the
+only remaining implementation work is Phase G (backend-ready wake
+integration).
 
 **Ordering rule:** Stabilize bottom-layer request identity, admission, and reap
 before higher-layer Scheduler/Batch/wake migration. Do not make a persistent
@@ -489,7 +489,7 @@ command-backed evidence and the resolution notes in `current-architecture-findin
 
 **Dependencies:** Phase C. It does not depend on Scheduler wake.
 
-## Phase F — Scheduler and Batch consume identity-bearing reap
+## Phase F — Scheduler and Batch consume identity-bearing reap — COMPLETE
 
 **Change:**
 
@@ -497,14 +497,29 @@ command-backed evidence and the resolution notes in `current-architecture-findin
 refactor(runtime): consume identity-bearing reap events
 ```
 
+**Status: COMPLETE.** F1 (PR #105), F2, and F3 are all implemented. The only
+remaining identity-related work is the backend-ready wake bridge (Phase G),
+which is a separate, untouched phase.
+
 **Work (re-baselined by audit issue #94; runtime decomposition in issue #98):**
 
-- **F2** — Batch origin flag: distinguish `rejected` at submit from
-  `accepted_and_completed` explicitly. Submit-time errors already surface with
-  `reap_seq 0` and `wait_err` precedence (`batch.cpp:133`); the residual is the
-  missing explicit `BatchResult` origin flag;
-- **F3** (optional, API ADR required) — public RequestHandle/waiter API surface
-  (ADR rows 12b/14b). AGENTS.md notes RequestKey is currently internal.
+- **F2 — COMPLETE.** `BatchResult` now carries a typed `BatchResultOrigin`
+  (`rejected` vs `accepted_and_completed`), orthogonal to success/error. A
+  submit-time rejection is `rejected`; any accepted request (success, terminal
+  error, or canceled winner) is `accepted_and_completed`. Tracked by an explicit
+  per-slot `submit_rejected` flag (not inferred from the result, and independent
+  of the internal `reap_seq` ordering mechanism). Evidence:
+  `tests/batch_result_origin_test.cpp` (ADR Decision 9 — Batch consumes outcome
+  origin explicitly);
+- **F3 — COMPLETE.** Public `RequestHandle` identity surface (ADR:
+  `docs/adr/ADR-public-request-handle.md`; gate:
+  `docs/architecture/phase-f3-compliance-gate.md`). Additive
+  `submit_*_request -> Result<RequestHandle>` (success ⇒ exactly one valid
+  handle; rejection ⇒ no handle; non-identity backend ⇒ `not_supported` with no
+  side effect); the read-only `request_state` identity consumer (outstanding /
+  backend_ready / completion_ready / not_found); non-forgeable construction
+  (private ctor, friend `AsyncBackend`, negative-compile gate). Closes C2b row
+  4b (cross-context) and the C2c row 12b/14b public-API residual.
 
 **Implemented by F1 (issue #98):**
 

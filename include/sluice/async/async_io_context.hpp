@@ -17,6 +17,7 @@
 
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/ready_sink.hpp>
+#include <sluice/async/request_handle.hpp>
 #include <sluice/error.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
@@ -237,6 +238,60 @@ public:
     // The default (false) is the conservative choice for external backends.
     virtual bool wait_one_is_nonblocking() const noexcept { return false; }
 
+    // Phase F3 (ADR-public-request-handle): public accepted-request identity.
+    // supports_request_identity() is the only PUBLIC part of the seam: whether
+    // this backend can produce/resolve a RequestHandle. Default false —
+    // external/legacy backends that do not use the RequestArena identity
+    // contract truthfully opt out. The four production arena backends override
+    // to true. submit_*_request checks this BEFORE accepting: false =>
+    // not_supported with no side effect, so the Decision-4 contract
+    // ("successful acceptance => exactly one valid handle") holds without
+    // leaving an accepted-but-handleless operation.
+    virtual bool supports_request_identity() const noexcept { return false; }
+
+private:
+    // Sealed identity seam (ADR-public-request-handle Decision 2 — non-forgeable
+    // construction authority). AsyncIoContext is the ONLY consumer: its
+    // submit_*_request mints the handle from the just-bound Completion and its
+    // request_state resolves it. Ordinary code — even code holding a raw
+    // AsyncBackend* (the backend is a public extension point) — must not be able
+    // to mint a handle from a Completion (identity_of) or feed a raw
+    // (context, slot, generation) tuple into the resolver (request_handle_state
+    // / resolve_identity_state): either would bypass the submit_*_request
+    // construction authority and expose the internal identity tuple.
+    friend class AsyncIoContext;
+
+    // Virtual hook for request_state(): resolve a public identity tuple
+    // (context, slot, generation) to the slot's current state, or not_supported
+    // for backends without the identity contract. PRIVATE virtual: derived
+    // backends override it (override access is checked at the call site, so
+    // their overrides are private too) and are reached only through
+    // request_handle_state, never through a raw backend pointer. Takes PLAIN
+    // scalars so derived backends need no friendship (friendship is not
+    // inherited). Arena backends override with a one-line delegation to their
+    // arena. not_found is a state, not an error, for valid handles whose slot
+    // was released/reused or whose context does not match.
+    virtual Result<RequestHandleState> resolve_identity_state(std::uint64_t context,
+                                                              std::uint32_t slot,
+                                                              std::uint64_t generation) const {
+        (void)context; (void)slot; (void)generation;
+        return make_unexpected<RequestHandleState>(IoError{IoError::Code::not_supported});
+    }
+
+    // Non-virtual identity extraction (friend of Completion + RequestHandle).
+    // Derives a handle from a Completion's private arena binding installed at
+    // commit (release_arena_ + bound_slot_). Returns an invalid handle when the
+    // Completion has no arena binding (legacy/external backend). Defined
+    // out-of-line where RequestArena's full definition is visible.
+    RequestHandle identity_of(Completion<std::size_t>& c) const noexcept;
+    RequestHandle identity_of(Completion<void>& c) const noexcept;
+
+    // Non-virtual entry for request_state() (AsyncIoContext, friend): extracts
+    // the handle's private components (friend of RequestHandle) and delegates to
+    // the virtual resolve_identity_state(). An invalid handle short-circuits to
+    // not_found.
+    Result<RequestHandleState> request_handle_state(const RequestHandle& h) const noexcept;
+
 protected:
     AsyncBackend() = default;
     AsyncStats* stats_ = nullptr;
@@ -357,6 +412,27 @@ public:
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
+
+    // Phase F3 (ADR-public-request-handle): additive submit variants that
+    // return the accepted request's public identity. On success the returned
+    // RequestHandle names the committed RequestKey (Decision 4: successful
+    // acceptance => exactly one valid handle). On synchronous rejection the
+    // Result carries the error and NO handle is produced; no accepted request,
+    // no borrow. If the backend does not support request identity
+    // (supports_request_identity() == false) the call returns not_supported
+    // WITHOUT submitting (no side effect). Serialized under access_mtx_ like
+    // submit_*; the handle is derived from the just-bound Completion before the
+    // lock is released (no accept/identity TOCTOU).
+    Result<RequestHandle> submit_read_request(ReadOp op, Completion<std::size_t>& c);
+    Result<RequestHandle> submit_write_request(WriteOp op, Completion<std::size_t>& c);
+    Result<RequestHandle> submit_sync_data_request(SyncDataOp op, Completion<void>& c);
+    Result<RequestHandle> submit_sync_all_request(SyncAllOp op, Completion<void>& c);
+
+    // Read-only identity consumer (ADR Decision 6): the request's current
+    // lifecycle state, or not_found for a stale / cross-context / released /
+    // invalid handle. Does not mutate the request, register a waiter, or cancel
+    // I/O. Returns not_supported for a backend without the identity contract.
+    Result<RequestHandleState> request_state(const RequestHandle& h) const;
 
     std::size_t poll();
     // Blocking reap. With a split-wait-capable backend (wait_source != null)

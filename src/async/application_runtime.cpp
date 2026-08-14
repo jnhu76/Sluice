@@ -46,6 +46,24 @@ Result<void> RuntimeTaskContext::submit_sync_all(SyncAllOp op, Completion<void>&
     return ctx_->submit_sync_all(op, c);
 }
 
+// Phase F3 (ADR-public-request-handle): identity-returning submit.
+Result<RequestHandle> RuntimeTaskContext::submit_read_request(ReadOp op,
+                                                              Completion<std::size_t>& c) {
+    return ctx_->submit_read_request(op, c);
+}
+Result<RequestHandle> RuntimeTaskContext::submit_write_request(WriteOp op,
+                                                               Completion<std::size_t>& c) {
+    return ctx_->submit_write_request(op, c);
+}
+Result<RequestHandle> RuntimeTaskContext::submit_sync_data_request(SyncDataOp op,
+                                                                   Completion<void>& c) {
+    return ctx_->submit_sync_data_request(op, c);
+}
+Result<RequestHandle> RuntimeTaskContext::submit_sync_all_request(SyncAllOp op,
+                                                                  Completion<void>& c) {
+    return ctx_->submit_sync_all_request(op, c);
+}
+
 // M1-A: cooperative Completion wait. Delegates to the already-audited
 // Scheduler::await_completion_* primitive (one suspend + one resume per
 // unresolved await; already-ready returns inline under the Scheduler's

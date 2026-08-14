@@ -292,8 +292,15 @@ that actually ran green.
 - **C2c** — waiter/borrow/delivery lease (rows 11–14): PARTIAL, not closed.
 - **C2d** — failure injection + post-commit allocator terminal (rows 9–10): MISSING, not closed.
 - **C2e** — close/drain/reset (row 15; row 16 already FULL): PARTIAL, not closed.
-- **Row 4b** — cross-context `RequestKey` authority rejection: Phase F scope (the public RequestHandle
-  consumer that exercises a foreign-`RequestKey` authority path does not exist yet). See §3.2.
+- **Row 4b** — cross-context `RequestKey` authority rejection: **CLOSED by Phase F3.** The public
+  RequestHandle consumer now exists (ADR `docs/adr/ADR-public-request-handle.md`):
+  `AsyncIoContext::submit_*_request -> Result<RequestHandle>` mints an opaque handle bound to the
+  committing context, and `request_state()` resolves it through the arena's `validate_` context check.
+  `tests/request_handle_test.cpp` `f3_cross_context_handle_is_not_found` proves a handle minted by
+  context A yields `RequestHandleState::not_found` through context B while A still observes its own
+  request (deterministic; no sleeps). Backend applicability: all four arena backends (Fake/Sync/
+  ThreadPool/Uring-real) override `supports_request_identity()->true`; external/non-arena backends
+  truthfully return `not_supported`. Not a C2b gap — closed as Phase F scope.
 - **Phase D** — Uring RequestArena migration: PENDING; Uring C2b conformance is the
   `uring_c2b_identity_not_implemented` record, never skip-as-pass.
 
@@ -302,7 +309,7 @@ that actually ran green.
 - Phase C remains **PARTIAL** (C1 IMPLEMENTED; C2a COMPLETE; C2b COMPLETE; C2c–C2e pending).
 - **C2b: COMPLETE** — rows 3, 4a, 5, 6, 7, and 8 of the C2 matrix have arena-level, per-backend,
   validity-proven evidence for Fake and ThreadPool; Uring's gap is authoritatively recorded. Row 4b
-  (cross-context RequestKey authority rejection) is explicitly Phase F scope, not a C2b gap.
+  (cross-context RequestKey authority rejection) is CLOSED by Phase F3 (see §9).
 - No `src/` production change (only `SLUICE_ASYNC_INTERNAL_TESTING`-guarded header seams in
   `include/sluice/`); no synchronous Reader/Writer behavior change; no Phase D Uring implementation;
   no C2c–C2e scope creep.

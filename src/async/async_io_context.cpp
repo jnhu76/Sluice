@@ -140,6 +140,62 @@ Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) 
     return r;
 }
 
+// Phase F3 (ADR-public-request-handle): additive identity-returning submit.
+// Capability is checked BEFORE accepting so a non-identity backend returns
+// not_supported with no side effect (Decision 5). On rejection the submit error
+// propagates and NO handle is produced (Decision 4). On success the handle is
+// derived from the just-bound Completion under the same lock (no TOCTOU).
+Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op,
+                                                          Completion<std::size_t>& c) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_->supports_request_identity())
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
+    auto r = backend_->submit_read(op, c);
+    tally_submit(stats_, r);
+    update_max_outstanding(stats_, backend_->outstanding());
+    if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
+    return backend_->identity_of(c);
+}
+Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op,
+                                                           Completion<std::size_t>& c) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_->supports_request_identity())
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
+    auto r = backend_->submit_write(op, c);
+    tally_submit(stats_, r);
+    update_max_outstanding(stats_, backend_->outstanding());
+    if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
+    return backend_->identity_of(c);
+}
+Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op,
+                                                               Completion<void>& c) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_->supports_request_identity())
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
+    auto r = backend_->submit_sync_data(op, c);
+    tally_submit(stats_, r);
+    update_max_outstanding(stats_, backend_->outstanding());
+    if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
+    return backend_->identity_of(c);
+}
+Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op,
+                                                              Completion<void>& c) {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!backend_->supports_request_identity())
+        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
+    auto r = backend_->submit_sync_all(op, c);
+    tally_submit(stats_, r);
+    update_max_outstanding(stats_, backend_->outstanding());
+    if (!r.has_value()) return make_unexpected<RequestHandle>(r.error());
+    return backend_->identity_of(c);
+}
+
+// Read-only identity consumer (ADR Decision 6).
+Result<RequestHandleState> AsyncIoContext::request_state(const RequestHandle& h) const {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    return backend_->request_handle_state(h);
+}
+
 std::size_t AsyncIoContext::poll() {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (stats_) ++stats_->poll_calls;

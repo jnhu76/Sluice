@@ -122,6 +122,19 @@ sluice_production_async_test("batch_test")
 	-- (the ThreadPoolBackend-based batch_test cannot).
 	sluice_production_async_test("batch_reap_order_test")
 
+-- F2 (issue #98) — BatchResult explicit admission origin (rejected vs
+-- accepted_and_completed). Deterministic OriginBackend drives submit-rejection
+-- and exact reap order; asserts the public origin field is orthogonal to
+-- success/error (ADR Decision 9: Batch consumes outcome origin explicitly).
+sluice_production_async_test("batch_result_origin_test")
+
+-- F3 (issue #98) — public RequestHandle identity surface
+-- (ADR-public-request-handle). Public-headers-only: proves accepted submit
+-- yields a valid handle, rejection yields none, external backends are
+-- not_supported, request_state lifecycle, cross-context rejection (C2b 4b),
+-- and stale-generation safety (C2c 14b).
+sluice_production_async_test("request_handle_test")
+
 -- Fiber state-model tests (sluice-CORE-E1). Pure C++ state machine; no asm yet
 -- (E2). Links sluice_async (fiber.cpp + cancel.cpp).
 sluice_production_async_test("fiber_test")

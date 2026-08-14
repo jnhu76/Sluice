@@ -55,10 +55,33 @@ struct BatchOp {
     enum class Kind : std::uint8_t { read, write, sync_data, sync_all } kind = Kind::read;
 };
 
+// Admission origin of one batched operation (ADR Decision 9: "Batch must
+// eventually consume outcome origin"). This is ORTHOGONAL to success/error: it
+// records whether the submit crossed the commit/accept linearization point.
+//
+//   rejected               — submit failed BEFORE commit/accept (invalid
+//                            descriptor, request capacity full, Completion
+//                            already claimed, or other synchronous submit-time
+//                            rejection). No accepted request existed.
+//   accepted_and_completed — submit crossed commit/accept and later obtained a
+//                            terminal result via reap. This includes successful
+//                            I/O, accepted I/O returning an error, an accepted
+//                            cancellation winner, and accepted post-commit
+//                            dispatch failure. Therefore `origin ==
+//                            accepted_and_completed` with an error Result is
+//                            valid and distinct from `rejected`.
+//
+// Do NOT infer origin from whether the Result is success/error.
+enum class BatchResultOrigin : std::uint8_t {
+    rejected,
+    accepted_and_completed,
+};
+
 // The result of one batched operation, returned by Batch::next(). Only the
 // member matching `is_void` is populated; the other is nullopt.
 struct BatchResult {
     std::size_t index = 0;                       // the add() index this matches
+    BatchResultOrigin origin = BatchResultOrigin::accepted_and_completed;
     bool is_void = false;                        // sync ops carry no byte count
     std::optional<Result<std::size_t>> size_res; // populated when !is_void
     std::optional<Result<void>> void_res;        // populated when is_void
@@ -124,6 +147,15 @@ private:
         Completion<void> void_c;
         bool ready = false;       // result available to pop
         bool popped = false;      // already returned by next()
+        // F2: admission origin. Set true ONLY when submit fails before
+        // commit/accept (the slot is marked ready without going through
+        // publish_from_reap, so its Completion keeps reap_seq 0). An accepted
+        // request that later terminates with any result (success, error, or
+        // canceled) leaves this false. This is the source of truth for
+        // BatchResult::origin; reap_seq remains the source of truth for reap
+        // ordering. The two agree because both derive from "did this slot reach
+        // publish_from_reap".
+        bool submit_rejected = false;
         std::optional<Result<std::size_t>> size_res{};
         std::optional<Result<void>> void_res{};
     };

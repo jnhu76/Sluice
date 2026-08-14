@@ -62,6 +62,16 @@ public:
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
 
+    // Phase F3 (ADR-public-request-handle): identity-returning submit variants.
+    // Delegates to AsyncIoContext::submit_*_request. On success returns the
+    // accepted request's public RequestHandle; on synchronous rejection returns
+    // the error and no handle; not_supported if this backend lacks the identity
+    // contract.
+    Result<RequestHandle> submit_read_request(ReadOp op, Completion<std::size_t>& c);
+    Result<RequestHandle> submit_write_request(WriteOp op, Completion<std::size_t>& c);
+    Result<RequestHandle> submit_sync_data_request(SyncDataOp op, Completion<void>& c);
+    Result<RequestHandle> submit_sync_all_request(SyncAllOp op, Completion<void>& c);
+
     // M1-A: cooperatively await a submitted, outstanding Completion. Returns
     // inline (no suspend) if the Completion is already ready; otherwise
     // suspends the calling Fiber exactly once and resumes exactly once when

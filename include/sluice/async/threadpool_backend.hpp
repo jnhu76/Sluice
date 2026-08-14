@@ -106,6 +106,23 @@ class ThreadPoolBackend : public AsyncBackend {
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c) override;
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c) override;
 
+    // Phase F3 (ADR-public-request-handle): this backend uses the RequestArena
+    // identity contract, so it produces and resolves public RequestHandles.
+    bool supports_request_identity() const noexcept override { return true; }
+
+  private:
+    // Sealed override of the private virtual in AsyncBackend: reached only via
+    // AsyncIoContext::request_state -> AsyncBackend::request_handle_state. A raw
+    // backend pointer must not expose the raw identity-tuple consumer.
+    Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
+                                                      std::uint64_t gen) const override {
+        return arena_.identity_handle_state(detail::SlotIndex{slot},
+                                            detail::Generation{gen},
+                                            detail::ContextIdentity{ctx});
+    }
+
+  public:
+
     std::size_t poll() override;
     Result<std::size_t> wait_one() override;
 
