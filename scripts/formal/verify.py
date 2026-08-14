@@ -136,7 +136,16 @@ def _check_coverage_gaps(manifest: dict) -> list[str]:
                         f"{where}: '{key}' entries must be non-empty strings"
                     )
                     continue
-                if not (REPO_ROOT / p).is_file():
+                candidate = (REPO_ROOT / p).resolve()
+                try:
+                    candidate.relative_to(REPO_ROOT.resolve())
+                except ValueError:
+                    errors.append(
+                        f"{where} ('{gid or '?'}'): '{key}' path escapes "
+                        f"REPO_ROOT: {p}"
+                    )
+                    continue
+                if not candidate.is_file():
                     errors.append(
                         f"{where} ('{gid or '?'}'): '{key}' file not found: {p}"
                     )
@@ -182,7 +191,8 @@ def cmd_doctor(manifest: dict) -> int:
     # Repo-root tla2tools.jar contamination guard.
     # resolve-jar.sh no longer falls back to the repo-root jar, and it is
     # gitignored, but a stale untracked copy here is the historical root cause
-    # of silent version drift (e.g. a v2.19 jar masking the locked v1.8.0).
+    # of silent version drift (e.g. a future TLC 2.2x jar masking the locked
+    # v1.7.4).
     # Flag its presence so it gets removed rather than silently shipped.
     repo_jar = REPO_ROOT / "tla2tools.jar"
     if repo_jar.is_file():

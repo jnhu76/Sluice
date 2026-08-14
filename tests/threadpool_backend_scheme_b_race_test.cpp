@@ -285,6 +285,11 @@ private:
             switch (decision.action) {
             case WatchdogDecision::AbortStalled:
                 diagnose_stalled_and_abort(now, last_progress_at);
+                // Unreachable: diagnose_stalled_and_abort is [[noreturn]]. The
+                // explicit break keeps this case non-fallthrough even if the
+                // attribute is ever dropped (a silent fallthrough into
+                // ReportProgressContinued would be a policy bug).
+                break;
             case WatchdogDecision::ReportProgressContinued:
                 // Non-fatal: budget exhausted while progress continued. Emit a
                 // diagnostic and re-arm the window (one full budget from now)
@@ -573,7 +578,9 @@ private:
 // sleep below is pacing only — it manufactures steady progress for the child;
 // the policy property itself is proven with injected timestamps in
 // tp_watchdog_decision_policy_controlled_timestamps, not by this wall-clock
-// loop. Fresh exec image (single-threaded at origin), same safe self-exec idiom
+// loop (a shorter pacing interval would not help against >1s scheduler
+// starvation anyway; only the deterministic policy test is authoritative).
+// Fresh exec image (single-threaded at origin), same safe self-exec idiom
 // as run_watchdog_diagnostic_child.
 [[noreturn]] void run_watchdog_progress_child() {
     PhaseProbe probe;
@@ -583,6 +590,37 @@ private:
         probe.progress_epoch.fetch_add(1, std::memory_order_relaxed);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+}
+
+// Single cleanup authority for the watchdog progress child: SIGKILL it and
+// reap it BOUNDED (5s) so a stray child can never outlive the test. Returns
+// true only when the reap is confirmed; on failure prints a diagnostic and
+// returns false so the caller can fail. Used by every path that ends the
+// child — fcntl setup failure, observation error, and the normal success
+// cleanup — so no path can leave run_watchdog_progress_child() alive.
+bool kill_and_reap_child(pid_t pid) {
+    ::kill(pid, SIGKILL);
+    int st = 0;
+    pid_t w = 0;
+    int reap_errno = 0;
+    const auto reap_deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    for (;;) {
+        w = sluice::detail::retry_on_eintr(
+            [&] { return ::waitpid(pid, &st, WNOHANG); });
+        if (w == pid) return true;
+        if (w < 0) {
+            reap_errno = errno;
+            break;
+        }
+        if (std::chrono::steady_clock::now() >= reap_deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    std::fprintf(stderr,
+                 "failed to reap the killed watchdog progress child "
+                 "(waitpid=%ld errno=%d); stray child possible\n",
+                 static_cast<long>(w), reap_errno);
+    return false;
 }
 
 }  // namespace
@@ -1746,9 +1784,7 @@ SLUICE_TEST_CASE(tp_watchdog_does_not_abort_on_continued_progress) {
         // observing. Kill + reap the child before reporting the failure.
         const int save_errno = errno;
         ::close(pipefd[0]);
-        ::kill(pid, SIGKILL);
-        sluice::detail::retry_on_eintr(
-            [&] { return ::waitpid(pid, nullptr, 0); });
+        kill_and_reap_child(pid);
         std::fprintf(stderr,
                      "fcntl(O_NONBLOCK) failed (errno=%d) while setting up the "
                      "watchdog progress-child pipe drain\n",
@@ -1765,11 +1801,23 @@ SLUICE_TEST_CASE(tp_watchdog_does_not_abort_on_continued_progress) {
     int observe_errno = 0;
     int early_termsig = 0;
     while (std::chrono::steady_clock::now() < observe_deadline) {
-        // Drain any pending diagnostic bytes (discard; EAGAIN == drained).
+        // Drain any pending diagnostic bytes (discard). Fail-closed: only
+        // EAGAIN/EWOULDBLOCK (non-blocking pipe drained) and EOF (child closed
+        // its stderr — the waitpid check below classifies an early exit) end
+        // the drain; any OTHER read error makes the observation untrustworthy
+        // and fails the case (never a false green).
         char drain[256];
-        while (sluice::detail::retry_on_eintr(
-                   [&] { return ::read(pipefd[0], drain, sizeof(drain)); }) > 0) {
+        for (;;) {
+            const ssize_t n = sluice::detail::retry_on_eintr(
+                [&] { return ::read(pipefd[0], drain, sizeof(drain)); });
+            if (n > 0) continue;
+            if (n == 0) break;  // EOF: drained; child's stderr closed
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;  // drained
+            observe_error = true;
+            observe_errno = errno;
+            break;
         }
+        if (observe_error) break;
         pid_t w = sluice::detail::retry_on_eintr(
             [&] { return ::waitpid(pid, &status, WNOHANG); });
         if (w == pid) {
@@ -1791,11 +1839,15 @@ SLUICE_TEST_CASE(tp_watchdog_does_not_abort_on_continued_progress) {
 
     const char* fail_msg = nullptr;
     if (observe_error) {
+        // Fail-closed: the observation error already means the child's state
+        // cannot be verified; kill + reap it so the progress child cannot
+        // remain alive and hang the test.
+        kill_and_reap_child(pid);
         std::fprintf(stderr,
-                     "waitpid failed while observing the watchdog progress "
-                     "child (errno=%d); child state cannot be verified\n",
+                     "watchdog progress-child observation failed (errno=%d); "
+                     "child state cannot be verified\n",
                      observe_errno);
-        fail_msg = "waitpid error during watchdog progress-child observation";
+        fail_msg = "watchdog progress-child observation error";
     } else if (died_early) {
         std::fprintf(stderr,
                      "watchdog progress child died early (termsig=%d); the "
@@ -1809,28 +1861,7 @@ SLUICE_TEST_CASE(tp_watchdog_does_not_abort_on_continued_progress) {
         // exhaustion under continued progress is non-fatal). Kill + reap it
         // bounded so a stray child cannot hang the test — and FAIL if the reap
         // cannot be confirmed.
-        ::kill(pid, SIGKILL);
-        int st = 0;
-        pid_t w = 0;
-        int reap_errno = 0;
-        const auto reap_deadline =
-            std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        for (;;) {
-            w = sluice::detail::retry_on_eintr(
-                [&] { return ::waitpid(pid, &st, WNOHANG); });
-            if (w == pid) break;
-            if (w < 0) {
-                reap_errno = errno;
-                break;
-            }
-            if (std::chrono::steady_clock::now() >= reap_deadline) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-        if (w != pid) {
-            std::fprintf(stderr,
-                         "failed to reap the killed watchdog progress child "
-                         "(waitpid=%ld errno=%d); stray child possible\n",
-                         static_cast<long>(w), reap_errno);
+        if (!kill_and_reap_child(pid)) {
             fail_msg = "watchdog progress child not reaped after SIGKILL";
         }
     }
