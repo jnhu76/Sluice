@@ -44,6 +44,51 @@ When a code change alters a modeled state transition, admission rule, winner rul
 
 **Never report "formally verified implementation" when only the abstract protocol model was checked.**
 
+## Coverage gaps (AGENTS.md §17 — recorded, not invented)
+
+Not every load-bearing protocol has a TLA+ model. AGENTS.md §17 permits, for a
+high-risk protocol, *either* a focused model *or* a recorded justified gap with
+a follow-up trigger. Each accepted gap is recorded as a `coverage_gaps` entry in
+`spec/tla/manifest.json` and summarized here. An accepted gap is formal debt, not
+a claim that the protocol is verified, and not permission to skip the model when
+a revisit trigger fires.
+
+### `request-arena-lifecycle` — RequestArena / RequestSlot explicit-I/O lifecycle
+
+No TLA+ suite binds the RequestArena / RequestSlot lifecycle
+(`include/sluice/async/detail/request_arena.hpp`, `request_slot.hpp`) — the
+load-bearing accepted-request protocol since Phase B. A future model would
+encode the five-stage admission (reserve → prepare → commit → enqueue →
+dispatch), Scheme-B enqueue/cancel arbitration, terminal-winner exactly-once,
+generation increment before reuse, the ready-ring FIFO, reap-only Completion
+publication, borrow-through-reap, the enqueue-in-flight pin, and the quiescent-
+destruction conditions.
+
+**Not covered by adjacent suites.** The e7-publication / e8-ownership-transfer
+suites model the Completion claim/publish CAS and ownership transfer (the
+*publication object*, a different protocol from the slot lifecycle);
+e9-park-wake / e10-waitnode model Scheduler wake / wait-queue primitives;
+e16-application-runtime models the runtime epoch. None models the arena slot
+state machine, Scheme-B arbitration, generation/reuse, ready-ring, or
+reap-only publication — do not read those suites as RequestArena coverage.
+
+**Current executable evidence instead of a model:**
+`tests/request_arena_test.cpp` (state-machine matrix),
+`tests/request_lifecycle_scheme_b_test.cpp` (Scheme-B arbitration, terminal
+winner, generation/reuse),
+`tests/request_waiter_borrow_lease_test.cpp` (register-vs-reap,
+cancel_waiter-vs-reap, borrow-through-reap), the per-backend C2b/C2c/C2d/C2e
+integration rows on Fake + ThreadPool, 8–13 single-point production mutation
+executions per C2 class, and the arena death tests. Per-slice gap notes also
+appear in the Phase C2c / C2d / E compliance gates.
+
+**Revisit triggers:** before materially changing RequestArena / RequestSlot
+lifecycle authority; before changing generation/reuse rules; before introducing
+a second waiter or multi-wait abstraction into the arena; before splitting the
+terminal-winner or reap-only-publication authority across a second domain; or
+when a future concurrency defect demonstrates the existing executable evidence
+does not distinguish the faulty protocol.
+
 ## Navigation
 
 | Topic | Document |

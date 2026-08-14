@@ -301,20 +301,25 @@ terminal-after-bookkeeping publication.
 
 ## Formal-coverage gap (AGENTS.md §17 — recorded, not invented)
 
-The Phase B TLA model suite covers the `RequestArena` slot state machine, the
-Scheme-B pending-cancel/enqueue arbitration, and the enqueue-in-flight pin
-(I17/I19). It does **not** model the Phase-E worker dequeue/cancel/ring protocol
-— the coordinated `pop_front + mark_running` ownership transfer under
-`work_mtx_`, and the `remove_exact + arena.cancel` arbitration — which is the
-load-bearing Phase-E race.
+No TLA+ suite models the `RequestArena` slot state machine, the Scheme-B
+pending-cancel/enqueue arbitration, or the enqueue-in-flight pin (I17/I19) —
+this is the consolidated `request-arena-lifecycle` coverage gap recorded in
+`spec/tla/manifest.json` (`coverage_gaps`) and `docs/verification/formal-models.md`
+(issue #100). Their correctness is established by deterministic tests, not by a
+model. The Phase-E gap recorded here is narrower still: no suite models the
+Phase-E worker dequeue/cancel/ring protocol — the coordinated
+`pop_front + mark_running` ownership transfer under `work_mtx_`, and the
+`remove_exact + arena.cancel` arbitration — which is the load-bearing Phase-E
+race.
 
 Per AGENTS.md §17 ("Do not invent a model merely for ceremonial coverage. Model
 the smallest protocol that captures the load-bearing race."), this Phase E
 records a **justified formal-coverage gap** rather than adding a new TLA model
 in this PR:
 
-- **Reason:** the protocol's correctness rests on (a) the already-modeled arena
-  state machine (Scheme B, pin, terminal winner) and (b) a single coordinated
+- **Reason:** the protocol's correctness rests on (a) the deterministically-
+  tested (not TLA-modeled) arena state machine (Scheme B, pin, terminal winner —
+  see the `request-arena-lifecycle` coverage gap) and (b) a single coordinated
   work-domain critical section (`work_mtx_`) that makes dequeue+mark_running and
   remove_exact+cancel indivisible ownership transfers. There is no second slot-
   state domain racing; the arena remains the sole terminal-winner authority.
