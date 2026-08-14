@@ -140,11 +140,11 @@ struct PhaseProbe {
 // complete host-scheduler starvation. It is a last-resort boundedness guard
 // that converts an unbounded hang into a bounded abort.
 //
-// Issue #101 root cause (Case A, 2026-08-14): a CASE-TOTAL wall-clock deadline
-// is NOT a liveness oracle. The watchdog polls the probe's progress checkpoints
+// Issue #101 model defect (2026-08-14): a CASE-TOTAL wall-clock deadline is NOT
+// a liveness oracle. The watchdog polls the probe's progress checkpoints
 // (lock-free atomics only) every kPollInterval and records when the progress
 // epoch last moved. The ONLY abort trigger is a GENUINE no-progress stall — the
-// progress epoch frozen for >= kNoProgressThreshold — checked CONTINUOUSLY so a
+// progress epoch frozen for >= the full case budget — checked CONTINUOUSLY so a
 // real stall is caught ~threshold after it happens, not at the case-total
 // budget. Case-total budget exhaustion with progress continuing (State A —
 // host-scheduler slowdown under load) is NOT stall evidence and is reported
@@ -153,7 +153,63 @@ struct PhaseProbe {
 // deadlock freezes progress and is caught by the stall check. This does NOT
 // weaken the gate: a true stall still ABORTs (a stuck protocol is a catastrophic
 // defect, not a Scheme-B correctness assertion), no duration is increased, and
-// no retry/sleep is added.
+// the abort path adds no retry/sleep.
+//
+// Evidence boundary (audit review, 2026-08-14): the defect class above is
+// PROVEN by the controlled-timestamp policy test and the synthetic progressing
+// child below. The historical 2026-08-13 serial 1/5 firing at 5e5ec36 is NOT
+// retroactively classified — no progress telemetry existed for it, so it is
+// neither STALLED nor PROGRESS CONTINUED. Removing the defect class does not
+// prove that historical firing was a progressing case; its classification
+// remains unresolved unless a future capture on instrumented historical code
+// says otherwise. "Watchdog model defect" and "historical residual root cause"
+// are therefore two separate statements.
+//
+// The abort decision is a PURE function of explicit time inputs (no threads,
+// no sleeps, no I/O): watchdog_decide() below is proven deterministically with
+// controlled timestamps in tp_watchdog_decision_policy_controlled_timestamps.
+// AGENTS.md §13.3: sleep_for must not prove liveness — the policy is proven
+// with injected time; the fork-based cases below are end-to-end wiring checks,
+// and their sleeps are pacing/diagnosis only.
+enum class WatchdogDecision : std::uint8_t {
+    Continue,                 // keep observing; nothing to report
+    ReportProgressContinued,  // budget window expired, progress recent — NOT a stall
+    AbortStalled,             // progress frozen >= threshold — genuine stall
+};
+
+struct WatchdogInputs {
+    std::chrono::steady_clock::time_point now;
+    std::chrono::steady_clock::time_point last_progress_at;
+    std::chrono::steady_clock::time_point budget_deadline;  // current window end
+    std::chrono::milliseconds no_progress_threshold;        // full case budget
+};
+
+struct WatchdogDecisionResult {
+    WatchdogDecision action;
+    // Re-armed window deadline; meaningful only when action ==
+    // ReportProgressContinued. The window is re-armed to one full budget from
+    // `now` so a real stall beginning after a re-arm is still caught (the
+    // stall check runs continuously, independent of the window).
+    std::chrono::steady_clock::time_point next_budget_deadline{};
+};
+
+inline WatchdogDecisionResult watchdog_decide(const WatchdogInputs& in) noexcept {
+    // A genuine stall is the ONLY abort trigger (issue #101). Checked BEFORE
+    // the budget window so a real deadlock is caught as soon as the freeze
+    // reaches the threshold, regardless of the current (possibly re-armed)
+    // window.
+    if (in.now - in.last_progress_at >= in.no_progress_threshold) {
+        return {WatchdogDecision::AbortStalled, in.budget_deadline};
+    }
+    // Budget window expired with progress recent: budget exhaustion, NOT stall
+    // evidence. Non-fatal — the caller re-arms the window and keeps observing.
+    if (in.now >= in.budget_deadline) {
+        return {WatchdogDecision::ReportProgressContinued,
+                in.now + in.no_progress_threshold};
+    }
+    return {WatchdogDecision::Continue, in.budget_deadline};
+}
+
 class Watchdog {
 public:
     explicit Watchdog(std::chrono::seconds timeout, const PhaseProbe& probe)
@@ -219,23 +275,26 @@ private:
                 last_epoch = epoch;
                 last_progress_at = now;
             }
-            // Issue #101 root cause (Case A): a case-total wall-clock deadline is
-            // NOT a liveness oracle. The ONLY abort trigger is a GENUINE no-progress
-            // stall — the progress epoch frozen for >= the no-progress interval —
-            // checked continuously so a real stall is caught ~threshold after it
-            // happens, not at the case-total budget.
-            if (now - last_progress_at >= no_progress_threshold_) {
+            // Thin driver over the pure watchdog_decide policy (defined above;
+            // proven deterministically in
+            // tp_watchdog_decision_policy_controlled_timestamps). A genuine
+            // stall (progress frozen >= the full budget) is the ONLY abort
+            // trigger; budget exhaustion with progress recent is non-fatal.
+            const auto decision = watchdog_decide(
+                {now, last_progress_at, deadline_, no_progress_threshold_});
+            switch (decision.action) {
+            case WatchdogDecision::AbortStalled:
                 diagnose_stalled_and_abort(now, last_progress_at);
-            }
-            // Case-total budget exhausted while progress CONTINUED: not a stall.
-            // Emit a non-fatal diagnostic and re-arm the budget window so the
-            // watchdog keeps guarding against a future genuine stall. No abort,
-            // no duration increase, no retry, no sleep. The race cases are
-            // straight-line / bounded-iteration, so continued progress converges;
-            // a real deadlock freezes progress and is caught above.
-            if (now >= deadline_) {
+            case WatchdogDecision::ReportProgressContinued:
+                // Non-fatal: budget exhausted while progress continued. Emit a
+                // diagnostic and re-arm the window (one full budget from now)
+                // so the watchdog keeps guarding against a future genuine
+                // stall. No abort, no duration increase, no retry, no sleep.
                 report_progress_continued(now, last_progress_at);
-                deadline_ = now + std::chrono::milliseconds(timeout_ms_);
+                deadline_ = decision.next_budget_deadline;
+                break;
+            case WatchdogDecision::Continue:
+                break;
             }
         }
     }
@@ -283,9 +342,9 @@ private:
     }
 
     // Non-fatal: the case-total budget window expired while progress continued.
-    // This is NOT stall evidence and MUST NOT abort (issue #101 root cause). The
-    // diagnostic is informational; the budget window is re-armed by the caller so
-    // the watchdog keeps observing for a genuine stall.
+    // This is NOT stall evidence and MUST NOT abort (issue #101 model defect).
+    // The diagnostic is informational; the budget window is re-armed by the
+    // caller so the watchdog keeps observing for a genuine stall.
     void report_progress_continued(
         std::chrono::steady_clock::time_point now,
         std::chrono::steady_clock::time_point last_progress_at) noexcept {
@@ -502,16 +561,20 @@ private:
     }
 }
 
-// Issue #101 regression child (Case A). Constructs a 1s-budget Watchdog and then
-// makes STEADY progress — bumping the probe's progress epoch every ~100ms —
-// forever. The no-progress interval for a 1s budget is 500ms, so a stall is
-// never reached; the budget expires with progress continuing. Pre-fix the
-// watchdog ABORTED at the first budget expiry (a case-total wall-clock deadline
-// used as a liveness oracle — the #101 defect); post-fix budget exhaustion
+// Issue #101 regression child. Constructs a 1s-budget Watchdog and then makes
+// STEADY progress — bumping the probe's progress epoch every ~100ms — forever.
+// The no-progress threshold equals the FULL 1s budget, so a stall (epoch frozen
+// for >= 1s) is never reached; the budget expires repeatedly with progress
+// continuing. Pre-fix the watchdog ABORTED at the first budget expiry (a
+// case-total wall-clock deadline used as a liveness oracle — the proven #101
+// model defect, exercised on this synthetic child); post-fix budget exhaustion
 // under continued progress is non-fatal, so this child stays alive indefinitely
-// and the parent regression kills it after confirming it did not abort. Fresh
-// exec image (single-threaded at origin), same safe self-exec idiom as
-// run_watchdog_diagnostic_child.
+// and the parent regression kills it after confirming it did not abort. The
+// sleep below is pacing only — it manufactures steady progress for the child;
+// the policy property itself is proven with injected timestamps in
+// tp_watchdog_decision_policy_controlled_timestamps, not by this wall-clock
+// loop. Fresh exec image (single-threaded at origin), same safe self-exec idiom
+// as run_watchdog_diagnostic_child.
 [[noreturn]] void run_watchdog_progress_child() {
     PhaseProbe probe;
     probe.name = "tp_watchdog_progress_continued_child";
@@ -1619,18 +1682,23 @@ SLUICE_TEST_CASE(tp_watchdog_diagnostic_path_reads_bound_gate) {
     if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
 }
 
-// Issue #101 regression (Case A). Proves the watchdog no longer aborts a case
-// that is making STEADY progress when its case-total budget expires — the
-// documented #101 defect class (a case-total wall-clock deadline used as a
-// liveness oracle). The forked child (--watchdog-progress-child) bumps its
-// progress epoch every 100ms under a 1s watchdog budget, so the budget expires
-// repeatedly with progress continuing. This case observes the child for ~3s
-// (3x the child's budget): if the watchdog model is correct the child STAYS
-// ALIVE (budget exhaustion under continued progress is non-fatal) and this case
-// passes; pre-fix the watchdog aborted the child by SIGABRT at the first (~1s)
-// budget expiry and this case FAILED. The child's non-fatal progress-continued
-// diagnostics are routed to a pipe and drained (expected output, not a failure).
-// POSIX only.
+// Issue #101 regression — end-to-end wiring of the pure decision policy.
+// tp_watchdog_decision_policy_controlled_timestamps proves the POLICY itself
+// with controlled timestamps; this case proves the real loop (thread + poll +
+// fork + exec wiring) does not abort a progressing child. The forked child
+// (--watchdog-progress-child) bumps its progress epoch every 100ms under a 1s
+// watchdog budget, so the budget expires repeatedly with progress continuing.
+// This case observes the child for ~3s (3x the child's budget): if the
+// watchdog model is correct the child STAYS ALIVE (budget exhaustion under
+// continued progress is non-fatal) and this case passes; pre-fix the watchdog
+// aborted the child by SIGABRT at the first (~1s) budget expiry and this case
+// FAILED. Fail-closed: a waitpid error during observation, an un-reaped child
+// after SIGKILL, or a failed pipe drain setup is a test FAILURE, never a false
+// green. The parent's sleeps pace the WNOHANG poll only (diagnosis, AGENTS.md
+// §13.3); child liveness is established by waitpid, and the policy property is
+// proven with injected time, not by this wall-clock window. The child's
+// non-fatal progress-continued diagnostics are routed to a pipe and drained
+// (expected output, not a failure). POSIX only.
 SLUICE_TEST_CASE(tp_watchdog_does_not_abort_on_continued_progress) {
     std::string self_path = sluice_death_test::resolve_self_executable_path();
     if (self_path.empty()) {
@@ -1665,26 +1733,42 @@ SLUICE_TEST_CASE(tp_watchdog_does_not_abort_on_continued_progress) {
     // Parent: close the write end, then observe the child for ~3s (3x its 1s
     // budget). Drain the pipe so the child's expected progress-continued
     // diagnostics cannot fill the pipe buffer and block it. The observed
-    // property is child LIVENESS via waitpid (an OS observation), not the sleep
-    // cadence — the sleep only paces the WNOHANG poll.
+    // property is child LIVENESS via waitpid (an OS observation); the sleep
+    // only paces the WNOHANG poll.
     ::close(pipefd[1]);
     // Non-blocking read end: drain the child's expected progress-continued
     // diagnostics without ever blocking on an open pipe (the child is alive by
     // design, so a blocking read would never see EOF and would stall the loop).
     int rd_flags = ::fcntl(pipefd[0], F_GETFL);
-    if (rd_flags >= 0) {
-        ::fcntl(pipefd[0], F_SETFL, rd_flags | O_NONBLOCK);
+    if (rd_flags < 0 ||
+        ::fcntl(pipefd[0], F_SETFL, rd_flags | O_NONBLOCK) < 0) {
+        // Fail-closed: without a reliable non-blocking drain we cannot keep
+        // observing. Kill + reap the child before reporting the failure.
+        const int save_errno = errno;
+        ::close(pipefd[0]);
+        ::kill(pid, SIGKILL);
+        sluice::detail::retry_on_eintr(
+            [&] { return ::waitpid(pid, nullptr, 0); });
+        std::fprintf(stderr,
+                     "fcntl(O_NONBLOCK) failed (errno=%d) while setting up the "
+                     "watchdog progress-child pipe drain\n",
+                     save_errno);
+        SLUICE_FAIL("pipe drain setup failed for watchdog progress-child "
+                    "regression");
     }
     constexpr auto kObserve = std::chrono::seconds(3);
     const auto observe_deadline =
         std::chrono::steady_clock::now() + kObserve;
     int status = 0;
     bool died_early = false;
+    bool observe_error = false;
+    int observe_errno = 0;
     int early_termsig = 0;
     while (std::chrono::steady_clock::now() < observe_deadline) {
         // Drain any pending diagnostic bytes (discard; EAGAIN == drained).
         char drain[256];
-        while (::read(pipefd[0], drain, sizeof(drain)) > 0) {
+        while (sluice::detail::retry_on_eintr(
+                   [&] { return ::read(pipefd[0], drain, sizeof(drain)); }) > 0) {
         }
         pid_t w = sluice::detail::retry_on_eintr(
             [&] { return ::waitpid(pid, &status, WNOHANG); });
@@ -1694,36 +1778,134 @@ SLUICE_TEST_CASE(tp_watchdog_does_not_abort_on_continued_progress) {
             break;
         }
         if (w < 0) {
-            break;  // waitpid error; reap path below reports it
+            // Fail-closed: an observation error is NOT a pass. We can no longer
+            // trust the child's state, so report the failure instead of falling
+            // through to the kill/reap success branch (a false green).
+            observe_error = true;
+            observe_errno = errno;
+            break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     ::close(pipefd[0]);
 
     const char* fail_msg = nullptr;
-    if (died_early) {
+    if (observe_error) {
+        std::fprintf(stderr,
+                     "waitpid failed while observing the watchdog progress "
+                     "child (errno=%d); child state cannot be verified\n",
+                     observe_errno);
+        fail_msg = "waitpid error during watchdog progress-child observation";
+    } else if (died_early) {
         std::fprintf(stderr,
                      "watchdog progress child died early (termsig=%d); the "
                      "watchdog must NOT abort a case making steady progress "
                      "(issue #101)\n",
                      early_termsig);
         fail_msg =
-            "watchdog must not abort on continued progress (issue #101 Case A)";
+            "watchdog must not abort on continued progress (issue #101)";
     } else {
         // Success: child survived the whole observation window (budget
         // exhaustion under continued progress is non-fatal). Kill + reap it
-        // bounded so a stray child cannot hang the test.
+        // bounded so a stray child cannot hang the test — and FAIL if the reap
+        // cannot be confirmed.
         ::kill(pid, SIGKILL);
         int st = 0;
+        pid_t w = 0;
+        int reap_errno = 0;
         const auto reap_deadline =
             std::chrono::steady_clock::now() + std::chrono::seconds(5);
         for (;;) {
-            pid_t w = sluice::detail::retry_on_eintr(
+            w = sluice::detail::retry_on_eintr(
                 [&] { return ::waitpid(pid, &st, WNOHANG); });
-            if (w == pid || w < 0) break;
+            if (w == pid) break;
+            if (w < 0) {
+                reap_errno = errno;
+                break;
+            }
             if (std::chrono::steady_clock::now() >= reap_deadline) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
+        if (w != pid) {
+            std::fprintf(stderr,
+                         "failed to reap the killed watchdog progress child "
+                         "(waitpid=%ld errno=%d); stray child possible\n",
+                         static_cast<long>(w), reap_errno);
+            fail_msg = "watchdog progress child not reaped after SIGKILL";
+        }
     }
     if (fail_msg != nullptr) SLUICE_FAIL(fail_msg);
+}
+
+// Issue #101 regression — the watchdog decision policy, proven DETERMINISTICALLY
+// with controlled timestamps (no sleeps, no processes, no threads). Directly
+// proves the two load-bearing policy properties the model-defect fix must have:
+//   budget expires + progress recent      -> ReportProgressContinued (NO abort)
+//   no progress >= full-budget threshold  -> AbortStalled (the ONLY abort)
+// plus the continuous-stall check (frozen progress is caught before any window
+// expires), the inclusive threshold boundary, and that a re-armed window
+// (ReportProgressContinued) does not lose the stall guard. AGENTS.md §13.3:
+// sleep_for must not prove liveness — here nothing is slept; every input is an
+// explicit timestamp. The fork-based regression above only wires this policy
+// through the real loop.
+SLUICE_TEST_CASE(tp_watchdog_decision_policy_controlled_timestamps) {
+    using clock = std::chrono::steady_clock;
+    using ms = std::chrono::milliseconds;
+    const auto t0 = clock::time_point{};  // arbitrary origin; pure arithmetic
+    const auto kBudget = ms(1000);
+    const auto kThreshold = kBudget;  // no-progress threshold == full case budget
+
+    auto dec = [&](auto now, auto last, auto deadline) {
+        return watchdog_decide({now, last, deadline, kThreshold});
+    };
+
+    // (1) Progress recent, budget not expired -> Continue.
+    auto r = dec(t0 + ms(500), t0 + ms(400), t0 + ms(1000));
+    if (r.action != WatchdogDecision::Continue) {
+        SLUICE_FAIL("budget not expired + progress recent must Continue");
+    }
+
+    // (2) Budget expires with progress recent -> ReportProgressContinued (the
+    //     #101 defect class: MUST NOT abort), and the window re-arms to one
+    //     full budget from `now`.
+    r = dec(t0 + ms(1000), t0 + ms(900), t0 + ms(1000));
+    if (r.action != WatchdogDecision::ReportProgressContinued) {
+        SLUICE_FAIL("budget expired + progress recent must NOT be a stall");
+    }
+    if (r.next_budget_deadline != t0 + ms(2000)) {
+        SLUICE_FAIL("re-arm must extend the window by one full budget");
+    }
+
+    // (3) Zero progress for the full budget (window expired) -> AbortStalled.
+    r = dec(t0 + ms(1000), t0, t0 + ms(1000));
+    if (r.action != WatchdogDecision::AbortStalled) {
+        SLUICE_FAIL("full-budget freeze at window expiry must abort");
+    }
+
+    // (4) Frozen progress reaches the threshold BEFORE the window expires —
+    //     the stall check runs continuously, not at the window end.
+    r = dec(t0 + ms(1500), t0 + ms(500), t0 + ms(3000));
+    if (r.action != WatchdogDecision::AbortStalled) {
+        SLUICE_FAIL("frozen progress must abort before the window expires");
+    }
+
+    // (5) Threshold boundary is inclusive: exactly one budget elapsed -> stall.
+    r = dec(t0 + ms(1000), t0, t0 + ms(3000));
+    if (r.action != WatchdogDecision::AbortStalled) {
+        SLUICE_FAIL("exactly one budget of frozen progress must abort");
+    }
+
+    // (6) Just below the threshold -> not a stall yet.
+    r = dec(t0 + ms(999), t0, t0 + ms(3000));
+    if (r.action != WatchdogDecision::Continue) {
+        SLUICE_FAIL("sub-threshold freeze must not abort");
+    }
+
+    // (7) After a re-arm (window now ends at t0+2000ms), progress freezes at
+    //     t0+1000ms: at the new window end the freeze has reached the full
+    //     budget -> AbortStalled. The re-arm must not lose the stall guard.
+    r = dec(t0 + ms(2000), t0 + ms(1000), t0 + ms(2000));
+    if (r.action != WatchdogDecision::AbortStalled) {
+        SLUICE_FAIL("re-armed window must still catch a genuine stall");
+    }
 }
