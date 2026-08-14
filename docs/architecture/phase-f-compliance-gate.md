@@ -2,11 +2,14 @@
 
 **Phase:** F (issue #98) — F1 + F2 + F3. **Status: COMPLETE.**
 **Baseline:** `e2b9f37` (`master`, PR #105 / Phase F1 merged).
-**Final head:** branch `feat/phase-f-remaining` (this PR): F2 commit `d096f1f`,
-F3 docs commit `1f1e178`, F3 impl commit `95e3a2a`, F3 corrective `0e7367b`
-(c2e real-liburing target lists `request_handle.cpp`), F3 authority-seal
-corrective `c593ce4` (private seam + friend `AsyncIoContext`), F4 evidence
-reconciliation `9948776` + `433c4a7`.
+**Closeout lineage (semantic commits on `feat/phase-f-remaining`, this PR):**
+F2 `d096f1f`; F3 docs `1f1e178`; F3 impl `95e3a2a`; F3 corrective `0e7367b`
+(c2e real-liburing target lists `request_handle.cpp`); F3 authority-seal
+corrective `c593ce4` (private seam + friend `AsyncIoContext`); F4 closeout +
+evidence reconciliation (`fc359a1`, `9948776`, `433c4a7`, `3fb0fea`). The
+current PR head is authoritative via Git history; subsequent review-driven
+docs/gate-only cleanups are not re-enumerated here, to avoid a self-referential
+SHA list that goes stale on every cleanup commit.
 **Authority:** `ADR-explicit-io-request-contract` (Decisions 7, 9, 10);
 `ADR-public-request-handle` (Accepted, this PR); Constitution AC-2 / AC-7 /
 AC-13 / AC-14 / AC-15; AGENTS.md §4, §8, §10, §12, §16.
@@ -86,7 +89,7 @@ bridge, which is Phase G (separate, untouched).
 | Clang Release | same with `-m release` | 162/162 PASS, 0 fail |
 | TSan | `-m tsan`; `xmake run -g test` | ALL PASS, 0 warnings |
 | ASan/UBSan | `xmake f -c -m asanubsan --toolchain=clang -y; xmake build -g test; xmake run -g test` | ALL TESTS PASSED, 0 errors (run 2026-08-14) |
-| Real liburing | `xmake f -c -m debug --toolchain=clang --with-liburing=true -y; xmake build -g test; xmake test` | 164/164 PASS (committed verification `0e7367b`; local sandbox re-run is mode=stub — CI/committed record authoritative) |
+| Real liburing | `xmake f -c -m debug --toolchain=clang --with-liburing=true -y; xmake build -g test; xmake test` | 164/164 PASS (executed locally, liburing 2.14; matches committed `0e7367b`. Earlier sandbox mode=stub limitation obsolete. GitHub CI does not run real liburing — real-mode authority is the local + committed run, not CI) |
 | Backend conformance | `scripts/verify-backend-conformance.py` + manifest self-test | RESULT: PASS — manifest self-test 209/209 OK; Fake ELIGIBLE, ThreadPool ELIGIBLE, Uring stub INCOMPLETE (manifest-declared); 47 PASS + 10 expected-stub INCOMPLETE rows; external probe PASS (quiet full run) |
 | Negative compile | `scripts/verify-request-handle-authority-negative-compile.sh` | 9/9 PASS |
 | Public acceptance | `tests/request_handle_test.cpp` (public headers only) | 6/6 PASS |

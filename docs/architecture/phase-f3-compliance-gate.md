@@ -65,7 +65,7 @@ contract; this gate records the as-built evidence.
   a leaf: `request_state` reads slot state under the arena mutex and returns; it
   calls no Scheduler, sink, or user code. Phase G (wake bridge) is untouched.
 
-## Gate 4 — Evidence (PENDING until executed)
+## Gate 4 — Evidence (executed)
 
 - [x] Clang Debug full suite green — 162/162 PASS, 0 fail
   (`xmake f -c -m debug --toolchain=clang -y; xmake build -g test; xmake test`).
@@ -75,14 +75,16 @@ contract; this gate records the as-built evidence.
   serialized under `access_mtx_`; cross-context + reset/reuse exercised; §16.3).
 - [x] ASan/UBSan green — ALL PASS, 0 errors (stale handle, context destruction,
   Completion reset, slot reuse; §16.2).
-- [x] Real liburing (committed verification, `0e7367b`): clean
+- [x] Real liburing (executed locally, liburing 2.14 in the package cache):
   `xmake f -c -m debug --toolchain=clang --with-liburing=true -y` +
   `xmake build -g test` + `xmake test` — 164/164 PASS (the 2 extra cases over
-  the 162 debug corpus are real-mode uring cases);
+  the 162 stub corpus are real-mode uring cases);
   `supports_request_identity()` + `request_state` exercised on the real Uring
-  backend; the stub build inherits `not_supported` by design. Note: this
-  sandbox re-runs `--with-liburing=true` as mode=stub (xmake package fetch),
-  so the committed record + GitHub CI are the authoritative real-mode evidence.
+  backend; the stub build inherits `not_supported` by design. The earlier
+  sandbox/package-fetch limitation (mode=stub) is obsolete; the real-mode gate
+  now runs locally (matches the committed `0e7367b` verification). GitHub CI
+  does not exercise the real-liburing path (its pipeline is a stub/subset
+  build), so real-mode authority is this local run, not CI.
 - [x] Backend conformance manifest self-test + `scripts/verify-backend-
   conformance.py` (quiet full run) — RESULT: PASS; manifest self-test 209/209
   OK; Fake ELIGIBLE; ThreadPool ELIGIBLE (incl. `threadpool_scheme_b_race`);
@@ -99,7 +101,8 @@ contract; this gate records the as-built evidence.
   `AsyncIoContext`; overrides private); negative-compile expanded 5 → 9 cases;
   c2e real-liburing target lists `request_handle.cpp` (`0e7367b`).
 - [x] `scripts/check-doc-links.py` (PASS) +
-  `scripts/verify-architecture-docs.py` (PASS); pre-push run below.
+  `scripts/verify-architecture-docs.py` (PASS); `bash scripts/gates/pre-push.sh`
+  — ALL CHECKS PASSED.
 - [x] C2b row 4b / C2c rows 12b + 14b closed with implementation + test pointers
   (see [phase-f-compliance-gate](phase-f-compliance-gate.md) + the C2b/C2c gates).
 
