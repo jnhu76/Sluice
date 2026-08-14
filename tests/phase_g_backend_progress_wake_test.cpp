@@ -237,32 +237,68 @@ struct ForensicsRtGuard {
 }  // namespace
 
 // ===========================================================================
-// Phase G park-window forensics (G1 BLOCKED instrumentation — NO behavioral
-// fix in this change).
+// Phase G G1 park-window stall — DETERMINISTIC reproducer (PR #108 review
+// P2b: causal-seam construction replacing the yield-ordered high-probability
+// canary; NO behavioral fix in this change).
 //
-// The clean-rebuild parallel stress reproduced two permanent stalls with the
-// Phase G unbounded wake-domain park:
-//   - sluice_copy_pipeline_integration_test / pipeline_integration_multi_worker
-//     (live gdb): ALL 4 scheduler workers parked unguarded in
-//     park_on_wake_source (bounded_backend_observation=false), NO worker in
-//     ctx_.wait_one, driver joining, app main waiting forever;
-//   - application_runtime_drain_starvation_test /
-//     final_backend_ready_request_drains_at_shutdown (coredump): one worker
-//     parked unguarded mid-drain, ApplicationRuntime::drain() waiting
-//     forever; the test teardown then destroyed a joinable std::thread ->
-//     "terminate called without an active exception" (the SIGABRT is a
-//     CONSEQUENCE of the stall, not a separate defect).
+// The stall (design doc §8): worker 0 — the only worker allowed to elect
+// MW-S2 (ws->id == 0) — parks as the progress participant in ctx_.wait_one
+// (backend domain). request_stop interrupts it; the still-gated read yields
+// 0 progress, so worker 0 takes the mw_s2_no_progress_terminate exit and
+// its thread DIES. The gate is then released; the backend publishes
+// backend-ready to a wait source with no observer. Worker 1 (the survivor,
+// held at its post-park recheck seam) re-drains, REAPS the request, and
+// routes the task continuation to its OWNER — dead worker 0. The route
+// clears global_terminate_ and its wake signal is absorbed by worker 1's
+// own park baseline; worker 1 classifies mw_s1 ("someone will run it"),
+// trusts it, and parks UNBOUNDED in the wake domain. The runnable is
+// stranded on a dead worker's queue, no wake source remains, and drain()
+// waits forever. Every step below is causally observed — no yield, no
+// sleep-as-ordering (production-test-plan §1).
 //
-// This case re-runs the drain-shutdown scenario with a FORENSICS WATCHDOG:
-// on a bounded timeout it dumps the park ledger + live scheduler state
-// (AsyncTestAccess::dump_park_forensics) and exits fail-closed, so a
-// repro states exactly which persistent state the parked worker trusted
-// (classification, outstanding, backend ready generation) versus which
-// publications happened after its baseline — distinguishing stale
-// classification from a publication that never crosses the park boundary.
-// On the healthy path the case passes like its non-forensics twin.
+// Deterministic construction:
+//   1. Submit ONE task (first spawn -> worker 0; its await_completion
+//      registers owner=worker 0). The backend worker pauses mid-read at the
+//      running gate. Worker 0 elects MW-S2 and parks in ctx_.wait_one
+//      (wait_phase_entered fires). OBSERVE both flags.
+//   1b. Pin the parked pair BEFORE the stop: park_domain(0)==Backend (set
+//      at the MW-S2 commit, cleared only when wait_one returns) AND
+//      park_domain(1)==Scheduler (inside park_on_wake_source). Both are
+//      stable while the read is gated, so the stop wake is GUARANTEED to
+//      route the survivor through its park return and into the held seam —
+//      without this pin a mid-cycle survivor instead exits on
+//      global_terminate_, the driver re-enters with fresh workers, and the
+//      scenario heals nondeterministically (observed as the old rc 124/134
+//      flake mix). A pin timeout is the no-participant manifestation (the
+//      task landed on worker 1, whose mw_s2 classify cannot elect) and
+//      fails closed with its own dump tag.
+//   2. ONLY NOW arm the worker_park_returned seam (arming earlier would
+//      catch the pre-submit quiescence park-returns of run #1 and wedge the
+//      setup; after the participant park the system is quiescent — the only
+//      future publications are this test's).
+//   3. rt.request_stop(). Worker 0's ARMED baseline observes the interrupt;
+//      the gated read reaps 0; worker 0 exits mw_s2_no_progress_terminate
+//      (loop_exited[0] becomes true — causally dead, its inbox residue is
+//      stranded unless a live participant re-seeds/steals it). Worker 1
+//      wakes from its wake-domain park and is HELD at the post-park recheck
+//      seam (excluded from release_all_phases — worker 0's exit path must
+//      not destroy the hold). OBSERVE both.
+//   4. Release the backend gate; the read completes and publishes
+//      backend-ready (ready epoch advances). OBSERVE the ready publication
+//      (backend_wait_token) — no observer exists for it: worker 0 is dead,
+//      worker 1 is held.
+//   5. Release the seam: worker 1's loop-top drain reaps the request and
+//      routes the continuation to dead worker 0. OBSERVE the stranded
+//      state (backend-ready count 0, worker 0 runnable depth 1).
+//   6. Verdict: rt.drain() must converge within the watchdog. PRE-FIX it
+//      never does (deterministic RED): the watchdog dumps the park ledger +
+//      live state and exits fail-closed (rc 70). The G1 repair makes the
+//      drain converge (GREEN): the task reaches terminal, the Completion is
+//      ready, and the backend counters — snapshotted BEFORE rt.join()
+//      (join destroys the backend; touching `raw` afterwards is the UAF the
+//      PR #108 review flagged as P1a) — are all zero.
 // ===========================================================================
-SLUICE_TEST_CASE(phase_g_park_window_forensics_drain_stall) {
+SLUICE_TEST_CASE(phase_g_g1_stranded_runnable_park_stall_reproducer) {
     if constexpr (!sa::fiber_ctx::supported) return;
 
     sa::ThreadPoolBackend::WorkerRunningPauseGate gate;
@@ -283,13 +319,16 @@ SLUICE_TEST_CASE(phase_g_park_window_forensics_drain_stall) {
         auto& rt = *rt_result.value();
         SLUICE_CHECK(rt.start().has_value());
         ForensicsRtGuard rt_guard{&rt};
-        // Forensics entry point (internal-testing accessor; observation
-        // only). Arm the park ledger — off by default because its snapshot
-        // locks shift park timing for other tests.
         Scheduler& sched = rt.test_scheduler_for_worker_topology();
+        // Seam controller: registered before any worker can reach the
+        // worker_park_returned call site; destroyed (unregistered) before
+        // rt_guard's shutdown joins the workers (reverse declaration order).
+        stest::ControllerGuard ctrl_guard{sched};
+        // Park ledger on for the stall dump (its snapshot locks shift park
+        // timing — acceptable here, the scenario is seam-driven).
         AsyncTestAccess::set_park_forensics(sched, true);
 
-        ForensicsTempPath tp("G");
+        ForensicsTempPath tp("G1");
         int fd = forensics_open_temp(tp.path());
         const std::byte seed[1] = {std::byte{0x67}};
         SLUICE_CHECK(::pwrite(fd, seed, 1, 0) == 1);
@@ -305,32 +344,197 @@ SLUICE_TEST_CASE(phase_g_park_window_forensics_drain_stall) {
             task_done.store(true, std::memory_order_release);
         }).has_value());
 
-        const char* fail_msg = nullptr;
-        const auto deadline =
+        // Fail-closed forensics exit: dump + gdb attach window + _Exit(70).
+        // EVERY construction violation and stall verdict takes this path.
+        // The scenario is deliberately NOT recovered: a mid-stall teardown
+        // either aborts via joinable-thread destruction (the old canary's
+        // rc 134) or hangs in shutdown (rc 124) — both mask the evidence and
+        // made two failure modes randomly compete for the exit code (PR #108
+        // review P2b). Pre-fix this case therefore ALWAYS exits rc 70 with a
+        // dump naming the exact stalled state.
+        auto fail_closed = [&sched](const char* tag, const char* msg) {
+            AsyncTestAccess::dump_park_forensics(sched, tag);
+            std::fprintf(stderr,
+                         "FORENSICS: %s; gdb-attach window (pid=%d, 20s), "
+                         "then exit fail-closed\n",
+                         msg, static_cast<int>(::getpid()));
+            std::this_thread::sleep_for(std::chrono::seconds(20));
+            std::_Exit(70);
+        };
+
+        const auto setup_deadline =
             std::chrono::steady_clock::now() + kForensicsWait;
-        if (!forensics_wait_flag(gate.paused, deadline)) {
-            AsyncTestAccess::dump_park_forensics(sched, "gate-never-paused");
-            fail_msg = "running gate did not pause in time (see dump)";
-        } else if (!forensics_wait_flag(wait_phase_entered, deadline)) {
-            AsyncTestAccess::dump_park_forensics(sched, "no-wait-phase");
-            fail_msg = "the MW-S2 participant never entered the backend ready wait (see dump)";
+
+        // (1) The backend worker is paused mid-read AND the MW-S2
+        // participant (worker 0 — the only elector) is parked in
+        // ctx_.wait_one (backend domain). "wait phase never entered" is
+        // itself a G1 manifestation: when the task fiber lands on worker 1
+        // (spawn/steal race at run startup), worker 1's mw_s2 classify
+        // cannot elect and BOTH workers park unguarded in the wake domain
+        // with no observer for the gated read — the same unguarded-park
+        // defect (design §8.3), reported fail-closed like the primary one.
+        if (!forensics_wait_flag(gate.paused, setup_deadline)) {
+            fail_closed("gate-never-paused",
+                        "running gate did not pause in time");
         }
-        if (fail_msg == nullptr) {
-            rt.request_stop();
-            std::this_thread::yield();
-        }
-        if (fail_msg == nullptr) {
-            // Disarm the seams BEFORE drain/join (join destroys the backend;
-            // `raw` must not be touched afterwards).
-            raw->set_running_pause_gate(nullptr);
-            raw->set_wait_phase_flag_for_test(nullptr);
-            sa::resume_threadpool_gate(gate);
+        if (!forensics_wait_flag(wait_phase_entered, setup_deadline)) {
+            fail_closed("no-wait-phase",
+                        "no MW-S2 participant entered the backend ready wait "
+                        "(unguarded-park G1 manifestation)");
         }
 
-        // Watchdog-bounded drain + join: on timeout, DUMP and exit
-        // fail-closed (std::_Exit — no teardown of the stuck threads, which
-        // would abort via joinable-thread destruction and mask the dump).
-        if (fail_msg == nullptr) {
+        // (1b) Pin the parked configuration causally BEFORE the stop: the
+        // participant (worker 0) is INSIDE its backend-domain park
+        // (park_domain == Backend, set at the MW-S2 commit and cleared only
+        // when wait_one returns) and the survivor (worker 1) is INSIDE
+        // park_on_wake_source (park_domain == Scheduler, cleared only when
+        // the park returns). With the gated read and no pending publication
+        // both parks are stable, so the upcoming request_stop wake is
+        // GUARANTEED to route the survivor through its park return and into
+        // the held seam — without this observation, a survivor caught
+        // mid-cycle exits on global_terminate_ instead, the driver re-enters
+        // with fresh workers, and the scenario heals nondeterministically.
+        // A timeout here is the no-participant manifestation (the task
+        // fiber landed on worker 1, whose mw_s2 classify cannot elect).
+        {
+            const auto parked_deadline =
+                std::chrono::steady_clock::now() + kForensicsWait;
+            bool parked_pair = false;
+            while (std::chrono::steady_clock::now() < parked_deadline) {
+                if (AsyncTestAccess::worker_park_domain(sched, 0) ==
+                        sa::WorkerState::ParkDomain::Backend &&
+                    AsyncTestAccess::worker_park_domain(sched, 1) ==
+                        sa::WorkerState::ParkDomain::Scheduler) {
+                    parked_pair = true;
+                    break;
+                }
+                std::this_thread::yield();
+            }
+            if (!parked_pair) {
+                fail_closed(
+                    "no-participant-parked-pair",
+                    "participant/survivor park pair never established "
+                    "(no-participant or mid-cycle survivor G1 manifestation)");
+            }
+        }
+
+        // (2) Arm the post-park recheck seam ONLY now — arming earlier would
+        // catch the pre-submit quiescence park-returns of the first run
+        // invocation and wedge the setup; after the participant park the
+        // system is quiescent, so the only future publications are this
+        // test's.
+        stest::WorkerParkReturnSeam::arm(sched);
+        // Baseline the backend wait token before the completion gate is
+        // released, so the ready publication below is unambiguous.
+        const auto token_before = AsyncTestAccess::backend_wait_token(sched);
+
+        // (3) request_stop: the participant's ARMED baseline observes the
+        // interrupt; the still-gated read reaps 0, so it takes the
+        // no-progress terminate and its thread dies (loop_exited — causally
+        // dead; its inbox residue is stranded unless a live participant
+        // re-seeds or steals it). The survivor's park returns on the stop
+        // wake and is held at the seam.
+        rt.request_stop();
+        {
+            const auto death_deadline =
+                std::chrono::steady_clock::now() + kForensicsWait;
+            bool w0_dead = false;
+            while (std::chrono::steady_clock::now() < death_deadline) {
+                if (AsyncTestAccess::worker_loop_exited(sched, 0)) {
+                    w0_dead = true;
+                    break;
+                }
+                std::this_thread::yield();
+            }
+            if (!w0_dead) {
+                fail_closed("participant-never-died",
+                            "worker 0 did not reach the no-progress terminate");
+            }
+        }
+
+        // Hold the survivor at its post-park recheck. BOUNDED: if the flow
+        // diverged (e.g. a repair that never parks the survivor), the seam
+        // never pauses — disarm it and let the drain verdict below measure
+        // convergence instead of wedging here.
+        {
+            const auto seam_deadline =
+                std::chrono::steady_clock::now() + kForensicsWait;
+            while (!stest::WorkerParkReturnSeam::is_paused(sched)) {
+                if (std::chrono::steady_clock::now() >= seam_deadline) break;
+                std::this_thread::yield();
+            }
+            if (stest::WorkerParkReturnSeam::is_paused(sched)) {
+                // (4) Complete the read and observe the backend-ready
+                // publication — which has NO observer: the participant is
+                // dead, the survivor is held.
+                sa::resume_threadpool_gate(gate);
+                const auto ready_deadline =
+                    std::chrono::steady_clock::now() + kForensicsWait;
+                bool ready_published = false;
+                while (std::chrono::steady_clock::now() < ready_deadline) {
+                    if (AsyncTestAccess::backend_wait_token(sched)
+                            .progress_generation >
+                        token_before.progress_generation) {
+                        ready_published = true;
+                        break;
+                    }
+                    std::this_thread::yield();
+                }
+                if (!ready_published) {
+                    fail_closed("ready-never-published",
+                                "backend-ready publication not observed");
+                }
+
+                // (5) Release the survivor: its loop-top drain reaps the
+                // completed request and routes the task continuation to its
+                // OWNER — the dead worker. The route clears
+                // global_terminate_ and its wake signal is absorbed by the
+                // survivor's own park baseline; it classifies mw_s1 and
+                // parks unbounded (the G1 stall).
+                stest::WorkerParkReturnSeam::release(sched);
+                const auto strand_deadline =
+                    std::chrono::steady_clock::now() + kForensicsWait;
+                bool stranded = false;
+                while (std::chrono::steady_clock::now() < strand_deadline) {
+                    if (raw->backend_ready_count_for_test() == 0 &&
+                        AsyncTestAccess::worker_local_runnable(sched, 0) +
+                                AsyncTestAccess::worker_local_runnable(sched, 1) ==
+                            1) {
+                        stranded = true;
+                        break;
+                    }
+                    std::this_thread::yield();
+                }
+                // Forensic marker, not a verdict: pre-fix the strand is
+                // permanent (the drain watchdog below fires); post-fix the
+                // repair may resolve it before this observation completes.
+                std::fprintf(stderr,
+                             "FORENSICS: stranded-runnable observed=%d "
+                             "(ready_count=%zu w0_runnable=%zu w1_runnable=%zu)\n",
+                             stranded ? 1 : 0,
+                             raw->backend_ready_count_for_test(),
+                             AsyncTestAccess::worker_local_runnable(sched, 0),
+                             AsyncTestAccess::worker_local_runnable(sched, 1));
+            } else {
+                // Divergent flow: no survivor was held. Complete the read and
+                // let the drain verdict measure convergence.
+                std::fprintf(stderr,
+                             "FORENSICS: park-return seam never paused "
+                             "(construction diverged; drain verdict decides)\n");
+                stest::WorkerParkReturnSeam::release(sched);
+                sa::resume_threadpool_gate(gate);
+            }
+        }
+
+        // Disarm the backend test seams BEFORE drain/join (join destroys the
+        // backend; `raw` must not be touched afterwards — P1a).
+        raw->set_running_pause_gate(nullptr);
+        raw->set_wait_phase_flag_for_test(nullptr);
+
+        // (6) THE VERDICT — watchdog-bounded drain. Pre-fix it never
+        // converges (fail-closed above); the G1 repair must make it
+        // converge with no other change to this construction.
+        {
             std::atomic<bool> drain_done{false};
             std::thread drainer([&] {
                 (void)rt.drain();
@@ -340,19 +544,40 @@ SLUICE_TEST_CASE(phase_g_park_window_forensics_drain_stall) {
                 std::chrono::steady_clock::now() + kForensicsWatchdog;
             while (!drain_done.load(std::memory_order_acquire)) {
                 if (std::chrono::steady_clock::now() >= wd) {
-                    AsyncTestAccess::dump_park_forensics(sched, "drain-stall");
-                    std::fprintf(stderr,
-                                 "FORENSICS: drain stalled — park-window "
-                                 "violation captured; gdb-attach window "
-                                 "(pid=%d, 20s), then exit fail-closed\n",
-                                 static_cast<int>(::getpid()));
-                    std::this_thread::sleep_for(std::chrono::seconds(20));
-                    std::_Exit(70);
+                    fail_closed("g1-stranded-runnable-park-stall",
+                                "G1 stall — drain never converged");
                 }
                 std::this_thread::yield();
             }
             drainer.join();
+        }
 
+        // P1a (PR #108 review): snapshot the backend counters while the
+        // backend is still alive — rt.join() destroys the runtime's
+        // IoContext and with it the ThreadPoolBackend, so any read via
+        // `raw` after the join is a use-after-free.
+        const std::size_t ready_at_drain = raw->backend_ready_count_for_test();
+        const std::size_t outstanding_at_drain = raw->outstanding();
+
+        // Post-drain caller lifecycle (ADR Decision 15, same discipline as
+        // final_backend_ready_request_drains_at_shutdown): reap published
+        // Completion-ready, but the arena slot is released only by the
+        // CALLER's reset — quiescent teardown (join -> close_resources ->
+        // ~ThreadPoolBackend) requires slot_in_use == 0 BEFORE join.
+        SLUICE_CHECK_MSG(task_done.load(std::memory_order_acquire),
+                         "task never reached terminal (park-window violation)");
+        SLUICE_CHECK_MSG(c.ready(), "Completion not ready after drain");
+        SLUICE_CHECK_MSG(ready_at_drain == 0,
+                         "backend-ready count nonzero after drain");
+        SLUICE_CHECK_MSG(outstanding_at_drain == 0,
+                         "outstanding nonzero after drain");
+        c.reset();
+        const std::size_t slot_in_use_at_drain = raw->arena_slot_in_use();
+        SLUICE_CHECK_MSG(slot_in_use_at_drain == 0,
+                         "caller reset must release the slot before join");
+
+        // Watchdog-bounded join (same fail-closed pattern as the drain).
+        {
             std::atomic<bool> join_done{false};
             std::thread joiner([&] {
                 (void)rt.join();
@@ -362,39 +587,12 @@ SLUICE_TEST_CASE(phase_g_park_window_forensics_drain_stall) {
                 std::chrono::steady_clock::now() + kForensicsWatchdog;
             while (!join_done.load(std::memory_order_acquire)) {
                 if (std::chrono::steady_clock::now() >= wd2) {
-                    AsyncTestAccess::dump_park_forensics(sched, "join-stall");
-                    std::fprintf(stderr,
-                                 "FORENSICS: join stalled — park-window "
-                                 "violation captured; gdb-attach window "
-                                 "(pid=%d, 20s), then exit fail-closed\n",
-                                 static_cast<int>(::getpid()));
-                    std::this_thread::sleep_for(std::chrono::seconds(20));
-                    std::_Exit(70);
+                    fail_closed("join-stall", "join never converged");
                 }
                 std::this_thread::yield();
             }
             joiner.join();
         }
-
-        if (fail_msg == nullptr && !task_done.load(std::memory_order_acquire)) {
-            AsyncTestAccess::dump_park_forensics(sched, "task-not-done");
-            fail_msg = "task never reached terminal (park-window violation; see dump)";
-        }
-        if (fail_msg == nullptr && !c.ready()) {
-            fail_msg = "Completion not ready after drain";
-        }
-        if (fail_msg == nullptr && raw->backend_ready_count_for_test() != 0) {
-            AsyncTestAccess::dump_park_forensics(sched, "ready-not-reaped");
-            fail_msg = "backend-ready count nonzero after drain (see dump)";
-        }
-        if (fail_msg == nullptr && raw->outstanding() != 0) {
-            fail_msg = "outstanding nonzero after drain";
-        }
-        if (fail_msg == nullptr && raw->arena_slot_in_use() != 0) {
-            fail_msg = "slot-in-use nonzero after drain";
-        }
-        SLUICE_CHECK_MSG(fail_msg == nullptr,
-                         fail_msg != nullptr ? fail_msg : "forensics scenario green");
         (void)::close(fd);
     }
 }
