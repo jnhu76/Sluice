@@ -26,6 +26,7 @@ The following future-phase proposals may exist:
 | Design | Status | Related ADR |
 |--------|--------|-------------|
 | [E16 Application Runtime](e16-application-runtime.md) | Proposed | [ADR-application-runtime](../adr/ADR-application-runtime.md) |
+| [Selectable / awaitable composability](selectable-async-composability-decision.md) | Decision — intentional defer (issue #99) | [ADR-async-io-model](../adr/ADR-async-io-model.md), [ADR-execution-model](../adr/ADR-execution-model.md) |
 | Fuzz infrastructure | Not yet proposed | — |
 
 If no actual design document exists for a row above, it is a placeholder for
