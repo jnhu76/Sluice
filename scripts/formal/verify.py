@@ -67,6 +67,82 @@ def suite_by_id(manifest: dict, suite_id: str) -> dict | None:
     return None
 
 
+# Fields every coverage_gaps entry must carry (issue #100; the entry is
+# authoritative long-lived structure, so `check`/`doctor` validate it).
+COVERAGE_GAP_REQUIRED_FIELDS = [
+    "id",
+    "status",
+    "protocol",
+    "why_no_model_yet",
+    "revisit_triggers",
+    "implementation_bindings",
+    "regression_test_cross_links",
+    "owner_docs",
+]
+
+# File-list fields whose referenced paths must exist in the repo.
+COVERAGE_GAP_FILE_FIELDS = [
+    "implementation_bindings",
+    "regression_test_cross_links",
+    "owner_docs",
+]
+
+
+def _check_coverage_gaps(manifest: dict) -> list[str]:
+    """Validate the optional top-level `coverage_gaps` structure.
+
+    Returns a list of human-readable error strings (empty when valid).
+    `coverage_gaps` is optional (manifests predate it), but once present every
+    entry is authoritative and must satisfy the statically checkable schema:
+    unique string ids, required fields, non-empty revisit_triggers, and
+    existence of every referenced file. A typo such as `revisit_trigers` or a
+    dangling binding must fail the structural check, not silently pass.
+    """
+    errors: list[str] = []
+    gaps = manifest.get("coverage_gaps")
+    if gaps is None:
+        return errors
+    if not isinstance(gaps, list):
+        return ["coverage_gaps must be an array"]
+    seen_ids: set[str] = set()
+    for i, gap in enumerate(gaps):
+        where = f"coverage_gaps[{i}]"
+        if not isinstance(gap, dict):
+            errors.append(f"{where}: must be an object")
+            continue
+        gid = gap.get("id")
+        if not isinstance(gid, str) or not gid:
+            errors.append(f"{where}: missing non-empty string 'id'")
+        elif gid in seen_ids:
+            errors.append(f"{where}: duplicate id '{gid}'")
+        else:
+            seen_ids.add(gid)
+        for field in COVERAGE_GAP_REQUIRED_FIELDS:
+            if field not in gap:
+                errors.append(f"{where}: missing required field '{field}'")
+        triggers = gap.get("revisit_triggers")
+        if not isinstance(triggers, list) or len(triggers) == 0:
+            errors.append(
+                f"{where}: 'revisit_triggers' must be a non-empty array"
+            )
+        for key in COVERAGE_GAP_FILE_FIELDS:
+            paths = gap.get(key)
+            if not isinstance(paths, list):
+                errors.append(f"{where}: '{key}' must be an array")
+                continue
+            for p in paths:
+                if not isinstance(p, str) or not p:
+                    errors.append(
+                        f"{where}: '{key}' entries must be non-empty strings"
+                    )
+                    continue
+                if not (REPO_ROOT / p).is_file():
+                    errors.append(
+                        f"{where} ('{gid or '?'}'): '{key}' file not found: {p}"
+                    )
+    return errors
+
+
 # --- doctor ---------------------------------------------------------------
 
 
@@ -125,6 +201,16 @@ def cmd_doctor(manifest: dict) -> int:
         rc = 1
     else:
         print(f"OK    manifest schema_version={manifest.get('schema_version')}")
+
+    # Coverage gaps schema (optional; validated once present — issue #100)
+    gap_errors = _check_coverage_gaps(manifest)
+    if gap_errors:
+        print(f"FAIL  coverage_gaps schema ({len(gap_errors)} error(s)):")
+        for e in gap_errors:
+            print(f"      {e}")
+        rc = 1
+    else:
+        print("OK    coverage_gaps schema valid (or absent)")
 
     # Verifiers exist and are executable
     for s in manifest.get("suites", []):
@@ -261,6 +347,20 @@ def cmd_check(manifest: dict) -> int:
     if "suites" not in manifest:
         print("FAIL  manifest has no suites")
         return 1
+
+    # 1b. Coverage gaps schema (optional; validated once present — issue #100).
+    # A structural `check` PASS must not claim more than it validated: without
+    # this, a malformed coverage_gaps entry (e.g. a typo'd `revisit_trigers` or
+    # a dangling binding) would pass and the closeout claim "manifest schema
+    # PASS" would overstate the check.
+    gap_errors = _check_coverage_gaps(manifest)
+    if gap_errors:
+        print(f"FAIL  coverage_gaps schema ({len(gap_errors)} error(s)):")
+        for e in gap_errors:
+            print(f"      {e}")
+        rc = 1
+    else:
+        print("OK    coverage_gaps schema valid (or absent)")
 
     # 2. Every .tla belongs to a suite
     suite_dirs = {s.get("spec_dir", "") for s in manifest["suites"]}

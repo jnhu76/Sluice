@@ -53,6 +53,13 @@ a follow-up trigger. Each accepted gap is recorded as a `coverage_gaps` entry in
 a claim that the protocol is verified, and not permission to skip the model when
 a revisit trigger fires.
 
+The `coverage_gaps` structure is authoritative long-lived manifest structure:
+`scripts/formal/verify.py check` (and `doctor`) validate every entry — unique
+`id`, required fields, non-empty `revisit_triggers`, and existence of every
+referenced `implementation_bindings` / `regression_test_cross_links` /
+`owner_docs` file — so a malformed entry fails the structural gate instead of
+silently passing (audit #94/#100 review hardening, 2026-08-14).
+
 ### `request-arena-lifecycle` — RequestArena / RequestSlot explicit-I/O lifecycle
 
 No TLA+ suite binds the RequestArena / RequestSlot lifecycle
