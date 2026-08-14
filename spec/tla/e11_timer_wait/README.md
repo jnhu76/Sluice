@@ -105,7 +105,7 @@ just any generic "Invariant violated"). To run it yourself:
 ```bash
 # one-time: fetch the jar the E7-E10 READMEs also expect at /tmp/tla2tools.jar
 curl -sSL -o /tmp/tla2tools.jar \
-  https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
+  https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
 # then:
 scripts/verify-timer-wait-formal.sh
 ```
